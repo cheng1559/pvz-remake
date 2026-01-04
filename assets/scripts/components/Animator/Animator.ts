@@ -11,8 +11,16 @@ import {
     Mat4,
     toRadian,
     UISkew,
+    Texture2D,
+    ImageAsset,
 } from 'cc'
-import { Animation, AnimState, AnimFrame, IAnimationController } from './AnimatorTypes'
+import {
+    Animation,
+    AnimState,
+    AnimFrame,
+    IAnimationController,
+    AnimResource,
+} from './AnimatorTypes'
 import { AnimationChain } from './AnimationChain'
 
 const { ccclass, property } = _decorator
@@ -33,13 +41,14 @@ export class Animator extends Component implements IAnimationController {
 
     private _tempMat4: Mat4 = new Mat4()
 
-    start() {
+    onLoad() {
         if (this.jsonAsset) {
             this.parseJson(this.jsonAsset.json as Animation[])
             if (this.animationName) {
                 this.loop(this.animationName)
             }
         }
+        console.log('Animator started', this.animationName)
     }
 
     parseJson(json: Animation[]) {
@@ -83,10 +92,26 @@ export class Animator extends Component implements IAnimationController {
         await Promise.all(promises)
     }
 
-    private reparentAnimationNodes(anim: Animation, parent: Node) {
-        const sortedResources = anim.resources.slice().sort((a, b) => a.z - b.z)
-        for (let i = 0; i < sortedResources.length; i++) {
-            const res = sortedResources[i]
+    private reparentAnimationNodes(parent: Node) {
+        const allResources: AnimResource[] = []
+        const seenNodes = new Set<string>()
+
+        for (const state of this._activeStates) {
+            const stateParent = this.findParentNodeForAnim(state.anim) || this.node
+            if (stateParent === parent) {
+                for (const res of state.anim.resources) {
+                    if (!seenNodes.has(res.name)) {
+                        seenNodes.add(res.name)
+                        allResources.push(res)
+                    }
+                }
+            }
+        }
+
+        allResources.sort((a, b) => a.z - b.z)
+
+        for (let i = 0; i < allResources.length; i++) {
+            const res = allResources[i]
             const node = this._nodes.get(res.name)
             if (!node) continue
             if (node === parent) continue
@@ -141,15 +166,30 @@ export class Animator extends Component implements IAnimationController {
         }
     }
 
-    public play(name: string, speed: number = 1, onFinish?: () => void) {
+    public play(
+        name: string,
+        speed: number = 1,
+        keepLastFrame: boolean = false,
+        z: number = 0,
+        onStart?: () => void,
+        onFinish?: () => void,
+    ) {
         const chain = new AnimationChain(this)
-        chain.play(name, speed, onFinish)
+        chain.play(name, speed, keepLastFrame, z, onStart, onFinish)
         return chain
     }
 
-    public loop(name: string, speed: number = 1, duration: number = 0, onFinish?: () => void) {
+    public loop(
+        name: string,
+        speed: number = 1,
+        duration: number = 0,
+        keepLastFrame: boolean = false,
+        z: number = 0,
+        onStart?: () => void,
+        onFinish?: () => void,
+    ) {
         const chain = new AnimationChain(this)
-        chain.loop(name, speed, duration, onFinish)
+        chain.loop(name, speed, duration, keepLastFrame, z, onStart, onFinish)
         return chain
     }
 
@@ -157,8 +197,11 @@ export class Animator extends Component implements IAnimationController {
         name: string,
         loop: boolean,
         speed: number,
-        onFinish?: () => void,
         duration: number = 0,
+        keepLastFrame: boolean = false,
+        z: number = 0,
+        onStart?: () => void,
+        onFinish?: () => void,
     ) {
         const anim = this._animations.get(name)
 
@@ -173,25 +216,29 @@ export class Animator extends Component implements IAnimationController {
             existingState.loop = loop
             existingState.speed = speed
             existingState.duration = duration
+            existingState.keepLastFrame = keepLastFrame
+            existingState.isFinished = false
             existingState.elapsedTotal = 0
+            existingState.z = z
             const oldFinish = existingState.onFinish
             existingState.onFinish = () => {
                 if (oldFinish) oldFinish()
                 if (onFinish) onFinish()
             }
+            if (onStart) onStart()
             return
         }
 
         await this.prepareAnimation(anim)
 
-        const conflictIndex = this._activeStates.findIndex((s) => {
-            if (anim.parent === null) return s.anim.parent === null
-            return s.anim.parent === anim.parent
-        })
+        // const conflictIndex = this._activeStates.findIndex((s) => {
+        //     if (anim.parent === null) return s.anim.parent === null
+        //     return s.anim.parent === anim.parent
+        // })
 
-        if (conflictIndex !== -1) {
-            this._activeStates.splice(conflictIndex, 1)
-        }
+        // if (conflictIndex !== -1) {
+        //     this._activeStates.splice(conflictIndex, 1)
+        // }
 
         const parentNode = this.findParentNodeForAnim(anim)
         const hasActive = this._activeStates.length > 0
@@ -214,6 +261,8 @@ export class Animator extends Component implements IAnimationController {
             }
         }
 
+        if (onStart) onStart()
+
         const newState: AnimState = {
             anim,
             time: 0,
@@ -223,6 +272,10 @@ export class Animator extends Component implements IAnimationController {
             speed,
             duration,
             elapsedTotal: 0,
+            keepLastFrame,
+            isFinished: false,
+            z,
+            onStart,
             onFinish,
         }
 
@@ -230,67 +283,209 @@ export class Animator extends Component implements IAnimationController {
         this._isPlaying = true
 
         if (canAttachAsChild) {
-            this.reparentAnimationNodes(anim, parentNode!)
+            this.reparentAnimationNodes(parentNode!)
         } else {
-            this.reparentAnimationNodes(anim, this.node)
+            this.reparentAnimationNodes(this.node)
         }
     }
 
     async loadSpriteFrame(name: string) {
         if (this._loadedSpriteFrames.has(name)) return
-        return new Promise<void>((resolve) => {
-            resources.load(`textures/${name}/spriteFrame`, SpriteFrame, (err, spriteFrame) => {
-                if (!err) {
-                    this._loadedSpriteFrames.set(name, spriteFrame!)
-                    resolve()
-                    return
-                }
 
-                resources.load(`textures/${name}`, SpriteFrame, (err2, spriteFrame2) => {
-                    if (!err2) this._loadedSpriteFrames.set(name, spriteFrame2!)
-                    resolve()
+        const loadSf = (path: string): Promise<SpriteFrame | null> => {
+            return new Promise((resolve) => {
+                resources.load(`textures/${path}/spriteFrame`, SpriteFrame, (err, spriteFrame) => {
+                    if (!err && spriteFrame) {
+                        resolve(spriteFrame)
+                        return
+                    }
+                    resources.load(`textures/${path}`, SpriteFrame, (err2, spriteFrame2) => {
+                        if (!err2 && spriteFrame2) resolve(spriteFrame2)
+                        else resolve(null)
+                    })
                 })
             })
+        }
+
+        let mainSf = await loadSf(name)
+
+        // Check for alpha image
+        const lastSlash = name.lastIndexOf('/')
+        let alphaName1 = ''
+        if (lastSlash >= 0) {
+            alphaName1 = name.substring(0, lastSlash + 1) + '_' + name.substring(lastSlash + 1)
+        } else {
+            alphaName1 = '_' + name
+        }
+        const alphaName2 = name + '_'
+
+        let alphaSf = await loadSf(alphaName1)
+        if (!alphaSf) {
+            alphaSf = await loadSf(alphaName2)
+        }
+
+        if (alphaSf) {
+            if (mainSf) {
+                this._mergeAlpha(mainSf, alphaSf)
+            } else {
+                // Create white texture with alpha
+                mainSf = this._createTextureFromAlpha(alphaSf)
+            }
+        }
+
+        if (mainSf) {
+            this._loadedSpriteFrames.set(name, mainSf)
+        }
+    }
+
+    private _getImageData(imageAsset: ImageAsset): Uint8Array | null {
+        const data = imageAsset.data
+        if (!data) return null
+
+        if (data instanceof Uint8Array) {
+            return data
+        }
+        if (ArrayBuffer.isView(data)) {
+            return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+        }
+
+        // Handle Web/Editor environment
+        if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+            try {
+                const canvas = document.createElement('canvas')
+                canvas.width = imageAsset.width
+                canvas.height = imageAsset.height
+                const ctx = canvas.getContext('2d')
+                if (ctx) {
+                    ctx.drawImage(data as CanvasImageSource, 0, 0)
+                    const imageData = ctx.getImageData(0, 0, imageAsset.width, imageAsset.height)
+                    return new Uint8Array(imageData.data.buffer)
+                }
+            } catch (e) {
+                console.warn('[Animator] Failed to extract image data:', e)
+            }
+        }
+        return null
+    }
+
+    private _mergeAlpha(rgbSf: SpriteFrame, alphaSf: SpriteFrame) {
+        const rgbTex = rgbSf.texture as Texture2D
+        const alphaTex = alphaSf.texture as Texture2D
+        if (!rgbTex || !alphaTex) return
+
+        const rgbImage = rgbTex.image as ImageAsset
+        const alphaImage = alphaTex.image as ImageAsset
+        if (!rgbImage || !alphaImage) return
+
+        if (rgbImage.width !== alphaImage.width || rgbImage.height !== alphaImage.height) return
+
+        const rgbData = this._getImageData(rgbImage)
+        const alphaData = this._getImageData(alphaImage)
+        if (!rgbData || !alphaData) return
+
+        const width = rgbImage.width
+        const height = rgbImage.height
+        const count = width * height
+        const newBuffer = new Uint8Array(count * 4)
+
+        const rgbStep = Math.floor(rgbData.length / count)
+        const alphaStep = Math.floor(alphaData.length / count)
+
+        for (let i = 0; i < count; i++) {
+            newBuffer[i * 4 + 0] = rgbData[i * rgbStep + 0]
+            newBuffer[i * 4 + 1] = rgbData[i * rgbStep + 1]
+            newBuffer[i * 4 + 2] = rgbData[i * rgbStep + 2]
+            newBuffer[i * 4 + 3] = alphaData[i * alphaStep + 0]
+        }
+
+        const newTex = new Texture2D()
+        newTex.reset({
+            width,
+            height,
+            format: Texture2D.PixelFormat.RGBA8888,
         })
+        newTex.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
+        newTex.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.LINEAR)
+        newTex.uploadData(newBuffer)
+
+        rgbSf.texture = newTex
+    }
+
+    private _createTextureFromAlpha(alphaSf: SpriteFrame): SpriteFrame | null {
+        const alphaTex = alphaSf.texture as Texture2D
+        if (!alphaTex) return null
+        const alphaImage = alphaTex.image as ImageAsset
+        if (!alphaImage) return null
+
+        const alphaData = this._getImageData(alphaImage)
+        if (!alphaData) return null
+
+        const width = alphaImage.width
+        const height = alphaImage.height
+        const count = width * height
+        const newBuffer = new Uint8Array(count * 4)
+        const alphaStep = Math.floor(alphaData.length / count)
+
+        for (let i = 0; i < count; i++) {
+            newBuffer[i * 4 + 0] = 255
+            newBuffer[i * 4 + 1] = 255
+            newBuffer[i * 4 + 2] = 255
+            newBuffer[i * 4 + 3] = alphaData[i * alphaStep + 0]
+        }
+
+        const newTex = new Texture2D()
+        newTex.reset({
+            width,
+            height,
+            format: Texture2D.PixelFormat.RGBA8888,
+        })
+        newTex.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
+        newTex.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.LINEAR)
+        newTex.uploadData(newBuffer)
+
+        const newSf = new SpriteFrame()
+        newSf.texture = newTex
+        return newSf
     }
 
     update(dt: number) {
         if (!this._isPlaying || this._activeStates.length === 0) return
 
-        const states = this._activeStates
+        const states = this._activeStates.sort((a, b) => a.z - b.z)
         const nextActiveStates: AnimState[] = []
         const touchedNodes = new Set<Node>()
 
         for (const state of states) {
-            state.time += dt * state.anim.fps * state.speed
-            state.elapsedTotal += dt * 1000
-            const maxTime = state.anim.frames
-            let isFinished = false
+            if (!state.isFinished) {
+                state.time += dt * state.anim.fps * state.speed
+                state.elapsedTotal += dt * 1000
+                const maxTime = state.anim.frames
 
-            if (state.loop && state.duration > 0 && state.elapsedTotal >= state.duration) {
-                isFinished = true
-                if (state.onFinish) {
-                    state.onFinish()
-                }
-            } else if (state.time >= maxTime) {
-                if (state.loop) {
-                    state.time %= maxTime
-                } else {
-                    state.time = maxTime - 0.0001
-                    isFinished = true
+                if (state.loop && state.duration > 0 && state.elapsedTotal >= state.duration) {
+                    state.isFinished = true
                     if (state.onFinish) {
                         state.onFinish()
                     }
-                    const otherAnim = this._activeStates.find(
-                        (s) => s !== state && s.parentResourceName === state.parentResourceName,
-                    )
-                    if (otherAnim) {
-                        otherAnim.time = 0
+                } else if (state.time >= maxTime) {
+                    if (state.loop) {
+                        state.time %= maxTime
+                    } else {
+                        state.time = maxTime - 0.0001
+                        state.isFinished = true
+                        if (state.onFinish) {
+                            state.onFinish()
+                        }
+                        // const otherAnim = this._activeStates.find(
+                        //     (s) => s !== state && s.parentResourceName === state.parentResourceName,
+                        // )
+                        // if (otherAnim) {
+                        //     otherAnim.time = 0
+                        // }
                     }
                 }
             }
 
-            if (!isFinished) {
+            if (!state.isFinished || state.keepLastFrame) {
                 nextActiveStates.push(state)
             }
 
@@ -380,6 +575,7 @@ export class Animator extends Component implements IAnimationController {
             }
         }
         this._activeStates = nextActiveStates
+        console.log(this._activeStates)
 
         for (const node of this._nodes.values()) {
             if (!touchedNodes.has(node)) {

@@ -239,7 +239,7 @@ if __name__ == "__main__":
     for anim_name in anim_list:
         print(f"Processing animation: {anim_name}")
 
-        input_file = f"./tools/raw_reanim/{anim_name}.reanim"
+        input_file = f"./tools/raw_data/reanim/{anim_name}.reanim"
         output_file = f"./assets/resources/animations/{anim_name}.json"
 
         try:

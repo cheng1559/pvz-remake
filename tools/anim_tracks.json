@@ -37,6 +37,7 @@
     "credits_anyhour": [],
     "credits_bigbrain": [],
     "credits_bossdance": ["anim_dance"],
+    "fumeshroom": ["anim_idle", "anim_shooting", "anim_blink", "anim_sleep"],
     "peashooter": ["anim_idle", "anim_head_idle", "anim_shooting", "anim_full_idle", "anim_blink"],
     "peashootersingle": [
         "anim_idle",
@@ -44,6 +45,22 @@
         "anim_shooting",
         "anim_full_idle",
         "anim_blink"
+    ],
+    "selectorscreen": [
+        "anim_cloud1",
+        "anim_cloud2",
+        "anim_cloud4",
+        "anim_cloud5",
+        "anim_cloud6",
+        "anim_cloud7",
+        "anim_start",
+        "anim_flower1",
+        "anim_flower2",
+        "anim_flower3",
+        "anim_grass",
+        "anim_idle",
+        "anim_sign",
+        "anim_open"
     ],
     "squash": [
         "anim_idle",

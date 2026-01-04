@@ -29,6 +29,9 @@
     "credits_anyhour": {},
     "credits_bigbrain": {},
     "credits_bossdance": {},
+    "fumeshroom": {
+        "anim_blink": "anim_face"
+    },
     "peashooter": {
         "anim_shooting": "anim_stem",
         "anim_blink": "anim_face",
@@ -39,6 +42,7 @@
         "anim_blink": "anim_face",
         "anim_head_idle": "anim_stem"
     },
+    "selectorscreen": {},
     "squash": {
         "anim_blink": "anim_face"
     },

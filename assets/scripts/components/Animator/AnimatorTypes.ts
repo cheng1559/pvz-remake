@@ -34,6 +34,10 @@ export interface AnimState {
     speed: number
     duration: number
     elapsedTotal: number
+    keepLastFrame?: boolean
+    isFinished?: boolean
+    z: number
+    onStart?: () => void
     onFinish?: () => void
 }
 
@@ -42,7 +46,10 @@ export interface IAnimationController {
         name: string,
         loop: boolean,
         speed: number,
-        onFinish?: () => void,
         duration?: number,
+        keepLastFrame?: boolean,
+        z?: number,
+        onStart?: () => void,
+        onFinish?: () => void,
     ): Promise<void>
 }

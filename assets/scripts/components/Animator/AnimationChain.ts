@@ -7,6 +7,9 @@ export class AnimationChain {
         type: 'play' | 'loop'
         speed: number
         duration?: number
+        keepLastFrame?: boolean
+        z: number
+        onStart?: () => void
         onFinish?: () => void
     }[] = []
     private _processing: boolean = false
@@ -15,14 +18,38 @@ export class AnimationChain {
         this._owner = owner
     }
 
-    play(name: string, speed: number = 1, onFinish?: () => void) {
-        this._queue.push({ name, type: 'play', speed, onFinish })
+    play(
+        name: string,
+        speed: number = 1,
+        keepLastFrame: boolean = false,
+        z: number = 0,
+        onStart?: () => void,
+        onFinish?: () => void,
+    ) {
+        this._queue.push({ name, type: 'play', speed, keepLastFrame, z, onStart, onFinish })
         this.process()
         return this
     }
 
-    loop(name: string, speed: number = 1, duration: number = 0, onFinish?: () => void) {
-        this._queue.push({ name, type: 'loop', speed, duration, onFinish })
+    loop(
+        name: string,
+        speed: number = 1,
+        duration: number = 0,
+        keepLastFrame: boolean = false,
+        z: number = 0,
+        onStart?: () => void,
+        onFinish?: () => void,
+    ) {
+        this._queue.push({
+            name,
+            type: 'loop',
+            speed,
+            duration,
+            keepLastFrame,
+            z,
+            onStart,
+            onFinish,
+        })
         this.process()
         return this
     }
@@ -40,6 +67,10 @@ export class AnimationChain {
             next.name,
             next.type === 'loop',
             next.speed,
+            next.duration,
+            next.keepLastFrame,
+            next.z,
+            next.onStart,
             () => {
                 if (next.onFinish) next.onFinish()
                 if (waitForFinish) {
@@ -47,7 +78,6 @@ export class AnimationChain {
                     this.process()
                 }
             },
-            next.duration,
         )
 
         if (!waitForFinish) {
