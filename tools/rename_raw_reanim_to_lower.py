@@ -1,18 +1,3 @@
-#!/usr/bin/env python3
-"""Rename files under raw_reanim to lowercase.
-
-Default root: tools/raw_reanim (relative to repo root / current working directory).
-
-Usage:
-  python .\tools\rename_raw_reanim_to_lower.py
-  python .\tools\rename_raw_reanim_to_lower.py --root .\tools\raw_reanim
-  python .\tools\rename_raw_reanim_to_lower.py --dry-run
-
-Notes:
-- On Windows, renaming only by case can fail because the filesystem is usually
-  case-insensitive. This script uses a temporary filename hop when needed.
-"""
-
 from __future__ import annotations
 
 import os

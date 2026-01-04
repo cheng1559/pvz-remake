@@ -1,187 +1,20 @@
 import xml.etree.ElementTree as ET
 import json
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
-ANIM_TRACKS = {
-    "blover": [
-        "anim_idle",
-        "anim_blow",
-        "anim_loop",
-    ],
-    "cabbagepult": [
-        "anim_shooting",
-        "anim_idle",
-        "anim_blink",
-    ],
-    "cactus": [
-        "anim_idle",
-        "anim_shooting",
-        "anim_blink",
-        "anim_rise",
-        "anim_idlehigh",
-        "anim_shootinghigh",
-        "anim_lower"
-    ],
-    "caltrop": [
-        "anim_idle",
-        "anim_attack",
-        "anim_blink",
-    ],
-    "cattail": [
-        "anim_idle",
-        "anim_shooting",
-        "anim_blink",
-    ],
-    "cherrybomb": [
-        "anim_idle",
-        "anim_explode",
-    ],
-    "chomper": [
-        "anim_idle",
-        "anim_bite",
-        "anim_swallow",
-        "anim_chew",
-    ],
-    "cobcannon": [
-        "anim_idle",
-        "anim_shooting",
-        "anim_blink",
-        "anim_charge",
-        "anim_unarmed_idle",
-    ],
-    "coffeebean": [
-        "anim_idle",
-        "anim_twitch",
-        "anim_crumble"
-    ],
-    "coin_gold": [],
-    "coin_silver": [],
-    "cornpult": [
-        "anim_idle",
-        "anim_shooting",
-        "anim_blink",
-        "anim_full_idle"
-    ],
-    "crazydave": [
-        "anim_enterup",
-        "anim_talk_handing",
-        "anim_idle_handing",
-        "anim_enter_handing",
-        "anim_grab",
-        "anim_blink",
-        "anim_mediumtalk",
-        "anim_crazy",
-        "anim_smalltalk",
-        "anim_idle",
-        "anim_blahblah",
-        "anim_leave",
-        "anim_enter",
-    ],
-    "credits_anyhour": [],
-    "credits_bigbrain": [],
-    "credits_bossdance": [
-        "anim_dance"
-    ],
-    "peashooter": [
-        "anim_idle",
-        "anim_head_idle",
-        "anim_shooting",
-        "anim_full_idle"
-        "anim_blink"
-    ],
-    "peashootersingle": [
-        "anim_idle",
-        "anim_head_idle",
-        "anim_shooting",
-        "anim_full_idle",
-        "anim_blink"
-    ],
-    "squash": [
-        "anim_idle",
-        "anim_lookleft",
-        "anim_lookright",
-        "anim_jumpup",
-        "anim_jumpdown",
-        "anim_blink"
-    ],
-    "sunflower": [
-        "anim_idle",
-        "anim_blink",
-    ],
-    "threepeater": [
-        "anim_idle",
-        "anim_head_idle1",
-        "anim_shooting1",
-        "anim_blink1",
-        "anim_head_idle2",
-        "anim_shooting2",
-        "anim_blink2",
-        "anim_head_idle3",
-        "anim_shooting3",
-        "anim_blink3",
-    ],
-}
 
-ANIM_PARENTS = {
-    "blover": {},
-    "cabbagepult": {
-        "anim_blink": "anim_face",
-    },
-    "cactus": {
-        "anim_blink": "anim_face",
-    },
-    "caltrop": {
-        "anim_blink": "anim_face",
-    },
-    "cattail": {
-        "anim_blink": "anim_face",
-    },
-    "cherrybomb": {},
-    "chomper": {},
-    "cobcannon": {
-        "anim_blink": "anim_face",
-    },
-    "coffeebean": {},
-    "coin_gold": {},
-    "coin_silver": {},
-    "cornpult": {
-        "anim_blink": "anim_face",
-    },
-    "crazydave": {
-        "anim_blink": "Dave_head",
-    },
-    "credits_anyhour": {},
-    "credits_bigbrain": {},
-    "credits_bossdance": {},
-    "peashooter": {
-        "anim_shooting": "anim_stem",
-        "anim_blink": "anim_face",
-        "anim_head_idle": "anim_stem",
-    },
-    "peashootersingle": {
-        "anim_shooting": "anim_stem",
-        "anim_blink": "anim_face",
-        "anim_head_idle": "anim_stem",
-    },
-    "squash": {
-        "anim_blink": "anim_face",
-    },
-    "sunflower": {
-        "anim_blink": "anim_idle_data",
-    },
-    "threepeater": {
-        "anim_head_idle1": "anim_head1",
-        "anim_shooting1": "anim_head1",
-        "anim_blink1": "anim_face1",
-        "anim_head_idle2": "anim_head2",
-        "anim_shooting2": "anim_head2",
-        "anim_blink2": "anim_face2",
-        "anim_head_idle3": "anim_head3",
-        "anim_shooting3": "anim_head3",
-        "anim_blink3": "anim_face3",
-    },
-}
+def load_json_config(filename):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(script_dir, filename)
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+ANIM_TRACKS = load_json_config('anim_tracks.json')
+
+ANIM_PARENTS = load_json_config('anim_parents.json')
 
 
 @dataclass
@@ -404,7 +237,6 @@ def parse_reanim_xml(anim_name: str, file_path: str, output_file: str):
 if __name__ == "__main__":
     anim_list = ANIM_TRACKS.keys()
     for anim_name in anim_list:
-        print("-----------------------------")
         print(f"Processing animation: {anim_name}")
 
         input_file = f"./tools/raw_reanim/{anim_name}.reanim"

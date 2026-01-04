@@ -1,0 +1,59 @@
+{
+    "blover": {},
+    "cabbagepult": {
+        "anim_blink": "anim_face"
+    },
+    "cactus": {
+        "anim_blink": "anim_face"
+    },
+    "caltrop": {
+        "anim_blink": "anim_face"
+    },
+    "cattail": {
+        "anim_blink": "anim_face"
+    },
+    "cherrybomb": {},
+    "chomper": {},
+    "cobcannon": {
+        "anim_blink": "anim_face"
+    },
+    "coffeebean": {},
+    "coin_gold": {},
+    "coin_silver": {},
+    "cornpult": {
+        "anim_blink": "anim_face"
+    },
+    "crazydave": {
+        "anim_blink": "Dave_head"
+    },
+    "credits_anyhour": {},
+    "credits_bigbrain": {},
+    "credits_bossdance": {},
+    "peashooter": {
+        "anim_shooting": "anim_stem",
+        "anim_blink": "anim_face",
+        "anim_head_idle": "anim_stem"
+    },
+    "peashootersingle": {
+        "anim_shooting": "anim_stem",
+        "anim_blink": "anim_face",
+        "anim_head_idle": "anim_stem"
+    },
+    "squash": {
+        "anim_blink": "anim_face"
+    },
+    "sunflower": {
+        "anim_blink": "anim_idle_data"
+    },
+    "threepeater": {
+        "anim_head_idle1": "anim_head1",
+        "anim_shooting1": "anim_head1",
+        "anim_blink1": "anim_face1",
+        "anim_head_idle2": "anim_head2",
+        "anim_shooting2": "anim_head2",
+        "anim_blink2": "anim_face2",
+        "anim_head_idle3": "anim_head3",
+        "anim_shooting3": "anim_head3",
+        "anim_blink3": "anim_face3"
+    }
+}
