@@ -1,11 +1,15 @@
 {
-  "__version__": "1.0.6",
-  "custom_joint_texture_layouts": [],
-  "general": {
-    "designResolution": {
-      "width": 800,
-      "height": 600,
-      "fitHeight": true
+    "__version__": "1.0.6",
+    "custom_joint_texture_layouts": [],
+    "general": {
+        "designResolution": {
+            "width": 800,
+            "height": 600,
+            "fitHeight": true
+        },
+        "highQuality": true
+    },
+    "script": {
+        "importMap": "C:\\Users\\jp2022213665\\Documents\\projects\\pvz-remake\\import-map.json"
     }
-  }
 }

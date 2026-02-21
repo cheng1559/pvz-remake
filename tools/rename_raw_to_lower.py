@@ -75,7 +75,7 @@ def rename_all_to_lower(root: Path, *, dry_run: bool = False) -> int:
 
 
 if __name__ == "__main__":
-    root = Path(r"tools/raw_data/reanim")
+    root = Path(r"tools/raw")
     dry_run = False 
 
     count = rename_all_to_lower(root, dry_run=dry_run)

@@ -150,7 +150,7 @@
           },
           "spine": {
             "_value": true,
-            "_option": "spine-3.8"
+            "_option": "spine-4.2"
           },
           "spine-3.8": {
             "_value": true,
@@ -210,7 +210,7 @@
           "physics-2d-box2d",
           "profiler",
           "rich-text",
-          "spine-3.8",
+          "spine-4.2",
           "tiled-map",
           "tween",
           "ui",

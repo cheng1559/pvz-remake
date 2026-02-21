@@ -38,6 +38,7 @@ Thumbs.db
 #//////////////////////////
 agent.md
 
-raw_data/
+raw/
 textures/
+images/
 *.meta

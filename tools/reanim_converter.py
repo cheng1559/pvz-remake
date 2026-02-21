@@ -1,51 +1,10 @@
-import xml.etree.ElementTree as ET
 import json
-import os
-from dataclasses import dataclass, field
+from xml.etree import ElementTree
+from pathlib import Path
 from typing import Any
 
 
-def load_json_config(filename):
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    file_path = os.path.join(script_dir, filename)
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-
-ANIM_TRACKS = load_json_config('anim_tracks.json')
-
-ANIM_PARENTS = load_json_config('anim_parents.json')
-
-
-@dataclass
-class Transform:
-    x: float
-    y: float
-    sx: float
-    sy: float
-    kx: float
-    ky: float
-    alpha: float
-    image: str | None
-
-
-@dataclass
-class ResourceTrack:
-    name: str
-    z: int
-    data: list[dict[str, Any]] = field(default_factory=list)
-
-
-@dataclass
-class AnimationClip:
-    name: str
-    parent: str | None
-    fps: int
-    frames: int
-    resources: list[ResourceTrack | None] = field(default_factory=list)
-
-
-def get_float(xml_elem: ET.Element, tag: str) -> float | None:
+def get_float(xml_elem: ElementTree.Element, tag: str) -> float | None:
     node = xml_elem.find(tag)
     if node is not None and node.text and node.text.strip():
         try:
@@ -55,21 +14,28 @@ def get_float(xml_elem: ET.Element, tag: str) -> float | None:
     return None
 
 
-def get_string(xml_elem: ET.Element, tag: str) -> str | None:
+def get_string(xml_elem: ElementTree.Element, tag: str) -> str | None:
     node = xml_elem.find(tag)
     if node is not None and node.text:
         return node.text.strip()
     return None
 
 
-def parse_track_data(track_node: ET.Element) -> tuple[str, list[dict[str, Any]], list[bool], bool]:
-    """
-    Returns:
-    1. Track Name
-    2. Dense Data List
-    3. Active Mask List
-    4. has_transform_data (bool): True if this track contains any x,y,sx,sy,kx,ky,i
-    """
+def load_json_config(config_dir: Path) -> dict[str, Any]:
+    file_path = config_dir / 'anim_defs.json'
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def load_anim_xml(xml_dir: Path, anim_name: str) -> ElementTree.Element:
+    file_path = xml_dir / f"{anim_name}.reanim"
+    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        raw = f.read()
+    root = ElementTree.fromstring(f"<root>{raw}</root>")
+    return root
+
+
+def parse_track_data(track_node: ElementTree.Element) -> tuple[str, int, list[dict[str, Any]]]:
     name_node = track_node.find('name')
     if name_node is None or name_node.text is None:
         raise ValueError(
@@ -78,173 +44,198 @@ def parse_track_data(track_node: ET.Element) -> tuple[str, list[dict[str, Any]],
 
     curr = {
         'x': 0.0, 'y': 0.0, 'sx': 1.0, 'sy': 1.0,
-        'kx': 0.0, 'ky': 0.0, 'alpha': 1.0, 'image': None
+        'kx': 0.0, 'ky': 0.0, 'alpha': 1.0, 'image': None,
+        'frameIndex': 0
     }
     is_active = True
-    has_data = False
-
-    dense_frames = []
-    active_mask = []
-
+    frames = []
     t_nodes = track_node.findall('t')
+    duration = len(t_nodes)
 
-    if len(t_nodes) > 0:
+    if duration > 0:
         f_init = get_float(t_nodes[0], 'f')
         if f_init == -1:
             is_active = False
 
-    for t_node in t_nodes:
-        f_val = get_float(t_node, 'f')
+    for i, frame_node in enumerate(t_nodes):
+        curr['frameIndex'] = i
+
+        f_val = get_float(frame_node, 'f')
         if f_val == 0:
             is_active = True
         elif f_val == -1:
             is_active = False
 
-        def check_update(tag, key):
-            val = get_float(t_node, tag)
+        def update_tag(tag, key):
+            val = get_float(frame_node, tag)
             if val is not None:
                 curr[key] = val
-                return True
-            return False
 
-        d1 = check_update('x', 'x')
-        d2 = check_update('y', 'y')
-        d3 = check_update('sx', 'sx')
-        d4 = check_update('sy', 'sy')
-        d5 = check_update('kx', 'kx')
-        d6 = check_update('ky', 'ky')
-        d7 = check_update('a', 'alpha')
+        update_tag('x', 'x')
+        update_tag('y', 'y')
+        update_tag('sx', 'sx')
+        update_tag('sy', 'sy')
+        update_tag('kx', 'kx')
+        update_tag('ky', 'ky')
+        update_tag('a', 'alpha')
 
-        val_i = get_string(t_node, 'i')
+        val_i = get_string(frame_node, 'i')
         if val_i is not None:
             assert val_i.startswith('IMAGE_REANIM_'), "Unexpected image format"
             curr['image'] = val_i.replace('IMAGE_REANIM_', '', 1).lower()
-            has_data = True
 
-        if d1 or d2 or d3 or d4 or d5 or d6 or d7:
-            has_data = True
+        if is_active:
+            frames.append(curr.copy())
 
-        dense_frames.append(curr.copy())
-        active_mask.append(is_active)
-
-    return name, dense_frames, active_mask, has_data
+    return name, duration, frames
 
 
-def parse_reanim_xml(anim_name: str, file_path: str, output_file: str):
-    try:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            raw = f.read()
-        root = ET.fromstring(f"<root>{raw}</root>")
-    except Exception as e:
-        print(f"Error reading XML: {e}")
-        return
+def get_animation_data(tracks: dict[str, dict[str, Any]], anim_name: str, fps: int) -> dict[str, Any]:
+    anim_track = tracks.get(anim_name)
+    if anim_track is None:
+        raise ValueError(
+            f"Animation track '{anim_name}' not found in XML.")
 
-    fps_node = root.find('fps')
+    start_frame, end_frame = None, None
+    for frame in anim_track['frames']:
+        if frame is not None:
+            if start_frame is None:
+                start_frame = frame['frameIndex']
+            end_frame = frame['frameIndex']
+
+    if start_frame is None or end_frame is None:
+        raise ValueError(
+            f"Animation '{anim_name}' has no active frames.")
+
+    return {
+        'fps': fps,
+        'duration': end_frame - start_frame + 1,
+        'startFrame': start_frame,
+        'endFrame': end_frame,
+    }
+
+
+def get_slot_data(tracks: dict[str, dict[str, Any]], slot_name: str) -> dict[str, Any]:
+    slot_track = tracks.get(slot_name)
+    if slot_track is None:
+        raise ValueError(
+            f"Slot track '{slot_name}' not found in XML.")
+    return {
+        'frames': [
+            {
+                'frameIndex': frame['frameIndex'],
+                'x': frame['x'],
+                'y': frame['y'],
+                'sx': frame['sx'],
+                'sy': frame['sy'],
+                'kx': frame['kx'],
+                'ky': frame['ky'],
+            }
+            for frame in slot_track['frames']
+        ]
+    }
+
+
+def get_anim_nodes(anim_info: dict[str, Any], anim_xml: ElementTree.Element) -> dict[str, Any]:
+    fps_node = anim_xml.find('fps')
     fps = int(fps_node.text) if fps_node is not None and fps_node.text else 12
 
-    all_tracks = []
-    for t_node in root.findall('track'):
-        all_tracks.append(parse_track_data(t_node))
-
-    controllers = []
-    data_tracks = []
-
-    if anim_name not in ANIM_TRACKS:
-        raise ValueError(
-            f"Animation '{anim_name}' not defined in ANIM_TRACKS.")
-    anim_tracks = ANIM_TRACKS[anim_name]
-
-    for name, frames, mask, has_data in all_tracks:
-        if name in anim_tracks:
-            if has_data:
-                print(
-                    f"Warning: Animation track '{name}' has transform data and will be treated as data track.")
-                data_tracks.append((f"{name}_data", frames, mask))
-            controllers.append((name, mask))
-        else:
-            data_tracks.append((name, frames, mask))
-
-    print(
-        f"Found {len(controllers)} controllers and {len(data_tracks)} data tracks.")
-
-    final_animations = []
-
-    if not controllers:
-        name = "default"
-        mask = [True] * len(data_tracks[0][1])
-        controllers.append((name, mask))
-        print("Warning: No controllers found; created default controller.")
-
-    for ctrl_name, ctrl_mask in controllers:
-        valid_indices = [i for i, active in enumerate(ctrl_mask) if active]
-
-        if not valid_indices:
-            continue
-
-        anim_resources = []
-
-        for z_index, (data_name, data_frames, data_mask) in enumerate(data_tracks):
-
-            extracted_data = []
-
-            for i in valid_indices:
-                if data_mask[i]:
-                    frame_obj = data_frames[i].copy()
-                    # frame_obj['t'] = i - valid_indices[0]
-                else:
-                    frame_obj = None
-                extracted_data.append(frame_obj)
-
-            if any(extracted_data):
-                anim_resources.append(ResourceTrack(
-                    name=data_name, z=z_index, data=extracted_data))
-
-        if anim_name not in ANIM_PARENTS:
-            raise ValueError(
-                f"Animation '{anim_name}' not defined in ANIM_PARENTS.")
-        parent = ANIM_PARENTS[anim_name].get(ctrl_name)
-
-        anim_clip = AnimationClip(
-            name=ctrl_name,
-            parent=parent,
-            fps=fps,
-            frames=len(valid_indices),
-            resources=anim_resources
-        )
-        final_animations.append(anim_clip)
-
-    output_json = []
-    for anim in final_animations:
-        anim_dict = {
-            "name": anim.name,
-            "parent": anim.parent,
-            "fps": anim.fps,
-            "frames": anim.frames,
-            "resources": []
+    tracks: dict[str, dict[str, Any]] = {}
+    anim_duration = None
+    for z, t_node in enumerate(anim_xml.findall('track')):
+        track_name, track_duration, track_frames = parse_track_data(t_node)
+        tracks[track_name] = {
+            'frames': track_frames,
+            'zIndex': z
         }
-        for res in anim.resources:
-            anim_dict["resources"].append({
-                "name": res.name,
-                "z": res.z,
-                "data": res.data
-            })
-        output_json.append(anim_dict)
+        if anim_duration is None:
+            anim_duration = track_duration
+        elif track_duration != anim_duration:
+            raise ValueError(
+                f"Track '{track_name}' has duration {track_duration} which differs from expected {anim_duration}.")
 
-    with open(output_file, 'w') as f:
-        json.dump(output_json, f, separators=(',', ':'))
+    if anim_duration is None:
+        raise ValueError(
+            "No tracks found in XML, cannot determine animation duration.")
+
+    anim_nodes = {}
+    for node_name, node_info in anim_info.items():
+        anim_names = node_info.get('animations', [])
+        slot_names = node_info.get('slots', [])
+
+        animations = {
+            anim_name: get_animation_data(tracks, anim_name, fps)
+            for anim_name in anim_names
+        }
+        if not animations:
+            animations = {
+                'default': {
+                    'fps': fps,
+                    'duration': anim_duration,
+                    'startFrame': 0,
+                    'endFrame': anim_duration - 1
+                }
+            }
+        slots = {
+            slot_name: get_slot_data(tracks, slot_name)
+            for slot_name in slot_names
+        }
+
+        anim_ranges = [
+            (anim_data['startFrame'], anim_data['endFrame'])
+            for anim_data in animations.values()
+        ]
+
+        def filter_frames_in_range(track_data: dict[str, Any]) -> list[dict[str, Any]]:
+            filtered = []
+            for frame in track_data['frames']:
+                fi = frame['frameIndex']
+                for start, end in anim_ranges:
+                    if start <= fi <= end:
+                        filtered.append(frame)
+                        break
+            return filtered
+
+        related_tracks = {}
+        for k, v in tracks.items():
+            filtered = filter_frames_in_range(v)
+            if filtered:
+                related_tracks[k] = {
+                    'frames': filtered,
+                    'zIndex': v['zIndex']
+                }
+
+        anim_nodes[node_name] = {
+            'animations': animations,
+            'slots': slots,
+            'tracks': related_tracks
+        }
+
+    return anim_nodes
+
+
+def save_anim_data(output_dir: Path, anim_name: str, anim_nodes: dict[str, Any]):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with open(output_dir / f"{anim_name}.json", 'w') as f:
+        json.dump(anim_nodes, f, separators=(',', ':'))
+    node_names = ', '.join(anim_nodes.keys())
+    print(f"Saved {anim_name}.json with nodes: {node_names}")
+
+
+def main():
+    config_dir = Path("./tools")
+    xml_dir = Path("./tools/raw/reanim")
+    output_dir = Path("./assets/resources/animations")
+
+    anim_defs = load_json_config(config_dir)
+    for anim_name, anim_info in anim_defs.items():
+        print(f"Processing animation: {anim_name}")
+
+        anim_xml = load_anim_xml(xml_dir, anim_name)
+        anim_nodes = get_anim_nodes(anim_info, anim_xml)
+        save_anim_data(output_dir, anim_name, anim_nodes)
+        print("-----------------------------")
 
 
 if __name__ == "__main__":
-    anim_list = ANIM_TRACKS.keys()
-    for anim_name in anim_list:
-        print(f"Processing animation: {anim_name}")
-
-        input_file = f"./tools/raw_data/reanim/{anim_name}.reanim"
-        output_file = f"./assets/resources/animations/{anim_name}.json"
-
-        try:
-            parse_reanim_xml(anim_name, input_file, output_file)
-            print(f"Generated flat animation list: {output_file}")
-        except Exception as e:
-            print(f"Failed: {e}")
-        print("-----------------------------")
+    main()
