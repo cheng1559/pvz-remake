@@ -23,11 +23,9 @@ enum ButtonState {
     DISABLED,
 }
 
-@ccclass('CustomButton')
-export class CustomButton extends Component {
-    private static _activeButton: CustomButton | null = null
-
-    // ── 图像状态 ──────────────────────────────────────────
+@ccclass('UIButton')
+export class UIButton extends Component {
+    private static _activeButton: UIButton | null = null
 
     @property(SpriteFrame)
     normalSprite: SpriteFrame | null = null
@@ -41,21 +39,14 @@ export class CustomButton extends Component {
     @property(SpriteFrame)
     disabledSprite: SpriteFrame | null = null
 
-    // ── 按下偏移 ──────────────────────────────────────────
-
     @property(Vec3)
     pressOffset = new Vec3(1, -1, 0)
-
-    // ── 多边形判定区域（本地坐标，留空则用矩形） ──────────
 
     @property([Vec2])
     polygon: Vec2[] = []
 
-    // ── 交互 ──────────────────────────────────────────────
-
     private _interactable: boolean = true
 
-    /** 完全不可交互（不响应任何触摸/鼠标事件） */
     @property
     public get interactable(): boolean {
         return this._interactable
@@ -72,8 +63,6 @@ export class CustomButton extends Component {
             this._setCursor('default')
         }
     }
-
-    // ── 锁定（灰色，仍可点击，触发 onClickLocked） ───────
 
     private _locked: boolean = false
 
@@ -94,18 +83,12 @@ export class CustomButton extends Component {
         }
     }
 
-    /** 是否在 hover 时切换鼠标样式 */
     @property
     changeCursor: boolean = true
 
-    // ── 点击回调（代码注册） ──────────────────────────────
-
     public onClick: ((event: EventTouch) => void) | null = null
 
-    /** locked 状态下点击的回调 */
     public onClickLocked: ((event: EventTouch) => void) | null = null
-
-    // ── 颜色叠加（与纹理像素相乘） ──────────────────────
 
     private _color: Color = Color.WHITE.clone()
 
@@ -117,8 +100,6 @@ export class CustomButton extends Component {
         this._color.set(value)
         this._applyColor()
     }
-
-    // ── 私有 ──────────────────────────────────────────────
 
     private _sprite: Sprite | null = null
     private _originPos = new Vec3()
@@ -133,7 +114,6 @@ export class CustomButton extends Component {
         this._applyState(ButtonState.NORMAL)
     }
 
-    /** 更新按钮的基准位置（不影响当前按下偏移状态） */
     public updateOriginPos(pos: Vec3) {
         Vec3.copy(this._originPos, pos)
         if (this._state === ButtonState.PRESSED) {
@@ -161,13 +141,11 @@ export class CustomButton extends Component {
         this.node.off(Node.EventType.MOUSE_LEAVE, this._onMouseLeave, this)
     }
 
-    // ── 事件处理 ──────────────────────────────────────────
-
     private _onTouchStart(event: EventTouch) {
         if (!this._interactable) return
         this._pressed = true
         event.propagationStopped = true
-        CustomButton._activeButton = this
+        UIButton._activeButton = this
         this._applyState(ButtonState.PRESSED)
         this._applyOffset()
     }
@@ -194,7 +172,7 @@ export class CustomButton extends Component {
         this._releaseOffset()
 
         const inside = this._isTouchInside(event)
-        CustomButton._activeButton = null
+        UIButton._activeButton = null
         this._applyState(this._hovering ? ButtonState.HOVER : ButtonState.NORMAL)
         this._setCursor(this._hovering ? 'pointer' : 'default')
         if (!this._locked) {
@@ -209,7 +187,7 @@ export class CustomButton extends Component {
         if (!this._pressed) return
         this._pressed = false
         this._releaseOffset()
-        CustomButton._activeButton = null
+        UIButton._activeButton = null
         this._applyState(this._hovering ? ButtonState.HOVER : ButtonState.NORMAL)
     }
 
@@ -223,7 +201,7 @@ export class CustomButton extends Component {
     private _onMouseEnter() {
         if (!this._interactable) return
         this._hovering = true
-        if (CustomButton._activeButton && CustomButton._activeButton !== this) return
+        if (UIButton._activeButton && UIButton._activeButton !== this) return
         if (this._pressed) return
         this._applyState(ButtonState.HOVER)
         this._setCursor('pointer')
@@ -232,13 +210,11 @@ export class CustomButton extends Component {
     private _onMouseLeave() {
         if (!this._interactable) return
         this._hovering = false
-        if (CustomButton._activeButton && CustomButton._activeButton !== this) return
+        if (UIButton._activeButton && UIButton._activeButton !== this) return
         if (this._pressed) return
         this._applyState(ButtonState.NORMAL)
         this._setCursor('default')
     }
-
-    // ── 状态切换 ──────────────────────────────────────────
 
     private _applyState(state: ButtonState) {
         this._state = state
@@ -272,8 +248,6 @@ export class CustomButton extends Component {
         }
     }
 
-    // ── 按下偏移 ──────────────────────────────────────────
-
     private _applyOffset() {
         const pos = new Vec3()
         Vec3.add(pos, this._originPos, this.pressOffset)
@@ -284,8 +258,6 @@ export class CustomButton extends Component {
         this.node.setPosition(this._originPos)
     }
 
-    // ── 光标样式 ─────────────────────────────────────────
-
     private _setCursor(style: string) {
         if (!this.changeCursor) return
         if (sys.isBrowser) {
@@ -293,8 +265,6 @@ export class CustomButton extends Component {
             if (canvas) canvas.style.cursor = style
         }
     }
-
-    // ── 多边形碰撞检测 ───────────────────────────────────
 
     private _setupHitTest() {
         if (this.polygon.length < 3) return

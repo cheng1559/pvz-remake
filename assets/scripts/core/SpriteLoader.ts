@@ -1,29 +1,15 @@
 import { SpriteFrame, Texture2D, ImageAsset, resources, warn } from 'cc'
 
-/**
- * 全局精灵帧加载工具
- * - 支持自动查找并合并 alpha 通道贴图（前缀 `_` 或后缀 `_`）
- * - 结果全局缓存，同一 key 只加载一次
- * - 支持自定义 resources 子目录前缀（默认 `textures`）
- */
 export class SpriteLoader {
     private static _cache: Map<string, SpriteFrame> = new Map()
 
-    /** 默认 resources 子目录前缀 */
-
     // ── Public API ─────────────────────────────────────────────
 
-    /**
-     * 加载一张 SpriteFrame，自动处理 alpha 通道合并
-     * @param name 资源名（不含前缀路径，如 `selectorscreen_bg`）
-     * @param prefix resources 子目录前缀，默认 `textures`
-     */
     static async load(name: string, prefix: string = 'textures'): Promise<SpriteFrame | null> {
         if (this._cache.has(name)) return this._cache.get(name)!
 
         let mainSf = await this._loadRaw(prefix, name)
 
-        // 查找 alpha 贴图：_name 或 name_
         const lastSlash = name.lastIndexOf('/')
         const alphaName1 =
             lastSlash >= 0
@@ -50,7 +36,6 @@ export class SpriteLoader {
         return mainSf
     }
 
-    /** 从缓存中获取已加载的 SpriteFrame */
     static get(name: string): SpriteFrame | undefined {
         const sf = this._cache.get(name)
         if (!sf) {
@@ -59,7 +44,6 @@ export class SpriteLoader {
         return sf
     }
 
-    /** 清除全部缓存 */
     static clearCache() {
         this._cache.clear()
     }

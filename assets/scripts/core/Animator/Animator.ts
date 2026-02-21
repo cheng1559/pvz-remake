@@ -71,7 +71,6 @@ export class Animator extends Component {
         this._externalNodes.add(name)
     }
 
-    /** 获取指定 track 的当前帧数据（不受 hideTrack 影响） */
     public getTrackFrame(trackName: string): TrackFrameData | null {
         for (let i = this._animNodes.length - 1; i >= 0; i--) {
             for (const cf of this._animNodes[i].computedFrames) {
@@ -81,12 +80,10 @@ export class Animator extends Component {
         return null
     }
 
-    /** 设置 track 的叠加颜色（与纹理像素相乘） */
     public setTrackColor(name: string, color: Color) {
         this._trackColors.set(name, color.clone())
     }
 
-    /** 获取 track 的叠加颜色，未设置则返回白色 */
     public getTrackColor(name: string): Color {
         return this._trackColors.get(name) ?? Color.WHITE
     }
