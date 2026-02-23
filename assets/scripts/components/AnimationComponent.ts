@@ -15,11 +15,13 @@ export class AnimationComponent extends Component {
         this.initAnimator()
     }
 
+    protected onReady() {}
+
     protected delay(seconds: number): Promise<void> {
         return new Promise((resolve) => this.scheduleOnce(resolve, seconds))
     }
 
-    private initAnimator() {
+    private async initAnimator() {
         let animatorNode = this.node.getChildByName('Animator')
         if (!animatorNode) {
             animatorNode = new Node('Animator')
@@ -36,9 +38,11 @@ export class AnimationComponent extends Component {
         this.animator = animatorNode.getComponent(Animator) || animatorNode.addComponent(Animator)
 
         if (this.animation && this.animation.json) {
-            this.animator.parseJson(this.animation.json as Record<string, AnimNodeData>)
+            await this.animator.parseJson(this.animation.json as Record<string, AnimNodeData>)
         } else {
             error('[AnimationComponent] Animation JSON asset is missing!')
         }
+
+        this.onReady()
     }
 }

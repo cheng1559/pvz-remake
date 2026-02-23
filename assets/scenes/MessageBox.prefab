@@ -1,0 +1,156 @@
+[
+  {
+    "__type__": "cc.Prefab",
+    "_name": "MessageBox",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "_native": "",
+    "data": {
+      "__id__": 1
+    },
+    "optimizationPolicy": 0,
+    "persistent": false
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "MessageBox",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "_parent": null,
+    "_children": [],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 2
+      },
+      {
+        "__id__": 4
+      }
+    ],
+    "_prefab": {
+      "__id__": 6
+    },
+    "_lpos": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_lrot": {
+      "__type__": "cc.Quat",
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "w": 1
+    },
+    "_lscale": {
+      "__type__": "cc.Vec3",
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "_mobility": 0,
+    "_layer": 33554432,
+    "_euler": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_id": ""
+  },
+  {
+    "__type__": "cc.UITransform",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 3
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 100,
+      "height": 100
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_id": ""
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "981uLKfMBD/IyB6CZr7Jh8"
+  },
+  {
+    "__type__": "35f6cqWHjVIv7irkzTenGbk",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 5
+    },
+    "dragHandle": null,
+    "dialogWidth": 500,
+    "dialogHeight": 300,
+    "dialogType": 0,
+    "title": "",
+    "message": "",
+    "titleFontConfig": {
+      "__uuid__": "a96d350f-cdaa-4a42-9232-901408da618b",
+      "__expectedType__": "cc.JsonAsset"
+    },
+    "titleFontTextures": [
+      {
+        "__uuid__": "34522ec2-cad7-4cea-8144-c54a0af9e7a1@6c48a",
+        "__expectedType__": "cc.Texture2D"
+      }
+    ],
+    "messageFontConfig": {
+      "__uuid__": "f6d88d2e-f10a-4db2-a1ed-8075059966ad",
+      "__expectedType__": "cc.JsonAsset"
+    },
+    "messageFontTextures": [
+      {
+        "__uuid__": "3c1d8c84-641a-45fe-a60a-a2124b2585f5@6c48a",
+        "__expectedType__": "cc.Texture2D"
+      }
+    ],
+    "buttonFontConfig": {
+      "__uuid__": "cefea039-2ab9-4796-b48c-33c4cc1f5344",
+      "__expectedType__": "cc.JsonAsset"
+    },
+    "buttonFontTextures": [
+      {
+        "__uuid__": "8be5a15b-52de-4778-87f4-4ee4ed26c8a0@6c48a",
+        "__expectedType__": "cc.Texture2D"
+      }
+    ],
+    "_id": ""
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "c8OKfqeCJIULE02ehi5Bz/"
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__id__": 0
+    },
+    "fileId": "e7gmWZXJlItLCnpDc5G0Rj",
+    "instance": null,
+    "targetOverrides": null
+  }
+]

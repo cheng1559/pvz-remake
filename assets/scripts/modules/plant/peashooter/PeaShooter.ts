@@ -55,7 +55,7 @@ export class Plant extends AnimationComponent {
         })
     }
 
-    start() {
+    onReady() {
         this.init()
         this.idle()
         this.schedule(() => {

@@ -50,7 +50,16 @@ export class SelectorScreen extends AnimationComponent {
         offsetY: number
     }[] = []
 
-    init() {
+    private _uiController: any = null
+
+    public set uiController(controller: any) {
+        this._uiController = controller
+    }
+
+    async init() {
+        // if (uiController) {
+        //     this._uiController = uiController
+        // }
         const cloudNames = ['cloud1', 'cloud2', 'cloud4', 'cloud5', 'cloud6', 'cloud7']
         for (const name of cloudNames) {
             const node = this.animator.addAnimNode(name)
@@ -66,7 +75,7 @@ export class SelectorScreen extends AnimationComponent {
         }
 
         this._initButtonContainer()
-        this._createButtons()
+        await this._createButtons()
         this._initZombieHandAnim()
     }
 
@@ -173,6 +182,10 @@ export class SelectorScreen extends AnimationComponent {
             btn.locked = true
             btn.onClickLocked = () => {
                 console.log(`[SelectorScreen] Locked button clicked: ${name}`)
+                this._uiController.showMessageBox(
+                    'Locked!',
+                    `Play more Adventure mode to unlock ${name} Mode.`,
+                )
             }
         }
     }
@@ -397,9 +410,16 @@ export class SelectorScreen extends AnimationComponent {
         })
     }
 
-    async start() {
-        this.init()
-        await this.delay(1)
+    onShowMessageBoxClicked() {
+        if (this._uiController) {
+            this._uiController.showMessageBox('Message', 'Hello from SelectorScreen!')
+        } else {
+            console.warn('[SelectorScreen] UIController not assigned.')
+        }
+    }
+
+    protected async onReady() {
+        await this.init()
         this.playOpenAnimation()
     }
 }
