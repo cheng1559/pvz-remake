@@ -251,16 +251,16 @@ export class MessageBox extends Component {
 
         // Load all sprites
         const sprites = await Promise.all([
-            SpriteLoader.load('dialog_topleft', 'images'),
-            SpriteLoader.load('dialog_topmiddle', 'images'),
-            SpriteLoader.load('dialog_topright', 'images'),
-            SpriteLoader.load('dialog_centerleft', 'images'),
-            SpriteLoader.load('dialog_centermiddle', 'images'),
-            SpriteLoader.load('dialog_centerright', 'images'),
-            SpriteLoader.load(`${bottomPrefix}left`, 'images'),
-            SpriteLoader.load(`${bottomPrefix}middle`, 'images'),
-            SpriteLoader.load(`${bottomPrefix}right`, 'images'),
-            SpriteLoader.load('dialog_header', 'images'),
+            SpriteLoader.load('dialog_topleft'),
+            SpriteLoader.load('dialog_topmiddle'),
+            SpriteLoader.load('dialog_topright'),
+            SpriteLoader.load('dialog_centerleft'),
+            SpriteLoader.load('dialog_centermiddle'),
+            SpriteLoader.load('dialog_centerright'),
+            SpriteLoader.load(`${bottomPrefix}left`),
+            SpriteLoader.load(`${bottomPrefix}middle`),
+            SpriteLoader.load(`${bottomPrefix}right`),
+            SpriteLoader.load('dialog_header'),
         ])
 
         const [
@@ -495,12 +495,12 @@ export class MessageBox extends Component {
     private async _loadButtonSprites() {
         if (MessageBox._btnLeft) return // already loaded
         const [left, mid, right, dLeft, dMid, dRight] = await Promise.all([
-            SpriteLoader.load('button_left', 'images'),
-            SpriteLoader.load('button_middle', 'images'),
-            SpriteLoader.load('button_right', 'images'),
-            SpriteLoader.load('button_down_left', 'images'),
-            SpriteLoader.load('button_down_middle', 'images'),
-            SpriteLoader.load('button_down_right', 'images'),
+            SpriteLoader.load('button_left'),
+            SpriteLoader.load('button_middle'),
+            SpriteLoader.load('button_right'),
+            SpriteLoader.load('button_down_left'),
+            SpriteLoader.load('button_down_middle'),
+            SpriteLoader.load('button_down_right'),
         ])
         MessageBox._btnLeft = left
         MessageBox._btnMiddle = mid

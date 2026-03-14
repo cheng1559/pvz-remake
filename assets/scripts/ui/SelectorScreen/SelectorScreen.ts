@@ -118,8 +118,8 @@ export class SelectorScreen extends AnimationComponent {
         const promises: Promise<any>[] = []
         for (const configs of groups) {
             for (const c of configs) {
-                promises.push(SpriteLoader.load(c.normalImage, c.spriteDir))
-                promises.push(SpriteLoader.load(c.pressedImage, c.spriteDir))
+                promises.push(SpriteLoader.load(c.normalImage))
+                promises.push(SpriteLoader.load(c.pressedImage))
             }
         }
         return Promise.all(promises)

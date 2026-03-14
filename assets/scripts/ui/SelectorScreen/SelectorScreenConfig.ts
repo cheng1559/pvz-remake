@@ -102,7 +102,6 @@ const AUX_BUTTON_CONFIGS: ButtonConfig[] = [
         pressedImage: 'selectorscreen_zengardenhighlight',
         width: 130,
         height: 130,
-        spriteDir: 'images',
     },
     {
         name: 'store',
@@ -114,7 +113,6 @@ const AUX_BUTTON_CONFIGS: ButtonConfig[] = [
         },
         normalImage: 'selectorscreen_store',
         pressedImage: 'selectorscreen_storehighlight',
-        spriteDir: 'images',
     },
     {
         name: 'almanac',
@@ -126,7 +124,6 @@ const AUX_BUTTON_CONFIGS: ButtonConfig[] = [
         },
         normalImage: 'selectorscreen_almanac',
         pressedImage: 'selectorscreen_almanachighlight',
-        spriteDir: 'images',
     },
     {
         name: 'achievement',
@@ -138,7 +135,6 @@ const AUX_BUTTON_CONFIGS: ButtonConfig[] = [
         },
         normalImage: 'achievements_pedestal',
         pressedImage: 'achievements_pedestal_press',
-        spriteDir: 'images',
     },
     {
         name: 'options',
@@ -153,7 +149,6 @@ const AUX_BUTTON_CONFIGS: ButtonConfig[] = [
         width: 81,
         height: 31 + 23,
         offsetY: 13,
-        spriteDir: 'images',
     },
     {
         name: 'help',
@@ -168,7 +163,6 @@ const AUX_BUTTON_CONFIGS: ButtonConfig[] = [
         width: 48,
         height: 22 + 33,
         offsetY: 28,
-        spriteDir: 'images',
     },
     {
         name: 'quit',
@@ -184,7 +178,6 @@ const AUX_BUTTON_CONFIGS: ButtonConfig[] = [
         height: 27 + 10,
         offsetX: 5,
         offsetY: 3,
-        spriteDir: 'images',
     },
 ]
 

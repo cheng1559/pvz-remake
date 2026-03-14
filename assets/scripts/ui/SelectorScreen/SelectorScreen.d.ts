@@ -20,7 +20,6 @@ interface ButtonConfig {
     height?: number
     polygon?: Vec2[]
     pressOffset?: Vec3
-    spriteDir?: string
 }
 
 export type { ButtonConfig }

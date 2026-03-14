@@ -5,10 +5,10 @@ export class SpriteLoader {
 
     // ── Public API ─────────────────────────────────────────────
 
-    static async load(name: string, prefix: string = 'textures'): Promise<SpriteFrame | null> {
+    static async load(name: string): Promise<SpriteFrame | null> {
         if (this._cache.has(name)) return this._cache.get(name)!
 
-        let mainSf = await this._loadRaw(prefix, name)
+        let mainSf = await this._loadRaw(name)
 
         const lastSlash = name.lastIndexOf('/')
         const alphaName1 =
@@ -17,8 +17,8 @@ export class SpriteLoader {
                 : '_' + name
         const alphaName2 = name + '_'
 
-        let alphaSf = await this._loadRaw(prefix, alphaName1)
-        if (!alphaSf) alphaSf = await this._loadRaw(prefix, alphaName2)
+        let alphaSf = await this._loadRaw(alphaName1)
+        if (!alphaSf) alphaSf = await this._loadRaw(alphaName2)
 
         if (alphaSf) {
             if (mainSf) {
@@ -31,7 +31,7 @@ export class SpriteLoader {
         if (mainSf) {
             this._cache.set(name, mainSf)
         } else {
-            warn(`[SpriteLoader] Failed to load sprite '${name}' with prefix '${prefix}'`)
+            warn(`[SpriteLoader] Failed to load sprite '${name}'`)
         }
         return mainSf
     }
@@ -50,14 +50,14 @@ export class SpriteLoader {
 
     // ── Raw Loading ────────────────────────────────────────────
 
-    private static _loadRaw(prefix: string, name: string): Promise<SpriteFrame | null> {
+    private static _loadRaw(name: string): Promise<SpriteFrame | null> {
         return new Promise((resolve) => {
-            resources.load(`${prefix}/${name}/spriteFrame`, SpriteFrame, (err, sf) => {
+            resources.load(`textures/${name}/spriteFrame`, SpriteFrame, (err, sf) => {
                 if (!err && sf) {
                     resolve(sf)
                     return
                 }
-                resources.load(`${prefix}/${name}`, SpriteFrame, (err2, sf2) => {
+                resources.load(`textures/${name}`, SpriteFrame, (err2, sf2) => {
                     if (!err2 && sf2) resolve(sf2)
                     else resolve(null)
                 })
