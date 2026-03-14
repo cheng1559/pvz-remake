@@ -16,6 +16,7 @@ import {
     Widget,
     Vec2,
     Vec3,
+    resources,
 } from 'cc'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { UIButton } from '@/ui/Button/UIButton'
@@ -58,24 +59,6 @@ export class MessageBox extends Component {
     @property
     message: string = ''
 
-    @property({ type: JsonAsset, tooltip: '标题字体 JSON 配置' })
-    titleFontConfig: JsonAsset | null = null
-
-    @property({ type: [Texture2D], tooltip: '标题字体图集纹理' })
-    titleFontTextures: Texture2D[] = []
-
-    @property({ type: JsonAsset, tooltip: '内容字体 JSON 配置' })
-    messageFontConfig: JsonAsset | null = null
-
-    @property({ type: [Texture2D], tooltip: '内容字体图集纹理' })
-    messageFontTextures: Texture2D[] = []
-
-    @property({ type: JsonAsset, tooltip: '按钮字体 JSON 配置' })
-    buttonFontConfig: JsonAsset | null = null
-
-    @property({ type: [Texture2D], tooltip: '按钮字体图集纹理' })
-    buttonFontTextures: Texture2D[] = []
-
     private _bgContainer: Node | null = null
     private _buttonContainer: Node | null = null
     private _modalBlocker: Node | null = null
@@ -96,6 +79,50 @@ export class MessageBox extends Component {
     private static _btnDownLeft: SpriteFrame | null = null
     private static _btnDownMiddle: SpriteFrame | null = null
     private static _btnDownRight: SpriteFrame | null = null
+
+    // Cached font assets (loaded once)
+    private static _fontCache: Map<string, { config: JsonAsset; texture: Texture2D }> = new Map()
+
+    /**
+     * Load a bitmap font (JSON config + texture) from resources/fonts/ by name.
+     * Results are cached so each font is only loaded once.
+     */
+    private static _loadFont(
+        name: string,
+    ): Promise<{ config: JsonAsset; texture: Texture2D } | null> {
+        const cached = MessageBox._fontCache.get(name)
+        if (cached) return Promise.resolve(cached)
+
+        return new Promise((resolve) => {
+            resources.load(`fonts/${name}`, JsonAsset, (err, jsonAsset) => {
+                if (err || !jsonAsset) {
+                    console.error(`[MessageBox] Failed to load font config: fonts/${name}`, err)
+                    resolve(null)
+                    return
+                }
+                const cfg = jsonAsset.json as any
+                const imageName = cfg.layers?.[0]?.image
+                if (!imageName) {
+                    console.error(`[MessageBox] No layer image in font: ${name}`)
+                    resolve(null)
+                    return
+                }
+                resources.load(`fonts/${imageName}/texture`, Texture2D, (err2, tex) => {
+                    if (err2 || !tex) {
+                        console.error(
+                            `[MessageBox] Failed to load font texture: fonts/${imageName}`,
+                            err2,
+                        )
+                        resolve(null)
+                        return
+                    }
+                    const entry = { config: jsonAsset, texture: tex }
+                    MessageBox._fontCache.set(name, entry)
+                    resolve(entry)
+                })
+            })
+        })
+    }
 
     start() {
         this._createModalBlocker()
@@ -393,8 +420,9 @@ export class MessageBox extends Component {
 
         // ── Create title FontRenderer ──
         this._destroyFontNode(this._titleNode)
-        if (this.titleFontConfig) {
-            const titleCfg = this.titleFontConfig.json as any
+        const titleFontData = await MessageBox._loadFont('dwarventodcraft24')
+        if (titleFontData) {
+            const titleCfg = titleFontData.config.json as any
             const titleL0 = titleCfg.layers?.[0]
             const titleAscentPad = titleL0?.ascentPadding ?? 0
             const titleAscent = titleL0?.ascent ?? 0
@@ -408,8 +436,8 @@ export class MessageBox extends Component {
             const titleUt = this._titleNode.addComponent(UITransform)
             titleUt.setAnchorPoint(0, 1)
             const titleFont = this._titleNode.addComponent(FontRenderer)
-            titleFont.fontConfigJson = this.titleFontConfig
-            titleFont.layerTextures = this.titleFontTextures
+            titleFont.fontConfigJson = titleFontData.config
+            titleFont.layerTextures = [titleFontData.texture]
             titleFont.fontColor = new Color(0xe0, 0xbb, 0x62)
             titleFont.string = this.title
             this.node.addChild(this._titleNode)
@@ -427,7 +455,8 @@ export class MessageBox extends Component {
 
         // ── Create message FontRenderer ──
         this._destroyFontNode(this._messageNode)
-        if (this.messageFontConfig) {
+        const msgFontData = await MessageBox._loadFont('dwarventodcraft15')
+        if (msgFontData) {
             // Message X in C++ coords: backgroundInsets.left + contentInsets.left + 2
             const msgX_cpp = BG_INSET + CONTENT_INSET_LEFT + 2
 
@@ -436,8 +465,8 @@ export class MessageBox extends Component {
             const msgUt = this._messageNode.addComponent(UITransform)
             msgUt.setAnchorPoint(0, 1)
             const msgFont = this._messageNode.addComponent(FontRenderer)
-            msgFont.fontConfigJson = this.messageFontConfig
-            msgFont.layerTextures = this.messageFontTextures
+            msgFont.fontConfigJson = msgFontData.config
+            msgFont.layerTextures = [msgFontData.texture]
             msgFont.fontColor = new Color(0xe0, 0xbb, 0x62)
             // Lines area width for word wrapping
             const CONTENT_INSET_RIGHT = 46
@@ -522,6 +551,12 @@ export class MessageBox extends Component {
         await this._loadButtonSprites()
         if (!MessageBox._btnLeft) return
 
+        // Pre-load button fonts
+        const [btnNormalFont, btnHighlightFont] = await Promise.all([
+            MessageBox._loadFont('dwarventodcraft18greeninset'),
+            MessageBox._loadFont('dwarventodcraft18brightgreeninset'),
+        ])
+
         // Create button container
         if (!this._buttonContainer) {
             this._buttonContainer = new Node('ButtonContainer')
@@ -591,6 +626,8 @@ export class MessageBox extends Component {
                     localY,
                     w,
                     btnH,
+                    btnNormalFont,
+                    btnHighlightFont,
                     cfg.onClick,
                 )
                 this._buttonContainer.addChild(btnNode)
@@ -614,6 +651,8 @@ export class MessageBox extends Component {
                 localY,
                 btnW,
                 btnH,
+                btnNormalFont,
+                btnHighlightFont,
                 cfg.onClick,
             )
             this._buttonContainer.addChild(btnNode)
@@ -631,6 +670,8 @@ export class MessageBox extends Component {
         y: number,
         width: number,
         height: number,
+        normalFont: { config: JsonAsset; texture: Texture2D } | null,
+        highlightFont: { config: JsonAsset; texture: Texture2D } | null,
         onClick?: () => void,
     ): Node {
         const btnRoot = new Node(`Btn_${label}`)
@@ -661,26 +702,44 @@ export class MessageBox extends Component {
         pressedContainer.active = false
         btnRoot.addChild(pressedContainer)
 
-        // FontRenderer label
+        // FontRenderer label (normal state)
         const labelNode = new Node('Label')
         labelNode.layer = Layers.Enum.UI_2D
         const labelUt = labelNode.addComponent(UITransform)
         labelUt.setAnchorPoint(0, 1) // top-left, matching FontRenderer render origin
         const fontComp = labelNode.addComponent(FontRenderer)
-        if (this.buttonFontConfig) {
-            fontComp.fontConfigJson = this.buttonFontConfig
-        }
-        if (this.buttonFontTextures.length > 0) {
-            fontComp.layerTextures = this.buttonFontTextures
+        if (normalFont) {
+            fontComp.fontConfigJson = normalFont.config
+            fontComp.layerTextures = [normalFont.texture]
         }
         fontComp.fontColor = new Color(213, 255, 196)
         fontComp.string = label
         btnRoot.addChild(labelNode)
         fontComp.forceRebuild()
+
+        // FontRenderer label (highlight state)
+        const hlLabelNode = new Node('LabelHighlight')
+        hlLabelNode.layer = Layers.Enum.UI_2D
+        const hlLabelUt = hlLabelNode.addComponent(UITransform)
+        hlLabelUt.setAnchorPoint(0, 1)
+        const hlFontComp = hlLabelNode.addComponent(FontRenderer)
+        if (highlightFont) {
+            hlFontComp.fontConfigJson = highlightFont.config
+            hlFontComp.layerTextures = [highlightFont.texture]
+        }
+        hlFontComp.fontColor = new Color(213, 255, 196)
+        hlFontComp.string = label
+        hlLabelNode.active = false
+        btnRoot.addChild(hlLabelNode)
+        hlFontComp.forceRebuild()
+
         // Center text within button bounds
         const labelX = (width - fontComp.contentWidth) / 2
         const labelY = (height + fontComp.contentHeight) / 2
         labelNode.setPosition(labelX, labelY)
+        const hlLabelX = (width - hlFontComp.contentWidth) / 2
+        const hlLabelY = (height + hlFontComp.contentHeight) / 2
+        hlLabelNode.setPosition(hlLabelX, hlLabelY)
 
         // UIButton for interaction
         const uiBtn = btnRoot.addComponent(UIButton)
@@ -700,12 +759,22 @@ export class MessageBox extends Component {
 
         // Override state changes to swap containers + shift label
         let isDown = false
+        let isHover = false
+        const showHighlight = () => {
+            labelNode.active = false
+            hlLabelNode.active = true
+        }
+        const showNormal = () => {
+            labelNode.active = true
+            hlLabelNode.active = false
+        }
         const press = () => {
             if (!isDown) {
                 isDown = true
                 normalContainer.active = false
                 pressedContainer.active = true
-                labelNode.setPosition(labelX + 1, labelY - 1)
+                showHighlight()
+                hlLabelNode.setPosition(hlLabelX + 1, hlLabelY - 1)
             }
         }
         const release = () => {
@@ -713,7 +782,13 @@ export class MessageBox extends Component {
                 isDown = false
                 normalContainer.active = true
                 pressedContainer.active = false
-                labelNode.setPosition(labelX, labelY)
+                if (isHover) {
+                    showHighlight()
+                    hlLabelNode.setPosition(hlLabelX, hlLabelY)
+                } else {
+                    showNormal()
+                    labelNode.setPosition(labelX, labelY)
+                }
             }
         }
         const isInsideButton = (event: EventTouch): boolean => {
@@ -721,6 +796,20 @@ export class MessageBox extends Component {
             const localPos = ut.convertToNodeSpaceAR(new Vec3(uiPos.x, uiPos.y, 0))
             return localPos.x >= 0 && localPos.x <= width && localPos.y >= 0 && localPos.y <= height
         }
+        btnRoot.on(Node.EventType.MOUSE_ENTER, () => {
+            isHover = true
+            if (!isDown) {
+                showHighlight()
+                hlLabelNode.setPosition(hlLabelX, hlLabelY)
+            }
+        })
+        btnRoot.on(Node.EventType.MOUSE_LEAVE, () => {
+            isHover = false
+            if (!isDown) {
+                showNormal()
+                labelNode.setPosition(labelX, labelY)
+            }
+        })
         btnRoot.on(Node.EventType.TOUCH_START, () => {
             press()
         })
