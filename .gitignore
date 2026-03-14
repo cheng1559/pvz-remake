@@ -42,3 +42,5 @@ raw/
 textures/
 images/
 fonts/
+__pycache__/
+main.pak

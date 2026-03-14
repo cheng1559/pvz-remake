@@ -6,8 +6,8 @@ import uuid
 
 
 def _normcase_path(path: Path) -> str:
-    # Normalize for case-insensitive comparisons on Windows.
-    return os.path.normcase(str(path.resolve()))
+    # Normalize for case-insensitive comparisons on Windows / macOS.
+    return str(path.resolve()).lower()
 
 
 def _unique_temp_name(path: Path) -> Path:
@@ -25,14 +25,14 @@ def _rename_file_case_safe(src: Path, dst: Path, *, dry_run: bool) -> bool:
         return False
 
     src_norm = _normcase_path(src)
-    dst_norm = os.path.normcase(str(dst.resolve()))
+    dst_norm = str(dst.resolve()).lower()
 
     # If the OS considers these the same path (common on Windows), do a temp hop.
     if src_norm == dst_norm:
         tmp = _unique_temp_name(src)
         if dry_run:
-            print(f"RENAME (temp) {src} -> {tmp}")
-            print(f"RENAME         {tmp} -> {dst}")
+            print(f"[rename] (temp) {src} -> {tmp}")
+            print(f"[rename]        {tmp} -> {dst}")
             return True
         src.rename(tmp)
         tmp.rename(dst)
@@ -42,7 +42,7 @@ def _rename_file_case_safe(src: Path, dst: Path, *, dry_run: bool) -> bool:
         raise FileExistsError(f"Target already exists: {dst}")
 
     if dry_run:
-        print(f"RENAME {src} -> {dst}")
+        print(f"[rename] {src} -> {dst}")
         return True
 
     src.rename(dst)
@@ -76,8 +76,8 @@ def rename_all_to_lower(root: Path, *, dry_run: bool = False) -> int:
 
 if __name__ == "__main__":
     root = Path(r"tools/raw")
-    dry_run = False 
+    dry_run = False
 
     count = rename_all_to_lower(root, dry_run=dry_run)
     action = "Would rename" if dry_run else "Renamed"
-    print(f"{action} {count} file(s).")
+    print(f"[rename] {action} {count} file(s).")

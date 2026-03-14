@@ -1,4 +1,5 @@
 import json
+import shutil
 from xml.etree import ElementTree
 from pathlib import Path
 from typing import Any
@@ -219,22 +220,55 @@ def save_anim_data(output_dir: Path, anim_name: str, anim_nodes: dict[str, Any])
     with open(output_dir / f"{anim_name}.json", 'w') as f:
         json.dump(anim_nodes, f, separators=(',', ':'))
     node_names = ', '.join(anim_nodes.keys())
-    print(f"Saved {anim_name}.json with nodes: {node_names}")
+    print(f"[reanim]   Nodes: {node_names}")
+    print(f"[reanim] Wrote: {output_dir / f'{anim_name}.json'}")
+
+
+def copy_textures(xml_dir: Path, texture_dir: Path):
+    """Copy all image files from xml_dir to texture_dir."""
+    texture_dir.mkdir(parents=True, exist_ok=True)
+
+    # Collect all image files and index stems that have a .png variant
+    image_files = sorted(
+        p for p in xml_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in ('.png', '.jpg', '.jpeg')
+    )
+    png_stems = {p.stem.lower()
+                 for p in image_files if p.suffix.lower() == '.png'}
+
+    copied = 0
+    skipped = 0
+    for src in image_files:
+        # Skip .jpg/.jpeg when a .png with the same stem exists (avoid URL conflict)
+        if src.suffix.lower() in ('.jpg', '.jpeg') and src.stem.lower() in png_stems:
+            continue
+        dst = texture_dir / src.name.lower()
+        if dst.exists():
+            skipped += 1
+        else:
+            shutil.copy2(src, dst)
+            print(f"[reanim] Wrote: {dst}")
+            copied += 1
+
+    print(f"[reanim] Textures: {copied} copied, {skipped} skipped")
 
 
 def main():
     config_dir = Path("./tools")
     xml_dir = Path("./tools/raw/reanim")
     output_dir = Path("./assets/resources/animations")
+    texture_dir = Path("./assets/resources/textures")
 
     anim_defs = load_json_config(config_dir)
+
     for anim_name, anim_info in anim_defs.items():
-        print(f"Processing animation: {anim_name}")
+        print(f"[reanim] Processing: {anim_name}")
 
         anim_xml = load_anim_xml(xml_dir, anim_name)
         anim_nodes = get_anim_nodes(anim_info, anim_xml)
         save_anim_data(output_dir, anim_name, anim_nodes)
-        print("-----------------------------")
+
+    copy_textures(xml_dir, texture_dir)
 
 
 if __name__ == "__main__":

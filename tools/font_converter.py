@@ -510,18 +510,18 @@ def convert_font(input_path: Path, output_dir: Path):
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 写 JSON
+    # Write JSON
     json_path = output_dir / (base_name + '.json')
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(font_data, f, indent=2)
-    print(f"  JSON → {json_path}")
+    print(f"[font] Wrote: {json_path}")
 
-    # 复制图片
+    # Copy images
     for img_path in parser.get_image_files():
         dst = output_dir / img_path.name
         if not dst.exists() or not dst.samefile(img_path):
             shutil.copy2(img_path, dst)
-            print(f"  IMG  → {dst}")
+            print(f"[font] Wrote: {dst}")
 
 
 def main():
@@ -529,10 +529,10 @@ def main():
     output_dir = Path("./assets/resources/fonts")
 
     for input_path in input_dir.glob("*.txt"):
-        print(f"Converting: {input_path}")
+        print(f"[font] Processing: {input_path.name}")
         convert_font(input_path, output_dir)
 
-    print("Done!")
+    print("[font] Done")
 
 
 if __name__ == '__main__':
