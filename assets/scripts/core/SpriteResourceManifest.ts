@@ -4,6 +4,7 @@ export type AlphaComposeColor = readonly [number, number, number]
 
 const LINEAR_PREFIXES = [
     'challenge_',
+    'acheesements_icons',
     'minigame_trophy',
     'selectorscreen_cloud',
     'selectorscreen_flower',

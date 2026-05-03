@@ -14,7 +14,13 @@ import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
 import { ModalDialog } from '@/ui/Dialog'
-import { buildNineSliceGrid, buildThreeSliceRow, createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
+import {
+    buildNineSliceGrid,
+    buildThreeSliceRow,
+    createSpriteNode,
+    createUINode,
+    setUISize,
+} from '@/ui/UIFactory'
 import { MessageBoxAssets, MessageBoxButtonSprites } from './MessageBoxAssets'
 
 const { ccclass, property } = _decorator
@@ -270,7 +276,9 @@ export class MessageBox extends ModalDialog {
             BG_INSET_RIGHT +
             CONTENT_INSET_LEFT +
             CONTENT_INSET_RIGHT +
-            (this.title ? FontMetricsUtil.measureTextWidth(titleFontData?.config ?? null, this.title) : 0)
+            (this.title
+                ? FontMetricsUtil.measureTextWidth(titleFontData?.config ?? null, this.title)
+                : 0)
 
         if (desiredWidth <= minImageWidth) {
             desiredWidth = minImageWidth
@@ -301,8 +309,7 @@ export class MessageBox extends ModalDialog {
             DIALOG_HEADER_OFFSET
 
         if (this.title) {
-            desiredHeight +=
-                -titleMetrics.ascentPadding + titleMetrics.height + SPACE_AFTER_HEADER
+            desiredHeight += -titleMetrics.ascentPadding + titleMetrics.height + SPACE_AFTER_HEADER
         }
         if (this.message) {
             const linesAreaWidth =
@@ -468,8 +475,7 @@ export class MessageBox extends ModalDialog {
             }
 
             // Word-wrapped text rect Y is already the glyph top in original C++ coordinates.
-            const msgX =
-                msgX_cpp - actualWidth / 2 + (defaultLinesAreaWidth - linesAreaWidth) / 2
+            const msgX = msgX_cpp - actualWidth / 2 + (defaultLinesAreaWidth - linesAreaWidth) / 2
             const msgY = actualHeight / 2 - msgY_cpp
             this._messageNode.setPosition(msgX, msgY - this.messageOffsetY)
             this._messageRenderer = msgFont
@@ -715,7 +721,8 @@ export class MessageBox extends ModalDialog {
         const highlightLayer = (highlightCfg?.json as any)?.layers?.[0] ?? normalLayer
         const normalAscent = normalLayer?.ascent ?? 0
         const highlightAscent = highlightLayer?.ascent ?? normalAscent
-        const labelWidth = FontMetricsUtil.measureTextWidth(normalCfg, label) || fontComp.contentWidth
+        const labelWidth =
+            FontMetricsUtil.measureTextWidth(normalCfg, label) || fontComp.contentWidth
         const hlLabelWidth =
             FontMetricsUtil.measureTextWidth(highlightCfg, label) || hlFontComp.contentWidth
 
@@ -780,5 +787,4 @@ export class MessageBox extends ModalDialog {
             anchorY: 0,
         })
     }
-
 }

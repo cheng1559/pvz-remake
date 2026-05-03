@@ -3,6 +3,8 @@ import { AssetLoader } from '@/core/AssetLoader'
 import { FONT_NAMES, FontLoader } from '@/core/FontLoader'
 import { SoundLoader } from '@/core/SoundLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
+import { AchievementScreenAssets } from './AchievementScreen/AchievementScreenAssets'
+import { AuxiliaryScreenAssets } from './AuxiliaryScreen/AuxiliaryScreenAssets'
 import { ChallengeScreenAssets } from './ChallengeScreen/ChallengeScreenAssets'
 import { HelpScreenAssets } from './HelpScreen/HelpScreenAssets'
 import { MessageBoxAssets } from './MessageBox/MessageBoxAssets'
@@ -13,6 +15,8 @@ const STARTUP_ANIMATIONS = SELECTOR_SCREEN_ANIMATIONS
 const STARTUP_TEXTURES = [
     ...MessageBoxAssets.preload.sprites,
     ...OptionsDialogAssets.preload.sprites,
+    ...AchievementScreenAssets.preload.sprites,
+    ...AuxiliaryScreenAssets.preload.sprites,
     ...ChallengeScreenAssets.preload.sprites,
     ...HelpScreenAssets.preload.sprites,
     ...SELECTOR_SCREEN_SPRITES,
@@ -48,6 +52,8 @@ export class StartupResourceLoader {
     private static async _loadFonts(): Promise<void> {
         await Promise.all([
             ...FONT_NAMES.map((name) => FontLoader.load(name)),
+            ...AchievementScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
+            ...AuxiliaryScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
             ...HelpScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
         ])
     }
