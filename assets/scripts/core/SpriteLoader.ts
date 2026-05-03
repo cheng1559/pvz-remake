@@ -1,6 +1,11 @@
 import { SpriteFrame, Texture2D, ImageAsset, warn } from 'cc'
 import { AssetLoader } from './AssetLoader'
-import { SpriteResourceManifest, type SpriteSampling } from './SpriteResourceManifest'
+import {
+    SpriteResourceManifest,
+    type AlphaComposeColor,
+    type SpriteSampling,
+    type TransparentColor,
+} from './SpriteResourceManifest'
 
 export class SpriteLoader {
     private static _cache: Map<string, SpriteFrame> = new Map()
@@ -9,6 +14,13 @@ export class SpriteLoader {
     // ── Public API ─────────────────────────────────────────────
 
     static async load(name: string): Promise<SpriteFrame | null> {
+        return this.loadWithAlpha(name)
+    }
+
+    static async loadWithAlpha(
+        name: string,
+        explicitAlphaName = SpriteResourceManifest.getAlphaImage(name),
+    ): Promise<SpriteFrame | null> {
         if (this._cache.has(name)) {
             return this._cache.get(name)!
         }
@@ -18,7 +30,7 @@ export class SpriteLoader {
             return pending
         }
 
-        const promise = this._loadUncached(name)
+        const promise = this._loadUncached(name, explicitAlphaName)
         this._pending.set(name, promise)
         const spriteFrame = await promise
         this._pending.delete(name)
@@ -27,6 +39,7 @@ export class SpriteLoader {
 
     private static async _loadUncached(
         name: string,
+        explicitAlphaName?: string,
     ): Promise<SpriteFrame | null> {
         let mainSf = await this._loadRaw(name)
 
@@ -37,7 +50,8 @@ export class SpriteLoader {
                 : '_' + name
         const alphaName2 = name + '_'
 
-        let alphaSf = await this._loadRaw(alphaName1)
+        let alphaSf = explicitAlphaName ? await this._loadRaw(explicitAlphaName) : null
+        if (!alphaSf) alphaSf = await this._loadRaw(alphaName1)
         if (!alphaSf) alphaSf = await this._loadRaw(alphaName2)
 
         if (alphaSf) {
@@ -49,6 +63,8 @@ export class SpriteLoader {
         }
 
         if (mainSf) {
+            this._applyAlphaComposeColor(mainSf, SpriteResourceManifest.getAlphaComposeColor(name))
+            this._applyTransparentColor(mainSf, SpriteResourceManifest.getTransparentColor(name))
             this._applySpriteSampling(mainSf, SpriteResourceManifest.getSampling(name))
             this._cache.set(name, mainSf)
         } else {
@@ -156,6 +172,79 @@ export class SpriteLoader {
         this._applyTextureSampling(newTex)
         newTex.uploadData(newBuffer)
         rgbSf.texture = newTex
+    }
+
+    private static _applyAlphaComposeColor(spriteFrame: SpriteFrame, color?: AlphaComposeColor) {
+        if (!color) return
+
+        const texture = spriteFrame.texture as Texture2D
+        if (!texture) return
+
+        const image = texture.image as ImageAsset
+        if (!image) return
+
+        const data = this._getImageData(image)
+        if (!data) return
+
+        const width = image.width
+        const height = image.height
+        const count = width * height
+        const step = Math.floor(data.length / count)
+        if (step < 3) return
+
+        const newBuffer = new Uint8Array(count * 4)
+        for (let i = 0; i < count; i++) {
+            const source = i * step
+            const target = i * 4
+            newBuffer[target + 0] = color[0]
+            newBuffer[target + 1] = color[1]
+            newBuffer[target + 2] = color[2]
+            newBuffer[target + 3] = Math.max(data[source], data[source + 1], data[source + 2])
+        }
+
+        const newTex = new Texture2D()
+        newTex.reset({ width, height, format: Texture2D.PixelFormat.RGBA8888 })
+        this._applyTextureSampling(newTex)
+        newTex.uploadData(newBuffer)
+        spriteFrame.texture = newTex
+    }
+
+    private static _applyTransparentColor(spriteFrame: SpriteFrame, color?: TransparentColor) {
+        if (!color) return
+
+        const texture = spriteFrame.texture as Texture2D
+        if (!texture) return
+
+        const image = texture.image as ImageAsset
+        if (!image) return
+
+        const data = this._getImageData(image)
+        if (!data) return
+
+        const width = image.width
+        const height = image.height
+        const count = width * height
+        const step = Math.floor(data.length / count)
+        if (step < 3) return
+
+        const newBuffer = new Uint8Array(count * 4)
+        for (let i = 0; i < count; i++) {
+            const source = i * step
+            const target = i * 4
+            const r = data[source]
+            const g = data[source + 1]
+            const b = data[source + 2]
+            newBuffer[target + 0] = r
+            newBuffer[target + 1] = g
+            newBuffer[target + 2] = b
+            newBuffer[target + 3] = r === color[0] && g === color[1] && b === color[2] ? 0 : 255
+        }
+
+        const newTex = new Texture2D()
+        newTex.reset({ width, height, format: Texture2D.PixelFormat.RGBA8888 })
+        this._applyTextureSampling(newTex)
+        newTex.uploadData(newBuffer)
+        spriteFrame.texture = newTex
     }
 
     private static _createTextureFromAlpha(alphaSf: SpriteFrame): SpriteFrame | null {

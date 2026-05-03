@@ -4,6 +4,7 @@ import { FONT_NAMES, FontLoader } from '@/core/FontLoader'
 import { SoundLoader } from '@/core/SoundLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { ChallengeScreenAssets } from './ChallengeScreen/ChallengeScreenAssets'
+import { HelpScreenAssets } from './HelpScreen/HelpScreenAssets'
 import { MessageBoxAssets } from './MessageBox/MessageBoxAssets'
 import { OptionsDialogAssets } from './OptionsDialog/OptionsDialogAssets'
 import { SELECTOR_SCREEN_ANIMATIONS, SELECTOR_SCREEN_SPRITES } from './SelectorScreen/SelectorScreenConfig'
@@ -13,6 +14,7 @@ const STARTUP_TEXTURES = [
     ...MessageBoxAssets.preload.sprites,
     ...OptionsDialogAssets.preload.sprites,
     ...ChallengeScreenAssets.preload.sprites,
+    ...HelpScreenAssets.preload.sprites,
     ...SELECTOR_SCREEN_SPRITES,
 ]
 
@@ -44,7 +46,10 @@ export class StartupResourceLoader {
     }
 
     private static async _loadFonts(): Promise<void> {
-        await Promise.all(FONT_NAMES.map((name) => FontLoader.load(name)))
+        await Promise.all([
+            ...FONT_NAMES.map((name) => FontLoader.load(name)),
+            ...HelpScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
+        ])
     }
 
     private static async _loadStartupAnimations(): Promise<JsonAsset[]> {

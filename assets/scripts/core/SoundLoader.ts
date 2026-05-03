@@ -17,6 +17,7 @@ export const SoundEffect = {
     GraveButton: 'gravebutton',
     LimbsPop: 'limbs_pop',
     LoseMusic: 'losemusic',
+    Paper: 'paper',
     RollIn: 'roll_in',
     Tap: 'tap',
 } as const

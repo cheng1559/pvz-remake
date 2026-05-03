@@ -122,7 +122,7 @@ export class MessageBox extends ModalDialog {
         }
     }
 
-    setButtonMode(mode: DialogButtonMode, footer = 'OK') {
+    setButtonMode(mode: DialogButtonMode, footer = 'OK', cancel = 'Cancel') {
         switch (mode) {
             case DialogButtonMode.YesNo:
                 this.setButtons([
@@ -132,8 +132,8 @@ export class MessageBox extends ModalDialog {
                 break
             case DialogButtonMode.OkCancel:
                 this.setButtons([
-                    { label: 'OK', result: DialogResult.Ok },
-                    { label: 'Cancel', result: DialogResult.Cancel },
+                    { label: footer, result: DialogResult.Ok },
+                    { label: cancel, result: DialogResult.Cancel },
                 ])
                 break
             case DialogButtonMode.Footer:

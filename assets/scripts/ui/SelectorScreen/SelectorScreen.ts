@@ -74,6 +74,8 @@ export class SelectorScreen extends AnimationComponent {
     public onLockedModeClick: ((name: string) => void) | null = null
     public onMessageBoxRequest: (() => void) | null = null
     public onOptionsRequest: (() => void) | null = null
+    public onHelpRequest: (() => void) | null = null
+    public onQuitRequest: (() => void) | null = null
     public onChallengePageRequest: ((page: ChallengePage) => void) | null = null
 
     async init() {
@@ -214,6 +216,12 @@ export class SelectorScreen extends AnimationComponent {
         }
         this._buttons.get('options')!.onClick = () => {
             this.onOptionsRequest?.()
+        }
+        this._buttons.get('help')!.onClick = () => {
+            this.onHelpRequest?.()
+        }
+        this._buttons.get('quit')!.onClick = () => {
+            this.onQuitRequest?.()
         }
         this._buttons.get('miniGames')!.onClick = () => {
             this.onChallengePageRequest?.(ChallengePage.MiniGames)

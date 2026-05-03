@@ -1,6 +1,7 @@
-import { _decorator, Component, Node } from 'cc'
+import { _decorator, Component, game, Node } from 'cc'
 import { ChallengePage, ChallengeScreen } from '../ChallengeScreen'
 import { DialogButtonMode, DialogResult, MessageBox } from '../MessageBox/MessageBox'
+import { HelpScreen } from '../HelpScreen'
 import { OptionsDialog } from '../OptionsDialog'
 import { SelectorScreen } from '../SelectorScreen/SelectorScreen'
 import { StartupResourceLoader } from '../StartupResourceLoader'
@@ -51,12 +52,29 @@ export class UIController extends Component {
         selectorScreen.onOptionsRequest = () => {
             this.showOptionsDialog()
         }
+        selectorScreen.onHelpRequest = () => {
+            this.showHelpScreen()
+        }
+        selectorScreen.onQuitRequest = () => {
+            void this.confirmQuit()
+        }
         selectorScreen.onChallengePageRequest = (page) => {
             this.showChallengeScreen(page)
         }
 
         this._setCurrentScreen(node)
         return selectorScreen
+    }
+
+    showHelpScreen(): HelpScreen | null {
+        const node = createUINode('HelpScreen', { active: false, width: 800, height: 600 })
+        const helpScreen = node.addComponent(HelpScreen)
+        helpScreen.onBackToMenu = () => {
+            void this.showSelectorScreen()
+        }
+
+        this._setCurrentScreen(node)
+        return helpScreen
     }
 
     showChallengeScreen(page: ChallengePage): ChallengeScreen | null {
@@ -101,6 +119,18 @@ export class UIController extends Component {
         dialog.setButtonMode(DialogButtonMode.YesNo)
         const result = await dialog.waitForResult()
         return result === DialogResult.Yes
+    }
+
+    async confirmQuit(): Promise<void> {
+        const dialog = this.showMessageBox('Quit', 'Are you sure you wish to\nquit the game?')
+        if (!dialog) return
+
+        dialog.setMessageLayout(0, 0, 2)
+        dialog.setButtonMode(DialogButtonMode.OkCancel, 'Quit', 'Cancel')
+        const result = await dialog.waitForResult()
+        if (result === DialogResult.Ok) {
+            game.end()
+        }
     }
 
     private _setCurrentScreen(node: Node) {
