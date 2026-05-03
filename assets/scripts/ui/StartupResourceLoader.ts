@@ -3,6 +3,7 @@ import { AssetLoader } from '@/core/AssetLoader'
 import { FONT_NAMES, FontLoader } from '@/core/FontLoader'
 import { SoundLoader } from '@/core/SoundLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
+import { ChallengeScreenAssets } from './ChallengeScreen/ChallengeScreenAssets'
 import { MessageBoxAssets } from './MessageBox/MessageBoxAssets'
 import { OptionsDialogAssets } from './OptionsDialog/OptionsDialogAssets'
 import { SELECTOR_SCREEN_ANIMATIONS, SELECTOR_SCREEN_SPRITES } from './SelectorScreen/SelectorScreenConfig'
@@ -11,6 +12,7 @@ const STARTUP_ANIMATIONS = SELECTOR_SCREEN_ANIMATIONS
 const STARTUP_TEXTURES = [
     ...MessageBoxAssets.preload.sprites,
     ...OptionsDialogAssets.preload.sprites,
+    ...ChallengeScreenAssets.preload.sprites,
     ...SELECTOR_SCREEN_SPRITES,
 ]
 

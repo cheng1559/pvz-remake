@@ -84,7 +84,7 @@ export class FontMetricsUtil {
             if (curChar === 32) {
                 spacePos = curPos
             } else if (curChar === 10) {
-                lineWidths.push(measureRange(lineStartPos, curPos))
+                lineWidths.push(measureRange(lineStartPos, this._trimTrailingSpaces(chars, lineStartPos, curPos)))
                 curPos++
                 lineStartPos = curPos
                 spacePos = -1
@@ -98,13 +98,13 @@ export class FontMetricsUtil {
 
             if (curWidth > wrapWidth) {
                 if (spacePos !== -1) {
-                    lineWidths.push(measureRange(lineStartPos, spacePos + 1))
+                    lineWidths.push(measureRange(lineStartPos, spacePos))
                     curPos = spacePos + 1
                     while (curPos < chars.length && chars[curPos] === 32) curPos++
                     lineStartPos = curPos
                 } else {
                     if (curPos <= lineStartPos) curPos++
-                    lineWidths.push(measureRange(lineStartPos, curPos))
+                    lineWidths.push(measureRange(lineStartPos, this._trimTrailingSpaces(chars, lineStartPos, curPos)))
                     lineStartPos = curPos
                 }
                 spacePos = -1
@@ -115,7 +115,9 @@ export class FontMetricsUtil {
             }
         }
 
-        if (lineStartPos < chars.length) lineWidths.push(measureRange(lineStartPos, chars.length))
+        if (lineStartPos < chars.length) {
+            lineWidths.push(measureRange(lineStartPos, this._trimTrailingSpaces(chars, lineStartPos, chars.length)))
+        }
         return {
             height: lineWidths.length > 0 ? lineWidths.length * metrics.lineSpacing : 0,
             lineWidths,
@@ -183,5 +185,13 @@ export class FontMetricsUtil {
             prevCode = chars[i]
         }
         return width
+    }
+
+    private static _trimTrailingSpaces(chars: number[], start: number, end: number): number {
+        let trimmedEnd = end
+        while (trimmedEnd > start && chars[trimmedEnd - 1] === 32) {
+            trimmedEnd--
+        }
+        return trimmedEnd
     }
 }

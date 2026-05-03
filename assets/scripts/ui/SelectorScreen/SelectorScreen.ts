@@ -3,7 +3,6 @@ import {
     randomRangeInt,
     randomRange,
     Node,
-    Sprite,
     JsonAsset,
     SpriteFrame,
     UITransform,
@@ -18,6 +17,7 @@ import { AnimNode } from '@/core/Animator/AnimNode'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
+import { ChallengePage } from '@/ui/ChallengeScreen'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import { Animator } from '@/core/Animator'
 import { ButtonConfig } from './SelectorScreen.d'
@@ -31,7 +31,7 @@ import {
 const { ccclass, property } = _decorator
 
 const MODE_BUTTON_NAMES = new Set(['adventure', 'miniGames', 'Puzzle', 'Survival'])
-const LOCKED_MODE_NAMES = new Set(['miniGames', 'Puzzle', 'Survival'])
+const LOCKED_MODE_NAMES = new Set<string>()
 const BOARD_WIDTH = 800
 const ZOMBIE_HAND_CLIP_HEIGHT = 560
 const ZOMBIE_HAND_X = -70
@@ -63,6 +63,7 @@ export class SelectorScreen extends AnimationComponent {
     private _woodsignContainer: Node = null!
     private _auxButtonContainer: Node = null!
     private _buttons: Map<string, UIButton> = new Map()
+    private _selectorButtonsReady = false
     private _trackedButtons: {
         button: UIButton
         trackName: string
@@ -73,6 +74,7 @@ export class SelectorScreen extends AnimationComponent {
     public onLockedModeClick: ((name: string) => void) | null = null
     public onMessageBoxRequest: (() => void) | null = null
     public onOptionsRequest: (() => void) | null = null
+    public onChallengePageRequest: ((page: ChallengePage) => void) | null = null
 
     async init() {
         const cloudNames = ['cloud1', 'cloud2', 'cloud4', 'cloud5', 'cloud6', 'cloud7']
@@ -205,11 +207,22 @@ export class SelectorScreen extends AnimationComponent {
 
         this.animator.hideTrack('SelectorScreen_StartAdventure_button')
 
+        this._setButtonsInteractable(false)
+
         this._buttons.get('adventure')!.onClick = () => {
             this.startAdventure()
         }
         this._buttons.get('options')!.onClick = () => {
             this.onOptionsRequest?.()
+        }
+        this._buttons.get('miniGames')!.onClick = () => {
+            this.onChallengePageRequest?.(ChallengePage.MiniGames)
+        }
+        this._buttons.get('Puzzle')!.onClick = () => {
+            this.onChallengePageRequest?.(ChallengePage.Puzzle)
+        }
+        this._buttons.get('Survival')!.onClick = () => {
+            this.onChallengePageRequest?.(ChallengePage.Survival)
         }
 
         for (const name of LOCKED_MODE_NAMES) {
@@ -218,6 +231,13 @@ export class SelectorScreen extends AnimationComponent {
             btn.onClickLocked = () => {
                 this.onLockedModeClick?.(name)
             }
+        }
+    }
+
+    private _setButtonsInteractable(interactable: boolean) {
+        this._selectorButtonsReady = interactable
+        for (const button of this._buttons.values()) {
+            button.interactable = interactable
         }
     }
 
@@ -295,11 +315,22 @@ export class SelectorScreen extends AnimationComponent {
             uiTransform.setAnchorPoint(0, 1)
             uiTransform.setContentSize(width ?? 0, height ?? 0)
         } else {
-            const sprite = node.addComponent(Sprite)
-            sprite.trim = false
-            sprite.spriteFrame = normalSprite
-            sprite.sizeMode = Sprite.SizeMode.RAW
-            node.getComponent(UITransform)!.setAnchorPoint(0, 1)
+            createSpriteNode({
+                name: 'sprite',
+                spriteFrame: normalSprite,
+                parent: node,
+                layer: this.node.layer,
+                x: 0,
+                y: 0,
+                anchorX: 0,
+                anchorY: 1,
+            })
+            const uiTransform = node.getComponent(UITransform)!
+            uiTransform.setAnchorPoint(0, 1)
+            uiTransform.setContentSize(
+                width ?? normalSprite.originalSize.width,
+                height ?? normalSprite.originalSize.height,
+            )
         }
 
         const button = node.addComponent(UIButton)
@@ -346,6 +377,7 @@ export class SelectorScreen extends AnimationComponent {
             const button = node.addComponent(UIButton)
             button.polygon = this._circlePolygon(fc.radius)
             button.changeCursor = false
+            button.interactable = this._selectorButtonsReady
 
             const idx = i
             button.onClick = (event: EventTouch) => {
@@ -388,9 +420,7 @@ export class SelectorScreen extends AnimationComponent {
     startAdventure() {
         void SoundLoader.play(SoundEffect.LoseMusic)
         this.playZombieHand()
-        for (const btn of this._buttons.values()) {
-            btn.interactable = false
-        }
+        this._setButtonsInteractable(false)
         let counter = 0
         const flashCallback = () => {
             counter++
@@ -483,6 +513,7 @@ export class SelectorScreen extends AnimationComponent {
                 this.playCloudsLoop()
             },
             onFinish: () => {
+                this._setButtonsInteractable(true)
                 this.signNode.play({
                     name: 'anim_sign',
                     speed: this._speedForReanimRate(this.signNode, 'anim_sign', SELECTOR_SIGN_RATE),

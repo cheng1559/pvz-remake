@@ -179,6 +179,7 @@ export class UIButton extends Component {
     private static _onGlobalMouseMove(event: EventMouse) {
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
+        UIButton.refreshHoverStates()
     }
 
     private static _onGlobalTouch(event: EventTouch) {
@@ -224,6 +225,7 @@ export class UIButton extends Component {
         this.node.on(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
         this.node.on(Node.EventType.TOUCH_END, this._onTouchEnd, this)
         this.node.on(Node.EventType.TOUCH_CANCEL, this._onTouchCancel, this)
+        this.node.on(Node.EventType.MOUSE_MOVE, this._onMouseMove, this)
         this.node.on(Node.EventType.MOUSE_ENTER, this._onMouseEnter, this)
         this.node.on(Node.EventType.MOUSE_LEAVE, this._onMouseLeave, this)
     }
@@ -240,6 +242,7 @@ export class UIButton extends Component {
         this.node.off(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
         this.node.off(Node.EventType.TOUCH_END, this._onTouchEnd, this)
         this.node.off(Node.EventType.TOUCH_CANCEL, this._onTouchCancel, this)
+        this.node.off(Node.EventType.MOUSE_MOVE, this._onMouseMove, this)
         this.node.off(Node.EventType.MOUSE_ENTER, this._onMouseEnter, this)
         this.node.off(Node.EventType.MOUSE_LEAVE, this._onMouseLeave, this)
     }
@@ -317,11 +320,22 @@ export class UIButton extends Component {
     private _onMouseEnter() {
         if (!this._interactable) return
         if (UIButton._activeButton && UIButton._activeButton !== this) return
+        UIButton._lastPointerCanHover = true
         if (this._pressed) {
             this._setHovering(true, false)
             return
         }
         this._setHovering(true)
+    }
+
+    private _onMouseMove(event: EventMouse) {
+        UIButton._lastMouseLocation = event.getLocation()
+        UIButton._lastPointerCanHover = true
+        if (!this._interactable) return
+        if (UIButton._activeButton && UIButton._activeButton !== this) return
+        if (!this._pressed) {
+            this._setHovering(true)
+        }
     }
 
     private _onMouseLeave() {

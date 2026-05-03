@@ -1,4 +1,5 @@
 import { _decorator, Component, Node } from 'cc'
+import { ChallengePage, ChallengeScreen } from '../ChallengeScreen'
 import { DialogButtonMode, DialogResult, MessageBox } from '../MessageBox/MessageBox'
 import { OptionsDialog } from '../OptionsDialog'
 import { SelectorScreen } from '../SelectorScreen/SelectorScreen'
@@ -11,6 +12,8 @@ const { ccclass, property } = _decorator
 export class UIController extends Component {
     @property(Node)
     uiRoot: Node | null = null
+
+    private _currentScreen: Node | null = null
 
     onLoad() {
         if (!this.uiRoot) {
@@ -26,6 +29,7 @@ export class UIController extends Component {
     }
 
     async showSelectorScreen(): Promise<SelectorScreen | null> {
+        this._destroyCurrentScreen()
         const [animation, zombieArmAnimation] = await Promise.all([
             StartupResourceLoader.loadJson('animations/selectorscreen'),
             StartupResourceLoader.loadJson('animations/zombie_hand'),
@@ -47,10 +51,24 @@ export class UIController extends Component {
         selectorScreen.onOptionsRequest = () => {
             this.showOptionsDialog()
         }
+        selectorScreen.onChallengePageRequest = (page) => {
+            this.showChallengeScreen(page)
+        }
 
-        this.uiRoot!.addChild(node)
-        node.active = true
+        this._setCurrentScreen(node)
         return selectorScreen
+    }
+
+    showChallengeScreen(page: ChallengePage): ChallengeScreen | null {
+        const node = createUINode('ChallengeScreen', { active: false, width: 800, height: 600 })
+        const challengeScreen = node.addComponent(ChallengeScreen)
+        challengeScreen.page = page
+        challengeScreen.onBackToMenu = () => {
+            void this.showSelectorScreen()
+        }
+
+        this._setCurrentScreen(node)
+        return challengeScreen
     }
 
     showOptionsDialog(): OptionsDialog | null {
@@ -83,5 +101,19 @@ export class UIController extends Component {
         dialog.setButtonMode(DialogButtonMode.YesNo)
         const result = await dialog.waitForResult()
         return result === DialogResult.Yes
+    }
+
+    private _setCurrentScreen(node: Node) {
+        this._destroyCurrentScreen()
+        this._currentScreen = node
+        this.uiRoot!.addChild(node)
+        node.active = true
+    }
+
+    private _destroyCurrentScreen() {
+        if (this._currentScreen?.isValid) {
+            this._currentScreen.destroy()
+        }
+        this._currentScreen = null
     }
 }

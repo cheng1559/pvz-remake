@@ -1,4 +1,4 @@
-import { JsonAsset, Texture2D } from 'cc'
+import { ImageAsset, JsonAsset, Texture2D } from 'cc'
 import { AssetLoader } from './AssetLoader'
 
 export const FONT_NAMES = [
@@ -92,9 +92,71 @@ export class FontLoader {
             Texture2D,
             null,
         )
-        if (texture) return texture
+        if (texture) return this._normalizeFontMaskTexture(imageName, texture)
 
         console.error(`[FontLoader] Failed to load font texture: ${imageName}`)
+        return null
+    }
+
+    private static _normalizeFontMaskTexture(imageName: string, texture: Texture2D): Texture2D {
+        const image = texture.image as ImageAsset | null
+        if (!image) return texture
+
+        const data = this._getImageBytes(image)
+        if (!data) return texture
+
+        const pixelCount = image.width * image.height
+        if (pixelCount <= 0) return texture
+
+        const isSingleChannelMask = data.length === pixelCount
+        const isOpaqueBrianneMask =
+            imageName.startsWith('BrianneTod') && data.length === pixelCount * 4
+        if (!isSingleChannelMask && !isOpaqueBrianneMask) return texture
+
+        const rgba = new Uint8Array(pixelCount * 4)
+        for (let i = 0; i < pixelCount; i++) {
+            const alpha = isSingleChannelMask
+                ? data[i]
+                : Math.max(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])
+            const offset = i * 4
+            rgba[offset] = 255
+            rgba[offset + 1] = 255
+            rgba[offset + 2] = 255
+            rgba[offset + 3] = alpha
+        }
+
+        const normalized = new Texture2D()
+        normalized.reset({
+            width: image.width,
+            height: image.height,
+            format: Texture2D.PixelFormat.RGBA8888,
+        })
+        normalized.uploadData(rgba)
+        return normalized
+    }
+
+    private static _getImageBytes(image: ImageAsset): Uint8Array | null {
+        const data = image.data
+        if (!data) return null
+        if (data instanceof Uint8Array) return data
+        if (ArrayBuffer.isView(data)) {
+            return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+        }
+
+        if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+            try {
+                const canvas = document.createElement('canvas')
+                canvas.width = image.width
+                canvas.height = image.height
+                const context = canvas.getContext('2d')
+                if (!context) return null
+                context.drawImage(data as CanvasImageSource, 0, 0)
+                const imageData = context.getImageData(0, 0, image.width, image.height)
+                return new Uint8Array(imageData.data.buffer)
+            } catch (error) {
+                console.warn('[FontLoader] Failed to extract font image bytes:', error)
+            }
+        }
         return null
     }
 
