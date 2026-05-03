@@ -11,11 +11,14 @@ import {
     Vec3,
     EventTouch,
     Color,
+    Mask,
 } from 'cc'
 import { AnimationComponent } from '@/components/AnimationComponent'
 import { AnimNode } from '@/core/Animator/AnimNode'
 import { SpriteLoader } from '@/core/SpriteLoader'
+import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
+import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import { Animator } from '@/core/Animator'
 import { ButtonConfig } from './SelectorScreen.d'
 import {
@@ -26,6 +29,19 @@ import {
 } from './SelectorScreenConfig'
 
 const { ccclass, property } = _decorator
+
+const MODE_BUTTON_NAMES = new Set(['adventure', 'miniGames', 'Puzzle', 'Survival'])
+const LOCKED_MODE_NAMES = new Set(['miniGames', 'Puzzle', 'Survival'])
+const BOARD_WIDTH = 800
+const ZOMBIE_HAND_CLIP_HEIGHT = 560
+const ZOMBIE_HAND_X = -70
+const ZOMBIE_HAND_Y = -10
+const SELECTOR_OPEN_RATE = 30
+const SELECTOR_SIGN_RATE = 30
+const SELECTOR_CLOUD_RATE = 0.5
+const SELECTOR_GRASS_INITIAL_RATE = 6
+const SELECTOR_FLOWER_RATE = 24
+const LIMBS_POP_PITCH_RANGE = 10
 
 @ccclass('SelectorScreen')
 export class SelectorScreen extends AnimationComponent {
@@ -38,6 +54,7 @@ export class SelectorScreen extends AnimationComponent {
     signNode: AnimNode
     flowerNodes: AnimNode[] = []
     zombieHandNode: AnimNode
+    zombieHandRockNode: AnimNode
 
     private _buttonContainer: Node = null!
     private _woodsignContainer: Node = null!
@@ -50,16 +67,10 @@ export class SelectorScreen extends AnimationComponent {
         offsetY: number
     }[] = []
 
-    private _uiController: any = null
-
-    public set uiController(controller: any) {
-        this._uiController = controller
-    }
+    public onLockedModeClick: ((name: string) => void) | null = null
+    public onMessageBoxRequest: (() => void) | null = null
 
     async init() {
-        // if (uiController) {
-        //     this._uiController = uiController
-        // }
         const cloudNames = ['cloud1', 'cloud2', 'cloud4', 'cloud5', 'cloud6', 'cloud7']
         for (const name of cloudNames) {
             const node = this.animator.addAnimNode(name)
@@ -80,36 +91,58 @@ export class SelectorScreen extends AnimationComponent {
     }
 
     private _initZombieHandAnim() {
-        const zombieHandNode = new Node('ZombieHand')
-        zombieHandNode.layer = this.node.layer
-        zombieHandNode.addComponent(UITransform)
+        const zombieHandNode = createUINode('ZombieHand', { layer: this.node.layer })
 
-        const animatorNode = new Node('Animator')
-        animatorNode.layer = this.node.layer
-        animatorNode.setPosition(-70, -10, 0)
-        zombieHandNode.addChild(animatorNode)
+        const clippedNode = createUINode('ClippedBody', {
+            layer: this.node.layer,
+            parent: zombieHandNode,
+            anchorX: 0,
+            anchorY: 1,
+            width: BOARD_WIDTH,
+            height: ZOMBIE_HAND_CLIP_HEIGHT,
+        })
+        const mask = clippedNode.addComponent(Mask)
+        mask.type = Mask.Type.RECT
 
-        const animator = animatorNode.addComponent(Animator)
-        animator.parseJson(this.zombieArmAnimation.json)
+        const bodyAnimator = this._createZombieHandAnimator(clippedNode, 'BodyAnimator')
+        const rockAnimator = this._createZombieHandAnimator(zombieHandNode, 'RockAnimator')
 
-        this.zombieHandNode = animator.addAnimNode('default')
+        const trackNames = Object.keys(this.zombieArmAnimation.json.default?.tracks ?? {})
+        for (const trackName of trackNames) {
+            if (trackName.startsWith('rock')) {
+                bodyAnimator.hideTrack(trackName)
+            } else {
+                rockAnimator.hideTrack(trackName)
+            }
+        }
+
+        this.zombieHandNode = bodyAnimator.addAnimNode('default')
+        this.zombieHandRockNode = rockAnimator.addAnimNode('default')
 
         this.animator.insertExternalNode('__zombie_hand__', zombieHandNode, 34)
     }
 
+    private _createZombieHandAnimator(parent: Node, name: string): Animator {
+        const animatorNode = new Node(name)
+        animatorNode.layer = this.node.layer
+        animatorNode.setPosition(ZOMBIE_HAND_X, ZOMBIE_HAND_Y, 0)
+        parent.addChild(animatorNode)
+
+        const animator = animatorNode.addComponent(Animator)
+        animator.parseJson(this.zombieArmAnimation.json)
+        return animator
+    }
+
     private _initButtonContainer() {
-        const container = new Node('Buttons')
-        container.layer = this.node.layer
+        const container = createUINode('Buttons', { layer: this.node.layer })
         this.animator.insertExternalNode('__buttons__', container, 34)
         this._buttonContainer = container
 
-        const wsContainer = new Node('WoodsignButtons')
-        wsContainer.layer = this.node.layer
+        const wsContainer = createUINode('WoodsignButtons', { layer: this.node.layer })
         this.animator.insertExternalNode('__woodsigns__', wsContainer, 46)
         this._woodsignContainer = wsContainer
 
-        const auxContainer = new Node('AuxButtons')
-        auxContainer.layer = this.node.layer
+        const auxContainer = createUINode('AuxButtons', { layer: this.node.layer })
         this.animator.insertExternalNode('__aux_buttons__', auxContainer, 34)
         this._auxButtonContainer = auxContainer
     }
@@ -126,9 +159,6 @@ export class SelectorScreen extends AnimationComponent {
     }
 
     private _createButtonsFromConfigs(configs: ButtonConfig[], container: Node) {
-        // for (const c of configs) {
-        //     if (c.trackName) this.animator.hideTrack(c.trackName)
-        // }
         for (const c of configs) {
             const btn = this._createButton({
                 name: c.name,
@@ -145,6 +175,7 @@ export class SelectorScreen extends AnimationComponent {
                 offsetY: c.offsetY,
             })
             if (btn) {
+                this._configureButtonSounds(c.name, btn)
                 if (c.attached) {
                     btn.node.active = false
                     this._trackedButtons.push({
@@ -174,20 +205,31 @@ export class SelectorScreen extends AnimationComponent {
             this.startAdventure()
         }
 
-        // const lockedColor = new Color(128, 128, 128)
-        const lockedNames = ['miniGames', 'puzzles', 'survival']
-        for (const name of lockedNames) {
+        for (const name of LOCKED_MODE_NAMES) {
             const btn = this._buttons.get(name)!
-            // btn.color = lockedColor
             btn.locked = true
             btn.onClickLocked = () => {
-                console.log(`[SelectorScreen] Locked button clicked: ${name}`)
-                this._uiController.showMessageBox(
-                    'Locked!',
-                    `Play more Adventure mode to unlock ${name} Mode.`,
-                )
+                this.onLockedModeClick?.(name)
             }
         }
+    }
+
+    private _configureButtonSounds(name: string, button: UIButton) {
+        button.onHoverEnter = () => {
+            if (LOCKED_MODE_NAMES.has(name) && button.locked) return
+            void SoundLoader.play(SoundEffect.Bleep)
+        }
+
+        button.onPress = () => {
+            const effect = MODE_BUTTON_NAMES.has(name) ? SoundEffect.GraveButton : SoundEffect.Tap
+            void SoundLoader.play(effect)
+        }
+    }
+
+    private _speedForReanimRate(node: AnimNode, animationName: string, rate: number): number {
+        const fps = node.getAnimationFps(animationName)
+        if (!fps || fps <= 0) return 1
+        return rate / fps
     }
 
     private _createButton(options: {
@@ -220,23 +262,23 @@ export class SelectorScreen extends AnimationComponent {
         } = options
         if (!normalSprite) return null
 
-        const node = new Node(name)
-        node.layer = this.node.layer
+        const node = createUINode(name, { layer: this.node.layer, anchorX: 0, anchorY: 1 })
 
         const hasOffset = (offsetX != null && offsetX !== 0) || (offsetY != null && offsetY !== 0)
 
         if (hasOffset) {
-            const spriteNode = new Node('sprite')
-            spriteNode.layer = this.node.layer
-            const sprite = spriteNode.addComponent(Sprite)
-            sprite.trim = false
-            sprite.sizeMode = Sprite.SizeMode.RAW
-            sprite.spriteFrame = normalSprite
-            spriteNode.getComponent(UITransform)!.setAnchorPoint(0, 1)
-            spriteNode.setPosition(offsetX ?? 0, -(offsetY ?? 0), 0)
-            node.addChild(spriteNode)
+            createSpriteNode({
+                name: 'sprite',
+                spriteFrame: normalSprite,
+                parent: node,
+                layer: this.node.layer,
+                x: offsetX ?? 0,
+                y: -(offsetY ?? 0),
+                anchorX: 0,
+                anchorY: 1,
+            })
 
-            const uiTransform = node.addComponent(UITransform)
+            const uiTransform = node.getComponent(UITransform)!
             uiTransform.setAnchorPoint(0, 1)
             uiTransform.setContentSize(width ?? 0, height ?? 0)
         } else {
@@ -295,7 +337,14 @@ export class SelectorScreen extends AnimationComponent {
             const idx = i
             button.onClick = (event: EventTouch) => {
                 const flowerNode = this.flowerNodes[idx]
-                flowerNode.speed = 1.0
+                if (flowerNode.speed > 0) return
+
+                void SoundLoader.playFoley(SoundEffect.LimbsPop, LIMBS_POP_PITCH_RANGE)
+                flowerNode.speed = this._speedForReanimRate(
+                    flowerNode,
+                    `anim_flower${idx + 1}`,
+                    SELECTOR_FLOWER_RATE,
+                )
             }
 
             node.setPosition(fc.x, -fc.y, 0)
@@ -324,6 +373,7 @@ export class SelectorScreen extends AnimationComponent {
     }
 
     startAdventure() {
+        void SoundLoader.play(SoundEffect.LoseMusic)
         this.playZombieHand()
         for (const btn of this._buttons.values()) {
             btn.interactable = false
@@ -336,8 +386,10 @@ export class SelectorScreen extends AnimationComponent {
         }
         this.schedule(flashCallback, 0.1)
         this.scheduleOnce(() => {
+            void SoundLoader.play(SoundEffect.EvilLaugh)
+        }, 1.25)
+        this.scheduleOnce(() => {
             this.unschedule(flashCallback)
-            console.log('[SelectorScreen] Enabling adventure button')
         }, 4.5)
     }
 
@@ -349,7 +401,11 @@ export class SelectorScreen extends AnimationComponent {
             const playCloud = (time = 0) => {
                 cloudNode.play({
                     name: `anim_${name}`,
-                    speed: 0.25 / 12,
+                    speed: this._speedForReanimRate(
+                        cloudNode,
+                        `anim_${name}`,
+                        SELECTOR_CLOUD_RATE,
+                    ),
                     time,
                     onFinish: () => {
                         const delay = randomRange(20, 40)
@@ -364,14 +420,22 @@ export class SelectorScreen extends AnimationComponent {
     playGrassLoop() {
         this.grassNode.play({
             name: 'anim_grass',
-            speed: 0.5,
+            speed: this._speedForReanimRate(
+                this.grassNode,
+                'anim_grass',
+                SELECTOR_GRASS_INITIAL_RATE,
+            ),
             loop: true,
         })
         this.schedule(
             () => {
                 this.grassNode.play({
                     name: 'anim_grass',
-                    speed: randomRange(0.25, 1),
+                    speed: this._speedForReanimRate(
+                        this.grassNode,
+                        'anim_grass',
+                        randomRange(3, 12),
+                    ),
                     blendTime: 0.2,
                     loop: true,
                 })
@@ -384,14 +448,14 @@ export class SelectorScreen extends AnimationComponent {
         this.openNode.play({
             name: 'anim_open',
             keepLastFrame: true,
-            speed: 1,
+            speed: this._speedForReanimRate(this.openNode, 'anim_open', SELECTOR_OPEN_RATE),
             onStart: () => {
                 this.playCloudsLoop()
             },
             onFinish: () => {
                 this.signNode.play({
                     name: 'anim_sign',
-                    speed: 1,
+                    speed: this._speedForReanimRate(this.signNode, 'anim_sign', SELECTOR_SIGN_RATE),
                     keepLastFrame: true,
                     onFinish: () => {
                         this._createFlowerButtons()
@@ -403,7 +467,13 @@ export class SelectorScreen extends AnimationComponent {
     }
 
     playZombieHand() {
+        void SoundLoader.play(SoundEffect.DirtRise)
         this.zombieHandNode.play({
+            name: 'default',
+            keepLastFrame: true,
+            speed: 1,
+        })
+        this.zombieHandRockNode.play({
             name: 'default',
             keepLastFrame: true,
             speed: 1,
@@ -411,15 +481,12 @@ export class SelectorScreen extends AnimationComponent {
     }
 
     onShowMessageBoxClicked() {
-        if (this._uiController) {
-            this._uiController.showMessageBox('Message', 'Hello from SelectorScreen!')
-        } else {
-            console.warn('[SelectorScreen] UIController not assigned.')
-        }
+        this.onMessageBoxRequest?.()
     }
 
     protected async onReady() {
         await this.init()
+        void SoundLoader.play(SoundEffect.RollIn)
         this.playOpenAnimation()
     }
 }

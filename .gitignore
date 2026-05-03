@@ -36,11 +36,13 @@ Thumbs.db
 #//////////////////////////
 # Agent
 #//////////////////////////
-agent.md
+AGENTS.md
 
 raw/
 textures/
 images/
+audio/
 fonts/
 __pycache__/
 main.pak
+reference

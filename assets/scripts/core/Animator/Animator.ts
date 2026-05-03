@@ -192,7 +192,7 @@ export class Animator extends Component {
         if (sprite) {
             sprite.enabled = true
 
-            // 计算最终颜色：trackColor × frameAlpha
+            // Combine track color with frame alpha.
             const trackColor = trackName ? this._trackColors.get(trackName) : undefined
             const alphaVal = Math.round(f.alpha * 255)
             if (trackColor) {

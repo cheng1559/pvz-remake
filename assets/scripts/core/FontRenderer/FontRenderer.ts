@@ -14,6 +14,9 @@ import {
     JsonAsset,
 } from 'cc'
 
+import { FontLoader } from '@/core/FontLoader'
+import type { BitmapFontAssets } from '@/core/FontLoader'
+import { FontMetricsUtil } from './FontMetrics'
 import type { FontConfig, RenderCmd } from './FontRenderer.d'
 
 const { ccclass, property, executeInEditMode } = _decorator
@@ -21,10 +24,8 @@ const { ccclass, property, executeInEditMode } = _decorator
 @ccclass('FontRenderer')
 @executeInEditMode(true)
 export class FontRenderer extends Component {
-    @property
     fontConfigJson: JsonAsset | null = null
 
-    @property
     layerTextures: Texture2D[] = []
 
     @property
@@ -99,15 +100,28 @@ export class FontRenderer extends Component {
         }
     }
 
-    // === 序列化字段 ===
+    @property
+    get textAlign(): number {
+        return this._textAlign
+    }
+    set textAlign(val: number) {
+        if (this._textAlign !== val) {
+            this._textAlign = val
+            this._dirty = true
+            this._scheduleRebuild()
+        }
+    }
+
+    // Serialized text layout fields.
     @property private _string: string = ''
     @property private _fontSize: number = 0
     @property private _fontColor: Color = new Color(255, 255, 255, 255)
     @property private _letterSpacing: number = 0
     @property private _lineSpacing: number = 0
     @property private _maxWidth: number = 0
+    @property private _textAlign: number = 0
 
-    // === 内部状态 ===
+    // Runtime state.
     private _config: FontConfig | null = null
     private _spriteFrameCache: Map<string, SpriteFrame> = new Map()
     private _charNodes: Node[] = []
@@ -115,8 +129,9 @@ export class FontRenderer extends Component {
     private _rebuildScheduled: boolean = false
     private _totalWidth: number = 0
     private _totalHeight: number = 0
+    private _fontLoadVersion: number = 0
 
-    // ─── 生命周期 ──────────────────────────────────────────
+    // Lifecycle.
 
     onLoad() {
         this._loadConfig()
@@ -129,26 +144,44 @@ export class FontRenderer extends Component {
         }
     }
 
-    // ─── 公共方法 ──────────────────────────────────────────
+    // Public API.
 
-    /** 获取当前文本渲染的像素宽度 */
+    /** Current rendered text width in pixels. */
     get contentWidth(): number {
         return this._totalWidth
     }
 
-    /** 获取当前文本渲染的像素高度 */
+    /** Current rendered text height in pixels. */
     get contentHeight(): number {
         return this._totalHeight
     }
 
-    /** 强制重建 */
+    async setFont(fontName: string): Promise<boolean> {
+        const loadVersion = ++this._fontLoadVersion
+        const assets = await FontLoader.load(fontName)
+        if (loadVersion !== this._fontLoadVersion) return false
+        if (!assets) return false
+
+        this.setFontAssets(assets)
+        return true
+    }
+
+    setFontAssets(assets: BitmapFontAssets) {
+        this.fontConfigJson = assets.config
+        this.layerTextures = assets.textures
+        this._loadConfig()
+        this._dirty = true
+        this._scheduleRebuild()
+    }
+
+    /** Force a text mesh rebuild. */
     forceRebuild() {
         this._dirty = true
         this._loadConfig()
         this._rebuild()
     }
 
-    // ─── 内部实现 ──────────────────────────────────────────
+    // Internal implementation.
 
     private _scheduleRebuild() {
         if (this._rebuildScheduled) return
@@ -169,11 +202,11 @@ export class FontRenderer extends Component {
         this._config = this.fontConfigJson.json as unknown as FontConfig
     }
 
-    /** 核心：重建所有字符节点 */
+    /** Rebuilds all glyph nodes. */
     private _rebuild() {
         this._dirty = false
 
-        // 清除旧节点
+        // Clear old glyph nodes.
         this._clearCharNodes()
 
         if (!this._config || !this._string) return
@@ -184,7 +217,7 @@ export class FontRenderer extends Component {
         const scale = config.defaultPointSize > 0 ? pointSize / config.defaultPointSize : 1
         const inputColor = this._fontColor
 
-        // ── Pre-process: resolve char codes ──
+        // Resolve char codes.
         const resolvedChars: number[] = []
         for (let i = 0; i < this._string.length; i++) {
             let code = this._string.charCodeAt(i)
@@ -193,20 +226,20 @@ export class FontRenderer extends Component {
             resolvedChars.push(code)
         }
 
-        // ── Word wrap: compute line breaks using layer 0 ──
-        // Each line = { startIdx, endIdx (exclusive) }
+        // Compute line breaks using layer 0. Each range is end-exclusive.
         const layer0 = config.layers[0]
         const wrapWidth = this._maxWidth > 0 ? this._maxWidth / scale : 0
 
-        // Compute lineSpacing from font config
-        // PvZ: when mHeight == 0 (not specified), falls back to mAscent
-        const layerLineHeight = layer0.height > 0 ? layer0.height : layer0.ascent
+        // PvZ ImageFont falls back to each layer's default glyph height when mHeight is 0.
+        const layerDefaultHeight = FontMetricsUtil.getLayerDefaultHeight(layer0)
+        const layerLineHeight = layer0.height > 0 ? layer0.height : layerDefaultHeight
         const fontLineSpacing =
             this._lineSpacing !== 0 ? this._lineSpacing : layerLineHeight + layer0.lineSpacingOffset
 
         interface LineRange {
             start: number
             end: number
+            width: number
         }
         const lines: LineRange[] = []
 
@@ -222,11 +255,21 @@ export class FontRenderer extends Component {
                 const curChar = resolvedChars[curPos]
 
                 if (curChar === 32) {
-                    // space
+                    // Space.
                     spacePos = curPos
                 } else if (curChar === 10) {
-                    // newline: force wrap
-                    lines.push({ start: lineStartPos, end: curPos })
+                    // Newline forces wrapping.
+                    lines.push({
+                        start: lineStartPos,
+                        end: curPos,
+                        width: this._measureLineWidth(
+                            layer0,
+                            resolvedChars,
+                            lineStartPos,
+                            curPos,
+                            pointSize,
+                        ),
+                    })
                     curPos++
                     lineStartPos = curPos
                     spacePos = -1
@@ -235,33 +278,50 @@ export class FontRenderer extends Component {
                     continue
                 }
 
-                // CharWidthKern: advance width + kerning with previous char
-                const charInfo = layer0.chars[String(curChar)]
-                let charAdvance = charInfo
-                    ? charInfo.width + layer0.spacing + this._letterSpacing
-                    : pointSize * 0.3
-                // Kerning with previous character
-                if (prevChar !== 0 && charInfo) {
-                    const kern = charInfo.kerning[String(prevChar)]
-                    if (kern !== undefined) charAdvance += kern
-                }
+                // CharWidthKern: advance width plus kerning with the previous char.
+                const charAdvance = this._getCharWidthKern(
+                    layer0,
+                    curChar,
+                    prevChar,
+                    pointSize,
+                )
                 curWidth += charAdvance
                 prevChar = curChar
 
                 if (curWidth > wrapWidth) {
-                    // Need to wrap
+                    // Need to wrap.
                     if (spacePos !== -1) {
-                        lines.push({ start: lineStartPos, end: spacePos })
+                        lines.push({
+                            start: lineStartPos,
+                            end: spacePos + 1,
+                            width: this._measureLineWidth(
+                                layer0,
+                                resolvedChars,
+                                lineStartPos,
+                                spacePos + 1,
+                                pointSize,
+                            ),
+                        })
                         curPos = spacePos + 1
-                        // Skip consecutive spaces
+                        // Skip consecutive spaces.
                         while (curPos < resolvedChars.length && resolvedChars[curPos] === 32) {
                             curPos++
                         }
                         lineStartPos = curPos
                     } else {
-                        // No space found: break at current position
-                        if (curPos <= lineStartPos) curPos++ // ensure progress
-                        lines.push({ start: lineStartPos, end: curPos })
+                        // No space found, break at the current position.
+                        if (curPos <= lineStartPos) curPos++ // Ensure progress.
+                        lines.push({
+                            start: lineStartPos,
+                            end: curPos,
+                            width: this._measureLineWidth(
+                                layer0,
+                                resolvedChars,
+                                lineStartPos,
+                                curPos,
+                                pointSize,
+                            ),
+                        })
                         lineStartPos = curPos
                     }
                     spacePos = -1
@@ -271,23 +331,40 @@ export class FontRenderer extends Component {
                     curPos++
                 }
             }
-            // Last line
-            if (lineStartPos <= resolvedChars.length) {
-                lines.push({ start: lineStartPos, end: resolvedChars.length })
+            // Last line.
+            if (lineStartPos < resolvedChars.length) {
+                lines.push({
+                    start: lineStartPos,
+                    end: resolvedChars.length,
+                    width: this._measureLineWidth(
+                        layer0,
+                        resolvedChars,
+                        lineStartPos,
+                        resolvedChars.length,
+                        pointSize,
+                    ),
+                })
             }
         } else {
-            // No word wrap: split only on \n
+            // No word wrap, split only on newlines.
             let lineStart = 0
+            let lineWidth = 0
+            let prevChar = 0
             for (let i = 0; i < resolvedChars.length; i++) {
                 if (resolvedChars[i] === 10) {
-                    lines.push({ start: lineStart, end: i })
+                    lines.push({ start: lineStart, end: i, width: lineWidth })
                     lineStart = i + 1
+                    lineWidth = 0
+                    prevChar = 0
+                } else {
+                    lineWidth += this._getCharWidthKern(layer0, resolvedChars[i], prevChar, pointSize)
+                    prevChar = resolvedChars[i]
                 }
             }
-            lines.push({ start: lineStart, end: resolvedChars.length })
+            lines.push({ start: lineStart, end: resolvedChars.length, width: lineWidth })
         }
 
-        // ── Phase 1: 收集渲染指令 ──
+        // Phase 1: collect render commands.
         const commands: RenderCmd[] = []
 
         for (let layerIdx = 0; layerIdx < config.layers.length; layerIdx++) {
@@ -299,38 +376,33 @@ export class FontRenderer extends Component {
 
             for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
                 const line = lines[lineIdx]
-                let cursorX = 0
+                let cursorX = this._getLineOffsetX(line.width, wrapWidth, layerScale)
 
                 for (let i = line.start; i < line.end; i++) {
                     const charCode = resolvedChars[i]
-                    if (charCode === 10) continue // skip newlines
+                    if (charCode === 10) continue // Skip newlines.
 
                     const charCodeStr = String(charCode)
                     const charInfo = layer.chars[charCodeStr]
                     if (!charInfo) {
-                        // Space or unknown: advance cursor
-                        if (charCode === 32) {
-                            cursorX += (charInfo?.width ?? pointSize * 0.3) * layerScale
-                        }
+                        // Space or unknown character, advance the cursor.
+                        cursorX +=
+                            this._getCharAdvanceToNext(
+                                layer,
+                                charCode,
+                                i + 1 < line.end ? resolvedChars[i + 1] : 0,
+                                pointSize,
+                            ) *
+                            layerScale
                         continue
                     }
 
-                    // Kerning adjustment
-                    let kernOffset = 0
-                    if (i + 1 < line.end) {
-                        const nextCode = resolvedChars[i + 1]
-                        const kernVal = charInfo.kerning[String(nextCode)]
-                        if (kernVal !== undefined) {
-                            kernOffset = kernVal * layerScale
-                        }
-                    }
-
-                    // Coordinates
+                    // Coordinates.
                     const x = cursorX + (layer.offset[0] + charInfo.offset[0]) * layerScale
                     const y =
                         lineY * layerScale + (layer.offset[1] + charInfo.offset[1]) * layerScale
 
-                    // Draw order
+                    // Draw order.
                     const order = Math.max(0, Math.min(255, layer.baseOrder + charInfo.order + 128))
 
                     commands.push({
@@ -344,19 +416,22 @@ export class FontRenderer extends Component {
 
                     // Advance cursor
                     cursorX +=
-                        (charInfo.width + layer.spacing + this._letterSpacing) * layerScale +
-                        kernOffset
+                        this._getCharAdvanceToNext(
+                            layer,
+                            charCode,
+                            i + 1 < line.end ? resolvedChars[i + 1] : 0,
+                            pointSize,
+                        ) * layerScale
                 }
 
                 lineY += fontLineSpacing
             }
         }
 
-        // ── Phase 2: 按 order 排序 (稳定排序) ──
+        // Phase 2: sort by draw order.
         commands.sort((a, b) => a.order - b.order)
 
-        // ── Phase 3: 创建节点 ──
-        let maxX = 0
+        // Phase 3: create glyph nodes.
         let maxY = 0
 
         for (const cmd of commands) {
@@ -364,7 +439,7 @@ export class FontRenderer extends Component {
             const texture = this.layerTextures[cmd.layerIdx]
             if (!texture) continue
 
-            // 取得或创建 SpriteFrame
+            // Get or create the SpriteFrame.
             const rect = cmd.charInfo.rect
             const sfKey = `${cmd.layerIdx}_${cmd.charCode}`
             let sf = this._spriteFrameCache.get(sfKey)
@@ -372,69 +447,109 @@ export class FontRenderer extends Component {
                 sf = new SpriteFrame()
                 sf.texture = texture
                 sf.rect = new Rect(rect[0], rect[1], rect[2], rect[3])
-                // 翻转Y坐标：PvZ 使用左上角原点，Cocos 也是 SpriteFrame 从左上角
+                // PvZ and SpriteFrame rects both use a top-left origin here.
                 sf.rotated = false
                 this._spriteFrameCache.set(sfKey, sf)
             }
 
-            // 创建节点
+            // Create the glyph node.
             const charNode = new Node(`char_${cmd.charCode}_L${cmd.layerIdx}`)
             const uiTrans = charNode.addComponent(UITransform)
             uiTrans.setContentSize(new Size(rect[2] * scale, rect[3] * scale))
-            uiTrans.setAnchorPoint(new Vec2(0, 1)) // 左上角锚点
+            uiTrans.setAnchorPoint(new Vec2(0, 1))
 
             const sprite = charNode.addComponent(Sprite)
             sprite.spriteFrame = sf
             sprite.sizeMode = Sprite.SizeMode.CUSTOM
             sprite.type = Sprite.Type.SIMPLE
 
-            // ── 设置 Alpha 混合模式 ──
-            // 必须显式设置 SRC_ALPHA / ONE_MINUS_SRC_ALPHA，
-            // 否则 Sprite 默认可能不走 Alpha 混合，导致黑底。
-            // const renderComp = sprite
-            // if (renderComp.customMaterial == null) {
-            //     // 使用自定义混合因子
-            //     sprite.color = Color.WHITE // 先设白色触发渲染器初始化
-            // }
-
-            // ── 颜色混合 ──
-            // PvZ 公式: finalColor = min(inputColor * layerColorMult / 255 + layerColorAdd, 255)
-            // 注意 colorMult[3] = alpha 通道：
-            //   PvZ Color(int) 构造器: 当 alpha bits == 0 时强制 alpha = 255
-            //   所以 ColorMult 0 → {R=0, G=0, B=0, A=255} = 不透明黑色
+            // PvZ formula: finalColor = min(inputColor * layerColorMult / 255 + layerColorAdd, 255).
+            // colorMult[3] is alpha. PvZ Color(int) treats zero alpha bits as 255.
             const cm = layer.colorMult
             const ca = layer.colorAdd
             const r = Math.min(255, Math.floor((inputColor.r * cm[0]) / 255) + ca[0])
             const g = Math.min(255, Math.floor((inputColor.g * cm[1]) / 255) + ca[1])
             const b = Math.min(255, Math.floor((inputColor.b * cm[2]) / 255) + ca[2])
             const a = Math.min(255, Math.floor((inputColor.a * cm[3]) / 255) + ca[3])
-            // Cocos Node.color 做 tint 乘法混合。
-            // 对于 colorAdd 非零的情况需自定义 Shader（PvZ 原版字体几乎全为 0）。
+            // Cocos Sprite.color is multiplicative tinting. Non-zero colorAdd needs a custom shader.
             sprite.color = new Color(r, g, b, a)
 
-            // 定位：Cocos Y 轴向上，PvZ Y 轴向下，所以 y 取负
+            // Cocos Y points up while PvZ text coordinates point down.
             charNode.setPosition(new Vec3(cmd.x, -cmd.y, 0))
 
             this.node.addChild(charNode)
             this._charNodes.push(charNode)
 
-            // 记录边界
-            if (cmd.x + rect[2] * scale > maxX) maxX = cmd.x + rect[2] * scale
+            // Record bounds.
             const bottom = cmd.y + rect[3] * scale
             if (bottom > maxY) maxY = bottom
         }
 
-        this._totalWidth = maxX
+        this._totalWidth = Math.max(0, ...lines.map((line) => line.width * scale))
         this._totalHeight = maxY
 
-        // 更新自身 UITransform
+        // Update this node's UITransform.
         const selfTrans = this.node.getComponent(UITransform)
         if (selfTrans) {
             selfTrans.setContentSize(new Size(this._totalWidth, this._totalHeight))
         }
     }
 
-    /** 清理所有字符子节点 */
+    private _getLineOffsetX(lineWidth: number, wrapWidth: number, scale: number): number {
+        if (wrapWidth <= 0 || this._textAlign === 0) return 0
+
+        const spare = Math.max(0, wrapWidth - lineWidth)
+        if (this._textAlign === 1) return spare * scale
+        if (this._textAlign === 2) return (spare / 2) * scale
+        return 0
+    }
+
+    private _getCharWidthKern(
+        layer: FontConfig['layers'][number],
+        charCode: number,
+        prevCharCode: number,
+        pointSize: number,
+    ): number {
+        const charInfo = layer.chars[String(charCode)]
+        let width = charInfo ? charInfo.width : pointSize * 0.3
+        if (prevCharCode !== 0) {
+            const prevInfo = layer.chars[String(prevCharCode)]
+            width += layer.spacing + (prevInfo?.kerning[String(charCode)] ?? 0)
+        }
+        return width + this._letterSpacing
+    }
+
+    private _measureLineWidth(
+        layer: FontConfig['layers'][number],
+        chars: number[],
+        start: number,
+        end: number,
+        pointSize: number,
+    ): number {
+        let width = 0
+        let prevChar = 0
+        for (let i = start; i < end; i++) {
+            width += this._getCharWidthKern(layer, chars[i], prevChar, pointSize)
+            prevChar = chars[i]
+        }
+        return width
+    }
+
+    private _getCharAdvanceToNext(
+        layer: FontConfig['layers'][number],
+        charCode: number,
+        nextCharCode: number,
+        pointSize: number,
+    ): number {
+        const charInfo = layer.chars[String(charCode)]
+        let width = charInfo ? charInfo.width : pointSize * 0.3
+        if (nextCharCode !== 0) {
+            width += layer.spacing + (charInfo?.kerning[String(nextCharCode)] ?? 0)
+        }
+        return width + this._letterSpacing
+    }
+
+    /** Clears all glyph child nodes. */
     private _clearCharNodes() {
         for (const n of this._charNodes) {
             if (n.isValid) {
@@ -447,7 +562,7 @@ export class FontRenderer extends Component {
 
     onDestroy() {
         this._clearCharNodes()
-        // 清理 SpriteFrame 缓存
+        // Clear SpriteFrame cache.
         for (const [, sf] of this._spriteFrameCache) {
             sf.destroy()
         }

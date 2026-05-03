@@ -1,55 +1,60 @@
-import { ButtonConfig } from './SelectorScreen.d'
 import { Vec2, Vec3 } from 'cc'
+import { ButtonConfig } from './SelectorScreen.d'
+
+type Point = [number, number]
+type ButtonExtra = Partial<Pick<ButtonConfig, 'width' | 'height' | 'offsetX' | 'offsetY' | 'pressOffset'>>
+
+const polygon = (points: Point[]) => points.map(([x, y]) => new Vec2(x, y))
+const zeroOffset = new Vec3(0, 0, 0)
+
+function replaceButton(
+    name: string,
+    trackName: string,
+    normalImage: string,
+    pressedImage: string,
+    points: Point[],
+): ButtonConfig {
+    return {
+        name,
+        attached: { trackName, offsetX: 0, offsetY: 0, isReplaceTrack: true },
+        normalImage,
+        pressedImage,
+        polygon: polygon(points),
+    }
+}
+
+function attachedButton(
+    name: string,
+    trackName: string,
+    offsetX: number,
+    offsetY: number,
+    normalImage: string,
+    pressedImage: string,
+    extra: ButtonExtra = {},
+    isReplaceTrack = false,
+): ButtonConfig {
+    return {
+        name,
+        attached: { trackName, offsetX, offsetY, isReplaceTrack },
+        normalImage,
+        pressedImage,
+        ...extra,
+    }
+}
 
 const BUTTON_CONFIGS: ButtonConfig[] = [
-    {
-        name: 'adventure',
-        attached: {
-            trackName: 'SelectorScreen_Adventure_button',
-            offsetX: 0,
-            offsetY: 0,
-            isReplaceTrack: true,
-        },
-        normalImage: 'selectorscreen_adventure_button',
-        pressedImage: 'selectorscreen_adventure_highlight',
-        polygon: [new Vec2(7, -1), new Vec2(328, -30), new Vec2(314, -125), new Vec2(1, -78)],
-    },
-    {
-        name: 'miniGames',
-        attached: {
-            trackName: 'SelectorScreen_Survival_button',
-            offsetX: 0,
-            offsetY: 0,
-            isReplaceTrack: true,
-        },
-        normalImage: 'selectorscreen_survival_button',
-        pressedImage: 'selectorscreen_survival_highlight',
-        polygon: [new Vec2(4, -2), new Vec2(312, -51), new Vec2(296, -130), new Vec2(7, -77)],
-    },
-    {
-        name: 'puzzles',
-        attached: {
-            trackName: 'SelectorScreen_Challenges_button',
-            offsetX: 0,
-            offsetY: 0,
-            isReplaceTrack: true,
-        },
-        normalImage: 'selectorscreen_challenges_button',
-        pressedImage: 'selectorscreen_challenges_highlight',
-        polygon: [new Vec2(2, 0), new Vec2(281, -55), new Vec2(268, -121), new Vec2(3, -60)],
-    },
-    {
-        name: 'survival',
-        attached: {
-            trackName: 'SelectorScreen_ZenGarden_button',
-            offsetX: 0,
-            offsetY: 0,
-            isReplaceTrack: true,
-        },
-        normalImage: 'selectorscreen_vasebreaker_button',
-        pressedImage: 'selectorscreen_vasebreaker_highlight',
-        polygon: [new Vec2(7, -1), new Vec2(267, -62), new Vec2(257, -124), new Vec2(7, -57)],
-    },
+    replaceButton('adventure', 'SelectorScreen_Adventure_button', 'selectorscreen_adventure_button', 'selectorscreen_adventure_highlight', [
+        [7, -1], [328, -30], [314, -125], [1, -78],
+    ]),
+    replaceButton('miniGames', 'SelectorScreen_Survival_button', 'selectorscreen_survival_button', 'selectorscreen_survival_highlight', [
+        [4, -2], [312, -51], [296, -130], [7, -77],
+    ]),
+    replaceButton('Puzzle', 'SelectorScreen_Challenges_button', 'selectorscreen_challenges_button', 'selectorscreen_challenges_highlight', [
+        [2, 0], [281, -55], [268, -121], [3, -60],
+    ]),
+    replaceButton('Survival', 'SelectorScreen_ZenGarden_button', 'selectorscreen_vasebreaker_button', 'selectorscreen_vasebreaker_highlight', [
+        [7, -1], [267, -62], [257, -124], [7, -57],
+    ]),
 ]
 
 const FLOWER_CENTERS: { x: number; y: number; radius: number }[] = [
@@ -59,126 +64,56 @@ const FLOWER_CENTERS: { x: number; y: number; radius: number }[] = [
 ]
 
 const WOODSIGN_BUTTON_CONFIGS: ButtonConfig[] = [
-    {
-        name: 'changeUser',
-        attached: {
-            trackName: 'woodsign2',
-            offsetX: 24,
-            offsetY: 10,
-            isReplaceTrack: true,
-        },
-        normalImage: 'selectorscreen_woodsign2',
-        pressedImage: 'selectorscreen_woodsign2_press',
-        pressOffset: new Vec3(0, 0, 0),
+    attachedButton('changeUser', 'woodsign2', 24, 10, 'selectorscreen_woodsign2', 'selectorscreen_woodsign2_press', {
+        pressOffset: zeroOffset,
         width: 250,
         height: 30,
         offsetX: -24,
         offsetY: -10,
-    },
-    {
-        name: 'zombatar',
-        attached: {
-            trackName: 'woodsign3',
-            offsetX: 0,
-            offsetY: 0,
-            isReplaceTrack: true,
-        },
-        normalImage: 'selectorscreen_woodsign3',
-        pressedImage: 'selectorscreen_woodsign3_press',
-        pressOffset: new Vec3(0, 0, 0),
-    },
+    }, true),
+    attachedButton('zombatar', 'woodsign3', 0, 0, 'selectorscreen_woodsign3', 'selectorscreen_woodsign3_press', {
+        pressOffset: zeroOffset,
+    }, true),
 ]
 
 const AUX_BUTTON_CONFIGS: ButtonConfig[] = [
-    {
-        name: 'zenGarden',
-        attached: {
-            trackName: 'SelectorScreen_BG_Right',
-            offsetX: 100,
-            offsetY: 360,
-            isReplaceTrack: false,
-        },
-        normalImage: 'selectorscreen_zengarden',
-        pressedImage: 'selectorscreen_zengardenhighlight',
+    attachedButton('zenGarden', 'SelectorScreen_BG_Right', 100, 360, 'selectorscreen_zengarden', 'selectorscreen_zengardenhighlight', {
         width: 130,
         height: 130,
-    },
-    {
-        name: 'store',
-        attached: {
-            trackName: 'SelectorScreen_BG_Right',
-            offsetX: 334,
-            offsetY: 441,
-            isReplaceTrack: false,
-        },
-        normalImage: 'selectorscreen_store',
-        pressedImage: 'selectorscreen_storehighlight',
-    },
-    {
-        name: 'almanac',
-        attached: {
-            trackName: 'SelectorScreen_BG_Right',
-            offsetX: 256,
-            offsetY: 387,
-            isReplaceTrack: false,
-        },
-        normalImage: 'selectorscreen_almanac',
-        pressedImage: 'selectorscreen_almanachighlight',
-    },
-    {
-        name: 'achievement',
-        attached: {
-            trackName: 'SelectorScreen_BG_Left',
-            offsetX: 20,
-            offsetY: 480,
-            isReplaceTrack: false,
-        },
-        normalImage: 'achievements_pedestal',
-        pressedImage: 'achievements_pedestal_press',
-    },
-    {
-        name: 'options',
-        attached: {
-            trackName: 'SelectorScreen_BG_Right',
-            offsetX: 494,
-            offsetY: 434,
-            isReplaceTrack: false,
-        },
-        normalImage: 'selectorscreen_options1',
-        pressedImage: 'selectorscreen_options2',
+    }),
+    attachedButton('store', 'SelectorScreen_BG_Right', 334, 441, 'selectorscreen_store', 'selectorscreen_storehighlight'),
+    attachedButton('almanac', 'SelectorScreen_BG_Right', 256, 387, 'selectorscreen_almanac', 'selectorscreen_almanachighlight'),
+    attachedButton('achievement', 'SelectorScreen_BG_Left', 20, 480, 'achievements_pedestal', 'achievements_pedestal_press'),
+    attachedButton('options', 'SelectorScreen_BG_Right', 494, 434, 'selectorscreen_options1', 'selectorscreen_options2', {
         width: 81,
-        height: 31 + 23,
+        height: 54,
         offsetY: 13,
-    },
-    {
-        name: 'help',
-        attached: {
-            trackName: 'SelectorScreen_BG_Right',
-            offsetX: 576,
-            offsetY: 458,
-            isReplaceTrack: false,
-        },
-        normalImage: 'selectorscreen_help1',
-        pressedImage: 'selectorscreen_help2',
+    }),
+    attachedButton('help', 'SelectorScreen_BG_Right', 576, 458, 'selectorscreen_help1', 'selectorscreen_help2', {
         width: 48,
-        height: 22 + 33,
+        height: 55,
         offsetY: 28,
-    },
-    {
-        name: 'quit',
-        attached: {
-            trackName: 'SelectorScreen_BG_Right',
-            offsetX: 644,
-            offsetY: 469,
-            isReplaceTrack: false,
-        },
-        normalImage: 'selectorscreen_quit1',
-        pressedImage: 'selectorscreen_quit2',
-        width: 47 + 10,
-        height: 27 + 10,
+    }),
+    attachedButton('quit', 'SelectorScreen_BG_Right', 644, 469, 'selectorscreen_quit1', 'selectorscreen_quit2', {
+        width: 57,
+        height: 37,
         offsetX: 5,
         offsetY: 3,
-    },
+    }),
 ]
 
-export { BUTTON_CONFIGS, FLOWER_CENTERS, WOODSIGN_BUTTON_CONFIGS, AUX_BUTTON_CONFIGS }
+const SELECTOR_SCREEN_ANIMATIONS = ['animations/selectorscreen', 'animations/zombie_hand']
+const SELECTOR_SCREEN_SPRITES = [
+    ...BUTTON_CONFIGS,
+    ...WOODSIGN_BUTTON_CONFIGS,
+    ...AUX_BUTTON_CONFIGS,
+].flatMap((config) => [config.normalImage, config.pressedImage])
+
+export {
+    BUTTON_CONFIGS,
+    FLOWER_CENTERS,
+    WOODSIGN_BUTTON_CONFIGS,
+    AUX_BUTTON_CONFIGS,
+    SELECTOR_SCREEN_ANIMATIONS,
+    SELECTOR_SCREEN_SPRITES,
+}

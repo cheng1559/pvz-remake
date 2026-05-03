@@ -8,6 +8,7 @@ Steps:
   3. Convert reanim animations
   4. Convert fonts
   5. Copy images to textures
+  6. Copy sounds to audio resources
 """
 
 import shutil
@@ -17,6 +18,7 @@ from pak_extractor import parse_pak, extract_entries, _decrypt
 from rename_raw_to_lower import rename_all_to_lower
 from reanim_converter import main as convert_reanim
 from font_converter import main as convert_font
+from copy_sounds import copy_sounds
 
 
 def copy_images(src_dir: Path, dst_dir: Path) -> int:
@@ -89,6 +91,17 @@ def main():
     texture_dir = Path("./assets/resources/textures")
     img_count = copy_images(images_dir, texture_dir)
     print(f"[pipeline] Copied {img_count} new images -> {texture_dir}")
+
+    # ── Step 6: Copy sounds ────────────────────────────────────────
+    print()
+    print("=" * 60)
+    print("[pipeline] Step 6: Copy sounds to audio resources")
+    print("=" * 60)
+
+    sounds_dir = raw_dir / "sounds"
+    audio_dir = Path("./assets/resources/audio/sfx")
+    sound_count = copy_sounds(sounds_dir, audio_dir)
+    print(f"[pipeline] Copied {sound_count} new sounds -> {audio_dir}")
 
     print()
     print("=" * 60)

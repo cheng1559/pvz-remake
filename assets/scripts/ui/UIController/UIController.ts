@@ -1,70 +1,74 @@
-import {
-    _decorator,
-    Component,
-    Node,
-    Prefab,
-    instantiate,
-    UITransform,
-    Label,
-    Layers,
-    Widget,
-    Color,
-} from 'cc'
-import { MessageBox } from '../MessageBox/MessageBox'
+import { _decorator, Component, Node } from 'cc'
+import { DialogButtonMode, DialogResult, MessageBox } from '../MessageBox/MessageBox'
 import { SelectorScreen } from '../SelectorScreen/SelectorScreen'
+import { StartupResourceLoader } from '../StartupResourceLoader'
+import { createUINode } from '../UIFactory'
+
 const { ccclass, property } = _decorator
 
 @ccclass('UIController')
 export class UIController extends Component {
-    @property(Prefab)
-    selectorScreenPrefab: Prefab
-
-    @property(Prefab)
-    messageBoxPrefab: Prefab
-
     @property(Node)
-    uiRoot: Node | null = null // The parent node for UI elements
+    uiRoot: Node | null = null
 
     onLoad() {
         if (!this.uiRoot) {
             this.uiRoot = this.node
         }
 
-        // Example: Show selector screen on start
-        this.showSelectorScreen()
+        void this._bootstrap()
     }
 
-    showSelectorScreen() {
-        const node = instantiate(this.selectorScreenPrefab)
-        this.uiRoot!.addChild(node)
-        const selectorScreen = node.getComponent(SelectorScreen)
-        selectorScreen.uiController = this
-        // if (selectorScreen) {
-        // selectorScreen.init(this)
-        // selectorScreen.playOpenAnimation()
-        // }
+    private async _bootstrap() {
+        await StartupResourceLoader.preloadStartup()
+        await this.showSelectorScreen()
     }
 
-    showMessageBox(title: string, message: string) {
-        let node: Node
+    async showSelectorScreen(): Promise<SelectorScreen | null> {
+        const [animation, zombieArmAnimation] = await Promise.all([
+            StartupResourceLoader.loadJson('animations/selectorscreen'),
+            StartupResourceLoader.loadJson('animations/zombie_hand'),
+        ])
+        if (!animation || !zombieArmAnimation) return null
 
-        console.log(`[UIController] Showing MessageBox - Title: "${title}", Message: "${message}"`)
+        const node = createUINode('SelectorScreen', { active: false, width: 800, height: 600 })
 
-        // Create node
-        node = instantiate(this.messageBoxPrefab)
-
-        // Setup component properties BEFORE adding to scene
-        const messageBox = node.getComponent(MessageBox)
-        if (messageBox) {
-            messageBox.title = title
-            messageBox.message = message
+        const selectorScreen = node.addComponent(SelectorScreen)
+        selectorScreen.animation = animation
+        selectorScreen.zombieArmAnimation = zombieArmAnimation
+        selectorScreen.onLockedModeClick = (name) => {
+            const dialog = this.showMessageBox('Locked!', `Play more Adventure to unlock ${name} Mode.`)
+            dialog?.setMessageLayout(277, -3, 2)
+        }
+        selectorScreen.onMessageBoxRequest = () => {
+            this.showMessageBox('Message', 'Hello from SelectorScreen!')
         }
 
-        messageBox.setButtons([{ label: 'OK', onClick: () => {
-            messageBox.close()
-        } }])
-
-        // Add to scene (triggers onEnable -> renderDialog)
         this.uiRoot!.addChild(node)
+        node.active = true
+        return selectorScreen
+    }
+
+    showMessageBox(title: string, message: string): MessageBox | null {
+        const node = createUINode('MessageBox', { active: false, width: 100, height: 100 })
+
+        const messageBox = node.addComponent(MessageBox)
+        messageBox.dialogWidth = 500
+        messageBox.dialogHeight = 300
+        messageBox.title = title
+        messageBox.message = message
+        messageBox.setButtonMode(DialogButtonMode.Footer, 'OK')
+
+        this.uiRoot!.addChild(node)
+        node.active = true
+        return messageBox
+    }
+
+    async showConfirmBox(title: string, message: string): Promise<boolean> {
+        const dialog = this.showMessageBox(title, message)
+        if (!dialog) return false
+        dialog.setButtonMode(DialogButtonMode.YesNo)
+        const result = await dialog.waitForResult()
+        return result === DialogResult.Yes
     }
 }

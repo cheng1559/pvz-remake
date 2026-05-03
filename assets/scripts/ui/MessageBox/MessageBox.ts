@@ -5,30 +5,49 @@ import {
     EventTouch,
     UITransform,
     view,
-    Sprite,
     SpriteFrame,
-    Texture2D,
-    JsonAsset,
     Layers,
     Enum,
     Color,
     BlockInputEvents,
-    Widget,
-    Vec2,
     Vec3,
-    resources,
+    input,
+    Input,
+    EventKeyboard,
 } from 'cc'
-import { SpriteLoader } from '@/core/SpriteLoader'
-import { UIButton } from '@/ui/Button/UIButton'
-import { FontRenderer } from '@/core/FontRenderer'
+import type { BitmapFontAssets } from '@/core/FontLoader'
+import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { UIButton } from '@/ui/Button'
+import { buildNineSliceGrid, buildThreeSliceRow, createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
+import { MessageBoxAssets, MessageBoxButtonSprites } from './MessageBoxAssets'
 
 const { ccclass, property } = _decorator
 
 export interface MessageBoxButton {
     label: string
+    result?: DialogResult
     width?: number
     height?: number
     onClick?: () => void
+}
+
+export const DialogResult = {
+    None: 0x7fffffff,
+    Yes: 1000,
+    No: 1001,
+    Ok: 1000,
+    Cancel: 1001,
+    Footer: 1000,
+} as const
+
+export type DialogResult = number
+
+export enum DialogButtonMode {
+    None,
+    YesNo,
+    OkCancel,
+    Footer,
 }
 
 /**
@@ -59,6 +78,21 @@ export class MessageBox extends Component {
     @property
     message: string = ''
 
+    @property
+    buttonDelay: number = -1
+
+    @property
+    verticalCenterText: boolean = true
+
+    @property
+    messageMaxWidth: number = 0
+
+    @property
+    messageOffsetY: number = 0
+
+    @property
+    messageAlign: number = 0
+
     private _bgContainer: Node | null = null
     private _buttonContainer: Node | null = null
     private _modalBlocker: Node | null = null
@@ -66,67 +100,29 @@ export class MessageBox extends Component {
     private _titleRenderer: FontRenderer | null = null
     private _messageNode: Node | null = null
     private _messageRenderer: FontRenderer | null = null
+    private _modalHoverBlockActive = false
     private _dragging = false
     private _dragMouseX = 0
     private _dragMouseY = 0
     private _buttons: MessageBoxButton[] = []
     private _buttonNodes: Node[] = []
-
-    // Cached button sprites (loaded once)
-    private static _btnLeft: SpriteFrame | null = null
-    private static _btnMiddle: SpriteFrame | null = null
-    private static _btnRight: SpriteFrame | null = null
-    private static _btnDownLeft: SpriteFrame | null = null
-    private static _btnDownMiddle: SpriteFrame | null = null
-    private static _btnDownRight: SpriteFrame | null = null
-
-    // Cached font assets (loaded once)
-    private static _fontCache: Map<string, { config: JsonAsset; texture: Texture2D }> = new Map()
-
-    /**
-     * Load a bitmap font (JSON config + texture) from resources/fonts/ by name.
-     * Results are cached so each font is only loaded once.
-     */
-    private static _loadFont(
-        name: string,
-    ): Promise<{ config: JsonAsset; texture: Texture2D } | null> {
-        const cached = MessageBox._fontCache.get(name)
-        if (cached) return Promise.resolve(cached)
-
-        return new Promise((resolve) => {
-            resources.load(`fonts/${name}`, JsonAsset, (err, jsonAsset) => {
-                if (err || !jsonAsset) {
-                    console.error(`[MessageBox] Failed to load font config: fonts/${name}`, err)
-                    resolve(null)
-                    return
-                }
-                const cfg = jsonAsset.json as any
-                const imageName = cfg.layers?.[0]?.image
-                if (!imageName) {
-                    console.error(`[MessageBox] No layer image in font: ${name}`)
-                    resolve(null)
-                    return
-                }
-                resources.load(`fonts/${imageName}/texture`, Texture2D, (err2, tex) => {
-                    if (err2 || !tex) {
-                        console.error(
-                            `[MessageBox] Failed to load font texture: fonts/${imageName}`,
-                            err2,
-                        )
-                        resolve(null)
-                        return
-                    }
-                    const entry = { config: jsonAsset, texture: tex }
-                    MessageBox._fontCache.set(name, entry)
-                    resolve(entry)
-                })
-            })
-        })
-    }
+    private _buttonStates: Map<Node, UIButton> = new Map()
+    private _result: DialogResult = DialogResult.None
+    private _started = false
+    private _updateCount = 0
+    private _resolveResult: ((result: DialogResult) => void) | null = null
 
     start() {
+        this._started = true
         this._createModalBlocker()
         this.renderDialog()
+    }
+
+    update() {
+        this._updateCount++
+        if (this.buttonDelay >= 0 && this._updateCount > this.buttonDelay) {
+            this.setButtonDelay(-1)
+        }
     }
 
     /**
@@ -134,16 +130,65 @@ export class MessageBox extends Component {
      */
     setButtons(buttons: MessageBoxButton[]) {
         this._buttons = buttons
+        if (this._started) {
+            this.renderDialog()
+        }
+    }
+
+    setButtonMode(mode: DialogButtonMode, footer = 'OK') {
+        switch (mode) {
+            case DialogButtonMode.YesNo:
+                this.setButtons([
+                    { label: 'Yes', result: DialogResult.Yes },
+                    { label: 'No', result: DialogResult.No },
+                ])
+                break
+            case DialogButtonMode.OkCancel:
+                this.setButtons([
+                    { label: 'OK', result: DialogResult.Ok },
+                    { label: 'Cancel', result: DialogResult.Cancel },
+                ])
+                break
+            case DialogButtonMode.Footer:
+                this.setButtons([{ label: footer, result: DialogResult.Footer }])
+                break
+            default:
+                this.setButtons([])
+                break
+        }
+    }
+
+    setButtonDelay(frames: number) {
+        this.buttonDelay = frames
+        this._updateCount = 0
+        this._setButtonsInteractable(frames < 0)
+    }
+
+    setMessageLayout(maxWidth = 0, offsetY = 0, align = 0) {
+        this.messageMaxWidth = maxWidth
+        this.messageOffsetY = offsetY
+        this.messageAlign = align
+        if (this._started) {
+            this.renderDialog()
+        }
+    }
+
+    waitForResult(): Promise<DialogResult> {
+        if (this._result !== DialogResult.None) return Promise.resolve(this._result)
+        return new Promise((resolve) => {
+            this._resolveResult = resolve
+        })
     }
 
     /**
      * Close and destroy this dialog along with its modal blocker.
      */
     close() {
-        if (this._modalBlocker && this._modalBlocker.isValid) {
-            this._modalBlocker.destroy()
-            this._modalBlocker = null
+        if (this._result === DialogResult.None) {
+            this._finish(DialogResult.Cancel)
+            return
         }
+        this._destroyModalBlocker()
         if (this.node.isValid) {
             this.node.destroy()
         }
@@ -180,14 +225,40 @@ export class MessageBox extends Component {
         }
 
         this._modalBlocker = blocker
+        this._beginModalHoverBlock()
+    }
+
+    private _beginModalHoverBlock() {
+        if (this._modalHoverBlockActive) return
+        this._modalHoverBlockActive = true
+        UIButton.beginHoverBlock()
+    }
+
+    private _endModalHoverBlock() {
+        if (!this._modalHoverBlockActive) return
+        this._modalHoverBlockActive = false
+        UIButton.endHoverBlock()
+    }
+
+    private _destroyModalBlocker() {
+        if (this._modalBlocker && this._modalBlocker.isValid) {
+            this._modalBlocker.destroy()
+        }
+        this._modalBlocker = null
+        this._endModalHoverBlock()
     }
 
     onEnable() {
+        if (this._modalBlocker) {
+            this._modalBlocker.active = true
+            this._beginModalHoverBlock()
+        }
         const target = this.dragHandle ?? this.node
         target.on(Node.EventType.TOUCH_START, this._onTouchStart, this)
         target.on(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
         target.on(Node.EventType.TOUCH_END, this._onTouchEnd, this)
         target.on(Node.EventType.TOUCH_CANCEL, this._onTouchEnd, this)
+        input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
     }
 
     onDisable() {
@@ -196,19 +267,18 @@ export class MessageBox extends Component {
         target.off(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
         target.off(Node.EventType.TOUCH_END, this._onTouchEnd, this)
         target.off(Node.EventType.TOUCH_CANCEL, this._onTouchEnd, this)
+        input.off(Input.EventType.KEY_DOWN, this._onKeyDown, this)
 
         // Hide blocker when dialog is disabled
         if (this._modalBlocker) {
             this._modalBlocker.active = false
+            this._endModalHoverBlock()
         }
     }
 
     onDestroy() {
         // Clean up the modal blocker node
-        if (this._modalBlocker && this._modalBlocker.isValid) {
-            this._modalBlocker.destroy()
-            this._modalBlocker = null
-        }
+        this._destroyModalBlocker()
         this._destroyFontNode(this._titleNode)
         this._destroyFontNode(this._messageNode)
         this._titleNode = null
@@ -218,6 +288,7 @@ export class MessageBox extends Component {
     }
 
     private _onTouchStart(event: EventTouch) {
+        event.propagationStopped = true
         this._dragging = true
         const uiPos = event.getUILocation()
         const ut = this.node.getComponent(UITransform)!
@@ -230,6 +301,7 @@ export class MessageBox extends Component {
 
     private _onTouchMove(event: EventTouch) {
         if (!this._dragging) return
+        event.propagationStopped = true
         const uiPos = event.getUILocation()
         const ut = this.node.getComponent(UITransform)!
         const { width: w, height: h } = ut.contentSize
@@ -253,6 +325,7 @@ export class MessageBox extends Component {
     }
 
     private _onTouchEnd(event: EventTouch) {
+        event.propagationStopped = true
         this._dragging = false
 
         // Restore cursor
@@ -261,36 +334,46 @@ export class MessageBox extends Component {
         }
     }
 
+    private _onKeyDown(event: EventKeyboard) {
+        if (this._result !== DialogResult.None) return
+        switch (event.keyCode) {
+            case 32: // Space
+            case 13: // Enter
+            case 89: // Y
+                this._finish(DialogResult.Yes)
+                break
+            case 27: // Escape
+            case 78: // N
+                if (
+                    this._buttons.some(
+                        (b) => b.result === DialogResult.No || b.result === DialogResult.Cancel,
+                    )
+                ) {
+                    this._finish(DialogResult.No)
+                }
+                break
+        }
+    }
+
     async renderDialog() {
         if (!this._bgContainer) {
-            this._bgContainer = new Node('BackgroundContainer')
-            this._bgContainer.layer = Layers.Enum.UI_2D
-            this.node.addChild(this._bgContainer)
+            this._bgContainer = createUINode('BackgroundContainer', { parent: this.node })
             this._bgContainer.setSiblingIndex(0)
         }
 
         const container = this._bgContainer
         container.removeAllChildren()
 
-        // Resources
         const isTall = this.dialogType === DialogType.TallBottom
-        const bottomPrefix = isTall ? 'dialog_bigbottom' : 'dialog_bottom'
+        const dialogSprites = await MessageBoxAssets.loadDialogSprites(isTall)
+        const textFonts = await MessageBoxAssets.loadTextFonts()
+        const buttonSprites = await MessageBoxAssets.loadButtonSprites()
+        if (!dialogSprites || !buttonSprites) {
+            console.error('[MessageBox] Failed to load one or more resources')
+            return
+        }
 
-        // Load all sprites
-        const sprites = await Promise.all([
-            SpriteLoader.load('dialog_topleft'),
-            SpriteLoader.load('dialog_topmiddle'),
-            SpriteLoader.load('dialog_topright'),
-            SpriteLoader.load('dialog_centerleft'),
-            SpriteLoader.load('dialog_centermiddle'),
-            SpriteLoader.load('dialog_centerright'),
-            SpriteLoader.load(`${bottomPrefix}left`),
-            SpriteLoader.load(`${bottomPrefix}middle`),
-            SpriteLoader.load(`${bottomPrefix}right`),
-            SpriteLoader.load('dialog_header'),
-        ])
-
-        const [
+        const {
             topLeft,
             topMiddle,
             topRight,
@@ -301,20 +384,53 @@ export class MessageBox extends Component {
             bottomMiddle,
             bottomRight,
             header,
-        ] = sprites
+        } = dialogSprites
 
-        if (sprites.some((s) => !s)) {
-            console.error('[MessageBox] Failed to load one or more resources')
-            return
-        }
+        // ── PvZ LawnDialog constants ──
+        const DIALOG_HEADER_OFFSET = 45
+        const BG_INSET_LEFT = 0
+        const BG_INSET_TOP = 0
+        const BG_INSET_RIGHT = 0
+        const BG_INSET_BOTTOM = 0
+        const CONTENT_INSET_TOP = 35
+        const CONTENT_INSET_LEFT = 36
+        const CONTENT_INSET_RIGHT = 46
+        const CONTENT_INSET_BOTTOM = 36
+        const LINES_RECT_EXTRA_LEFT = 2
+        const LINES_RECT_EXTRA_WIDTH = 4
+        const LINES_EXTRA_HEIGHT = 30
+        const VERTICAL_CENTER_BOTTOM_PAD = 55
+        const SPACE_AFTER_HEADER = 10
+        // LawnDialog passes null button images to Dialog, so Dialog::mButtonHeight remains 24.
+        const LAYOUT_BUTTON_HEIGHT = 24
 
-        // Layout constants
-        const DIALOG_HEADER_OFFSET = 37
+        const titleFontData = textFonts.title
+        const msgFontData = textFonts.message
+        const titleMetrics = FontMetricsUtil.getMetrics(titleFontData?.config ?? null)
 
-        // Calculate repeats
         const topW = topLeft!.originalSize.width + topRight!.originalSize.width
         const midW = topMiddle!.originalSize.width
-        const repeatX = Math.floor(Math.max(0, this.dialogWidth - topW) / midW)
+        const minImageWidth = topW + midW
+        let desiredWidth =
+            BG_INSET_LEFT +
+            BG_INSET_RIGHT +
+            CONTENT_INSET_LEFT +
+            CONTENT_INSET_RIGHT +
+            (this.title ? FontMetricsUtil.measureTextWidth(titleFontData?.config ?? null, this.title) : 0)
+
+        if (desiredWidth <= minImageWidth) {
+            desiredWidth = minImageWidth
+        } else if (midW > 0) {
+            const extraWidth = (desiredWidth - minImageWidth) % midW
+            if (extraWidth) desiredWidth += midW - extraWidth
+        }
+
+        if (this.message) {
+            desiredWidth += midW
+        }
+
+        // Calculate repeats
+        const repeatX = Math.floor(Math.max(0, desiredWidth - topW) / midW)
 
         // Recalculate actual width based on tiles to ensure perfect centering
         const actualWidth = topW + repeatX * midW
@@ -323,8 +439,45 @@ export class MessageBox extends Component {
         const bottomH = bottomLeft!.originalSize.height
         const centerH = centerLeft!.originalSize.height
 
-        const availableHeight = this.dialogHeight - topH - bottomH - DIALOG_HEADER_OFFSET
-        const repeatY = Math.floor(Math.max(0, availableHeight) / centerH)
+        let desiredHeight =
+            BG_INSET_TOP +
+            BG_INSET_BOTTOM +
+            CONTENT_INSET_TOP +
+            CONTENT_INSET_BOTTOM +
+            DIALOG_HEADER_OFFSET
+
+        if (this.title) {
+            desiredHeight +=
+                -titleMetrics.ascentPadding + titleMetrics.height + SPACE_AFTER_HEADER
+        }
+        if (this.message) {
+            const linesAreaWidth =
+                actualWidth -
+                CONTENT_INSET_LEFT -
+                CONTENT_INSET_RIGHT -
+                BG_INSET_LEFT -
+                BG_INSET_RIGHT -
+                LINES_RECT_EXTRA_WIDTH
+            desiredHeight +=
+                FontMetricsUtil.measureWordWrappedHeight(
+                    msgFontData?.config ?? null,
+                    this.message,
+                    linesAreaWidth,
+                ) + LINES_EXTRA_HEIGHT
+        }
+        desiredHeight += LAYOUT_BUTTON_HEIGHT
+
+        const minImageHeight = topH + bottomH + DIALOG_HEADER_OFFSET
+        if (desiredHeight < minImageHeight) {
+            desiredHeight = minImageHeight
+        } else if (centerH > 0) {
+            const extraHeight = (desiredHeight - minImageHeight) % centerH
+            if (extraHeight) desiredHeight += centerH - extraHeight
+        }
+
+        const repeatY = Math.floor(
+            Math.max(0, desiredHeight - topH - bottomH - DIALOG_HEADER_OFFSET) / centerH,
+        )
 
         // Recalculate actual height
         const actualHeight = topH + bottomH + repeatY * centerH + DIALOG_HEADER_OFFSET
@@ -334,55 +487,22 @@ export class MessageBox extends Component {
         // Start Y includes header offset downward, centered vertically based on actual height
         const startY = actualHeight / 2 - DIALOG_HEADER_OFFSET
 
-        let currentX = startX
-        let currentY = startY
-
-        // 1. Draw Top Row
-        this._createSprite(topLeft!, currentX, currentY, container)
-        currentX += topLeft!.originalSize.width
-
-        for (let i = 0; i < repeatX; i++) {
-            this._createSprite(topMiddle!, currentX, currentY, container)
-            currentX += midW
-        }
-
-        this._createSprite(topRight!, currentX, currentY, container)
-
-        // 2. Draw Center Rows
-        // Reset X to start, move Y down by top height
-        currentY -= topH
-
-        for (let i = 0; i < repeatY; i++) {
-            currentX = startX
-
-            // Left
-            this._createSprite(centerLeft!, currentX, currentY, container)
-            currentX += centerLeft!.originalSize.width
-
-            // Middle
-            for (let j = 0; j < repeatX; j++) {
-                this._createSprite(centerMiddle!, currentX, currentY, container)
-                currentX += centerMiddle!.originalSize.width
-            }
-
-            // Right
-            this._createSprite(centerRight!, currentX, currentY, container)
-
-            currentY -= centerH
-        }
-
-        // 3. Draw Bottom Row
-        currentX = startX
-
-        this._createSprite(bottomLeft!, currentX, currentY, container)
-        currentX += bottomLeft!.originalSize.width
-
-        for (let i = 0; i < repeatX; i++) {
-            this._createSprite(bottomMiddle!, currentX, currentY, container)
-            currentX += bottomMiddle!.originalSize.width
-        }
-
-        this._createSprite(bottomRight!, currentX, currentY, container)
+        buildNineSliceGrid({
+            parent: container,
+            startX,
+            startY,
+            repeatX,
+            repeatY,
+            topLeft: topLeft!,
+            topMiddle: topMiddle!,
+            topRight: topRight!,
+            centerLeft: centerLeft!,
+            centerMiddle: centerMiddle!,
+            centerRight: centerRight!,
+            bottomLeft: bottomLeft!,
+            bottomMiddle: bottomMiddle!,
+            bottomRight: bottomRight!,
+        })
 
         // 4. Draw Header
         // The header is a separate overlay, effectively above the box
@@ -398,54 +518,42 @@ export class MessageBox extends Component {
 
         const headerY = actualHeight / 2
 
-        this._createSprite(header!, headerX, headerY, container)
+        createSpriteNode({ spriteFrame: header!, parent: container, x: headerX, y: headerY })
 
-        const uiTransform = this.node.getComponent(UITransform)
-        uiTransform.setContentSize(actualWidth, actualHeight)
-        uiTransform.setAnchorPoint(0.5, 0.5)
-
-        // ── PvZ LawnDialog.Draw text layout ──
-        const CONTENT_INSET_TOP = 35
-        const CONTENT_INSET_LEFT = 36
-        const CONTENT_INSET_BOTTOM = 36
-        const BG_INSET = 0 // mBackgroundInsets, usually 0
-        const SPACE_AFTER_HEADER = 0 // mSpaceAfterHeader
-
-        // Load button sprites early for layout height calculation
-        await this._loadButtonSprites()
-        const buttonHeight = MessageBox._btnLeft ? MessageBox._btnLeft.originalSize.height : 46
+        setUISize(this.node, actualWidth, actualHeight)
 
         // aFontY in C++ coords (top-left origin, Y-down)
-        let aFontY = CONTENT_INSET_TOP + BG_INSET + DIALOG_HEADER_OFFSET // = 72
+        let aFontY = CONTENT_INSET_TOP + BG_INSET_TOP + DIALOG_HEADER_OFFSET
 
         // ── Create title FontRenderer ──
         this._destroyFontNode(this._titleNode)
-        const titleFontData = await MessageBox._loadFont('dwarventodcraft24')
         if (titleFontData) {
             const titleCfg = titleFontData.config.json as any
             const titleL0 = titleCfg.layers?.[0]
             const titleAscentPad = titleL0?.ascentPadding ?? 0
             const titleAscent = titleL0?.ascent ?? 0
-            const titleFontHeight = titleL0?.height ?? 0
+            const configuredTitleHeight = titleL0?.height ?? 0
 
             // aOffsetY = aFontY - ascentPadding + ascent (baseline in C++ coords)
             const aOffsetY = aFontY - titleAscentPad + titleAscent
 
-            this._titleNode = new Node('TitleText')
-            this._titleNode.layer = Layers.Enum.UI_2D
-            const titleUt = this._titleNode.addComponent(UITransform)
-            titleUt.setAnchorPoint(0, 1)
+            this._titleNode = createUINode('TitleText', { anchorX: 0, anchorY: 1 })
             const titleFont = this._titleNode.addComponent(FontRenderer)
-            titleFont.fontConfigJson = titleFontData.config
-            titleFont.layerTextures = [titleFontData.texture]
+            titleFont.setFontAssets(titleFontData)
             titleFont.fontColor = new Color(0xe0, 0xbb, 0x62)
             titleFont.string = this.title
             this.node.addChild(this._titleNode)
             titleFont.forceRebuild()
+            const titleFontHeight =
+                configuredTitleHeight > 0 ? configuredTitleHeight : titleFont.contentHeight
 
-            // Center horizontally; convert C++ baseline Y to Cocos Y
-            const titleX = -titleFont.contentWidth / 2
-            const titleY = actualHeight / 2 - aOffsetY
+            // FontRenderer is positioned by glyph top, while the original DrawString uses baseline Y.
+            const titleWidth =
+                FontMetricsUtil.measureTextWidth(titleFontData.config, this.title) ||
+                titleFont.contentWidth
+            const titleX = -titleWidth / 2
+            const titleTopYCpp = aOffsetY - titleAscent
+            const titleY = actualHeight / 2 - titleTopYCpp
             this._titleNode.setPosition(titleX, titleY)
             this._titleRenderer = titleFont
 
@@ -455,49 +563,66 @@ export class MessageBox extends Component {
 
         // ── Create message FontRenderer ──
         this._destroyFontNode(this._messageNode)
-        const msgFontData = await MessageBox._loadFont('dwarventodcraft15')
         if (msgFontData) {
             // Message X in C++ coords: backgroundInsets.left + contentInsets.left + 2
-            const msgX_cpp = BG_INSET + CONTENT_INSET_LEFT + 2
+            const msgX_cpp = BG_INSET_LEFT + CONTENT_INSET_LEFT + LINES_RECT_EXTRA_LEFT
 
-            this._messageNode = new Node('MessageText')
-            this._messageNode.layer = Layers.Enum.UI_2D
-            const msgUt = this._messageNode.addComponent(UITransform)
-            msgUt.setAnchorPoint(0, 1)
+            this._messageNode = createUINode('MessageText', { anchorX: 0, anchorY: 1 })
+            const msgUt = this._messageNode.getComponent(UITransform)!
             const msgFont = this._messageNode.addComponent(FontRenderer)
-            msgFont.fontConfigJson = msgFontData.config
-            msgFont.layerTextures = [msgFontData.texture]
+            msgFont.setFontAssets(msgFontData)
             msgFont.fontColor = new Color(0xe0, 0xbb, 0x62)
+            msgFont.textAlign = this.messageAlign
             // Lines area width for word wrapping
-            const CONTENT_INSET_RIGHT = 46
+            const defaultLinesAreaWidth =
+                actualWidth -
+                CONTENT_INSET_LEFT -
+                CONTENT_INSET_RIGHT -
+                BG_INSET_LEFT -
+                BG_INSET_RIGHT -
+                LINES_RECT_EXTRA_WIDTH
             const linesAreaWidth =
-                actualWidth - BG_INSET - CONTENT_INSET_RIGHT - CONTENT_INSET_LEFT - 2
+                this.messageMaxWidth > 0
+                    ? Math.min(this.messageMaxWidth, defaultLinesAreaWidth)
+                    : defaultLinesAreaWidth
             msgFont.maxWidth = linesAreaWidth
             msgFont.string = this.message
             this.node.addChild(this._messageNode)
             msgFont.forceRebuild()
+            msgUt.setContentSize(linesAreaWidth, msgFont.contentHeight)
+            const wrapped = FontMetricsUtil.measureWordWrapped(
+                msgFontData.config,
+                this.message,
+                linesAreaWidth,
+            )
 
             // Vertical centering (mVerticalCenterText = true)
             let msgY_cpp = aFontY
-            const linesHeight = msgFont.contentHeight
+            const linesHeight = wrapped.height
             let linesAreaHeight =
-                actualHeight - CONTENT_INSET_BOTTOM - BG_INSET - buttonHeight - aFontY - 55
+                actualHeight -
+                CONTENT_INSET_BOTTOM -
+                BG_INSET_BOTTOM -
+                LAYOUT_BUTTON_HEIGHT -
+                aFontY -
+                VERTICAL_CENTER_BOTTOM_PAD
             if (this.dialogType === DialogType.TallBottom) {
                 linesAreaHeight -= 36
             }
-            if (linesAreaHeight > linesHeight) {
-                msgY_cpp += Math.floor((linesAreaHeight - linesHeight) / 2)
+            if (this.verticalCenterText) {
+                msgY_cpp += Math.trunc((linesAreaHeight - linesHeight) / 2)
             }
 
-            // Convert C++ (top-left origin) to Cocos local coords (center origin, Y-up)
-            const msgX = msgX_cpp - actualWidth / 2
+            // Word-wrapped text rect Y is already the glyph top in original C++ coordinates.
+            const msgX =
+                msgX_cpp - actualWidth / 2 + (defaultLinesAreaWidth - linesAreaWidth) / 2
             const msgY = actualHeight / 2 - msgY_cpp
-            this._messageNode.setPosition(msgX, msgY)
+            this._messageNode.setPosition(msgX, msgY - this.messageOffsetY)
             this._messageRenderer = msgFont
         }
 
         // Render buttons
-        await this._renderButtons(actualWidth, actualHeight)
+        await this._renderButtons(actualWidth, actualHeight, buttonSprites)
     }
 
     show(title: string, message: string) {
@@ -519,43 +644,45 @@ export class MessageBox extends Component {
         }
     }
 
-    // ── Stone Button Rendering ──────────────────────────────────
+    private _finish(result: DialogResult, destroy = true) {
+        if (this._result !== DialogResult.None) return
+        const button = this._buttons.find((b) => b.result === result)
+        if (this.buttonDelay >= 0 && this._updateCount <= this.buttonDelay) return
 
-    private async _loadButtonSprites() {
-        if (MessageBox._btnLeft) return // already loaded
-        const [left, mid, right, dLeft, dMid, dRight] = await Promise.all([
-            SpriteLoader.load('button_left'),
-            SpriteLoader.load('button_middle'),
-            SpriteLoader.load('button_right'),
-            SpriteLoader.load('button_down_left'),
-            SpriteLoader.load('button_down_middle'),
-            SpriteLoader.load('button_down_right'),
-        ])
-        MessageBox._btnLeft = left
-        MessageBox._btnMiddle = mid
-        MessageBox._btnRight = right
-        MessageBox._btnDownLeft = dLeft
-        MessageBox._btnDownMiddle = dMid
-        MessageBox._btnDownRight = dRight
+        this._result = result
+        button?.onClick?.()
+        this._resolveResult?.(result)
+        this._resolveResult = null
+
+        if (destroy && this.node.isValid) {
+            this.node.destroy()
+        }
     }
 
-    private async _renderButtons(dialogW: number, dialogH: number) {
+    private _setButtonsInteractable(interactable: boolean) {
+        for (const node of this._buttonNodes) {
+            const button = this._buttonStates.get(node)
+            if (button) button.interactable = interactable
+        }
+    }
+
+    // ── Stone Button Rendering ──────────────────────────────────
+
+    private async _renderButtons(
+        dialogW: number,
+        dialogH: number,
+        sprites: MessageBoxButtonSprites,
+    ) {
         // Clean up old buttons
         for (const n of this._buttonNodes) {
             if (n.isValid) n.destroy()
         }
         this._buttonNodes = []
+        this._buttonStates.clear()
 
         if (this._buttons.length === 0) return
 
-        await this._loadButtonSprites()
-        if (!MessageBox._btnLeft) return
-
-        // Pre-load button fonts
-        const [btnNormalFont, btnHighlightFont] = await Promise.all([
-            MessageBox._loadFont('dwarventodcraft18greeninset'),
-            MessageBox._loadFont('dwarventodcraft18brightgreeninset'),
-        ])
+        const buttonFonts = await MessageBoxAssets.loadButtonFonts()
 
         // Create button container
         if (!this._buttonContainer) {
@@ -569,10 +696,9 @@ export class MessageBox extends Component {
         const INSET_RIGHT = 46
         const INSET_BOTTOM = 36
 
-        const btnH = MessageBox._btnLeft!.originalSize.height
-        const btnMinW =
-            MessageBox._btnLeft!.originalSize.width + MessageBox._btnRight!.originalSize.width
-        const btnMidW = MessageBox._btnMiddle!.originalSize.width
+        const btnH = sprites.left.originalSize.height
+        const btnMinW = sprites.left.originalSize.width + sprites.right.originalSize.width
+        const btnMidW = sprites.middle.originalSize.width
 
         // C++ layout (top-left origin coords)
         const aButtonAreaX = INSET_LEFT - 5
@@ -614,11 +740,14 @@ export class MessageBox extends Component {
                 { cfg: this._buttons[1], cx: noX, cy: noY, w: btnW },
             ]
 
-            for (const { cfg, cx, cy, w } of cfgs) {
+            for (let i = 0; i < cfgs.length; i++) {
+                const { cfg, cx, cy, w } = cfgs[i]
                 // Convert C++ top-left coords to Cocos local coords (center origin, Y-up)
                 // C++ (cx, cy) = top-left of button; button anchor = (0,0) bottom-left
                 const localX = cx - dialogW / 2
                 const localY = dialogH / 2 - cy - btnH
+                const fallbackResult = i === 0 ? DialogResult.Yes : DialogResult.No
+                cfg.result = cfg.result ?? fallbackResult
 
                 const btnNode = this._createStoneButton(
                     cfg.label,
@@ -626,9 +755,10 @@ export class MessageBox extends Component {
                     localY,
                     w,
                     btnH,
-                    btnNormalFont,
-                    btnHighlightFont,
-                    cfg.onClick,
+                    sprites,
+                    buttonFonts.normal,
+                    buttonFonts.highlight,
+                    () => this._finish(cfg.result ?? fallbackResult),
                 )
                 this._buttonContainer.addChild(btnNode)
                 this._buttonNodes.push(btnNode)
@@ -645,24 +775,28 @@ export class MessageBox extends Component {
             const localY = dialogH / 2 - cy - btnH
 
             const cfg = this._buttons[0]
+            cfg.result = cfg.result ?? DialogResult.Footer
             const btnNode = this._createStoneButton(
                 cfg.label,
                 localX,
                 localY,
                 btnW,
                 btnH,
-                btnNormalFont,
-                btnHighlightFont,
-                cfg.onClick,
+                sprites,
+                buttonFonts.normal,
+                buttonFonts.highlight,
+                () => this._finish(cfg.result ?? DialogResult.Footer),
             )
             this._buttonContainer.addChild(btnNode)
             this._buttonNodes.push(btnNode)
         }
+
+        this._setButtonsInteractable(this.buttonDelay < 0)
     }
 
     /**
      * Create a single stone button node with tiled left/middle/right sprites.
-     * Normal & pressed states use separate sprite sets; UIButton handles switching.
+     * Normal & pressed states use separate sprite sets.
      */
     private _createStoneButton(
         label: string,
@@ -670,24 +804,20 @@ export class MessageBox extends Component {
         y: number,
         width: number,
         height: number,
-        normalFont: { config: JsonAsset; texture: Texture2D } | null,
-        highlightFont: { config: JsonAsset; texture: Texture2D } | null,
+        sprites: MessageBoxButtonSprites,
+        normalFont: BitmapFontAssets | null,
+        highlightFont: BitmapFontAssets | null,
         onClick?: () => void,
     ): Node {
-        const btnRoot = new Node(`Btn_${label}`)
-        btnRoot.layer = Layers.Enum.UI_2D
-
-        const ut = btnRoot.addComponent(UITransform)
-        ut.setAnchorPoint(0, 0) // bottom-left
-        ut.setContentSize(width, height)
+        const btnRoot = createUINode(`Btn_${label}`, { anchorX: 0, anchorY: 0, width, height })
 
         // Build normal sprite container
         const normalContainer = this._buildStoneButtonRow(
             'Normal',
             width,
-            MessageBox._btnLeft!,
-            MessageBox._btnMiddle!,
-            MessageBox._btnRight!,
+            sprites.left,
+            sprites.middle,
+            sprites.right,
         )
         btnRoot.addChild(normalContainer)
 
@@ -695,22 +825,18 @@ export class MessageBox extends Component {
         const pressedContainer = this._buildStoneButtonRow(
             'Pressed',
             width,
-            MessageBox._btnDownLeft!,
-            MessageBox._btnDownMiddle!,
-            MessageBox._btnDownRight!,
+            sprites.downLeft,
+            sprites.downMiddle,
+            sprites.downRight,
         )
         pressedContainer.active = false
         btnRoot.addChild(pressedContainer)
 
         // FontRenderer label (normal state)
-        const labelNode = new Node('Label')
-        labelNode.layer = Layers.Enum.UI_2D
-        const labelUt = labelNode.addComponent(UITransform)
-        labelUt.setAnchorPoint(0, 1) // top-left, matching FontRenderer render origin
+        const labelNode = createUINode('Label', { anchorX: 0, anchorY: 1 })
         const fontComp = labelNode.addComponent(FontRenderer)
         if (normalFont) {
-            fontComp.fontConfigJson = normalFont.config
-            fontComp.layerTextures = [normalFont.texture]
+            fontComp.setFontAssets(normalFont)
         }
         fontComp.fontColor = new Color(213, 255, 196)
         fontComp.string = label
@@ -718,14 +844,10 @@ export class MessageBox extends Component {
         fontComp.forceRebuild()
 
         // FontRenderer label (highlight state)
-        const hlLabelNode = new Node('LabelHighlight')
-        hlLabelNode.layer = Layers.Enum.UI_2D
-        const hlLabelUt = hlLabelNode.addComponent(UITransform)
-        hlLabelUt.setAnchorPoint(0, 1)
+        const hlLabelNode = createUINode('LabelHighlight', { anchorX: 0, anchorY: 1 })
         const hlFontComp = hlLabelNode.addComponent(FontRenderer)
         if (highlightFont) {
-            hlFontComp.fontConfigJson = highlightFont.config
-            hlFontComp.layerTextures = [highlightFont.texture]
+            hlFontComp.setFontAssets(highlightFont)
         }
         hlFontComp.fontColor = new Color(213, 255, 196)
         hlFontComp.string = label
@@ -733,95 +855,52 @@ export class MessageBox extends Component {
         btnRoot.addChild(hlLabelNode)
         hlFontComp.forceRebuild()
 
-        // Center text within button bounds
-        const labelX = (width - fontComp.contentWidth) / 2
-        const labelY = (height + fontComp.contentHeight) / 2
+        const normalCfg = normalFont?.config ?? null
+        const highlightCfg = highlightFont?.config ?? normalCfg
+        const normalLayer = (normalCfg?.json as any)?.layers?.[0]
+        const highlightLayer = (highlightCfg?.json as any)?.layers?.[0] ?? normalLayer
+        const normalAscent = normalLayer?.ascent ?? 0
+        const highlightAscent = highlightLayer?.ascent ?? normalAscent
+        const labelWidth = FontMetricsUtil.measureTextWidth(normalCfg, label) || fontComp.contentWidth
+        const hlLabelWidth =
+            FontMetricsUtil.measureTextWidth(highlightCfg, label) || hlFontComp.contentWidth
+
+        // DrawStoneButton computes a baseline, then ImageFont draws glyphs at baseline - ascent.
+        const labelX = (width - labelWidth) / 2 + 1
+        const labelBaselineYCpp = (height - normalAscent / 6 - 1 + normalAscent) / 2 - 4
+        const labelTopYCpp = labelBaselineYCpp - normalAscent
+        const labelY = height - labelTopYCpp
         labelNode.setPosition(labelX, labelY)
-        const hlLabelX = (width - hlFontComp.contentWidth) / 2
-        const hlLabelY = (height + hlFontComp.contentHeight) / 2
+
+        const hlLabelX = (width - hlLabelWidth) / 2 + 1
+        const hlLabelBaselineYCpp = (height - highlightAscent / 6 - 1 + highlightAscent) / 2 - 4
+        const hlLabelTopYCpp = hlLabelBaselineYCpp - highlightAscent
+        const hlLabelY = height - hlLabelTopYCpp
         hlLabelNode.setPosition(hlLabelX, hlLabelY)
 
-        // UIButton for interaction
-        const uiBtn = btnRoot.addComponent(UIButton)
-        uiBtn.polygon = [
-            new Vec2(0, 0),
-            new Vec2(width, 0),
-            new Vec2(width, height),
-            new Vec2(0, height),
-        ]
-        uiBtn.pressOffset = new Vec3(1, 0, 0) // Shift down 1px when pressed
+        const button = btnRoot.addComponent(UIButton)
+        button.pressOffset = new Vec3(0, 0, 0)
+        button.onPress = () => {
+            void SoundLoader.play(SoundEffect.GraveButton)
+        }
+        button.onClick = () => onClick?.()
+        button.onStateChange = (state) => {
+            const highlighted = state === 'hover' || state === 'pressed'
+            const pressed = state === 'pressed'
+            normalContainer.active = !pressed
+            pressedContainer.active = pressed
+            labelNode.active = !highlighted
+            hlLabelNode.active = highlighted
+            labelNode.setPosition(labelX, labelY)
+            hlLabelNode.setPosition(
+                pressed ? hlLabelX + 1 : hlLabelX,
+                pressed ? hlLabelY - 1 : hlLabelY,
+            )
+        }
+        this._buttonStates.set(btnRoot, button)
 
-        // Swap containers on state change
-        const origOnLoad = uiBtn.onLoad?.bind(uiBtn)
-        uiBtn.onClick = (event) => {
-            onClick?.()
-        }
-
-        // Override state changes to swap containers + shift label
-        let isDown = false
-        let isHover = false
-        const showHighlight = () => {
-            labelNode.active = false
-            hlLabelNode.active = true
-        }
-        const showNormal = () => {
-            labelNode.active = true
-            hlLabelNode.active = false
-        }
-        const press = () => {
-            if (!isDown) {
-                isDown = true
-                normalContainer.active = false
-                pressedContainer.active = true
-                showHighlight()
-                hlLabelNode.setPosition(hlLabelX + 1, hlLabelY - 1)
-            }
-        }
-        const release = () => {
-            if (isDown) {
-                isDown = false
-                normalContainer.active = true
-                pressedContainer.active = false
-                if (isHover) {
-                    showHighlight()
-                    hlLabelNode.setPosition(hlLabelX, hlLabelY)
-                } else {
-                    showNormal()
-                    labelNode.setPosition(labelX, labelY)
-                }
-            }
-        }
-        const isInsideButton = (event: EventTouch): boolean => {
-            const uiPos = event.getUILocation()
-            const localPos = ut.convertToNodeSpaceAR(new Vec3(uiPos.x, uiPos.y, 0))
-            return localPos.x >= 0 && localPos.x <= width && localPos.y >= 0 && localPos.y <= height
-        }
-        btnRoot.on(Node.EventType.MOUSE_ENTER, () => {
-            isHover = true
-            if (!isDown) {
-                showHighlight()
-                hlLabelNode.setPosition(hlLabelX, hlLabelY)
-            }
-        })
-        btnRoot.on(Node.EventType.MOUSE_LEAVE, () => {
-            isHover = false
-            if (!isDown) {
-                showNormal()
-                labelNode.setPosition(labelX, labelY)
-            }
-        })
-        btnRoot.on(Node.EventType.TOUCH_START, () => {
-            press()
-        })
-        btnRoot.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
-            if (isInsideButton(event)) {
-                press()
-            } else {
-                release()
-            }
-        })
-        btnRoot.on(Node.EventType.TOUCH_END, release)
-        btnRoot.on(Node.EventType.TOUCH_CANCEL, release)
+        labelNode.active = true
+        hlLabelNode.active = false
 
         btnRoot.setPosition(x, y)
         return btnRoot
@@ -837,63 +916,15 @@ export class MessageBox extends Component {
         middleSf: SpriteFrame,
         rightSf: SpriteFrame,
     ): Node {
-        const row = new Node(name)
-        row.layer = Layers.Enum.UI_2D
-
-        const lw = leftSf.originalSize.width
-        const rw = rightSf.originalSize.width
-        const mw = middleSf.originalSize.width
-        const mh = middleSf.originalSize.height
-
-        let px = 0
-
-        // Left
-        this._createSprite(leftSf, px, 0, row, 0, 0) // anchor bottom-left
-        px += lw
-
-        // Middle (repeated)
-        const repeatCount = Math.floor((totalWidth - lw - rw) / mw)
-        for (let i = 0; i < repeatCount; i++) {
-            this._createSprite(middleSf, px, 0, row, 0, 0)
-            px += mw
-        }
-
-        // Remaining middle fragment
-        const remaining = totalWidth - lw - rw - repeatCount * mw
-        if (remaining > 0) {
-            const fragNode = this._createSprite(middleSf, px, 0, row, 0, 0)
-            // Clip by adjusting UITransform width
-            const fragUt = fragNode.getComponent(UITransform)!
-            fragUt.setContentSize(remaining, mh)
-            px += remaining
-        }
-
-        // Right
-        this._createSprite(rightSf, px, 0, row, 0, 0)
-
-        return row
+        return buildThreeSliceRow({
+            name,
+            width: totalWidth,
+            left: leftSf,
+            middle: middleSf,
+            right: rightSf,
+            anchorX: 0,
+            anchorY: 0,
+        })
     }
 
-    private _createSprite(
-        sf: SpriteFrame,
-        x: number,
-        y: number,
-        parent: Node,
-        anchorX = 0,
-        anchorY = 1,
-    ) {
-        const node = new Node()
-        node.layer = Layers.Enum.UI_2D
-        const sprite = node.addComponent(Sprite)
-        sprite.spriteFrame = sf
-        sprite.sizeMode = Sprite.SizeMode.RAW
-        sprite.trim = false // Disable trim to preserve original dimensions
-
-        const uiTransform = node.getComponent(UITransform)
-        uiTransform.setAnchorPoint(anchorX, anchorY)
-
-        node.setPosition(x, y)
-        parent.addChild(node)
-        return node
-    }
 }

@@ -1,3 +1,4 @@
 import { FontRenderer } from './FontRenderer'
+import { FontMetricsUtil } from './FontMetrics'
 
-export { FontRenderer }
+export { FontRenderer, FontMetricsUtil }

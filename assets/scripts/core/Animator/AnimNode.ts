@@ -171,6 +171,10 @@ export class AnimNode {
         this._speed = value
     }
 
+    public getAnimationFps(name: string): number | null {
+        return this._data.animations[name]?.fps ?? null
+    }
+
     public get time(): number {
         return this._time
     }
@@ -187,16 +191,16 @@ export class AnimNode {
 
         let anim = this._currentAnim
 
-        // For looping anims, the last frame == first frame, so loop period excludes it
-        const maxTime = this._loop && anim.duration > 1 ? anim.duration - 1 : anim.duration
+        const frameSpan = Math.max(0, anim.duration - 1)
+        const advanceScale = anim.duration > 0 ? frameSpan / anim.duration : 0
 
         // advance time
-        this._time += dt * anim.fps * this._speed
-        if (this._time >= maxTime) {
+        this._time += dt * anim.fps * this._speed * advanceScale
+        if (frameSpan > 0 && this._time >= frameSpan) {
             if (this._loop) {
-                this._time %= maxTime
+                this._time %= frameSpan
             } else {
-                this._time = maxTime - 0.001
+                this._time = frameSpan
                 if (!this._keepLastFrame) {
                     this.isPlaying = false
                 }
@@ -208,6 +212,14 @@ export class AnimNode {
                 if (this._currentAnim && this._currentAnim !== anim) {
                     anim = this._currentAnim
                 }
+            }
+        } else if (frameSpan <= 0 && !this._loop) {
+            if (!this._keepLastFrame) {
+                this.isPlaying = false
+            }
+            if (!this._finished) {
+                this._finished = true
+                this._onFinish?.()
             }
         }
 

@@ -1,13 +1,33 @@
-import { SpriteFrame, Texture2D, ImageAsset, resources, warn } from 'cc'
+import { SpriteFrame, Texture2D, ImageAsset, warn } from 'cc'
+import { AssetLoader } from './AssetLoader'
+import { SpriteResourceManifest, type SpriteSampling } from './SpriteResourceManifest'
 
 export class SpriteLoader {
     private static _cache: Map<string, SpriteFrame> = new Map()
+    private static _pending: Map<string, Promise<SpriteFrame | null>> = new Map()
 
     // ── Public API ─────────────────────────────────────────────
 
     static async load(name: string): Promise<SpriteFrame | null> {
-        if (this._cache.has(name)) return this._cache.get(name)!
+        if (this._cache.has(name)) {
+            return this._cache.get(name)!
+        }
 
+        const pending = this._pending.get(name)
+        if (pending) {
+            return pending
+        }
+
+        const promise = this._loadUncached(name)
+        this._pending.set(name, promise)
+        const spriteFrame = await promise
+        this._pending.delete(name)
+        return spriteFrame
+    }
+
+    private static async _loadUncached(
+        name: string,
+    ): Promise<SpriteFrame | null> {
         let mainSf = await this._loadRaw(name)
 
         const lastSlash = name.lastIndexOf('/')
@@ -29,6 +49,7 @@ export class SpriteLoader {
         }
 
         if (mainSf) {
+            this._applySpriteSampling(mainSf, SpriteResourceManifest.getSampling(name))
             this._cache.set(name, mainSf)
         } else {
             warn(`[SpriteLoader] Failed to load sprite '${name}'`)
@@ -46,26 +67,34 @@ export class SpriteLoader {
 
     static clearCache() {
         this._cache.clear()
+        this._pending.clear()
     }
 
     // ── Raw Loading ────────────────────────────────────────────
 
     private static _loadRaw(name: string): Promise<SpriteFrame | null> {
-        return new Promise((resolve) => {
-            resources.load(`textures/${name}/spriteFrame`, SpriteFrame, (err, sf) => {
-                if (!err && sf) {
-                    resolve(sf)
-                    return
-                }
-                resources.load(`textures/${name}`, SpriteFrame, (err2, sf2) => {
-                    if (!err2 && sf2) resolve(sf2)
-                    else resolve(null)
-                })
-            })
+        return AssetLoader.load(`textures/${name}/spriteFrame`, SpriteFrame, null).then((sf) => {
+            if (sf) return sf
+            return AssetLoader.load(`textures/${name}`, SpriteFrame, null)
         })
     }
 
     // ── Alpha Merging ──────────────────────────────────────────
+
+    private static _applyTextureSampling(texture: Texture2D, sampling: SpriteSampling = 'nearest') {
+        const filter =
+            sampling === 'linear' ? Texture2D.Filter.LINEAR : Texture2D.Filter.NEAREST
+        texture.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
+        texture.setFilters(filter, filter)
+    }
+
+    private static _applySpriteSampling(
+        spriteFrame: SpriteFrame | null,
+        sampling: SpriteSampling = 'nearest',
+    ) {
+        const texture = spriteFrame?.texture as Texture2D | null
+        if (texture) this._applyTextureSampling(texture, sampling)
+    }
 
     private static _getImageData(imageAsset: ImageAsset): Uint8Array | null {
         const data = imageAsset.data
@@ -124,8 +153,7 @@ export class SpriteLoader {
 
         const newTex = new Texture2D()
         newTex.reset({ width, height, format: Texture2D.PixelFormat.RGBA8888 })
-        newTex.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
-        newTex.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.LINEAR)
+        this._applyTextureSampling(newTex)
         newTex.uploadData(newBuffer)
         rgbSf.texture = newTex
     }
@@ -154,8 +182,7 @@ export class SpriteLoader {
 
         const newTex = new Texture2D()
         newTex.reset({ width, height, format: Texture2D.PixelFormat.RGBA8888 })
-        newTex.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
-        newTex.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.LINEAR)
+        this._applyTextureSampling(newTex)
         newTex.uploadData(newBuffer)
 
         const newSf = new SpriteFrame()
