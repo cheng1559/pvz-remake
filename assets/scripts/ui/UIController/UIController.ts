@@ -1,5 +1,6 @@
 import { _decorator, Component, Node } from 'cc'
 import { DialogButtonMode, DialogResult, MessageBox } from '../MessageBox/MessageBox'
+import { OptionsDialog } from '../OptionsDialog'
 import { SelectorScreen } from '../SelectorScreen/SelectorScreen'
 import { StartupResourceLoader } from '../StartupResourceLoader'
 import { createUINode } from '../UIFactory'
@@ -43,10 +44,22 @@ export class UIController extends Component {
         selectorScreen.onMessageBoxRequest = () => {
             this.showMessageBox('Message', 'Hello from SelectorScreen!')
         }
+        selectorScreen.onOptionsRequest = () => {
+            this.showOptionsDialog()
+        }
 
         this.uiRoot!.addChild(node)
         node.active = true
         return selectorScreen
+    }
+
+    showOptionsDialog(): OptionsDialog | null {
+        const node = createUINode('OptionsDialog', { active: false, width: 423, height: 498 })
+        const optionsDialog = node.addComponent(OptionsDialog)
+
+        this.uiRoot!.addChild(node)
+        node.active = true
+        return optionsDialog
     }
 
     showMessageBox(title: string, message: string): MessageBox | null {

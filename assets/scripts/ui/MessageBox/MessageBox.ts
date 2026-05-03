@@ -1,24 +1,19 @@
 import {
     _decorator,
-    Component,
     Node,
-    EventTouch,
     UITransform,
-    view,
     SpriteFrame,
     Layers,
     Enum,
     Color,
-    BlockInputEvents,
     Vec3,
-    input,
-    Input,
     EventKeyboard,
 } from 'cc'
 import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
+import { ModalDialog } from '@/ui/Dialog'
 import { buildNineSliceGrid, buildThreeSliceRow, createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { MessageBoxAssets, MessageBoxButtonSprites } from './MessageBoxAssets'
 
@@ -59,10 +54,7 @@ enum DialogType {
 }
 
 @ccclass('MessageBox')
-export class MessageBox extends Component {
-    @property(Node)
-    dragHandle: Node | null = null
-
+export class MessageBox extends ModalDialog {
     @property
     dialogWidth: number = 400
 
@@ -95,15 +87,10 @@ export class MessageBox extends Component {
 
     private _bgContainer: Node | null = null
     private _buttonContainer: Node | null = null
-    private _modalBlocker: Node | null = null
     private _titleNode: Node | null = null
     private _titleRenderer: FontRenderer | null = null
     private _messageNode: Node | null = null
     private _messageRenderer: FontRenderer | null = null
-    private _modalHoverBlockActive = false
-    private _dragging = false
-    private _dragMouseX = 0
-    private _dragMouseY = 0
     private _buttons: MessageBoxButton[] = []
     private _buttonNodes: Node[] = []
     private _buttonStates: Map<Node, UIButton> = new Map()
@@ -114,7 +101,7 @@ export class MessageBox extends Component {
 
     start() {
         this._started = true
-        this._createModalBlocker()
+        this.createModalBlocker()
         this.renderDialog()
     }
 
@@ -188,97 +175,11 @@ export class MessageBox extends Component {
             this._finish(DialogResult.Cancel)
             return
         }
-        this._destroyModalBlocker()
-        if (this.node.isValid) {
-            this.node.destroy()
-        }
-    }
-
-    /**
-     * Create a full-screen transparent node that blocks all input to elements behind the dialog.
-     * It is added as a sibling before this node so it sits underneath.
-     */
-    private _createModalBlocker() {
-        if (this._modalBlocker) return
-
-        const blocker = new Node('ModalBlocker')
-        blocker.layer = Layers.Enum.UI_2D
-
-        // Full-screen UITransform
-        const ut = blocker.addComponent(UITransform)
-        const visibleSize = view.getVisibleSize()
-        ut.setContentSize(visibleSize.width, visibleSize.height)
-        ut.setAnchorPoint(0.5, 0.5)
-
-        // Block all touch events from passing through
-        blocker.addComponent(BlockInputEvents)
-
-        // Insert as sibling before this node
-        const parent = this.node.parent
-        if (parent) {
-            parent.addChild(blocker)
-            // Position at same place as this node's parent center
-            blocker.setWorldPosition(visibleSize.width / 2, visibleSize.height / 2, 0)
-            // Put blocker right before the dialog node
-            const idx = this.node.getSiblingIndex()
-            blocker.setSiblingIndex(idx)
-        }
-
-        this._modalBlocker = blocker
-        this._beginModalHoverBlock()
-    }
-
-    private _beginModalHoverBlock() {
-        if (this._modalHoverBlockActive) return
-        this._modalHoverBlockActive = true
-        UIButton.beginHoverBlock()
-    }
-
-    private _endModalHoverBlock() {
-        if (!this._modalHoverBlockActive) return
-        this._modalHoverBlockActive = false
-        UIButton.endHoverBlock()
-    }
-
-    private _destroyModalBlocker() {
-        if (this._modalBlocker && this._modalBlocker.isValid) {
-            this._modalBlocker.destroy()
-        }
-        this._modalBlocker = null
-        this._endModalHoverBlock()
-    }
-
-    onEnable() {
-        if (this._modalBlocker) {
-            this._modalBlocker.active = true
-            this._beginModalHoverBlock()
-        }
-        const target = this.dragHandle ?? this.node
-        target.on(Node.EventType.TOUCH_START, this._onTouchStart, this)
-        target.on(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
-        target.on(Node.EventType.TOUCH_END, this._onTouchEnd, this)
-        target.on(Node.EventType.TOUCH_CANCEL, this._onTouchEnd, this)
-        input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
-    }
-
-    onDisable() {
-        const target = this.dragHandle ?? this.node
-        target.off(Node.EventType.TOUCH_START, this._onTouchStart, this)
-        target.off(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
-        target.off(Node.EventType.TOUCH_END, this._onTouchEnd, this)
-        target.off(Node.EventType.TOUCH_CANCEL, this._onTouchEnd, this)
-        input.off(Input.EventType.KEY_DOWN, this._onKeyDown, this)
-
-        // Hide blocker when dialog is disabled
-        if (this._modalBlocker) {
-            this._modalBlocker.active = false
-            this._endModalHoverBlock()
-        }
+        super.close()
     }
 
     onDestroy() {
-        // Clean up the modal blocker node
-        this._destroyModalBlocker()
+        super.onDestroy()
         this._destroyFontNode(this._titleNode)
         this._destroyFontNode(this._messageNode)
         this._titleNode = null
@@ -287,54 +188,7 @@ export class MessageBox extends Component {
         this._messageRenderer = null
     }
 
-    private _onTouchStart(event: EventTouch) {
-        event.propagationStopped = true
-        this._dragging = true
-        const uiPos = event.getUILocation()
-        const ut = this.node.getComponent(UITransform)!
-        const pos = this.node.worldPosition
-        // Touch offset from dialog top-left corner
-        this._dragMouseX = uiPos.x - (pos.x - ut.contentSize.width * ut.anchorPoint.x)
-        this._dragMouseY = pos.y + ut.contentSize.height * (1 - ut.anchorPoint.y) - uiPos.y
-        if (typeof document !== 'undefined') document.body.style.cursor = 'move'
-    }
-
-    private _onTouchMove(event: EventTouch) {
-        if (!this._dragging) return
-        event.propagationStopped = true
-        const uiPos = event.getUILocation()
-        const ut = this.node.getComponent(UITransform)!
-        const { width: w, height: h } = ut.contentSize
-        const { width: sw, height: sh } = view.getVisibleSize()
-        const M = 8
-
-        // New top-left = touch - drag offset
-        let nx = uiPos.x - this._dragMouseX
-        let ny = uiPos.y + this._dragMouseY
-
-        // Clamp with 8px overflow tolerance
-        nx = Math.max(-M, Math.min(sw - w + M, nx))
-        ny = Math.max(h - M, Math.min(sh + M, ny))
-
-        // Recalculate & clamp drag offset within dialog bounds
-        this._dragMouseX = Math.max(M, Math.min(w - M - 1, uiPos.x - nx))
-        this._dragMouseY = Math.max(M, Math.min(h - M - 1, ny - uiPos.y))
-
-        // Convert top-left to world position
-        this.node.setWorldPosition(nx + w * ut.anchorPoint.x, ny - h * (1 - ut.anchorPoint.y), 0)
-    }
-
-    private _onTouchEnd(event: EventTouch) {
-        event.propagationStopped = true
-        this._dragging = false
-
-        // Restore cursor
-        if (typeof document !== 'undefined') {
-            document.body.style.cursor = ''
-        }
-    }
-
-    private _onKeyDown(event: EventKeyboard) {
+    protected onDialogKeyDown(event: EventKeyboard) {
         if (this._result !== DialogResult.None) return
         switch (event.keyCode) {
             case 32: // Space

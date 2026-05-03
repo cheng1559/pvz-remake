@@ -11,6 +11,7 @@ type AudioClipWithNativeAsset = AudioClip & {
 
 export const SoundEffect = {
     Bleep: 'bleep',
+    ButtonClick: 'buttonclick',
     DirtRise: 'dirt_rise',
     EvilLaugh: 'evillaugh',
     GraveButton: 'gravebutton',

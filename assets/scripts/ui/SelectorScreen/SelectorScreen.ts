@@ -39,6 +39,9 @@ const ZOMBIE_HAND_Y = -10
 const SELECTOR_OPEN_RATE = 30
 const SELECTOR_SIGN_RATE = 30
 const SELECTOR_CLOUD_RATE = 0.5
+const SELECTOR_CLOUD_INITIAL_MIN_TICKS = -6000
+const SELECTOR_CLOUD_INITIAL_MAX_TICKS = 2000
+const SELECTOR_TICK_SECONDS = 0.01
 const SELECTOR_GRASS_INITIAL_RATE = 6
 const SELECTOR_FLOWER_RATE = 24
 const LIMBS_POP_PITCH_RANGE = 10
@@ -69,6 +72,7 @@ export class SelectorScreen extends AnimationComponent {
 
     public onLockedModeClick: ((name: string) => void) | null = null
     public onMessageBoxRequest: (() => void) | null = null
+    public onOptionsRequest: (() => void) | null = null
 
     async init() {
         const cloudNames = ['cloud1', 'cloud2', 'cloud4', 'cloud5', 'cloud6', 'cloud7']
@@ -204,6 +208,9 @@ export class SelectorScreen extends AnimationComponent {
         this._buttons.get('adventure')!.onClick = () => {
             this.startAdventure()
         }
+        this._buttons.get('options')!.onClick = () => {
+            this.onOptionsRequest?.()
+        }
 
         for (const name of LOCKED_MODE_NAMES) {
             const btn = this._buttons.get(name)!
@@ -230,6 +237,12 @@ export class SelectorScreen extends AnimationComponent {
         const fps = node.getAnimationFps(animationName)
         if (!fps || fps <= 0) return 1
         return rate / fps
+    }
+
+    private _timeForReanimFraction(node: AnimNode, animationName: string, fraction: number): number {
+        const duration = node.getAnimationDuration(animationName)
+        if (!duration || duration <= 1) return 0
+        return Math.max(0, Math.min(1, fraction)) * (duration - 1)
     }
 
     private _createButton(options: {
@@ -398,22 +411,39 @@ export class SelectorScreen extends AnimationComponent {
         for (let i = 0; i < this.cloudNodes.length; i++) {
             const cloudNode = this.cloudNodes[i]
             const name = cloudNames[i]
+            const animationName = `anim_${name}`
             const playCloud = (time = 0) => {
                 cloudNode.play({
-                    name: `anim_${name}`,
-                    speed: this._speedForReanimRate(
-                        cloudNode,
-                        `anim_${name}`,
-                        SELECTOR_CLOUD_RATE,
-                    ),
+                    name: animationName,
+                    speed: this._speedForReanimRate(cloudNode, animationName, SELECTOR_CLOUD_RATE),
                     time,
+                    keepLastFrame: true,
                     onFinish: () => {
                         const delay = randomRange(20, 40)
                         this.scheduleOnce(() => playCloud(), delay)
                     },
                 })
             }
-            playCloud(randomRangeInt(0, 60))
+            const initialCounter = randomRangeInt(
+                SELECTOR_CLOUD_INITIAL_MIN_TICKS,
+                SELECTOR_CLOUD_INITIAL_MAX_TICKS,
+            )
+            if (initialCounter < 0) {
+                playCloud(
+                    this._timeForReanimFraction(
+                        cloudNode,
+                        animationName,
+                        -initialCounter / -SELECTOR_CLOUD_INITIAL_MIN_TICKS,
+                    ),
+                )
+            } else {
+                cloudNode.play({
+                    name: animationName,
+                    speed: 0,
+                    keepLastFrame: true,
+                })
+                this.scheduleOnce(() => playCloud(), initialCounter * SELECTOR_TICK_SECONDS)
+            }
         }
     }
 

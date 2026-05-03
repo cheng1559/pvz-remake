@@ -175,6 +175,10 @@ export class AnimNode {
         return this._data.animations[name]?.fps ?? null
     }
 
+    public getAnimationDuration(name: string): number | null {
+        return this._data.animations[name]?.duration ?? null
+    }
+
     public get time(): number {
         return this._time
     }
