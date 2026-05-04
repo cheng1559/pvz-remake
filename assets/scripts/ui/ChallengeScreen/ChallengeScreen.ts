@@ -1,9 +1,10 @@
-import { _decorator, Color, Component, Node, Rect, Size, Sprite, SpriteFrame, Vec2, Vec3 } from 'cc'
+import { _decorator, Color, Node, Rect, Size, Sprite, SpriteFrame, Vec2, Vec3 } from 'cc'
 import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
-import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
+import { MenuScreenBase } from '@/ui/MenuScreenBase'
+import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import {
     ChallengeScreenAssets,
     type ChallengeScreenFonts,
@@ -20,8 +21,6 @@ export const ChallengePage = {
 
 export type ChallengePage = (typeof ChallengePage)[keyof typeof ChallengePage]
 
-const SCREEN_WIDTH = 800
-const SCREEN_HEIGHT = 600
 const CHALLENGE_BUTTON_WIDTH = 104
 const CHALLENGE_BUTTON_HEIGHT = 115
 const CHALLENGE_THUMBNAIL_WIDTH = 80
@@ -126,20 +125,13 @@ const CHALLENGE_DEFINITIONS: ChallengeDefinition[] = [
 ]
 
 @ccclass('ChallengeScreen')
-export class ChallengeScreen extends Component {
+export class ChallengeScreen extends MenuScreenBase {
     @property
     page: ChallengePage = ChallengePage.MiniGames
 
-    public onBackToMenu: (() => void) | null = null
     public onChallengeSelected: ((challengeName: string) => void) | null = null
 
-    private _root: Node | null = null
     private _thumbnailFrames: Map<string, SpriteFrame> = new Map()
-
-    start() {
-        setUISize(this.node, SCREEN_WIDTH, SCREEN_HEIGHT)
-        void this.render()
-    }
 
     async render() {
         const [sprites, fonts] = await Promise.all([
@@ -148,29 +140,12 @@ export class ChallengeScreen extends Component {
         ])
         if (!sprites) return
 
-        this._root?.destroy()
-        this._root = createUINode('ChallengeScreenRoot', {
-            parent: this.node,
-            layer: this.node.layer,
-        })
-        this._createBackground(sprites)
+        this._resetRoot('ChallengeScreenRoot')
+        this._createBackground(sprites.background)
         this._createTitle(fonts.title)
         this._createTrophyCounter(sprites, fonts.small)
         this._createChallengeButtons(sprites, fonts.button)
         this._createBackButton(sprites, fonts)
-    }
-
-    private _createBackground(sprites: ChallengeScreenSprites) {
-        createSpriteNode({
-            name: 'Background',
-            spriteFrame: sprites.background,
-            parent: this._root!,
-            layer: this.node.layer,
-            x: -SCREEN_WIDTH / 2,
-            y: SCREEN_HEIGHT / 2,
-            anchorX: 0,
-            anchorY: 1,
-        })
     }
 
     private _createTitle(font: BitmapFontAssets | null) {
@@ -357,6 +332,8 @@ export class ChallengeScreen extends Component {
         button.normalSprite = sprites.challengeWindow
         button.hoverSprite = sprites.challengeWindowHighlight
         button.pressedSprite = sprites.challengeWindowHighlight
+        button.keepPressOffsetOnPressOut = true
+        button.releaseToNormalOnPressOut = true
         button.onPress = () => {
             void SoundLoader.play(SoundEffect.ButtonClick)
         }
@@ -392,45 +369,6 @@ export class ChallengeScreen extends Component {
         })
         this._thumbnailFrames.set(key, frame)
         return frame
-    }
-
-    private _createText(args: {
-        name: string
-        text: string
-        baselineX: number
-        baselineY: number
-        font: BitmapFontAssets | null
-        color: Color
-        align: 'left' | 'center' | 'right'
-    }) {
-        const node = createUINode(args.name, {
-            parent: this._root!,
-            layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
-        })
-        const renderer = node.addComponent(FontRenderer)
-        if (args.font) renderer.setFontAssets(args.font)
-        renderer.fontColor = args.color
-        renderer.string = args.text
-        renderer.forceRebuild()
-
-        const metrics = FontMetricsUtil.getMetrics(args.font?.config ?? null)
-        const width =
-            FontMetricsUtil.measureTextWidth(args.font?.config ?? null, args.text) ||
-            renderer.contentWidth
-        let x = args.baselineX
-        if (args.align === 'center') x -= width / 2
-        if (args.align === 'right') x -= width
-        node.setPosition(this._cppX(x), this._cppY(args.baselineY - metrics.ascent), 0)
-    }
-
-    private _cppX(x: number) {
-        return x - SCREEN_WIDTH / 2
-    }
-
-    private _cppY(y: number) {
-        return SCREEN_HEIGHT / 2 - y
     }
 
     onDestroy() {

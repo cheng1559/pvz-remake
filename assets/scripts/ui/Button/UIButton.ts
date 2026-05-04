@@ -52,6 +52,12 @@ export class UIButton extends Component {
     @property(Vec3)
     pressOffset = new Vec3(1, -1, 0)
 
+    @property
+    releaseToNormalOnPressOut = false
+
+    @property
+    keepPressOffsetOnPressOut = false
+
     @property([Vec2])
     polygon: Vec2[] = []
 
@@ -123,6 +129,14 @@ export class UIButton extends Component {
     private _pressed = false
     private _hovering = false
 
+    public get isPressed(): boolean {
+        return this._pressed
+    }
+
+    public get isHovering(): boolean {
+        return this._hovering
+    }
+
     public static beginHoverBlock() {
         this._hoverBlockCount++
         this.clearHoverStates()
@@ -159,9 +173,15 @@ export class UIButton extends Component {
         }
 
         this._ensureMouseTracking()
+        let anyHovering = false
         for (const button of this._instances) {
-            button._refreshHoverFromPointer()
+            anyHovering = button._refreshHoverFromPointer(false) || anyHovering
         }
+        this._setGlobalCursor(anyHovering ? 'pointer' : 'default')
+    }
+
+    public refreshHoverFromPointer(updateCursor = true) {
+        return this._refreshHoverFromPointer(updateCursor)
     }
 
     private static _ensureMouseTracking() {
@@ -177,6 +197,10 @@ export class UIButton extends Component {
     }
 
     private static _onGlobalMouseMove(event: EventMouse) {
+        if (sys.isMobile) {
+            UIButton._lastPointerCanHover = false
+            return
+        }
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
         UIButton.refreshHoverStates()
@@ -199,6 +223,8 @@ export class UIButton extends Component {
         UIButton._lastMouseLocation = event.touch?.getLocation() ?? event.getUILocation()
         if (sys.isMobile) {
             UIButton._lastPointerCanHover = false
+        } else {
+            UIButton._lastPointerCanHover = true
         }
     }
 
@@ -266,15 +292,21 @@ export class UIButton extends Component {
         event.propagationStopped = true
         const inside = this._isTouchInside(event)
         this._setHovering(inside, false)
-        if (inside && this._state !== ButtonState.PRESSED) {
-            this._applyState(ButtonState.PRESSED)
+        if (inside) {
+            if (this._state !== ButtonState.PRESSED) {
+                this._applyState(ButtonState.PRESSED)
+            }
             this._applyOffset()
-            this._setCursor('pointer')
-        } else if (!inside && this._state === ButtonState.PRESSED) {
-            this._applyState(ButtonState.NORMAL)
-            this._releaseOffset()
-            this._setCursor('default')
+        } else {
+            const outState = this.releaseToNormalOnPressOut ? ButtonState.NORMAL : ButtonState.HOVER
+            if (this._state !== outState) {
+                this._applyState(outState)
+            }
+            if (!this.keepPressOffsetOnPressOut) {
+                this._releaseOffset()
+            }
         }
+        this._setCursor(inside ? 'pointer' : 'default')
     }
 
     private _onTouchEnd(event: EventTouch) {
@@ -318,6 +350,7 @@ export class UIButton extends Component {
     }
 
     private _onMouseEnter() {
+        if (sys.isMobile) return
         if (!this._interactable) return
         if (UIButton._activeButton && UIButton._activeButton !== this) return
         UIButton._lastPointerCanHover = true
@@ -329,6 +362,7 @@ export class UIButton extends Component {
     }
 
     private _onMouseMove(event: EventMouse) {
+        if (sys.isMobile) return
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
         if (!this._interactable) return
@@ -339,6 +373,7 @@ export class UIButton extends Component {
     }
 
     private _onMouseLeave() {
+        if (sys.isMobile) return
         if (!this._interactable) return
         if (UIButton._activeButton && UIButton._activeButton !== this) return
         if (this._pressed) {
@@ -348,26 +383,32 @@ export class UIButton extends Component {
         this._setHovering(false)
     }
 
-    private _refreshHoverFromPointer() {
-        if (!this._interactable || !this.node.activeInHierarchy || this._pressed) {
-            this._setHovering(false)
-            return
+    private _refreshHoverFromPointer(updateCursor = true) {
+        if (
+            !this._interactable ||
+            !this.node.activeInHierarchy ||
+            this._pressed ||
+            !UIButton._lastPointerCanHover
+        ) {
+            this._setHovering(false, true, true, updateCursor)
+            return false
         }
 
         const uiTransform = this.node.getComponent(UITransform)
         const location = UIButton._lastMouseLocation
         const hovering = !!uiTransform && !!location && uiTransform.hitTest(location)
-        this._setHovering(hovering)
+        this._setHovering(hovering, true, true, updateCursor)
+        return hovering
     }
 
-    private _setHovering(hovering: boolean, applyVisual = true, emitEvent = true) {
+    private _setHovering(hovering: boolean, applyVisual = true, emitEvent = true, updateCursor = true) {
         const wasHovering = this._hovering
         this._hovering = hovering
         if (!this._interactable) return
 
         if (applyVisual && !this._pressed) {
             this._applyState(hovering ? ButtonState.HOVER : ButtonState.NORMAL)
-            this._setCursor(hovering ? 'pointer' : 'default')
+            if (updateCursor) this._setCursor(hovering ? 'pointer' : 'default')
         }
         if (emitEvent && hovering && !wasHovering) {
             this.onHoverEnter?.()

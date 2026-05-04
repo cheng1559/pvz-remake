@@ -345,6 +345,7 @@ export class OptionsDialog extends ModalDialog {
         button.pressedSprite = sprites.backToGameButtonDown
         button.hoverSprite = sprites.backToGameButton
         button.pressOffset = new Vec3(0, 0, 0)
+        button.releaseToNormalOnPressOut = true
         button.onPress = () => {
             void SoundLoader.play(SoundEffect.GraveButton)
         }

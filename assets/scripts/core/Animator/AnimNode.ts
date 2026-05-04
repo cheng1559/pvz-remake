@@ -289,6 +289,7 @@ export class AnimNode {
         targetFrame: number,
     ): TrackFrameData | null {
         if (frames.length === 0) return null
+        if (targetFrame > frames[frames.length - 1].frameIndex) return null
 
         let leftIdx = -1
         for (let i = 0; i < frames.length; i++) {
@@ -317,6 +318,7 @@ export class AnimNode {
 
     private _sampleFrameDataAt(frames: FrameData[], targetFrame: number): FrameData | null {
         if (frames.length === 0) return null
+        if (targetFrame > frames[frames.length - 1].frameIndex) return null
 
         let leftIdx = -1
         for (let i = 0; i < frames.length; i++) {

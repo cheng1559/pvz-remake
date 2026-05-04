@@ -1,7 +1,6 @@
 import {
     _decorator,
     Color,
-    Component,
     EventKeyboard,
     Graphics,
     input,
@@ -13,13 +12,12 @@ import {
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
-import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
+import { createSpriteNode, createUINode } from '@/ui/UIFactory'
+import { MenuScreenBase, SCREEN_HEIGHT, SCREEN_WIDTH } from '@/ui/MenuScreenBase'
 import { HelpScreenAssets, type HelpScreenFonts, type HelpScreenSprites } from './HelpScreenAssets'
 
 const { ccclass } = _decorator
 
-const SCREEN_WIDTH = 800
-const SCREEN_HEIGHT = 600
 const FADE_TICKS = 180
 const FADE_TICK_SECONDS = 0.01
 const BUTTON_TEXT_COLOR = new Color(213, 159, 43)
@@ -29,18 +27,10 @@ const MAIN_MENU_BUTTON_WIDTH = 156
 const MAIN_MENU_BUTTON_HEIGHT = 42
 
 @ccclass('HelpScreen')
-export class HelpScreen extends Component {
-    public onBackToMenu: (() => void) | null = null
-
-    private _root: Node | null = null
+export class HelpScreen extends MenuScreenBase {
     private _fadeGraphics: Graphics | null = null
     private _fadeCounter = FADE_TICKS
     private _hasExited = false
-
-    start() {
-        setUISize(this.node, SCREEN_WIDTH, SCREEN_HEIGHT)
-        void this.render()
-    }
 
     onEnable() {
         input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
@@ -57,11 +47,7 @@ export class HelpScreen extends Component {
         ])
         if (!sprites) return
 
-        this._root?.destroy()
-        this._root = createUINode('HelpScreenRoot', {
-            parent: this.node,
-            layer: this.node.layer,
-        })
+        this._resetRoot('HelpScreenRoot')
 
         this._createNote(sprites)
         this._createMainMenuButton(sprites, fonts)
@@ -181,6 +167,7 @@ export class HelpScreen extends Component {
         button.pressedSprite = sprites.mainMenuButton
         button.disabledSprite = sprites.mainMenuButtonDisabled
         button.pressOffset = new Vec3(0, 0, 0)
+        button.releaseToNormalOnPressOut = true
         button.onPress = () => {
             void SoundLoader.play(SoundEffect.Tap)
         }
@@ -239,11 +226,4 @@ export class HelpScreen extends Component {
         this.onBackToMenu?.()
     }
 
-    private _cppX(x: number) {
-        return x - SCREEN_WIDTH / 2
-    }
-
-    private _cppY(y: number) {
-        return SCREEN_HEIGHT / 2 - y
-    }
 }

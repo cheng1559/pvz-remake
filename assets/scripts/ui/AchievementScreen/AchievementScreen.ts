@@ -1,9 +1,9 @@
 import {
     _decorator,
     Color,
-    Component,
     EventKeyboard,
     EventMouse,
+    EventTouch,
     input,
     Input,
     KeyCode,
@@ -12,13 +12,15 @@ import {
     Size,
     Sprite,
     SpriteFrame,
+    sys,
     Vec2,
     Vec3,
 } from 'cc'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
-import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
+import { MenuScreenBase } from '@/ui/MenuScreenBase'
+import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import {
     AchievementScreenAssets,
     type AchievementScreenFonts,
@@ -27,8 +29,6 @@ import {
 
 const { ccclass } = _decorator
 
-const SCREEN_WIDTH = 800
-const SCREEN_HEIGHT = 600
 const BACK_BUTTON_X = 128
 const BACK_BUTTON_Y = 55
 const BACK_BUTTON_HIT_OFFSET_X = -8
@@ -41,6 +41,7 @@ const TILE_COUNT = 70
 const MAX_SCROLL_POSITION = 15342
 const WHEEL_SCROLL_DISTANCE = 435
 const WHEEL_TWEEN_SECONDS = 0.35
+const WHEEL_MIN_TWEEN_SECONDS = 0.05
 const MORE_SCROLL_DISTANCE = 230
 const MORE_TWEEN_SECONDS = 0.25
 const ACHIEVEMENT_ICON_COLUMNS = 7
@@ -144,10 +145,7 @@ const ACHIEVEMENTS: AchievementDefinition[] = [
 ]
 
 @ccclass('AchievementScreen')
-export class AchievementScreen extends Component {
-    public onBackToMenu: (() => void) | null = null
-
-    private _root: Node | null = null
+export class AchievementScreen extends MenuScreenBase {
     private _rockButtonImage: Sprite | null = null
     private _moreButton: UIButton | null = null
     private _sprites: AchievementScreenSprites | null = null
@@ -159,20 +157,27 @@ export class AchievementScreen extends Component {
     private _scrollTweenStart = 0
     private _scrollTweenEnd = 0
     private _iconFrames: SpriteFrame[] = []
-
-    start() {
-        setUISize(this.node, SCREEN_WIDTH, SCREEN_HEIGHT)
-        void this.render()
-    }
+    private _dragging = false
 
     onEnable() {
         input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this.node.on(Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this)
+        if (sys.isMobile) {
+            this.node.on(Node.EventType.TOUCH_START, this._onTouchStart, this)
+            this.node.on(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
+            this.node.on(Node.EventType.TOUCH_END, this._onTouchEnd, this)
+            this.node.on(Node.EventType.TOUCH_CANCEL, this._onTouchEnd, this)
+        }
     }
 
     onDisable() {
         input.off(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this.node.off(Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this)
+        this.node.off(Node.EventType.TOUCH_START, this._onTouchStart, this)
+        this.node.off(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
+        this.node.off(Node.EventType.TOUCH_END, this._onTouchEnd, this)
+        this.node.off(Node.EventType.TOUCH_CANCEL, this._onTouchEnd, this)
+        this._dragging = false
     }
 
     async render() {
@@ -184,11 +189,7 @@ export class AchievementScreen extends Component {
 
         this._sprites = sprites
         this._clearIconFrames()
-        this._root?.destroy()
-        this._root = createUINode('AchievementScreenRoot', {
-            parent: this.node,
-            layer: this.node.layer,
-        })
+        this._resetRoot('AchievementScreenRoot')
 
         this._createBackground(sprites)
         this._createAchievements(sprites, fonts)
@@ -390,6 +391,7 @@ export class AchievementScreen extends Component {
         button.hoverSprite = sprites.backButton
         button.pressedSprite = sprites.backButton
         button.pressOffset = new Vec3(0, 0, 0)
+        button.releaseToNormalOnPressOut = true
         button.changeCursor = false
         button.onStateChange = (state) => {
             glowNode.active = state === 'hover' || state === 'pressed'
@@ -434,6 +436,7 @@ export class AchievementScreen extends Component {
         this._moreButton.hoverSprite = sprites.moreButtonHighlight
         this._moreButton.pressedSprite = sprites.moreButtonHighlight
         this._moreButton.pressOffset = new Vec3(0, 0, 0)
+        this._moreButton.releaseToNormalOnPressOut = true
         this._moreButton.changeCursor = false
         this._moreButton.onPress = () => {
             if (!this._showingTop) {
@@ -478,10 +481,39 @@ export class AchievementScreen extends Component {
     private _onMouseWheel(event: EventMouse) {
         const delta = Math.sign(event.getScrollY())
         if (delta === 0) return
-        const target = this._clampScrollPosition(
-            this._scrollTargetPosition + WHEEL_SCROLL_DISTANCE * delta,
-        )
-        this._startScrollTween(target, WHEEL_TWEEN_SECONDS)
+        event.propagationStopped = true
+        const requestedTarget = this._scrollTargetPosition + WHEEL_SCROLL_DISTANCE * delta
+        const target = this._clampScrollPosition(requestedTarget)
+        const targetDistance = Math.abs(target - this._scrollTargetPosition)
+        if (targetDistance === 0) return
+
+        const durationScale = Math.min(1, targetDistance / WHEEL_SCROLL_DISTANCE)
+        const duration = Math.max(WHEEL_MIN_TWEEN_SECONDS, WHEEL_TWEEN_SECONDS * durationScale)
+        this._startScrollTween(target, duration)
+    }
+
+    private _onTouchStart(event: EventTouch) {
+        this._dragging = true
+        this._cancelScrollTween()
+        event.propagationStopped = true
+    }
+
+    private _onTouchMove(event: EventTouch) {
+        if (!this._dragging) return
+
+        const delta = event.getDelta().y
+        if (delta !== 0) {
+            this._setScrollPosition(this._scrollPosition - delta)
+            this._scrollTargetPosition = this._scrollPosition
+        }
+        event.propagationStopped = true
+    }
+
+    private _onTouchEnd(event: EventTouch) {
+        if (!this._dragging) return
+
+        this._dragging = false
+        this._scrollTargetPosition = this._scrollPosition
         event.propagationStopped = true
     }
 
@@ -534,11 +566,4 @@ export class AchievementScreen extends Component {
         this._clearIconFrames()
     }
 
-    private _cppX(x: number) {
-        return x - SCREEN_WIDTH / 2
-    }
-
-    private _cppY(y: number) {
-        return SCREEN_HEIGHT / 2 - y
-    }
 }

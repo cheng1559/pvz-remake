@@ -109,9 +109,13 @@ export class FontLoader {
         if (pixelCount <= 0) return texture
 
         const isSingleChannelMask = data.length === pixelCount
-        const isOpaqueBrianneMask =
-            imageName.startsWith('BrianneTod') && data.length === pixelCount * 4
-        if (!isSingleChannelMask && !isOpaqueBrianneMask) return texture
+        const isOpaqueRgba = data.length === pixelCount * 4 && this._isFullyOpaqueRgba(data, pixelCount)
+        const isOpaqueMask =
+            (imageName.startsWith('BrianneTod') ||
+                imageName === 'ContinuumBold14' ||
+                imageName.startsWith('HouseofTerror')) &&
+            isOpaqueRgba
+        if (!isSingleChannelMask && !isOpaqueMask) return texture
 
         const rgba = new Uint8Array(pixelCount * 4)
         for (let i = 0; i < pixelCount; i++) {
@@ -133,6 +137,13 @@ export class FontLoader {
         })
         normalized.uploadData(rgba)
         return normalized
+    }
+
+    private static _isFullyOpaqueRgba(data: Uint8Array, pixelCount: number): boolean {
+        for (let i = 0; i < pixelCount; i++) {
+            if (data[i * 4 + 3] !== 255) return false
+        }
+        return true
     }
 
     private static _getImageBytes(image: ImageAsset): Uint8Array | null {

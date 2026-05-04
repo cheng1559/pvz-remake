@@ -132,5 +132,90 @@
             "slots": [],
             "animations": []
         }
+    },
+    "treeofwisdom": {
+        "tree": {
+            "slots": [],
+            "animations": [
+                "anim_start",
+                "anim_grow1",
+                "anim_grow2",
+                "anim_grow3",
+                "anim_grow4",
+                "anim_grow5",
+                "anim_grow6",
+                "anim_grow7",
+                "anim_grow8",
+                "anim_grow9",
+                "anim_grow10",
+                "anim_grow11",
+                "anim_grow12",
+                "anim_grow13",
+                "anim_grow14",
+                "anim_grow15",
+                "anim_grow16",
+                "anim_grow17",
+                "anim_grow18",
+                "anim_grow19",
+                "anim_grow20",
+                "anim_grow21",
+                "anim_grow22",
+                "anim_grow23",
+                "anim_grow24",
+                "anim_grow25",
+                "anim_grow26",
+                "anim_grow27",
+                "anim_grow28",
+                "anim_grow29",
+                "anim_grow30",
+                "anim_grow31",
+                "anim_grow32",
+                "anim_grow33",
+                "anim_grow34",
+                "anim_grow35",
+                "anim_grow36",
+                "anim_grow37",
+                "anim_grow38",
+                "anim_grow39",
+                "anim_grow40",
+                "anim_grow41",
+                "anim_grow42",
+                "anim_grow43",
+                "anim_grow44",
+                "anim_grow45",
+                "anim_grow46",
+                "anim_grow47",
+                "anim_grow48",
+                "anim_grow49",
+                "anim_grow50",
+                "anim_grow51"
+            ]
+        }
+    },
+    "treeofwisdomclouds": {
+        "Cloud1": {
+            "slots": [],
+            "animations": ["Cloud1"]
+        },
+        "Cloud2": {
+            "slots": [],
+            "animations": ["Cloud2"]
+        },
+        "Cloud3": {
+            "slots": [],
+            "animations": ["Cloud3"]
+        },
+        "Cloud4": {
+            "slots": [],
+            "animations": ["Cloud4"]
+        },
+        "Cloud5": {
+            "slots": [],
+            "animations": ["Cloud5"]
+        },
+        "Cloud6": {
+            "slots": [],
+            "animations": ["Cloud6"]
+        }
     }
 }

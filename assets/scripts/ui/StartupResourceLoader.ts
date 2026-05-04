@@ -1,24 +1,32 @@
 import { JsonAsset } from 'cc'
 import { AssetLoader } from '@/core/AssetLoader'
 import { FONT_NAMES, FontLoader } from '@/core/FontLoader'
+import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundLoader } from '@/core/SoundLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { AchievementScreenAssets } from './AchievementScreen/AchievementScreenAssets'
-import { AuxiliaryScreenAssets } from './AuxiliaryScreen/AuxiliaryScreenAssets'
+import { AlmanacScreenAssets } from './AlmanacScreen/AlmanacScreenAssets'
 import { ChallengeScreenAssets } from './ChallengeScreen/ChallengeScreenAssets'
 import { HelpScreenAssets } from './HelpScreen/HelpScreenAssets'
 import { MessageBoxAssets } from './MessageBox/MessageBoxAssets'
 import { OptionsDialogAssets } from './OptionsDialog/OptionsDialogAssets'
 import { SELECTOR_SCREEN_ANIMATIONS, SELECTOR_SCREEN_SPRITES } from './SelectorScreen/SelectorScreenConfig'
+import { StoreScreenAssets } from './StoreScreen/StoreScreenAssets'
+import { ZenGardenScreenAssets } from './ZenGardenScreen/ZenGardenScreenAssets'
 
-const STARTUP_ANIMATIONS = SELECTOR_SCREEN_ANIMATIONS
+const STARTUP_ANIMATIONS = [
+    ...SELECTOR_SCREEN_ANIMATIONS,
+    ...ZenGardenScreenAssets.preload.animations.map((name) => `animations/${name}`),
+]
 const STARTUP_TEXTURES = [
     ...MessageBoxAssets.preload.sprites,
     ...OptionsDialogAssets.preload.sprites,
     ...AchievementScreenAssets.preload.sprites,
-    ...AuxiliaryScreenAssets.preload.sprites,
+    ...AlmanacScreenAssets.preload.sprites,
     ...ChallengeScreenAssets.preload.sprites,
     ...HelpScreenAssets.preload.sprites,
+    ...StoreScreenAssets.preload.sprites,
+    ...ZenGardenScreenAssets.preload.sprites,
     ...SELECTOR_SCREEN_SPRITES,
 ]
 
@@ -31,7 +39,12 @@ export class StartupResourceLoader {
 
         this._preloadPromise = (async () => {
             const animations = await this._loadStartupAnimations()
-            await Promise.all([this._loadStartupTextures(animations), this._loadAudio(), this._loadFonts()])
+            await Promise.all([
+                this._loadStartupTextures(animations),
+                this._loadAudio(),
+                this._loadFonts(),
+                LawnStringLoader.load(),
+            ])
         })()
 
         return this._preloadPromise
@@ -53,8 +66,10 @@ export class StartupResourceLoader {
         await Promise.all([
             ...FONT_NAMES.map((name) => FontLoader.load(name)),
             ...AchievementScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
-            ...AuxiliaryScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
+            ...AlmanacScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
             ...HelpScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
+            ...StoreScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
+            ...ZenGardenScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
         ])
     }
 

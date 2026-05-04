@@ -741,6 +741,7 @@ export class MessageBox extends ModalDialog {
 
         const button = btnRoot.addComponent(UIButton)
         button.pressOffset = new Vec3(0, 0, 0)
+        button.releaseToNormalOnPressOut = true
         button.onPress = () => {
             void SoundLoader.play(SoundEffect.GraveButton)
         }

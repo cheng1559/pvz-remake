@@ -15,6 +15,8 @@ export const SoundEffect = {
     DirtRise: 'dirt_rise',
     EvilLaugh: 'evillaugh',
     GraveButton: 'gravebutton',
+    HatchbackClose: 'hatchback_close',
+    HatchbackOpen: 'hatchback_open',
     LimbsPop: 'limbs_pop',
     LoseMusic: 'losemusic',
     Paper: 'paper',

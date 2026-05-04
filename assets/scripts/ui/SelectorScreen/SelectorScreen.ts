@@ -63,6 +63,7 @@ export class SelectorScreen extends AnimationComponent {
     private _woodsignContainer: Node = null!
     private _auxButtonContainer: Node = null!
     private _buttons: Map<string, UIButton> = new Map()
+    private _flowerButtons: UIButton[] = []
     private _selectorButtonsReady = false
     private _trackedButtons: {
         button: UIButton
@@ -77,6 +78,10 @@ export class SelectorScreen extends AnimationComponent {
     public onHelpRequest: (() => void) | null = null
     public onQuitRequest: (() => void) | null = null
     public onChallengePageRequest: ((page: ChallengePage) => void) | null = null
+    public onAchievementRequest: (() => void) | null = null
+    public onZenGardenRequest: (() => void) | null = null
+    public onStoreRequest: (() => void) | null = null
+    public onAlmanacRequest: (() => void) | null = null
 
     async init() {
         const cloudNames = ['cloud1', 'cloud2', 'cloud4', 'cloud5', 'cloud6', 'cloud7']
@@ -232,6 +237,18 @@ export class SelectorScreen extends AnimationComponent {
         this._buttons.get('Survival')!.onClick = () => {
             this.onChallengePageRequest?.(ChallengePage.Survival)
         }
+        this._buttons.get('achievement')!.onClick = () => {
+            this.onAchievementRequest?.()
+        }
+        this._buttons.get('zenGarden')!.onClick = () => {
+            this.onZenGardenRequest?.()
+        }
+        this._buttons.get('store')!.onClick = () => {
+            this.onStoreRequest?.()
+        }
+        this._buttons.get('almanac')!.onClick = () => {
+            this.onAlmanacRequest?.()
+        }
 
         for (const name of LOCKED_MODE_NAMES) {
             const btn = this._buttons.get(name)!
@@ -247,6 +264,13 @@ export class SelectorScreen extends AnimationComponent {
         for (const button of this._buttons.values()) {
             button.interactable = interactable
         }
+        for (const button of this._flowerButtons) {
+            button.interactable = interactable
+        }
+    }
+
+    public setButtonsInteractable(interactable: boolean) {
+        this._setButtonsInteractable(interactable)
     }
 
     private _configureButtonSounds(name: string, button: UIButton) {
@@ -386,6 +410,7 @@ export class SelectorScreen extends AnimationComponent {
             button.polygon = this._circlePolygon(fc.radius)
             button.changeCursor = false
             button.interactable = this._selectorButtonsReady
+            this._flowerButtons.push(button)
 
             const idx = i
             button.onClick = (event: EventTouch) => {
