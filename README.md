@@ -55,3 +55,9 @@ A Plants vs. Zombies 1 remake project built with Cocos Creator 3.8.8 and TypeScr
    Simulator Preview currently has known compatibility issues.
 
 3. Click the Run button to start the project.
+
+## License
+
+This project's source code is licensed under the [MIT License](LICENSE).
+
+This license applies only to the source code and project files in this repository. Original Plants vs. Zombies assets are not included and remain the property of their respective copyright holders.
