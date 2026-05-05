@@ -59,6 +59,8 @@ enum DialogType {
     TallBottom,
 }
 
+const MESSAGE_GLYPH_TOP_ADJUST_Y = 4
+
 @ccclass('MessageBox')
 export class MessageBox extends ModalDialog {
     @property
@@ -89,7 +91,7 @@ export class MessageBox extends ModalDialog {
     messageOffsetY: number = 0
 
     @property
-    messageAlign: number = 0
+    messageAlign: number = 2
 
     private _bgContainer: Node | null = null
     private _buttonContainer: Node | null = null
@@ -103,6 +105,7 @@ export class MessageBox extends ModalDialog {
     private _result: DialogResult = DialogResult.None
     private _started = false
     private _updateCount = 0
+    private _renderVersion = 0
     private _resolveResult: ((result: DialogResult) => void) | null = null
 
     start() {
@@ -157,7 +160,7 @@ export class MessageBox extends ModalDialog {
         this._setButtonsInteractable(frames < 0)
     }
 
-    setMessageLayout(maxWidth = 0, offsetY = 0, align = 0) {
+    setMessageLayout(maxWidth = 0, offsetY = 0, align = 2) {
         this.messageMaxWidth = maxWidth
         this.messageOffsetY = offsetY
         this.messageAlign = align
@@ -216,22 +219,24 @@ export class MessageBox extends ModalDialog {
     }
 
     async renderDialog() {
+        const renderVersion = ++this._renderVersion
         if (!this._bgContainer) {
             this._bgContainer = createUINode('BackgroundContainer', { parent: this.node })
             this._bgContainer.setSiblingIndex(0)
         }
 
-        const container = this._bgContainer
-        container.removeAllChildren()
-
         const isTall = this.dialogType === DialogType.TallBottom
         const dialogSprites = await MessageBoxAssets.loadDialogSprites(isTall)
         const textFonts = await MessageBoxAssets.loadTextFonts()
         const buttonSprites = await MessageBoxAssets.loadButtonSprites()
+        if (renderVersion !== this._renderVersion || !this.node.isValid) return
         if (!dialogSprites || !buttonSprites) {
             console.error('[MessageBox] Failed to load one or more resources')
             return
         }
+
+        const container = this._bgContainer
+        container.removeAllChildren()
 
         const {
             topLeft,
@@ -456,6 +461,7 @@ export class MessageBox extends ModalDialog {
                 this.message,
                 linesAreaWidth,
             )
+            const msgMetrics = FontMetricsUtil.getMetrics(msgFontData.config)
 
             // Vertical centering (mVerticalCenterText = true)
             let msgY_cpp = aFontY
@@ -477,12 +483,15 @@ export class MessageBox extends ModalDialog {
             // Word-wrapped text rect Y is already the glyph top in original C++ coordinates.
             const msgX = msgX_cpp - actualWidth / 2 + (defaultLinesAreaWidth - linesAreaWidth) / 2
             const msgY = actualHeight / 2 - msgY_cpp
-            this._messageNode.setPosition(msgX, msgY - this.messageOffsetY)
+            this._messageNode.setPosition(
+                msgX,
+                msgY + msgMetrics.ascentPadding + MESSAGE_GLYPH_TOP_ADJUST_Y - this.messageOffsetY,
+            )
             this._messageRenderer = msgFont
         }
 
         // Render buttons
-        await this._renderButtons(actualWidth, actualHeight, buttonSprites)
+        await this._renderButtons(actualWidth, actualHeight, buttonSprites, renderVersion)
     }
 
     show(title: string, message: string) {
@@ -532,6 +541,7 @@ export class MessageBox extends ModalDialog {
         dialogW: number,
         dialogH: number,
         sprites: MessageBoxButtonSprites,
+        renderVersion: number,
     ) {
         // Clean up old buttons
         for (const n of this._buttonNodes) {
@@ -543,6 +553,7 @@ export class MessageBox extends ModalDialog {
         if (this._buttons.length === 0) return
 
         const buttonFonts = await MessageBoxAssets.loadButtonFonts()
+        if (renderVersion !== this._renderVersion || !this.node.isValid) return
 
         // Create button container
         if (!this._buttonContainer) {

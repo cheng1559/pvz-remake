@@ -110,16 +110,15 @@ export class FontLoader {
 
         const isFontMaskImage = this._isFontMaskImage(imageName)
         const isSingleChannelMask = isFontMaskImage && data.length === pixelCount
+        const isRgbMask = isFontMaskImage && data.length === pixelCount * 3
         const isOpaqueRgba = data.length === pixelCount * 4 && this._isFullyOpaqueRgba(data, pixelCount)
         const isOpaqueMask = isFontMaskImage && isOpaqueRgba
-        if (!isSingleChannelMask && !isOpaqueMask) return texture
+        if (!isSingleChannelMask && !isRgbMask && !isOpaqueMask) return texture
 
         const singleChannelScale = isSingleChannelMask ? this._getSingleChannelMaskScale(data) : 1
         const rgba = new Uint8Array(pixelCount * 4)
         for (let i = 0; i < pixelCount; i++) {
-            const alpha = isSingleChannelMask
-                ? Math.min(255, Math.round(data[i] * singleChannelScale))
-                : Math.max(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])
+            const alpha = this._getMaskAlpha(data, i, singleChannelScale, isSingleChannelMask, isRgbMask)
             const offset = i * 4
             rgba[offset] = 255
             rgba[offset + 1] = 255
@@ -138,13 +137,30 @@ export class FontLoader {
     }
 
     private static _isFontMaskImage(imageName: string): boolean {
+        const baseName = imageName.endsWith('_atlas') ? imageName.slice(0, -6) : imageName
         return (
-            imageName.startsWith('BrianneTod') ||
-            imageName.startsWith('ContinuumBold14') ||
-            imageName.startsWith('HouseofTerror') ||
-            imageName === 'Pico129' ||
-            imageName === 'Pix118Bold'
+            baseName.startsWith('BrianneTod') ||
+            baseName.startsWith('ContinuumBold14') ||
+            baseName.startsWith('DwarvenTodcraft') ||
+            baseName.startsWith('HouseofTerror') ||
+            baseName === 'Pico129' ||
+            baseName === 'Pix118Bold'
         )
+    }
+
+    private static _getMaskAlpha(
+        data: Uint8Array,
+        pixelIndex: number,
+        singleChannelScale: number,
+        isSingleChannelMask: boolean,
+        isRgbMask: boolean,
+    ): number {
+        if (isSingleChannelMask) {
+            return Math.min(255, Math.round(data[pixelIndex] * singleChannelScale))
+        }
+
+        const offset = pixelIndex * (isRgbMask ? 3 : 4)
+        return Math.max(data[offset], data[offset + 1], data[offset + 2])
     }
 
     private static _getSingleChannelMaskScale(data: Uint8Array): number {

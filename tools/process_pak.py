@@ -11,6 +11,7 @@ Steps:
   6. Copy images to textures
   7. Copy particle images to texture resources
   8. Copy sounds to audio resources
+  9. Generate cached packet plant atlas
 """
 
 import shutil
@@ -23,24 +24,34 @@ from font_converter import main as convert_font
 from lawnstrings_converter import convert_lawnstrings
 from copy_particles import copy_particles
 from copy_sounds import copy_sounds
+from generate_packet_plant_cache import main as generate_packet_plant_cache
+
+
+IMAGE_SUFFIX_PRIORITY = {'.png': 0, '.jpg': 1, '.jpeg': 1, '.gif': 2}
+
+
+def get_image_resource_name(path: Path) -> str:
+    name = path.name.lower()
+    while Path(name).suffix.lower() in IMAGE_SUFFIX_PRIORITY:
+        name = Path(name).with_suffix('').name
+    return name
 
 
 def copy_images(src_dir: Path, dst_dir: Path) -> int:
     """Copy all image files from src_dir to dst_dir, return count of newly copied files."""
     dst_dir.mkdir(parents=True, exist_ok=True)
 
-    image_files = sorted(
+    image_files = [
         p for p in src_dir.iterdir()
-        if p.is_file() and p.suffix.lower() in ('.png', '.jpg', '.jpeg', '.gif')
-    )
-    # Skip .jpg/.jpeg when a .png with the same stem exists (avoid URL conflict)
-    png_stems = {p.stem.lower()
-                 for p in image_files if p.suffix.lower() == '.png'}
+        if p.is_file() and p.suffix.lower() in IMAGE_SUFFIX_PRIORITY
+    ]
+    images_by_resource: dict[str, list[Path]] = {}
+    for image_file in image_files:
+        images_by_resource.setdefault(get_image_resource_name(image_file), []).append(image_file)
 
     copied = 0
-    for src in image_files:
-        if src.suffix.lower() in ('.jpg', '.jpeg') and src.stem.lower() in png_stems:
-            continue
+    for candidates in sorted(images_by_resource.values(), key=lambda files: get_image_resource_name(files[0])):
+        src = min(candidates, key=lambda path: (IMAGE_SUFFIX_PRIORITY[path.suffix.lower()], path.name.count('.')))
         dst = dst_dir / src.name.lower()
         if not dst.exists():
             shutil.copy2(src, dst)
@@ -128,6 +139,14 @@ def main():
     audio_dir = Path("./assets/resources/audio/sfx")
     sound_count = copy_sounds(sounds_dir, audio_dir)
     print(f"[pipeline] Copied {sound_count} new sounds -> {audio_dir}")
+
+    # ── Step 9: Generate cached packet plant atlas ────────────────
+    print()
+    print("=" * 60)
+    print("[pipeline] Step 9: Generate cached packet plant atlas")
+    print("=" * 60)
+
+    generate_packet_plant_cache()
 
     print()
     print("=" * 60)

@@ -91,11 +91,24 @@ def parse_track_data(track_node: ElementTree.Element) -> tuple[str, int, list[di
     return name, duration, frames
 
 
-def get_animation_data(tracks: dict[str, dict[str, Any]], anim_name: str, fps: int) -> dict[str, Any]:
+def warn_missing_track(anim_name: str, node_name: str, track_name: str, usage: str) -> None:
+    print(
+        f"[reanim] WARN: {anim_name}.{node_name} {usage} track '{track_name}' "
+        "not found; skipping it"
+    )
+
+
+def get_animation_data(
+    tracks: dict[str, dict[str, Any]],
+    source_anim_name: str,
+    node_name: str,
+    anim_name: str,
+    fps: int,
+) -> dict[str, Any] | None:
     anim_track = tracks.get(anim_name)
     if anim_track is None:
-        raise ValueError(
-            f"Animation track '{anim_name}' not found in XML.")
+        warn_missing_track(source_anim_name, node_name, anim_name, "animation")
+        return None
 
     start_frame, end_frame = None, None
     for frame in anim_track['frames']:
@@ -105,8 +118,11 @@ def get_animation_data(tracks: dict[str, dict[str, Any]], anim_name: str, fps: i
             end_frame = frame['frameIndex']
 
     if start_frame is None or end_frame is None:
-        raise ValueError(
-            f"Animation '{anim_name}' has no active frames.")
+        print(
+            f"[reanim] WARN: {source_anim_name}.{node_name} animation track "
+            f"'{anim_name}' has no active frames; skipping it"
+        )
+        return None
 
     return {
         'fps': fps,
@@ -116,11 +132,16 @@ def get_animation_data(tracks: dict[str, dict[str, Any]], anim_name: str, fps: i
     }
 
 
-def get_slot_data(tracks: dict[str, dict[str, Any]], slot_name: str) -> dict[str, Any]:
+def get_slot_data(
+    tracks: dict[str, dict[str, Any]],
+    source_anim_name: str,
+    node_name: str,
+    slot_name: str,
+) -> dict[str, Any] | None:
     slot_track = tracks.get(slot_name)
     if slot_track is None:
-        raise ValueError(
-            f"Slot track '{slot_name}' not found in XML.")
+        warn_missing_track(source_anim_name, node_name, slot_name, "slot")
+        return None
     return {
         'frames': [
             {
@@ -137,7 +158,11 @@ def get_slot_data(tracks: dict[str, dict[str, Any]], slot_name: str) -> dict[str
     }
 
 
-def get_anim_nodes(anim_info: dict[str, Any], anim_xml: ElementTree.Element) -> dict[str, Any]:
+def get_anim_nodes(
+    source_anim_name: str,
+    anim_info: dict[str, Any],
+    anim_xml: ElementTree.Element,
+) -> dict[str, Any]:
     fps_node = anim_xml.find('fps')
     fps = int(fps_node.text) if fps_node is not None and fps_node.text else 12
 
@@ -164,10 +189,18 @@ def get_anim_nodes(anim_info: dict[str, Any], anim_xml: ElementTree.Element) -> 
         anim_names = node_info.get('animations', [])
         slot_names = node_info.get('slots', [])
 
-        animations = {
-            anim_name: get_animation_data(tracks, anim_name, fps)
-            for anim_name in anim_names
-        }
+        animations = {}
+        for anim_name in anim_names:
+            anim_data = get_animation_data(
+                tracks,
+                source_anim_name,
+                node_name,
+                anim_name,
+                fps,
+            )
+            if anim_data is not None:
+                animations[anim_name] = anim_data
+
         if not animations:
             animations = {
                 'default': {
@@ -177,10 +210,16 @@ def get_anim_nodes(anim_info: dict[str, Any], anim_xml: ElementTree.Element) -> 
                     'endFrame': anim_duration - 1
                 }
             }
-        slots = {
-            slot_name: get_slot_data(tracks, slot_name)
-            for slot_name in slot_names
-        }
+        slots = {}
+        for slot_name in slot_names:
+            slot_data = get_slot_data(
+                tracks,
+                source_anim_name,
+                node_name,
+                slot_name,
+            )
+            if slot_data is not None:
+                slots[slot_name] = slot_data
 
         anim_ranges = [
             (anim_data['startFrame'], anim_data['endFrame'])
@@ -265,7 +304,7 @@ def main():
         print(f"[reanim] Processing: {anim_name}")
 
         anim_xml = load_anim_xml(xml_dir, anim_name)
-        anim_nodes = get_anim_nodes(anim_info, anim_xml)
+        anim_nodes = get_anim_nodes(anim_name, anim_info, anim_xml)
         save_anim_data(output_dir, anim_name, anim_nodes)
 
     copy_textures(xml_dir, texture_dir)

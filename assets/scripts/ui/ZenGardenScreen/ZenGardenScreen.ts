@@ -1,12 +1,11 @@
 import { _decorator, Color, Node, Vec3 } from 'cc'
-import type { BitmapFontAssets } from '@/core/FontLoader'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { Animator } from '@/core/Animator'
 import { AnimNode } from '@/core/Animator/AnimNode'
 import { UIButton } from '@/ui/Button'
 import { createTooltipNode } from '@/ui/Tooltip'
-import { buildThreeSliceRow, createSpriteNode, createUINode } from '@/ui/UIFactory'
+import { createSpriteNode, createUINode } from '@/ui/UIFactory'
+import { createStoneButton } from '@/ui/StoneButton'
 import {
     ZenGardenScreenAssets,
     type ZenGardenScreenAnimations,
@@ -264,112 +263,28 @@ export class ZenGardenScreen extends MenuScreenBase {
     }
 
     private _createMainMenuButton(sprites: ZenGardenScreenSprites, fonts: ZenGardenScreenFonts) {
-        const buttonNode = createUINode('MainMenuButton', {
+        createStoneButton({
+            name: 'MainMenuButton',
             parent: this._root!,
             layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
+            label: 'Main Menu',
+            x: this._cppX(628),
+            y: this._cppY(-10),
             width: MAIN_MENU_WIDTH,
             height: MAIN_MENU_HEIGHT,
+            sprites: {
+                left: sprites.buttonLeft,
+                middle: sprites.buttonMiddle,
+                right: sprites.buttonRight,
+                downLeft: sprites.buttonDownLeft,
+                downMiddle: sprites.buttonDownMiddle,
+                downRight: sprites.buttonDownRight,
+            },
+            fonts: {
+                normal: fonts.button,
+                highlight: fonts.buttonHighlight,
+            },
+            onClick: () => this.onBackToMenu?.(),
         })
-        buttonNode.setPosition(this._cppX(628), this._cppY(-10), 0)
-
-        const normalRow = buildThreeSliceRow({
-            name: 'Normal',
-            width: MAIN_MENU_WIDTH,
-            left: sprites.buttonLeft,
-            middle: sprites.buttonMiddle,
-            right: sprites.buttonRight,
-            layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
-        })
-        normalRow.setParent(buttonNode)
-
-        const pressedRow = buildThreeSliceRow({
-            name: 'Pressed',
-            width: MAIN_MENU_WIDTH,
-            left: sprites.buttonDownLeft,
-            middle: sprites.buttonDownMiddle,
-            right: sprites.buttonDownRight,
-            layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
-        })
-        pressedRow.setParent(buttonNode)
-        pressedRow.setPosition(1, 0, 0)
-        pressedRow.active = false
-
-        const labels = this._createStoneButtonLabels(
-            buttonNode,
-            'Main Menu',
-            fonts.button,
-            fonts.buttonHighlight,
-        )
-
-        const button = buttonNode.addComponent(UIButton)
-        button.pressOffset = new Vec3(0, 0, 0)
-        button.releaseToNormalOnPressOut = true
-        button.onPress = () => {
-            void SoundLoader.play(SoundEffect.GraveButton)
-        }
-        button.onClick = () => this.onBackToMenu?.()
-        button.onStateChange = (state) => {
-            const pressed = state === 'pressed'
-            const highlighted = state === 'hover' || pressed
-            normalRow.active = !pressed
-            pressedRow.active = pressed
-            labels.normal.active = !highlighted
-            labels.highlight.active = highlighted
-            labels.normal.setPosition(labels.normalPos)
-            labels.highlight.setPosition(
-                labels.highlightPos.x + (pressed ? 1 : 0),
-                labels.highlightPos.y - (pressed ? 1 : 0),
-                0,
-            )
-        }
-    }
-
-    private _createStoneButtonLabels(
-        parent: Node,
-        text: string,
-        normalFont: BitmapFontAssets | null,
-        highlightFont: BitmapFontAssets | null,
-    ) {
-        const normal = this._createStoneButtonLabel(parent, 'Label', text, normalFont)
-        const highlight = this._createStoneButtonLabel(parent, 'LabelHighlight', text, highlightFont)
-        const normalPos = this._getStoneButtonLabelPosition(text, normalFont)
-        const highlightPos = this._getStoneButtonLabelPosition(text, highlightFont ?? normalFont)
-
-        normal.setPosition(normalPos)
-        highlight.setPosition(highlightPos)
-        highlight.active = false
-        return { normal, highlight, normalPos, highlightPos }
-    }
-
-    private _createStoneButtonLabel(
-        parent: Node,
-        name: string,
-        text: string,
-        font: BitmapFontAssets | null,
-    ) {
-        const label = createUINode(name, {
-            parent,
-            layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
-        })
-        const renderer = label.addComponent(FontRenderer)
-        if (font) renderer.setFontAssets(font)
-        renderer.string = text
-        renderer.forceRebuild()
-        return label
-    }
-
-    private _getStoneButtonLabelPosition(text: string, font: BitmapFontAssets | null) {
-        const metrics = FontMetricsUtil.getMetrics(font?.config ?? null)
-        const width = FontMetricsUtil.measureTextWidth(font?.config ?? null, text)
-        const baselineY = (MAIN_MENU_HEIGHT - metrics.ascent / 6 - 1 + metrics.ascent) / 2 - 4
-        return new Vec3((MAIN_MENU_WIDTH - width) / 2 + 1, -(baselineY - metrics.ascent), 0)
     }
 }

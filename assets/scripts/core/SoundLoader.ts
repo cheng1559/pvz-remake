@@ -12,6 +12,7 @@ type AudioClipWithNativeAsset = AudioClip & {
 export const SoundEffect = {
     Bleep: 'bleep',
     ButtonClick: 'buttonclick',
+    DiggerZombie: 'digger_zombie',
     DirtRise: 'dirt_rise',
     EvilLaugh: 'evillaugh',
     GraveButton: 'gravebutton',
@@ -20,8 +21,16 @@ export const SoundEffect = {
     LimbsPop: 'limbs_pop',
     LoseMusic: 'losemusic',
     Paper: 'paper',
+    Pause: 'pause',
+    Plant: 'plant',
+    Points: 'points',
     RollIn: 'roll_in',
+    SeedLift: 'seedlift',
+    Splat: 'splat',
     Tap: 'tap',
+    Throw: 'throw',
+    FinalFanfare: 'finalfanfare',
+    FinalWave: 'finalwave',
 } as const
 
 export type SoundEffect = (typeof SoundEffect)[keyof typeof SoundEffect]

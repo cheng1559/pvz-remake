@@ -10,8 +10,20 @@ import argparse
 import shutil
 from pathlib import Path
 
+from PIL import Image
+
 
 SUPPORTED_PARTICLE_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg"}
+
+
+def is_valid_image(path: Path) -> bool:
+    try:
+        with Image.open(path) as image:
+            image.verify()
+        return True
+    except Exception as exc:
+        print(f"[particles] Skipped invalid image: {path} ({exc})")
+        return False
 
 
 def copy_particles(src_dir: Path, dst_dir: Path, overwrite: bool = False) -> int:
@@ -23,6 +35,14 @@ def copy_particles(src_dir: Path, dst_dir: Path, overwrite: bool = False) -> int
             continue
 
         dst = dst_dir / src.name.lower()
+        if not is_valid_image(src):
+            if dst.exists():
+                dst.unlink()
+                meta_path = dst.with_name(dst.name + ".meta")
+                if meta_path.exists():
+                    meta_path.unlink()
+            continue
+
         if dst.exists() and not overwrite:
             continue
 

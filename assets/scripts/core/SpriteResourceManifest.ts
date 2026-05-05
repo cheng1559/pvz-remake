@@ -3,13 +3,17 @@ export type TransparentColor = readonly [number, number, number]
 export type AlphaComposeColor = readonly [number, number, number]
 
 const LINEAR_PREFIXES = [
-    'challenge_',
     'acheesements_icons',
+    'challenge_',
     'minigame_trophy',
+    'packet_plants',
+    'packet_plants_cached',
+    'peashooter_',
     'selectorscreen_cloud',
     'selectorscreen_flower',
     'selectorscreen_leaf',
     'selectorscreen_leaves',
+    'seeds',
     'survival_thumbnails',
     'trophy',
 ]

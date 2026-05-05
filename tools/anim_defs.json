@@ -1,64 +1,523 @@
 {
     "peashooter": {
         "body": {
-            "slots": ["anim_stem"],
-            "animations": ["anim_idle"]
+            "slots": [
+                "anim_stem"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
         },
         "head": {
-            "slots": ["anim_face"],
-            "animations": ["anim_head_idle", "anim_shooting"]
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_head_idle",
+                "anim_shooting"
+            ]
         },
         "face": {
             "slots": [],
-            "animations": ["anim_blink"]
+            "animations": [
+                "anim_blink"
+            ]
         }
     },
     "peashootersingle": {
         "body": {
-            "slots": ["anim_stem"],
-            "animations": ["anim_idle"]
+            "slots": [
+                "anim_stem"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
         },
         "head": {
-            "slots": ["anim_face"],
-            "animations": ["anim_head_idle", "anim_shooting"]
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_head_idle",
+                "anim_shooting"
+            ]
         },
         "face": {
-            "animations": ["anim_blink"]
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "sunflower": {
+        "body": {
+            "slots": [
+                "anim_idle"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "cherrybomb": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_explode"
+            ]
+        }
+    },
+    "wallnut": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "_ground"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink_twitch",
+                "anim_blink_twice",
+                "anim_blink_thrice"
+            ]
+        }
+    },
+    "potatomine": {
+        "body": {
+            "slots": [
+                "anim_face",
+                "anim_eye",
+                "anim_light"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_armed",
+                "anim_rise",
+                "anim_mashed"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        },
+        "glow": {
+            "slots": [],
+            "animations": [
+                "anim_glow"
+            ]
+        }
+    },
+    "snowpea": {
+        "body": {
+            "slots": [
+                "anim_stem"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
+        },
+        "head": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_head_idle",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "chomper": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_bite",
+                "anim_chew",
+                "anim_swallow"
+            ]
+        }
+    },
+    "puffshroom": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_sleep",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "sunshroom": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_sleep",
+                "anim_bigidle",
+                "anim_bigsleep",
+                "anim_grow"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "fumeshroom": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_sleep",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "gravebuster": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_land",
+                "anim_idle"
+            ]
+        }
+    },
+    "hypnoshroom": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_sleep"
+            ]
+        }
+    },
+    "scaredyshroom": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_sleep",
+                "anim_grow",
+                "anim_scaredidle",
+                "anim_scared",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "iceshroom": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_sleep"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "doomshroom": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_sleep",
+                "anim_explode"
+            ]
+        }
+    },
+    "lilypad": {
+        "body": {
+            "slots": [
+                "anim_idle"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "squash": {
+        "body": {
+            "slots": [
+                "anim_face",
+                "anim_eye"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_lookleft",
+                "anim_lookright",
+                "anim_jumpup",
+                "anim_jumpdown"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
         }
     },
     "threepeater": {
         "body": {
-            "slots": ["anim_head1", "anim_head2", "anim_head3"],
-            "animations": ["anim_idle"]
+            "slots": [
+                "anim_head1",
+                "anim_head2",
+                "anim_head3"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
         },
         "head1": {
-            "slots": ["anim_face1"],
-            "animations": ["anim_head_idle1", "anim_shooting1"]
+            "slots": [
+                "anim_face1"
+            ],
+            "animations": [
+                "anim_head_idle1",
+                "anim_shooting1"
+            ]
         },
         "face1": {
             "slots": [],
-            "animations": ["anim_blink1"]
+            "animations": [
+                "anim_blink1"
+            ]
         },
         "head2": {
-            "slots": ["anim_face2"],
-            "animations": ["anim_head_idle2", "anim_shooting2"]
+            "slots": [
+                "anim_face2"
+            ],
+            "animations": [
+                "anim_head_idle2",
+                "anim_shooting2"
+            ]
         },
         "face2": {
             "slots": [],
-            "animations": ["anim_blink2"]
+            "animations": [
+                "anim_blink2"
+            ]
         },
         "head3": {
-            "slots": ["anim_face3"],
-            "animations": ["anim_head_idle3", "anim_shooting3"]
+            "slots": [
+                "anim_face3"
+            ],
+            "animations": [
+                "anim_head_idle3",
+                "anim_shooting3"
+            ]
         },
         "face3": {
             "slots": [],
-            "animations": ["anim_blink3"]
+            "animations": [
+                "anim_blink3"
+            ]
+        }
+    },
+    "tanglekelp": {
+        "body": {
+            "slots": [
+                "anim_face",
+                "anim_waterline"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_idle_aquarium",
+                "anim_grab"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "jalapeno": {
+        "body": {
+            "slots": [
+                "anim_idle"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_explode"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "caltrop": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_attack"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "spikerock": {
+        "body": {
+            "slots": [
+                "anim_face",
+                "anim_eye_leftbrow",
+                "anim_eye_rightbrow"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_attack"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "torchwood": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "tallnut": {
+        "body": {
+            "slots": [
+                "anim_idle"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink_twice",
+                "anim_blink_thrice"
+            ]
+        }
+    },
+    "seashroom": {
+        "body": {
+            "slots": [
+                "anim_face",
+                "anim_waterline"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_idle_aquarium",
+                "anim_sleep",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "plantern": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
         }
     },
     "cactus": {
         "body": {
-            "slots": ["anim_face"],
+            "slots": [
+                "anim_face"
+            ],
             "animations": [
                 "anim_idle",
                 "anim_shooting",
@@ -70,61 +529,458 @@
         },
         "face": {
             "slots": [],
-            "animations": ["anim_blink"]
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "blover": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_blow",
+                "anim_loop"
+            ]
+        }
+    },
+    "splitpea": {
+        "body": {
+            "slots": [
+                "anim_idle"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
+        },
+        "head": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_head_idle",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        },
+        "backHead": {
+            "slots": [],
+            "animations": [
+                "anim_splitpea_idle",
+                "anim_splitpea_shooting"
+            ]
+        },
+        "backFace": {
+            "slots": [],
+            "animations": [
+                "anim_SplitPea_blink"
+            ]
+        }
+    },
+    "starfruit": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_shoot"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "pumpkin": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle"
+            ]
+        }
+    },
+    "magnetshroom": {
+        "body": {
+            "slots": [
+                "anim_face",
+                "anim_eyes",
+                "anim_eyes2",
+                "anim_eyes22"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_sleep",
+                "anim_shooting",
+                "anim_nonactive_idle",
+                "anim_nonactive_idle2"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "cabbagepult": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "pot": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_zengarden",
+                "anim_waterplants"
+            ]
+        }
+    },
+    "cornpult": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "coffeebean": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_twitch",
+                "anim_crumble"
+            ]
+        }
+    },
+    "garlic": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "umbrellaleaf": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_block"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "marigold": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "melonpult": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "gatlingpea": {
+        "body": {
+            "slots": [
+                "anim_idle"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
+        },
+        "head": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_head_idle",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "twinsunflower": {
+        "body": {
+            "slots": [
+                "anim_face",
+                "anim_face2"
+            ],
+            "animations": [
+                "anim_idle"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        },
+        "face2": {
+            "slots": [],
+            "animations": [
+                "anim_blink2"
+            ]
+        }
+    },
+    "gloomshroom": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_sleep",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "cattail": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "wintermelon": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_shooting"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "goldmagnet": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_attract"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "cobcannon": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_unarmed_idle",
+                "anim_idle",
+                "anim_shooting",
+                "anim_charge"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
+    "imitater": {
+        "body": {
+            "slots": [
+                "anim_face"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_explode"
+            ]
+        },
+        "face": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
         }
     },
     "selectorscreen": {
         "cloud1": {
             "slots": [],
-            "animations": ["anim_cloud1"]
+            "animations": [
+                "anim_cloud1"
+            ]
         },
         "cloud2": {
             "slots": [],
-            "animations": ["anim_cloud2"]
+            "animations": [
+                "anim_cloud2"
+            ]
         },
         "cloud4": {
             "slots": [],
-            "animations": ["anim_cloud4"]
+            "animations": [
+                "anim_cloud4"
+            ]
         },
         "cloud5": {
             "slots": [],
-            "animations": ["anim_cloud5"]
+            "animations": [
+                "anim_cloud5"
+            ]
         },
         "cloud6": {
             "slots": [],
-            "animations": ["anim_cloud6"]
+            "animations": [
+                "anim_cloud6"
+            ]
         },
         "cloud7": {
             "slots": [],
-            "animations": ["anim_cloud7"]
+            "animations": [
+                "anim_cloud7"
+            ]
         },
         "flower1": {
             "slots": [],
-            "animations": ["anim_flower1"]
+            "animations": [
+                "anim_flower1"
+            ]
         },
         "flower2": {
             "slots": [],
-            "animations": ["anim_flower2"]
+            "animations": [
+                "anim_flower2"
+            ]
         },
         "flower3": {
             "slots": [],
-            "animations": ["anim_flower3"]
+            "animations": [
+                "anim_flower3"
+            ]
         },
         "grass": {
             "slots": [],
-            "animations": ["anim_grass"]
+            "animations": [
+                "anim_grass"
+            ]
         },
         "sign": {
             "slots": [],
-            "animations": ["anim_sign"]
+            "animations": [
+                "anim_sign"
+            ]
         },
         "idle": {
             "slots": [],
-            "animations": ["anim_idle"]
+            "animations": [
+                "anim_idle"
+            ]
         },
         "open": {
             "slots": [],
-            "animations": ["anim_open"]
+            "animations": [
+                "anim_open"
+            ]
         }
     },
     "zombie_hand": {
@@ -195,27 +1051,51 @@
     "treeofwisdomclouds": {
         "Cloud1": {
             "slots": [],
-            "animations": ["Cloud1"]
+            "animations": [
+                "Cloud1"
+            ]
         },
         "Cloud2": {
             "slots": [],
-            "animations": ["Cloud2"]
+            "animations": [
+                "Cloud2"
+            ]
         },
         "Cloud3": {
             "slots": [],
-            "animations": ["Cloud3"]
+            "animations": [
+                "Cloud3"
+            ]
         },
         "Cloud4": {
             "slots": [],
-            "animations": ["Cloud4"]
+            "animations": [
+                "Cloud4"
+            ]
         },
         "Cloud5": {
             "slots": [],
-            "animations": ["Cloud5"]
+            "animations": [
+                "Cloud5"
+            ]
         },
         "Cloud6": {
             "slots": [],
-            "animations": ["Cloud6"]
+            "animations": [
+                "Cloud6"
+            ]
+        }
+    },
+    "sodroll": {
+        "default": {
+            "slots": [],
+            "animations": []
+        }
+    },
+    "sun": {
+        "default": {
+            "slots": [],
+            "animations": []
         }
     }
 }

@@ -82,6 +82,7 @@ export class SelectorScreen extends AnimationComponent {
     public onZenGardenRequest: (() => void) | null = null
     public onStoreRequest: (() => void) | null = null
     public onAlmanacRequest: (() => void) | null = null
+    public onAdventureRequest: (() => void) | null = null
 
     async init() {
         const cloudNames = ['cloud1', 'cloud2', 'cloud4', 'cloud5', 'cloud6', 'cloud7']
@@ -216,47 +217,58 @@ export class SelectorScreen extends AnimationComponent {
 
         this._setButtonsInteractable(false)
 
-        this._buttons.get('adventure')!.onClick = () => {
+        this._bindButtonClick('adventure', () => {
             this.startAdventure()
-        }
-        this._buttons.get('options')!.onClick = () => {
+        })
+        this._bindButtonClick('options', () => {
             this.onOptionsRequest?.()
-        }
-        this._buttons.get('help')!.onClick = () => {
+        })
+        this._bindButtonClick('help', () => {
             this.onHelpRequest?.()
-        }
-        this._buttons.get('quit')!.onClick = () => {
+        })
+        this._bindButtonClick('quit', () => {
             this.onQuitRequest?.()
-        }
-        this._buttons.get('miniGames')!.onClick = () => {
+        })
+        this._bindButtonClick('miniGames', () => {
             this.onChallengePageRequest?.(ChallengePage.MiniGames)
-        }
-        this._buttons.get('Puzzle')!.onClick = () => {
+        })
+        this._bindButtonClick('Puzzle', () => {
             this.onChallengePageRequest?.(ChallengePage.Puzzle)
-        }
-        this._buttons.get('Survival')!.onClick = () => {
+        })
+        this._bindButtonClick('Survival', () => {
             this.onChallengePageRequest?.(ChallengePage.Survival)
-        }
-        this._buttons.get('achievement')!.onClick = () => {
+        })
+        this._bindButtonClick('achievement', () => {
             this.onAchievementRequest?.()
-        }
-        this._buttons.get('zenGarden')!.onClick = () => {
+        })
+        this._bindButtonClick('zenGarden', () => {
             this.onZenGardenRequest?.()
-        }
-        this._buttons.get('store')!.onClick = () => {
+        })
+        this._bindButtonClick('store', () => {
             this.onStoreRequest?.()
-        }
-        this._buttons.get('almanac')!.onClick = () => {
+        })
+        this._bindButtonClick('almanac', () => {
             this.onAlmanacRequest?.()
-        }
+        })
 
         for (const name of LOCKED_MODE_NAMES) {
-            const btn = this._buttons.get(name)!
+            const btn = this._buttons.get(name)
+            if (!btn) continue
             btn.locked = true
             btn.onClickLocked = () => {
                 this.onLockedModeClick?.(name)
             }
         }
+    }
+
+    private _bindButtonClick(name: string, onClick: () => void) {
+        const button = this._buttons.get(name)
+        if (!button) {
+            console.warn(`[SelectorScreen] Button '${name}' was not created because its sprites are missing`)
+            return
+        }
+
+        button.onClick = onClick
     }
 
     private _setButtonsInteractable(interactable: boolean) {
@@ -325,7 +337,10 @@ export class SelectorScreen extends AnimationComponent {
             offsetX,
             offsetY,
         } = options
-        if (!normalSprite) return null
+        if (!normalSprite) {
+            console.warn(`[SelectorScreen] Missing normal sprite for button '${name}'`)
+            return null
+        }
 
         const node = createUINode(name, { layer: this.node.layer, anchorX: 0, anchorY: 1 })
 
@@ -466,6 +481,7 @@ export class SelectorScreen extends AnimationComponent {
         }, 1.25)
         this.scheduleOnce(() => {
             this.unschedule(flashCallback)
+            this.onAdventureRequest?.()
         }, 4.5)
     }
 

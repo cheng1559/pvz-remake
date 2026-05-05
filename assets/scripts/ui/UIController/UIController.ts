@@ -1,4 +1,5 @@
 import { _decorator, Component, game, Node, tween, Vec3 } from 'cc'
+import { AdventureGameScreen } from '@/game/GameScreen'
 import { AchievementScreen } from '../AchievementScreen'
 import { AlmanacScreen } from '../AlmanacScreen/AlmanacScreen'
 import { StoreScreen } from '../StoreScreen/StoreScreen'
@@ -10,8 +11,10 @@ import { OptionsDialog } from '../OptionsDialog'
 import { SelectorScreen } from '../SelectorScreen/SelectorScreen'
 import { StartupResourceLoader } from '../StartupResourceLoader'
 import { createUINode } from '../UIFactory'
+import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 
 const { ccclass, property } = _decorator
+const DEBUG_START_ADVENTURE_DIRECTLY = true
 
 interface StoreScreenOptions {
     initialPage?: number
@@ -40,6 +43,14 @@ export class UIController extends Component {
 
     private async _bootstrap() {
         await StartupResourceLoader.preloadStartup()
+        if (DEBUG_START_ADVENTURE_DIRECTLY) {
+            this.showAdventureGame()
+            return
+        }
+        if (this._shouldStartDebugAdventure()) {
+            this.showAdventureGame()
+            return
+        }
         await this.showSelectorScreen()
     }
 
@@ -88,10 +99,28 @@ export class UIController extends Component {
         selectorScreen.onAlmanacRequest = () => {
             this.showAlmanacDialog()
         }
+        selectorScreen.onAdventureRequest = () => {
+            this.showAdventureGame()
+        }
 
         this._setCurrentScreen(node)
         this._selectorScreen = selectorScreen
         return selectorScreen
+    }
+
+    showAdventureGame(): AdventureGameScreen | null {
+        this._selectorScreen = null
+        const node = createUINode('AdventureGameScreen', { active: false, width: 800, height: 600 })
+        const gameScreen = node.addComponent(AdventureGameScreen)
+        gameScreen.onBackToMenu = () => {
+            void this.showSelectorScreen()
+        }
+        gameScreen.onMenuRequest = () => {
+            this.showGameOptionsDialog()
+        }
+
+        this._setCurrentScreen(node)
+        return gameScreen
     }
 
     showHelpScreen(): HelpScreen | null {
@@ -278,6 +307,33 @@ export class UIController extends Component {
         return optionsDialog
     }
 
+    showGameOptionsDialog(): OptionsDialog | null {
+        const node = createUINode('GameOptionsDialog', { active: false, width: 423, height: 498 })
+        const optionsDialog = node.addComponent(OptionsDialog)
+        optionsDialog.gameMenu = true
+        optionsDialog.backButtonLabel = 'Back To Game'
+        optionsDialog.onRestartLevel = () => {
+            void this.confirmRestartLevel().then((confirmed) => {
+                if (!confirmed) return
+                void SoundLoader.play(SoundEffect.ButtonClick)
+                if (node.isValid) node.destroy()
+                this.showAdventureGame()
+            })
+        }
+        optionsDialog.onMainMenu = () => {
+            void this.confirmBackToMainMenu().then((confirmed) => {
+                if (!confirmed) return
+                void SoundLoader.play(SoundEffect.ButtonClick)
+                if (node.isValid) node.destroy()
+                void this.showSelectorScreen()
+            })
+        }
+
+        this.uiRoot!.addChild(node)
+        node.active = true
+        return optionsDialog
+    }
+
     showMessageBox(title: string, message: string): MessageBox | null {
         const node = createUINode('MessageBox', { active: false, width: 100, height: 100 })
 
@@ -313,6 +369,32 @@ export class UIController extends Component {
         }
     }
 
+    async confirmRestartLevel(): Promise<boolean> {
+        const dialog = this.showMessageBox(
+            'Restart Level?',
+            'Do you want to try this level\nagain from the beginning?',
+        )
+        if (!dialog) return false
+
+        dialog.setMessageLayout(0, 0, 2)
+        dialog.setButtonMode(DialogButtonMode.OkCancel, 'RESTART', 'CANCEL')
+        const result = await dialog.waitForResult()
+        return result === DialogResult.Ok
+    }
+
+    async confirmBackToMainMenu(): Promise<boolean> {
+        const dialog = this.showMessageBox(
+            'Leave Game?',
+            'Do you want to return\nto the main menu?\n\nYour game will be saved.',
+        )
+        if (!dialog) return false
+
+        dialog.setMessageLayout(0, 0, 2)
+        dialog.setButtonMode(DialogButtonMode.OkCancel, 'LEAVE', 'CANCEL')
+        const result = await dialog.waitForResult()
+        return result === DialogResult.Ok
+    }
+
     private _setCurrentScreen(node: Node) {
         this._destroyCurrentScreen()
         this._currentScreen = node
@@ -335,5 +417,12 @@ export class UIController extends Component {
         }
         this._currentScreen = null
         this._selectorScreen = null
+    }
+
+    private _shouldStartDebugAdventure() {
+        const locationLike = globalThis as typeof globalThis & {
+            location?: { search?: string }
+        }
+        return locationLike.location?.search?.includes('game=adventure-1-1') === true
     }
 }

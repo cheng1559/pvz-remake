@@ -16,8 +16,12 @@ from typing import Any
 from PIL import Image
 
 
+def _normalize_image_stem(image_name: str) -> str:
+    return image_name.lstrip('_') + '_atlas'
+
+
 def _normalize_image_name(path: Path) -> str:
-    return path.with_suffix('.png').name.lstrip('_')
+    return _normalize_image_stem(path.with_suffix('').name) + '.png'
 
 
 class PvZFontParser:
@@ -57,6 +61,18 @@ class PvZFontParser:
                 i += 1
                 s = ''
                 while i < len(text) and text[i] != quote:
+                    if text[i] == '\\' and i + 1 < len(text):
+                        escaped = text[i + 1]
+                        if escaped == 'n':
+                            s += '\n'
+                        elif escaped == 'r':
+                            s += '\r'
+                        elif escaped == 't':
+                            s += '\t'
+                        else:
+                            s += escaped
+                        i += 2
+                        continue
                     s += text[i]
                     i += 1
                 if i < len(text):
@@ -468,7 +484,7 @@ class PvZFontParser:
         for layer in self.layers:
             layer_data = {
                 'name': layer['name'],
-                'image': layer['image'],
+                'image': _normalize_image_stem(layer['image']) if layer['image'] else '',
                 'ascent': layer['ascent'],
                 'ascentPadding': layer['ascentPadding'],
                 'lineSpacingOffset': layer['lineSpacingOffset'],

@@ -18,8 +18,10 @@ const ALMANAC_SCREEN_SPRITES = [
     'almanac_zombiewindow2',
     'almanac_groundday',
     'almanac_groundice',
-    'seedpacketflash',
+    'particles/seedpacketflash',
     'seeds',
+    'packet_plants',
+    'packet_plants_cached',
     'seedchooser_button',
     'seedchooser_button_glow',
     'button_left',
@@ -59,6 +61,8 @@ export interface AlmanacScreenSprites {
     almanacGroundIce: SpriteFrame
     seedPacketFlash: SpriteFrame
     seeds: SpriteFrame
+    packetPlants: SpriteFrame
+    packetPlantsCached: SpriteFrame
     seedChooserButton: SpriteFrame
     seedChooserButtonHighlight: SpriteFrame
     buttonLeft: SpriteFrame
@@ -89,7 +93,8 @@ export class AlmanacScreenAssets {
     static async loadSprites(): Promise<AlmanacScreenSprites | null> {
         const sprites = await Promise.all(ALMANAC_SCREEN_SPRITES.map((name) => SpriteLoader.load(name)))
         if (sprites.some((sprite) => !sprite)) {
-            console.error('[AlmanacScreenAssets] Failed to load one or more resources')
+            const missing = ALMANAC_SCREEN_SPRITES.filter((_, index) => !sprites[index])
+            console.error(`[AlmanacScreenAssets] Failed to load resources: ${missing.join(', ')}`)
             return null
         }
         const [
@@ -110,6 +115,8 @@ export class AlmanacScreenAssets {
             almanacGroundIce,
             seedPacketFlash,
             seeds,
+            packetPlants,
+            packetPlantsCached,
             seedChooserButton,
             seedChooserButtonHighlight,
             buttonLeft,
@@ -137,6 +144,8 @@ export class AlmanacScreenAssets {
             almanacGroundIce,
             seedPacketFlash,
             seeds,
+            packetPlants,
+            packetPlantsCached,
             seedChooserButton,
             seedChooserButtonHighlight,
             buttonLeft,

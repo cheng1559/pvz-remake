@@ -14,6 +14,7 @@ import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
 import { ModalDialog } from '@/ui/Dialog'
+import { createStoneButton } from '@/ui/StoneButton'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { OptionsDialogAssets, type OptionsDialogFonts, type OptionsDialogSprites } from './OptionsDialogAssets'
 
@@ -37,11 +38,19 @@ export class OptionsDialog extends ModalDialog {
     @property
     fullScreen = false
 
+    @property
+    gameMenu = false
+
+    @property
+    backButtonLabel = 'OK'
+
     public onClose: (() => void) | null = null
     public onMusicVolumeChanged: ((value: number) => void) | null = null
     public onSfxVolumeChanged: ((value: number) => void) | null = null
     public onHardwareAccelerationChanged: ((checked: boolean) => void) | null = null
     public onFullScreenChanged: ((checked: boolean) => void) | null = null
+    public onRestartLevel: (() => void) | null = null
+    public onMainMenu: (() => void) | null = null
 
     private _root: Node | null = null
     private _sprites: OptionsDialogSprites | null = null
@@ -89,27 +98,41 @@ export class OptionsDialog extends ModalDialog {
             anchorY: 1,
         })
 
-        this._createLabel('Music', 186, 145, fonts.label, 'right')
-        this._createLabel('Sound FX', 186, 177, fonts.label, 'right')
-        this._createLabel('3D Acceleration', 274, 212, fonts.label, 'right')
-        this._createLabel('Full Screen', 274, 249, fonts.label, 'right')
+        const musicOffset = this.gameMenu ? 0 : 5
+        const sfxOffset = this.gameMenu ? 0 : 10
+        const accelerationOffset = this.gameMenu ? 0 : 15
+        const fullScreenOffset = this.gameMenu ? 0 : 20
 
-        this._createSlider('MusicVolume', 199, 121, this.musicVolume, (value) => {
+        this._createLabel('Music', 186, 140 + musicOffset, fonts.label, 'right')
+        this._createLabel('Sound FX', 186, 167 + sfxOffset, fonts.label, 'right')
+        this._createLabel('3D Acceleration', 274, 197 + accelerationOffset, fonts.label, 'right')
+        this._createLabel('Full Screen', 274, 229 + fullScreenOffset, fonts.label, 'right')
+
+        this._createSlider('MusicVolume', 199, 116 + musicOffset, this.musicVolume, (value) => {
             this.musicVolume = value
             this.onMusicVolumeChanged?.(value)
         })
-        this._createSlider('SfxVolume', 199, 153, this.sfxVolume / 0.65, (value) => {
+        this._createSlider('SfxVolume', 199, 143 + sfxOffset, this.sfxVolume / 0.65, (value) => {
             this.sfxVolume = value * 0.65
             this.onSfxVolumeChanged?.(this.sfxVolume)
         })
-        this._createCheckbox('HardwareAcceleration', 284, 190, this.hardwareAcceleration, (checked) => {
-            this.hardwareAcceleration = checked
-            this.onHardwareAccelerationChanged?.(checked)
-        })
-        this._createCheckbox('FullScreen', 284, 226, this.fullScreen, (checked) => {
+        this._createCheckbox(
+            'HardwareAcceleration',
+            284,
+            175 + accelerationOffset,
+            this.hardwareAcceleration,
+            (checked) => {
+                this.hardwareAcceleration = checked
+                this.onHardwareAccelerationChanged?.(checked)
+            },
+        )
+        this._createCheckbox('FullScreen', 284, 206 + fullScreenOffset, this.fullScreen, (checked) => {
             this.fullScreen = checked
             this.onFullScreenChanged?.(checked)
         })
+        if (this.gameMenu) {
+            this._createGameButtons(fonts)
+        }
         this._createBackButton(fonts)
     }
 
@@ -277,8 +300,53 @@ export class OptionsDialog extends ModalDialog {
         }
     }
 
+    private _createGameButtons(fonts: OptionsDialogFonts) {
+        const sprites = this._sprites!
+        const buttonSprites = {
+            left: sprites.buttonLeft,
+            middle: sprites.buttonMiddle,
+            right: sprites.buttonRight,
+            downLeft: sprites.buttonDownLeft,
+            downMiddle: sprites.buttonDownMiddle,
+            downRight: sprites.buttonDownRight,
+        }
+        const buttonFonts = {
+            normal: fonts.smallButton,
+            highlight: fonts.smallButtonHighlight,
+        }
+
+        createStoneButton({
+            name: 'RestartLevelButton',
+            parent: this._root!,
+            layer: this.node.layer,
+            label: 'Restart Level',
+            x: this._cppX(107),
+            y: this._cppY(284),
+            width: 209,
+            height: 46,
+            sprites: buttonSprites,
+            fonts: buttonFonts,
+            onClick: () => this.onRestartLevel?.(),
+        })
+
+        createStoneButton({
+            name: 'MainMenuButton',
+            parent: this._root!,
+            layer: this.node.layer,
+            label: 'Main Menu',
+            x: this._cppX(107),
+            y: this._cppY(327),
+            width: 209,
+            height: 46,
+            sprites: buttonSprites,
+            fonts: buttonFonts,
+            onClick: () => this.onMainMenu?.(),
+        })
+    }
+
     private _createBackButton(fonts: OptionsDialogFonts) {
         const sprites = this._sprites!
+        const labelText = this.backButtonLabel
         const buttonNode = createUINode('BackToGameButton', {
             parent: this._root!,
             layer: this.node.layer,
@@ -303,7 +371,7 @@ export class OptionsDialog extends ModalDialog {
         const normalLabel = normalLabelNode.addComponent(FontRenderer)
         if (fonts.button) normalLabel.setFontAssets(fonts.button)
         normalLabel.fontColor = Color.WHITE
-        normalLabel.string = 'OK'
+        normalLabel.string = labelText
         normalLabel.forceRebuild()
 
         const highlightLabelNode = createUINode('LabelHighlight', {
@@ -319,19 +387,24 @@ export class OptionsDialog extends ModalDialog {
             highlightLabel.setFontAssets(fonts.button)
         }
         highlightLabel.fontColor = Color.WHITE
-        highlightLabel.string = 'OK'
+        highlightLabel.string = labelText
         highlightLabel.forceRebuild()
 
         const buttonWidth = sprites.backToGameButton.originalSize.width
         const buttonHeight = sprites.backToGameButton.originalSize.height
         const normalWidth =
-            FontMetricsUtil.measureTextWidth(fonts.button?.config ?? null, 'OK') ||
+            FontMetricsUtil.measureTextWidth(fonts.button?.config ?? null, labelText) ||
             normalLabel.contentWidth
         const highlightWidth =
-            FontMetricsUtil.measureTextWidth(fonts.buttonHighlight?.config ?? fonts.button?.config ?? null, 'OK') ||
+            FontMetricsUtil.measureTextWidth(
+                fonts.buttonHighlight?.config ?? fonts.button?.config ?? null,
+                labelText,
+            ) ||
             highlightLabel.contentWidth
         const normalMetrics = FontMetricsUtil.getMetrics(fonts.button?.config ?? null)
-        const highlightMetrics = FontMetricsUtil.getMetrics(fonts.buttonHighlight?.config ?? fonts.button?.config ?? null)
+        const highlightMetrics = FontMetricsUtil.getMetrics(
+            fonts.buttonHighlight?.config ?? fonts.button?.config ?? null,
+        )
         const normalTopY = this._buttonLabelTopY(buttonHeight, normalMetrics.ascent, -5)
         const highlightTopY = this._buttonLabelTopY(buttonHeight, highlightMetrics.ascent, -5)
         const normalX = (buttonWidth - normalWidth) / 2 - 2

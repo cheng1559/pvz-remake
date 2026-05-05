@@ -9,8 +9,6 @@ import {
     Mask,
     Material,
     Node,
-    Rect,
-    Size,
     Sprite,
     SpriteFrame,
     UITransform,
@@ -25,6 +23,7 @@ import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
 import { TouchScrollGesture } from '@/ui/ScrollGesture'
+import { SeedPacketRenderer, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/ui/SeedPacketRenderer'
 import { buildThreeSliceRow, createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import {
     AlmanacScreenAssets,
@@ -41,13 +40,9 @@ const WHITE = new Color(255, 255, 255)
 const BODY_TEXT_COLOR = new Color(40, 50, 90)
 const FORMAT_ACCENT_TEXT_COLOR = new Color(143, 67, 27)
 const FORMAT_STAT_TEXT_COLOR = new Color(204, 36, 29)
-const SEED_PACKET_WIDTH = 50
-const SEED_PACKET_HEIGHT = 70
 const SEED_PACKET_ROWS = 8
 const SEED_PACKET_STRIDE_X = SEED_PACKET_WIDTH + 2
 const SEED_PACKET_STRIDE_Y = SEED_PACKET_HEIGHT + 8
-const SEED_PACKET_BACKGROUND_NORMAL = 2
-const SEED_PACKET_BACKGROUND_UPGRADE = 1
 const SHORT_LINE_SPACING_OFFSET = -9
 const ZOMBIE_WINDOW_SIZE = 76
 const ZOMBIE_ROWS = 5
@@ -199,7 +194,6 @@ export class AlmanacScreen extends MenuScreenBase {
     private _descriptionScrollbarBackColor = Color.WHITE.clone()
     private _descriptionContentNode: Node | null = null
     private readonly _descriptionTouchScrollGesture = new TouchScrollGesture()
-    private _atlasFrames: WeakMap<SpriteFrame, Map<string, SpriteFrame>> = new WeakMap()
 
     onEnable() {
         input.on(Input.EventType.MOUSE_MOVE, this._onGlobalMouseMove, this)
@@ -350,21 +344,19 @@ export class AlmanacScreen extends MenuScreenBase {
                 anchorY: 1,
             })
         } else {
-            createSpriteNode({
-                name: `${plant.name}PacketBackground`,
-                spriteFrame: this._getAtlasFrame(
-                    sprites.seeds,
-                    plant.upgrade ? SEED_PACKET_BACKGROUND_UPGRADE : SEED_PACKET_BACKGROUND_NORMAL,
-                    SEED_PACKET_WIDTH,
-                    SEED_PACKET_HEIGHT,
-                    9,
-                ),
+            SeedPacketRenderer.drawSeedPacket({
+                name: `${plant.name}Packet`,
                 parent: this._root!,
                 layer: this.node.layer,
+                seedType: plant.id,
+                cost: plant.cost,
+                upgrade: plant.upgrade,
+                seeds: sprites.seeds,
+                packetPlants: sprites.packetPlants,
+                cachedPacketPlants: sprites.packetPlantsCached,
+                costFont: fonts.packetCost,
                 x: this._cppX(x),
                 y: this._cppY(y),
-                anchorX: 0,
-                anchorY: 1,
             })
             highlightNode = createUINode(`${plant.name}Highlight`, {
                 parent: this._root!,
@@ -380,18 +372,6 @@ export class AlmanacScreen extends MenuScreenBase {
                 y: this._cppY(y),
                 anchorX: 0,
                 anchorY: 1,
-            })
-        }
-
-        if (plant.id !== 48) {
-            this._createText({
-                name: `${plant.name}PacketCost`,
-                text: String(plant.cost),
-                baselineX: x + 32,
-                baselineY: y + 64,
-                font: fonts.packetCost,
-                color: Color.BLACK,
-                align: 'right',
             })
         }
 
@@ -1470,35 +1450,4 @@ export class AlmanacScreen extends MenuScreenBase {
         return { normalLabel, highlightLabel, normalPos, highlightPos }
     }
 
-    private _getAtlasFrame(atlas: SpriteFrame, index: number, width: number, height: number, columns: number) {
-        const cacheKey = `${index}:${width}:${height}:${columns}`
-        let framesByAtlas = this._atlasFrames.get(atlas)
-        if (!framesByAtlas) {
-            framesByAtlas = new Map<string, SpriteFrame>()
-            this._atlasFrames.set(atlas, framesByAtlas)
-        }
-
-        const cached = framesByAtlas.get(cacheKey)
-        if (cached) return cached
-
-        const atlasRect = atlas.rect
-        const atlasOriginalSize = atlas.originalSize
-        const atlasX = atlasOriginalSize.width >= columns * width ? 0 : atlasRect.x
-        const atlasY = atlasOriginalSize.height >= (Math.floor(index / columns) + 1) * height ? 0 : atlasRect.y
-        const frame = new SpriteFrame()
-        frame.reset({
-            texture: atlas.texture,
-            rect: new Rect(
-                atlasX + (index % columns) * width,
-                atlasY + Math.floor(index / columns) * height,
-                width,
-                height,
-            ),
-            originalSize: new Size(width, height),
-            offset: new Vec2(0, 0),
-            isRotate: false,
-        })
-        framesByAtlas.set(cacheKey, frame)
-        return frame
-    }
 }
