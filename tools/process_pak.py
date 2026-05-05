@@ -7,9 +7,10 @@ Steps:
   2. Rename files to lowercase
   3. Convert reanim animations
   4. Convert fonts
-  5. Copy images to textures
-  6. Copy particle images to texture resources
-  7. Copy sounds to audio resources
+  5. Convert LawnStrings
+  6. Copy images to textures
+  7. Copy particle images to texture resources
+  8. Copy sounds to audio resources
 """
 
 import shutil
@@ -19,6 +20,7 @@ from pak_extractor import parse_pak, extract_entries, _decrypt
 from rename_raw_to_lower import rename_all_to_lower
 from reanim_converter import main as convert_reanim
 from font_converter import main as convert_font
+from lawnstrings_converter import convert_lawnstrings
 from copy_particles import copy_particles
 from copy_sounds import copy_sounds
 
@@ -83,10 +85,21 @@ def main():
     print("=" * 60)
     convert_font()
 
-    # ── Step 5: Copy images ────────────────────────────────────────
+    # ── Step 5: Convert LawnStrings ────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 5: Copy images to textures")
+    print("[pipeline] Step 5: Convert LawnStrings")
+    print("=" * 60)
+
+    lawnstrings_src = raw_dir / "properties/lawnstrings.txt"
+    lawnstrings_dst = Path("./assets/resources/properties/lawnstrings.json")
+    string_count = convert_lawnstrings(lawnstrings_src, lawnstrings_dst)
+    print(f"[pipeline] Converted {string_count} strings -> {lawnstrings_dst}")
+
+    # ── Step 6: Copy images ────────────────────────────────────────
+    print()
+    print("=" * 60)
+    print("[pipeline] Step 6: Copy images to textures")
     print("=" * 60)
 
     images_dir = raw_dir / "images"
@@ -94,10 +107,10 @@ def main():
     img_count = copy_images(images_dir, texture_dir)
     print(f"[pipeline] Copied {img_count} new images -> {texture_dir}")
 
-    # ── Step 6: Copy particle images ───────────────────────────────
+    # ── Step 7: Copy particle images ───────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 6: Copy particle images to texture resources")
+    print("[pipeline] Step 7: Copy particle images to texture resources")
     print("=" * 60)
 
     particles_dir = raw_dir / "particles"
@@ -105,10 +118,10 @@ def main():
     particle_count = copy_particles(particles_dir, particle_texture_dir)
     print(f"[pipeline] Copied {particle_count} new particle images -> {particle_texture_dir}")
 
-    # ── Step 7: Copy sounds ────────────────────────────────────────
+    # ── Step 8: Copy sounds ────────────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 7: Copy sounds to audio resources")
+    print("[pipeline] Step 8: Copy sounds to audio resources")
     print("=" * 60)
 
     sounds_dir = raw_dir / "sounds"

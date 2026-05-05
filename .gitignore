@@ -14,6 +14,11 @@ native
 node_modules/
 
 #//////////////////////////
+# Python
+#//////////////////////////
+__pycache__/
+
+#//////////////////////////
 # VSCode
 #//////////////////////////
 .vscode/
@@ -38,11 +43,17 @@ Thumbs.db
 #//////////////////////////
 AGENTS.md
 
-raw/
+tools/raw/
+tools/main.pak
 textures/
-images/
-audio/
-fonts/
-__pycache__/
-main.pak
+assets/resources/images/
+assets/resources/images.meta
+assets/resources/audio/
+assets/resources/audio.meta
+assets/resources/fonts/
+assets/resources/fonts.meta
+assets/resources/animations/
+assets/resources/animations.meta
+assets/resources/properties/
+assets/resources/properties.meta
 reference
