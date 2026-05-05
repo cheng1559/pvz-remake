@@ -24,6 +24,7 @@ import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
+import { TouchScrollGesture } from '@/ui/ScrollGesture'
 import { buildThreeSliceRow, createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import {
     AlmanacScreenAssets,
@@ -58,7 +59,6 @@ const ALMANAC_DESCRIPTION_MIN_HEIGHT = 20
 const DESCRIPTION_SCROLLBAR_WIDTH = 8
 const DESCRIPTION_WHEEL_SCROLL_SCALE = 0.6
 const DESCRIPTION_SCROLL_BOTTOM_PADDING_RATIO = 0.6
-const DESCRIPTION_TOUCH_SCROLL_SCALE = 0.5
 const DESCRIPTION_SCROLLBAR_THUMB_SCALE = 1.5
 const PLANT_SCROLLBAR_COLOR = new Color(143, 67, 27)
 const PLANT_SCROLLBAR_BACK_COLOR = new Color(143, 67, 27, 75)
@@ -198,7 +198,7 @@ export class AlmanacScreen extends MenuScreenBase {
     private _descriptionScrollbarColor = Color.WHITE.clone()
     private _descriptionScrollbarBackColor = Color.WHITE.clone()
     private _descriptionContentNode: Node | null = null
-    private _descriptionContentDragging = false
+    private readonly _descriptionTouchScrollGesture = new TouchScrollGesture()
     private _atlasFrames: WeakMap<SpriteFrame, Map<string, SpriteFrame>> = new WeakMap()
 
     onEnable() {
@@ -210,7 +210,7 @@ export class AlmanacScreen extends MenuScreenBase {
         input.off(Input.EventType.MOUSE_MOVE, this._onGlobalMouseMove, this)
         input.off(Input.EventType.MOUSE_UP, this._onGlobalMouseUp, this)
         this._descriptionSliderDragging = false
-        this._descriptionContentDragging = false
+        this._descriptionTouchScrollGesture.cancel()
     }
 
     async render(): Promise<void> {
@@ -425,7 +425,7 @@ export class AlmanacScreen extends MenuScreenBase {
             this._hoveredPlantId = plant.id
             this._preserveHoveredPlantDuringRender = true
             this._descriptionSliderDragging = false
-            this._descriptionContentDragging = false
+            this._descriptionTouchScrollGesture.cancel()
             this._descriptionScroll = 0
             void SoundLoader.play(SoundEffect.Tap)
             void this.render()
@@ -594,7 +594,7 @@ export class AlmanacScreen extends MenuScreenBase {
             this._hoveredZombieId = zombie.id
             this._preserveHoveredZombieDuringRender = true
             this._descriptionSliderDragging = false
-            this._descriptionContentDragging = false
+            this._descriptionTouchScrollGesture.cancel()
             this._descriptionScroll = 0
             void SoundLoader.play(SoundEffect.Tap)
             void this.render()
@@ -819,7 +819,7 @@ export class AlmanacScreen extends MenuScreenBase {
             this._descriptionMaxScroll = 0
             this._descriptionLineSpacing = 0
             this._descriptionSliderDragging = false
-            this._descriptionContentDragging = false
+            this._descriptionTouchScrollGesture.cancel()
             this._descriptionContentNode = null
             this._descriptionScrollbarNode = null
             this._descriptionScrollbarGraphics = null
@@ -894,25 +894,23 @@ export class AlmanacScreen extends MenuScreenBase {
             clipNode.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
                 if (this._descriptionSliderDragging) return
                 event.propagationStopped = true
-                this._descriptionContentDragging = true
+                this._descriptionTouchScrollGesture.begin()
             })
             clipNode.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
-                if (!this._descriptionContentDragging || this._descriptionSliderDragging) return
+                if (!this._descriptionTouchScrollGesture.dragging || this._descriptionSliderDragging) return
                 event.propagationStopped = true
                 this._setDescriptionScroll(
-                    this._descriptionScroll + event.getDelta().y * DESCRIPTION_TOUCH_SCROLL_SCALE,
+                    this._descriptionScroll + this._descriptionTouchScrollGesture.getDeltaY(event),
                     this._descriptionMaxScroll,
                 )
             })
             clipNode.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
-                if (!this._descriptionContentDragging) return
+                if (!this._descriptionTouchScrollGesture.end()) return
                 event.propagationStopped = true
-                this._descriptionContentDragging = false
             })
             clipNode.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => {
-                if (!this._descriptionContentDragging) return
+                if (!this._descriptionTouchScrollGesture.end()) return
                 event.propagationStopped = true
-                this._descriptionContentDragging = false
             })
         }
         this._createDescriptionScrollbar(args, visualMaxScroll, maxScroll)
@@ -1059,7 +1057,7 @@ export class AlmanacScreen extends MenuScreenBase {
         if (localY < thumbY || localY >= thumbY + this._descriptionThumbHeight) return false
         this._descriptionDragOffsetY = localY - thumbY
         this._descriptionSliderDragging = true
-        this._descriptionContentDragging = false
+        this._descriptionTouchScrollGesture.cancel()
         return true
     }
 

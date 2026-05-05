@@ -20,6 +20,7 @@ import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
 import { MenuScreenBase } from '@/ui/MenuScreenBase'
+import { TouchScrollGesture } from '@/ui/ScrollGesture'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import {
     AchievementScreenAssets,
@@ -157,7 +158,7 @@ export class AchievementScreen extends MenuScreenBase {
     private _scrollTweenStart = 0
     private _scrollTweenEnd = 0
     private _iconFrames: SpriteFrame[] = []
-    private _dragging = false
+    private readonly _touchScrollGesture = new TouchScrollGesture({ direction: -1 })
 
     onEnable() {
         input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
@@ -177,7 +178,7 @@ export class AchievementScreen extends MenuScreenBase {
         this.node.off(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
         this.node.off(Node.EventType.TOUCH_END, this._onTouchEnd, this)
         this.node.off(Node.EventType.TOUCH_CANCEL, this._onTouchEnd, this)
-        this._dragging = false
+        this._touchScrollGesture.cancel()
     }
 
     async render() {
@@ -493,26 +494,25 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     private _onTouchStart(event: EventTouch) {
-        this._dragging = true
+        this._touchScrollGesture.begin()
         this._cancelScrollTween()
         event.propagationStopped = true
     }
 
     private _onTouchMove(event: EventTouch) {
-        if (!this._dragging) return
+        if (!this._touchScrollGesture.dragging) return
 
-        const delta = event.getDelta().y
+        const delta = this._touchScrollGesture.getDeltaY(event)
         if (delta !== 0) {
-            this._setScrollPosition(this._scrollPosition - delta)
+            this._setScrollPosition(this._scrollPosition + delta)
             this._scrollTargetPosition = this._scrollPosition
         }
         event.propagationStopped = true
     }
 
     private _onTouchEnd(event: EventTouch) {
-        if (!this._dragging) return
+        if (!this._touchScrollGesture.end()) return
 
-        this._dragging = false
         this._scrollTargetPosition = this._scrollPosition
         event.propagationStopped = true
     }

@@ -22,7 +22,7 @@ const ZEN_GARDEN_SCREEN_FONTS = [
     'dwarventodcraft18greeninset',
     'dwarventodcraft18brightgreeninset',
     'houseofterror16',
-    'briannetod12',
+    'pico129',
 ]
 
 const ZEN_GARDEN_SCREEN_ANIMATIONS = ['treeofwisdom', 'treeofwisdomclouds']

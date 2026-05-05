@@ -108,19 +108,17 @@ export class FontLoader {
         const pixelCount = image.width * image.height
         if (pixelCount <= 0) return texture
 
-        const isSingleChannelMask = data.length === pixelCount
+        const isFontMaskImage = this._isFontMaskImage(imageName)
+        const isSingleChannelMask = isFontMaskImage && data.length === pixelCount
         const isOpaqueRgba = data.length === pixelCount * 4 && this._isFullyOpaqueRgba(data, pixelCount)
-        const isOpaqueMask =
-            (imageName.startsWith('BrianneTod') ||
-                imageName === 'ContinuumBold14' ||
-                imageName.startsWith('HouseofTerror')) &&
-            isOpaqueRgba
+        const isOpaqueMask = isFontMaskImage && isOpaqueRgba
         if (!isSingleChannelMask && !isOpaqueMask) return texture
 
+        const singleChannelScale = isSingleChannelMask ? this._getSingleChannelMaskScale(data) : 1
         const rgba = new Uint8Array(pixelCount * 4)
         for (let i = 0; i < pixelCount; i++) {
             const alpha = isSingleChannelMask
-                ? data[i]
+                ? Math.min(255, Math.round(data[i] * singleChannelScale))
                 : Math.max(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])
             const offset = i * 4
             rgba[offset] = 255
@@ -137,6 +135,25 @@ export class FontLoader {
         })
         normalized.uploadData(rgba)
         return normalized
+    }
+
+    private static _isFontMaskImage(imageName: string): boolean {
+        return (
+            imageName.startsWith('BrianneTod') ||
+            imageName.startsWith('ContinuumBold14') ||
+            imageName.startsWith('HouseofTerror') ||
+            imageName === 'Pico129' ||
+            imageName === 'Pix118Bold'
+        )
+    }
+
+    private static _getSingleChannelMaskScale(data: Uint8Array): number {
+        let maxValue = 0
+        for (let i = 0; i < data.length; i++) {
+            if (data[i] > maxValue) maxValue = data[i]
+        }
+        if (maxValue > 0 && maxValue < 128) return 255 / maxValue
+        return 1
     }
 
     private static _isFullyOpaqueRgba(data: Uint8Array, pixelCount: number): boolean {
