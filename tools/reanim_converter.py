@@ -168,9 +168,20 @@ def get_anim_nodes(
 
     tracks: dict[str, dict[str, Any]] = {}
     anim_duration = None
+
+    def unique_track_name(track_name: str) -> str:
+        if track_name not in tracks:
+            return track_name
+
+        index = 2
+        while f"{track_name}_{index}" in tracks:
+            index += 1
+        return f"{track_name}_{index}"
+
     for z, t_node in enumerate(anim_xml.findall('track')):
         track_name, track_duration, track_frames = parse_track_data(t_node)
-        tracks[track_name] = {
+        resolved_track_name = unique_track_name(track_name)
+        tracks[resolved_track_name] = {
             'frames': track_frames,
             'zIndex': z
         }

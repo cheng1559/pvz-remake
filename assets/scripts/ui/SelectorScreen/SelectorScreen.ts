@@ -8,7 +8,6 @@ import {
     UITransform,
     Vec2,
     Vec3,
-    EventTouch,
     Color,
     Mask,
 } from 'cc'
@@ -428,7 +427,7 @@ export class SelectorScreen extends AnimationComponent {
             this._flowerButtons.push(button)
 
             const idx = i
-            button.onClick = (event: EventTouch) => {
+            button.onClick = () => {
                 const flowerNode = this.flowerNodes[idx]
                 if (flowerNode.speed > 0) return
 

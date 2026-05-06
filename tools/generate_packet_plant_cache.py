@@ -147,6 +147,8 @@ def get_animation_name(node_data: dict[str, Any]) -> str | None:
 
 
 def get_animation_name_for_seed(seed_id: int, node_data: dict[str, Any]) -> str | None:
+    if seed_id == 4 and "anim_armed" in node_data.get("animations", {}):
+        return "anim_armed"
     if seed_id == 19 and "anim_idle_aquarium" in node_data.get("animations", {}):
         return "anim_idle_aquarium"
     return get_animation_name(node_data)
@@ -467,6 +469,8 @@ def get_plant_image_size(seed_id: int) -> tuple[int, int, int, int]:
 
 
 def get_cache_render_params(seed_id: int, offset_x: int, offset_y: int) -> tuple[float, float, float]:
+    if seed_id == 4:
+        return -(offset_x - 12.0), -(offset_y - 12.0), 0.85
     if seed_id == 35:
         return -(offset_x - 12.0), -(offset_y - 12.0), 0.8
     return -offset_x, -offset_y + (5.0 if seed_id == 48 else 0.0), 1.0

@@ -37,6 +37,14 @@ export class LawnStringLoader {
         return key
     }
 
+    static translateOptional(key: string, strings: LawnStringMap): string {
+        if (key.length >= 3 && key[0] === '[' && key[key.length - 1] === ']') {
+            const name = key.slice(1, -1).trim().toUpperCase()
+            return strings[name] ?? ''
+        }
+        return key
+    }
+
     static almanacText(key: string, strings: LawnStringMap): string {
         let text = this.translate(key, strings)
         for (const [pattern, replacement] of TOKEN_REPLACEMENTS) {

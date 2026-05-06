@@ -13,6 +13,7 @@ export class AnimNode {
     private _data: AnimNodeData
     private _parentNode: AnimNode | null = null
     private _parentSlot: string | null = null
+    private _parentBasePoseFrame: number | null = null
 
     // Current animation
     private _currentAnim: AnimationData | null = null
@@ -23,6 +24,9 @@ export class AnimNode {
     private _finished: boolean = false
     private _keepLastFrame: boolean = false
     private _onFinish?: () => void
+    private _frameCountOverride: number | null = null
+    private _truncateDisappearingFrames: boolean = true
+    private _visibleTracks: Set<string> | null = null
 
     // Blend transition (snapshot-based)
     private _blendTrackSnapshot: Record<string, TrackFrameData> = {}
@@ -55,6 +59,8 @@ export class AnimNode {
         time?: number
         blendTime?: number
         keepLastFrame?: boolean
+        frameCountOverride?: number
+        truncateDisappearingFrames?: boolean
         onStart?: () => void
         onFinish?: () => void
     }): void {
@@ -65,6 +71,8 @@ export class AnimNode {
             time = 0,
             blendTime = 0,
             keepLastFrame = false,
+            frameCountOverride,
+            truncateDisappearingFrames = true,
             onStart,
             onFinish,
         } = args
@@ -101,9 +109,12 @@ export class AnimNode {
         this._loop = loop
         this._speed = speed
         this._time = time
+        this._parentBasePoseFrame = this._parentNode?.currentAnimationStartFrame ?? null
         this.isPlaying = true
         this._finished = false
         this._keepLastFrame = keepLastFrame
+        this._frameCountOverride = frameCountOverride ?? null
+        this._truncateDisappearingFrames = truncateDisappearingFrames
         this._onFinish = onFinish
         onStart?.()
     }
@@ -116,17 +127,18 @@ export class AnimNode {
         }
         this._parentNode = args.node
         this._parentSlot = args.slot
+        this._parentBasePoseFrame = null
     }
 
-    public computeTransformMatrix(slot: string): Mat4 {
+    public computeTransformMatrix(slot: string, basePoseFrame?: number | null): Mat4 {
         const result = new Mat4()
         if (!this._currentAnim) return result
 
         const slotData = this._data.slots[slot]
         if (!slotData || slotData.frames.length === 0) return result
 
-        // base frame = first frame (bind pose)
-        const baseFrame = slotData.frames[0]
+        const baseFrame = this._sampleBaseSlotFrame(slot, basePoseFrame ?? this._currentAnim.startFrame)
+        if (!baseFrame) return result
 
         // current frame at current time
         let currentFrame = this._sampleSlot(slot, this._time, this._currentAnim)
@@ -147,7 +159,7 @@ export class AnimNode {
 
         // chain parent transform
         if (this._parentNode && this._parentSlot) {
-            const parentMat = this._parentNode.computeTransformMatrix(this._parentSlot)
+            const parentMat = this._parentNode.computeTransformMatrix(this._parentSlot, this._parentBasePoseFrame)
             Mat4.multiply(result, parentMat, result)
         }
 
@@ -158,9 +170,20 @@ export class AnimNode {
         this.isPlaying = false
         this._currentAnim = null
         this._currentAnimName = null
+        this._parentBasePoseFrame = null
+        this._frameCountOverride = null
+        this._truncateDisappearingFrames = true
         this._blendTrackSnapshot = {}
         this._blendSlotSnapshot = {}
         this._finished = false
+    }
+
+    public showOnlyTrack(trackName: string): void {
+        this._visibleTracks = new Set([trackName])
+    }
+
+    public clearTrackFilter(): void {
+        this._visibleTracks = null
     }
 
     public get speed(): number {
@@ -179,6 +202,14 @@ export class AnimNode {
         return this._data.animations[name]?.duration ?? null
     }
 
+    public hasAnimation(name: string): boolean {
+        return name in this._data.animations
+    }
+
+    public get currentAnimationStartFrame(): number | null {
+        return this._currentAnim?.startFrame ?? null
+    }
+
     public get time(): number {
         return this._time
     }
@@ -195,8 +226,9 @@ export class AnimNode {
 
         let anim = this._currentAnim
 
-        const frameSpan = Math.max(0, anim.duration - 1)
-        const advanceScale = anim.duration > 0 ? frameSpan / anim.duration : 0
+        const duration = this._frameCountOverride ?? anim.duration
+        const frameSpan = Math.max(0, duration - 1)
+        const advanceScale = duration > 0 ? frameSpan / duration : 0
 
         // advance time
         this._time += dt * anim.fps * this._speed * advanceScale
@@ -242,12 +274,14 @@ export class AnimNode {
         // parent transform (computed once per frame)
         let parentMat: Mat4 | null = null
         if (this._parentNode && this._parentSlot) {
-            parentMat = this._parentNode.computeTransformMatrix(this._parentSlot)
+            parentMat = this._parentNode.computeTransformMatrix(this._parentSlot, this._parentBasePoseFrame)
         }
 
         // sample all tracks
         const tracks = this._data.tracks
         for (const trackName in tracks) {
+            if (this._visibleTracks && !this._visibleTracks.has(trackName)) continue
+
             const trackData = tracks[trackName]
             let frame = this._sampleTrack(trackName, this._time, anim)
 
@@ -289,7 +323,13 @@ export class AnimNode {
         targetFrame: number,
     ): TrackFrameData | null {
         if (frames.length === 0) return null
-        if (targetFrame > frames[frames.length - 1].frameIndex) return null
+        if (targetFrame > frames[frames.length - 1].frameIndex) {
+            const last = frames[frames.length - 1]
+            if (!this._truncateDisappearingFrames && targetFrame < last.frameIndex + 1) {
+                return { ...last }
+            }
+            return null
+        }
 
         let leftIdx = -1
         for (let i = 0; i < frames.length; i++) {
@@ -302,6 +342,10 @@ export class AnimNode {
         if (leftIdx + 1 >= frames.length) return { ...left }
 
         const right = frames[leftIdx + 1]
+        if (right.frameIndex - left.frameIndex > 1 && targetFrame >= left.frameIndex + 1) {
+            return null
+        }
+
         const span = right.frameIndex - left.frameIndex
         if (span <= 0) return { ...left }
 
@@ -314,6 +358,12 @@ export class AnimNode {
         if (!slotData || slotData.frames.length === 0) return null
         const targetFrame = anim.startFrame + time
         return this._sampleFrameDataAt(slotData.frames, targetFrame)
+    }
+
+    private _sampleBaseSlotFrame(slot: string, basePoseFrame: number): FrameData | null {
+        const slotData = this._data.slots[slot]
+        if (!slotData || slotData.frames.length === 0) return null
+        return this._sampleFrameDataAt(slotData.frames, basePoseFrame) ?? slotData.frames[0]
     }
 
     private _sampleFrameDataAt(frames: FrameData[], targetFrame: number): FrameData | null {

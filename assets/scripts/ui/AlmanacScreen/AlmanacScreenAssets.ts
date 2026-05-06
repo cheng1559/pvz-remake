@@ -1,6 +1,21 @@
+import { JsonAsset, type SpriteFrame } from 'cc'
+import { AssetLoader } from '@/core/AssetLoader'
 import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
-import type { SpriteFrame } from 'cc'
+
+export const ALMANAC_PLANT_ANIMATIONS = [
+    'peashootersingle',
+    'sunflower',
+    'cherrybomb',
+    'wallnut',
+    'potatomine',
+    'snowpea',
+    'chomper',
+    'peashooter',
+] as const
+
+export type AlmanacPlantAnimationName = typeof ALMANAC_PLANT_ANIMATIONS[number]
+export type AlmanacPlantAnimationMap = Partial<Record<AlmanacPlantAnimationName, JsonAsset>>
 
 const ALMANAC_SCREEN_SPRITES = [
     'almanac_indexback',
@@ -30,6 +45,7 @@ const ALMANAC_SCREEN_SPRITES = [
     'button_down_left',
     'button_down_middle',
     'button_down_right',
+    'plantshadow',
 ]
 
 const ALMANAC_SCREEN_FONTS = [
@@ -71,6 +87,7 @@ export interface AlmanacScreenSprites {
     buttonDownLeft: SpriteFrame
     buttonDownMiddle: SpriteFrame
     buttonDownRight: SpriteFrame
+    plantShadow: SpriteFrame
 }
 
 export interface AlmanacScreenFonts {
@@ -88,6 +105,7 @@ export class AlmanacScreenAssets {
     static readonly preload = {
         sprites: ALMANAC_SCREEN_SPRITES,
         fonts: ALMANAC_SCREEN_FONTS,
+        animations: ALMANAC_PLANT_ANIMATIONS,
     }
 
     static async loadSprites(): Promise<AlmanacScreenSprites | null> {
@@ -125,6 +143,7 @@ export class AlmanacScreenAssets {
             buttonDownLeft,
             buttonDownMiddle,
             buttonDownRight,
+            plantShadow,
         ] = sprites as SpriteFrame[]
         return {
             almanacIndexBack,
@@ -154,7 +173,22 @@ export class AlmanacScreenAssets {
             buttonDownLeft,
             buttonDownMiddle,
             buttonDownRight,
+            plantShadow,
         }
+    }
+
+    static async loadAnimations(): Promise<AlmanacPlantAnimationMap> {
+        const animations = await Promise.all(
+            ALMANAC_PLANT_ANIMATIONS.map((name) =>
+                AssetLoader.load(`animations/${name}`, JsonAsset, `almanac plant animation: ${name}`),
+            ),
+        )
+        const map: AlmanacPlantAnimationMap = {}
+        for (let i = 0; i < ALMANAC_PLANT_ANIMATIONS.length; i++) {
+            const animation = animations[i]
+            if (animation) map[ALMANAC_PLANT_ANIMATIONS[i]] = animation
+        }
+        return map
     }
 
     static async loadFonts(): Promise<AlmanacScreenFonts> {

@@ -16,6 +16,7 @@ import { ZenGardenScreenAssets } from './ZenGardenScreen/ZenGardenScreenAssets'
 
 const STARTUP_ANIMATIONS = [
     ...SELECTOR_SCREEN_ANIMATIONS,
+    ...AlmanacScreenAssets.preload.animations.map((name) => `animations/${name}`),
     ...ZenGardenScreenAssets.preload.animations.map((name) => `animations/${name}`),
 ]
 const STARTUP_TEXTURES = [

@@ -983,6 +983,33 @@
             ]
         }
     },
+    "zombie": {
+        "body": {
+            "slots": [
+                "Zombie_flaghand"
+            ],
+            "animations": [
+                "anim_idle",
+                "anim_idle2",
+                "anim_walk",
+                "anim_walk2",
+                "anim_eat",
+                "anim_swim",
+                "anim_death",
+                "anim_death2",
+                "anim_superlongdeath",
+                "anim_waterdeath"
+            ]
+        }
+    },
+    "zombie_flagpole": {
+        "flag": {
+            "slots": [],
+            "animations": [
+                "Zombie_flag"
+            ]
+        }
+    },
     "zombie_hand": {
         "default": {
             "slots": [],
@@ -1090,6 +1117,14 @@
         "default": {
             "slots": [],
             "animations": []
+        }
+    },
+    "lawnmower": {
+        "default": {
+            "slots": [],
+            "animations": [
+                "anim_normal"
+            ]
         }
     },
     "sun": {

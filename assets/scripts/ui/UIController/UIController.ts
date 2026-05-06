@@ -116,7 +116,7 @@ export class UIController extends Component {
             void this.showSelectorScreen()
         }
         gameScreen.onMenuRequest = () => {
-            this.showGameOptionsDialog()
+            this.showGameOptionsDialog(gameScreen)
         }
 
         this._setCurrentScreen(node)
@@ -307,11 +307,14 @@ export class UIController extends Component {
         return optionsDialog
     }
 
-    showGameOptionsDialog(): OptionsDialog | null {
+    showGameOptionsDialog(gameScreen?: AdventureGameScreen): OptionsDialog | null {
         const node = createUINode('GameOptionsDialog', { active: false, width: 423, height: 498 })
         const optionsDialog = node.addComponent(OptionsDialog)
         optionsDialog.gameMenu = true
         optionsDialog.backButtonLabel = 'Back To Game'
+        optionsDialog.onClose = () => {
+            gameScreen?.resumeGame()
+        }
         optionsDialog.onRestartLevel = () => {
             void this.confirmRestartLevel().then((confirmed) => {
                 if (!confirmed) return

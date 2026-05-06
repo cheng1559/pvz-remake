@@ -167,6 +167,7 @@ export class HelpScreen extends MenuScreenBase {
         button.pressedSprite = sprites.mainMenuButton
         button.disabledSprite = sprites.mainMenuButtonDisabled
         button.pressOffset = new Vec3(0, 0, 0)
+        button.rightClickTriggers = false
         button.releaseToNormalOnPressOut = true
         button.onPress = () => {
             void SoundLoader.play(SoundEffect.Tap)

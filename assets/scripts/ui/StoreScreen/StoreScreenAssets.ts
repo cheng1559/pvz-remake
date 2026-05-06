@@ -15,6 +15,8 @@ const STORE_SCREEN_SPRITES = [
     'store_packetupgrade',
     'particles/seedpacketflash',
     'seeds',
+    'packet_plants',
+    'packet_plants_cached',
     'store_nextbutton',
     'store_nextbuttonhighlight',
     'store_nextbuttondisabled',
@@ -56,6 +58,8 @@ export interface StoreScreenSprites {
     storePacketUpgrade: SpriteFrame
     seedPacketFlash: SpriteFrame
     seeds: SpriteFrame
+    packetPlants: SpriteFrame
+    packetPlantsCached: SpriteFrame
     storeNextButton: SpriteFrame
     storeNextButtonHighlight: SpriteFrame
     storeNextButtonDisabled: SpriteFrame
@@ -114,6 +118,8 @@ export class StoreScreenAssets {
             storePacketUpgrade,
             seedPacketFlash,
             seeds,
+            packetPlants,
+            packetPlantsCached,
             storeNextButton,
             storeNextButtonHighlight,
             storeNextButtonDisabled,
@@ -152,6 +158,8 @@ export class StoreScreenAssets {
             storePacketUpgrade,
             seedPacketFlash,
             seeds,
+            packetPlants,
+            packetPlantsCached,
             storeNextButton,
             storeNextButtonHighlight,
             storeNextButtonDisabled,

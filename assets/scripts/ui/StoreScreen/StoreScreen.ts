@@ -10,6 +10,7 @@ import { MenuScreenBase } from '../MenuScreenBase'
 import { SoundEffect } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
 import { DialogButtonMode, MessageBox } from '@/ui/MessageBox/MessageBox'
+import { SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
 
 const { ccclass } = _decorator
 
@@ -34,6 +35,14 @@ const STORE_ITEM_HIGHLIGHT_COLOR = new Color(255, 255, 255, 96)
 const STORE_ITEM_HIGHLIGHT_TEXT_COLOR = new Color(255, 255, 255, 255)
 const STORE_SLOT_TEXT_WIDTH = 55
 const STORE_SLOT_TEXT_HEIGHT = 70
+const STORE_SEED_GATLINGPEA = 40
+const STORE_SEED_TWINSUNFLOWER = 41
+const STORE_SEED_GLOOMSHROOM = 42
+const STORE_SEED_CATTAIL = 43
+const STORE_SEED_WINTERMELON = 44
+const STORE_SEED_GOLD_MAGNET = 45
+const STORE_SEED_SPIKEROCK = 46
+const STORE_SEED_COBCANNON = 47
 
 let additiveSpriteMaterial: Material | null = null
 
@@ -45,6 +54,7 @@ interface StoreItemDefinition {
     x: number
     y: number
     kind?: StoreItemKind
+    seedType?: number
     spriteKey?: keyof StoreScreenSprites
     offsetX?: number
     offsetY?: number
@@ -71,16 +81,16 @@ const STORE_PAGES: StoreItemDefinition[][] = [
         { price: '$1,000', spriteKey: 'iconPoolCleaner', offsetX: 1, offsetY: 7, ...STORE_ITEM_POSITIONS[1] },
         { price: '$200', spriteKey: 'iconRake', offsetX: -5, offsetY: 10, ...STORE_ITEM_POSITIONS[2] },
         { price: '$3,000', spriteKey: 'iconRoofCleaner', offsetX: 0, offsetY: 28, ...STORE_ITEM_POSITIONS[3] },
-        { price: '$5,000', kind: 'upgradePacket', ...STORE_ITEM_POSITIONS[4] },
-        { price: '$5,000', kind: 'upgradePacket', ...STORE_ITEM_POSITIONS[5] },
-        { price: '$7,500', kind: 'upgradePacket', ...STORE_ITEM_POSITIONS[6] },
-        { price: '$10,000', kind: 'upgradePacket', ...STORE_ITEM_POSITIONS[7] },
+        { price: '$5,000', kind: 'upgradePacket', seedType: STORE_SEED_GATLINGPEA, ...STORE_ITEM_POSITIONS[4] },
+        { price: '$5,000', kind: 'upgradePacket', seedType: STORE_SEED_TWINSUNFLOWER, ...STORE_ITEM_POSITIONS[5] },
+        { price: '$7,500', kind: 'upgradePacket', seedType: STORE_SEED_GLOOMSHROOM, ...STORE_ITEM_POSITIONS[6] },
+        { price: '$10,000', kind: 'upgradePacket', seedType: STORE_SEED_CATTAIL, ...STORE_ITEM_POSITIONS[7] },
     ],
     [
-        { price: '$7,500', kind: 'upgradePacket', ...STORE_ITEM_POSITIONS[0] },
-        { price: '$3,000', kind: 'upgradePacket', ...STORE_ITEM_POSITIONS[1] },
-        { price: '$10,000', kind: 'upgradePacket', ...STORE_ITEM_POSITIONS[2] },
-        { price: '$20,000', kind: 'upgradePacket', ...STORE_ITEM_POSITIONS[3] },
+        { price: '$7,500', kind: 'upgradePacket', seedType: STORE_SEED_SPIKEROCK, ...STORE_ITEM_POSITIONS[0] },
+        { price: '$3,000', kind: 'upgradePacket', seedType: STORE_SEED_GOLD_MAGNET, ...STORE_ITEM_POSITIONS[1] },
+        { price: '$10,000', kind: 'upgradePacket', seedType: STORE_SEED_WINTERMELON, ...STORE_ITEM_POSITIONS[2] },
+        { price: '$20,000', kind: 'upgradePacket', seedType: STORE_SEED_COBCANNON, ...STORE_ITEM_POSITIONS[3] },
         { price: '$30,000', spriteKey: 'imitaterSeed', offsetX: 0, offsetY: 0, highlight: 'seedPacketFlash', ...STORE_ITEM_POSITIONS[4] },
         { price: '$2,000', spriteKey: 'storeFirstAidWallnutIcon', offsetX: -1, offsetY: 13, ...STORE_ITEM_POSITIONS[5] },
     ],
@@ -281,7 +291,7 @@ export class StoreScreen extends MenuScreenBase {
         return 3 * time * time - 2 * time * time * time
     }
 
-    private _setStoreButtonsInteractable(interactable: boolean, backInteractable = !this._waitForDialog) {
+    private _setStoreButtonsInteractable(interactable: boolean, backInteractable = interactable && !this._waitForDialog) {
         const prevButton = this._root?.getChildByName('PrevButton')?.getComponent(UIButton)
         const nextButton = this._root?.getChildByName('NextButton')?.getComponent(UIButton)
         const backButton = this._root?.getChildByName('BackToMenuButton')?.getComponent(UIButton)
@@ -431,6 +441,23 @@ export class StoreScreen extends MenuScreenBase {
     }
 
     private _createUpgradePacket(item: StoreItemDefinition, sprites: StoreScreenSprites) {
+        if (item.seedType != null) {
+            SeedPacketRenderer.drawSeedPacket({
+                name: 'UpgradePacket',
+                parent: this._root!,
+                layer: this.node.layer,
+                seedType: item.seedType,
+                drawCost: false,
+                upgrade: true,
+                seeds: sprites.seeds,
+                packetPlants: sprites.packetPlants,
+                cachedPacketPlants: sprites.packetPlantsCached,
+                x: this._cppX(item.x),
+                y: this._cppY(item.y),
+            })
+            return
+        }
+
         createSpriteNode({
             name: 'UpgradePacketBackground',
             spriteFrame: this._getAtlasFrame(sprites.seeds, STORE_SEED_PACKET_UPGRADE_CEL, STORE_PACKET_WIDTH, STORE_PACKET_HEIGHT),

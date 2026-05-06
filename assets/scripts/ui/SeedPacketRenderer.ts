@@ -33,7 +33,27 @@ const PACKET_PLANT_CELS = new Map<number, number>([
 
 const atlasFrames: WeakMap<SpriteFrame, Map<string, SpriteFrame>> = new WeakMap()
 
-export type SeedPacketSeedType = number | 'peashooter'
+export type SeedPacketSeedType =
+    | number
+    | 'peashooter'
+    | 'sunflower'
+    | 'cherrybomb'
+    | 'wallnut'
+    | 'potatomine'
+    | 'snowpea'
+    | 'chomper'
+    | 'repeater'
+
+const SEED_PACKET_ICON_IDS: Record<string, number> = {
+    peashooter: 0,
+    sunflower: 1,
+    cherrybomb: 2,
+    wallnut: 3,
+    potatomine: 4,
+    snowpea: 5,
+    chomper: 6,
+    repeater: 7,
+}
 
 export interface SeedPacketRenderArgs {
     name?: string
@@ -102,7 +122,7 @@ export class SeedPacketRenderer {
     }
 
     private static _drawPlantIcon(root: Node, args: SeedPacketRenderArgs) {
-        const seedId = args.seedType === 'peashooter' ? 0 : args.seedType
+        const seedId = typeof args.seedType === 'string' ? SEED_PACKET_ICON_IDS[args.seedType] : args.seedType
         if (typeof seedId !== 'number') return
 
         const packetPlantCel = PACKET_PLANT_CELS.get(seedId)

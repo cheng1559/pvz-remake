@@ -31,6 +31,7 @@ export function createStoneButton(args: {
     sprites: StoneButtonSprites
     fonts: StoneButtonFonts
     onClick?: () => void
+    rightClickTriggers?: boolean
 }) {
     const height = args.height ?? args.sprites.left.originalSize.height
     const buttonNode = createUINode(args.name, {
@@ -79,6 +80,7 @@ export function createStoneButton(args: {
     )
 
     const button = buttonNode.addComponent(UIButton)
+    button.rightClickTriggers = args.rightClickTriggers ?? true
     button.pressOffset = new Vec3(0, 0, 0)
     button.releaseToNormalOnPressOut = true
     button.onPress = () => {

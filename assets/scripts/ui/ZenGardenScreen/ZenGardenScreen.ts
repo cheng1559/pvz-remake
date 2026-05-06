@@ -250,6 +250,7 @@ export class ZenGardenScreen extends MenuScreenBase {
         button.normalSprite = sprites.zenShopButton
         button.hoverSprite = sprites.zenShopButtonHighlight
         button.pressedSprite = sprites.zenShopButtonHighlight
+        button.rightClickTriggers = false
         button.releaseToNormalOnPressOut = true
         button.pressOffset = new Vec3(0, 0, 0)
         button.onPress = () => {
@@ -284,6 +285,7 @@ export class ZenGardenScreen extends MenuScreenBase {
                 normal: fonts.button,
                 highlight: fonts.buttonHighlight,
             },
+            rightClickTriggers: false,
             onClick: () => this.onBackToMenu?.(),
         })
     }

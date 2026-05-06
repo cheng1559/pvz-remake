@@ -5,7 +5,9 @@ import {
     JsonAsset,
     Sprite,
     Color,
+    gfx,
     log,
+    Material,
     warn,
     SpriteFrame,
     UITransform,
@@ -17,16 +19,21 @@ import { AnimNode } from './AnimNode'
 import { SpriteLoader } from '../SpriteLoader'
 
 const { ccclass, property } = _decorator
+let additiveSpriteMaterial: Material | null = null
 
 @ccclass('Animator')
 export class Animator extends Component {
     private _nodeDataMap: Record<string, AnimNodeData> = {}
     private _animNodes: AnimNode[] = []
     private _trackNodes: Map<string, Node> = new Map()
+    private _additiveTrackNodes: Map<string, Node> = new Map()
     private _trackZ: Map<string, number> = new Map()
     private _hiddenTracks: Set<string> = new Set()
     private _externalNodes: Set<string> = new Set()
     private _trackColors: Map<string, Color> = new Map()
+    private _trackImageOverrides: Map<string, string> = new Map()
+    private _enableExtraAdditiveDraw = false
+    private _extraAdditiveColor = new Color(255, 255, 255, 196)
 
     // ── Initialization ─────────────────────────────────────────
 
@@ -34,6 +41,7 @@ export class Animator extends Component {
         this._nodeDataMap = json
         this._animNodes = []
         this._trackNodes.clear()
+        this._additiveTrackNodes.clear()
         this._trackZ.clear()
 
         await this._preloadImages(json)
@@ -58,6 +66,18 @@ export class Animator extends Component {
 
     public showTrack(name: string) {
         this._hiddenTracks.delete(name)
+    }
+
+    public hidePrefix(prefix: string) {
+        for (const trackName of this._getTrackNames()) {
+            if (trackName.startsWith(prefix)) this.hideTrack(trackName)
+        }
+    }
+
+    public showPrefix(prefix: string) {
+        for (const trackName of this._getTrackNames()) {
+            if (trackName.startsWith(prefix)) this.showTrack(trackName)
+        }
     }
 
     public isTrackHidden(name: string): boolean {
@@ -88,6 +108,25 @@ export class Animator extends Component {
         return this._trackColors.get(name) ?? Color.WHITE
     }
 
+    public setTrackImageOverride(name: string, image: string | null) {
+        if (image) {
+            this._trackImageOverrides.set(name, image)
+        } else {
+            this._trackImageOverrides.delete(name)
+        }
+    }
+
+    public setExtraAdditiveDraw(enabled: boolean, color: Color = new Color(255, 255, 255, 196)) {
+        this._enableExtraAdditiveDraw = enabled
+        this._extraAdditiveColor = color.clone()
+        if (!enabled) {
+            this._additiveTrackNodes.forEach((node) => {
+                const sprite = node.getComponent(Sprite)
+                if (sprite) sprite.enabled = false
+            })
+        }
+    }
+
     // ── Update Loop ────────────────────────────────────────────
 
     protected update(dt: number) {
@@ -111,12 +150,22 @@ export class Animator extends Component {
             if (this._hiddenTracks.has(trackName)) return
             const targetNode = this._getOrCreateTrackNode(trackName, value.zIndex)
             this._applyFrameToNode(targetNode, value.frame, trackName)
+            if (this._enableExtraAdditiveDraw) {
+                const additiveNode = this._getOrCreateAdditiveTrackNode(trackName)
+                this._applyFrameToNode(additiveNode, value.frame, undefined, this._extraAdditiveColor)
+            }
         })
 
         // 4. Hide untouched / hidden track nodes
         this._trackNodes.forEach((n, name) => {
             if (this._externalNodes.has(name)) return
             if (!touched.has(name) || this._hiddenTracks.has(name)) {
+                const sp = n.getComponent(Sprite)
+                if (sp) sp.enabled = false
+            }
+        })
+        this._additiveTrackNodes.forEach((n, name) => {
+            if (!this._enableExtraAdditiveDraw || !touched.has(name) || this._hiddenTracks.has(name)) {
                 const sp = n.getComponent(Sprite)
                 if (sp) sp.enabled = false
             }
@@ -130,8 +179,15 @@ export class Animator extends Component {
             const zb = this._trackZ.get(b[0]) ?? 0
             return za - zb
         })
+        let siblingIndex = 0
         for (let i = 0; i < sorted.length; i++) {
-            sorted[i][1].setSiblingIndex(i)
+            const [trackName, node] = sorted[i]
+            node.setSiblingIndex(siblingIndex++)
+            const additiveNode = this._additiveTrackNodes.get(trackName)
+            const additiveSprite = additiveNode?.getComponent(Sprite)
+            if (additiveNode?.isValid && additiveSprite?.enabled) {
+                additiveNode.setSiblingIndex(siblingIndex++)
+            }
         }
     }
 
@@ -161,9 +217,33 @@ export class Animator extends Component {
         return node
     }
 
+    private _getOrCreateAdditiveTrackNode(name: string): Node {
+        let node = this._additiveTrackNodes.get(name)
+        if (!node) {
+            node = new Node(`${name}_extra_additive`)
+            node.layer = this.node.layer
+            node.parent = this.node
+
+            const trans = node.addComponent(UITransform)
+            trans.setAnchorPoint(0, 1)
+
+            const sprite = node.addComponent(Sprite)
+            sprite.sizeMode = Sprite.SizeMode.RAW
+            sprite.trim = false
+            sprite.enabled = false
+            sprite.customMaterial = Animator._getAdditiveSpriteMaterial()
+
+            node.addComponent(UISkew)
+
+            this._additiveTrackNodes.set(name, node)
+        }
+
+        return node
+    }
+
     // ── Frame Rendering ────────────────────────────────────────
 
-    private _applyFrameToNode(node: Node, f: TrackFrameData, trackName?: string) {
+    private _applyFrameToNode(node: Node, f: TrackFrameData, trackName?: string, colorOverride?: Color) {
         node.setPosition(f.x, -f.y, 0)
         node.angle = -f.kx
 
@@ -193,13 +273,13 @@ export class Animator extends Component {
             sprite.enabled = true
 
             // Combine track color with frame alpha.
-            const trackColor = trackName ? this._trackColors.get(trackName) : undefined
+            const trackColor = colorOverride ?? (trackName ? this._trackColors.get(trackName) : undefined)
             const alphaVal = Math.round(f.alpha * 255)
             if (trackColor) {
                 const finalR = Math.round(trackColor.r)
                 const finalG = Math.round(trackColor.g)
                 const finalB = Math.round(trackColor.b)
-                const finalA = Math.round((trackColor.a * f.alpha) / 255)
+                const finalA = Math.round(trackColor.a * f.alpha)
                 const c = sprite.color
                 if (c.r !== finalR || c.g !== finalG || c.b !== finalB || c.a !== finalA) {
                     sprite.color = new Color(finalR, finalG, finalB, finalA)
@@ -215,11 +295,38 @@ export class Animator extends Component {
                 }
             }
 
-            if (f.image && sprite.spriteFrame?.name !== f.image) {
-                const sf = SpriteLoader.get(f.image)
+            const imageName = trackName ? this._trackImageOverrides.get(trackName) ?? f.image : f.image
+            if (imageName && sprite.spriteFrame?.name !== imageName) {
+                const sf = SpriteLoader.get(imageName)
                 if (sf) sprite.spriteFrame = sf
             }
         }
+    }
+
+    private static _getAdditiveSpriteMaterial() {
+        if (additiveSpriteMaterial) return additiveSpriteMaterial
+
+        additiveSpriteMaterial = new Material()
+        additiveSpriteMaterial.initialize({
+            effectName: 'for2d/builtin-sprite',
+            defines: {
+                USE_TEXTURE: true,
+            },
+            states: {
+                blendState: {
+                    targets: [
+                        {
+                            blend: true,
+                            blendSrc: gfx.BlendFactor.SRC_ALPHA,
+                            blendDst: gfx.BlendFactor.ONE,
+                            blendSrcAlpha: gfx.BlendFactor.SRC_ALPHA,
+                            blendDstAlpha: gfx.BlendFactor.ONE,
+                        },
+                    ],
+                },
+            },
+        })
+        return additiveSpriteMaterial
     }
 
     // ── Image Preloading ───────────────────────────────────────
@@ -247,5 +354,15 @@ export class Animator extends Component {
 
     async loadSpriteFrame(name: string) {
         return SpriteLoader.load(name)
+    }
+
+    private _getTrackNames() {
+        const trackNames = new Set<string>()
+        for (const nodeData of Object.values(this._nodeDataMap)) {
+            for (const trackName of Object.keys(nodeData.tracks)) {
+                trackNames.add(trackName)
+            }
+        }
+        return trackNames
     }
 }

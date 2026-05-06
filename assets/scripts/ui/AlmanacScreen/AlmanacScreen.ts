@@ -17,16 +17,21 @@ import {
     input,
     sys,
 } from 'cc'
+import { Animator } from '@/core/Animator/Animator'
 import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { wirePlantAnimation, type PlantAnimationView } from '@/game/PlantAnimation'
+import type { PlantType } from '@/game/GameTypes'
 import { UIButton } from '@/ui/Button'
 import { TouchScrollGesture } from '@/ui/ScrollGesture'
 import { SeedPacketRenderer, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/ui/SeedPacketRenderer'
 import { buildThreeSliceRow, createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import {
     AlmanacScreenAssets,
+    type AlmanacPlantAnimationMap,
+    type AlmanacPlantAnimationName,
     type AlmanacScreenFonts,
     type AlmanacScreenSprites,
 } from './AlmanacScreenAssets'
@@ -59,6 +64,10 @@ const PLANT_SCROLLBAR_COLOR = new Color(143, 67, 27)
 const PLANT_SCROLLBAR_BACK_COLOR = new Color(143, 67, 27, 75)
 const ZOMBIE_SCROLLBAR_COLOR = new Color(63, 63, 86)
 const ZOMBIE_SCROLLBAR_BACK_COLOR = new Color(95, 97, 129, 75)
+const ALMANAC_PLANT_POSITION_X = 578
+const ALMANAC_PLANT_POSITION_Y = 140
+const ALMANAC_INDEX_PLANT_POSITION_X = 167
+const ALMANAC_INDEX_PLANT_POSITION_Y = 225
 
 let additiveSpriteMaterial: Material | null = null
 
@@ -88,6 +97,30 @@ interface AlmanacZombieDefinition {
     id: number
     key: string
     iceGround?: boolean
+}
+
+interface AlmanacPlantPreviewDefinition {
+    plantType: PlantType
+    animationName: AlmanacPlantAnimationName
+}
+
+const ALMANAC_PLANT_PREVIEW_BY_KEY: Partial<Record<string, AlmanacPlantPreviewDefinition>> = {
+    PEASHOOTER: { plantType: 'peashooter', animationName: 'peashootersingle' },
+    SUNFLOWER: { plantType: 'sunflower', animationName: 'sunflower' },
+    CHERRY_BOMB: { plantType: 'cherrybomb', animationName: 'cherrybomb' },
+    WALL_NUT: { plantType: 'wallnut', animationName: 'wallnut' },
+    POTATO_MINE: { plantType: 'potatomine', animationName: 'potatomine' },
+    SNOW_PEA: { plantType: 'snowpea', animationName: 'snowpea' },
+    CHOMPER: { plantType: 'chomper', animationName: 'chomper' },
+    REPEATER: { plantType: 'repeater', animationName: 'peashooter' },
+}
+
+const ALMANAC_PLANT_VISUAL_ADJUSTMENTS: Partial<Record<PlantType, { offsetX?: number, offsetY?: number, scale?: number }>> = {
+    potatomine: { offsetX: 12, offsetY: 12, scale: 0.8 },
+}
+
+const ALMANAC_PLANT_SHADOW_ADJUSTMENTS: Partial<Record<PlantType, { offsetX: number, offsetY: number, scale?: number }>> = {
+    chomper: { offsetX: -21, offsetY: 57 },
 }
 
 const ALMANAC_PLANTS: AlmanacPlantDefinition[] = [
@@ -208,21 +241,27 @@ export class AlmanacScreen extends MenuScreenBase {
     }
 
     async render(): Promise<void> {
-        const [sprites, fonts] = await Promise.all([
+        const [sprites, fonts, animations] = await Promise.all([
             AlmanacScreenAssets.loadSprites(),
             AlmanacScreenAssets.loadFonts(),
+            AlmanacScreenAssets.loadAnimations(),
         ])
         if (!sprites) return
         const lawnStrings = await LawnStringLoader.load()
 
         this._resetRoot('AlmanacScreenRoot')
-        this._renderAlmanac(sprites, fonts, lawnStrings)
+        this._renderAlmanac(sprites, fonts, animations, lawnStrings)
         this._preserveHoveredPlantDuringRender = false
         this._preserveHoveredZombieDuringRender = false
         UIButton.refreshHoverStates()
     }
 
-    private _renderAlmanac(sprites: AlmanacScreenSprites, fonts: AlmanacScreenFonts, lawnStrings: LawnStringMap) {
+    private _renderAlmanac(
+        sprites: AlmanacScreenSprites,
+        fonts: AlmanacScreenFonts,
+        animations: AlmanacPlantAnimationMap,
+        lawnStrings: LawnStringMap,
+    ) {
         if (this._almanacPage === 'plants') {
             this._createBackground(sprites.almanacPlantBack)
             this._createText({
@@ -234,7 +273,7 @@ export class AlmanacScreen extends MenuScreenBase {
                 color: new Color(213, 159, 43),
                 align: 'center',
             })
-            this._renderPlantAlmanac(sprites, fonts, lawnStrings)
+            this._renderPlantAlmanac(sprites, fonts, animations, lawnStrings)
         } else if (this._almanacPage === 'zombies') {
             this._createBackground(sprites.almanacZombieBack)
             this._createText({
@@ -258,6 +297,14 @@ export class AlmanacScreen extends MenuScreenBase {
                 color: TITLE_COLOR,
                 align: 'center',
             })
+            this._createAlmanacPlantPreview(
+                'IndexSunflowerPreview',
+                'SUNFLOWER',
+                animations,
+                sprites,
+                ALMANAC_INDEX_PLANT_POSITION_X,
+                ALMANAC_INDEX_PLANT_POSITION_Y,
+            )
         }
 
         if (this._almanacPage !== 'index') {
@@ -301,12 +348,13 @@ export class AlmanacScreen extends MenuScreenBase {
     private _renderPlantAlmanac(
         sprites: AlmanacScreenSprites,
         fonts: AlmanacScreenFonts,
+        animations: AlmanacPlantAnimationMap,
         lawnStrings: LawnStringMap,
     ) {
         for (const plant of ALMANAC_PLANTS) {
             this._createPlantSeedPacket(plant, sprites, fonts)
         }
-        this._createPlantInfoPanel(this._getSelectedPlant(), sprites, fonts, lawnStrings)
+        this._createPlantInfoPanel(this._getSelectedPlant(), sprites, fonts, animations, lawnStrings)
     }
 
     private _createPlantSeedPacket(
@@ -416,6 +464,7 @@ export class AlmanacScreen extends MenuScreenBase {
         plant: AlmanacPlantDefinition,
         sprites: AlmanacScreenSprites,
         fonts: AlmanacScreenFonts,
+        animations: AlmanacPlantAnimationMap,
         lawnStrings: LawnStringMap,
     ) {
         createSpriteNode({
@@ -428,6 +477,14 @@ export class AlmanacScreen extends MenuScreenBase {
             anchorX: 0,
             anchorY: 1,
         })
+        this._createAlmanacPlantPreview(
+            'SelectedPlantPreview',
+            plant.key,
+            animations,
+            sprites,
+            ALMANAC_PLANT_POSITION_X,
+            ALMANAC_PLANT_POSITION_Y,
+        )
         createSpriteNode({
             name: 'PlantCard',
             spriteFrame: sprites.almanacPlantCard,
@@ -451,7 +508,7 @@ export class AlmanacScreen extends MenuScreenBase {
 
         const infoHeight = this._createAlmanacText({
             name: 'PlantDescriptionHeader',
-            text: LawnStringLoader.translate(`[${plant.key}_DESCRIPTION_HEADER]`, lawnStrings),
+            text: LawnStringLoader.translateOptional(`[${plant.key}_DESCRIPTION_HEADER]`, lawnStrings),
             x: 485,
             y: 309,
             width: 258,
@@ -487,6 +544,78 @@ export class AlmanacScreen extends MenuScreenBase {
             width: 139,
             font: fonts.footer,
             align: 1,
+        })
+    }
+
+    private _createAlmanacPlantPreview(
+        name: string,
+        plantKey: string,
+        animations: AlmanacPlantAnimationMap,
+        sprites: AlmanacScreenSprites,
+        x: number,
+        y: number,
+    ) {
+        const preview = ALMANAC_PLANT_PREVIEW_BY_KEY[plantKey]
+        if (!preview) return
+
+        const animation = animations[preview.animationName]
+        if (!animation?.json) return
+
+        const root = createUINode(name, {
+            parent: this._root!,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 120,
+            height: 120,
+            x: this._cppX(x),
+            y: this._cppY(y),
+        })
+
+        const shadowAdjust = ALMANAC_PLANT_SHADOW_ADJUSTMENTS[preview.plantType] ?? { offsetX: -3, offsetY: 51 }
+        const shadowNode = createSpriteNode({
+            name: 'PlantShadow',
+            spriteFrame: sprites.plantShadow,
+            parent: root,
+            layer: this.node.layer,
+            x: shadowAdjust.offsetX,
+            y: -shadowAdjust.offsetY,
+        })
+        const shadowScale = shadowAdjust.scale ?? 1
+        shadowNode.setScale(shadowScale, shadowScale, 1)
+
+        const animatorNode = createUINode('Animator', {
+            parent: root,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+        })
+        const visualAdjust = ALMANAC_PLANT_VISUAL_ADJUSTMENTS[preview.plantType]
+        animatorNode.setPosition(visualAdjust?.offsetX ?? 0, -(visualAdjust?.offsetY ?? 0), 0)
+        const visualScale = visualAdjust?.scale ?? 1
+        animatorNode.setScale(visualScale, visualScale, 1)
+
+        const animator = animatorNode.addComponent(Animator)
+        const animationJson = animation.json as Record<string, any>
+        void animator.parseJson(animationJson).then(() => {
+            if (!animatorNode.isValid) return
+            const view: PlantAnimationView = {
+                plantType: preview.plantType,
+                body: null,
+                head: null,
+                face: null,
+                face2: null,
+                glow: null,
+                idleSpeed: 1,
+            }
+            wirePlantAnimation(animator, view, preview.plantType, {
+                animated: true,
+                staticAnimTime: 0,
+                includePotatoGlow: false,
+                potatoInitialState: preview.plantType === 'potatomine' ? 'armed' : 'idle',
+                cherryBombInitialState: 'idle',
+                shakeNode: animatorNode,
+            })
         })
     }
 
@@ -665,7 +794,7 @@ export class AlmanacScreen extends MenuScreenBase {
 
         const headerHeight = this._createAlmanacText({
             name: 'ZombieDescriptionHeader',
-            text: LawnStringLoader.translate(`[${zombie.key}_DESCRIPTION_HEADER]`, lawnStrings),
+            text: LawnStringLoader.translateOptional(`[${zombie.key}_DESCRIPTION_HEADER]`, lawnStrings),
             x: 485,
             y: 377,
             width: 257,
@@ -756,6 +885,8 @@ export class AlmanacScreen extends MenuScreenBase {
         font: BitmapFontAssets | null
         align?: number
     }) {
+        if (args.text.length === 0) return 0
+
         const lines = this._wrapAlmanacText(args.text, args.font, args.width)
         const metrics = FontMetricsUtil.getMetrics(args.font?.config ?? null)
         let y = args.y
