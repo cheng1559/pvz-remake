@@ -165,8 +165,8 @@ export class Item implements ItemEntity {
 
         this._collectionDistance = Math.sqrt(deltaY * deltaY + deltaX * deltaX)
         if (this._collectionDistance < 8) {
-            context.addSun(this._sunValue())
             this.dead = true
+            context.addSun(this._sunValue())
             return
         }
 

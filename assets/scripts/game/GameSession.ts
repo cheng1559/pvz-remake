@@ -48,6 +48,7 @@ const LEVEL_1_ADVICE_PICK_SEED = 'Click on a seed packet to pick it up!'
 const LEVEL_1_ADVICE_PLANT_SEED = 'Click on the grass to plant your seed!'
 const LEVEL_1_ADVICE_FIRST_PLANT_DONE = 'Nicely done!'
 const LEVEL_1_ADVICE_COLLECT_FALLING_SUN = 'Click on the falling sun to collect it!'
+const LEVEL_1_ADVICE_CLICKED_SUN = "Keep on collecting sun!\nYou'll need it to grow more plants!"
 const LEVEL_1_ADVICE_ENOUGH_SUN = "Excellent! You've collected\nenough for your next plant!"
 const LEVEL_1_ADVICE_PLANT_SECOND_PEASHOOTER = 'Click on the peashooter to plant another one!'
 const LEVEL_1_ADVICE_ZOMBIES_CAN_START = "Don't let the zombies reach your house!"
@@ -90,6 +91,7 @@ export class GameSession {
     private _finalWaveSoundCounter = 0
     private _levelOneTutorialPhase: LevelOneTutorialPhase = 'done'
     private _levelOneTutorialTimer = 0
+    private _levelOneClickOnSunAdviceShown = false
 
     constructor(level: LevelDefinition = ADVENTURE_1_1) {
         this.level = level
@@ -456,6 +458,7 @@ export class GameSession {
 
         switch (this._levelOneTutorialPhase) {
             case 'first-plant-done':
+            case 'collect-more-sun':
                 if (this._levelOnePeashooterPacketReady()) {
                     this._enterLevelOneEnoughSunPhase()
                 }
@@ -464,7 +467,7 @@ export class GameSession {
                 this._levelOneTutorialTimer--
                 if (this._levelOneTutorialTimer <= 0) {
                     if (!this._levelOnePeashooterPacketReady()) {
-                        this._levelOneTutorialPhase = 'first-plant-done'
+                        this._levelOneTutorialPhase = 'collect-more-sun'
                         return
                     }
                     this._levelOneTutorialPhase = 'pick-second-seed'
@@ -526,19 +529,22 @@ export class GameSession {
     private _handleLevelOneTutorialSunClicked(item: Item) {
         if (this.level.adventureLevel !== 1 || item.type !== 'sun') return
 
-        if (this._levelOneTutorialPhase === 'first-plant-done' && this._levelOnePeashooterPacketReady()) {
-            this._enterLevelOneEnoughSunPhase()
+        if (this._levelOneTutorialPhase === 'first-plant-done') {
+            this._levelOneTutorialPhase = 'collect-more-sun'
+            this._pushLevelOneTutorialAdvice(LEVEL_1_ADVICE_CLICKED_SUN)
             return
         }
 
-        if (this._levelOneTutorialPhase === 'first-plant-done') {
-            this._clearAdvice()
+        if (this._levelOneTutorialPhase === 'collect-more-sun' && this._levelOnePeashooterPacketReady()) {
+            this._enterLevelOneEnoughSunPhase()
+            return
         }
     }
 
     private _handleLevelOneTutorialSunBanked() {
         if (this.level.adventureLevel !== 1) return
-        if (this._levelOneTutorialPhase !== 'first-plant-done') return
+        if (this._levelOneTutorialPhase !== 'first-plant-done' &&
+            this._levelOneTutorialPhase !== 'collect-more-sun') return
         if (!this._levelOnePeashooterPacketReady()) return
 
         this._enterLevelOneEnoughSunPhase()
@@ -705,11 +711,19 @@ export class GameSession {
         this.items.push(item)
         this.events.push({ type: 'entitySpawned', entityId: item.id })
         if (this.level.adventureLevel === 1 &&
-            this._levelOneTutorialPhase === 'first-plant-done' &&
+            (this._levelOneTutorialPhase === 'first-plant-done' ||
+                this._levelOneTutorialPhase === 'collect-more-sun') &&
             type === 'sun') {
-            this._pushLevelOneTutorialAdvice(LEVEL_1_ADVICE_COLLECT_FALLING_SUN)
+            this._pushLevelOneClickOnSunAdvice()
         }
         return item
+    }
+
+    private _pushLevelOneClickOnSunAdvice() {
+        if (this._levelOneClickOnSunAdviceShown) return
+
+        this._levelOneClickOnSunAdviceShown = true
+        this._pushLevelOneTutorialAdvice(LEVEL_1_ADVICE_COLLECT_FALLING_SUN)
     }
 
     private _canSpendSun(amount: number) {
