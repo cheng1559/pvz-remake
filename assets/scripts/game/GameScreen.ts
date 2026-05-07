@@ -47,6 +47,14 @@ import {
     wirePlantAnimation,
     type PlantAnimationView,
 } from './PlantAnimation'
+import {
+    attachFlagZombieAnimation,
+    createZombieAnimationView,
+    playZombieBodyAnimation,
+    syncZombieTrackVisibility,
+    wireZombieAnimation,
+    type ZombieAnimationView,
+} from './ZombieAnimation'
 import { GameSession } from './GameSession'
 import type {
     GameEntity,
@@ -106,6 +114,8 @@ const DEBUG_ZOMBIE_ATTACK_RECT_COLOR = new Color(255, 64, 64, 220)
 const DEBUG_ZOMBIE_RECT_LINE_WIDTH = 2
 const ZOMBIE_BODY_REANIM_OFFSET_X = 15
 const ZOMBIE_BODY_REANIM_OFFSET_Y = 8
+const ZOMBIE_REANIM_BLEND_TIME = 0.2
+const PAUSE_DIALOG_ZOMBIE_ANIMATION_PATH = 'animations/zombie_paper'
 const PLANT_PREVIEW_CACHE_CELL_WIDTH = 220
 const PLANT_PREVIEW_CACHE_CELL_HEIGHT = 160
 const PLANT_PREVIEW_CACHE_COLUMNS = 8
@@ -150,9 +160,6 @@ const SEED_TOOLTIP_NAMES: Record<SeedType, string> = {
 }
 const SEED_TOOLTIP_WAITING = 'recharging...'
 const SEED_TOOLTIP_NOT_ENOUGH_SUN = 'not enough sun'
-const CACHED_PLANT_ANIM_TIME: Partial<Record<PlantType, number>> = {
-    sunflower: 0.15,
-}
 const PLANT_VISUAL_ADJUSTMENTS: Partial<Record<PlantType, { offsetX?: number, offsetY?: number, scale?: number }>> = {
     potatomine: { offsetX: 12, offsetY: 12, scale: 0.8 },
 }
@@ -192,14 +199,8 @@ interface PlantView extends PlantAnimationView {
     highlightOverlay: Node | null
 }
 
-interface ZombieView {
+interface ZombieView extends ZombieAnimationView {
     node: Node
-    animator: Animator | null
-    body: AnimNode | null
-    flag: AnimNode | null
-    currentAnimation: string
-    currentAnimationSpeed: number
-    currentAnimationTime: number
 }
 
 @ccclass('AdventureGameScreen')
@@ -323,6 +324,7 @@ export class AdventureGameScreen extends Component {
             ...Object.values(PLANT_DEFINITIONS).map((plant) => StartupResourceLoader.loadJson(plant.animationPath)),
             ...Object.values(ZOMBIE_DEFINITIONS).map((zombie) => StartupResourceLoader.loadJson(zombie.animationPath)),
             StartupResourceLoader.loadJson('animations/zombie_flagpole'),
+            StartupResourceLoader.loadJson(PAUSE_DIALOG_ZOMBIE_ANIMATION_PATH),
             StartupResourceLoader.loadJson('animations/sun'),
             StartupResourceLoader.loadJson('animations/sodroll'),
             StartupResourceLoader.loadJson('animations/lawnmower'),
@@ -345,16 +347,20 @@ export class AdventureGameScreen extends Component {
         }
         const afterZombies = afterPlants + zombieTypes.length
         this._flagZombieAnimation = results[afterZombies] as JsonAsset | null
-        this._sunAnimation = results[afterZombies + 1] as JsonAsset | null
-        this._sodRollAnimation = results[afterZombies + 2] as JsonAsset | null
-        this._lawnMowerAnimation = results[afterZombies + 3] as JsonAsset | null
-        this._sunFont = results[afterZombies + 4] as BitmapFontAssets | null
-        this._packetCostFont = results[afterZombies + 5] as BitmapFontAssets | null
-        this._adviceFont = results[afterZombies + 6] as BitmapFontAssets | null
-        this._buttonSprites = results[afterZombies + 7] as MessageBoxButtonSprites | null
-        this._buttonFonts = results[afterZombies + 8] as MessageBoxButtonFonts | null
-        await this._preloadPlantAnimationTextures()
-        await this._preloadSunAnimationTextures()
+        const pauseDialogZombieAnimation = results[afterZombies + 1] as JsonAsset | null
+        this._sunAnimation = results[afterZombies + 2] as JsonAsset | null
+        this._sodRollAnimation = results[afterZombies + 3] as JsonAsset | null
+        this._lawnMowerAnimation = results[afterZombies + 4] as JsonAsset | null
+        this._sunFont = results[afterZombies + 5] as BitmapFontAssets | null
+        this._packetCostFont = results[afterZombies + 6] as BitmapFontAssets | null
+        this._adviceFont = results[afterZombies + 7] as BitmapFontAssets | null
+        this._buttonSprites = results[afterZombies + 8] as MessageBoxButtonSprites | null
+        this._buttonFonts = results[afterZombies + 9] as MessageBoxButtonFonts | null
+        await Promise.all([
+            this._preloadPlantAnimationTextures(),
+            this._preloadZombieAnimationTextures(pauseDialogZombieAnimation),
+            this._preloadSunAnimationTextures(),
+        ])
 
         await this._drawStaticBoard()
         this._drawHud()
@@ -1345,12 +1351,7 @@ export class AdventureGameScreen extends Component {
     private _createZombieVisual(node: Node, zombie: ZombieEntity): ZombieView {
         const view: ZombieView = {
             node,
-            animator: null,
-            body: null,
-            flag: null,
-            currentAnimation: '',
-            currentAnimationSpeed: 1,
-            currentAnimationTime: 0,
+            ...createZombieAnimationView(),
         }
         const shadow = SpriteLoader.get('plantshadow')
         if (shadow) {
@@ -1358,7 +1359,7 @@ export class AdventureGameScreen extends Component {
                 name: 'ZombieShadow',
                 spriteFrame: shadow,
                 parent: node,
-                x: 18,
+                x: 23,
                 y: -92,
             })
         }
@@ -1373,10 +1374,12 @@ export class AdventureGameScreen extends Component {
             animator.enabled = !this._session.paused
             const animationJson = zombieAnimation.json as Record<string, any>
             void animator.parseJson(animationJson).then(() => {
-                view.body = animator.addAnimNode('body')
-                this._configureZombieTracks(animator, zombie.type)
-                this._syncZombieTrackVisibility(view, zombie)
-                this._playZombieBodyAnimation(view, zombie.currentAnimation, zombie.animationSpeed, zombie.animationTime)
+                wireZombieAnimation(animator, view, zombie.type)
+                syncZombieTrackVisibility(view, zombie)
+                playZombieBodyAnimation(view, zombie.currentAnimation, {
+                    speed: zombie.animationSpeed,
+                    time: zombie.animationTime,
+                })
                 if (zombie.type === 'flag') {
                     this._attachFlagZombieVisual(animatorNode, view)
                 }
@@ -1510,156 +1513,43 @@ export class AdventureGameScreen extends Component {
         }
     }
 
-    private _configureZombieTracks(animator: Animator, zombieType: ZombieType) {
-        const hiddenByDefault = [
-            'anim_cone',
-            'anim_bucket',
-            'anim_screendoor',
-            'Zombie_flaghand',
-            'Zombie_duckytube',
-            'anim_tongue',
-            'Zombie_mustache',
-            'Zombie_innerarm_screendoor',
-            'Zombie_innerarm_screendoor_hand',
-            'Zombie_outerarm_screendoor',
-        ]
-        for (const track of hiddenByDefault) {
-            animator.hideTrack(track)
-        }
-
-        switch (zombieType) {
-            case 'traffic-cone':
-                animator.showTrack('anim_cone')
-                animator.hideTrack('anim_hair')
-                break
-            case 'bucket':
-                animator.showTrack('anim_bucket')
-                animator.hideTrack('anim_hair')
-                break
-            case 'ducky-tube':
-                animator.showTrack('Zombie_duckytube')
-                break
-            case 'flag':
-                animator.showTrack('Zombie_flaghand')
-                animator.showTrack('Zombie_innerarm_screendoor')
-                animator.hideTrack('anim_innerarm1')
-                animator.hideTrack('anim_innerarm2')
-                animator.hideTrack('anim_innerarm3')
-                break
-        }
-    }
-
-    private _syncZombieTrackVisibility(view: ZombieView, zombie: ZombieEntity) {
-        const animator = view.animator
-        if (!animator) return
-
-        if (zombie.hasHead) {
-            animator.showPrefix('anim_head')
-            animator.showPrefix('anim_hair')
-            if (zombie.hasTongue) {
-                animator.showPrefix('anim_tongue')
-            } else {
-                animator.hidePrefix('anim_tongue')
-            }
-            if (zombie.type === 'traffic-cone' || zombie.type === 'bucket') {
-                animator.hidePrefix('anim_hair')
-            }
-        } else {
-            animator.hidePrefix('anim_head')
-            animator.hidePrefix('anim_hair')
-            animator.hidePrefix('anim_tongue')
-        }
-
-        if (!zombie.hasArm) {
-            animator.hidePrefix('Zombie_outerarm_lower')
-            animator.hidePrefix('Zombie_outerarm_hand')
-            animator.setTrackImageOverride('Zombie_outerarm_upper', 'zombie_outerarm_upper2')
-        } else {
-            animator.showPrefix('Zombie_outerarm_lower')
-            animator.showPrefix('Zombie_outerarm_hand')
-            animator.setTrackImageOverride('Zombie_outerarm_upper', null)
-        }
-
-        if (zombie.type === 'traffic-cone') {
-            if (zombie.helmHealth > 0) {
-                animator.showTrack('anim_cone')
-                animator.hidePrefix('anim_hair')
-            } else {
-                animator.hideTrack('anim_cone')
-                if (zombie.hasHead) animator.showPrefix('anim_hair')
-            }
-        } else if (zombie.type === 'bucket') {
-            if (zombie.helmHealth > 0) {
-                animator.showTrack('anim_bucket')
-                animator.hidePrefix('anim_hair')
-            } else {
-                animator.hideTrack('anim_bucket')
-                if (zombie.hasHead) animator.showPrefix('anim_hair')
-            }
-        }
-    }
-
     private _attachFlagZombieVisual(parentNode: Node, view: ZombieView) {
         if (!this._flagZombieAnimation?.json || !view.body) return
 
-        const flagNode = new Node('Flag')
-        flagNode.layer = parentNode.layer
-        parentNode.addChild(flagNode)
-        const flagAnimator = flagNode.addComponent(Animator)
-        flagAnimator.enabled = !this._session.paused
         const animationJson = this._flagZombieAnimation.json as Record<string, any>
-        void flagAnimator.parseJson(animationJson).then(() => {
-            view.flag = flagAnimator.addAnimNode('flag')
-            view.flag?.attach({ node: view.body!, slot: 'Zombie_flaghand' })
-            view.flag?.play({ name: 'Zombie_flag', loop: true, speed: 15 / 12 })
-        })
-    }
-
-    private _playZombieBodyAnimation(view: ZombieView, animation: string, speed = 1, time = 0) {
-        if (!view.body) {
-            view.currentAnimation = animation
-            view.currentAnimationSpeed = speed
-            view.currentAnimationTime = time
-            return
-        }
-        if (view.currentAnimation === animation && view.body.isPlaying) {
-            if (view.currentAnimationSpeed !== speed) {
-                view.currentAnimationSpeed = speed
-            }
-            view.currentAnimationTime = time
-            view.body.speed = 0
-            view.body.time = time
-            return
-        }
-        view.currentAnimation = animation
-        view.currentAnimationSpeed = speed
-        view.currentAnimationTime = time
-        const isDeathAnimation =
-            animation === 'anim_death' ||
-            animation === 'anim_death2' ||
-            animation === 'anim_superlongdeath' ||
-            animation === 'anim_waterdeath'
-        view.body.play({
-            name: animation,
-            loop: !isDeathAnimation,
-            speed: 0,
-            time,
-            keepLastFrame: isDeathAnimation,
+        void attachFlagZombieAnimation(parentNode, view, animationJson, {
+            enabled: !this._session.paused,
+            sortHost: view.animator,
         })
     }
 
     private _syncZombieAnimation(zombie: ZombieEntity) {
         const view = this._zombieViews.get(zombie.id)
         if (!view) return
-        this._syncZombieTrackVisibility(view, zombie)
-        this._playZombieBodyAnimation(view, zombie.currentAnimation, zombie.animationSpeed, zombie.animationTime)
+        syncZombieTrackVisibility(view, zombie)
+        const blendTime = this._getZombieAnimationBlendTime(view, zombie.currentAnimation)
+        playZombieBodyAnimation(view, zombie.currentAnimation, {
+            speed: zombie.animationSpeed,
+            time: zombie.animationTime,
+            blendTime,
+        })
     }
 
     private _playZombieAnimation(entityId: number, animation: string) {
         const view = this._zombieViews.get(entityId)
         if (!view) return
         const zombie = this._session.zombies.find((item) => item.id === entityId)
-        this._playZombieBodyAnimation(view, animation, zombie?.animationSpeed ?? 1, zombie?.animationTime ?? 0)
+        const blendTime = this._getZombieAnimationBlendTime(view, animation)
+        playZombieBodyAnimation(view, animation, {
+            speed: zombie?.animationSpeed ?? 1,
+            time: zombie?.animationTime ?? 0,
+            blendTime,
+        })
+    }
+
+    private _getZombieAnimationBlendTime(view: ZombieView, nextAnimation: string) {
+        if (!view.currentAnimation || view.currentAnimation === nextAnimation) return 0
+        return ZOMBIE_REANIM_BLEND_TIME
     }
 
     private _playPlantAnimation(entityId: number, animation: string) {
@@ -1774,7 +1664,7 @@ export class AdventureGameScreen extends Component {
     }
 
     private _applyPacketColor(node: Node, packet: SeedPacketState) {
-        const affordable = this._session.sun >= SEED_DEFINITIONS[packet.seedType].cost
+        const affordable = this._session.canAffordSeed(packet.seedType)
         const cooling = packet.cooldownRemaining > 0
         const inactiveWithoutCooldown = !packet.active && !cooling
         const color =
@@ -1871,6 +1761,21 @@ export class AdventureGameScreen extends Component {
         await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
     }
 
+    private async _preloadZombieAnimationTextures(extraAnimation: JsonAsset | null) {
+        const textureNames = new Set<string>()
+        for (const animation of this._zombieAnimations.values()) {
+            this._collectAnimationImages(animation.json as Record<string, any>, textureNames)
+        }
+        if (this._flagZombieAnimation?.json) {
+            this._collectAnimationImages(this._flagZombieAnimation.json as Record<string, any>, textureNames)
+        }
+        if (extraAnimation?.json) {
+            this._collectAnimationImages(extraAnimation.json as Record<string, any>, textureNames)
+        }
+        textureNames.add('plantshadow')
+        await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
+    }
+
     private async _preloadSunAnimationTextures() {
         if (!this._sunAnimation?.json) return
 
@@ -1919,10 +1824,10 @@ export class AdventureGameScreen extends Component {
             this._previewSeedType = this._session.selectedSeed
         }
         if (!this._cursorPreview?.isValid) {
-            this._cursorPreview = this._createPlantPreviewNode('CursorPreview', CURSOR_PLANT_PREVIEW_OPACITY, true)
+            this._cursorPreview = this._createPlantPreviewNode('CursorPreview', CURSOR_PLANT_PREVIEW_OPACITY)
         }
         if (!this._gridPreview?.isValid) {
-            this._gridPreview = this._createPlantPreviewNode('GridPreview', GRID_PLANT_PREVIEW_OPACITY, true)
+            this._gridPreview = this._createPlantPreviewNode('GridPreview', GRID_PLANT_PREVIEW_OPACITY)
         }
 
         this._cursorPreview.setPosition(
@@ -1969,29 +1874,17 @@ export class AdventureGameScreen extends Component {
         this._shovelCursor = null
     }
 
-    private _createPlantPreviewNode(name: string, opacity: number, useCachedPreview: boolean) {
+    private _createPlantPreviewNode(name: string, opacity: number) {
         const seedType = this._session.selectedSeed!
         const plantType = SEED_DEFINITIONS[seedType].plantType
-        if (useCachedPreview) {
-            const cachedNode = this._createCachedPlantPreviewNode(name, plantType, opacity)
-            if (cachedNode) return cachedNode
-        }
-
-        const staticAnimTime = CACHED_PLANT_ANIM_TIME[plantType] ?? 0
-        const node = createUINode(name, {
-            parent: this._uiLayer,
-            anchorX: 0,
-            anchorY: 1,
-            width: 100,
-            height: 100,
-        })
-        this._createPlantVisual(node, plantType, false, opacity, false, staticAnimTime)
-        return node
+        return this._createCachedPlantPreviewNode(name, plantType, opacity)
     }
 
     private _createCachedPlantPreviewNode(name: string, plantType: PlantType, opacity: number) {
         const atlas = SpriteLoader.get('plant_previews_cached')
-        if (!atlas) return null
+        if (!atlas) {
+            throw new Error("[GameScreen] Required sprite 'plant_previews_cached' is not loaded")
+        }
 
         const node = createUINode(name, {
             parent: this._uiLayer,
@@ -2161,14 +2054,14 @@ export class AdventureGameScreen extends Component {
 
     private _getSeedTooltipWarning(packet: SeedPacketState) {
         if (!packet.active || packet.cooldownRemaining > 0) return SEED_TOOLTIP_WAITING
-        if (this._session.sun < SEED_DEFINITIONS[packet.seedType].cost) return SEED_TOOLTIP_NOT_ENOUGH_SUN
+        if (!this._session.canAffordSeed(packet.seedType)) return SEED_TOOLTIP_NOT_ENOUGH_SUN
         return ''
     }
 
     private _canPickUpSeedPacket(packet: SeedPacketState) {
         return packet.active &&
             packet.cooldownRemaining <= 0 &&
-            this._session.sun >= SEED_DEFINITIONS[packet.seedType].cost
+            this._session.canAffordSeed(packet.seedType)
     }
 
     private _isMenuButtonPixel(pixel: { x: number, y: number }) {

@@ -1010,10 +1010,258 @@
             ]
         }
     },
+    "zombie_paper": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_death",
+                "anim_eat",
+                "anim_eat_nopaper",
+                "anim_walk",
+                "anim_walk_nopaper",
+                "anim_idle",
+                "anim_gasp"
+            ]
+        }
+    },
     "zombie_hand": {
         "default": {
             "slots": [],
             "animations": []
+        }
+    },
+    "zombie_polevaulter": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_run",
+                "anim_jump",
+                "anim_walk",
+                "anim_death",
+                "anim_eat"
+            ]
+        }
+    },
+    "zombie_football": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_death",
+                "anim_eat",
+                "anim_walk",
+                "anim_idle"
+            ]
+        }
+    },
+    "zombie_disco": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_moonwalk",
+                "anim_point",
+                "anim_walk",
+                "anim_armraise",
+                "anim_eat",
+                "anim_death"
+            ]
+        }
+    },
+    "zombie_backup": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_walk",
+                "anim_armraise",
+                "anim_eat",
+                "anim_death"
+            ]
+        }
+    },
+    "zombie_snorkle": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_aquarium_death",
+                "anim_aquarium_bite",
+                "anim_aquarium_swim",
+                "anim_death",
+                "anim_eat",
+                "anim_uptoeat",
+                "anim_swim",
+                "anim_jumpinpool",
+                "anim_walk",
+                "anim_idle"
+            ]
+        }
+    },
+    "zombie_zamboni": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_drive",
+                "anim_wheelie1",
+                "anim_wheelie2"
+            ]
+        }
+    },
+    "zombie_bobsled": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_walk",
+                "anim_push",
+                "anim_jump",
+                "anim_death",
+                "anim_eat"
+            ]
+        }
+    },
+    "zombie_dolphinrider": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_walkdolphin",
+                "anim_walk",
+                "anim_jumpinpool",
+                "anim_ride",
+                "anim_dolphinjump",
+                "anim_eat",
+                "anim_swim",
+                "anim_death"
+            ]
+        }
+    },
+    "zombie_jackbox": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_walk",
+                "anim_eat",
+                "anim_pop",
+                "anim_death"
+            ]
+        }
+    },
+    "zombie_balloon": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_swing",
+                "anim_pop",
+                "anim_eat",
+                "anim_walk",
+                "anim_death"
+            ]
+        },
+        "propeller": {
+            "slots": [],
+            "animations": [
+                "propeller"
+            ]
+        }
+    },
+    "zombie_digger": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_walk",
+                "anim_eat",
+                "anim_death",
+                "anim_dig",
+                "anim_drill",
+                "anim_landing",
+                "anim_dizzy"
+            ]
+        }
+    },
+    "zombie_pogo": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_pogo",
+                "anim_death",
+                "anim_walk",
+                "anim_idle",
+                "anim_eat"
+            ]
+        }
+    },
+    "zombie_yeti": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_death",
+                "anim_eat",
+                "anim_walk",
+                "anim_idle"
+            ]
+        }
+    },
+    "zombie_bungi": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_drop",
+                "anim_grab",
+                "anim_hold",
+                "anim_raise"
+            ]
+        }
+    },
+    "zombie_ladder": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_ladderwalk",
+                "anim_laddereat",
+                "anim_death",
+                "anim_walk",
+                "anim_eat",
+                "anim_placeladder"
+            ]
+        }
+    },
+    "zombie_catapult": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_walk",
+                "anim_shoot",
+                "anim_idle",
+                "anim_bounce"
+            ]
+        }
+    },
+    "zombie_gargantuar": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_idle",
+                "anim_walk",
+                "anim_smash",
+                "anim_throw",
+                "anim_death"
+            ]
+        }
+    },
+    "zombie_imp": {
+        "body": {
+            "slots": [],
+            "animations": [
+                "anim_land",
+                "anim_thrown",
+                "anim_walk",
+                "anim_eat",
+                "anim_death"
+            ]
         }
     },
     "treeofwisdom": {

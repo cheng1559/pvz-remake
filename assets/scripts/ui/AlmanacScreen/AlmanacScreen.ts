@@ -22,18 +22,35 @@ import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
-import { wirePlantAnimation, type PlantAnimationView } from '@/game/PlantAnimation'
+import {
+    getAnimationRateSpeed,
+    wirePlantAnimation,
+    type PlantAnimationView,
+} from '@/game/PlantAnimation'
 import type { PlantType } from '@/game/GameTypes'
+import {
+    attachFlagZombieAnimation,
+    createZombieAnimationView,
+    playZombieBodyAnimation,
+    wireZombieAnimation,
+    type ZombieAnimationType,
+} from '@/game/ZombieAnimation'
 import { UIButton } from '@/ui/Button'
 import { TouchScrollGesture } from '@/ui/ScrollGesture'
-import { SeedPacketRenderer, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/ui/SeedPacketRenderer'
+import {
+    getAtlasFrame,
+    SeedPacketRenderer,
+    SEED_PACKET_HEIGHT,
+    SEED_PACKET_WIDTH,
+} from '@/ui/SeedPacketRenderer'
 import { buildThreeSliceRow, createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import {
     AlmanacScreenAssets,
-    type AlmanacPlantAnimationMap,
+    type AlmanacAnimationMap,
     type AlmanacPlantAnimationName,
     type AlmanacScreenFonts,
     type AlmanacScreenSprites,
+    type AlmanacZombieAnimationName,
 } from './AlmanacScreenAssets'
 import { MenuScreenBase } from '../MenuScreenBase'
 
@@ -50,6 +67,9 @@ const SEED_PACKET_STRIDE_X = SEED_PACKET_WIDTH + 2
 const SEED_PACKET_STRIDE_Y = SEED_PACKET_HEIGHT + 8
 const SHORT_LINE_SPACING_OFFSET = -9
 const ZOMBIE_WINDOW_SIZE = 76
+const ZOMBIE_PREVIEW_CACHE_COLUMNS = 8
+const ZOMBIE_PREVIEW_CACHE_CELL_WIDTH = 76
+const ZOMBIE_PREVIEW_CACHE_CELL_HEIGHT = 76
 const ZOMBIE_ROWS = 5
 const ZOMBIE_STRIDE_X = 85
 const ZOMBIE_STRIDE_Y = 80
@@ -68,11 +88,36 @@ const ALMANAC_PLANT_POSITION_X = 578
 const ALMANAC_PLANT_POSITION_Y = 140
 const ALMANAC_INDEX_PLANT_POSITION_X = 167
 const ALMANAC_INDEX_PLANT_POSITION_Y = 225
+const ALMANAC_ZOMBIE_POSITION_X = 559
+const ALMANAC_ZOMBIE_POSITION_Y = 175
+const ALMANAC_INDEX_ZOMBIE_POSITION_X = 535
+const ALMANAC_INDEX_ZOMBIE_POSITION_Y = 215
+const ALMANAC_ZOMBIE_REANIM_OFFSET_X = 15
+const ALMANAC_ZOMBIE_REANIM_OFFSET_Y = 8
+const ALMANAC_ZOMBIE_SCALE_PIVOT_X = 30
+const ALMANAC_ZOMBIE_SCALE_PIVOT_Y = 120
+const ALMANAC_ZOMBIE_SHADOW_OFFSET_X = 23
+const ALMANAC_ZOMBIE_SHADOW_OFFSET_Y = 92
+const ALMANAC_ZOMBIE_IDLE2_CHANCE = 0.75
+const ALMANAC_ZOMBIE_IDLE_RATE_MIN = 12
+const ALMANAC_ZOMBIE_IDLE_RATE_MAX = 18
+const ALMANAC_ZOMBIE_IDLE2_RATE_MIN = 12
+const ALMANAC_ZOMBIE_IDLE2_RATE_MAX = 24
+const ALMANAC_ZOMBIE_UPDATE_TICKS_PER_SECOND = 100
+const POGO_BOUNCE_TIME = 80
+const POGO_BOUNCE_REANIM_RESTART_COUNTER = 7
+const POGO_BOUNCE_MIN_ALTITUDE = 9
+const POGO_BOUNCE_MAX_ALTITUDE = 49
+const POGO_BOUNCE_REANIM_RATE = 40
+const BUNGEE_CUTSCENE_TIME = 200
+const BUNGEE_CUTSCENE_ALTITUDE = 40
+const BUNGEE_DROP_REANIM_RATE = 24
 
 let additiveSpriteMaterial: Material | null = null
 
 type AlmanacPage = 'index' | 'plants' | 'zombies'
 type LawnStringMap = Record<string, string>
+type AlmanacZombieMotionType = 'pogo' | 'bungee'
 
 interface AlmanacTextRun {
     text: string
@@ -104,6 +149,37 @@ interface AlmanacPlantPreviewDefinition {
     animationName: AlmanacPlantAnimationName
 }
 
+interface AlmanacZombiePreviewDefinition {
+    zombieType: ZombieAnimationType
+    animationName: AlmanacZombieAnimationName
+    bodyAnimations: readonly string[]
+    animationRates?: Partial<Record<string, number>>
+    flag?: boolean
+    previewOffsetX?: number
+    previewOffsetY?: number
+    drawOffsetX?: number
+    drawOffsetY?: number
+    visualOffsetX?: number
+    visualOffsetY?: number
+    scale?: number
+    shadowOffsetX?: number
+    shadowOffsetY?: number
+    shadowScale?: number
+    hideShadow?: boolean
+    motion?: AlmanacZombieMotionType
+}
+
+interface AlmanacZombiePreviewMotion {
+    type: AlmanacZombieMotionType
+    animatorNode: Node
+    animatorBaseY: number
+    shadowNode: Node | null
+    shadowBaseY: number
+    phaseCounter: number
+    previousPhaseCounter: number
+    view: ReturnType<typeof createZombieAnimationView>
+}
+
 const ALMANAC_PLANT_PREVIEW_BY_KEY: Partial<Record<string, AlmanacPlantPreviewDefinition>> = {
     PEASHOOTER: { plantType: 'peashooter', animationName: 'peashootersingle' },
     SUNFLOWER: { plantType: 'sunflower', animationName: 'sunflower' },
@@ -115,12 +191,196 @@ const ALMANAC_PLANT_PREVIEW_BY_KEY: Partial<Record<string, AlmanacPlantPreviewDe
     REPEATER: { plantType: 'repeater', animationName: 'peashooter' },
 }
 
-const ALMANAC_PLANT_VISUAL_ADJUSTMENTS: Partial<Record<PlantType, { offsetX?: number, offsetY?: number, scale?: number }>> = {
+const ALMANAC_PLANT_VISUAL_ADJUSTMENTS: Partial<
+    Record<PlantType, { offsetX?: number; offsetY?: number; scale?: number }>
+> = {
     potatomine: { offsetX: 12, offsetY: 12, scale: 0.8 },
 }
 
-const ALMANAC_PLANT_SHADOW_ADJUSTMENTS: Partial<Record<PlantType, { offsetX: number, offsetY: number, scale?: number }>> = {
+const ALMANAC_PLANT_SHADOW_ADJUSTMENTS: Partial<
+    Record<PlantType, { offsetX: number; offsetY: number; scale?: number }>
+> = {
     chomper: { offsetX: -21, offsetY: 57 },
+}
+
+const ALMANAC_ZOMBIE_PREVIEW_BY_KEY: Partial<Record<string, AlmanacZombiePreviewDefinition>> = {
+    ZOMBIE: {
+        zombieType: 'normal',
+        animationName: 'zombie',
+        bodyAnimations: ['anim_idle2', 'anim_idle'],
+    },
+    FLAG_ZOMBIE: {
+        zombieType: 'flag',
+        animationName: 'zombie',
+        bodyAnimations: ['anim_idle2', 'anim_idle'],
+        flag: true,
+    },
+    CONEHEAD_ZOMBIE: {
+        zombieType: 'traffic-cone',
+        animationName: 'zombie',
+        bodyAnimations: ['anim_idle2', 'anim_idle'],
+    },
+    POLE_VAULTING_ZOMBIE: {
+        zombieType: 'pole-vaulter',
+        animationName: 'zombie_polevaulter',
+        bodyAnimations: ['anim_idle'],
+        drawOffsetX: -6,
+        drawOffsetY: -11,
+        shadowOffsetX: 36,
+        shadowOffsetY: 103,
+    },
+    BUCKETHEAD_ZOMBIE: {
+        zombieType: 'bucket',
+        animationName: 'zombie',
+        bodyAnimations: ['anim_idle2', 'anim_idle'],
+    },
+    SCREEN_DOOR_ZOMBIE: {
+        zombieType: 'screen-door',
+        animationName: 'zombie',
+        bodyAnimations: ['anim_idle2', 'anim_idle'],
+    },
+    NEWSPAPER_ZOMBIE: {
+        zombieType: 'newspaper',
+        animationName: 'zombie_paper',
+        bodyAnimations: ['anim_idle'],
+        shadowOffsetX: 29,
+        shadowOffsetY: 96,
+    },
+    FOOTBALL_ZOMBIE: {
+        zombieType: 'football',
+        animationName: 'zombie_football',
+        bodyAnimations: ['anim_idle'],
+        previewOffsetX: -12,
+        previewOffsetY: 0,
+        drawOffsetY: -16,
+        shadowOffsetX: 43,
+        shadowOffsetY: 108,
+    },
+    DANCING_ZOMBIE: {
+        zombieType: 'dancing',
+        animationName: 'zombie_disco',
+        bodyAnimations: ['anim_armraise'],
+        animationRates: { anim_armraise: 12 },
+        scale: 0.8,
+    },
+    BACKUP_DANCER: {
+        zombieType: 'backup-dancer',
+        animationName: 'zombie_backup',
+        bodyAnimations: ['anim_armraise'],
+        animationRates: { anim_armraise: 12 },
+        scale: 0.8,
+    },
+    DUCKY_TUBE_ZOMBIE: {
+        zombieType: 'ducky-tube',
+        animationName: 'zombie',
+        bodyAnimations: ['anim_idle2', 'anim_idle'],
+    },
+    SNORKEL_ZOMBIE: {
+        zombieType: 'snorkel',
+        animationName: 'zombie_snorkle',
+        bodyAnimations: ['anim_idle'],
+        shadowOffsetX: 35,
+        shadowOffsetY: 97,
+    },
+    ZOMBONI: {
+        zombieType: 'zamboni',
+        animationName: 'zombie_zamboni',
+        bodyAnimations: ['anim_drive'],
+        previewOffsetX: 38,
+        previewOffsetY: -18,
+        hideShadow: true,
+    },
+    ZOMBIE_BOBSLED_TEAM: {
+        zombieType: 'bobsled',
+        animationName: 'zombie_bobsled',
+        bodyAnimations: ['anim_idle'],
+        drawOffsetY: -12,
+        shadowOffsetX: 20,
+        shadowOffsetY: 105,
+    },
+    DOLPHIN_RIDER_ZOMBIE: {
+        zombieType: 'dolphin-rider',
+        animationName: 'zombie_dolphinrider',
+        bodyAnimations: ['anim_idle'],
+        shadowOffsetX: 19,
+        shadowOffsetY: 103,
+    },
+    JACK_IN_THE_BOX_ZOMBIE: {
+        zombieType: 'jack-in-the-box',
+        animationName: 'zombie_jackbox',
+        bodyAnimations: ['anim_idle'],
+    },
+    BALLOON_ZOMBIE: {
+        zombieType: 'balloon',
+        animationName: 'zombie_balloon',
+        bodyAnimations: ['anim_idle'],
+        animationRates: { anim_idle: 9 },
+        previewOffsetY: -3,
+        shadowOffsetY: 105,
+    },
+    DIGGER_ZOMBIE: {
+        zombieType: 'digger',
+        animationName: 'zombie_digger',
+        bodyAnimations: ['anim_idle'],
+        shadowOffsetX: 17,
+        shadowOffsetY: 97,
+    },
+    POGO_ZOMBIE: {
+        zombieType: 'pogo',
+        animationName: 'zombie_pogo',
+        bodyAnimations: ['anim_pogo'],
+        animationRates: { anim_pogo: POGO_BOUNCE_REANIM_RATE },
+        drawOffsetY: 16,
+        shadowOffsetY: 92,
+        motion: 'pogo',
+    },
+    ZOMBIE_YETI: {
+        zombieType: 'yeti',
+        animationName: 'zombie_yeti',
+        bodyAnimations: ['anim_idle'],
+        drawOffsetY: -20,
+        shadowOffsetX: 3,
+        shadowOffsetY: 112,
+    },
+    BUNGEE_ZOMBIE: {
+        zombieType: 'bungee',
+        animationName: 'zombie_bungi',
+        bodyAnimations: ['anim_drop'],
+        animationRates: { anim_drop: BUNGEE_DROP_REANIM_RATE },
+        previewOffsetX: -3,
+        hideShadow: true,
+        motion: 'bungee',
+    },
+    LADDER_ZOMBIE: {
+        zombieType: 'ladder',
+        animationName: 'zombie_ladder',
+        bodyAnimations: ['anim_idle'],
+    },
+    CATAPULT_ZOMBIE: {
+        zombieType: 'catapult',
+        animationName: 'zombie_catapult',
+        bodyAnimations: ['anim_idle'],
+        previewOffsetX: -35,
+        previewOffsetY: -18,
+        hideShadow: true,
+    },
+    GARGANTUAR: {
+        zombieType: 'gargantuar',
+        animationName: 'zombie_gargantuar',
+        bodyAnimations: ['anim_idle'],
+        previewOffsetY: 22,
+        shadowOffsetX: 27,
+        shadowOffsetY: 89,
+        shadowScale: 1.5,
+    },
+    IMP: {
+        zombieType: 'imp',
+        animationName: 'zombie_imp',
+        bodyAnimations: ['anim_walk'],
+        shadowOffsetX: 41,
+        shadowOffsetY: 106,
+        shadowScale: 0.6,
+    },
 }
 
 const ALMANAC_PLANTS: AlmanacPlantDefinition[] = [
@@ -164,11 +424,39 @@ const ALMANAC_PLANTS: AlmanacPlantDefinition[] = [
     { id: 37, key: 'UMBRELLA_LEAF', name: 'Umbrella Leaf', cost: 100, refreshTime: 750 },
     { id: 38, key: 'MARIGOLD', name: 'Marigold', cost: 50, refreshTime: 3000 },
     { id: 39, key: 'MELON_PULT', name: 'Melon-pult', cost: 300, refreshTime: 750 },
-    { id: 40, key: 'GATLING_PEA', name: 'Gatling Pea', cost: 250, refreshTime: 5000, upgrade: true },
-    { id: 41, key: 'TWIN_SUNFLOWER', name: 'Twin Sunflower', cost: 150, refreshTime: 5000, upgrade: true },
-    { id: 42, key: 'GLOOM_SHROOM', name: 'Gloom-shroom', cost: 150, refreshTime: 5000, upgrade: true },
+    {
+        id: 40,
+        key: 'GATLING_PEA',
+        name: 'Gatling Pea',
+        cost: 250,
+        refreshTime: 5000,
+        upgrade: true,
+    },
+    {
+        id: 41,
+        key: 'TWIN_SUNFLOWER',
+        name: 'Twin Sunflower',
+        cost: 150,
+        refreshTime: 5000,
+        upgrade: true,
+    },
+    {
+        id: 42,
+        key: 'GLOOM_SHROOM',
+        name: 'Gloom-shroom',
+        cost: 150,
+        refreshTime: 5000,
+        upgrade: true,
+    },
     { id: 43, key: 'CATTAIL', name: 'Cattail', cost: 225, refreshTime: 5000, upgrade: true },
-    { id: 44, key: 'WINTER_MELON', name: 'Winter Melon', cost: 200, refreshTime: 5000, upgrade: true },
+    {
+        id: 44,
+        key: 'WINTER_MELON',
+        name: 'Winter Melon',
+        cost: 200,
+        refreshTime: 5000,
+        upgrade: true,
+    },
     { id: 45, key: 'GOLD_MAGNET', name: 'Gold Magnet', cost: 50, refreshTime: 5000, upgrade: true },
     { id: 46, key: 'SPIKEROCK', name: 'Spikerock', cost: 125, refreshTime: 5000, upgrade: true },
     { id: 47, key: 'COB_CANNON', name: 'Cob Cannon', cost: 500, refreshTime: 5000, upgrade: true },
@@ -226,6 +514,7 @@ export class AlmanacScreen extends MenuScreenBase {
     private _descriptionScrollbarColor = Color.WHITE.clone()
     private _descriptionScrollbarBackColor = Color.WHITE.clone()
     private _descriptionContentNode: Node | null = null
+    private _zombiePreviewMotions: AlmanacZombiePreviewMotion[] = []
     private readonly _descriptionTouchScrollGesture = new TouchScrollGesture()
 
     onEnable() {
@@ -238,6 +527,11 @@ export class AlmanacScreen extends MenuScreenBase {
         input.off(Input.EventType.MOUSE_UP, this._onGlobalMouseUp, this)
         this._descriptionSliderDragging = false
         this._descriptionTouchScrollGesture.cancel()
+        this._zombiePreviewMotions = []
+    }
+
+    protected update(dt: number) {
+        this._updateZombiePreviewMotions(dt)
     }
 
     async render(): Promise<void> {
@@ -250,6 +544,7 @@ export class AlmanacScreen extends MenuScreenBase {
         const lawnStrings = await LawnStringLoader.load()
 
         this._resetRoot('AlmanacScreenRoot')
+        this._zombiePreviewMotions = []
         this._renderAlmanac(sprites, fonts, animations, lawnStrings)
         this._preserveHoveredPlantDuringRender = false
         this._preserveHoveredZombieDuringRender = false
@@ -259,7 +554,7 @@ export class AlmanacScreen extends MenuScreenBase {
     private _renderAlmanac(
         sprites: AlmanacScreenSprites,
         fonts: AlmanacScreenFonts,
-        animations: AlmanacPlantAnimationMap,
+        animations: AlmanacAnimationMap,
         lawnStrings: LawnStringMap,
     ) {
         if (this._almanacPage === 'plants') {
@@ -285,7 +580,7 @@ export class AlmanacScreen extends MenuScreenBase {
                 color: new Color(0, 196, 0),
                 align: 'center',
             })
-            this._renderZombieAlmanac(sprites, fonts, lawnStrings)
+            this._renderZombieAlmanac(sprites, fonts, animations, lawnStrings)
         } else {
             this._createBackground(sprites.almanacIndexBack)
             this._createText({
@@ -305,6 +600,14 @@ export class AlmanacScreen extends MenuScreenBase {
                 ALMANAC_INDEX_PLANT_POSITION_X,
                 ALMANAC_INDEX_PLANT_POSITION_Y,
             )
+            this._createAlmanacZombiePreview({
+                name: 'IndexZombiePreview',
+                zombieKey: 'ZOMBIE',
+                animations,
+                sprites,
+                x: ALMANAC_INDEX_ZOMBIE_POSITION_X,
+                y: ALMANAC_INDEX_ZOMBIE_POSITION_Y,
+            })
         }
 
         if (this._almanacPage !== 'index') {
@@ -348,13 +651,19 @@ export class AlmanacScreen extends MenuScreenBase {
     private _renderPlantAlmanac(
         sprites: AlmanacScreenSprites,
         fonts: AlmanacScreenFonts,
-        animations: AlmanacPlantAnimationMap,
+        animations: AlmanacAnimationMap,
         lawnStrings: LawnStringMap,
     ) {
         for (const plant of ALMANAC_PLANTS) {
             this._createPlantSeedPacket(plant, sprites, fonts)
         }
-        this._createPlantInfoPanel(this._getSelectedPlant(), sprites, fonts, animations, lawnStrings)
+        this._createPlantInfoPanel(
+            this._getSelectedPlant(),
+            sprites,
+            fonts,
+            animations,
+            lawnStrings,
+        )
     }
 
     private _createPlantSeedPacket(
@@ -429,7 +738,8 @@ export class AlmanacScreen extends MenuScreenBase {
             anchorX: 0,
             anchorY: 1,
             width: plant.id === 48 ? sprites.almanacImitater.originalSize.width : SEED_PACKET_WIDTH,
-            height: plant.id === 48 ? sprites.almanacImitater.originalSize.height : SEED_PACKET_HEIGHT,
+            height:
+                plant.id === 48 ? sprites.almanacImitater.originalSize.height : SEED_PACKET_HEIGHT,
             x: this._cppX(x),
             y: this._cppY(y),
         })
@@ -443,7 +753,10 @@ export class AlmanacScreen extends MenuScreenBase {
             }
             if (highlighted) {
                 this._hoveredPlantId = plant.id
-            } else if (!this._preserveHoveredPlantDuringRender && this._hoveredPlantId === plant.id) {
+            } else if (
+                !this._preserveHoveredPlantDuringRender &&
+                this._hoveredPlantId === plant.id
+            ) {
                 this._hoveredPlantId = null
             }
         }
@@ -464,7 +777,7 @@ export class AlmanacScreen extends MenuScreenBase {
         plant: AlmanacPlantDefinition,
         sprites: AlmanacScreenSprites,
         fonts: AlmanacScreenFonts,
-        animations: AlmanacPlantAnimationMap,
+        animations: AlmanacAnimationMap,
         lawnStrings: LawnStringMap,
     ) {
         createSpriteNode({
@@ -508,7 +821,10 @@ export class AlmanacScreen extends MenuScreenBase {
 
         const infoHeight = this._createAlmanacText({
             name: 'PlantDescriptionHeader',
-            text: LawnStringLoader.translateOptional(`[${plant.key}_DESCRIPTION_HEADER]`, lawnStrings),
+            text: LawnStringLoader.translateOptional(
+                `[${plant.key}_DESCRIPTION_HEADER]`,
+                lawnStrings,
+            ),
             x: 485,
             y: 309,
             width: 258,
@@ -550,7 +866,7 @@ export class AlmanacScreen extends MenuScreenBase {
     private _createAlmanacPlantPreview(
         name: string,
         plantKey: string,
-        animations: AlmanacPlantAnimationMap,
+        animations: AlmanacAnimationMap,
         sprites: AlmanacScreenSprites,
         x: number,
         y: number,
@@ -572,7 +888,10 @@ export class AlmanacScreen extends MenuScreenBase {
             y: this._cppY(y),
         })
 
-        const shadowAdjust = ALMANAC_PLANT_SHADOW_ADJUSTMENTS[preview.plantType] ?? { offsetX: -3, offsetY: 51 }
+        const shadowAdjust = ALMANAC_PLANT_SHADOW_ADJUSTMENTS[preview.plantType] ?? {
+            offsetX: -3,
+            offsetY: 51,
+        }
         const shadowNode = createSpriteNode({
             name: 'PlantShadow',
             spriteFrame: sprites.plantShadow,
@@ -619,15 +938,351 @@ export class AlmanacScreen extends MenuScreenBase {
         })
     }
 
+    private _createAlmanacZombiePreview(args: {
+        name: string
+        zombieKey: string
+        animations: AlmanacAnimationMap
+        sprites: AlmanacScreenSprites
+        x: number
+        y: number
+        includeShadow?: boolean
+    }) {
+        const preview = ALMANAC_ZOMBIE_PREVIEW_BY_KEY[args.zombieKey]
+        if (!preview) return
+
+        const animation = args.animations[preview.animationName]
+        if (!animation?.json) return
+        const previewOffsetX = (preview.previewOffsetX ?? 0) + (preview.drawOffsetX ?? 0)
+        const previewOffsetY = (preview.previewOffsetY ?? 0) + (preview.drawOffsetY ?? 0)
+
+        const root = createUINode(args.name, {
+            parent: this._root!,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 120,
+            height: 120,
+            x: this._cppX(args.x + previewOffsetX),
+            y: this._cppY(args.y + previewOffsetY),
+        })
+
+        let shadowNode: Node | null = null
+        let shadowBaseY = 0
+        if (args.includeShadow && !preview.hideShadow) {
+            shadowNode = createSpriteNode({
+                name: 'ZombieShadow',
+                spriteFrame: args.sprites.plantShadow,
+                parent: root,
+                layer: this.node.layer,
+                x: preview.shadowOffsetX ?? ALMANAC_ZOMBIE_SHADOW_OFFSET_X,
+                y: -(preview.shadowOffsetY ?? ALMANAC_ZOMBIE_SHADOW_OFFSET_Y),
+            })
+            shadowBaseY = shadowNode.position.y
+            const shadowScale = preview.shadowScale ?? 1
+            shadowNode.setScale(shadowScale, shadowScale, 1)
+        }
+
+        const visualScale = preview.scale ?? 1
+        const animatorOffsetX =
+            ALMANAC_ZOMBIE_REANIM_OFFSET_X +
+            (preview.visualOffsetX ?? 0) +
+            ALMANAC_ZOMBIE_SCALE_PIVOT_X * (1 - visualScale)
+        const animatorOffsetY =
+            ALMANAC_ZOMBIE_REANIM_OFFSET_Y -
+            (preview.visualOffsetY ?? 0) -
+            ALMANAC_ZOMBIE_SCALE_PIVOT_Y * (1 - visualScale)
+        const animatorNode = createUINode('Animator', {
+            parent: root,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            x: animatorOffsetX,
+            y: animatorOffsetY,
+        })
+        animatorNode.setScale(visualScale, visualScale, 1)
+        const animatorBaseY = animatorNode.position.y
+        const animator = animatorNode.addComponent(Animator)
+        const animationJson = animation.json as Record<string, any>
+        void animator.parseJson(animationJson).then(() => {
+            if (!animatorNode.isValid) return
+            const view = createZombieAnimationView(animator)
+            wireZombieAnimation(animator, view, preview.zombieType)
+            this._playAlmanacZombiePreview(
+                view,
+                preview,
+                animatorNode,
+                animatorBaseY,
+                shadowNode,
+                shadowBaseY,
+            )
+            if (preview.flag) {
+                const flagAnimation = args.animations.zombie_flagpole
+                if (flagAnimation?.json) {
+                    void attachFlagZombieAnimation(
+                        animatorNode,
+                        view,
+                        flagAnimation.json as Record<string, any>,
+                        {
+                            sortHost: animator,
+                        },
+                    )
+                }
+            }
+        })
+    }
+
+    private _pickAlmanacZombiePlayback(
+        view: ReturnType<typeof createZombieAnimationView>,
+        preview: AlmanacZombiePreviewDefinition,
+    ) {
+        const animations = preview.bodyAnimations
+        if (
+            animations.includes('anim_idle2') &&
+            view.body?.hasAnimation('anim_idle2') &&
+            Math.random() < ALMANAC_ZOMBIE_IDLE2_CHANCE
+        ) {
+            const rate = this._randomRange(
+                ALMANAC_ZOMBIE_IDLE2_RATE_MIN,
+                ALMANAC_ZOMBIE_IDLE2_RATE_MAX,
+            )
+            return {
+                animation: 'anim_idle2',
+                speed: getAnimationRateSpeed(view.body, 'anim_idle2', rate),
+            }
+        }
+
+        const fallbackAnimations = animations.filter((animation) => animation !== 'anim_idle2')
+        for (const animation of fallbackAnimations) {
+            if (view.body?.hasAnimation(animation)) {
+                const rate = this._getAlmanacZombieAnimationRate(animation, preview)
+                return {
+                    animation,
+                    speed: getAnimationRateSpeed(view.body, animation, rate),
+                }
+            }
+        }
+
+        const fallback = fallbackAnimations[0] ?? animations[0] ?? 'anim_idle'
+        const fallbackRate = this._getAlmanacZombieAnimationRate(fallback, preview)
+        return {
+            animation: fallback,
+            speed: getAnimationRateSpeed(view.body, fallback, fallbackRate),
+        }
+    }
+
+    private _playAlmanacZombiePreview(
+        view: ReturnType<typeof createZombieAnimationView>,
+        preview: AlmanacZombiePreviewDefinition,
+        animatorNode: Node,
+        animatorBaseY: number,
+        shadowNode: Node | null,
+        shadowBaseY: number,
+    ) {
+        if (preview.motion === 'pogo' && view.body?.hasAnimation('anim_pogo')) {
+            const phaseCounter = this._randomInteger(1, POGO_BOUNCE_TIME)
+            view.body.play({
+                name: 'anim_pogo',
+                loop: false,
+                speed: 0,
+                time: Math.max(0, (view.body.getAnimationDuration('anim_pogo') ?? 1) - 1),
+                keepLastFrame: true,
+            })
+            this._zombiePreviewMotions.push({
+                type: 'pogo',
+                animatorNode,
+                animatorBaseY,
+                shadowNode,
+                shadowBaseY,
+                phaseCounter,
+                previousPhaseCounter: phaseCounter,
+                view,
+            })
+            return
+        }
+
+        if (preview.motion === 'bungee' && view.body?.hasAnimation('anim_drop')) {
+            const phaseCounter = this._randomInteger(0, BUNGEE_CUTSCENE_TIME)
+            view.body.play({
+                name: 'anim_drop',
+                loop: true,
+                speed: getAnimationRateSpeed(view.body, 'anim_drop', BUNGEE_DROP_REANIM_RATE),
+                truncateDisappearingFrames: false,
+            })
+            this._zombiePreviewMotions.push({
+                type: 'bungee',
+                animatorNode,
+                animatorBaseY,
+                shadowNode,
+                shadowBaseY,
+                phaseCounter,
+                previousPhaseCounter: phaseCounter,
+                view,
+            })
+            return
+        }
+
+        const playback = this._pickAlmanacZombiePlayback(view, preview)
+        playZombieBodyAnimation(view, playback.animation, {
+            speed: playback.speed,
+            manualTime: false,
+            loop: true,
+        })
+    }
+
+    private _updateZombiePreviewMotions(dt: number) {
+        if (this._zombiePreviewMotions.length === 0) return
+
+        const tickDelta = dt * ALMANAC_ZOMBIE_UPDATE_TICKS_PER_SECOND
+        this._zombiePreviewMotions = this._zombiePreviewMotions.filter((motion) => {
+            if (!motion.animatorNode.isValid) return false
+            motion.previousPhaseCounter = motion.phaseCounter
+
+            if (motion.type === 'pogo') {
+                this._updatePogoZombiePreviewMotion(motion, tickDelta)
+            } else {
+                this._updateBungeeZombiePreviewMotion(motion, tickDelta)
+            }
+
+            return true
+        })
+    }
+
+    private _updatePogoZombiePreviewMotion(motion: AlmanacZombiePreviewMotion, tickDelta: number) {
+        this._advanceZombiePhaseCounter(motion, tickDelta)
+
+        if (
+            motion.previousPhaseCounter > POGO_BOUNCE_REANIM_RESTART_COUNTER &&
+            motion.phaseCounter <= POGO_BOUNCE_REANIM_RESTART_COUNTER
+        ) {
+            motion.view.body?.play({
+                name: 'anim_pogo',
+                loop: false,
+                speed: getAnimationRateSpeed(
+                    motion.view.body,
+                    'anim_pogo',
+                    POGO_BOUNCE_REANIM_RATE,
+                ),
+                time: 0,
+                keepLastFrame: true,
+            })
+        }
+
+        const altitude = this._animateBounceSlowMiddle(
+            POGO_BOUNCE_TIME,
+            0,
+            motion.phaseCounter,
+            POGO_BOUNCE_MIN_ALTITUDE,
+            POGO_BOUNCE_MAX_ALTITUDE,
+        )
+        this._applyZombiePreviewAltitude(motion, altitude)
+
+        if (motion.phaseCounter <= 0) {
+            motion.phaseCounter = POGO_BOUNCE_TIME
+        }
+    }
+
+    private _updateBungeeZombiePreviewMotion(
+        motion: AlmanacZombiePreviewMotion,
+        tickDelta: number,
+    ) {
+        this._advanceZombiePhaseCounter(motion, tickDelta)
+        const altitude = this._animateSinWave(
+            BUNGEE_CUTSCENE_TIME,
+            0,
+            motion.phaseCounter,
+            BUNGEE_CUTSCENE_ALTITUDE,
+            0,
+        )
+        if (motion.phaseCounter <= 0) {
+            motion.phaseCounter = BUNGEE_CUTSCENE_TIME
+        }
+        this._applyZombiePreviewAltitude(motion, altitude)
+    }
+
+    private _advanceZombiePhaseCounter(motion: AlmanacZombiePreviewMotion, tickDelta: number) {
+        if (motion.phaseCounter > 0) {
+            motion.phaseCounter = Math.max(0, motion.phaseCounter - tickDelta)
+        }
+    }
+
+    private _applyZombiePreviewAltitude(motion: AlmanacZombiePreviewMotion, altitude: number) {
+        motion.animatorNode.setPosition(
+            motion.animatorNode.position.x,
+            motion.animatorBaseY + altitude,
+            motion.animatorNode.position.z,
+        )
+        if (motion.type !== 'pogo' && motion.shadowNode?.isValid) {
+            motion.shadowNode.setPosition(
+                motion.shadowNode.position.x,
+                motion.shadowBaseY - altitude,
+                motion.shadowNode.position.z,
+            )
+        }
+    }
+
+    private _getAlmanacZombieAnimationRate(
+        animation: string,
+        preview?: AlmanacZombiePreviewDefinition,
+    ) {
+        const configuredRate = preview?.animationRates?.[animation]
+        if (configuredRate != null) return configuredRate
+
+        if (animation === 'anim_idle') {
+            return this._randomRange(ALMANAC_ZOMBIE_IDLE_RATE_MIN, ALMANAC_ZOMBIE_IDLE_RATE_MAX)
+        }
+        if (animation === 'anim_idle2') {
+            return this._randomRange(ALMANAC_ZOMBIE_IDLE2_RATE_MIN, ALMANAC_ZOMBIE_IDLE2_RATE_MAX)
+        }
+        return ALMANAC_ZOMBIE_IDLE_RATE_MIN
+    }
+
+    private _randomRange(min: number, max: number) {
+        return min + Math.random() * (max - min)
+    }
+
+    private _randomInteger(min: number, max: number) {
+        return Math.floor(this._randomRange(min, max + 1))
+    }
+
+    private _animateBounceSlowMiddle(
+        start: number,
+        end: number,
+        age: number,
+        from: number,
+        to: number,
+    ) {
+        const t = this._clamp01((age - start) / (end - start))
+        const bounce = 1 - Math.abs(2 * t - 1)
+        const warped = 2 * bounce - bounce * bounce
+        return from + (to - from) * warped
+    }
+
+    private _animateSinWave(start: number, end: number, age: number, from: number, to: number) {
+        const t = (age - start) / (end - start)
+        const warped = Math.sin(2 * Math.PI * t)
+        return from + (to - from) * warped
+    }
+
+    private _clamp01(value: number) {
+        return Math.max(0, Math.min(1, value))
+    }
+
     private _renderZombieAlmanac(
         sprites: AlmanacScreenSprites,
         fonts: AlmanacScreenFonts,
+        animations: AlmanacAnimationMap,
         lawnStrings: LawnStringMap,
     ) {
         for (const zombie of ALMANAC_ZOMBIES) {
             this._createZombieWindow(zombie, sprites)
         }
-        this._createZombieInfoPanel(this._getSelectedZombie(), sprites, fonts, lawnStrings)
+        this._createZombieInfoPanel(
+            this._getSelectedZombie(),
+            sprites,
+            fonts,
+            animations,
+            lawnStrings,
+        )
     }
 
     private _createZombieWindow(zombie: AlmanacZombieDefinition, sprites: AlmanacScreenSprites) {
@@ -650,7 +1305,26 @@ export class AlmanacScreen extends MenuScreenBase {
             this._root!,
         )
         hoverUnderlay.active = false
-
+        if (zombie.id < 25) {
+            createSpriteNode({
+                name: `${zombie.key}Preview`,
+                spriteFrame: getAtlasFrame(
+                    sprites.zombiePreviewsCached,
+                    zombie.id,
+                    ZOMBIE_PREVIEW_CACHE_CELL_WIDTH,
+                    ZOMBIE_PREVIEW_CACHE_CELL_HEIGHT,
+                    ZOMBIE_PREVIEW_CACHE_COLUMNS,
+                ),
+                parent: this._root!,
+                layer: this.node.layer,
+                x: this._cppX(x),
+                y: this._cppY(y),
+                anchorX: 0,
+                anchorY: 1,
+                width: ZOMBIE_PREVIEW_CACHE_CELL_WIDTH,
+                height: ZOMBIE_PREVIEW_CACHE_CELL_HEIGHT,
+            })
+        }
         createSpriteNode({
             name: `${zombie.key}WindowOverlay`,
             spriteFrame: sprites.almanacZombieWindowOverlay,
@@ -693,7 +1367,10 @@ export class AlmanacScreen extends MenuScreenBase {
             }
             if (highlighted) {
                 this._hoveredZombieId = zombie.id
-            } else if (!this._preserveHoveredZombieDuringRender && this._hoveredZombieId === zombie.id) {
+            } else if (
+                !this._preserveHoveredZombieDuringRender &&
+                this._hoveredZombieId === zombie.id
+            ) {
                 this._hoveredZombieId = null
             }
         }
@@ -710,7 +1387,13 @@ export class AlmanacScreen extends MenuScreenBase {
         }
     }
 
-    private _createZombieHoverLayer(name: string, spriteFrame: SpriteFrame, x: number, y: number, parent: Node) {
+    private _createZombieHoverLayer(
+        name: string,
+        spriteFrame: SpriteFrame,
+        x: number,
+        y: number,
+        parent: Node,
+    ) {
         const node = createSpriteNode({
             name,
             spriteFrame,
@@ -759,6 +1442,7 @@ export class AlmanacScreen extends MenuScreenBase {
         zombie: AlmanacZombieDefinition,
         sprites: AlmanacScreenSprites,
         fonts: AlmanacScreenFonts,
+        animations: AlmanacAnimationMap,
         lawnStrings: LawnStringMap,
     ) {
         createSpriteNode({
@@ -770,6 +1454,15 @@ export class AlmanacScreen extends MenuScreenBase {
             y: this._cppY(110),
             anchorX: 0,
             anchorY: 1,
+        })
+        this._createAlmanacZombiePreview({
+            name: 'SelectedZombiePreview',
+            zombieKey: zombie.key,
+            animations,
+            sprites,
+            x: ALMANAC_ZOMBIE_POSITION_X,
+            y: ALMANAC_ZOMBIE_POSITION_Y,
+            includeShadow: true,
         })
         createSpriteNode({
             name: 'ZombieCard',
@@ -794,10 +1487,13 @@ export class AlmanacScreen extends MenuScreenBase {
 
         const headerHeight = this._createAlmanacText({
             name: 'ZombieDescriptionHeader',
-            text: LawnStringLoader.translateOptional(`[${zombie.key}_DESCRIPTION_HEADER]`, lawnStrings),
+            text: LawnStringLoader.translateOptional(
+                `[${zombie.key}_DESCRIPTION_HEADER]`,
+                lawnStrings,
+            ),
             x: 485,
             y: 377,
-            width: 257,
+            width: 258,
             font: fonts.footer,
         })
         this._createScrollableAlmanacText({
@@ -818,24 +1514,35 @@ export class AlmanacScreen extends MenuScreenBase {
 
         return {
             x: (plantId % SEED_PACKET_ROWS) * SEED_PACKET_STRIDE_X + SEED_PACKET_STRIDE_X / 2,
-            y: Math.floor(plantId / SEED_PACKET_ROWS) * SEED_PACKET_STRIDE_Y + SEED_PACKET_STRIDE_Y + 14,
+            y:
+                Math.floor(plantId / SEED_PACKET_ROWS) * SEED_PACKET_STRIDE_Y +
+                SEED_PACKET_STRIDE_Y +
+                14,
         }
     }
 
     private _getSelectedPlant() {
-        return ALMANAC_PLANTS.find((plant) => plant.id === this._selectedPlantId) ?? ALMANAC_PLANTS[0]
+        return (
+            ALMANAC_PLANTS.find((plant) => plant.id === this._selectedPlantId) ?? ALMANAC_PLANTS[0]
+        )
     }
 
     private _getZombiePosition(zombieId: number) {
         const zombieIndex = zombieId === 25 ? zombieId + 2 : zombieId
         return {
             x: (zombieIndex % ZOMBIE_ROWS) * ZOMBIE_STRIDE_X + 22,
-            y: Math.floor(zombieIndex / ZOMBIE_ROWS) * ZOMBIE_STRIDE_Y + ZOMBIE_STRIDE_Y + ZOMBIE_OFFSET_Y,
+            y:
+                Math.floor(zombieIndex / ZOMBIE_ROWS) * ZOMBIE_STRIDE_Y +
+                ZOMBIE_STRIDE_Y +
+                ZOMBIE_OFFSET_Y,
         }
     }
 
     private _getSelectedZombie() {
-        return ALMANAC_ZOMBIES.find((zombie) => zombie.id === this._selectedZombieId) ?? ALMANAC_ZOMBIES[0]
+        return (
+            ALMANAC_ZOMBIES.find((zombie) => zombie.id === this._selectedZombieId) ??
+            ALMANAC_ZOMBIES[0]
+        )
     }
 
     private _getRechargeLabel(refreshTime: number, lawnStrings: LawnStringMap) {
@@ -950,7 +1657,8 @@ export class AlmanacScreen extends MenuScreenBase {
         const contentHeight = this._measureAlmanacTextLines(lines, args.font)
         const metrics = FontMetricsUtil.getMetrics(args.font?.config ?? null)
         const visualMaxScroll = Math.max(0, contentHeight - args.height)
-        const maxScroll = visualMaxScroll + metrics.lineSpacing * DESCRIPTION_SCROLL_BOTTOM_PADDING_RATIO
+        const maxScroll =
+            visualMaxScroll + metrics.lineSpacing * DESCRIPTION_SCROLL_BOTTOM_PADDING_RATIO
         const scroll = Math.min(this._descriptionScroll, maxScroll)
         this._descriptionContentNode = null
         this._descriptionScrollbarGraphics = null
@@ -1008,7 +1716,11 @@ export class AlmanacScreen extends MenuScreenBase {
                 this._descriptionTouchScrollGesture.begin()
             })
             clipNode.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
-                if (!this._descriptionTouchScrollGesture.dragging || this._descriptionSliderDragging) return
+                if (
+                    !this._descriptionTouchScrollGesture.dragging ||
+                    this._descriptionSliderDragging
+                )
+                    return
                 event.propagationStopped = true
                 this._setDescriptionScroll(
                     this._descriptionScroll + this._descriptionTouchScrollGesture.getDeltaY(event),
@@ -1039,7 +1751,8 @@ export class AlmanacScreen extends MenuScreenBase {
         parent?: Node
     }) {
         const lineTextWidth = args.line.runs.reduce(
-            (sum, run) => sum + FontMetricsUtil.measureTextWidth(args.font?.config ?? null, run.text),
+            (sum, run) =>
+                sum + FontMetricsUtil.measureTextWidth(args.font?.config ?? null, run.text),
             0,
         )
         const lineX = args.x + (args.align === 1 ? args.width - lineTextWidth : 0)
@@ -1082,7 +1795,10 @@ export class AlmanacScreen extends MenuScreenBase {
         const trackHeight = args.height
         const rawThumbHeight = trackHeight - scrollbarMaxScroll
         const originalThumbHeight = Math.max(ALMANAC_DESCRIPTION_MIN_HEIGHT, rawThumbHeight)
-        const thumbHeight = Math.min(trackHeight, originalThumbHeight * DESCRIPTION_SCROLLBAR_THUMB_SCALE)
+        const thumbHeight = Math.min(
+            trackHeight,
+            originalThumbHeight * DESCRIPTION_SCROLLBAR_THUMB_SCALE,
+        )
         const thumbRange = Math.max(1, trackHeight - thumbHeight)
         this._descriptionDragRectHeight = trackHeight
         this._descriptionThumbHeight = thumbHeight
@@ -1130,7 +1846,10 @@ export class AlmanacScreen extends MenuScreenBase {
             this._descriptionSliderDragging = false
         })
         trackNode.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => {
-            const localY = this._getLocalScrollYFromLocation(trackNode, this._getMouseUILocation(event))
+            const localY = this._getLocalScrollYFromLocation(
+                trackNode,
+                this._getMouseUILocation(event),
+            )
             if (!this._beginDescriptionSliderDrag(localY)) return
             event.propagationStopped = true
         })
@@ -1141,7 +1860,8 @@ export class AlmanacScreen extends MenuScreenBase {
         const delta = Math.sign(event.getScrollY())
         if (delta === 0) return
         this._setDescriptionScroll(
-            this._descriptionScroll - this._descriptionLineSpacing * DESCRIPTION_WHEEL_SCROLL_SCALE * delta,
+            this._descriptionScroll -
+                this._descriptionLineSpacing * DESCRIPTION_WHEEL_SCROLL_SCALE * delta,
             this._descriptionMaxScroll,
         )
     }
@@ -1185,7 +1905,9 @@ export class AlmanacScreen extends MenuScreenBase {
         const scrollbarNode = this._descriptionScrollbarNode
         if (!scrollbarNode?.isValid) return
         event.propagationStopped = true
-        this._dragDescriptionSlider(this._getLocalScrollYFromLocation(scrollbarNode, this._getMouseUILocation(event)))
+        this._dragDescriptionSlider(
+            this._getLocalScrollYFromLocation(scrollbarNode, this._getMouseUILocation(event)),
+        )
     }
 
     private _onGlobalMouseUp(event: EventMouse) {
@@ -1212,19 +1934,36 @@ export class AlmanacScreen extends MenuScreenBase {
 
         graphics.clear()
         graphics.fillColor = this._descriptionScrollbarBackColor
-        graphics.fillRect(0, -this._descriptionDragRectHeight, DESCRIPTION_SCROLLBAR_WIDTH, this._descriptionDragRectHeight)
+        graphics.fillRect(
+            0,
+            -this._descriptionDragRectHeight,
+            DESCRIPTION_SCROLLBAR_WIDTH,
+            this._descriptionDragRectHeight,
+        )
         graphics.fillColor = this._descriptionScrollbarColor
         const thumbY = this._getDescriptionThumbY()
-        graphics.fillRect(0, -(thumbY + this._descriptionThumbHeight), DESCRIPTION_SCROLLBAR_WIDTH, this._descriptionThumbHeight)
+        graphics.fillRect(
+            0,
+            -(thumbY + this._descriptionThumbHeight),
+            DESCRIPTION_SCROLLBAR_WIDTH,
+            this._descriptionThumbHeight,
+        )
     }
 
     private _getDescriptionThumbY() {
         if (this._descriptionMaxScroll <= 0) return 0
         const ratio = this._descriptionScroll / this._descriptionMaxScroll
-        return Math.max(0, Math.min(this._descriptionThumbRange, ratio * this._descriptionThumbRange))
+        return Math.max(
+            0,
+            Math.min(this._descriptionThumbRange, ratio * this._descriptionThumbRange),
+        )
     }
 
-    private _wrapAlmanacText(text: string, font: BitmapFontAssets | null, width: number): AlmanacTextLine[] {
+    private _wrapAlmanacText(
+        text: string,
+        font: BitmapFontAssets | null,
+        width: number,
+    ): AlmanacTextLine[] {
         const sourceLines = this._parseAlmanacTextLines(text)
         const wrapped: AlmanacTextLine[] = []
         for (const line of sourceLines) {
@@ -1240,7 +1979,11 @@ export class AlmanacScreen extends MenuScreenBase {
                 for (const part of parts) {
                     if (!part) continue
                     const partWidth = FontMetricsUtil.measureTextWidth(font?.config ?? null, part)
-                    if (currentWidth > 0 && currentWidth + partWidth > width && part.trim().length > 0) {
+                    if (
+                        currentWidth > 0 &&
+                        currentWidth + partWidth > width &&
+                        part.trim().length > 0
+                    ) {
                         wrapped.push(currentLine)
                         currentLine = { runs: [], spacingOffset: 0 }
                         currentWidth = 0
@@ -1323,7 +2066,7 @@ export class AlmanacScreen extends MenuScreenBase {
                     continue
                 }
                 if (ignoreNewlines) {
-                    if (buffer.length > 0 && !buffer.endsWith(' ')) buffer += ' '
+                    buffer += ' '
                     continue
                 }
                 finishLine()
@@ -1339,7 +2082,12 @@ export class AlmanacScreen extends MenuScreenBase {
 
     private _appendAlmanacRun(line: AlmanacTextLine, text: string, color: Color) {
         const previous = line.runs[line.runs.length - 1]
-        if (previous && previous.color.r === color.r && previous.color.g === color.g && previous.color.b === color.b) {
+        if (
+            previous &&
+            previous.color.r === color.r &&
+            previous.color.g === color.g &&
+            previous.color.b === color.b
+        ) {
             previous.text += text
             return
         }
@@ -1479,14 +2227,15 @@ export class AlmanacScreen extends MenuScreenBase {
                 button.refreshHoverFromPointer()
             }
         }
-        const { normalLabel, highlightLabel, normalPos, highlightPos } = this._createStoneButtonLabels(
-            buttonNode,
-            label,
-            width,
-            height,
-            fonts.zombieButton,
-            fonts.zombieButtonHover,
-        )
+        const { normalLabel, highlightLabel, normalPos, highlightPos } =
+            this._createStoneButtonLabels(
+                buttonNode,
+                label,
+                width,
+                height,
+                fonts.zombieButton,
+                fonts.zombieButtonHover,
+            )
         button.onStateChange = (state) => {
             const pressed = state === 'pressed'
             const highlighted = state === 'hover' || pressed
@@ -1523,7 +2272,8 @@ export class AlmanacScreen extends MenuScreenBase {
         renderer.forceRebuild()
 
         const metrics = FontMetricsUtil.getMetrics(font?.config ?? null)
-        const textWidth = FontMetricsUtil.measureTextWidth(font?.config ?? null, text) || renderer.contentWidth
+        const textWidth =
+            FontMetricsUtil.measureTextWidth(font?.config ?? null, text) || renderer.contentWidth
         node.setPosition((width - textWidth) / 2, -(centerY - metrics.ascent / 2), 0)
         return node
     }
@@ -1559,14 +2309,25 @@ export class AlmanacScreen extends MenuScreenBase {
         highlightRenderer.forceRebuild()
 
         const normalMetrics = FontMetricsUtil.getMetrics(normalFont?.config ?? null)
-        const highlightMetrics = FontMetricsUtil.getMetrics(highlightFont?.config ?? normalFont?.config ?? null)
-        const normalWidth = FontMetricsUtil.measureTextWidth(normalFont?.config ?? null, text) || normalRenderer.contentWidth
+        const highlightMetrics = FontMetricsUtil.getMetrics(
+            highlightFont?.config ?? normalFont?.config ?? null,
+        )
+        const normalWidth =
+            FontMetricsUtil.measureTextWidth(normalFont?.config ?? null, text) ||
+            normalRenderer.contentWidth
         const highlightWidth =
-            FontMetricsUtil.measureTextWidth(highlightFont?.config ?? null, text) || highlightRenderer.contentWidth
+            FontMetricsUtil.measureTextWidth(highlightFont?.config ?? null, text) ||
+            highlightRenderer.contentWidth
 
-        const normalBaselineY = (height - normalMetrics.ascent / 6 - 1 + normalMetrics.ascent) / 2 - 4
-        const highlightBaselineY = (height - highlightMetrics.ascent / 6 - 1 + highlightMetrics.ascent) / 2 - 4
-        const normalPos = new Vec3((width - normalWidth) / 2 + 1, -(normalBaselineY - normalMetrics.ascent), 0)
+        const normalBaselineY =
+            (height - normalMetrics.ascent / 6 - 1 + normalMetrics.ascent) / 2 - 4
+        const highlightBaselineY =
+            (height - highlightMetrics.ascent / 6 - 1 + highlightMetrics.ascent) / 2 - 4
+        const normalPos = new Vec3(
+            (width - normalWidth) / 2 + 1,
+            -(normalBaselineY - normalMetrics.ascent),
+            0,
+        )
         const highlightPos = new Vec3(
             (width - highlightWidth) / 2 + 1,
             -(highlightBaselineY - highlightMetrics.ascent),
@@ -1580,5 +2341,4 @@ export class AlmanacScreen extends MenuScreenBase {
 
         return { normalLabel, highlightLabel, normalPos, highlightPos }
     }
-
 }

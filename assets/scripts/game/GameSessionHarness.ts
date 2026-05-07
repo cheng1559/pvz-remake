@@ -86,6 +86,25 @@ export function runAdventure11Harness(): GameHarnessResult {
         details.push('Adventure 1-1 should keep spawning sky sun after the first Peashooter even if earlier sun was not collected.')
     }
 
+    const completedTutorialSession = new GameSession()
+    const completedTutorialCenter = completedTutorialSession.geometry.gridToPixel(0, 2)
+    completedTutorialSession.dispatch({ type: 'selectSeed', seedType: 'peashooter' })
+    completedTutorialSession.dispatch({ type: 'placePlant', x: completedTutorialCenter.x + 40, y: completedTutorialCenter.y + 50 })
+    completedTutorialSession.sun = 100
+    completedTutorialSession.seedPackets[0].cooldownRemaining = 0
+    completedTutorialSession.seedPackets[0].active = true
+    completedTutorialSession.update()
+    completedTutorialSession.dispatch({ type: 'selectSeed', seedType: 'peashooter' })
+    completedTutorialSession.dispatch({ type: 'placePlant', x: completedTutorialCenter.x + 120, y: completedTutorialCenter.y + 50 })
+    completedTutorialSession.drainEvents()
+    for (let i = 0; i < 420; i++) completedTutorialSession.update()
+    const postTutorialEvents = completedTutorialSession.drainEvents()
+    if (postTutorialEvents.some((event) =>
+        event.type === 'advice' &&
+        event.message === 'Click on the falling sun to collect it!')) {
+        details.push('Adventure 1-1 should stop showing falling sun tutorial advice after the second Peashooter is planted.')
+    }
+
     const zombieSession = new GameSession()
     const normalZombie = zombieSession.addZombie('normal', 2, 500)
     const coneZombie = zombieSession.addZombie('traffic-cone', 2, 520)

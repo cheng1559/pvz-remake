@@ -14,8 +14,40 @@ export const ALMANAC_PLANT_ANIMATIONS = [
     'peashooter',
 ] as const
 
+export const ALMANAC_ZOMBIE_ANIMATIONS = [
+    'zombie',
+    'zombie_flagpole',
+    'zombie_paper',
+    'zombie_polevaulter',
+    'zombie_football',
+    'zombie_disco',
+    'zombie_backup',
+    'zombie_snorkle',
+    'zombie_zamboni',
+    'zombie_bobsled',
+    'zombie_dolphinrider',
+    'zombie_jackbox',
+    'zombie_balloon',
+    'zombie_digger',
+    'zombie_pogo',
+    'zombie_yeti',
+    'zombie_bungi',
+    'zombie_ladder',
+    'zombie_catapult',
+    'zombie_gargantuar',
+    'zombie_imp',
+] as const
+
+export const ALMANAC_ANIMATIONS = [
+    ...ALMANAC_PLANT_ANIMATIONS,
+    ...ALMANAC_ZOMBIE_ANIMATIONS,
+] as const
+
 export type AlmanacPlantAnimationName = typeof ALMANAC_PLANT_ANIMATIONS[number]
-export type AlmanacPlantAnimationMap = Partial<Record<AlmanacPlantAnimationName, JsonAsset>>
+export type AlmanacZombieAnimationName = typeof ALMANAC_ZOMBIE_ANIMATIONS[number]
+export type AlmanacAnimationName = typeof ALMANAC_ANIMATIONS[number]
+export type AlmanacAnimationMap = Partial<Record<AlmanacAnimationName, JsonAsset>>
+export type AlmanacPlantAnimationMap = AlmanacAnimationMap
 
 const ALMANAC_SCREEN_SPRITES = [
     'almanac_indexback',
@@ -37,6 +69,7 @@ const ALMANAC_SCREEN_SPRITES = [
     'seeds',
     'packet_plants',
     'packet_plants_cached',
+    'zombie_previews_cached',
     'seedchooser_button',
     'seedchooser_button_glow',
     'button_left',
@@ -79,6 +112,7 @@ export interface AlmanacScreenSprites {
     seeds: SpriteFrame
     packetPlants: SpriteFrame
     packetPlantsCached: SpriteFrame
+    zombiePreviewsCached: SpriteFrame
     seedChooserButton: SpriteFrame
     seedChooserButtonHighlight: SpriteFrame
     buttonLeft: SpriteFrame
@@ -105,7 +139,7 @@ export class AlmanacScreenAssets {
     static readonly preload = {
         sprites: ALMANAC_SCREEN_SPRITES,
         fonts: ALMANAC_SCREEN_FONTS,
-        animations: ALMANAC_PLANT_ANIMATIONS,
+        animations: ALMANAC_ANIMATIONS,
     }
 
     static async loadSprites(): Promise<AlmanacScreenSprites | null> {
@@ -135,6 +169,7 @@ export class AlmanacScreenAssets {
             seeds,
             packetPlants,
             packetPlantsCached,
+            zombiePreviewsCached,
             seedChooserButton,
             seedChooserButtonHighlight,
             buttonLeft,
@@ -165,6 +200,7 @@ export class AlmanacScreenAssets {
             seeds,
             packetPlants,
             packetPlantsCached,
+            zombiePreviewsCached,
             seedChooserButton,
             seedChooserButtonHighlight,
             buttonLeft,
@@ -177,16 +213,16 @@ export class AlmanacScreenAssets {
         }
     }
 
-    static async loadAnimations(): Promise<AlmanacPlantAnimationMap> {
+    static async loadAnimations(): Promise<AlmanacAnimationMap> {
         const animations = await Promise.all(
-            ALMANAC_PLANT_ANIMATIONS.map((name) =>
-                AssetLoader.load(`animations/${name}`, JsonAsset, `almanac plant animation: ${name}`),
+            ALMANAC_ANIMATIONS.map((name) =>
+                AssetLoader.load(`animations/${name}`, JsonAsset, `almanac animation: ${name}`),
             ),
         )
-        const map: AlmanacPlantAnimationMap = {}
-        for (let i = 0; i < ALMANAC_PLANT_ANIMATIONS.length; i++) {
+        const map: AlmanacAnimationMap = {}
+        for (let i = 0; i < ALMANAC_ANIMATIONS.length; i++) {
             const animation = animations[i]
-            if (animation) map[ALMANAC_PLANT_ANIMATIONS[i]] = animation
+            if (animation) map[ALMANAC_ANIMATIONS[i]] = animation
         }
         return map
     }

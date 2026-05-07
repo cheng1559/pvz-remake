@@ -12,6 +12,8 @@ Steps:
   7. Copy particle images to texture resources
   8. Copy sounds to audio resources
   9. Generate cached packet plant atlas
+ 10. Generate cached plant preview atlas
+ 11. Generate cached zombie preview atlas
 """
 
 import shutil
@@ -25,6 +27,8 @@ from lawnstrings_converter import convert_lawnstrings
 from copy_particles import copy_particles
 from copy_sounds import copy_sounds
 from generate_packet_plant_cache import main as generate_packet_plant_cache
+from generate_plant_preview_cache import main as generate_plant_preview_cache
+from generate_zombie_preview_cache import main as generate_zombie_preview_cache
 
 
 IMAGE_SUFFIX_PRIORITY = {'.png': 0, '.jpg': 1, '.jpeg': 1, '.gif': 2}
@@ -147,6 +151,22 @@ def main():
     print("=" * 60)
 
     generate_packet_plant_cache()
+
+    # ── Step 10: Generate cached plant preview atlas ──────────────
+    print()
+    print("=" * 60)
+    print("[pipeline] Step 10: Generate cached plant preview atlas")
+    print("=" * 60)
+
+    generate_plant_preview_cache()
+
+    # ── Step 11: Generate cached zombie preview atlas ─────────────
+    print()
+    print("=" * 60)
+    print("[pipeline] Step 11: Generate cached zombie preview atlas")
+    print("=" * 60)
+
+    generate_zombie_preview_cache()
 
     print()
     print("=" * 60)

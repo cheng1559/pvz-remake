@@ -14,13 +14,30 @@ export class SpriteLoader {
     // ── Public API ─────────────────────────────────────────────
 
     static async load(name: string): Promise<SpriteFrame | null> {
+        if (!this._isValidSpriteName(name)) {
+            this._warnInvalidSpriteName('load', name)
+            return null
+        }
         return this.loadWithAlpha(name)
     }
 
     static async loadWithAlpha(
         name: string,
-        explicitAlphaName = SpriteResourceManifest.getAlphaImage(name),
+        explicitAlphaName?: string,
     ): Promise<SpriteFrame | null> {
+        if (!this._isValidSpriteName(name)) {
+            this._warnInvalidSpriteName('loadWithAlpha', name)
+            return null
+        }
+
+        const alphaName =
+            explicitAlphaName === undefined
+                ? SpriteResourceManifest.getAlphaImage(name)
+                : explicitAlphaName
+        if (alphaName != null && !this._isValidSpriteName(alphaName)) {
+            this._warnInvalidSpriteName('loadWithAlpha alpha', alphaName)
+        }
+
         if (this._cache.has(name)) {
             return this._cache.get(name)!
         }
@@ -30,7 +47,10 @@ export class SpriteLoader {
             return pending
         }
 
-        const promise = this._loadUncached(name, explicitAlphaName)
+        const promise = this._loadUncached(
+            name,
+            this._isValidSpriteName(alphaName) ? alphaName : undefined,
+        )
         this._pending.set(name, promise)
         const spriteFrame = await promise
         this._pending.delete(name)
@@ -74,6 +94,11 @@ export class SpriteLoader {
     }
 
     static get(name: string): SpriteFrame | undefined {
+        if (!this._isValidSpriteName(name)) {
+            this._warnInvalidSpriteName('get', name)
+            return undefined
+        }
+
         const sf = this._cache.get(name)
         if (!sf) {
             warn(`[SpriteLoader] Sprite '${name}' not found in cache`)
@@ -84,6 +109,27 @@ export class SpriteLoader {
     static clearCache() {
         this._cache.clear()
         this._pending.clear()
+    }
+
+    private static _isValidSpriteName(name: unknown): name is string {
+        return typeof name === 'string' && name.length > 0
+    }
+
+    private static _warnInvalidSpriteName(context: string, name: unknown) {
+        warn(
+            `[SpriteLoader] Ignoring invalid sprite name in ${context}: ${this._formatValue(name)}`,
+        )
+    }
+
+    private static _formatValue(value: unknown): string {
+        if (typeof value === 'string') return value
+        try {
+            const json = JSON.stringify(value)
+            if (json) return json.slice(0, 160)
+        } catch {
+            // Fall through to String(value).
+        }
+        return String(value)
     }
 
     // ── Raw Loading ────────────────────────────────────────────

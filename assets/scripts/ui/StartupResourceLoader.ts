@@ -95,9 +95,21 @@ export class StartupResourceLoader {
             const tracks = json[nodeName]?.tracks
             for (const trackName in tracks ?? {}) {
                 for (const frame of tracks[trackName]?.frames ?? []) {
-                    if (frame?.image) output.add(frame.image)
+                    const imageName = this._normalizeImageName(frame?.image)
+                    if (imageName) {
+                        output.add(imageName)
+                    }
                 }
             }
         }
+    }
+
+    private static _normalizeImageName(imageName: unknown): string | null {
+        if (typeof imageName === 'string') return imageName.length > 0 ? imageName : null
+        if (imageName instanceof String) {
+            const value = imageName.valueOf()
+            return value.length > 0 ? value : null
+        }
+        return null
     }
 }

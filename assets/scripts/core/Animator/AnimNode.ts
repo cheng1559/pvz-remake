@@ -13,6 +13,7 @@ export class AnimNode {
     private _data: AnimNodeData
     private _parentNode: AnimNode | null = null
     private _parentSlot: string | null = null
+    private _parentTrack: string | null = null
     private _parentBasePoseFrame: number | null = null
 
     // Current animation
@@ -127,6 +128,19 @@ export class AnimNode {
         }
         this._parentNode = args.node
         this._parentSlot = args.slot
+        this._parentTrack = null
+        this._parentBasePoseFrame = null
+    }
+
+    public attachToTrack(args: { node: AnimNode; track: string }): void {
+        if (!(args.track in args.node._data.tracks)) {
+            const availableTracks = Object.keys(args.node._data.tracks).join(', ')
+            const message = `[AnimNode] attachToTrack: track '${args.track}' not found in parent node.`
+            warn(`${message} Available: ${availableTracks}`)
+        }
+        this._parentNode = args.node
+        this._parentSlot = null
+        this._parentTrack = args.track
         this._parentBasePoseFrame = null
     }
 
@@ -157,11 +171,36 @@ export class AnimNode {
         this._frameToMatrix(currentFrame, this._m2)
         Mat4.multiply(result, this._m2, this._m1)
 
-        // chain parent transform
-        if (this._parentNode && this._parentSlot) {
-            const parentMat = this._parentNode.computeTransformMatrix(this._parentSlot, this._parentBasePoseFrame)
-            Mat4.multiply(result, parentMat, result)
+        this._applyAttachedParentTransform(result)
+
+        return result
+    }
+
+    public computeTrackTransformMatrix(track: string, basePoseFrame?: number | null): Mat4 {
+        const result = new Mat4()
+        if (!this._currentAnim) return result
+
+        const trackData = this._data.tracks[track]
+        if (!trackData || trackData.frames.length === 0) return result
+
+        const baseFrame = this._sampleBaseTrackFrame(track, basePoseFrame ?? this._currentAnim.startFrame)
+        if (!baseFrame) return result
+
+        let currentFrame = this._sampleTrack(track, this._time, this._currentAnim)
+        if (!currentFrame) return result
+
+        if (this._blendTime > 0 && this._blendElapsed < this._blendTime) {
+            const snapshotFrame = this._blendTrackSnapshot[track] ?? null
+            const t = Math.min(1, this._blendElapsed / this._blendTime)
+            currentFrame = this._blendTrackFrames(snapshotFrame, currentFrame, t) ?? currentFrame
         }
+
+        this._frameToMatrix(baseFrame, this._m1)
+        Mat4.invert(this._m1, this._m1)
+        this._frameToMatrix(currentFrame, this._m2)
+        Mat4.multiply(result, this._m2, this._m1)
+
+        this._applyAttachedParentTransform(result)
 
         return result
     }
@@ -273,8 +312,8 @@ export class AnimNode {
 
         // parent transform (computed once per frame)
         let parentMat: Mat4 | null = null
-        if (this._parentNode && this._parentSlot) {
-            parentMat = this._parentNode.computeTransformMatrix(this._parentSlot, this._parentBasePoseFrame)
+        if (this._parentNode && (this._parentSlot || this._parentTrack)) {
+            parentMat = this._getAttachedParentTransform()
         }
 
         // sample all tracks
@@ -366,6 +405,12 @@ export class AnimNode {
         return this._sampleFrameDataAt(slotData.frames, basePoseFrame) ?? slotData.frames[0]
     }
 
+    private _sampleBaseTrackFrame(track: string, basePoseFrame: number): TrackFrameData | null {
+        const trackData = this._data.tracks[track]
+        if (!trackData || trackData.frames.length === 0) return null
+        return this._sampleTrackFramesAt(trackData.frames, basePoseFrame) ?? trackData.frames[0]
+    }
+
     private _sampleFrameDataAt(frames: FrameData[], targetFrame: number): FrameData | null {
         if (frames.length === 0) return null
         if (targetFrame > frames[frames.length - 1].frameIndex) return null
@@ -392,7 +437,7 @@ export class AnimNode {
 
     private _lerpTrackFrame(a: TrackFrameData, b: TrackFrameData, t: number): TrackFrameData {
         return {
-            frameIndex: a.frameIndex + (b.frameIndex - a.frameIndex) * t,
+            frameIndex: a.frameIndex,
             x: a.x + (b.x - a.x) * t,
             y: a.y + (b.y - a.y) * t,
             sx: a.sx + (b.sx - a.sx) * t,
@@ -400,14 +445,13 @@ export class AnimNode {
             kx: a.kx + (b.kx - a.kx) * t,
             ky: a.ky + (b.ky - a.ky) * t,
             alpha: a.alpha + (b.alpha - a.alpha) * t,
-            // alpha: t < 0.5 ? a.alpha : b.alpha,
-            image: t < 0.5 ? a.image : b.image,
+            image: a.image,
         }
     }
 
     private _lerpFrameData(a: FrameData, b: FrameData, t: number): FrameData {
         return {
-            frameIndex: a.frameIndex + (b.frameIndex - a.frameIndex) * t,
+            frameIndex: a.frameIndex,
             x: a.x + (b.x - a.x) * t,
             y: a.y + (b.y - a.y) * t,
             sx: a.sx + (b.sx - a.sx) * t,
@@ -424,7 +468,7 @@ export class AnimNode {
         to: TrackFrameData | null,
         t: number,
     ): TrackFrameData | null {
-        if (from && to) return this._lerpTrackFrame(from, to, t)
+        if (from && to) return this._blendTrackFrame(from, to, t)
         return to
     }
 
@@ -433,8 +477,41 @@ export class AnimNode {
         to: FrameData | null,
         t: number,
     ): FrameData | null {
-        if (from && to) return this._lerpFrameData(from, to, t)
+        if (from && to) return this._blendSlotFrame(from, to, t)
         return to
+    }
+
+    private _blendTrackFrame(from: TrackFrameData, to: TrackFrameData, t: number): TrackFrameData {
+        return {
+            frameIndex: to.frameIndex,
+            x: from.x + (to.x - from.x) * t,
+            y: from.y + (to.y - from.y) * t,
+            sx: from.sx + (to.sx - from.sx) * t,
+            sy: from.sy + (to.sy - from.sy) * t,
+            kx: this._lerpBlendAngle(from.kx, to.kx, t),
+            ky: this._lerpBlendAngle(from.ky, to.ky, t),
+            alpha: from.alpha + (to.alpha - from.alpha) * t,
+            image: to.image,
+        }
+    }
+
+    private _lerpBlendAngle(from: number, to: number, t: number) {
+        let adjustedFrom = from
+        while (adjustedFrom > to + 180) adjustedFrom -= 360
+        while (adjustedFrom < to - 180) adjustedFrom += 360
+        return adjustedFrom + (to - adjustedFrom) * t
+    }
+
+    private _blendSlotFrame(from: FrameData, to: FrameData, t: number): FrameData {
+        return {
+            frameIndex: to.frameIndex,
+            x: from.x + (to.x - from.x) * t,
+            y: from.y + (to.y - from.y) * t,
+            sx: from.sx + (to.sx - from.sx) * t,
+            sy: from.sy + (to.sy - from.sy) * t,
+            kx: this._lerpBlendAngle(from.kx, to.kx, t),
+            ky: this._lerpBlendAngle(from.ky, to.ky, t),
+        }
     }
 
     // ── Matrix helpers ─────────────────────────────────────────
@@ -480,5 +557,23 @@ export class AnimNode {
         this._frameToMatrix(frame, this._m3)
         Mat4.multiply(this._m3, parentMat, this._m3)
         return this._matrixToTrackFrame(this._m3, frame)
+    }
+
+    private _getAttachedParentTransform(): Mat4 | null {
+        if (!this._parentNode) return null
+        if (this._parentSlot) {
+            return this._parentNode.computeTransformMatrix(this._parentSlot, this._parentBasePoseFrame)
+        }
+        if (this._parentTrack) {
+            return this._parentNode.computeTrackTransformMatrix(this._parentTrack, this._parentBasePoseFrame)
+        }
+        return null
+    }
+
+    private _applyAttachedParentTransform(matrix: Mat4): void {
+        const parentMat = this._getAttachedParentTransform()
+        if (parentMat) {
+            Mat4.multiply(matrix, parentMat, matrix)
+        }
     }
 }

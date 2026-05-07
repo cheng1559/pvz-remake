@@ -189,6 +189,10 @@ export class GameSession {
         return this._findPlantAt(x, y) !== null
     }
 
+    canAffordSeed(seedType: SeedType) {
+        return this._canSpendSun(SEED_DEFINITIONS[seedType].cost)
+    }
+
     addZombie(type: ZombieType, row: number, x?: number, fromWave = -1) {
         if (!this.level.activeRows.includes(row)) return null
         const definition = ZOMBIE_DEFINITIONS[type]
@@ -220,9 +224,14 @@ export class GameSession {
     }
 
     shouldShowTutorialSeedGuide(seedType: SeedType) {
+        const packet = this.seedPackets.find((item) => item.seedType === seedType)
         return this.level.adventureLevel === 1 &&
             seedType === 'peashooter' &&
             !this.selectedSeed &&
+            !!packet &&
+            packet.active &&
+            packet.cooldownRemaining <= 0 &&
+            this.canAffordSeed(seedType) &&
             (this._levelOneTutorialPhase === 'pick-first-seed' ||
                 this._levelOneTutorialPhase === 'pick-second-seed')
     }
@@ -454,6 +463,10 @@ export class GameSession {
             case 'enough-sun':
                 this._levelOneTutorialTimer--
                 if (this._levelOneTutorialTimer <= 0) {
+                    if (!this._levelOnePeashooterPacketReady()) {
+                        this._levelOneTutorialPhase = 'first-plant-done'
+                        return
+                    }
                     this._levelOneTutorialPhase = 'pick-second-seed'
                     this._pushLevelOneTutorialAdvice(LEVEL_1_ADVICE_PLANT_SECOND_PEASHOOTER)
                 }
@@ -515,6 +528,11 @@ export class GameSession {
 
         if (this._levelOneTutorialPhase === 'first-plant-done' && this._levelOnePeashooterPacketReady()) {
             this._enterLevelOneEnoughSunPhase()
+            return
+        }
+
+        if (this._levelOneTutorialPhase === 'first-plant-done') {
+            this._clearAdvice()
         }
     }
 
@@ -686,7 +704,9 @@ export class GameSession {
         }, this._createItemUpdateContext(this.events))
         this.items.push(item)
         this.events.push({ type: 'entitySpawned', entityId: item.id })
-        if (this.level.adventureLevel === 1 && type === 'sun') {
+        if (this.level.adventureLevel === 1 &&
+            this._levelOneTutorialPhase === 'first-plant-done' &&
+            type === 'sun') {
             this._pushLevelOneTutorialAdvice(LEVEL_1_ADVICE_COLLECT_FALLING_SUN)
         }
         return item

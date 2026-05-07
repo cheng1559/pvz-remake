@@ -68,6 +68,8 @@ const LINEAR_PREFIXES = [
     'wallnut_',
     'wintermelon_',
     'zombie_',
+    'zombie_previews_cached',
+    'zombie_paper_',
 ]
 
 const ALPHA_IMAGES: Record<string, string> = {}

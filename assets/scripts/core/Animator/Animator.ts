@@ -296,8 +296,12 @@ export class Animator extends Component {
             }
 
             const imageName = trackName ? this._trackImageOverrides.get(trackName) ?? f.image : f.image
-            if (imageName && sprite.spriteFrame?.name !== imageName) {
-                const sf = SpriteLoader.get(imageName)
+            const normalizedImageName = Animator._normalizeImageName(imageName)
+            if (
+                normalizedImageName &&
+                sprite.spriteFrame?.name !== normalizedImageName
+            ) {
+                const sf = SpriteLoader.get(normalizedImageName)
                 if (sf) sprite.spriteFrame = sf
             }
         }
@@ -341,15 +345,25 @@ export class Animator extends Component {
             for (const trackName in tracks) {
                 const track = tracks[trackName]
                 for (const frame of track.frames) {
-                    if (frame && frame.image && !seenImages.has(frame.image)) {
-                        seenImages.add(frame.image)
-                        promises.push(SpriteLoader.load(frame.image))
+                    const imageName = Animator._normalizeImageName(frame?.image)
+                    if (imageName && !seenImages.has(imageName)) {
+                        seenImages.add(imageName)
+                        promises.push(SpriteLoader.load(imageName))
                     }
                 }
             }
         }
 
         await Promise.all(promises)
+    }
+
+    private static _normalizeImageName(imageName: unknown): string | null {
+        if (typeof imageName === 'string') return imageName.length > 0 ? imageName : null
+        if (imageName instanceof String) {
+            const value = imageName.valueOf()
+            return value.length > 0 ? value : null
+        }
+        return null
     }
 
     async loadSpriteFrame(name: string) {
