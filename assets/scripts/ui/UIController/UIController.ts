@@ -8,6 +8,7 @@ import { ChallengePage, ChallengeScreen } from '../ChallengeScreen'
 import { DialogButtonMode, DialogResult, MessageBox } from '../MessageBox/MessageBox'
 import { HelpScreen } from '../HelpScreen'
 import { OptionsDialog } from '../OptionsDialog'
+import { PauseDialog } from '../PauseDialog'
 import { SelectorScreen } from '../SelectorScreen/SelectorScreen'
 import { StartupResourceLoader } from '../StartupResourceLoader'
 import { createUINode } from '../UIFactory'
@@ -117,6 +118,9 @@ export class UIController extends Component {
         }
         gameScreen.onMenuRequest = () => {
             this.showGameOptionsDialog(gameScreen)
+        }
+        gameScreen.onPauseRequest = () => {
+            this.showPauseDialog(gameScreen)
         }
 
         this._setCurrentScreen(node)
@@ -335,6 +339,23 @@ export class UIController extends Component {
         this.uiRoot!.addChild(node)
         node.active = true
         return optionsDialog
+    }
+
+    showPauseDialog(gameScreen?: AdventureGameScreen): PauseDialog | null {
+        if (this._modalScreen?.isValid) return null
+
+        const node = createUINode('PauseDialog', { active: false, width: 100, height: 100 })
+        const pauseDialog = node.addComponent(PauseDialog)
+
+        this.uiRoot!.addChild(node)
+        node.active = true
+        this._modalScreen = node
+
+        void pauseDialog.waitForResult().then(() => {
+            if (this._modalScreen === node) this._modalScreen = null
+            gameScreen?.resumeGame()
+        })
+        return pauseDialog
     }
 
     showMessageBox(title: string, message: string): MessageBox | null {

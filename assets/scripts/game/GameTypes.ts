@@ -26,8 +26,6 @@ export type LevelOneTutorialPhase =
     | 'pick-first-seed'
     | 'plant-first-seed'
     | 'first-plant-done'
-    | 'collect-falling-sun'
-    | 'keep-collecting-sun'
     | 'enough-sun'
     | 'pick-second-seed'
     | 'plant-second-seed'

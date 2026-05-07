@@ -41,6 +41,7 @@ export class UIButton extends Component {
     private static _lastMouseLocation: Vec2 | null = null
     private static _lastPointerCanHover = false
     private static _mouseTrackingStarted = false
+    private static _pressCaptureRoot: Node | null = null
 
     @property(SpriteFrame)
     normalSprite: SpriteFrame | null = null
@@ -76,6 +77,10 @@ export class UIButton extends Component {
     public set interactable(value: boolean) {
         if (this._interactable === value) return
         this._interactable = value
+        if (UIButton._activeButton === this) {
+            UIButton._activeButton = null
+            UIButton._endPressCapture()
+        }
         this._pressed = false
         this._hovering = false
         this._releaseOffset()
@@ -95,6 +100,10 @@ export class UIButton extends Component {
     public set locked(value: boolean) {
         if (this._locked === value) return
         this._locked = value
+        if (UIButton._activeButton === this) {
+            UIButton._activeButton = null
+            UIButton._endPressCapture()
+        }
         this._pressed = false
         this._releaseOffset()
         this._applyState(ButtonState.NORMAL)
@@ -181,6 +190,7 @@ export class UIButton extends Component {
 
     public static clearHoverStates() {
         this._activeButton = null
+        this._endPressCapture()
         for (const button of this._instances) {
             button._pressed = false
             button._setHovering(false)
@@ -265,6 +275,39 @@ export class UIButton extends Component {
         UIButton.refreshHoverStates()
     }
 
+    private static _beginPressCapture(button: UIButton) {
+        const root = button._findPressCaptureRoot()
+        if (!root || this._pressCaptureRoot === root) return
+        this._endPressCapture()
+        this._pressCaptureRoot = root
+        root.on(Node.EventType.MOUSE_MOVE, this._onPressCaptureMouseMove, this, true)
+        root.on(Node.EventType.MOUSE_UP, this._onPressCaptureMouseUp, this, true)
+    }
+
+    private static _endPressCapture() {
+        const root = this._pressCaptureRoot
+        if (!root) return
+        root.off(Node.EventType.MOUSE_MOVE, this._onPressCaptureMouseMove, this, true)
+        root.off(Node.EventType.MOUSE_UP, this._onPressCaptureMouseUp, this, true)
+        this._pressCaptureRoot = null
+    }
+
+    private static _onPressCaptureMouseMove(event: EventMouse) {
+        const button = UIButton._activeButton
+        if (!button?._pressed) return
+        UIButton._lastMouseLocation = event.getLocation()
+        UIButton._lastPointerCanHover = true
+        button._updateMousePressState(event)
+    }
+
+    private static _onPressCaptureMouseUp(event: EventMouse) {
+        const button = UIButton._activeButton
+        if (!button?._pressed) return
+        UIButton._lastMouseLocation = event.getLocation()
+        UIButton._lastPointerCanHover = true
+        button._finishMousePress(event)
+    }
+
     private static _onGlobalTouch(event: EventTouch) {
         if (!sys.isMobile) return
         UIButton._lastMouseLocation = event.touch?.getLocation() ?? event.getUILocation()
@@ -329,6 +372,7 @@ export class UIButton extends Component {
         UIButton._instances.delete(this)
         if (UIButton._activeButton === this) {
             UIButton._activeButton = null
+            UIButton._endPressCapture()
         }
         this._pressed = false
         this._setHovering(false)
@@ -451,6 +495,7 @@ export class UIButton extends Component {
 
         event.propagationStopped = true
         this._startPress(event)
+        UIButton._beginPressCapture(this)
     }
 
     private _onMouseUp(event: EventMouse) {
@@ -490,6 +535,7 @@ export class UIButton extends Component {
 
         const inside = this._isMouseInside(event)
         UIButton._activeButton = null
+        UIButton._endPressCapture()
         const shouldHover = inside && UIButton._hoverSuppressCount === 0
         this._setHovering(shouldHover, false, false)
         this._applyState(shouldHover ? ButtonState.HOVER : ButtonState.NORMAL)
@@ -506,6 +552,44 @@ export class UIButton extends Component {
     private _isMouseInside(event: EventMouse): boolean {
         const uiTransform = this.node.getComponent(UITransform)
         return !!uiTransform && uiTransform.hitTest(event.getLocation())
+    }
+
+    private _updateMousePressState(event: EventMouse) {
+        if (!this._interactable) return
+        if (!this._pressed) return
+
+        const inside = this._isMouseInside(event)
+        const hoverAllowed = UIButton._hoverSuppressCount === 0
+        this._setHovering(hoverAllowed && inside, false)
+        if (inside) {
+            if (this._state !== ButtonState.PRESSED) {
+                this._applyState(ButtonState.PRESSED)
+            }
+            this._applyOffset()
+            this._setCursor(hoverAllowed ? 'pointer' : 'default')
+            return
+        }
+
+        const outState = !hoverAllowed || this.releaseToNormalOnPressOut ? ButtonState.NORMAL : ButtonState.HOVER
+        if (this._state !== outState) {
+            this._applyState(outState)
+        }
+        if (!this.keepPressOffsetOnPressOut) {
+            this._releaseOffset()
+        }
+        this._setCursor('default')
+    }
+
+    private _findPressCaptureRoot(): Node | null {
+        let root: Node | null = this.node.getComponent(UITransform) ? this.node : null
+        let current = this.node.parent
+        while (current) {
+            if (current.getComponent(UITransform)) {
+                root = current
+            }
+            current = current.parent
+        }
+        return root
     }
 
     private _onMouseEnter() {
@@ -530,7 +614,9 @@ export class UIButton extends Component {
         if (UIButton._activeButton && UIButton._activeButton !== this) return
         if (!this._pressed) {
             this._setHovering(true)
+            return
         }
+        this._updateMousePressState(event)
     }
 
     private _onMouseLeave() {

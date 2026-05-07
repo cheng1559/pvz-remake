@@ -71,6 +71,7 @@ export class OptionsDialog extends ModalDialog {
             case 13:
             case 32:
             case 27:
+                void SoundLoader.play(SoundEffect.ButtonClick)
                 this.close()
                 break
         }
@@ -87,7 +88,7 @@ export class OptionsDialog extends ModalDialog {
         this._root?.destroy()
         this._root = createUINode('OptionsDialogRoot', { parent: this.node, layer: this.node.layer })
 
-        createSpriteNode({
+        const menuBack = createSpriteNode({
             name: 'MenuBack',
             spriteFrame: sprites.menuBack,
             parent: this._root,
@@ -97,6 +98,7 @@ export class OptionsDialog extends ModalDialog {
             anchorX: 0,
             anchorY: 1,
         })
+        this.setDragHandle(menuBack)
 
         const musicOffset = this.gameMenu ? 0 : 5
         const sfxOffset = this.gameMenu ? 0 : 10

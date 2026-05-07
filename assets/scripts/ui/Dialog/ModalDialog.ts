@@ -36,6 +36,7 @@ export class ModalDialog extends Component {
     private _dragging = false
     private _dragMouseX = 0
     private _dragMouseY = 0
+    private _dragEventTarget: Node | null = null
 
     onEnable() {
         this._createModalBlocker()
@@ -72,22 +73,41 @@ export class ModalDialog extends Component {
         this._createModalBlocker()
     }
 
+    protected setDragHandle(handle: Node | null) {
+        if (this.dragHandle === handle && this._dragEventTarget === (handle ?? this.node)) return
+
+        this._unbindDragEvents()
+        this.dragHandle = handle
+
+        if (this.node.activeInHierarchy && this.enabled) {
+            this._bindDragEvents()
+        }
+    }
+
     private _bindDragEvents() {
         if (!this.draggable) return
+        if (this._dragEventTarget) return
         const target = this.dragHandle ?? this.node
+        if (!target.isValid) return
+
         target.on(Node.EventType.TOUCH_START, this._onTouchStart, this)
         target.on(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
         target.on(Node.EventType.TOUCH_END, this._onTouchEnd, this)
         target.on(Node.EventType.TOUCH_CANCEL, this._onTouchEnd, this)
+        this._dragEventTarget = target
     }
 
     private _unbindDragEvents() {
-        if (!this.draggable) return
-        const target = this.dragHandle ?? this.node
-        target.off(Node.EventType.TOUCH_START, this._onTouchStart, this)
-        target.off(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
-        target.off(Node.EventType.TOUCH_END, this._onTouchEnd, this)
-        target.off(Node.EventType.TOUCH_CANCEL, this._onTouchEnd, this)
+        const target = this._dragEventTarget
+        if (!target) return
+
+        if (target.isValid) {
+            target.off(Node.EventType.TOUCH_START, this._onTouchStart, this)
+            target.off(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
+            target.off(Node.EventType.TOUCH_END, this._onTouchEnd, this)
+            target.off(Node.EventType.TOUCH_CANCEL, this._onTouchEnd, this)
+        }
+        this._dragEventTarget = null
     }
 
     private _createModalBlocker() {

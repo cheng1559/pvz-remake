@@ -2,6 +2,7 @@ import {
     _decorator,
     Color,
     Component,
+    EventKeyboard,
     EventMouse,
     EventTouch,
     game,
@@ -205,6 +206,7 @@ interface ZombieView {
 export class AdventureGameScreen extends Component {
     public onBackToMenu: (() => void) | null = null
     public onMenuRequest: (() => void) | null = null
+    public onPauseRequest: (() => void) | null = null
 
     private _session = new GameSession()
     private _boardRoot: Node = null!
@@ -309,6 +311,7 @@ export class AdventureGameScreen extends Component {
 
     onDestroy() {
         input.off(Input.EventType.MOUSE_DOWN, this._onGlobalMouseDown, this)
+        input.off(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this._releasePlantCursorHoverBlock()
         this._setCanvasCursor('default')
         this.unscheduleAllCallbacks()
@@ -685,6 +688,7 @@ export class AdventureGameScreen extends Component {
 
     private _wireInput() {
         input.on(Input.EventType.MOUSE_DOWN, this._onGlobalMouseDown, this)
+        input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this.node.on(Node.EventType.MOUSE_MOVE, (event: EventMouse) => {
             if (sys.isMobile) return
             this._mousePixel = this._eventToBoardPixel(event)
@@ -719,6 +723,16 @@ export class AdventureGameScreen extends Component {
             this._mousePixel = pixel
             this._handlePointerDown(pixel)
         })
+    }
+
+    private _onKeyDown(event: EventKeyboard) {
+        if (event.keyCode !== 32) return
+        if (!this._gameStarted || this._session.result !== 'playing') return
+        if (this._session.paused) return
+
+        this.pauseGame()
+        void SoundLoader.play(SoundEffect.Pause)
+        this.onPauseRequest?.()
     }
 
     private _onGlobalMouseDown(event: EventMouse) {
@@ -2044,6 +2058,10 @@ export class AdventureGameScreen extends Component {
 
     private _updateHoverItemAndSeedPacketState() {
         if (sys.isMobile) return
+        if (this._session.paused) {
+            this._hideTooltips()
+            return
+        }
         if (!this._gameStarted || this._mousePixel.x < 0 || this._mousePixel.y < 0 || this._hasCursorObject()) {
             this._hideTooltips()
             this._setCanvasCursor(this._isMenuButtonPixel(this._mousePixel) ? 'pointer' : 'default')

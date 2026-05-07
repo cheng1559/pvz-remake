@@ -48,14 +48,11 @@ const LEVEL_1_ADVICE_PICK_SEED = 'Click on a seed packet to pick it up!'
 const LEVEL_1_ADVICE_PLANT_SEED = 'Click on the grass to plant your seed!'
 const LEVEL_1_ADVICE_FIRST_PLANT_DONE = 'Nicely done!'
 const LEVEL_1_ADVICE_COLLECT_FALLING_SUN = 'Click on the falling sun to collect it!'
-const LEVEL_1_ADVICE_KEEP_COLLECTING_SUN = "Keep on collecting sun!\nYou'll need it to grow more plants!"
 const LEVEL_1_ADVICE_ENOUGH_SUN = "Excellent! You've collected\nenough for your next plant!"
 const LEVEL_1_ADVICE_PLANT_SECOND_PEASHOOTER = 'Click on the peashooter to plant another one!'
 const LEVEL_1_ADVICE_ZOMBIES_CAN_START = "Don't let the zombies reach your house!"
 const LEVEL_1_AFTER_FIRST_PLANT_SUN_DELAY = 400
-const LEVEL_1_NEXT_SUN_DELAY = 100
 const LEVEL_1_SECOND_SEED_PROMPT_DELAY = 400
-const LEVEL_1_SECOND_PLANT_SUN_TARGET = 100
 const LEVEL_1_ZOMBIE_COUNTDOWN_AFTER_TUTORIAL = 200
 const PROJECTILE_DAMAGE: Record<ProjectileType, number> = {
     pea: 20,
@@ -93,7 +90,6 @@ export class GameSession {
     private _finalWaveSoundCounter = 0
     private _levelOneTutorialPhase: LevelOneTutorialPhase = 'done'
     private _levelOneTutorialTimer = 0
-    private _levelOneTutorialSunTimer = 0
 
     constructor(level: LevelDefinition = ADVENTURE_1_1) {
         this.level = level
@@ -162,7 +158,7 @@ export class GameSession {
         this.tick++
         this._updateSeedPackets()
         this._updateLevelOneTutorial()
-        if (!this._isLevelOneTutorialActive()) {
+        if (!this._isLevelOneTutorialBlockingSun()) {
             this._updateSunSpawning()
         }
         if (!this._isLevelOneTutorialBlockingZombies()) {
@@ -249,7 +245,7 @@ export class GameSession {
         if (packet.cooldownRemaining > 0 || (!packet.active && this.selectedSeed !== seedType)) {
             return 'waiting-for-seed'
         }
-        if (this.sun < seed.cost) return 'not-enough-sun'
+        if (!this._canSpendSun(seed.cost)) return 'not-enough-sun'
         if (!this.level.activeRows.includes(row)) return 'not-here'
         if (col < 0 || col >= this.geometry.cols) return 'not-here'
         return this.plants.some((plant) => !plant.dead && plant.col === col && plant.row === row)
@@ -264,7 +260,7 @@ export class GameSession {
             this.events.push({ type: 'soundRequested', sound: SoundEffect.Buzzer })
             return
         }
-        if (this.sun < SEED_DEFINITIONS[seedType].cost) {
+        if (!this._canSpendSun(SEED_DEFINITIONS[seedType].cost)) {
             this.events.push({ type: 'soundRequested', sound: SoundEffect.Buzzer })
             this.events.push({ type: 'advice', message: 'You need more sun to do that!', style: 'hint' })
             return
@@ -451,20 +447,8 @@ export class GameSession {
 
         switch (this._levelOneTutorialPhase) {
             case 'first-plant-done':
-                this._levelOneTutorialTimer--
-                if (this._levelOneTutorialTimer <= 0) {
-                    this._spawnLevelOneTutorialSun(true)
-                }
-                break
-            case 'keep-collecting-sun':
-                if (this.sun >= LEVEL_1_SECOND_PLANT_SUN_TARGET) {
+                if (this._levelOnePeashooterPacketReady()) {
                     this._enterLevelOneEnoughSunPhase()
-                    return
-                }
-                if (this._hasActiveLevelOneTutorialSun()) return
-                this._levelOneTutorialSunTimer--
-                if (this._levelOneTutorialSunTimer <= 0) {
-                    this._spawnLevelOneTutorialSun(false)
                 }
                 break
             case 'enough-sun':
@@ -513,7 +497,7 @@ export class GameSession {
 
         if (isFirstPlant) {
             this._levelOneTutorialPhase = 'first-plant-done'
-            this._levelOneTutorialTimer = LEVEL_1_AFTER_FIRST_PLANT_SUN_DELAY
+            this._sunCountDown = LEVEL_1_AFTER_FIRST_PLANT_SUN_DELAY
             this._pushLevelOneTutorialAdvice(LEVEL_1_ADVICE_FIRST_PLANT_DONE)
             return
         }
@@ -528,24 +512,16 @@ export class GameSession {
 
     private _handleLevelOneTutorialSunClicked(item: Item) {
         if (this.level.adventureLevel !== 1 || item.type !== 'sun') return
-        if (this._levelOneTutorialPhase !== 'collect-falling-sun' &&
-            this._levelOneTutorialPhase !== 'keep-collecting-sun') {
-            return
-        }
-        if (this.sun >= LEVEL_1_SECOND_PLANT_SUN_TARGET) return
 
-        this._levelOneTutorialPhase = 'keep-collecting-sun'
-        this._levelOneTutorialSunTimer = LEVEL_1_NEXT_SUN_DELAY
-        this._pushLevelOneTutorialAdvice(LEVEL_1_ADVICE_KEEP_COLLECTING_SUN)
+        if (this._levelOneTutorialPhase === 'first-plant-done' && this._levelOnePeashooterPacketReady()) {
+            this._enterLevelOneEnoughSunPhase()
+        }
     }
 
     private _handleLevelOneTutorialSunBanked() {
         if (this.level.adventureLevel !== 1) return
-        if (this._levelOneTutorialPhase !== 'collect-falling-sun' &&
-            this._levelOneTutorialPhase !== 'keep-collecting-sun') {
-            return
-        }
-        if (this.sun < LEVEL_1_SECOND_PLANT_SUN_TARGET) return
+        if (this._levelOneTutorialPhase !== 'first-plant-done') return
+        if (!this._levelOnePeashooterPacketReady()) return
 
         this._enterLevelOneEnoughSunPhase()
     }
@@ -560,34 +536,22 @@ export class GameSession {
 
         this._levelOneTutorialPhase = 'enough-sun'
         this._levelOneTutorialTimer = LEVEL_1_SECOND_SEED_PROMPT_DELAY
-        this._readyLevelOnePeashooterPacket()
         this._pushLevelOneTutorialAdvice(LEVEL_1_ADVICE_ENOUGH_SUN)
     }
 
-    private _spawnLevelOneTutorialSun(showCollectAdvice: boolean) {
-        if (this.sun >= LEVEL_1_SECOND_PLANT_SUN_TARGET || this._hasActiveLevelOneTutorialSun()) return
-
-        this._addItem('sun', 'from-sky', this._randomInt(SKY_SUN_X_MIN, SKY_SUN_X_MAX), SKY_SUN_Y)
-        if (showCollectAdvice) {
-            this._levelOneTutorialPhase = 'collect-falling-sun'
-            this._pushLevelOneTutorialAdvice(LEVEL_1_ADVICE_COLLECT_FALLING_SUN)
-        }
-    }
-
-    private _hasActiveLevelOneTutorialSun() {
-        return this.items.some((item) => !item.dead && item.type === 'sun')
-    }
-
-    private _readyLevelOnePeashooterPacket() {
+    private _levelOnePeashooterPacketReady() {
         const packet = this.seedPackets.find((item) => item.seedType === 'peashooter')
-        if (!packet) return
+        if (!packet || packet.cooldownRemaining > 0 || !packet.active) return false
 
-        packet.cooldownRemaining = 0
-        if (this.selectedSeed !== 'peashooter') packet.active = true
+        return this._canSpendSun(SEED_DEFINITIONS.peashooter.cost)
     }
 
-    private _isLevelOneTutorialActive() {
-        return this.level.adventureLevel === 1 && this._levelOneTutorialPhase !== 'done'
+    private _isLevelOneTutorialBlockingSun() {
+        if (this.level.adventureLevel !== 1) return false
+        if (this._levelOneTutorialPhase !== 'pick-first-seed' && this._levelOneTutorialPhase !== 'plant-first-seed') {
+            return false
+        }
+        return this.plants.length === 0
     }
 
     private _isLevelOneTutorialBlockingZombies() {
@@ -722,7 +686,24 @@ export class GameSession {
         }, this._createItemUpdateContext(this.events))
         this.items.push(item)
         this.events.push({ type: 'entitySpawned', entityId: item.id })
+        if (this.level.adventureLevel === 1 && type === 'sun') {
+            this._pushLevelOneTutorialAdvice(LEVEL_1_ADVICE_COLLECT_FALLING_SUN)
+        }
         return item
+    }
+
+    private _canSpendSun(amount: number) {
+        return amount <= this.sun + this._countSunBeingCollected()
+    }
+
+    private _countSunBeingCollected() {
+        return this.items.reduce((total, item) => {
+            if (!item.beingCollected || item.dead) return total
+            if (item.type === 'small-sun') return total + 15
+            if (item.type === 'large-sun') return total + 50
+            if (item.type === 'sun') return total + 25
+            return total
+        }, 0)
     }
 
     private _findItemAt(x: number, y: number) {

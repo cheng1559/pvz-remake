@@ -59,8 +59,6 @@ enum DialogType {
     TallBottom,
 }
 
-const MESSAGE_GLYPH_TOP_ADJUST_Y = 4
-
 @ccclass('MessageBox')
 export class MessageBox extends ModalDialog {
     @property
@@ -92,6 +90,12 @@ export class MessageBox extends ModalDialog {
 
     @property
     messageAlign: number = 2
+
+    @property
+    spaceAfterHeader: number = 10
+
+    @property
+    extraHeight: number = 0
 
     private _bgContainer: Node | null = null
     private _buttonContainer: Node | null = null
@@ -224,6 +228,7 @@ export class MessageBox extends ModalDialog {
             this._bgContainer = createUINode('BackgroundContainer', { parent: this.node })
             this._bgContainer.setSiblingIndex(0)
         }
+        this.setDragHandle(this._bgContainer)
 
         const isTall = this.dialogType === DialogType.TallBottom
         const dialogSprites = await MessageBoxAssets.loadDialogSprites(isTall)
@@ -265,7 +270,6 @@ export class MessageBox extends ModalDialog {
         const LINES_RECT_EXTRA_WIDTH = 4
         const LINES_EXTRA_HEIGHT = 30
         const VERTICAL_CENTER_BOTTOM_PAD = 55
-        const SPACE_AFTER_HEADER = 10
         // LawnDialog passes null button images to Dialog, so Dialog::mButtonHeight remains 24.
         const LAYOUT_BUTTON_HEIGHT = 24
 
@@ -314,7 +318,8 @@ export class MessageBox extends ModalDialog {
             DIALOG_HEADER_OFFSET
 
         if (this.title) {
-            desiredHeight += -titleMetrics.ascentPadding + titleMetrics.height + SPACE_AFTER_HEADER
+            desiredHeight +=
+                -titleMetrics.ascentPadding + titleMetrics.height + this.spaceAfterHeader
         }
         if (this.message) {
             const linesAreaWidth =
@@ -332,6 +337,7 @@ export class MessageBox extends ModalDialog {
                 ) + LINES_EXTRA_HEIGHT
         }
         desiredHeight += LAYOUT_BUTTON_HEIGHT
+        desiredHeight += this.extraHeight
 
         const minImageHeight = topH + bottomH + DIALOG_HEADER_OFFSET
         if (desiredHeight < minImageHeight) {
@@ -387,6 +393,7 @@ export class MessageBox extends ModalDialog {
         createSpriteNode({ spriteFrame: header!, parent: container, x: headerX, y: headerY })
 
         setUISize(this.node, actualWidth, actualHeight)
+        setUISize(container, actualWidth, actualHeight)
 
         // aFontY in C++ coords (top-left origin, Y-down)
         let aFontY = CONTENT_INSET_TOP + BG_INSET_TOP + DIALOG_HEADER_OFFSET
@@ -424,7 +431,7 @@ export class MessageBox extends ModalDialog {
             this._titleRenderer = titleFont
 
             // Advance aFontY past title: baseline - ascent + fontHeight + spaceAfterHeader
-            aFontY = aOffsetY - titleAscent + titleFontHeight + SPACE_AFTER_HEADER
+            aFontY = aOffsetY - titleAscent + titleFontHeight + this.spaceAfterHeader
         }
 
         // ── Create message FontRenderer ──
@@ -485,14 +492,18 @@ export class MessageBox extends ModalDialog {
             const msgY = actualHeight / 2 - msgY_cpp
             this._messageNode.setPosition(
                 msgX,
-                msgY + msgMetrics.ascentPadding + MESSAGE_GLYPH_TOP_ADJUST_Y - this.messageOffsetY,
+                msgY + msgMetrics.ascentPadding - this.messageOffsetY,
             )
             this._messageRenderer = msgFont
         }
 
+        this.onDialogRendered(actualWidth, actualHeight)
+
         // Render buttons
         await this._renderButtons(actualWidth, actualHeight, buttonSprites, renderVersion)
     }
+
+    protected onDialogRendered(_actualWidth: number, _actualHeight: number) {}
 
     show(title: string, message: string) {
         this.title = title

@@ -77,9 +77,13 @@ export function runAdventure11Harness(): GameHarnessResult {
     }
 
     const skySunSession = new GameSession()
-    for (let i = 0; i < 700; i++) skySunSession.update()
-    if (!skySunSession.items.some((item) => item.type === 'sun' && item.motion === 'from-sky')) {
-        details.push('Day levels should spawn falling sky sun through the item system.')
+    const skySunCenter = skySunSession.geometry.gridToPixel(0, 2)
+    skySunSession.dispatch({ type: 'selectSeed', seedType: 'peashooter' })
+    skySunSession.dispatch({ type: 'placePlant', x: skySunCenter.x + 40, y: skySunCenter.y + 50 })
+    for (let i = 0; i < 1250; i++) skySunSession.update()
+    const liveSkySuns = skySunSession.items.filter((item) => !item.dead && item.type === 'sun' && item.motion === 'from-sky')
+    if (liveSkySuns.length < 2) {
+        details.push('Adventure 1-1 should keep spawning sky sun after the first Peashooter even if earlier sun was not collected.')
     }
 
     const zombieSession = new GameSession()
