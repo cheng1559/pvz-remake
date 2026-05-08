@@ -10,15 +10,10 @@ import { ChallengeScreenAssets } from './ChallengeScreen/ChallengeScreenAssets'
 import { HelpScreenAssets } from './HelpScreen/HelpScreenAssets'
 import { MessageBoxAssets } from './MessageBox/MessageBoxAssets'
 import { OptionsDialogAssets } from './OptionsDialog/OptionsDialogAssets'
-import { SELECTOR_SCREEN_ANIMATIONS, SELECTOR_SCREEN_SPRITES } from './SelectorScreen/SelectorScreenConfig'
+import { SELECTOR_SCREEN_SPRITES } from './SelectorScreen/SelectorScreenConfig'
 import { StoreScreenAssets } from './StoreScreen/StoreScreenAssets'
 import { ZenGardenScreenAssets } from './ZenGardenScreen/ZenGardenScreenAssets'
 
-const STARTUP_ANIMATIONS = [
-    ...SELECTOR_SCREEN_ANIMATIONS,
-    ...AlmanacScreenAssets.preload.animations.map((name) => `animations/${name}`),
-    ...ZenGardenScreenAssets.preload.animations.map((name) => `animations/${name}`),
-]
 const STARTUP_TEXTURES = [
     ...MessageBoxAssets.preload.sprites,
     ...OptionsDialogAssets.preload.sprites,
@@ -75,10 +70,15 @@ export class StartupResourceLoader {
     }
 
     private static async _loadStartupAnimations(): Promise<JsonAsset[]> {
-        const animations = await Promise.all(
-            STARTUP_ANIMATIONS.map((path) => this.loadJson(path)),
+        const animations = await AssetLoader.loadDir(
+            'animations',
+            JsonAsset,
+            'animation resources',
         )
-        return animations.filter((animation): animation is JsonAsset => animation !== null)
+        for (const animation of animations) {
+            this._jsonCache.set(`animations/${animation.name}`, animation)
+        }
+        return animations
     }
 
     private static async _loadStartupTextures(animations: JsonAsset[]): Promise<void> {

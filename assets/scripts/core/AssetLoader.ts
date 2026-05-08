@@ -2,6 +2,7 @@ import { Asset, resources } from 'cc'
 
 export class AssetLoader {
     private static _pending: Map<string, Promise<Asset | null>> = new Map()
+    private static _pendingDirs: Map<string, Promise<Asset[]>> = new Map()
 
     static load<T extends Asset>(
         path: string,
@@ -29,7 +30,34 @@ export class AssetLoader {
         return promise
     }
 
+    static loadDir<T extends Asset>(
+        path: string,
+        type: any,
+        label: string | null = path,
+    ): Promise<T[]> {
+        const key = `${type.name}:${path}`
+        const pending = this._pendingDirs.get(key) as Promise<T[]> | undefined
+        if (pending) return pending
+
+        const promise = new Promise<T[]>((resolve) => {
+            resources.loadDir(path, type, (err, assets) => {
+                this._pendingDirs.delete(key)
+                if (err || !assets) {
+                    if (label) {
+                        console.warn(`[AssetLoader] Failed to load ${label}`, err)
+                    }
+                    resolve([])
+                    return
+                }
+                resolve(assets as T[])
+            })
+        })
+        this._pendingDirs.set(key, promise as Promise<Asset[]>)
+        return promise
+    }
+
     static clearPending() {
         this._pending.clear()
+        this._pendingDirs.clear()
     }
 }
