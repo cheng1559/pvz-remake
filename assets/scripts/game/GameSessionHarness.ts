@@ -127,6 +127,43 @@ export function runAdventure11Harness(): GameHarnessResult {
         details.push('Ducky Tube zombie should keep the float object and start in pool movement state.')
     }
 
+    const mowerSession = new GameSession()
+    const mower = mowerSession.lawnMowers[0]
+    if (!mower || mower.row !== 2 || mower.x !== -21 || mower.y !== 303 || mower.state !== 'ready') {
+        details.push('Adventure 1-1 should initialize one ready lawn mower in the original active row position.')
+    }
+    const mowerZombie = mowerSession.addZombie('normal', 2, -20)
+    mowerSession.drainEvents()
+    mowerSession.update()
+    const mowerEvents = mowerSession.drainEvents()
+    if (!mowerZombie || mowerZombie.state !== 'mowered' || mowerZombie.dead) {
+        details.push('A ready lawn mower should put a headed zombie into the mowered animation state before removal.')
+    }
+    if (mowerSession.result !== 'playing') {
+        details.push('The lawn mower should prevent an overlapping zombie from immediately causing a house loss.')
+    }
+    if (mowerSession.lawnMowers[0]?.state !== 'triggered') {
+        details.push('Mowing the first zombie should trigger the lawn mower.')
+    }
+    if (!mowerEvents.some((event) => event.type === 'foleyRequested' && event.sound === SoundEffect.Lawnmower) ||
+        !mowerEvents.some((event) => event.type === 'foleyRequested' && event.sound === SoundEffect.Splat)) {
+        details.push('Triggering a lawn mower should request the original lawnmower foley and splat on impact.')
+    }
+    for (let i = 0; i < 100; i++) mowerSession.update()
+    if (mowerSession.zombies.length !== 0) {
+        details.push('A mowered zombie should be removed after its lawnmowered zombie animation window.')
+    }
+
+    const triggeredMowerSession = new GameSession()
+    const triggeredMower = triggeredMowerSession.lawnMowers[0]
+    triggeredMowerSession.addZombie('normal', 2, -20)
+    triggeredMowerSession.update()
+    const mowerXAfterTrigger = triggeredMower.x
+    triggeredMowerSession.update()
+    if (triggeredMower.x <= mowerXAfterTrigger) {
+        details.push('A triggered lawn mower should continue moving right after activation.')
+    }
+
     const waveSession = new GameSession()
     for (let i = 0; i < 1799; i++) waveSession.update()
     if (waveSession.zombies.length !== 0 || waveSession.currentWave !== 0) {
@@ -142,7 +179,7 @@ export function runAdventure11Harness(): GameHarnessResult {
     combatSession.dispatch({ type: 'selectSeed', seedType: 'peashooter' })
     combatSession.dispatch({ type: 'placePlant', x: combatCenter.x + 40, y: combatCenter.y + 50 })
     const combatPlant = combatSession.plants[0]
-    const combatZombie = combatSession.addZombie('normal', 2, combatPlant.x + 70)
+    const combatZombie = combatSession.addZombie('normal', 2, combatPlant.x + 180)
     if (!combatZombie) {
         details.push('Combat zombie should spawn in the active row.')
     } else {
@@ -154,8 +191,16 @@ export function runAdventure11Harness(): GameHarnessResult {
         if (!combatEvents.some((event) => event.type === 'animationRequested' && event.entityId === combatPlant.id && event.animation === 'shoot')) {
             details.push('Peashooter should see a zombie target in its row and request the shooting animation.')
         }
+        if (combatSession.projectiles.length !== 0 || combatZombie.health !== 270) {
+            details.push('Peashooter should not apply projectile damage before the shooting counter reaches its fire frame.')
+        }
+        for (let i = 0; i < 32; i++) combatSession.update()
+        if (!combatSession.projectiles.some((projectile) => projectile.type === 'pea' && projectile.row === combatPlant.row)) {
+            details.push('Peashooter should create a pea projectile on the original shooting fire frame.')
+        }
+        for (let i = 0; i < 40; i++) combatSession.update()
         if (combatZombie.health !== 250) {
-            details.push('Peashooter projectile fire should apply 20 damage to the first zombie in its row.')
+            details.push('A pea projectile should move across the row and apply 20 damage when it overlaps the first zombie.')
         }
     }
 

@@ -8,6 +8,7 @@ import {
 import { SoundEffect } from '@/core/SoundLoader'
 import { createItem, Item } from './items/ItemFactory'
 import { createPlant, Plant } from './plants/PlantFactory'
+import { createProjectile, Projectile } from './projectiles/ProjectileFactory'
 import { createZombie, Zombie } from './zombies/ZombieFactory'
 import type {
     GameCommand,
@@ -16,11 +17,11 @@ import type {
     ItemMotion,
     ItemType,
     GameResult,
+    LawnMowerEntity,
     LevelDefinition,
     LevelOneTutorialPhase,
     PlantEntity,
     PlantingReason,
-    ProjectileType,
     Rect,
     SeedPacketState,
     SeedType,
@@ -44,6 +45,15 @@ const ZOMBIE_COUNTDOWN_BEFORE_HUGE_WAVE = 750
 const HUGE_WAVE_WARNING_COUNTDOWN = 5
 const FINAL_WAVE_SOUND_DELAY = 60
 const FLAG_WAVE_EXTRA_NORMAL_ZOMBIES = 4
+const LAWN_MOWER_READY_X = -21
+const LAWN_MOWER_START_X = -160
+const LAWN_MOWER_Y_OFFSET = 23
+const LAWN_MOWER_ATTACK_WIDTH = 50
+const LAWN_MOWER_ATTACK_HEIGHT = 80
+const LAWN_MOWER_SPEED = 3.33
+const LAWN_MOWER_CHOMP_READY_COUNTER = 25
+const LAWN_MOWER_CHOMP_TRIGGERED_COUNTER = 50
+const WIDE_BOARD_WIDTH = 800
 const LEVEL_1_ADVICE_PICK_SEED = 'Click on a seed packet to pick it up!'
 const LEVEL_1_ADVICE_PLANT_SEED = 'Click on the grass to plant your seed!'
 const LEVEL_1_ADVICE_FIRST_PLANT_DONE = 'Nicely done!'
@@ -55,10 +65,6 @@ const LEVEL_1_ADVICE_ZOMBIES_CAN_START = "Don't let the zombies reach your house
 const LEVEL_1_AFTER_FIRST_PLANT_SUN_DELAY = 400
 const LEVEL_1_SECOND_SEED_PROMPT_DELAY = 400
 const LEVEL_1_ZOMBIE_COUNTDOWN_AFTER_TUTORIAL = 200
-const PROJECTILE_DAMAGE: Record<ProjectileType, number> = {
-    pea: 20,
-    snowpea: 20,
-}
 const ZOMBIE_REACHED_HOUSE_X = -50
 
 export class GameSession {
@@ -67,7 +73,9 @@ export class GameSession {
     readonly seedPackets: SeedPacketState[]
     readonly plants: Plant[] = []
     readonly zombies: Zombie[] = []
+    readonly projectiles: Projectile[] = []
     readonly items: Item[] = []
+    readonly lawnMowers: LawnMowerEntity[] = []
     readonly events: GameEvent[] = []
 
     tick = 0
@@ -89,6 +97,7 @@ export class GameSession {
     private _zombieHealthToNextWave = -1
     private _hugeWaveCountDown = 0
     private _finalWaveSoundCounter = 0
+    private _levelWonNotified = false
     private _levelOneTutorialPhase: LevelOneTutorialPhase = 'done'
     private _levelOneTutorialTimer = 0
     private _levelOneClickOnSunAdviceShown = false
@@ -108,11 +117,12 @@ export class GameSession {
         if (level.adventureLevel === 1) {
             this._levelOneTutorialPhase = 'pick-first-seed'
         }
+        this._initLawnMowers()
         this._pushAdvice()
     }
 
     allEntities(): GameEntity[] {
-        return [...this.plants, ...this.zombies, ...this.items]
+        return [...this.plants, ...this.zombies, ...this.projectiles, ...this.lawnMowers, ...this.items]
     }
 
     drainEvents(): GameEvent[] {
@@ -168,6 +178,8 @@ export class GameSession {
         }
         this._updatePlants()
         this._updateZombies()
+        this._updateProjectiles()
+        this._updateLawnMowers()
         this._updateItems()
         this._checkZombieReachedHouse()
         this._removeDeadEntities()
@@ -399,11 +411,43 @@ export class GameSession {
             if (event.type === 'sunProduced') {
                 this._addItem('sun', 'from-plant', event.x, event.y)
             } else if (event.type === 'projectileFired') {
-                this._damageFirstZombieInRow(event.row, event.x, PROJECTILE_DAMAGE[event.projectileType])
+                this._addProjectile(event.projectileType, event.x, event.y, event.row)
                 this.events.push(event)
             } else {
                 this.events.push(event)
             }
+        }
+    }
+
+    private _addProjectile(type: Projectile['type'], x: number, y: number, row: number) {
+        const projectile = createProjectile({
+            id: this._allocateId(),
+            type,
+            x,
+            y,
+            row,
+            shadowY: this.geometry.gridToPixel(0, row).y + 67,
+        })
+        this.projectiles.push(projectile)
+        this.events.push({ type: 'entitySpawned', entityId: projectile.id })
+        return projectile
+    }
+
+    private _updateProjectiles() {
+        const context = {
+            events: this.events,
+            findCollisionTarget: (projectile: Projectile) => this._findProjectileCollisionTarget(projectile),
+            damageTarget: (target: Zombie, projectile: Projectile) => {
+                if (projectile.type === 'snowpea') target.applyChill(this.events)
+                target.takeDamage(projectile.damage, {
+                    zombieCount: this._countLiveZombies(),
+                    canUseSuperLongDeath: this._canUseSuperLongDeath(),
+                })
+            },
+        }
+
+        for (const projectile of this.projectiles) {
+            projectile.update(context)
         }
     }
 
@@ -432,6 +476,90 @@ export class GameSession {
 
         for (const zombie of this.zombies) {
             zombie.update(context)
+        }
+    }
+
+    private _initLawnMowers() {
+        for (const row of this.level.activeRows) {
+            const mower = this._createLawnMower(row)
+            mower.x = LAWN_MOWER_READY_X
+            this.lawnMowers.push(mower)
+            this.events.push({ type: 'entitySpawned', entityId: mower.id })
+        }
+    }
+
+    private _createLawnMower(row: number): LawnMowerEntity {
+        return {
+            id: this._allocateId(),
+            kind: 'lawnmower',
+            row,
+            x: LAWN_MOWER_START_X,
+            y: this.geometry.gridToPixel(0, row).y + LAWN_MOWER_Y_OFFSET,
+            state: 'ready',
+            chompCounter: 0,
+            dead: false,
+        }
+    }
+
+    private _updateLawnMowers() {
+        for (const mower of this.lawnMowers) {
+            if (mower.dead) continue
+            this._mowOverlappingZombies(mower)
+            if (mower.state !== 'triggered') continue
+
+            let speed = LAWN_MOWER_SPEED
+            if (mower.chompCounter > 0) {
+                mower.chompCounter--
+                speed = this._animateBounceSlowMiddle(
+                    LAWN_MOWER_CHOMP_TRIGGERED_COUNTER,
+                    0,
+                    mower.chompCounter,
+                    LAWN_MOWER_SPEED,
+                    1,
+                )
+            }
+            mower.x += speed
+            mower.y = this.geometry.gridToPixel(0, mower.row).y + LAWN_MOWER_Y_OFFSET
+            if (mower.x > WIDE_BOARD_WIDTH) mower.dead = true
+        }
+    }
+
+    private _mowOverlappingZombies(mower: LawnMowerEntity) {
+        const attackRect = this._lawnMowerAttackRect(mower)
+        for (const zombie of this.zombies) {
+            if (zombie.dead || zombie.row !== mower.row) continue
+            if (zombie.state === 'mowered') continue
+            if (this._rectOverlap(attackRect, zombie.getBodyRect()) <= 0) continue
+            if (mower.state === 'ready' && !zombie.hasHead) continue
+
+            this._mowZombie(mower, zombie)
+        }
+    }
+
+    private _mowZombie(mower: LawnMowerEntity, zombie: Zombie) {
+        if (mower.state === 'ready') {
+            this._startLawnMower(mower)
+            mower.chompCounter = LAWN_MOWER_CHOMP_READY_COUNTER
+        } else {
+            mower.chompCounter = LAWN_MOWER_CHOMP_TRIGGERED_COUNTER
+        }
+        this.events.push({ type: 'foleyRequested', sound: SoundEffect.Splat })
+        zombie.mowDown()
+    }
+
+    private _startLawnMower(mower: LawnMowerEntity) {
+        if (mower.state === 'triggered') return
+
+        mower.state = 'triggered'
+        this.events.push({ type: 'foleyRequested', sound: SoundEffect.Lawnmower })
+    }
+
+    private _lawnMowerAttackRect(mower: LawnMowerEntity): Rect {
+        return {
+            x: mower.x,
+            y: mower.y,
+            width: LAWN_MOWER_ATTACK_WIDTH,
+            height: LAWN_MOWER_ATTACK_HEIGHT,
         }
     }
 
@@ -750,8 +878,8 @@ export class GameSession {
 
     private _hasTargetInRow(row: number, plant: Plant) {
         return this.zombies.some((zombie) => {
-            if (zombie.dead || zombie.row !== row) return false
-            if (!this._isZombieVisibleForPlantTarget(zombie)) return false
+            if (zombie.row !== row) return false
+            if (!this._isZombieDamageableForProjectile(zombie)) return false
             const zombieRect = zombie.getBodyRect()
             return zombieRect.x + zombieRect.width > plant.x
         })
@@ -765,9 +893,8 @@ export class GameSession {
             height: 75,
         }
         return this.zombies.some((zombie) =>
-            !zombie.dead &&
             zombie.row === plant.row &&
-            this._isZombieVisibleForPlantTarget(zombie) &&
+            this._isZombieDamageableForProjectile(zombie) &&
             this._rectOverlapX(attackRect, zombie.getBodyRect()) > 0)
     }
 
@@ -785,7 +912,9 @@ export class GameSession {
     private _removeDeadEntities() {
         this._removeDead(this.plants)
         this._removeDead(this.zombies)
+        this._removeDead(this.projectiles)
         this._removeDead(this.items)
+        this._removeDead(this.lawnMowers)
     }
 
     private _removeDead<T extends { id: number, dead: boolean }>(items: T[]) {
@@ -797,11 +926,11 @@ export class GameSession {
     }
 
     private _checkLevelCompletion() {
-        if (this.result !== 'playing') return
+        if (this.result !== 'playing' || this._levelWonNotified) return
         if (this.currentWave < this.numWaves) return
         if (this.zombies.some((zombie) => !zombie.dead)) return
 
-        this.result = 'won'
+        this._levelWonNotified = true
         this.events.push({ type: 'levelWon' })
     }
 
@@ -852,19 +981,43 @@ export class GameSession {
         return right - left
     }
 
-    private _damageFirstZombieInRow(row: number, projectileX: number, damage: number) {
+    private _rectOverlap(rectA: Rect, rectB: Rect) {
+        const overlapX = this._rectOverlapX(rectA, rectB)
+        if (overlapX <= 0) return overlapX
+
+        const top = Math.max(rectA.y, rectB.y)
+        const bottom = Math.min(rectA.y + rectA.height, rectB.y + rectB.height)
+        const overlapY = bottom - top
+        if (overlapY <= 0) return overlapY
+
+        return Math.min(overlapX, overlapY)
+    }
+
+    private _animateBounceSlowMiddle(
+        timeStart: number,
+        timeEnd: number,
+        timeAge: number,
+        positionStart: number,
+        positionEnd: number,
+    ) {
+        const warpedAge = (timeAge - timeStart) / (timeEnd - timeStart)
+        if (warpedAge <= 0 || warpedAge >= 1) return positionStart
+
+        const bounce = 1 - Math.abs(2 * warpedAge - 1)
+        const invQuad = 2 * bounce - bounce * bounce
+        return (positionEnd - positionStart) * invQuad + positionStart
+    }
+
+    private _findProjectileCollisionTarget(projectile: Projectile) {
+        const projectileRect = projectile.getProjectileRect()
         let target: Zombie | null = null
         for (const zombie of this.zombies) {
-            if (zombie.dead || zombie.row !== row) continue
-            if (!this._isZombieVisibleForPlantTarget(zombie)) continue
-            const rect = zombie.getBodyRect()
-            if (rect.x + rect.width < projectileX) continue
+            if (zombie.row !== projectile.row) continue
+            if (!this._isZombieDamageableForProjectile(zombie)) continue
+            if (this._rectOverlap(projectileRect, zombie.getBodyRect()) <= 0) continue
             if (!target || zombie.x < target.x) target = zombie
         }
-        target?.takeDamage(damage, {
-            zombieCount: this._countLiveZombies(),
-            canUseSuperLongDeath: this._canUseSuperLongDeath(),
-        })
+        return target
     }
 
     private _countLiveZombies() {
@@ -877,6 +1030,11 @@ export class GameSession {
 
     private _isZombieVisibleForPlantTarget(zombie: Zombie) {
         return zombie.getBodyRect().x < this.geometry.width
+    }
+
+    private _isZombieDamageableForProjectile(zombie: Zombie) {
+        if (zombie.dead || zombie.state === 'dying' || zombie.state === 'mowered') return false
+        return this._isZombieVisibleForPlantTarget(zombie)
     }
 
     private _randomInt(minInclusive: number, maxInclusive: number) {

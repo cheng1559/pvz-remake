@@ -18,7 +18,8 @@ export type BackgroundType = 'day'
 export type GameResult = 'playing' | 'won' | 'lost'
 export type ZombieType = 'normal' | 'flag' | 'traffic-cone' | 'bucket' | 'ducky-tube'
 export type ZombieSubclass = 'normal'
-export type ZombieState = 'walking' | 'eating' | 'dying'
+export type ZombieState = 'walking' | 'eating' | 'dying' | 'mowered'
+export type LawnMowerState = 'ready' | 'triggered'
 export type ZombieHelmType = 'none' | 'traffic-cone' | 'bucket'
 export type ZombieShieldType = 'none'
 export type AdviceStyle = 'hint' | 'hint-stay' | 'tutorial-level1' | 'tutorial-level1-stay' | 'huge-wave' | 'big-middle'
@@ -205,7 +206,9 @@ export interface ZombieEntity {
     currentAnimation: string
     animationSpeed: number
     animationTime: number
+    moweredTime: number
     age: number
+    chilledCounter: number
     hasHead: boolean
     hasArm: boolean
     hasTongue: boolean
@@ -231,4 +234,34 @@ export interface ItemEntity {
     beingCollected: boolean
 }
 
-export type GameEntity = PlantEntity | ZombieEntity | ItemEntity
+export interface ProjectileEntity {
+    id: number
+    kind: 'projectile'
+    type: ProjectileType
+    row: number
+    x: number
+    y: number
+    z: number
+    velocityX: number
+    velocityY: number
+    velocityZ: number
+    accelerationZ: number
+    shadowY: number
+    width: number
+    height: number
+    age: number
+    dead: boolean
+}
+
+export interface LawnMowerEntity {
+    id: number
+    kind: 'lawnmower'
+    row: number
+    x: number
+    y: number
+    state: LawnMowerState
+    chompCounter: number
+    dead: boolean
+}
+
+export type GameEntity = PlantEntity | ZombieEntity | ItemEntity | ProjectileEntity | LawnMowerEntity

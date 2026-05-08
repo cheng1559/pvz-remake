@@ -7,6 +7,7 @@ import type {
 } from './GameTypes'
 
 export const GAME_TICK_SECONDS = 0.01
+export const GAME_SPEED = 1
 
 export const DAY_GEOMETRY: BoardGeometry = {
     width: 800,
@@ -123,7 +124,7 @@ export const PLANT_DEFINITIONS: Record<string, PlantDefinition> = {
         shootingAnimationTicks: 33,
         projectileType: 'pea',
         projectileOffsetX: 56,
-        projectileOffsetY: -55,
+        projectileOffsetY: 10,
         animationPath: 'animations/peashootersingle',
         bodyRect: { x: 10, y: 0, width: 60, height: 80 },
     },
@@ -171,7 +172,7 @@ export const PLANT_DEFINITIONS: Record<string, PlantDefinition> = {
         shootingAnimationTicks: 33,
         projectileType: 'snowpea',
         projectileOffsetX: 56,
-        projectileOffsetY: -55,
+        projectileOffsetY: 10,
         animationPath: 'animations/snowpea',
         bodyRect: { x: 10, y: 0, width: 60, height: 80 },
     },
@@ -207,7 +208,7 @@ export const PLANT_DEFINITIONS: Record<string, PlantDefinition> = {
         shootingAnimationTicks: 26,
         projectileType: 'pea',
         projectileOffsetX: 56,
-        projectileOffsetY: -55,
+        projectileOffsetY: 10,
         animationPath: 'animations/peashooter',
         bodyRect: { x: 10, y: 0, width: 60, height: 80 },
     },

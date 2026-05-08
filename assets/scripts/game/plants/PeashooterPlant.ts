@@ -53,9 +53,9 @@ export class PeashooterPlant extends Plant {
 
     private fire(context: PlantUpdateContext) {
         const definition = PLANT_DEFINITIONS[this.type]
-        context.events.push({ type: 'soundRequested', sound: SoundEffect.Throw })
+        context.events.push({ type: 'foleyRequested', sound: SoundEffect.Throw, pitchRange: 10 })
         if (definition.projectileType === 'snowpea') {
-            context.events.push({ type: 'soundRequested', sound: SoundEffect.SnowPeaSparkles })
+            context.events.push({ type: 'foleyRequested', sound: SoundEffect.SnowPeaSparkles, pitchRange: 10 })
         }
         context.events.push({
             type: 'projectileFired',

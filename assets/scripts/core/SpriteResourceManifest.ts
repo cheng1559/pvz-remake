@@ -27,6 +27,7 @@ const LINEAR_PREFIXES = [
     'imitater_',
     'imitaterseed',
     'jalapeno_',
+    'lawnmower_cached',
     'lilypad_',
     'magnetshroom_',
     'marigold_',

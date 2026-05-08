@@ -15,6 +15,8 @@ const ARM_DROP_HEALTH = 180
 const HEAD_DROP_HEALTH = 90
 const HEADLESS_DECAY_CHANCE = 5
 const HEADLESS_DECAY_DAMAGE = 1
+const CHILLED_TICKS = 1000
+const CHILLED_SPEED_FACTOR = 0.5
 const ZOMBIE_WALK_ASSET_FPS = 12
 const ZOMBIE_EAT_ANIM_RATE = 36
 const ZOMBIE_EAT_FRAME_SPAN = 39
@@ -28,6 +30,7 @@ const ZOMBIE_DEATH2_FRAME_SPAN = 32
 const ZOMBIE_SUPER_LONG_DEATH_FRAME_SPAN = 136
 const ZOMBIE_WATER_DEATH_FRAME_SPAN = 24
 const ZOMBIE_DEATH_HOLD_TICKS = 40
+const ZOMBIE_MOWERED_TICKS = 100
 const ZOMBIE_DEATH_FALL_TIME = 0.77
 const ZOMBIE_DEATH2_FALL_TIME = 0.71
 const ZOMBIE_SUPER_LONG_DEATH_FALL_TIME = 0.788
@@ -92,11 +95,13 @@ export abstract class Zombie implements ZombieEntity {
     currentAnimation: string
     animationSpeed: number
     animationTime: number
+    moweredTime = 0
     health: number
     helmHealth: number
     shieldHealth: number
     state: ZombieState = 'walking'
     age = 0
+    chilledCounter = 0
     hasHead = true
     hasArm = true
     hasTongue = false
@@ -151,10 +156,17 @@ export abstract class Zombie implements ZombieEntity {
         this._flushPendingEvents(context)
         this.age++
         if (this.state === 'dying') {
+            this._updateChill()
             this.updateDying(context)
             return
         }
+        if (this.state === 'mowered') {
+            this._updateChill()
+            this.updateMowered()
+            return
+        }
 
+        this._updateChill()
         const target = context.findPlantTarget(this)
         if (target) {
             this.updateEating(context, target)
@@ -166,7 +178,7 @@ export abstract class Zombie implements ZombieEntity {
     }
 
     takeDamage(damage: number, deathContext: ZombieDeathContext = { zombieCount: 1, canUseSuperLongDeath: false }) {
-        if (this.state === 'dying') return
+        if (this.state === 'dying' || this.state === 'mowered') return
 
         let remainingDamage = damage
         if (this.shieldHealth > 0) {
@@ -184,6 +196,40 @@ export abstract class Zombie implements ZombieEntity {
             this._updateDamageStates()
         }
         if (this.health <= 0) this.startDeathAnimation(deathContext)
+    }
+
+    applyChill(events: GameEvent[]) {
+        if (this.state === 'dying' || this.state === 'mowered') return
+        if (this.chilledCounter <= 0) {
+            events.push({ type: 'foleyRequested', sound: SoundEffect.Frozen })
+        }
+        this.chilledCounter = Math.max(this.chilledCounter, CHILLED_TICKS)
+    }
+
+    mowDown() {
+        if (this.dead || this.state === 'mowered') return
+
+        this.state = 'mowered'
+        this.health = 0
+        this.helmHealth = 0
+        this.shieldHealth = 0
+        this.hasTongue = false
+        this.velocityX = 0
+        this.animationTime = 0
+        this.animationSpeed = 8 / ZOMBIE_WALK_ASSET_FPS
+        this.moweredTime = 0
+        this.currentAnimation = 'default'
+    }
+
+    protected updateMowered() {
+        this.moweredTime++
+        this.animationTime = Math.min(
+            ZOMBIE_MOWERED_TICKS,
+            this.animationTime + this.animationSpeed * ZOMBIE_WALK_ASSET_FPS / GAME_TICKS_PER_SECOND,
+        )
+        if (this.moweredTime >= ZOMBIE_MOWERED_TICKS) {
+            this.dead = true
+        }
     }
 
     getBodyRect(): Rect {
@@ -205,7 +251,7 @@ export abstract class Zombie implements ZombieEntity {
             this.currentAnimation = animation
             this.animationSpeed = speed
         }
-        this.x -= this.inPool ? this.velocityX : this._advanceWalkGroundDistance()
+        this.x -= this.inPool ? this._chilledAnimSpeed(this.velocityX) : this._advanceWalkGroundDistance()
         if (this.inPool) this.animationTime = this._advanceLoopingAnimationTime(this.animationTime, this.animationSpeed, ZOMBIE_WALK_FRAME_SPAN)
         this._updateGroan(context)
         this._eatCounter = TICKS_BETWEEN_EATS
@@ -217,10 +263,10 @@ export abstract class Zombie implements ZombieEntity {
             this.state = 'eating'
             this._eatCounter = TICKS_BETWEEN_EATS
             this._chewSoundCounter = 0
-            this._requestAnimation(context, 'anim_eat', ZOMBIE_EAT_ANIM_RATE / ZOMBIE_WALK_ASSET_FPS)
+            this._requestAnimation(context, 'anim_eat', this._chilledAnimSpeed(ZOMBIE_EAT_ANIM_RATE / ZOMBIE_WALK_ASSET_FPS))
         } else {
             this.currentAnimation = 'anim_eat'
-            this.animationSpeed = ZOMBIE_EAT_ANIM_RATE / ZOMBIE_WALK_ASSET_FPS
+            this.animationSpeed = this._chilledAnimSpeed(ZOMBIE_EAT_ANIM_RATE / ZOMBIE_WALK_ASSET_FPS)
         }
         this.animationTime = this._advanceLoopingAnimationTime(this.animationTime, this.animationSpeed, ZOMBIE_EAT_FRAME_SPAN)
 
@@ -307,9 +353,9 @@ export abstract class Zombie implements ZombieEntity {
     }
 
     private _walkAnimationSpeed() {
-        if (this.inPool) return 1
+        if (this.inPool) return this._chilledAnimSpeed(1)
 
-        return this._walkAnimRate() / ZOMBIE_WALK_ASSET_FPS
+        return this._chilledAnimSpeed(this._walkAnimRate() / ZOMBIE_WALK_ASSET_FPS)
     }
 
     private _advanceWalkGroundDistance() {
@@ -355,7 +401,15 @@ export abstract class Zombie implements ZombieEntity {
     }
 
     private _walkFrameAdvance() {
-        return this._walkAnimRate() * SECONDS_PER_UPDATE
+        return this._chilledAnimSpeed(this._walkAnimRate()) * SECONDS_PER_UPDATE
+    }
+
+    private _updateChill() {
+        if (this.chilledCounter > 0) this.chilledCounter--
+    }
+
+    private _chilledAnimSpeed(speed: number) {
+        return this.chilledCounter > 0 ? speed * CHILLED_SPEED_FACTOR : speed
     }
 
     private _updateDamageStates() {
@@ -391,6 +445,7 @@ export abstract class Zombie implements ZombieEntity {
         if (
             deathHit === ZOMBIE_SUPER_LONG_DEATH_HIT &&
             deathContext.canUseSuperLongDeath &&
+            this.chilledCounter <= 0 &&
             deathContext.zombieCount <= 5
         ) {
             this.currentAnimation = 'anim_superlongdeath'

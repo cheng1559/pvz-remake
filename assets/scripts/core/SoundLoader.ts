@@ -32,6 +32,7 @@ export const SoundEffect = {
     HatchbackClose: 'hatchback_close',
     HatchbackOpen: 'hatchback_open',
     Juicy: 'juicy',
+    Lawnmower: 'lawnmower',
     LimbsPop: 'limbs_pop',
     LoseMusic: 'losemusic',
     Paper: 'paper',
@@ -45,11 +46,15 @@ export const SoundEffect = {
     SeedLift: 'seedlift',
     Shovel: 'shovel',
     Splat: 'splat',
+    Splat2: 'splat2',
+    Splat3: 'splat3',
     SnowPeaSparkles: 'snow_pea_sparkles',
     Tap: 'tap',
     Throw: 'throw',
+    Throw2: 'throw2',
     FinalFanfare: 'finalfanfare',
     FinalWave: 'finalwave',
+    Frozen: 'frozen',
     ZombieFalling1: 'zombie_falling_1',
     ZombieFalling2: 'zombie_falling_2',
 } as const
@@ -60,6 +65,10 @@ export class SoundLoader {
     private static readonly _basePath = 'audio/sfx'
     private static readonly _effects: SoundEffect[] = Object.values(SoundEffect)
     private static readonly _pitchStepMultiplier = 1.0594630943592953
+    private static readonly _foleyVariants: Partial<Record<SoundEffect, readonly SoundEffect[]>> = {
+        [SoundEffect.Splat]: [SoundEffect.Splat, SoundEffect.Splat2, SoundEffect.Splat3],
+        [SoundEffect.Throw]: [SoundEffect.Throw, SoundEffect.Throw, SoundEffect.Throw, SoundEffect.Throw2],
+    }
     private static _clips: Map<SoundEffect, AudioClip> = new Map()
     private static _loading: Map<SoundEffect, Promise<AudioClip | null>> = new Map()
     private static _audioBuffers: Map<SoundEffect, Promise<AudioBuffer | null>> = new Map()
@@ -100,8 +109,9 @@ export class SoundLoader {
     }
 
     public static playFoley(effect: SoundEffect, pitchRange = 0, volume = 1) {
+        const selectedEffect = this._pickFoleyEffect(effect)
         const pitch = pitchRange === 0 ? 0 : Math.random() * pitchRange
-        return this.playWithPitch(effect, pitch, volume)
+        return this.playWithPitch(selectedEffect, pitch, volume)
     }
 
     public static async playWithPitch(effect: SoundEffect, pitchSteps: number, volume = 1) {
@@ -150,6 +160,13 @@ export class SoundLoader {
         director.addPersistRootNode(node)
         this._source = node.addComponent(AudioSource)
         return this._source
+    }
+
+    private static _pickFoleyEffect(effect: SoundEffect) {
+        const variants = this._foleyVariants[effect]
+        if (!variants || variants.length === 0) return effect
+
+        return variants[Math.floor(Math.random() * variants.length)]
     }
 
     private static _getAudioContext(): AudioContext | null {

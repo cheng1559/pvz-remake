@@ -40,7 +40,7 @@ import { createStoneButton } from '@/ui/StoneButton'
 import { createTooltipNode } from '@/ui/Tooltip/Tooltip'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
-import { GAME_TICK_SECONDS, PLANT_DEFINITIONS, SEED_DEFINITIONS, ZOMBIE_DEFINITIONS } from './GameDefinitions'
+import { GAME_SPEED, GAME_TICK_SECONDS, PLANT_DEFINITIONS, SEED_DEFINITIONS, ZOMBIE_DEFINITIONS } from './GameDefinitions'
 import {
     getAnimationRateSpeed,
     playPotatoArmedAnimation,
@@ -61,8 +61,10 @@ import type {
     GameEvent,
     ItemEntity,
     AdviceStyle,
+    LawnMowerEntity,
     PlantEntity,
     PlantType,
+    ProjectileEntity,
     SeedPacketState,
     SeedType,
     ToolType,
@@ -93,6 +95,9 @@ const INTRO_LAWN_MOWER_REANIM_Y_OFFSET = 19
 const INTRO_LAWN_MOWER_SHADOW_X_OFFSET = -7
 const INTRO_LAWN_MOWER_SHADOW_Y_OFFSET = 47
 const INTRO_LAWN_MOWER_SCALE = 0.85
+const LAWN_MOWER_CACHED_DRAW_OFFSET_X = -20
+const GAMEPLAY_LAWN_MOWER_REANIM_X_OFFSET = INTRO_LAWN_MOWER_REANIM_X_OFFSET
+const GAMEPLAY_LAWN_MOWER_REANIM_Y_OFFSET = INTRO_LAWN_MOWER_REANIM_Y_OFFSET
 const INTRO_END = 855
 const SOD_ROW_X = 239 - BOARD_OFFSET
 const SOD_ROW_Y = 265
@@ -176,6 +181,18 @@ const PLANT_PREVIEW_CACHE_IDS: Record<PlantType, number> = {
 const PLANT_SHADOW_ADJUSTMENTS: Partial<Record<PlantType, { offsetX: number, offsetY: number, scale?: number }>> = {
     chomper: { offsetX: -21, offsetY: 57 },
 }
+const PROJECTILE_SHADOW_WIDTH = 21
+const PROJECTILE_SHADOW_HEIGHT = 9
+const PROJECTILE_SHADOW_COLUMNS = 2
+const PROJECTILE_SHADOW_DAY_CEL = 0
+const PROJECTILE_SPRITES: Record<ProjectileEntity['type'], string> = {
+    pea: 'projectilepea',
+    snowpea: 'projectilesnowpea',
+}
+const PROJECTILE_SHADOW_ADJUSTMENTS: Record<ProjectileEntity['type'], { offsetX: number, scale?: number }> = {
+    pea: { offsetX: 3 },
+    snowpea: { offsetX: -1, scale: 1.3 },
+}
 const GAME_TEXTURES = [
     'background1',
     'background1unsodded',
@@ -188,7 +205,11 @@ const GAME_TEXTURES = [
     'shovelbank',
     'shovel',
     'peashooter_head',
+    'projectilepea',
+    'projectilesnowpea',
+    'pea_shadows',
     'plantshadow',
+    'lawnmower_cached',
     'sod1row',
 ]
 
@@ -197,10 +218,24 @@ interface PlantView extends PlantAnimationView {
     animator: Animator | null
     highlighted: boolean
     highlightOverlay: Node | null
+    shootingAnimationActive: boolean
+    shootingAnimationToken: number
 }
 
 interface ZombieView extends ZombieAnimationView {
     node: Node
+    bodyNode: Node | null
+    shadowNode: Node | null
+    moweredAnimNode: AnimNode | null
+    showingMowered: boolean
+}
+
+interface LawnMowerView {
+    node: Node
+    cachedNode: Node | null
+    animatorNode: Node | null
+    animNode: AnimNode | null
+    state: LawnMowerEntity['state'] | null
 }
 
 @ccclass('AdventureGameScreen')
@@ -244,6 +279,7 @@ export class AdventureGameScreen extends Component {
     private _entityNodes: Map<number, Node> = new Map()
     private _plantViews: Map<number, PlantView> = new Map()
     private _zombieViews: Map<number, ZombieView> = new Map()
+    private _lawnMowerViews: Map<number, LawnMowerView> = new Map()
     private _seedPacketNodes: Map<SeedType, Node> = new Map()
     private _seedPacketCooldownClips: Map<SeedType, Node> = new Map()
     private _seedTooltipNode: Node | null = null
@@ -253,11 +289,11 @@ export class AdventureGameScreen extends Component {
     private _plantAnimations: Map<PlantType, JsonAsset> = new Map()
     private _zombieAnimations: Map<ZombieType, JsonAsset> = new Map()
     private _flagZombieAnimation: JsonAsset | null = null
+    private _moweredZombieAnimation: JsonAsset | null = null
     private _sunAnimation: JsonAsset | null = null
     private _sodRollAnimation: JsonAsset | null = null
     private _sodRollAnimNode: AnimNode | null = null
     private _lawnMowerAnimation: JsonAsset | null = null
-    private _lawnMowerAnimNode: AnimNode | null = null
     private _sunFont: BitmapFontAssets | null = null
     private _packetCostFont: BitmapFontAssets | null = null
     private _buttonSprites: MessageBoxButtonSprites | null = null
@@ -273,6 +309,7 @@ export class AdventureGameScreen extends Component {
     private _bootstrapped = false
 
     onLoad() {
+        Animator.timeScale = GAME_SPEED
         setUISize(this.node, 800, 600)
         this._boardRoot = createUINode('BoardRoot', {
             parent: this.node,
@@ -311,6 +348,7 @@ export class AdventureGameScreen extends Component {
     }
 
     onDestroy() {
+        Animator.timeScale = 1
         input.off(Input.EventType.MOUSE_DOWN, this._onGlobalMouseDown, this)
         input.off(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this._releasePlantCursorHoverBlock()
@@ -324,6 +362,7 @@ export class AdventureGameScreen extends Component {
             ...Object.values(PLANT_DEFINITIONS).map((plant) => StartupResourceLoader.loadJson(plant.animationPath)),
             ...Object.values(ZOMBIE_DEFINITIONS).map((zombie) => StartupResourceLoader.loadJson(zombie.animationPath)),
             StartupResourceLoader.loadJson('animations/zombie_flagpole'),
+            StartupResourceLoader.loadJson('animations/lawnmoweredzombie'),
             StartupResourceLoader.loadJson(PAUSE_DIALOG_ZOMBIE_ANIMATION_PATH),
             StartupResourceLoader.loadJson('animations/sun'),
             StartupResourceLoader.loadJson('animations/sodroll'),
@@ -347,15 +386,16 @@ export class AdventureGameScreen extends Component {
         }
         const afterZombies = afterPlants + zombieTypes.length
         this._flagZombieAnimation = results[afterZombies] as JsonAsset | null
-        const pauseDialogZombieAnimation = results[afterZombies + 1] as JsonAsset | null
-        this._sunAnimation = results[afterZombies + 2] as JsonAsset | null
-        this._sodRollAnimation = results[afterZombies + 3] as JsonAsset | null
-        this._lawnMowerAnimation = results[afterZombies + 4] as JsonAsset | null
-        this._sunFont = results[afterZombies + 5] as BitmapFontAssets | null
-        this._packetCostFont = results[afterZombies + 6] as BitmapFontAssets | null
-        this._adviceFont = results[afterZombies + 7] as BitmapFontAssets | null
-        this._buttonSprites = results[afterZombies + 8] as MessageBoxButtonSprites | null
-        this._buttonFonts = results[afterZombies + 9] as MessageBoxButtonFonts | null
+        this._moweredZombieAnimation = results[afterZombies + 1] as JsonAsset | null
+        const pauseDialogZombieAnimation = results[afterZombies + 2] as JsonAsset | null
+        this._sunAnimation = results[afterZombies + 3] as JsonAsset | null
+        this._sodRollAnimation = results[afterZombies + 4] as JsonAsset | null
+        this._lawnMowerAnimation = results[afterZombies + 5] as JsonAsset | null
+        this._sunFont = results[afterZombies + 6] as BitmapFontAssets | null
+        this._packetCostFont = results[afterZombies + 7] as BitmapFontAssets | null
+        this._adviceFont = results[afterZombies + 8] as BitmapFontAssets | null
+        this._buttonSprites = results[afterZombies + 9] as MessageBoxButtonSprites | null
+        this._buttonFonts = results[afterZombies + 10] as MessageBoxButtonFonts | null
         await Promise.all([
             this._preloadPlantAnimationTextures(),
             this._preloadZombieAnimationTextures(pauseDialogZombieAnimation),
@@ -372,10 +412,11 @@ export class AdventureGameScreen extends Component {
     update(dt: number) {
         if (!this._bootstrapped) return
 
+        Animator.timeScale = GAME_SPEED
         let gameTicks = 0
         if (this._gameStarted) {
             if (!this._session.paused) {
-                this._gameAccumulator += dt
+                this._gameAccumulator += dt * GAME_SPEED
                 while (this._gameAccumulator >= GAME_TICK_SECONDS) {
                     this._session.update()
                     this._gameAccumulator -= GAME_TICK_SECONDS
@@ -472,14 +513,14 @@ export class AdventureGameScreen extends Component {
             this._sodRollAnimNode = animator.addAnimNode('default')
         }
 
-        if (this._lawnMowerAnimation?.json) {
-            await this._createIntroLawnMower()
+        if (SpriteLoader.get('lawnmower_cached') && SpriteLoader.get('plantshadow')) {
+            this._createIntroLawnMower()
         }
 
         this._entityLayer.setSiblingIndex(this._boardContent.children.length - 1)
     }
 
-    private async _createIntroLawnMower() {
+    private _createIntroLawnMower() {
         this._introLawnMowerShadowNode = createSpriteNode({
             name: 'IntroLawnMowerShadow',
             spriteFrame: SpriteLoader.get('plantshadow')!,
@@ -499,16 +540,21 @@ export class AdventureGameScreen extends Component {
             height: 120,
         })
         this._introLawnMowerNode.active = false
-        this._introLawnMowerNode.setScale(INTRO_LAWN_MOWER_SCALE, INTRO_LAWN_MOWER_SCALE, 1)
 
-        const animator = this._introLawnMowerNode.addComponent(Animator)
-        await animator.parseJson(this._lawnMowerAnimation!.json as Record<string, any>)
-        this._lawnMowerAnimNode = animator.addAnimNode('default')
-        this._lawnMowerAnimNode?.play({
-            name: 'anim_normal',
-            loop: true,
-            speed: 0,
-        })
+        const cachedMower = SpriteLoader.get('lawnmower_cached')
+        if (cachedMower) {
+            createSpriteNode({
+                name: 'CachedMower',
+                spriteFrame: cachedMower,
+                parent: this._introLawnMowerNode,
+                layer: this.node.layer,
+                anchorX: 0,
+                anchorY: 1,
+                x: LAWN_MOWER_CACHED_DRAW_OFFSET_X,
+                y: 0,
+            })
+        }
+
         this._syncIntroLawnMower()
     }
 
@@ -539,6 +585,7 @@ export class AdventureGameScreen extends Component {
         })
         this._createAdviceWidget()
         this._resultLabel = this._createLabel('Result', 400, -285, '', 42, new Color(255, 240, 120))
+        this._resultLabel.node.active = false
         this._drawSeedPackets()
         this._createShovel()
         this._createMenuButton()
@@ -869,12 +916,12 @@ export class AdventureGameScreen extends Component {
         }
         this._syncPlantCursorHoverBlock()
         this._syncSunAmount()
-        this._resultLabel.string =
-            this._session.result === 'won' ? 'Level Complete!' :
-                this._session.result === 'lost' ? 'Game Over' : ''
+        this._resultLabel.string = ''
 
-        for (const entity of this._session.allEntities()) {
-            this._syncEntity(entity)
+        if (this._gameStarted) {
+            for (const entity of this._session.allEntities()) {
+                this._syncEntity(entity)
+            }
         }
         this._syncEntityLayerOrder()
         this._drawZombieCollisionDebug()
@@ -905,9 +952,8 @@ export class AdventureGameScreen extends Component {
         if (this._unsoddedNode) this._unsoddedNode.active = true
         if (this._sodClipNode) this._sodClipNode.active = true
         if (this._sodRollNode) this._sodRollNode.active = false
-        if (this._introLawnMowerNode) this._introLawnMowerNode.active = true
-        if (this._introLawnMowerShadowNode) this._introLawnMowerShadowNode.active = true
-        this._syncIntroLawnMower(INTRO_LAWN_MOWER_END_X)
+        if (this._introLawnMowerNode) this._introLawnMowerNode.active = false
+        if (this._introLawnMowerShadowNode) this._introLawnMowerShadowNode.active = false
         if (this._seedBankNode) {
             this._seedBankNode.active = true
             this._seedBankNode.setPosition(10, 0, 10)
@@ -999,13 +1045,22 @@ export class AdventureGameScreen extends Component {
             -(INTRO_LAWN_MOWER_Y + INTRO_LAWN_MOWER_REANIM_Y_OFFSET),
             this._session.geometry.rowZ(INTRO_LAWN_MOWER_ROW),
         )
+        const shadowOffset = this._getReadyLawnMowerShadowOffset()
         this._introLawnMowerShadowNode.setPosition(
-            mowerX + INTRO_LAWN_MOWER_SHADOW_X_OFFSET,
-            -(INTRO_LAWN_MOWER_Y + INTRO_LAWN_MOWER_SHADOW_Y_OFFSET),
+            mowerX + shadowOffset.x,
+            -(INTRO_LAWN_MOWER_Y + shadowOffset.y),
             this._session.geometry.rowZ(INTRO_LAWN_MOWER_ROW) - 1,
         )
         this._introLawnMowerShadowNode.setSiblingIndex(this._boardContent.children.length - 1)
         this._introLawnMowerNode.setSiblingIndex(this._boardContent.children.length - 1)
+    }
+
+    private _getReadyLawnMowerShadowOffset() {
+        const shadow = SpriteLoader.get('plantshadow')
+        return {
+            x: INTRO_LAWN_MOWER_SHADOW_X_OFFSET + (shadow?.originalSize.width ?? 86) / 2,
+            y: INTRO_LAWN_MOWER_SHADOW_Y_OFFSET + (shadow?.originalSize.height ?? 36) / 2,
+        }
     }
 
     private _createAdviceWidget() {
@@ -1268,6 +1323,8 @@ export class AdventureGameScreen extends Component {
         node.setPosition(entity.x, -entity.y, this._entityZ(entity))
         if (entity.kind === 'zombie') {
             this._syncZombieAnimation(entity)
+        } else if (entity.kind === 'lawnmower') {
+            this._syncLawnMowerAnimation(entity)
         }
     }
 
@@ -1277,19 +1334,31 @@ export class AdventureGameScreen extends Component {
                 return this._createPlantNode(entity)
             case 'zombie':
                 return this._createZombieNode(entity)
+            case 'projectile':
+                return this._createProjectileNode(entity)
             case 'item':
                 return this._createItemNode(entity)
+            case 'lawnmower':
+                return this._createLawnMowerNode(entity)
         }
     }
 
     private _syncEntityLayerOrder() {
         const entries: { node: Node, order: number }[] = []
-        for (const entity of [...this._session.plants, ...this._session.zombies]) {
+        for (const entity of [
+            ...this._session.plants,
+            ...this._session.zombies,
+            ...this._session.projectiles,
+            ...this._session.lawnMowers,
+        ]) {
             const node = this._entityNodes.get(entity.id)
             if (!node?.isValid) continue
 
             const rowOrder = entity.row * 10
-            const typeOrder = entity.kind === 'zombie' ? 1 : 0
+            const typeOrder =
+                entity.kind === 'lawnmower' ? 3 :
+                    entity.kind === 'projectile' ? 2 :
+                    entity.kind === 'zombie' ? 1 : 0
             entries.push({ node, order: rowOrder + typeOrder })
         }
 
@@ -1348,14 +1417,68 @@ export class AdventureGameScreen extends Component {
         return node
     }
 
+    private _createProjectileNode(projectile: ProjectileEntity) {
+        const node = createUINode(`Projectile_${projectile.id}`, {
+            parent: this._entityLayer,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: projectile.width,
+            height: projectile.height,
+        })
+
+        const shadow = SpriteLoader.get('pea_shadows')
+        if (shadow) {
+            const adjust = PROJECTILE_SHADOW_ADJUSTMENTS[projectile.type]
+            const shadowFrame = getAtlasFrame(
+                shadow,
+                PROJECTILE_SHADOW_DAY_CEL,
+                PROJECTILE_SHADOW_WIDTH,
+                PROJECTILE_SHADOW_HEIGHT,
+                PROJECTILE_SHADOW_COLUMNS,
+            )
+            const shadowNode = createSpriteNode({
+                name: 'ProjectileShadow',
+                spriteFrame: shadowFrame,
+                parent: node,
+                layer: this.node.layer,
+                anchorX: 0,
+                anchorY: 1,
+                x: adjust.offsetX,
+                y: -(projectile.shadowY - projectile.y),
+                z: -1,
+            })
+            const scale = adjust.scale ?? 1
+            shadowNode.setScale(scale, scale, 1)
+        }
+
+        const spriteFrame = SpriteLoader.get(PROJECTILE_SPRITES[projectile.type])
+        if (spriteFrame) {
+            createSpriteNode({
+                name: 'ProjectileSprite',
+                spriteFrame,
+                parent: node,
+                layer: this.node.layer,
+                anchorX: 0,
+                anchorY: 1,
+            })
+        }
+
+        return node
+    }
+
     private _createZombieVisual(node: Node, zombie: ZombieEntity): ZombieView {
         const view: ZombieView = {
             node,
+            bodyNode: null,
+            shadowNode: null,
+            moweredAnimNode: null,
+            showingMowered: false,
             ...createZombieAnimationView(),
         }
         const shadow = SpriteLoader.get('plantshadow')
         if (shadow) {
-            createSpriteNode({
+            view.shadowNode = createSpriteNode({
                 name: 'ZombieShadow',
                 spriteFrame: shadow,
                 parent: node,
@@ -1369,6 +1492,7 @@ export class AdventureGameScreen extends Component {
             animatorNode.layer = node.layer
             animatorNode.setPosition(ZOMBIE_BODY_REANIM_OFFSET_X, ZOMBIE_BODY_REANIM_OFFSET_Y, 0)
             node.addChild(animatorNode)
+            view.bodyNode = animatorNode
             const animator = animatorNode.addComponent(Animator)
             view.animator = animator
             animator.enabled = !this._session.paused
@@ -1376,10 +1500,14 @@ export class AdventureGameScreen extends Component {
             void animator.parseJson(animationJson).then(() => {
                 wireZombieAnimation(animator, view, zombie.type)
                 syncZombieTrackVisibility(view, zombie)
-                playZombieBodyAnimation(view, zombie.currentAnimation, {
-                    speed: zombie.animationSpeed,
-                    time: zombie.animationTime,
-                })
+                if (zombie.state === 'mowered') {
+                    this._syncMoweredZombieAnimation(view, zombie)
+                } else {
+                    playZombieBodyAnimation(view, zombie.currentAnimation, {
+                        speed: zombie.animationSpeed,
+                        time: zombie.animationTime,
+                    })
+                }
                 if (zombie.type === 'flag') {
                     this._attachFlagZombieVisual(animatorNode, view)
                 }
@@ -1401,6 +1529,102 @@ export class AdventureGameScreen extends Component {
             this._createSunVisual(node)
         }
         return node
+    }
+
+    private _createLawnMowerNode(mower: LawnMowerEntity) {
+        const node = createUINode(`LawnMower_${mower.id}`, {
+            parent: this._entityLayer,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 120,
+            height: 120,
+        })
+        const view: LawnMowerView = {
+            node,
+            cachedNode: null,
+            animatorNode: null,
+            animNode: null,
+            state: null,
+        }
+        this._lawnMowerViews.set(mower.id, view)
+
+        const shadow = SpriteLoader.get('plantshadow')
+        if (shadow) {
+            const shadowOffset = this._getReadyLawnMowerShadowOffset()
+            createSpriteNode({
+                name: 'LawnMowerShadow',
+                spriteFrame: shadow,
+                parent: node,
+                layer: this.node.layer,
+                anchorX: 0.5,
+                anchorY: 0.5,
+                x: shadowOffset.x,
+                y: -shadowOffset.y,
+                z: -1,
+            })
+        }
+
+        const cachedMower = SpriteLoader.get('lawnmower_cached')
+        if (cachedMower) {
+            view.cachedNode = createSpriteNode({
+                name: 'CachedMower',
+                spriteFrame: cachedMower,
+                parent: node,
+                layer: this.node.layer,
+                anchorX: 0,
+                anchorY: 1,
+                x: GAMEPLAY_LAWN_MOWER_REANIM_X_OFFSET + LAWN_MOWER_CACHED_DRAW_OFFSET_X,
+                y: -GAMEPLAY_LAWN_MOWER_REANIM_Y_OFFSET,
+            })
+        }
+
+        if (this._lawnMowerAnimation?.json) {
+            const animatorNode = createUINode('Animator', {
+                parent: node,
+                layer: this.node.layer,
+                anchorX: 0,
+                anchorY: 1,
+                width: 120,
+                height: 120,
+                x: GAMEPLAY_LAWN_MOWER_REANIM_X_OFFSET,
+                y: -GAMEPLAY_LAWN_MOWER_REANIM_Y_OFFSET,
+            })
+            animatorNode.setScale(INTRO_LAWN_MOWER_SCALE, INTRO_LAWN_MOWER_SCALE, 1)
+            animatorNode.active = false
+            view.animatorNode = animatorNode
+            const animator = animatorNode.addComponent(Animator)
+            animator.enabled = !this._session.paused
+            void animator.parseJson(this._lawnMowerAnimation.json as Record<string, any>).then(() => {
+                view.animNode = animator.addAnimNode('default')
+                this._syncLawnMowerAnimation(mower)
+            })
+        }
+
+        return node
+    }
+
+    private _syncLawnMowerAnimation(mower: LawnMowerEntity) {
+        const view = this._lawnMowerViews.get(mower.id)
+        if (!view) return
+
+        if (view.cachedNode?.isValid) view.cachedNode.active = mower.state === 'ready'
+        if (view.animatorNode?.isValid) view.animatorNode.active = mower.state === 'triggered'
+        if (!view.animNode) return
+
+        const speed = mower.state === 'triggered'
+            ? getAnimationRateSpeed(view.animNode, 'anim_normal', 70)
+            : 0
+        if (view.state !== mower.state) {
+            view.animNode.play({
+                name: 'anim_normal',
+                loop: true,
+                speed,
+            })
+            view.state = mower.state
+            return
+        }
+        view.animNode.speed = speed
     }
 
     private _createSunVisual(node: Node) {
@@ -1480,6 +1704,8 @@ export class AdventureGameScreen extends Component {
             idleSpeed: 1,
             highlighted: false,
             highlightOverlay: null,
+            shootingAnimationActive: false,
+            shootingAnimationToken: 0,
         }
         const plantAnimation = this._plantAnimations.get(plantType)
         if (plantAnimation?.json) {
@@ -1526,6 +1752,11 @@ export class AdventureGameScreen extends Component {
     private _syncZombieAnimation(zombie: ZombieEntity) {
         const view = this._zombieViews.get(zombie.id)
         if (!view) return
+        if (zombie.state === 'mowered') {
+            this._syncMoweredZombieAnimation(view, zombie)
+            return
+        }
+        if (view.showingMowered) this._clearMoweredZombieAnimation(view)
         syncZombieTrackVisibility(view, zombie)
         const blendTime = this._getZombieAnimationBlendTime(view, zombie.currentAnimation)
         playZombieBodyAnimation(view, zombie.currentAnimation, {
@@ -1533,6 +1764,56 @@ export class AdventureGameScreen extends Component {
             time: zombie.animationTime,
             blendTime,
         })
+    }
+
+    private _syncMoweredZombieAnimation(view: ZombieView, zombie: ZombieEntity) {
+        if (!view.body) return
+
+        syncZombieTrackVisibility(view, zombie)
+        if (view.shadowNode?.isValid) view.shadowNode.active = false
+        view.showingMowered = true
+        view.body.speed = 0
+        if (!view.moweredAnimNode) {
+            this._createMoweredZombieDriver(view)
+        }
+        if (!view.moweredAnimNode) return
+
+        if (!view.moweredAnimNode.isPlaying) {
+            view.moweredAnimNode.play({
+                name: 'default',
+                loop: false,
+                speed: 0,
+                keepLastFrame: true,
+            })
+            view.body.attachToTrack({ node: view.moweredAnimNode, track: 'locator' })
+        }
+        const duration = view.moweredAnimNode.getAnimationDuration('default') ?? 1
+        view.moweredAnimNode.time = Math.min(Math.max(0, duration - 1), zombie.animationTime)
+    }
+
+    private _createMoweredZombieDriver(view: ZombieView) {
+        if (!this._moweredZombieAnimation?.json || !view.node.isValid) return
+
+        const driverNode = createUINode('MoweredDriver', {
+            parent: view.node,
+            layer: view.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 1,
+            height: 1,
+        })
+        const driver = driverNode.addComponent(Animator)
+        driver.enabled = !this._session.paused
+        void driver.parseJson(this._moweredZombieAnimation.json as Record<string, any>).then(() => {
+            if (!view.node.isValid) return
+
+            view.moweredAnimNode = driver.addAnimNode('default')
+        })
+    }
+
+    private _clearMoweredZombieAnimation(view: ZombieView) {
+        view.showingMowered = false
+        if (view.shadowNode?.isValid) view.shadowNode.active = true
     }
 
     private _playZombieAnimation(entityId: number, animation: string) {
@@ -1557,6 +1838,10 @@ export class AdventureGameScreen extends Component {
         if (!view) return
 
         if (animation.startsWith('anim_blink')) {
+            if (this._isPlantBlinkBlocked(entityId, view)) {
+                this._endPlantBlinkAnimation(view)
+                return
+            }
             this._playPlantBlinkAnimation(view, animation)
             return
         }
@@ -1587,13 +1872,20 @@ export class AdventureGameScreen extends Component {
     }
 
     private _playShooterAnimation(view: PlantView) {
+        this._endPlantBlinkAnimation(view)
+        if (!view.head?.hasAnimation('anim_shooting')) return
+
         const animRate = view.plantType === 'repeater' ? 45 : 35
-        view.head?.play({
+        const shootingToken = ++view.shootingAnimationToken
+        view.shootingAnimationActive = true
+        view.head.play({
             name: 'anim_shooting',
             speed: getAnimationRateSpeed(view.head, 'anim_shooting', animRate),
             blendTime: 0.1,
             keepLastFrame: true,
             onFinish: () => {
+                if (view.shootingAnimationToken !== shootingToken) return
+                view.shootingAnimationActive = false
                 view.head?.play({ name: 'anim_head_idle', speed: view.idleSpeed, loop: true, blendTime: 0.1 })
             },
         })
@@ -1650,6 +1942,17 @@ export class AdventureGameScreen extends Component {
                 }
             },
         })
+    }
+
+    private _endPlantBlinkAnimation(view: PlantView) {
+        view.animator?.stopAnimNode(view.face)
+        view.animator?.stopAnimNode(view.face2)
+        view.animator?.showTrack('anim_eye')
+    }
+
+    private _isPlantBlinkBlocked(entityId: number, view: PlantView) {
+        const plant = this._session.plants.find((item) => item.id === entityId)
+        return view.shootingAnimationActive || (!!plant && plant.shootingCounter !== 0)
     }
 
     private _syncSeedPacketState() {
@@ -1768,6 +2071,9 @@ export class AdventureGameScreen extends Component {
         }
         if (this._flagZombieAnimation?.json) {
             this._collectAnimationImages(this._flagZombieAnimation.json as Record<string, any>, textureNames)
+        }
+        if (this._moweredZombieAnimation?.json) {
+            this._collectAnimationImages(this._moweredZombieAnimation.json as Record<string, any>, textureNames)
         }
         if (extraAnimation?.json) {
             this._collectAnimationImages(extraAnimation.json as Record<string, any>, textureNames)
@@ -2156,6 +2462,7 @@ export class AdventureGameScreen extends Component {
         this._entityNodes.delete(entityId)
         this._plantViews.delete(entityId)
         this._zombieViews.delete(entityId)
+        this._lawnMowerViews.delete(entityId)
     }
 
     private _eventToBoardPixel(event: EventMouse | EventTouch) {

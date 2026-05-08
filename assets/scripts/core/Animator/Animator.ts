@@ -23,6 +23,8 @@ let additiveSpriteMaterial: Material | null = null
 
 @ccclass('Animator')
 export class Animator extends Component {
+    public static timeScale = 1
+
     private _nodeDataMap: Record<string, AnimNodeData> = {}
     private _animNodes: AnimNode[] = []
     private _trackNodes: Map<string, Node> = new Map()
@@ -58,6 +60,20 @@ export class Animator extends Component {
         const node = new AnimNode(data)
         this._animNodes.push(node)
         return node
+    }
+
+    public stopAnimNode(animNode: AnimNode | null) {
+        if (!animNode) return
+
+        const trackNames = animNode.computedFrames.map((frame) => frame.trackName)
+        animNode.stop()
+        for (const trackName of trackNames) {
+            const sprite = this._trackNodes.get(trackName)?.getComponent(Sprite)
+            if (sprite) sprite.enabled = false
+
+            const additiveSprite = this._additiveTrackNodes.get(trackName)?.getComponent(Sprite)
+            if (additiveSprite) additiveSprite.enabled = false
+        }
     }
 
     public hideTrack(name: string) {
@@ -130,9 +146,11 @@ export class Animator extends Component {
     // ── Update Loop ────────────────────────────────────────────
 
     protected update(dt: number) {
+        const scaledDt = dt * Animator.timeScale
+
         // 1. Update all AnimNodes (compute frames)
         for (const animNode of this._animNodes) {
-            animNode.update(dt)
+            animNode.update(scaledDt)
         }
 
         // 2. Collect computed frames, later nodes override earlier ones per track
