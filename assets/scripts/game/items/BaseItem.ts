@@ -41,6 +41,7 @@ export class Item implements ItemEntity {
     y: number
     scale = 1
     alpha = 255
+    hitGround = false
     dead = false
     beingCollected = false
 
@@ -50,7 +51,6 @@ export class Item implements ItemEntity {
     private _age = 0
     private _disappearCounter = 0
     private _fadeCount = 0
-    private _hitGround = false
     private _collectionDistance = 0
 
     constructor(args: ItemCreateArgs, context: ItemUpdateContext) {
@@ -86,9 +86,7 @@ export class Item implements ItemEntity {
         this.beingCollected = true
         this._disappearCounter = 0
         this._fadeCount = 0
-        for (const sound of this._collectSounds()) {
-            context.events.push({ type: 'soundRequested', sound })
-        }
+        this._pushCollectSound(context)
         return true
     }
 
@@ -121,7 +119,7 @@ export class Item implements ItemEntity {
                 this._velX = -0.4 + context.randomFloat(0, 0.8)
                 this._groundY = this.y + 15 + context.randomInt(0, 19)
                 this.scale = 0.4
-                context.events.push({ type: 'soundRequested', sound: SoundEffect.Throw })
+                context.events.push({ type: 'foleyRequested', sound: SoundEffect.Throw, pitchRange: 10 })
                 break
             case 'coin':
                 this._velY = -3 - context.randomFloat(0, 2)
@@ -152,8 +150,8 @@ export class Item implements ItemEntity {
         } else {
             this.y = this._groundY
             this.x = Math.round(this.x)
-            if (!this._hitGround) {
-                this._hitGround = true
+            if (!this.hitGround) {
+                this.hitGround = true
                 this._playGroundSound(context)
             }
             if (this._canDisappearOnGround()) {
@@ -271,11 +269,17 @@ export class Item implements ItemEntity {
         }
     }
 
-    private _collectSounds() {
-        if (this._isSun()) return [SoundEffect.Points]
-        if (this.type === 'final-seed-packet') return [SoundEffect.SeedLift, SoundEffect.Drop]
-        if (this.type === 'diamond') return [SoundEffect.Chime]
-        return [SoundEffect.Coin]
+    private _pushCollectSound(context: ItemUpdateContext) {
+        if (this._isSun()) {
+            context.events.push({ type: 'foleyRequested', sound: SoundEffect.Points, pitchRange: 10 })
+        } else if (this.type === 'final-seed-packet') {
+            context.events.push({ type: 'soundRequested', sound: SoundEffect.SeedLift })
+            context.events.push({ type: 'soundRequested', sound: SoundEffect.Drop })
+        } else if (this.type === 'diamond') {
+            context.events.push({ type: 'soundRequested', sound: SoundEffect.Chime })
+        } else {
+            context.events.push({ type: 'foleyRequested', sound: SoundEffect.Coin, pitchRange: 10 })
+        }
     }
 
     private _playGroundSound(context: ItemUpdateContext) {

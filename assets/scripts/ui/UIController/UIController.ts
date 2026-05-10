@@ -17,17 +17,23 @@ import { ZenGardenScreen } from '../ZenGardenScreen/ZenGardenScreen'
 import { ChallengePage, ChallengeScreen } from '../ChallengeScreen'
 import { DebugCliDialog, executeDebugCliCommand } from '../DebugCliDialog'
 import { DialogButtonMode, DialogResult, MessageBox } from '../MessageBox/MessageBox'
+import { MessageBoxAssets } from '../MessageBox/MessageBoxAssets'
 import { HelpScreen } from '../HelpScreen'
 import { OptionsDialog } from '../OptionsDialog'
 import { PauseDialog } from '../PauseDialog'
 import { SelectorScreen } from '../SelectorScreen/SelectorScreen'
 import { StartupResourceLoader } from '../StartupResourceLoader'
+import { createStoneButton } from '../StoneButton'
 import { createUINode } from '../UIFactory'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 
 const { ccclass, property } = _decorator
 const DEBUG_START_ADVENTURE_DIRECTLY = true
 const DEBUG_CLI_KEY_CODE = 191
+const GAME_OVER_MAIN_MENU_X = 235
+const GAME_OVER_MAIN_MENU_Y = 310
+const GAME_OVER_MAIN_MENU_WIDTH = 163
+const GAME_OVER_MAIN_MENU_HEIGHT = 46
 
 interface StoreScreenOptions {
     initialPage?: number
@@ -46,6 +52,7 @@ export class UIController extends Component {
     private _achievementScreen: Node | null = null
     private _modalScreen: Node | null = null
     private _debugCliScreen: Node | null = null
+    private _gameOverMainMenuButton: Node | null = null
     private _screenTransitioning = false
 
     onLoad() {
@@ -141,6 +148,9 @@ export class UIController extends Component {
         }
         gameScreen.onPauseRequest = () => {
             this.showPauseDialog(gameScreen)
+        }
+        gameScreen.onGameOverRequest = () => {
+            this.showGameOverDialog()
         }
 
         this._setCurrentScreen(node)
@@ -412,7 +422,7 @@ export class UIController extends Component {
 
         void dialog.waitForResult().then((result) => {
             if (this._debugCliScreen === node) this._debugCliScreen = null
-            if (result === DialogResult.Ok && dialog.command.length > 0) {
+            if ((result === DialogResult.Ok || result === DialogResult.Yes) && dialog.command.length > 0) {
                 dialog.onCommand?.(dialog.command)
             }
             const currentGameScreenNode = gameScreen?.node as Node | null | undefined
@@ -436,6 +446,75 @@ export class UIController extends Component {
         this.uiRoot!.addChild(node)
         node.active = true
         return messageBox
+    }
+
+    showGameOverDialog(): MessageBox | null {
+        if (this._modalScreen?.isValid) return null
+
+        const node = createUINode('GameOverDialog', { active: false, width: 100, height: 100 })
+        const dialog = node.addComponent(MessageBox)
+        dialog.title = 'GAME OVER'
+        dialog.message = ''
+        dialog.contentInsetTopExtra = 15
+        dialog.setButtonMode(DialogButtonMode.Footer, 'Try Again')
+
+        this.uiRoot!.addChild(node)
+        node.active = true
+        this._modalScreen = node
+        void this._createGameOverMainMenuButton()
+
+        void dialog.waitForResult().then((result) => {
+            if (this._modalScreen === node) this._modalScreen = null
+            this._destroyGameOverMainMenuButton()
+            if (result !== DialogResult.Footer && result !== DialogResult.Ok) return
+
+            void SoundLoader.play(SoundEffect.ButtonClick)
+            this.showAdventureGame()
+        })
+        return dialog
+    }
+
+    private async _createGameOverMainMenuButton() {
+        this._destroyGameOverMainMenuButton()
+
+        const [sprites, fonts] = await Promise.all([
+            MessageBoxAssets.loadButtonSprites(),
+            MessageBoxAssets.loadButtonFonts(),
+        ])
+        if (!sprites || !fonts || this._gameOverMainMenuButton?.isValid) return
+        if (!this._modalScreen?.isValid || !this.uiRoot?.isValid) return
+
+        const button = createStoneButton({
+            name: 'GameOverMainMenuButton',
+            parent: this.uiRoot,
+            layer: this.uiRoot.layer,
+            label: 'Main Menu',
+            x: GAME_OVER_MAIN_MENU_X,
+            y: GAME_OVER_MAIN_MENU_Y,
+            width: GAME_OVER_MAIN_MENU_WIDTH,
+            height: GAME_OVER_MAIN_MENU_HEIGHT,
+            sprites,
+            fonts: {
+                normal: fonts.normal,
+                highlight: fonts.highlight,
+            },
+            rightClickTriggers: true,
+            onClick: () => {
+                this._destroyGameOverMainMenuButton()
+                this._modalScreen?.getComponent(MessageBox)?.close()
+                this._modalScreen = null
+                void SoundLoader.play(SoundEffect.ButtonClick)
+                void this.showSelectorScreen()
+            },
+        })
+        this._gameOverMainMenuButton = button
+    }
+
+    private _destroyGameOverMainMenuButton() {
+        if (this._gameOverMainMenuButton?.isValid) {
+            this._gameOverMainMenuButton.destroy()
+        }
+        this._gameOverMainMenuButton = null
     }
 
     async showConfirmBox(title: string, message: string): Promise<boolean> {
@@ -504,6 +583,7 @@ export class UIController extends Component {
             this._debugCliScreen.destroy()
         }
         this._debugCliScreen = null
+        this._destroyGameOverMainMenuButton()
         this._screenTransitioning = false
         if (this._currentScreen?.isValid) {
             this._currentScreen.destroy()

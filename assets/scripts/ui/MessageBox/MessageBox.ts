@@ -100,6 +100,9 @@ export class MessageBox extends ModalDialog {
     @property
     extraWidth: number = 0
 
+    @property
+    contentInsetTopExtra: number = 0
+
     private _bgContainer: Node | null = null
     private _buttonContainer: Node | null = null
     private _titleNode: Node | null = null
@@ -265,7 +268,7 @@ export class MessageBox extends ModalDialog {
         const BG_INSET_TOP = 0
         const BG_INSET_RIGHT = 0
         const BG_INSET_BOTTOM = 0
-        const CONTENT_INSET_TOP = 35
+        const CONTENT_INSET_TOP = 35 + this.contentInsetTopExtra
         const CONTENT_INSET_LEFT = 36
         const CONTENT_INSET_RIGHT = 46
         const CONTENT_INSET_BOTTOM = 36

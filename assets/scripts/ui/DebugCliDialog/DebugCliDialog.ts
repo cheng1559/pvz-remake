@@ -22,6 +22,11 @@ import {
 import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SpriteLoader } from '@/core/SpriteLoader'
+import {
+    getDebugCliCompletion,
+    getDebugCliCompletions,
+    getDebugCliParameterHint,
+} from '@/ui/DebugCliDialog/DebugCliCommands'
 import { MessageBox } from '@/ui/MessageBox/MessageBox'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 
@@ -42,12 +47,15 @@ const ORIGINAL_BLINK_DELAY_UPDATES = 14
 const CURSOR_BLINK_SECONDS = ORIGINAL_FRAME_SECONDS * (ORIGINAL_BLINK_DELAY_UPDATES + 1)
 const COMMAND_FONT = 'briannetod16'
 const COMMAND_COLOR = new Color(240, 240, 255, 255)
+const COMPLETION_COLOR = new Color(240, 240, 255, 95)
 const SELECTION_TEXT_COLOR = new Color(0, 0, 0, 255)
 const CURSOR_COLOR = new Color(255, 255, 255, 255)
 const SELECTION_COLOR = new Color(255, 255, 255, 255)
 const CURSOR_WIDTH = 2
+const COMMAND_HISTORY_LIMIT = 64
 
 const enum DebugCliKeyCode {
+    Tab = 9,
     Backspace = 8,
     Enter = 13,
     Escape = 27,
@@ -55,7 +63,9 @@ const enum DebugCliKeyCode {
     End = 35,
     Home = 36,
     Left = 37,
+    Up = 38,
     Right = 39,
+    Down = 40,
     Delete = 46,
     Digit0 = 48,
     Digit9 = 57,
@@ -80,12 +90,16 @@ interface DebugCliInputKey {
 
 @ccclass('DebugCliDialog')
 export class DebugCliDialog extends MessageBox {
+    private static _commandHistory: string[] = []
+
     public onCommand: ((command: string) => void) | null = null
     public initialCommand = ''
 
     private _inputRoot: Node | null = null
     private _textNode: Node | null = null
     private _textRenderer: FontRenderer | null = null
+    private _completionNode: Node | null = null
+    private _completionRenderer: FontRenderer | null = null
     private _selectionNode: Node | null = null
     private _selectionGraphics: Graphics | null = null
     private _selectionTextClip: Node | null = null
@@ -108,6 +122,11 @@ export class DebugCliDialog extends MessageBox {
     private _cursorBlinkElapsed = 0
     private _domKeyDownListener: ((event: KeyboardEvent) => void) | null = null
     private _inputWidth = 0
+    private _historyIndex = -1
+    private _historyDraft = ''
+    private _completionCycleBaseCommand = ''
+    private _completionCycleCandidates: string[] = []
+    private _completionCycleIndex = -1
 
     start() {
         this.title = 'DEBUG CLI'
@@ -253,6 +272,21 @@ export class DebugCliDialog extends MessageBox {
         if (this._commandFont) this._textRenderer.setFontAssets(this._commandFont)
         this._textRenderer.fontColor = COMMAND_COLOR
         this._textRenderer.maxWidth = this._inputTextMaxWidth()
+
+        this._completionNode = createUINode('CommandCompletionText', {
+            parent: editNode,
+            active: false,
+            anchorX: 0,
+            anchorY: 1,
+            width: this._inputWidth,
+            height: INPUT_HEIGHT,
+            x: this._inputTextX(),
+            y: INPUT_TEXT_TOP_Y,
+        })
+        this._completionRenderer = this._completionNode.addComponent(FontRenderer)
+        if (this._commandFont) this._completionRenderer.setFontAssets(this._commandFont)
+        this._completionRenderer.fontColor = COMPLETION_COLOR
+        this._completionRenderer.maxWidth = 0
 
         this._selectionTextClip = createUINode('CommandSelectionTextClip', {
             parent: editNode,
@@ -459,6 +493,10 @@ export class DebugCliDialog extends MessageBox {
     }
 
     private _handleInputKey(event: DebugCliInputKey) {
+        if (event.keyCode !== DebugCliKeyCode.Tab) {
+            this._resetCompletionCycle()
+        }
+
         if (event.rawEvent?.ctrlKey && this._handleShortcutKey(event)) {
             return
         }
@@ -480,6 +518,15 @@ export class DebugCliDialog extends MessageBox {
         }
 
         switch (event.keyCode) {
+            case DebugCliKeyCode.Tab:
+                if (this._acceptCompletion()) return
+                return
+            case DebugCliKeyCode.Up:
+                if (this._navigateHistory(-1)) return
+                return
+            case DebugCliKeyCode.Down:
+                if (this._navigateHistory(1)) return
+                return
             case DebugCliKeyCode.Backspace:
                 if (this._deleteSelectionWithUndo()) {
                     if (this._closeIfEmpty()) return
@@ -490,6 +537,7 @@ export class DebugCliDialog extends MessageBox {
                 if (this._cursorPos > 0) {
                     const oldCommand = this._command
                     const oldCursor = this._cursorPos
+                    this._resetHistoryNavigation()
                     this._command =
                         this._command.slice(0, this._cursorPos - 1) +
                         this._command.slice(this._cursorPos)
@@ -513,6 +561,7 @@ export class DebugCliDialog extends MessageBox {
                 if (this._cursorPos < this._command.length) {
                     const oldCommand = this._command
                     const oldCursor = this._cursorPos
+                    this._resetHistoryNavigation()
                     this._command =
                         this._command.slice(0, this._cursorPos) +
                         this._command.slice(this._cursorPos + 1)
@@ -543,6 +592,8 @@ export class DebugCliDialog extends MessageBox {
                     this._hilitePos = -1
                 } else if (event.rawEvent?.ctrlKey) {
                     this._moveCursorToNextWord()
+                } else if (this._cursorPos === this._command.length && this._acceptCompletion()) {
+                    return
                 } else {
                     this._cursorPos = Math.min(this._command.length, this._cursorPos + 1)
                 }
@@ -569,6 +620,7 @@ export class DebugCliDialog extends MessageBox {
         const oldCommand = this._command
         const oldCursor = this._cursorPos
         const oldHilitePos = this._hilitePos
+        this._resetHistoryNavigation()
         if (this._hasSelection()) {
             const start = this._selectionStart()
             const end = this._selectionEnd()
@@ -594,6 +646,10 @@ export class DebugCliDialog extends MessageBox {
         this._command = this._command.trim()
         this._cursorPos = this._command.length
         this._hilitePos = -1
+        this._commitHistory(this._command)
+        this._historyIndex = -1
+        this._historyDraft = ''
+        this._resetCompletionCycle()
         this._focusCursor(true)
         this._refreshInputText()
     }
@@ -607,6 +663,120 @@ export class DebugCliDialog extends MessageBox {
         this._undoCommand = ''
         this._undoCursor = 0
         this._undoHilitePos = -1
+        this._historyIndex = -1
+        this._historyDraft = ''
+        this._resetCompletionCycle()
+    }
+
+    private _commitHistory(command: string) {
+        if (!command) return
+
+        const history = DebugCliDialog._commandHistory
+        if (history[history.length - 1] === command) return
+
+        const duplicateIndex = history.indexOf(command)
+        if (duplicateIndex !== -1) history.splice(duplicateIndex, 1)
+        history.push(command)
+        while (history.length > COMMAND_HISTORY_LIMIT) history.shift()
+    }
+
+    private _navigateHistory(direction: -1 | 1) {
+        const history = DebugCliDialog._commandHistory
+        if (history.length === 0) return false
+
+        if (direction < 0) {
+            if (this._historyIndex === -1) {
+                this._historyDraft = this._command
+                this._historyIndex = history.length - 1
+            } else {
+                this._historyIndex = Math.max(0, this._historyIndex - 1)
+            }
+        } else {
+            if (this._historyIndex === -1) return false
+            this._historyIndex++
+            if (this._historyIndex >= history.length) {
+                this._historyIndex = -1
+            }
+        }
+
+        const command = this._historyIndex === -1
+            ? this._historyDraft
+            : history[this._historyIndex]
+        this._replaceCommandFromHistory(command)
+        return true
+    }
+
+    private _replaceCommandFromHistory(command: string) {
+        const oldCommand = this._command
+        const oldCursor = this._cursorPos
+        const oldHilitePos = this._hilitePos
+        this._resetCompletionCycle()
+        this._command = command
+        this._cursorPos = command.length
+        this._hilitePos = -1
+        this._lastModifyIdx = this._cursorPos
+        this._setUndoSnapshot(oldCommand, oldCursor, oldHilitePos)
+        this._focusCursor(true)
+        this._showCursorNow()
+    }
+
+    private _resetHistoryNavigation() {
+        this._historyIndex = -1
+        this._historyDraft = ''
+    }
+
+    private _resetCompletionCycle() {
+        this._completionCycleBaseCommand = ''
+        this._completionCycleCandidates = []
+        this._completionCycleIndex = -1
+    }
+
+    private _acceptCompletion() {
+        if (this._hasSelection()) return false
+        if (this._cursorPos !== this._command.length) return false
+
+        const completion = this._getNextCompletion()
+        if (!completion || completion === this._command) return false
+
+        const oldCommand = this._command
+        const oldCursor = this._cursorPos
+        const oldHilitePos = this._hilitePos
+        this._command = completion
+        this._cursorPos = completion.length
+        this._hilitePos = -1
+        this._lastModifyIdx = this._cursorPos
+        this._setUndoSnapshot(oldCommand, oldCursor, oldHilitePos)
+        this._resetHistoryNavigation()
+        this._focusCursor(false)
+        this._showCursorNow()
+        return true
+    }
+
+    private _getNextCompletion() {
+        const currentCycleCandidate = this._completionCycleCandidates[this._completionCycleIndex]
+        if (
+            this._completionCycleBaseCommand &&
+            currentCycleCandidate === this._command &&
+            this._completionCycleCandidates.length > 1
+        ) {
+            this._completionCycleIndex =
+                (this._completionCycleIndex + 1) % this._completionCycleCandidates.length
+            return this._completionCycleCandidates[this._completionCycleIndex]
+        }
+
+        const candidates = getDebugCliCompletions(this._command, true)
+        if (candidates.length === 0) {
+            this._resetCompletionCycle()
+            return ''
+        }
+
+        this._completionCycleBaseCommand = this._command
+        this._completionCycleCandidates = candidates
+        const currentIndex = candidates.indexOf(this._command)
+        this._completionCycleIndex = currentIndex === -1
+            ? 0
+            : (currentIndex + 1) % candidates.length
+        return candidates[this._completionCycleIndex]
     }
 
     private _closeIfEmpty() {
@@ -695,6 +865,7 @@ export class DebugCliDialog extends MessageBox {
         const oldCommand = this._command
         const oldCursor = this._cursorPos
         const oldHilitePos = this._hilitePos
+        this._resetHistoryNavigation()
         if (this._hasSelection()) {
             const start = this._selectionStart()
             const end = this._selectionEnd()
@@ -744,47 +915,72 @@ export class DebugCliDialog extends MessageBox {
         let sanitized = ''
         for (const char of text) {
             if (char === '\r' || char === '\n') break
-            if (this._isPrintableAscii(char)) sanitized += char
+            if (this._isAllowedInputChar(char)) sanitized += char
         }
         return sanitized
     }
 
     private _eventToInputChar(event: DebugCliInputKey) {
         const rawKey = event.rawEvent?.key
-        if (rawKey && rawKey.length === 1 && this._isPrintableAscii(rawKey)) return rawKey
+        if (rawKey && rawKey.length === 1 && this._isAllowedInputChar(rawKey)) return rawKey
 
         const keyCode = event.keyCode
         if (keyCode >= DebugCliKeyCode.A && keyCode <= DebugCliKeyCode.Z) {
-            return String.fromCharCode(keyCode).toLowerCase()
+            return this._filterInputChar(String.fromCharCode(keyCode).toLowerCase())
         }
         if (keyCode >= DebugCliKeyCode.Digit0 && keyCode <= DebugCliKeyCode.Digit9) {
-            return String.fromCharCode(keyCode)
+            return this._filterInputChar(String.fromCharCode(keyCode))
         }
         if (keyCode >= DebugCliKeyCode.Numpad0 && keyCode <= DebugCliKeyCode.Numpad9) {
-            return String(keyCode - DebugCliKeyCode.Numpad0)
+            return this._filterInputChar(String(keyCode - DebugCliKeyCode.Numpad0))
         }
 
         switch (keyCode) {
             case DebugCliKeyCode.Space:
-                return ' '
+                return this._filterInputChar(' ')
             case DebugCliKeyCode.NumpadMultiply:
-                return '*'
+                return this._filterInputChar('*')
             case DebugCliKeyCode.NumpadAdd:
-                return '+'
+                return this._filterInputChar('+')
             case DebugCliKeyCode.NumpadSubtract:
-                return '-'
+                return this._filterInputChar('-')
             case DebugCliKeyCode.NumpadDecimal:
-                return '.'
+                return this._filterInputChar('.')
             case DebugCliKeyCode.NumpadDivide:
-                return '/'
+                return this._filterInputChar('/')
             default:
                 return ''
         }
     }
 
+    private _filterInputChar(char: string) {
+        return this._isAllowedInputChar(char) ? char : ''
+    }
+
+    private _isAllowedInputChar(char: string) {
+        return this._isPrintableAscii(char) && this._hasCommandFontGlyph(char)
+    }
+
     private _isPrintableAscii(char: string) {
         const code = char.charCodeAt(0)
         return code >= 32 && code <= 126
+    }
+
+    private _hasCommandFontGlyph(char: string) {
+        if (char === ' ') return true
+
+        const config = this._commandFont?.config.json as
+            | {
+                charMap?: Record<string, number>
+                layers?: Array<{ chars?: Record<string, unknown> }>
+            }
+            | undefined
+        const layerChars = config?.layers?.[0]?.chars
+        if (!layerChars) return true
+
+        const sourceCode = String(char.charCodeAt(0))
+        const mappedCode = String(config?.charMap?.[sourceCode] ?? sourceCode)
+        return layerChars[mappedCode] != null
     }
 
     private _isUndoKey(event: DebugCliInputKey) {
@@ -832,12 +1028,51 @@ export class DebugCliDialog extends MessageBox {
         const visibleText = this._command.slice(this._leftPos)
         this._textRenderer.string = visibleText
         this._textRenderer.forceRebuild()
+        this._refreshCompletion()
         if (this._selectionTextRenderer) {
             this._selectionTextRenderer.string = visibleText
             this._selectionTextRenderer.forceRebuild()
         }
         this._refreshSelection()
         this._refreshCursor()
+    }
+
+    private _refreshCompletion() {
+        if (!this._completionNode || !this._completionRenderer) return
+
+        const suffix = this._getCompletionSuffix()
+        if (!suffix) {
+            this._completionNode.active = false
+            this._completionRenderer.string = ''
+            return
+        }
+
+        const commandWidth = this._measureText(this._command.slice(this._leftPos, this._cursorPos))
+        const maxWidth = this._inputTextMaxWidth()
+        const remainingWidth = maxWidth - commandWidth
+        if (remainingWidth <= 0) {
+            this._completionNode.active = false
+            this._completionRenderer.string = ''
+            return
+        }
+
+        this._completionNode.active = true
+        this._completionNode.setPosition(this._inputTextX() + commandWidth, INPUT_TEXT_TOP_Y, 0)
+        setUISize(this._completionNode, remainingWidth, INPUT_HEIGHT, 0, 1)
+        this._completionRenderer.maxWidth = 0
+        this._completionRenderer.string = suffix
+        this._completionRenderer.forceRebuild()
+    }
+
+    private _getCompletionSuffix() {
+        if (!this._hasInputFocus || this._hasSelection()) return ''
+        if (this._cursorPos !== this._command.length) return ''
+
+        const completion = getDebugCliCompletion(this._command)
+        if (completion && completion.length > this._command.length) {
+            return completion.slice(this._command.length)
+        }
+        return getDebugCliParameterHint(this._command)
     }
 
     private _refreshSelection() {
@@ -935,6 +1170,7 @@ export class DebugCliDialog extends MessageBox {
         } else {
             this._draggingSelection = false
             this._cursorVisible = false
+            this._refreshCompletion()
             this._refreshCursor()
         }
     }
@@ -1091,6 +1327,7 @@ export class DebugCliDialog extends MessageBox {
         const oldHilitePos = this._hilitePos
         const start = this._selectionStart()
         const end = this._selectionEnd()
+        this._resetHistoryNavigation()
         this._command = this._command.slice(0, start) + this._command.slice(end)
         this._cursorPos = start
         this._hilitePos = -1
@@ -1114,6 +1351,8 @@ export class DebugCliDialog extends MessageBox {
         this._inputRoot = null
         this._textNode = null
         this._textRenderer = null
+        this._completionNode = null
+        this._completionRenderer = null
         this._selectionNode = null
         this._selectionGraphics = null
         this._selectionTextClip = null

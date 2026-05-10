@@ -25,9 +25,9 @@ import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import {
     getAnimationRateSpeed,
     wirePlantAnimation,
+    type PlantAnimationType,
     type PlantAnimationView,
 } from '@/game/PlantAnimation'
-import type { PlantType } from '@/game/GameTypes'
 import {
     attachFlagZombieAnimation,
     createZombieAnimationView,
@@ -145,7 +145,7 @@ interface AlmanacZombieDefinition {
 }
 
 interface AlmanacPlantPreviewDefinition {
-    plantType: PlantType
+    plantType: PlantAnimationType
     animationName: AlmanacPlantAnimationName
 }
 
@@ -189,19 +189,47 @@ const ALMANAC_PLANT_PREVIEW_BY_KEY: Partial<Record<string, AlmanacPlantPreviewDe
     SNOW_PEA: { plantType: 'snowpea', animationName: 'snowpea' },
     CHOMPER: { plantType: 'chomper', animationName: 'chomper' },
     REPEATER: { plantType: 'repeater', animationName: 'peashooter' },
+    PUFF_SHROOM: { plantType: 'puffshroom', animationName: 'puffshroom' },
+    SUN_SHROOM: { plantType: 'sunshroom', animationName: 'sunshroom' },
+    FUME_SHROOM: { plantType: 'fumeshroom', animationName: 'fumeshroom' },
+    GRAVE_BUSTER: { plantType: 'gravebuster', animationName: 'gravebuster' },
+    HYPNO_SHROOM: { plantType: 'hypnoshroom', animationName: 'hypnoshroom' },
+    SCAREDY_SHROOM: { plantType: 'scaredyshroom', animationName: 'scaredyshroom' },
+    ICE_SHROOM: { plantType: 'iceshroom', animationName: 'iceshroom' },
+    DOOM_SHROOM: { plantType: 'doomshroom', animationName: 'doomshroom' },
 }
 
 const ALMANAC_PLANT_VISUAL_ADJUSTMENTS: Partial<
-    Record<PlantType, { offsetX?: number; offsetY?: number; scale?: number }>
+    Record<PlantAnimationType, { offsetX?: number; offsetY?: number; scale?: number }>
 > = {
     potatomine: { offsetX: 12, offsetY: 12, scale: 0.8 },
+    puffshroom: { offsetY: 5 },
+    scaredyshroom: { offsetY: -14 },
+    gravebuster: { offsetY: 15 },
 }
 
 const ALMANAC_PLANT_SHADOW_ADJUSTMENTS: Partial<
-    Record<PlantType, { offsetX: number; offsetY: number; scale?: number }>
+    Record<PlantAnimationType, { offsetX: number; offsetY: number; scale?: number; hide?: boolean }>
 > = {
     chomper: { offsetX: -21, offsetY: 57 },
+    puffshroom: { offsetX: -3, offsetY: 42, scale: 0.5 },
+    sunshroom: { offsetX: -3, offsetY: 42, scale: 0.5 },
+    fumeshroom: { offsetX: -3, offsetY: 47, scale: 1.3 },
+    gravebuster: { offsetX: 0, offsetY: 0, hide: true },
+    scaredyshroom: { offsetX: -9, offsetY: 55 },
 }
+
+const ALMANAC_NIGHT_GROUND_PLANT_KEYS = new Set([
+    'PUFF_SHROOM',
+    'SUN_SHROOM',
+    'FUME_SHROOM',
+    'GRAVE_BUSTER',
+    'HYPNO_SHROOM',
+    'SCAREDY_SHROOM',
+    'ICE_SHROOM',
+    'DOOM_SHROOM',
+    'PLANTERN',
+])
 
 const ALMANAC_ZOMBIE_PREVIEW_BY_KEY: Partial<Record<string, AlmanacZombiePreviewDefinition>> = {
     ZOMBIE: {
@@ -782,7 +810,7 @@ export class AlmanacScreen extends MenuScreenBase {
     ) {
         createSpriteNode({
             name: 'PlantGroundPreview',
-            spriteFrame: sprites.almanacGroundDay,
+            spriteFrame: this._getAlmanacPlantGround(plant, sprites),
             parent: this._root!,
             layer: this.node.layer,
             x: this._cppX(521),
@@ -891,17 +919,20 @@ export class AlmanacScreen extends MenuScreenBase {
         const shadowAdjust = ALMANAC_PLANT_SHADOW_ADJUSTMENTS[preview.plantType] ?? {
             offsetX: -3,
             offsetY: 51,
+            hide: false,
         }
-        const shadowNode = createSpriteNode({
-            name: 'PlantShadow',
-            spriteFrame: sprites.plantShadow,
-            parent: root,
-            layer: this.node.layer,
-            x: shadowAdjust.offsetX,
-            y: -shadowAdjust.offsetY,
-        })
-        const shadowScale = shadowAdjust.scale ?? 1
-        shadowNode.setScale(shadowScale, shadowScale, 1)
+        if (!shadowAdjust.hide) {
+            const shadowNode = createSpriteNode({
+                name: 'PlantShadow',
+                spriteFrame: sprites.plantShadow,
+                parent: root,
+                layer: this.node.layer,
+                x: shadowAdjust.offsetX,
+                y: -shadowAdjust.offsetY,
+            })
+            const shadowScale = shadowAdjust.scale ?? 1
+            shadowNode.setScale(shadowScale, shadowScale, 1)
+        }
 
         const animatorNode = createUINode('Animator', {
             parent: root,
@@ -933,9 +964,18 @@ export class AlmanacScreen extends MenuScreenBase {
                 includePotatoGlow: false,
                 potatoInitialState: preview.plantType === 'potatomine' ? 'armed' : 'idle',
                 cherryBombInitialState: 'idle',
+                sunShroomInitialState: 'big',
                 shakeNode: animatorNode,
             })
         })
+    }
+
+    private _getAlmanacPlantGround(
+        plant: AlmanacPlantDefinition,
+        sprites: AlmanacScreenSprites,
+    ) {
+        if (ALMANAC_NIGHT_GROUND_PLANT_KEYS.has(plant.key)) return sprites.almanacGroundNight
+        return sprites.almanacGroundDay
     }
 
     private _createAlmanacZombiePreview(args: {

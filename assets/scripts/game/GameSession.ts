@@ -61,6 +61,9 @@ const LAWN_MOWER_CHOMP_TRIGGERED_COUNTER = 50
 const SUN_MIN = 0
 const SUN_MAX = 9990
 const WIDE_BOARD_WIDTH = 800
+const BOARD_EDGE = -100
+const HEADLESS_ZOMBIE_EDGE_OFFSET = 70
+const HEADLESS_ZOMBIE_EDGE_DAMAGE = 1800
 const LEVEL_1_ADVICE_PICK_SEED = 'Click on a seed packet to pick it up!'
 const LEVEL_1_ADVICE_PLANT_SEED = 'Click on the grass to plant your seed!'
 const LEVEL_1_ADVICE_FIRST_PLANT_DONE = 'Nicely done!'
@@ -69,10 +72,10 @@ const LEVEL_1_ADVICE_CLICKED_SUN = "Keep on collecting sun!\nYou'll need it to g
 const LEVEL_1_ADVICE_ENOUGH_SUN = "Excellent! You've collected\nenough for your next plant!"
 const LEVEL_1_ADVICE_PLANT_SECOND_PEASHOOTER = 'Click on the peashooter to plant another one!'
 const LEVEL_1_ADVICE_ZOMBIES_CAN_START = "Don't let the zombies reach your house!"
+const LEVEL_1_ADVICE_CANT_AFFORD = 'You need more sun to do that!'
 const LEVEL_1_AFTER_FIRST_PLANT_SUN_DELAY = 400
 const LEVEL_1_SECOND_SEED_PROMPT_DELAY = 400
 const LEVEL_1_ZOMBIE_COUNTDOWN_AFTER_TUTORIAL = 200
-const ZOMBIE_REACHED_HOUSE_X = -50
 
 export class GameSession {
     readonly level: LevelDefinition
@@ -92,6 +95,7 @@ export class GameSession {
     currentWave = 0
     zombieCountDown = ZOMBIE_COUNTDOWN_FIRST_WAVE
     zombieCountDownStart = ZOMBIE_COUNTDOWN_FIRST_WAVE
+    progressMeterWidth = 0
     selectedSeed: SeedType | null = null
     selectedTool: ToolType | null = null
     paused = false
@@ -113,6 +117,7 @@ export class GameSession {
     private _levelOneTutorialPhase: LevelOneTutorialPhase = 'done'
     private _levelOneTutorialTimer = 0
     private _levelOneClickOnSunAdviceShown = false
+    private _levelOneCantAffordAdviceShown = false
 
     constructor(level: LevelDefinition = ADVENTURE_1_1) {
         this.level = level
@@ -190,10 +195,11 @@ export class GameSession {
         }
         this._updatePlants()
         this._updateZombies()
+        if (this.result !== 'playing') return
         this._updateProjectiles()
         this._updateLawnMowers()
         this._updateItems()
-        this._checkZombieReachedHouse()
+        this._updateProgressMeter()
         this._removeDeadEntities()
         this._checkLevelCompletion()
     }
@@ -361,8 +367,7 @@ export class GameSession {
             return
         }
         if (!this._canSpendSun(SEED_DEFINITIONS[seedType].cost)) {
-            this.events.push({ type: 'soundRequested', sound: SoundEffect.Buzzer })
-            this.events.push({ type: 'advice', message: 'You need more sun to do that!', style: 'hint' })
+            this._pushNotEnoughSunFeedback()
             return
         }
 
@@ -395,8 +400,7 @@ export class GameSession {
         const reason = this.getPlantingReason(seedType, grid.col, grid.row)
         if (reason !== 'ok') {
             if (reason === 'not-enough-sun') {
-                this.events.push({ type: 'advice', message: 'You need more sun to do that!', style: 'hint' })
-                this.events.push({ type: 'soundRequested', sound: SoundEffect.Buzzer })
+                this._pushNotEnoughSunFeedback()
             } else if (reason === 'waiting-for-seed') {
                 this.events.push({ type: 'soundRequested', sound: SoundEffect.Buzzer })
             }
@@ -560,6 +564,7 @@ export class GameSession {
                 plant.health = Math.max(0, plant.health - damage)
                 if (plant.health <= 0) plant.dead = true
             },
+            checkBoardEdge: (zombie: Zombie) => this._checkZombieBoardEdge(zombie),
             randomInt: (minInclusive: number, maxInclusive: number) =>
                 this._randomInt(minInclusive, maxInclusive),
             randomFloat: (minInclusive: number, maxExclusive: number) =>
@@ -570,6 +575,7 @@ export class GameSession {
             const wasDying = zombie.state === 'dying'
             zombie.update(context)
             if (!wasDying && zombie.state === 'dying') this._dropZombieLoot(zombie)
+            if (this.result !== 'playing') break
         }
     }
 
@@ -656,6 +662,7 @@ export class GameSession {
         const attackRect = this._lawnMowerAttackRect(mower)
         for (const zombie of this.zombies) {
             if (zombie.dead || zombie.row !== mower.row) continue
+            if (zombie.state === 'dying') continue
             if (zombie.state === 'mowered') continue
             if (this._rectOverlap(attackRect, zombie.getBodyRect()) <= 0) continue
             if (mower.state === 'ready' && !zombie.hasHead) continue
@@ -942,14 +949,19 @@ export class GameSession {
         if (this._hugeWaveCountDown === 0) {
             this._nextWaveComing()
             this.zombieCountDown = 1
+        } else if (this._hugeWaveCountDown === 725) {
+            this.events.push({ type: 'soundRequested', sound: SoundEffect.HugeWave })
         }
         return true
     }
 
     private _nextWaveComing() {
         if (this.currentWave + 1 === this.numWaves) {
-            this.events.push({ type: 'advice', message: 'FINAL WAVE', style: 'big-middle' })
+            this.events.push({ type: 'finalWave' })
             this._finalWaveSoundCounter = FINAL_WAVE_SOUND_DELAY
+        }
+        if (this.currentWave === 0) {
+            this.events.push({ type: 'soundRequested', sound: SoundEffect.Awooga })
         }
     }
 
@@ -959,6 +971,35 @@ export class GameSession {
         this._finalWaveSoundCounter--
         if (this._finalWaveSoundCounter === 0) {
             this.events.push({ type: 'soundRequested', sound: SoundEffect.FinalWave })
+        }
+    }
+
+    private _updateProgressMeter() {
+        if (this.currentWave === 0) return
+
+        const totalWidth = 150
+        const denominator = Math.max(1, this.numWaves - 1)
+        const waveLength = totalWidth / denominator
+        const currentWaveLength = (this.currentWave - 1) * totalWidth / denominator
+        const nextWaveLength = this.currentWave * totalWidth / denominator
+        let fraction = this.zombieCountDownStart > 0
+            ? (this.zombieCountDownStart - this.zombieCountDown) / this.zombieCountDownStart
+            : 1
+
+        if (this._zombieHealthToNextWave !== -1) {
+            const healthCurrent = this._totalZombiesHealthInWave(this.currentWave - 1)
+            const damageTarget = Math.max(1, this._zombieHealthWaveStart - this._zombieHealthToNextWave)
+            const healthFraction = (damageTarget - healthCurrent + this._zombieHealthToNextWave) / damageTarget
+            fraction = Math.max(healthFraction, fraction)
+        }
+
+        const targetLength = Math.max(
+            1,
+            Math.min(150, Math.round(currentWaveLength + (nextWaveLength - currentWaveLength) * fraction)),
+        )
+        const delta = targetLength - this.progressMeterWidth
+        if ((delta > waveLength && this.tick % 5 === 0) || (delta > 0 && this.tick % 20 === 0)) {
+            this.progressMeterWidth++
         }
     }
 
@@ -996,6 +1037,15 @@ export class GameSession {
 
         this._levelOneClickOnSunAdviceShown = true
         this._pushLevelOneTutorialAdvice(LEVEL_1_ADVICE_COLLECT_FALLING_SUN)
+    }
+
+    private _pushNotEnoughSunFeedback() {
+        this.events.push({ type: 'soundRequested', sound: SoundEffect.Buzzer })
+        this.events.push({ type: 'sunFlash' })
+        if (this.level.adventureLevel !== 1 || this._levelOneCantAffordAdviceShown) return
+
+        this._levelOneCantAffordAdviceShown = true
+        this.events.push({ type: 'advice', message: LEVEL_1_ADVICE_CANT_AFFORD, style: 'tutorial-level1' })
     }
 
     private _canSpendSun(amount: number) {
@@ -1093,12 +1143,37 @@ export class GameSession {
         this.events.push({ type: 'levelWon' })
     }
 
-    private _checkZombieReachedHouse() {
-        if (this.result !== 'playing') return
-        if (!this.zombies.some((zombie) => !zombie.dead && zombie.x < ZOMBIE_REACHED_HOUSE_X)) return
+    private _checkZombieBoardEdge(zombie: Zombie) {
+        if (this.result !== 'playing') return false
+        if (zombie.dead || zombie.state === 'dying' || zombie.state === 'mowered') return false
+
+        const edgeX = this._zombieBoardEdgeX(zombie)
+        const zombieX = zombie.getBoardX()
+        if (zombie.hasHead && zombieX <= edgeX) {
+            this._zombiesWon(zombie)
+            return true
+        }
+        if (!zombie.hasHead && zombieX <= edgeX + HEADLESS_ZOMBIE_EDGE_OFFSET) {
+            zombie.takeDamage(HEADLESS_ZOMBIE_EDGE_DAMAGE, {
+                zombieCount: this._countLiveZombies(),
+                canUseSuperLongDeath: this._canUseSuperLongDeath(),
+            })
+            return true
+        }
+
+        return false
+    }
+
+    private _zombieBoardEdgeX(_zombie: Zombie) {
+        return BOARD_EDGE
+    }
+
+    private _zombiesWon(winner: Zombie | null) {
+        if (this.result === 'lost') return
 
         this.result = 'lost'
-        this.events.push({ type: 'levelLost' })
+        winner?.walkIntoHouse()
+        this.events.push({ type: 'levelLost', zombieId: winner?.id ?? null })
     }
 
     private _pushAdvice() {
@@ -1207,9 +1282,13 @@ export class GameSession {
             this._dropLevelAward(centerX, centerY)
             return
         }
-        if (this._levelAwardDropped) return
+        if (this._levelAwardDropped || !this._canDropMoneyLoot()) return
 
         this._dropMoneyLootPiece(centerX, centerY, this._zombieLootDropFactor(zombie.type))
+    }
+
+    private _canDropMoneyLoot() {
+        return this.level.adventureLevel > 1
     }
 
     private _shouldDropLevelAwardFromZombie(zombie: Zombie) {
@@ -1227,8 +1306,16 @@ export class GameSession {
         if (!this.level.awardSeedType || this._levelAwardDropped) return
 
         this._levelAwardDropped = true
+        this._stopPostAwardBoardActivity()
         this.events.push({ type: 'foleyRequested', sound: SoundEffect.Throw, pitchRange: 10 })
         this._addItem('final-seed-packet', 'coin', x, y, this.level.awardSeedType)
+    }
+
+    private _stopPostAwardBoardActivity() {
+        this.sunSpawningEnabled = false
+        for (const zombie of this.zombies) {
+            if (zombie.state === 'dying') zombie.dead = true
+        }
     }
 
     private _dropMoneyLootPiece(x: number, y: number, dropFactor: number) {

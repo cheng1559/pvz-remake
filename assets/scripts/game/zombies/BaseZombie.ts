@@ -18,6 +18,7 @@ const HEADLESS_DECAY_DAMAGE = 1
 const CHILLED_TICKS = 1000
 const CHILLED_SPEED_FACTOR = 0.5
 const ZOMBIE_WALK_ASSET_FPS = 12
+const GAME_TICKS_PER_SECOND = 100
 const ZOMBIE_EAT_ANIM_RATE = 36
 const ZOMBIE_EAT_FRAME_SPAN = 39
 const ZOMBIE_DEATH_ANIM_RATE_MIN = 24
@@ -30,7 +31,12 @@ const ZOMBIE_DEATH2_FRAME_SPAN = 32
 const ZOMBIE_SUPER_LONG_DEATH_FRAME_SPAN = 136
 const ZOMBIE_WATER_DEATH_FRAME_SPAN = 24
 const ZOMBIE_DEATH_HOLD_TICKS = 40
-const ZOMBIE_MOWERED_TICKS = 100
+const ZOMBIE_MOWERED_ANIM_RATE = 16
+const ZOMBIE_MOWERED_FRAME_COUNT = 8
+const ZOMBIE_MOWERED_FRAME_SPAN = ZOMBIE_MOWERED_FRAME_COUNT - 1
+const ZOMBIE_MOWERED_TICKS = Math.ceil(
+    ZOMBIE_MOWERED_FRAME_COUNT / ZOMBIE_MOWERED_ANIM_RATE * GAME_TICKS_PER_SECOND,
+)
 const ZOMBIE_DEATH_FALL_TIME = 0.77
 const ZOMBIE_DEATH2_FALL_TIME = 0.71
 const ZOMBIE_SUPER_LONG_DEATH_FALL_TIME = 0.788
@@ -45,7 +51,6 @@ const ZOMBIE_WALK_GROUND_X = [
 const ZOMBIE_WALK_FRAME_SPAN = ZOMBIE_WALK_GROUND_X.length - 1
 const ZOMBIE_WALK_FRAME_COUNT = ZOMBIE_WALK_GROUND_X.length
 const ZOMBIE_WALK_GROUND_DISTANCE = ZOMBIE_WALK_GROUND_X[ZOMBIE_WALK_GROUND_X.length - 1] - ZOMBIE_WALK_GROUND_X[0]
-const GAME_TICKS_PER_SECOND = 100
 
 export interface ZombieUpdateContext {
     events: GameEvent[]
@@ -53,6 +58,7 @@ export interface ZombieUpdateContext {
     canUseSuperLongDeath: boolean
     findPlantTarget(zombie: Zombie): PlantEntity | null
     damagePlant(plant: PlantEntity, damage: number): void
+    checkBoardEdge(zombie: Zombie): boolean
     randomInt(minInclusive: number, maxInclusive: number): number
     randomFloat(minInclusive: number, maxExclusive: number): number
 }
@@ -116,6 +122,7 @@ export abstract class Zombie implements ZombieEntity {
     private _deathFallSoundPlayed = false
     private _deathFrameSpan = ZOMBIE_DEATH_FRAME_SPAN
     private _deathFallTime = ZOMBIE_DEATH_FALL_TIME
+    private _boardX = 0
     private _walkGroundTime = 0
     private _walkAnimation: string
     private _pendingEvents: GameEvent[] = []
@@ -147,6 +154,7 @@ export abstract class Zombie implements ZombieEntity {
         this.currentAnimation = this.inPool ? 'anim_swim' : this._walkAnimation
         this.animationSpeed = this._walkAnimationSpeed()
         this.animationTime = 0
+        this._boardX = Math.trunc(this.x)
         this._groanCounter = GROAN_COUNTDOWN_MIN + Math.floor(Math.random() * (GROAN_COUNTDOWN_MAX - GROAN_COUNTDOWN_MIN + 1))
     }
 
@@ -155,6 +163,7 @@ export abstract class Zombie implements ZombieEntity {
 
         this._flushPendingEvents(context)
         this.age++
+        this._boardX = Math.trunc(this.x)
         if (this.state === 'dying') {
             this._updateChill()
             this.updateDying(context)
@@ -170,10 +179,12 @@ export abstract class Zombie implements ZombieEntity {
         const target = context.findPlantTarget(this)
         if (target) {
             this.updateEating(context, target)
+            context.checkBoardEdge(this)
         } else if (!this.hasHead) {
             this.updateHeadless(context)
         } else {
             this.updateWalking(context)
+            context.checkBoardEdge(this)
         }
     }
 
@@ -216,7 +227,7 @@ export abstract class Zombie implements ZombieEntity {
         this.hasTongue = false
         this.velocityX = 0
         this.animationTime = 0
-        this.animationSpeed = 8 / ZOMBIE_WALK_ASSET_FPS
+        this.animationSpeed = ZOMBIE_MOWERED_ANIM_RATE / ZOMBIE_WALK_ASSET_FPS
         this.moweredTime = 0
         this.currentAnimation = 'default'
     }
@@ -224,8 +235,8 @@ export abstract class Zombie implements ZombieEntity {
     protected updateMowered() {
         this.moweredTime++
         this.animationTime = Math.min(
-            ZOMBIE_MOWERED_TICKS,
-            this.animationTime + this.animationSpeed * ZOMBIE_WALK_ASSET_FPS / GAME_TICKS_PER_SECOND,
+            ZOMBIE_MOWERED_FRAME_SPAN,
+            this.animationTime + ZOMBIE_MOWERED_FRAME_SPAN / ZOMBIE_MOWERED_TICKS,
         )
         if (this.moweredTime >= ZOMBIE_MOWERED_TICKS) {
             this.dead = true
@@ -238,6 +249,10 @@ export abstract class Zombie implements ZombieEntity {
 
     getAttackRect(): Rect {
         return this.offsetRect(this.attackRect)
+    }
+
+    getBoardX() {
+        return this._boardX
     }
 
     protected updateWalking(context: ZombieUpdateContext) {
@@ -321,7 +336,36 @@ export abstract class Zombie implements ZombieEntity {
 
     protected updateHeadless(context: ZombieUpdateContext) {
         this.updateWalking(context)
+        if (context.checkBoardEdge(this)) return
         this._updateHeadlessDecay(context)
+    }
+
+    walkIntoHouse() {
+        if (this.dead) return
+
+        this.state = 'walking'
+        this.y = 290
+        this.currentAnimation = this.inPool ? 'anim_swim' : this._walkAnimation
+        this.animationSpeed = this._walkAnimationSpeed()
+    }
+
+    advanceGameOverWalk(ticks: number) {
+        if (this.dead || ticks <= 0) return
+
+        this.state = 'walking'
+        this.currentAnimation = this.inPool ? 'anim_swim' : this._walkAnimation
+        this.animationSpeed = this._walkAnimationSpeed()
+        this.x -= this.inPool
+            ? this._chilledAnimSpeed(this.velocityX) * ticks
+            : this._advanceWalkGroundDistance(ticks)
+        if (this.inPool) {
+            this.animationTime = this._advanceLoopingAnimationTime(
+                this.animationTime,
+                this.animationSpeed,
+                ZOMBIE_WALK_FRAME_SPAN,
+                ticks,
+            )
+        }
     }
 
     private _updateHeadlessDecay(context: ZombieUpdateContext) {
@@ -358,8 +402,8 @@ export abstract class Zombie implements ZombieEntity {
         return this._chilledAnimSpeed(this._walkAnimRate() / ZOMBIE_WALK_ASSET_FPS)
     }
 
-    private _advanceWalkGroundDistance() {
-        const frameAdvance = this._walkFrameAdvance()
+    private _advanceWalkGroundDistance(ticks = 1) {
+        const frameAdvance = this._walkFrameAdvance(ticks)
         let nextTime = this._walkGroundTime + frameAdvance
         const previousX = this._sampleWalkGroundX(this._walkGroundTime)
 
@@ -389,10 +433,10 @@ export abstract class Zombie implements ZombieEntity {
         return ZOMBIE_WALK_GROUND_X[leftIndex] + (ZOMBIE_WALK_GROUND_X[rightIndex] - ZOMBIE_WALK_GROUND_X[leftIndex]) * t
     }
 
-    private _advanceLoopingAnimationTime(time: number, speed: number, frameSpan: number) {
+    private _advanceLoopingAnimationTime(time: number, speed: number, frameSpan: number, ticks = 1) {
         if (frameSpan <= 0) return 0
 
-        const frameAdvance = speed * ZOMBIE_WALK_ASSET_FPS / GAME_TICKS_PER_SECOND
+        const frameAdvance = speed * ZOMBIE_WALK_ASSET_FPS / GAME_TICKS_PER_SECOND * ticks
         return (time + frameAdvance) % frameSpan
     }
 
@@ -400,8 +444,8 @@ export abstract class Zombie implements ZombieEntity {
         return this.velocityX * ZOMBIE_WALK_FRAME_COUNT / ZOMBIE_WALK_GROUND_DISTANCE * ZOMBIE_REANIM_WALK_RATE_FACTOR
     }
 
-    private _walkFrameAdvance() {
-        return this._chilledAnimSpeed(this._walkAnimRate()) * SECONDS_PER_UPDATE
+    private _walkFrameAdvance(ticks = 1) {
+        return this._chilledAnimSpeed(this._walkAnimRate()) * SECONDS_PER_UPDATE * ticks
     }
 
     private _updateChill() {

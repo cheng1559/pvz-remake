@@ -38,7 +38,7 @@ export class PotatoMinePlant extends Plant {
         this.state = 'potato-rising'
         this.stateCountdown = RISE_ANIMATION_TICKS
         context.events.push({ type: 'animationRequested', entityId: this.id, animation: 'potato-rise' })
-        context.events.push({ type: 'soundRequested', sound: SoundEffect.DirtRise })
+        context.events.push({ type: 'foleyRequested', sound: SoundEffect.DirtRise, pitchRange: 5 })
     }
 
     private updateRising(context: PlantUpdateContext) {

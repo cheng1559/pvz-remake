@@ -1367,6 +1367,12 @@
             "animations": []
         }
     },
+    "finalwave": {
+        "default": {
+            "slots": [],
+            "animations": []
+        }
+    },
     "lawnmower": {
         "default": {
             "slots": [],

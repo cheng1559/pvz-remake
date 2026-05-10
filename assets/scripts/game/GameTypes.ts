@@ -153,9 +153,11 @@ export type GameEvent =
     | { type: 'soundRequested', sound: SoundEffect }
     | { type: 'foleyRequested', sound: SoundEffect, pitchRange?: number }
     | { type: 'levelWon' }
-    | { type: 'levelLost' }
+    | { type: 'levelLost', zombieId: number | null }
     | { type: 'advice', message: string, style?: AdviceStyle }
     | { type: 'adviceCleared' }
+    | { type: 'sunFlash' }
+    | { type: 'finalWave' }
 
 export interface SeedPacketState {
     seedType: SeedType
@@ -232,6 +234,7 @@ export interface ItemEntity {
     scale: number
     alpha: number
     awardSeedType: SeedType | null
+    hitGround: boolean
     dead: boolean
     beingCollected: boolean
 }

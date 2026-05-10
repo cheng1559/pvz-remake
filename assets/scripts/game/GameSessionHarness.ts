@@ -1,6 +1,7 @@
 import { GameSession } from './GameSession'
 import { ADVENTURE_1_1, ZOMBIE_DEFINITIONS } from './GameDefinitions'
 import { SoundEffect } from '@/core/SoundLoader'
+import { createProjectile } from './projectiles/ProjectileFactory'
 
 export interface GameHarnessResult {
     passed: boolean
@@ -68,7 +69,15 @@ export function runAdventure11Harness(): GameHarnessResult {
         } else {
             const item = sunflowerSession.items[0]
             const sunBeforeCollect = sunflowerSession.sun
+            sunflowerSession.drainEvents()
             sunflowerSession.collectItemAt(item.x + 30, item.y + 30)
+            const sunCollectEvents = sunflowerSession.drainEvents()
+            if (!sunCollectEvents.some((event) =>
+                event.type === 'foleyRequested' &&
+                event.sound === SoundEffect.Points &&
+                event.pitchRange === 10)) {
+                details.push('Collecting sun should request the original pitch-varied sun foley.')
+            }
             for (let i = 0; i < 160; i++) sunflowerSession.update()
             if (sunflowerSession.sun !== sunBeforeCollect + 25) {
                 details.push('Collected sun items should add 25 sun after flying to the sun bank.')
@@ -103,6 +112,26 @@ export function runAdventure11Harness(): GameHarnessResult {
         event.type === 'advice' &&
         event.message === 'Click on the falling sun to collect it!')) {
         details.push('Adventure 1-1 should stop showing falling sun tutorial advice after the second Peashooter is planted.')
+    }
+
+    const notEnoughSunSession = new GameSession()
+    notEnoughSunSession.drainEvents()
+    notEnoughSunSession.debugSetSun(0)
+    notEnoughSunSession.dispatch({ type: 'selectSeed', seedType: 'peashooter' })
+    const firstNotEnoughEvents = notEnoughSunSession.drainEvents()
+    notEnoughSunSession.dispatch({ type: 'selectSeed', seedType: 'peashooter' })
+    const repeatedNotEnoughEvents = notEnoughSunSession.drainEvents()
+    const isCantAffordAdvice = (event: ReturnType<GameSession['drainEvents']>[number]) =>
+        event.type === 'advice' &&
+        event.message === 'You need more sun to do that!' &&
+        event.style === 'tutorial-level1'
+    if (!firstNotEnoughEvents.some((event) => event.type === 'sunFlash') ||
+        !firstNotEnoughEvents.some(isCantAffordAdvice)) {
+        details.push('Adventure 1-1 should show the tall tutorial not-enough-sun advice and flash the sun counter the first time.')
+    }
+    if (!repeatedNotEnoughEvents.some((event) => event.type === 'sunFlash') ||
+        repeatedNotEnoughEvents.some(isCantAffordAdvice)) {
+        details.push('Repeated not-enough-sun seed clicks should keep flashing the sun counter without repeating the 1-1 advice.')
     }
 
     const zombieSession = new GameSession()
@@ -149,9 +178,26 @@ export function runAdventure11Harness(): GameHarnessResult {
         !mowerEvents.some((event) => event.type === 'foleyRequested' && event.sound === SoundEffect.Splat)) {
         details.push('Triggering a lawn mower should request the original lawnmower foley and splat on impact.')
     }
-    for (let i = 0; i < 100; i++) mowerSession.update()
+    for (let i = 0; i < 49; i++) mowerSession.update()
+    if (mowerSession.zombies.length !== 1) {
+        details.push('A mowered zombie should stay until the original lawnmowered animation window completes.')
+    }
+    mowerSession.update()
     if (mowerSession.zombies.length !== 0) {
         details.push('A mowered zombie should be removed after its lawnmowered zombie animation window.')
+    }
+
+    const freeMowerSession = new GameSession()
+    const freeMower = freeMowerSession.lawnMowers[0]
+    if (!freeMower) {
+        details.push('Adventure 1-1 should create a lawn mower before testing its original movement speed.')
+    } else {
+        freeMowerSession.debugSetLawnMower(2, 'trigger')
+        const freeMowerStartX = freeMower.x
+        freeMowerSession.update()
+        if (Math.abs(freeMower.x - freeMowerStartX - 3.33) > 0.001) {
+            details.push('A triggered lawn mower should move at the original 3.33 pixels per tick when not chomping.')
+        }
     }
 
     const triggeredMowerSession = new GameSession()
@@ -164,14 +210,62 @@ export function runAdventure11Harness(): GameHarnessResult {
         details.push('A triggered lawn mower should continue moving right after activation.')
     }
 
+    const houseLossSession = new GameSession()
+    const houseLossZombie = houseLossSession.addZombie('normal', 2, -101)
+    houseLossSession.drainEvents()
+    houseLossSession.update()
+    const houseLossEvents = houseLossSession.drainEvents()
+    if (!houseLossZombie || houseLossSession.result !== 'lost') {
+        details.push('A headed zombie should trigger house loss only after its original board-edge X passes -100.')
+    } else {
+        if (houseLossZombie.y !== 290) {
+            details.push('The winning zombie should be moved to the original day-background house-entry Y of 290.')
+        }
+        if (!houseLossEvents.some((event) => event.type === 'levelLost' && event.zombieId === houseLossZombie.id)) {
+            details.push('House loss should report the zombie that crossed the original board edge.')
+        }
+        if (houseLossSession.lawnMowers[0]?.state !== 'ready') {
+            details.push('The lawn mower should not run after a zombie has already triggered the original house-loss edge.')
+        }
+    }
+
+    const headlessEdgeSession = new GameSession()
+    const headlessEdgeZombie = headlessEdgeSession.addZombie('normal', 2, -31)
+    if (!headlessEdgeZombie) {
+        details.push('Headless board-edge setup should create a zombie in the active row.')
+    } else {
+        headlessEdgeZombie.hasHead = false
+        headlessEdgeSession.drainEvents()
+        headlessEdgeSession.update()
+        if (headlessEdgeSession.result !== 'playing') {
+            details.push('A headless zombie crossing the original edge buffer should die instead of causing house loss.')
+        }
+        if (headlessEdgeZombie.state !== 'dying') {
+            details.push('A headless zombie should take the original 1800 edge damage at BOARD_EDGE + 70.')
+        }
+        if (headlessEdgeSession.lawnMowers[0]?.state !== 'ready') {
+            details.push('The lawn mower should ignore zombies already dying from the original headless edge rule.')
+        }
+    }
+
     const waveSession = new GameSession()
-    for (let i = 0; i < 1799; i++) waveSession.update()
+    waveSession.drainEvents()
+    for (let i = 0; i < 1795; i++) waveSession.update()
+    const firstWaveWarningEvents = waveSession.drainEvents()
+    if (!firstWaveWarningEvents.some((event) => event.type === 'soundRequested' && event.sound === SoundEffect.Awooga)) {
+        details.push('Adventure 1-1 should play the original awooga sound when the first zombie wave is about to enter.')
+    }
+    for (let i = 0; i < 4; i++) waveSession.update()
     if (waveSession.zombies.length !== 0 || waveSession.currentWave !== 0) {
         details.push('Adventure 1-1 should not spawn the first zombie before the original first-wave countdown.')
     }
     waveSession.update()
     if (waveSession.zombies.length !== 1 || waveSession.currentWave !== 1 || waveSession.zombies[0].type !== 'normal') {
         details.push('Adventure 1-1 first wave should spawn one normal zombie after the original first-wave countdown.')
+    }
+    for (let i = 0; i < 20; i++) waveSession.update()
+    if (waveSession.progressMeterWidth <= 0) {
+        details.push('Adventure 1-1 should start advancing the lower-right progress meter after the first wave begins.')
     }
 
     const combatSession = new GameSession()
@@ -226,6 +320,70 @@ export function runAdventure11Harness(): GameHarnessResult {
         }
     }
 
+    const edgeProjectile = createProjectile({
+        id: 1,
+        type: 'pea',
+        x: 798,
+        y: 280,
+        row: 2,
+        shadowY: 347,
+    })
+    let edgeProjectileHit = false
+    edgeProjectile.update({
+        events: [],
+        findCollisionTarget: () => ({}),
+        damageTarget: () => {
+            edgeProjectileHit = true
+        },
+    })
+    if (!edgeProjectileHit || !edgeProjectile.dead) {
+        details.push('A pea should still resolve its collision on the tick where it crosses the right board edge.')
+    }
+
+    const originalRandom = Math.random
+    try {
+        Math.random = () => 0
+        const noMoneySession = new GameSession()
+        noMoneySession.addZombie('normal', 2, -20)
+        noMoneySession.update()
+        if (noMoneySession.items.some((item) => item.type === 'silver-coin' || item.type === 'gold-coin' || item.type === 'diamond')) {
+            details.push('Adventure 1-1 should not drop regular money loot from zombies.')
+        }
+    } finally {
+        Math.random = originalRandom
+    }
+
+    const awardDropSession = new GameSession()
+    awardDropSession.currentWave = awardDropSession.numWaves
+    const dyingAwardZombie = awardDropSession.addZombie('normal', 2, 500)
+    const finalAwardZombie = awardDropSession.addZombie('normal', 2, 260)
+    if (!dyingAwardZombie || !finalAwardZombie) {
+        details.push('Award drop setup should create the final two zombies in the active row.')
+    } else {
+        dyingAwardZombie.takeDamage(9999, { zombieCount: 2, canUseSuperLongDeath: false })
+        finalAwardZombie.velocityX = 0
+        finalAwardZombie.health = 20
+        awardDropSession.projectiles.push(createProjectile({
+            id: 9999,
+            type: 'pea',
+            x: finalAwardZombie.x,
+            y: 280,
+            row: 2,
+            shadowY: 347,
+        }))
+        awardDropSession.drainEvents()
+        awardDropSession.update()
+        if (!awardDropSession.items.some((item) => item.type === 'final-seed-packet' && !item.dead)) {
+            details.push('The final zombie should drop the level award seed packet.')
+        }
+        if (awardDropSession.sunSpawningEnabled) {
+            details.push('Sky sun spawning should stop once the level award seed packet drops.')
+        }
+        if (awardDropSession.zombies.some((zombie) => zombie.state === 'dying')) {
+            details.push('Dying zombies should disappear immediately after the level award seed packet drops.')
+        }
+    }
+
     const cherrySession = new GameSession()
     const cherryCenter = cherrySession.geometry.gridToPixel(2, 2)
     cherrySession.dispatch({ type: 'selectSeed', seedType: 'cherrybomb' })
@@ -245,8 +403,11 @@ export function runAdventure11Harness(): GameHarnessResult {
     if (cherrySession.plants.length !== 0) {
         details.push('Cherry Bomb should remove itself when the fuse reaches zero.')
     }
-    if (!cherryEvents.some((event) => event.type === 'soundRequested' && event.sound === SoundEffect.CherryBomb) ||
-        !cherryEvents.some((event) => event.type === 'soundRequested' && event.sound === SoundEffect.Juicy)) {
+    if (!cherryEvents.some((event) => event.type === 'foleyRequested' && event.sound === SoundEffect.CherryBomb) ||
+        !cherryEvents.some((event) =>
+            event.type === 'foleyRequested' &&
+            event.sound === SoundEffect.Juicy &&
+            event.pitchRange === 2)) {
         details.push('Cherry Bomb detonation should play the cherrybomb and juicy sounds.')
     }
 

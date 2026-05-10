@@ -14,6 +14,56 @@ const DEBUG_PLANT_TYPES = Object.keys(PLANT_DEFINITIONS) as PlantType[]
 const DEBUG_ZOMBIE_TYPES = Object.keys(ZOMBIE_DEFINITIONS) as ZombieType[]
 const DEBUG_PLANT_LOOKUP = createDebugTypeLookup(DEBUG_PLANT_TYPES)
 const DEBUG_ZOMBIE_LOOKUP = createDebugTypeLookup(DEBUG_ZOMBIE_TYPES)
+const DEBUG_BOOLEAN_VALUES = ['true', 'false']
+const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
+    {
+        name: 'plant',
+        completions: [DEBUG_PLANT_TYPES],
+        parameterHints: ['{plant_name}', '{row}', '{col}'],
+    },
+    {
+        name: 'gamespeed',
+        completions: [],
+        parameterHints: ['{speed}'],
+    },
+    {
+        name: 'lawnmower',
+        completions: [['trigger', 'reset']],
+        parameterHints: ['{action}', '[optional]{row}'],
+    },
+    {
+        name: 'sun',
+        completions: [['add', 'set']],
+        parameterHints: ['{action}', '{number}'],
+    },
+    {
+        name: 'sunspawning',
+        completions: [DEBUG_BOOLEAN_VALUES],
+        parameterHints: ['{enabled}'],
+    },
+    {
+        name: 'summon',
+        completions: [DEBUG_ZOMBIE_TYPES],
+        parameterHints: ['{zombie_name}', '{row}', '[optional]{col}'],
+    },
+    {
+        name: 'cooldown',
+        completions: [DEBUG_BOOLEAN_VALUES],
+        parameterHints: ['{enabled}'],
+    },
+]
+
+interface DebugCliCommandSpec {
+    name: string
+    completions: readonly (readonly string[])[]
+    parameterHints: readonly string[]
+}
+
+interface DebugCliInputToken {
+    value: string
+    start: number
+    end: number
+}
 
 export function executeDebugCliCommand(command: string, gameScreen: AdventureGameScreen | null): DebugCliResult {
     const tokens = tokenizeDebugCliCommand(command)
@@ -33,13 +83,68 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugLawnMowerCommand(tokens, gameScreen)
         case 'sun':
             return executeDebugSunCommand(tokens, gameScreen)
-        case 'recharging':
+        case 'cooldown':
             return executeDebugRechargingCommand(tokens, gameScreen)
         case 'sunspawning':
             return executeDebugSunSpawningCommand(tokens, gameScreen)
         default:
             return { ok: false, message: `Unknown command: ${tokens[0]}` }
     }
+}
+
+export function getDebugCliCompletion(command: string) {
+    return getDebugCliCompletions(command)[0] ?? ''
+}
+
+export function getDebugCliParameterHint(command: string) {
+    const tokens = parseDebugCliInputTokens(command)
+    if (tokens.length === 0) return ''
+
+    const commandName = normalizeDebugCommandName(tokens[0].value)
+    const spec = DEBUG_CLI_COMMAND_SPECS.find((candidate) => candidate.name === commandName)
+    if (!spec) return ''
+
+    const completedParamCount = getDebugCompletedParamCount(command, tokens, spec)
+    if (completedParamCount == null) return ''
+
+    const remainingHints = spec.parameterHints.slice(completedParamCount)
+    if (remainingHints.length === 0) return ''
+
+    const suffixPrefix = /\s$/.test(command) ? '' : ' '
+    return `${suffixPrefix}${remainingHints.join(' ')}`
+}
+
+export function getDebugCliCompletions(command: string, allowEmptyTokenCompletion = false) {
+    const tokens = parseDebugCliInputTokens(command)
+    if (tokens.length === 0) {
+        return getDebugCliCommandCompletions(command, '', command.length)
+    }
+
+    const hasTrailingWhitespace = /\s$/.test(command)
+    const activeTokenIndex = hasTrailingWhitespace ? tokens.length : tokens.length - 1
+    if (activeTokenIndex <= 0) {
+        const token = tokens[0]
+        return getDebugCliCommandCompletions(
+            command,
+            token.value,
+            token.start,
+            allowEmptyTokenCompletion,
+        )
+    }
+
+    const commandName = normalizeDebugCommandName(tokens[0].value)
+    const spec = DEBUG_CLI_COMMAND_SPECS.find((candidate) => candidate.name === commandName)
+    if (!spec) return []
+
+    const completionIndex = activeTokenIndex - 1
+    const completions = spec.completions[completionIndex]
+    if (!completions) return []
+
+    const prefix = hasTrailingWhitespace ? '' : tokens[activeTokenIndex]?.value ?? ''
+    const activeStart = hasTrailingWhitespace ? command.length : tokens[activeTokenIndex].start
+    return getDebugTokenCompletions(completions, prefix, allowEmptyTokenCompletion)
+        .map((completion) => command.slice(0, activeStart) + completion)
+        .filter((completion) => completion.length > command.length)
 }
 
 function executeDebugPlantCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
@@ -135,23 +240,23 @@ function executeDebugGameSpeedCommand(tokens: string[]): DebugCliResult {
 
 function executeDebugRechargingCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
     if (tokens.length !== 2) {
-        return { ok: false, message: 'Usage: /recharging {true|false}' }
+        return { ok: false, message: 'Usage: /cooldown {true|false}' }
     }
 
     if (!isLevelReady(gameScreen)) {
-        return { ok: false, message: '/recharging can only run during an active level' }
+        return { ok: false, message: '/cooldown can only run during an active level' }
     }
 
     const enabled = parseDebugBoolean(tokens[1])
     if (enabled == null) {
-        return { ok: false, message: `Invalid recharging value: ${tokens[1]}. Use true or false` }
+        return { ok: false, message: `Invalid cooldown value: ${tokens[1]}. Use true or false` }
     }
 
     const rechargingEnabled = gameScreen.debugSetRechargingEnabled(enabled)
     if (rechargingEnabled == null) {
-        return { ok: false, message: '/recharging can only run during an active level' }
+        return { ok: false, message: '/cooldown can only run during an active level' }
     }
-    return { ok: true, message: `Seed packet recharging ${rechargingEnabled ? 'enabled' : 'disabled'}` }
+    return { ok: true, message: `Seed packet cooldown ${rechargingEnabled ? 'enabled' : 'disabled'}` }
 }
 
 function executeDebugSunSpawningCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
@@ -257,6 +362,68 @@ function parseDebugPlantType(name: string): PlantType | null {
     return DEBUG_PLANT_LOOKUP[normalizeDebugEntityName(name)] ?? null
 }
 
+function getDebugCliCommandCompletions(
+    command: string,
+    prefix: string,
+    activeStart: number,
+    allowExactCommandCompletion = false,
+) {
+    const normalizedPrefix = prefix.startsWith('/') ? prefix.slice(1) : prefix
+    if (normalizedPrefix.length === 0) return []
+    if (
+        !allowExactCommandCompletion &&
+        DEBUG_CLI_COMMAND_SPECS.some((candidate) => candidate.name === normalizedPrefix.toLowerCase())
+    ) {
+        return []
+    }
+
+    const hasSlash = prefix.length === 0 || prefix.startsWith('/') || command.startsWith('/')
+    const matches = DEBUG_CLI_COMMAND_SPECS.filter((candidate) =>
+        candidate.name.toLowerCase().startsWith(normalizedPrefix.toLowerCase()),
+    )
+    return matches
+        .map((spec) => command.slice(0, activeStart) + `${hasSlash ? '/' : ''}${spec.name}`)
+        .filter((completion) => allowExactCommandCompletion || completion.length > command.length)
+}
+
+function getDebugCompletedParamCount(
+    command: string,
+    tokens: DebugCliInputToken[],
+    spec: DebugCliCommandSpec,
+) {
+    if (tokens.length === 1) return 0
+
+    if (/\s$/.test(command)) {
+        return Math.max(0, tokens.length - 1)
+    }
+
+    const paramIndex = tokens.length - 2
+    const token = tokens[tokens.length - 1]
+    if (token.value.length === 0) return paramIndex
+
+    const completions = spec.completions[paramIndex]
+    if (completions && !completions.some((completion) => completion.toLowerCase() === token.value.toLowerCase())) {
+        return null
+    }
+    return paramIndex + 1
+}
+
+function getDebugTokenCompletions(
+    completions: readonly string[],
+    prefix: string,
+    allowEmptyTokenCompletion: boolean,
+) {
+    if (prefix.length === 0 && !allowEmptyTokenCompletion) return []
+
+    return completions.filter((completion) =>
+        completion.toLowerCase().startsWith(prefix.toLowerCase()),
+    )
+}
+
+function normalizeDebugCommandName(commandName: string) {
+    return commandName.startsWith('/') ? commandName.slice(1).toLowerCase() : commandName.toLowerCase()
+}
+
 function parseDebugZombieType(name: string): ZombieType | null {
     return DEBUG_ZOMBIE_LOOKUP[normalizeDebugEntityName(name)] ?? null
 }
@@ -317,6 +484,37 @@ function validateDebugGridPosition(gameScreen: AdventureGameScreen, row: number,
         return `Col ${col} is out of bounds. Use 1-${size.cols}`
     }
     return null
+}
+
+function parseDebugCliInputTokens(command: string) {
+    const tokens: DebugCliInputToken[] = []
+    let tokenStart = -1
+
+    for (let i = 0; i < command.length; i++) {
+        const char = command[i]
+        if (/\s/.test(char)) {
+            if (tokenStart !== -1) {
+                tokens.push({
+                    value: command.slice(tokenStart, i),
+                    start: tokenStart,
+                    end: i,
+                })
+                tokenStart = -1
+            }
+            continue
+        }
+
+        if (tokenStart === -1) tokenStart = i
+    }
+
+    if (tokenStart !== -1) {
+        tokens.push({
+            value: command.slice(tokenStart),
+            start: tokenStart,
+            end: command.length,
+        })
+    }
+    return tokens
 }
 
 function tokenizeDebugCliCommand(command: string) {

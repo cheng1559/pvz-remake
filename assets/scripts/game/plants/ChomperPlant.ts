@@ -40,7 +40,7 @@ export class ChomperPlant extends Plant {
     private updateBiting(context: PlantUpdateContext) {
         if (this.stateCountdown > 0) return
 
-        context.events.push({ type: 'soundRequested', sound: SoundEffect.BigChomp })
+        context.events.push({ type: 'foleyRequested', sound: SoundEffect.BigChomp, pitchRange: -2 })
         if (context.hasTargetInPlantAttackRect(this)) {
             this.state = 'chomper-biting-got-one'
             this.startDigesting(context)

@@ -10,6 +10,7 @@ type AudioClipWithNativeAsset = AudioClip & {
 }
 
 export const SoundEffect = {
+    Awooga: 'awooga',
     Bleep: 'bleep',
     BigChomp: 'bigchomp',
     Buzzer: 'buzzer',
@@ -33,6 +34,7 @@ export const SoundEffect = {
     Groan6: 'groan6',
     HatchbackClose: 'hatchback_close',
     HatchbackOpen: 'hatchback_open',
+    HugeWave: 'hugewave',
     Juicy: 'juicy',
     Lawnmower: 'lawnmower',
     LimbsPop: 'limbs_pop',
@@ -48,6 +50,7 @@ export const SoundEffect = {
     RollIn: 'roll_in',
     SeedLift: 'seedlift',
     Shovel: 'shovel',
+    Scream: 'scream',
     Splat: 'splat',
     Splat2: 'splat2',
     Splat3: 'splat3',
@@ -68,6 +71,22 @@ export class SoundLoader {
     private static readonly _basePath = 'audio/sfx'
     private static readonly _effects: SoundEffect[] = Object.values(SoundEffect)
     private static readonly _pitchStepMultiplier = 1.0594630943592953
+    private static readonly _foleyPitchRanges: Partial<Record<SoundEffect, number>> = {
+        [SoundEffect.Points]: 10,
+        [SoundEffect.Splat]: 10,
+        [SoundEffect.Lawnmower]: 10,
+        [SoundEffect.Throw]: 10,
+        [SoundEffect.ChompSoft]: 4,
+        [SoundEffect.LimbsPop]: 10,
+        [SoundEffect.SnowPeaSparkles]: 10,
+        [SoundEffect.ZombieFalling1]: 10,
+        [SoundEffect.ZombieFalling2]: 10,
+        [SoundEffect.Coin]: 10,
+        [SoundEffect.DirtRise]: 5,
+        [SoundEffect.BigChomp]: -2,
+        [SoundEffect.Juicy]: 2,
+        [SoundEffect.Shovel]: 5,
+    }
     private static readonly _foleyVariants: Partial<Record<SoundEffect, readonly SoundEffect[]>> = {
         [SoundEffect.Splat]: [SoundEffect.Splat, SoundEffect.Splat2, SoundEffect.Splat3],
         [SoundEffect.Throw]: [SoundEffect.Throw, SoundEffect.Throw, SoundEffect.Throw, SoundEffect.Throw2],
@@ -111,9 +130,10 @@ export class SoundLoader {
         source.playOneShot(clip, volume)
     }
 
-    public static playFoley(effect: SoundEffect, pitchRange = 0, volume = 1) {
+    public static playFoley(effect: SoundEffect, pitchRange?: number, volume = 1) {
         const selectedEffect = this._pickFoleyEffect(effect)
-        const pitch = pitchRange === 0 ? 0 : Math.random() * pitchRange
+        const resolvedPitchRange = pitchRange ?? this._foleyPitchRanges[effect] ?? 0
+        const pitch = resolvedPitchRange === 0 ? 0 : Math.random() * resolvedPitchRange
         return this.playWithPitch(selectedEffect, pitch, volume)
     }
 

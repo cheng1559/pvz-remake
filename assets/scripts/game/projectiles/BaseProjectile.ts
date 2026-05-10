@@ -59,13 +59,13 @@ export class Projectile implements ProjectileEntity {
         this.z += this.velocityZ
         this.velocityZ += this.accelerationZ
 
-        if (this.x > WIDE_BOARD_WIDTH || this.x + this.width < 0) {
-            this.dead = true
+        const target = context.findCollisionTarget(this)
+        if (!target) {
+            if (this.x > WIDE_BOARD_WIDTH || this.x + this.width < 0) {
+                this.dead = true
+            }
             return
         }
-
-        const target = context.findCollisionTarget(this)
-        if (!target) return
 
         context.damageTarget(target, this)
         context.events.push({ type: 'foleyRequested', sound: SoundEffect.Splat, pitchRange: 10 })

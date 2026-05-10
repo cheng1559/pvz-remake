@@ -5,6 +5,17 @@ import type { PlantType } from './GameTypes'
 
 const { ccclass } = _decorator
 
+export type PlantAnimationType =
+    | PlantType
+    | 'puffshroom'
+    | 'sunshroom'
+    | 'fumeshroom'
+    | 'gravebuster'
+    | 'hypnoshroom'
+    | 'scaredyshroom'
+    | 'iceshroom'
+    | 'doomshroom'
+
 const PLANT_IDLE_ANIM_RATE_MIN = 10
 const PLANT_IDLE_ANIM_RATE_MAX = 15
 const SHOOTER_IDLE_ANIM_RATE_MIN = 15
@@ -15,7 +26,7 @@ const POTATO_MINE_ARMED_ANIM_RATE_MAX = 15
 const CHERRYBOMB_EXPLODE_ANIM_RATE_MIN = 10
 const CHERRYBOMB_EXPLODE_ANIM_RATE_MAX = 15
 
-const PLANT_IDLE_ANIM_RATES: Partial<Record<PlantType, readonly [number, number]>> = {
+const PLANT_IDLE_ANIM_RATES: Partial<Record<PlantAnimationType, readonly [number, number]>> = {
     peashooter: [SHOOTER_IDLE_ANIM_RATE_MIN, SHOOTER_IDLE_ANIM_RATE_MAX],
     snowpea: [SHOOTER_IDLE_ANIM_RATE_MIN, SHOOTER_IDLE_ANIM_RATE_MAX],
     repeater: [SHOOTER_IDLE_ANIM_RATE_MIN, SHOOTER_IDLE_ANIM_RATE_MAX],
@@ -23,7 +34,7 @@ const PLANT_IDLE_ANIM_RATES: Partial<Record<PlantType, readonly [number, number]
 }
 
 export interface PlantAnimationView {
-    plantType: PlantType
+    plantType: PlantAnimationType
     body: AnimNode | null
     head: AnimNode | null
     face: AnimNode | null
@@ -38,6 +49,7 @@ export interface WirePlantAnimationOptions {
     includePotatoGlow?: boolean
     potatoInitialState?: 'idle' | 'armed'
     cherryBombInitialState?: 'idle' | 'explode'
+    sunShroomInitialState?: 'small' | 'big' | 'sleep' | 'bigsleep'
     shakeNode?: Node | null
     enableCherryShake?: boolean
 }
@@ -45,7 +57,7 @@ export interface WirePlantAnimationOptions {
 export function wirePlantAnimation(
     animator: Animator,
     view: PlantAnimationView,
-    plantType: PlantType,
+    plantType: PlantAnimationType,
     options: WirePlantAnimationOptions,
 ) {
     const {
@@ -54,6 +66,7 @@ export function wirePlantAnimation(
         includePotatoGlow = true,
         potatoInitialState = 'idle',
         cherryBombInitialState = animated ? 'explode' : 'idle',
+        sunShroomInitialState = 'small',
         shakeNode = null,
         enableCherryShake = true,
     } = options
@@ -81,6 +94,32 @@ export function wirePlantAnimation(
             if (view.body && view.face) {
                 view.face.attach({ node: view.body, slot: 'anim_idle' })
             }
+            view.body?.play({ name: 'anim_idle', speed: animated ? view.idleSpeed : 0, time: playTime, loop: true })
+            break
+        case 'puffshroom':
+        case 'fumeshroom':
+        case 'scaredyshroom':
+        case 'iceshroom':
+            view.face = animator.addAnimNode('face')
+            if (view.body && view.face) {
+                view.face.attach({ node: view.body, slot: 'anim_face' })
+            }
+            view.body?.play({ name: 'anim_idle', speed: animated ? view.idleSpeed : 0, time: playTime, loop: true })
+            break
+        case 'sunshroom': {
+            const initialAnim = getSunShroomInitialAnimation(sunShroomInitialState)
+            const initialTime = animated ? 0 : getStaticAnimTime(view.body, initialAnim, staticAnimTime)
+            view.idleSpeed = getPlantIdleSpeed(view.body, plantType, animated, initialAnim)
+            view.face = animator.addAnimNode('face')
+            if (view.body && view.face) {
+                view.face.attach({ node: view.body, slot: 'anim_face' })
+            }
+            view.body?.play({ name: initialAnim, speed: animated ? view.idleSpeed : 0, time: initialTime, loop: true })
+            break
+        }
+        case 'gravebuster':
+        case 'hypnoshroom':
+        case 'doomshroom':
             view.body?.play({ name: 'anim_idle', speed: animated ? view.idleSpeed : 0, time: playTime, loop: true })
             break
         case 'potatomine':
@@ -200,10 +239,29 @@ export function getStaticAnimTime(node: AnimNode | null, animationName: string, 
     return Math.max(0, duration - 1) * normalizedTime
 }
 
-function getPlantIdleSpeed(body: AnimNode | null, plantType: PlantType, animated: boolean) {
+function getSunShroomInitialAnimation(initialState: NonNullable<WirePlantAnimationOptions['sunShroomInitialState']>) {
+    switch (initialState) {
+        case 'big':
+            return 'anim_bigidle'
+        case 'sleep':
+            return 'anim_sleep'
+        case 'bigsleep':
+            return 'anim_bigsleep'
+        case 'small':
+        default:
+            return 'anim_idle'
+    }
+}
+
+function getPlantIdleSpeed(
+    body: AnimNode | null,
+    plantType: PlantAnimationType,
+    animated: boolean,
+    animationName = 'anim_idle',
+) {
     if (!animated || !body) return 0
 
     const [minRate, maxRate] = PLANT_IDLE_ANIM_RATES[plantType] ?? [PLANT_IDLE_ANIM_RATE_MIN, PLANT_IDLE_ANIM_RATE_MAX]
     const animRate = minRate + Math.random() * (maxRate - minRate)
-    return getAnimationRateSpeed(body, 'anim_idle', animRate)
+    return getAnimationRateSpeed(body, animationName, animRate)
 }

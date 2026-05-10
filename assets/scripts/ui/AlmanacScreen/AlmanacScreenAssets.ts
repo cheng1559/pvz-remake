@@ -12,6 +12,14 @@ export const ALMANAC_PLANT_ANIMATIONS = [
     'snowpea',
     'chomper',
     'peashooter',
+    'puffshroom',
+    'sunshroom',
+    'fumeshroom',
+    'gravebuster',
+    'hypnoshroom',
+    'scaredyshroom',
+    'iceshroom',
+    'doomshroom',
 ] as const
 
 export const ALMANAC_ZOMBIE_ANIMATIONS = [
@@ -64,6 +72,7 @@ const ALMANAC_SCREEN_SPRITES = [
     'almanac_zombiewindow',
     'almanac_zombiewindow2',
     'almanac_groundday',
+    'almanac_groundnight',
     'almanac_groundice',
     'particles/seedpacketflash',
     'seeds',
@@ -107,6 +116,7 @@ export interface AlmanacScreenSprites {
     almanacZombieWindow: SpriteFrame
     almanacZombieWindowOverlay: SpriteFrame
     almanacGroundDay: SpriteFrame
+    almanacGroundNight: SpriteFrame
     almanacGroundIce: SpriteFrame
     seedPacketFlash: SpriteFrame
     seeds: SpriteFrame
@@ -164,6 +174,7 @@ export class AlmanacScreenAssets {
             almanacZombieWindow,
             almanacZombieWindowOverlay,
             almanacGroundDay,
+            almanacGroundNight,
             almanacGroundIce,
             seedPacketFlash,
             seeds,
@@ -195,6 +206,7 @@ export class AlmanacScreenAssets {
             almanacZombieWindow,
             almanacZombieWindowOverlay,
             almanacGroundDay,
+            almanacGroundNight,
             almanacGroundIce,
             seedPacketFlash,
             seeds,

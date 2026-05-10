@@ -17,8 +17,8 @@ export class CherryBombPlant extends Plant {
         this.specialCounter--
         if (this.specialCounter !== 0) return
 
-        context.events.push({ type: 'soundRequested', sound: SoundEffect.CherryBomb })
-        context.events.push({ type: 'soundRequested', sound: SoundEffect.Juicy })
+        context.events.push({ type: 'foleyRequested', sound: SoundEffect.CherryBomb })
+        context.events.push({ type: 'foleyRequested', sound: SoundEffect.Juicy, pitchRange: 2 })
         this.dead = true
     }
 }
