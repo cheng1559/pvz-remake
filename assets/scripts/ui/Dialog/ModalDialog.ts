@@ -19,6 +19,8 @@ const { ccclass, property } = _decorator
 
 @ccclass('ModalDialog')
 export class ModalDialog extends Component {
+    private static _activeDialogs: ModalDialog[] = []
+
     @property(Node)
     dragHandle: Node | null = null
 
@@ -41,10 +43,12 @@ export class ModalDialog extends Component {
     onEnable() {
         this._createModalBlocker()
         this._bindDragEvents()
+        this._registerActiveDialog()
         input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
     }
 
     onDisable() {
+        this._unregisterActiveDialog()
         this._unbindDragEvents()
         input.off(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this._dragging = false
@@ -57,6 +61,7 @@ export class ModalDialog extends Component {
     }
 
     onDestroy() {
+        this._unregisterActiveDialog()
         this._destroyModalBlocker()
     }
 
@@ -67,6 +72,10 @@ export class ModalDialog extends Component {
     }
 
     protected onDialogKeyDown(_event: EventKeyboard) {
+    }
+
+    protected isTopDialog() {
+        return ModalDialog._getTopDialog() === this
     }
 
     protected createModalBlocker() {
@@ -202,7 +211,35 @@ export class ModalDialog extends Component {
     }
 
     private _onKeyDown(event: EventKeyboard) {
+        const modalEvent = event as EventKeyboard & { modalDialogHandled?: boolean }
+        if (modalEvent.modalDialogHandled) return
+        if (!this.isTopDialog()) return
+
+        modalEvent.modalDialogHandled = true
+        event.propagationStopped = true
         this.onDialogKeyDown(event)
+    }
+
+    private _registerActiveDialog() {
+        this._unregisterActiveDialog()
+        ModalDialog._activeDialogs.push(this)
+    }
+
+    private _unregisterActiveDialog() {
+        const index = ModalDialog._activeDialogs.indexOf(this)
+        if (index !== -1) ModalDialog._activeDialogs.splice(index, 1)
+    }
+
+    private static _getTopDialog() {
+        for (let i = ModalDialog._activeDialogs.length - 1; i >= 0; i--) {
+            const dialog = ModalDialog._activeDialogs[i]
+            const node = dialog.node as Node | null | undefined
+            if (dialog.isValid && node?.isValid && node.activeInHierarchy && dialog.enabled) {
+                return dialog
+            }
+            ModalDialog._activeDialogs.splice(i, 1)
+        }
+        return null
     }
 
     private _setCursor(style: string) {

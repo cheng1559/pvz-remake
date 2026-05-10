@@ -19,6 +19,8 @@ Steps:
 import shutil
 from pathlib import Path
 
+from PIL import Image
+
 from pak_extractor import parse_pak, extract_entries, _decrypt
 from rename_raw_to_lower import rename_all_to_lower
 from reanim_converter import main as convert_reanim
@@ -56,9 +58,23 @@ def copy_images(src_dir: Path, dst_dir: Path) -> int:
     copied = 0
     for candidates in sorted(images_by_resource.values(), key=lambda files: get_image_resource_name(files[0])):
         src = min(candidates, key=lambda path: (IMAGE_SUFFIX_PRIORITY[path.suffix.lower()], path.name.count('.')))
-        dst = dst_dir / src.name.lower()
+        dst_name = src.with_suffix('.png').name.lower() if src.suffix.lower() == '.gif' else src.name.lower()
+        dst = dst_dir / dst_name
+
+        if src.suffix.lower() == '.gif':
+            legacy_dst = dst_dir / src.name.lower()
+            if legacy_dst.exists():
+                legacy_dst.unlink()
+            legacy_meta = dst_dir / f"{src.name.lower()}.meta"
+            if legacy_meta.exists():
+                legacy_meta.unlink()
+
         if not dst.exists():
-            shutil.copy2(src, dst)
+            if src.suffix.lower() == '.gif':
+                with Image.open(src) as image:
+                    image.convert('RGBA').save(dst)
+            else:
+                shutil.copy2(src, dst)
             print(f"[pipeline] Wrote: {dst}")
             copied += 1
     return copied

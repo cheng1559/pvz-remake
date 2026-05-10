@@ -1,13 +1,20 @@
-import type { GameEvent, ItemEntity, ItemMotion, ItemType } from '../GameTypes'
+import type { GameEvent, ItemEntity, ItemMotion, ItemType, SeedType } from '../GameTypes'
 import { SoundEffect } from '@/core/SoundLoader'
 
 const BOARD_WIDTH = 800
 const SUN_BANK_DEST_X = 15
 const SUN_BANK_DEST_Y = 0
+const COIN_BANK_DEST_X = 700
+const COIN_BANK_DEST_Y = 0
+const DEFAULT_ITEM_SIZE = 60
+const FINAL_SEED_PACKET_WIDTH = 50
+const FINAL_SEED_PACKET_HEIGHT = 70
 
 export interface ItemUpdateContext {
     events: GameEvent[]
     addSun(amount: number): void
+    addMoney(amount: number): void
+    completeLevelAward(item: Item): void
     randomInt(minInclusive: number, maxInclusive: number): number
     randomFloat(minInclusive: number, maxExclusive: number): number
 }
@@ -18,6 +25,7 @@ export interface ItemCreateArgs {
     motion: ItemMotion
     x: number
     y: number
+    awardSeedType?: SeedType | null
 }
 
 export class Item implements ItemEntity {
@@ -25,8 +33,9 @@ export class Item implements ItemEntity {
     readonly kind = 'item' as const
     readonly type: ItemType
     readonly motion: ItemMotion
-    readonly width = 60
-    readonly height = 60
+    readonly width: number
+    readonly height: number
+    readonly awardSeedType: SeedType | null
 
     x: number
     y: number
@@ -50,6 +59,10 @@ export class Item implements ItemEntity {
         this.motion = args.motion
         this.x = args.x
         this.y = args.y
+        this.width = this._initialWidth()
+        this.height = this._initialHeight()
+        this.awardSeedType = args.awardSeedType ?? null
+        this._adjustInitialPosition()
         this._initializeMotion(context)
         this.scale *= this._sunScale()
     }
@@ -73,7 +86,9 @@ export class Item implements ItemEntity {
         this.beingCollected = true
         this._disappearCounter = 0
         this._fadeCount = 0
-        context.events.push({ type: 'soundRequested', sound: SoundEffect.Points })
+        for (const sound of this._collectSounds()) {
+            context.events.push({ type: 'soundRequested', sound })
+        }
         return true
     }
 
@@ -112,6 +127,7 @@ export class Item implements ItemEntity {
                 this._velY = -3 - context.randomFloat(0, 2)
                 this._velX = -0.5 + context.randomFloat(0, 1)
                 this._groundY = Math.max(80, Math.min(521, this.y + 45 + context.randomInt(0, 19)))
+                if (this.type === 'final-seed-packet') this._groundY -= 30
                 break
         }
     }
@@ -136,10 +152,15 @@ export class Item implements ItemEntity {
         } else {
             this.y = this._groundY
             this.x = Math.round(this.x)
-            if (!this._hitGround) this._hitGround = true
-            this._disappearCounter++
-            if (this._disappearCounter >= this._disappearTime()) {
-                this._fadeCount = 50
+            if (!this._hitGround) {
+                this._hitGround = true
+                this._playGroundSound(context)
+            }
+            if (this._canDisappearOnGround()) {
+                this._disappearCounter++
+                if (this._disappearCounter >= this._disappearTime()) {
+                    this._fadeCount = 50
+                }
             }
         }
 
@@ -150,27 +171,41 @@ export class Item implements ItemEntity {
     }
 
     private _updateCollected(context: ItemUpdateContext) {
-        const deltaX = Math.abs(this.x - SUN_BANK_DEST_X)
-        const deltaY = Math.abs(this.y - SUN_BANK_DEST_Y)
-        if (this.x > SUN_BANK_DEST_X) {
+        const destination = this._collectionDestination()
+        if (this.type === 'final-seed-packet') this._disappearCounter++
+        const deltaX = Math.abs(this.x - destination.x)
+        const deltaY = Math.abs(this.y - destination.y)
+        if (this.x > destination.x) {
             this.x -= deltaX / 21
-        } else if (this.x < SUN_BANK_DEST_X) {
+        } else if (this.x < destination.x) {
             this.x += deltaX / 21
         }
-        if (this.y > SUN_BANK_DEST_Y) {
+        if (this.y > destination.y) {
             this.y -= deltaY / 21
-        } else if (this.y < SUN_BANK_DEST_Y) {
+        } else if (this.y < destination.y) {
             this.y += deltaY / 21
         }
 
         this._collectionDistance = Math.sqrt(deltaY * deltaY + deltaX * deltaX)
         if (this._collectionDistance < 8) {
             this.dead = true
-            context.addSun(this._sunValue())
+            if (this._isSun()) {
+                context.addSun(this._sunValue())
+            } else if (this._isMoney()) {
+                context.addMoney(this._moneyValue())
+            } else if (this.type === 'final-seed-packet') {
+                context.completeLevelAward(this)
+            }
             return
         }
 
-        this.scale = Math.max(0.5, Math.min(1, this._collectionDistance * 0.05)) * this._sunScale()
+        if (this.type === 'final-seed-packet') {
+            const t = Math.min(1, this._disappearCounter / 400)
+            const eased = t * t * (3 - 2 * t)
+            this.scale = 1.01 + (2 - 1.01) * eased
+        } else {
+            this.scale = Math.max(0.5, Math.min(1, this._collectionDistance * 0.05)) * this._sunScale()
+        }
     }
 
     private _updateFade() {
@@ -182,6 +217,7 @@ export class Item implements ItemEntity {
     }
 
     private _sunScale() {
+        if (!this._isSun()) return 1
         if (this.type === 'small-sun') return 0.5
         if (this.type === 'large-sun') return 2
         return 1
@@ -193,7 +229,64 @@ export class Item implements ItemEntity {
         return 25
     }
 
+    private _moneyValue() {
+        if (this.type === 'silver-coin') return 1
+        if (this.type === 'gold-coin') return 5
+        if (this.type === 'diamond') return 100
+        return 0
+    }
+
     private _disappearTime() {
+        if (this.type === 'diamond') return 1500
         return 750
+    }
+
+    private _canDisappearOnGround() {
+        return this.type !== 'final-seed-packet'
+    }
+
+    private _isSun() {
+        return this.type === 'sun' || this.type === 'small-sun' || this.type === 'large-sun'
+    }
+
+    private _isMoney() {
+        return this.type === 'silver-coin' || this.type === 'gold-coin' || this.type === 'diamond'
+    }
+
+    private _initialWidth() {
+        return this.type === 'final-seed-packet' ? FINAL_SEED_PACKET_WIDTH : DEFAULT_ITEM_SIZE
+    }
+
+    private _initialHeight() {
+        return this.type === 'final-seed-packet' ? FINAL_SEED_PACKET_HEIGHT : DEFAULT_ITEM_SIZE
+    }
+
+    private _adjustInitialPosition() {
+        if (this.type === 'silver-coin' || this.type === 'gold-coin') {
+            this.x -= 10
+            this.y -= 8
+        } else if (this.type === 'diamond') {
+            this.x -= 15
+            this.y -= 15
+        }
+    }
+
+    private _collectSounds() {
+        if (this._isSun()) return [SoundEffect.Points]
+        if (this.type === 'final-seed-packet') return [SoundEffect.SeedLift, SoundEffect.Drop]
+        if (this.type === 'diamond') return [SoundEffect.Chime]
+        return [SoundEffect.Coin]
+    }
+
+    private _playGroundSound(context: ItemUpdateContext) {
+        if (this.type === 'gold-coin') {
+            context.events.push({ type: 'foleyRequested', sound: SoundEffect.MoneyFalls })
+        }
+    }
+
+    private _collectionDestination() {
+        if (this._isSun()) return { x: SUN_BANK_DEST_X, y: SUN_BANK_DEST_Y }
+        if (this.type === 'final-seed-packet') return { x: 400 - this.width / 2, y: 200 - this.height / 2 }
+        return { x: COIN_BANK_DEST_X, y: COIN_BANK_DEST_Y }
     }
 }

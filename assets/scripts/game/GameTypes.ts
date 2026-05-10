@@ -11,7 +11,7 @@ export type SeedType =
     | 'repeater'
 export type PlantType = SeedType
 export type ProjectileType = 'pea' | 'snowpea'
-export type ItemType = 'sun' | 'small-sun' | 'large-sun'
+export type ItemType = 'sun' | 'small-sun' | 'large-sun' | 'silver-coin' | 'gold-coin' | 'diamond' | 'final-seed-packet'
 export type ItemMotion = 'from-sky' | 'from-sky-slow' | 'from-plant' | 'coin'
 export type ToolType = 'shovel'
 export type BackgroundType = 'day'
@@ -67,6 +67,7 @@ export interface LevelDefinition {
     seedPackets: SeedType[]
     zombieWaves: ZombieWaveDefinition[]
     tutorialAdvice: string[]
+    awardSeedType?: SeedType
 }
 
 export interface ZombieWaveDefinition {
@@ -230,6 +231,7 @@ export interface ItemEntity {
     height: number
     scale: number
     alpha: number
+    awardSeedType: SeedType | null
     dead: boolean
     beingCollected: boolean
 }

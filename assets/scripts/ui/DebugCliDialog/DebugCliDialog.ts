@@ -1,0 +1,1126 @@
+import {
+    _decorator,
+    Color,
+    EventKeyboard,
+    EventMouse,
+    EventTouch,
+    game,
+    Game,
+    Graphics,
+    input,
+    Input,
+    Mask,
+    Node,
+    Rect,
+    Size,
+    Sprite,
+    SpriteFrame,
+    UITransform,
+    Vec2,
+    Vec3,
+} from 'cc'
+import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
+import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { SpriteLoader } from '@/core/SpriteLoader'
+import { MessageBox } from '@/ui/MessageBox/MessageBox'
+import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
+
+const { ccclass } = _decorator
+
+const INPUT_HEIGHT = 28
+const INPUT_BORDER_X = 8
+const INPUT_BORDER_Y = 4
+const INPUT_LEFT_INSET = 48
+const INPUT_RIGHT_INSET = 58
+const INPUT_CENTER_FROM_BOTTOM = 141
+const INPUT_CLIP_LEFT = 4
+const INPUT_CLIP_RIGHT = 8
+const INPUT_TEXT_TOP_Y = INPUT_HEIGHT / 2 - 4
+const MAX_COMMAND_LENGTH = 120
+const ORIGINAL_FRAME_SECONDS = 0.01
+const ORIGINAL_BLINK_DELAY_UPDATES = 14
+const CURSOR_BLINK_SECONDS = ORIGINAL_FRAME_SECONDS * (ORIGINAL_BLINK_DELAY_UPDATES + 1)
+const COMMAND_FONT = 'briannetod16'
+const COMMAND_COLOR = new Color(240, 240, 255, 255)
+const SELECTION_TEXT_COLOR = new Color(0, 0, 0, 255)
+const CURSOR_COLOR = new Color(255, 255, 255, 255)
+const SELECTION_COLOR = new Color(255, 255, 255, 255)
+const CURSOR_WIDTH = 2
+
+const enum DebugCliKeyCode {
+    Backspace = 8,
+    Enter = 13,
+    Escape = 27,
+    Space = 32,
+    End = 35,
+    Home = 36,
+    Left = 37,
+    Right = 39,
+    Delete = 46,
+    Digit0 = 48,
+    Digit9 = 57,
+    A = 65,
+    Z = 90,
+    Numpad0 = 96,
+    Numpad9 = 105,
+    NumpadMultiply = 106,
+    NumpadAdd = 107,
+    NumpadSubtract = 109,
+    NumpadDecimal = 110,
+    NumpadDivide = 111,
+}
+
+interface DebugCliInputKey {
+    keyCode: number
+    rawEvent?: {
+        key?: string
+        ctrlKey?: boolean
+    }
+}
+
+@ccclass('DebugCliDialog')
+export class DebugCliDialog extends MessageBox {
+    public onCommand: ((command: string) => void) | null = null
+    public initialCommand = ''
+
+    private _inputRoot: Node | null = null
+    private _textNode: Node | null = null
+    private _textRenderer: FontRenderer | null = null
+    private _selectionNode: Node | null = null
+    private _selectionGraphics: Graphics | null = null
+    private _selectionTextClip: Node | null = null
+    private _selectionTextNode: Node | null = null
+    private _selectionTextRenderer: FontRenderer | null = null
+    private _cursorNode: Node | null = null
+    private _cursorGraphics: Graphics | null = null
+    private _commandFont: BitmapFontAssets | null = null
+    private _command = ''
+    private _undoCommand = ''
+    private _undoCursor = 0
+    private _undoHilitePos = -1
+    private _lastModifyIdx = 0
+    private _cursorPos = 0
+    private _hilitePos = -1
+    private _leftPos = 0
+    private _hasInputFocus = true
+    private _draggingSelection = false
+    private _cursorVisible = true
+    private _cursorBlinkElapsed = 0
+    private _domKeyDownListener: ((event: KeyboardEvent) => void) | null = null
+    private _inputWidth = 0
+
+    start() {
+        this.title = 'DEBUG CLI'
+        this.message = 'Enter debug command:'
+        this.verticalCenterText = false
+        this.messageOffsetY = -8
+        this.spaceAfterHeader = 10
+        this.extraWidth = 110
+        this.extraHeight = 40
+        this.setButtons([])
+        this._setCommand(this.initialCommand)
+        super.start()
+    }
+
+    onEnable() {
+        super.onEnable()
+        this._bindDomKeyboardEvents()
+        input.on(Input.EventType.MOUSE_DOWN, this._onGlobalPointerDown, this)
+        input.on(Input.EventType.TOUCH_START, this._onGlobalPointerDown, this)
+        game.on(Game.EVENT_HIDE, this._onInputFocusLost, this)
+    }
+
+    onDisable() {
+        this._unbindDomKeyboardEvents()
+        input.off(Input.EventType.MOUSE_DOWN, this._onGlobalPointerDown, this)
+        input.off(Input.EventType.TOUCH_START, this._onGlobalPointerDown, this)
+        game.off(Game.EVENT_HIDE, this._onInputFocusLost, this)
+        this._draggingSelection = false
+        this._setCanvasCursor('')
+        super.onDisable()
+    }
+
+    get command() {
+        return this._command.trim()
+    }
+
+    update(dt: number) {
+        super.update()
+        if (!this._hasInputFocus) return
+
+        this._cursorBlinkElapsed += dt
+        if (this._cursorBlinkElapsed < CURSOR_BLINK_SECONDS) return
+
+        this._cursorBlinkElapsed = 0
+        this._cursorVisible = !this._cursorVisible
+        this._refreshCursor()
+    }
+
+    onDestroy() {
+        this._unbindDomKeyboardEvents()
+        this._destroyInput()
+        super.onDestroy()
+    }
+
+    protected onDialogRendered(actualWidth: number, actualHeight: number) {
+        void this._renderInput(actualWidth, actualHeight)
+    }
+
+    protected onDialogKeyDown(event: EventKeyboard) {
+        if (event.keyCode === DebugCliKeyCode.Enter) {
+            this._captureCommand()
+            super.onDialogKeyDown(event)
+            return
+        }
+
+        if (event.keyCode === DebugCliKeyCode.Escape) {
+            this.close()
+            return
+        }
+
+        if (!this._hasInputFocus) return
+
+        event.propagationStopped = true
+        if (!this._domKeyDownListener) {
+            this._handleInputKey(event)
+        }
+    }
+
+    private async _renderInput(dialogWidth: number, dialogHeight: number) {
+        this._destroyInput()
+
+        const [editBoxFrame, commandFont] = await Promise.all([
+            SpriteLoader.load('editbox'),
+            FontLoader.load(COMMAND_FONT),
+        ])
+        const dialogNode = this.node as Node | null | undefined
+        if (!dialogNode?.isValid) return
+        this._commandFont = commandFont
+        this._inputWidth = dialogWidth - INPUT_LEFT_INSET - INPUT_RIGHT_INSET
+
+        const inputRoot = createUINode('DebugCliInput', {
+            parent: dialogNode,
+            anchorX: 0.5,
+            anchorY: 0.5,
+            width: this._inputWidth + INPUT_BORDER_X * 2,
+            height: INPUT_HEIGHT + INPUT_BORDER_Y * 2,
+            x: INPUT_LEFT_INSET + this._inputWidth / 2 - dialogWidth / 2,
+            y: -dialogHeight / 2 + INPUT_CENTER_FROM_BOTTOM,
+        })
+        this._inputRoot = inputRoot
+        this._bindInputPointerEvents(inputRoot)
+
+        if (!editBoxFrame) return
+        this._drawImageBox(
+            inputRoot,
+            editBoxFrame,
+            this._inputWidth + INPUT_BORDER_X * 2,
+            INPUT_HEIGHT + INPUT_BORDER_Y * 2,
+        )
+
+        const editNode = createUINode('CommandInput', {
+            parent: inputRoot,
+            anchorX: 0.5,
+            anchorY: 0.5,
+            width: this._inputWidth,
+            height: INPUT_HEIGHT,
+        })
+        setUISize(editNode, this._inputWidth, INPUT_HEIGHT)
+        const inputMask = editNode.addComponent(Mask)
+        inputMask.type = (Mask.Type as any).RECT
+
+        this._selectionNode = createUINode('CommandSelection', {
+            parent: editNode,
+            anchorX: 0,
+            anchorY: 0.5,
+            width: this._inputWidth,
+            height: INPUT_HEIGHT,
+            x: this._inputTextX(),
+            y: 0,
+        })
+        this._selectionGraphics = this._selectionNode.addComponent(Graphics)
+
+        this._textNode = createUINode('CommandText', {
+            parent: editNode,
+            anchorX: 0,
+            anchorY: 1,
+            width: this._inputWidth,
+            height: INPUT_HEIGHT,
+            x: this._inputTextX(),
+            y: INPUT_TEXT_TOP_Y,
+        })
+        this._textRenderer = this._textNode.addComponent(FontRenderer)
+        if (this._commandFont) this._textRenderer.setFontAssets(this._commandFont)
+        this._textRenderer.fontColor = COMMAND_COLOR
+        this._textRenderer.maxWidth = this._inputTextMaxWidth()
+
+        this._selectionTextClip = createUINode('CommandSelectionTextClip', {
+            parent: editNode,
+            active: false,
+            anchorX: 0,
+            anchorY: 0.5,
+            width: 1,
+            height: INPUT_HEIGHT,
+            x: this._inputTextX(),
+            y: 0,
+        })
+        const selectionTextMask = this._selectionTextClip.addComponent(Mask)
+        selectionTextMask.type = (Mask.Type as any).RECT
+        this._selectionTextNode = createUINode('CommandSelectionText', {
+            parent: this._selectionTextClip,
+            anchorX: 0,
+            anchorY: 1,
+            width: this._inputWidth,
+            height: INPUT_HEIGHT,
+            x: 0,
+            y: INPUT_TEXT_TOP_Y,
+        })
+        this._selectionTextRenderer = this._selectionTextNode.addComponent(FontRenderer)
+        if (this._commandFont) this._selectionTextRenderer.setFontAssets(this._commandFont)
+        this._selectionTextRenderer.fontColor = SELECTION_TEXT_COLOR
+        this._selectionTextRenderer.maxWidth = this._inputTextMaxWidth()
+
+        this._cursorNode = createUINode('CommandCursor', {
+            parent: editNode,
+            anchorX: 0,
+            anchorY: 0.5,
+            width: CURSOR_WIDTH,
+            height: INPUT_HEIGHT,
+            x: this._inputTextX(),
+            y: 0,
+        })
+        this._cursorGraphics = this._cursorNode.addComponent(Graphics)
+        this._cursorGraphics.fillColor = CURSOR_COLOR
+
+        this._setInputFocus(true)
+        this._showCursorNow()
+
+        const transform = dialogNode.getComponent(UITransform)
+        if (transform) transform.setContentSize(dialogWidth, dialogHeight)
+    }
+
+    private _drawImageBox(parent: Node, spriteFrame: SpriteFrame, width: number, height: number) {
+        const sourceWidth = spriteFrame.rect.width
+        const sourceHeight = spriteFrame.rect.height
+        if (sourceWidth <= 0 || sourceHeight <= 0) return
+
+        const cornerWidth = Math.floor(sourceWidth / 3)
+        const cornerHeight = Math.floor(sourceHeight / 3)
+        const middleWidth = sourceWidth - cornerWidth * 2
+        const middleHeight = sourceHeight - cornerHeight * 2
+        if (cornerWidth <= 0 || cornerHeight <= 0 || middleWidth <= 0 || middleHeight <= 0) {
+            return
+        }
+
+        const startX = -width / 2
+        const startY = height / 2
+        const rightX = width - cornerWidth
+        const bottomY = height - cornerHeight
+        const middleTargetWidth = Math.max(0, width - cornerWidth * 2)
+        const middleTargetHeight = Math.max(0, height - cornerHeight * 2)
+
+        this._drawImageBoxTile(parent, spriteFrame, 0, 0, cornerWidth, cornerHeight, startX, startY)
+        this._drawImageBoxTile(
+            parent,
+            spriteFrame,
+            cornerWidth + middleWidth,
+            0,
+            cornerWidth,
+            cornerHeight,
+            startX + rightX,
+            startY,
+        )
+        this._drawImageBoxTile(
+            parent,
+            spriteFrame,
+            0,
+            cornerHeight + middleHeight,
+            cornerWidth,
+            cornerHeight,
+            startX,
+            startY - bottomY,
+        )
+        this._drawImageBoxTile(
+            parent,
+            spriteFrame,
+            cornerWidth + middleWidth,
+            cornerHeight + middleHeight,
+            cornerWidth,
+            cornerHeight,
+            startX + rightX,
+            startY - bottomY,
+        )
+
+        for (let x = 0; x < middleTargetWidth; x += middleWidth) {
+            const tileWidth = Math.min(middleWidth, middleTargetWidth - x)
+            this._drawImageBoxTile(
+                parent,
+                spriteFrame,
+                cornerWidth,
+                0,
+                tileWidth,
+                cornerHeight,
+                startX + cornerWidth + x,
+                startY,
+            )
+            this._drawImageBoxTile(
+                parent,
+                spriteFrame,
+                cornerWidth,
+                cornerHeight + middleHeight,
+                tileWidth,
+                cornerHeight,
+                startX + cornerWidth + x,
+                startY - bottomY,
+            )
+        }
+
+        for (let y = 0; y < middleTargetHeight; y += middleHeight) {
+            const tileHeight = Math.min(middleHeight, middleTargetHeight - y)
+            this._drawImageBoxTile(
+                parent,
+                spriteFrame,
+                0,
+                cornerHeight,
+                cornerWidth,
+                tileHeight,
+                startX,
+                startY - cornerHeight - y,
+            )
+            this._drawImageBoxTile(
+                parent,
+                spriteFrame,
+                cornerWidth + middleWidth,
+                cornerHeight,
+                cornerWidth,
+                tileHeight,
+                startX + rightX,
+                startY - cornerHeight - y,
+            )
+        }
+
+        for (let x = 0; x < middleTargetWidth; x += middleWidth) {
+            const tileWidth = Math.min(middleWidth, middleTargetWidth - x)
+            for (let y = 0; y < middleTargetHeight; y += middleHeight) {
+                const tileHeight = Math.min(middleHeight, middleTargetHeight - y)
+                this._drawImageBoxTile(
+                    parent,
+                    spriteFrame,
+                    cornerWidth,
+                    cornerHeight,
+                    tileWidth,
+                    tileHeight,
+                    startX + cornerWidth + x,
+                    startY - cornerHeight - y,
+                )
+            }
+        }
+    }
+
+    private _drawImageBoxTile(
+        parent: Node,
+        source: SpriteFrame,
+        sourceX: number,
+        sourceY: number,
+        width: number,
+        height: number,
+        x: number,
+        y: number,
+    ) {
+        if (width <= 0 || height <= 0) return
+
+        const sourceRect = source.rect
+        const frame = new SpriteFrame()
+        frame.reset({
+            texture: source.texture,
+            rect: new Rect(sourceRect.x + sourceX, sourceRect.y + sourceY, width, height),
+            originalSize: new Size(width, height),
+            offset: new Vec2(0, 0),
+            isRotate: false,
+        })
+
+        const node = createSpriteNode({
+            name: 'CommandInputBackgroundTile',
+            spriteFrame: frame,
+            parent,
+            layer: parent.layer,
+            x,
+            y,
+            anchorX: 0,
+            anchorY: 1,
+            width,
+            height,
+        })
+        const sprite = node.getComponent(Sprite)
+        if (sprite) {
+            sprite.type = Sprite.Type.SIMPLE
+            sprite.sizeMode = Sprite.SizeMode.CUSTOM
+        }
+    }
+
+    private _handleInputKey(event: DebugCliInputKey) {
+        if (event.rawEvent?.ctrlKey && this._handleShortcutKey(event)) {
+            return
+        }
+
+        if (event.rawEvent?.ctrlKey && this._isUndoKey(event)) {
+            const swapCommand = this._command
+            const swapCursor = this._cursorPos
+            const swapHilitePos = this._hilitePos
+            this._command = this._undoCommand
+            this._cursorPos = this._undoCursor
+            this._hilitePos = this._undoHilitePos
+            this._undoCommand = swapCommand
+            this._undoCursor = swapCursor
+            this._undoHilitePos = swapHilitePos
+            this._lastModifyIdx = -1
+            this._focusCursor(true)
+            this._showCursorNow()
+            return
+        }
+
+        switch (event.keyCode) {
+            case DebugCliKeyCode.Backspace:
+                if (this._deleteSelectionWithUndo()) {
+                    if (this._closeIfEmpty()) return
+                    this._focusCursor(false)
+                    this._showCursorNow()
+                    return
+                }
+                if (this._cursorPos > 0) {
+                    const oldCommand = this._command
+                    const oldCursor = this._cursorPos
+                    this._command =
+                        this._command.slice(0, this._cursorPos - 1) +
+                        this._command.slice(this._cursorPos)
+                    this._cursorPos--
+                    if (this._cursorPos !== this._lastModifyIdx) {
+                        this._setUndoSnapshot(oldCommand, oldCursor)
+                    }
+                    this._lastModifyIdx = this._cursorPos - 1
+                    if (this._closeIfEmpty()) return
+                    this._focusCursor(false)
+                    this._showCursorNow()
+                }
+                return
+            case DebugCliKeyCode.Delete:
+                if (this._deleteSelectionWithUndo()) {
+                    if (this._closeIfEmpty()) return
+                    this._focusCursor(false)
+                    this._showCursorNow()
+                    return
+                }
+                if (this._cursorPos < this._command.length) {
+                    const oldCommand = this._command
+                    const oldCursor = this._cursorPos
+                    this._command =
+                        this._command.slice(0, this._cursorPos) +
+                        this._command.slice(this._cursorPos + 1)
+                    if (this._cursorPos !== this._lastModifyIdx) {
+                        this._setUndoSnapshot(oldCommand, oldCursor)
+                    }
+                    this._lastModifyIdx = this._cursorPos
+                    if (this._closeIfEmpty()) return
+                    this._focusCursor(false)
+                    this._showCursorNow()
+                }
+                return
+            case DebugCliKeyCode.Left:
+                if (this._hasSelection()) {
+                    this._cursorPos = this._selectionStart()
+                    this._hilitePos = -1
+                } else if (event.rawEvent?.ctrlKey) {
+                    this._moveCursorToPreviousWord()
+                } else {
+                    this._cursorPos = Math.max(0, this._cursorPos - 1)
+                }
+                this._focusCursor(true)
+                this._showCursorNow()
+                return
+            case DebugCliKeyCode.Right:
+                if (this._hasSelection()) {
+                    this._cursorPos = this._selectionEnd()
+                    this._hilitePos = -1
+                } else if (event.rawEvent?.ctrlKey) {
+                    this._moveCursorToNextWord()
+                } else {
+                    this._cursorPos = Math.min(this._command.length, this._cursorPos + 1)
+                }
+                this._focusCursor(true)
+                this._showCursorNow()
+                return
+            case DebugCliKeyCode.Home:
+                this._cursorPos = 0
+                this._hilitePos = -1
+                this._focusCursor(true)
+                this._showCursorNow()
+                return
+            case DebugCliKeyCode.End:
+                this._cursorPos = this._command.length
+                this._hilitePos = -1
+                this._focusCursor(true)
+                this._showCursorNow()
+                return
+        }
+
+        const char = this._eventToInputChar(event)
+        if (!char || this._command.length >= MAX_COMMAND_LENGTH) return
+
+        const oldCommand = this._command
+        const oldCursor = this._cursorPos
+        const oldHilitePos = this._hilitePos
+        if (this._hasSelection()) {
+            const start = this._selectionStart()
+            const end = this._selectionEnd()
+            this._command = this._command.slice(0, start) + char + this._command.slice(end)
+            this._cursorPos = start
+            this._hilitePos = -1
+        } else {
+            this._command =
+                this._command.slice(0, this._cursorPos) + char + this._command.slice(this._cursorPos)
+        }
+        if (this._cursorPos !== this._lastModifyIdx + 1) {
+            this._setUndoSnapshot(oldCommand, oldCursor, oldHilitePos)
+        }
+        this._lastModifyIdx = this._cursorPos
+        this._cursorPos += char.length
+        this._enforceMaxPixels()
+        this._cursorPos = Math.min(this._cursorPos, this._command.length)
+        this._focusCursor(false)
+        this._showCursorNow()
+    }
+
+    private _captureCommand() {
+        this._command = this._command.trim()
+        this._cursorPos = this._command.length
+        this._hilitePos = -1
+        this._focusCursor(true)
+        this._refreshInputText()
+    }
+
+    private _setCommand(command: string) {
+        this._command = command
+        this._cursorPos = command.length
+        this._hilitePos = -1
+        this._leftPos = 0
+        this._lastModifyIdx = 0
+        this._undoCommand = ''
+        this._undoCursor = 0
+        this._undoHilitePos = -1
+    }
+
+    private _closeIfEmpty() {
+        if (this._command.length > 0) return false
+
+        this.close()
+        return true
+    }
+
+    private _setUndoSnapshot(command: string, cursorPos: number, hilitePos = -1) {
+        this._undoCommand = command
+        this._undoCursor = cursorPos
+        this._undoHilitePos = hilitePos
+    }
+
+    private _handleShortcutKey(event: DebugCliInputKey) {
+        const key = this._shortcutKeyName(event)
+        switch (key) {
+            case 'a':
+                this._selectAll()
+                return true
+            case 'c':
+                void this._copySelectionToClipboard()
+                return true
+            case 'v':
+                void this._pasteFromClipboard()
+                return true
+            case 'x':
+                void this._cutSelectionToClipboard()
+                return true
+            case 'z':
+                return false
+            default:
+                return key.length === 1
+        }
+    }
+
+    private _shortcutKeyName(event: DebugCliInputKey) {
+        const key = event.rawEvent?.key?.toLowerCase()
+        if (key) return key
+
+        if (event.keyCode >= DebugCliKeyCode.A && event.keyCode <= DebugCliKeyCode.Z) {
+            return String.fromCharCode(event.keyCode).toLowerCase()
+        }
+        return ''
+    }
+
+    private _selectAll() {
+        if (this._command.length === 0) return
+
+        this._hilitePos = 0
+        this._cursorPos = this._command.length
+        this._leftPos = 0
+        this._focusCursor(true)
+        this._showCursorNow()
+    }
+
+    private async _copySelectionToClipboard() {
+        if (!this._hasSelection()) return
+
+        await this._writeClipboardText(
+            this._command.slice(this._selectionStart(), this._selectionEnd()),
+        )
+    }
+
+    private async _cutSelectionToClipboard() {
+        if (!this._hasSelection()) return
+
+        const selectedText = this._command.slice(this._selectionStart(), this._selectionEnd())
+        await this._writeClipboardText(selectedText)
+        if (this._deleteSelectionWithUndo()) {
+            if (this._closeIfEmpty()) return
+            this._focusCursor(false)
+            this._showCursorNow()
+        }
+    }
+
+    private async _pasteFromClipboard() {
+        const text = this._sanitizeClipboardText(await this._readClipboardText())
+        if (!text) return
+
+        this._insertText(text)
+    }
+
+    private _insertText(text: string) {
+        const oldCommand = this._command
+        const oldCursor = this._cursorPos
+        const oldHilitePos = this._hilitePos
+        if (this._hasSelection()) {
+            const start = this._selectionStart()
+            const end = this._selectionEnd()
+            this._command = this._command.slice(0, start) + text + this._command.slice(end)
+            this._cursorPos = start
+            this._hilitePos = -1
+        } else {
+            this._command =
+                this._command.slice(0, this._cursorPos) + text + this._command.slice(this._cursorPos)
+        }
+
+        this._setUndoSnapshot(oldCommand, oldCursor, oldHilitePos)
+        this._cursorPos += text.length
+        if (this._command.length > MAX_COMMAND_LENGTH) {
+            this._command = this._command.slice(0, MAX_COMMAND_LENGTH)
+        }
+        this._enforceMaxPixels()
+        this._cursorPos = Math.min(this._cursorPos, this._command.length)
+        this._lastModifyIdx = this._cursorPos
+        this._focusCursor(false)
+        this._showCursorNow()
+    }
+
+    private async _readClipboardText() {
+        const clipboard = globalThis.navigator?.clipboard
+        if (!clipboard?.readText) return ''
+
+        try {
+            return await clipboard.readText()
+        } catch {
+            return ''
+        }
+    }
+
+    private async _writeClipboardText(text: string) {
+        const clipboard = globalThis.navigator?.clipboard
+        if (!clipboard?.writeText) return
+
+        try {
+            await clipboard.writeText(text)
+        } catch {
+            return
+        }
+    }
+
+    private _sanitizeClipboardText(text: string) {
+        let sanitized = ''
+        for (const char of text) {
+            if (char === '\r' || char === '\n') break
+            if (this._isPrintableAscii(char)) sanitized += char
+        }
+        return sanitized
+    }
+
+    private _eventToInputChar(event: DebugCliInputKey) {
+        const rawKey = event.rawEvent?.key
+        if (rawKey && rawKey.length === 1 && this._isPrintableAscii(rawKey)) return rawKey
+
+        const keyCode = event.keyCode
+        if (keyCode >= DebugCliKeyCode.A && keyCode <= DebugCliKeyCode.Z) {
+            return String.fromCharCode(keyCode).toLowerCase()
+        }
+        if (keyCode >= DebugCliKeyCode.Digit0 && keyCode <= DebugCliKeyCode.Digit9) {
+            return String.fromCharCode(keyCode)
+        }
+        if (keyCode >= DebugCliKeyCode.Numpad0 && keyCode <= DebugCliKeyCode.Numpad9) {
+            return String(keyCode - DebugCliKeyCode.Numpad0)
+        }
+
+        switch (keyCode) {
+            case DebugCliKeyCode.Space:
+                return ' '
+            case DebugCliKeyCode.NumpadMultiply:
+                return '*'
+            case DebugCliKeyCode.NumpadAdd:
+                return '+'
+            case DebugCliKeyCode.NumpadSubtract:
+                return '-'
+            case DebugCliKeyCode.NumpadDecimal:
+                return '.'
+            case DebugCliKeyCode.NumpadDivide:
+                return '/'
+            default:
+                return ''
+        }
+    }
+
+    private _isPrintableAscii(char: string) {
+        const code = char.charCodeAt(0)
+        return code >= 32 && code <= 126
+    }
+
+    private _isUndoKey(event: DebugCliInputKey) {
+        return event.rawEvent?.key?.toLowerCase() === 'z' || event.keyCode === DebugCliKeyCode.Z
+    }
+
+    private _isPartOfWord(char: string) {
+        return /^[A-Za-z0-9_]$/.test(char)
+    }
+
+    private _moveCursorToPreviousWord() {
+        while (this._cursorPos > 0 && !this._isPartOfWord(this._command[this._cursorPos - 1])) {
+            this._cursorPos--
+        }
+        while (this._cursorPos > 0 && this._isPartOfWord(this._command[this._cursorPos - 1])) {
+            this._cursorPos--
+        }
+    }
+
+    private _moveCursorToNextWord() {
+        while (
+            this._cursorPos < this._command.length - 1 &&
+            this._isPartOfWord(this._command[this._cursorPos + 1])
+        ) {
+            this._cursorPos++
+        }
+        while (
+            this._cursorPos < this._command.length - 1 &&
+            !this._isPartOfWord(this._command[this._cursorPos + 1])
+        ) {
+            this._cursorPos++
+        }
+        this._cursorPos = Math.min(this._cursorPos + 1, this._command.length)
+    }
+
+    private _showCursorNow() {
+        this._cursorBlinkElapsed = 0
+        this._cursorVisible = true
+        this._refreshInputText()
+    }
+
+    private _refreshInputText() {
+        if (!this._textRenderer) return
+
+        const visibleText = this._command.slice(this._leftPos)
+        this._textRenderer.string = visibleText
+        this._textRenderer.forceRebuild()
+        if (this._selectionTextRenderer) {
+            this._selectionTextRenderer.string = visibleText
+            this._selectionTextRenderer.forceRebuild()
+        }
+        this._refreshSelection()
+        this._refreshCursor()
+    }
+
+    private _refreshSelection() {
+        if (!this._selectionGraphics || !this._selectionTextClip || !this._selectionTextNode) return
+
+        this._selectionGraphics.clear()
+        this._selectionTextClip.active = false
+        if (!this._hasSelection()) return
+
+        const start = this._selectionStart()
+        const end = this._selectionEnd()
+        const startX = this._measureText(this._command.slice(this._leftPos, start))
+        const endX = this._measureText(this._command.slice(this._leftPos, end))
+        const maxWidth = this._inputTextMaxWidth()
+        const visibleStartX = Math.max(0, Math.min(maxWidth, startX))
+        const visibleEndX = Math.max(0, Math.min(maxWidth, endX))
+        if (visibleEndX <= visibleStartX) return
+
+        const selectionWidth = visibleEndX - visibleStartX
+        this._selectionGraphics.fillColor = SELECTION_COLOR
+        this._selectionGraphics.rect(
+            visibleStartX,
+            -INPUT_HEIGHT / 2 + 4,
+            selectionWidth,
+            INPUT_HEIGHT - 8,
+        )
+        this._selectionGraphics.fill()
+
+        this._selectionTextClip.active = true
+        this._selectionTextClip.setPosition(this._inputTextX() + visibleStartX, 0, 0)
+        setUISize(this._selectionTextClip, selectionWidth, INPUT_HEIGHT, 0, 0.5)
+        this._selectionTextNode.setPosition(-visibleStartX, INPUT_TEXT_TOP_Y, 0)
+    }
+
+    private _refreshCursor() {
+        if (!this._cursorNode || !this._cursorGraphics) return
+
+        this._cursorNode.active = this._hasInputFocus && this._cursorVisible && !this._hasSelection()
+        this._cursorNode.setPosition(
+            this._inputTextX() +
+                this._measureText(this._command.slice(this._leftPos, this._cursorPos)),
+            0,
+            0,
+        )
+
+        this._cursorGraphics.clear()
+        this._cursorGraphics.fillColor = CURSOR_COLOR
+        this._cursorGraphics.rect(0, -INPUT_HEIGHT / 2 + 3, CURSOR_WIDTH, INPUT_HEIGHT - 6)
+        this._cursorGraphics.fill()
+    }
+
+    private _focusCursor(bigJump: boolean) {
+        while (this._cursorPos < this._leftPos) {
+            this._leftPos = Math.max(0, this._leftPos - (bigJump ? 10 : 1))
+        }
+
+        while (
+            this._inputTextMaxWidth() > 0 &&
+            this._measureText(this._command.slice(this._leftPos, this._cursorPos)) >=
+                this._inputTextMaxWidth()
+        ) {
+            this._leftPos = Math.min(this._leftPos + (bigJump ? 10 : 1), this._command.length - 1)
+        }
+
+        this._leftPos = Math.max(0, Math.min(this._leftPos, this._command.length))
+    }
+
+    private _enforceMaxPixels() {
+        while (
+            this._command.length > 0 &&
+            this._measureText(this._command) > this._inputTextMaxWidth()
+        ) {
+            this._command = this._command.slice(0, -1)
+        }
+    }
+
+    private _inputTextX() {
+        return -this._inputWidth / 2 + INPUT_CLIP_LEFT
+    }
+
+    private _inputTextMaxWidth() {
+        return this._inputWidth - INPUT_CLIP_LEFT - INPUT_CLIP_RIGHT
+    }
+
+    private _measureText(text: string) {
+        return FontMetricsUtil.measureTextWidth(this._commandFont?.config ?? null, text)
+    }
+
+    private _setInputFocus(focused: boolean) {
+        if (this._hasInputFocus === focused) return
+
+        this._hasInputFocus = focused
+        if (focused) {
+            this._showCursorNow()
+        } else {
+            this._draggingSelection = false
+            this._cursorVisible = false
+            this._refreshCursor()
+        }
+    }
+
+    private _bindInputPointerEvents(inputRoot: Node) {
+        inputRoot.on(Node.EventType.TOUCH_START, this._onInputPointerDown, this)
+        inputRoot.on(Node.EventType.TOUCH_MOVE, this._onInputPointerMove, this)
+        inputRoot.on(Node.EventType.TOUCH_END, this._onInputPointerUp, this)
+        inputRoot.on(Node.EventType.TOUCH_CANCEL, this._onInputPointerUp, this)
+        inputRoot.on(Node.EventType.MOUSE_ENTER, this._onInputMouseEnter, this)
+        inputRoot.on(Node.EventType.MOUSE_LEAVE, this._onInputMouseLeave, this)
+    }
+
+    private _unbindInputPointerEvents(inputRoot: Node) {
+        inputRoot.off(Node.EventType.TOUCH_START, this._onInputPointerDown, this)
+        inputRoot.off(Node.EventType.TOUCH_MOVE, this._onInputPointerMove, this)
+        inputRoot.off(Node.EventType.TOUCH_END, this._onInputPointerUp, this)
+        inputRoot.off(Node.EventType.TOUCH_CANCEL, this._onInputPointerUp, this)
+        inputRoot.off(Node.EventType.MOUSE_ENTER, this._onInputMouseEnter, this)
+        inputRoot.off(Node.EventType.MOUSE_LEAVE, this._onInputMouseLeave, this)
+    }
+
+    private _onInputPointerDown(event: EventTouch) {
+        event.propagationStopped = true
+        this._setInputFocus(true)
+        this._draggingSelection = true
+        this._hilitePos = -1
+        this._cursorPos = this._getCharAtEvent(event)
+        this._focusCursor(false)
+        this._showCursorNow()
+    }
+
+    private _onInputPointerMove(event: EventTouch) {
+        event.propagationStopped = true
+        if (!this._draggingSelection) return
+
+        if (this._hilitePos === -1) this._hilitePos = this._cursorPos
+        this._cursorPos = this._getCharAtEvent(event)
+        if (this._hilitePos === this._cursorPos) this._hilitePos = -1
+        this._focusCursor(false)
+        this._showCursorNow()
+    }
+
+    private _onInputPointerUp(event: EventTouch) {
+        event.propagationStopped = true
+        this._draggingSelection = false
+        if (this._hilitePos === this._cursorPos) this._hilitePos = -1
+        this._refreshInputText()
+    }
+
+    private _onInputMouseEnter() {
+        this._setCanvasCursor('text')
+    }
+
+    private _onInputMouseLeave() {
+        this._setCanvasCursor('')
+    }
+
+    private _bindDomKeyboardEvents() {
+        if (this._domKeyDownListener) return
+        if (typeof globalThis.addEventListener !== 'function') return
+
+        this._domKeyDownListener = (event) => this._onDomKeyDown(event)
+        globalThis.addEventListener('keydown', this._domKeyDownListener, true)
+    }
+
+    private _unbindDomKeyboardEvents() {
+        if (!this._domKeyDownListener) return
+        if (typeof globalThis.removeEventListener === 'function') {
+            globalThis.removeEventListener('keydown', this._domKeyDownListener, true)
+        }
+        this._domKeyDownListener = null
+    }
+
+    private _onDomKeyDown(event: KeyboardEvent) {
+        if (!this.isTopDialog()) return
+        if (!this._hasInputFocus) return
+        if (event.key === 'Enter' || event.key === 'Escape') return
+
+        this._handleInputKey({
+            keyCode: event.keyCode,
+            rawEvent: {
+                key: event.key,
+                ctrlKey: event.ctrlKey,
+            },
+        })
+        event.preventDefault()
+        event.stopPropagation()
+    }
+
+    private _onInputFocusLost() {
+        this._setInputFocus(false)
+    }
+
+    private _onGlobalPointerDown(event: EventMouse | EventTouch) {
+        if (!this._inputRoot?.isValid) {
+            this._setInputFocus(false)
+            return
+        }
+
+        const transform = this._inputRoot.getComponent(UITransform)
+        if (!transform) return
+
+        const uiLocation = event.getUILocation()
+        const local = transform.convertToNodeSpaceAR(new Vec3(uiLocation.x, uiLocation.y, 0))
+        const width = transform.contentSize.width
+        const height = transform.contentSize.height
+        this._setInputFocus(
+            local.x >= -width / 2 &&
+                local.x <= width / 2 &&
+                local.y >= -height / 2 &&
+                local.y <= height / 2,
+        )
+    }
+
+    private _getCharAtEvent(event: EventTouch) {
+        if (!this._inputRoot?.isValid) return this._cursorPos
+
+        const transform = this._inputRoot.getComponent(UITransform)
+        if (!transform) return this._cursorPos
+
+        const uiLocation = event.getUILocation()
+        const local = transform.convertToNodeSpaceAR(new Vec3(uiLocation.x, uiLocation.y, 0))
+        return this._getCharAt(local.x + this._inputWidth / 2)
+    }
+
+    private _getCharAt(x: number) {
+        let pos = this._leftPos
+        for (let i = this._leftPos; i < this._command.length; i++) {
+            const low = this._measureText(this._command.slice(this._leftPos, i))
+            const high = this._measureText(this._command.slice(this._leftPos, i + 1))
+            if (x >= (low + high) / 2 + 5) pos = i + 1
+        }
+        return Math.max(0, Math.min(this._command.length, pos))
+    }
+
+    private _hasSelection() {
+        return this._hilitePos !== -1 && this._hilitePos !== this._cursorPos
+    }
+
+    private _selectionStart() {
+        return this._hasSelection() ? Math.min(this._cursorPos, this._hilitePos) : this._cursorPos
+    }
+
+    private _selectionEnd() {
+        return this._hasSelection() ? Math.max(this._cursorPos, this._hilitePos) : this._cursorPos
+    }
+
+    private _deleteSelectionWithUndo() {
+        if (!this._hasSelection()) return false
+
+        const oldCommand = this._command
+        const oldCursor = this._cursorPos
+        const oldHilitePos = this._hilitePos
+        const start = this._selectionStart()
+        const end = this._selectionEnd()
+        this._command = this._command.slice(0, start) + this._command.slice(end)
+        this._cursorPos = start
+        this._hilitePos = -1
+        this._setUndoSnapshot(oldCommand, oldCursor, oldHilitePos)
+        this._lastModifyIdx = -1
+        return true
+    }
+
+    private _setCanvasCursor(style: string) {
+        const canvas = game.canvas
+        if (canvas) canvas.style.cursor = style
+    }
+
+    private _destroyInput() {
+        this._draggingSelection = false
+        this._setCanvasCursor('')
+        if (this._inputRoot?.isValid) {
+            this._unbindInputPointerEvents(this._inputRoot)
+            this._inputRoot.destroy()
+        }
+        this._inputRoot = null
+        this._textNode = null
+        this._textRenderer = null
+        this._selectionNode = null
+        this._selectionGraphics = null
+        this._selectionTextClip = null
+        this._selectionTextNode = null
+        this._selectionTextRenderer = null
+        this._cursorNode = null
+        this._cursorGraphics = null
+        this._commandFont = null
+    }
+}

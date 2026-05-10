@@ -97,6 +97,9 @@ export class MessageBox extends ModalDialog {
     @property
     extraHeight: number = 0
 
+    @property
+    extraWidth: number = 0
+
     private _bgContainer: Node | null = null
     private _buttonContainer: Node | null = null
     private _titleNode: Node | null = null
@@ -285,6 +288,7 @@ export class MessageBox extends ModalDialog {
             BG_INSET_RIGHT +
             CONTENT_INSET_LEFT +
             CONTENT_INSET_RIGHT +
+            this.extraWidth +
             (this.title
                 ? FontMetricsUtil.measureTextWidth(titleFontData?.config ?? null, this.title)
                 : 0)

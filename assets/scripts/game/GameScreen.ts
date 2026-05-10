@@ -40,7 +40,7 @@ import { createStoneButton } from '@/ui/StoneButton'
 import { createTooltipNode } from '@/ui/Tooltip/Tooltip'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
-import { GAME_SPEED, GAME_TICK_SECONDS, PLANT_DEFINITIONS, SEED_DEFINITIONS, ZOMBIE_DEFINITIONS } from './GameDefinitions'
+import { GAME_TICK_SECONDS, PLANT_DEFINITIONS, SEED_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed } from './GameDefinitions'
 import {
     getAnimationRateSpeed,
     playPotatoArmedAnimation,
@@ -193,6 +193,11 @@ const PROJECTILE_SHADOW_ADJUSTMENTS: Record<ProjectileEntity['type'], { offsetX:
     pea: { offsetX: 3 },
     snowpea: { offsetX: -1, scale: 1.3 },
 }
+const MONEY_ITEM_SPRITES: Partial<Record<ItemEntity['type'], string>> = {
+    'silver-coin': 'coin_silver_dollar',
+    'gold-coin': 'coin_gold_dollar',
+    diamond: 'diamond',
+}
 const GAME_TEXTURES = [
     'background1',
     'background1unsodded',
@@ -205,6 +210,9 @@ const GAME_TEXTURES = [
     'shovelbank',
     'shovel',
     'peashooter_head',
+    'coin_silver_dollar',
+    'coin_gold_dollar',
+    'diamond',
     'projectilepea',
     'projectilesnowpea',
     'pea_shadows',
@@ -236,6 +244,13 @@ interface LawnMowerView {
     animatorNode: Node | null
     animNode: AnimNode | null
     state: LawnMowerEntity['state'] | null
+}
+
+interface RenderEntitySnapshot {
+    x: number
+    y: number
+    scale?: number
+    alpha?: number
 }
 
 @ccclass('AdventureGameScreen')
@@ -280,6 +295,7 @@ export class AdventureGameScreen extends Component {
     private _plantViews: Map<number, PlantView> = new Map()
     private _zombieViews: Map<number, ZombieView> = new Map()
     private _lawnMowerViews: Map<number, LawnMowerView> = new Map()
+    private _previousEntitySnapshots: Map<number, RenderEntitySnapshot> = new Map()
     private _seedPacketNodes: Map<SeedType, Node> = new Map()
     private _seedPacketCooldownClips: Map<SeedType, Node> = new Map()
     private _seedTooltipNode: Node | null = null
@@ -309,7 +325,7 @@ export class AdventureGameScreen extends Component {
     private _bootstrapped = false
 
     onLoad() {
-        Animator.timeScale = GAME_SPEED
+        Animator.timeScale = getGameSpeed()
         setUISize(this.node, 800, 600)
         this._boardRoot = createUINode('BoardRoot', {
             parent: this.node,
@@ -412,18 +428,20 @@ export class AdventureGameScreen extends Component {
     update(dt: number) {
         if (!this._bootstrapped) return
 
-        Animator.timeScale = GAME_SPEED
+        const gameSpeed = getGameSpeed()
+        Animator.timeScale = gameSpeed
         let gameTicks = 0
         if (this._gameStarted) {
             if (!this._session.paused) {
-                this._gameAccumulator += dt * GAME_SPEED
+                this._gameAccumulator += dt * gameSpeed
                 while (this._gameAccumulator >= GAME_TICK_SECONDS) {
+                    this._capturePreviousEntitySnapshots()
                     this._session.update()
                     this._gameAccumulator -= GAME_TICK_SECONDS
                     gameTicks++
                 }
             }
-        } else {
+        } else if (!this._session.paused) {
             this._updateIntro(dt)
         }
         if (gameTicks > 0) this._updateAdviceWidget(gameTicks)
@@ -433,6 +451,7 @@ export class AdventureGameScreen extends Component {
     public pauseGame() {
         this._session.dispatch({ type: 'pause' })
         this._gameAccumulator = 0
+        this._previousEntitySnapshots.clear()
         this._setGameplayAnimationsPaused(true)
         this._renderFrame()
     }
@@ -441,6 +460,86 @@ export class AdventureGameScreen extends Component {
         this._session.dispatch({ type: 'resume' })
         this._setGameplayAnimationsPaused(false)
         this._renderFrame()
+    }
+
+    public isPaused() {
+        return this._session.paused
+    }
+
+    public isLevelRunning() {
+        return this._bootstrapped && this._gameStarted && this._session.result === 'playing'
+    }
+
+    public getGridSize() {
+        return {
+            rows: this._session.geometry.rows,
+            cols: this._session.geometry.cols,
+        }
+    }
+
+    public debugPlacePlant(type: PlantType, row: number, col: number) {
+        if (!this.isLevelRunning()) return false
+
+        this._session.debugAddPlant(type, row, col)
+        this._renderFrame()
+        return true
+    }
+
+    public debugSummonZombie(type: ZombieType, row: number, col?: number) {
+        if (!this.isLevelRunning()) return false
+
+        const x = col == null ? undefined : this._session.geometry.gridToPixel(col, row).x
+        this._session.debugAddZombie(type, row, x)
+        this._renderFrame()
+        return true
+    }
+
+    public debugSetLawnMower(row: number, status: 'trigger' | 'reset') {
+        if (!this.isLevelRunning()) return false
+
+        const changed = this._session.debugSetLawnMower(row, status)
+        if (changed) this._renderFrame()
+        return changed
+    }
+
+    public debugSetAllLawnMowers(status: 'trigger' | 'reset') {
+        if (!this.isLevelRunning()) return -1
+
+        const changed = this._session.debugSetAllLawnMowers(status)
+        if (changed > 0) this._renderFrame()
+        return changed
+    }
+
+    public debugAddSun(amount: number) {
+        if (!this.isLevelRunning()) return null
+
+        const sun = this._session.debugAddSun(amount)
+        this._renderFrame()
+        return sun
+    }
+
+    public debugSetSun(amount: number) {
+        if (!this.isLevelRunning()) return null
+
+        const sun = this._session.debugSetSun(amount)
+        this._renderFrame()
+        return sun
+    }
+
+    public debugSetRechargingEnabled(enabled: boolean) {
+        if (!this.isLevelRunning()) return null
+
+        const rechargingEnabled = this._session.debugSetRechargingEnabled(enabled)
+        this._renderFrame()
+        return rechargingEnabled
+    }
+
+    public debugSetSunSpawningEnabled(enabled: boolean) {
+        if (!this.isLevelRunning()) return null
+
+        const sunSpawningEnabled = this._session.debugSetSunSpawningEnabled(enabled)
+        this._renderFrame()
+        return sunSpawningEnabled
     }
 
     private async _drawStaticBoard() {
@@ -591,6 +690,28 @@ export class AdventureGameScreen extends Component {
         this._createMenuButton()
         this._setSeedBankContentsVisible(false)
         this._syncItemLayerBehindAdvice()
+    }
+
+    private _capturePreviousEntitySnapshots() {
+        this._previousEntitySnapshots.clear()
+        for (const entity of this._session.allEntities()) {
+            this._previousEntitySnapshots.set(entity.id, this._createRenderEntitySnapshot(entity))
+        }
+    }
+
+    private _createRenderEntitySnapshot(entity: GameEntity): RenderEntitySnapshot {
+        if (entity.kind === 'item') {
+            return {
+                x: entity.x,
+                y: entity.y,
+                scale: entity.scale,
+                alpha: entity.alpha,
+            }
+        }
+        return {
+            x: entity.x,
+            y: entity.y,
+        }
     }
 
     private _syncItemLayerBehindAdvice() {
@@ -1313,19 +1434,47 @@ export class AdventureGameScreen extends Component {
             node = this._createEntityNode(entity)
             this._entityNodes.set(entity.id, node)
         }
+        const renderState = this._getRenderEntityState(entity)
         if (entity.kind === 'item') {
-            node.setPosition(entity.x + entity.width / 2, -(entity.y + entity.height / 2), this._entityZ(entity))
-            node.setScale(entity.scale, entity.scale, 1)
+            node.setPosition(
+                renderState.x + entity.width / 2,
+                -(renderState.y + entity.height / 2),
+                this._entityZ(entity),
+            )
+            const scale = renderState.scale ?? entity.scale
+            node.setScale(scale, scale, 1)
             const opacity = node.getComponent(UIOpacity) ?? node.addComponent(UIOpacity)
-            opacity.opacity = entity.alpha
+            opacity.opacity = renderState.alpha ?? entity.alpha
             return
         }
-        node.setPosition(entity.x, -entity.y, this._entityZ(entity))
+        node.setPosition(renderState.x, -renderState.y, this._entityZ(entity))
         if (entity.kind === 'zombie') {
             this._syncZombieAnimation(entity)
         } else if (entity.kind === 'lawnmower') {
             this._syncLawnMowerAnimation(entity)
         }
+    }
+
+    private _getRenderEntityState(entity: GameEntity): RenderEntitySnapshot {
+        const previous = this._previousEntitySnapshots.get(entity.id)
+        if (!previous || this._session.paused) return this._createRenderEntitySnapshot(entity)
+
+        const t = this._renderInterpolationAlpha()
+        const current = this._createRenderEntitySnapshot(entity)
+        return {
+            x: this._lerp(previous.x, current.x, t),
+            y: this._lerp(previous.y, current.y, t),
+            scale: previous.scale == null || current.scale == null
+                ? current.scale
+                : this._lerp(previous.scale, current.scale, t),
+            alpha: previous.alpha == null || current.alpha == null
+                ? current.alpha
+                : Math.round(this._lerp(previous.alpha, current.alpha, t)),
+        }
+    }
+
+    private _renderInterpolationAlpha() {
+        return Math.max(0, Math.min(1, this._gameAccumulator / GAME_TICK_SECONDS))
     }
 
     private _createEntityNode(entity: GameEntity) {
@@ -1527,6 +1676,10 @@ export class AdventureGameScreen extends Component {
         node.addComponent(UIOpacity).opacity = item.alpha
         if (item.type === 'sun' || item.type === 'small-sun' || item.type === 'large-sun') {
             this._createSunVisual(node)
+        } else if (item.type === 'final-seed-packet') {
+            this._createFinalSeedPacketVisual(node, item)
+        } else {
+            this._createMoneyItemVisual(node, item)
         }
         return node
     }
@@ -1643,6 +1796,39 @@ export class AdventureGameScreen extends Component {
         void animator.parseJson(this._sunAnimation.json as Record<string, any>).then(() => {
             const sun = animator.addAnimNode('default')
             sun?.play({ name: 'default', speed: getAnimationRateSpeed(sun, 'default', 6), loop: true })
+        })
+    }
+
+    private _createMoneyItemVisual(node: Node, item: ItemEntity) {
+        const spriteName = MONEY_ITEM_SPRITES[item.type]
+        if (!spriteName) return
+
+        const spriteFrame = SpriteLoader.get(spriteName)
+        if (!spriteFrame) return
+
+        createSpriteNode({
+            name: 'MoneyItem',
+            spriteFrame,
+            parent: node,
+            layer: this.node.layer,
+            anchorX: 0.5,
+            anchorY: 0.5,
+        })
+    }
+
+    private _createFinalSeedPacketVisual(node: Node, item: ItemEntity) {
+        const seedType = item.awardSeedType ?? 'sunflower'
+        SeedPacketRenderer.drawSeedPacket({
+            name: 'FinalSeedPacket',
+            parent: node,
+            layer: this.node.layer,
+            x: -SEED_PACKET_WIDTH / 2,
+            y: SEED_PACKET_HEIGHT / 2,
+            seedType,
+            drawCost: false,
+            seeds: SpriteLoader.get('seeds'),
+            packetPlants: SpriteLoader.get('packet_plants'),
+            cachedPacketPlants: SpriteLoader.get('packet_plants_cached'),
         })
     }
 
@@ -2463,6 +2649,7 @@ export class AdventureGameScreen extends Component {
         this._plantViews.delete(entityId)
         this._zombieViews.delete(entityId)
         this._lawnMowerViews.delete(entityId)
+        this._previousEntitySnapshots.delete(entityId)
     }
 
     private _eventToBoardPixel(event: EventMouse | EventTouch) {
@@ -2565,6 +2752,10 @@ export class AdventureGameScreen extends Component {
 
     private _linearFloat(startTick: number, endTick: number, tick: number, start: number, end: number) {
         const t = Math.max(0, Math.min(1, (tick - startTick) / (endTick - startTick)))
+        return start + (end - start) * t
+    }
+
+    private _lerp(start: number, end: number, t: number) {
         return start + (end - start) * t
     }
 

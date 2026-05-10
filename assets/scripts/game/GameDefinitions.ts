@@ -7,7 +7,16 @@ import type {
 } from './GameTypes'
 
 export const GAME_TICK_SECONDS = 0.01
-export const GAME_SPEED = 1
+const DEFAULT_GAME_SPEED = 1
+let currentGameSpeed = DEFAULT_GAME_SPEED
+
+export function getGameSpeed() {
+    return currentGameSpeed
+}
+
+export function setGameSpeed(speed: number) {
+    currentGameSpeed = speed
+}
 
 export const DAY_GEOMETRY: BoardGeometry = {
     width: 800,
@@ -314,6 +323,7 @@ export const ADVENTURE_1_1: LevelDefinition = {
         { zombies: ['normal'] },
         { zombies: ['normal', 'normal'] },
     ],
+    awardSeedType: 'sunflower',
     tutorialAdvice: [
         'Click on a seed packet to pick it up!',
     ],

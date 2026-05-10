@@ -1,10 +1,21 @@
-import { _decorator, Component, game, Node, tween, Vec3 } from 'cc'
+import {
+    _decorator,
+    Component,
+    EventKeyboard,
+    game,
+    input,
+    Input,
+    Node,
+    tween,
+    Vec3,
+} from 'cc'
 import { AdventureGameScreen } from '@/game/GameScreen'
 import { AchievementScreen } from '../AchievementScreen'
 import { AlmanacScreen } from '../AlmanacScreen/AlmanacScreen'
 import { StoreScreen } from '../StoreScreen/StoreScreen'
 import { ZenGardenScreen } from '../ZenGardenScreen/ZenGardenScreen'
 import { ChallengePage, ChallengeScreen } from '../ChallengeScreen'
+import { DebugCliDialog, executeDebugCliCommand } from '../DebugCliDialog'
 import { DialogButtonMode, DialogResult, MessageBox } from '../MessageBox/MessageBox'
 import { HelpScreen } from '../HelpScreen'
 import { OptionsDialog } from '../OptionsDialog'
@@ -16,6 +27,7 @@ import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 
 const { ccclass, property } = _decorator
 const DEBUG_START_ADVENTURE_DIRECTLY = true
+const DEBUG_CLI_KEY_CODE = 191
 
 interface StoreScreenOptions {
     initialPage?: number
@@ -30,8 +42,10 @@ export class UIController extends Component {
 
     private _currentScreen: Node | null = null
     private _selectorScreen: SelectorScreen | null = null
+    private _adventureGameScreen: AdventureGameScreen | null = null
     private _achievementScreen: Node | null = null
     private _modalScreen: Node | null = null
+    private _debugCliScreen: Node | null = null
     private _screenTransitioning = false
 
     onLoad() {
@@ -39,7 +53,12 @@ export class UIController extends Component {
             this.uiRoot = this.node
         }
 
+        input.on(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
         void this._bootstrap()
+    }
+
+    onDestroy() {
+        input.off(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
     }
 
     private async _bootstrap() {
@@ -58,6 +77,7 @@ export class UIController extends Component {
     async showSelectorScreen(): Promise<SelectorScreen | null> {
         this._destroyCurrentScreen()
         this._selectorScreen = null
+        this._adventureGameScreen = null
         const [animation, zombieArmAnimation] = await Promise.all([
             StartupResourceLoader.loadJson('animations/selectorscreen'),
             StartupResourceLoader.loadJson('animations/zombie_hand'),
@@ -124,6 +144,7 @@ export class UIController extends Component {
         }
 
         this._setCurrentScreen(node)
+        this._adventureGameScreen = gameScreen
         return gameScreen
     }
 
@@ -140,6 +161,7 @@ export class UIController extends Component {
 
     showChallengeScreen(page: ChallengePage): ChallengeScreen | null {
         this._selectorScreen = null
+        this._adventureGameScreen = null
         const node = createUINode('ChallengeScreen', { active: false, width: 800, height: 600 })
         const challengeScreen = node.addComponent(ChallengeScreen)
         challengeScreen.page = page
@@ -153,6 +175,7 @@ export class UIController extends Component {
 
     showZenGardenScreen(): ZenGardenScreen | null {
         this._selectorScreen = null
+        this._adventureGameScreen = null
         const node = createUINode('ZenGardenScreen', { active: false, width: 800, height: 600 })
         const zenGardenScreen = node.addComponent(ZenGardenScreen)
         zenGardenScreen.onBackToMenu = () => {
@@ -174,6 +197,7 @@ export class UIController extends Component {
 
     showStoreScreen(options: StoreScreenOptions = {}): StoreScreen | null {
         this._selectorScreen = null
+        this._adventureGameScreen = null
         const node = createUINode('StoreScreen', { active: false, width: 800, height: 600 })
         const storeScreen = node.addComponent(StoreScreen)
         storeScreen.initialPage = options.initialPage ?? 0
@@ -358,6 +382,47 @@ export class UIController extends Component {
         return pauseDialog
     }
 
+    showDebugCliDialog(initialCommand = ''): DebugCliDialog | null {
+        if (this._debugCliScreen?.isValid) return null
+
+        const gameScreenNode = this._adventureGameScreen?.node as Node | null | undefined
+        const gameScreen = gameScreenNode?.isValid === true ? this._adventureGameScreen : null
+        const wasGamePaused = gameScreen?.isPaused() ?? true
+        if (gameScreen && !wasGamePaused) {
+            gameScreen.pauseGame()
+        }
+
+        const node = createUINode('DebugCliDialog', { active: false, width: 100, height: 100 })
+        const dialog = node.addComponent(DebugCliDialog)
+        dialog.initialCommand = initialCommand
+        dialog.onCommand = (command) => {
+            const currentGameScreenNode = gameScreen?.node as Node | null | undefined
+            const activeGameScreen = currentGameScreenNode?.isValid === true ? gameScreen : null
+            const result = executeDebugCliCommand(command, activeGameScreen)
+            if (result.ok) {
+                console.info(`[DebugCliDialog] ${result.message}`)
+            } else {
+                console.warn(`[DebugCliDialog] ${result.message}`)
+            }
+        }
+
+        this.uiRoot!.addChild(node)
+        node.active = true
+        this._debugCliScreen = node
+
+        void dialog.waitForResult().then((result) => {
+            if (this._debugCliScreen === node) this._debugCliScreen = null
+            if (result === DialogResult.Ok && dialog.command.length > 0) {
+                dialog.onCommand?.(dialog.command)
+            }
+            const currentGameScreenNode = gameScreen?.node as Node | null | undefined
+            if (currentGameScreenNode?.isValid && !wasGamePaused) {
+                gameScreen.resumeGame()
+            }
+        })
+        return dialog
+    }
+
     showMessageBox(title: string, message: string): MessageBox | null {
         const node = createUINode('MessageBox', { active: false, width: 100, height: 100 })
 
@@ -435,12 +500,25 @@ export class UIController extends Component {
             this._modalScreen.destroy()
         }
         this._modalScreen = null
+        if (this._debugCliScreen?.isValid) {
+            this._debugCliScreen.destroy()
+        }
+        this._debugCliScreen = null
         this._screenTransitioning = false
         if (this._currentScreen?.isValid) {
             this._currentScreen.destroy()
         }
         this._currentScreen = null
         this._selectorScreen = null
+        this._adventureGameScreen = null
+    }
+
+    private _onGlobalKeyDown(event: EventKeyboard) {
+        if (event.keyCode !== DEBUG_CLI_KEY_CODE) return
+        if (this._debugCliScreen?.isValid) return
+
+        event.propagationStopped = true
+        this.showDebugCliDialog('/')
     }
 
     private _shouldStartDebugAdventure() {
