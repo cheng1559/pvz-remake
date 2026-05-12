@@ -5,6 +5,7 @@ export interface PlantUpdateContext {
     events: GameEvent[]
     hasTargetInRow(row: number, plant: Plant): boolean
     hasTargetInPlantAttackRect(plant: Plant): boolean
+    canProduceSun(): boolean
     randomInt(minInclusive: number, maxInclusive: number): number
 }
 
@@ -41,6 +42,7 @@ export abstract class Plant implements PlantEntity {
     attackCounter: number
     shootingCounter = 0
     specialCounter = 0
+    eatenFlashCounter = 0
     state: PlantState = 'not-ready'
     stateCountdown = 0
     dead = false
@@ -69,6 +71,7 @@ export abstract class Plant implements PlantEntity {
         if (this.stateCountdown > 0) this.stateCountdown--
         this.updateAbilities(context)
         this.updateBlink(context)
+        if (this.eatenFlashCounter > 0) this.eatenFlashCounter--
         this.attackCounter = this.launchCounter
     }
 

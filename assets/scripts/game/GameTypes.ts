@@ -18,7 +18,7 @@ export type BackgroundType = 'day'
 export type GameResult = 'playing' | 'won' | 'lost'
 export type ZombieType = 'normal' | 'flag' | 'traffic-cone' | 'bucket' | 'ducky-tube'
 export type ZombieSubclass = 'normal'
-export type ZombieState = 'walking' | 'eating' | 'dying' | 'mowered'
+export type ZombieState = 'walking' | 'eating' | 'dying' | 'mowered' | 'charred'
 export type LawnMowerState = 'ready' | 'triggered'
 export type ZombieHelmType = 'none' | 'traffic-cone' | 'bucket'
 export type ZombieShieldType = 'none'
@@ -27,6 +27,7 @@ export type AdviceStyle =
     | 'hint-stay'
     | 'tutorial-level1'
     | 'tutorial-level1-stay'
+    | 'tutorial-level2'
 export type LevelOneTutorialPhase =
     | 'pick-first-seed'
     | 'plant-first-seed'
@@ -36,6 +37,12 @@ export type LevelOneTutorialPhase =
     | 'pick-second-seed'
     | 'plant-second-seed'
     | 'done'
+export type LevelTwoTutorialPhase =
+    | 'off'
+    | 'pick-sunflower'
+    | 'plant-sunflower'
+    | 'refresh-sunflower'
+    | 'completed'
 export type PlantingReason = 'ok' | 'not-here' | 'not-enough-sun' | 'waiting-for-seed'
 export type PlantState =
     | 'not-ready'
@@ -63,7 +70,7 @@ export interface BoardGridPosition {
 }
 
 export interface LevelDefinition {
-    id: 'adventure-1-1'
+    id: 'adventure-1-1' | 'adventure-1-2' | 'adventure-1-3'
     adventureLevel: number
     background: BackgroundType
     activeRows: number[]
@@ -154,6 +161,9 @@ export type GameEvent =
     | { type: 'animationRequested', entityId: number, animation: string }
     | { type: 'projectileFired', entityId: number, projectileType: ProjectileType, x: number, y: number, row: number }
     | { type: 'sunProduced', entityId: number, amount: number, x: number, y: number }
+    | { type: 'cherryBombDetonated', entityId: number, x: number, y: number, row: number }
+    | { type: 'boardShake', amountX: number, amountY: number }
+    | { type: 'readySetPlant' }
     | { type: 'soundRequested', sound: SoundEffect }
     | { type: 'foleyRequested', sound: SoundEffect, pitchRange?: number }
     | { type: 'levelAwardCollected' }
@@ -188,6 +198,7 @@ export interface PlantEntity {
     attackCounter: number
     shootingCounter: number
     specialCounter: number
+    eatenFlashCounter: number
     state: PlantState
     stateCountdown: number
     dead: boolean
@@ -216,6 +227,7 @@ export interface ZombieEntity {
     animationSpeed: number
     animationTime: number
     moweredTime: number
+    charredTime: number
     age: number
     chilledCounter: number
     hitFlashCounter: number

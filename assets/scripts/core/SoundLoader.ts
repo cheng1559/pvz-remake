@@ -47,6 +47,7 @@ export const SoundEffect = {
     Points: 'points',
     PotatoMine: 'potato_mine',
     ReverseExplosion: 'reverse_explosion',
+    ReadySetPlant: 'readysetplant',
     RollIn: 'roll_in',
     SeedLift: 'seedlift',
     ShieldHit: 'shieldhit',

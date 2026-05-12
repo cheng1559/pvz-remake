@@ -19,8 +19,15 @@ export class SunflowerPlant extends Plant {
 
     private updateProductionPlant(context: PlantUpdateContext) {
         if (this.launchRate <= 0) return
+        if (!context.canProduceSun()) {
+            this.eatenFlashCounter = 0
+            return
+        }
 
         this.launchCounter--
+        if (this.launchCounter <= 100) {
+            this.eatenFlashCounter = Math.max(this.eatenFlashCounter, 100 - Math.max(0, this.launchCounter))
+        }
         if (this.launchCounter > 0) return
 
         this.launchCounter = context.randomInt(this.launchRate - 150, this.launchRate)

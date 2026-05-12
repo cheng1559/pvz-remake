@@ -95,6 +95,8 @@ export class Item implements ItemEntity {
         this._pushCollectSound(context)
         if (this.type === 'final-seed-packet') {
             context.events.push({ type: 'levelAwardCollected' })
+            this._levelAwardCompleted = true
+            context.completeLevelAward(this)
         }
         return true
     }

@@ -1,6 +1,6 @@
 import type { AdventureGameScreen } from '@/game/GameScreen'
-import { PLANT_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed, setGameSpeed } from '@/game/GameDefinitions'
-import type { PlantType, ZombieType } from '@/game/GameTypes'
+import { ADVENTURE_LEVELS, PLANT_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed, setGameSpeed } from '@/game/GameDefinitions'
+import type { LevelDefinition, PlantType, ZombieType } from '@/game/GameTypes'
 
 const DEBUG_CLI_MIN_SPEED = 0
 const DEBUG_CLI_MAX_SPEED = 10
@@ -9,7 +9,8 @@ export interface DebugCliResult {
     ok: boolean
     message: string
     failure?: 'syntax' | 'condition'
-    action?: 'restart' | 'home'
+    action?: 'restart' | 'home' | 'level'
+    levelId?: LevelDefinition['id']
 }
 
 const DEBUG_PLANT_TYPES = Object.keys(PLANT_DEFINITIONS) as PlantType[]
@@ -17,6 +18,8 @@ const DEBUG_ZOMBIE_TYPES = Object.keys(ZOMBIE_DEFINITIONS) as ZombieType[]
 const DEBUG_PLANT_LOOKUP = createDebugTypeLookup(DEBUG_PLANT_TYPES)
 const DEBUG_ZOMBIE_LOOKUP = createDebugTypeLookup(DEBUG_ZOMBIE_TYPES)
 const DEBUG_BOOLEAN_VALUES = ['true', 'false']
+const DEBUG_LEVEL_IDS = ADVENTURE_LEVELS.map((level) => debugLevelId(level))
+const DEBUG_LEVEL_LOOKUP = new Map(DEBUG_LEVEL_IDS.map((id, index) => [id, ADVENTURE_LEVELS[index]]))
 const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
     {
         name: 'plant',
@@ -69,6 +72,11 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         parameterHints: [],
     },
     {
+        name: 'level',
+        completions: [DEBUG_LEVEL_IDS],
+        parameterHints: ['{level}'],
+    },
+    {
         name: 'gamespeed',
         completions: [],
         parameterHints: ['{speed}'],
@@ -85,6 +93,11 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
     },
     {
         name: 'sunspawning',
+        completions: [DEBUG_BOOLEAN_VALUES],
+        parameterHints: ['{enabled}'],
+    },
+    {
+        name: 'autocollect',
         completions: [DEBUG_BOOLEAN_VALUES],
         parameterHints: ['{enabled}'],
     },
@@ -140,6 +153,8 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugRestartCommand(tokens, gameScreen)
         case 'home':
             return executeDebugHomeCommand(tokens, gameScreen)
+        case 'level':
+            return executeDebugLevelCommand(tokens)
         case 'summon':
             return executeDebugSummonCommand(tokens, gameScreen)
         case 'gamespeed':
@@ -152,6 +167,8 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugRechargingCommand(tokens, gameScreen)
         case 'sunspawning':
             return executeDebugSunSpawningCommand(tokens, gameScreen)
+        case 'autocollect':
+            return executeDebugAutoCollectCommand(tokens, gameScreen)
         default:
             return { ok: false, message: `Unknown command: ${tokens[0]}` }
     }
@@ -389,6 +406,26 @@ function executeDebugHomeCommand(tokens: string[], gameScreen: AdventureGameScre
     return { ok: true, message: 'Returning to main menu', action: 'home' }
 }
 
+function executeDebugLevelCommand(tokens: string[]): DebugCliResult {
+    if (tokens.length !== 2) {
+        return { ok: false, message: 'Usage: /level {level}' }
+    }
+
+    const level = DEBUG_LEVEL_LOOKUP.get(normalizeDebugLevelId(tokens[1]))
+    if (!level) {
+        return {
+            ok: false,
+            message: `Unknown level: ${tokens[1]}. Valid levels: ${DEBUG_LEVEL_IDS.join(', ')}`,
+        }
+    }
+    return {
+        ok: true,
+        message: `Loading level ${debugLevelId(level)}`,
+        action: 'level',
+        levelId: level.id,
+    }
+}
+
 function executeDebugSummonCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
     if (tokens.length < 2 || tokens.length > 4) {
         return { ok: false, message: 'Usage: /summon {zombie_name} [row] [col]' }
@@ -493,6 +530,27 @@ function executeDebugSunSpawningCommand(tokens: string[], gameScreen: AdventureG
         return conditionFailure('/sunspawning can only run during an active level')
     }
     return { ok: true, message: `Sun spawning ${sunSpawningEnabled ? 'enabled' : 'disabled'}` }
+}
+
+function executeDebugAutoCollectCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 2) {
+        return { ok: false, message: 'Usage: /autocollect {true|false}' }
+    }
+
+    if (!isLevelReady(gameScreen)) {
+        return conditionFailure('/autocollect can only run during an active level')
+    }
+
+    const enabled = parseDebugBoolean(tokens[1])
+    if (enabled == null) {
+        return { ok: false, message: `Invalid auto collect value: ${tokens[1]}. Use true or false` }
+    }
+
+    const autoCollectEnabled = gameScreen.debugSetAutoCollectEnabled(enabled)
+    if (autoCollectEnabled == null) {
+        return conditionFailure('/autocollect can only run during an active level')
+    }
+    return { ok: true, message: `Auto collect ${autoCollectEnabled ? 'enabled' : 'disabled'}` }
 }
 
 function executeDebugLawnMowerCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
@@ -648,6 +706,15 @@ function normalizeDebugCommandName(commandName: string) {
 
 function parseDebugZombieType(name: string): ZombieType | null {
     return DEBUG_ZOMBIE_LOOKUP[normalizeDebugEntityName(name)] ?? null
+}
+
+function debugLevelId(level: LevelDefinition) {
+    return level.id.replace('adventure-', '')
+}
+
+function normalizeDebugLevelId(value: string) {
+    const normalized = value.trim().toLowerCase()
+    return normalized.startsWith('adventure-') ? normalized.slice('adventure-'.length) : normalized
 }
 
 function parseLawnMowerStatus(status: string): 'trigger' | 'reset' | null {

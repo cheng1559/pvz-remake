@@ -344,3 +344,49 @@ export const ADVENTURE_1_1: LevelDefinition = {
         'Click on a seed packet to pick it up!',
     ],
 }
+
+export const ADVENTURE_1_2: LevelDefinition = {
+    id: 'adventure-1-2',
+    adventureLevel: 2,
+    background: 'day',
+    activeRows: [1, 2, 3],
+    startingSun: 50,
+    seedPackets: ['peashooter', 'sunflower'],
+    zombieWaves: [
+        { zombies: ['normal'] },
+        { zombies: ['normal'] },
+        { zombies: ['normal'] },
+        { zombies: ['normal', 'normal'] },
+        { zombies: ['normal', 'normal'] },
+        { zombies: ['normal', 'normal'], flagWave: true },
+    ],
+    awardSeedType: 'cherrybomb',
+    tutorialAdvice: [],
+}
+
+export const ADVENTURE_1_3: LevelDefinition = {
+    id: 'adventure-1-3',
+    adventureLevel: 3,
+    background: 'day',
+    activeRows: [1, 2, 3],
+    startingSun: 50,
+    seedPackets: ['peashooter', 'sunflower', 'cherrybomb'],
+    zombieWaves: [
+        { zombies: ['normal'] },
+        { zombies: ['normal'] },
+        { zombies: ['traffic-cone'] },
+        { zombies: ['normal', 'normal'] },
+        { zombies: ['normal', 'traffic-cone'] },
+        { zombies: ['normal', 'normal'] },
+        { zombies: ['normal', 'traffic-cone', 'normal'] },
+        { zombies: ['normal', 'traffic-cone', 'normal'], flagWave: true },
+    ],
+    awardSeedType: 'wallnut',
+    tutorialAdvice: [],
+}
+
+export const ADVENTURE_LEVELS = [
+    ADVENTURE_1_1,
+    ADVENTURE_1_2,
+    ADVENTURE_1_3,
+] as const

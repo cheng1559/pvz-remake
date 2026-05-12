@@ -36,6 +36,12 @@ const ZOMBIE_MOWERED_FRAME_SPAN = ZOMBIE_MOWERED_FRAME_COUNT - 1
 const ZOMBIE_MOWERED_TICKS = Math.ceil(
     ZOMBIE_MOWERED_FRAME_COUNT / ZOMBIE_MOWERED_ANIM_RATE * GAME_TICKS_PER_SECOND,
 )
+const ZOMBIE_CHARRED_ANIM_RATE = 15
+const ZOMBIE_CHARRED_FRAME_COUNT = 43
+const ZOMBIE_CHARRED_FRAME_SPAN = ZOMBIE_CHARRED_FRAME_COUNT - 1
+const ZOMBIE_CHARRED_TICKS = Math.ceil(
+    ZOMBIE_CHARRED_FRAME_COUNT / ZOMBIE_CHARRED_ANIM_RATE * GAME_TICKS_PER_SECOND,
+)
 const ZOMBIE_DEATH_FALL_TIME = 0.77
 const ZOMBIE_DEATH2_FALL_TIME = 0.71
 const ZOMBIE_SUPER_LONG_DEATH_FALL_TIME = 0.788
@@ -56,6 +62,7 @@ export interface ZombieUpdateContext {
     zombieCount: number
     canUseSuperLongDeath: boolean
     findPlantTarget(zombie: Zombie): PlantEntity | null
+    canChewPlant(plant: PlantEntity): boolean
     damagePlant(plant: PlantEntity, damage: number): void
     checkBoardEdge(zombie: Zombie): boolean
     randomInt(minInclusive: number, maxInclusive: number): number
@@ -107,6 +114,7 @@ export abstract class Zombie implements ZombieEntity {
     animationSpeed: number
     animationTime: number
     moweredTime = 0
+    charredTime = 0
     health: number
     helmHealth: number
     shieldHealth: number
@@ -181,6 +189,10 @@ export abstract class Zombie implements ZombieEntity {
             this.updateMowered()
             return
         }
+        if (this.state === 'charred') {
+            this.updateCharred()
+            return
+        }
 
         this._updateChill()
         const target = context.findPlantTarget(this)
@@ -204,7 +216,7 @@ export abstract class Zombie implements ZombieEntity {
             droppedHead: false,
             startedDying: false,
         }
-        if (this.state === 'dying' || this.state === 'mowered') return result
+        if (this.state === 'dying' || this.state === 'mowered' || this.state === 'charred') return result
 
         if (damage > 0) this.hitFlashCounter = HIT_FLASH_TICKS
         let remainingDamage = damage
@@ -232,7 +244,7 @@ export abstract class Zombie implements ZombieEntity {
     }
 
     applyChill(events: GameEvent[]) {
-        if (this.state === 'dying' || this.state === 'mowered') return
+        if (this.state === 'dying' || this.state === 'mowered' || this.state === 'charred') return
         if (this.chilledCounter <= 0) {
             events.push({ type: 'foleyRequested', sound: SoundEffect.Frozen })
         }
@@ -240,7 +252,7 @@ export abstract class Zombie implements ZombieEntity {
     }
 
     mowDown() {
-        if (this.dead || this.state === 'mowered') return
+        if (this.dead || this.state === 'mowered' || this.state === 'charred') return
 
         this.state = 'mowered'
         this.health = 0
@@ -255,6 +267,31 @@ export abstract class Zombie implements ZombieEntity {
         this.currentAnimation = 'default'
     }
 
+    applyBurn() {
+        if (this.dead || this.state === 'charred') return false
+        if (this.state === 'dying' || this.state === 'mowered') {
+            this.dead = true
+            return false
+        }
+
+        this.state = 'charred'
+        this.health = 0
+        this.helmHealth = 0
+        this.shieldHealth = 0
+        this.hasHead = false
+        this.hasArm = false
+        this.hasTongue = false
+        if (this.type === 'flag') this.hasObject = false
+        this.velocityX = 0
+        this.chilledCounter = 0
+        this.hitFlashCounter = 0
+        this.animationTime = 0
+        this.animationSpeed = ZOMBIE_CHARRED_ANIM_RATE / ZOMBIE_WALK_ASSET_FPS
+        this.charredTime = 0
+        this.currentAnimation = 'anim_crumble'
+        return true
+    }
+
     protected updateMowered() {
         this.moweredTime++
         this.animationTime = Math.min(
@@ -262,6 +299,17 @@ export abstract class Zombie implements ZombieEntity {
             this.animationTime + ZOMBIE_MOWERED_FRAME_SPAN / ZOMBIE_MOWERED_TICKS,
         )
         if (this.moweredTime >= ZOMBIE_MOWERED_TICKS) {
+            this.dead = true
+        }
+    }
+
+    protected updateCharred() {
+        this.charredTime++
+        this.animationTime = Math.min(
+            ZOMBIE_CHARRED_FRAME_SPAN,
+            this.animationTime + ZOMBIE_CHARRED_FRAME_SPAN / ZOMBIE_CHARRED_TICKS,
+        )
+        if (this.charredTime >= ZOMBIE_CHARRED_TICKS) {
             this.dead = true
         }
     }
@@ -313,7 +361,6 @@ export abstract class Zombie implements ZombieEntity {
             this._updateHeadlessDecay(context)
             return
         }
-
         this._eatCounter--
         this._chewSoundCounter--
         if (this._chewSoundCounter <= 0) {
@@ -322,6 +369,11 @@ export abstract class Zombie implements ZombieEntity {
                 : context.randomInt(0, 1) === 0 ? SoundEffect.Chomp : SoundEffect.Chomp2
             context.events.push({ type: 'foleyRequested', sound })
             this._chewSoundCounter = CHEW_SOUND_INTERVAL
+        }
+
+        if (!context.canChewPlant(target)) {
+            this._eatCounter = TICKS_BETWEEN_EATS
+            return
         }
 
         if (this._eatCounter <= 0) {
@@ -364,7 +416,7 @@ export abstract class Zombie implements ZombieEntity {
     }
 
     finishAfterLevelAwardDropped(deathContext: ZombieDeathContext = { zombieCount: 1, canUseSuperLongDeath: false }) {
-        if (this.dead || this.state === 'dying' || this.state === 'mowered') return
+        if (this.dead || this.state === 'dying' || this.state === 'mowered' || this.state === 'charred') return
         if (this.hasHead) return
 
         this.startDeathAnimation(deathContext)

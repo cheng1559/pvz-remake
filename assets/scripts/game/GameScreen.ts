@@ -42,7 +42,14 @@ import { createStoneButton } from '@/ui/StoneButton'
 import { createTooltipNode } from '@/ui/Tooltip/Tooltip'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
-import { GAME_TICK_SECONDS, PLANT_DEFINITIONS, SEED_DEFINITIONS, ZOMBIE_DEFINITIONS, scaleGameDeltaTime } from './GameDefinitions'
+import {
+    ADVENTURE_1_1,
+    GAME_TICK_SECONDS,
+    PLANT_DEFINITIONS,
+    SEED_DEFINITIONS,
+    ZOMBIE_DEFINITIONS,
+    scaleGameDeltaTime,
+} from './GameDefinitions'
 import {
     getAnimationRateSpeed,
     playPotatoArmedAnimation,
@@ -65,6 +72,7 @@ import type {
     ItemEntity,
     AdviceStyle,
     LawnMowerEntity,
+    LevelDefinition,
     PlantEntity,
     PlantType,
     ProjectileEntity,
@@ -78,6 +86,8 @@ import type {
 const { ccclass } = _decorator
 
 const BOARD_OFFSET = 220
+const BOARD_ROOT_X = -400
+const BOARD_ROOT_Y = 300
 const BOARD_RIGHT_X = -380
 const MENU_BUTTON_WIDTH = 117
 const MENU_BUTTON_HEIGHT = 46
@@ -90,14 +100,15 @@ const INTRO_ROLL_SOD_END = 800
 const INTRO_LAWN_MOWER_ROW = 2
 const INTRO_LAWN_MOWER_START = 820
 const INTRO_LAWN_MOWER_END = 845
+const INTRO_LAWN_MOWER_ROW_START_STEP = 5
 const INTRO_LAWN_MOWER_START_X = -80
 const INTRO_LAWN_MOWER_END_X = -21
-const INTRO_LAWN_MOWER_Y = 303
 const INTRO_LAWN_MOWER_REANIM_X_OFFSET = 6
 const INTRO_LAWN_MOWER_REANIM_Y_OFFSET = 19
 const INTRO_LAWN_MOWER_SHADOW_X_OFFSET = -7
 const INTRO_LAWN_MOWER_SHADOW_Y_OFFSET = 47
 const INTRO_LAWN_MOWER_SCALE = 0.85
+const LAWN_MOWER_Y_OFFSET = 23
 const INTRO_SEED_BANK_ON_START = 800
 const INTRO_SEED_BANK_ON_END = 825
 const INTRO_SEED_BANK_X = 10
@@ -118,6 +129,8 @@ const PROGRESS_METER_HEAD_MAX_PROGRESS = 135
 const PROGRESS_METER_PART_WIDTH = 25
 const PROGRESS_METER_PART_HEIGHT = 25
 const PROGRESS_METER_PART_COLUMNS = 3
+const PROGRESS_METER_FLAG_RAISE_TIME = 100
+const PROGRESS_METER_FLAG_RAISE_HEIGHT = 14
 const LEVEL_LABEL_BASELINE_Y = 595
 const LEVEL_LABEL_RIGHT_X = 780
 const LEVEL_LABEL_WITH_PROGRESS_RIGHT_X = 593
@@ -139,10 +152,13 @@ const INTRO_STREET_ZOMBIE_ODD_COLUMN_Z_OFFSET = 2
 const INTRO_END = 855
 const SOD_ROW_X = 239 - BOARD_OFFSET
 const SOD_ROW_Y = 265
+const SOD_THREE_ROW_X = 235 - BOARD_OFFSET
+const SOD_THREE_ROW_Y = 149
 const SUN_AMOUNT_BASELINE_X = 34
 const SUN_AMOUNT_BASELINE_Y = 78
 const SUN_FLASH_TICKS = 70
 const SUN_FLASH_PERIOD_TICKS = 20
+const BOARD_SHAKE_TICKS = 12
 const POTATO_MINE_RISE_ANIM_RATE = 18
 const CHOMPER_BITE_ANIM_RATE = 24
 const CHOMPER_CHEW_ANIM_RATE = 15
@@ -185,6 +201,9 @@ const HUGE_WAVE_TEXT_DURATION = 750
 const HUGE_WAVE_TEXT_ENTER_TICKS = 20
 const HUGE_WAVE_TEXT_LEAVE_TICKS = 40
 const TUTORIAL_FLASH_TIME = 75
+const READY_SET_PLANT_ANIMATION_PATH = 'animations/startreadysetplant'
+const READY_SET_PLANT_REANIM_X = 400
+const READY_SET_PLANT_REANIM_Y = 324
 const FINAL_WAVE_ANIMATION_PATH = 'animations/finalwave'
 const FINAL_WAVE_REANIM_X = 0
 const FINAL_WAVE_REANIM_Y = 30
@@ -306,6 +325,7 @@ const GAME_TEXTURES = [
     'plantshadow',
     'lawnmower_cached',
     'sod1row',
+    'sod3row',
     'finalwave',
     'flagmeter',
     'flagmeterparts',
@@ -331,7 +351,9 @@ interface ZombieView extends ZombieAnimationView {
     bodyNode: Node | null
     shadowNode: Node | null
     moweredAnimNode: AnimNode | null
+    charredAnimNode: AnimNode | null
     showingMowered: boolean
+    showingCharred: boolean
 }
 
 interface LawnMowerView {
@@ -340,6 +362,12 @@ interface LawnMowerView {
     animatorNode: Node | null
     animNode: AnimNode | null
     state: LawnMowerEntity['state'] | null
+}
+
+interface IntroLawnMowerView {
+    row: number
+    node: Node
+    shadowNode: Node
 }
 
 interface MoneyItemView {
@@ -362,6 +390,17 @@ interface IntroStreetZombieSpec {
     gridY: number
 }
 
+interface SodRollView {
+    node: Node
+    animNode: AnimNode
+}
+
+interface ProgressFlagView {
+    totalWavesAtFlag: number
+    poleNode: Node
+    flagNode: Node
+}
+
 @ccclass('AdventureGameScreen')
 export class AdventureGameScreen extends Component {
     public onBackToMenu: (() => void) | null = null
@@ -369,6 +408,7 @@ export class AdventureGameScreen extends Component {
     public onPauseRequest: (() => void) | null = null
     public onGameOverRequest: (() => void) | null = null
     public onAwardScreenRequest: ((seedType: SeedType) => void) | null = null
+    public levelDefinition: LevelDefinition = ADVENTURE_1_1
 
     private _session = new GameSession()
     private _boardRoot: Node = null!
@@ -384,11 +424,12 @@ export class AdventureGameScreen extends Component {
     private _menuButtonNode: Node | null = null
     private _unsoddedNode: Node | null = null
     private _soddedNode: Node | null = null
+    private _sodBaseNode: Node | null = null
     private _sodClipNode: Node | null = null
+    private _sodClipSpriteName = 'sod1row'
     private _tutorialLawnFlashNode: Node | null = null
-    private _sodRollNode: Node | null = null
-    private _introLawnMowerNode: Node | null = null
-    private _introLawnMowerShadowNode: Node | null = null
+    private _sodRollViews: SodRollView[] = []
+    private _introLawnMowerViews: IntroLawnMowerView[] = []
     private _introStreetZombieNodes: Node[] = []
     private _seedBankHeight = 87
     private _cursorPreview: Node | null = null
@@ -397,6 +438,9 @@ export class AdventureGameScreen extends Component {
     private _shovelCursor: Node | null = null
     private _sunLabel: FontRenderer = null!
     private _sunFlashTicks = 0
+    private _boardShakeTicks = 0
+    private _boardShakeAmountX = 0
+    private _boardShakeAmountY = 0
     private _adviceFont: BitmapFontAssets | null = null
     private _adviceWidget: AdviceWidget | null = null
     private _houseNameNode: Node | null = null
@@ -428,13 +472,16 @@ export class AdventureGameScreen extends Component {
     private _zombieAnimations: Map<ZombieType, JsonAsset> = new Map()
     private _flagZombieAnimation: JsonAsset | null = null
     private _moweredZombieAnimation: JsonAsset | null = null
+    private _charredZombieAnimation: JsonAsset | null = null
     private _sunAnimation: JsonAsset | null = null
     private _sodRollAnimation: JsonAsset | null = null
-    private _sodRollAnimNode: AnimNode | null = null
     private _lawnMowerAnimation: JsonAsset | null = null
     private _finalWaveAnimation: JsonAsset | null = null
     private _finalWaveNode: Node | null = null
     private _finalWaveAnimNode: AnimNode | null = null
+    private _readySetPlantAnimation: JsonAsset | null = null
+    private _readySetPlantNode: Node | null = null
+    private _readySetPlantAnimNode: AnimNode | null = null
     private _houseDoorBottomNode: Node | null = null
     private _houseDoorTopNode: Node | null = null
     private _gameOverOverlayNode: Node | null = null
@@ -460,6 +507,7 @@ export class AdventureGameScreen extends Component {
     private _progressMeterFillClip: Node | null = null
     private _progressMeterFillNode: Node | null = null
     private _progressMeterHeadNode: Node | null = null
+    private _progressFlagViews: ProgressFlagView[] = []
     private _levelLabel: FontRenderer | null = null
     private _introTime = 0
     private _gameAccumulator = 0
@@ -472,6 +520,7 @@ export class AdventureGameScreen extends Component {
     private _bootstrapped = false
 
     onLoad() {
+        this._session = new GameSession(this.levelDefinition)
         setUISize(this.node, 800, 600)
         this._boardRoot = createUINode('BoardRoot', {
             parent: this.node,
@@ -479,8 +528,8 @@ export class AdventureGameScreen extends Component {
             height: 600,
             anchorX: 0,
             anchorY: 1,
-            x: -400,
-            y: 300,
+            x: BOARD_ROOT_X,
+            y: BOARD_ROOT_Y,
         })
         this._boardRoot.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT
         this._boardContent = createUINode('BoardContent', {
@@ -525,11 +574,13 @@ export class AdventureGameScreen extends Component {
             ...Object.values(ZOMBIE_DEFINITIONS).map((zombie) => StartupResourceLoader.loadJson(zombie.animationPath)),
             StartupResourceLoader.loadJson('animations/zombie_flagpole'),
             StartupResourceLoader.loadJson('animations/lawnmoweredzombie'),
+            StartupResourceLoader.loadJson('animations/zombie_charred'),
             StartupResourceLoader.loadJson(PAUSE_DIALOG_ZOMBIE_ANIMATION_PATH),
             StartupResourceLoader.loadJson('animations/sun'),
             StartupResourceLoader.loadJson('animations/sodroll'),
             StartupResourceLoader.loadJson('animations/lawnmower'),
             StartupResourceLoader.loadJson(FINAL_WAVE_ANIMATION_PATH),
+            StartupResourceLoader.loadJson(READY_SET_PLANT_ANIMATION_PATH),
             FontLoader.load('continuumbold14'),
             FontLoader.load('pico129'),
             FontLoader.load('houseofterror28'),
@@ -551,22 +602,25 @@ export class AdventureGameScreen extends Component {
         const afterZombies = afterPlants + zombieTypes.length
         this._flagZombieAnimation = results[afterZombies] as JsonAsset | null
         this._moweredZombieAnimation = results[afterZombies + 1] as JsonAsset | null
-        const pauseDialogZombieAnimation = results[afterZombies + 2] as JsonAsset | null
-        this._sunAnimation = results[afterZombies + 3] as JsonAsset | null
-        this._sodRollAnimation = results[afterZombies + 4] as JsonAsset | null
-        this._lawnMowerAnimation = results[afterZombies + 5] as JsonAsset | null
-        this._finalWaveAnimation = results[afterZombies + 6] as JsonAsset | null
-        this._sunFont = results[afterZombies + 7] as BitmapFontAssets | null
-        this._packetCostFont = results[afterZombies + 8] as BitmapFontAssets | null
-        this._adviceFont = results[afterZombies + 9] as BitmapFontAssets | null
-        this._levelFont = results[afterZombies + 10] as BitmapFontAssets | null
-        this._buttonSprites = results[afterZombies + 11] as MessageBoxButtonSprites | null
-        this._buttonFonts = results[afterZombies + 12] as MessageBoxButtonFonts | null
+        this._charredZombieAnimation = results[afterZombies + 2] as JsonAsset | null
+        const pauseDialogZombieAnimation = results[afterZombies + 3] as JsonAsset | null
+        this._sunAnimation = results[afterZombies + 4] as JsonAsset | null
+        this._sodRollAnimation = results[afterZombies + 5] as JsonAsset | null
+        this._lawnMowerAnimation = results[afterZombies + 6] as JsonAsset | null
+        this._finalWaveAnimation = results[afterZombies + 7] as JsonAsset | null
+        this._readySetPlantAnimation = results[afterZombies + 8] as JsonAsset | null
+        this._sunFont = results[afterZombies + 9] as BitmapFontAssets | null
+        this._packetCostFont = results[afterZombies + 10] as BitmapFontAssets | null
+        this._adviceFont = results[afterZombies + 11] as BitmapFontAssets | null
+        this._levelFont = results[afterZombies + 12] as BitmapFontAssets | null
+        this._buttonSprites = results[afterZombies + 13] as MessageBoxButtonSprites | null
+        this._buttonFonts = results[afterZombies + 14] as MessageBoxButtonFonts | null
         await Promise.all([
             this._preloadPlantAnimationTextures(),
             this._preloadZombieAnimationTextures(pauseDialogZombieAnimation),
             this._preloadSunAnimationTextures(),
             this._preloadFinalWaveAnimationTextures(),
+            this._preloadReadySetPlantAnimationTextures(),
         ])
 
         await this._drawStaticBoard()
@@ -768,6 +822,14 @@ export class AdventureGameScreen extends Component {
         return sunSpawningEnabled
     }
 
+    public debugSetAutoCollectEnabled(enabled: boolean) {
+        if (!this.isLevelRunning()) return null
+
+        const autoCollectEnabled = this._session.debugSetAutoCollectEnabled(enabled)
+        this._renderFrame()
+        return autoCollectEnabled
+    }
+
     private async _drawStaticBoard() {
         const unsodded = SpriteLoader.get('background1unsodded')
         if (unsodded) {
@@ -792,17 +854,32 @@ export class AdventureGameScreen extends Component {
             this._soddedNode.active = false
         }
 
-        const sod = SpriteLoader.get('sod1row')
+        const sodLayout = this._introSodLayout()
+        const baseSod = sodLayout.baseSprite ? SpriteLoader.get(sodLayout.baseSprite) : null
+        if (baseSod) {
+            this._sodBaseNode = createSpriteNode({
+                name: 'SodBase',
+                spriteFrame: baseSod,
+                parent: this._boardContent,
+                x: sodLayout.baseX,
+                y: -sodLayout.baseY,
+            })
+            this._sodBaseNode.active = sodLayout.baseVisible
+        }
+
+        const sod = SpriteLoader.get(sodLayout.clipSprite)
         if (sod) {
+            this._sodClipSpriteName = sodLayout.clipSprite
             this._sodClipNode = createUINode('SodClip', {
                 parent: this._boardContent,
                 anchorX: 0,
                 anchorY: 1,
-                width: 0,
+                width: sodLayout.clipVisible ? 0 : sod.originalSize.width,
                 height: sod.originalSize.height,
-                x: SOD_ROW_X,
-                y: -SOD_ROW_Y,
+                x: sodLayout.clipX,
+                y: -sodLayout.clipY,
             })
+            this._sodClipNode.active = sodLayout.clipVisible
             this._sodClipNode.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT
             createSpriteNode({
                 name: 'SodRow',
@@ -822,20 +899,23 @@ export class AdventureGameScreen extends Component {
             this._tutorialLawnFlashNode.active = false
         }
 
-        if (this._sodRollAnimation?.json) {
-            this._sodRollNode = createUINode('SodRoll', {
-                parent: this._boardContent,
-                anchorX: 0,
-                anchorY: 1,
-                width: 800,
-                height: 600,
-                x: 0,
-                y: 0,
-            })
-            this._sodRollNode.active = false
-            const animator = this._sodRollNode.addComponent(Animator)
-            await animator.parseJson(this._sodRollAnimation.json as Record<string, any>)
-            this._sodRollAnimNode = animator.addAnimNode('default')
+        if (this._shouldPlayIntroSodRoll() && this._sodRollAnimation?.json) {
+            for (const spec of this._introSodRollSpecs()) {
+                const node = createUINode('SodRoll', {
+                    parent: this._boardContent,
+                    anchorX: 0,
+                    anchorY: 1,
+                    width: 800,
+                    height: 600,
+                    x: spec.x,
+                    y: -spec.y,
+                })
+                node.active = false
+                const animator = node.addComponent(Animator)
+                await animator.parseJson(this._sodRollAnimation.json as Record<string, any>)
+                const animNode = animator.addAnimNode('default')
+                if (animNode) this._sodRollViews.push({ node, animNode })
+            }
         }
 
         if (SpriteLoader.get('lawnmower_cached') && SpriteLoader.get('plantshadow')) {
@@ -845,6 +925,59 @@ export class AdventureGameScreen extends Component {
         this._createIntroStreetZombies()
         this._createGameOverDoorLayers()
         this._entityLayer.setSiblingIndex(this._boardContent.children.length - 1)
+    }
+
+    private _introSodLayout() {
+        if (this._session.level.adventureLevel === 3) {
+            return {
+                baseSprite: 'sod3row',
+                baseVisible: true,
+                baseX: SOD_THREE_ROW_X,
+                baseY: SOD_THREE_ROW_Y,
+                clipSprite: 'sod3row',
+                clipX: SOD_THREE_ROW_X,
+                clipY: SOD_THREE_ROW_Y,
+                clipVisible: false,
+            }
+        }
+        if (this._session.level.adventureLevel === 2) {
+            return {
+                baseSprite: 'sod1row',
+                baseVisible: true,
+                baseX: SOD_ROW_X,
+                baseY: SOD_ROW_Y,
+                clipSprite: 'sod3row',
+                clipX: SOD_THREE_ROW_X,
+                clipY: SOD_THREE_ROW_Y,
+                clipVisible: true,
+            }
+        }
+
+        return {
+            baseSprite: '',
+            baseVisible: false,
+            baseX: 0,
+            baseY: 0,
+            clipSprite: 'sod1row',
+            clipX: SOD_ROW_X,
+            clipY: SOD_ROW_Y,
+            clipVisible: true,
+        }
+    }
+
+    private _introSodRollSpecs() {
+        if (this._session.level.adventureLevel === 2) {
+            return [
+                { x: 0, y: -102 },
+                { x: 0, y: 111 },
+            ]
+        }
+
+        return [{ x: 0, y: 0 }]
+    }
+
+    private _shouldPlayIntroSodRoll() {
+        return this._session.level.adventureLevel <= 2
     }
 
     private _createGameOverDoorLayers() {
@@ -892,38 +1025,43 @@ export class AdventureGameScreen extends Component {
     }
 
     private _createIntroLawnMower() {
-        this._introLawnMowerShadowNode = createSpriteNode({
-            name: 'IntroLawnMowerShadow',
-            spriteFrame: SpriteLoader.get('plantshadow')!,
-            parent: this._boardContent,
-            layer: this.node.layer,
-            anchorX: 0.5,
-            anchorY: 0.5,
-        })
-        this._introLawnMowerShadowNode.active = false
-
-        this._introLawnMowerNode = createUINode('IntroLawnMower', {
-            parent: this._boardContent,
-            layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
-            width: 120,
-            height: 120,
-        })
-        this._introLawnMowerNode.active = false
-
+        const shadow = SpriteLoader.get('plantshadow')
         const cachedMower = SpriteLoader.get('lawnmower_cached')
-        if (cachedMower) {
+        if (!shadow || !cachedMower) return
+
+        for (const row of this._session.level.activeRows) {
+            const shadowNode = createSpriteNode({
+                name: `IntroLawnMowerShadow_${row}`,
+                spriteFrame: shadow,
+                parent: this._boardContent,
+                layer: this.node.layer,
+                anchorX: 0.5,
+                anchorY: 0.5,
+            })
+            shadowNode.active = false
+
+            const node = createUINode(`IntroLawnMower_${row}`, {
+                parent: this._boardContent,
+                layer: this.node.layer,
+                anchorX: 0,
+                anchorY: 1,
+                width: 120,
+                height: 120,
+            })
+            node.active = false
+
             createSpriteNode({
                 name: 'CachedMower',
                 spriteFrame: cachedMower,
-                parent: this._introLawnMowerNode,
+                parent: node,
                 layer: this.node.layer,
                 anchorX: 0,
                 anchorY: 1,
                 x: LAWN_MOWER_CACHED_DRAW_OFFSET_X,
                 y: 0,
             })
+
+            this._introLawnMowerViews.push({ row, node, shadowNode })
         }
 
         this._syncIntroLawnMower()
@@ -1036,6 +1174,7 @@ export class AdventureGameScreen extends Component {
             animationSpeed: this._pickIntroZombieAnimationSpeed(),
             animationTime: Math.random() * 20,
             moweredTime: 0,
+            charredTime: 0,
             age: 0,
             chilledCounter: 0,
             hitFlashCounter: 0,
@@ -1182,6 +1321,9 @@ export class AdventureGameScreen extends Component {
             z: 3,
         })
 
+        this._createProgressMeterFlags(parts)
+        this._progressMeterHeadNode.setSiblingIndex(this._progressMeterNode.children.length - 1)
+
         this._levelLabel = this._createBitmapText({
             name: 'LevelLabel',
             text: this._levelLabelText(),
@@ -1193,6 +1335,48 @@ export class AdventureGameScreen extends Component {
             align: 'right',
         })
         this._levelLabel.node.active = false
+    }
+
+    private _createProgressMeterFlags(parts: SpriteFrame) {
+        const wavesPerFlag = this._progressMeterWavesPerFlag()
+        const flagCount = this._progressMeterFlagCount(wavesPerFlag)
+        const flagsPosEnd = 590 + PROGRESS_METER_WIDTH
+        for (let flagWave = 1; flagWave <= flagCount; flagWave++) {
+            const totalWavesAtFlag = flagWave * wavesPerFlag
+            const flagX = this._linearFloat(0, this._session.numWaves, totalWavesAtFlag, flagsPosEnd, 606)
+            const localX = flagX - PROGRESS_METER_X
+            const poleNode = createSpriteNode({
+                name: `ProgressFlagPole_${flagWave}`,
+                spriteFrame: getAtlasFrame(
+                    parts,
+                    1,
+                    PROGRESS_METER_PART_WIDTH,
+                    PROGRESS_METER_PART_HEIGHT,
+                    PROGRESS_METER_PART_COLUMNS,
+                ),
+                parent: this._progressMeterNode!,
+                layer: this.node.layer,
+                x: localX,
+                y: -(571 - PROGRESS_METER_Y),
+                z: 2,
+            })
+            const flagNode = createSpriteNode({
+                name: `ProgressFlag_${flagWave}`,
+                spriteFrame: getAtlasFrame(
+                    parts,
+                    2,
+                    PROGRESS_METER_PART_WIDTH,
+                    PROGRESS_METER_PART_HEIGHT,
+                    PROGRESS_METER_PART_COLUMNS,
+                ),
+                parent: this._progressMeterNode!,
+                layer: this.node.layer,
+                x: localX,
+                y: -(572 - PROGRESS_METER_Y),
+                z: 2,
+            })
+            this._progressFlagViews.push({ totalWavesAtFlag, poleNode, flagNode })
+        }
     }
 
     private _capturePreviousEntitySnapshots() {
@@ -1561,6 +1745,7 @@ export class AdventureGameScreen extends Component {
                 this._syncEntity(entity)
             }
         }
+        if (this._gameStarted && !this._gameOverActive) this._syncBoardPosition()
         this._syncEntityLayerOrder()
         this._drawZombieCollisionDebug()
         this._restoreGameplayLayerOrder()
@@ -1578,10 +1763,10 @@ export class AdventureGameScreen extends Component {
         const previousIntroTime = this._introTime
         this._introTime += dt * 100
         this._boardContent.setPosition(this._introBoardX(), 0, 0)
-        if (previousIntroTime < INTRO_ROLL_SOD_START && this._introTime >= INTRO_ROLL_SOD_START) {
+        if (this._shouldPlayIntroSodRoll() && previousIntroTime < INTRO_ROLL_SOD_START && this._introTime >= INTRO_ROLL_SOD_START) {
             this._startSodRoll()
         }
-        this._updateIntroSod()
+        if (this._shouldPlayIntroSodRoll()) this._updateIntroSod()
         this._syncIntroLawnMower()
         this._syncIntroSeedBank()
 
@@ -1591,10 +1776,13 @@ export class AdventureGameScreen extends Component {
         this._boardContent.setPosition(0, 0, 0)
         if (this._soddedNode) this._soddedNode.active = false
         if (this._unsoddedNode) this._unsoddedNode.active = true
+        if (this._sodBaseNode) this._sodBaseNode.active = true
         if (this._sodClipNode) this._sodClipNode.active = true
-        if (this._sodRollNode) this._sodRollNode.active = false
-        if (this._introLawnMowerNode) this._introLawnMowerNode.active = false
-        if (this._introLawnMowerShadowNode) this._introLawnMowerShadowNode.active = false
+        for (const view of this._sodRollViews) view.node.active = false
+        for (const view of this._introLawnMowerViews) {
+            view.node.active = false
+            view.shadowNode.active = false
+        }
         this._destroyIntroStreetZombies()
         if (this._seedBankNode) {
             this._seedBankNode.active = true
@@ -1655,16 +1843,18 @@ export class AdventureGameScreen extends Component {
     }
 
     private _startSodRoll() {
-        if (!this._sodRollNode || !this._sodRollAnimNode) return
+        if (this._sodRollViews.length === 0) return
 
-        this._sodRollNode.active = true
-        this._sodRollNode.setSiblingIndex(this._boardContent.children.length - 1)
-        this._sodRollAnimNode.play({
-            name: 'default',
-            loop: false,
-            speed: 0,
-            keepLastFrame: true,
-        })
+        for (const view of this._sodRollViews) {
+            view.node.active = true
+            view.node.setSiblingIndex(this._boardContent.children.length - 1)
+            view.animNode.play({
+                name: 'default',
+                loop: false,
+                speed: 0,
+                keepLastFrame: true,
+            })
+        }
         void SoundLoader.play(SoundEffect.DiggerZombie)
     }
 
@@ -1675,51 +1865,61 @@ export class AdventureGameScreen extends Component {
         const height = transform?.height ?? 127
         if (this._introTime < INTRO_ROLL_SOD_START) {
             setUISize(this._sodClipNode, 0, height, 0, 1)
-            if (this._sodRollNode) this._sodRollNode.active = false
+            for (const view of this._sodRollViews) view.node.active = false
             return
         }
 
-        const sodWidth = SpriteLoader.get('sod1row')?.originalSize.width ?? 771
+        const sodWidth = SpriteLoader.get(this._sodClipSpriteName)?.originalSize.width ?? 771
         const progress = this._linearFloat(INTRO_ROLL_SOD_START, INTRO_ROLL_SOD_END, this._introTime, 0, 1)
         const rollProgress = this._linearFloat(INTRO_ROLL_SOD_START, INTRO_ROLL_SOD_END, this._introTime + 1, 0, 1)
         setUISize(this._sodClipNode, sodWidth * progress, height, 0, 1)
         this._syncSodRollAnimation(rollProgress)
-        if (this._sodRollNode) {
-            this._sodRollNode.active = rollProgress < 1
-            if (this._sodRollNode.active) {
-                this._sodRollNode.setSiblingIndex(this._boardContent.children.length - 1)
+        for (const view of this._sodRollViews) {
+            view.node.active = rollProgress < 1
+            if (view.node.active) {
+                view.node.setSiblingIndex(this._boardContent.children.length - 1)
             }
         }
     }
 
     private _syncIntroLawnMower(forcedX?: number) {
-        if (!this._introLawnMowerNode || !this._introLawnMowerShadowNode) return
-
-        const visible = forcedX != null || this._introTime > INTRO_LAWN_MOWER_START
-        this._introLawnMowerNode.active = visible
-        this._introLawnMowerShadowNode.active = visible
-        if (!visible) return
-
-        const mowerX = forcedX ?? this._easeInOut(
-            INTRO_LAWN_MOWER_START,
-            INTRO_LAWN_MOWER_END,
-            this._introTime,
-            INTRO_LAWN_MOWER_START_X,
-            INTRO_LAWN_MOWER_END_X,
-        )
-        this._introLawnMowerNode.setPosition(
-            mowerX + INTRO_LAWN_MOWER_REANIM_X_OFFSET,
-            -(INTRO_LAWN_MOWER_Y + INTRO_LAWN_MOWER_REANIM_Y_OFFSET),
-            this._session.geometry.rowZ(INTRO_LAWN_MOWER_ROW),
-        )
         const shadowOffset = this._getReadyLawnMowerShadowOffset()
-        this._introLawnMowerShadowNode.setPosition(
-            mowerX + shadowOffset.x,
-            -(INTRO_LAWN_MOWER_Y + shadowOffset.y),
-            this._session.geometry.rowZ(INTRO_LAWN_MOWER_ROW) - 1,
-        )
-        this._introLawnMowerShadowNode.setSiblingIndex(this._boardContent.children.length - 1)
-        this._introLawnMowerNode.setSiblingIndex(this._boardContent.children.length - 1)
+        for (const view of this._introLawnMowerViews) {
+            const start = this._introLawnMowerStartTime(view.row)
+            const visible = forcedX != null || this._introTime > start
+            view.node.active = visible
+            view.shadowNode.active = visible
+            if (!visible) continue
+
+            const mowerX = forcedX ?? this._easeInOut(
+                start,
+                start + (INTRO_LAWN_MOWER_END - INTRO_LAWN_MOWER_START),
+                this._introTime,
+                INTRO_LAWN_MOWER_START_X,
+                INTRO_LAWN_MOWER_END_X,
+            )
+            const mowerY = this._introLawnMowerY(view.row)
+            view.node.setPosition(
+                mowerX + INTRO_LAWN_MOWER_REANIM_X_OFFSET,
+                -(mowerY + INTRO_LAWN_MOWER_REANIM_Y_OFFSET),
+                this._session.geometry.rowZ(view.row),
+            )
+            view.shadowNode.setPosition(
+                mowerX + shadowOffset.x,
+                -(mowerY + shadowOffset.y),
+                this._session.geometry.rowZ(view.row) - 1,
+            )
+            view.shadowNode.setSiblingIndex(this._boardContent.children.length - 1)
+            view.node.setSiblingIndex(this._boardContent.children.length - 1)
+        }
+    }
+
+    private _introLawnMowerStartTime(row: number) {
+        return INTRO_LAWN_MOWER_START + (INTRO_LAWN_MOWER_ROW - row) * INTRO_LAWN_MOWER_ROW_START_STEP
+    }
+
+    private _introLawnMowerY(row: number) {
+        return this._session.geometry.gridToPixel(0, row).y + LAWN_MOWER_Y_OFFSET
     }
 
     private _getReadyLawnMowerShadowOffset() {
@@ -1932,12 +2132,42 @@ export class AdventureGameScreen extends Component {
         if (this._sunFlashTicks > 0) {
             this._sunFlashTicks = Math.max(0, this._sunFlashTicks - ticks)
         }
+        if (this._boardShakeTicks > 0) {
+            this._boardShakeTicks = Math.max(0, this._boardShakeTicks - ticks)
+            if (this._boardShakeTicks > 0 && Math.floor(Math.random() * 3) === 0) {
+                this._boardShakeAmountX = -this._boardShakeAmountX
+            }
+        }
+    }
+
+    private _startBoardShake(amountX: number, amountY: number) {
+        this._boardShakeTicks = BOARD_SHAKE_TICKS
+        this._boardShakeAmountX = amountX
+        this._boardShakeAmountY = amountY
+    }
+
+    private _syncBoardPosition(baseX = 0, baseY = 0) {
+        const offset = this._boardShakeOffset()
+        this._boardRoot.setPosition(BOARD_ROOT_X + offset.x, BOARD_ROOT_Y + offset.y, 0)
+        this._boardContent.setPosition(baseX, baseY, 0)
+        this._itemLayer.setPosition(baseX, baseY, 0)
+    }
+
+    private _boardShakeOffset() {
+        if (this._boardShakeTicks <= 0) return { x: 0, y: 0 }
+
+        const t = 1 - this._boardShakeTicks / BOARD_SHAKE_TICKS
+        const bounce = Math.sin(t * Math.PI * 4) * (1 - t)
+        return {
+            x: Math.round(this._boardShakeAmountX * bounce),
+            y: Math.round(this._boardShakeAmountY * bounce),
+        }
     }
 
     private _restoreGameplayLayerOrder() {
         if (!this._gameStarted || !this._entityLayer?.isValid) return
 
-        const mowerNodes = [this._introLawnMowerShadowNode, this._introLawnMowerNode]
+        const mowerNodes = this._introLawnMowerViews.flatMap((view) => [view.shadowNode, view.node])
             .filter((node): node is Node => !!node?.isValid && node.parent === this._boardContent && node.active)
         if (mowerNodes.length === 0) {
             this._entityLayer.setSiblingIndex(this._boardContent.children.length - 1)
@@ -1949,12 +2179,12 @@ export class AdventureGameScreen extends Component {
     }
 
     private _syncSodRollAnimation(progress: number) {
-        if (!this._sodRollAnimNode) return
+        for (const view of this._sodRollViews) {
+            const duration = view.animNode.getAnimationDuration('default')
+            if (!duration) continue
 
-        const duration = this._sodRollAnimNode.getAnimationDuration('default')
-        if (!duration) return
-
-        this._sodRollAnimNode.time = Math.max(0, duration - 1) * progress
+            view.animNode.time = Math.max(0, duration - 1) * progress
+        }
     }
 
     private _handleEvents(events: GameEvent[]) {
@@ -1985,8 +2215,14 @@ export class AdventureGameScreen extends Component {
                 case 'hugeWave':
                     this._showHugeWaveText()
                     break
+                case 'readySetPlant':
+                    this._showReadySetPlant()
+                    break
                 case 'sunFlash':
                     this._sunFlashTicks = SUN_FLASH_TICKS
+                    break
+                case 'boardShake':
+                    this._startBoardShake(event.amountX, event.amountY)
                     break
                 case 'finalWave':
                     this._showFinalWaveWarning()
@@ -2008,6 +2244,56 @@ export class AdventureGameScreen extends Component {
         this._clearAdvice()
         this._clearHugeWaveText()
         void this._playFinalWaveWarning()
+    }
+
+    private _showReadySetPlant() {
+        this._clearAdvice()
+        void this._playReadySetPlant()
+    }
+
+    private async _playReadySetPlant() {
+        this._destroyReadySetPlant()
+
+        const node = createUINode('ReadySetPlant', {
+            parent: this._uiLayer,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 1,
+            height: 1,
+            x: READY_SET_PLANT_REANIM_X,
+            y: -READY_SET_PLANT_REANIM_Y,
+            z: CURSOR_PREVIEW_Z - 1,
+        })
+        node.setSiblingIndex(this._uiLayer.children.length - 1)
+        this._readySetPlantNode = node
+
+        const json = this._readySetPlantAnimation?.json as Record<string, any> | undefined
+        if (!json) {
+            this.scheduleOnce(() => this._destroyReadySetPlant(node), 2)
+            return
+        }
+
+        const animator = node.addComponent(Animator)
+        await animator.parseJson(json)
+        if (!node.isValid || this._readySetPlantNode !== node) return
+
+        const animNode = animator.addAnimNode('default')
+        this._readySetPlantAnimNode = animNode
+        animNode?.play({
+            name: 'default',
+            loop: false,
+            speed: 1,
+            onFinish: () => this._destroyReadySetPlant(node),
+        })
+    }
+
+    private _destroyReadySetPlant(expectedNode?: Node) {
+        if (expectedNode && this._readySetPlantNode !== expectedNode) return
+
+        if (this._readySetPlantNode?.isValid) this._readySetPlantNode.destroy()
+        this._readySetPlantNode = null
+        this._readySetPlantAnimNode = null
     }
 
     private async _playFinalWaveWarning() {
@@ -2085,6 +2371,7 @@ export class AdventureGameScreen extends Component {
         this._session.dispatch({ type: 'clearCursor' })
         this._clearAdvice()
         this._clearHugeWaveText()
+        this._destroyReadySetPlant()
         this._destroyFinalWaveWarning()
         this._releasePlantCursorHoverBlock()
         this._setCanvasCursor('default')
@@ -2185,6 +2472,7 @@ export class AdventureGameScreen extends Component {
         this._clearAdvice()
         this._clearHugeWaveText()
         this._destroyFinalWaveWarning()
+        this._destroyReadySetPlant()
         this._releasePlantCursorHoverBlock()
         this._setCanvasCursor('default')
         this._hideGameplayUiForGameOver()
@@ -2302,6 +2590,7 @@ export class AdventureGameScreen extends Component {
         if (this._houseDoorTopNode?.isValid) this._houseDoorTopNode.active = true
         this._syncGameOverLayerOrder()
         const boardX = this._gameOverBoardX()
+        this._boardRoot.setPosition(BOARD_ROOT_X, BOARD_ROOT_Y, 0)
         this._boardContent.setPosition(boardX, 0, 0)
         this._itemLayer.setPosition(boardX, 0, 0)
 
@@ -2626,7 +2915,9 @@ export class AdventureGameScreen extends Component {
             bodyNode: null,
             shadowNode: null,
             moweredAnimNode: null,
+            charredAnimNode: null,
             showingMowered: false,
+            showingCharred: false,
             ...createZombieAnimationView(),
         }
         const clipNode = createUINode('ZombieClip', {
@@ -2675,6 +2966,8 @@ export class AdventureGameScreen extends Component {
                 syncZombieTrackVisibility(view, zombie)
                 if (zombie.state === 'mowered') {
                     this._syncMoweredZombieAnimation(view, zombie)
+                } else if (zombie.state === 'charred') {
+                    this._syncCharredZombieAnimation(view, zombie)
                 } else {
                     const animation = view.body?.hasAnimation(zombie.currentAnimation)
                         ? zombie.currentAnimation
@@ -3000,9 +3293,12 @@ export class AdventureGameScreen extends Component {
             : null
 
         for (const [plantId, view] of this._plantViews) {
+            const plant = this._session.plants.find((item) => item.id === plantId)
             const highlighted = plantId === highlightedPlantId
             if (highlighted) {
                 this._showPlantHighlight(view)
+            } else if (plant && plant.eatenFlashCounter > 0) {
+                this._showPlantEatenFlash(view, plant.eatenFlashCounter)
             } else {
                 this._hidePlantHighlight(view)
             }
@@ -3016,6 +3312,11 @@ export class AdventureGameScreen extends Component {
 
     private _hidePlantHighlight(view: PlantView) {
         view.animator?.setExtraAdditiveDraw(false)
+    }
+
+    private _showPlantEatenFlash(view: PlantView, flashCounter: number) {
+        const grayness = Math.min(255, flashCounter * 3)
+        view.animator?.setExtraAdditiveDraw(true, new Color(grayness, grayness, grayness, 255))
     }
 
     private _createPlantVisual(
@@ -3167,6 +3468,7 @@ export class AdventureGameScreen extends Component {
 
         if (this._gameOverActive && zombie.id === this._gameOverWinnerZombieId) {
             if (view.showingMowered) this._clearMoweredZombieAnimation(view)
+            if (view.showingCharred) this._clearCharredZombieAnimation(view)
             syncZombieTrackVisibility(view, zombie)
             this._syncZombieHitFlash(view, zombie)
             playZombieBodyAnimation(view, zombie.currentAnimation, {
@@ -3182,7 +3484,12 @@ export class AdventureGameScreen extends Component {
             this._syncMoweredZombieAnimation(view, zombie)
             return
         }
+        if (zombie.state === 'charred') {
+            this._syncCharredZombieAnimation(view, zombie)
+            return
+        }
         if (view.showingMowered) this._clearMoweredZombieAnimation(view)
+        if (view.showingCharred) this._clearCharredZombieAnimation(view)
         syncZombieTrackVisibility(view, zombie)
         this._syncZombieHitFlash(view, zombie)
         const blendTime = this._getZombieAnimationBlendTime(view, zombie.currentAnimation)
@@ -3219,6 +3526,30 @@ export class AdventureGameScreen extends Component {
         view.moweredAnimNode.time = Math.min(Math.max(0, duration - 1), zombie.animationTime)
     }
 
+    private _syncCharredZombieAnimation(view: ZombieView, zombie: ZombieEntity) {
+        if (!view.bodyNode) return
+
+        if (view.showingMowered) this._clearMoweredZombieAnimation(view)
+        if (view.shadowNode?.isValid) view.shadowNode.active = false
+        view.bodyNode.active = false
+        view.showingCharred = true
+        if (!view.charredAnimNode) {
+            this._createCharredZombieDriver(view)
+        }
+        if (!view.charredAnimNode) return
+
+        if (!view.charredAnimNode.isPlaying) {
+            view.charredAnimNode.play({
+                name: 'anim_crumble',
+                loop: false,
+                speed: 0,
+                keepLastFrame: true,
+            })
+        }
+        const duration = view.charredAnimNode.getAnimationDuration('anim_crumble') ?? 1
+        view.charredAnimNode.time = Math.min(Math.max(0, duration - 1), zombie.animationTime)
+    }
+
     private _syncZombieHitFlash(view: ZombieView, zombie: ZombieEntity) {
         if (zombie.hitFlashCounter <= 0) {
             view.animator?.setExtraAdditiveDraw(false)
@@ -3249,9 +3580,38 @@ export class AdventureGameScreen extends Component {
         })
     }
 
+    private _createCharredZombieDriver(view: ZombieView) {
+        if (!this._charredZombieAnimation?.json || !view.visualRootNode?.isValid) return
+
+        const driverNode = createUINode('CharredDriver', {
+            parent: view.visualRootNode,
+            layer: view.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 1,
+            height: 1,
+            x: 22,
+            y: 10,
+        })
+        const driver = driverNode.addComponent(Animator)
+        driver.enabled = !this._session.paused
+        void driver.parseJson(this._charredZombieAnimation.json as Record<string, any>).then(() => {
+            if (!view.node.isValid) return
+
+            view.charredAnimNode = driver.addAnimNode('default')
+        })
+    }
+
     private _clearMoweredZombieAnimation(view: ZombieView) {
         view.showingMowered = false
         if (view.shadowNode?.isValid) view.shadowNode.active = true
+    }
+
+    private _clearCharredZombieAnimation(view: ZombieView) {
+        view.showingCharred = false
+        if (view.bodyNode?.isValid) view.bodyNode.active = true
+        if (view.shadowNode?.isValid) view.shadowNode.active = true
+        if (view.charredAnimNode) view.charredAnimNode.stop()
     }
 
     private _playZombieAnimation(entityId: number, animation: string) {
@@ -3405,6 +3765,11 @@ export class AdventureGameScreen extends Component {
     }
 
     private _applyPacketColor(node: Node, packet: SeedPacketState) {
+        if (!this._gameStarted) {
+            this._applySpriteColorRecursive(node, new Color(128, 128, 128, 255), 'CooldownClip')
+            return
+        }
+
         const affordable = this._session.canAffordSeed(packet.seedType)
         const cooling = packet.cooldownRemaining > 0
         const inactiveWithoutCooldown = !packet.active && !cooling
@@ -3418,6 +3783,11 @@ export class AdventureGameScreen extends Component {
     private _syncSeedPacketCooldown(packet: SeedPacketState) {
         const clip = this._seedPacketCooldownClips.get(packet.seedType)
         if (!clip) return
+
+        if (!this._gameStarted) {
+            clip.active = false
+            return
+        }
 
         const cooldownTicks = SEED_DEFINITIONS[packet.seedType].cooldownTicks
         const percentDark = cooldownTicks > 0 ? packet.cooldownRemaining / cooldownTicks : 0
@@ -3462,7 +3832,42 @@ export class AdventureGameScreen extends Component {
                 -(PROGRESS_METER_HEAD_Y - PROGRESS_METER_Y),
                 3,
             )
+            this._progressMeterHeadNode.setSiblingIndex(this._progressMeterNode.children.length - 1)
         }
+        this._syncProgressMeterFlags()
+    }
+
+    private _syncProgressMeterFlags() {
+        for (const view of this._progressFlagViews) {
+            let height = 0
+            if (view.totalWavesAtFlag < this._session.currentWave) {
+                height = PROGRESS_METER_FLAG_RAISE_HEIGHT
+            } else if (view.totalWavesAtFlag === this._session.currentWave) {
+                height = Math.round(this._linearFloat(
+                    PROGRESS_METER_FLAG_RAISE_TIME,
+                    0,
+                    this._session.flagRaiseCounter,
+                    0,
+                    PROGRESS_METER_FLAG_RAISE_HEIGHT,
+                ))
+            }
+            view.poleNode.active = true
+            view.flagNode.active = true
+            view.flagNode.setPosition(
+                view.flagNode.position.x,
+                -(572 - height - PROGRESS_METER_Y),
+                2,
+            )
+        }
+    }
+
+    private _progressMeterWavesPerFlag() {
+        return this._session.numWaves < 10 ? this._session.numWaves : 10
+    }
+
+    private _progressMeterFlagCount(wavesPerFlag: number) {
+        if (this._session.level.adventureLevel === 1) return 0
+        return Math.floor(this._session.numWaves / wavesPerFlag)
     }
 
     private _syncLevelLabel() {
@@ -3619,6 +4024,9 @@ export class AdventureGameScreen extends Component {
         if (this._moweredZombieAnimation?.json) {
             this._collectAnimationImages(this._moweredZombieAnimation.json as Record<string, any>, textureNames)
         }
+        if (this._charredZombieAnimation?.json) {
+            this._collectAnimationImages(this._charredZombieAnimation.json as Record<string, any>, textureNames)
+        }
         if (extraAnimation?.json) {
             this._collectAnimationImages(extraAnimation.json as Record<string, any>, textureNames)
         }
@@ -3644,6 +4052,14 @@ export class AdventureGameScreen extends Component {
 
         const textureNames = new Set<string>()
         this._collectAnimationImages(this._finalWaveAnimation.json as Record<string, any>, textureNames)
+        await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
+    }
+
+    private async _preloadReadySetPlantAnimationTextures() {
+        if (!this._readySetPlantAnimation?.json) return
+
+        const textureNames = new Set<string>()
+        this._collectAnimationImages(this._readySetPlantAnimation.json as Record<string, any>, textureNames)
         await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
     }
 

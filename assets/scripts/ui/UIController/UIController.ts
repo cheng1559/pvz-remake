@@ -9,7 +9,15 @@ import {
 } from 'cc'
 import { FontLoader } from '@/core/FontLoader'
 import { AdventureGameScreen } from '@/game/GameScreen'
-import { popGlobalGamePause, pushGlobalGamePause, scaleGameDeltaTime } from '@/game/GameDefinitions'
+import {
+    ADVENTURE_1_1,
+    ADVENTURE_1_2,
+    ADVENTURE_1_3,
+    ADVENTURE_LEVELS,
+    popGlobalGamePause,
+    pushGlobalGamePause,
+    scaleGameDeltaTime,
+} from '@/game/GameDefinitions'
 import { AdviceWidget } from '../AdviceWidget'
 import { AchievementScreen } from '../AchievementScreen'
 import { AwardScreen } from '../AwardScreen'
@@ -29,6 +37,7 @@ import { createStoneButton } from '../StoneButton'
 import { createUINode } from '../UIFactory'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import type { SeedType } from '@/game/GameTypes'
+import type { LevelDefinition } from '@/game/GameTypes'
 
 const { ccclass, property } = _decorator
 const DEBUG_START_ADVENTURE_DIRECTLY = true
@@ -69,6 +78,7 @@ export class UIController extends Component {
     private _globalAdviceLayer: Node | null = null
     private _globalAdviceWidget: AdviceWidget | null = null
     private _globalAdviceTick = 0
+    private _adventureLevel: LevelDefinition = ADVENTURE_1_1
     private _gameOverMainMenuButton: Node | null = null
     private _screenTransitioning = false
     private _achievementTransition: AchievementTransitionState | null = null
@@ -160,10 +170,12 @@ export class UIController extends Component {
         return selectorScreen
     }
 
-    showAdventureGame(): AdventureGameScreen | null {
+    showAdventureGame(level: LevelDefinition = this._adventureLevel): AdventureGameScreen | null {
+        this._adventureLevel = level
         this._selectorScreen = null
         const node = createUINode('AdventureGameScreen', { active: false, width: 800, height: 600 })
         const gameScreen = node.addComponent(AdventureGameScreen)
+        gameScreen.levelDefinition = level
         gameScreen.onBackToMenu = () => {
             void this.showSelectorScreen()
         }
@@ -190,7 +202,7 @@ export class UIController extends Component {
         const awardScreen = node.addComponent(AwardScreen)
         awardScreen.seedType = seedType
         awardScreen.onNextLevelRequest = () => {
-            this.showAdventureGame()
+            this.showAdventureGame(this._nextAdventureLevel())
         }
 
         void awardScreen.ensureRendered().then(() => {
@@ -548,9 +560,12 @@ export class UIController extends Component {
                 this._showGlobalAdvice(commandResult.message)
             }
             if (commandAction === 'restart') {
-                this.showAdventureGame()
+                this.showAdventureGame(this._adventureLevel)
             } else if (commandAction === 'home') {
                 void this.showSelectorScreen()
+            } else if (commandAction === 'level' && commandResult?.levelId) {
+                const level = this._findAdventureLevel(commandResult.levelId)
+                if (level) this.showAdventureGame(level)
             }
         })
         return dialog
@@ -746,8 +761,36 @@ export class UIController extends Component {
                 font: FontLoader.get('houseofterror28') ?? null,
             })
         }
-        this._globalAdviceLayer?.setSiblingIndex(this.uiRoot.children.length - 1)
+        this._placeGlobalAdviceLayer()
         this._globalAdviceWidget.show(message, 'hint')
+    }
+
+    private _placeGlobalAdviceLayer() {
+        if (!this.uiRoot?.isValid || !this._globalAdviceLayer?.isValid) return
+
+        const modal = this._modalScreen?.isValid ? this._modalScreen : null
+        if (!modal || modal.parent !== this.uiRoot) {
+            this._globalAdviceLayer.setSiblingIndex(this.uiRoot.children.length - 1)
+            return
+        }
+
+        const adviceIndex = this._globalAdviceLayer.getSiblingIndex()
+        const modalIndex = modal.getSiblingIndex()
+        if (adviceIndex < modalIndex) {
+            this._globalAdviceLayer.setSiblingIndex(Math.max(0, modalIndex - 1))
+        } else if (adviceIndex > modalIndex) {
+            this._globalAdviceLayer.setSiblingIndex(modalIndex)
+        }
+    }
+
+    private _nextAdventureLevel(): LevelDefinition {
+        if (this._adventureLevel.id === 'adventure-1-1') return ADVENTURE_1_2
+        if (this._adventureLevel.id === 'adventure-1-2') return ADVENTURE_1_3
+        return this._adventureLevel
+    }
+
+    private _findAdventureLevel(levelId: LevelDefinition['id']) {
+        return ADVENTURE_LEVELS.find((level) => level.id === levelId) ?? null
     }
 
     private _shouldStartDebugAdventure() {

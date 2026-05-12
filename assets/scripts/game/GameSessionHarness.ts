@@ -494,10 +494,23 @@ export function runAdventure11Harness(): GameHarnessResult {
         details.push('Cherry Bomb should stay on the board until the 100th fuse tick.')
     }
     cherrySession.drainEvents()
+    const burnedCenter = cherrySession.debugAddZombie('normal', 2, cherryCenter.x + 160)
+    const burnedAdjacentRow = cherrySession.debugAddZombie('normal', 3, cherryCenter.x + 160)
+    const safeFarRow = cherrySession.debugAddZombie('normal', 4, cherryCenter.x + 160)
+    cherrySession.drainEvents()
     cherrySession.update()
     const cherryEvents = cherrySession.drainEvents()
     if (cherrySession.plants.length !== 0) {
         details.push('Cherry Bomb should remove itself when the fuse reaches zero.')
+    }
+    if (!burnedCenter || burnedCenter.state !== 'charred') {
+        details.push('Cherry Bomb should burn zombies inside the original 115px radius.')
+    }
+    if (!burnedAdjacentRow || burnedAdjacentRow.state !== 'charred') {
+        details.push('Cherry Bomb should affect zombies up to one row away.')
+    }
+    if (!safeFarRow || safeFarRow.state === 'charred') {
+        details.push('Cherry Bomb should not affect zombies more than one row away.')
     }
     if (!cherryEvents.some((event) => event.type === 'foleyRequested' && event.sound === SoundEffect.CherryBomb) ||
         !cherryEvents.some((event) =>

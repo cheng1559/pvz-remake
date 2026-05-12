@@ -3,12 +3,14 @@ import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { createUINode, setUISize } from '@/ui/UIFactory'
 
-export type AdviceWidgetStyle = 'hint' | 'hint-stay' | 'tutorial-level1' | 'tutorial-level1-stay'
+export type AdviceWidgetStyle = 'hint' | 'hint-stay' | 'tutorial-level1' | 'tutorial-level1-stay' | 'tutorial-level2'
 
 const ADVICE_HINT_Y = 527
 const ADVICE_HINT_HEIGHT = 55
 const ADVICE_TUTORIAL_LEVEL1_Y = 400
 const ADVICE_TUTORIAL_LEVEL1_HEIGHT = 110
+const ADVICE_TUTORIAL_LEVEL2_Y = 476
+const ADVICE_TUTORIAL_LEVEL2_HEIGHT = 100
 const ADVICE_WIDTH = 800
 const ADVICE_DURATION_FAST = 500
 const ADVICE_DURATION_STAY = 10000
@@ -147,6 +149,16 @@ export class AdviceWidget {
                 return {
                     y: ADVICE_TUTORIAL_LEVEL1_Y,
                     height: ADVICE_TUTORIAL_LEVEL1_HEIGHT,
+                    textOffsetY: ADVICE_TEXT_OFFSET_Y,
+                    textColor: new Color(253, 245, 173, alpha),
+                    fontSize: ADVICE_TEXT_SIZE,
+                    lineHeight: 0,
+                    backdropAlpha: 128,
+                }
+            case 'tutorial-level2':
+                return {
+                    y: ADVICE_TUTORIAL_LEVEL2_Y,
+                    height: ADVICE_TUTORIAL_LEVEL2_HEIGHT,
                     textOffsetY: ADVICE_TEXT_OFFSET_Y,
                     textColor: new Color(253, 245, 173, alpha),
                     fontSize: ADVICE_TEXT_SIZE,

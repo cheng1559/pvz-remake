@@ -20,6 +20,7 @@ import type {
     LawnMowerEntity,
     LevelDefinition,
     LevelOneTutorialPhase,
+    LevelTwoTutorialPhase,
     PlantEntity,
     PlantType,
     PlantingReason,
@@ -45,6 +46,7 @@ const ZOMBIE_WAVE_SPAWN_X_SPACING = 40
 const ZOMBIE_COUNTDOWN_BEFORE_HUGE_WAVE = 750
 const HUGE_WAVE_WARNING_COUNTDOWN = 5
 const FINAL_WAVE_SOUND_DELAY = 60
+const FLAG_RAISE_TIME = 100
 const FLAG_WAVE_EXTRA_NORMAL_ZOMBIES = 4
 const MONEY_DROP_ROLL_MAX = 29999
 const DIAMOND_DROP_THRESHOLD = 14
@@ -58,6 +60,8 @@ const LAWN_MOWER_ATTACK_HEIGHT = 80
 const LAWN_MOWER_SPEED = 3.33
 const LAWN_MOWER_CHOMP_READY_COUNTER = 25
 const LAWN_MOWER_CHOMP_TRIGGERED_COUNTER = 50
+const CHERRY_BOMB_RADIUS = 115
+const CHERRY_BOMB_ROW_RANGE = 1
 const SUN_MIN = 0
 const SUN_MAX = 9990
 const WIDE_BOARD_WIDTH = 800
@@ -76,6 +80,15 @@ const LEVEL_1_ADVICE_CANT_AFFORD = 'You need more sun to do that!'
 const LEVEL_1_AFTER_FIRST_PLANT_SUN_DELAY = 400
 const LEVEL_1_SECOND_SEED_PROMPT_DELAY = 400
 const LEVEL_1_ZOMBIE_COUNTDOWN_AFTER_TUTORIAL = 200
+const LEVEL_2_ADVICE_PLANT_SUNFLOWER_1 = 'Sunflowers are an extremely important plant!'
+const LEVEL_2_ADVICE_PLANT_SUNFLOWER_2 = 'Try to plant at least 3 of them!'
+const LEVEL_2_ADVICE_PLANT_SUNFLOWER_3 = 'Planting at least 3 sunflowers improves your\nchances of surviving a zombie attack!'
+const LEVEL_2_ADVICE_MORE_SUNFLOWERS = 'The more sunflowers you have,\nthe faster you can grow plants!'
+const LEVEL_2_FIRST_ADVICE_DELAY = 500
+const LEVEL_2_ZOMBIE_COUNTDOWN_FIRST_WAVE = ZOMBIE_COUNTDOWN * 2
+const LEVEL_2_COMPLETED_ZOMBIE_COUNTDOWN = 999
+const LEVEL_2_ZOMBIE_WARNING_COUNTDOWN = 750
+const READY_SET_PLANT_TICKS = 183
 
 export class GameSession {
     readonly level: LevelDefinition
@@ -93,6 +106,7 @@ export class GameSession {
     money = 0
     result: GameResult = 'playing'
     currentWave = 0
+    flagRaiseCounter = 0
     zombieCountDown = ZOMBIE_COUNTDOWN_FIRST_WAVE
     zombieCountDownStart = ZOMBIE_COUNTDOWN_FIRST_WAVE
     progressMeterWidth = 0
@@ -102,6 +116,7 @@ export class GameSession {
     hasPlantedAtLeastOnce = false
     rechargingEnabled = true
     sunSpawningEnabled = true
+    autoCollectEnabled = false
 
     private _nextEntityId = 1
     private _adviceIndex = 0
@@ -118,6 +133,10 @@ export class GameSession {
     private _levelOneTutorialTimer = 0
     private _levelOneClickOnSunAdviceShown = false
     private _levelOneCantAffordAdviceShown = false
+    private _levelTwoTutorialPhase: LevelTwoTutorialPhase = 'off'
+    private _levelTwoTutorialTimer = -1
+    private _levelTwoZombieWarningShown = false
+    private _readySetPlantCounter = 0
 
     constructor(level: LevelDefinition = ADVENTURE_1_1) {
         this.level = level
@@ -133,9 +152,22 @@ export class GameSession {
         }
         if (level.adventureLevel === 1) {
             this._levelOneTutorialPhase = 'pick-first-seed'
+        } else if (level.adventureLevel === 2) {
+            this._levelTwoTutorialPhase = 'pick-sunflower'
+            this._levelTwoTutorialTimer = LEVEL_2_FIRST_ADVICE_DELAY
+            this.zombieCountDown = LEVEL_2_ZOMBIE_COUNTDOWN_FIRST_WAVE
+            this.zombieCountDownStart = this.zombieCountDown
+        } else if (level.adventureLevel >= 3) {
+            this._readySetPlantCounter = READY_SET_PLANT_TICKS
+            this._setSeedPacketsActive(false)
         }
         this._initLawnMowers()
         this._pushAdvice()
+        if (level.adventureLevel === 2) {
+            this._pushLevelTwoTutorialAdvice(LEVEL_2_ADVICE_PLANT_SUNFLOWER_1)
+        } else if (this._readySetPlantCounter > 0) {
+            this._pushReadySetPlantEvent()
+        }
     }
 
     allEntities(): GameEntity[] {
@@ -181,16 +213,24 @@ export class GameSession {
     }
 
     update() {
-        if (this.result !== 'playing') return
+        if (this.result !== 'playing') {
+            if (this.result === 'won' && !this.paused) {
+                this._updateItems()
+                this._removeDeadEntities()
+            }
+            return
+        }
         if (this.paused) return
 
         this.tick++
+        this._updateReadySetPlant()
         this._updateSeedPackets()
         this._updateLevelOneTutorial()
-        if (this.sunSpawningEnabled && !this._isLevelOneTutorialBlockingSun()) {
+        this._updateLevelTwoTutorial()
+        if (this.sunSpawningEnabled && !this._isLevelOneTutorialBlockingSun() && !this._isReadySetPlantBlockingGameplay()) {
             this._updateSunSpawning()
         }
-        if (!this._isLevelOneTutorialBlockingZombies()) {
+        if (!this._isLevelOneTutorialBlockingZombies() && !this._isReadySetPlantBlockingGameplay()) {
             this._updateZombieSpawning()
         }
         this._updatePlants()
@@ -237,6 +277,7 @@ export class GameSession {
         this.events.push({ type: 'entitySpawned', entityId: plant.id })
         this.events.push({ type: 'soundRequested', sound: SoundEffect.Plant })
         this._handleLevelOneTutorialPlantPlaced(plant, isFirstPlant)
+        this._handleLevelTwoTutorialPlantPlaced(plant)
         if (plant.type === 'cherrybomb') {
             this.events.push({ type: 'soundRequested', sound: SoundEffect.ReverseExplosion })
         }
@@ -268,7 +309,7 @@ export class GameSession {
     debugSpawnNextWave() {
         if (this.currentWave >= this.numWaves) return false
 
-        this._spawnCurrentZombieWaveNow()
+        this._spawnCurrentZombieWaveNow(true)
         return true
     }
 
@@ -277,7 +318,7 @@ export class GameSession {
             if (!this._isFlagWave(waveIndex)) continue
 
             this.currentWave = waveIndex
-            this._spawnCurrentZombieWaveNow()
+            this._spawnCurrentZombieWaveNow(true)
             return true
         }
         return false
@@ -366,6 +407,12 @@ export class GameSession {
         return this.sunSpawningEnabled
     }
 
+    debugSetAutoCollectEnabled(enabled: boolean) {
+        this.autoCollectEnabled = enabled
+        if (enabled) this._autoCollectAvailableItems()
+        return this.autoCollectEnabled
+    }
+
     private _addZombieUnchecked(type: ZombieType, row: number, x?: number, fromWave = -1) {
         const definition = ZOMBIE_DEFINITIONS[type]
         const zombie = createZombie({
@@ -397,7 +444,7 @@ export class GameSession {
 
     shouldShowTutorialSeedGuide(seedType: SeedType) {
         const packet = this.seedPackets.find((item) => item.seedType === seedType)
-        return this.level.adventureLevel === 1 &&
+        return (this.level.adventureLevel === 1 &&
             seedType === 'peashooter' &&
             !this.selectedSeed &&
             !!packet &&
@@ -405,7 +452,15 @@ export class GameSession {
             packet.cooldownRemaining <= 0 &&
             this.canAffordSeed(seedType) &&
             (this._levelOneTutorialPhase === 'pick-first-seed' ||
-                this._levelOneTutorialPhase === 'pick-second-seed')
+                this._levelOneTutorialPhase === 'pick-second-seed')) ||
+            (this.level.adventureLevel === 2 &&
+                seedType === 'sunflower' &&
+                !this.selectedSeed &&
+                !!packet &&
+                packet.active &&
+                packet.cooldownRemaining <= 0 &&
+                this.canAffordSeed(seedType) &&
+                this._levelTwoTutorialPhase === 'pick-sunflower')
     }
 
     shouldShowTutorialLawnGuide() {
@@ -454,6 +509,7 @@ export class GameSession {
         }
         this.events.push({ type: 'soundRequested', sound: SoundEffect.SeedLift })
         this._handleLevelOneTutorialSeedSelected(seedType)
+        this._handleLevelTwoTutorialSeedSelected(seedType)
     }
 
     private _selectTool(toolType: ToolType) {
@@ -504,6 +560,7 @@ export class GameSession {
         this.events.push({ type: 'entitySpawned', entityId: plant.id })
         this.events.push({ type: 'soundRequested', sound: SoundEffect.Plant })
         this._handleLevelOneTutorialPlantPlaced(plant, isFirstPlant)
+        this._handleLevelTwoTutorialPlantPlaced(plant)
         if (plant.type === 'cherrybomb') {
             this.events.push({ type: 'soundRequested', sound: SoundEffect.ReverseExplosion })
         }
@@ -539,24 +596,35 @@ export class GameSession {
         const packet = this.seedPackets.find((item) => item.seedType === selectedSeed)
         if (packet && packet.cooldownRemaining <= 0) packet.active = true
         this._handleLevelOneTutorialSeedCanceled(selectedSeed)
+        this._handleLevelTwoTutorialSeedCanceled(selectedSeed)
     }
 
     private _updateSeedPackets() {
+        if (this._isReadySetPlantBlockingPackets()) return
+
         if (!this.rechargingEnabled) {
             this._clearSeedPacketCooldowns()
             return
         }
 
         for (const packet of this.seedPackets) {
+            const wasReady = packet.cooldownRemaining <= 0 && packet.active
             if (packet.cooldownRemaining > 0) packet.cooldownRemaining--
             if (packet.cooldownRemaining <= 0 && !packet.selected) packet.active = true
+            if (!wasReady && packet.active && packet.cooldownRemaining <= 0) {
+                this._handleLevelTwoTutorialSeedPacketReady(packet.seedType)
+            }
         }
     }
 
     private _clearSeedPacketCooldowns() {
+        if (this._isReadySetPlantBlockingPackets()) return
+
         for (const packet of this.seedPackets) {
+            const wasReady = packet.cooldownRemaining <= 0 && packet.active
             packet.cooldownRemaining = 0
             if (!packet.selected) packet.active = true
+            if (!wasReady && packet.active) this._handleLevelTwoTutorialSeedPacketReady(packet.seedType)
         }
     }
 
@@ -566,6 +634,7 @@ export class GameSession {
             events: plantEvents,
             hasTargetInRow: (row: number, plant: Plant) => this._hasTargetInRow(row, plant),
             hasTargetInPlantAttackRect: (plant: Plant) => this._hasTargetInPlantAttackRect(plant),
+            canProduceSun: () => !this._levelAwardDropped && this.result === 'playing',
             randomInt: (minInclusive: number, maxInclusive: number) =>
                 this._randomInt(minInclusive, maxInclusive),
         }
@@ -578,13 +647,31 @@ export class GameSession {
     private _handlePlantEvents(events: GameEvent[]) {
         for (const event of events) {
             if (event.type === 'sunProduced') {
+                if (this._levelAwardDropped) continue
                 this._addItem('sun', 'from-plant', event.x, event.y)
             } else if (event.type === 'projectileFired') {
                 this._addProjectile(event.projectileType, event.x, event.y, event.row)
                 this.events.push(event)
+            } else if (event.type === 'cherryBombDetonated') {
+                this._detonateCherryBomb(event.x, event.y, event.row)
+                this.events.push(event)
+                this.events.push({ type: 'boardShake', amountX: 3, amountY: -4 })
             } else {
                 this.events.push(event)
             }
+        }
+    }
+
+    private _detonateCherryBomb(x: number, y: number, row: number) {
+        for (const zombie of this.zombies) {
+            if (!this._isZombieDamageable(zombie)) continue
+            if (Math.abs(zombie.row - row) > CHERRY_BOMB_ROW_RANGE) continue
+            if (!this._circleRectOverlap(x, y, CHERRY_BOMB_RADIUS, zombie.getBodyRect())) continue
+
+            const burned = zombie.applyBurn()
+            if (!burned) continue
+
+            this._dropZombieLoot(zombie)
         }
     }
 
@@ -645,6 +732,29 @@ export class GameSession {
         for (const item of this.items) {
             item.update(context)
         }
+        if (this.autoCollectEnabled) this._autoCollectAvailableItems()
+    }
+
+    private _autoCollectAvailableItems() {
+        const context = this._createItemUpdateContext(this.events)
+        for (const item of this.items) {
+            if (!this._isAutoCollectableItem(item)) continue
+
+            const collected = item.collect(context)
+            if (collected && this._isSunItem(item)) this._handleLevelOneTutorialSunClicked(item)
+        }
+    }
+
+    private _isAutoCollectableItem(item: Item) {
+        return !item.dead && !item.beingCollected && (this._isSunItem(item) || this._isMoneyItem(item))
+    }
+
+    private _isSunItem(item: Item) {
+        return item.type === 'sun' || item.type === 'small-sun' || item.type === 'large-sun'
+    }
+
+    private _isMoneyItem(item: Item) {
+        return item.type === 'silver-coin' || item.type === 'gold-coin' || item.type === 'diamond'
     }
 
     private _updateZombies() {
@@ -653,6 +763,7 @@ export class GameSession {
             zombieCount: this._countLiveZombies(),
             canUseSuperLongDeath: this._canUseSuperLongDeath(),
             findPlantTarget: (zombie: Zombie) => this._findZombiePlantTarget(zombie),
+            canChewPlant: (plant: PlantEntity) => this._canZombieChewPlant(plant),
             damagePlant: (plant: PlantEntity, damage: number) => {
                 plant.health = Math.max(0, plant.health - damage)
                 if (plant.health <= 0) plant.dead = true
@@ -670,6 +781,12 @@ export class GameSession {
             if (!wasDying && zombie.state === 'dying') this._dropZombieLoot(zombie)
             if (this.result !== 'playing') break
         }
+    }
+
+    private _canZombieChewPlant(plant: PlantEntity) {
+        if (plant.type === 'cherrybomb') return false
+        if (plant.type === 'potatomine' && plant.state !== 'not-ready') return false
+        return true
     }
 
     private _initLawnMowers() {
@@ -757,6 +874,7 @@ export class GameSession {
             if (zombie.dead || zombie.row !== mower.row) continue
             if (zombie.state === 'dying') continue
             if (zombie.state === 'mowered') continue
+            if (zombie.state === 'charred') continue
             if (this._rectOverlap(attackRect, zombie.getBodyRect()) <= 0) continue
             if (mower.state === 'ready' && !zombie.hasHead) continue
 
@@ -957,6 +1075,121 @@ export class GameSession {
         return this.level.adventureLevel === 1 && this._levelOneTutorialPhase !== 'done'
     }
 
+    private _updateLevelTwoTutorial() {
+        if (this.level.adventureLevel !== 2) return
+
+        if (this._levelTwoTutorialTimer > 0) {
+            this._levelTwoTutorialTimer--
+            if (this._levelTwoTutorialTimer === 0 &&
+                this._levelTwoTutorialPhase !== 'off' &&
+                this._levelTwoTutorialPhase !== 'completed') {
+                this._pushLevelTwoTutorialAdvice(LEVEL_2_ADVICE_PLANT_SUNFLOWER_2)
+                this._levelTwoTutorialTimer = -1
+            }
+        }
+
+        if (this._levelTwoTutorialPhase === 'refresh-sunflower' && this._levelTwoSunflowerPacketReady()) {
+            this._levelTwoTutorialPhase = 'pick-sunflower'
+        }
+
+        if (!this._levelTwoZombieWarningShown &&
+            this.currentWave === 0 &&
+            this.zombieCountDown === LEVEL_2_ZOMBIE_WARNING_COUNTDOWN &&
+            this._levelTwoTutorialPhase !== 'off' &&
+            this._levelTwoTutorialPhase !== 'completed') {
+            this._levelTwoZombieWarningShown = true
+            this._pushLevelTwoTutorialAdvice(LEVEL_2_ADVICE_PLANT_SUNFLOWER_3)
+        }
+    }
+
+    private _updateReadySetPlant() {
+        if (this._readySetPlantCounter <= 0) return
+
+        this._readySetPlantCounter--
+        if (this._readySetPlantCounter === 0) {
+            this._setSeedPacketsActive(true)
+        }
+    }
+
+    private _isReadySetPlantBlockingGameplay() {
+        return this._readySetPlantCounter > 0
+    }
+
+    private _isReadySetPlantBlockingPackets() {
+        return this._readySetPlantCounter > 0
+    }
+
+    private _setSeedPacketsActive(active: boolean) {
+        for (const packet of this.seedPackets) {
+            if (!packet.selected) packet.active = active
+        }
+    }
+
+    private _pushReadySetPlantEvent() {
+        this.events.push({ type: 'readySetPlant' })
+        this.events.push({ type: 'soundRequested', sound: SoundEffect.ReadySetPlant })
+    }
+
+    private _handleLevelTwoTutorialSeedSelected(seedType: SeedType) {
+        if (this.level.adventureLevel !== 2) return
+
+        if (this._levelTwoTutorialPhase === 'pick-sunflower') {
+            this._levelTwoTutorialPhase = seedType === 'sunflower' ? 'plant-sunflower' : 'refresh-sunflower'
+        }
+    }
+
+    private _handleLevelTwoTutorialSeedCanceled(seedType: SeedType) {
+        if (this.level.adventureLevel !== 2) return
+        if (seedType === 'sunflower' && this._levelTwoTutorialPhase === 'plant-sunflower') {
+            this._levelTwoTutorialPhase = this._levelTwoSunflowerPacketReady()
+                ? 'pick-sunflower'
+                : 'refresh-sunflower'
+        } else if (this._levelTwoTutorialPhase === 'refresh-sunflower' && this._levelTwoSunflowerPacketReady()) {
+            this._levelTwoTutorialPhase = 'pick-sunflower'
+        }
+    }
+
+    private _handleLevelTwoTutorialSeedPacketReady(seedType: SeedType) {
+        if (this.level.adventureLevel !== 2 || seedType !== 'sunflower') return
+        if (this._levelTwoTutorialPhase === 'refresh-sunflower') {
+            this._levelTwoTutorialPhase = 'pick-sunflower'
+        }
+    }
+
+    private _handleLevelTwoTutorialPlantPlaced(plant: Plant) {
+        if (this.level.adventureLevel !== 2) return
+        if (this._levelTwoTutorialPhase === 'off' || this._levelTwoTutorialPhase === 'completed') return
+
+        const sunflowerCount = this._countSunflowers()
+        if (plant.type === 'sunflower' && sunflowerCount === 2) {
+            this._pushLevelTwoTutorialAdvice(LEVEL_2_ADVICE_MORE_SUNFLOWERS)
+        }
+
+        if (sunflowerCount >= 3) {
+            this._levelTwoTutorialPhase = 'completed'
+            if (this.currentWave === 0) {
+                this.zombieCountDown = LEVEL_2_COMPLETED_ZOMBIE_COUNTDOWN
+                this.zombieCountDownStart = this.zombieCountDown
+            }
+            return
+        }
+
+        this._levelTwoTutorialPhase = this._levelTwoSunflowerPacketReady()
+            ? 'pick-sunflower'
+            : 'refresh-sunflower'
+    }
+
+    private _levelTwoSunflowerPacketReady() {
+        const packet = this.seedPackets.find((item) => item.seedType === 'sunflower')
+        if (!packet || packet.cooldownRemaining > 0 || !packet.active) return false
+
+        return this._canSpendSun(SEED_DEFINITIONS.sunflower.cost)
+    }
+
+    private _countSunflowers() {
+        return this.plants.filter((plant) => !plant.dead && plant.type === 'sunflower').length
+    }
+
     private _clearAdvice() {
         this.events.push({ type: 'adviceCleared' })
     }
@@ -998,13 +1231,14 @@ export class GameSession {
         this._spawnCurrentZombieWaveNow()
     }
 
-    private _spawnCurrentZombieWaveNow() {
+    private _spawnCurrentZombieWaveNow(forceAnnouncements = false) {
         const waveIndex = this.currentWave
         this._hugeWaveCountDown = 0
-        this._pushZombieWaveIncomingEvents(waveIndex)
+        if (forceAnnouncements) this._pushZombieWaveIncomingEvents(waveIndex)
         this._spawnZombieWave(waveIndex)
         this._zombieHealthWaveStart = this._totalZombiesHealthInWave(waveIndex)
         this._zombieHealthToNextWave = this._randomFloat(0.5, 0.65) * this._zombieHealthWaveStart
+        if (this._isFlagWave(waveIndex)) this.flagRaiseCounter = FLAG_RAISE_TIME
         this.currentWave++
         this.zombieCountDown = ZOMBIE_COUNTDOWN + this._randomInt(0, ZOMBIE_COUNTDOWN_RANGE - 1)
         this.zombieCountDownStart = this.zombieCountDown
@@ -1042,7 +1276,7 @@ export class GameSession {
 
         let totalHealth = 0
         for (const zombie of this.zombies) {
-            if (zombie.fromWave !== waveIndex || zombie.dead || zombie.state === 'dying') continue
+            if (zombie.fromWave !== waveIndex || zombie.dead || zombie.state === 'dying' || zombie.state === 'charred') continue
             totalHealth += zombie.health + zombie.helmHealth + zombie.shieldHealth * 0.2
         }
         return totalHealth
@@ -1095,11 +1329,21 @@ export class GameSession {
     private _updateProgressMeter() {
         if (this.currentWave === 0) return
 
-        const totalWidth = 150
+        if (this.flagRaiseCounter > 0) this.flagRaiseCounter--
+
+        const wavesPerFlag = this._numWavesPerFlag()
+        const flagCount = this._progressMeterFlagCount(wavesPerFlag)
+        const hasFlags = flagCount > 0
+        const totalWidth = 150 - (hasFlags ? 12 * flagCount : 0)
         const denominator = Math.max(1, this.numWaves - 1)
         const waveLength = totalWidth / denominator
-        const currentWaveLength = (this.currentWave - 1) * totalWidth / denominator
-        const nextWaveLength = this.currentWave * totalWidth / denominator
+        let currentWaveLength = (this.currentWave - 1) * totalWidth / denominator
+        let nextWaveLength = this.currentWave * totalWidth / denominator
+        if (hasFlags) {
+            const extraLength = Math.floor(this.currentWave / wavesPerFlag) * 12
+            currentWaveLength += extraLength
+            nextWaveLength += extraLength
+        }
         let fraction = this.zombieCountDownStart > 0
             ? (this.zombieCountDownStart - this.zombieCountDown) / this.zombieCountDownStart
             : 1
@@ -1123,6 +1367,15 @@ export class GameSession {
 
     private _isFlagWave(waveIndex: number) {
         return this.level.zombieWaves[waveIndex]?.flagWave === true
+    }
+
+    private _numWavesPerFlag() {
+        return this.numWaves < 10 ? this.numWaves : 10
+    }
+
+    private _progressMeterFlagCount(wavesPerFlag: number) {
+        if (this.level.adventureLevel === 1) return 0
+        return Math.floor(this.numWaves / wavesPerFlag)
     }
 
     private _pickRowForNewZombie(_zombieType: ZombieType) {
@@ -1257,17 +1510,27 @@ export class GameSession {
         this._completeLevel()
     }
 
+    private _autoCollectRemainingSun() {
+        const context = this._createItemUpdateContext(this.events)
+        for (const item of this.items) {
+            if (!this._isSunItem(item) || item.dead || item.beingCollected) continue
+            item.collect(context)
+        }
+    }
+
     private _completeLevel() {
         if (this._levelWonNotified) return
 
         this._levelWonNotified = true
+        this.sunSpawningEnabled = false
+        this._autoCollectRemainingSun()
         this.result = 'won'
         this.events.push({ type: 'levelWon' })
     }
 
     private _checkZombieBoardEdge(zombie: Zombie) {
         if (this.result !== 'playing') return false
-        if (zombie.dead || zombie.state === 'dying' || zombie.state === 'mowered') return false
+        if (zombie.dead || zombie.state === 'dying' || zombie.state === 'mowered' || zombie.state === 'charred') return false
 
         const edgeX = this._zombieBoardEdgeX(zombie)
         const zombieX = zombie.getBoardX()
@@ -1306,6 +1569,10 @@ export class GameSession {
 
     private _pushLevelOneTutorialAdvice(message: string, style: 'tutorial-level1' | 'tutorial-level1-stay' = 'tutorial-level1-stay') {
         this.events.push({ type: 'advice', message, style })
+    }
+
+    private _pushLevelTwoTutorialAdvice(message: string) {
+        this.events.push({ type: 'advice', message, style: 'tutorial-level2' })
     }
 
     private _allocateId() {
@@ -1347,6 +1614,14 @@ export class GameSession {
         if (overlapY <= 0) return overlapY
 
         return Math.min(overlapX, overlapY)
+    }
+
+    private _circleRectOverlap(circleX: number, circleY: number, radius: number, rect: Rect) {
+        const closestX = Math.max(rect.x, Math.min(circleX, rect.x + rect.width))
+        const closestY = Math.max(rect.y, Math.min(circleY, rect.y + rect.height))
+        const dx = circleX - closestX
+        const dy = circleY - closestY
+        return dx * dx + dy * dy <= radius * radius
     }
 
     private _animateBounceSlowMiddle(
@@ -1393,7 +1668,7 @@ export class GameSession {
     }
 
     private _isZombieDamageable(zombie: Zombie) {
-        if (zombie.dead || zombie.state === 'dying' || zombie.state === 'mowered') return false
+        if (zombie.dead || zombie.state === 'dying' || zombie.state === 'mowered' || zombie.state === 'charred') return false
         return true
     }
 
@@ -1434,7 +1709,8 @@ export class GameSession {
             item.id === zombie.id ||
             item.dead ||
             item.state === 'dying' ||
-            item.state === 'mowered')
+            item.state === 'mowered' ||
+            item.state === 'charred')
     }
 
     private _dropLevelAward(x: number, y: number) {

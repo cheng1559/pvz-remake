@@ -1373,6 +1373,12 @@
             "animations": []
         }
     },
+    "startreadysetplant": {
+        "default": {
+            "slots": [],
+            "animations": []
+        }
+    },
     "lawnmower": {
         "default": {
             "slots": [],
@@ -1385,6 +1391,14 @@
         "default": {
             "slots": [],
             "animations": []
+        }
+    },
+    "zombie_charred": {
+        "default": {
+            "slots": [],
+            "animations": [
+                "anim_crumble"
+            ]
         }
     },
     "sun": {
