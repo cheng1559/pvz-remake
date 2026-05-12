@@ -49,11 +49,15 @@ export const SoundEffect = {
     ReverseExplosion: 'reverse_explosion',
     RollIn: 'roll_in',
     SeedLift: 'seedlift',
+    ShieldHit: 'shieldhit',
+    ShieldHit2: 'shieldhit2',
     Shovel: 'shovel',
     Scream: 'scream',
     Splat: 'splat',
     Splat2: 'splat2',
     Splat3: 'splat3',
+    PlasticHit: 'plastichit',
+    PlasticHit2: 'plastichit2',
     SnowPeaSparkles: 'snow_pea_sparkles',
     Tap: 'tap',
     Throw: 'throw',
@@ -61,6 +65,8 @@ export const SoundEffect = {
     FinalFanfare: 'finalfanfare',
     FinalWave: 'finalwave',
     Frozen: 'frozen',
+    LightFill: 'lightfill',
+    WinMusic: 'winmusic',
     ZombieFalling1: 'zombie_falling_1',
     ZombieFalling2: 'zombie_falling_2',
 } as const
@@ -73,7 +79,9 @@ export class SoundLoader {
     private static readonly _pitchStepMultiplier = 1.0594630943592953
     private static readonly _foleyPitchRanges: Partial<Record<SoundEffect, number>> = {
         [SoundEffect.Points]: 10,
+        [SoundEffect.ShieldHit]: 10,
         [SoundEffect.Splat]: 10,
+        [SoundEffect.PlasticHit]: 5,
         [SoundEffect.Lawnmower]: 10,
         [SoundEffect.Throw]: 10,
         [SoundEffect.ChompSoft]: 4,
@@ -88,7 +96,9 @@ export class SoundLoader {
         [SoundEffect.Shovel]: 5,
     }
     private static readonly _foleyVariants: Partial<Record<SoundEffect, readonly SoundEffect[]>> = {
+        [SoundEffect.ShieldHit]: [SoundEffect.ShieldHit, SoundEffect.ShieldHit2],
         [SoundEffect.Splat]: [SoundEffect.Splat, SoundEffect.Splat2, SoundEffect.Splat3],
+        [SoundEffect.PlasticHit]: [SoundEffect.PlasticHit, SoundEffect.PlasticHit2],
         [SoundEffect.Throw]: [SoundEffect.Throw, SoundEffect.Throw, SoundEffect.Throw, SoundEffect.Throw2],
     }
     private static _clips: Map<SoundEffect, AudioClip> = new Map()

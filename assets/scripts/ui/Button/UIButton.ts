@@ -16,6 +16,7 @@ import {
     Color,
     EventMouse,
 } from 'cc'
+import { UIHoverManager, type UIHoverPointer } from '@/ui/UIHoverManager'
 
 const { ccclass, property } = _decorator
 const LEFT_MOUSE_BUTTON = 0
@@ -34,7 +35,6 @@ export type UIButtonPointerEvent = EventTouch | EventMouse
 export class UIButton extends Component {
     private static _activeButton: UIButton | null = null
     private static _instances: Set<UIButton> = new Set()
-    private static _hoverBlockCount = 0
     private static _hoverSuppressCount = 0
     private static _inputSuppressedPointerActive = false
     private static _ignoreHoverUntilMouseMove = false
@@ -42,6 +42,11 @@ export class UIButton extends Component {
     private static _lastPointerCanHover = false
     private static _mouseTrackingStarted = false
     private static _pressCaptureRoot: Node | null = null
+    private static readonly _hoverClient = {
+        clearHover: () => UIButton.clearHoverStates(),
+        refreshHover: (pointer: UIHoverPointer | null, activeModalRoot: Node | null) =>
+            UIButton._refreshManagedHover(pointer, activeModalRoot),
+    }
 
     @property(SpriteFrame)
     normalSprite: SpriteFrame | null = null
@@ -119,6 +124,9 @@ export class UIButton extends Component {
     @property
     rightClickTriggers: boolean = true
 
+    @property
+    refreshHoverOnEnable: boolean = true
+
     public onClick: ((event: UIButtonPointerEvent) => void) | null = null
 
     public onClickLocked: ((event: UIButtonPointerEvent) => void) | null = null
@@ -141,6 +149,7 @@ export class UIButton extends Component {
     }
 
     private _sprite: Sprite | null = null
+    private _spriteExplicit = false
     private _originPos = new Vec3()
     private _state: ButtonState = ButtonState.NORMAL
     private _pressed = false
@@ -152,20 +161,6 @@ export class UIButton extends Component {
 
     public get isHovering(): boolean {
         return this._hovering
-    }
-
-    public static beginHoverBlock() {
-        this._hoverBlockCount++
-        this.clearHoverStates()
-    }
-
-    public static endHoverBlock() {
-        if (this._hoverBlockCount > 0) {
-            this._hoverBlockCount--
-        }
-        if (this._hoverBlockCount === 0) {
-            this.refreshHoverStates()
-        }
     }
 
     public static beginHoverSuppress() {
@@ -199,36 +194,44 @@ export class UIButton extends Component {
         this._setGlobalCursor('default')
     }
 
-    public static refreshHoverStates() {
-        if (this._hoverBlockCount > 0) {
+    public static refreshHoverStates(
+        pointerLocation: Vec2 | null = null,
+        activeModalRoot: Node | null = UIHoverManager.activeModalRoot,
+    ) {
+        if (this._hoverSuppressCount > 0 && !activeModalRoot) {
             this.clearHoverStates()
-            return
+            return false
         }
-        if (this._hoverSuppressCount > 0) {
-            this.clearHoverStates()
-            return
-        }
-        if (this._activeButton) return
+        if (this._activeButton) return false
         if (!this._lastPointerCanHover) {
             this.clearHoverStates()
-            return
+            return false
         }
 
         this._ensureMouseTracking()
         let anyHovering = false
+        const location = pointerLocation ?? this._lastMouseLocation
         for (const button of this._instances) {
-            anyHovering = button._refreshHoverFromPointer(false) || anyHovering
+            anyHovering = button._refreshHoverFromPointer(false, location, activeModalRoot) || anyHovering
         }
         this._setGlobalCursor(anyHovering ? 'pointer' : 'default')
+        return anyHovering
     }
 
     public refreshHoverFromPointer(updateCursor = true) {
-        return this._refreshHoverFromPointer(updateCursor)
+        return this._refreshHoverFromPointer(updateCursor, null, UIHoverManager.activeModalRoot)
+    }
+
+    public setVisualSprite(sprite: Sprite | null) {
+        this._sprite = sprite
+        this._spriteExplicit = true
+        this._applyState(this._state)
     }
 
     private static _ensureMouseTracking() {
         if (this._mouseTrackingStarted) return
         this._mouseTrackingStarted = true
+        UIHoverManager.registerClient(this._hoverClient)
         input.on(Input.EventType.MOUSE_MOVE, this._onGlobalMouseMove)
         input.on(Input.EventType.MOUSE_DOWN, this._onGlobalMouseDown)
         input.on(Input.EventType.MOUSE_UP, this._onGlobalMouseUp)
@@ -246,7 +249,7 @@ export class UIButton extends Component {
         UIButton._ignoreHoverUntilMouseMove = false
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
-        UIButton.refreshHoverStates()
+        UIHoverManager.rememberMouseEvent(event)
     }
 
     private static _onGlobalMouseDown(event: EventMouse) {
@@ -256,6 +259,7 @@ export class UIButton extends Component {
         }
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
+        UIHoverManager.rememberMouseEvent(event, false)
     }
 
     private static _onGlobalMouseUp(event: EventMouse) {
@@ -268,6 +272,7 @@ export class UIButton extends Component {
         }
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
+        UIHoverManager.rememberMouseEvent(event, false)
         if (UIButton._ignoreHoverUntilMouseMove) {
             UIButton.clearHoverStates()
             return
@@ -297,6 +302,7 @@ export class UIButton extends Component {
         if (!button?._pressed) return
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
+        UIHoverManager.rememberMouseEvent(event, false)
         button._updateMousePressState(event)
     }
 
@@ -305,6 +311,7 @@ export class UIButton extends Component {
         if (!button?._pressed) return
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
+        UIHoverManager.rememberMouseEvent(event, false)
         button._finishMousePress(event)
     }
 
@@ -312,6 +319,7 @@ export class UIButton extends Component {
         if (!sys.isMobile) return
         UIButton._lastMouseLocation = event.touch?.getLocation() ?? event.getUILocation()
         UIButton._lastPointerCanHover = false
+        UIHoverManager.rememberTouchEvent(event, false)
     }
 
     private static _setGlobalCursor(style: string) {
@@ -322,6 +330,7 @@ export class UIButton extends Component {
 
     public static rememberTouchLocation(event: EventTouch) {
         UIButton._lastMouseLocation = event.touch?.getLocation() ?? event.getUILocation()
+        UIHoverManager.rememberTouchEvent(event, false)
         if (sys.isMobile) {
             UIButton._lastPointerCanHover = false
         } else {
@@ -336,10 +345,19 @@ export class UIButton extends Component {
         }
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
+        UIHoverManager.rememberMouseEvent(event, false)
+    }
+
+    private static _refreshManagedHover(pointer: UIHoverPointer | null, activeModalRoot: Node | null) {
+        this._lastPointerCanHover = !!pointer?.canHover
+        this._lastMouseLocation = pointer?.location.clone() ?? null
+        return this.refreshHoverStates(pointer?.location ?? null, activeModalRoot)
     }
 
     onLoad() {
-        this._sprite = this.node.getComponent(Sprite) ?? this.node.getComponentInChildren(Sprite)
+        if (!this._spriteExplicit) {
+            this._sprite = this.node.getComponent(Sprite) ?? this.node.getComponentInChildren(Sprite)
+        }
         Vec3.copy(this._originPos, this.node.position)
         this._setupHitTest()
         this._applyState(ButtonState.NORMAL)
@@ -366,6 +384,9 @@ export class UIButton extends Component {
         this.node.on(Node.EventType.MOUSE_MOVE, this._onMouseMove, this)
         this.node.on(Node.EventType.MOUSE_ENTER, this._onMouseEnter, this)
         this.node.on(Node.EventType.MOUSE_LEAVE, this._onMouseLeave, this)
+        if (this.refreshHoverOnEnable) {
+            UIHoverManager.refreshHoverStates()
+        }
     }
 
     onDisable() {
@@ -389,7 +410,7 @@ export class UIButton extends Component {
     }
 
     private _onTouchStart(event: EventTouch) {
-        if (UIButton._isInputSuppressed()) {
+        if (UIButton._isInputSuppressedForNode(this.node)) {
             UIButton._inputSuppressedPointerActive = true
             UIButton._ignoreHoverUntilMouseMove = true
             return
@@ -403,14 +424,14 @@ export class UIButton extends Component {
     }
 
     private _onTouchMove(event: EventTouch) {
-        if (UIButton._isInputSuppressed() || UIButton._inputSuppressedPointerActive) return
+        if (UIButton._isInputSuppressedForNode(this.node) || UIButton._inputSuppressedPointerActive) return
         if (!sys.isMobile) return
         if (!this._interactable) return
         if (!this._pressed) return
         UIButton.rememberTouchLocation(event)
         event.propagationStopped = true
         const inside = this._isTouchInside(event)
-        const hoverAllowed = UIButton._hoverSuppressCount === 0
+        const hoverAllowed = !UIButton._isInputSuppressedForNode(this.node)
         this._setHovering(hoverAllowed && inside, false)
         if (inside) {
             if (this._state !== ButtonState.PRESSED) {
@@ -431,7 +452,7 @@ export class UIButton extends Component {
     }
 
     private _onTouchEnd(event: EventTouch) {
-        if (UIButton._isInputSuppressed() || UIButton._inputSuppressedPointerActive) {
+        if (UIButton._isInputSuppressedForNode(this.node) || UIButton._inputSuppressedPointerActive) {
             UIButton._inputSuppressedPointerActive = false
             return
         }
@@ -445,7 +466,7 @@ export class UIButton extends Component {
 
         const inside = this._isTouchInside(event)
         UIButton._activeButton = null
-        const shouldHover = !sys.isMobile && inside && UIButton._hoverSuppressCount === 0
+        const shouldHover = !sys.isMobile && inside && !UIButton._isInputSuppressedForNode(this.node)
         this._setHovering(shouldHover, false, false)
         this._applyState(shouldHover ? ButtonState.HOVER : ButtonState.NORMAL)
         this._setCursor(shouldHover ? 'pointer' : 'default')
@@ -457,7 +478,7 @@ export class UIButton extends Component {
     }
 
     private _onTouchCancel(event: EventTouch) {
-        if (UIButton._isInputSuppressed() || UIButton._inputSuppressedPointerActive) {
+        if (UIButton._isInputSuppressedForNode(this.node) || UIButton._inputSuppressedPointerActive) {
             UIButton._inputSuppressedPointerActive = false
             return
         }
@@ -484,7 +505,8 @@ export class UIButton extends Component {
         if (sys.isMobile) return
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
-        if (UIButton._isInputSuppressed()) {
+        UIHoverManager.rememberMouseEvent(event, false)
+        if (UIButton._isInputSuppressedForNode(this.node)) {
             UIButton._inputSuppressedPointerActive = true
             UIButton._ignoreHoverUntilMouseMove = true
             return
@@ -502,15 +524,28 @@ export class UIButton extends Component {
         if (sys.isMobile) return
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
-        if (UIButton._isInputSuppressed() || UIButton._inputSuppressedPointerActive) {
+        UIHoverManager.rememberMouseEvent(event, false)
+        if (UIButton._isInputSuppressedForNode(this.node) || UIButton._inputSuppressedPointerActive) {
             UIButton._inputSuppressedPointerActive = false
             return
         }
         this._finishMousePress(event)
     }
 
-    private static _isInputSuppressed() {
-        return UIButton._hoverSuppressCount > 0
+    private static _isInputSuppressedForNode(
+        node: Node | null,
+        activeModalRoot: Node | null = UIHoverManager.activeModalRoot,
+    ) {
+        return UIButton._hoverSuppressCount > 0 && !UIButton._isNodeInsideModalRoot(node, activeModalRoot)
+    }
+
+    private static _isNodeInsideModalRoot(node: Node | null, activeModalRoot: Node | null) {
+        let current = node
+        while (current) {
+            if (current === activeModalRoot) return true
+            current = current.parent
+        }
+        return false
     }
 
     private _shouldHandleMouseButton(event: EventMouse) {
@@ -520,7 +555,7 @@ export class UIButton extends Component {
     private _startPress(event: UIButtonPointerEvent) {
         this._pressed = true
         UIButton._activeButton = this
-        this._setHovering(UIButton._hoverSuppressCount === 0, false, false)
+        this._setHovering(!UIButton._isInputSuppressedForNode(this.node), false, false)
         this._applyState(ButtonState.PRESSED)
         this._applyOffset()
         this.onPress?.(event)
@@ -536,7 +571,7 @@ export class UIButton extends Component {
         const inside = this._isMouseInside(event)
         UIButton._activeButton = null
         UIButton._endPressCapture()
-        const shouldHover = inside && UIButton._hoverSuppressCount === 0
+        const shouldHover = inside && !UIButton._isInputSuppressedForNode(this.node)
         this._setHovering(shouldHover, false, false)
         this._applyState(shouldHover ? ButtonState.HOVER : ButtonState.NORMAL)
         this._setCursor(shouldHover ? 'pointer' : 'default')
@@ -559,7 +594,7 @@ export class UIButton extends Component {
         if (!this._pressed) return
 
         const inside = this._isMouseInside(event)
-        const hoverAllowed = UIButton._hoverSuppressCount === 0
+        const hoverAllowed = !UIButton._isInputSuppressedForNode(this.node)
         this._setHovering(hoverAllowed && inside, false)
         if (inside) {
             if (this._state !== ButtonState.PRESSED) {
@@ -595,7 +630,7 @@ export class UIButton extends Component {
     private _onMouseEnter() {
         if (sys.isMobile) return
         if (!this._interactable) return
-        if (UIButton._hoverSuppressCount > 0) return
+        if (UIButton._isInputSuppressedForNode(this.node)) return
         if (UIButton._activeButton && UIButton._activeButton !== this) return
         UIButton._lastPointerCanHover = true
         if (this._pressed) {
@@ -609,8 +644,9 @@ export class UIButton extends Component {
         if (sys.isMobile) return
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
+        UIHoverManager.rememberMouseEvent(event, false)
         if (!this._interactable) return
-        if (UIButton._hoverSuppressCount > 0) return
+        if (UIButton._isInputSuppressedForNode(this.node)) return
         if (UIButton._activeButton && UIButton._activeButton !== this) return
         if (!this._pressed) {
             this._setHovering(true)
@@ -622,7 +658,7 @@ export class UIButton extends Component {
     private _onMouseLeave() {
         if (sys.isMobile) return
         if (!this._interactable) return
-        if (UIButton._hoverSuppressCount > 0) return
+        if (UIButton._isInputSuppressedForNode(this.node)) return
         if (UIButton._activeButton && UIButton._activeButton !== this) return
         if (this._pressed) {
             this._setHovering(false, false)
@@ -631,12 +667,17 @@ export class UIButton extends Component {
         this._setHovering(false)
     }
 
-    private _refreshHoverFromPointer(updateCursor = true) {
+    private _refreshHoverFromPointer(
+        updateCursor = true,
+        pointerLocation: Vec2 | null = null,
+        activeModalRoot: Node | null = null,
+    ) {
         if (
             !this._interactable ||
             !this.node.activeInHierarchy ||
+            (activeModalRoot && !this._isInsideModalRoot(activeModalRoot)) ||
             this._pressed ||
-            UIButton._hoverSuppressCount > 0 ||
+            UIButton._isInputSuppressedForNode(this.node, activeModalRoot) ||
             !UIButton._lastPointerCanHover
         ) {
             this._setHovering(false, true, true, updateCursor)
@@ -644,10 +685,19 @@ export class UIButton extends Component {
         }
 
         const uiTransform = this.node.getComponent(UITransform)
-        const location = UIButton._lastMouseLocation
+        const location = pointerLocation ?? UIButton._lastMouseLocation
         const hovering = !!uiTransform && !!location && uiTransform.hitTest(location)
         this._setHovering(hovering, true, true, updateCursor)
         return hovering
+    }
+
+    private _isInsideModalRoot(activeModalRoot: Node) {
+        let node: Node | null = this.node
+        while (node) {
+            if (node === activeModalRoot) return true
+            node = node.parent
+        }
+        return false
     }
 
     private _setHovering(hovering: boolean, applyVisual = true, emitEvent = true, updateCursor = true) {

@@ -8,6 +8,7 @@ import {
 } from './StoreScreenAssets'
 import { MenuScreenBase } from '../MenuScreenBase'
 import { SoundEffect } from '@/core/SoundLoader'
+import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { UIButton } from '@/ui/Button'
 import { DialogButtonMode, MessageBox } from '@/ui/MessageBox/MessageBox'
 import { SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
@@ -241,11 +242,12 @@ export class StoreScreen extends MenuScreenBase {
     }
 
     update(deltaTime: number) {
+        const scaledDeltaTime = scaleGameDeltaTime(deltaTime)
         const wasReady = this._canInteractWithStoreItems()
         if (this._storeTime < STORE_INTERACTION_READY_FRAME) {
             this._storeTime = Math.min(
                 STORE_INTERACTION_READY_FRAME,
-                this._storeTime + deltaTime * STORE_UPDATE_RATE,
+                this._storeTime + scaledDeltaTime * STORE_UPDATE_RATE,
             )
             this._updateSignPosition()
             if (!wasReady && this._canInteractWithStoreItems()) {
@@ -257,7 +259,7 @@ export class StoreScreen extends MenuScreenBase {
 
         if (this._hatchTimer <= 0) return
 
-        this._hatchTimer = Math.max(0, this._hatchTimer - deltaTime)
+        this._hatchTimer = Math.max(0, this._hatchTimer - scaledDeltaTime)
         if (this._hatchTimer <= 0) {
             this._rerenderLoaded()
             this._refreshPageButtonPointerState()

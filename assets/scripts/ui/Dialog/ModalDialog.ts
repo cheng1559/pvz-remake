@@ -3,6 +3,7 @@ import {
     BlockInputEvents,
     Component,
     EventKeyboard,
+    EventMouse,
     EventTouch,
     game,
     input,
@@ -13,7 +14,7 @@ import {
     UITransform,
     view,
 } from 'cc'
-import { UIButton } from '@/ui/Button'
+import { UIHoverManager } from '@/ui/UIHoverManager'
 
 const { ccclass, property } = _decorator
 
@@ -39,9 +40,12 @@ export class ModalDialog extends Component {
     private _dragMouseX = 0
     private _dragMouseY = 0
     private _dragEventTarget: Node | null = null
+    private _pointerEventsBound = false
+    private _modalBlockerPointerEventsBound = false
 
     onEnable() {
         this._createModalBlocker()
+        this._bindPointerEvents()
         this._bindDragEvents()
         this._registerActiveDialog()
         input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
@@ -50,6 +54,7 @@ export class ModalDialog extends Component {
     onDisable() {
         this._unregisterActiveDialog()
         this._unbindDragEvents()
+        this._unbindPointerEvents()
         input.off(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this._dragging = false
         this._setCursor('')
@@ -63,6 +68,7 @@ export class ModalDialog extends Component {
     onDestroy() {
         this._unregisterActiveDialog()
         this._destroyModalBlocker()
+        UIHoverManager.refreshHoverStates()
     }
 
     close() {
@@ -144,27 +150,69 @@ export class ModalDialog extends Component {
         }
 
         this._modalBlocker = blocker
+        this._bindModalBlockerPointerEvents()
         this._beginModalHoverBlock()
     }
 
     private _beginModalHoverBlock() {
         if (this._modalHoverBlockActive) return
         this._modalHoverBlockActive = true
-        UIButton.beginHoverBlock()
+        UIHoverManager.beginModalBlock(this.node)
     }
 
     private _endModalHoverBlock() {
         if (!this._modalHoverBlockActive) return
         this._modalHoverBlockActive = false
-        UIButton.endHoverBlock()
+        UIHoverManager.endModalBlock(this.node)
     }
 
     private _destroyModalBlocker() {
+        this._unbindModalBlockerPointerEvents()
         if (this._modalBlocker?.isValid) {
             this._modalBlocker.destroy()
         }
         this._modalBlocker = null
         this._endModalHoverBlock()
+    }
+
+    private _bindPointerEvents() {
+        if (this._pointerEventsBound) return
+        this._pointerEventsBound = true
+        this.node.on(Node.EventType.MOUSE_MOVE, this._rememberMouseEvent, this)
+        this.node.on(Node.EventType.MOUSE_DOWN, this._rememberMouseEvent, this)
+        this.node.on(Node.EventType.MOUSE_UP, this._rememberMouseEvent, this)
+        this._bindModalBlockerPointerEvents()
+    }
+
+    private _unbindPointerEvents() {
+        if (!this._pointerEventsBound) return
+        this._pointerEventsBound = false
+        this.node.off(Node.EventType.MOUSE_MOVE, this._rememberMouseEvent, this)
+        this.node.off(Node.EventType.MOUSE_DOWN, this._rememberMouseEvent, this)
+        this.node.off(Node.EventType.MOUSE_UP, this._rememberMouseEvent, this)
+        this._unbindModalBlockerPointerEvents()
+    }
+
+    private _bindModalBlockerPointerEvents() {
+        if (this._modalBlockerPointerEventsBound) return
+        if (!this._modalBlocker?.isValid) return
+        this._modalBlockerPointerEventsBound = true
+        this._modalBlocker.on(Node.EventType.MOUSE_MOVE, this._rememberMouseEvent, this)
+        this._modalBlocker.on(Node.EventType.MOUSE_DOWN, this._rememberMouseEvent, this)
+        this._modalBlocker.on(Node.EventType.MOUSE_UP, this._rememberMouseEvent, this)
+    }
+
+    private _unbindModalBlockerPointerEvents() {
+        if (!this._modalBlockerPointerEventsBound) return
+        this._modalBlockerPointerEventsBound = false
+        if (!this._modalBlocker?.isValid) return
+        this._modalBlocker.off(Node.EventType.MOUSE_MOVE, this._rememberMouseEvent, this)
+        this._modalBlocker.off(Node.EventType.MOUSE_DOWN, this._rememberMouseEvent, this)
+        this._modalBlocker.off(Node.EventType.MOUSE_UP, this._rememberMouseEvent, this)
+    }
+
+    private _rememberMouseEvent(event: EventMouse) {
+        UIHoverManager.rememberMouseEvent(event, false)
     }
 
     private _onTouchStart(event: EventTouch) {

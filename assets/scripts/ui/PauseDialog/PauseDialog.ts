@@ -1,7 +1,6 @@
 import { _decorator, EventKeyboard, Node } from 'cc'
 import { Animator } from '@/core/Animator'
 import { createZombieAnimationView, playZombieBodyAnimation, wireZombieAnimation } from '@/game/ZombieAnimation'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { DialogButtonMode, MessageBox } from '@/ui/MessageBox/MessageBox'
 import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
 
@@ -39,9 +38,6 @@ export class PauseDialog extends MessageBox {
     }
 
     protected onDialogKeyDown(event: EventKeyboard) {
-        if (event.keyCode === 32 || event.keyCode === 13) {
-            void SoundLoader.play(SoundEffect.ButtonClick)
-        }
         super.onDialogKeyDown(event)
     }
 

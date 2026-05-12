@@ -1,63 +1,88 @@
 import json
-import math
 import uuid
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
 from generate_packet_plant_cache import (
     ANIMATION_DIR,
-    ANIMATION_NAMES,
-    SEED_COUNT,
+    TEXTURE_DIR,
     load_json,
-    render_plant_cache,
-    style_for,
+    load_texture,
+    paste_transformed,
+    render_frame_to_matrix,
+    sample_frames,
 )
 
 
-ATLAS_COLUMNS = 8
-CELL_WIDTH = 220
-CELL_HEIGHT = 160
-COMMON_OFFSET_X = -40
-COMMON_OFFSET_Y = -40
+OUTPUT_WIDTH = 90
+OUTPUT_HEIGHT = 100
+RENDER_SCALE = 0.85
+DRAW_OFFSET_X = 10.0
+DRAW_OFFSET_Y = 0.0
 
-ROOT = Path(__file__).resolve().parents[1]
-TEXTURE_DIR = ROOT / "assets/resources/textures"
-OUTPUT_PATH = TEXTURE_DIR / "plant_previews_cached.png"
-OUTPUT_META_PATH = TEXTURE_DIR / "plant_previews_cached.png.meta"
+OUTPUT_PATH = TEXTURE_DIR / "lawnmower_cached.png"
+OUTPUT_META_PATH = TEXTURE_DIR / "lawnmower_cached.png.meta"
 
 
-def render_seed(seed_id: int) -> Image.Image:
-    animation_name = ANIMATION_NAMES.get(seed_id)
-    cell = Image.new("RGBA", (CELL_WIDTH, CELL_HEIGHT), (0, 0, 0, 0))
-    if animation_name is None:
-        return cell
+def get_anim_node(animation_json: dict[str, Any]) -> dict[str, Any] | None:
+    node = animation_json.get("default")
+    if isinstance(node, dict) and "tracks" in node and "animations" in node:
+        return node
+    return None
 
-    animation_path = ANIMATION_DIR / f"{animation_name}.json"
-    if not animation_path.exists():
-        print(f"[plant-preview-cache] WARN: missing animation json for seed {seed_id}: {animation_path}")
-        return cell
 
+def sample_lawnmower_tracks(animation_json: dict[str, Any]) -> list[dict[str, Any]]:
+    node = get_anim_node(animation_json)
+    if not node:
+        print("[lawnmower-cache] WARN: missing default animation node")
+        return []
+
+    animation = node.get("animations", {}).get("anim_normal")
+    if not animation:
+        print("[lawnmower-cache] WARN: missing anim_normal layer")
+        return []
+
+    target_frame = animation["startFrame"]
+    sampled: list[dict[str, Any]] = []
+    for track_name, track in node.get("tracks", {}).items():
+        frame = sample_frames(track.get("frames", []), target_frame)
+        if not frame or not frame.get("image"):
+            continue
+        sampled.append({
+            "z": track.get("zIndex", 0),
+            "image": frame["image"],
+            "alpha": frame.get("alpha", 1),
+            "matrix": render_frame_to_matrix(frame),
+        })
+
+    sampled.sort(key=lambda item: item["z"])
+    return sampled
+
+
+def render_lawnmower_cache() -> Image.Image:
+    animation_path = ANIMATION_DIR / "lawnmower.json"
     animation_json = load_json(animation_path)
-    cache, offset_x, offset_y = render_plant_cache(seed_id, animation_json, style_for(seed_id))
-    cell.alpha_composite(cache, (offset_x - COMMON_OFFSET_X, offset_y - COMMON_OFFSET_Y))
-    return cell
+    canvas = Image.new("RGBA", (OUTPUT_WIDTH, OUTPUT_HEIGHT), (0, 0, 0, 0))
+
+    for item in sample_lawnmower_tracks(animation_json):
+        local = item["matrix"]
+        matrix = (
+            RENDER_SCALE * local[0],
+            RENDER_SCALE * local[1],
+            RENDER_SCALE * local[2],
+            RENDER_SCALE * local[3],
+            DRAW_OFFSET_X + RENDER_SCALE * local[4],
+            DRAW_OFFSET_Y + RENDER_SCALE * local[5],
+        )
+        paste_transformed(canvas, load_texture(item["image"]), matrix, item["alpha"])
+
+    return canvas
 
 
 def write_meta() -> None:
-    width = ATLAS_COLUMNS * CELL_WIDTH
-    height = math.ceil(SEED_COUNT / ATLAS_COLUMNS) * CELL_HEIGHT
     if OUTPUT_META_PATH.exists():
-        meta = json.loads(OUTPUT_META_PATH.read_text(encoding="utf-8"))
-        texture_data = meta.get("subMetas", {}).get("6c48a", {}).get("userData", {})
-        texture_data["minfilter"] = "linear"
-        texture_data["magfilter"] = "linear"
-        sprite_data = meta.get("subMetas", {}).get("f9941", {}).get("userData", {})
-        sprite_data["width"] = width
-        sprite_data["height"] = height
-        sprite_data["rawWidth"] = width
-        sprite_data["rawHeight"] = height
-        OUTPUT_META_PATH.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
         return
 
     image_uuid = str(uuid.uuid4())
@@ -71,7 +96,7 @@ def write_meta() -> None:
             "6c48a": {
                 "importer": "texture",
                 "uuid": f"{image_uuid}@6c48a",
-                "displayName": "plant_previews_cached",
+                "displayName": "lawnmower_cached",
                 "id": "6c48a",
                 "name": "texture",
                 "userData": {
@@ -93,7 +118,7 @@ def write_meta() -> None:
             "f9941": {
                 "importer": "sprite-frame",
                 "uuid": f"{image_uuid}@f9941",
-                "displayName": "plant_previews_cached",
+                "displayName": "lawnmower_cached",
                 "id": "f9941",
                 "name": "spriteFrame",
                 "userData": {
@@ -103,10 +128,10 @@ def write_meta() -> None:
                     "offsetY": 0,
                     "trimX": 0,
                     "trimY": 0,
-                    "width": width,
-                    "height": height,
-                    "rawWidth": width,
-                    "rawHeight": height,
+                    "width": OUTPUT_WIDTH,
+                    "height": OUTPUT_HEIGHT,
+                    "rawWidth": OUTPUT_WIDTH,
+                    "rawHeight": OUTPUT_HEIGHT,
                     "borderTop": 0,
                     "borderBottom": 0,
                     "borderLeft": 0,
@@ -138,14 +163,8 @@ def write_meta() -> None:
 
 
 def main() -> None:
-    rows = math.ceil(SEED_COUNT / ATLAS_COLUMNS)
-    atlas = Image.new("RGBA", (ATLAS_COLUMNS * CELL_WIDTH, rows * CELL_HEIGHT), (0, 0, 0, 0))
-    for seed_id in range(SEED_COUNT):
-        cel = render_seed(seed_id)
-        x = seed_id % ATLAS_COLUMNS * CELL_WIDTH
-        y = seed_id // ATLAS_COLUMNS * CELL_HEIGHT
-        atlas.alpha_composite(cel, (x, y))
-    atlas.save(OUTPUT_PATH)
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    render_lawnmower_cache().save(OUTPUT_PATH)
     write_meta()
     print(f"Wrote {OUTPUT_PATH}")
 

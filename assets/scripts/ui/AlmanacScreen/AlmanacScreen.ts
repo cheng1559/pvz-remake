@@ -18,10 +18,12 @@ import {
     sys,
 } from 'cc'
 import { Animator } from '@/core/Animator/Animator'
+import type { AnimNode } from '@/core/Animator/AnimNode'
 import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import {
     getAnimationRateSpeed,
     wirePlantAnimation,
@@ -112,6 +114,14 @@ const POGO_BOUNCE_REANIM_RATE = 40
 const BUNGEE_CUTSCENE_TIME = 200
 const BUNGEE_CUTSCENE_ALTITUDE = 40
 const BUNGEE_DROP_REANIM_RATE = 24
+const ALMANAC_PLANT_BLINK_TICKS_PER_SECOND = 100
+const ALMANAC_PLANT_BLINK_COUNTDOWN_MIN = 400
+const ALMANAC_PLANT_BLINK_COUNTDOWN_RANGE = 400
+const ALMANAC_NUT_BLINK_COUNTDOWN_MIN = 1000
+const ALMANAC_NUT_BLINK_COUNTDOWN_RANGE = 1000
+const ALMANAC_NUT_BLINK_TWITCH_CHANCE = 1
+const ALMANAC_NUT_BLINK_TWICE_CHANCE = 7
+const ALMANAC_PLANT_BLINK_RATE = 15
 
 let additiveSpriteMaterial: Material | null = null
 
@@ -229,6 +239,11 @@ const ALMANAC_NIGHT_GROUND_PLANT_KEYS = new Set([
     'ICE_SHROOM',
     'DOOM_SHROOM',
     'PLANTERN',
+])
+
+const ALMANAC_PLANT_SHADOW_FOLLOWS_VISUAL_OFFSET = new Set<PlantAnimationType>([
+    'puffshroom',
+    'scaredyshroom',
 ])
 
 const ALMANAC_ZOMBIE_PREVIEW_BY_KEY: Partial<Record<string, AlmanacZombiePreviewDefinition>> = {
@@ -559,7 +574,7 @@ export class AlmanacScreen extends MenuScreenBase {
     }
 
     protected update(dt: number) {
-        this._updateZombiePreviewMotions(dt)
+        this._updateZombiePreviewMotions(scaleGameDeltaTime(dt))
     }
 
     async render(): Promise<void> {
@@ -916,21 +931,29 @@ export class AlmanacScreen extends MenuScreenBase {
             y: this._cppY(y),
         })
 
+        const visualAdjust = ALMANAC_PLANT_VISUAL_ADJUSTMENTS[preview.plantType]
         const shadowAdjust = ALMANAC_PLANT_SHADOW_ADJUSTMENTS[preview.plantType] ?? {
             offsetX: -3,
             offsetY: 51,
             hide: false,
         }
         if (!shadowAdjust.hide) {
+            const shadowScale = shadowAdjust.scale ?? 1
+            const shadowFollowsVisualOffset = ALMANAC_PLANT_SHADOW_FOLLOWS_VISUAL_OFFSET.has(preview.plantType)
+            const shadowVisualOffsetX = shadowFollowsVisualOffset ? visualAdjust?.offsetX ?? 0 : 0
+            const shadowVisualOffsetY = shadowFollowsVisualOffset ? visualAdjust?.offsetY ?? 0 : 0
+            const shadowCenterX = shadowAdjust.offsetX + sprites.plantShadow.originalSize.width / 2 + shadowVisualOffsetX
+            const shadowCenterY = -shadowAdjust.offsetY - sprites.plantShadow.originalSize.height / 2 - shadowVisualOffsetY
             const shadowNode = createSpriteNode({
                 name: 'PlantShadow',
                 spriteFrame: sprites.plantShadow,
                 parent: root,
                 layer: this.node.layer,
-                x: shadowAdjust.offsetX,
-                y: -shadowAdjust.offsetY,
+                x: shadowCenterX,
+                y: shadowCenterY,
+                anchorX: 0.5,
+                anchorY: 0.5,
             })
-            const shadowScale = shadowAdjust.scale ?? 1
             shadowNode.setScale(shadowScale, shadowScale, 1)
         }
 
@@ -940,7 +963,6 @@ export class AlmanacScreen extends MenuScreenBase {
             anchorX: 0,
             anchorY: 1,
         })
-        const visualAdjust = ALMANAC_PLANT_VISUAL_ADJUSTMENTS[preview.plantType]
         animatorNode.setPosition(visualAdjust?.offsetX ?? 0, -(visualAdjust?.offsetY ?? 0), 0)
         const visualScale = visualAdjust?.scale ?? 1
         animatorNode.setScale(visualScale, visualScale, 1)
@@ -967,7 +989,70 @@ export class AlmanacScreen extends MenuScreenBase {
                 sunShroomInitialState: 'big',
                 shakeNode: animatorNode,
             })
+            this._attachAlmanacPlantBlink(animator, view)
         })
+    }
+
+    private _attachAlmanacPlantBlink(animator: Animator, view: PlantAnimationView) {
+        const face = view.face
+        if (!face) return
+
+        let blinkCountdown = this._nextAlmanacPlantBlinkCountdown(view.plantType)
+        const tick = (dt: number) => {
+            if (!animator.node?.isValid) {
+                this.unschedule(tick)
+                return
+            }
+            if (face.isPlaying) return
+
+            blinkCountdown -= dt * ALMANAC_PLANT_BLINK_TICKS_PER_SECOND
+            if (blinkCountdown > 0) return
+
+            const animationName = this._pickAlmanacPlantBlinkAnimation(face, view.plantType)
+            if (!animationName) {
+                blinkCountdown = this._nextAlmanacPlantBlinkCountdown(view.plantType)
+                return
+            }
+
+            if (view.plantType === 'potatomine') {
+                animator.hideTrack('anim_eye')
+            }
+            face.play({
+                name: animationName,
+                speed: getAnimationRateSpeed(face, animationName, ALMANAC_PLANT_BLINK_RATE),
+                keepLastFrame: false,
+                onFinish: () => {
+                    if (view.plantType === 'potatomine') {
+                        animator.showTrack('anim_eye')
+                    }
+                    blinkCountdown = this._nextAlmanacPlantBlinkCountdown(view.plantType)
+                },
+            })
+        }
+        this.schedule(tick)
+    }
+
+    private _pickAlmanacPlantBlinkAnimation(face: AnimNode, plantType: PlantAnimationType) {
+        if (plantType === 'wallnut') {
+            const hit = Math.floor(Math.random() * 10)
+            if (hit < ALMANAC_NUT_BLINK_TWITCH_CHANCE && face.hasAnimation('anim_blink_twitch')) {
+                return 'anim_blink_twitch'
+            }
+            if (hit < ALMANAC_NUT_BLINK_TWICE_CHANCE && face.hasAnimation('anim_blink_twice')) {
+                return 'anim_blink_twice'
+            }
+            if (face.hasAnimation('anim_blink_thrice')) return 'anim_blink_thrice'
+        }
+
+        return face.hasAnimation('anim_blink') ? 'anim_blink' : null
+    }
+
+    private _nextAlmanacPlantBlinkCountdown(plantType: PlantAnimationType) {
+        if (plantType === 'wallnut') {
+            return ALMANAC_NUT_BLINK_COUNTDOWN_MIN + Math.random() * ALMANAC_NUT_BLINK_COUNTDOWN_RANGE
+        }
+
+        return ALMANAC_PLANT_BLINK_COUNTDOWN_MIN + Math.random() * ALMANAC_PLANT_BLINK_COUNTDOWN_RANGE
     }
 
     private _getAlmanacPlantGround(
@@ -1718,7 +1803,7 @@ export class AlmanacScreen extends MenuScreenBase {
             y: this._cppY(args.y),
         })
         const mask = clipNode.addComponent(Mask)
-        mask.type = Mask.Type.RECT
+        mask.type = Mask.Type.GRAPHICS_RECT
 
         const contentNode = createUINode(`${args.name}Content`, {
             parent: clipNode,
@@ -2201,7 +2286,9 @@ export class AlmanacScreen extends MenuScreenBase {
             anchorY: 1,
         })
         glowNode.active = false
-        this._createButtonLabel(buttonNode, label, width, fonts.plantButton, 19)
+        this._applyAdditiveSpriteMaterial(glowNode)
+        const labelNode = this._createButtonLabel(buttonNode, label, width, fonts.plantButton, 19)
+        glowNode.setSiblingIndex(labelNode.getSiblingIndex() + 1)
 
         const button = buttonNode.getComponent(UIButton)
         button!.onStateChange = (state) => {

@@ -183,6 +183,8 @@ export function syncZombieTrackVisibility(view: ZombieAnimationView, zombie: Zom
     const animator = view.animator
     if (!animator) return
 
+    syncFlagZombieObjectVisibility(view, zombie)
+
     if (zombie.hasHead) {
         animator.showPrefix('anim_head')
         animator.showPrefix('anim_hair')
@@ -214,18 +216,54 @@ export function syncZombieTrackVisibility(view: ZombieAnimationView, zombie: Zom
         if (zombie.helmHealth > 0) {
             animator.showTrack('anim_cone')
             animator.hidePrefix('anim_hair')
+            animator.setTrackImageOverride('anim_cone', zombieHelmDamageImage(zombie, 'zombie_cone'))
         } else {
             animator.hideTrack('anim_cone')
+            animator.setTrackImageOverride('anim_cone', null)
             if (zombie.hasHead) animator.showPrefix('anim_hair')
         }
     } else if (zombie.type === 'bucket') {
         if (zombie.helmHealth > 0) {
             animator.showTrack('anim_bucket')
             animator.hidePrefix('anim_hair')
+            animator.setTrackImageOverride('anim_bucket', zombieHelmDamageImage(zombie, 'zombie_bucket'))
         } else {
             animator.hideTrack('anim_bucket')
+            animator.setTrackImageOverride('anim_bucket', null)
             if (zombie.hasHead) animator.showPrefix('anim_hair')
         }
+    }
+}
+
+function zombieHelmDamageImage(zombie: ZombieEntity, imagePrefix: 'zombie_cone' | 'zombie_bucket') {
+    if (zombie.helmMaxHealth <= 0) return `${imagePrefix}1`
+    if (zombie.helmHealth < zombie.helmMaxHealth / 3) return `${imagePrefix}3`
+    if (zombie.helmHealth < 2 * zombie.helmMaxHealth / 3) return `${imagePrefix}2`
+    return `${imagePrefix}1`
+}
+
+function syncFlagZombieObjectVisibility(view: ZombieAnimationView, zombie: ZombieEntity) {
+    if (zombie.type !== 'flag') return
+
+    const animator = view.animator
+    if (!animator) return
+
+    if (zombie.hasObject) {
+        animator.showTrack('Zombie_flaghand')
+        animator.showTrack('Zombie_innerarm_screendoor')
+        animator.hideTrack('anim_innerarm1')
+        animator.hideTrack('anim_innerarm2')
+        animator.hideTrack('anim_innerarm3')
+        if (view.flag && !view.flag.isPlaying) {
+            view.flag.play({ name: 'Zombie_flag', loop: true, speed: 15 / 12 })
+        }
+    } else {
+        animator.hideTrack('Zombie_flaghand')
+        animator.hideTrack('Zombie_innerarm_screendoor')
+        animator.showTrack('anim_innerarm1')
+        animator.showTrack('anim_innerarm2')
+        animator.showTrack('anim_innerarm3')
+        view.flag?.stop()
     }
 }
 

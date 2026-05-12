@@ -7,6 +7,7 @@ import { SpriteLoader } from '@/core/SpriteLoader'
 import { AchievementScreenAssets } from './AchievementScreen/AchievementScreenAssets'
 import { AlmanacScreenAssets } from './AlmanacScreen/AlmanacScreenAssets'
 import { ChallengeScreenAssets } from './ChallengeScreen/ChallengeScreenAssets'
+import { DEBUG_CLI_PRELOAD } from './DebugCliDialog/DebugCliDialog'
 import { HelpScreenAssets } from './HelpScreen/HelpScreenAssets'
 import { MessageBoxAssets } from './MessageBox/MessageBoxAssets'
 import { OptionsDialogAssets } from './OptionsDialog/OptionsDialogAssets'
@@ -20,6 +21,7 @@ const STARTUP_TEXTURES = [
     ...AchievementScreenAssets.preload.sprites,
     ...AlmanacScreenAssets.preload.sprites,
     ...ChallengeScreenAssets.preload.sprites,
+    ...DEBUG_CLI_PRELOAD.sprites,
     ...HelpScreenAssets.preload.sprites,
     ...StoreScreenAssets.preload.sprites,
     ...ZenGardenScreenAssets.preload.sprites,
@@ -63,6 +65,7 @@ export class StartupResourceLoader {
             ...FONT_NAMES.map((name) => FontLoader.load(name)),
             ...AchievementScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
             ...AlmanacScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
+            ...DEBUG_CLI_PRELOAD.fonts.map((name) => FontLoader.load(name)),
             ...HelpScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
             ...StoreScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),
             ...ZenGardenScreenAssets.preload.fonts.map((name) => FontLoader.load(name)),

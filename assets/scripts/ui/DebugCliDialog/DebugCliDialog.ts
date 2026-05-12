@@ -21,8 +21,10 @@ import {
 } from 'cc'
 import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import {
+    type DebugCliResult,
     getDebugCliCompletion,
     getDebugCliCompletions,
     getDebugCliParameterHint,
@@ -45,7 +47,13 @@ const MAX_COMMAND_LENGTH = 120
 const ORIGINAL_FRAME_SECONDS = 0.01
 const ORIGINAL_BLINK_DELAY_UPDATES = 14
 const CURSOR_BLINK_SECONDS = ORIGINAL_FRAME_SECONDS * (ORIGINAL_BLINK_DELAY_UPDATES + 1)
+const COMMAND_FLASH_TICKS = 70
+const COMMAND_FLASH_PERIOD_TICKS = 20
 const COMMAND_FONT = 'briannetod16'
+export const DEBUG_CLI_PRELOAD = {
+    sprites: ['editbox'],
+    fonts: [COMMAND_FONT],
+}
 const COMMAND_COLOR = new Color(240, 240, 255, 255)
 const COMPLETION_COLOR = new Color(240, 240, 255, 95)
 const SELECTION_TEXT_COLOR = new Color(0, 0, 0, 255)
@@ -92,8 +100,9 @@ interface DebugCliInputKey {
 export class DebugCliDialog extends MessageBox {
     private static _commandHistory: string[] = []
 
-    public onCommand: ((command: string) => void) | null = null
+    public onCommand: ((command: string) => DebugCliResult) | null = null
     public initialCommand = ''
+    public lastCommandResult: DebugCliResult | null = null
 
     private _inputRoot: Node | null = null
     private _textNode: Node | null = null
@@ -127,6 +136,7 @@ export class DebugCliDialog extends MessageBox {
     private _completionCycleBaseCommand = ''
     private _completionCycleCandidates: string[] = []
     private _completionCycleIndex = -1
+    private _commandFlashTicks = 0
 
     start() {
         this.title = 'DEBUG CLI'
@@ -150,6 +160,9 @@ export class DebugCliDialog extends MessageBox {
     }
 
     onDisable() {
+        if (this.node.isValid) {
+            void SoundLoader.play(SoundEffect.GraveButton)
+        }
         this._unbindDomKeyboardEvents()
         input.off(Input.EventType.MOUSE_DOWN, this._onGlobalPointerDown, this)
         input.off(Input.EventType.TOUCH_START, this._onGlobalPointerDown, this)
@@ -165,6 +178,10 @@ export class DebugCliDialog extends MessageBox {
 
     update(dt: number) {
         super.update()
+        if (this._commandFlashTicks > 0) {
+            this._commandFlashTicks = Math.max(0, this._commandFlashTicks - dt / ORIGINAL_FRAME_SECONDS)
+            this._refreshInputTextColor()
+        }
         if (!this._hasInputFocus) return
 
         this._cursorBlinkElapsed += dt
@@ -188,7 +205,7 @@ export class DebugCliDialog extends MessageBox {
     protected onDialogKeyDown(event: EventKeyboard) {
         if (event.keyCode === DebugCliKeyCode.Enter) {
             this._captureCommand()
-            super.onDialogKeyDown(event)
+            this._submitCommand()
             return
         }
 
@@ -246,7 +263,7 @@ export class DebugCliDialog extends MessageBox {
         })
         setUISize(editNode, this._inputWidth, INPUT_HEIGHT)
         const inputMask = editNode.addComponent(Mask)
-        inputMask.type = (Mask.Type as any).RECT
+        inputMask.type = Mask.Type.GRAPHICS_RECT
 
         this._selectionNode = createUINode('CommandSelection', {
             parent: editNode,
@@ -270,7 +287,7 @@ export class DebugCliDialog extends MessageBox {
         })
         this._textRenderer = this._textNode.addComponent(FontRenderer)
         if (this._commandFont) this._textRenderer.setFontAssets(this._commandFont)
-        this._textRenderer.fontColor = COMMAND_COLOR
+        this._textRenderer.fontColor = this._commandTextColor()
         this._textRenderer.maxWidth = this._inputTextMaxWidth()
 
         this._completionNode = createUINode('CommandCompletionText', {
@@ -299,7 +316,7 @@ export class DebugCliDialog extends MessageBox {
             y: 0,
         })
         const selectionTextMask = this._selectionTextClip.addComponent(Mask)
-        selectionTextMask.type = (Mask.Type as any).RECT
+        selectionTextMask.type = Mask.Type.GRAPHICS_RECT
         this._selectionTextNode = createUINode('CommandSelectionText', {
             parent: this._selectionTextClip,
             anchorX: 0,
@@ -652,6 +669,34 @@ export class DebugCliDialog extends MessageBox {
         this._resetCompletionCycle()
         this._focusCursor(true)
         this._refreshInputText()
+    }
+
+    private _submitCommand() {
+        if (!this._command || !this.onCommand) {
+            this._flashInvalidCommand()
+            return
+        }
+
+        const result = this.onCommand(this._command)
+        if (!result.ok && result.failure !== 'condition') {
+            this._flashInvalidCommand()
+            return
+        }
+
+        this.lastCommandResult = result
+        if (result.ok) {
+            void SoundLoader.play(SoundEffect.ButtonClick)
+        } else if (result.failure === 'condition') {
+            void SoundLoader.play(SoundEffect.Buzzer)
+        }
+        this.close()
+    }
+
+    private _flashInvalidCommand() {
+        this._commandFlashTicks = COMMAND_FLASH_TICKS
+        this._refreshInputTextColor()
+        this._showCursorNow()
+        void SoundLoader.play(SoundEffect.Buzzer)
     }
 
     private _setCommand(command: string) {
@@ -1026,6 +1071,7 @@ export class DebugCliDialog extends MessageBox {
         if (!this._textRenderer) return
 
         const visibleText = this._command.slice(this._leftPos)
+        this._refreshInputTextColor()
         this._textRenderer.string = visibleText
         this._textRenderer.forceRebuild()
         this._refreshCompletion()
@@ -1035,6 +1081,24 @@ export class DebugCliDialog extends MessageBox {
         }
         this._refreshSelection()
         this._refreshCursor()
+    }
+
+    private _refreshInputTextColor() {
+        const color = this._commandTextColor()
+        if (this._textRenderer && !this._textRenderer.fontColor.equals(color)) {
+            this._textRenderer.fontColor = color
+            this._textRenderer.forceRebuild()
+        }
+    }
+
+    private _commandTextColor() {
+        if (
+            this._commandFlashTicks > 0 &&
+            Math.floor(this._commandFlashTicks) % COMMAND_FLASH_PERIOD_TICKS < COMMAND_FLASH_PERIOD_TICKS / 2
+        ) {
+            return new Color(255, 0, 0, 255)
+        }
+        return COMMAND_COLOR
     }
 
     private _refreshCompletion() {

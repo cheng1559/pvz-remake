@@ -284,6 +284,7 @@ export class ChallengeScreen extends MenuScreenBase {
             anchorX: 0,
             anchorY: 1,
         })
+        const windowSprite = windowNode.getComponent(Sprite)
 
         const thumbnailAtlas =
             definition.page === ChallengePage.Survival
@@ -326,6 +327,7 @@ export class ChallengeScreen extends MenuScreenBase {
         labelNode.setPosition((CHALLENGE_BUTTON_WIDTH - CHALLENGE_LABEL_WIDTH) / 2, -labelTop, 0)
 
         const button = buttonNode.addComponent(UIButton)
+        button.setVisualSprite(windowSprite)
         thumbnailNode.setSiblingIndex(0)
         windowNode.setSiblingIndex(1)
         labelNode.setSiblingIndex(2)

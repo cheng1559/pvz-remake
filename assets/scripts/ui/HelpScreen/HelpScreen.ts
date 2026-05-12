@@ -11,6 +11,7 @@ import {
 } from 'cc'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { UIButton } from '@/ui/Button'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import { MenuScreenBase, SCREEN_HEIGHT, SCREEN_WIDTH } from '@/ui/MenuScreenBase'
@@ -59,7 +60,7 @@ export class HelpScreen extends MenuScreenBase {
     update(dt: number) {
         if (this._fadeCounter <= 0) return
 
-        this._fadeCounter = Math.max(0, this._fadeCounter - dt / FADE_TICK_SECONDS)
+        this._fadeCounter = Math.max(0, this._fadeCounter - scaleGameDeltaTime(dt) / FADE_TICK_SECONDS)
         this._drawFadeOverlay()
     }
 
@@ -134,6 +135,7 @@ export class HelpScreen extends MenuScreenBase {
             height: MAIN_MENU_BUTTON_HEIGHT,
         })
         overlayNode.active = false
+        this._applyAdditiveSpriteMaterial(overlayNode)
 
         const labelNode = createUINode('Label', {
             parent: buttonNode,
@@ -160,6 +162,7 @@ export class HelpScreen extends MenuScreenBase {
             0,
         )
         labelNode.setPosition(labelOrigin)
+        overlayNode.setSiblingIndex(labelNode.getSiblingIndex() + 1)
 
         const button = buttonNode.addComponent(UIButton)
         button.normalSprite = sprites.mainMenuButton

@@ -18,6 +18,7 @@ import {
 } from 'cc'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { UIButton } from '@/ui/Button'
 import { MenuScreenBase } from '@/ui/MenuScreenBase'
 import { TouchScrollGesture } from '@/ui/ScrollGesture'
@@ -200,10 +201,11 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     update(dt: number) {
+        const scaledDt = scaleGameDeltaTime(dt)
         if (this._scrollTweenDuration > 0) {
             this._scrollTweenElapsed = Math.min(
                 this._scrollTweenDuration,
-                this._scrollTweenElapsed + dt,
+                this._scrollTweenElapsed + scaledDt,
             )
             const t = this._scrollTweenElapsed / this._scrollTweenDuration
             this._setScrollPosition(

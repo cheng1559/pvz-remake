@@ -79,6 +79,7 @@ STYLES: dict[int, dict[str, float]] = {
     12: {"x": 8.0, "y": -13.0, "scale": 0.4},
     15: {"x": 8.0, "y": -13.0, "scale": 0.4},
     17: {"x": 8.0, "y": -13.0, "scale": 0.4},
+    18: {"x": 5.0, "y": -11.0},
     19: {"x": 8.0, "y": -13.0, "scale": 0.4},
     21: {"x": 8.0, "y": -13.0, "scale": 0.4},
     22: {"x": 8.0, "y": -13.0, "scale": 0.4},
@@ -90,6 +91,7 @@ STYLES: dict[int, dict[str, float]] = {
     32: {"x": 15.0, "y": -15.0, "scale": 0.4},
     34: {"x": 13.0, "y": -15.0, "scale": 0.4},
     35: {"x": 0.0, "y": -10.0, "scale": 0.55},
+    37: {"x": 5.0, "y": -11.0},
     39: {"x": 18.0, "y": -20.0, "scale": 0.35},
     40: {"x": 2.0, "y": -9.0},
     42: {"x": 7.0, "y": -15.0, "scale": 0.45},
@@ -368,6 +370,8 @@ def sample_tracks(animation_json: dict[str, Any], seed_id: int, style: dict[str,
             frame = sample_frames(track.get("frames", []), target_frame)
             if not frame or not frame.get("image"):
                 continue
+            if should_skip_packet_track(seed_id, track_name, frame["image"]):
+                continue
             if parent:
                 frame = apply_parent_transform(frame, compute_slot_matrix(node_states, parent[0], parent[1]))
             sampled.append({
@@ -379,6 +383,12 @@ def sample_tracks(animation_json: dict[str, Any], seed_id: int, style: dict[str,
 
     sampled.sort(key=lambda item: item["z"])
     return sampled
+
+
+def should_skip_packet_track(seed_id: int, track_name: str, image_name: str) -> bool:
+    if seed_id == 34 and (track_name.lower().endswith("butter") or image_name == "cornpult_butter"):
+        return True
+    return False
 
 
 def sand_alpha_edges(image: Image.Image) -> Image.Image:

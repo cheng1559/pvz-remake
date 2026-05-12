@@ -14,6 +14,7 @@ Steps:
   9. Generate cached packet plant atlas
  10. Generate cached plant preview atlas
  11. Generate cached zombie preview atlas
+ 12. Generate cached lawn mower sprite
 """
 
 import shutil
@@ -31,6 +32,7 @@ from copy_sounds import copy_sounds
 from generate_packet_plant_cache import main as generate_packet_plant_cache
 from generate_plant_preview_cache import main as generate_plant_preview_cache
 from generate_zombie_preview_cache import main as generate_zombie_preview_cache
+from generate_lawnmower_cache import main as generate_lawnmower_cache
 
 
 IMAGE_SUFFIX_PRIORITY = {'.png': 0, '.jpg': 1, '.jpeg': 1, '.gif': 2}
@@ -183,6 +185,14 @@ def main():
     print("=" * 60)
 
     generate_zombie_preview_cache()
+
+    # Step 12: Generate cached lawn mower sprite
+    print()
+    print("=" * 60)
+    print("[pipeline] Step 12: Generate cached lawn mower sprite")
+    print("=" * 60)
+
+    generate_lawnmower_cache()
 
     print()
     print("=" * 60)

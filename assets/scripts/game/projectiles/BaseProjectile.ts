@@ -10,7 +10,7 @@ const WIDE_BOARD_WIDTH = 800
 export interface ProjectileUpdateContext<TTarget> {
     events: GameEvent[]
     findCollisionTarget(projectile: Projectile): TTarget | null
-    damageTarget(target: TTarget, projectile: Projectile): void
+    damageTarget(target: TTarget, projectile: Projectile): boolean | void
 }
 
 export interface ProjectileCreateArgs {
@@ -67,8 +67,10 @@ export class Projectile implements ProjectileEntity {
             return
         }
 
-        context.damageTarget(target, this)
-        context.events.push({ type: 'foleyRequested', sound: SoundEffect.Splat, pitchRange: 10 })
+        const handledImpactSound = context.damageTarget(target, this) === true
+        if (!handledImpactSound) {
+            context.events.push({ type: 'foleyRequested', sound: SoundEffect.Splat, pitchRange: 10 })
+        }
         this.dead = true
     }
 

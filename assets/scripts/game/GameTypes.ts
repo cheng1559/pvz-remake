@@ -22,7 +22,11 @@ export type ZombieState = 'walking' | 'eating' | 'dying' | 'mowered'
 export type LawnMowerState = 'ready' | 'triggered'
 export type ZombieHelmType = 'none' | 'traffic-cone' | 'bucket'
 export type ZombieShieldType = 'none'
-export type AdviceStyle = 'hint' | 'hint-stay' | 'tutorial-level1' | 'tutorial-level1-stay' | 'huge-wave' | 'big-middle'
+export type AdviceStyle =
+    | 'hint'
+    | 'hint-stay'
+    | 'tutorial-level1'
+    | 'tutorial-level1-stay'
 export type LevelOneTutorialPhase =
     | 'pick-first-seed'
     | 'plant-first-seed'
@@ -152,10 +156,12 @@ export type GameEvent =
     | { type: 'sunProduced', entityId: number, amount: number, x: number, y: number }
     | { type: 'soundRequested', sound: SoundEffect }
     | { type: 'foleyRequested', sound: SoundEffect, pitchRange?: number }
+    | { type: 'levelAwardCollected' }
     | { type: 'levelWon' }
     | { type: 'levelLost', zombieId: number | null }
     | { type: 'advice', message: string, style?: AdviceStyle }
     | { type: 'adviceCleared' }
+    | { type: 'hugeWave' }
     | { type: 'sunFlash' }
     | { type: 'finalWave' }
 
@@ -212,6 +218,7 @@ export interface ZombieEntity {
     moweredTime: number
     age: number
     chilledCounter: number
+    hitFlashCounter: number
     hasHead: boolean
     hasArm: boolean
     hasTongue: boolean

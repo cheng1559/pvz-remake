@@ -1,4 +1,4 @@
-import { Color, Component, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
+import { Color, Component, gfx, Material, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
 import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
@@ -9,17 +9,30 @@ export const SCREEN_WIDTH = 800
 export const SCREEN_HEIGHT = 600
 export const BUTTON_TEXT_HOVER_COLOR = new Color(250, 40, 40)
 
+let additiveSpriteMaterial: Material | null = null
+
 export abstract class MenuScreenBase extends Component {
     public onBackToMenu: (() => void) | null = null
 
     protected _root: Node | null = null
+    private _renderPromise: Promise<void> | null = null
 
     start() {
         setUISize(this.node, SCREEN_WIDTH, SCREEN_HEIGHT)
-        void this.render()
+        void this.ensureRendered()
     }
 
     abstract render(): Promise<void>
+
+    ensureRendered(): Promise<void> {
+        if (!this._renderPromise) {
+            this._renderPromise = this.render().catch((error) => {
+                this._renderPromise = null
+                throw error
+            })
+        }
+        return this._renderPromise
+    }
 
     protected _resetRoot(name: string) {
         this._root?.destroy()
@@ -169,6 +182,39 @@ export abstract class MenuScreenBase extends Component {
         if (args.align === 'right') x -= width
         node.setPosition(this._cppX(x), this._cppY(args.baselineY - metrics.ascent), 0)
         return node
+    }
+
+    protected _applyAdditiveSpriteMaterial(node: Node) {
+        const sprite = node.getComponent(Sprite)
+        if (sprite) {
+            sprite.customMaterial = this._getAdditiveSpriteMaterial()
+        }
+    }
+
+    private _getAdditiveSpriteMaterial() {
+        if (additiveSpriteMaterial) return additiveSpriteMaterial
+
+        additiveSpriteMaterial = new Material()
+        additiveSpriteMaterial.initialize({
+            effectName: 'for2d/builtin-sprite',
+            defines: {
+                USE_TEXTURE: true,
+            },
+            states: {
+                blendState: {
+                    targets: [
+                        {
+                            blend: true,
+                            blendSrc: gfx.BlendFactor.SRC_ALPHA,
+                            blendDst: gfx.BlendFactor.ONE,
+                            blendSrcAlpha: gfx.BlendFactor.SRC_ALPHA,
+                            blendDstAlpha: gfx.BlendFactor.ONE,
+                        },
+                    ],
+                },
+            },
+        })
+        return additiveSpriteMaterial
     }
 
     protected _cppX(x: number) {

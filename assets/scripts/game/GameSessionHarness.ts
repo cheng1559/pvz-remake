@@ -95,6 +95,23 @@ export function runAdventure11Harness(): GameHarnessResult {
         details.push('Adventure 1-1 should keep spawning sky sun after the first Peashooter even if earlier sun was not collected.')
     }
 
+    const debugFirstPlantSession = new GameSession()
+    const debugFirstNonPeaCenter = debugFirstPlantSession.geometry.gridToPixel(0, 2)
+    const debugFirstPeaCenter = debugFirstPlantSession.geometry.gridToPixel(1, 2)
+    debugFirstPlantSession.debugAddPlant('sunflower', 2, 0)
+    debugFirstPlantSession.dispatch({ type: 'selectSeed', seedType: 'peashooter' })
+    debugFirstPlantSession.dispatch({
+        type: 'placePlant',
+        x: debugFirstPeaCenter.x + 40,
+        y: debugFirstPeaCenter.y + 50,
+    })
+    if (debugFirstPlantSession.levelOneTutorialPhase !== 'first-plant-done') {
+        details.push('Adventure 1-1 tutorial should advance when the first Peashooter is planted after a debug-placed non-Peashooter.')
+    }
+    if (!debugFirstPlantSession.hasPlantAt(debugFirstNonPeaCenter.x + 40, debugFirstNonPeaCenter.y + 50)) {
+        details.push('Debug-placed non-Peashooter should remain on the board during the tutorial recovery case.')
+    }
+
     const completedTutorialSession = new GameSession()
     const completedTutorialCenter = completedTutorialSession.geometry.gridToPixel(0, 2)
     completedTutorialSession.dispatch({ type: 'selectSeed', seedType: 'peashooter' })
@@ -154,6 +171,65 @@ export function runAdventure11Harness(): GameHarnessResult {
     }
     if (!duckyZombie || !duckyZombie.hasObject || !duckyZombie.inPool) {
         details.push('Ducky Tube zombie should keep the float object and start in pool movement state.')
+    }
+
+    const coneHitSession = new GameSession()
+    const coneHitZombie = coneHitSession.addZombie('traffic-cone', 2, 260)
+    if (!coneHitZombie) {
+        details.push('Cone projectile impact setup should create a conehead zombie.')
+    } else {
+        coneHitZombie.velocityX = 0
+        coneHitSession.projectiles.push(createProjectile({
+            id: 3001,
+            type: 'pea',
+            x: coneHitZombie.x,
+            y: coneHitSession.geometry.gridToPixel(0, 2).y + 10,
+            row: 2,
+            shadowY: coneHitSession.geometry.gridToPixel(0, 2).y + 77,
+        }))
+        coneHitSession.drainEvents()
+        coneHitSession.update()
+        const coneHitEvents = coneHitSession.drainEvents()
+        if (!coneHitEvents.some((event) => event.type === 'foleyRequested' && event.sound === SoundEffect.PlasticHit) ||
+            !coneHitEvents.some((event) => event.type === 'foleyRequested' && event.sound === SoundEffect.Splat)) {
+            details.push('A projectile hitting traffic-cone armor should request plastic hit plus splat foley like the original.')
+        }
+    }
+
+    const bucketHitSession = new GameSession()
+    const bucketHitZombie = bucketHitSession.addZombie('bucket', 2, 260)
+    if (!bucketHitZombie) {
+        details.push('Bucket projectile impact setup should create a buckethead zombie.')
+    } else {
+        bucketHitZombie.velocityX = 0
+        bucketHitSession.projectiles.push(createProjectile({
+            id: 3002,
+            type: 'pea',
+            x: bucketHitZombie.x,
+            y: bucketHitSession.geometry.gridToPixel(0, 2).y + 10,
+            row: 2,
+            shadowY: bucketHitSession.geometry.gridToPixel(0, 2).y + 77,
+        }))
+        bucketHitSession.drainEvents()
+        bucketHitSession.update()
+        const bucketHitEvents = bucketHitSession.drainEvents()
+        if (!bucketHitEvents.some((event) => event.type === 'foleyRequested' && event.sound === SoundEffect.ShieldHit) ||
+            bucketHitEvents.some((event) => event.type === 'foleyRequested' && event.sound === SoundEffect.Splat)) {
+            details.push('A projectile hitting bucket armor should request shield hit foley without the body splat.')
+        }
+    }
+
+    if (normalZombie) {
+        const armResult = normalZombie.takeDamage(91)
+        if (!armResult.droppedArm || armResult.droppedHead || normalZombie.hasArm || !normalZombie.hasHead) {
+            details.push('Body damage below two thirds should drop only the zombie arm.')
+        }
+    }
+    if (flagZombie) {
+        const headResult = flagZombie.takeDamage(200)
+        if (!headResult.droppedHead || flagZombie.hasHead || flagZombie.hasObject) {
+            details.push('Flag zombie should drop its flag object when losing its head.')
+        }
     }
 
     const mowerSession = new GameSession()
@@ -340,6 +416,26 @@ export function runAdventure11Harness(): GameHarnessResult {
         details.push('A pea should still resolve its collision on the tick where it crosses the right board edge.')
     }
 
+    const edgeZombieSession = new GameSession()
+    const edgeZombie = edgeZombieSession.addZombie('normal', 2, 780)
+    edgeZombieSession.projectiles.push(createProjectile({
+        id: 2,
+        type: 'pea',
+        x: 798,
+        y: edgeZombieSession.geometry.gridToPixel(0, 2).y + 10,
+        row: 2,
+        shadowY: edgeZombieSession.geometry.gridToPixel(0, 2).y + 77,
+    }))
+    if (!edgeZombie) {
+        details.push('Edge projectile setup should create a partially entered zombie.')
+    } else {
+        edgeZombie.velocityX = 0
+        edgeZombieSession.update()
+        if (edgeZombie.health !== 250 || edgeZombieSession.projectiles.length !== 0) {
+            details.push('A pea crossing the right edge should hit a zombie whose origin has entered even if its body rect is still offscreen.')
+        }
+    }
+
     const originalRandom = Math.random
     try {
         Math.random = () => 0
@@ -362,7 +458,7 @@ export function runAdventure11Harness(): GameHarnessResult {
     } else {
         dyingAwardZombie.takeDamage(9999, { zombieCount: 2, canUseSuperLongDeath: false })
         finalAwardZombie.velocityX = 0
-        finalAwardZombie.health = 20
+        finalAwardZombie.health = 100
         awardDropSession.projectiles.push(createProjectile({
             id: 9999,
             type: 'pea',
@@ -379,8 +475,8 @@ export function runAdventure11Harness(): GameHarnessResult {
         if (awardDropSession.sunSpawningEnabled) {
             details.push('Sky sun spawning should stop once the level award seed packet drops.')
         }
-        if (awardDropSession.zombies.some((zombie) => zombie.state === 'dying')) {
-            details.push('Dying zombies should disappear immediately after the level award seed packet drops.')
+        if (awardDropSession.zombies.length !== 0) {
+            details.push('Dropping the level award should remove every zombie from the board like the original RemoveAllZombies path.')
         }
     }
 

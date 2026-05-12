@@ -17,6 +17,7 @@ import {
 import type { AnimNodeData, TrackFrameData } from './Animator.d'
 import { AnimNode } from './AnimNode'
 import { SpriteLoader } from '../SpriteLoader'
+import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 
 const { ccclass, property } = _decorator
 let additiveSpriteMaterial: Material | null = null
@@ -146,7 +147,7 @@ export class Animator extends Component {
     // ── Update Loop ────────────────────────────────────────────
 
     protected update(dt: number) {
-        const scaledDt = dt * Animator.timeScale
+        const scaledDt = scaleGameDeltaTime(dt) * Animator.timeScale
 
         // 1. Update all AnimNodes (compute frames)
         for (const animNode of this._animNodes) {
@@ -170,7 +171,7 @@ export class Animator extends Component {
             this._applyFrameToNode(targetNode, value.frame, trackName)
             if (this._enableExtraAdditiveDraw) {
                 const additiveNode = this._getOrCreateAdditiveTrackNode(trackName)
-                this._applyFrameToNode(additiveNode, value.frame, undefined, this._extraAdditiveColor)
+                this._applyFrameToNode(additiveNode, value.frame, trackName, this._extraAdditiveColor)
             }
         })
 

@@ -11,12 +11,11 @@ const GROAN_COUNTDOWN_MIN = 300
 const GROAN_COUNTDOWN_MAX = 400
 const GROAN_REPEAT_MIN = 500
 const GROAN_REPEAT_MAX = 1499
-const ARM_DROP_HEALTH = 180
-const HEAD_DROP_HEALTH = 90
 const HEADLESS_DECAY_CHANCE = 5
 const HEADLESS_DECAY_DAMAGE = 1
 const CHILLED_TICKS = 1000
 const CHILLED_SPEED_FACTOR = 0.5
+const HIT_FLASH_TICKS = 25
 const ZOMBIE_WALK_ASSET_FPS = 12
 const GAME_TICKS_PER_SECOND = 100
 const ZOMBIE_EAT_ANIM_RATE = 36
@@ -68,6 +67,12 @@ export interface ZombieDeathContext {
     canUseSuperLongDeath: boolean
 }
 
+export interface ZombieDamageResult {
+    droppedArm: boolean
+    droppedHead: boolean
+    startedDying: boolean
+}
+
 export interface ZombieCreateArgs {
     id: number
     type: ZombieType
@@ -108,6 +113,7 @@ export abstract class Zombie implements ZombieEntity {
     state: ZombieState = 'walking'
     age = 0
     chilledCounter = 0
+    hitFlashCounter = 0
     hasHead = true
     hasArm = true
     hasTongue = false
@@ -164,6 +170,7 @@ export abstract class Zombie implements ZombieEntity {
         this._flushPendingEvents(context)
         this.age++
         this._boardX = Math.trunc(this.x)
+        this._updateHitFlash()
         if (this.state === 'dying') {
             this._updateChill()
             this.updateDying(context)
@@ -188,9 +195,18 @@ export abstract class Zombie implements ZombieEntity {
         }
     }
 
-    takeDamage(damage: number, deathContext: ZombieDeathContext = { zombieCount: 1, canUseSuperLongDeath: false }) {
-        if (this.state === 'dying' || this.state === 'mowered') return
+    takeDamage(
+        damage: number,
+        deathContext: ZombieDeathContext = { zombieCount: 1, canUseSuperLongDeath: false },
+    ): ZombieDamageResult {
+        const result: ZombieDamageResult = {
+            droppedArm: false,
+            droppedHead: false,
+            startedDying: false,
+        }
+        if (this.state === 'dying' || this.state === 'mowered') return result
 
+        if (damage > 0) this.hitFlashCounter = HIT_FLASH_TICKS
         let remainingDamage = damage
         if (this.shieldHealth > 0) {
             const absorbed = Math.min(this.shieldHealth, remainingDamage)
@@ -204,9 +220,15 @@ export abstract class Zombie implements ZombieEntity {
         }
         if (remainingDamage > 0) {
             this.health = Math.max(0, this.health - remainingDamage)
-            this._updateDamageStates()
+            const damageStateResult = this._updateDamageStates()
+            result.droppedArm = damageStateResult.droppedArm
+            result.droppedHead = damageStateResult.droppedHead
         }
-        if (this.health <= 0) this.startDeathAnimation(deathContext)
+        if (this.health <= 0) {
+            this.startDeathAnimation(deathContext)
+            result.startedDying = this.state === 'dying'
+        }
+        return result
     }
 
     applyChill(events: GameEvent[]) {
@@ -225,6 +247,7 @@ export abstract class Zombie implements ZombieEntity {
         this.helmHealth = 0
         this.shieldHealth = 0
         this.hasTongue = false
+        if (this.type === 'flag') this.hasObject = false
         this.velocityX = 0
         this.animationTime = 0
         this.animationSpeed = ZOMBIE_MOWERED_ANIM_RATE / ZOMBIE_WALK_ASSET_FPS
@@ -340,6 +363,13 @@ export abstract class Zombie implements ZombieEntity {
         this._updateHeadlessDecay(context)
     }
 
+    finishAfterLevelAwardDropped(deathContext: ZombieDeathContext = { zombieCount: 1, canUseSuperLongDeath: false }) {
+        if (this.dead || this.state === 'dying' || this.state === 'mowered') return
+        if (this.hasHead) return
+
+        this.startDeathAnimation(deathContext)
+    }
+
     walkIntoHouse() {
         if (this.dead) return
 
@@ -452,20 +482,44 @@ export abstract class Zombie implements ZombieEntity {
         if (this.chilledCounter > 0) this.chilledCounter--
     }
 
+    private _updateHitFlash() {
+        if (this.hitFlashCounter > 0) this.hitFlashCounter--
+    }
+
     private _chilledAnimSpeed(speed: number) {
         return this.chilledCounter > 0 ? speed * CHILLED_SPEED_FACTOR : speed
     }
 
-    private _updateDamageStates() {
-        if (this.hasArm && this.health < ARM_DROP_HEALTH && this.health > 0) {
+    private _updateDamageStates(): Pick<ZombieDamageResult, 'droppedArm' | 'droppedHead'> {
+        const result = {
+            droppedArm: false,
+            droppedHead: false,
+        }
+        if (!this._canLoseBodyParts()) return result
+
+        if (this.hasArm && this.health < 2 * this.maxHealth / 3 && this.health > 0) {
             this.hasArm = false
+            result.droppedArm = true
             this._pendingEvents.push({ type: 'foleyRequested', sound: SoundEffect.LimbsPop, pitchRange: 10 })
         }
-        if (this.hasHead && this.health < HEAD_DROP_HEALTH) {
+        if (this.hasHead && this.health < this.maxHealth / 3) {
             this.hasHead = false
             this.hasTongue = false
+            if (this.type === 'flag') this.hasObject = false
+            result.droppedHead = true
             this._pendingEvents.push({ type: 'foleyRequested', sound: SoundEffect.LimbsPop, pitchRange: 10 })
         }
+        return result
+    }
+
+    private _canLoseBodyParts() {
+        return (
+            this.type === 'normal' ||
+            this.type === 'flag' ||
+            this.type === 'traffic-cone' ||
+            this.type === 'bucket' ||
+            this.type === 'ducky-tube'
+        )
     }
 
     private _canHaveTongue(type: ZombieType) {

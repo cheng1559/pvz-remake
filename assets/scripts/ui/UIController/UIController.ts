@@ -6,11 +6,13 @@ import {
     input,
     Input,
     Node,
-    tween,
-    Vec3,
 } from 'cc'
+import { FontLoader } from '@/core/FontLoader'
 import { AdventureGameScreen } from '@/game/GameScreen'
+import { popGlobalGamePause, pushGlobalGamePause, scaleGameDeltaTime } from '@/game/GameDefinitions'
+import { AdviceWidget } from '../AdviceWidget'
 import { AchievementScreen } from '../AchievementScreen'
+import { AwardScreen } from '../AwardScreen'
 import { AlmanacScreen } from '../AlmanacScreen/AlmanacScreen'
 import { StoreScreen } from '../StoreScreen/StoreScreen'
 import { ZenGardenScreen } from '../ZenGardenScreen/ZenGardenScreen'
@@ -26,6 +28,7 @@ import { StartupResourceLoader } from '../StartupResourceLoader'
 import { createStoneButton } from '../StoneButton'
 import { createUINode } from '../UIFactory'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import type { SeedType } from '@/game/GameTypes'
 
 const { ccclass, property } = _decorator
 const DEBUG_START_ADVENTURE_DIRECTLY = true
@@ -34,11 +37,22 @@ const GAME_OVER_MAIN_MENU_X = 235
 const GAME_OVER_MAIN_MENU_Y = 310
 const GAME_OVER_MAIN_MENU_WIDTH = 163
 const GAME_OVER_MAIN_MENU_HEIGHT = 46
+const ACHIEVEMENT_TRANSITION_SECONDS = 0.75
+const ACHIEVEMENT_SELECTOR_HIDDEN_Y = 600
+const ACHIEVEMENT_SCREEN_HIDDEN_Y = -599
+const ACHIEVEMENT_SCREEN_SHOWN_Y = 1
 
 interface StoreScreenOptions {
     initialPage?: number
     backButtonLabel?: string
     onBack?: () => void
+}
+
+interface AchievementTransitionState {
+    mode: 'show' | 'hide'
+    elapsed: number
+    selectorNode: Node
+    achievementNode: Node
 }
 
 @ccclass('UIController')
@@ -52,8 +66,12 @@ export class UIController extends Component {
     private _achievementScreen: Node | null = null
     private _modalScreen: Node | null = null
     private _debugCliScreen: Node | null = null
+    private _globalAdviceLayer: Node | null = null
+    private _globalAdviceWidget: AdviceWidget | null = null
+    private _globalAdviceTick = 0
     private _gameOverMainMenuButton: Node | null = null
     private _screenTransitioning = false
+    private _achievementTransition: AchievementTransitionState | null = null
 
     onLoad() {
         if (!this.uiRoot) {
@@ -66,6 +84,13 @@ export class UIController extends Component {
 
     onDestroy() {
         input.off(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
+    }
+
+    update(dt: number) {
+        const scaledDt = scaleGameDeltaTime(dt)
+        this._globalAdviceTick += scaledDt * 100
+        this._globalAdviceWidget?.update(scaledDt * 100, this._globalAdviceTick)
+        this._updateAchievementTransition(scaledDt)
     }
 
     private async _bootstrap() {
@@ -82,9 +107,6 @@ export class UIController extends Component {
     }
 
     async showSelectorScreen(): Promise<SelectorScreen | null> {
-        this._destroyCurrentScreen()
-        this._selectorScreen = null
-        this._adventureGameScreen = null
         const [animation, zombieArmAnimation] = await Promise.all([
             StartupResourceLoader.loadJson('animations/selectorscreen'),
             StartupResourceLoader.loadJson('animations/zombie_hand'),
@@ -131,6 +153,8 @@ export class UIController extends Component {
             this.showAdventureGame()
         }
 
+        this._selectorScreen = null
+        this._adventureGameScreen = null
         this._setCurrentScreen(node)
         this._selectorScreen = selectorScreen
         return selectorScreen
@@ -152,10 +176,33 @@ export class UIController extends Component {
         gameScreen.onGameOverRequest = () => {
             this.showGameOverDialog()
         }
+        gameScreen.onAwardScreenRequest = (seedType) => {
+            this.showAwardScreen(seedType)
+        }
 
         this._setCurrentScreen(node)
         this._adventureGameScreen = gameScreen
         return gameScreen
+    }
+
+    showAwardScreen(seedType: SeedType): AwardScreen | null {
+        const node = createUINode('AwardScreen', { active: false, width: 800, height: 600 })
+        const awardScreen = node.addComponent(AwardScreen)
+        awardScreen.seedType = seedType
+        awardScreen.onNextLevelRequest = () => {
+            this.showAdventureGame()
+        }
+
+        void awardScreen.ensureRendered().then(() => {
+            if (!node.isValid) return
+            this._selectorScreen = null
+            this._adventureGameScreen = null
+            this._setCurrentScreen(node)
+        }).catch((error) => {
+            console.error('[UIController] Failed to prepare AwardScreen', error)
+            if (node.isValid) node.destroy()
+        })
+        return awardScreen
     }
 
     showHelpScreen(): HelpScreen | null {
@@ -165,13 +212,17 @@ export class UIController extends Component {
             void this.showSelectorScreen()
         }
 
-        this._setCurrentScreen(node)
+        void helpScreen.ensureRendered().then(() => {
+            if (!node.isValid) return
+            this._setCurrentScreen(node)
+        }).catch((error) => {
+            console.error('[UIController] Failed to prepare HelpScreen', error)
+            if (node.isValid) node.destroy()
+        })
         return helpScreen
     }
 
     showChallengeScreen(page: ChallengePage): ChallengeScreen | null {
-        this._selectorScreen = null
-        this._adventureGameScreen = null
         const node = createUINode('ChallengeScreen', { active: false, width: 800, height: 600 })
         const challengeScreen = node.addComponent(ChallengeScreen)
         challengeScreen.page = page
@@ -179,13 +230,19 @@ export class UIController extends Component {
             void this.showSelectorScreen()
         }
 
-        this._setCurrentScreen(node)
+        void challengeScreen.ensureRendered().then(() => {
+            if (!node.isValid) return
+            this._selectorScreen = null
+            this._adventureGameScreen = null
+            this._setCurrentScreen(node)
+        }).catch((error) => {
+            console.error('[UIController] Failed to prepare ChallengeScreen', error)
+            if (node.isValid) node.destroy()
+        })
         return challengeScreen
     }
 
     showZenGardenScreen(): ZenGardenScreen | null {
-        this._selectorScreen = null
-        this._adventureGameScreen = null
         const node = createUINode('ZenGardenScreen', { active: false, width: 800, height: 600 })
         const zenGardenScreen = node.addComponent(ZenGardenScreen)
         zenGardenScreen.onBackToMenu = () => {
@@ -201,13 +258,19 @@ export class UIController extends Component {
             })
         }
 
-        this._setCurrentScreen(node)
+        void zenGardenScreen.ensureRendered().then(() => {
+            if (!node.isValid) return
+            this._selectorScreen = null
+            this._adventureGameScreen = null
+            this._setCurrentScreen(node)
+        }).catch((error) => {
+            console.error('[UIController] Failed to prepare ZenGardenScreen', error)
+            if (node.isValid) node.destroy()
+        })
         return zenGardenScreen
     }
 
     showStoreScreen(options: StoreScreenOptions = {}): StoreScreen | null {
-        this._selectorScreen = null
-        this._adventureGameScreen = null
         const node = createUINode('StoreScreen', { active: false, width: 800, height: 600 })
         const storeScreen = node.addComponent(StoreScreen)
         storeScreen.initialPage = options.initialPage ?? 0
@@ -216,7 +279,15 @@ export class UIController extends Component {
             void this.showSelectorScreen()
         })
 
-        this._setCurrentScreen(node)
+        void storeScreen.ensureRendered().then(() => {
+            if (!node.isValid) return
+            this._selectorScreen = null
+            this._adventureGameScreen = null
+            this._setCurrentScreen(node)
+        }).catch((error) => {
+            console.error('[UIController] Failed to prepare StoreScreen', error)
+            if (node.isValid) node.destroy()
+        })
         return storeScreen
     }
 
@@ -297,16 +368,7 @@ export class UIController extends Component {
         this._achievementScreen = node
 
         this._selectorScreen?.setButtonsInteractable(false)
-        this._screenTransitioning = true
-        tween(this._currentScreen)
-            .to(0.75, { position: new Vec3(0, 600, 0) }, { easing: 'quadInOut' })
-            .start()
-        tween(node)
-            .to(0.75, { position: new Vec3(0, 1, 0) }, { easing: 'quadInOut' })
-            .call(() => {
-                this._screenTransitioning = false
-            })
-            .start()
+        this._startAchievementTransition('show', this._currentScreen, node)
 
         return achievementScreen
     }
@@ -321,19 +383,69 @@ export class UIController extends Component {
         }
 
         const achievementNode = this._achievementScreen
+        this._startAchievementTransition('hide', this._currentScreen, achievementNode)
+    }
+
+    private _startAchievementTransition(mode: 'show' | 'hide', selectorNode: Node, achievementNode: Node) {
         this._screenTransitioning = true
-        tween(this._currentScreen)
-            .to(0.75, { position: new Vec3(0, 0, 0) }, { easing: 'quadInOut' })
-            .start()
-        tween(achievementNode)
-            .to(0.75, { position: new Vec3(0, -599, 0) }, { easing: 'quadInOut' })
-            .call(() => {
-                if (achievementNode.isValid) achievementNode.destroy()
-                if (this._achievementScreen === achievementNode) this._achievementScreen = null
-                this._selectorScreen?.setButtonsInteractable(true)
-                this._screenTransitioning = false
-            })
-            .start()
+        this._achievementTransition = {
+            mode,
+            elapsed: 0,
+            selectorNode,
+            achievementNode,
+        }
+        this._applyAchievementTransition(this._achievementTransition, 0)
+    }
+
+    private _updateAchievementTransition(dt: number) {
+        const transition = this._achievementTransition
+        if (!transition) return
+
+        if (!transition.selectorNode.isValid || !transition.achievementNode.isValid) {
+            this._achievementTransition = null
+            this._screenTransitioning = false
+            return
+        }
+
+        transition.elapsed = Math.min(ACHIEVEMENT_TRANSITION_SECONDS, transition.elapsed + dt)
+        const progress = transition.elapsed / ACHIEVEMENT_TRANSITION_SECONDS
+        this._applyAchievementTransition(transition, this._easeInOut(progress))
+        if (transition.elapsed < ACHIEVEMENT_TRANSITION_SECONDS) return
+
+        this._finishAchievementTransition(transition)
+    }
+
+    private _applyAchievementTransition(transition: AchievementTransitionState, eased: number) {
+        if (transition.mode === 'show') {
+            transition.selectorNode.setPosition(0, this._lerp(0, ACHIEVEMENT_SELECTOR_HIDDEN_Y, eased), 0)
+            transition.achievementNode.setPosition(0, this._lerp(ACHIEVEMENT_SCREEN_HIDDEN_Y, ACHIEVEMENT_SCREEN_SHOWN_Y, eased), 0)
+        } else {
+            transition.selectorNode.setPosition(0, this._lerp(ACHIEVEMENT_SELECTOR_HIDDEN_Y, 0, eased), 0)
+            transition.achievementNode.setPosition(0, this._lerp(ACHIEVEMENT_SCREEN_SHOWN_Y, ACHIEVEMENT_SCREEN_HIDDEN_Y, eased), 0)
+        }
+    }
+
+    private _finishAchievementTransition(transition: AchievementTransitionState) {
+        this._applyAchievementTransition(transition, 1)
+        this._achievementTransition = null
+        if (transition.mode === 'hide') {
+            if (transition.achievementNode.isValid) transition.achievementNode.destroy()
+            if (this._achievementScreen === transition.achievementNode) this._achievementScreen = null
+            this._selectorScreen?.setButtonsInteractable(true)
+        }
+        this._screenTransitioning = false
+    }
+
+    private _easeInOut(t: number) {
+        return this._curveS(this._curveS(t))
+    }
+
+    private _curveS(t: number) {
+        return 3 * t * t - 2 * t * t * t
+    }
+
+    private _lerp(start: number, end: number, t: number) {
+        return start + (end - start) * t
     }
 
     showOptionsDialog(): OptionsDialog | null {
@@ -401,6 +513,7 @@ export class UIController extends Component {
         if (gameScreen && !wasGamePaused) {
             gameScreen.pauseGame()
         }
+        pushGlobalGamePause()
 
         const node = createUINode('DebugCliDialog', { active: false, width: 100, height: 100 })
         const dialog = node.addComponent(DebugCliDialog)
@@ -414,20 +527,30 @@ export class UIController extends Component {
             } else {
                 console.warn(`[DebugCliDialog] ${result.message}`)
             }
+            return result
         }
 
         this.uiRoot!.addChild(node)
         node.active = true
         this._debugCliScreen = node
+        void SoundLoader.play(SoundEffect.GraveButton)
 
-        void dialog.waitForResult().then((result) => {
+        void dialog.waitForResult().then(() => {
+            const commandResult = dialog.lastCommandResult
+            const commandAction = commandResult?.action ?? null
             if (this._debugCliScreen === node) this._debugCliScreen = null
-            if ((result === DialogResult.Ok || result === DialogResult.Yes) && dialog.command.length > 0) {
-                dialog.onCommand?.(dialog.command)
-            }
+            popGlobalGamePause()
             const currentGameScreenNode = gameScreen?.node as Node | null | undefined
             if (currentGameScreenNode?.isValid && !wasGamePaused) {
                 gameScreen.resumeGame()
+            }
+            if (commandResult && !commandResult.ok && commandResult.failure === 'condition') {
+                this._showGlobalAdvice(commandResult.message)
+            }
+            if (commandAction === 'restart') {
+                this.showAdventureGame()
+            } else if (commandAction === 'home') {
+                void this.showSelectorScreen()
             }
         })
         return dialog
@@ -599,6 +722,32 @@ export class UIController extends Component {
 
         event.propagationStopped = true
         this.showDebugCliDialog('/')
+    }
+
+    private _showGlobalAdvice(message: string) {
+        if (!this.uiRoot?.isValid) return
+
+        if (!this._globalAdviceWidget?.node.isValid) {
+            if (!this._globalAdviceLayer?.isValid) {
+                this._globalAdviceLayer = createUINode('GlobalAdviceLayer', {
+                    parent: this.uiRoot,
+                    layer: this.uiRoot.layer,
+                    anchorX: 0,
+                    anchorY: 1,
+                    width: 800,
+                    height: 600,
+                    x: -400,
+                    y: 300,
+                })
+            }
+            this._globalAdviceWidget = new AdviceWidget({
+                parent: this._globalAdviceLayer,
+                layer: this.uiRoot.layer,
+                font: FontLoader.get('houseofterror28') ?? null,
+            })
+        }
+        this._globalAdviceLayer?.setSiblingIndex(this.uiRoot.children.length - 1)
+        this._globalAdviceWidget.show(message, 'hint')
     }
 
     private _shouldStartDebugAdventure() {

@@ -9,6 +9,10 @@ const COIN_BANK_DEST_Y = 0
 const DEFAULT_ITEM_SIZE = 60
 const FINAL_SEED_PACKET_WIDTH = 50
 const FINAL_SEED_PACKET_HEIGHT = 70
+const DEFAULT_COLLECTION_EASE_DIVISOR = 21
+const FINAL_SEED_PACKET_COLLECTION_EASE_DIVISOR = 80
+const DEFAULT_COLLECTION_COMPLETE_DISTANCE = 8
+const FINAL_SEED_PACKET_COLLECTION_COMPLETE_DISTANCE = 0.5
 
 export interface ItemUpdateContext {
     events: GameEvent[]
@@ -52,6 +56,7 @@ export class Item implements ItemEntity {
     private _disappearCounter = 0
     private _fadeCount = 0
     private _collectionDistance = 0
+    private _levelAwardCompleted = false
 
     constructor(args: ItemCreateArgs, context: ItemUpdateContext) {
         this.id = args.id
@@ -86,7 +91,11 @@ export class Item implements ItemEntity {
         this.beingCollected = true
         this._disappearCounter = 0
         this._fadeCount = 0
+        this._levelAwardCompleted = false
         this._pushCollectSound(context)
+        if (this.type === 'final-seed-packet') {
+            context.events.push({ type: 'levelAwardCollected' })
+        }
         return true
     }
 
@@ -173,26 +182,41 @@ export class Item implements ItemEntity {
         if (this.type === 'final-seed-packet') this._disappearCounter++
         const deltaX = Math.abs(this.x - destination.x)
         const deltaY = Math.abs(this.y - destination.y)
+        const divisor = this.type === 'final-seed-packet'
+            ? FINAL_SEED_PACKET_COLLECTION_EASE_DIVISOR
+            : DEFAULT_COLLECTION_EASE_DIVISOR
         if (this.x > destination.x) {
-            this.x -= deltaX / 21
+            this.x -= deltaX / divisor
         } else if (this.x < destination.x) {
-            this.x += deltaX / 21
+            this.x += deltaX / divisor
         }
         if (this.y > destination.y) {
-            this.y -= deltaY / 21
+            this.y -= deltaY / divisor
         } else if (this.y < destination.y) {
-            this.y += deltaY / 21
+            this.y += deltaY / divisor
         }
 
         this._collectionDistance = Math.sqrt(deltaY * deltaY + deltaX * deltaX)
-        if (this._collectionDistance < 8) {
+        const completeDistance = this.type === 'final-seed-packet'
+            ? FINAL_SEED_PACKET_COLLECTION_COMPLETE_DISTANCE
+            : DEFAULT_COLLECTION_COMPLETE_DISTANCE
+        if (this._collectionDistance < completeDistance) {
+            if (this.type === 'final-seed-packet') {
+                this.x = destination.x
+                this.y = destination.y
+                this.scale = 2
+                if (!this._levelAwardCompleted) {
+                    this._levelAwardCompleted = true
+                    context.completeLevelAward(this)
+                }
+                return
+            }
+
             this.dead = true
             if (this._isSun()) {
                 context.addSun(this._sunValue())
             } else if (this._isMoney()) {
                 context.addMoney(this._moneyValue())
-            } else if (this.type === 'final-seed-packet') {
-                context.completeLevelAward(this)
             }
             return
         }

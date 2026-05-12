@@ -294,7 +294,7 @@ export class OptionsDialog extends ModalDialog {
             new Vec2(46, -45),
             new Vec2(0, -45),
         ]
-        button.onClick = () => {
+        button.onPress = () => {
             void SoundLoader.play(SoundEffect.ButtonClick)
             checked = !checked
             sprite.spriteFrame = checked ? sprites.checkboxOn : sprites.checkboxOff

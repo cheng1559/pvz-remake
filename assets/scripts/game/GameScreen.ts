@@ -35,12 +35,14 @@ import {
     type MessageBoxButtonSprites,
 } from '@/ui/MessageBox/MessageBoxAssets'
 import { UIButton } from '@/ui/Button'
+import { AdviceWidget } from '@/ui/AdviceWidget'
+import { UIHoverManager, type UIHoverPointer } from '@/ui/UIHoverManager'
 import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH, SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
 import { createStoneButton } from '@/ui/StoneButton'
 import { createTooltipNode } from '@/ui/Tooltip/Tooltip'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
-import { GAME_TICK_SECONDS, PLANT_DEFINITIONS, SEED_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed } from './GameDefinitions'
+import { GAME_TICK_SECONDS, PLANT_DEFINITIONS, SEED_DEFINITIONS, ZOMBIE_DEFINITIONS, scaleGameDeltaTime } from './GameDefinitions'
 import {
     getAnimationRateSpeed,
     playPotatoArmedAnimation,
@@ -96,6 +98,9 @@ const INTRO_LAWN_MOWER_REANIM_Y_OFFSET = 19
 const INTRO_LAWN_MOWER_SHADOW_X_OFFSET = -7
 const INTRO_LAWN_MOWER_SHADOW_Y_OFFSET = 47
 const INTRO_LAWN_MOWER_SCALE = 0.85
+const INTRO_SEED_BANK_ON_START = 800
+const INTRO_SEED_BANK_ON_END = 825
+const INTRO_SEED_BANK_X = 10
 const LAWN_MOWER_CACHED_DRAW_OFFSET_X = -20
 const GAMEPLAY_LAWN_MOWER_REANIM_X_OFFSET = INTRO_LAWN_MOWER_REANIM_X_OFFSET
 const GAMEPLAY_LAWN_MOWER_REANIM_Y_OFFSET = INTRO_LAWN_MOWER_REANIM_Y_OFFSET
@@ -116,6 +121,21 @@ const PROGRESS_METER_PART_COLUMNS = 3
 const LEVEL_LABEL_BASELINE_Y = 595
 const LEVEL_LABEL_RIGHT_X = 780
 const LEVEL_LABEL_WITH_PROGRESS_RIGHT_X = 593
+const INTRO_HOUSE_NAME_Y = 550
+const INTRO_HOUSE_NAME_DURATION = 250
+const DEFAULT_PLAYER_NAME = 'Player'
+const INTRO_STREET_ZOMBIE_GRID_SIZE = 5
+const INTRO_STREET_ZOMBIE_PREVIEW_CAPACITY = 10
+const INTRO_STREET_ZOMBIE_BASE_X = 830
+const INTRO_STREET_ZOMBIE_GRID_X_STEP = 56
+const INTRO_STREET_ZOMBIE_BASE_Y = 70
+const INTRO_STREET_ZOMBIE_GRID_Y_STEP = 90
+const INTRO_STREET_ZOMBIE_ODD_COLUMN_Y_OFFSET = 30
+const INTRO_STREET_ZOMBIE_RANDOM_OFFSET = 15
+const INTRO_STREET_ZOMBIE_WAVE = -2
+const INTRO_STREET_ZOMBIE_Z_BASE = 100
+const INTRO_STREET_ZOMBIE_ROW_Z_STEP = 4
+const INTRO_STREET_ZOMBIE_ODD_COLUMN_Z_OFFSET = 2
 const INTRO_END = 855
 const SOD_ROW_X = 239 - BOARD_OFFSET
 const SOD_ROW_Y = 265
@@ -158,20 +178,10 @@ const SHOVEL_TOOLTIP_OFFSET_X = 35
 const SHOVEL_TOOLTIP_OFFSET_Y = 72
 const SEED_TOOLTIP_OFFSET_Y = 70
 const PLANT_HIGHLIGHT_COLOR = new Color(255, 255, 255, 196)
-const ADVICE_HINT_Y = 527
-const ADVICE_HINT_HEIGHT = 55
-const ADVICE_TUTORIAL_LEVEL1_Y = 400
-const ADVICE_TUTORIAL_LEVEL1_HEIGHT = 110
-const ADVICE_MIDDLE_Y = 300
-const ADVICE_MIDDLE_HEIGHT = 110
-const ADVICE_HUGE_WAVE_Y = 330
-const ADVICE_WIDTH = 800
-const ADVICE_DURATION_FAST = 500
-const ADVICE_DURATION_STAY = 10000
-const ADVICE_DURATION_HUGE_WAVE = 750
-const ADVICE_TEXT_SIZE = 28
-const ADVICE_TEXT_OFFSET_Y = -4
-const ADVICE_TEXT_MIN_ALPHA = 192
+const HUGE_WAVE_TEXT = 'A HUGE WAVE OF ZOMBIES IS APPROACHING!'
+const HUGE_WAVE_TEXT_Y = 330
+const HUGE_WAVE_TEXT_HEIGHT = 55
+const HUGE_WAVE_TEXT_DURATION = 750
 const HUGE_WAVE_TEXT_ENTER_TICKS = 20
 const HUGE_WAVE_TEXT_LEAVE_TICKS = 40
 const TUTORIAL_FLASH_TIME = 75
@@ -213,6 +223,10 @@ const GAME_OVER_TITLE_KEYS = [
     { x: 152.4, y: 80.8, scale: 0.911 },
     { x: 129.9, y: 59.4, scale: 1.000 },
 ]
+const LEVEL_COMPLETE_FADE_TICKS = 600
+const LEVEL_COMPLETE_LIGHT_FILL_TICK = 300
+const LEVEL_COMPLETE_FADE_START_TICKS = 400
+const LEVEL_COMPLETE_FADE_DURATION_TICKS = 200
 const SEED_TOOLTIP_NAMES: Record<SeedType, string> = {
     peashooter: 'Peashooter',
     sunflower: 'Sunflower',
@@ -268,10 +282,10 @@ const GAME_TEXTURES = [
     'background1unsodded',
     'seedbank',
     'seeds',
+    'seedpacket_larger',
     'packet_plants',
     'packet_plants_cached',
     'plant_previews_cached',
-    'seedpacket_larger',
     'shovelbank',
     'shovel',
     'peashooter_head',
@@ -342,12 +356,19 @@ interface RenderEntitySnapshot {
     alpha?: number
 }
 
+interface IntroStreetZombieSpec {
+    type: ZombieType
+    gridX: number
+    gridY: number
+}
+
 @ccclass('AdventureGameScreen')
 export class AdventureGameScreen extends Component {
     public onBackToMenu: (() => void) | null = null
     public onMenuRequest: (() => void) | null = null
     public onPauseRequest: (() => void) | null = null
     public onGameOverRequest: (() => void) | null = null
+    public onAwardScreenRequest: ((seedType: SeedType) => void) | null = null
 
     private _session = new GameSession()
     private _boardRoot: Node = null!
@@ -368,6 +389,7 @@ export class AdventureGameScreen extends Component {
     private _sodRollNode: Node | null = null
     private _introLawnMowerNode: Node | null = null
     private _introLawnMowerShadowNode: Node | null = null
+    private _introStreetZombieNodes: Node[] = []
     private _seedBankHeight = 87
     private _cursorPreview: Node | null = null
     private _gridPreview: Node | null = null
@@ -375,12 +397,14 @@ export class AdventureGameScreen extends Component {
     private _shovelCursor: Node | null = null
     private _sunLabel: FontRenderer = null!
     private _sunFlashTicks = 0
-    private _adviceLabel: FontRenderer = null!
     private _adviceFont: BitmapFontAssets | null = null
-    private _adviceNode: Node = null!
-    private _adviceBackdrop: Graphics = null!
-    private _adviceDurationTicks = 0
-    private _adviceStyle: AdviceStyle = 'hint'
+    private _adviceWidget: AdviceWidget | null = null
+    private _houseNameNode: Node | null = null
+    private _houseNameLabel: FontRenderer | null = null
+    private _houseNameTicks = 0
+    private _hugeWaveTextNode: Node | null = null
+    private _hugeWaveTextLabel: FontRenderer | null = null
+    private _hugeWaveTextTicks = 0
     private _resultLabel: Label = null!
     private _entityNodes: Map<number, Node> = new Map()
     private _plantViews: Map<number, PlantView> = new Map()
@@ -394,6 +418,12 @@ export class AdventureGameScreen extends Component {
     private _seedTooltipKey = ''
     private _shovelTooltipNode: Node | null = null
     private _mousePixel = { x: -1, y: -1 }
+    private _hasCursorPointer = false
+    private readonly _boardHoverClient = {
+        clearHover: () => this._clearBoardHoverState(),
+        refreshHover: (pointer: UIHoverPointer | null, activeModalRoot: Node | null) =>
+            this._refreshBoardHoverFromPointer(pointer, activeModalRoot),
+    }
     private _plantAnimations: Map<PlantType, JsonAsset> = new Map()
     private _zombieAnimations: Map<ZombieType, JsonAsset> = new Map()
     private _flagZombieAnimation: JsonAsset | null = null
@@ -414,6 +444,13 @@ export class AdventureGameScreen extends Component {
     private _gameOverActive = false
     private _gameOverDialogRequested = false
     private _gameOverWinnerZombieId: number | null = null
+    private _levelCompleteOverlayNode: Node | null = null
+    private _levelCompleteFadeNode: Node | null = null
+    private _levelCompleteTicks = 0
+    private _levelCompleteActive = false
+    private _levelCompleteLightFillPlayed = false
+    private _levelAwardScreenShown = false
+    private _levelAwardSeedType: SeedType | null = null
     private _sunFont: BitmapFontAssets | null = null
     private _packetCostFont: BitmapFontAssets | null = null
     private _levelFont: BitmapFontAssets | null = null
@@ -435,7 +472,6 @@ export class AdventureGameScreen extends Component {
     private _bootstrapped = false
 
     onLoad() {
-        Animator.timeScale = getGameSpeed()
         setUISize(this.node, 800, 600)
         this._boardRoot = createUINode('BoardRoot', {
             parent: this.node,
@@ -446,7 +482,7 @@ export class AdventureGameScreen extends Component {
             x: -400,
             y: 300,
         })
-        this._boardRoot.addComponent(Mask).type = Mask.Type.RECT
+        this._boardRoot.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT
         this._boardContent = createUINode('BoardContent', {
             parent: this._boardRoot,
             anchorX: 0,
@@ -474,7 +510,7 @@ export class AdventureGameScreen extends Component {
     }
 
     onDestroy() {
-        Animator.timeScale = 1
+        UIHoverManager.unregisterClient(this._boardHoverClient)
         input.off(Input.EventType.MOUSE_DOWN, this._onGlobalMouseDown, this)
         input.off(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this._releasePlantCursorHoverBlock()
@@ -535,7 +571,9 @@ export class AdventureGameScreen extends Component {
 
         await this._drawStaticBoard()
         this._drawHud()
+        this._showIntroHouseName()
         this._wireInput()
+        UIHoverManager.registerClient(this._boardHoverClient)
         this._bootstrapped = true
         this._renderFrame()
     }
@@ -543,12 +581,11 @@ export class AdventureGameScreen extends Component {
     update(dt: number) {
         if (!this._bootstrapped) return
 
-        const gameSpeed = getGameSpeed()
-        Animator.timeScale = gameSpeed
+        const scaledDt = scaleGameDeltaTime(dt)
         let gameTicks = 0
         if (this._gameStarted) {
             if (!this._session.paused) {
-                this._gameAccumulator += dt * gameSpeed
+                this._gameAccumulator += scaledDt
                 while (this._gameAccumulator >= GAME_TICK_SECONDS) {
                     this._capturePreviousEntitySnapshots()
                     this._session.update()
@@ -557,16 +594,21 @@ export class AdventureGameScreen extends Component {
                 }
             }
         } else if (!this._session.paused) {
-            this._updateIntro(dt)
+            this._updateIntro(scaledDt)
+            this._updateAdviceWidget(scaledDt * 100)
         }
         if (this._gameOverActive && !this._session.paused) {
-            this._updateGameOver(dt * gameSpeed / GAME_TICK_SECONDS)
+            this._updateGameOver(scaledDt / GAME_TICK_SECONDS)
+        }
+        if (this._levelCompleteActive && !this._session.paused) {
+            this._updateLevelCompleteEffect(scaledDt / GAME_TICK_SECONDS)
         }
         if (gameTicks > 0) {
             this._updateAdviceWidget(gameTicks)
             this._updateTimedUiEffects(gameTicks)
         }
         if (this._gameOverActive) this._syncGameOverScene()
+        if (this._levelCompleteActive) this._syncLevelCompleteEffect()
         this._renderFrame()
     }
 
@@ -607,8 +649,70 @@ export class AdventureGameScreen extends Component {
         return true
     }
 
-    public debugSummonZombie(type: ZombieType, row: number, col?: number) {
+    public debugRemovePlant(row: number, col: number) {
         if (!this.isLevelRunning()) return false
+
+        const removed = this._session.debugRemovePlant(row, col)
+        if (removed) this._renderFrame()
+        return removed
+    }
+
+    public debugCompleteLevel() {
+        if (!this.isLevelRunning()) return false
+
+        const completed = this._session.debugCompleteLevel()
+        if (completed) this._renderFrame()
+        return completed
+    }
+
+    public debugLoseLevel() {
+        if (!this.isLevelRunning()) return false
+
+        const lost = this._session.debugLoseLevel()
+        if (lost) this._renderFrame()
+        return lost
+    }
+
+    public debugSpawnNextWave() {
+        if (!this.isLevelRunning()) return false
+
+        const spawned = this._session.debugSpawnNextWave()
+        if (spawned) this._renderFrame()
+        return spawned
+    }
+
+    public debugSpawnNextFlagWave() {
+        if (!this.isLevelRunning()) return false
+
+        const spawned = this._session.debugSpawnNextFlagWave()
+        if (spawned) this._renderFrame()
+        return spawned
+    }
+
+    public debugDamageAllZombies(damage: number) {
+        if (!this.isLevelRunning()) return null
+
+        const damaged = this._session.debugDamageAllZombies(damage)
+        if (damaged > 0) this._renderFrame()
+        return damaged
+    }
+
+    public debugKillAllZombies() {
+        if (!this.isLevelRunning()) return null
+
+        const killed = this._session.debugKillAllZombies()
+        if (killed > 0) this._renderFrame()
+        return killed
+    }
+
+    public debugSummonZombie(type: ZombieType, row?: number, col?: number) {
+        if (!this.isLevelRunning()) return false
+
+        if (row == null) {
+            this._session.debugAddZombieAutoRow(type)
+            this._renderFrame()
+            return true
+        }
 
         const x = col == null ? undefined : this._session.geometry.gridToPixel(col, row).x
         this._session.debugAddZombie(type, row, x)
@@ -699,7 +803,7 @@ export class AdventureGameScreen extends Component {
                 x: SOD_ROW_X,
                 y: -SOD_ROW_Y,
             })
-            this._sodClipNode.addComponent(Mask).type = Mask.Type.RECT
+            this._sodClipNode.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT
             createSpriteNode({
                 name: 'SodRow',
                 spriteFrame: sod,
@@ -738,6 +842,7 @@ export class AdventureGameScreen extends Component {
             this._createIntroLawnMower()
         }
 
+        this._createIntroStreetZombies()
         this._createGameOverDoorLayers()
         this._entityLayer.setSiblingIndex(this._boardContent.children.length - 1)
     }
@@ -824,6 +929,148 @@ export class AdventureGameScreen extends Component {
         this._syncIntroLawnMower()
     }
 
+    private _createIntroStreetZombies() {
+        const specs = this._introStreetZombieSpecs()
+        for (let i = 0; i < specs.length; i++) {
+            const spec = specs[i]
+            const zombie = this._createIntroZombieEntity(spec, i)
+            const node = createUINode(`IntroStreetZombie_${i}`, {
+                parent: this._entityLayer,
+                layer: this.node.layer,
+                anchorX: 0,
+                anchorY: 1,
+                width: 120,
+                height: 120,
+                x: zombie.x,
+                y: -zombie.y,
+                z: this._introStreetZombieZ(spec),
+            })
+            this._createZombieVisual(node, zombie, { manualTime: false })
+            this._introStreetZombieNodes.push(node)
+        }
+        this._syncIntroStreetZombieLayerOrder()
+    }
+
+    private _introStreetZombieSpecs(): IntroStreetZombieSpec[] {
+        const zombieTypeCount = new Map<ZombieType, number>()
+        let totalZombieCount = 0
+
+        for (const wave of this._session.level.zombieWaves) {
+            for (const zombieType of wave.zombies) {
+                if (zombieType === 'flag') continue
+
+                zombieTypeCount.set(zombieType, (zombieTypeCount.get(zombieType) ?? 0) + 1)
+                totalZombieCount++
+            }
+        }
+        if (totalZombieCount <= 0) return []
+
+        const occupied = Array.from({ length: INTRO_STREET_ZOMBIE_GRID_SIZE }, () =>
+            Array.from({ length: INTRO_STREET_ZOMBIE_GRID_SIZE }, () => false),
+        )
+        const specs: IntroStreetZombieSpec[] = []
+        for (const zombieType of Object.keys(ZOMBIE_DEFINITIONS) as ZombieType[]) {
+            const count = zombieTypeCount.get(zombieType) ?? 0
+            if (count <= 0) continue
+
+            const previewCount = Math.max(
+                1,
+                Math.min(count, Math.floor(count * INTRO_STREET_ZOMBIE_PREVIEW_CAPACITY / totalZombieCount)),
+            )
+            for (let i = 0; i < previewCount; i++) {
+                const spot = this._pickIntroStreetZombieSpot(occupied)
+                occupied[spot.gridX][spot.gridY] = true
+                specs.push({ type: zombieType, gridX: spot.gridX, gridY: spot.gridY })
+            }
+        }
+        return specs
+    }
+
+    private _pickIntroStreetZombieSpot(occupied: boolean[][]) {
+        const candidates: Array<{ gridX: number, gridY: number }> = []
+        for (let gridX = 0; gridX < INTRO_STREET_ZOMBIE_GRID_SIZE; gridX++) {
+            for (let gridY = 0; gridY < INTRO_STREET_ZOMBIE_GRID_SIZE; gridY++) {
+                if (!this._canIntroZombieGoInGridSpot(gridX, gridY, occupied)) continue
+                if (!occupied[gridX][gridY]) candidates.push({ gridX, gridY })
+            }
+        }
+        if (candidates.length === 0) return { gridX: 2, gridY: 2 }
+
+        return candidates[Math.floor(Math.random() * candidates.length)]
+    }
+
+    private _canIntroZombieGoInGridSpot(gridX: number, gridY: number, occupied: boolean[][]) {
+        if (occupied[gridX][gridY]) return false
+        return gridX !== INTRO_STREET_ZOMBIE_GRID_SIZE - 1 || gridY !== 0
+    }
+
+    private _createIntroZombieEntity(spec: IntroStreetZombieSpec, index: number): ZombieEntity {
+        const definition = ZOMBIE_DEFINITIONS[spec.type]
+        const x = spec.gridX * INTRO_STREET_ZOMBIE_GRID_X_STEP +
+            INTRO_STREET_ZOMBIE_BASE_X +
+            Math.floor(Math.random() * INTRO_STREET_ZOMBIE_RANDOM_OFFSET)
+        const y = spec.gridY * INTRO_STREET_ZOMBIE_GRID_Y_STEP +
+            INTRO_STREET_ZOMBIE_BASE_Y +
+            (spec.gridX % 2 === 1 ? INTRO_STREET_ZOMBIE_ODD_COLUMN_Y_OFFSET : 0) +
+            Math.floor(Math.random() * INTRO_STREET_ZOMBIE_RANDOM_OFFSET)
+        return {
+            id: -1000 - index,
+            kind: 'zombie',
+            type: spec.type,
+            subclass: 'normal',
+            fromWave: INTRO_STREET_ZOMBIE_WAVE,
+            row: Math.max(0, Math.min(this._session.geometry.rows - 1, spec.gridY)),
+            x,
+            y,
+            velocityX: 0,
+            health: definition.maxHealth,
+            maxHealth: definition.maxHealth,
+            helmType: definition.helmType,
+            helmHealth: definition.helmHealth,
+            helmMaxHealth: definition.helmHealth,
+            shieldType: definition.shieldType,
+            shieldHealth: definition.shieldHealth,
+            shieldMaxHealth: definition.shieldHealth,
+            state: 'walking',
+            currentAnimation: this._pickIntroZombieAnimation(),
+            animationSpeed: this._pickIntroZombieAnimationSpeed(),
+            animationTime: Math.random() * 20,
+            moweredTime: 0,
+            age: 0,
+            chilledCounter: 0,
+            hitFlashCounter: 0,
+            hasHead: true,
+            hasArm: true,
+            hasTongue: false,
+            hasObject: definition.hasFlag || definition.hasFloat,
+            inPool: definition.hasFloat,
+            dead: false,
+            bodyRect: { ...definition.bodyRect },
+            attackRect: { ...definition.attackRect },
+        }
+    }
+
+    private _introStreetZombieZ(spec: IntroStreetZombieSpec) {
+        return INTRO_STREET_ZOMBIE_Z_BASE +
+            spec.gridY * INTRO_STREET_ZOMBIE_ROW_Z_STEP +
+            (spec.gridX % 2) * INTRO_STREET_ZOMBIE_ODD_COLUMN_Z_OFFSET
+    }
+
+    private _pickIntroZombieAnimation() {
+        return Math.floor(Math.random() * 4) > 0 ? 'anim_idle2' : 'anim_idle'
+    }
+
+    private _pickIntroZombieAnimationSpeed() {
+        return (12 + Math.random() * 12) / 12
+    }
+
+    private _syncIntroStreetZombieLayerOrder() {
+        const sorted = [...this._introStreetZombieNodes].sort((a, b) => a.position.z - b.position.z)
+        for (const node of sorted) {
+            if (node.isValid) node.setSiblingIndex(this._entityLayer.children.length - 1)
+        }
+    }
+
     private _drawHud() {
         const bank = SpriteLoader.get('seedbank')
         if (bank) {
@@ -899,7 +1146,7 @@ export class AdventureGameScreen extends Component {
             y: 0,
             z: 1,
         })
-        this._progressMeterFillClip.addComponent(Mask).type = Mask.Type.RECT
+        this._progressMeterFillClip.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT
         this._progressMeterFillNode = createSpriteNode({
             name: 'ProgressMeterFill',
             spriteFrame: getAtlasFrame(meter, 1, PROGRESS_METER_WIDTH, PROGRESS_METER_CEL_HEIGHT, 1),
@@ -971,11 +1218,12 @@ export class AdventureGameScreen extends Component {
     }
 
     private _syncItemLayerBehindAdvice() {
-        if (!this._itemLayer?.isValid || !this._adviceNode?.isValid) return
-        if (this._itemLayer.parent !== this._uiLayer || this._adviceNode.parent !== this._uiLayer) return
+        const adviceNode = this._adviceWidget?.node
+        if (!this._itemLayer?.isValid || !adviceNode?.isValid) return
+        if (this._itemLayer.parent !== this._uiLayer || adviceNode.parent !== this._uiLayer) return
 
         const itemIndex = this._itemLayer.getSiblingIndex()
-        const adviceIndex = this._adviceNode.getSiblingIndex()
+        const adviceIndex = adviceNode.getSiblingIndex()
         const targetIndex = itemIndex < adviceIndex ? adviceIndex - 1 : adviceIndex
         this._itemLayer.setSiblingIndex(Math.max(0, targetIndex))
     }
@@ -1072,7 +1320,7 @@ export class AdventureGameScreen extends Component {
             y: 0,
             z: 20,
         })
-        clip.addComponent(Mask).type = Mask.Type.RECT
+        clip.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT
         clip.active = false
 
         const darkPacket = SeedPacketRenderer.drawSeedPacket({
@@ -1103,6 +1351,7 @@ export class AdventureGameScreen extends Component {
             event.propagationStopped = true
             const pixel = this._eventToBoardPixel(event)
             this._mousePixel = pixel
+            this._hasCursorPointer = true
             this._session.dispatch({ type: 'selectSeed', seedType })
             this._renderFrame()
         }
@@ -1122,15 +1371,15 @@ export class AdventureGameScreen extends Component {
         input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this.node.on(Node.EventType.MOUSE_MOVE, (event: EventMouse) => {
             if (sys.isMobile) return
-            this._mousePixel = this._eventToBoardPixel(event)
-            this._updateCursorPreview()
-            this._updateHoverItemAndSeedPacketState()
+            UIHoverManager.rememberMouseEvent(event)
         })
         this.node.on(Node.EventType.MOUSE_LEAVE, () => {
             if (sys.isMobile) return
-            this._mousePixel = { x: -1, y: -1 }
-            this._hideTooltips()
-            this._setCanvasCursor('default')
+            if (UIHoverManager.isModalBlocked) {
+                this._clearBoardHoverState()
+                return
+            }
+            UIHoverManager.clearPointer()
         })
         this.node.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => {
             if (sys.isMobile) return
@@ -1141,17 +1390,22 @@ export class AdventureGameScreen extends Component {
             if (event.getButton() !== 0) return
             const pixel = this._eventToBoardPixel(event)
             this._mousePixel = pixel
+            this._hasCursorPointer = true
             this._handlePointerDown(pixel)
         })
         this.node.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
             if (!sys.isMobile) return
+            UIHoverManager.rememberTouchEvent(event, false)
             this._mousePixel = this._eventToBoardPixel(event)
+            this._hasCursorPointer = true
             this._updateCursorPreview()
         })
         this.node.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
             if (!sys.isMobile) return
+            UIHoverManager.rememberTouchEvent(event, false)
             const pixel = this._eventToBoardPixel(event)
             this._mousePixel = pixel
+            this._hasCursorPointer = true
             this._handlePointerDown(pixel)
         })
     }
@@ -1180,6 +1434,7 @@ export class AdventureGameScreen extends Component {
         UIButton.rememberMouseLocation(event)
         const pixel = this._eventToBoardPixel(event)
         this._mousePixel = pixel
+        this._hasCursorPointer = true
 
         const seedHit = this._findSeedPacketAt(pixel)
         if (seedHit && !this._hasCursorObject()) {
@@ -1255,7 +1510,7 @@ export class AdventureGameScreen extends Component {
     }
 
     private _canUseBoardInput() {
-        return this._gameStarted && this._session.result === 'playing' && !this._session.paused
+        return this._gameStarted && this._session.result === 'playing' && !this._session.paused && !this._levelCompleteActive
     }
 
     private _cancelCursor(refreshHover = true) {
@@ -1328,6 +1583,7 @@ export class AdventureGameScreen extends Component {
         }
         this._updateIntroSod()
         this._syncIntroLawnMower()
+        this._syncIntroSeedBank()
 
         if (this._introTime < INTRO_END) return
 
@@ -1339,13 +1595,39 @@ export class AdventureGameScreen extends Component {
         if (this._sodRollNode) this._sodRollNode.active = false
         if (this._introLawnMowerNode) this._introLawnMowerNode.active = false
         if (this._introLawnMowerShadowNode) this._introLawnMowerShadowNode.active = false
+        this._destroyIntroStreetZombies()
         if (this._seedBankNode) {
             this._seedBankNode.active = true
-            this._seedBankNode.setPosition(10, 0, 10)
+            this._seedBankNode.setPosition(INTRO_SEED_BANK_X, 0, 10)
         }
         if (this._menuButtonNode) this._menuButtonNode.active = true
         this._setSeedBankContentsVisible(true)
         this._restoreGameplayLayerOrder()
+    }
+
+    private _destroyIntroStreetZombies() {
+        for (const node of this._introStreetZombieNodes) {
+            if (node.isValid) node.destroy()
+        }
+        this._introStreetZombieNodes = []
+    }
+
+    private _syncIntroSeedBank() {
+        if (!this._seedBankNode?.isValid) return
+
+        if (this._introTime <= INTRO_SEED_BANK_ON_START) {
+            this._seedBankNode.active = false
+            this._seedBankNode.setPosition(INTRO_SEED_BANK_X, this._seedBankHeight, 10)
+            this._setSeedBankContentsVisible(false)
+            return
+        }
+
+        this._seedBankNode.active = true
+        this._setSeedBankContentsVisible(true)
+        const y = this._introTime <= INTRO_SEED_BANK_ON_END
+            ? this._easeInOut(INTRO_SEED_BANK_ON_START, INTRO_SEED_BANK_ON_END, this._introTime, this._seedBankHeight, 0)
+            : 0
+        this._seedBankNode.setPosition(INTRO_SEED_BANK_X, y, 10)
     }
 
     private _introBoardX() {
@@ -1449,229 +1731,207 @@ export class AdventureGameScreen extends Component {
     }
 
     private _createAdviceWidget() {
-        this._adviceNode = createUINode('AdviceWidget', {
+        this._adviceWidget = new AdviceWidget({
             parent: this._uiLayer,
-            anchorX: 0.5,
-            anchorY: 0.5,
-            width: ADVICE_WIDTH,
-            height: ADVICE_HINT_HEIGHT,
-            x: ADVICE_WIDTH / 2,
-            y: -(ADVICE_HINT_Y + ADVICE_HINT_HEIGHT / 2),
+            layer: this.node.layer,
+            font: this._adviceFont,
         })
-        this._adviceBackdrop = this._adviceNode.addComponent(Graphics)
-        this._adviceNode.addComponent(UIOpacity).opacity = 255
-        const labelNode = createUINode('AdviceLabel', {
-            parent: this._adviceNode,
-            anchorX: 0,
-            anchorY: 1,
-            width: ADVICE_WIDTH - 40,
-            height: ADVICE_HINT_HEIGHT,
-        })
-        this._adviceLabel = labelNode.addComponent(FontRenderer)
-        if (this._adviceFont) this._adviceLabel.setFontAssets(this._adviceFont)
-        this._adviceLabel.fontSize = ADVICE_TEXT_SIZE
-        this._adviceLabel.lineSpacing = 0
-        this._adviceLabel.maxWidth = ADVICE_WIDTH - 40
-        this._adviceLabel.textAlign = 2
-        this._adviceLabel.string = ''
-        this._adviceLabel.forceRebuild()
-        this._adviceNode.active = false
+    }
+
+    private _showIntroHouseName() {
+        this._showHouseName(`${DEFAULT_PLAYER_NAME}'s House`)
     }
 
     private _showAdvice(message: string, style: AdviceStyle) {
-        if (!this._adviceNode?.isValid) return
-
-        this._adviceStyle = style
-        this._adviceDurationTicks = this._adviceDurationForStyle(style)
-        this._adviceLabel.string = message
-        this._adviceLabel.forceRebuild()
-        this._applyAdviceLayout()
-        this._adviceNode.active = true
-        this._drawAdviceBackdrop()
+        this._adviceWidget?.show(message, style)
         this._syncItemLayerBehindAdvice()
     }
 
     private _clearAdvice() {
-        if (!this._adviceNode?.isValid) return
-
-        this._adviceLabel.string = ''
-        this._adviceLabel.forceRebuild()
-        this._adviceBackdrop.clear()
-        this._adviceNode.active = false
-        this._adviceNode.setScale(1, 1, 1)
-        const opacity = this._adviceNode.getComponent(UIOpacity)
-        if (opacity) opacity.opacity = 255
-        this._adviceDurationTicks = 0
+        this._adviceWidget?.clear()
     }
 
     private _updateAdviceWidget(ticks: number) {
-        if (!this._adviceNode?.active) return
-        if (this._adviceDurationTicks >= ADVICE_DURATION_STAY) {
-            this._applyAdviceLayout()
-            this._drawAdviceBackdrop()
+        this._adviceWidget?.update(ticks, this._session.tick)
+        this._updateHouseName(ticks)
+        this._updateHugeWaveText(ticks)
+    }
+
+    private _showHouseName(message: string) {
+        this._ensureHouseNameNode()
+        if (!this._houseNameLabel) return
+
+        this._houseNameTicks = INTRO_HOUSE_NAME_DURATION
+        this._houseNameLabel.string = message
+        this._houseNameLabel.forceRebuild()
+        if (this._houseNameNode) this._houseNameNode.active = true
+        this._syncHouseName()
+    }
+
+    private _ensureHouseNameNode() {
+        if (this._houseNameNode?.isValid && this._houseNameLabel) return
+
+        this._houseNameNode = createUINode('HouseNameText', {
+            parent: this._uiLayer,
+            layer: this.node.layer,
+            anchorX: 0.5,
+            anchorY: 0.5,
+            width: this._session.geometry.width,
+            height: this._session.geometry.height,
+            x: this._session.geometry.width / 2,
+            y: -this._session.geometry.height / 2,
+        })
+        this._houseNameNode.addComponent(UIOpacity).opacity = 255
+        const labelNode = createUINode('HouseNameLabel', {
+            parent: this._houseNameNode,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: this._session.geometry.width,
+            height: this._session.geometry.height,
+        })
+        this._houseNameLabel = labelNode.addComponent(FontRenderer)
+        if (this._adviceFont) this._houseNameLabel.setFontAssets(this._adviceFont)
+        this._houseNameLabel.fontColor = Color.WHITE
+        this._houseNameLabel.fontSize = 28
+        this._houseNameLabel.lineSpacing = 0
+        this._houseNameLabel.maxWidth = this._session.geometry.width
+        this._houseNameLabel.textAlign = 2
+        this._houseNameLabel.forceRebuild()
+
+        const metrics = FontMetricsUtil.getMetrics(this._adviceFont?.config ?? null)
+        labelNode.setPosition(
+            -this._session.geometry.width / 2,
+            this._session.geometry.height / 2 - (INTRO_HOUSE_NAME_Y - metrics.ascent),
+            0,
+        )
+        this._houseNameNode.active = false
+    }
+
+    private _updateHouseName(ticks: number) {
+        if (!this._houseNameNode?.active) return
+
+        this._houseNameTicks = Math.max(0, this._houseNameTicks - ticks)
+        if (this._houseNameTicks === 0) {
+            this._houseNameNode.active = false
             return
         }
+        this._syncHouseName()
+    }
 
-        this._adviceDurationTicks = Math.max(0, this._adviceDurationTicks - ticks)
-        if (this._adviceDurationTicks === 0) {
-            this._adviceNode.active = false
+    private _syncHouseName() {
+        const opacity = this._houseNameNode?.getComponent(UIOpacity)
+        if (opacity) opacity.opacity = Math.max(0, Math.min(255, this._houseNameTicks * 15))
+    }
+
+    private _showHugeWaveText() {
+        this._ensureHugeWaveTextNode()
+        if (!this._hugeWaveTextLabel) return
+
+        this._hugeWaveTextTicks = HUGE_WAVE_TEXT_DURATION
+        this._hugeWaveTextLabel.string = HUGE_WAVE_TEXT
+        this._hugeWaveTextLabel.forceRebuild()
+        if (this._hugeWaveTextNode) this._hugeWaveTextNode.active = true
+        this._syncHugeWaveText()
+    }
+
+    private _ensureHugeWaveTextNode() {
+        if (this._hugeWaveTextNode?.isValid && this._hugeWaveTextLabel) return
+
+        this._hugeWaveTextNode = createUINode('HugeWaveText', {
+            parent: this._uiLayer,
+            layer: this.node.layer,
+            anchorX: 0.5,
+            anchorY: 0.5,
+            width: this._session.geometry.width,
+            height: HUGE_WAVE_TEXT_HEIGHT,
+            x: this._session.geometry.width / 2,
+            y: -(HUGE_WAVE_TEXT_Y + HUGE_WAVE_TEXT_HEIGHT / 2),
+        })
+        this._hugeWaveTextNode.addComponent(UIOpacity).opacity = 255
+        const labelNode = createUINode('HugeWaveTextLabel', {
+            parent: this._hugeWaveTextNode,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: this._session.geometry.width - 40,
+            height: HUGE_WAVE_TEXT_HEIGHT,
+        })
+        this._hugeWaveTextLabel = labelNode.addComponent(FontRenderer)
+        if (this._adviceFont) this._hugeWaveTextLabel.setFontAssets(this._adviceFont)
+        this._hugeWaveTextLabel.fontColor = new Color(255, 0, 0, 255)
+        this._hugeWaveTextLabel.fontSize = 28
+        this._hugeWaveTextLabel.lineSpacing = 0
+        this._hugeWaveTextLabel.maxWidth = this._session.geometry.width - 40
+        this._hugeWaveTextLabel.textAlign = 2
+        this._hugeWaveTextLabel.forceRebuild()
+        labelNode.setPosition(-this._session.geometry.width / 2 + 20, this._hugeWaveTextLocalTopY(), 0)
+        this._hugeWaveTextNode.active = false
+    }
+
+    private _updateHugeWaveText(ticks: number) {
+        if (!this._hugeWaveTextNode?.active) return
+
+        this._hugeWaveTextTicks = Math.max(0, this._hugeWaveTextTicks - ticks)
+        if (this._hugeWaveTextTicks === 0) {
+            this._hugeWaveTextNode.active = false
             return
         }
-
-        this._applyAdviceLayout()
-        this._drawAdviceBackdrop()
+        this._syncHugeWaveText()
     }
 
-    private _updateTimedUiEffects(ticks: number) {
-        if (this._sunFlashTicks > 0) {
-            this._sunFlashTicks = Math.max(0, this._sunFlashTicks - ticks)
-        }
+    private _clearHugeWaveText() {
+        if (!this._hugeWaveTextNode?.isValid) return
+
+        this._hugeWaveTextTicks = 0
+        this._hugeWaveTextNode.active = false
+        this._hugeWaveTextNode.setScale(1, 1, 1)
+        const opacity = this._hugeWaveTextNode.getComponent(UIOpacity)
+        if (opacity) opacity.opacity = 255
     }
 
-    private _applyAdviceLayout() {
-        const layout = this._adviceLayout()
-        const labelWidth = ADVICE_WIDTH - 40
-        this._adviceLabel.fontColor = layout.textColor
-        this._adviceLabel.fontSize = layout.fontSize
-        this._adviceLabel.lineSpacing = layout.lineHeight
-        this._adviceLabel.maxWidth = labelWidth
-        this._adviceLabel.textAlign = 2
-        this._adviceLabel.forceRebuild()
-        setUISize(this._adviceNode, ADVICE_WIDTH, layout.height)
-        this._adviceNode.setPosition(ADVICE_WIDTH / 2, -(layout.y + layout.height / 2), 0)
-        setUISize(this._adviceLabel.node, labelWidth, layout.height, 0, 1)
-        this._adviceLabel.node.setPosition(-labelWidth / 2, this._getAdviceTextLocalTopY(layout, labelWidth), 0)
-        this._syncAdviceTransform()
-    }
+    private _syncHugeWaveText() {
+        if (!this._hugeWaveTextNode?.isValid) return
 
-    private _drawAdviceBackdrop() {
-        if (!this._adviceBackdrop) return
-
-        const layout = this._adviceLayout()
-        this._adviceBackdrop.clear()
-        if (layout.backdropAlpha <= 0) return
-
-        this._adviceBackdrop.fillColor = new Color(0, 0, 0, layout.backdropAlpha)
-        this._adviceBackdrop.fillRect(-ADVICE_WIDTH / 2, -layout.height / 2, ADVICE_WIDTH, layout.height)
-    }
-
-    private _syncAdviceTransform() {
-        const opacity = this._adviceNode.getComponent(UIOpacity)
-        if (this._adviceStyle !== 'huge-wave') {
-            this._adviceNode.setScale(1, 1, 1)
-            if (opacity) opacity.opacity = 255
-            return
-        }
-
-        const elapsedTicks = ADVICE_DURATION_HUGE_WAVE - this._adviceDurationTicks
+        const elapsedTicks = HUGE_WAVE_TEXT_DURATION - this._hugeWaveTextTicks
         let scale = 1
         let alpha = 1
         if (elapsedTicks < HUGE_WAVE_TEXT_ENTER_TICKS) {
             const t = Math.max(0, elapsedTicks) / HUGE_WAVE_TEXT_ENTER_TICKS
             scale = this._lerp(2.003, 1.001, t)
             alpha = t
-        } else if (this._adviceDurationTicks < HUGE_WAVE_TEXT_LEAVE_TICKS) {
-            alpha = Math.max(0, this._adviceDurationTicks / HUGE_WAVE_TEXT_LEAVE_TICKS)
+        } else if (this._hugeWaveTextTicks < HUGE_WAVE_TEXT_LEAVE_TICKS) {
+            alpha = Math.max(0, this._hugeWaveTextTicks / HUGE_WAVE_TEXT_LEAVE_TICKS)
         }
 
-        this._adviceNode.setScale(scale, scale, 1)
+        this._hugeWaveTextNode.setScale(scale, scale, 1)
+        const opacity = this._hugeWaveTextNode.getComponent(UIOpacity)
         if (opacity) opacity.opacity = Math.round(255 * alpha)
     }
 
-    private _adviceLayout() {
-        const alpha = this._advicePulseAlpha()
-        switch (this._adviceStyle) {
-            case 'huge-wave':
-                return {
-                    y: ADVICE_HUGE_WAVE_Y,
-                    height: ADVICE_HINT_HEIGHT,
-                    textOffsetY: 0,
-                    textColor: new Color(255, 0, 0, 255),
-                    fontSize: ADVICE_TEXT_SIZE,
-                    lineHeight: 0,
-                    backdropAlpha: 0,
-                }
-            case 'big-middle':
-                return {
-                    y: ADVICE_MIDDLE_Y,
-                    height: ADVICE_MIDDLE_HEIGHT,
-                    textOffsetY: 0,
-                    textColor: new Color(253, 245, 173, alpha),
-                    fontSize: ADVICE_TEXT_SIZE,
-                    lineHeight: 0,
-                    backdropAlpha: 128,
-                }
-            case 'tutorial-level1':
-            case 'tutorial-level1-stay':
-                return {
-                    y: ADVICE_TUTORIAL_LEVEL1_Y,
-                    height: ADVICE_TUTORIAL_LEVEL1_HEIGHT,
-                    textOffsetY: ADVICE_TEXT_OFFSET_Y,
-                    textColor: new Color(253, 245, 173, alpha),
-                    fontSize: ADVICE_TEXT_SIZE,
-                    lineHeight: 0,
-                    backdropAlpha: 128,
-                }
-            case 'hint-stay':
-            case 'hint':
-            default:
-                return {
-                    y: ADVICE_HINT_Y,
-                    height: ADVICE_HINT_HEIGHT,
-                    textOffsetY: ADVICE_TEXT_OFFSET_Y,
-                    textColor: new Color(253, 245, 173, alpha),
-                    fontSize: ADVICE_TEXT_SIZE,
-                    lineHeight: 0,
-                    backdropAlpha: 128,
-                }
-        }
-    }
-
-    private _getAdviceTextLocalTopY(layout: {
-        y: number
-        height: number
-        textOffsetY: number
-        fontSize: number
-    }, labelWidth: number) {
+    private _hugeWaveTextLocalTopY() {
+        const labelWidth = this._session.geometry.width - 40
         const fontConfig = this._adviceFont?.config ?? null
         const metrics = FontMetricsUtil.getMetrics(fontConfig)
-        if (metrics.height <= 0) return this._adviceLabel.contentHeight / 2 + layout.textOffsetY
+        if (metrics.height <= 0) return HUGE_WAVE_TEXT_HEIGHT / 2
 
-        const wrapped = FontMetricsUtil.measureWordWrapped(fontConfig, this._adviceLabel.string, labelWidth)
+        const wrapped = FontMetricsUtil.measureWordWrapped(fontConfig, HUGE_WAVE_TEXT, labelWidth)
         const lineCount = Math.max(1, wrapped.lineWidths.length)
         const rawConfig = fontConfig?.json as { defaultPointSize?: number } | undefined
-        const defaultPointSize = rawConfig?.defaultPointSize ?? layout.fontSize
-        const scale = defaultPointSize > 0 ? layout.fontSize / defaultPointSize : 1
+        const defaultPointSize = rawConfig?.defaultPointSize ?? 28
+        const scale = defaultPointSize > 0 ? 28 / defaultPointSize : 1
         const wrappedHeight = (
             metrics.height - metrics.ascentPadding + Math.max(0, lineCount - 1) * metrics.lineSpacing
         ) * scale
-        const centeredRectY = layout.y + layout.textOffsetY + Math.trunc((layout.height - wrappedHeight) / 2)
+        const centeredRectY = HUGE_WAVE_TEXT_Y + Math.trunc((HUGE_WAVE_TEXT_HEIGHT - wrappedHeight) / 2)
         const textTopY = centeredRectY - metrics.ascentPadding * scale
-        return layout.y + layout.height / 2 - textTopY
+        return HUGE_WAVE_TEXT_Y + HUGE_WAVE_TEXT_HEIGHT / 2 - textTopY
     }
 
-    private _adviceDurationForStyle(style: AdviceStyle) {
-        switch (style) {
-            case 'hint-stay':
-            case 'tutorial-level1-stay':
-                return ADVICE_DURATION_STAY
-            case 'tutorial-level1':
-                return ADVICE_DURATION_FAST
-            case 'huge-wave':
-                return ADVICE_DURATION_HUGE_WAVE
-            case 'big-middle':
-            case 'hint':
-            default:
-                return ADVICE_DURATION_FAST
+    private _updateTimedUiEffects(ticks: number) {
+        if (this._sunFlashTicks > 0) {
+            this._sunFlashTicks = Math.max(0, this._sunFlashTicks - ticks)
         }
-    }
-
-    private _advicePulseAlpha() {
-        if (this._adviceStyle === 'huge-wave') return 255
-
-        const t = (this._session.tick % 75) / 75
-        const peak = 1 - Math.abs(t * 2 - 1)
-        return Math.round(ADVICE_TEXT_MIN_ALPHA + (255 - ADVICE_TEXT_MIN_ALPHA) * peak)
     }
 
     private _restoreGameplayLayerOrder() {
@@ -1722,11 +1982,20 @@ export class AdventureGameScreen extends Component {
                 case 'adviceCleared':
                     this._clearAdvice()
                     break
+                case 'hugeWave':
+                    this._showHugeWaveText()
+                    break
                 case 'sunFlash':
                     this._sunFlashTicks = SUN_FLASH_TICKS
                     break
                 case 'finalWave':
                     this._showFinalWaveWarning()
+                    break
+                case 'levelAwardCollected':
+                    this._startLevelCompleteEffect()
+                    break
+                case 'levelWon':
+                    this._startLevelCompleteEffect()
                     break
                 case 'levelLost':
                     this._startGameOver(event.zombieId)
@@ -1737,6 +2006,7 @@ export class AdventureGameScreen extends Component {
 
     private _showFinalWaveWarning() {
         this._clearAdvice()
+        this._clearHugeWaveText()
         void this._playFinalWaveWarning()
     }
 
@@ -1802,6 +2072,106 @@ export class AdventureGameScreen extends Component {
         this._finalWaveAnimNode = null
     }
 
+    private _startLevelCompleteEffect() {
+        if (this._levelCompleteActive) return
+
+        this._levelCompleteActive = true
+        this._levelCompleteTicks = 0
+        this._levelCompleteLightFillPlayed = false
+        this._levelAwardScreenShown = false
+        this._levelAwardSeedType = this._session.level.awardSeedType ?? null
+        this._gameAccumulator = 0
+        this._previousEntitySnapshots.clear()
+        this._session.dispatch({ type: 'clearCursor' })
+        this._clearAdvice()
+        this._clearHugeWaveText()
+        this._destroyFinalWaveWarning()
+        this._releasePlantCursorHoverBlock()
+        this._setCanvasCursor('default')
+        this._ensureLevelCompleteOverlay()
+        this._syncLevelCompleteEffect()
+        void SoundLoader.play(SoundEffect.WinMusic)
+    }
+
+    private _ensureLevelCompleteOverlay() {
+        if (this._levelCompleteOverlayNode?.isValid) return
+
+        this._levelCompleteOverlayNode = createUINode('LevelCompleteOverlay', {
+            parent: this._uiLayer,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 800,
+            height: 600,
+            x: 0,
+            y: 0,
+            z: CURSOR_PREVIEW_Z - 1,
+        })
+
+        this._levelCompleteFadeNode = createUINode('LevelCompleteFade', {
+            parent: this._levelCompleteOverlayNode,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 800,
+            height: 600,
+            x: 0,
+            y: 0,
+        })
+        this._levelCompleteFadeNode.addComponent(Graphics)
+    }
+
+    private _updateLevelCompleteEffect(ticks: number) {
+        if (ticks <= 0) return
+
+        const previousTicks = this._levelCompleteTicks
+        this._levelCompleteTicks = Math.min(LEVEL_COMPLETE_FADE_TICKS, this._levelCompleteTicks + ticks)
+        if (
+            !this._levelCompleteLightFillPlayed &&
+            previousTicks < LEVEL_COMPLETE_LIGHT_FILL_TICK &&
+            this._levelCompleteTicks >= LEVEL_COMPLETE_LIGHT_FILL_TICK
+        ) {
+            this._levelCompleteLightFillPlayed = true
+            void SoundLoader.play(SoundEffect.LightFill)
+        }
+        if (this._levelCompleteTicks >= LEVEL_COMPLETE_FADE_TICKS) {
+            this._requestLevelAwardScreen()
+        }
+        this._syncLevelCompleteEffect()
+    }
+
+    private _syncLevelCompleteEffect() {
+        if (!this._levelCompleteActive) return
+
+        this._ensureLevelCompleteOverlay()
+        if (this._levelCompleteOverlayNode?.isValid) {
+            this._levelCompleteOverlayNode.active = true
+            this._levelCompleteOverlayNode.setSiblingIndex(this._uiLayer.children.length - 1)
+        }
+
+        const graphics = this._levelCompleteFadeNode?.getComponent(Graphics)
+        if (!graphics) return
+
+        const fadeT = Math.max(0, this._levelCompleteTicks - LEVEL_COMPLETE_FADE_START_TICKS) /
+            LEVEL_COMPLETE_FADE_DURATION_TICKS
+        const alpha = Math.round(255 * Math.max(0, Math.min(1, fadeT)))
+        this._levelCompleteFadeNode!.active = alpha > 0
+        graphics.clear()
+        if (alpha <= 0) return
+
+        graphics.fillColor = new Color(255, 255, 255, alpha)
+        graphics.fillRect(0, -600, 800, 600)
+    }
+
+    private _requestLevelAwardScreen() {
+        if (this._levelAwardScreenShown) return
+        const seedType = this._levelAwardSeedType
+        if (!seedType) return
+
+        this._levelAwardScreenShown = true
+        this.onAwardScreenRequest?.(seedType)
+    }
+
     private _startGameOver(zombieId: number | null) {
         if (this._gameOverActive) return
 
@@ -1813,6 +2183,7 @@ export class AdventureGameScreen extends Component {
         this._gameOverWinnerZombieId = zombieId
         this._session.dispatch({ type: 'clearCursor' })
         this._clearAdvice()
+        this._clearHugeWaveText()
         this._destroyFinalWaveWarning()
         this._releasePlantCursorHoverBlock()
         this._setCanvasCursor('default')
@@ -2053,7 +2424,12 @@ export class AdventureGameScreen extends Component {
                 this._entityZ(entity),
             )
             const scale = renderState.scale ?? entity.scale
-            node.setScale(scale, scale, 1)
+            if (entity.type === 'final-seed-packet') {
+                node.setScale(1, 1, 1)
+                this._syncFinalSeedPacketVisual(node, scale)
+            } else {
+                node.setScale(scale, scale, 1)
+            }
             const opacity = node.getComponent(UIOpacity) ?? node.addComponent(UIOpacity)
             opacity.opacity = renderState.alpha ?? entity.alpha
             this._syncMoneyItemAnimation(entity)
@@ -2238,7 +2614,11 @@ export class AdventureGameScreen extends Component {
         return node
     }
 
-    private _createZombieVisual(node: Node, zombie: ZombieEntity): ZombieView {
+    private _createZombieVisual(
+        node: Node,
+        zombie: ZombieEntity,
+        options: { manualTime?: boolean } = {},
+    ): ZombieView {
         const view: ZombieView = {
             node,
             clipNode: null,
@@ -2296,14 +2676,21 @@ export class AdventureGameScreen extends Component {
                 if (zombie.state === 'mowered') {
                     this._syncMoweredZombieAnimation(view, zombie)
                 } else {
-                    playZombieBodyAnimation(view, zombie.currentAnimation, {
+                    const animation = view.body?.hasAnimation(zombie.currentAnimation)
+                        ? zombie.currentAnimation
+                        : zombie.currentAnimation === 'anim_idle2' && view.body?.hasAnimation('anim_idle')
+                            ? 'anim_idle'
+                            : zombie.currentAnimation
+                    playZombieBodyAnimation(view, animation, {
                         speed: zombie.animationSpeed,
                         time: zombie.animationTime,
+                        manualTime: options.manualTime,
                     })
                 }
                 if (zombie.type === 'flag') {
-                    this._attachFlagZombieVisual(animatorNode, view, zombie.id)
+                    this._attachFlagZombieVisual(animatorNode, view, zombie)
                 }
+                this._syncZombieHitFlash(view, zombie)
                 this._syncSceneAnimationState()
             })
         }
@@ -2559,17 +2946,52 @@ export class AdventureGameScreen extends Component {
     private _createFinalSeedPacketVisual(node: Node, item: ItemEntity) {
         const seedType = item.awardSeedType ?? 'sunflower'
         SeedPacketRenderer.drawSeedPacket({
-            name: 'FinalSeedPacket',
+            name: 'FinalSeedPacketNormal',
             parent: node,
             layer: this.node.layer,
-            x: -SEED_PACKET_WIDTH / 2,
-            y: SEED_PACKET_HEIGHT / 2,
+            x: 0,
+            y: 0,
             seedType,
-            drawCost: false,
+            cost: SEED_DEFINITIONS[seedType].cost,
             seeds: SpriteLoader.get('seeds'),
             packetPlants: SpriteLoader.get('packet_plants'),
             cachedPacketPlants: SpriteLoader.get('packet_plants_cached'),
+            costFont: this._packetCostFont,
         })
+        SeedPacketRenderer.drawSeedPacket({
+            name: 'FinalSeedPacketLarge',
+            parent: node,
+            layer: this.node.layer,
+            x: 0,
+            y: 0,
+            scale: 2,
+            seedType,
+            cost: SEED_DEFINITIONS[seedType].cost,
+            seeds: null,
+            seedPacketLarger: SpriteLoader.get('seedpacket_larger'),
+            plantPreviews: SpriteLoader.get('plant_previews_cached'),
+            costFont: this._packetCostFont,
+        })
+        this._syncFinalSeedPacketVisual(node, item.scale)
+    }
+
+    private _syncFinalSeedPacketVisual(node: Node, scale: number) {
+        const visualScale = Math.max(0.001, scale)
+        const normalPacket = node.children.find((child) => child.name === 'FinalSeedPacketNormal')
+        const largePacket = node.children.find((child) => child.name === 'FinalSeedPacketLarge')
+        const topLeftX = -SEED_PACKET_WIDTH * visualScale / 2
+        const topLeftY = SEED_PACKET_HEIGHT * visualScale / 2
+
+        if (normalPacket?.isValid) {
+            normalPacket.active = visualScale <= 1
+            normalPacket.setScale(visualScale, visualScale, 1)
+            normalPacket.setPosition(topLeftX, topLeftY, 0)
+        }
+        if (largePacket?.isValid) {
+            largePacket.active = visualScale > 1
+            largePacket.setScale(visualScale / 2, visualScale / 2, 1)
+            largePacket.setPosition(topLeftX, topLeftY, 0)
+        }
     }
 
     private _syncPlantHighlights() {
@@ -2667,14 +3089,15 @@ export class AdventureGameScreen extends Component {
         }
     }
 
-    private _attachFlagZombieVisual(parentNode: Node, view: ZombieView, zombieId: number) {
+    private _attachFlagZombieVisual(parentNode: Node, view: ZombieView, zombie: ZombieEntity) {
         if (!this._flagZombieAnimation?.json || !view.body) return
 
         const animationJson = this._flagZombieAnimation.json as Record<string, any>
         void attachFlagZombieAnimation(parentNode, view, animationJson, {
-            enabled: this._isZombieSceneAnimationEnabled(zombieId),
+            enabled: this._isZombieSceneAnimationEnabled(zombie.id),
             sortHost: view.animator,
         }).then(() => {
+            syncZombieTrackVisibility(view, zombie)
             this._syncSceneAnimationState()
         })
     }
@@ -2723,7 +3146,7 @@ export class AdventureGameScreen extends Component {
         view.visualRootNode.setPosition(-localX, -localY, 0)
 
         const mask = view.clipNode.getComponent(Mask) ?? view.clipNode.addComponent(Mask)
-        mask.type = Mask.Type.RECT
+        mask.type = Mask.Type.GRAPHICS_RECT
         mask.enabled = true
     }
 
@@ -2745,6 +3168,7 @@ export class AdventureGameScreen extends Component {
         if (this._gameOverActive && zombie.id === this._gameOverWinnerZombieId) {
             if (view.showingMowered) this._clearMoweredZombieAnimation(view)
             syncZombieTrackVisibility(view, zombie)
+            this._syncZombieHitFlash(view, zombie)
             playZombieBodyAnimation(view, zombie.currentAnimation, {
                 speed: zombie.animationSpeed,
                 time: zombie.animationTime,
@@ -2760,6 +3184,7 @@ export class AdventureGameScreen extends Component {
         }
         if (view.showingMowered) this._clearMoweredZombieAnimation(view)
         syncZombieTrackVisibility(view, zombie)
+        this._syncZombieHitFlash(view, zombie)
         const blendTime = this._getZombieAnimationBlendTime(view, zombie.currentAnimation)
         playZombieBodyAnimation(view, zombie.currentAnimation, {
             speed: zombie.animationSpeed,
@@ -2772,6 +3197,7 @@ export class AdventureGameScreen extends Component {
         if (!view.body) return
 
         syncZombieTrackVisibility(view, zombie)
+        this._syncZombieHitFlash(view, zombie)
         if (view.shadowNode?.isValid) view.shadowNode.active = false
         view.showingMowered = true
         view.body.speed = 0
@@ -2791,6 +3217,16 @@ export class AdventureGameScreen extends Component {
         }
         const duration = view.moweredAnimNode.getAnimationDuration('default') ?? 1
         view.moweredAnimNode.time = Math.min(Math.max(0, duration - 1), zombie.animationTime)
+    }
+
+    private _syncZombieHitFlash(view: ZombieView, zombie: ZombieEntity) {
+        if (zombie.hitFlashCounter <= 0) {
+            view.animator?.setExtraAdditiveDraw(false)
+            return
+        }
+
+        const grayness = Math.min(255, zombie.hitFlashCounter * 10)
+        view.animator?.setExtraAdditiveDraw(true, new Color(grayness, grayness, grayness, 255))
     }
 
     private _createMoweredZombieDriver(view: ZombieView) {
@@ -3186,6 +3622,11 @@ export class AdventureGameScreen extends Component {
         if (extraAnimation?.json) {
             this._collectAnimationImages(extraAnimation.json as Record<string, any>, textureNames)
         }
+        textureNames.add('zombie_outerarm_upper2')
+        textureNames.add('zombie_cone2')
+        textureNames.add('zombie_cone3')
+        textureNames.add('zombie_bucket2')
+        textureNames.add('zombie_bucket3')
         textureNames.add('plantshadow')
         await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
     }
@@ -3229,12 +3670,21 @@ export class AdventureGameScreen extends Component {
         }
 
         if (this._session.selectedTool === 'shovel') {
-            this._updateShovelCursor()
+            if (this._canShowCursorObjectPreview()) {
+                this._updateShovelCursor()
+            } else {
+                this._hideCursorObjectPreview()
+            }
         } else {
             this._destroyShovelCursor()
         }
 
         if (!this._session.selectedSeed) {
+            return
+        }
+
+        if (!this._canShowCursorObjectPreview()) {
+            this._hideCursorObjectPreview()
             return
         }
 
@@ -3249,9 +3699,15 @@ export class AdventureGameScreen extends Component {
             this._cursorPreview = this._createPlantPreviewNode('CursorPreview', CURSOR_PLANT_PREVIEW_OPACITY)
         }
         if (!this._gridPreview?.isValid) {
-            this._gridPreview = this._createPlantPreviewNode('GridPreview', GRID_PLANT_PREVIEW_OPACITY)
+            this._gridPreview = this._createPlantPreviewNode(
+                'GridPreview',
+                GRID_PLANT_PREVIEW_OPACITY,
+                this._itemLayer,
+            )
         }
 
+        this._cursorPreview.active = true
+        this._gridPreview.active = true
         this._cursorPreview.setPosition(
             this._mousePixel.x + CURSOR_PLANT_OFFSET_X,
             -(this._mousePixel.y + CURSOR_PLANT_OFFSET_Y),
@@ -3271,6 +3727,19 @@ export class AdventureGameScreen extends Component {
         this._orderPreviewNodes()
     }
 
+    private _canShowCursorObjectPreview() {
+        return this._hasCursorPointer &&
+            !UIHoverManager.isModalBlocked &&
+            !this._session.paused &&
+            !this._gameOverActive
+    }
+
+    private _hideCursorObjectPreview() {
+        if (this._cursorPreview?.isValid) this._cursorPreview.active = false
+        if (this._gridPreview?.isValid) this._gridPreview.active = false
+        if (this._shovelCursor?.isValid) this._shovelCursor.active = false
+    }
+
     private _updateShovelCursor() {
         const shovel = SpriteLoader.get('shovel')
         if (!shovel) return
@@ -3283,6 +3752,7 @@ export class AdventureGameScreen extends Component {
                 layer: this.node.layer,
             })
         }
+        this._shovelCursor.active = true
         this._shovelCursor.setPosition(
             this._mousePixel.x + SHOVEL_CURSOR_OFFSET_X,
             -(this._mousePixel.y + SHOVEL_CURSOR_OFFSET_Y),
@@ -3296,20 +3766,20 @@ export class AdventureGameScreen extends Component {
         this._shovelCursor = null
     }
 
-    private _createPlantPreviewNode(name: string, opacity: number) {
+    private _createPlantPreviewNode(name: string, opacity: number, parent: Node = this._uiLayer) {
         const seedType = this._session.selectedSeed!
         const plantType = SEED_DEFINITIONS[seedType].plantType
-        return this._createCachedPlantPreviewNode(name, plantType, opacity)
+        return this._createCachedPlantPreviewNode(name, plantType, opacity, parent)
     }
 
-    private _createCachedPlantPreviewNode(name: string, plantType: PlantType, opacity: number) {
+    private _createCachedPlantPreviewNode(name: string, plantType: PlantType, opacity: number, parent: Node = this._uiLayer) {
         const atlas = SpriteLoader.get('plant_previews_cached')
         if (!atlas) {
             throw new Error("[GameScreen] Required sprite 'plant_previews_cached' is not loaded")
         }
 
         const node = createUINode(name, {
-            parent: this._uiLayer,
+            parent,
             anchorX: 0,
             anchorY: 1,
             width: PLANT_PREVIEW_CACHE_CELL_WIDTH,
@@ -3339,7 +3809,7 @@ export class AdventureGameScreen extends Component {
     private _orderPreviewNodes() {
         if (!this._gridPreview?.isValid || !this._cursorPreview?.isValid) return
 
-        this._gridPreview.setSiblingIndex(Math.max(0, this._cursorPreview.getSiblingIndex()))
+        this._gridPreview.setSiblingIndex(0)
         this._cursorPreview.setSiblingIndex(this._uiLayer.children.length - 1)
     }
 
@@ -3371,21 +3841,53 @@ export class AdventureGameScreen extends Component {
             : null
     }
 
+    private _refreshBoardHoverFromPointer(pointer: UIHoverPointer | null, activeModalRoot: Node | null) {
+        if (this._levelAwardScreenShown) return false
+        if (this._levelCompleteActive) {
+            this._clearBoardHoverState()
+            return false
+        }
+        if (activeModalRoot || !pointer?.canHover) {
+            this._clearBoardHoverState()
+            return false
+        }
+
+        this._mousePixel = this._uiLocationToBoardPixel(pointer.uiLocation)
+        this._hasCursorPointer = true
+        this._updateCursorPreview()
+        return this._updateHoverItemAndSeedPacketState()
+    }
+
+    private _clearBoardHoverState() {
+        this._mousePixel = { x: -1, y: -1 }
+        this._hasCursorPointer = false
+        this._hideCursorObjectPreview()
+        this._hideTooltips()
+        if (!this._levelAwardScreenShown) this._setCanvasCursor('default')
+    }
+
     private _updateHoverItemAndSeedPacketState() {
-        if (sys.isMobile) return
-        if (this._gameOverActive) {
+        if (sys.isMobile) return false
+        if (this._levelAwardScreenShown) return false
+        if (this._gameOverActive || this._levelCompleteActive) {
             this._hideTooltips()
             this._setCanvasCursor('default')
-            return
+            return false
         }
         if (this._session.paused) {
             this._hideTooltips()
-            return
+            return false
         }
-        if (!this._gameStarted || this._mousePixel.x < 0 || this._mousePixel.y < 0 || this._hasCursorObject()) {
+        if (this._hasCursorObject()) {
             this._hideTooltips()
-            this._setCanvasCursor(this._isMenuButtonPixel(this._mousePixel) ? 'pointer' : 'default')
-            return
+            this._setCanvasCursor('default')
+            return false
+        }
+        if (!this._gameStarted || this._mousePixel.x < 0 || this._mousePixel.y < 0) {
+            this._hideTooltips()
+            const hovering = this._isMenuButtonPixel(this._mousePixel)
+            this._setCanvasCursor(hovering ? 'pointer' : 'default')
+            return hovering
         }
 
         const seedHit = this._findSeedPacketAt(this._mousePixel)
@@ -3405,7 +3907,9 @@ export class AdventureGameScreen extends Component {
         const overCollectableItem = this._session.hasItemAt(this._mousePixel.x, this._mousePixel.y)
         const overPickableSeed = seedHit ? this._canPickUpSeedPacket(seedHit.packet) : false
         const overMenuButton = this._isMenuButtonPixel(this._mousePixel)
-        this._setCanvasCursor(overCollectableItem || overPickableSeed || shovelHit || overMenuButton ? 'pointer' : 'default')
+        const hovering = overCollectableItem || overPickableSeed || shovelHit || overMenuButton
+        this._setCanvasCursor(hovering ? 'pointer' : 'default')
+        return hovering
     }
 
     private _showSeedTooltip(
@@ -3590,6 +4094,10 @@ export class AdventureGameScreen extends Component {
 
     private _eventToBoardPixel(event: EventMouse | EventTouch) {
         const ui = event.getUILocation()
+        return this._uiLocationToBoardPixel(ui)
+    }
+
+    private _uiLocationToBoardPixel(ui: { x: number, y: number }) {
         const local = this.node.getComponent(UITransform)!.convertToNodeSpaceAR(new Vec3(ui.x, ui.y, 0))
         return {
             x: local.x + 400,

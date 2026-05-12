@@ -47,6 +47,7 @@ const LINEAR_PREFIXES = [
     'selectorscreen_flower',
     'selectorscreen_leaf',
     'selectorscreen_leaves',
+    'seedpacket_larger',
     'seeds',
     'snowpea_',
     'spikerock_',

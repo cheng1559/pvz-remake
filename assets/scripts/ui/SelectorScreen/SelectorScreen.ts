@@ -115,7 +115,7 @@ export class SelectorScreen extends AnimationComponent {
             height: ZOMBIE_HAND_CLIP_HEIGHT,
         })
         const mask = clippedNode.addComponent(Mask)
-        mask.type = Mask.Type.RECT
+        mask.type = Mask.Type.GRAPHICS_RECT
 
         const bodyAnimator = this._createZombieHandAnimator(clippedNode, 'BodyAnimator')
         const rockAnimator = this._createZombieHandAnimator(zombieHandNode, 'RockAnimator')
@@ -380,6 +380,7 @@ export class SelectorScreen extends AnimationComponent {
         }
 
         const button = node.addComponent(UIButton)
+        button.refreshHoverOnEnable = false
         button.normalSprite = normalSprite
         button.pressedSprite = pressedSprite ?? normalSprite
         button.hoverSprite = pressedSprite ?? normalSprite
@@ -421,6 +422,7 @@ export class SelectorScreen extends AnimationComponent {
             uiTransform.setAnchorPoint(0.5, 0.5)
 
             const button = node.addComponent(UIButton)
+            button.refreshHoverOnEnable = false
             button.polygon = this._circlePolygon(fc.radius)
             button.changeCursor = false
             button.interactable = this._selectorButtonsReady

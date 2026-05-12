@@ -8,6 +8,8 @@ const DEBUG_CLI_MAX_SPEED = 10
 export interface DebugCliResult {
     ok: boolean
     message: string
+    failure?: 'syntax' | 'condition'
+    action?: 'restart' | 'home'
 }
 
 const DEBUG_PLANT_TYPES = Object.keys(PLANT_DEFINITIONS) as PlantType[]
@@ -20,6 +22,51 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         name: 'plant',
         completions: [DEBUG_PLANT_TYPES],
         parameterHints: ['{plant_name}', '{row}', '{col}'],
+    },
+    {
+        name: 'removeplant',
+        completions: [],
+        parameterHints: ['{row}', '{col}'],
+    },
+    {
+        name: 'win',
+        completions: [],
+        parameterHints: [],
+    },
+    {
+        name: 'lose',
+        completions: [],
+        parameterHints: [],
+    },
+    {
+        name: 'nextflag',
+        completions: [],
+        parameterHints: [],
+    },
+    {
+        name: 'nextwave',
+        completions: [],
+        parameterHints: [],
+    },
+    {
+        name: 'damage',
+        completions: [],
+        parameterHints: ['{damage}'],
+    },
+    {
+        name: 'kill',
+        completions: [],
+        parameterHints: [],
+    },
+    {
+        name: 'restart',
+        completions: [],
+        parameterHints: [],
+    },
+    {
+        name: 'home',
+        completions: [],
+        parameterHints: [],
     },
     {
         name: 'gamespeed',
@@ -44,7 +91,7 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
     {
         name: 'summon',
         completions: [DEBUG_ZOMBIE_TYPES],
-        parameterHints: ['{zombie_name}', '{row}', '[optional]{col}'],
+        parameterHints: ['{zombie_name}', '[optional]{row}', '[optional]{col}'],
     },
     {
         name: 'cooldown',
@@ -75,6 +122,24 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
     switch (commandName.toLowerCase()) {
         case 'plant':
             return executeDebugPlantCommand(tokens, gameScreen)
+        case 'removeplant':
+            return executeDebugRemovePlantCommand(tokens, gameScreen)
+        case 'win':
+            return executeDebugWinCommand(tokens, gameScreen)
+        case 'lose':
+            return executeDebugLoseCommand(tokens, gameScreen)
+        case 'nextflag':
+            return executeDebugNextFlagCommand(tokens, gameScreen)
+        case 'nextwave':
+            return executeDebugNextWaveCommand(tokens, gameScreen)
+        case 'damage':
+            return executeDebugDamageCommand(tokens, gameScreen)
+        case 'kill':
+            return executeDebugKillCommand(tokens, gameScreen)
+        case 'restart':
+            return executeDebugRestartCommand(tokens, gameScreen)
+        case 'home':
+            return executeDebugHomeCommand(tokens, gameScreen)
         case 'summon':
             return executeDebugSummonCommand(tokens, gameScreen)
         case 'gamespeed':
@@ -153,7 +218,7 @@ function executeDebugPlantCommand(tokens: string[], gameScreen: AdventureGameScr
     }
 
     if (!isLevelReady(gameScreen)) {
-        return { ok: false, message: '/plant can only run during an active level' }
+        return conditionFailure('/plant can only run during an active level')
     }
 
     const plantType = parseDebugPlantType(tokens[1])
@@ -176,18 +241,161 @@ function executeDebugPlantCommand(tokens: string[], gameScreen: AdventureGameScr
     if (boundsError) return { ok: false, message: boundsError }
 
     if (!gameScreen.debugPlacePlant(plantType, row - 1, col - 1)) {
-        return { ok: false, message: '/plant can only run during an active level' }
+        return conditionFailure('/plant can only run during an active level')
     }
     return { ok: true, message: `Planted ${plantType} at row ${row}, col ${col}` }
 }
 
-function executeDebugSummonCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
-    if (tokens.length !== 3 && tokens.length !== 4) {
-        return { ok: false, message: 'Usage: /summon {zombie_name} {row} [col]' }
+function executeDebugRemovePlantCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 3) {
+        return { ok: false, message: 'Usage: /removeplant {row} {col}' }
     }
 
     if (!isLevelReady(gameScreen)) {
-        return { ok: false, message: '/summon can only run during an active level' }
+        return conditionFailure('/removeplant can only run during an active level')
+    }
+
+    const row = parseDebugInteger(tokens[1])
+    if (row == null) {
+        return { ok: false, message: `Invalid row. Use an integer from 1 to ${gameScreen.getGridSize().rows}` }
+    }
+    const col = parseDebugInteger(tokens[2])
+    if (col == null) {
+        return { ok: false, message: `Invalid col. Use an integer from 1 to ${gameScreen.getGridSize().cols}` }
+    }
+    const boundsError = validateDebugGridPosition(gameScreen, row, col)
+    if (boundsError) return { ok: false, message: boundsError }
+
+    if (!gameScreen.debugRemovePlant(row - 1, col - 1)) {
+        return conditionFailure(`No plant at row ${row}, col ${col}`)
+    }
+    return { ok: true, message: `Removed plant at row ${row}, col ${col}` }
+}
+
+function executeDebugWinCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 1) {
+        return { ok: false, message: 'Usage: /win' }
+    }
+
+    if (!isLevelReady(gameScreen)) {
+        return conditionFailure('/win can only run during an active level')
+    }
+
+    if (!gameScreen.debugCompleteLevel()) {
+        return conditionFailure('/win can only run during an active level')
+    }
+    return { ok: true, message: 'Level completed' }
+}
+
+function executeDebugLoseCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 1) {
+        return { ok: false, message: 'Usage: /lose' }
+    }
+
+    if (!isLevelReady(gameScreen)) {
+        return conditionFailure('/lose can only run during an active level')
+    }
+
+    if (!gameScreen.debugLoseLevel()) {
+        return conditionFailure('/lose can only run during an active level')
+    }
+    return { ok: true, message: 'Level failed' }
+}
+
+function executeDebugNextFlagCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 1) {
+        return { ok: false, message: 'Usage: /nextflag' }
+    }
+
+    if (!isLevelReady(gameScreen)) {
+        return conditionFailure('/nextflag can only run during an active level')
+    }
+
+    if (!gameScreen.debugSpawnNextFlagWave()) {
+        return conditionFailure('No remaining flag waves')
+    }
+    return { ok: true, message: 'Spawned next flag wave' }
+}
+
+function executeDebugNextWaveCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 1) {
+        return { ok: false, message: 'Usage: /nextwave' }
+    }
+
+    if (!isLevelReady(gameScreen)) {
+        return conditionFailure('/nextwave can only run during an active level')
+    }
+
+    if (!gameScreen.debugSpawnNextWave()) {
+        return conditionFailure('No remaining zombie waves')
+    }
+    return { ok: true, message: 'Spawned next zombie wave' }
+}
+
+function executeDebugDamageCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 2) {
+        return { ok: false, message: 'Usage: /damage {damage}' }
+    }
+
+    if (!isLevelReady(gameScreen)) {
+        return conditionFailure('/damage can only run during an active level')
+    }
+
+    const damage = parseDebugInteger(tokens[1])
+    if (damage == null || damage <= 0) {
+        return { ok: false, message: `Invalid damage: ${tokens[1]}. Use a positive integer` }
+    }
+
+    const damaged = gameScreen.debugDamageAllZombies(damage)
+    if (damaged == null) {
+        return conditionFailure('/damage can only run during an active level')
+    }
+    return { ok: true, message: `Damaged ${damaged} zombie(s) for ${damage}` }
+}
+
+function executeDebugKillCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 1) {
+        return { ok: false, message: 'Usage: /kill' }
+    }
+
+    if (!isLevelReady(gameScreen)) {
+        return conditionFailure('/kill can only run during an active level')
+    }
+
+    const killed = gameScreen.debugKillAllZombies()
+    if (killed == null) {
+        return conditionFailure('/kill can only run during an active level')
+    }
+    return { ok: true, message: `Cleared ${killed} zombie(s)` }
+}
+
+function executeDebugRestartCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 1) {
+        return { ok: false, message: 'Usage: /restart' }
+    }
+
+    if (!isLevelScreenAvailable(gameScreen)) {
+        return conditionFailure('/restart can only run from a level')
+    }
+
+    return { ok: true, message: 'Restarting level', action: 'restart' }
+}
+
+function executeDebugHomeCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 1) {
+        return { ok: false, message: 'Usage: /home' }
+    }
+
+    return { ok: true, message: 'Returning to main menu', action: 'home' }
+}
+
+function executeDebugSummonCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length < 2 || tokens.length > 4) {
+        return { ok: false, message: 'Usage: /summon {zombie_name} [row] [col]' }
+    }
+
+    if (!isLevelReady(gameScreen)) {
+        return conditionFailure('/summon can only run during an active level')
     }
 
     const zombieType = parseDebugZombieType(tokens[1])
@@ -196,6 +404,13 @@ function executeDebugSummonCommand(tokens: string[], gameScreen: AdventureGameSc
             ok: false,
             message: `Unknown zombie: ${tokens[1]}. Valid zombies: ${listDebugNames(DEBUG_ZOMBIE_TYPES)}`,
         }
+    }
+
+    if (tokens.length === 2) {
+        if (!gameScreen.debugSummonZombie(zombieType)) {
+            return conditionFailure('/summon can only run during an active level')
+        }
+        return { ok: true, message: `Summoned ${zombieType} using spawn row logic` }
     }
 
     const row = parseDebugInteger(tokens[2])
@@ -210,7 +425,7 @@ function executeDebugSummonCommand(tokens: string[], gameScreen: AdventureGameSc
     if (boundsError) return { ok: false, message: boundsError }
 
     if (!gameScreen.debugSummonZombie(zombieType, row - 1, col == null ? undefined : col - 1)) {
-        return { ok: false, message: '/summon can only run during an active level' }
+        return conditionFailure('/summon can only run during an active level')
     }
 
     const position = col == null ? `row ${row}, right edge` : `row ${row}, col ${col}`
@@ -244,7 +459,7 @@ function executeDebugRechargingCommand(tokens: string[], gameScreen: AdventureGa
     }
 
     if (!isLevelReady(gameScreen)) {
-        return { ok: false, message: '/cooldown can only run during an active level' }
+        return conditionFailure('/cooldown can only run during an active level')
     }
 
     const enabled = parseDebugBoolean(tokens[1])
@@ -254,7 +469,7 @@ function executeDebugRechargingCommand(tokens: string[], gameScreen: AdventureGa
 
     const rechargingEnabled = gameScreen.debugSetRechargingEnabled(enabled)
     if (rechargingEnabled == null) {
-        return { ok: false, message: '/cooldown can only run during an active level' }
+        return conditionFailure('/cooldown can only run during an active level')
     }
     return { ok: true, message: `Seed packet cooldown ${rechargingEnabled ? 'enabled' : 'disabled'}` }
 }
@@ -265,7 +480,7 @@ function executeDebugSunSpawningCommand(tokens: string[], gameScreen: AdventureG
     }
 
     if (!isLevelReady(gameScreen)) {
-        return { ok: false, message: '/sunspawning can only run during an active level' }
+        return conditionFailure('/sunspawning can only run during an active level')
     }
 
     const enabled = parseDebugBoolean(tokens[1])
@@ -275,7 +490,7 @@ function executeDebugSunSpawningCommand(tokens: string[], gameScreen: AdventureG
 
     const sunSpawningEnabled = gameScreen.debugSetSunSpawningEnabled(enabled)
     if (sunSpawningEnabled == null) {
-        return { ok: false, message: '/sunspawning can only run during an active level' }
+        return conditionFailure('/sunspawning can only run during an active level')
     }
     return { ok: true, message: `Sun spawning ${sunSpawningEnabled ? 'enabled' : 'disabled'}` }
 }
@@ -286,7 +501,7 @@ function executeDebugLawnMowerCommand(tokens: string[], gameScreen: AdventureGam
     }
 
     if (!isLevelReady(gameScreen)) {
-        return { ok: false, message: '/lawnmower can only run during an active level' }
+        return conditionFailure('/lawnmower can only run during an active level')
     }
 
     const status = parseLawnMowerStatus(tokens[1])
@@ -297,7 +512,7 @@ function executeDebugLawnMowerCommand(tokens: string[], gameScreen: AdventureGam
     if (tokens.length === 2) {
         const changed = gameScreen.debugSetAllLawnMowers(status)
         if (changed <= 0) {
-            return { ok: false, message: `No lawn mowers could be ${lawnMowerPastTense(status)}` }
+            return conditionFailure(`No lawn mowers could be ${lawnMowerPastTense(status)}`)
         }
         return { ok: true, message: `${lawnMowerPastTense(status)} ${changed} lawn mower(s)` }
     }
@@ -311,12 +526,11 @@ function executeDebugLawnMowerCommand(tokens: string[], gameScreen: AdventureGam
 
     const changed = gameScreen.debugSetLawnMower(row - 1, status)
     if (!changed) {
-        return {
-            ok: false,
-            message: status === 'trigger'
+        return conditionFailure(
+            status === 'trigger'
                 ? `No ready lawn mower can be triggered at row ${row}`
                 : `No triggered lawn mower can be reset at row ${row}`,
-        }
+        )
     }
     return { ok: true, message: `${lawnMowerPastTense(status)} lawn mower at row ${row}` }
 }
@@ -327,7 +541,7 @@ function executeDebugSunCommand(tokens: string[], gameScreen: AdventureGameScree
     }
 
     if (!isLevelReady(gameScreen)) {
-        return { ok: false, message: '/sun can only run during an active level' }
+        return conditionFailure('/sun can only run during an active level')
     }
 
     const action = parseSunAction(tokens[1])
@@ -344,7 +558,7 @@ function executeDebugSunCommand(tokens: string[], gameScreen: AdventureGameScree
         ? gameScreen.debugAddSun(amount)
         : gameScreen.debugSetSun(amount)
     if (sun == null) {
-        return { ok: false, message: '/sun can only run during an active level' }
+        return conditionFailure('/sun can only run during an active level')
     }
     return {
         ok: true,
@@ -356,6 +570,14 @@ function executeDebugSunCommand(tokens: string[], gameScreen: AdventureGameScree
 
 function isLevelReady(gameScreen: AdventureGameScreen | null): gameScreen is AdventureGameScreen {
     return gameScreen?.isLevelRunning() === true
+}
+
+function isLevelScreenAvailable(gameScreen: AdventureGameScreen | null): gameScreen is AdventureGameScreen {
+    return gameScreen?.node?.isValid === true
+}
+
+function conditionFailure(message: string): DebugCliResult {
+    return { ok: false, message, failure: 'condition' }
 }
 
 function parseDebugPlantType(name: string): PlantType | null {

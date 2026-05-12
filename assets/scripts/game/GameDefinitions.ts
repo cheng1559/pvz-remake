@@ -1,3 +1,4 @@
+import { director } from 'cc'
 import type {
     BoardGeometry,
     LevelDefinition,
@@ -9,6 +10,7 @@ import type {
 export const GAME_TICK_SECONDS = 0.01
 const DEFAULT_GAME_SPEED = 1
 let currentGameSpeed = DEFAULT_GAME_SPEED
+let globalPauseDepth = 0
 
 export function getGameSpeed() {
     return currentGameSpeed
@@ -16,6 +18,20 @@ export function getGameSpeed() {
 
 export function setGameSpeed(speed: number) {
     currentGameSpeed = speed
+    director.getScheduler().setTimeScale(speed)
+}
+
+export function pushGlobalGamePause() {
+    globalPauseDepth++
+}
+
+export function popGlobalGamePause() {
+    globalPauseDepth = Math.max(0, globalPauseDepth - 1)
+}
+
+export function scaleGameDeltaTime(dt: number) {
+    if (globalPauseDepth > 0) return 0
+    return dt * currentGameSpeed
 }
 
 export const DAY_GEOMETRY: BoardGeometry = {
