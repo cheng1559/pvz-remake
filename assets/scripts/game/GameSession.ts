@@ -258,6 +258,15 @@ export class GameSession {
         return collected
     }
 
+    collectCurrencyItemAt(x: number, y: number) {
+        const item = this._findItemAt(x, y)
+        if (!item || (!this._isSunItem(item) && !this._isMoneyItem(item))) return false
+
+        const collected = item.collect(this._createItemUpdateContext(this.events))
+        if (collected && this._isSunItem(item)) this._handleLevelOneTutorialSunClicked(item)
+        return collected
+    }
+
     hasItemAt(x: number, y: number) {
         return this._findItemAt(x, y) !== null
     }

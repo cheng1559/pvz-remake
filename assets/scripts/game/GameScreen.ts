@@ -174,6 +174,8 @@ const GRID_PREVIEW_Z = 999
 const CURSOR_PREVIEW_Z = 1000
 const CURSOR_PLANT_PREVIEW_OPACITY = 255
 const GRID_PLANT_PREVIEW_OPACITY = 100
+const MOBILE_PLANT_DRAG_THRESHOLD_PX = 12
+const MOBILE_ITEM_SWIPE_SAMPLE_STEP = 24
 const DEBUG_ZOMBIE_COLLISION_RECTS = true
 const DEBUG_ZOMBIE_BODY_RECT_COLOR = new Color(0, 220, 255, 220)
 const DEBUG_ZOMBIE_ATTACK_RECT_COLOR = new Color(255, 64, 64, 220)
@@ -521,6 +523,11 @@ export class AdventureGameScreen extends Component {
     private _lastRightMouseDownAt = 0
     private _lastRightMouseDownX = Number.NaN
     private _lastRightMouseDownY = Number.NaN
+    private _mobilePlantDragActive = false
+    private _mobilePlantDragStartPixel = { x: -1, y: -1 }
+    private _mobilePlantDragMoved = false
+    private _mobilePlantDragStartedFromSeedPacket = false
+    private _lastTouchPixel: { x: number, y: number } | null = null
     private _refreshHoverAfterCursorRelease = true
     private _plantCursorHoverBlocked = false
     private _gameStarted = false
@@ -1536,15 +1543,17 @@ export class AdventureGameScreen extends Component {
 
     private _wireSeedPacketInput(packetNode: Node, seedType: SeedType) {
         const onPress = (event: EventMouse | EventTouch) => {
-            if (!this._canUseBoardInput()) return
-            if (this._session.selectedSeed) return
+            if (!this._canUseBoardInput()) return false
+            if (this._session.selectedSeed) return false
 
             event.propagationStopped = true
             const pixel = this._eventToBoardPixel(event)
             this._mousePixel = pixel
             this._hasCursorPointer = true
             this._session.dispatch({ type: 'selectSeed', seedType })
+            if (sys.isMobile) this._beginMobilePlantDrag(pixel, true)
             this._renderFrame()
+            return true
         }
         packetNode.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => {
             if (sys.isMobile) return
@@ -1554,6 +1563,21 @@ export class AdventureGameScreen extends Component {
         packetNode.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
             if (!sys.isMobile) return
             onPress(event)
+        }, this)
+        packetNode.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
+            if (!sys.isMobile) return
+            event.propagationStopped = true
+            this._onMobileTouchMove(event)
+        }, this)
+        packetNode.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+            if (!sys.isMobile) return
+            event.propagationStopped = true
+            this._onMobileTouchEnd(event)
+        }, this)
+        packetNode.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => {
+            if (!sys.isMobile) return
+            event.propagationStopped = true
+            this._onMobileTouchEnd(event)
         }, this)
     }
 
@@ -1586,10 +1610,7 @@ export class AdventureGameScreen extends Component {
         })
         this.node.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
             if (!sys.isMobile) return
-            UIHoverManager.rememberTouchEvent(event, false)
-            this._mousePixel = this._eventToBoardPixel(event)
-            this._hasCursorPointer = true
-            this._updateCursorPreview()
+            this._onMobileTouchMove(event)
         })
         this.node.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
             if (!sys.isMobile) return
@@ -1597,8 +1618,140 @@ export class AdventureGameScreen extends Component {
             const pixel = this._eventToBoardPixel(event)
             this._mousePixel = pixel
             this._hasCursorPointer = true
+            this._lastTouchPixel = pixel
+            if (this._session.selectedSeed) {
+                this._beginMobilePlantDrag(pixel, false)
+                this._updateCursorPreview()
+                return
+            }
             this._handlePointerDown(pixel)
         })
+        this.node.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+            if (!sys.isMobile) return
+            this._onMobileTouchEnd(event)
+        })
+        this.node.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => {
+            if (!sys.isMobile) return
+            this._onMobileTouchCancel(event)
+        })
+    }
+
+    private _beginMobilePlantDrag(pixel: { x: number, y: number }, startedFromSeedPacket: boolean) {
+        this._mobilePlantDragActive = true
+        this._mobilePlantDragStartPixel = pixel
+        this._mobilePlantDragMoved = false
+        this._mobilePlantDragStartedFromSeedPacket = startedFromSeedPacket
+        this._lastTouchPixel = pixel
+    }
+
+    private _onMobileTouchMove(event: EventTouch) {
+        UIHoverManager.rememberTouchEvent(event, false)
+        const pixel = this._eventToBoardPixel(event)
+        const previous = this._lastTouchPixel
+        this._mousePixel = pixel
+        this._hasCursorPointer = true
+        this._lastTouchPixel = pixel
+
+        if (this._mobilePlantDragActive && !this._mobilePlantDragMoved) {
+            this._updateMobilePlantDragMoved(pixel)
+        }
+
+        const collected = previous
+            ? this._collectItemsAlongMobileSwipe(previous, pixel)
+            : this._session.collectCurrencyItemAt(pixel.x, pixel.y)
+        this._updateCursorPreview()
+        if (collected) this._renderFrame()
+    }
+
+    private _onMobileTouchEnd(event: EventTouch) {
+        UIHoverManager.rememberTouchEvent(event, false)
+        const previous = this._lastTouchPixel
+        const eventPixel = this._eventToBoardPixel(event)
+        const pixel = this._mobilePlantDragActive && this._mobilePlantDragMoved && previous
+            ? previous
+            : eventPixel
+        this._mousePixel = pixel
+        this._hasCursorPointer = true
+        this._lastTouchPixel = null
+
+        const collected = previous
+            ? this._collectItemsAlongMobileSwipe(previous, pixel)
+            : this._session.collectCurrencyItemAt(pixel.x, pixel.y)
+        this._updateMobilePlantDragMoved(pixel)
+        const shouldResolvePlantTouch = this._mobilePlantDragActive &&
+            !!this._session.selectedSeed &&
+            (!this._mobilePlantDragStartedFromSeedPacket || this._mobilePlantDragMoved)
+        const shouldCancelDraggedPlant = shouldResolvePlantTouch &&
+            this._mobilePlantDragMoved &&
+            this._mobilePlantDragStartedFromSeedPacket &&
+            !this._canPlantSelectedSeedAt(pixel)
+        this._mobilePlantDragActive = false
+        this._mobilePlantDragMoved = false
+        this._mobilePlantDragStartedFromSeedPacket = false
+
+        if (shouldCancelDraggedPlant) {
+            this._cancelCursor(false)
+            return
+        }
+
+        if (shouldResolvePlantTouch) {
+            this._refreshHoverAfterCursorRelease = false
+            this._session.dispatch({ type: 'placePlant', x: pixel.x, y: pixel.y })
+            this._renderFrame()
+            return
+        }
+
+        this._updateCursorPreview()
+        if (collected) this._renderFrame()
+    }
+
+    private _onMobileTouchCancel(event: EventTouch) {
+        if (this._mobilePlantDragActive && this._session.selectedSeed) {
+            this._onMobileTouchEnd(event)
+            return
+        }
+
+        UIHoverManager.rememberTouchEvent(event, false)
+        this._resetMobilePlantDrag()
+        this._updateCursorPreview()
+    }
+
+    private _collectItemsAlongMobileSwipe(from: { x: number, y: number }, to: { x: number, y: number }) {
+        if (!this._canUseBoardInput()) return false
+
+        const dx = to.x - from.x
+        const dy = to.y - from.y
+        const distance = Math.hypot(dx, dy)
+        const steps = Math.max(1, Math.ceil(distance / MOBILE_ITEM_SWIPE_SAMPLE_STEP))
+        let collected = false
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps
+            if (this._session.collectCurrencyItemAt(from.x + dx * t, from.y + dy * t)) collected = true
+        }
+        return collected
+    }
+
+    private _updateMobilePlantDragMoved(pixel: { x: number, y: number }) {
+        if (!this._mobilePlantDragActive || this._mobilePlantDragMoved) return
+
+        const dx = pixel.x - this._mobilePlantDragStartPixel.x
+        const dy = pixel.y - this._mobilePlantDragStartPixel.y
+        this._mobilePlantDragMoved = dx * dx + dy * dy >= MOBILE_PLANT_DRAG_THRESHOLD_PX * MOBILE_PLANT_DRAG_THRESHOLD_PX
+    }
+
+    private _resetMobilePlantDrag() {
+        this._mobilePlantDragActive = false
+        this._mobilePlantDragMoved = false
+        this._mobilePlantDragStartedFromSeedPacket = false
+        this._lastTouchPixel = null
+    }
+
+    private _canPlantSelectedSeedAt(pixel: { x: number, y: number }) {
+        const seedType = this._session.selectedSeed
+        if (!seedType) return false
+
+        const grid = this._session.geometry.plantingPixelToGrid(pixel.x, pixel.y, seedType)
+        return !!grid && this._session.getPlantingReason(seedType, grid.col, grid.row) === 'ok'
     }
 
     private _onKeyDown(event: EventKeyboard) {
@@ -4153,8 +4306,12 @@ export class AdventureGameScreen extends Component {
             this._gridPreview = null
             this._previewSeedType = this._session.selectedSeed
         }
-        if (!this._cursorPreview?.isValid) {
+        const showCursorPreview = !sys.isMobile
+        if (showCursorPreview && !this._cursorPreview?.isValid) {
             this._cursorPreview = this._createPlantPreviewNode('CursorPreview', CURSOR_PLANT_PREVIEW_OPACITY)
+        } else if (!showCursorPreview) {
+            if (this._cursorPreview?.isValid) this._cursorPreview.destroy()
+            this._cursorPreview = null
         }
         if (!this._gridPreview?.isValid) {
             this._gridPreview = this._createPlantPreviewNode(
@@ -4164,13 +4321,15 @@ export class AdventureGameScreen extends Component {
             )
         }
 
-        this._cursorPreview.active = true
+        if (this._cursorPreview?.isValid) this._cursorPreview.active = true
         this._gridPreview.active = true
-        this._cursorPreview.setPosition(
-            this._mousePixel.x + CURSOR_PLANT_OFFSET_X,
-            -(this._mousePixel.y + CURSOR_PLANT_OFFSET_Y),
-            CURSOR_PREVIEW_Z,
-        )
+        if (this._cursorPreview?.isValid) {
+            this._cursorPreview.setPosition(
+                this._mousePixel.x + CURSOR_PLANT_OFFSET_X,
+                -(this._mousePixel.y + CURSOR_PLANT_OFFSET_Y),
+                CURSOR_PREVIEW_Z,
+            )
+        }
         const seedType = this._session.selectedSeed
         const grid = seedType
             ? this._session.geometry.plantingPixelToGrid(this._mousePixel.x, this._mousePixel.y, seedType)
