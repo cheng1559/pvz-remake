@@ -165,8 +165,6 @@ export class GameSession {
         this._pushAdvice()
         if (level.adventureLevel === 2) {
             this._pushLevelTwoTutorialAdvice(LEVEL_2_ADVICE_PLANT_SUNFLOWER_1)
-        } else if (this._readySetPlantCounter > 0) {
-            this._pushReadySetPlantEvent()
         }
     }
 
@@ -176,6 +174,13 @@ export class GameSession {
 
     drainEvents(): GameEvent[] {
         return this.events.splice(0)
+    }
+
+    completeReadySetPlantIntro() {
+        if (this._readySetPlantCounter <= 0) return
+
+        this._readySetPlantCounter = 0
+        this._setSeedPacketsActive(true)
     }
 
     dispatch(command: GameCommand) {
@@ -1123,11 +1128,6 @@ export class GameSession {
         for (const packet of this.seedPackets) {
             if (!packet.selected) packet.active = active
         }
-    }
-
-    private _pushReadySetPlantEvent() {
-        this.events.push({ type: 'readySetPlant' })
-        this.events.push({ type: 'soundRequested', sound: SoundEffect.ReadySetPlant })
     }
 
     private _handleLevelTwoTutorialSeedSelected(seedType: SeedType) {

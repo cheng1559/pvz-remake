@@ -100,6 +100,8 @@ const INTRO_ROLL_SOD_END = 800
 const INTRO_LAWN_MOWER_ROW = 2
 const INTRO_LAWN_MOWER_START = 820
 const INTRO_LAWN_MOWER_END = 845
+const INTRO_LAWN_MOWER_NO_SOD_START = 620
+const INTRO_LAWN_MOWER_NO_SOD_END = 645
 const INTRO_LAWN_MOWER_ROW_START_STEP = 5
 const INTRO_LAWN_MOWER_START_X = -80
 const INTRO_LAWN_MOWER_END_X = -21
@@ -111,6 +113,8 @@ const INTRO_LAWN_MOWER_SCALE = 0.85
 const LAWN_MOWER_Y_OFFSET = 23
 const INTRO_SEED_BANK_ON_START = 800
 const INTRO_SEED_BANK_ON_END = 825
+const INTRO_SEED_BANK_NO_SOD_ON_START = 600
+const INTRO_SEED_BANK_NO_SOD_ON_END = 625
 const INTRO_SEED_BANK_X = 10
 const LAWN_MOWER_CACHED_DRAW_OFFSET_X = -20
 const GAMEPLAY_LAWN_MOWER_REANIM_X_OFFSET = INTRO_LAWN_MOWER_REANIM_X_OFFSET
@@ -150,6 +154,7 @@ const INTRO_STREET_ZOMBIE_Z_BASE = 100
 const INTRO_STREET_ZOMBIE_ROW_Z_STEP = 4
 const INTRO_STREET_ZOMBIE_ODD_COLUMN_Z_OFFSET = 2
 const INTRO_END = 855
+const INTRO_NO_SOD_READY_SET_PLANT_END = 838
 const SOD_ROW_X = 239 - BOARD_OFFSET
 const SOD_ROW_Y = 265
 const SOD_THREE_ROW_X = 235 - BOARD_OFFSET
@@ -202,6 +207,7 @@ const HUGE_WAVE_TEXT_ENTER_TICKS = 20
 const HUGE_WAVE_TEXT_LEAVE_TICKS = 40
 const TUTORIAL_FLASH_TIME = 75
 const READY_SET_PLANT_ANIMATION_PATH = 'animations/startreadysetplant'
+const READY_SET_PLANT_INTRO_TICKS = 183
 const READY_SET_PLANT_REANIM_X = 400
 const READY_SET_PLANT_REANIM_Y = 324
 const FINAL_WAVE_ANIMATION_PATH = 'animations/finalwave'
@@ -510,6 +516,7 @@ export class AdventureGameScreen extends Component {
     private _progressFlagViews: ProgressFlagView[] = []
     private _levelLabel: FontRenderer | null = null
     private _introTime = 0
+    private _introReadySetPlantShown = false
     private _gameAccumulator = 0
     private _lastRightMouseDownAt = 0
     private _lastRightMouseDownX = Number.NaN
@@ -1766,12 +1773,20 @@ export class AdventureGameScreen extends Component {
         if (this._shouldPlayIntroSodRoll() && previousIntroTime < INTRO_ROLL_SOD_START && this._introTime >= INTRO_ROLL_SOD_START) {
             this._startSodRoll()
         }
+        const introEnd = this._introEndTime()
+        if (this._shouldPlayReadySetPlantIntro() &&
+            !this._introReadySetPlantShown &&
+            this._introTime >= introEnd - READY_SET_PLANT_INTRO_TICKS) {
+            this._introReadySetPlantShown = true
+            this._showReadySetPlant()
+        }
         if (this._shouldPlayIntroSodRoll()) this._updateIntroSod()
         this._syncIntroLawnMower()
         this._syncIntroSeedBank()
 
-        if (this._introTime < INTRO_END) return
+        if (this._introTime < introEnd) return
 
+        this._session.completeReadySetPlantIntro()
         this._gameStarted = true
         this._boardContent.setPosition(0, 0, 0)
         if (this._soddedNode) this._soddedNode.active = false
@@ -1793,6 +1808,18 @@ export class AdventureGameScreen extends Component {
         this._restoreGameplayLayerOrder()
     }
 
+    private _shouldPlayReadySetPlantIntro() {
+        return (this._session.level.adventureLevel ?? 1) >= 3
+    }
+
+    private _introEndTime() {
+        if (!this._shouldPlayIntroSodRoll() && this._shouldPlayReadySetPlantIntro()) {
+            return INTRO_NO_SOD_READY_SET_PLANT_END
+        }
+
+        return INTRO_END
+    }
+
     private _destroyIntroStreetZombies() {
         for (const node of this._introStreetZombieNodes) {
             if (node.isValid) node.destroy()
@@ -1803,7 +1830,9 @@ export class AdventureGameScreen extends Component {
     private _syncIntroSeedBank() {
         if (!this._seedBankNode?.isValid) return
 
-        if (this._introTime <= INTRO_SEED_BANK_ON_START) {
+        const seedBankStart = this._introSeedBankOnStart()
+        const seedBankEnd = this._introSeedBankOnEnd()
+        if (this._introTime <= seedBankStart) {
             this._seedBankNode.active = false
             this._seedBankNode.setPosition(INTRO_SEED_BANK_X, this._seedBankHeight, 10)
             this._setSeedBankContentsVisible(false)
@@ -1812,10 +1841,18 @@ export class AdventureGameScreen extends Component {
 
         this._seedBankNode.active = true
         this._setSeedBankContentsVisible(true)
-        const y = this._introTime <= INTRO_SEED_BANK_ON_END
-            ? this._easeInOut(INTRO_SEED_BANK_ON_START, INTRO_SEED_BANK_ON_END, this._introTime, this._seedBankHeight, 0)
+        const y = this._introTime <= seedBankEnd
+            ? this._easeInOut(seedBankStart, seedBankEnd, this._introTime, this._seedBankHeight, 0)
             : 0
         this._seedBankNode.setPosition(INTRO_SEED_BANK_X, y, 10)
+    }
+
+    private _introSeedBankOnStart() {
+        return this._shouldPlayIntroSodRoll() ? INTRO_SEED_BANK_ON_START : INTRO_SEED_BANK_NO_SOD_ON_START
+    }
+
+    private _introSeedBankOnEnd() {
+        return this._shouldPlayIntroSodRoll() ? INTRO_SEED_BANK_ON_END : INTRO_SEED_BANK_NO_SOD_ON_END
     }
 
     private _introBoardX() {
@@ -1893,7 +1930,7 @@ export class AdventureGameScreen extends Component {
 
             const mowerX = forcedX ?? this._easeInOut(
                 start,
-                start + (INTRO_LAWN_MOWER_END - INTRO_LAWN_MOWER_START),
+                start + this._introLawnMowerDuration(),
                 this._introTime,
                 INTRO_LAWN_MOWER_START_X,
                 INTRO_LAWN_MOWER_END_X,
@@ -1915,7 +1952,14 @@ export class AdventureGameScreen extends Component {
     }
 
     private _introLawnMowerStartTime(row: number) {
-        return INTRO_LAWN_MOWER_START + (INTRO_LAWN_MOWER_ROW - row) * INTRO_LAWN_MOWER_ROW_START_STEP
+        const baseStart = this._shouldPlayIntroSodRoll() ? INTRO_LAWN_MOWER_START : INTRO_LAWN_MOWER_NO_SOD_START
+        return baseStart + (INTRO_LAWN_MOWER_ROW - row) * INTRO_LAWN_MOWER_ROW_START_STEP
+    }
+
+    private _introLawnMowerDuration() {
+        if (!this._shouldPlayIntroSodRoll()) return INTRO_LAWN_MOWER_NO_SOD_END - INTRO_LAWN_MOWER_NO_SOD_START
+
+        return INTRO_LAWN_MOWER_END - INTRO_LAWN_MOWER_START
     }
 
     private _introLawnMowerY(row: number) {
@@ -2215,9 +2259,6 @@ export class AdventureGameScreen extends Component {
                 case 'hugeWave':
                     this._showHugeWaveText()
                     break
-                case 'readySetPlant':
-                    this._showReadySetPlant()
-                    break
                 case 'sunFlash':
                     this._sunFlashTicks = SUN_FLASH_TICKS
                     break
@@ -2248,6 +2289,7 @@ export class AdventureGameScreen extends Component {
 
     private _showReadySetPlant() {
         this._clearAdvice()
+        void SoundLoader.play(SoundEffect.ReadySetPlant)
         void this._playReadySetPlant()
     }
 

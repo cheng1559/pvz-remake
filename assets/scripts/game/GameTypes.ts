@@ -163,7 +163,6 @@ export type GameEvent =
     | { type: 'sunProduced', entityId: number, amount: number, x: number, y: number }
     | { type: 'cherryBombDetonated', entityId: number, x: number, y: number, row: number }
     | { type: 'boardShake', amountX: number, amountY: number }
-    | { type: 'readySetPlant' }
     | { type: 'soundRequested', sound: SoundEffect }
     | { type: 'foleyRequested', sound: SoundEffect, pitchRange?: number }
     | { type: 'levelAwardCollected' }
