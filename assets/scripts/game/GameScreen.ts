@@ -1,5 +1,6 @@
 import {
     _decorator,
+    Camera,
     Color,
     Component,
     EventKeyboard,
@@ -4593,7 +4594,7 @@ export class AdventureGameScreen extends Component {
             return false
         }
 
-        this._mousePixel = this._uiLocationToBoardPixel(pointer.uiLocation)
+        this._mousePixel = this._pointerToBoardPixel(pointer)
         this._hasCursorPointer = true
         this._updateCursorPreview()
         return this._updateHoverItemAndSeedPacketState()
@@ -4834,12 +4835,31 @@ export class AdventureGameScreen extends Component {
     }
 
     private _eventToBoardPixel(event: EventMouse | EventTouch) {
-        const ui = event.getUILocation()
-        return this._uiLocationToBoardPixel(ui)
+        const screen = this._eventScreenLocation(event)
+        return this._screenLocationToBoardPixel(screen, event.getUILocation())
     }
 
-    private _uiLocationToBoardPixel(ui: { x: number, y: number }) {
-        const local = this.node.getComponent(UITransform)!.convertToNodeSpaceAR(new Vec3(ui.x, ui.y, 0))
+    private _pointerToBoardPixel(pointer: UIHoverPointer) {
+        return this._screenLocationToBoardPixel(pointer.location, pointer.uiLocation)
+    }
+
+    private _eventScreenLocation(event: EventMouse | EventTouch) {
+        const touchLocation = (event as EventTouch).touch?.getLocation?.()
+        return touchLocation ?? (event as EventMouse).getLocation?.() ?? event.getUILocation()
+    }
+
+    private _screenLocationToBoardPixel(screen: { x: number, y: number }, fallbackUi?: { x: number, y: number }) {
+        const transform = this.node.getComponent(UITransform)!
+        const local = new Vec3()
+        const camera = this.node.scene.getComponentInChildren(Camera)
+        if (camera) {
+            const world = new Vec3()
+            camera.screenToWorld(new Vec3(screen.x, screen.y, 0), world)
+            transform.convertToNodeSpaceAR(world, local)
+        } else {
+            const ui = fallbackUi ?? screen
+            transform.convertToNodeSpaceAR(new Vec3(ui.x, ui.y, 0), local)
+        }
         return {
             x: local.x + 400,
             y: 300 - local.y,
