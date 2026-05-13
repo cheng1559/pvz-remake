@@ -4353,8 +4353,12 @@ export class AdventureGameScreen extends Component {
         }
         const mobilePlantPressReady = this._isMobilePlantPressReady()
         const showCursorPreview = !sys.isMobile || mobilePlantPressReady
-        if (showCursorPreview && !this._cursorPreview?.isValid) {
-            this._cursorPreview = this._createPlantPreviewNode('CursorPreview', CURSOR_PLANT_PREVIEW_OPACITY)
+        if (
+            showCursorPreview &&
+            (!this._cursorPreview?.isValid || this._cursorPreview.parent !== this._itemLayer)
+        ) {
+            if (this._cursorPreview?.isValid) this._cursorPreview.destroy()
+            this._cursorPreview = this._createPlantPreviewNode('CursorPreview', CURSOR_PLANT_PREVIEW_OPACITY, this._itemLayer)
         } else if (!showCursorPreview) {
             if (this._cursorPreview?.isValid) this._cursorPreview.destroy()
             this._cursorPreview = null
@@ -4549,10 +4553,11 @@ export class AdventureGameScreen extends Component {
     }
 
     private _orderPreviewNodes() {
-        if (!this._gridPreview?.isValid || !this._cursorPreview?.isValid) return
-
-        this._gridPreview.setSiblingIndex(0)
-        this._cursorPreview.setSiblingIndex(this._uiLayer.children.length - 1)
+        if (this._gridPreview?.isValid) this._gridPreview.setSiblingIndex(0)
+        if (this._cursorPreview?.isValid) {
+            const parent = this._cursorPreview.parent
+            this._cursorPreview.setSiblingIndex(parent ? Math.max(0, parent.children.length - 1) : 0)
+        }
     }
 
     private _hitSeedPacket(pixel: { x: number, y: number }): SeedType | null {
