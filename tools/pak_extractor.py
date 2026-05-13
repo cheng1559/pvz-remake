@@ -21,6 +21,7 @@ from __future__ import annotations
 import struct
 import sys
 import datetime
+import posixpath
 from pathlib import Path
 from typing import NamedTuple
 
@@ -61,6 +62,28 @@ def _filetime_to_datetime(ft: int) -> datetime.datetime | None:
         return _FILETIME_EPOCH + datetime.timedelta(microseconds=us)
     except (OverflowError, OSError):
         return None
+
+
+def _entry_output_path(out_dir: Path, entry_name: str) -> Path:
+    """
+    Convert a PAK entry name to a local output path.
+
+    PvZ PAK names use Windows-style backslashes. On POSIX systems, pathlib treats
+    backslash as a normal filename character, so normalize entries explicitly.
+    """
+    raw_name = entry_name.replace("\\", "/")
+    raw_parts = [part for part in raw_name.split("/") if part not in ("", ".")]
+    normalized = posixpath.normpath(raw_name)
+    parts = [part for part in normalized.split("/") if part not in ("", ".")]
+    if (
+        normalized.startswith("/")
+        or any(part == ".." for part in raw_parts)
+        or (len(parts) > 0 and ":" in parts[0])
+    ):
+        raise ValueError(f"非法 PAK 路径: {entry_name!r}")
+    if not parts:
+        raise ValueError(f"非法 PAK 路径: {entry_name!r}")
+    return out_dir.joinpath(*parts)
 
 
 def parse_pak(data: bytes) -> list[PakEntry]:
@@ -148,7 +171,7 @@ def extract_entries(data: bytes, entries: list[PakEntry],
     out_dir.mkdir(parents=True, exist_ok=True)
     count = 0
     for e in entries:
-        file_path = out_dir / e.name
+        file_path = _entry_output_path(out_dir, e.name)
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         file_data = data[e.data_offset:e.data_offset + e.size]
