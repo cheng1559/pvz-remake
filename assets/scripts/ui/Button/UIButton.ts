@@ -165,6 +165,7 @@ export class UIButton extends Component {
 
     public static beginHoverSuppress() {
         this._hoverSuppressCount++
+        this._inputSuppressedPointerActive = false
         this.clearHoverStates()
     }
 
@@ -173,6 +174,7 @@ export class UIButton extends Component {
             this._hoverSuppressCount--
         }
         if (this._hoverSuppressCount === 0) {
+            this._inputSuppressedPointerActive = false
             this._ignoreHoverUntilMouseMove = false
             if (refreshHover) {
                 this.refreshHoverStates()
@@ -185,6 +187,7 @@ export class UIButton extends Component {
 
     public static clearHoverStates() {
         this._activeButton = null
+        this._inputSuppressedPointerActive = false
         this._endPressCapture()
         for (const button of this._instances) {
             button._pressed = false
@@ -266,6 +269,7 @@ export class UIButton extends Component {
         if (UIButton._activeButton?._pressed) {
             UIButton._activeButton._finishMousePress(event)
         }
+        UIButton._inputSuppressedPointerActive = false
         if (sys.isMobile) {
             UIButton._lastPointerCanHover = false
             return
@@ -320,6 +324,9 @@ export class UIButton extends Component {
         UIButton._lastMouseLocation = event.touch?.getLocation() ?? event.getUILocation()
         UIButton._lastPointerCanHover = false
         UIHoverManager.rememberTouchEvent(event, false)
+        if (event.type === Node.EventType.TOUCH_END || event.type === Node.EventType.TOUCH_CANCEL) {
+            UIButton._inputSuppressedPointerActive = false
+        }
     }
 
     private static _setGlobalCursor(style: string) {
@@ -410,13 +417,13 @@ export class UIButton extends Component {
     }
 
     private _onTouchStart(event: EventTouch) {
+        if (!sys.isMobile) return
         if (UIButton._isInputSuppressedForNode(this.node)) {
             UIButton._inputSuppressedPointerActive = true
             UIButton._ignoreHoverUntilMouseMove = true
             return
         }
         if (UIButton._inputSuppressedPointerActive) return
-        if (!sys.isMobile) return
         if (!this._interactable) return
         UIButton.rememberTouchLocation(event)
         event.propagationStopped = true
@@ -424,8 +431,8 @@ export class UIButton extends Component {
     }
 
     private _onTouchMove(event: EventTouch) {
-        if (UIButton._isInputSuppressedForNode(this.node) || UIButton._inputSuppressedPointerActive) return
         if (!sys.isMobile) return
+        if (UIButton._isInputSuppressedForNode(this.node) || UIButton._inputSuppressedPointerActive) return
         if (!this._interactable) return
         if (!this._pressed) return
         UIButton.rememberTouchLocation(event)
@@ -452,11 +459,11 @@ export class UIButton extends Component {
     }
 
     private _onTouchEnd(event: EventTouch) {
+        if (!sys.isMobile) return
         if (UIButton._isInputSuppressedForNode(this.node) || UIButton._inputSuppressedPointerActive) {
             UIButton._inputSuppressedPointerActive = false
             return
         }
-        if (!sys.isMobile) return
         if (!this._interactable) return
         if (!this._pressed) return
         UIButton.rememberTouchLocation(event)
@@ -478,11 +485,11 @@ export class UIButton extends Component {
     }
 
     private _onTouchCancel(event: EventTouch) {
+        if (!sys.isMobile) return
         if (UIButton._isInputSuppressedForNode(this.node) || UIButton._inputSuppressedPointerActive) {
             UIButton._inputSuppressedPointerActive = false
             return
         }
-        if (!sys.isMobile) return
         if (!this._interactable) return
         if (!this._pressed) return
         UIButton.rememberTouchLocation(event)
@@ -495,10 +502,7 @@ export class UIButton extends Component {
     }
 
     private _isTouchInside(event: EventTouch): boolean {
-        const uiTransform = this.node.getComponent(UITransform)
-        if (!uiTransform) return false
-        const screenPoint = event.touch!.getLocation()
-        return uiTransform.hitTest(screenPoint)
+        return this._hitTestPointer(event.touch?.getLocation() ?? event.getUILocation())
     }
 
     private _onMouseDown(event: EventMouse) {
@@ -585,8 +589,7 @@ export class UIButton extends Component {
     }
 
     private _isMouseInside(event: EventMouse): boolean {
-        const uiTransform = this.node.getComponent(UITransform)
-        return !!uiTransform && uiTransform.hitTest(event.getLocation())
+        return this._hitTestPointer(event.getLocation())
     }
 
     private _updateMousePressState(event: EventMouse) {
@@ -686,7 +689,7 @@ export class UIButton extends Component {
 
         const uiTransform = this.node.getComponent(UITransform)
         const location = pointerLocation ?? UIButton._lastMouseLocation
-        const hovering = !!uiTransform && !!location && uiTransform.hitTest(location)
+        const hovering = !!uiTransform && !!location && this._hitTestPointer(location)
         this._setHovering(hovering, true, true, updateCursor)
         return hovering
     }
@@ -779,26 +782,44 @@ export class UIButton extends Component {
         const self = this
         uiTransform.hitTest = (worldPoint: Vec2, windowId?: number) => {
             if (self.polygon.length < 3) return original(worldPoint, windowId)
-            return self._pointInPolygon(worldPoint)
+            return self._hitTestPointer(worldPoint)
         }
     }
 
-    private _pointInPolygon(worldPoint: Vec2): boolean {
+    private _hitTestPointer(screenPoint: Vec2): boolean {
         const uiTransform = this.node.getComponent(UITransform)
         if (!uiTransform) return false
 
+        const localPos = this._screenToNodeLocal(screenPoint, uiTransform)
+        if (!localPos) return false
+
+        if (this.polygon.length >= 3) {
+            return this._pointInPolygonLocal(localPos.x, localPos.y)
+        }
+
+        const width = uiTransform.contentSize.width
+        const height = uiTransform.contentSize.height
+        const anchor = uiTransform.anchorPoint
+        return localPos.x >= -anchor.x * width &&
+            localPos.x <= (1 - anchor.x) * width &&
+            localPos.y >= -anchor.y * height &&
+            localPos.y <= (1 - anchor.y) * height
+    }
+
+    private _screenToNodeLocal(screenPoint: Vec2, uiTransform: UITransform): Vec3 | null {
         const localPos = new Vec3()
         const camera = this.node.scene.getComponentInChildren(Camera)
         if (camera) {
             const worldPos = new Vec3()
-            camera.screenToWorld(new Vec3(worldPoint.x, worldPoint.y, 0), worldPos)
+            camera.screenToWorld(new Vec3(screenPoint.x, screenPoint.y, 0), worldPos)
             uiTransform.convertToNodeSpaceAR(worldPos, localPos)
         } else {
-            uiTransform.convertToNodeSpaceAR(new Vec3(worldPoint.x, worldPoint.y, 0), localPos)
+            uiTransform.convertToNodeSpaceAR(new Vec3(screenPoint.x, screenPoint.y, 0), localPos)
         }
+        return localPos
+    }
 
-        const x = localPos.x
-        const y = localPos.y
+    private _pointInPolygonLocal(x: number, y: number): boolean {
         const poly = this.polygon
 
         let inside = false

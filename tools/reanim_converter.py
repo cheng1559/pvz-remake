@@ -1,8 +1,15 @@
 import json
-import shutil
 from xml.etree import ElementTree
 from pathlib import Path
 from typing import Any
+
+from sprite_texture_preprocessor import (
+    get_alpha_companion_name,
+    get_output_name,
+    is_alpha_companion_name,
+    select_image_resources,
+    write_preprocessed_resource,
+)
 
 
 def get_float(xml_elem: ElementTree.Element, tag: str) -> float | None:
@@ -278,27 +285,20 @@ def copy_textures(xml_dir: Path, texture_dir: Path):
     """Copy all image files from xml_dir to texture_dir."""
     texture_dir.mkdir(parents=True, exist_ok=True)
 
-    # Collect all image files and index stems that have a .png variant
-    image_files = sorted(
-        p for p in xml_dir.iterdir()
-        if p.is_file() and p.suffix.lower() in ('.png', '.jpg', '.jpeg')
-    )
-    png_stems = {p.stem.lower()
-                 for p in image_files if p.suffix.lower() == '.png'}
-
+    resources = select_image_resources(xml_dir)
     copied = 0
     skipped = 0
-    for src in image_files:
-        # Skip .jpg/.jpeg when a .png with the same stem exists (avoid URL conflict)
-        if src.suffix.lower() in ('.jpg', '.jpeg') and src.stem.lower() in png_stems:
+    for resource_name, src in sorted(resources.items()):
+        if is_alpha_companion_name(resource_name) and resource_name[:-1] in resources:
             continue
-        dst = texture_dir / src.name.lower()
-        if dst.exists():
-            skipped += 1
-        else:
-            shutil.copy2(src, dst)
+        alpha_src = resources.get(get_alpha_companion_name(resource_name))
+        dst_name = get_output_name(src, resource_name, force_png=alpha_src is not None)
+        dst = texture_dir / dst_name
+        if write_preprocessed_resource(src, dst, resource_name=resource_name, alpha_src=alpha_src):
             print(f"[reanim] Wrote: {dst}")
             copied += 1
+        else:
+            skipped += 1
 
     print(f"[reanim] Textures: {copied} copied, {skipped} skipped")
 

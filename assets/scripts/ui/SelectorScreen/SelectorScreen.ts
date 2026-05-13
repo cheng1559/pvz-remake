@@ -19,6 +19,7 @@ import { UIButton } from '@/ui/Button'
 import { ChallengePage } from '@/ui/ChallengeScreen'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import { Animator } from '@/core/Animator'
+import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { ButtonConfig } from './SelectorScreen.d'
 import {
     BUTTON_CONFIGS,
@@ -44,6 +45,15 @@ const SELECTOR_TICK_SECONDS = 0.01
 const SELECTOR_GRASS_INITIAL_RATE = 6
 const SELECTOR_FLOWER_RATE = 24
 const LIMBS_POP_PITCH_RANGE = 10
+const START_ADVENTURE_FLASH_SECONDS = 0.1
+const START_ADVENTURE_LAUGH_SECONDS = 1.25
+const START_ADVENTURE_COMPLETE_SECONDS = 4.5
+
+interface CloudLoopState {
+    node: AnimNode
+    animationName: string
+    delayRemaining: number
+}
 
 @ccclass('SelectorScreen')
 export class SelectorScreen extends AnimationComponent {
@@ -70,6 +80,15 @@ export class SelectorScreen extends AnimationComponent {
         offsetX: number
         offsetY: number
     }[] = []
+    private _startAdventureActive = false
+    private _startAdventureElapsed = 0
+    private _startAdventureFlashCounter = 0
+    private _startAdventureFlashElapsed = 0
+    private _startAdventureLaughPlayed = false
+    private _cloudLoopStates: CloudLoopState[] = []
+    private _grassLoopActive = false
+    private _grassLoopElapsed = 0
+    private _grassLoopInterval = 0
 
     public onLockedModeClick: ((name: string) => void) | null = null
     public onMessageBoxRequest: (() => void) | null = null
@@ -461,55 +480,73 @@ export class SelectorScreen extends AnimationComponent {
     }
 
     protected lateUpdate(dt: number) {
+        const scaledDt = scaleGameDeltaTime(dt)
+        this._updateStartAdventureTransition(scaledDt)
+        this._updateCloudLoops(scaledDt)
+        this._updateGrassLoop(scaledDt)
+        if (!this.node.isValid) return
+
         for (const tb of this._trackedButtons) {
             this._trackButton(tb.button, tb.trackName, tb.offsetX, tb.offsetY)
         }
     }
 
     startAdventure() {
+        if (this._startAdventureActive) return
+
         void SoundLoader.play(SoundEffect.LoseMusic)
         this.playZombieHand()
         this._setButtonsInteractable(false)
-        let counter = 0
-        const flashCallback = () => {
-            counter++
-            this._buttons.get('adventure')!.color =
-                counter % 2 === 0 ? new Color(80, 80, 80) : new Color(255, 255, 255)
+        this._startAdventureActive = true
+        this._startAdventureElapsed = 0
+        this._startAdventureFlashCounter = 0
+        this._startAdventureFlashElapsed = 0
+        this._startAdventureLaughPlayed = false
+    }
+
+    private _updateStartAdventureTransition(dt: number) {
+        if (!this._startAdventureActive) return
+
+        this._startAdventureElapsed += dt
+        this._startAdventureFlashElapsed += dt
+        while (this._startAdventureFlashElapsed >= START_ADVENTURE_FLASH_SECONDS) {
+            this._startAdventureFlashElapsed -= START_ADVENTURE_FLASH_SECONDS
+            this._startAdventureFlashCounter++
+            const button = this._buttons.get('adventure')
+            if (button) {
+                button.color = this._startAdventureFlashCounter % 2 === 0
+                    ? new Color(80, 80, 80)
+                    : new Color(255, 255, 255)
+            }
         }
-        this.schedule(flashCallback, 0.1)
-        this.scheduleOnce(() => {
+
+        if (!this._startAdventureLaughPlayed && this._startAdventureElapsed >= START_ADVENTURE_LAUGH_SECONDS) {
+            this._startAdventureLaughPlayed = true
             void SoundLoader.play(SoundEffect.EvilLaugh)
-        }, 1.25)
-        this.scheduleOnce(() => {
-            this.unschedule(flashCallback)
-            this.onAdventureRequest?.()
-        }, 4.5)
+        }
+
+        if (this._startAdventureElapsed < START_ADVENTURE_COMPLETE_SECONDS) return
+
+        this._startAdventureActive = false
+        this.onAdventureRequest?.()
     }
 
     playCloudsLoop() {
         const cloudNames = ['cloud1', 'cloud2', 'cloud4', 'cloud5', 'cloud6', 'cloud7']
+        this._cloudLoopStates = []
         for (let i = 0; i < this.cloudNodes.length; i++) {
             const cloudNode = this.cloudNodes[i]
             const name = cloudNames[i]
             const animationName = `anim_${name}`
-            const playCloud = (time = 0) => {
-                cloudNode.play({
-                    name: animationName,
-                    speed: this._speedForReanimRate(cloudNode, animationName, SELECTOR_CLOUD_RATE),
-                    time,
-                    keepLastFrame: true,
-                    onFinish: () => {
-                        const delay = randomRange(20, 40)
-                        this.scheduleOnce(() => playCloud(), delay)
-                    },
-                })
-            }
+            const state = { node: cloudNode, animationName, delayRemaining: 0 }
+            this._cloudLoopStates.push(state)
             const initialCounter = randomRangeInt(
                 SELECTOR_CLOUD_INITIAL_MIN_TICKS,
                 SELECTOR_CLOUD_INITIAL_MAX_TICKS,
             )
-            if (initialCounter < 0) {
-                playCloud(
+            if (initialCounter <= 0) {
+                this._playCloudLoop(
+                    state,
                     this._timeForReanimFraction(
                         cloudNode,
                         animationName,
@@ -522,9 +559,33 @@ export class SelectorScreen extends AnimationComponent {
                     speed: 0,
                     keepLastFrame: true,
                 })
-                this.scheduleOnce(() => playCloud(), initialCounter * SELECTOR_TICK_SECONDS)
+                state.delayRemaining = initialCounter * SELECTOR_TICK_SECONDS
             }
         }
+    }
+
+    private _updateCloudLoops(dt: number) {
+        for (const state of this._cloudLoopStates) {
+            if (state.delayRemaining <= 0) continue
+
+            state.delayRemaining -= dt
+            if (state.delayRemaining <= 0) {
+                state.delayRemaining = 0
+                this._playCloudLoop(state)
+            }
+        }
+    }
+
+    private _playCloudLoop(state: CloudLoopState, time = 0) {
+        state.node.play({
+            name: state.animationName,
+            speed: this._speedForReanimRate(state.node, state.animationName, SELECTOR_CLOUD_RATE),
+            time,
+            keepLastFrame: true,
+            onFinish: () => {
+                state.delayRemaining = randomRange(20, 40)
+            },
+        })
     }
 
     playGrassLoop() {
@@ -537,21 +598,28 @@ export class SelectorScreen extends AnimationComponent {
             ),
             loop: true,
         })
-        this.schedule(
-            () => {
-                this.grassNode.play({
-                    name: 'anim_grass',
-                    speed: this._speedForReanimRate(
-                        this.grassNode,
-                        'anim_grass',
-                        randomRange(3, 12),
-                    ),
-                    blendTime: 0.2,
-                    loop: true,
-                })
-            },
-            randomRange(2, 4),
-        )
+        this._grassLoopActive = true
+        this._grassLoopElapsed = 0
+        this._grassLoopInterval = randomRange(2, 4)
+    }
+
+    private _updateGrassLoop(dt: number) {
+        if (!this._grassLoopActive || this._grassLoopInterval <= 0) return
+
+        this._grassLoopElapsed += dt
+        while (this._grassLoopElapsed >= this._grassLoopInterval) {
+            this._grassLoopElapsed -= this._grassLoopInterval
+            this.grassNode.play({
+                name: 'anim_grass',
+                speed: this._speedForReanimRate(
+                    this.grassNode,
+                    'anim_grass',
+                    randomRange(3, 12),
+                ),
+                blendTime: 0.2,
+                loop: true,
+            })
+        }
     }
 
     playOpenAnimation() {
@@ -578,7 +646,7 @@ export class SelectorScreen extends AnimationComponent {
     }
 
     playZombieHand() {
-        void SoundLoader.play(SoundEffect.DirtRise)
+        void SoundLoader.playFoley(SoundEffect.DirtRise)
         this.zombieHandNode.play({
             name: 'default',
             keepLastFrame: true,

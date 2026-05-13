@@ -17,10 +17,7 @@ Steps:
  12. Generate cached lawn mower sprite
 """
 
-import shutil
 from pathlib import Path
-
-from PIL import Image
 
 from pak_extractor import parse_pak, extract_entries, _decrypt
 from rename_raw_to_lower import rename_all_to_lower
@@ -33,36 +30,29 @@ from generate_packet_plant_cache import main as generate_packet_plant_cache
 from generate_plant_preview_cache import main as generate_plant_preview_cache
 from generate_zombie_preview_cache import main as generate_zombie_preview_cache
 from generate_lawnmower_cache import main as generate_lawnmower_cache
-
-
-IMAGE_SUFFIX_PRIORITY = {'.png': 0, '.jpg': 1, '.jpeg': 1, '.gif': 2}
-
-
-def get_image_resource_name(path: Path) -> str:
-    name = path.name.lower()
-    while Path(name).suffix.lower() in IMAGE_SUFFIX_PRIORITY:
-        name = Path(name).with_suffix('').name
-    return name
+from sprite_texture_preprocessor import (
+    get_alpha_companion_name,
+    get_output_name,
+    is_alpha_companion_name,
+    select_image_resources,
+    write_preprocessed_resource,
+)
 
 
 def copy_images(src_dir: Path, dst_dir: Path) -> int:
     """Copy all image files from src_dir to dst_dir, return count of newly copied files."""
     dst_dir.mkdir(parents=True, exist_ok=True)
 
-    image_files = [
-        p for p in src_dir.iterdir()
-        if p.is_file() and p.suffix.lower() in IMAGE_SUFFIX_PRIORITY
-    ]
-    images_by_resource: dict[str, list[Path]] = {}
-    for image_file in image_files:
-        images_by_resource.setdefault(get_image_resource_name(image_file), []).append(image_file)
+    resources = select_image_resources(src_dir)
 
     copied = 0
-    for candidates in sorted(images_by_resource.values(), key=lambda files: get_image_resource_name(files[0])):
-        src = min(candidates, key=lambda path: (IMAGE_SUFFIX_PRIORITY[path.suffix.lower()], path.name.count('.')))
-        dst_name = src.with_suffix('.png').name.lower() if src.suffix.lower() == '.gif' else src.name.lower()
-        dst = dst_dir / dst_name
+    for resource_name, src in sorted(resources.items()):
+        if is_alpha_companion_name(resource_name) and resource_name[:-1] in resources:
+            continue
 
+        alpha_src = resources.get(get_alpha_companion_name(resource_name))
+        dst_name = get_output_name(src, resource_name, force_png=alpha_src is not None)
+        dst = dst_dir / dst_name
         if src.suffix.lower() == '.gif':
             legacy_dst = dst_dir / src.name.lower()
             if legacy_dst.exists():
@@ -71,12 +61,7 @@ def copy_images(src_dir: Path, dst_dir: Path) -> int:
             if legacy_meta.exists():
                 legacy_meta.unlink()
 
-        if not dst.exists():
-            if src.suffix.lower() == '.gif':
-                with Image.open(src) as image:
-                    image.convert('RGBA').save(dst)
-            else:
-                shutil.copy2(src, dst)
+        if write_preprocessed_resource(src, dst, resource_name=resource_name, alpha_src=alpha_src):
             print(f"[pipeline] Wrote: {dst}")
             copied += 1
     return copied

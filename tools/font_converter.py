@@ -9,7 +9,6 @@ Usage:
 import re
 import sys
 import json
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +21,39 @@ def _normalize_image_stem(image_name: str) -> str:
 
 def _normalize_image_name(path: Path) -> str:
     return _normalize_image_stem(path.with_suffix('').name) + '.png'
+
+
+def _normalize_font_mask_image(src: Path, dst: Path):
+    with Image.open(src) as image:
+        rgba = image.convert('RGBA')
+
+    alpha = rgba.getchannel('A')
+    alpha_histogram = alpha.histogram()
+    has_transparency = sum(alpha_histogram[:255]) > 0
+    if has_transparency:
+        rgba.save(dst, 'PNG')
+        return
+
+    source = rgba.load()
+    mask = Image.new('L', rgba.size, 0)
+    mask_pixels = mask.load()
+    width, height = rgba.size
+    max_value = 0
+    for y in range(height):
+        for x in range(width):
+            r, g, b, _a = source[x, y]
+            value = max(r, g, b)
+            mask_pixels[x, y] = value
+            if value > max_value:
+                max_value = value
+
+    if max_value > 0 and max_value < 128:
+        scale = 255 / max_value
+        mask = mask.point(lambda value: min(255, round(value * scale)))
+
+    normalized = Image.new('RGBA', rgba.size, (255, 255, 255, 255))
+    normalized.putalpha(mask)
+    normalized.save(dst, 'PNG')
 
 
 class PvZFontParser:
@@ -532,16 +564,12 @@ def convert_font(input_path: Path, output_dir: Path):
         json.dump(font_data, f, indent=2)
     print(f"[font] Wrote: {json_path}")
 
-    # Copy images. Cocos Creator imports PNG font atlases as textures, but GIF
-    # files are treated as raw assets, so normalize them during conversion.
+    # Cocos imports PNG atlases as textures, but the PvZ font atlases are masks.
+    # Bake opaque mask images to RGBA so runtime loading is platform-neutral.
     for img_path in parser.get_image_files():
         dst = output_dir / _normalize_image_name(img_path)
         if not dst.exists() or not dst.samefile(img_path):
-            if img_path.suffix.lower() == '.gif':
-                with Image.open(img_path) as image:
-                    image.save(dst, 'PNG')
-            else:
-                shutil.copy2(img_path, dst)
+            _normalize_font_mask_image(img_path, dst)
             print(f"[font] Wrote: {dst}")
 
 

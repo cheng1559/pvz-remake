@@ -1,6 +1,7 @@
 import {
     _decorator,
     Color,
+    EditBox,
     EventKeyboard,
     EventMouse,
     EventTouch,
@@ -15,7 +16,9 @@ import {
     Size,
     Sprite,
     SpriteFrame,
+    sys,
     UITransform,
+    UIOpacity,
     Vec2,
     Vec3,
 } from 'cc'
@@ -86,6 +89,17 @@ const enum DebugCliKeyCode {
     NumpadSubtract = 109,
     NumpadDecimal = 110,
     NumpadDivide = 111,
+    Semicolon = 186,
+    Equal = 187,
+    Comma = 188,
+    Minus = 189,
+    Period = 190,
+    Slash = 191,
+    Backquote = 192,
+    BracketLeft = 219,
+    Backslash = 220,
+    BracketRight = 221,
+    Quote = 222,
 }
 
 interface DebugCliInputKey {
@@ -130,6 +144,8 @@ export class DebugCliDialog extends MessageBox {
     private _cursorVisible = true
     private _cursorBlinkElapsed = 0
     private _domKeyDownListener: ((event: KeyboardEvent) => void) | null = null
+    private _nativeTextInput: EditBox | null = null
+    private _syncingNativeTextInput = false
     private _inputWidth = 0
     private _historyIndex = -1
     private _historyDraft = ''
@@ -264,6 +280,7 @@ export class DebugCliDialog extends MessageBox {
         setUISize(editNode, this._inputWidth, INPUT_HEIGHT)
         const inputMask = editNode.addComponent(Mask)
         inputMask.type = Mask.Type.GRAPHICS_RECT
+        this._createNativeTextInput(editNode)
 
         this._selectionNode = createUINode('CommandSelection', {
             parent: editNode,
@@ -344,6 +361,8 @@ export class DebugCliDialog extends MessageBox {
         this._cursorGraphics.fillColor = CURSOR_COLOR
 
         this._setInputFocus(true)
+        this._focusNativeTextInput()
+        this.scheduleOnce(() => this._focusNativeTextInput(), 0)
         this._showCursorNow()
 
         const transform = dialogNode.getComponent(UITransform)
@@ -507,6 +526,95 @@ export class DebugCliDialog extends MessageBox {
             sprite.type = Sprite.Type.SIMPLE
             sprite.sizeMode = Sprite.SizeMode.CUSTOM
         }
+    }
+
+    private _createNativeTextInput(parent: Node) {
+        if (sys.isBrowser || !sys.isMobile) return
+
+        const node = createUINode('NativeCommandTextInput', {
+            parent,
+            anchorX: 0.5,
+            anchorY: 0.5,
+            width: 1,
+            height: 1,
+            x: -this._inputWidth / 2 - 16,
+        })
+        node.addComponent(UIOpacity).opacity = 0
+
+        const editBox = node.addComponent(EditBox)
+        editBox.inputMode = EditBox.InputMode.SINGLE_LINE
+        editBox.inputFlag = EditBox.InputFlag.SENSITIVE
+        editBox.returnType = EditBox.KeyboardReturnType.DONE
+        editBox.maxLength = MAX_COMMAND_LENGTH
+        editBox.placeholder = ''
+        editBox.backgroundImage = null
+        editBox.string = this._command
+        node.on(EditBox.EventType.TEXT_CHANGED, this._onNativeTextInputChanged, this)
+        node.on(EditBox.EventType.EDITING_RETURN, this._onNativeTextInputReturn, this)
+        this._nativeTextInput = editBox
+    }
+
+    private _focusNativeTextInput() {
+        if (!this._nativeTextInput?.node.isValid) return
+        if (!this._hasInputFocus) return
+
+        this._syncNativeTextInput()
+        this._nativeTextInput.focus()
+    }
+
+    private _blurNativeTextInput() {
+        if (!this._nativeTextInput?.node.isValid) return
+
+        this._nativeTextInput.blur()
+    }
+
+    private _syncNativeTextInput() {
+        if (!this._nativeTextInput?.node.isValid) return
+        if (this._nativeTextInput.string === this._command) return
+
+        this._syncingNativeTextInput = true
+        this._nativeTextInput.string = this._command
+        this._syncingNativeTextInput = false
+    }
+
+    private _onNativeTextInputChanged(editBox: EditBox) {
+        if (this._syncingNativeTextInput) return
+        if (!this._hasInputFocus) return
+
+        const sanitized = this._sanitizeClipboardText(editBox.string)
+        if (sanitized !== editBox.string) {
+            this._syncingNativeTextInput = true
+            editBox.string = sanitized
+            this._syncingNativeTextInput = false
+        }
+        this._replaceCommandFromNativeTextInput(sanitized)
+    }
+
+    private _onNativeTextInputReturn() {
+        if (!this.isTopDialog()) return
+
+        this._captureCommand()
+        this._submitCommand()
+    }
+
+    private _replaceCommandFromNativeTextInput(command: string) {
+        if (command === this._command) return
+
+        const oldCommand = this._command
+        const oldCursor = this._cursorPos
+        const oldHilitePos = this._hilitePos
+        this._resetCompletionCycle()
+        this._resetHistoryNavigation()
+        this._command = command
+        this._cursorPos = command.length
+        this._hilitePos = -1
+        this._setUndoSnapshot(oldCommand, oldCursor, oldHilitePos)
+        this._lastModifyIdx = this._cursorPos
+        this._enforceMaxPixels()
+        this._cursorPos = Math.min(this._cursorPos, this._command.length)
+        this._focusCursor(false)
+        if (this._closeIfEmpty()) return
+        this._showCursorNow()
     }
 
     private _handleInputKey(event: DebugCliInputKey) {
@@ -677,8 +785,10 @@ export class DebugCliDialog extends MessageBox {
             return
         }
 
+        this._setInputFocus(false)
         const result = this.onCommand(this._command)
         if (!result.ok && result.failure !== 'condition') {
+            this._setInputFocus(true)
             this._flashInvalidCommand()
             return
         }
@@ -689,6 +799,7 @@ export class DebugCliDialog extends MessageBox {
         } else if (result.failure === 'condition') {
             void SoundLoader.play(SoundEffect.Buzzer)
         }
+        this._destroyInput()
         this.close()
     }
 
@@ -993,6 +1104,28 @@ export class DebugCliDialog extends MessageBox {
                 return this._filterInputChar('.')
             case DebugCliKeyCode.NumpadDivide:
                 return this._filterInputChar('/')
+            case DebugCliKeyCode.Semicolon:
+                return this._filterInputChar(';')
+            case DebugCliKeyCode.Equal:
+                return this._filterInputChar('=')
+            case DebugCliKeyCode.Comma:
+                return this._filterInputChar(',')
+            case DebugCliKeyCode.Minus:
+                return this._filterInputChar('-')
+            case DebugCliKeyCode.Period:
+                return this._filterInputChar('.')
+            case DebugCliKeyCode.Slash:
+                return this._filterInputChar('/')
+            case DebugCliKeyCode.Backquote:
+                return this._filterInputChar('`')
+            case DebugCliKeyCode.BracketLeft:
+                return this._filterInputChar('[')
+            case DebugCliKeyCode.Backslash:
+                return this._filterInputChar('\\')
+            case DebugCliKeyCode.BracketRight:
+                return this._filterInputChar(']')
+            case DebugCliKeyCode.Quote:
+                return this._filterInputChar("'")
             default:
                 return ''
         }
@@ -1070,6 +1203,7 @@ export class DebugCliDialog extends MessageBox {
     private _refreshInputText() {
         if (!this._textRenderer) return
 
+        this._syncNativeTextInput()
         const visibleText = this._command.slice(this._leftPos)
         this._refreshInputTextColor()
         this._textRenderer.string = visibleText
@@ -1226,12 +1360,17 @@ export class DebugCliDialog extends MessageBox {
     }
 
     private _setInputFocus(focused: boolean) {
-        if (this._hasInputFocus === focused) return
+        if (this._hasInputFocus === focused) {
+            if (focused) this._focusNativeTextInput()
+            return
+        }
 
         this._hasInputFocus = focused
         if (focused) {
+            this._focusNativeTextInput()
             this._showCursorNow()
         } else {
+            this._blurNativeTextInput()
             this._draggingSelection = false
             this._cursorVisible = false
             this._refreshCompletion()
@@ -1295,6 +1434,7 @@ export class DebugCliDialog extends MessageBox {
 
     private _bindDomKeyboardEvents() {
         if (this._domKeyDownListener) return
+        if (!sys.isBrowser) return
         if (typeof globalThis.addEventListener !== 'function') return
 
         this._domKeyDownListener = (event) => this._onDomKeyDown(event)
@@ -1401,6 +1541,7 @@ export class DebugCliDialog extends MessageBox {
     }
 
     private _setCanvasCursor(style: string) {
+        if (!sys.isBrowser) return
         const canvas = game.canvas
         if (canvas) canvas.style.cursor = style
     }
@@ -1408,11 +1549,18 @@ export class DebugCliDialog extends MessageBox {
     private _destroyInput() {
         this._draggingSelection = false
         this._setCanvasCursor('')
+        if (this._nativeTextInput?.node.isValid) {
+            this._nativeTextInput.node.off(EditBox.EventType.TEXT_CHANGED, this._onNativeTextInputChanged, this)
+            this._nativeTextInput.node.off(EditBox.EventType.EDITING_RETURN, this._onNativeTextInputReturn, this)
+            this._nativeTextInput.blur()
+        }
         if (this._inputRoot?.isValid) {
             this._unbindInputPointerEvents(this._inputRoot)
             this._inputRoot.destroy()
         }
         this._inputRoot = null
+        this._nativeTextInput = null
+        this._syncingNativeTextInput = false
         this._textNode = null
         this._textRenderer = null
         this._completionNode = null

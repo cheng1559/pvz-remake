@@ -1,4 +1,4 @@
-import { ImageAsset, JsonAsset, Texture2D } from 'cc'
+import { JsonAsset, Texture2D } from 'cc'
 import { AssetLoader } from './AssetLoader'
 
 export const FONT_NAMES = [
@@ -92,115 +92,9 @@ export class FontLoader {
             Texture2D,
             null,
         )
-        if (texture) return this._normalizeFontMaskTexture(imageName, texture)
+        if (texture) return texture
 
         console.error(`[FontLoader] Failed to load font texture: ${imageName}`)
-        return null
-    }
-
-    private static _normalizeFontMaskTexture(imageName: string, texture: Texture2D): Texture2D {
-        const image = texture.image as ImageAsset | null
-        if (!image) return texture
-
-        const data = this._getImageBytes(image)
-        if (!data) return texture
-
-        const pixelCount = image.width * image.height
-        if (pixelCount <= 0) return texture
-
-        const isFontMaskImage = this._isFontMaskImage(imageName)
-        const isSingleChannelMask = isFontMaskImage && data.length === pixelCount
-        const isRgbMask = isFontMaskImage && data.length === pixelCount * 3
-        const isOpaqueRgba = data.length === pixelCount * 4 && this._isFullyOpaqueRgba(data, pixelCount)
-        const isOpaqueMask = isFontMaskImage && isOpaqueRgba
-        if (!isSingleChannelMask && !isRgbMask && !isOpaqueMask) return texture
-
-        const singleChannelScale = isSingleChannelMask ? this._getSingleChannelMaskScale(data) : 1
-        const rgba = new Uint8Array(pixelCount * 4)
-        for (let i = 0; i < pixelCount; i++) {
-            const alpha = this._getMaskAlpha(data, i, singleChannelScale, isSingleChannelMask, isRgbMask)
-            const offset = i * 4
-            rgba[offset] = 255
-            rgba[offset + 1] = 255
-            rgba[offset + 2] = 255
-            rgba[offset + 3] = alpha
-        }
-
-        const normalized = new Texture2D()
-        normalized.reset({
-            width: image.width,
-            height: image.height,
-            format: Texture2D.PixelFormat.RGBA8888,
-        })
-        normalized.uploadData(rgba)
-        return normalized
-    }
-
-    private static _isFontMaskImage(imageName: string): boolean {
-        const baseName = imageName.endsWith('_atlas') ? imageName.slice(0, -6) : imageName
-        return (
-            baseName.startsWith('BrianneTod') ||
-            baseName.startsWith('ContinuumBold14') ||
-            baseName.startsWith('DwarvenTodcraft') ||
-            baseName.startsWith('HouseofTerror') ||
-            baseName === 'Pico129' ||
-            baseName === 'Pix118Bold'
-        )
-    }
-
-    private static _getMaskAlpha(
-        data: Uint8Array,
-        pixelIndex: number,
-        singleChannelScale: number,
-        isSingleChannelMask: boolean,
-        isRgbMask: boolean,
-    ): number {
-        if (isSingleChannelMask) {
-            return Math.min(255, Math.round(data[pixelIndex] * singleChannelScale))
-        }
-
-        const offset = pixelIndex * (isRgbMask ? 3 : 4)
-        return Math.max(data[offset], data[offset + 1], data[offset + 2])
-    }
-
-    private static _getSingleChannelMaskScale(data: Uint8Array): number {
-        let maxValue = 0
-        for (let i = 0; i < data.length; i++) {
-            if (data[i] > maxValue) maxValue = data[i]
-        }
-        if (maxValue > 0 && maxValue < 128) return 255 / maxValue
-        return 1
-    }
-
-    private static _isFullyOpaqueRgba(data: Uint8Array, pixelCount: number): boolean {
-        for (let i = 0; i < pixelCount; i++) {
-            if (data[i * 4 + 3] !== 255) return false
-        }
-        return true
-    }
-
-    private static _getImageBytes(image: ImageAsset): Uint8Array | null {
-        const data = image.data
-        if (!data) return null
-        if (data instanceof Uint8Array) return data
-        if (ArrayBuffer.isView(data)) {
-            return new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-        }
-
-        if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
-            try {
-                const canvas = document.createElement('canvas')
-                canvas.width = image.width
-                canvas.height = image.height
-                const context = canvas.getContext('2d')
-                if (!context) return null
-                context.drawImage(data as CanvasImageSource, 0, 0)
-                const imageData = context.getImageData(0, 0, image.width, image.height)
-                return new Uint8Array(imageData.data.buffer)
-            } catch (error) {
-                console.warn('[FontLoader] Failed to extract font image bytes:', error)
-            }
-        }
         return null
     }
 

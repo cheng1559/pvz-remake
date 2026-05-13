@@ -36,6 +36,7 @@ export class ZenGardenScreen extends MenuScreenBase {
     private _fonts: ZenGardenScreenFonts | null = null
     private _animations: ZenGardenScreenAnimations | null = null
     private _backdrop: Node | null = null
+    private _nextGardenTooltipNode: Node | null = null
 
     async render(): Promise<void> {
         const [sprites, fonts, animations] = await Promise.all([
@@ -48,6 +49,7 @@ export class ZenGardenScreen extends MenuScreenBase {
         this._sprites = sprites
         this._fonts = fonts
         this._animations = animations
+        this._hideNextGardenTooltip()
         this._resetRoot('ZenGardenScreenRoot')
         await this._replaceSceneBackdrop()
 
@@ -66,24 +68,44 @@ export class ZenGardenScreen extends MenuScreenBase {
             releaseToNormalOnPressOut: true,
             onClick: () => this._gotoNextGarden(),
         })
-        const tooltip = createTooltipNode({
+        const nextGardenButton = nextGardenButtonNode.getComponent(UIButton)
+        if (nextGardenButton) {
+            nextGardenButton.onStateChange = (state) => {
+                if (state === 'hover' || state === 'pressed') {
+                    this._showNextGardenTooltip()
+                } else {
+                    this._hideNextGardenTooltip()
+                }
+            }
+            nextGardenButton.refreshHoverFromPointer()
+        }
+    }
+
+    private _showNextGardenTooltip() {
+        if (this._nextGardenTooltipNode?.isValid) {
+            const childCount = this._nextGardenTooltipNode.parent?.children.length ?? 1
+            this._nextGardenTooltipNode.setSiblingIndex(childCount - 1)
+            return
+        }
+        if (!this._root || !this._fonts?.tooltip) return
+
+        this._nextGardenTooltipNode = createTooltipNode({
             name: 'NextGardenTooltip',
             text: NEXT_GARDEN_TOOLTIP,
-            font: fonts.tooltip,
-            parent: this._root!,
+            font: this._fonts.tooltip,
+            parent: this._root,
             layer: this.node.layer,
             x: this._cppX(599),
             y: this._cppY(52),
             centerX: true,
-            active: false,
         })
-        const nextGardenButton = nextGardenButtonNode.getComponent(UIButton)
-        if (nextGardenButton) {
-            nextGardenButton.onStateChange = (state) => {
-                tooltip.active = state === 'hover' || state === 'pressed'
-            }
-            nextGardenButton.refreshHoverFromPointer()
+    }
+
+    private _hideNextGardenTooltip() {
+        if (this._nextGardenTooltipNode?.isValid) {
+            this._nextGardenTooltipNode.destroy()
         }
+        this._nextGardenTooltipNode = null
     }
 
     private _gotoNextGarden() {

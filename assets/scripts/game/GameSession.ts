@@ -289,7 +289,7 @@ export class GameSession {
         this.plants.push(plant)
         this.hasPlantedAtLeastOnce = true
         this.events.push({ type: 'entitySpawned', entityId: plant.id })
-        this.events.push({ type: 'soundRequested', sound: SoundEffect.Plant })
+        this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant })
         this._handleLevelOneTutorialPlantPlaced(plant, isFirstPlant)
         this._handleLevelTwoTutorialPlantPlaced(plant)
         if (plant.type === 'cherrybomb') {
@@ -303,7 +303,7 @@ export class GameSession {
         if (!plant) return false
 
         plant.dead = true
-        this.events.push({ type: 'soundRequested', sound: SoundEffect.Plant2 })
+        this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant2 })
         this._removeDeadEntities()
         return true
     }
@@ -572,7 +572,7 @@ export class GameSession {
         this._clearCursor()
         if (packet && !this.rechargingEnabled) packet.active = true
         this.events.push({ type: 'entitySpawned', entityId: plant.id })
-        this.events.push({ type: 'soundRequested', sound: SoundEffect.Plant })
+        this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant })
         this._handleLevelOneTutorialPlantPlaced(plant, isFirstPlant)
         this._handleLevelTwoTutorialPlantPlaced(plant)
         if (plant.type === 'cherrybomb') {
@@ -597,7 +597,7 @@ export class GameSession {
         }
 
         plant.dead = true
-        this.events.push({ type: 'soundRequested', sound: SoundEffect.Plant2 })
+        this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant2 })
         this._clearCursor()
         this._removeDeadEntities()
     }

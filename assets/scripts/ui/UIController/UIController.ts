@@ -6,6 +6,7 @@ import {
     input,
     Input,
     Node,
+    sys,
 } from 'cc'
 import { FontLoader } from '@/core/FontLoader'
 import { AdventureGameScreen } from '@/game/GameScreen'
@@ -50,6 +51,7 @@ const ACHIEVEMENT_TRANSITION_SECONDS = 0.75
 const ACHIEVEMENT_SELECTOR_HIDDEN_Y = 600
 const ACHIEVEMENT_SCREEN_HIDDEN_Y = -599
 const ACHIEVEMENT_SCREEN_SHOWN_Y = 1
+const NATIVE_UNCAPPED_FRAME_RATE = 1000
 
 interface StoreScreenOptions {
     initialPage?: number
@@ -88,6 +90,7 @@ export class UIController extends Component {
             this.uiRoot = this.node
         }
 
+        this._configurePlatformFrameRate()
         input.on(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
         void this._bootstrap()
     }
@@ -101,6 +104,12 @@ export class UIController extends Component {
         this._globalAdviceTick += scaledDt * 100
         this._globalAdviceWidget?.update(scaledDt * 100, this._globalAdviceTick)
         this._updateAchievementTransition(scaledDt)
+    }
+
+    private _configurePlatformFrameRate() {
+        if (sys.isNative && game.frameRate < NATIVE_UNCAPPED_FRAME_RATE) {
+            game.frameRate = NATIVE_UNCAPPED_FRAME_RATE
+        }
     }
 
     private async _bootstrap() {
@@ -529,6 +538,40 @@ export class UIController extends Component {
 
         const node = createUINode('DebugCliDialog', { active: false, width: 100, height: 100 })
         const dialog = node.addComponent(DebugCliDialog)
+        let finalized = false
+        let pendingCommandResult: ReturnType<typeof executeDebugCliCommand> | null = null
+        const finalizeDebugCli = (commandResult: ReturnType<typeof executeDebugCliCommand> | null) => {
+            if (finalized) return
+            finalized = true
+
+            if (this._debugCliScreen === node) this._debugCliScreen = null
+            popGlobalGamePause()
+
+            const commandAction = commandResult?.action ?? null
+            if (commandResult && !commandResult.ok && commandResult.failure === 'condition') {
+                this._showGlobalAdvice(commandResult.message)
+            }
+            if (commandAction === 'restart') {
+                this.showAdventureGame(this._adventureLevel)
+                return
+            }
+            if (commandAction === 'home') {
+                void this.showSelectorScreen()
+                return
+            }
+            if (commandAction === 'level' && commandResult?.levelId) {
+                const level = this._findAdventureLevel(commandResult.levelId)
+                if (level) this.showAdventureGame(level)
+                return
+            }
+
+            const currentGameScreenNode = gameScreen?.node as Node | null | undefined
+            if (currentGameScreenNode?.isValid && !wasGamePaused) {
+                gameScreen.resumeGame()
+            }
+        }
+        const isNavigationDebugCommand = (result: ReturnType<typeof executeDebugCliCommand>) =>
+            result.action === 'restart' || result.action === 'home' || result.action === 'level'
         dialog.initialCommand = initialCommand
         dialog.onCommand = (command) => {
             const currentGameScreenNode = gameScreen?.node as Node | null | undefined
@@ -539,6 +582,12 @@ export class UIController extends Component {
             } else {
                 console.warn(`[DebugCliDialog] ${result.message}`)
             }
+            if (result.ok || result.failure === 'condition') {
+                pendingCommandResult = result
+                if (!result.ok || !isNavigationDebugCommand(result)) {
+                    this.scheduleOnce(() => finalizeDebugCli(result), 0)
+                }
+            }
             return result
         }
 
@@ -548,25 +597,8 @@ export class UIController extends Component {
         void SoundLoader.play(SoundEffect.GraveButton)
 
         void dialog.waitForResult().then(() => {
-            const commandResult = dialog.lastCommandResult
-            const commandAction = commandResult?.action ?? null
-            if (this._debugCliScreen === node) this._debugCliScreen = null
-            popGlobalGamePause()
-            const currentGameScreenNode = gameScreen?.node as Node | null | undefined
-            if (currentGameScreenNode?.isValid && !wasGamePaused) {
-                gameScreen.resumeGame()
-            }
-            if (commandResult && !commandResult.ok && commandResult.failure === 'condition') {
-                this._showGlobalAdvice(commandResult.message)
-            }
-            if (commandAction === 'restart') {
-                this.showAdventureGame(this._adventureLevel)
-            } else if (commandAction === 'home') {
-                void this.showSelectorScreen()
-            } else if (commandAction === 'level' && commandResult?.levelId) {
-                const level = this._findAdventureLevel(commandResult.levelId)
-                if (level) this.showAdventureGame(level)
-            }
+            const result = dialog.lastCommandResult ?? pendingCommandResult
+            this.scheduleOnce(() => finalizeDebugCli(result), 0)
         })
         return dialog
     }

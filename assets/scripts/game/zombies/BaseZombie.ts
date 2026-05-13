@@ -366,7 +366,7 @@ export abstract class Zombie implements ZombieEntity {
         if (this._chewSoundCounter <= 0) {
             const sound = target.type === 'wallnut'
                 ? SoundEffect.ChompSoft
-                : context.randomInt(0, 1) === 0 ? SoundEffect.Chomp : SoundEffect.Chomp2
+                : SoundEffect.Chomp
             context.events.push({ type: 'foleyRequested', sound })
             this._chewSoundCounter = CHEW_SOUND_INTERVAL
         }
@@ -400,7 +400,7 @@ export abstract class Zombie implements ZombieEntity {
             this.animationTime + this.animationSpeed * ZOMBIE_WALK_ASSET_FPS / GAME_TICKS_PER_SECOND,
         )
         if (!this._deathFallSoundPlayed && this.animationTime >= this._deathFrameSpan * this._deathFallTime) {
-            context.events.push({ type: 'foleyRequested', sound: this._randomZombieFallingSound(context), pitchRange: 10 })
+            context.events.push({ type: 'foleyRequested', sound: SoundEffect.ZombieFalling1, pitchRange: 10 })
             this._deathFallSoundPlayed = true
         }
         this._deathCounter--
@@ -626,24 +626,8 @@ export abstract class Zombie implements ZombieEntity {
         if (this._groanCounter !== 0) return
         if (context.randomInt(0, Math.max(0, context.zombieCount - 1)) !== 0) return
 
-        context.events.push({ type: 'foleyRequested', sound: this._randomGroanSound(context) })
+        context.events.push({ type: 'foleyRequested', sound: SoundEffect.Groan })
         this._groanCounter = context.randomInt(GROAN_REPEAT_MIN, GROAN_REPEAT_MAX)
-    }
-
-    private _randomGroanSound(context: ZombieUpdateContext): SoundEffect {
-        const groans = [
-            SoundEffect.Groan,
-            SoundEffect.Groan2,
-            SoundEffect.Groan3,
-            SoundEffect.Groan4,
-            SoundEffect.Groan5,
-            SoundEffect.Groan6,
-        ]
-        return groans[context.randomInt(0, groans.length - 1)]
-    }
-
-    private _randomZombieFallingSound(context: ZombieUpdateContext): SoundEffect {
-        return context.randomInt(0, 1) === 0 ? SoundEffect.ZombieFalling1 : SoundEffect.ZombieFalling2
     }
 
     private _flushPendingEvents(context: ZombieUpdateContext) {
