@@ -10,11 +10,12 @@ Steps:
   5. Convert LawnStrings
   6. Copy images to textures
   7. Copy particle images to texture resources
-  8. Copy sounds to audio resources
-  9. Generate cached packet plant atlas
- 10. Generate cached plant preview atlas
- 11. Generate cached zombie preview atlas
- 12. Generate cached lawn mower sprite
+  8. Convert sounds to MP3 audio resources
+  9. Generate MP3 pitch-shifted sound variants
+ 10. Generate cached packet plant atlas
+ 11. Generate cached plant preview atlas
+ 12. Generate cached zombie preview atlas
+ 13. Generate cached lawn mower sprite
 """
 
 from pathlib import Path
@@ -29,6 +30,7 @@ from font_converter import main as convert_font
 from lawnstrings_converter import convert_lawnstrings
 from copy_particles import copy_particles
 from copy_sounds import copy_sounds
+from generate_pitch_sfx import generate_pitch_sfx
 from generate_packet_plant_cache import main as generate_packet_plant_cache
 from generate_plant_preview_cache import main as generate_plant_preview_cache
 from generate_zombie_preview_cache import main as generate_zombie_preview_cache
@@ -180,45 +182,55 @@ def main():
     particle_count = copy_particles(particles_dir, particle_texture_dir)
     print(f"[pipeline] Copied {particle_count} new particle images -> {particle_texture_dir}")
 
-    # ── Step 9: Copy sounds ────────────────────────────────────────
+    # ── Step 9: Convert sounds ─────────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 9: Copy sounds to audio resources")
+    print("[pipeline] Step 9: Convert sounds to MP3 audio resources")
     print("=" * 60)
 
     sounds_dir = raw_dir / "sounds"
     audio_dir = Path("./assets/resources/audio/sfx")
-    sound_count = copy_sounds(sounds_dir, audio_dir)
-    print(f"[pipeline] Copied {sound_count} new sounds -> {audio_dir}")
+    sound_count = copy_sounds(sounds_dir, audio_dir, overwrite=True)
+    print(f"[pipeline] Converted {sound_count} sounds -> {audio_dir}")
 
-    # ── Step 10: Generate cached packet plant atlas ────────────────
+    # ── Step 10: Generate pitch-shifted sounds ─────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 10: Generate cached packet plant atlas")
+    print("[pipeline] Step 10: Generate MP3 pitch-shifted sound variants")
+    print("=" * 60)
+
+    pitch_audio_dir = Path("./assets/resources/audio/sfx_pitch")
+    pitch_written, pitch_skipped = generate_pitch_sfx(audio_dir, pitch_audio_dir, overwrite=True)
+    print(f"[pipeline] Generated {pitch_written} pitch sounds ({pitch_skipped} skipped) -> {pitch_audio_dir}")
+
+    # ── Step 11: Generate cached packet plant atlas ────────────────
+    print()
+    print("=" * 60)
+    print("[pipeline] Step 11: Generate cached packet plant atlas")
     print("=" * 60)
 
     generate_packet_plant_cache()
 
-    # ── Step 11: Generate cached plant preview atlas ──────────────
+    # ── Step 12: Generate cached plant preview atlas ──────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 11: Generate cached plant preview atlas")
+    print("[pipeline] Step 12: Generate cached plant preview atlas")
     print("=" * 60)
 
     generate_plant_preview_cache()
 
-    # ── Step 12: Generate cached zombie preview atlas ─────────────
+    # ── Step 13: Generate cached zombie preview atlas ─────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 12: Generate cached zombie preview atlas")
+    print("[pipeline] Step 13: Generate cached zombie preview atlas")
     print("=" * 60)
 
     generate_zombie_preview_cache()
 
-    # Step 13: Generate cached lawn mower sprite
+    # Step 14: Generate cached lawn mower sprite
     print()
     print("=" * 60)
-    print("[pipeline] Step 13: Generate cached lawn mower sprite")
+    print("[pipeline] Step 14: Generate cached lawn mower sprite")
     print("=" * 60)
 
     generate_lawnmower_cache()
