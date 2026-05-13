@@ -11,11 +11,10 @@ Steps:
   6. Copy images to textures
   7. Copy particle images to texture resources
   8. Convert sounds to MP3 audio resources
-  9. Generate MP3 pitch-shifted sound variants
- 10. Generate cached packet plant atlas
- 11. Generate cached plant preview atlas
- 12. Generate cached zombie preview atlas
- 13. Generate cached lawn mower sprite
+  9. Generate cached packet plant atlas
+ 10. Generate cached plant preview atlas
+ 11. Generate cached zombie preview atlas
+ 12. Generate cached lawn mower sprite
 """
 
 from pathlib import Path
@@ -30,7 +29,6 @@ from font_converter import main as convert_font
 from lawnstrings_converter import convert_lawnstrings
 from copy_particles import copy_particles
 from copy_sounds import copy_sounds
-from generate_pitch_sfx import generate_pitch_sfx
 from generate_packet_plant_cache import main as generate_packet_plant_cache
 from generate_plant_preview_cache import main as generate_plant_preview_cache
 from generate_zombie_preview_cache import main as generate_zombie_preview_cache
@@ -193,44 +191,34 @@ def main():
     sound_count = copy_sounds(sounds_dir, audio_dir, overwrite=True)
     print(f"[pipeline] Converted {sound_count} sounds -> {audio_dir}")
 
-    # ── Step 10: Generate pitch-shifted sounds ─────────────────────
+    # ── Step 10: Generate cached packet plant atlas ────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 10: Generate MP3 pitch-shifted sound variants")
-    print("=" * 60)
-
-    pitch_audio_dir = Path("./assets/resources/audio/sfx_pitch")
-    pitch_written, pitch_skipped = generate_pitch_sfx(audio_dir, pitch_audio_dir, overwrite=True)
-    print(f"[pipeline] Generated {pitch_written} pitch sounds ({pitch_skipped} skipped) -> {pitch_audio_dir}")
-
-    # ── Step 11: Generate cached packet plant atlas ────────────────
-    print()
-    print("=" * 60)
-    print("[pipeline] Step 11: Generate cached packet plant atlas")
+    print("[pipeline] Step 10: Generate cached packet plant atlas")
     print("=" * 60)
 
     generate_packet_plant_cache()
 
-    # ── Step 12: Generate cached plant preview atlas ──────────────
+    # ── Step 11: Generate cached plant preview atlas ──────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 12: Generate cached plant preview atlas")
+    print("[pipeline] Step 11: Generate cached plant preview atlas")
     print("=" * 60)
 
     generate_plant_preview_cache()
 
-    # ── Step 13: Generate cached zombie preview atlas ─────────────
+    # ── Step 12: Generate cached zombie preview atlas ─────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 13: Generate cached zombie preview atlas")
+    print("[pipeline] Step 12: Generate cached zombie preview atlas")
     print("=" * 60)
 
     generate_zombie_preview_cache()
 
-    # Step 14: Generate cached lawn mower sprite
+    # Step 13: Generate cached lawn mower sprite
     print()
     print("=" * 60)
-    print("[pipeline] Step 14: Generate cached lawn mower sprite")
+    print("[pipeline] Step 13: Generate cached lawn mower sprite")
     print("=" * 60)
 
     generate_lawnmower_cache()
