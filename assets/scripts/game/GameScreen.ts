@@ -2368,22 +2368,14 @@ export class AdventureGameScreen extends Component {
     }
 
     private _hugeWaveTextLocalTopY() {
-        const labelWidth = this._session.geometry.width - 40
         const fontConfig = this._adviceFont?.config ?? null
         const metrics = FontMetricsUtil.getMetrics(fontConfig)
-        if (metrics.height <= 0) return HUGE_WAVE_TEXT_HEIGHT / 2
-
-        const wrapped = FontMetricsUtil.measureWordWrapped(fontConfig, HUGE_WAVE_TEXT, labelWidth)
-        const lineCount = Math.max(1, wrapped.lineWidths.length)
         const rawConfig = fontConfig?.json as { defaultPointSize?: number } | undefined
         const defaultPointSize = rawConfig?.defaultPointSize ?? 28
         const scale = defaultPointSize > 0 ? 28 / defaultPointSize : 1
-        const wrappedHeight = (
-            metrics.height - metrics.ascentPadding + Math.max(0, lineCount - 1) * metrics.lineSpacing
-        ) * scale
-        const centeredRectY = HUGE_WAVE_TEXT_Y + Math.trunc((HUGE_WAVE_TEXT_HEIGHT - wrappedHeight) / 2)
-        const textTopY = centeredRectY - metrics.ascentPadding * scale
-        return HUGE_WAVE_TEXT_Y + HUGE_WAVE_TEXT_HEIGHT / 2 - textTopY
+        const ascent = metrics.ascent > 0 ? metrics.ascent * scale : 28
+
+        return HUGE_WAVE_TEXT_HEIGHT / 2 + ascent
     }
 
     private _updateTimedUiEffects(ticks: number) {

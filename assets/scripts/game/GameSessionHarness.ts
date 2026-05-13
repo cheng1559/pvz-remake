@@ -353,6 +353,26 @@ export function runAdventure11Harness(): GameHarnessResult {
         details.push('Adventure 1-2 final flag wave should match the original 4 normal zombies plus 1 flag zombie.')
     }
 
+    const originalRandom = Math.random
+    try {
+        const level2MoweredRowSession = new GameSession(ADVENTURE_1_2)
+        level2MoweredRowSession.debugSetLawnMower(1, 'trigger')
+        Math.random = () => 0.01
+        level2MoweredRowSession.debugSpawnNextWave()
+        if (level2MoweredRowSession.zombies[0]?.row === 1) {
+            details.push('Adventure 1-2 should strongly de-prioritize a row in the first wave after its lawn mower triggered.')
+        }
+
+        const level3SpawnXSession = new GameSession(ADVENTURE_1_3)
+        level3SpawnXSession.debugSpawnNextFlagWave()
+        const finalWaveZombies = level3SpawnXSession.zombies.filter((zombie) => zombie.fromWave === ADVENTURE_1_3.zombieWaves.length - 1)
+        if (finalWaveZombies.some((zombie) => zombie.x !== 780)) {
+            details.push('Zombies in one wave should each use the original 780 + Rand(40) start X without an added per-index spacing.')
+        }
+    } finally {
+        Math.random = originalRandom
+    }
+
     const level3WaveSession = new GameSession(ADVENTURE_1_3)
     for (let i = 0; i < ADVENTURE_1_3.zombieWaves.length; i++) level3WaveSession.debugSpawnNextWave()
     const level3ThirdWave = level3WaveSession.zombies.filter((zombie) => zombie.fromWave === 2)
@@ -463,7 +483,7 @@ export function runAdventure11Harness(): GameHarnessResult {
         }
     }
 
-    const originalRandom = Math.random
+    const originalLootRandom = Math.random
     try {
         Math.random = () => 0
         const noMoneySession = new GameSession()
@@ -473,7 +493,7 @@ export function runAdventure11Harness(): GameHarnessResult {
             details.push('Adventure 1-1 should not drop regular money loot from zombies.')
         }
     } finally {
-        Math.random = originalRandom
+        Math.random = originalLootRandom
     }
 
     const awardDropSession = new GameSession()

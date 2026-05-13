@@ -42,7 +42,6 @@ const SKY_SUN_Y = 60
 const ZOMBIE_COUNTDOWN_FIRST_WAVE = 1800
 const ZOMBIE_COUNTDOWN = 2500
 const ZOMBIE_COUNTDOWN_RANGE = 600
-const ZOMBIE_WAVE_SPAWN_X_SPACING = 40
 const ZOMBIE_COUNTDOWN_BEFORE_HUGE_WAVE = 750
 const HUGE_WAVE_WARNING_COUNTDOWN = 5
 const FINAL_WAVE_SOUND_DELAY = 60
@@ -60,6 +59,7 @@ const LAWN_MOWER_ATTACK_HEIGHT = 80
 const LAWN_MOWER_SPEED = 3.33
 const LAWN_MOWER_CHOMP_READY_COUNTER = 25
 const LAWN_MOWER_CHOMP_TRIGGERED_COUNTER = 50
+const WAVE_ROW_GOT_LAWN_MOWERED_INITIAL = -100
 const CHERRY_BOMB_RADIUS = 115
 const CHERRY_BOMB_ROW_RANGE = 1
 const SUN_MIN = 0
@@ -137,6 +137,7 @@ export class GameSession {
     private _levelTwoTutorialTimer = -1
     private _levelTwoZombieWarningShown = false
     private _readySetPlantCounter = 0
+    private _waveRowGotLawnMowered = Array.from({ length: DAY_GEOMETRY.rows }, () => WAVE_ROW_GOT_LAWN_MOWERED_INITIAL)
 
     constructor(level: LevelDefinition = ADVENTURE_1_1) {
         this.level = level
@@ -843,6 +844,7 @@ export class GameSession {
             mower.x = LAWN_MOWER_READY_X
             mower.y = this.geometry.gridToPixel(0, row).y + LAWN_MOWER_Y_OFFSET
             mower.chompCounter = 0
+            this._waveRowGotLawnMowered[row] = WAVE_ROW_GOT_LAWN_MOWERED_INITIAL
             return true
         }
 
@@ -911,6 +913,7 @@ export class GameSession {
     private _startLawnMower(mower: LawnMowerEntity) {
         if (mower.state === 'triggered') return
 
+        this._waveRowGotLawnMowered[mower.row] = this.currentWave
         mower.state = 'triggered'
         this.events.push({ type: 'foleyRequested', sound: SoundEffect.Lawnmower })
     }
@@ -1275,7 +1278,7 @@ export class GameSession {
         for (let i = 0; i < zombies.length; i++) {
             const zombieType = zombies[i]
             const row = this._pickRowForNewZombie(zombieType)
-            const x = 780 + i * ZOMBIE_WAVE_SPAWN_X_SPACING + this._randomInt(0, 39)
+            const x = 780 + this._randomInt(0, 39)
             this.addZombie(zombieType, row, x, waveIndex)
         }
     }
@@ -1390,7 +1393,27 @@ export class GameSession {
 
     private _pickRowForNewZombie(_zombieType: ZombieType) {
         if (this.level.activeRows.length === 0) return 0
-        return this.level.activeRows[this._randomInt(0, this.level.activeRows.length - 1)]
+
+        const weightedRows = this.level.activeRows.map((row) => ({
+            row,
+            weight: this._rowPickWeight(row),
+        }))
+        const totalWeight = weightedRows.reduce((total, item) => total + item.weight, 0)
+        if (totalWeight <= 0) return this.level.activeRows[this._randomInt(0, this.level.activeRows.length - 1)]
+
+        let pick = this._randomFloat(0, totalWeight)
+        for (const item of weightedRows) {
+            pick -= item.weight
+            if (pick < 0) return item.row
+        }
+        return weightedRows[weightedRows.length - 1].row
+    }
+
+    private _rowPickWeight(row: number) {
+        const wavesMowered = this.currentWave - (this._waveRowGotLawnMowered[row] ?? WAVE_ROW_GOT_LAWN_MOWERED_INITIAL)
+        if (wavesMowered <= 1) return 0.01
+        if (wavesMowered <= 2) return 0.5
+        return 1.0
     }
 
     private _addItem(type: ItemType, motion: ItemMotion, x: number, y: number, awardSeedType: SeedType | null = null) {
