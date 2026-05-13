@@ -84,6 +84,7 @@ export interface LevelDefinition {
 export interface ZombieWaveDefinition {
     zombies: ZombieType[]
     flagWave?: boolean
+    flagNormalCount?: number
 }
 
 export interface SeedDefinition {

@@ -451,8 +451,9 @@ export class AdventureGameScreen extends Component {
     private _cursorPreview: Node | null = null
     private _gridPreview: Node | null = null
     private _mobileGridGuide: Node | null = null
-    private _mobileGridGuideClip: Node | null = null
     private _mobileGridGuideGraphics: Graphics | null = null
+    private _mobileGridGuideCol = -1
+    private _mobileGridGuideRow = -1
     private _previewSeedType: SeedType | null = null
     private _shovelCursor: Node | null = null
     private _sunLabel: FontRenderer = null!
@@ -4493,63 +4494,65 @@ export class AdventureGameScreen extends Component {
     }
 
     private _updateMobileGridGuide(col: number, row: number) {
-        if (!this._mobileGridGuide?.isValid || !this._mobileGridGuideGraphics) {
-            this._mobileGridGuideClip = createUINode('MobilePlantGridGuideClip', {
+        if (
+            !this._mobileGridGuide?.isValid ||
+            this._mobileGridGuide.parent !== this._boardContent ||
+            !this._mobileGridGuideGraphics
+        ) {
+            if (this._mobileGridGuide?.isValid) this._mobileGridGuide.destroy()
+            this._mobileGridGuide = createUINode('MobilePlantGridGuide', {
                 parent: this._boardContent,
                 layer: this.node.layer,
                 anchorX: 0,
                 anchorY: 1,
-                width: this._session.geometry.gridWidth * this._session.geometry.cols,
-                height: this._session.geometry.gridHeight * this._session.geometry.rows,
-                x: this._session.geometry.lawnXMin,
-                y: -this._session.geometry.lawnYMin,
-            })
-            this._mobileGridGuideClip.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT
-            this._mobileGridGuide = createUINode('MobilePlantGridGuide', {
-                parent: this._mobileGridGuideClip,
-                layer: this.node.layer,
-                anchorX: 0,
-                anchorY: 1,
-                width: this._session.geometry.gridWidth * this._session.geometry.cols,
-                height: this._session.geometry.gridHeight * this._session.geometry.rows,
+                width: this._session.geometry.width,
+                height: this._session.geometry.height,
             })
             this._mobileGridGuideGraphics = this._mobileGridGuide.addComponent(Graphics)
+            this._placeMobileGridGuideBehindForeground()
         }
 
+        if (this._mobileGridGuideCol === col && this._mobileGridGuideRow === row) {
+            this._mobileGridGuide.active = true
+            return
+        }
+        this._mobileGridGuideCol = col
+        this._mobileGridGuideRow = row
+
         const geometry = this._session.geometry
-        const guideX = 0
-        const guideY = 0
+        const guideX = geometry.lawnXMin
+        const guideY = geometry.lawnYMin
         const guideWidth = geometry.gridWidth * geometry.cols
         const guideHeight = geometry.gridHeight * geometry.rows
-        const colX = col * geometry.gridWidth
-        const rowY = row * geometry.gridHeight
+        const colX = geometry.lawnXMin + col * geometry.gridWidth
+        const rowY = geometry.lawnYMin + row * geometry.gridHeight
         const graphics = this._mobileGridGuideGraphics
 
-        if (this._mobileGridGuideClip?.isValid) this._mobileGridGuideClip.active = true
+        this._mobileGridGuide.active = true
         graphics.clear()
         graphics.fillColor = new Color(255, 255, 255, MOBILE_GRID_GUIDE_OPACITY)
         graphics.fillRect(guideX, -(rowY + geometry.gridHeight), guideWidth, geometry.gridHeight)
         graphics.fillRect(colX, -(guideY + guideHeight), geometry.gridWidth, guideHeight)
-        this._placeMobileGridGuideBehindForeground()
     }
 
     private _hideMobileGridGuide() {
-        if (this._mobileGridGuideClip?.isValid) this._mobileGridGuideClip.active = false
+        if (this._mobileGridGuide?.isValid) this._mobileGridGuide.active = false
+        this._mobileGridGuideCol = -1
+        this._mobileGridGuideRow = -1
     }
 
     private _placeMobileGridGuideBehindForeground() {
-        const guide = this._mobileGridGuideClip
+        const guide = this._mobileGridGuide
         if (!guide?.isValid || guide.parent !== this._boardContent) return
 
-        const foregroundNodes = [
-            this._entityLayer,
-            this._seedBankNode,
-            ...this._introLawnMowerViews.flatMap((view) => [view.shadowNode, view.node]),
-        ].filter((node): node is Node => !!node?.isValid && node.parent === this._boardContent)
-        if (foregroundNodes.length === 0) return
+        if (this._seedBankNode?.isValid && this._seedBankNode.parent === this._boardContent) {
+            guide.setSiblingIndex(this._seedBankNode.getSiblingIndex())
+            return
+        }
 
-        const foregroundIndex = Math.min(...foregroundNodes.map((node) => node.getSiblingIndex()))
-        guide.setSiblingIndex(Math.max(0, foregroundIndex))
+        if (this._entityLayer?.isValid && this._entityLayer.parent === this._boardContent) {
+            guide.setSiblingIndex(this._entityLayer.getSiblingIndex())
+        }
     }
 
     private _orderPreviewNodes() {
@@ -4908,7 +4911,7 @@ export class AdventureGameScreen extends Component {
         const metrics = FontMetricsUtil.getMetrics(args.font?.config ?? null)
         const width = FontMetricsUtil.measureTextWidth(args.font?.config ?? null, args.text) || renderer.contentWidth
         let x = args.baselineX
-        if (args.align === 'center') x -= width / 2
+        if (args.align === 'center') x -= Math.trunc(width / 2)
         if (args.align === 'right') x -= width
         node.setPosition(x, -(args.baselineY - metrics.ascent), 0)
         return renderer
@@ -4929,7 +4932,7 @@ export class AdventureGameScreen extends Component {
         const metrics = FontMetricsUtil.getMetrics(this._sunFont?.config ?? null)
         const width = FontMetricsUtil.measureTextWidth(this._sunFont?.config ?? null, text) || this._sunLabel.contentWidth
         this._sunLabel.node.setPosition(
-            SUN_AMOUNT_BASELINE_X - width / 2,
+            SUN_AMOUNT_BASELINE_X - Math.trunc(width / 2),
             -(SUN_AMOUNT_BASELINE_Y - metrics.ascent),
             0,
         )

@@ -94,7 +94,7 @@ def parse_pak(data: bytes) -> list[PakEntry]:
         if name_len == 0:
             raise ValueError(f"位置 {pos - 1}: 文件名长度为 0")
 
-        name = data[pos:pos + name_len].decode('ascii')
+        name = data[pos:pos + name_len].decode('utf-8')
         pos += name_len
 
         file_size = struct.unpack_from('<I', data, pos)[0]

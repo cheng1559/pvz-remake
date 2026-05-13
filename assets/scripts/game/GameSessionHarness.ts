@@ -1,5 +1,5 @@
 import { GameSession } from './GameSession'
-import { ADVENTURE_1_1, ZOMBIE_DEFINITIONS } from './GameDefinitions'
+import { ADVENTURE_1_1, ADVENTURE_1_2, ADVENTURE_1_3, ZOMBIE_DEFINITIONS } from './GameDefinitions'
 import { SoundEffect } from '@/core/SoundLoader'
 import { createProjectile } from './projectiles/ProjectileFactory'
 
@@ -342,6 +342,33 @@ export function runAdventure11Harness(): GameHarnessResult {
     for (let i = 0; i < 20; i++) waveSession.update()
     if (waveSession.progressMeterWidth <= 0) {
         details.push('Adventure 1-1 should start advancing the lower-right progress meter after the first wave begins.')
+    }
+
+    const level2WaveSession = new GameSession(ADVENTURE_1_2)
+    for (let i = 0; i < ADVENTURE_1_2.zombieWaves.length; i++) level2WaveSession.debugSpawnNextWave()
+    const level2FinalWave = level2WaveSession.zombies.filter((zombie) => zombie.fromWave === ADVENTURE_1_2.zombieWaves.length - 1)
+    const level2FinalNormals = level2FinalWave.filter((zombie) => zombie.type === 'normal').length
+    const level2FinalFlags = level2FinalWave.filter((zombie) => zombie.type === 'flag').length
+    if (level2FinalNormals !== 4 || level2FinalFlags !== 1 || level2FinalWave.length !== 5) {
+        details.push('Adventure 1-2 final flag wave should match the original 4 normal zombies plus 1 flag zombie.')
+    }
+
+    const level3WaveSession = new GameSession(ADVENTURE_1_3)
+    for (let i = 0; i < ADVENTURE_1_3.zombieWaves.length; i++) level3WaveSession.debugSpawnNextWave()
+    const level3ThirdWave = level3WaveSession.zombies.filter((zombie) => zombie.fromWave === 2)
+    if (level3ThirdWave.length !== 1 || level3ThirdWave[0]?.type !== 'normal') {
+        details.push('Adventure 1-3 third wave should still be a normal zombie because conehead costs more than the original one-point wave budget.')
+    }
+    const level3IntroWave = level3WaveSession.zombies.filter((zombie) => zombie.fromWave === 4)
+    if (level3IntroWave.length !== 1 || level3IntroWave[0]?.type !== 'traffic-cone') {
+        details.push('Adventure 1-3 fifth wave should introduce the conehead zombie like the original midpoint intro rule.')
+    }
+    const level3FinalWave = level3WaveSession.zombies.filter((zombie) => zombie.fromWave === ADVENTURE_1_3.zombieWaves.length - 1)
+    const level3FinalNormals = level3FinalWave.filter((zombie) => zombie.type === 'normal').length
+    const level3FinalFlags = level3FinalWave.filter((zombie) => zombie.type === 'flag').length
+    const level3FinalCones = level3FinalWave.filter((zombie) => zombie.type === 'traffic-cone').length
+    if (level3FinalNormals !== 4 || level3FinalFlags !== 1 || level3FinalCones !== 1 || level3FinalWave.length !== 6) {
+        details.push('Adventure 1-3 final flag wave should match the original 4 normals, 1 flag, and introduced conehead.')
     }
 
     const combatSession = new GameSession()

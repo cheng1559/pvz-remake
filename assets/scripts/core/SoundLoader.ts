@@ -7,6 +7,7 @@ type NativeAudioAsset = {
 
 type AudioClipWithNativeAsset = AudioClip & {
     _nativeAsset?: NativeAudioAsset | null
+    nativeUrl?: string
 }
 
 type NativePCMHeader = {
@@ -22,7 +23,7 @@ type NativeAudioEngine = {
     play2d?: (url: string, loop: boolean, volume: number) => number
     setFinishCallback?: (audioId: number, callback: () => void) => void
     getPCMHeader?: (url: string) => NativePCMHeader | null
-    getOriginalPCMBuffer?: (url: string, channelId: number) => ArrayBuffer | ArrayBufferView | null
+    getOriginalPCMBuffer?: (url: string, channelId: number) => ArrayBuffer | ArrayBufferView | NativePODBuffer | null
 }
 
 type NativeFileUtils = {
@@ -30,6 +31,12 @@ type NativeFileUtils = {
     createDirectory?: (path: string) => boolean
     isFileExist?: (path: string) => boolean
     writeDataToFile?: (data: ArrayBuffer | ArrayBufferView, path: string) => boolean
+}
+
+type NativePODBuffer = {
+    underlyingData?: () => ArrayBuffer
+    _data?: () => ArrayBufferView
+    __data?: ArrayBufferView
 }
 
 type NativeBindings = typeof globalThis & {
@@ -109,6 +116,7 @@ export class SoundLoader {
     private static readonly _effects: SoundEffect[] = Object.values(SoundEffect)
     private static readonly _pitchStepMultiplier = 1.0594630943592953
     private static readonly _nativePitchStep = 0.5
+    private static readonly _nativePitchCacheDir = 'sound-pitch-cache-v2'
     private static readonly _foleyRecentSuppressMs = 100
     private static readonly _foleyPitchRanges: Partial<Record<SoundEffect, number>> = {
         [SoundEffect.Points]: 10,
@@ -239,7 +247,7 @@ export class SoundLoader {
         const audioEngine = bindings.jsb?.AudioEngine
         if (!audioEngine?.play2d || !audioEngine.getPCMHeader || !audioEngine.getOriginalPCMBuffer) return false
 
-        const url = (clip as AudioClipWithNativeAsset)._nativeAsset?.url
+        const url = (clip as AudioClipWithNativeAsset)._nativeAsset?.url ?? (clip as AudioClipWithNativeAsset).nativeUrl
         if (!url) return false
 
         const pitchedUrl = await this._getNativePitchedWav(effect, url, pitchSteps)
@@ -294,29 +302,49 @@ export class SoundLoader {
         }
 
         const wav = this._buildPitchedWav(channelSamples, sampleRate, rate)
-        const outputPath = this._nativePitchWavPath(fileUtils, effect, pitchSteps)
+        const outputPath = this._nativePitchWavPath(fileUtils, effect, url, pitchSteps)
         if (!outputPath) return null
         if (fileUtils.isFileExist?.(outputPath)) return outputPath
 
         return fileUtils.writeDataToFile(wav.buffer, outputPath) ? outputPath : null
     }
 
-    private static _nativePitchWavPath(fileUtils: NativeFileUtils, effect: SoundEffect, pitchSteps: number) {
+    private static _nativePitchWavPath(fileUtils: NativeFileUtils, effect: SoundEffect, url: string, pitchSteps: number) {
         const writablePath = fileUtils.getWritablePath?.()
         if (!writablePath) return null
 
-        const dir = `${writablePath.replace(/\\/g, '/')}${writablePath.endsWith('/') || writablePath.endsWith('\\') ? '' : '/'}sound-pitch-cache/`
+        const dir = `${writablePath.replace(/\\/g, '/')}${writablePath.endsWith('/') || writablePath.endsWith('\\') ? '' : '/'}${this._nativePitchCacheDir}/`
         fileUtils.createDirectory?.(dir)
         const pitchKey = pitchSteps.toFixed(1).replace('-', 'm').replace('.', 'p')
-        return `${dir}${effect}_${pitchKey}.wav`
+        return `${dir}${effect}_${this._hashNativePitchSource(url)}_${pitchKey}.wav`
     }
 
-    private static _toArrayBuffer(data: ArrayBuffer | ArrayBufferView | null | undefined) {
+    private static _hashNativePitchSource(value: string) {
+        let hash = 2166136261
+        for (let i = 0; i < value.length; i++) {
+            hash ^= value.charCodeAt(i)
+            hash = Math.imul(hash, 16777619)
+        }
+        return (hash >>> 0).toString(36)
+    }
+
+    private static _toArrayBuffer(data: ArrayBuffer | ArrayBufferView | NativePODBuffer | null | undefined) {
         if (!data) return null
         if (data instanceof ArrayBuffer) return data
+        if (ArrayBuffer.isView(data)) {
+            return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+        }
 
-        const view = data as ArrayBufferView
-        return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength)
+        const nativeBuffer = data as NativePODBuffer
+        const underlyingData = nativeBuffer.underlyingData?.()
+        if (underlyingData instanceof ArrayBuffer) return underlyingData
+
+        const dataView = nativeBuffer._data?.() ?? nativeBuffer.__data
+        if (dataView && ArrayBuffer.isView(dataView)) {
+            return dataView.buffer.slice(dataView.byteOffset, dataView.byteOffset + dataView.byteLength)
+        }
+
+        return null
     }
 
     private static _buildPitchedWav(channels: Int16Array[], sampleRate: number, rate: number) {

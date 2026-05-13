@@ -18,9 +18,12 @@ Steps:
 """
 
 from pathlib import Path
+import shutil
 
 from pak_extractor import parse_pak, extract_entries, _decrypt
 from rename_raw_to_lower import rename_all_to_lower
+from decompile_particle_compiled import convert_directory as decompile_particle_directory
+from decompile_reanim_compiled import convert_file as decompile_reanim_file
 from reanim_converter import main as convert_reanim
 from font_converter import main as convert_font
 from lawnstrings_converter import convert_lawnstrings
@@ -67,6 +70,29 @@ def copy_images(src_dir: Path, dst_dir: Path) -> int:
     return copied
 
 
+def decompile_reanim_directory(src_dir: Path, out_dir: Path) -> int:
+    count = 0
+    if not src_dir.exists():
+        return count
+    for src in sorted(src_dir.glob("*.reanim.compiled")):
+        dst = decompile_reanim_file(src, out_dir)
+        print(f"[reanim-decompile] Wrote: {dst}")
+        count += 1
+
+    aliases = {
+        "zombie_jackson.reanim": "zombie_disco.reanim",
+        "zombie_dancer.reanim": "zombie_backup.reanim",
+    }
+    for source_name, alias_name in aliases.items():
+        source = out_dir / source_name
+        alias = out_dir / alias_name
+        if source.exists() and not alias.exists():
+            shutil.copyfile(source, alias)
+            print(f"[reanim-decompile] Wrote alias: {alias} <- {source.name}")
+            count += 1
+    return count
+
+
 def main():
     pak_path = Path("./tools/main.pak")
     raw_dir = Path("./tools/raw")
@@ -90,23 +116,41 @@ def main():
     renamed = rename_all_to_lower(raw_dir)
     print(f"[pipeline] Renamed {renamed} files\n")
 
-    # ── Step 3: Convert reanim ─────────────────────────────────────
+    # ── Step 3: Decompile compiled particles/reanim ────────────────
     print("=" * 60)
-    print("[pipeline] Step 3: Convert reanim animations")
+    print("[pipeline] Step 3: Decompile compiled particles/reanim")
+    print("=" * 60)
+
+    particle_compiled_dir = raw_dir / "compiled/particles"
+    particle_count = decompile_particle_directory(
+        particle_compiled_dir, raw_dir / "particles"
+    )
+    reanim_compiled_dir = raw_dir / "compiled/reanim"
+    reanim_count = decompile_reanim_directory(
+        reanim_compiled_dir, raw_dir / "reanim"
+    )
+    print(
+        f"[pipeline] Decompiled {particle_count} particle XML files and "
+        f"{reanim_count} reanim files\n"
+    )
+
+    # ── Step 4: Convert reanim ─────────────────────────────────────
+    print("=" * 60)
+    print("[pipeline] Step 4: Convert reanim animations")
     print("=" * 60)
     convert_reanim()
 
-    # ── Step 4: Convert fonts ──────────────────────────────────────
+    # ── Step 5: Convert fonts ──────────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 4: Convert fonts")
+    print("[pipeline] Step 5: Convert fonts")
     print("=" * 60)
     convert_font()
 
-    # ── Step 5: Convert LawnStrings ────────────────────────────────
+    # ── Step 6: Convert LawnStrings ────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 5: Convert LawnStrings")
+    print("[pipeline] Step 6: Convert LawnStrings")
     print("=" * 60)
 
     lawnstrings_src = raw_dir / "properties/lawnstrings.txt"
@@ -114,10 +158,10 @@ def main():
     string_count = convert_lawnstrings(lawnstrings_src, lawnstrings_dst)
     print(f"[pipeline] Converted {string_count} strings -> {lawnstrings_dst}")
 
-    # ── Step 6: Copy images ────────────────────────────────────────
+    # ── Step 7: Copy images ────────────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 6: Copy images to textures")
+    print("[pipeline] Step 7: Copy images to textures")
     print("=" * 60)
 
     images_dir = raw_dir / "images"
@@ -125,10 +169,10 @@ def main():
     img_count = copy_images(images_dir, texture_dir)
     print(f"[pipeline] Copied {img_count} new images -> {texture_dir}")
 
-    # ── Step 7: Copy particle images ───────────────────────────────
+    # ── Step 8: Copy particle images ───────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 7: Copy particle images to texture resources")
+    print("[pipeline] Step 8: Copy particle images to texture resources")
     print("=" * 60)
 
     particles_dir = raw_dir / "particles"
@@ -136,10 +180,10 @@ def main():
     particle_count = copy_particles(particles_dir, particle_texture_dir)
     print(f"[pipeline] Copied {particle_count} new particle images -> {particle_texture_dir}")
 
-    # ── Step 8: Copy sounds ────────────────────────────────────────
+    # ── Step 9: Copy sounds ────────────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 8: Copy sounds to audio resources")
+    print("[pipeline] Step 9: Copy sounds to audio resources")
     print("=" * 60)
 
     sounds_dir = raw_dir / "sounds"
@@ -147,34 +191,34 @@ def main():
     sound_count = copy_sounds(sounds_dir, audio_dir)
     print(f"[pipeline] Copied {sound_count} new sounds -> {audio_dir}")
 
-    # ── Step 9: Generate cached packet plant atlas ────────────────
+    # ── Step 10: Generate cached packet plant atlas ────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 9: Generate cached packet plant atlas")
+    print("[pipeline] Step 10: Generate cached packet plant atlas")
     print("=" * 60)
 
     generate_packet_plant_cache()
 
-    # ── Step 10: Generate cached plant preview atlas ──────────────
+    # ── Step 11: Generate cached plant preview atlas ──────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 10: Generate cached plant preview atlas")
+    print("[pipeline] Step 11: Generate cached plant preview atlas")
     print("=" * 60)
 
     generate_plant_preview_cache()
 
-    # ── Step 11: Generate cached zombie preview atlas ─────────────
+    # ── Step 12: Generate cached zombie preview atlas ─────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 11: Generate cached zombie preview atlas")
+    print("[pipeline] Step 12: Generate cached zombie preview atlas")
     print("=" * 60)
 
     generate_zombie_preview_cache()
 
-    # Step 12: Generate cached lawn mower sprite
+    # Step 13: Generate cached lawn mower sprite
     print()
     print("=" * 60)
-    print("[pipeline] Step 12: Generate cached lawn mower sprite")
+    print("[pipeline] Step 13: Generate cached lawn mower sprite")
     print("=" * 60)
 
     generate_lawnmower_cache()

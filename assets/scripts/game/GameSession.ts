@@ -1295,7 +1295,8 @@ export class GameSession {
         const wave = this.level.zombieWaves[waveIndex]
         if (!wave?.flagWave) return wave?.zombies ?? []
 
-        const plainZombieCount = Math.min(FLAG_WAVE_EXTRA_NORMAL_ZOMBIES, Math.max(1, wave.zombies.length))
+        const plainZombieCount = wave.flagNormalCount ??
+            Math.min(FLAG_WAVE_EXTRA_NORMAL_ZOMBIES, Math.max(1, wave.zombies.length))
         return [
             ...Array.from({ length: plainZombieCount }, () => 'normal' as ZombieType),
             'flag' as ZombieType,
