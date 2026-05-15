@@ -8,6 +8,9 @@ const AWARD_SCREEN_SPRITES = [
     'plant_previews_cached',
     'seedchooser_button',
     'seedchooser_button_glow',
+    'seedchooser_button2',
+    'seedchooser_button2_glow',
+    'shovel_hi_res',
 ] as const
 
 const AWARD_SCREEN_FONTS = [
@@ -16,6 +19,7 @@ const AWARD_SCREEN_FONTS = [
     'briannetod16',
     'dwarventodcraft15',
     'pico129',
+    'briannetod12',
 ] as const
 
 export interface AwardScreenSprites {
@@ -24,6 +28,9 @@ export interface AwardScreenSprites {
     plantPreviewsCached: SpriteFrame
     seedChooserButton: SpriteFrame
     seedChooserButtonGlow: SpriteFrame
+    seedChooserButton2: SpriteFrame
+    seedChooserButton2Glow: SpriteFrame
+    shovelHiRes: SpriteFrame
 }
 
 export interface AwardScreenFonts {
@@ -32,6 +39,7 @@ export interface AwardScreenFonts {
     description: BitmapFontAssets | null
     button: BitmapFontAssets | null
     packetCost: BitmapFontAssets | null
+    mainMenuButton: BitmapFontAssets | null
 }
 
 export class AwardScreenAssets {
@@ -54,6 +62,9 @@ export class AwardScreenAssets {
             plantPreviewsCached,
             seedChooserButton,
             seedChooserButtonGlow,
+            seedChooserButton2,
+            seedChooserButton2Glow,
+            shovelHiRes,
         ] = sprites as SpriteFrame[]
         return {
             background,
@@ -61,13 +72,16 @@ export class AwardScreenAssets {
             plantPreviewsCached,
             seedChooserButton,
             seedChooserButtonGlow,
+            seedChooserButton2,
+            seedChooserButton2Glow,
+            shovelHiRes,
         }
     }
 
     static async loadFonts(): Promise<AwardScreenFonts> {
-        const [title, awardName, description, button, packetCost] = await Promise.all(
-            AWARD_SCREEN_FONTS.map((name) => FontLoader.load(name)),
-        )
-        return { title, awardName, description, button, packetCost }
+        const [title, awardName, description, button, packetCost, mainMenuButton] = await Promise.all([
+            ...AWARD_SCREEN_FONTS.map((name) => FontLoader.load(name)),
+        ])
+        return { title, awardName, description, button, packetCost, mainMenuButton }
     }
 }

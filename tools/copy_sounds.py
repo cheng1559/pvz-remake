@@ -3,19 +3,20 @@
 Convert extracted PvZ sound effects into the Cocos resources library.
 
 The original package also contains tracker music and a few legacy audio formats.
-This script intentionally imports sound effects only and normalizes them to MP3,
-which is supported across the Cocos targets used by this project.
+This script intentionally imports sound effects only and normalizes them to WAV,
+which is the most reliable shared format across the Cocos targets used here.
 """
 
 import argparse
 import json
+import shutil
 import subprocess
 import uuid
 from pathlib import Path
 
 
 SUPPORTED_SOUND_SUFFIXES = (".ogg", ".mp3", ".wav")
-OUTPUT_SUFFIX = ".mp3"
+OUTPUT_SUFFIX = ".wav"
 OUTPUT_AUDIO_FILES = [".json", OUTPUT_SUFFIX]
 
 
@@ -68,21 +69,47 @@ def write_audio_meta(path: Path) -> None:
 
 
 def convert_sound(ffmpeg: str, src: Path, dst: Path, overwrite: bool) -> None:
+    if src.suffix.lower() == OUTPUT_SUFFIX:
+        if overwrite or not dst.exists():
+            shutil.copy2(src, dst)
+        return
+
+    ffmpeg_path = resolve_ffmpeg(ffmpeg)
     args = [
-        ffmpeg,
+        ffmpeg_path,
         "-y" if overwrite else "-n",
         "-v",
         "error",
         "-i",
         str(src),
         "-vn",
-        "-c:a",
-        "libmp3lame",
-        "-b:a",
-        "96k",
+        "-acodec",
+        "pcm_s16le",
+        "-ar",
+        "44100",
+        "-ac",
+        "2",
         str(dst),
     ]
     subprocess.run(args, check=True)
+
+
+def resolve_ffmpeg(ffmpeg: str) -> str:
+    resolved = shutil.which(ffmpeg)
+    if resolved:
+        return resolved
+
+    for candidate in (
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+    ):
+        if Path(candidate).exists():
+            return candidate
+
+    raise RuntimeError(
+        "ffmpeg is required to convert PvZ sound files to WAV. "
+        "Install it with `brew install ffmpeg` on macOS, or pass --ffmpeg /path/to/ffmpeg."
+    )
 
 
 def copy_sounds(src_dir: Path, dst_dir: Path, overwrite: bool = False, ffmpeg: str = "ffmpeg") -> int:
@@ -138,7 +165,7 @@ def main():
         help="Destination under the Cocos resources directory.",
     )
     parser.add_argument("--overwrite", action="store_true", help="Replace existing copied files.")
-    parser.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg executable used for MP3 conversion.")
+    parser.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg executable used for WAV conversion.")
     args = parser.parse_args()
 
     if not args.src.exists():

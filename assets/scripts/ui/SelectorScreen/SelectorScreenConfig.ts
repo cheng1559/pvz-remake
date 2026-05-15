@@ -103,11 +103,19 @@ const AUX_BUTTON_CONFIGS: ButtonConfig[] = [
 ]
 
 const SELECTOR_SCREEN_ANIMATIONS = ['animations/selectorscreen', 'animations/zombie_hand']
-const SELECTOR_SCREEN_SPRITES = [
+const SELECTOR_SCREEN_BUTTON_SPRITES = [
     ...BUTTON_CONFIGS,
     ...WOODSIGN_BUTTON_CONFIGS,
     ...AUX_BUTTON_CONFIGS,
 ].flatMap((config) => [config.normalImage, config.pressedImage])
+const SELECTOR_SCREEN_SPRITES = [
+    ...SELECTOR_SCREEN_BUTTON_SPRITES,
+    'selectorscreen_almanac_shadow',
+    'selectorscreen_key_shadow',
+    'selectorscreen_startadventure_button1',
+    'selectorscreen_startadventure_highlight',
+    'selectorscreen_levelnumbers',
+]
 
 export {
     BUTTON_CONFIGS,

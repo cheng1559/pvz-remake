@@ -20,6 +20,8 @@ const ZOMBIE_WALK_ASSET_FPS = 12
 const GAME_TICKS_PER_SECOND = 100
 const ZOMBIE_EAT_ANIM_RATE = 36
 const ZOMBIE_EAT_FRAME_SPAN = 39
+const ZOMBIE_EAT_LEFT_HAND_TIME = 0.14
+const ZOMBIE_EAT_RIGHT_HAND_TIME = 0.68
 const ZOMBIE_DEATH_ANIM_RATE_MIN = 24
 const ZOMBIE_DEATH_ANIM_RATE_MAX = 30
 const ZOMBIE_SUPER_LONG_DEATH_ANIM_RATE = 14
@@ -64,6 +66,7 @@ export interface ZombieUpdateContext {
     findPlantTarget(zombie: Zombie): PlantEntity | null
     canChewPlant(plant: PlantEntity): boolean
     damagePlant(plant: PlantEntity, damage: number): void
+    flashChewedPlant(plant: PlantEntity): void
     checkBoardEdge(zombie: Zombie): boolean
     randomInt(minInclusive: number, maxInclusive: number): number
     randomFloat(minInclusive: number, maxExclusive: number): number
@@ -195,7 +198,9 @@ export abstract class Zombie implements ZombieEntity {
         }
 
         this._updateChill()
-        const target = context.findPlantTarget(this)
+        const target = this.hasHead || this.state === 'eating'
+            ? context.findPlantTarget(this)
+            : null
         if (target) {
             this.updateEating(context, target)
             context.checkBoardEdge(this)
@@ -354,7 +359,11 @@ export abstract class Zombie implements ZombieEntity {
             this.currentAnimation = 'anim_eat'
             this.animationSpeed = this._chilledAnimSpeed(ZOMBIE_EAT_ANIM_RATE / ZOMBIE_WALK_ASSET_FPS)
         }
+        const previousAnimationTime = this.animationTime
         this.animationTime = this._advanceLoopingAnimationTime(this.animationTime, this.animationSpeed, ZOMBIE_EAT_FRAME_SPAN)
+        if (this.hasHead && this._shouldTriggerChewEffect(previousAnimationTime, this.animationTime)) {
+            context.flashChewedPlant(target)
+        }
 
         if (!this.hasHead) {
             this._chewSoundCounter = 0
@@ -520,6 +529,19 @@ export abstract class Zombie implements ZombieEntity {
 
         const frameAdvance = speed * ZOMBIE_WALK_ASSET_FPS / GAME_TICKS_PER_SECOND * ticks
         return (time + frameAdvance) % frameSpan
+    }
+
+    private _shouldTriggerChewEffect(previousTime: number, currentTime: number) {
+        return this._didCrossLoopingTime(previousTime, currentTime, ZOMBIE_EAT_LEFT_HAND_TIME * ZOMBIE_EAT_FRAME_SPAN) ||
+            this._didCrossLoopingTime(previousTime, currentTime, ZOMBIE_EAT_RIGHT_HAND_TIME * ZOMBIE_EAT_FRAME_SPAN)
+    }
+
+    private _didCrossLoopingTime(previousTime: number, currentTime: number, triggerTime: number) {
+        if (currentTime >= previousTime) {
+            return previousTime < triggerTime && triggerTime <= currentTime
+        }
+
+        return previousTime < triggerTime || triggerTime <= currentTime
     }
 
     private _walkAnimRate() {

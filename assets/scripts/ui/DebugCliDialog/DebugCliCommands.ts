@@ -1,5 +1,6 @@
 import type { AdventureGameScreen } from '@/game/GameScreen'
 import { ADVENTURE_LEVELS, PLANT_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed, setGameSpeed } from '@/game/GameDefinitions'
+import { GameDebugSettings } from '@/game/GameDebugSettings'
 import type { LevelDefinition, PlantType, ZombieType } from '@/game/GameTypes'
 
 const DEBUG_CLI_MIN_SPEED = 0
@@ -102,6 +103,11 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         parameterHints: ['{enabled}'],
     },
     {
+        name: 'hitboxes',
+        completions: [DEBUG_BOOLEAN_VALUES],
+        parameterHints: ['{enabled}'],
+    },
+    {
         name: 'summon',
         completions: [DEBUG_ZOMBIE_TYPES],
         parameterHints: ['{zombie_name}', '[optional]{row}', '[optional]{col}'],
@@ -169,6 +175,8 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugSunSpawningCommand(tokens, gameScreen)
         case 'autocollect':
             return executeDebugAutoCollectCommand(tokens, gameScreen)
+        case 'hitboxes':
+            return executeDebugHitboxesCommand(tokens, gameScreen)
         default:
             return { ok: false, message: `Unknown command: ${tokens[0]}` }
     }
@@ -495,19 +503,14 @@ function executeDebugRechargingCommand(tokens: string[], gameScreen: AdventureGa
         return { ok: false, message: 'Usage: /cooldown {true|false}' }
     }
 
-    if (!isLevelReady(gameScreen)) {
-        return conditionFailure('/cooldown can only run during an active level')
-    }
-
     const enabled = parseDebugBoolean(tokens[1])
     if (enabled == null) {
         return { ok: false, message: `Invalid cooldown value: ${tokens[1]}. Use true or false` }
     }
 
-    const rechargingEnabled = gameScreen.debugSetRechargingEnabled(enabled)
-    if (rechargingEnabled == null) {
-        return conditionFailure('/cooldown can only run during an active level')
-    }
+    const rechargingEnabled = isLevelScreenAvailable(gameScreen)
+        ? gameScreen.debugSetRechargingEnabled(enabled)
+        : setDebugRechargingEnabled(enabled)
     return { ok: true, message: `Seed packet cooldown ${rechargingEnabled ? 'enabled' : 'disabled'}` }
 }
 
@@ -537,20 +540,31 @@ function executeDebugAutoCollectCommand(tokens: string[], gameScreen: AdventureG
         return { ok: false, message: 'Usage: /autocollect {true|false}' }
     }
 
-    if (!isLevelReady(gameScreen)) {
-        return conditionFailure('/autocollect can only run during an active level')
-    }
-
     const enabled = parseDebugBoolean(tokens[1])
     if (enabled == null) {
         return { ok: false, message: `Invalid auto collect value: ${tokens[1]}. Use true or false` }
     }
 
-    const autoCollectEnabled = gameScreen.debugSetAutoCollectEnabled(enabled)
-    if (autoCollectEnabled == null) {
-        return conditionFailure('/autocollect can only run during an active level')
-    }
+    const autoCollectEnabled = isLevelScreenAvailable(gameScreen)
+        ? gameScreen.debugSetAutoCollectEnabled(enabled)
+        : setDebugAutoCollectEnabled(enabled)
     return { ok: true, message: `Auto collect ${autoCollectEnabled ? 'enabled' : 'disabled'}` }
+}
+
+function executeDebugHitboxesCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 2) {
+        return { ok: false, message: 'Usage: /hitboxes {true|false}' }
+    }
+
+    const enabled = parseDebugBoolean(tokens[1])
+    if (enabled == null) {
+        return { ok: false, message: `Invalid hitboxes value: ${tokens[1]}. Use true or false` }
+    }
+
+    const hitboxesVisible = isLevelScreenAvailable(gameScreen)
+        ? gameScreen.debugSetHitboxesVisible(enabled)
+        : setDebugHitboxesVisible(enabled)
+    return { ok: true, message: `Hitboxes ${hitboxesVisible ? 'enabled' : 'disabled'}` }
 }
 
 function executeDebugLawnMowerCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
@@ -632,6 +646,21 @@ function isLevelReady(gameScreen: AdventureGameScreen | null): gameScreen is Adv
 
 function isLevelScreenAvailable(gameScreen: AdventureGameScreen | null): gameScreen is AdventureGameScreen {
     return gameScreen?.node?.isValid === true
+}
+
+function setDebugRechargingEnabled(enabled: boolean) {
+    GameDebugSettings.rechargingEnabled = enabled
+    return GameDebugSettings.rechargingEnabled
+}
+
+function setDebugAutoCollectEnabled(enabled: boolean) {
+    GameDebugSettings.autoCollectEnabled = enabled
+    return GameDebugSettings.autoCollectEnabled
+}
+
+function setDebugHitboxesVisible(visible: boolean) {
+    GameDebugSettings.hitboxesVisible = visible
+    return GameDebugSettings.hitboxesVisible
 }
 
 function conditionFailure(message: string): DebugCliResult {

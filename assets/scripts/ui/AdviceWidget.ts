@@ -3,7 +3,14 @@ import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { createUINode, setUISize } from '@/ui/UIFactory'
 
-export type AdviceWidgetStyle = 'hint' | 'hint-stay' | 'tutorial-level1' | 'tutorial-level1-stay' | 'tutorial-level2'
+export type AdviceWidgetStyle =
+    | 'hint'
+    | 'hint-stay'
+    | 'tutorial-level1'
+    | 'tutorial-level1-stay'
+    | 'tutorial-level2'
+    | 'tutorial-later'
+    | 'tutorial-later-stay'
 
 const ADVICE_HINT_Y = 527
 const ADVICE_HINT_HEIGHT = 55
@@ -156,6 +163,8 @@ export class AdviceWidget {
                     backdropAlpha: 128,
                 }
             case 'tutorial-level2':
+            case 'tutorial-later':
+            case 'tutorial-later-stay':
                 return {
                     y: ADVICE_TUTORIAL_LEVEL2_Y,
                     height: ADVICE_TUTORIAL_LEVEL2_HEIGHT,
@@ -207,8 +216,11 @@ export class AdviceWidget {
         switch (style) {
             case 'hint-stay':
             case 'tutorial-level1-stay':
+            case 'tutorial-later-stay':
                 return ADVICE_DURATION_STAY
             case 'tutorial-level1':
+            case 'tutorial-level2':
+            case 'tutorial-later':
                 return ADVICE_DURATION_FAST
             case 'hint':
             default:

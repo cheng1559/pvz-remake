@@ -1,4 +1,4 @@
-import type { GameEvent, ItemEntity, ItemMotion, ItemType, SeedType } from '../GameTypes'
+import type { GameEvent, ItemEntity, ItemMotion, ItemType, LevelAwardKind, SeedType } from '../GameTypes'
 import { SoundEffect } from '@/core/SoundLoader'
 
 const BOARD_WIDTH = 800
@@ -9,6 +9,8 @@ const COIN_BANK_DEST_Y = 0
 const DEFAULT_ITEM_SIZE = 60
 const FINAL_SEED_PACKET_WIDTH = 50
 const FINAL_SEED_PACKET_HEIGHT = 70
+const FINAL_SHOVEL_WIDTH = 80
+const FINAL_SHOVEL_HEIGHT = 80
 const DEFAULT_COLLECTION_EASE_DIVISOR = 21
 const FINAL_SEED_PACKET_COLLECTION_EASE_DIVISOR = 80
 const DEFAULT_COLLECTION_COMPLETE_DISTANCE = 8
@@ -29,6 +31,7 @@ export interface ItemCreateArgs {
     motion: ItemMotion
     x: number
     y: number
+    awardKind?: LevelAwardKind
     awardSeedType?: SeedType | null
 }
 
@@ -39,12 +42,14 @@ export class Item implements ItemEntity {
     readonly motion: ItemMotion
     readonly width: number
     readonly height: number
+    readonly awardKind: LevelAwardKind
     readonly awardSeedType: SeedType | null
 
     x: number
     y: number
     scale = 1
     alpha = 255
+    age = 0
     hitGround = false
     dead = false
     beingCollected = false
@@ -62,6 +67,7 @@ export class Item implements ItemEntity {
         this.id = args.id
         this.type = args.type
         this.motion = args.motion
+        this.awardKind = args.awardKind ?? 'seed'
         this.x = args.x
         this.y = args.y
         this.width = this._initialWidth()
@@ -76,6 +82,7 @@ export class Item implements ItemEntity {
         if (this.dead) return
 
         this._age++
+        this.age = this._age
         if (this._fadeCount > 0) {
             this._updateFade()
         } else if (this.beingCollected) {
@@ -278,10 +285,12 @@ export class Item implements ItemEntity {
     }
 
     private _initialWidth() {
+        if (this.type === 'final-seed-packet' && this.awardKind === 'shovel') return FINAL_SHOVEL_WIDTH
         return this.type === 'final-seed-packet' ? FINAL_SEED_PACKET_WIDTH : DEFAULT_ITEM_SIZE
     }
 
     private _initialHeight() {
+        if (this.type === 'final-seed-packet' && this.awardKind === 'shovel') return FINAL_SHOVEL_HEIGHT
         return this.type === 'final-seed-packet' ? FINAL_SEED_PACKET_HEIGHT : DEFAULT_ITEM_SIZE
     }
 
@@ -298,6 +307,8 @@ export class Item implements ItemEntity {
     private _pushCollectSound(context: ItemUpdateContext) {
         if (this._isSun()) {
             context.events.push({ type: 'foleyRequested', sound: SoundEffect.Points, pitchRange: 10 })
+        } else if (this.type === 'final-seed-packet' && this.awardKind === 'shovel') {
+            context.events.push({ type: 'soundRequested', sound: SoundEffect.Shovel })
         } else if (this.type === 'final-seed-packet') {
             context.events.push({ type: 'soundRequested', sound: SoundEffect.SeedLift })
             context.events.push({ type: 'soundRequested', sound: SoundEffect.Drop })

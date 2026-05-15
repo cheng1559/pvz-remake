@@ -10,7 +10,7 @@ Steps:
   5. Convert LawnStrings
   6. Copy images to textures
   7. Copy particle images to texture resources
-  8. Convert sounds to MP3 audio resources
+  8. Convert sounds to WAV audio resources
   9. Generate cached packet plant atlas
  10. Generate cached plant preview atlas
  11. Generate cached zombie preview atlas
@@ -183,7 +183,7 @@ def main():
     # ── Step 9: Convert sounds ─────────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 9: Convert sounds to MP3 audio resources")
+    print("[pipeline] Step 9: Convert sounds to WAV audio resources")
     print("=" * 60)
 
     sounds_dir = raw_dir / "sounds"

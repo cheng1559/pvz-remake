@@ -148,6 +148,8 @@ const ACHIEVEMENTS: AchievementDefinition[] = [
 
 @ccclass('AchievementScreen')
 export class AchievementScreen extends MenuScreenBase {
+    public earnedAchievements: readonly boolean[] = []
+
     private _rockButtonImage: Sprite | null = null
     private _moreButton: UIButton | null = null
     private _sprites: AchievementScreenSprites | null = null
@@ -261,7 +263,7 @@ export class AchievementScreen extends MenuScreenBase {
             const imagePosX = xPos - 90
             const achievement = ACHIEVEMENTS[i]
 
-            createSpriteNode({
+            const iconNode = createSpriteNode({
                 name: `AchievementIcon_${i}`,
                 spriteFrame: this._getAchievementIconFrame(sprites.icons, i),
                 parent: this._root!,
@@ -273,6 +275,10 @@ export class AchievementScreen extends MenuScreenBase {
                 width: ACHIEVEMENT_ICON_SIZE * ACHIEVEMENT_ICON_SCALE,
                 height: ACHIEVEMENT_ICON_SIZE * ACHIEVEMENT_ICON_SCALE,
             })
+            const iconSprite = iconNode.getComponent(Sprite)
+            if (iconSprite) {
+                iconSprite.color = new Color(255, 255, 255, this._isAchievementEarned(i) ? 255 : 32)
+            }
 
             this._createText({
                 name: `AchievementTitle_${i}`,
@@ -292,6 +298,10 @@ export class AchievementScreen extends MenuScreenBase {
                 maxWidth: ACHIEVEMENT_DESC_WIDTH,
             })
         }
+    }
+
+    private _isAchievementEarned(index: number) {
+        return this.earnedAchievements[index] === true
     }
 
     private _createText(args: {

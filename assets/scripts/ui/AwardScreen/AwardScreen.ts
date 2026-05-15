@@ -3,7 +3,7 @@ import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { SEED_DEFINITIONS, scaleGameDeltaTime } from '@/game/GameDefinitions'
-import type { SeedType } from '@/game/GameTypes'
+import type { LevelAwardKind, SeedType } from '@/game/GameTypes'
 import { UIButton } from '@/ui/Button'
 import { MenuScreenBase, SCREEN_HEIGHT, SCREEN_WIDTH } from '@/ui/MenuScreenBase'
 import { SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
@@ -17,6 +17,7 @@ const FADE_IN_TICKS = 180
 const PACKET_X = 350
 const PACKET_Y = 129
 const PACKET_SCALE = 2
+const SHOVEL_Y = 137
 const TITLE_BASELINE_X = 400
 const TITLE_BASELINE_Y = 58
 const PLANT_NAME_BASELINE_X = 400
@@ -30,9 +31,15 @@ const NEXT_BUTTON_Y = 500
 const NEXT_BUTTON_WIDTH = 156
 const NEXT_BUTTON_HEIGHT = 42
 const NEXT_BUTTON_TEXT_OFFSET_Y = -1
+const MAIN_MENU_BUTTON_X = 677
+const MAIN_MENU_BUTTON_Y = 16
+const MAIN_MENU_BUTTON_WIDTH = 111
+const MAIN_MENU_BUTTON_HEIGHT = 26
+const MAIN_MENU_BUTTON_TEXT_OFFSET_Y = 1
 const TITLE_COLOR = new Color(213, 159, 43, 255)
 const DESCRIPTION_COLOR = new Color(40, 50, 90, 255)
 const BUTTON_TEXT_COLOR = new Color(213, 159, 43, 255)
+const MAIN_MENU_BUTTON_TEXT_COLOR = new Color(42, 42, 90, 255)
 
 const SEED_STRING_KEYS: Record<SeedType, string> = {
     peashooter: 'PEASHOOTER',
@@ -47,7 +54,9 @@ const SEED_STRING_KEYS: Record<SeedType, string> = {
 
 @ccclass('AwardScreen')
 export class AwardScreen extends MenuScreenBase {
-    public seedType: SeedType = 'sunflower'
+    public awardKind: LevelAwardKind = 'seed'
+    public seedType: SeedType | null = 'sunflower'
+    public adventureLevel = 1
     public onNextLevelRequest: (() => void) | null = null
 
     private _fadeInCounter = FADE_IN_TICKS
@@ -73,10 +82,15 @@ export class AwardScreen extends MenuScreenBase {
         this._fadeInCounter = FADE_IN_TICKS
         this._createInputBlocker()
         this._createBackground(sprites.background)
-        this._drawTitle(fonts, lawnStrings)
-        this._drawSeedPacket(sprites, fonts)
-        this._drawDescription(fonts, lawnStrings)
+        if (this.awardKind === 'shovel') {
+            this._drawShovelAward(sprites, fonts, lawnStrings)
+        } else {
+            this._drawSeedAward(sprites, fonts, lawnStrings)
+        }
         this._drawNextButton(sprites, fonts, lawnStrings)
+        if (this.adventureLevel > 3) {
+            this._drawMainMenuButton(sprites, fonts, lawnStrings)
+        }
         this._createFade()
         this._syncFade()
         UIButton.refreshHoverStates()
@@ -94,7 +108,58 @@ export class AwardScreen extends MenuScreenBase {
         })
     }
 
+    private _drawSeedAward(
+        sprites: AwardScreenSprites,
+        fonts: AwardScreenFonts,
+        lawnStrings: Record<string, string>,
+    ) {
+        this._drawTitle(fonts, lawnStrings)
+        this._drawSeedPacket(sprites, fonts)
+        this._drawDescription(fonts, lawnStrings)
+    }
+
+    private _drawShovelAward(
+        sprites: AwardScreenSprites,
+        fonts: AwardScreenFonts,
+        lawnStrings: Record<string, string>,
+    ) {
+        this._createText({
+            name: 'Title',
+            text: lawnStrings.GOT_SHOVEL ?? 'YOU GOT THE SHOVEL!',
+            baselineX: TITLE_BASELINE_X,
+            baselineY: TITLE_BASELINE_Y,
+            font: fonts.title,
+            color: TITLE_COLOR,
+            align: 'center',
+        })
+        this._createText({
+            name: 'AwardName',
+            text: lawnStrings.SHOVEL ?? 'SHOVEL',
+            baselineX: PLANT_NAME_BASELINE_X,
+            baselineY: PLANT_NAME_BASELINE_Y,
+            font: fonts.awardName,
+            color: Color.WHITE,
+            align: 'center',
+        })
+
+        createSpriteNode({
+            name: 'AwardShovel',
+            spriteFrame: sprites.shovelHiRes,
+            parent: this._root!,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            x: this._cppX(400 - sprites.shovelHiRes.originalSize.width / 2),
+            y: this._cppY(SHOVEL_Y),
+        })
+        this._drawAwardDescription(
+            fonts,
+            lawnStrings.SHOVEL_DESCRIPTION ?? 'Use this to dig up plants.',
+        )
+    }
+
     private _drawSeedPacket(sprites: AwardScreenSprites, fonts: AwardScreenFonts) {
+        const seedType = this.seedType ?? 'sunflower'
         SeedPacketRenderer.drawSeedPacket({
             name: 'AwardSeedPacket',
             parent: this._root!,
@@ -102,8 +167,8 @@ export class AwardScreen extends MenuScreenBase {
             x: this._cppX(PACKET_X),
             y: this._cppY(PACKET_Y),
             scale: PACKET_SCALE,
-            seedType: this.seedType,
-            cost: SEED_DEFINITIONS[this.seedType].cost,
+            seedType,
+            cost: SEED_DEFINITIONS[seedType].cost,
             seeds: null,
             seedPacketLarger: sprites.seedPacketLarger,
             plantPreviews: sprites.plantPreviewsCached,
@@ -112,7 +177,8 @@ export class AwardScreen extends MenuScreenBase {
     }
 
     private _drawDescription(fonts: AwardScreenFonts, lawnStrings: Record<string, string>) {
-        const stringKey = SEED_STRING_KEYS[this.seedType]
+        const seedType = this.seedType ?? 'sunflower'
+        const stringKey = SEED_STRING_KEYS[seedType]
         this._createText({
             name: 'PlantName',
             text: lawnStrings[stringKey] ?? stringKey,
@@ -123,6 +189,10 @@ export class AwardScreen extends MenuScreenBase {
             align: 'center',
         })
 
+        this._drawAwardDescription(fonts, lawnStrings[`${stringKey}_TOOLTIP`] ?? `${stringKey}_TOOLTIP`)
+    }
+
+    private _drawAwardDescription(fonts: AwardScreenFonts, text: string) {
         const node = createUINode('Description', {
             parent: this._root!,
             layer: this.node.layer,
@@ -133,7 +203,7 @@ export class AwardScreen extends MenuScreenBase {
         const renderer = node.addComponent(FontRenderer)
         if (fonts.description) renderer.setFontAssets(fonts.description)
         renderer.fontColor = DESCRIPTION_COLOR
-        renderer.string = lawnStrings[`${stringKey}_TOOLTIP`] ?? `${stringKey}_TOOLTIP`
+        renderer.string = text
         renderer.maxWidth = DESCRIPTION_WIDTH
         renderer.textAlign = 2
         renderer.forceRebuild()
@@ -184,6 +254,7 @@ export class AwardScreen extends MenuScreenBase {
         button.hoverSprite = sprites.seedChooserButton
         button.pressedSprite = sprites.seedChooserButton
         button.pressOffset = new Vec3(1, -1, 0)
+        button.rightClickTriggers = false
         button.releaseToNormalOnPressOut = true
         button.onPress = () => {
             void SoundLoader.play(SoundEffect.Tap)
@@ -194,6 +265,46 @@ export class AwardScreen extends MenuScreenBase {
             label.setPosition(label.awardBaseX, label.awardBaseY, 1)
         }
         button.onClick = () => this.onNextLevelRequest?.()
+    }
+
+    private _drawMainMenuButton(
+        sprites: AwardScreenSprites,
+        fonts: AwardScreenFonts,
+        lawnStrings: Record<string, string>,
+    ) {
+        const buttonNode = createSpriteNode({
+            name: 'MainMenuButton',
+            spriteFrame: sprites.seedChooserButton2,
+            parent: this._root!,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            x: this._cppX(MAIN_MENU_BUTTON_X),
+            y: this._cppY(MAIN_MENU_BUTTON_Y),
+            width: MAIN_MENU_BUTTON_WIDTH,
+            height: MAIN_MENU_BUTTON_HEIGHT,
+        })
+        const label = this._createSmallButtonLabel(
+            buttonNode,
+            lawnStrings.AWARD_MAIN_MENU_BUTTON ?? 'MAIN MENU',
+            fonts,
+        )
+
+        const button = buttonNode.addComponent(UIButton)
+        button.normalSprite = sprites.seedChooserButton2
+        button.hoverSprite = sprites.seedChooserButton2Glow
+        button.pressedSprite = sprites.seedChooserButton2Glow
+        button.pressOffset = new Vec3(0, 0, 0)
+        button.rightClickTriggers = false
+        button.releaseToNormalOnPressOut = true
+        button.onPress = () => {
+            void SoundLoader.play(SoundEffect.Tap)
+        }
+        button.onStateChange = (state) => {
+            const pressed = state === 'pressed'
+            label.setPosition(label.awardBaseX + (pressed ? 1 : 0), label.awardBaseY - (pressed ? 1 : 0), 1)
+        }
+        button.onClick = () => this.onBackToMenu?.()
     }
 
     private _createNextButtonLabel(parent: Node, text: string, fonts: AwardScreenFonts) {
@@ -214,6 +325,30 @@ export class AwardScreen extends MenuScreenBase {
         const baselineY = (NEXT_BUTTON_HEIGHT - metrics.ascent / 6 + metrics.ascent - 1) / 2 + NEXT_BUTTON_TEXT_OFFSET_Y
         node.awardBaseX = (NEXT_BUTTON_WIDTH - width) / 2
         node.awardBaseY = -(baselineY - metrics.ascent)
+        node.setPosition(node.awardBaseX, node.awardBaseY, 1)
+        return node
+    }
+
+    private _createSmallButtonLabel(parent: Node, text: string, fonts: AwardScreenFonts) {
+        const node = createUINode('Label', {
+            parent,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+        }) as Node & { awardBaseX: number, awardBaseY: number }
+        const renderer = node.addComponent(FontRenderer)
+        if (fonts.mainMenuButton) renderer.setFontAssets(fonts.mainMenuButton)
+        renderer.fontColor = MAIN_MENU_BUTTON_TEXT_COLOR
+        renderer.string = text
+        renderer.forceRebuild()
+
+        const metrics = FontMetricsUtil.getMetrics(fonts.mainMenuButton?.config ?? null)
+        const width = FontMetricsUtil.measureTextWidth(fonts.mainMenuButton?.config ?? null, text) || renderer.contentWidth
+        const baselineY = Math.trunc(
+            (MAIN_MENU_BUTTON_HEIGHT - Math.trunc(metrics.ascent / 6) + metrics.ascent - 1) / 2,
+        ) + MAIN_MENU_BUTTON_TEXT_OFFSET_Y
+        node.awardBaseX = (MAIN_MENU_BUTTON_WIDTH - width) / 2
+        node.awardBaseY = -(baselineY - metrics.ascent + 1)
         node.setPosition(node.awardBaseX, node.awardBaseY, 1)
         return node
     }

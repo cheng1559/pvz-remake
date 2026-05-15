@@ -34,6 +34,8 @@ export class ModalDialog extends Component {
     @property
     dragClampMargin = 8
 
+    public onDragStateChange: ((dragging: boolean) => void) | null = null
+
     private _modalBlocker: Node | null = null
     private _modalHoverBlockActive = false
     private _dragging = false
@@ -218,6 +220,7 @@ export class ModalDialog extends Component {
     private _onTouchStart(event: EventTouch) {
         event.propagationStopped = true
         this._dragging = true
+        this.onDragStateChange?.(true)
 
         const uiPos = event.getUILocation()
         const transform = this.node.getComponent(UITransform)!
@@ -256,6 +259,7 @@ export class ModalDialog extends Component {
         event.propagationStopped = true
         this._dragging = false
         this._setCursor('')
+        this.onDragStateChange?.(false)
     }
 
     private _onKeyDown(event: EventKeyboard) {

@@ -339,6 +339,7 @@ export const ADVENTURE_1_1: LevelDefinition = {
         { zombies: ['normal'] },
         { zombies: ['normal', 'normal'] },
     ],
+    awardKind: 'seed',
     awardSeedType: 'sunflower',
     tutorialAdvice: [
         'Click on a seed packet to pick it up!',
@@ -360,6 +361,7 @@ export const ADVENTURE_1_2: LevelDefinition = {
         { zombies: ['normal', 'normal'] },
         { zombies: ['normal', 'normal'], flagWave: true, flagNormalCount: 2 },
     ],
+    awardKind: 'seed',
     awardSeedType: 'cherrybomb',
     tutorialAdvice: [],
 }
@@ -381,7 +383,31 @@ export const ADVENTURE_1_3: LevelDefinition = {
         { zombies: ['traffic-cone', 'normal'] },
         { zombies: ['traffic-cone', 'normal'], flagWave: true, flagNormalCount: 3 },
     ],
+    awardKind: 'seed',
     awardSeedType: 'wallnut',
+    tutorialAdvice: [],
+}
+
+export const ADVENTURE_1_4: LevelDefinition = {
+    id: 'adventure-1-4',
+    adventureLevel: 4,
+    background: 'day',
+    activeRows: [0, 1, 2, 3, 4],
+    startingSun: 50,
+    seedPackets: ['peashooter', 'sunflower', 'cherrybomb', 'wallnut'],
+    zombieWaves: [
+        { zombies: ['normal'] },
+        { zombies: ['normal'] },
+        { zombies: ['normal', 'normal'] },
+        { zombies: ['traffic-cone'] },
+        { zombies: ['normal', 'normal'] },
+        { zombies: ['traffic-cone', 'normal'] },
+        { zombies: ['normal', 'normal', 'normal'] },
+        { zombies: ['traffic-cone', 'normal'] },
+        { zombies: ['traffic-cone', 'normal', 'normal'] },
+        { zombies: ['traffic-cone'], flagWave: true, flagNormalCount: 4 },
+    ],
+    awardKind: 'shovel',
     tutorialAdvice: [],
 }
 
@@ -389,4 +415,5 @@ export const ADVENTURE_LEVELS = [
     ADVENTURE_1_1,
     ADVENTURE_1_2,
     ADVENTURE_1_3,
+    ADVENTURE_1_4,
 ] as const

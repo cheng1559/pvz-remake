@@ -259,15 +259,14 @@ export class FontRenderer extends Component {
                     spacePos = curPos
                 } else if (curChar === 10) {
                     // Newline forces wrapping.
-                    const lineEnd = this._trimTrailingSpaces(resolvedChars, lineStartPos, curPos)
                     lines.push({
                         start: lineStartPos,
-                        end: lineEnd,
+                        end: curPos,
                         width: this._measureLineWidth(
                             layer0,
                             resolvedChars,
                             lineStartPos,
-                            lineEnd,
+                            curPos,
                             pointSize,
                         ),
                     })
@@ -312,15 +311,14 @@ export class FontRenderer extends Component {
                     } else {
                         // No space found, break at the current position.
                         if (curPos <= lineStartPos) curPos++ // Ensure progress.
-                        const lineEnd = this._trimTrailingSpaces(resolvedChars, lineStartPos, curPos)
                         lines.push({
                             start: lineStartPos,
-                            end: lineEnd,
+                            end: curPos,
                             width: this._measureLineWidth(
                                 layer0,
                                 resolvedChars,
                                 lineStartPos,
-                                lineEnd,
+                                curPos,
                                 pointSize,
                             ),
                         })
@@ -335,19 +333,14 @@ export class FontRenderer extends Component {
             }
             // Last line.
             if (lineStartPos < resolvedChars.length) {
-                const lineEnd = this._trimTrailingSpaces(
-                    resolvedChars,
-                    lineStartPos,
-                    resolvedChars.length,
-                )
                 lines.push({
                     start: lineStartPos,
-                    end: lineEnd,
+                    end: resolvedChars.length,
                     width: this._measureLineWidth(
                         layer0,
                         resolvedChars,
                         lineStartPos,
-                        lineEnd,
+                        resolvedChars.length,
                         pointSize,
                     ),
                 })
@@ -359,11 +352,10 @@ export class FontRenderer extends Component {
             let prevChar = 0
             for (let i = 0; i < resolvedChars.length; i++) {
                 if (resolvedChars[i] === 10) {
-                    const lineEnd = this._trimTrailingSpaces(resolvedChars, lineStart, i)
                     lines.push({
                         start: lineStart,
-                        end: lineEnd,
-                        width: this._measureLineWidth(layer0, resolvedChars, lineStart, lineEnd, pointSize),
+                        end: i,
+                        width: this._measureLineWidth(layer0, resolvedChars, lineStart, i, pointSize),
                     })
                     lineStart = i + 1
                     lineWidth = 0
@@ -373,11 +365,16 @@ export class FontRenderer extends Component {
                     prevChar = resolvedChars[i]
                 }
             }
-            const lineEnd = this._trimTrailingSpaces(resolvedChars, lineStart, resolvedChars.length)
             lines.push({
                 start: lineStart,
-                end: lineEnd,
-                width: this._measureLineWidth(layer0, resolvedChars, lineStart, lineEnd, pointSize),
+                end: resolvedChars.length,
+                width: this._measureLineWidth(
+                    layer0,
+                    resolvedChars,
+                    lineStart,
+                    resolvedChars.length,
+                    pointSize,
+                ),
             })
         }
 
@@ -550,14 +547,6 @@ export class FontRenderer extends Component {
             prevChar = chars[i]
         }
         return width
-    }
-
-    private _trimTrailingSpaces(chars: number[], start: number, end: number): number {
-        let trimmedEnd = end
-        while (trimmedEnd > start && chars[trimmedEnd - 1] === 32) {
-            trimmedEnd--
-        }
-        return trimmedEnd
     }
 
     private _getCharAdvanceToNext(

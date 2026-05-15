@@ -14,6 +14,7 @@ import {
     ADVENTURE_1_1,
     ADVENTURE_1_2,
     ADVENTURE_1_3,
+    ADVENTURE_1_4,
     ADVENTURE_LEVELS,
     popGlobalGamePause,
     pushGlobalGamePause,
@@ -26,6 +27,7 @@ import { AlmanacScreen } from '../AlmanacScreen/AlmanacScreen'
 import { StoreScreen } from '../StoreScreen/StoreScreen'
 import { ZenGardenScreen } from '../ZenGardenScreen/ZenGardenScreen'
 import { ChallengePage, ChallengeScreen } from '../ChallengeScreen'
+import { UIButton } from '../Button'
 import { DebugCliDialog, executeDebugCliCommand } from '../DebugCliDialog'
 import { DialogButtonMode, DialogResult, MessageBox } from '../MessageBox/MessageBox'
 import { MessageBoxAssets } from '../MessageBox/MessageBoxAssets'
@@ -37,11 +39,12 @@ import { StartupResourceLoader } from '../StartupResourceLoader'
 import { createStoneButton } from '../StoneButton'
 import { createUINode } from '../UIFactory'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
-import type { SeedType } from '@/game/GameTypes'
+import type { LevelAward } from '@/game/GameTypes'
 import type { LevelDefinition } from '@/game/GameTypes'
+import { ProfileStore, type PlayerProfile } from '@/game/persistence/ProfileStore'
 
 const { ccclass, property } = _decorator
-const DEBUG_START_ADVENTURE_DIRECTLY = true
+const DEBUG_START_ADVENTURE_DIRECTLY = false
 const DEBUG_CLI_KEY_CODE = 191
 const GAME_OVER_MAIN_MENU_X = 235
 const GAME_OVER_MAIN_MENU_Y = 310
@@ -80,8 +83,10 @@ export class UIController extends Component {
     private _globalAdviceLayer: Node | null = null
     private _globalAdviceWidget: AdviceWidget | null = null
     private _globalAdviceTick = 0
+    private _profile: PlayerProfile | null = null
     private _adventureLevel: LevelDefinition = ADVENTURE_1_1
     private _gameOverMainMenuButton: Node | null = null
+    private _gameOverDialogDragging = false
     private _screenTransitioning = false
     private _achievementTransition: AchievementTransitionState | null = null
 
@@ -90,6 +95,8 @@ export class UIController extends Component {
             this.uiRoot = this.node
         }
 
+        this._profile = ProfileStore.loadCurrentProfile()
+        this._adventureLevel = this._getProfileAdventureLevel()
         this._configurePlatformFrameRate()
         input.on(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
         void this._bootstrap()
@@ -103,6 +110,7 @@ export class UIController extends Component {
         const scaledDt = scaleGameDeltaTime(dt)
         this._globalAdviceTick += scaledDt * 100
         this._globalAdviceWidget?.update(scaledDt * 100, this._globalAdviceTick)
+        if (this._globalAdviceWidget?.node.active) this._placeGlobalAdviceLayer()
         this._updateAchievementTransition(scaledDt)
     }
 
@@ -137,9 +145,26 @@ export class UIController extends Component {
         const selectorScreen = node.addComponent(SelectorScreen)
         selectorScreen.animation = animation
         selectorScreen.zombieArmAnimation = zombieArmAnimation
+        const playableAdventureLevel = this._getProfileAdventureLevel()
+        this._adventureLevel = playableAdventureLevel
+        selectorScreen.adventureLevel = playableAdventureLevel.adventureLevel
+        selectorScreen.finishedAdventure = this._profile?.finishedAdventure ?? 0
+        selectorScreen.setAccessState({
+            minigamesLocked: !this._canShowMinigames(),
+            puzzleLocked: !this._canShowPuzzle(),
+            survivalLocked: !this._canShowSurvival(),
+            almanacAvailable: this._canShowAlmanac(),
+            storeAvailable: this._canShowStore(),
+            zenGardenAvailable: this._canShowZenGarden(),
+        })
         selectorScreen.onLockedModeClick = (name) => {
-            const dialog = this.showMessageBox('Locked!', `Play more Adventure to unlock ${name} Mode.`)
-            dialog?.setMessageLayout(277, -3, 2)
+            const message =
+                name === 'miniGames'
+                    ? 'Play more Adventure to \nunlock the Mini-games.'
+                    : name === 'Puzzle'
+                        ? 'Play more Adventure to \nunlock Puzzle Mode.'
+                        : 'Play more Adventure to \nunlock Survival Mode.'
+            void this._showSelectorLockedDialog('Locked!', message)
         }
         selectorScreen.onMessageBoxRequest = () => {
             this.showMessageBox('Message', 'Hello from SelectorScreen!')
@@ -154,22 +179,57 @@ export class UIController extends Component {
             void this.confirmQuit()
         }
         selectorScreen.onChallengePageRequest = (page) => {
+            if (
+                (page === ChallengePage.MiniGames && !this._canShowMinigames()) ||
+                (page === ChallengePage.Puzzle && !this._canShowPuzzle()) ||
+                (page === ChallengePage.Survival && !this._canShowSurvival())
+            ) {
+                selectorScreen.onLockedModeClick?.(
+                    page === ChallengePage.MiniGames
+                        ? 'miniGames'
+                        : page === ChallengePage.Puzzle
+                            ? 'Puzzle'
+                            : 'Survival',
+                )
+                return
+            }
             this.showChallengeScreen(page)
         }
         selectorScreen.onAchievementRequest = () => {
             this.showAchievementScreen()
         }
         selectorScreen.onZenGardenRequest = () => {
+            if (!this._canShowZenGarden()) {
+                void this._showSelectorLockedDialog(
+                    'Locked!',
+                    'Play more Adventure to \nunlock the Zen Garden.',
+                )
+                return
+            }
             this.showZenGardenScreen()
         }
         selectorScreen.onStoreRequest = () => {
+            if (!this._canShowStore()) {
+                void this._showSelectorLockedDialog(
+                    'Locked!',
+                    'Play more Adventure to \nunlock the Shop.',
+                )
+                return
+            }
             this.showStoreDialog()
         }
         selectorScreen.onAlmanacRequest = () => {
+            if (!this._canShowAlmanac()) {
+                void this._showSelectorLockedDialog(
+                    'Locked!',
+                    'Play more Adventure to \nunlock the Almanac.',
+                )
+                return
+            }
             this.showAlmanacDialog()
         }
         selectorScreen.onAdventureRequest = () => {
-            this.showAdventureGame()
+            this.showAdventureGame(this._getProfileAdventureLevel())
         }
 
         this._selectorScreen = null
@@ -185,6 +245,7 @@ export class UIController extends Component {
         const node = createUINode('AdventureGameScreen', { active: false, width: 800, height: 600 })
         const gameScreen = node.addComponent(AdventureGameScreen)
         gameScreen.levelDefinition = level
+        gameScreen.firstTimeAdventure = (this._profile?.finishedAdventure ?? 0) <= 0
         gameScreen.onBackToMenu = () => {
             void this.showSelectorScreen()
         }
@@ -197,8 +258,9 @@ export class UIController extends Component {
         gameScreen.onGameOverRequest = () => {
             this.showGameOverDialog()
         }
-        gameScreen.onAwardScreenRequest = (seedType) => {
-            this.showAwardScreen(seedType)
+        gameScreen.onAwardScreenRequest = (award) => {
+            const profileAdventureLevel = this._advanceAdventureProgress(gameScreen.levelDefinition.adventureLevel)
+            this.showAwardScreen(award, profileAdventureLevel)
         }
 
         this._setCurrentScreen(node)
@@ -206,12 +268,25 @@ export class UIController extends Component {
         return gameScreen
     }
 
-    showAwardScreen(seedType: SeedType): AwardScreen | null {
+    showAwardScreen(
+        award: LevelAward,
+        adventureLevel = this._profile?.adventureLevel ?? this._adventureLevel.adventureLevel,
+    ): AwardScreen | null {
         const node = createUINode('AwardScreen', { active: false, width: 800, height: 600 })
         const awardScreen = node.addComponent(AwardScreen)
-        awardScreen.seedType = seedType
+        awardScreen.awardKind = award.kind
+        awardScreen.seedType = award.seedType
+        awardScreen.adventureLevel = adventureLevel
         awardScreen.onNextLevelRequest = () => {
-            this.showAdventureGame(this._nextAdventureLevel())
+            const nextLevel = this._nextAdventureLevel()
+            if (nextLevel.id === this._adventureLevel.id) {
+                void this.showSelectorScreen()
+                return
+            }
+            this.showAdventureGame(nextLevel)
+        }
+        awardScreen.onBackToMenu = () => {
+            void this.showSelectorScreen()
         }
 
         void awardScreen.ensureRendered().then(() => {
@@ -379,6 +454,7 @@ export class UIController extends Component {
 
         const node = createUINode('AchievementScreen', { active: false, width: 800, height: 600 })
         const achievementScreen = node.addComponent(AchievementScreen)
+        achievementScreen.earnedAchievements = this._profile?.earnedAchievements ?? []
         achievementScreen.onBackToMenu = () => {
             this.hideAchievementScreen()
         }
@@ -627,6 +703,13 @@ export class UIController extends Component {
         dialog.message = ''
         dialog.contentInsetTopExtra = 15
         dialog.setButtonMode(DialogButtonMode.Footer, 'Try Again')
+        dialog.onDragStateChange = (dragging) => {
+            this._gameOverDialogDragging = dragging
+            const button = this._gameOverMainMenuButton?.getComponent(UIButton)
+            if (!button) return
+
+            button.interactable = !dragging
+        }
 
         this.uiRoot!.addChild(node)
         node.active = true
@@ -678,6 +761,8 @@ export class UIController extends Component {
             },
         })
         this._gameOverMainMenuButton = button
+        const buttonState = button.getComponent(UIButton)
+        if (buttonState) buttonState.interactable = !this._gameOverDialogDragging
     }
 
     private _destroyGameOverMainMenuButton() {
@@ -685,6 +770,7 @@ export class UIController extends Component {
             this._gameOverMainMenuButton.destroy()
         }
         this._gameOverMainMenuButton = null
+        this._gameOverDialogDragging = false
     }
 
     async showConfirmBox(title: string, message: string): Promise<boolean> {
@@ -696,7 +782,7 @@ export class UIController extends Component {
     }
 
     async confirmQuit(): Promise<void> {
-        const dialog = this.showMessageBox('Quit', 'Are you sure you wish to\nquit the game?')
+        const dialog = this.showMessageBox('Quit', 'Are you sure you wish to \nquit the game?')
         if (!dialog) return
 
         dialog.setMessageLayout(0, 0, 2)
@@ -710,7 +796,7 @@ export class UIController extends Component {
     async confirmRestartLevel(): Promise<boolean> {
         const dialog = this.showMessageBox(
             'Restart Level?',
-            'Do you want to try this level\nagain from the beginning?',
+            'Do you want to try this level \nagain from the beginning?',
         )
         if (!dialog) return false
 
@@ -800,24 +886,75 @@ export class UIController extends Component {
     private _placeGlobalAdviceLayer() {
         if (!this.uiRoot?.isValid || !this._globalAdviceLayer?.isValid) return
 
-        const modal = this._modalScreen?.isValid ? this._modalScreen : null
-        if (!modal || modal.parent !== this.uiRoot) {
-            this._globalAdviceLayer.setSiblingIndex(this.uiRoot.children.length - 1)
-            return
-        }
+        this._globalAdviceLayer.setSiblingIndex(this.uiRoot.children.length - 1)
+    }
 
-        const adviceIndex = this._globalAdviceLayer.getSiblingIndex()
-        const modalIndex = modal.getSiblingIndex()
-        if (adviceIndex < modalIndex) {
-            this._globalAdviceLayer.setSiblingIndex(Math.max(0, modalIndex - 1))
-        } else if (adviceIndex > modalIndex) {
-            this._globalAdviceLayer.setSiblingIndex(modalIndex)
+    private _advanceAdventureProgress(completedLevel: number) {
+        const profile = this._profile ?? ProfileStore.loadCurrentProfile()
+        this._profile = ProfileStore.advanceAdventureProgress(profile, completedLevel)
+        return this._profile.adventureLevel
+    }
+
+    private _getProfileAdventureLevel() {
+        return this._resolveAdventureLevel(this._profile?.adventureLevel ?? 1)
+    }
+
+    private _canShowMinigames() {
+        const profile = this._profile
+        if (!profile) return false
+        return profile.finishedAdventure > 0 || profile.hasUnlockedMinigames
+    }
+
+    private _canShowPuzzle() {
+        const profile = this._profile
+        if (!profile) return false
+        return profile.finishedAdventure > 0 || profile.hasUnlockedPuzzleMode
+    }
+
+    private _canShowSurvival() {
+        const profile = this._profile
+        if (!profile) return false
+        return profile.finishedAdventure > 0 || profile.hasUnlockedSurvivalMode
+    }
+
+    private _canShowAlmanac() {
+        const profile = this._profile
+        if (!profile) return false
+        return profile.finishedAdventure > 0 || profile.adventureLevel >= 15
+    }
+
+    private _canShowStore() {
+        const profile = this._profile
+        if (!profile) return false
+        return profile.finishedAdventure > 0 || profile.hasSeenUpsell || profile.adventureLevel >= 25
+    }
+
+    private _canShowZenGarden() {
+        const profile = this._profile
+        if (!profile) return false
+        return profile.finishedAdventure > 0 || profile.adventureLevel >= 45
+    }
+
+    private async _showSelectorLockedDialog(title: string, message: string) {
+        const dialog = this.showMessageBox(title, message)
+        dialog?.setMessageLayout(277, 0, 2)
+    }
+
+    private _resolveAdventureLevel(progressLevel: number): LevelDefinition {
+        const target = Math.max(1, Math.floor(progressLevel) || 1)
+        let resolved = ADVENTURE_LEVELS[0]
+        for (const level of ADVENTURE_LEVELS) {
+            if (level.adventureLevel <= target) {
+                resolved = level
+            }
         }
+        return resolved
     }
 
     private _nextAdventureLevel(): LevelDefinition {
         if (this._adventureLevel.id === 'adventure-1-1') return ADVENTURE_1_2
         if (this._adventureLevel.id === 'adventure-1-2') return ADVENTURE_1_3
+        if (this._adventureLevel.id === 'adventure-1-3') return ADVENTURE_1_4
         return this._adventureLevel
     }
 

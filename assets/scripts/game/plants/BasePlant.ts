@@ -43,6 +43,7 @@ export abstract class Plant implements PlantEntity {
     shootingCounter = 0
     specialCounter = 0
     eatenFlashCounter = 0
+    recentlyEatenCounter = 0
     state: PlantState = 'not-ready'
     stateCountdown = 0
     dead = false
@@ -72,10 +73,20 @@ export abstract class Plant implements PlantEntity {
         this.updateAbilities(context)
         this.updateBlink(context)
         if (this.eatenFlashCounter > 0) this.eatenFlashCounter--
+        if (this.recentlyEatenCounter > 0) this.recentlyEatenCounter--
         this.attackCounter = this.launchCounter
     }
 
+    takeChewDamage(damage: number) {
+        this.health = Math.max(0, this.health - damage)
+        this.updateDamageState()
+        if (this.health <= 0) this.dead = true
+    }
+
     protected updateAbilities(_context: PlantUpdateContext) {
+    }
+
+    protected updateDamageState() {
     }
 
     protected updateShooting(_context: PlantUpdateContext) {

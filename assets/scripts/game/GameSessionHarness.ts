@@ -1,5 +1,5 @@
 import { GameSession } from './GameSession'
-import { ADVENTURE_1_1, ADVENTURE_1_2, ADVENTURE_1_3, ZOMBIE_DEFINITIONS } from './GameDefinitions'
+import { ADVENTURE_1_1, ADVENTURE_1_2, ADVENTURE_1_3, ADVENTURE_1_4, ZOMBIE_DEFINITIONS } from './GameDefinitions'
 import { SoundEffect } from '@/core/SoundLoader'
 import { createProjectile } from './projectiles/ProjectileFactory'
 
@@ -149,6 +149,93 @@ export function runAdventure11Harness(): GameHarnessResult {
     if (!repeatedNotEnoughEvents.some((event) => event.type === 'sunFlash') ||
         repeatedNotEnoughEvents.some(isCantAffordAdvice)) {
         details.push('Repeated not-enough-sun seed clicks should keep flashing the sun counter without repeating the 1-1 advice.')
+    }
+
+    const levelThreeCooldownSession = new GameSession(ADVENTURE_1_3)
+    const levelThreeCherry = levelThreeCooldownSession.seedPackets.find((packet) => packet.seedType === 'cherrybomb')
+    if (!levelThreeCherry ||
+        levelThreeCherry.cooldownRemaining !== 3500 ||
+        levelThreeCherry.cooldownTotal !== 3500 ||
+        levelThreeCherry.active) {
+        details.push('Adventure 1-3 Cherry Bomb should start a full 3500-tick initial cooldown.')
+    }
+    levelThreeCooldownSession.completeReadySetPlantIntro()
+    if (levelThreeCherry?.active) {
+        details.push('Ready-set-plant completion should not activate packets that are still in their initial cooldown.')
+    }
+
+    const levelFourCooldownSession = new GameSession(ADVENTURE_1_4)
+    const levelFourWallnut = levelFourCooldownSession.seedPackets.find((packet) => packet.seedType === 'wallnut')
+    if (!levelFourWallnut ||
+        levelFourWallnut.cooldownRemaining !== 2000 ||
+        levelFourWallnut.cooldownTotal !== 2000 ||
+        levelFourWallnut.active) {
+        details.push('Adventure 1-4 Wall-nut should start a full 2000-tick initial cooldown.')
+    }
+    const wallNutDamageSession = new GameSession(ADVENTURE_1_4)
+    const wallNut = wallNutDamageSession.debugAddPlant('wallnut', 2, 2)
+    wallNut.takeChewDamage(Math.ceil(wallNut.maxHealth / 3) + 1)
+    if (wallNut.state !== 'wallnut-cracked1') {
+        details.push('Wall-nut should switch to the first cracked state after dropping below two-thirds health.')
+    }
+    wallNut.takeChewDamage(Math.ceil(wallNut.maxHealth / 3))
+    if (wallNut.state !== 'wallnut-cracked2') {
+        details.push('Wall-nut should switch to the second cracked state after dropping below one-third health.')
+    }
+
+    const laterSunflowerSession = new GameSession(ADVENTURE_1_3)
+    laterSunflowerSession.completeReadySetPlantIntro()
+    laterSunflowerSession.drainEvents()
+    for (let i = 0; i < 5; i++) laterSunflowerSession.debugSpawnNextWave()
+    laterSunflowerSession.update()
+    const laterSunflowerStartEvents = laterSunflowerSession.drainEvents()
+    if (!laterSunflowerStartEvents.some((event) =>
+        event.type === 'advice' &&
+        event.message === 'Try to plant at least 3 sunflowers!' &&
+        event.style === 'tutorial-later-stay')) {
+        details.push('Adventure 1-3 should show the later sunflower reminder after wave 5 if fewer than 3 sunflowers are planted.')
+    }
+    if (!laterSunflowerSession.shouldShowTutorialSeedGuide('sunflower')) {
+        details.push('The later sunflower reminder should flash the Sunflower seed packet while it is ready.')
+    }
+    laterSunflowerSession.debugAddPlant('sunflower', 2, 0)
+    laterSunflowerSession.debugAddPlant('sunflower', 2, 1)
+    laterSunflowerSession.drainEvents()
+    laterSunflowerSession.debugAddPlant('sunflower', 2, 2)
+    const laterSunflowerDoneEvents = laterSunflowerSession.drainEvents()
+    if (!laterSunflowerDoneEvents.some((event) =>
+        event.type === 'advice' &&
+        event.message === 'Planting sunflowers will improve your chances \nof surviving the zombie attack!' &&
+        event.style === 'tutorial-later')) {
+        details.push('Completing the later sunflower tutorial before the 500-tick reminder should show the completion advice.')
+    }
+    if (laterSunflowerSession.shouldShowTutorialSeedGuide('sunflower')) {
+        details.push('Completing the later sunflower tutorial should stop flashing the Sunflower seed packet.')
+    }
+    const expiredLaterSunflowerSession = new GameSession(ADVENTURE_1_3)
+    expiredLaterSunflowerSession.completeReadySetPlantIntro()
+    expiredLaterSunflowerSession.drainEvents()
+    for (let i = 0; i < 5; i++) expiredLaterSunflowerSession.debugSpawnNextWave()
+    expiredLaterSunflowerSession.update()
+    expiredLaterSunflowerSession.drainEvents()
+    for (let i = 0; i < 500; i++) expiredLaterSunflowerSession.update()
+    expiredLaterSunflowerSession.drainEvents()
+    expiredLaterSunflowerSession.debugAddPlant('sunflower', 2, 0)
+    expiredLaterSunflowerSession.debugAddPlant('sunflower', 2, 1)
+    expiredLaterSunflowerSession.drainEvents()
+    expiredLaterSunflowerSession.debugAddPlant('sunflower', 2, 2)
+    if (expiredLaterSunflowerSession.drainEvents().some((event) => event.type === 'advice')) {
+        details.push('Completing the later sunflower tutorial after the 500-tick reminder should not repeat the completion advice.')
+    }
+    const replayLaterSunflowerSession = new GameSession(ADVENTURE_1_3, { firstTimeAdventure: false })
+    replayLaterSunflowerSession.completeReadySetPlantIntro()
+    replayLaterSunflowerSession.drainEvents()
+    for (let i = 0; i < 5; i++) replayLaterSunflowerSession.debugSpawnNextWave()
+    replayLaterSunflowerSession.update()
+    if (replayLaterSunflowerSession.drainEvents().some((event) =>
+        event.type === 'advice' &&
+        event.message === 'Try to plant at least 3 sunflowers!')) {
+        details.push('Replay adventure sessions should not show the first-time later sunflower tutorial.')
     }
 
     const zombieSession = new GameSession()
@@ -324,6 +411,67 @@ export function runAdventure11Harness(): GameHarnessResult {
         }
     }
 
+    const plantChewFlashSession = new GameSession()
+    const chewedPlant = plantChewFlashSession.debugAddPlant('peashooter', 2, 0)
+    const chewingZombie = plantChewFlashSession.addZombie('normal', 2, chewedPlant.x + 10)
+    if (!chewingZombie) {
+        details.push('Plant chew flash setup should create a zombie in the active row.')
+    } else {
+        chewingZombie.velocityX = 0
+        plantChewFlashSession.drainEvents()
+        for (let i = 0; i < 4; i++) plantChewFlashSession.update()
+        if (chewedPlant.health !== chewedPlant.maxHealth - 4) {
+            details.push('Zombie chewing should damage plants on the original 4-tick cadence.')
+        }
+        if (chewedPlant.recentlyEatenCounter !== 50) {
+            details.push('Zombie chewing should refresh the original 50-tick recently-eaten plant timer on damage.')
+        }
+        if (chewedPlant.eatenFlashCounter !== 0) {
+            details.push('Plant eaten flash should wait for the original chew animation hand event instead of every damage tick.')
+        }
+        for (let i = 0; i < 12; i++) plantChewFlashSession.update()
+        if (chewedPlant.eatenFlashCounter !== 25) {
+            details.push('A chewed plant should start the original 25-tick eaten flash highlight on a chew animation hand event.')
+        }
+    }
+
+    const headlessPlantSession = new GameSession()
+    const ignoredPlant = headlessPlantSession.debugAddPlant('peashooter', 2, 0)
+    const headlessTouchingPlant = headlessPlantSession.addZombie('normal', 2, ignoredPlant.x + 10)
+    if (!headlessTouchingPlant) {
+        details.push('Headless plant collision setup should create a zombie in the active row.')
+    } else {
+        headlessTouchingPlant.velocityX = 0
+        headlessTouchingPlant.hasHead = false
+        headlessPlantSession.drainEvents()
+        headlessPlantSession.update()
+        if (headlessTouchingPlant.state === 'eating' || headlessTouchingPlant.currentAnimation === 'anim_eat') {
+            details.push('A headless zombie touching a plant should keep walking instead of switching to the eating animation.')
+        }
+        if (ignoredPlant.health !== ignoredPlant.maxHealth || ignoredPlant.eatenFlashCounter !== 0) {
+            details.push('A headless zombie touching a plant should not chew or flash the plant.')
+        }
+    }
+
+    const eatingHeadDropSession = new GameSession()
+    const eatingPlant = eatingHeadDropSession.debugAddPlant('peashooter', 2, 0)
+    const eatingHeadDropZombie = eatingHeadDropSession.addZombie('normal', 2, eatingPlant.x + 10)
+    if (!eatingHeadDropZombie) {
+        details.push('Eating head-drop setup should create a zombie in the active row.')
+    } else {
+        eatingHeadDropZombie.velocityX = 0
+        eatingHeadDropSession.drainEvents()
+        eatingHeadDropSession.update()
+        eatingHeadDropZombie.takeDamage(200)
+        eatingHeadDropSession.update()
+        if (eatingHeadDropZombie.hasHead) {
+            details.push('Eating head-drop setup should remove the zombie head.')
+        }
+        if (eatingHeadDropZombie.state !== 'eating' || eatingHeadDropZombie.currentAnimation !== 'anim_eat') {
+            details.push('A zombie that loses its head while eating should keep the eating animation until its current target is gone.')
+        }
+    }
+
     const waveSession = new GameSession()
     waveSession.drainEvents()
     for (let i = 0; i < 1795; i++) waveSession.update()
@@ -391,6 +539,16 @@ export function runAdventure11Harness(): GameHarnessResult {
         details.push('Adventure 1-3 final flag wave should match the original 4 normals, 1 flag, and introduced conehead.')
     }
 
+    const level4WaveSession = new GameSession(ADVENTURE_1_4)
+    for (let i = 0; i < ADVENTURE_1_4.zombieWaves.length; i++) level4WaveSession.debugSpawnNextWave()
+    const level4FinalWave = level4WaveSession.zombies.filter((zombie) => zombie.fromWave === ADVENTURE_1_4.zombieWaves.length - 1)
+    const level4FinalNormals = level4FinalWave.filter((zombie) => zombie.type === 'normal').length
+    const level4FinalFlags = level4FinalWave.filter((zombie) => zombie.type === 'flag').length
+    const level4FinalCones = level4FinalWave.filter((zombie) => zombie.type === 'traffic-cone').length
+    if (ADVENTURE_1_4.zombieWaves.length !== 10 || level4FinalNormals !== 4 || level4FinalFlags !== 1 || level4FinalCones !== 1 || level4FinalWave.length !== 6) {
+        details.push('Adventure 1-4 should have 10 waves and end with the original 4 normals, 1 flag, and 1 conehead reward wave.')
+    }
+
     const combatSession = new GameSession()
     const combatCenter = combatSession.geometry.gridToPixel(0, 2)
     combatSession.dispatch({ type: 'selectSeed', seedType: 'peashooter' })
@@ -440,6 +598,32 @@ export function runAdventure11Harness(): GameHarnessResult {
         }
         if (offscreenCombatZombie.health !== 270) {
             details.push('Offscreen zombies should not take immediate projectile damage before becoming visible.')
+        }
+    }
+
+    const shooterRangeSession = new GameSession()
+    const shooterRangeCenter = shooterRangeSession.geometry.gridToPixel(0, 2)
+    shooterRangeSession.dispatch({ type: 'selectSeed', seedType: 'peashooter' })
+    shooterRangeSession.dispatch({ type: 'placePlant', x: shooterRangeCenter.x + 40, y: shooterRangeCenter.y + 50 })
+    const shooterRangePlant = shooterRangeSession.plants[0]
+    const shooterRangeZombie = shooterRangeSession.addZombie('normal', 2, shooterRangePlant.x - 37)
+    if (!shooterRangePlant || !shooterRangeZombie) {
+        details.push('Shooter range setup should create a Peashooter and zombie in the active row.')
+    } else {
+        shooterRangeZombie.velocityX = 0
+        shooterRangePlant.launchCounter = 1
+        shooterRangeSession.drainEvents()
+        shooterRangeSession.update()
+        const beforeAttackLineEvents = shooterRangeSession.drainEvents()
+        if (beforeAttackLineEvents.some((event) => event.type === 'animationRequested' && event.entityId === shooterRangePlant.id && event.animation === 'shoot')) {
+            details.push('Peashooter should not shoot until the zombie body reaches the original plant attack rect at plant.x + 60.')
+        }
+        shooterRangeZombie.x = shooterRangePlant.x - 18
+        shooterRangePlant.launchCounter = 1
+        shooterRangeSession.update()
+        const onAttackLineEvents = shooterRangeSession.drainEvents()
+        if (!onAttackLineEvents.some((event) => event.type === 'animationRequested' && event.entityId === shooterRangePlant.id && event.animation === 'shoot')) {
+            details.push('Peashooter should shoot once the zombie body reaches the original plant attack rect at plant.x + 60.')
         }
     }
 
@@ -496,7 +680,7 @@ export function runAdventure11Harness(): GameHarnessResult {
         Math.random = originalLootRandom
     }
 
-    const awardDropSession = new GameSession()
+    const awardDropSession = new GameSession(ADVENTURE_1_4)
     awardDropSession.currentWave = awardDropSession.numWaves
     const dyingAwardZombie = awardDropSession.addZombie('normal', 2, 500)
     const finalAwardZombie = awardDropSession.addZombie('normal', 2, 260)
@@ -516,15 +700,27 @@ export function runAdventure11Harness(): GameHarnessResult {
         }))
         awardDropSession.drainEvents()
         awardDropSession.update()
-        if (!awardDropSession.items.some((item) => item.type === 'final-seed-packet' && !item.dead)) {
-            details.push('The final zombie should drop the level award seed packet.')
+        const levelAwardItem = awardDropSession.items.find((item) => item.type === 'final-seed-packet' && !item.dead)
+        if (!levelAwardItem) {
+            details.push('The final zombie should drop the level award item.')
+        } else if (levelAwardItem.awardKind !== 'shovel') {
+            details.push('Adventure 1-4 should drop the shovel award instead of a seed packet.')
         }
         if (awardDropSession.sunSpawningEnabled) {
-            details.push('Sky sun spawning should stop once the level award seed packet drops.')
+            details.push('Sky sun spawning should stop once the level award item drops.')
         }
         if (awardDropSession.zombies.length !== 0) {
             details.push('Dropping the level award should remove every zombie from the board like the original RemoveAllZombies path.')
         }
+    }
+    const debugAwardFallbackSession = new GameSession(ADVENTURE_1_4)
+    debugAwardFallbackSession.currentWave = debugAwardFallbackSession.numWaves
+    debugAwardFallbackSession.addZombie('normal', 2, 500)
+    debugAwardFallbackSession.drainEvents()
+    debugAwardFallbackSession.debugKillAllZombies()
+    const fallbackAwardItem = debugAwardFallbackSession.items.find((item) => item.type === 'final-seed-packet' && !item.dead)
+    if (!fallbackAwardItem || fallbackAwardItem.awardKind !== 'shovel') {
+        details.push('Debug-killing the final zombies should still drop the Adventure 1-4 shovel award from the board center.')
     }
 
     const cherrySession = new GameSession()

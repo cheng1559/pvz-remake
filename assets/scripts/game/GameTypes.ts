@@ -22,12 +22,15 @@ export type ZombieState = 'walking' | 'eating' | 'dying' | 'mowered' | 'charred'
 export type LawnMowerState = 'ready' | 'triggered'
 export type ZombieHelmType = 'none' | 'traffic-cone' | 'bucket'
 export type ZombieShieldType = 'none'
+export type LevelAwardKind = 'seed' | 'shovel'
 export type AdviceStyle =
     | 'hint'
     | 'hint-stay'
     | 'tutorial-level1'
     | 'tutorial-level1-stay'
     | 'tutorial-level2'
+    | 'tutorial-later'
+    | 'tutorial-later-stay'
 export type LevelOneTutorialPhase =
     | 'pick-first-seed'
     | 'plant-first-seed'
@@ -43,6 +46,7 @@ export type LevelTwoTutorialPhase =
     | 'plant-sunflower'
     | 'refresh-sunflower'
     | 'completed'
+export type LaterSunflowerTutorialPhase = LevelTwoTutorialPhase
 export type PlantingReason = 'ok' | 'not-here' | 'not-enough-sun' | 'waiting-for-seed'
 export type PlantState =
     | 'not-ready'
@@ -56,6 +60,8 @@ export type PlantState =
     | 'chomper-biting-missed'
     | 'chomper-digesting'
     | 'chomper-swallowing'
+    | 'wallnut-cracked1'
+    | 'wallnut-cracked2'
 
 export interface Rect {
     x: number
@@ -70,7 +76,7 @@ export interface BoardGridPosition {
 }
 
 export interface LevelDefinition {
-    id: 'adventure-1-1' | 'adventure-1-2' | 'adventure-1-3'
+    id: 'adventure-1-1' | 'adventure-1-2' | 'adventure-1-3' | 'adventure-1-4'
     adventureLevel: number
     background: BackgroundType
     activeRows: number[]
@@ -78,6 +84,7 @@ export interface LevelDefinition {
     seedPackets: SeedType[]
     zombieWaves: ZombieWaveDefinition[]
     tutorialAdvice: string[]
+    awardKind?: LevelAwardKind
     awardSeedType?: SeedType
 }
 
@@ -178,6 +185,7 @@ export type GameEvent =
 export interface SeedPacketState {
     seedType: SeedType
     cooldownRemaining: number
+    cooldownTotal: number
     active: boolean
     selected: boolean
 }
@@ -199,6 +207,7 @@ export interface PlantEntity {
     shootingCounter: number
     specialCounter: number
     eatenFlashCounter: number
+    recentlyEatenCounter: number
     state: PlantState
     stateCountdown: number
     dead: boolean
@@ -252,10 +261,17 @@ export interface ItemEntity {
     height: number
     scale: number
     alpha: number
+    awardKind: LevelAwardKind
     awardSeedType: SeedType | null
+    age: number
     hitGround: boolean
     dead: boolean
     beingCollected: boolean
+}
+
+export interface LevelAward {
+    kind: LevelAwardKind
+    seedType: SeedType | null
 }
 
 export interface ProjectileEntity {

@@ -66,12 +66,14 @@ import {
     type ZombieAnimationView,
 } from './ZombieAnimation'
 import { GameSession } from './GameSession'
+import { GameDebugSettings } from './GameDebugSettings'
 import type {
     GameEntity,
     GameEvent,
     ItemEntity,
     AdviceStyle,
     LawnMowerEntity,
+    LevelAward,
     LevelDefinition,
     PlantEntity,
     PlantType,
@@ -97,6 +99,7 @@ const INTRO_PAN_LEFT_START = 450
 const INTRO_PAN_LEFT_END = 600
 const INTRO_ROLL_SOD_START = 600
 const INTRO_ROLL_SOD_END = 800
+const INTRO_SOD_READY_SET_PLANT_END = 1038
 const INTRO_LAWN_MOWER_ROW = 2
 const INTRO_LAWN_MOWER_START = 820
 const INTRO_LAWN_MOWER_END = 845
@@ -155,6 +158,7 @@ const INTRO_STREET_ZOMBIE_ROW_Z_STEP = 4
 const INTRO_STREET_ZOMBIE_ODD_COLUMN_Z_OFFSET = 2
 const INTRO_END = 855
 const INTRO_NO_SOD_READY_SET_PLANT_END = 838
+const LEVEL_AWARD_FLASH_TIME = 75
 const SOD_ROW_X = 239 - BOARD_OFFSET
 const SOD_ROW_Y = 265
 const SOD_THREE_ROW_X = 235 - BOARD_OFFSET
@@ -176,10 +180,9 @@ const CURSOR_PLANT_PREVIEW_OPACITY = 255
 const GRID_PLANT_PREVIEW_OPACITY = 100
 const MOBILE_GRID_GUIDE_OPACITY = 72
 const MOBILE_ITEM_SWIPE_SAMPLE_STEP = 24
-const DEBUG_ZOMBIE_COLLISION_RECTS = true
-const DEBUG_ZOMBIE_BODY_RECT_COLOR = new Color(0, 220, 255, 220)
-const DEBUG_ZOMBIE_ATTACK_RECT_COLOR = new Color(255, 64, 64, 220)
-const DEBUG_ZOMBIE_RECT_LINE_WIDTH = 2
+const DEBUG_HITBOX_EDGE_WIDTH = 1
+const DEBUG_BODY_RECT_COLOR = new Color(0, 255, 0, 255)
+const DEBUG_ATTACK_RECT_COLOR = new Color(255, 0, 0, 255)
 const ZOMBIE_BODY_REANIM_OFFSET_X = 15
 const ZOMBIE_BODY_REANIM_OFFSET_Y = 8
 const ZOMBIE_REANIM_BLEND_TIME = 0.2
@@ -316,7 +319,10 @@ const GAME_TEXTURES = [
     'plant_previews_cached',
     'shovelbank',
     'shovel',
+    'shovel_hi_res',
     'peashooter_head',
+    'wallnut_cracked1',
+    'wallnut_cracked2',
     'coinglow',
     'coin_silver_dollar',
     'coin_silver2',
@@ -351,6 +357,8 @@ interface PlantView extends PlantAnimationView {
     highlightOverlay: Node | null
     shootingAnimationActive: boolean
     shootingAnimationToken: number
+    wallnutDamageState: PlantEntity['state'] | null
+    wallnutFrozen: boolean
 }
 
 interface ZombieView extends ZombieAnimationView {
@@ -423,8 +431,9 @@ export class AdventureGameScreen extends Component {
     public onMenuRequest: (() => void) | null = null
     public onPauseRequest: (() => void) | null = null
     public onGameOverRequest: (() => void) | null = null
-    public onAwardScreenRequest: ((seedType: SeedType) => void) | null = null
+    public onAwardScreenRequest: ((award: LevelAward) => void) | null = null
     public levelDefinition: LevelDefinition = ADVENTURE_1_1
+    public firstTimeAdventure = true
 
     private _session = new GameSession()
     private _boardRoot: Node = null!
@@ -432,6 +441,7 @@ export class AdventureGameScreen extends Component {
     private _entityLayer: Node = null!
     private _collisionDebugLayer: Node | null = null
     private _collisionDebugGraphics: Graphics | null = null
+    private _debugHitboxesVisible = false
     private _uiLayer: Node = null!
     private _itemLayer: Node = null!
     private _seedBankNode: Node | null = null
@@ -442,7 +452,7 @@ export class AdventureGameScreen extends Component {
     private _soddedNode: Node | null = null
     private _sodBaseNode: Node | null = null
     private _sodClipNode: Node | null = null
-    private _sodClipSpriteName = 'sod1row'
+    private _sodClipRevealWidth = 771
     private _tutorialLawnFlashNode: Node | null = null
     private _sodRollViews: SodRollView[] = []
     private _introLawnMowerViews: IntroLawnMowerView[] = []
@@ -518,7 +528,7 @@ export class AdventureGameScreen extends Component {
     private _levelCompleteActive = false
     private _levelCompleteLightFillPlayed = false
     private _levelAwardScreenShown = false
-    private _levelAwardSeedType: SeedType | null = null
+    private _levelAward: LevelAward | null = null
     private _sunFont: BitmapFontAssets | null = null
     private _packetCostFont: BitmapFontAssets | null = null
     private _levelFont: BitmapFontAssets | null = null
@@ -547,7 +557,10 @@ export class AdventureGameScreen extends Component {
     private _bootstrapped = false
 
     onLoad() {
-        this._session = new GameSession(this.levelDefinition)
+        this._session = new GameSession(this.levelDefinition, {
+            firstTimeAdventure: this.firstTimeAdventure,
+        })
+        this._debugHitboxesVisible = GameDebugSettings.hitboxesVisible
         setUISize(this.node, 800, 600)
         this._boardRoot = createUINode('BoardRoot', {
             parent: this.node,
@@ -569,16 +582,15 @@ export class AdventureGameScreen extends Component {
             y: 0,
         })
         this._entityLayer = createUINode('Entities', { parent: this._boardContent, anchorX: 0, anchorY: 1 })
-        if (DEBUG_ZOMBIE_COLLISION_RECTS) {
-            this._collisionDebugLayer = createUINode('ZombieCollisionDebug', {
-                parent: this._entityLayer,
-                anchorX: 0,
-                anchorY: 1,
-                width: 1400,
-                height: 600,
-            })
-            this._collisionDebugGraphics = this._collisionDebugLayer.addComponent(Graphics)
-        }
+        this._collisionDebugLayer = createUINode('HitboxDebug', {
+            parent: this._entityLayer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 1400,
+            height: 600,
+        })
+        this._collisionDebugLayer.active = this._debugHitboxesVisible
+        this._collisionDebugGraphics = this._collisionDebugLayer.addComponent(Graphics)
         this._uiLayer = createUINode('HUD', { parent: this._boardRoot, anchorX: 0, anchorY: 1 })
         this._itemLayer = createUINode('Items', { parent: this._uiLayer, anchorX: 0, anchorY: 1 })
 
@@ -590,7 +602,6 @@ export class AdventureGameScreen extends Component {
         input.off(Input.EventType.MOUSE_DOWN, this._onGlobalMouseDown, this)
         input.off(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this._releasePlantCursorHoverBlock()
-        this._setCanvasCursor('default')
         this.unscheduleAllCallbacks()
     }
 
@@ -834,10 +845,9 @@ export class AdventureGameScreen extends Component {
     }
 
     public debugSetRechargingEnabled(enabled: boolean) {
-        if (!this.isLevelRunning()) return null
-
+        GameDebugSettings.rechargingEnabled = enabled
         const rechargingEnabled = this._session.debugSetRechargingEnabled(enabled)
-        this._renderFrame()
+        if (this._bootstrapped) this._renderFrame()
         return rechargingEnabled
     }
 
@@ -850,11 +860,23 @@ export class AdventureGameScreen extends Component {
     }
 
     public debugSetAutoCollectEnabled(enabled: boolean) {
-        if (!this.isLevelRunning()) return null
-
+        GameDebugSettings.autoCollectEnabled = enabled
         const autoCollectEnabled = this._session.debugSetAutoCollectEnabled(enabled)
-        this._renderFrame()
+        if (this._bootstrapped) this._renderFrame()
         return autoCollectEnabled
+    }
+
+    public debugSetHitboxesVisible(visible: boolean) {
+        GameDebugSettings.hitboxesVisible = visible
+        this._debugHitboxesVisible = visible
+        if (this._collisionDebugLayer?.isValid) {
+            this._collisionDebugLayer.active = visible
+        }
+        if (!visible) {
+            this._collisionDebugGraphics?.clear()
+        }
+        if (this._bootstrapped) this._renderFrame()
+        return this._debugHitboxesVisible
     }
 
     private async _drawStaticBoard() {
@@ -896,12 +918,12 @@ export class AdventureGameScreen extends Component {
 
         const sod = SpriteLoader.get(sodLayout.clipSprite)
         if (sod) {
-            this._sodClipSpriteName = sodLayout.clipSprite
+            this._sodClipRevealWidth = sodLayout.clipRevealWidth ?? sod.originalSize.width
             this._sodClipNode = createUINode('SodClip', {
                 parent: this._boardContent,
                 anchorX: 0,
                 anchorY: 1,
-                width: sodLayout.clipVisible ? 0 : sod.originalSize.width,
+                width: sodLayout.clipVisible ? 0 : this._sodClipRevealWidth,
                 height: sod.originalSize.height,
                 x: sodLayout.clipX,
                 y: -sodLayout.clipY,
@@ -912,8 +934,8 @@ export class AdventureGameScreen extends Component {
                 name: 'SodRow',
                 spriteFrame: sod,
                 parent: this._sodClipNode,
-                x: 0,
-                y: 0,
+                x: sodLayout.clipSpriteOffsetX ?? 0,
+                y: sodLayout.clipSpriteOffsetY ?? 0,
             })
             this._tutorialLawnFlashNode = createSpriteNode({
                 name: 'TutorialLawnFlash',
@@ -955,6 +977,21 @@ export class AdventureGameScreen extends Component {
     }
 
     private _introSodLayout() {
+        if (this._session.level.adventureLevel === 4) {
+            return {
+                baseSprite: 'sod3row',
+                baseVisible: true,
+                baseX: SOD_THREE_ROW_X,
+                baseY: SOD_THREE_ROW_Y,
+                clipSprite: 'background1',
+                clipX: 232 - BOARD_OFFSET,
+                clipY: 0,
+                clipVisible: true,
+                clipRevealWidth: 773,
+                clipSpriteOffsetX: -232,
+                clipSpriteOffsetY: 0,
+            }
+        }
         if (this._session.level.adventureLevel === 3) {
             return {
                 baseSprite: 'sod3row',
@@ -965,6 +1002,9 @@ export class AdventureGameScreen extends Component {
                 clipX: SOD_THREE_ROW_X,
                 clipY: SOD_THREE_ROW_Y,
                 clipVisible: false,
+                clipRevealWidth: 771,
+                clipSpriteOffsetX: 0,
+                clipSpriteOffsetY: 0,
             }
         }
         if (this._session.level.adventureLevel === 2) {
@@ -977,6 +1017,9 @@ export class AdventureGameScreen extends Component {
                 clipX: SOD_THREE_ROW_X,
                 clipY: SOD_THREE_ROW_Y,
                 clipVisible: true,
+                clipRevealWidth: 771,
+                clipSpriteOffsetX: 0,
+                clipSpriteOffsetY: 0,
             }
         }
 
@@ -989,10 +1032,19 @@ export class AdventureGameScreen extends Component {
             clipX: SOD_ROW_X,
             clipY: SOD_ROW_Y,
             clipVisible: true,
+            clipRevealWidth: 771,
+            clipSpriteOffsetX: 0,
+            clipSpriteOffsetY: 0,
         }
     }
 
     private _introSodRollSpecs() {
+        if (this._session.level.adventureLevel === 4) {
+            return [
+                { x: -3, y: -198 },
+                { x: -3, y: 203 },
+            ]
+        }
         if (this._session.level.adventureLevel === 2) {
             return [
                 { x: 0, y: -102 },
@@ -1004,7 +1056,7 @@ export class AdventureGameScreen extends Component {
     }
 
     private _shouldPlayIntroSodRoll() {
-        return this._session.level.adventureLevel <= 2
+        return this._session.level.adventureLevel <= 2 || this._session.level.adventureLevel === 4
     }
 
     private _createGameOverDoorLayers() {
@@ -1968,7 +2020,7 @@ export class AdventureGameScreen extends Component {
         }
         if (this._gameStarted && !this._gameOverActive) this._syncBoardPosition()
         this._syncEntityLayerOrder()
-        this._drawZombieCollisionDebug()
+        this._drawHitboxDebug()
         this._restoreGameplayLayerOrder()
         this._syncGameOverLayerOrder()
         this._syncPlantHighlights()
@@ -2027,6 +2079,9 @@ export class AdventureGameScreen extends Component {
     }
 
     private _introEndTime() {
+        if (this._shouldPlayIntroSodRoll() && this._shouldPlayReadySetPlantIntro()) {
+            return INTRO_SOD_READY_SET_PLANT_END
+        }
         if (!this._shouldPlayIntroSodRoll() && this._shouldPlayReadySetPlantIntro()) {
             return INTRO_NO_SOD_READY_SET_PLANT_END
         }
@@ -2120,7 +2175,7 @@ export class AdventureGameScreen extends Component {
             return
         }
 
-        const sodWidth = SpriteLoader.get(this._sodClipSpriteName)?.originalSize.width ?? 771
+        const sodWidth = this._sodClipRevealWidth
         const progress = this._linearFloat(INTRO_ROLL_SOD_START, INTRO_ROLL_SOD_END, this._introTime, 0, 1)
         const rollProgress = this._linearFloat(INTRO_ROLL_SOD_START, INTRO_ROLL_SOD_END, this._introTime + 1, 0, 1)
         setUISize(this._sodClipNode, sodWidth * progress, height, 0, 1)
@@ -2590,7 +2645,10 @@ export class AdventureGameScreen extends Component {
         this._levelCompleteTicks = 0
         this._levelCompleteLightFillPlayed = false
         this._levelAwardScreenShown = false
-        this._levelAwardSeedType = this._session.level.awardSeedType ?? null
+        const awardKind = this._session.level.awardKind ?? (this._session.level.awardSeedType ? 'seed' : null)
+        this._levelAward = awardKind
+            ? { kind: awardKind, seedType: this._session.level.awardSeedType ?? null }
+            : null
         this._gameAccumulator = 0
         this._previousEntitySnapshots.clear()
         this._session.dispatch({ type: 'clearCursor' })
@@ -2599,7 +2657,6 @@ export class AdventureGameScreen extends Component {
         this._destroyReadySetPlant()
         this._destroyFinalWaveWarning()
         this._releasePlantCursorHoverBlock()
-        this._setCanvasCursor('default')
         this._ensureLevelCompleteOverlay()
         this._syncLevelCompleteEffect()
         void SoundLoader.play(SoundEffect.WinMusic)
@@ -2677,11 +2734,11 @@ export class AdventureGameScreen extends Component {
 
     private _requestLevelAwardScreen() {
         if (this._levelAwardScreenShown) return
-        const seedType = this._levelAwardSeedType
-        if (!seedType) return
+        const award = this._levelAward
+        if (!award) return
 
         this._levelAwardScreenShown = true
-        this.onAwardScreenRequest?.(seedType)
+        this.onAwardScreenRequest?.(award)
     }
 
     private _startGameOver(zombieId: number | null) {
@@ -2699,7 +2756,6 @@ export class AdventureGameScreen extends Component {
         this._destroyFinalWaveWarning()
         this._destroyReadySetPlant()
         this._releasePlantCursorHoverBlock()
-        this._setCanvasCursor('default')
         this._hideGameplayUiForGameOver()
         this._syncSceneAnimationState()
         this._ensureGameOverOverlay()
@@ -2782,7 +2838,6 @@ export class AdventureGameScreen extends Component {
         if (this._gameOverTicks < GAME_OVER_END_TICKS) return
 
         this._gameOverDialogRequested = true
-        this._setCanvasCursor('default')
         this.onGameOverRequest?.()
     }
 
@@ -2940,7 +2995,11 @@ export class AdventureGameScreen extends Component {
             const scale = renderState.scale ?? entity.scale
             if (entity.type === 'final-seed-packet') {
                 node.setScale(1, 1, 1)
-                this._syncFinalSeedPacketVisual(node, scale)
+                if (entity.awardKind === 'shovel') {
+                    this._syncFinalShovelVisual(node, scale, entity.age, entity.beingCollected)
+                } else {
+                    this._syncFinalSeedPacketVisual(node, scale)
+                }
             } else {
                 node.setScale(scale, scale, 1)
             }
@@ -2950,7 +3009,9 @@ export class AdventureGameScreen extends Component {
             return
         }
         node.setPosition(renderState.x, -renderState.y, this._entityZ(entity))
-        if (entity.kind === 'zombie') {
+        if (entity.kind === 'plant') {
+            this._syncPlantAnimation(entity)
+        } else if (entity.kind === 'zombie') {
             this._syncZombieGameOverClip(entity, renderState)
             this._syncZombieAnimation(entity)
         } else if (entity.kind === 'lawnmower') {
@@ -3029,44 +3090,94 @@ export class AdventureGameScreen extends Component {
         }
     }
 
-    private _drawZombieCollisionDebug() {
+    private _drawHitboxDebug() {
         const graphics = this._collisionDebugGraphics
-        if (!DEBUG_ZOMBIE_COLLISION_RECTS || !graphics) return
+        if (!graphics) return
 
         graphics.clear()
-        graphics.lineWidth = DEBUG_ZOMBIE_RECT_LINE_WIDTH
+        if (!this._debugHitboxesVisible) return
+
+        for (const plant of this._session.plants) {
+            if (plant.dead) continue
+            const rect = this._session.debugGetPlantBodyRect(plant)
+            this._drawBoardDebugRect(
+                graphics,
+                rect.x,
+                rect.y,
+                rect.width,
+                rect.height,
+                DEBUG_BODY_RECT_COLOR,
+            )
+        }
+
         for (const zombie of this._session.zombies) {
             if (zombie.dead) continue
-            this._strokeBoardRect(
+            if (zombie.state === 'dying' || zombie.state === 'mowered' || zombie.state === 'charred') continue
+            this._drawBoardDebugRect(
                 graphics,
                 zombie.x + zombie.bodyRect.x,
                 zombie.y + zombie.bodyRect.y,
                 zombie.bodyRect.width,
                 zombie.bodyRect.height,
-                DEBUG_ZOMBIE_BODY_RECT_COLOR,
+                DEBUG_BODY_RECT_COLOR,
             )
-            this._strokeBoardRect(
+            this._drawBoardDebugRect(
                 graphics,
                 zombie.x + zombie.attackRect.x,
                 zombie.y + zombie.attackRect.y,
                 zombie.attackRect.width,
                 zombie.attackRect.height,
-                DEBUG_ZOMBIE_ATTACK_RECT_COLOR,
+                DEBUG_ATTACK_RECT_COLOR,
+            )
+        }
+
+        for (const projectile of this._session.projectiles) {
+            if (projectile.dead) continue
+            const rect = projectile.getProjectileRect()
+            this._drawBoardDebugRect(
+                graphics,
+                rect.x,
+                rect.y,
+                rect.width,
+                rect.height,
+                DEBUG_ATTACK_RECT_COLOR,
+            )
+        }
+
+        for (const mower of this._session.lawnMowers) {
+            if (mower.dead) continue
+            const rect = this._session.debugGetLawnMowerAttackRect(mower)
+            this._drawBoardDebugRect(
+                graphics,
+                rect.x,
+                rect.y,
+                rect.width,
+                rect.height,
+                DEBUG_ATTACK_RECT_COLOR,
             )
         }
 
         this._collisionDebugLayer?.setSiblingIndex(this._entityLayer.children.length - 1)
     }
 
-    private _strokeBoardRect(graphics: Graphics, x: number, y: number, width: number, height: number, color: Color) {
-        graphics.strokeColor = color
-        graphics.rect(x, -(y + height), width, height)
-        graphics.stroke()
+    private _drawBoardDebugRect(graphics: Graphics, x: number, y: number, width: number, height: number, color: Color) {
+        graphics.fillColor = color
+        graphics.fillRect(x, -(y + DEBUG_HITBOX_EDGE_WIDTH), width + DEBUG_HITBOX_EDGE_WIDTH, DEBUG_HITBOX_EDGE_WIDTH)
+        graphics.fillRect(x, -(y + height + DEBUG_HITBOX_EDGE_WIDTH), width + DEBUG_HITBOX_EDGE_WIDTH, DEBUG_HITBOX_EDGE_WIDTH)
+        if (height <= DEBUG_HITBOX_EDGE_WIDTH) return
+
+        graphics.fillRect(x, -(y + height), DEBUG_HITBOX_EDGE_WIDTH, height - DEBUG_HITBOX_EDGE_WIDTH)
+        graphics.fillRect(
+            x + width,
+            -(y + height),
+            DEBUG_HITBOX_EDGE_WIDTH,
+            height - DEBUG_HITBOX_EDGE_WIDTH,
+        )
     }
 
     private _createPlantNode(plant: PlantEntity) {
         const node = createUINode(`Plant_${plant.id}`, { parent: this._entityLayer, anchorX: 0, anchorY: 1, width: 100, height: 100 })
-        const view = this._createPlantVisual(node, plant.type, true, 255, true, 0)
+        const view = this._createPlantVisual(node, plant.type, true, 255, true, 0, plant.id)
         this._plantViews.set(plant.id, view)
         return node
     }
@@ -3226,6 +3337,8 @@ export class AdventureGameScreen extends Component {
         node.addComponent(UIOpacity).opacity = item.alpha
         if (item.type === 'sun' || item.type === 'small-sun' || item.type === 'large-sun') {
             this._createSunVisual(node)
+        } else if (item.type === 'final-seed-packet' && item.awardKind === 'shovel') {
+            this._createFinalShovelVisual(node, item)
         } else if (item.type === 'final-seed-packet') {
             this._createFinalSeedPacketVisual(node, item)
         } else {
@@ -3493,6 +3606,34 @@ export class AdventureGameScreen extends Component {
         this._syncFinalSeedPacketVisual(node, item.scale)
     }
 
+    private _createFinalShovelVisual(node: Node, item: ItemEntity) {
+        const shovel = SpriteLoader.get('shovel_hi_res')
+        if (!shovel) return
+
+        createSpriteNode({
+            name: 'FinalShovelBase',
+            spriteFrame: shovel,
+            parent: node,
+            layer: this.node.layer,
+            anchorX: 0.5,
+            anchorY: 0.5,
+            x: 0,
+            y: 0,
+        })
+        const flashNode = createSpriteNode({
+            name: 'FinalShovelFlash',
+            spriteFrame: shovel,
+            parent: node,
+            layer: this.node.layer,
+            anchorX: 0.5,
+            anchorY: 0.5,
+            x: 0,
+            y: 0,
+        })
+        flashNode.getComponent(Sprite)!.color = new Color(0, 0, 0, 255)
+        this._syncFinalShovelVisual(node, item.scale, item.age, false)
+    }
+
     private _syncFinalSeedPacketVisual(node: Node, scale: number) {
         const visualScale = Math.max(0.001, scale)
         const normalPacket = node.children.find((child) => child.name === 'FinalSeedPacketNormal')
@@ -3510,6 +3651,34 @@ export class AdventureGameScreen extends Component {
             largePacket.setScale(visualScale / 2, visualScale / 2, 1)
             largePacket.setPosition(topLeftX, topLeftY, 0)
         }
+    }
+
+    private _syncFinalShovelVisual(node: Node, scale: number, age: number, beingCollected: boolean) {
+        const base = node.children.find((child) => child.name === 'FinalShovelBase')
+        const flash = node.children.find((child) => child.name === 'FinalShovelFlash')
+        if (!base?.isValid || !flash?.isValid) return
+
+        const visualScale = Math.max(0.001, scale)
+        base.setScale(visualScale * 0.5, visualScale * 0.5, 1)
+        flash.setScale(visualScale * 0.5, visualScale * 0.5, 1)
+        base.setPosition(0, 0, 0)
+        flash.setPosition(0, 0, 0)
+
+        const flashSprite = flash.getComponent(Sprite)
+        const flashOpacity = flash.getComponent(UIOpacity) ?? flash.addComponent(UIOpacity)
+        if (!flashSprite) return
+
+        if (scale < 0.001 || beingCollected) {
+            flash.active = false
+            flashOpacity.opacity = 0
+            return
+        }
+
+        flash.active = true
+        const ageInFlashCycle = age % LEVEL_AWARD_FLASH_TIME
+        const half = LEVEL_AWARD_FLASH_TIME / 2
+        const grayness = Math.min(255, Math.round(55 + 200 * Math.abs(half - ageInFlashCycle) / half))
+        flashOpacity.opacity = 255 - grayness
     }
 
     private _syncPlantHighlights() {
@@ -3551,6 +3720,7 @@ export class AdventureGameScreen extends Component {
         opacity: number,
         animated: boolean,
         staticAnimTime: number,
+        plantId?: number,
     ): PlantView {
         const shadow = SpriteLoader.get('plantshadow')
         if (includeShadow && shadow) {
@@ -3580,6 +3750,8 @@ export class AdventureGameScreen extends Component {
             highlightOverlay: null,
             shootingAnimationActive: false,
             shootingAnimationToken: 0,
+            wallnutDamageState: null,
+            wallnutFrozen: false,
         }
         const plantAnimation = this._plantAnimations.get(plantType)
         if (plantAnimation?.json) {
@@ -3598,6 +3770,10 @@ export class AdventureGameScreen extends Component {
                 animator.enabled = this._isGameplaySceneAnimationEnabled()
                 this._setAnimatorOpacity(animator, animationJson, opacity)
                 wirePlantAnimation(animator, view, plantType, { animated, staticAnimTime, shakeNode: animatorNode })
+                const currentPlant = plantId == null
+                    ? null
+                    : this._session.plants.find((item) => item.id === plantId)
+                if (currentPlant) this._syncPlantAnimation(currentPlant)
                 this._syncSceneAnimationState()
             })
         }
@@ -3685,6 +3861,42 @@ export class AdventureGameScreen extends Component {
         if (view.visualRootNode?.isValid) view.visualRootNode.setPosition(0, 0, 0)
     }
 
+    private _syncPlantAnimation(plant: PlantEntity) {
+        const view = this._plantViews.get(plant.id)
+        if (!view) return
+        if (plant.type !== 'wallnut') return
+
+        this._syncWallNutDamageState(view, plant)
+        this._syncWallNutEatingFreeze(view, plant)
+    }
+
+    private _syncWallNutDamageState(view: PlantView, plant: PlantEntity) {
+        if (!view.animator || view.wallnutDamageState === plant.state) return
+
+        view.wallnutDamageState = plant.state
+        if (plant.state === 'wallnut-cracked2') {
+            view.animator.setTrackImageOverride('anim_face', 'wallnut_cracked2')
+        } else if (plant.state === 'wallnut-cracked1') {
+            view.animator.setTrackImageOverride('anim_face', 'wallnut_cracked1')
+        } else {
+            view.animator.setTrackImageOverride('anim_face', null)
+        }
+    }
+
+    private _syncWallNutEatingFreeze(view: PlantView, plant: PlantEntity) {
+        const frozen = plant.recentlyEatenCounter > 0
+        if (view.wallnutFrozen === frozen) return
+
+        view.wallnutFrozen = frozen
+        if (frozen) {
+            this._endPlantBlinkAnimation(view)
+            if (view.body) view.body.speed = 0
+            return
+        }
+
+        if (view.body) view.body.speed = view.idleSpeed
+    }
+
     private _syncZombieAnimation(zombie: ZombieEntity) {
         const view = this._zombieViews.get(zombie.id)
         if (!view) return
@@ -3695,6 +3907,7 @@ export class AdventureGameScreen extends Component {
             if (view.showingMowered) this._clearMoweredZombieAnimation(view)
             if (view.showingCharred) this._clearCharredZombieAnimation(view)
             syncZombieTrackVisibility(view, zombie)
+            this._syncZombieShadow(view, zombie)
             this._syncZombieHitFlash(view, zombie)
             playZombieBodyAnimation(view, zombie.currentAnimation, {
                 speed: zombie.animationSpeed,
@@ -3716,6 +3929,7 @@ export class AdventureGameScreen extends Component {
         if (view.showingMowered) this._clearMoweredZombieAnimation(view)
         if (view.showingCharred) this._clearCharredZombieAnimation(view)
         syncZombieTrackVisibility(view, zombie)
+        this._syncZombieShadow(view, zombie)
         this._syncZombieHitFlash(view, zombie)
         const blendTime = this._getZombieAnimationBlendTime(view, zombie.currentAnimation)
         playZombieBodyAnimation(view, zombie.currentAnimation, {
@@ -3730,7 +3944,7 @@ export class AdventureGameScreen extends Component {
 
         syncZombieTrackVisibility(view, zombie)
         this._syncZombieHitFlash(view, zombie)
-        if (view.shadowNode?.isValid) view.shadowNode.active = false
+        this._syncZombieShadow(view, zombie)
         view.showingMowered = true
         view.body.speed = 0
         if (!view.moweredAnimNode) {
@@ -3755,7 +3969,7 @@ export class AdventureGameScreen extends Component {
         if (!view.bodyNode) return
 
         if (view.showingMowered) this._clearMoweredZombieAnimation(view)
-        if (view.shadowNode?.isValid) view.shadowNode.active = false
+        this._syncZombieShadow(view, zombie)
         view.bodyNode.active = false
         view.showingCharred = true
         if (!view.charredAnimNode) {
@@ -3783,6 +3997,14 @@ export class AdventureGameScreen extends Component {
 
         const grayness = Math.min(255, zombie.hitFlashCounter * 10)
         view.animator?.setExtraAdditiveDraw(true, new Color(grayness, grayness, grayness, 255))
+    }
+
+    private _syncZombieShadow(view: ZombieView, zombie: ZombieEntity) {
+        if (!view.shadowNode?.isValid) return
+
+        view.shadowNode.active = zombie.state !== 'dying' &&
+            zombie.state !== 'mowered' &&
+            zombie.state !== 'charred'
     }
 
     private _createMoweredZombieDriver(view: ZombieView) {
@@ -4026,8 +4248,7 @@ export class AdventureGameScreen extends Component {
             return
         }
 
-        const cooldownTicks = SEED_DEFINITIONS[packet.seedType].cooldownTicks
-        const percentDark = cooldownTicks > 0 ? packet.cooldownRemaining / cooldownTicks : 0
+        const percentDark = packet.cooldownTotal > 0 ? packet.cooldownRemaining / packet.cooldownTotal : 0
         if (percentDark <= 0) {
             clip.active = false
             return
@@ -4604,7 +4825,9 @@ export class AdventureGameScreen extends Component {
         this._hasCursorPointer = false
         this._hideCursorObjectPreview()
         this._hideTooltips()
-        if (!this._levelAwardScreenShown) this._setCanvasCursor('default')
+        if (!this._levelAwardScreenShown && !this._levelCompleteActive && !this._gameOverActive) {
+            this._setCanvasCursor('default')
+        }
     }
 
     private _updateHoverItemAndSeedPacketState() {
@@ -4612,7 +4835,6 @@ export class AdventureGameScreen extends Component {
         if (this._levelAwardScreenShown) return false
         if (this._gameOverActive || this._levelCompleteActive) {
             this._hideTooltips()
-            this._setCanvasCursor('default')
             return false
         }
         if (this._session.paused) {

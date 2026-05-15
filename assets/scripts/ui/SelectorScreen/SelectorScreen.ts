@@ -10,6 +10,7 @@ import {
     Vec3,
     Color,
     Mask,
+    Sprite,
 } from 'cc'
 import { AnimationComponent } from '@/components/AnimationComponent'
 import { AnimNode } from '@/core/Animator/AnimNode'
@@ -20,6 +21,7 @@ import { ChallengePage } from '@/ui/ChallengeScreen'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import { Animator } from '@/core/Animator'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
+import { getAtlasFrame } from '@/ui/SeedPacketRenderer'
 import { ButtonConfig } from './SelectorScreen.d'
 import {
     BUTTON_CONFIGS,
@@ -31,7 +33,6 @@ import {
 const { ccclass, property } = _decorator
 
 const MODE_BUTTON_NAMES = new Set(['adventure', 'miniGames', 'Puzzle', 'Survival'])
-const LOCKED_MODE_NAMES = new Set<string>()
 const BOARD_WIDTH = 800
 const ZOMBIE_HAND_CLIP_HEIGHT = 560
 const ZOMBIE_HAND_X = -70
@@ -48,11 +49,42 @@ const LIMBS_POP_PITCH_RANGE = 10
 const START_ADVENTURE_FLASH_SECONDS = 0.1
 const START_ADVENTURE_LAUGH_SECONDS = 1.25
 const START_ADVENTURE_COMPLETE_SECONDS = 4.5
+const SELECTOR_ADVENTURE_TRACK = 'SelectorScreen_Adventure_button'
+const SELECTOR_START_ADVENTURE_TRACK = 'SelectorScreen_StartAdventure_button'
+const SELECTOR_ADVENTURE_SHADOW_TRACK = 'SelectorScreen_Adventure_shadow'
+const SELECTOR_START_ADVENTURE_SHADOW_TRACK = 'SelectorScreen_StartAdventure_shadow'
+const SELECTOR_ADVENTURE_IMAGE = 'selectorscreen_adventure_button'
+const SELECTOR_ADVENTURE_HIGHLIGHT_IMAGE = 'selectorscreen_adventure_highlight'
+const SELECTOR_START_ADVENTURE_IMAGE = 'selectorscreen_startadventure_button1'
+const SELECTOR_START_ADVENTURE_HIGHLIGHT_IMAGE = 'selectorscreen_startadventure_highlight'
+const SELECTOR_ALMANAC_KEY_SHADOW_TRACK = 'almanac_key_shadow'
+const SELECTOR_ALMANAC_SHADOW_IMAGE = 'selectorscreen_almanac_shadow'
+const SELECTOR_KEY_SHADOW_IMAGE = 'selectorscreen_key_shadow'
+const SELECTOR_LEVEL_NUMBER_IMAGE = 'selectorscreen_levelnumbers'
+const SELECTOR_LEVEL_NUMBER_TRACK = 'SelectorScreen_BG_Right'
+const SELECTOR_LEVEL_NUMBER_WIDTH = 12
+const SELECTOR_LEVEL_NUMBER_HEIGHT = 17
+const SELECTOR_LEVEL_NUMBER_COLUMNS = 10
+const SELECTOR_LEVEL_STAGE_X = 486
+const SELECTOR_LEVEL_STAGE_Y = 47
+const SELECTOR_LEVEL_SUB_X = 509
+const SELECTOR_LEVEL_SUB_Y = 50
+const SELECTOR_LEVEL_SUB_TEN_X = 518
+const SELECTOR_LEVEL_SUB_TEN_Y = 51
 
 interface CloudLoopState {
     node: AnimNode
     animationName: string
     delayRemaining: number
+}
+
+interface SelectorAccessState {
+    minigamesLocked: boolean
+    puzzleLocked: boolean
+    survivalLocked: boolean
+    almanacAvailable: boolean
+    storeAvailable: boolean
+    zenGardenAvailable: boolean
 }
 
 @ccclass('SelectorScreen')
@@ -76,6 +108,7 @@ export class SelectorScreen extends AnimationComponent {
     private _selectorButtonsReady = false
     private _trackedButtons: {
         button: UIButton
+        name: string
         trackName: string
         offsetX: number
         offsetY: number
@@ -89,6 +122,19 @@ export class SelectorScreen extends AnimationComponent {
     private _grassLoopActive = false
     private _grassLoopElapsed = 0
     private _grassLoopInterval = 0
+    private _adventureLevel = 1
+    private _finishedAdventure = 0
+    private _levelNumberContainer: Node | null = null
+    private _levelNumberAtlas: SpriteFrame | null = null
+    private _levelNumberSprites: Sprite[] = []
+    private _accessState: SelectorAccessState = {
+        minigamesLocked: true,
+        puzzleLocked: true,
+        survivalLocked: true,
+        almanacAvailable: false,
+        storeAvailable: false,
+        zenGardenAvailable: false,
+    }
 
     public onLockedModeClick: ((name: string) => void) | null = null
     public onMessageBoxRequest: (() => void) | null = null
@@ -101,6 +147,37 @@ export class SelectorScreen extends AnimationComponent {
     public onStoreRequest: (() => void) | null = null
     public onAlmanacRequest: (() => void) | null = null
     public onAdventureRequest: (() => void) | null = null
+
+    public get adventureLevel(): number {
+        return this._adventureLevel
+    }
+
+    public set adventureLevel(value: number) {
+        const normalized = Math.max(1, Math.floor(Number(value) || 1))
+        if (this._adventureLevel === normalized) return
+        this._adventureLevel = normalized
+        this._renderLevelNumbers()
+        this._updateAdventureButtonMode()
+        this._applyAccessState()
+    }
+
+    public get finishedAdventure(): number {
+        return this._finishedAdventure
+    }
+
+    public set finishedAdventure(value: number) {
+        const normalized = Math.max(0, Math.floor(Number(value) || 0))
+        if (this._finishedAdventure === normalized) return
+        this._finishedAdventure = normalized
+        this._renderLevelNumbers()
+        this._updateAdventureButtonMode()
+        this._applyAccessState()
+    }
+
+    public setAccessState(state: Partial<SelectorAccessState>) {
+        this._accessState = { ...this._accessState, ...state }
+        this._applyAccessState()
+    }
 
     async init() {
         const cloudNames = ['cloud1', 'cloud2', 'cloud4', 'cloud5', 'cloud6', 'cloud7']
@@ -118,7 +195,10 @@ export class SelectorScreen extends AnimationComponent {
         }
 
         this._initButtonContainer()
+        await this._initLevelNumbers()
         await this._createButtons()
+        this._updateAdventureButtonMode()
+        this._applyAccessState()
         this._initZombieHandAnim()
     }
 
@@ -179,6 +259,227 @@ export class SelectorScreen extends AnimationComponent {
         this._auxButtonContainer = auxContainer
     }
 
+    private async _initLevelNumbers() {
+        this._levelNumberAtlas = await SpriteLoader.load(SELECTOR_LEVEL_NUMBER_IMAGE)
+        if (!this._levelNumberAtlas) {
+            console.warn(`[SelectorScreen] Missing level number sprite '${SELECTOR_LEVEL_NUMBER_IMAGE}'`)
+            return
+        }
+
+        const container = createUINode('LevelNumbers', { layer: this.node.layer, anchorX: 0, anchorY: 1 })
+        this.animator.insertExternalNode('__level_numbers__', container, 35)
+        this._levelNumberContainer = container
+        this._renderLevelNumbers()
+    }
+
+    private _renderLevelNumbers() {
+        const container = this._levelNumberContainer
+        const atlas = this._levelNumberAtlas
+        if (!container || !atlas) return
+
+        container.removeAllChildren()
+        this._levelNumberSprites = []
+
+        if (this._shouldShowStartAdventureButton()) {
+            container.active = false
+            return
+        }
+
+        const parts = this._getAdventureLevelParts(this._adventureLevel)
+        const stageOffsetX = parts.stage === 4 ? -1 : 0
+        const stageOffsetY = parts.stage === 1 ? 1 : 0
+        const subOffsetX = parts.sub === 3 ? -1 : 0
+
+        this._createLevelNumberSprite(
+            `stage_${parts.displayStage}`,
+            parts.displayStage,
+            SELECTOR_LEVEL_STAGE_X + stageOffsetX,
+            -(SELECTOR_LEVEL_STAGE_Y + stageOffsetY),
+        )
+
+        if (parts.sub < 10) {
+            this._createLevelNumberSprite(
+                `sub_${parts.sub}`,
+                parts.sub,
+                SELECTOR_LEVEL_SUB_X + subOffsetX,
+                -SELECTOR_LEVEL_SUB_Y,
+            )
+        } else if (parts.sub === 10) {
+            this._createLevelNumberSprite(
+                'sub_1',
+                1,
+                SELECTOR_LEVEL_SUB_X + subOffsetX,
+                -SELECTOR_LEVEL_SUB_Y,
+            )
+            this._createLevelNumberSprite(
+                'sub_0',
+                0,
+                SELECTOR_LEVEL_SUB_TEN_X + subOffsetX,
+                -SELECTOR_LEVEL_SUB_TEN_Y,
+            )
+        }
+
+        this._syncLevelNumberColor()
+        this._updateLevelNumberPosition()
+    }
+
+    private _createLevelNumberSprite(name: string, cel: number, x: number, y: number) {
+        const atlas = this._levelNumberAtlas
+        const container = this._levelNumberContainer
+        if (!atlas || !container) return
+
+        const node = createSpriteNode({
+            name,
+            spriteFrame: getAtlasFrame(
+                atlas,
+                cel,
+                SELECTOR_LEVEL_NUMBER_WIDTH,
+                SELECTOR_LEVEL_NUMBER_HEIGHT,
+                SELECTOR_LEVEL_NUMBER_COLUMNS,
+            ),
+            parent: container,
+            layer: this.node.layer,
+            x,
+            y,
+            anchorX: 0,
+            anchorY: 1,
+        })
+        const sprite = node.getComponent(Sprite)
+        if (sprite) this._levelNumberSprites.push(sprite)
+    }
+
+    private _getAdventureLevelParts(level: number) {
+        const normalized = Math.max(1, Math.floor(Number(level) || 1))
+        const stage = Math.max(1, Math.min(6, Math.floor((normalized - 1) / 10) + 1))
+        const sub = normalized - (stage - 1) * 10
+        const displayStage = stage
+        return { stage, sub, displayStage }
+    }
+
+    private _updateLevelNumberPosition() {
+        const container = this._levelNumberContainer
+        if (!container) return
+
+        if (this._shouldShowStartAdventureButton()) {
+            container.active = false
+            return
+        }
+
+        const frame = this.animator.getTrackFrame(SELECTOR_LEVEL_NUMBER_TRACK)
+        if (!frame) {
+            container.active = false
+            return
+        }
+
+        container.active = true
+        const adventureButton = this._buttons.get('adventure')
+        const pressOffset = adventureButton?.isPressed && adventureButton.isHovering ? 1 : 0
+        container.setPosition(frame.x + pressOffset, -(frame.y + pressOffset), 0)
+    }
+
+    private _syncLevelNumberColor() {
+        const color = this._buttons.get('adventure')?.color ?? Color.WHITE
+        for (const sprite of this._levelNumberSprites) {
+            sprite.color = color.clone()
+        }
+    }
+
+    private _shouldShowStartAdventureButton() {
+        return this._adventureLevel <= 1 && this._finishedAdventure <= 0
+    }
+
+    private _getAdventureButtonTrackName() {
+        return this._shouldShowStartAdventureButton() ? SELECTOR_START_ADVENTURE_TRACK : SELECTOR_ADVENTURE_TRACK
+    }
+
+    private _updateAdventureButtonMode() {
+        this.animator?.hideTrack(SELECTOR_ADVENTURE_TRACK)
+        this.animator?.hideTrack(SELECTOR_START_ADVENTURE_TRACK)
+
+        const button = this._buttons.get('adventure')
+        const showStartAdventure = this._shouldShowStartAdventureButton()
+        if (showStartAdventure) {
+            this.animator?.hideTrack(SELECTOR_ADVENTURE_SHADOW_TRACK)
+            this.animator?.showTrack(SELECTOR_START_ADVENTURE_SHADOW_TRACK)
+        } else {
+            this.animator?.showTrack(SELECTOR_ADVENTURE_SHADOW_TRACK)
+            this.animator?.hideTrack(SELECTOR_START_ADVENTURE_SHADOW_TRACK)
+        }
+
+        if (!button) return
+
+        const normalSprite = SpriteLoader.get(
+            showStartAdventure ? SELECTOR_START_ADVENTURE_IMAGE : SELECTOR_ADVENTURE_IMAGE,
+        )
+        const highlightSprite = SpriteLoader.get(
+            showStartAdventure ? SELECTOR_START_ADVENTURE_HIGHLIGHT_IMAGE : SELECTOR_ADVENTURE_HIGHLIGHT_IMAGE,
+        )
+        if (!normalSprite) return
+
+        button.normalSprite = normalSprite
+        button.pressedSprite = highlightSprite ?? normalSprite
+        button.hoverSprite = highlightSprite ?? normalSprite
+        button.setVisualSprite(button.node.getComponentInChildren(Sprite))
+    }
+
+    private _applyAccessState() {
+        for (const name of ['miniGames', 'Puzzle', 'Survival'] as const) {
+            const button = this._buttons.get(name)
+            if (!button) continue
+
+            const locked = this._isModeLocked(name)
+            button.locked = locked
+            button.color = locked ? new Color(128, 128, 128) : Color.WHITE
+            button.onClickLocked = () => {
+                this.onLockedModeClick?.(name)
+            }
+        }
+
+        this._applyVisibilityState('zenGarden', this._accessState.zenGardenAvailable)
+        this._applyVisibilityState('store', this._accessState.storeAvailable)
+        this._applyVisibilityState('almanac', this._accessState.almanacAvailable)
+
+        if (!this.animator) return
+
+        const almanacVisible = this._accessState.almanacAvailable || this._accessState.storeAvailable
+        if (almanacVisible) {
+            this.animator.showTrack(SELECTOR_ALMANAC_KEY_SHADOW_TRACK)
+            this.animator.setTrackImageOverride(
+                SELECTOR_ALMANAC_KEY_SHADOW_TRACK,
+                this._accessState.almanacAvailable && this._accessState.storeAvailable
+                    ? null
+                    : this._accessState.almanacAvailable
+                        ? SELECTOR_ALMANAC_SHADOW_IMAGE
+                        : SELECTOR_KEY_SHADOW_IMAGE,
+            )
+        } else {
+            this.animator.hideTrack(SELECTOR_ALMANAC_KEY_SHADOW_TRACK)
+            this.animator.setTrackImageOverride(SELECTOR_ALMANAC_KEY_SHADOW_TRACK, null)
+        }
+    }
+
+    private _applyVisibilityState(name: 'zenGarden' | 'store' | 'almanac', visible: boolean) {
+        const button = this._buttons.get(name)
+        if (!button) return
+
+        button.node.active = visible
+        button.interactable = this._selectorButtonsReady && visible
+    }
+
+    private _isModeLocked(name: 'miniGames' | 'Puzzle' | 'Survival') {
+        if (this._finishedAdventure > 0) return false
+        if (name === 'miniGames') return this._accessState.minigamesLocked
+        if (name === 'Puzzle') return this._accessState.puzzleLocked
+        return this._accessState.survivalLocked
+    }
+
+    private _isButtonAvailable(name: string) {
+        if (name === 'zenGarden') return this._accessState.zenGardenAvailable
+        if (name === 'store') return this._accessState.storeAvailable
+        if (name === 'almanac') return this._accessState.almanacAvailable
+        return true
+    }
+
     private _loadConfigs(...groups: ButtonConfig[][]) {
         const promises: Promise<any>[] = []
         for (const configs of groups) {
@@ -212,6 +513,7 @@ export class SelectorScreen extends AnimationComponent {
                     btn.node.active = false
                     this._trackedButtons.push({
                         button: btn,
+                        name: c.name,
                         trackName: c.attached.trackName,
                         offsetX: c.attached.offsetX,
                         offsetY: c.attached.offsetY,
@@ -269,14 +571,7 @@ export class SelectorScreen extends AnimationComponent {
             this.onAlmanacRequest?.()
         })
 
-        for (const name of LOCKED_MODE_NAMES) {
-            const btn = this._buttons.get(name)
-            if (!btn) continue
-            btn.locked = true
-            btn.onClickLocked = () => {
-                this.onLockedModeClick?.(name)
-            }
-        }
+        this._applyAccessState()
     }
 
     private _bindButtonClick(name: string, onClick: () => void) {
@@ -291,8 +586,8 @@ export class SelectorScreen extends AnimationComponent {
 
     private _setButtonsInteractable(interactable: boolean) {
         this._selectorButtonsReady = interactable
-        for (const button of this._buttons.values()) {
-            button.interactable = interactable
+        for (const [name, button] of this._buttons) {
+            button.interactable = interactable && this._isButtonAvailable(name)
         }
         for (const button of this._flowerButtons) {
             button.interactable = interactable
@@ -305,7 +600,7 @@ export class SelectorScreen extends AnimationComponent {
 
     private _configureButtonSounds(name: string, button: UIButton) {
         button.onHoverEnter = () => {
-            if (LOCKED_MODE_NAMES.has(name) && button.locked) return
+            if (button.locked) return
             void SoundLoader.play(SoundEffect.Bleep)
         }
 
@@ -486,9 +781,17 @@ export class SelectorScreen extends AnimationComponent {
         this._updateGrassLoop(scaledDt)
         if (!this.node.isValid) return
 
+        const adventureButton = this._buttons.get('adventure')
         for (const tb of this._trackedButtons) {
-            this._trackButton(tb.button, tb.trackName, tb.offsetX, tb.offsetY)
+            if (!this._isButtonAvailable(tb.name)) {
+                tb.button.node.active = false
+                continue
+            }
+            const trackName = tb.button === adventureButton ? this._getAdventureButtonTrackName() : tb.trackName
+            this._trackButton(tb.button, trackName, tb.offsetX, tb.offsetY)
         }
+        this._updateLevelNumberPosition()
+        this._syncLevelNumberColor()
     }
 
     startAdventure() {
