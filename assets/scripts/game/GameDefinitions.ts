@@ -411,9 +411,49 @@ export const ADVENTURE_1_4: LevelDefinition = {
     tutorialAdvice: [],
 }
 
+export const ADVENTURE_1_5: LevelDefinition = {
+    id: 'adventure-1-5',
+    adventureLevel: 5,
+    background: 'day',
+    activeRows: [0, 1, 2, 3, 4],
+    startingSun: 50,
+    seedPackets: [],
+    seedBankPacketSlots: 10,
+    initialPlants: [
+        { type: 'peashooter', row: 1, col: 5 },
+        { type: 'peashooter', row: 2, col: 7 },
+        { type: 'peashooter', row: 3, col: 6 },
+    ],
+    showCrazyDave: true,
+    crazyDaveIntro: true,
+    skipIntro: true,
+    startWithFullLawn: true,
+    hideSeedBank: true,
+    hasLawnMowers: false,
+    skySunSpawning: false,
+    pauseGameplayOnStart: true,
+    suppressReadySetPlant: true,
+    zombieWaves: [
+        { zombies: ['normal'] },
+        { zombies: ['normal'] },
+        { zombies: ['normal', 'normal'] },
+        { zombies: ['traffic-cone'] },
+        { zombies: ['normal', 'normal'] },
+        { zombies: ['traffic-cone', 'normal'] },
+        { zombies: ['normal', 'normal', 'normal'] },
+        { zombies: ['traffic-cone', 'normal'] },
+        { zombies: ['traffic-cone', 'normal', 'normal'] },
+        { zombies: ['traffic-cone'], flagWave: true, flagNormalCount: 5 },
+    ],
+    awardKind: 'seed',
+    awardSeedType: 'potatomine',
+    tutorialAdvice: [],
+}
+
 export const ADVENTURE_LEVELS = [
     ADVENTURE_1_1,
     ADVENTURE_1_2,
     ADVENTURE_1_3,
     ADVENTURE_1_4,
+    ADVENTURE_1_5,
 ] as const

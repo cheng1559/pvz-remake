@@ -15,7 +15,7 @@ import uuid
 from pathlib import Path
 
 
-SUPPORTED_SOUND_SUFFIXES = (".ogg", ".mp3", ".wav")
+SUPPORTED_SOUND_SUFFIXES = (".au", ".ogg", ".mp3", ".wav")
 OUTPUT_SUFFIX = ".wav"
 OUTPUT_AUDIO_FILES = [".json", OUTPUT_SUFFIX]
 
@@ -85,12 +85,10 @@ def convert_sound(ffmpeg: str, src: Path, dst: Path, overwrite: bool) -> None:
         "-vn",
         "-acodec",
         "pcm_s16le",
-        "-ar",
-        "44100",
-        "-ac",
-        "2",
-        str(dst),
     ]
+    if src.suffix.lower() != ".au":
+        args.extend(["-ar", "44100", "-ac", "2"])
+    args.append(str(dst))
     subprocess.run(args, check=True)
 
 
@@ -124,7 +122,7 @@ def copy_sounds(src_dir: Path, dst_dir: Path, overwrite: bool = False, ffmpeg: s
         sound_files.setdefault(_resource_stem(src), []).append(src)
 
     copied = 0
-    suffix_priority = {".wav": 0, ".ogg": 1, ".mp3": 2}
+    suffix_priority = {".wav": 0, ".ogg": 1, ".mp3": 2, ".au": 3}
     for resource_stem, candidates in sorted(sound_files.items()):
         src = min(candidates, key=lambda path: suffix_priority[path.suffix.lower()])
         dst = dst_dir / f"{resource_stem}{OUTPUT_SUFFIX}"

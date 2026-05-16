@@ -4,8 +4,8 @@ import { SoundEffect } from '@/core/SoundLoader'
 const BOARD_WIDTH = 800
 const SUN_BANK_DEST_X = 15
 const SUN_BANK_DEST_Y = 0
-const COIN_BANK_DEST_X = 700
-const COIN_BANK_DEST_Y = 0
+const COIN_BANK_DEST_X = 39
+const COIN_BANK_DEST_Y = 558
 const DEFAULT_ITEM_SIZE = 60
 const FINAL_SEED_PACKET_WIDTH = 50
 const FINAL_SEED_PACKET_HEIGHT = 70
@@ -14,6 +14,7 @@ const FINAL_SHOVEL_HEIGHT = 80
 const DEFAULT_COLLECTION_EASE_DIVISOR = 21
 const FINAL_SEED_PACKET_COLLECTION_EASE_DIVISOR = 80
 const DEFAULT_COLLECTION_COMPLETE_DISTANCE = 8
+const MONEY_COLLECTION_COMPLETE_DISTANCE = 12
 const FINAL_SEED_PACKET_COLLECTION_COMPLETE_DISTANCE = 0.5
 
 export interface ItemUpdateContext {
@@ -75,6 +76,7 @@ export class Item implements ItemEntity {
         this.awardSeedType = args.awardSeedType ?? null
         this._adjustInitialPosition()
         this._initializeMotion(context)
+        this._pushLaunchSound(context)
         this.scale *= this._sunScale()
     }
 
@@ -206,9 +208,7 @@ export class Item implements ItemEntity {
         }
 
         this._collectionDistance = Math.sqrt(deltaY * deltaY + deltaX * deltaX)
-        const completeDistance = this.type === 'final-seed-packet'
-            ? FINAL_SEED_PACKET_COLLECTION_COMPLETE_DISTANCE
-            : DEFAULT_COLLECTION_COMPLETE_DISTANCE
+        const completeDistance = this._collectionCompleteDistance()
         if (this._collectionDistance < completeDistance) {
             if (this.type === 'final-seed-packet') {
                 this.x = destination.x
@@ -237,6 +237,12 @@ export class Item implements ItemEntity {
         } else {
             this.scale = Math.max(0.5, Math.min(1, this._collectionDistance * 0.05)) * this._sunScale()
         }
+    }
+
+    private _collectionCompleteDistance() {
+        if (this.type === 'final-seed-packet') return FINAL_SEED_PACKET_COLLECTION_COMPLETE_DISTANCE
+        if (this._isMoney()) return MONEY_COLLECTION_COMPLETE_DISTANCE
+        return DEFAULT_COLLECTION_COMPLETE_DISTANCE
     }
 
     private _updateFade() {
@@ -313,9 +319,15 @@ export class Item implements ItemEntity {
             context.events.push({ type: 'soundRequested', sound: SoundEffect.SeedLift })
             context.events.push({ type: 'soundRequested', sound: SoundEffect.Drop })
         } else if (this.type === 'diamond') {
-            context.events.push({ type: 'soundRequested', sound: SoundEffect.Chime })
+            context.events.push({ type: 'soundRequested', sound: SoundEffect.Diamond })
         } else {
             context.events.push({ type: 'foleyRequested', sound: SoundEffect.Coin, pitchRange: 10 })
+        }
+    }
+
+    private _pushLaunchSound(context: ItemUpdateContext) {
+        if (this.type === 'diamond') {
+            context.events.push({ type: 'soundRequested', sound: SoundEffect.Chime })
         }
     }
 

@@ -676,6 +676,18 @@ export function runAdventure11Harness(): GameHarnessResult {
         if (noMoneySession.items.some((item) => item.type === 'silver-coin' || item.type === 'gold-coin' || item.type === 'diamond')) {
             details.push('Adventure 1-1 should not drop regular money loot from zombies.')
         }
+        const noEarlyAdventureMoneySession = new GameSession(ADVENTURE_1_2)
+        noEarlyAdventureMoneySession.addZombie('normal', 2, -20)
+        noEarlyAdventureMoneySession.update()
+        if (noEarlyAdventureMoneySession.items.some((item) => item.type === 'silver-coin' || item.type === 'gold-coin' || item.type === 'diamond')) {
+            details.push('First-time adventure should not drop regular money before level 2-1.')
+        }
+        const replayMoneySession = new GameSession(ADVENTURE_1_2, { firstTimeAdventure: false })
+        replayMoneySession.addZombie('normal', 2, -20)
+        replayMoneySession.update()
+        if (!replayMoneySession.items.some((item) => item.type === 'silver-coin' || item.type === 'gold-coin' || item.type === 'diamond')) {
+            details.push('Replay adventure should use the original regular money drop table.')
+        }
     } finally {
         Math.random = originalLootRandom
     }

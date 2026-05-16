@@ -1,4 +1,4 @@
-import { _decorator, Color, gfx, Material, Node, Rect, Size, Sprite, SpriteFrame, Vec2, Vec3 } from 'cc'
+import { _decorator, Color, gfx, JsonAsset, Material, Node, Rect, Size, Sprite, SpriteFrame, Vec2, Vec3 } from 'cc'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import {
@@ -9,27 +9,49 @@ import {
 import { MenuScreenBase } from '../MenuScreenBase'
 import { SoundEffect } from '@/core/SoundLoader'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
+import { ProfileStore } from '@/game/persistence/ProfileStore'
 import { UIButton } from '@/ui/Button'
 import { DialogButtonMode, MessageBox } from '@/ui/MessageBox/MessageBox'
+import { MoneyCounter } from '@/ui/MoneyCounter'
 import { SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
+import { CrazyDaveWidget } from '@/ui/CrazyDaveWidget'
+import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
+import { LawnStringLoader } from '@/core/LawnStringLoader'
 
 const { ccclass } = _decorator
 
 const STORE_BUTTON_COLOR = new Color(98, 153, 235)
 const STORE_BUTTON_HOVER_COLOR = new Color(167, 192, 235)
-const STORE_MONEY_COLOR = new Color(180, 255, 90)
 const STORE_PAGE_COLOR = new Color(128, 128, 128)
 const STORE_PRICE_COLOR = new Color(0, 0, 0)
 const STORE_PACKET_WIDTH = 50
 const STORE_PACKET_HEIGHT = 70
 const STORE_SEED_PACKET_UPGRADE_CEL = 1
 const STORE_HATCH_TRANSITION_SECONDS = 0.5
+const STORE_HATCH_SHAKE_END_SECONDS = 0.35
+const STORE_HATCH_SHAKE_MIN_Y = 1
+const STORE_HATCH_SHAKE_MAX_Y = 3
 const STORE_UPDATE_RATE = 100
 const STORE_SIGN_ANIMATION_START_FRAME = 50
 const STORE_SIGN_ANIMATION_END_FRAME = 110
 const STORE_INTERACTION_READY_FRAME = 120
 const STORE_SIGN_START_Y = -150
 const STORE_SIGN_END_Y = 0
+const STORE_CAR_X = 196
+const STORE_CAR_Y = 138
+const STORE_HATCHBACK_X = 299
+const STORE_HATCHBACK_Y = 0
+const STORE_PREV_BUTTON_X = 252
+const STORE_PREV_BUTTON_Y = 402
+const STORE_NEXT_BUTTON_X = 596
+const STORE_NEXT_BUTTON_Y = 402
+const STORE_BACK_BUTTON_X = 366
+const STORE_BACK_BUTTON_Y = 512
+const STORE_CRAZY_DAVE_ANIMATION_PATH = 'animations/crazydave'
+const STORE_CRAZY_DAVE_X = -42
+const STORE_CRAZY_DAVE_Y = 68
+const STORE_CRAZY_DAVE_BUBBLE_X = 105
+const STORE_CRAZY_DAVE_BUBBLE_Y = -58
 const STORE_ITEM_HIT_WIDTH = 50
 const STORE_ITEM_HIT_HEIGHT = 87
 const STORE_ITEM_HIGHLIGHT_COLOR = new Color(255, 255, 255, 96)
@@ -44,11 +66,17 @@ const STORE_SEED_WINTERMELON = 44
 const STORE_SEED_GOLD_MAGNET = 45
 const STORE_SEED_SPIKEROCK = 46
 const STORE_SEED_COBCANNON = 47
+const STORE_PURCHASE_PACKET_UPGRADE = 21
+const STORE_DAVE_ITEM_BUBBLE_TICKS = 100
+const STORE_DAVE_AMBIENT_BUBBLE_TICKS = 800
+const STORE_DAVE_AMBIENT_COUNTDOWN_MIN = 500
+const STORE_DAVE_AMBIENT_COUNTDOWN_MAX = 1000
 
 let additiveSpriteMaterial: Material | null = null
 
 type StoreItemKind = 'sprite' | 'upgradePacket'
 type StoreItemHighlight = 'additiveIcon' | 'seedPacketFlash'
+type StoreDaveMessageIndex = number | 'packetUpgrade'
 
 interface StoreItemDefinition {
     price: string
@@ -63,6 +91,7 @@ interface StoreItemDefinition {
     highlight?: StoreItemHighlight
     slotText?: string
     quantityText?: string
+    daveMessageIndex?: StoreDaveMessageIndex
 }
 
 const STORE_ITEM_POSITIONS = [
@@ -78,40 +107,40 @@ const STORE_ITEM_POSITIONS = [
 
 const STORE_PAGES: StoreItemDefinition[][] = [
     [
-        { price: '$750', spriteKey: 'storePacketUpgrade', offsetX: -7, offsetY: 7, highlightAlpha: 32, slotText: '7\nslots', ...STORE_ITEM_POSITIONS[0] },
-        { price: '$1,000', spriteKey: 'iconPoolCleaner', offsetX: 1, offsetY: 7, ...STORE_ITEM_POSITIONS[1] },
-        { price: '$200', spriteKey: 'iconRake', offsetX: -5, offsetY: 10, ...STORE_ITEM_POSITIONS[2] },
-        { price: '$3,000', spriteKey: 'iconRoofCleaner', offsetX: 0, offsetY: 28, ...STORE_ITEM_POSITIONS[3] },
-        { price: '$5,000', kind: 'upgradePacket', seedType: STORE_SEED_GATLINGPEA, ...STORE_ITEM_POSITIONS[4] },
-        { price: '$5,000', kind: 'upgradePacket', seedType: STORE_SEED_TWINSUNFLOWER, ...STORE_ITEM_POSITIONS[5] },
-        { price: '$7,500', kind: 'upgradePacket', seedType: STORE_SEED_GLOOMSHROOM, ...STORE_ITEM_POSITIONS[6] },
-        { price: '$10,000', kind: 'upgradePacket', seedType: STORE_SEED_CATTAIL, ...STORE_ITEM_POSITIONS[7] },
+        { price: '$750', spriteKey: 'storePacketUpgrade', offsetX: -7, offsetY: 7, highlightAlpha: 32, slotText: '7\nslots', daveMessageIndex: 'packetUpgrade', ...STORE_ITEM_POSITIONS[0] },
+        { price: '$1,000', spriteKey: 'iconPoolCleaner', offsetX: 1, offsetY: 7, daveMessageIndex: 2026, ...STORE_ITEM_POSITIONS[1] },
+        { price: '$200', spriteKey: 'iconRake', offsetX: -5, offsetY: 10, daveMessageIndex: 2028, ...STORE_ITEM_POSITIONS[2] },
+        { price: '$3,000', spriteKey: 'iconRoofCleaner', offsetX: 0, offsetY: 28, daveMessageIndex: 2027, ...STORE_ITEM_POSITIONS[3] },
+        { price: '$5,000', kind: 'upgradePacket', seedType: STORE_SEED_GATLINGPEA, daveMessageIndex: 2000, ...STORE_ITEM_POSITIONS[4] },
+        { price: '$5,000', kind: 'upgradePacket', seedType: STORE_SEED_TWINSUNFLOWER, daveMessageIndex: 2001, ...STORE_ITEM_POSITIONS[5] },
+        { price: '$7,500', kind: 'upgradePacket', seedType: STORE_SEED_GLOOMSHROOM, daveMessageIndex: 2002, ...STORE_ITEM_POSITIONS[6] },
+        { price: '$10,000', kind: 'upgradePacket', seedType: STORE_SEED_CATTAIL, daveMessageIndex: 2003, ...STORE_ITEM_POSITIONS[7] },
     ],
     [
-        { price: '$7,500', kind: 'upgradePacket', seedType: STORE_SEED_SPIKEROCK, ...STORE_ITEM_POSITIONS[0] },
-        { price: '$3,000', kind: 'upgradePacket', seedType: STORE_SEED_GOLD_MAGNET, ...STORE_ITEM_POSITIONS[1] },
-        { price: '$10,000', kind: 'upgradePacket', seedType: STORE_SEED_WINTERMELON, ...STORE_ITEM_POSITIONS[2] },
-        { price: '$20,000', kind: 'upgradePacket', seedType: STORE_SEED_COBCANNON, ...STORE_ITEM_POSITIONS[3] },
-        { price: '$30,000', spriteKey: 'imitaterSeed', offsetX: 0, offsetY: 0, highlight: 'seedPacketFlash', ...STORE_ITEM_POSITIONS[4] },
-        { price: '$2,000', spriteKey: 'storeFirstAidWallnutIcon', offsetX: -1, offsetY: 13, ...STORE_ITEM_POSITIONS[5] },
+        { price: '$7,500', kind: 'upgradePacket', seedType: STORE_SEED_SPIKEROCK, daveMessageIndex: 2006, ...STORE_ITEM_POSITIONS[0] },
+        { price: '$3,000', kind: 'upgradePacket', seedType: STORE_SEED_GOLD_MAGNET, daveMessageIndex: 2005, ...STORE_ITEM_POSITIONS[1] },
+        { price: '$10,000', kind: 'upgradePacket', seedType: STORE_SEED_WINTERMELON, daveMessageIndex: 2004, ...STORE_ITEM_POSITIONS[2] },
+        { price: '$20,000', kind: 'upgradePacket', seedType: STORE_SEED_COBCANNON, daveMessageIndex: 2007, ...STORE_ITEM_POSITIONS[3] },
+        { price: '$30,000', spriteKey: 'imitaterSeed', offsetX: 0, offsetY: 0, highlight: 'seedPacketFlash', daveMessageIndex: 2008, ...STORE_ITEM_POSITIONS[4] },
+        { price: '$2,000', spriteKey: 'storeFirstAidWallnutIcon', offsetX: -1, offsetY: 13, daveMessageIndex: 2033, ...STORE_ITEM_POSITIONS[5] },
     ],
     [
-        { price: '$2,500', ...STORE_ITEM_POSITIONS[0] },
-        { price: '$2,500', ...STORE_ITEM_POSITIONS[1] },
-        { price: '$2,500', ...STORE_ITEM_POSITIONS[2] },
-        { price: '$10,000', spriteKey: 'wateringCanGold', offsetX: -14, offsetY: -4, ...STORE_ITEM_POSITIONS[3] },
-        { price: '$750', spriteKey: 'fertilizer', offsetX: -11, offsetY: -2, quantityText: 'x5', ...STORE_ITEM_POSITIONS[4] },
-        { price: '$1,000', spriteKey: 'bugSpray', offsetX: -12, offsetY: 3, quantityText: 'x5', ...STORE_ITEM_POSITIONS[5] },
-        { price: '$15,000', spriteKey: 'phonograph', offsetX: -12, offsetY: 3, ...STORE_ITEM_POSITIONS[6] },
-        { price: '$1,000', spriteKey: 'zenGardenGlove', offsetX: -12, offsetY: 3, ...STORE_ITEM_POSITIONS[7] },
+        { price: '$2,500', daveMessageIndex: 2010, ...STORE_ITEM_POSITIONS[0] },
+        { price: '$2,500', daveMessageIndex: 2010, ...STORE_ITEM_POSITIONS[1] },
+        { price: '$2,500', daveMessageIndex: 2010, ...STORE_ITEM_POSITIONS[2] },
+        { price: '$10,000', spriteKey: 'wateringCanGold', offsetX: -14, offsetY: -4, daveMessageIndex: 2019, ...STORE_ITEM_POSITIONS[3] },
+        { price: '$750', spriteKey: 'fertilizer', offsetX: -11, offsetY: -2, quantityText: 'x5', daveMessageIndex: 2020, ...STORE_ITEM_POSITIONS[4] },
+        { price: '$1,000', spriteKey: 'bugSpray', offsetX: -12, offsetY: 3, quantityText: 'x5', daveMessageIndex: 2022, ...STORE_ITEM_POSITIONS[5] },
+        { price: '$15,000', spriteKey: 'phonograph', offsetX: -12, offsetY: 3, daveMessageIndex: 2021, ...STORE_ITEM_POSITIONS[6] },
+        { price: '$1,000', spriteKey: 'zenGardenGlove', offsetX: -12, offsetY: 3, daveMessageIndex: 2023, ...STORE_ITEM_POSITIONS[7] },
     ],
     [
-        { price: '$30,000', spriteKey: 'storeMushroomGardenIcon', offsetX: -8, offsetY: 2, ...STORE_ITEM_POSITIONS[0] },
-        { price: '$30,000', spriteKey: 'storeAquariumGardenIcon', offsetX: -8, offsetY: 2, ...STORE_ITEM_POSITIONS[1] },
-        { price: '$200', spriteKey: 'zenWheelbarrow', offsetX: -12, offsetY: 3, ...STORE_ITEM_POSITIONS[2] },
-        { price: '$3,000', spriteKey: 'stinkyTurn3', offsetX: -24, offsetY: 14, ...STORE_ITEM_POSITIONS[3] },
-        { price: '$10,000', spriteKey: 'storeTreeOfWisdomIcon', offsetX: -8, offsetY: 2, ...STORE_ITEM_POSITIONS[4] },
-        { price: '$2,500', spriteKey: 'treeFood', offsetX: -8, offsetY: -2, ...STORE_ITEM_POSITIONS[5] },
+        { price: '$30,000', spriteKey: 'storeMushroomGardenIcon', offsetX: -8, offsetY: 2, daveMessageIndex: 2032, ...STORE_ITEM_POSITIONS[0] },
+        { price: '$30,000', spriteKey: 'storeAquariumGardenIcon', offsetX: -8, offsetY: 2, daveMessageIndex: 2029, ...STORE_ITEM_POSITIONS[1] },
+        { price: '$200', spriteKey: 'zenWheelbarrow', offsetX: -12, offsetY: 3, daveMessageIndex: 2024, ...STORE_ITEM_POSITIONS[2] },
+        { price: '$3,000', spriteKey: 'stinkyTurn3', offsetX: -24, offsetY: 14, daveMessageIndex: 2025, ...STORE_ITEM_POSITIONS[3] },
+        { price: '$10,000', spriteKey: 'storeTreeOfWisdomIcon', offsetX: -8, offsetY: 2, daveMessageIndex: 2030, ...STORE_ITEM_POSITIONS[4] },
+        { price: '$2,500', spriteKey: 'treeFood', offsetX: -8, offsetY: -2, daveMessageIndex: 2031, ...STORE_ITEM_POSITIONS[5] },
     ],
 ]
 
@@ -124,24 +153,38 @@ export class StoreScreen extends MenuScreenBase {
     private _storeTime = 0
     private _hatchTimer = 0
     private _waitForDialog = false
+    private _carNode: Node | null = null
     private _signNode: Node | null = null
     private _itemButtons: UIButton[] = []
     private _atlasFrames = new Map<SpriteFrame, Map<string, SpriteFrame>>()
     private _createdAtlasFrames: SpriteFrame[] = []
     private _loadedSprites: StoreScreenSprites | null = null
     private _loadedFonts: StoreScreenFonts | null = null
+    private _crazyDaveAnimation: JsonAsset | null = null
+    private _crazyDave: CrazyDaveWidget | null = null
+    private _crazyDaveEntered = false
+    private _lawnStrings: Record<string, string> = {}
+    private _crazyDaveMessageIndex = -1
+    private _crazyDaveBubbleCountdown = 0
+    private _crazyDaveAmbientCountdown = 200
+    private _previousCrazyDaveAmbientIndex = -1
+    private _hoveredStoreItem: StoreItemDefinition | null = null
 
     async render(): Promise<void> {
-        const [sprites, fonts] = await Promise.all([
+        const [sprites, fonts, crazyDaveAnimation, lawnStrings] = await Promise.all([
             StoreScreenAssets.loadSprites(),
             StoreScreenAssets.loadFonts(),
+            StartupResourceLoader.loadJson(STORE_CRAZY_DAVE_ANIMATION_PATH),
+            LawnStringLoader.load(),
         ])
         if (!sprites) return
         this._loadedSprites = sprites
         this._loadedFonts = fonts
+        this._crazyDaveAnimation = crazyDaveAnimation
+        this._lawnStrings = lawnStrings
 
         this._storePage = this._normalizeStorePage(this.initialPage)
-        this._resetRoot('StoreScreenRoot')
+        this._resetRoot('StoreContentRoot')
         this._renderStore(sprites, fonts)
         UIButton.refreshHoverStates()
     }
@@ -150,13 +193,13 @@ export class StoreScreen extends MenuScreenBase {
         const hatchOpen = this._hatchTimer <= 0
         this._itemButtons = []
         this._createBackground(sprites.storeBackground)
-        createSpriteNode({
+        this._carNode = createSpriteNode({
             name: 'Car',
             spriteFrame: hatchOpen ? sprites.storeCar : sprites.storeCarClosed,
             parent: this._root!,
             layer: this.node.layer,
-            x: this._cppX(196),
-            y: this._cppY(138),
+            x: this._cppX(STORE_CAR_X),
+            y: this._cppY(STORE_CAR_Y),
             anchorX: 0,
             anchorY: 1,
         })
@@ -166,8 +209,8 @@ export class StoreScreen extends MenuScreenBase {
                 spriteFrame: sprites.storeHatchbackOpen,
                 parent: this._root!,
                 layer: this.node.layer,
-                x: this._cppX(299),
-                y: this._cppY(0),
+                x: this._cppX(STORE_HATCHBACK_X),
+                y: this._cppY(STORE_HATCHBACK_Y),
                 anchorX: 0,
                 anchorY: 1,
             })
@@ -189,24 +232,17 @@ export class StoreScreen extends MenuScreenBase {
             }
         }
 
-        createSpriteNode({
-            name: 'CoinBank',
-            spriteFrame: sprites.coinBank,
+        this._createCrazyDave(sprites, fonts)
+
+        new MoneyCounter({
             parent: this._root!,
             layer: this.node.layer,
+            coinBank: sprites.coinBank,
+            font: fonts.money,
+            amount: ProfileStore.getCurrentProfile()?.coins ?? 0,
             x: this._cppX(650),
             y: this._cppY(559),
-            anchorX: 0,
-            anchorY: 1,
-        })
-        this._createText({
-            name: 'Money',
-            text: '$0',
-            baselineX: 758,
-            baselineY: 583,
-            font: fonts.money,
-            color: STORE_MONEY_COLOR,
-            align: 'right',
+            textRightOffset: 113,
         })
         if (hatchOpen) {
             this._createText({
@@ -219,10 +255,10 @@ export class StoreScreen extends MenuScreenBase {
                 align: 'center',
             })
         }
-        this._createStorePageButton('PrevButton', 252, 402, sprites.storePrevButton, sprites.storePrevButtonHighlight, () => {
+        this._createStorePageButton('PrevButton', STORE_PREV_BUTTON_X, STORE_PREV_BUTTON_Y, sprites.storePrevButton, sprites.storePrevButtonHighlight, () => {
             this._turnPage(-1)
         })
-        this._createStorePageButton('NextButton', 596, 402, sprites.storeNextButton, sprites.storeNextButtonHighlight, () => {
+        this._createStorePageButton('NextButton', STORE_NEXT_BUTTON_X, STORE_NEXT_BUTTON_Y, sprites.storeNextButton, sprites.storeNextButtonHighlight, () => {
             this._turnPage(1)
         })
         this._createStoreBackButton(sprites, fonts)
@@ -233,6 +269,8 @@ export class StoreScreen extends MenuScreenBase {
         if (this._hatchTimer > 0) return
         this._storePage = (this._storePage + STORE_PAGES.length + delta) % STORE_PAGES.length
         this._hatchTimer = STORE_HATCH_TRANSITION_SECONDS
+        this._hoveredStoreItem = null
+        this._stopCrazyDaveTalking(true)
         this._rerenderLoaded()
         UIButton.refreshHoverStates()
     }
@@ -243,6 +281,10 @@ export class StoreScreen extends MenuScreenBase {
 
     update(deltaTime: number) {
         const scaledDeltaTime = scaleGameDeltaTime(deltaTime)
+        const ticks = scaledDeltaTime * STORE_UPDATE_RATE
+        this._crazyDave?.updateTicks(ticks, true)
+        this._crazyDave?.syncBubbleShake()
+        this._updateCrazyDaveBubble(ticks)
         const wasReady = this._canInteractWithStoreItems()
         if (this._storeTime < STORE_INTERACTION_READY_FRAME) {
             this._storeTime = Math.min(
@@ -264,13 +306,159 @@ export class StoreScreen extends MenuScreenBase {
             this._rerenderLoaded()
             this._refreshPageButtonPointerState()
             UIButton.refreshHoverStates()
+        } else {
+            this._updateHatchCarShake()
         }
     }
 
     private _rerenderLoaded() {
         if (!this._loadedSprites || !this._loadedFonts) return
-        this._resetRoot('StoreScreenRoot')
+        this._hoveredStoreItem = null
+        this._carNode = null
+        this._signNode = null
+        this._itemButtons = []
+        this._resetRoot('StoreContentRoot')
         this._renderStore(this._loadedSprites, this._loadedFonts)
+    }
+
+    private _updateHatchCarShake() {
+        if (!this._carNode?.isValid) return
+
+        const shakeY = this._hatchTimer > STORE_HATCH_SHAKE_END_SECONDS
+            ? STORE_HATCH_SHAKE_MIN_Y + Math.floor(Math.random() * (STORE_HATCH_SHAKE_MAX_Y - STORE_HATCH_SHAKE_MIN_Y + 1))
+            : 0
+        this._carNode.setPosition(this._cppX(STORE_CAR_X), this._cppY(STORE_CAR_Y + shakeY), 0)
+        this._root?.getChildByName('PrevButton')?.setPosition(this._cppX(STORE_PREV_BUTTON_X), this._cppY(STORE_PREV_BUTTON_Y + shakeY), 0)
+        this._root?.getChildByName('NextButton')?.setPosition(this._cppX(STORE_NEXT_BUTTON_X), this._cppY(STORE_NEXT_BUTTON_Y + shakeY), 0)
+        this._root?.getChildByName('BackToMenuButton')?.setPosition(this._cppX(STORE_BACK_BUTTON_X), this._cppY(STORE_BACK_BUTTON_Y + shakeY), 0)
+    }
+
+    private _updateCrazyDaveBubble(ticks: number) {
+        if (this._waitForDialog || this._hatchTimer > 0) return
+
+        if (this._hoveredStoreItem && this._canInteractWithStoreItems()) {
+            this._showCrazyDaveItemMessage(this._hoveredStoreItem)
+            return
+        }
+
+        if (this._crazyDaveBubbleCountdown > 0) {
+            this._crazyDaveBubbleCountdown = Math.max(0, this._crazyDaveBubbleCountdown - ticks)
+            if (this._crazyDaveBubbleCountdown === 0) {
+                this._stopCrazyDaveTalking()
+            }
+            return
+        }
+
+        if (!this._canInteractWithButtons()) return
+
+        this._crazyDaveAmbientCountdown -= ticks
+        if (this._crazyDaveAmbientCountdown > 0) return
+
+        const messageIndex = this._pickCrazyDaveAmbientMessage()
+        this._previousCrazyDaveAmbientIndex = messageIndex
+        this._setCrazyDaveBubbleText(messageIndex, STORE_DAVE_AMBIENT_BUBBLE_TICKS, false)
+        this._crazyDaveAmbientCountdown = this._randomCrazyDaveAmbientCountdown()
+    }
+
+    private _setCrazyDaveBubbleText(messageIndex: number, countdown: number, clickToContinue: boolean) {
+        const rawText = this._getCrazyDaveText(messageIndex)
+        if (!rawText || !this._crazyDave?.showMessage(rawText, {
+            clickToContinue,
+            restartNoSoundWhileTalking: false,
+        })) return
+
+        this._crazyDaveMessageIndex = messageIndex
+        this._crazyDaveBubbleCountdown = countdown
+    }
+
+    private _stopCrazyDaveTalking(stopSound = false) {
+        this._crazyDave?.stopTalking({ stopSound })
+        this._crazyDaveMessageIndex = -1
+        this._crazyDaveBubbleCountdown = 0
+    }
+
+    private _showCrazyDaveItemMessage(item: StoreItemDefinition) {
+        const messageIndex = this._resolveCrazyDaveMessageIndex(item.daveMessageIndex)
+        if (messageIndex < 0) return
+
+        if (this._crazyDaveMessageIndex !== messageIndex) {
+            this._setCrazyDaveBubbleText(messageIndex, STORE_DAVE_ITEM_BUBBLE_TICKS, false)
+        } else {
+            this._crazyDaveBubbleCountdown = STORE_DAVE_ITEM_BUBBLE_TICKS
+        }
+        this._crazyDaveAmbientCountdown = this._randomCrazyDaveAmbientCountdown()
+    }
+
+    private _resolveCrazyDaveMessageIndex(messageIndex: StoreDaveMessageIndex | undefined) {
+        if (messageIndex == null) return -1
+        if (messageIndex !== 'packetUpgrade') return messageIndex
+
+        const profile = ProfileStore.getCurrentProfile()
+        const purchaseCount = Math.max(0, Math.min(3, Math.floor(profile?.purchases[STORE_PURCHASE_PACKET_UPGRADE] ?? 0)))
+        return 2011 + purchaseCount
+    }
+
+    private _getCrazyDaveText(messageIndex: number) {
+        let text = LawnStringLoader.translateOptional(`[CRAZY_DAVE_${messageIndex}]`, this._lawnStrings)
+        const profile = ProfileStore.getCurrentProfile()
+        text = text.replace(/\{MONEY\}/g, this._formatStoreMoney(profile?.coins ?? 0))
+        text = text.replace(/\{UPGRADE_COST\}/g, '$750')
+        text = text.replace(/\{PLAYER_NAME\}/g, profile?.name ?? '')
+        return text
+    }
+
+    private _formatStoreMoney(coins: number) {
+        return `$${Math.max(0, Math.floor(coins)) * 10}`
+    }
+
+    private _pickCrazyDaveAmbientMessage() {
+        const candidates = [2015, 2016, 2017, 2018].filter((messageIndex) => messageIndex !== this._previousCrazyDaveAmbientIndex)
+        return candidates[Math.floor(Math.random() * candidates.length)] ?? 2015
+    }
+
+    private _randomCrazyDaveAmbientCountdown() {
+        return STORE_DAVE_AMBIENT_COUNTDOWN_MIN +
+            Math.floor(Math.random() * (STORE_DAVE_AMBIENT_COUNTDOWN_MAX - STORE_DAVE_AMBIENT_COUNTDOWN_MIN + 1))
+    }
+
+    private _createCrazyDave(sprites: StoreScreenSprites, fonts: StoreScreenFonts) {
+        if (!this._crazyDaveAnimation?.json) return
+        if (this._crazyDave?.isValid && this._crazyDave.node.isValid) {
+            this._crazyDave.node.setPosition(this._cppX(STORE_CRAZY_DAVE_X), this._cppY(STORE_CRAZY_DAVE_Y), 0)
+            this._crazyDave.node.setSiblingIndex(this.node.children.length - 1)
+            return
+        }
+
+        const node = createUINode('CrazyDave', {
+            parent: this.node,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 320,
+            height: 360,
+            x: this._cppX(STORE_CRAZY_DAVE_X),
+            y: this._cppY(STORE_CRAZY_DAVE_Y),
+        })
+        const widget = node.addComponent(CrazyDaveWidget)
+        this._crazyDave = widget
+        void widget.initialize({
+            animation: this._crazyDaveAnimation,
+            bubbleSprite: sprites.storeSpeechBubble,
+            bubbleX: STORE_CRAZY_DAVE_BUBBLE_X,
+            bubbleY: STORE_CRAZY_DAVE_BUBBLE_Y,
+            daveFont: fonts.dave,
+            continueFont: fonts.money,
+            layer: this.node.layer,
+            animationsEnabled: true,
+        }).then((ready) => {
+            if (!ready || !widget.isValid) return
+            if (this._crazyDaveEntered) {
+                widget.playIdle()
+                return
+            }
+            this._crazyDaveEntered = true
+            widget.enterThen(() => {})
+        })
     }
 
     private _updateSignPosition() {
@@ -303,6 +491,7 @@ export class StoreScreen extends MenuScreenBase {
     }
 
     private _setItemButtonsInteractable(interactable: boolean) {
+        if (!interactable) this._hoveredStoreItem = null
         for (const button of this._itemButtons) {
             if (button.isValid) button.interactable = interactable
         }
@@ -490,6 +679,12 @@ export class StoreScreen extends MenuScreenBase {
             if (highlightNode?.isValid) {
                 highlightNode.active = state === 'hover' || state === 'pressed'
             }
+            if (state === 'hover' || state === 'pressed') {
+                this._hoveredStoreItem = item
+                this._showCrazyDaveItemMessage(item)
+            } else if (this._hoveredStoreItem === item) {
+                this._hoveredStoreItem = null
+            }
         }
         button.onPress = () => {
             void this._showPurchaseConfirmation(highlightNode)
@@ -592,6 +787,8 @@ export class StoreScreen extends MenuScreenBase {
     private async _showPurchaseConfirmation(activeHighlightNode?: Node | null) {
         if (this._waitForDialog || !this._canInteractWithStoreItems()) return
 
+        this._hoveredStoreItem = null
+        this._stopCrazyDaveTalking()
         this._waitForDialog = true
         this._setItemButtonsInteractable(false)
         this._setStoreButtonsInteractable(false, false)
@@ -674,8 +871,8 @@ export class StoreScreen extends MenuScreenBase {
     private _createStoreBackButton(sprites: StoreScreenSprites, fonts: StoreScreenFonts) {
         const buttonNode = this._createImageButton({
             name: 'BackToMenuButton',
-            x: 366,
-            y: 512,
+            x: STORE_BACK_BUTTON_X,
+            y: STORE_BACK_BUTTON_Y,
             normal: sprites.storeMainMenuButton,
             hover: sprites.storeMainMenuButtonHighlight,
             pressed: sprites.storeMainMenuButtonDown,

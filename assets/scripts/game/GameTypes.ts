@@ -75,15 +75,32 @@ export interface BoardGridPosition {
     row: number
 }
 
+export interface InitialPlantDefinition {
+    type: PlantType
+    row: number
+    col: number
+}
+
 export interface LevelDefinition {
-    id: 'adventure-1-1' | 'adventure-1-2' | 'adventure-1-3' | 'adventure-1-4'
+    id: 'adventure-1-1' | 'adventure-1-2' | 'adventure-1-3' | 'adventure-1-4' | 'adventure-1-5'
     adventureLevel: number
     background: BackgroundType
     activeRows: number[]
     startingSun: number
     seedPackets: SeedType[]
+    seedBankPacketSlots?: number
     zombieWaves: ZombieWaveDefinition[]
     tutorialAdvice: string[]
+    initialPlants?: InitialPlantDefinition[]
+    showCrazyDave?: boolean
+    crazyDaveIntro?: boolean
+    skipIntro?: boolean
+    startWithFullLawn?: boolean
+    hideSeedBank?: boolean
+    hasLawnMowers?: boolean
+    skySunSpawning?: boolean
+    pauseGameplayOnStart?: boolean
+    suppressReadySetPlant?: boolean
     awardKind?: LevelAwardKind
     awardSeedType?: SeedType
 }
@@ -180,6 +197,8 @@ export type GameEvent =
     | { type: 'adviceCleared' }
     | { type: 'hugeWave' }
     | { type: 'sunFlash' }
+    | { type: 'coinBankShown' }
+    | { type: 'moneyChanged', amount: number }
     | { type: 'finalWave' }
 
 export interface SeedPacketState {

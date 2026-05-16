@@ -41,9 +41,11 @@ const STORE_SCREEN_SPRITES = [
     'stinky_turn3',
     'zen_gardenglove',
     'zen_wheelbarrow',
+    'store_speechbubble',
+    'store_speechbubble2',
 ]
 
-const STORE_SCREEN_FONTS = ['houseofterror20', 'houseofterror16', 'briannetod12', 'continuumbold14']
+const STORE_SCREEN_FONTS = ['houseofterror20', 'houseofterror16', 'briannetod12', 'continuumbold14', 'briannetod16']
 
 export interface StoreScreenSprites {
     storeBackground: SpriteFrame
@@ -84,6 +86,8 @@ export interface StoreScreenSprites {
     stinkyTurn3: SpriteFrame
     zenGardenGlove: SpriteFrame
     zenWheelbarrow: SpriteFrame
+    storeSpeechBubble: SpriteFrame
+    storeSpeechBubble2: SpriteFrame
 }
 
 export interface StoreScreenFonts {
@@ -91,6 +95,7 @@ export interface StoreScreenFonts {
     item: BitmapFontAssets | null
     small: BitmapFontAssets | null
     money: BitmapFontAssets | null
+    dave: BitmapFontAssets | null
 }
 
 export class StoreScreenAssets {
@@ -144,6 +149,8 @@ export class StoreScreenAssets {
             stinkyTurn3,
             zenGardenGlove,
             zenWheelbarrow,
+            storeSpeechBubble,
+            storeSpeechBubble2,
         ] = sprites as SpriteFrame[]
         return {
             storeBackground,
@@ -184,11 +191,13 @@ export class StoreScreenAssets {
             stinkyTurn3,
             zenGardenGlove,
             zenWheelbarrow,
+            storeSpeechBubble,
+            storeSpeechBubble2,
         }
     }
 
     static async loadFonts(): Promise<StoreScreenFonts> {
-        const [title, item, small, money] = await Promise.all(STORE_SCREEN_FONTS.map((name) => FontLoader.load(name)))
-        return { title, item, small, money }
+        const [title, item, small, money, dave] = await Promise.all(STORE_SCREEN_FONTS.map((name) => FontLoader.load(name)))
+        return { title, item, small, money, dave }
     }
 }

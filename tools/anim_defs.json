@@ -1401,6 +1401,51 @@
             ]
         }
     },
+    "coin_silver": {
+        "default": {
+            "slots": [],
+            "animations": []
+        }
+    },
+    "coin_gold": {
+        "default": {
+            "slots": [],
+            "animations": []
+        }
+    },
+    "diamond": {
+        "default": {
+            "slots": [],
+            "animations": []
+        }
+    },
+    "crazydave": {
+        "body": {
+            "slots": [
+                "Dave_eye"
+            ],
+            "animations": [
+                "anim_enter",
+                "anim_leave",
+                "anim_blahblah",
+                "anim_idle",
+                "anim_smalltalk",
+                "anim_crazy",
+                "anim_mediumtalk",
+                "anim_grab",
+                "anim_enter_handing",
+                "anim_idle_handing",
+                "anim_talk_handing",
+                "anim_enterup"
+            ]
+        },
+        "blink": {
+            "slots": [],
+            "animations": [
+                "anim_blink"
+            ]
+        }
+    },
     "sun": {
         "default": {
             "slots": [],

@@ -86,17 +86,34 @@ export class AnimNode {
         }
 
         if (blendTime > 0 && this._currentAnim) {
+            const previousTrackSnapshot = this._blendTrackSnapshot
+            const previousSlotSnapshot = this._blendSlotSnapshot
+            const previousBlendTime = this._blendTime
+            const previousBlendElapsed = this._blendElapsed
+
             // Snapshot current track/slot states
-            this._blendTrackSnapshot = {}
-            this._blendSlotSnapshot = {}
+            const blendTrackSnapshot: Record<string, TrackFrameData> = {}
+            const blendSlotSnapshot: Record<string, FrameData> = {}
             for (const trackName in this._data.tracks) {
-                const f = this._sampleTrack(trackName, this._time, this._currentAnim)
-                if (f) this._blendTrackSnapshot[trackName] = f
+                const f = this._sampleCurrentTrackForBlend(
+                    trackName,
+                    previousTrackSnapshot,
+                    previousBlendTime,
+                    previousBlendElapsed,
+                )
+                if (f) blendTrackSnapshot[trackName] = f
             }
             for (const slotName in this._data.slots) {
-                const f = this._sampleSlot(slotName, this._time, this._currentAnim)
-                if (f) this._blendSlotSnapshot[slotName] = f
+                const f = this._sampleCurrentSlotForBlend(
+                    slotName,
+                    previousSlotSnapshot,
+                    previousBlendTime,
+                    previousBlendElapsed,
+                )
+                if (f) blendSlotSnapshot[slotName] = f
             }
+            this._blendTrackSnapshot = blendTrackSnapshot
+            this._blendSlotSnapshot = blendSlotSnapshot
             this._blendTime = blendTime
             this._blendElapsed = 0
         } else {
@@ -397,6 +414,38 @@ export class AnimNode {
         if (!slotData || slotData.frames.length === 0) return null
         const targetFrame = anim.startFrame + time
         return this._sampleFrameDataAt(slotData.frames, targetFrame)
+    }
+
+    private _sampleCurrentTrackForBlend(
+        trackName: string,
+        blendTrackSnapshot: Record<string, TrackFrameData>,
+        blendTime: number,
+        blendElapsed: number,
+    ) {
+        if (!this._currentAnim) return null
+
+        let frame = this._sampleTrack(trackName, this._time, this._currentAnim)
+        if (blendTime > 0 && blendElapsed < blendTime) {
+            const blendRatio = Math.min(1, blendElapsed / blendTime)
+            frame = this._blendTrackFrames(blendTrackSnapshot[trackName] ?? null, frame, blendRatio)
+        }
+        return frame
+    }
+
+    private _sampleCurrentSlotForBlend(
+        slotName: string,
+        blendSlotSnapshot: Record<string, FrameData>,
+        blendTime: number,
+        blendElapsed: number,
+    ) {
+        if (!this._currentAnim) return null
+
+        let frame = this._sampleSlot(slotName, this._time, this._currentAnim)
+        if (blendTime > 0 && blendElapsed < blendTime) {
+            const blendRatio = Math.min(1, blendElapsed / blendTime)
+            frame = this._blendFrameData(blendSlotSnapshot[slotName] ?? null, frame, blendRatio)
+        }
+        return frame
     }
 
     private _sampleBaseSlotFrame(slot: string, basePoseFrame: number): FrameData | null {

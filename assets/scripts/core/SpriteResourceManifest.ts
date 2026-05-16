@@ -13,6 +13,7 @@ const LINEAR_PREFIXES = [
     'chomper_',
     'coffeebean_',
     'cornpult_',
+    'crazydave_',
     'doomshroom_',
     'fumeshroom_',
     'garlic_',

@@ -1,7 +1,7 @@
 import type { AdventureGameScreen } from '@/game/GameScreen'
 import { ADVENTURE_LEVELS, PLANT_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed, setGameSpeed } from '@/game/GameDefinitions'
 import { GameDebugSettings } from '@/game/GameDebugSettings'
-import type { LevelDefinition, PlantType, ZombieType } from '@/game/GameTypes'
+import type { ItemType, LevelAwardKind, LevelDefinition, PlantType, ZombieType } from '@/game/GameTypes'
 
 const DEBUG_CLI_MIN_SPEED = 0
 const DEBUG_CLI_MAX_SPEED = 10
@@ -10,14 +10,26 @@ export interface DebugCliResult {
     ok: boolean
     message: string
     failure?: 'syntax' | 'condition'
-    action?: 'restart' | 'home' | 'level'
+    action?: 'restart' | 'home' | 'level' | 'help' | 'store' | 'almanac' | 'zenGarden' | 'quit'
     levelId?: LevelDefinition['id']
 }
 
 const DEBUG_PLANT_TYPES = Object.keys(PLANT_DEFINITIONS) as PlantType[]
 const DEBUG_ZOMBIE_TYPES = Object.keys(ZOMBIE_DEFINITIONS) as ZombieType[]
+const DEBUG_ITEM_SPECS: DebugItemSpec[] = [
+    { name: 'silver', type: 'silver-coin' },
+    { name: 'gold', type: 'gold-coin' },
+    { name: 'diamond', type: 'diamond' },
+    { name: 'sun', type: 'sun' },
+    { name: 'small-sun', type: 'small-sun' },
+    { name: 'large-sun', type: 'large-sun' },
+    { name: 'award', type: 'final-seed-packet' },
+    { name: 'seed-award', type: 'final-seed-packet', awardKind: 'seed' },
+    { name: 'shovel-award', type: 'final-seed-packet', awardKind: 'shovel' },
+]
 const DEBUG_PLANT_LOOKUP = createDebugTypeLookup(DEBUG_PLANT_TYPES)
 const DEBUG_ZOMBIE_LOOKUP = createDebugTypeLookup(DEBUG_ZOMBIE_TYPES)
+const DEBUG_ITEM_LOOKUP = createDebugItemLookup(DEBUG_ITEM_SPECS)
 const DEBUG_BOOLEAN_VALUES = ['true', 'false']
 const DEBUG_LEVEL_IDS = ADVENTURE_LEVELS.map((level) => debugLevelId(level))
 const DEBUG_LEVEL_LOOKUP = new Map(DEBUG_LEVEL_IDS.map((id, index) => [id, ADVENTURE_LEVELS[index]]))
@@ -73,6 +85,31 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         parameterHints: [],
     },
     {
+        name: 'quit',
+        completions: [],
+        parameterHints: [],
+    },
+    {
+        name: 'help',
+        completions: [],
+        parameterHints: [],
+    },
+    {
+        name: 'shop',
+        completions: [],
+        parameterHints: [],
+    },
+    {
+        name: 'almanac',
+        completions: [],
+        parameterHints: [],
+    },
+    {
+        name: 'zengarden',
+        completions: [],
+        parameterHints: [],
+    },
+    {
         name: 'level',
         completions: [DEBUG_LEVEL_IDS],
         parameterHints: ['{level}'],
@@ -91,6 +128,16 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         name: 'sun',
         completions: [['add', 'set']],
         parameterHints: ['{action}', '{number}'],
+    },
+    {
+        name: 'money',
+        completions: [['add', 'set']],
+        parameterHints: ['{action}', '{number}'],
+    },
+    {
+        name: 'item',
+        completions: [DEBUG_ITEM_SPECS.map((item) => item.name)],
+        parameterHints: ['{item_name}', '[optional]{row}', '[optional]{col}'],
     },
     {
         name: 'sunspawning',
@@ -123,6 +170,12 @@ interface DebugCliCommandSpec {
     name: string
     completions: readonly (readonly string[])[]
     parameterHints: readonly string[]
+}
+
+interface DebugItemSpec {
+    name: string
+    type: ItemType
+    awardKind?: LevelAwardKind
 }
 
 interface DebugCliInputToken {
@@ -159,6 +212,16 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugRestartCommand(tokens, gameScreen)
         case 'home':
             return executeDebugHomeCommand(tokens, gameScreen)
+        case 'quit':
+            return executeDebugQuitCommand(tokens)
+        case 'help':
+            return executeDebugScreenCommand(tokens, 'help', 'Opening help')
+        case 'shop':
+            return executeDebugScreenCommand(tokens, 'store', 'Opening shop')
+        case 'almanac':
+            return executeDebugScreenCommand(tokens, 'almanac', 'Opening almanac')
+        case 'zengarden':
+            return executeDebugScreenCommand(tokens, 'zenGarden', 'Opening Zen Garden')
         case 'level':
             return executeDebugLevelCommand(tokens)
         case 'summon':
@@ -169,6 +232,10 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugLawnMowerCommand(tokens, gameScreen)
         case 'sun':
             return executeDebugSunCommand(tokens, gameScreen)
+        case 'money':
+            return executeDebugMoneyCommand(tokens, gameScreen)
+        case 'item':
+            return executeDebugItemCommand(tokens, gameScreen)
         case 'cooldown':
             return executeDebugRechargingCommand(tokens, gameScreen)
         case 'sunspawning':
@@ -414,6 +481,26 @@ function executeDebugHomeCommand(tokens: string[], gameScreen: AdventureGameScre
     return { ok: true, message: 'Returning to main menu', action: 'home' }
 }
 
+function executeDebugQuitCommand(tokens: string[]): DebugCliResult {
+    if (tokens.length !== 1) {
+        return { ok: false, message: 'Usage: /quit' }
+    }
+
+    return { ok: true, message: 'Quitting game', action: 'quit' }
+}
+
+function executeDebugScreenCommand(
+    tokens: string[],
+    action: NonNullable<DebugCliResult['action']>,
+    message: string,
+): DebugCliResult {
+    if (tokens.length !== 1) {
+        return { ok: false, message: `Usage: /${tokens[0].replace(/^\//, '')}` }
+    }
+
+    return { ok: true, message, action }
+}
+
 function executeDebugLevelCommand(tokens: string[]): DebugCliResult {
     if (tokens.length !== 2) {
         return { ok: false, message: 'Usage: /level {level}' }
@@ -616,7 +703,7 @@ function executeDebugSunCommand(tokens: string[], gameScreen: AdventureGameScree
         return conditionFailure('/sun can only run during an active level')
     }
 
-    const action = parseSunAction(tokens[1])
+    const action = parseAmountAction(tokens[1])
     if (!action) {
         return { ok: false, message: `Invalid sun action: ${tokens[1]}. Use add or set` }
     }
@@ -638,6 +725,84 @@ function executeDebugSunCommand(tokens: string[], gameScreen: AdventureGameScree
             ? `Changed sun by ${amount}. Current sun: ${sun}`
             : `Set sun to ${sun}`,
     }
+}
+
+function executeDebugMoneyCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 3) {
+        return { ok: false, message: 'Usage: /money {add|set} {number}' }
+    }
+
+    if (!isLevelReady(gameScreen)) {
+        return conditionFailure('/money can only run during an active level')
+    }
+
+    const action = parseAmountAction(tokens[1])
+    if (!action) {
+        return { ok: false, message: `Invalid money action: ${tokens[1]}. Use add or set` }
+    }
+
+    const amount = parseDebugInteger(tokens[2])
+    if (amount == null) {
+        return { ok: false, message: `Invalid money amount: ${tokens[2]}` }
+    }
+
+    const money = action === 'add'
+        ? gameScreen.debugAddMoney(amount)
+        : gameScreen.debugSetMoney(amount)
+    if (money == null) {
+        return conditionFailure('/money can only run during an active level')
+    }
+    return {
+        ok: true,
+        message: action === 'add'
+            ? `Changed money by ${amount}. Current money: ${money}`
+            : `Set money to ${money}`,
+    }
+}
+
+function executeDebugItemCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 2 && tokens.length !== 4) {
+        return { ok: false, message: 'Usage: /item {item_name} [row] [col]' }
+    }
+
+    if (!isLevelReady(gameScreen)) {
+        return conditionFailure('/item can only run during an active level')
+    }
+
+    const itemSpec = parseDebugItemSpec(tokens[1])
+    if (!itemSpec) {
+        return {
+            ok: false,
+            message: `Unknown item: ${tokens[1]}. Valid items: ${listDebugNames(DEBUG_ITEM_SPECS.map((item) => item.name))}`,
+        }
+    }
+
+    let row: number | undefined
+    let col: number | undefined
+    if (tokens.length === 4) {
+        const parsedRow = parseDebugInteger(tokens[2])
+        if (parsedRow == null) {
+            return { ok: false, message: `Invalid row. Use an integer from 1 to ${gameScreen.getGridSize().rows}` }
+        }
+        const parsedCol = parseDebugInteger(tokens[3])
+        if (parsedCol == null) {
+            return { ok: false, message: `Invalid col. Use an integer from 1 to ${gameScreen.getGridSize().cols}` }
+        }
+        const boundsError = validateDebugGridPosition(gameScreen, parsedRow, parsedCol)
+        if (boundsError) return { ok: false, message: boundsError }
+        row = parsedRow - 1
+        col = parsedCol - 1
+    }
+
+    const item = gameScreen.debugSpawnItem(itemSpec.type, row, col, itemSpec.awardKind)
+    if (!item) {
+        return conditionFailure('/item can only run during an active level')
+    }
+
+    const position = row == null || col == null
+        ? 'at the default board position'
+        : `at row ${row + 1}, col ${col + 1}`
+    return { ok: true, message: `Spawned ${itemSpec.name} ${position}` }
 }
 
 function isLevelReady(gameScreen: AdventureGameScreen | null): gameScreen is AdventureGameScreen {
@@ -737,6 +902,10 @@ function parseDebugZombieType(name: string): ZombieType | null {
     return DEBUG_ZOMBIE_LOOKUP[normalizeDebugEntityName(name)] ?? null
 }
 
+function parseDebugItemSpec(name: string): DebugItemSpec | null {
+    return DEBUG_ITEM_LOOKUP[normalizeDebugEntityName(name)] ?? null
+}
+
 function debugLevelId(level: LevelDefinition) {
     return level.id.replace('adventure-', '')
 }
@@ -752,7 +921,7 @@ function parseLawnMowerStatus(status: string): 'trigger' | 'reset' | null {
     return null
 }
 
-function parseSunAction(action: string): 'add' | 'set' | null {
+function parseAmountAction(action: string): 'add' | 'set' | null {
     const normalized = action.toLowerCase()
     if (normalized === 'add' || normalized === 'set') return normalized
     return null
@@ -775,6 +944,19 @@ function createDebugTypeLookup<T extends string>(types: T[]) {
         lookup[type.toLowerCase()] = type
         lookup[normalizeDebugEntityName(type)] = type
     }
+    return lookup
+}
+
+function createDebugItemLookup(items: DebugItemSpec[]) {
+    const lookup: Record<string, DebugItemSpec> = Object.create(null)
+    for (const item of items) {
+        lookup[item.name.toLowerCase()] = item
+        lookup[normalizeDebugEntityName(item.name)] = item
+        lookup[normalizeDebugEntityName(item.type)] = item
+    }
+    lookup.silvercoin = items.find((item) => item.name === 'silver')!
+    lookup.goldcoin = items.find((item) => item.name === 'gold')!
+    lookup.finalseedpacket = items.find((item) => item.name === 'award')!
     return lookup
 }
 

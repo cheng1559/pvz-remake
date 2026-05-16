@@ -22,6 +22,9 @@ type NativeBindings = typeof globalThis & {
     }
 }
 
+const DEFAULT_MUSIC_VOLUME = 0.85
+const DEFAULT_SFX_VOLUME = 0.5525
+
 export const SoundEffect = {
     Awooga: 'awooga',
     Bleep: 'bleep',
@@ -34,6 +37,19 @@ export const SoundEffect = {
     ChompSoft: 'chompsoft',
     Chime: 'chime',
     Coin: 'coin',
+    CrazyDaveCrazy: 'crazydavecrazy',
+    CrazyDaveExtraLong1: 'crazydaveextralong1',
+    CrazyDaveExtraLong2: 'crazydaveextralong2',
+    CrazyDaveExtraLong3: 'crazydaveextralong3',
+    CrazyDaveLong1: 'crazydavelong1',
+    CrazyDaveLong2: 'crazydavelong2',
+    CrazyDaveLong3: 'crazydavelong3',
+    CrazyDaveScream: 'crazydavescream',
+    CrazyDaveScream2: 'crazydavescream2',
+    CrazyDaveShort1: 'crazydaveshort1',
+    CrazyDaveShort2: 'crazydaveshort2',
+    CrazyDaveShort3: 'crazydaveshort3',
+    Diamond: 'diamond',
     DiggerZombie: 'digger_zombie',
     DirtRise: 'dirt_rise',
     Drop: 'tap2',
@@ -90,6 +106,11 @@ export type SoundEffect = (typeof SoundEffect)[keyof typeof SoundEffect]
 export class SoundLoader {
     private static readonly _basePath = 'audio/sfx'
     private static readonly _effects: SoundEffect[] = Object.values(SoundEffect)
+    private static readonly _musicEffects = new Set<SoundEffect>([
+        SoundEffect.FinalFanfare,
+        SoundEffect.LoseMusic,
+        SoundEffect.WinMusic,
+    ])
     private static readonly _pitchStepMultiplier = 1.0594630943592953
     private static readonly _foleyRecentSuppressMs = 100
     private static readonly _foleyPitchRanges: Partial<Record<SoundEffect, number>> = {
@@ -126,16 +147,55 @@ export class SoundLoader {
             SoundEffect.Groan6,
         ],
         [SoundEffect.ZombieFalling1]: [SoundEffect.ZombieFalling1, SoundEffect.ZombieFalling2],
+        [SoundEffect.CrazyDaveShort1]: [
+            SoundEffect.CrazyDaveShort1,
+            SoundEffect.CrazyDaveShort2,
+            SoundEffect.CrazyDaveShort3,
+        ],
+        [SoundEffect.CrazyDaveLong1]: [
+            SoundEffect.CrazyDaveLong1,
+            SoundEffect.CrazyDaveLong2,
+            SoundEffect.CrazyDaveLong3,
+        ],
+        [SoundEffect.CrazyDaveExtraLong1]: [
+            SoundEffect.CrazyDaveExtraLong1,
+            SoundEffect.CrazyDaveExtraLong2,
+            SoundEffect.CrazyDaveExtraLong3,
+        ],
     }
     private static _clips: Map<SoundEffect, AudioClip> = new Map()
     private static _loading: Map<SoundEffect, Promise<AudioClip | null>> = new Map()
     private static _audioBuffers: Map<SoundEffect, Promise<AudioBuffer | null>> = new Map()
     private static _foleyLastPlayedAt: Map<SoundEffect, number> = new Map()
+    private static _exclusiveSources: Map<string, AudioSource> = new Map()
+    private static _exclusiveEffects: Map<string, SoundEffect> = new Map()
+    private static _exclusiveBaseVolumes: Map<string, number> = new Map()
+    private static _exclusiveTokens: Map<string, number> = new Map()
     private static _audioContext: AudioContext | null = null
     private static _source: AudioSource | null = null
+    private static _musicVolume = DEFAULT_MUSIC_VOLUME
+    private static _sfxVolume = DEFAULT_SFX_VOLUME
 
     public static preloadAll() {
         return Promise.all(this._effects.map((effect) => this.load(effect)))
+    }
+
+    public static getMusicVolume() {
+        return this._musicVolume
+    }
+
+    public static setMusicVolume(volume: number) {
+        this._musicVolume = this._clampMasterVolume(volume, DEFAULT_MUSIC_VOLUME)
+        this._syncExclusiveSourceVolumes()
+    }
+
+    public static getSfxVolume() {
+        return this._sfxVolume
+    }
+
+    public static setSfxVolume(volume: number) {
+        this._sfxVolume = this._clampMasterVolume(volume, DEFAULT_SFX_VOLUME)
+        this._syncExclusiveSourceVolumes()
     }
 
     public static load(effect: SoundEffect): Promise<AudioClip | null> {
@@ -164,7 +224,7 @@ export class SoundLoader {
         if (!clip) return
 
         const source = this._getSource()
-        source.playOneShot(clip, volume)
+        source.playOneShot(clip, this._resolveEffectVolume(effect, volume))
     }
 
     public static playFoley(effect: SoundEffect, pitchRange?: number, volume = 1) {
@@ -176,28 +236,65 @@ export class SoundLoader {
         return this.playWithPitch(selectedEffect, pitch, volume)
     }
 
+    public static async playExclusive(effect: SoundEffect, channel: string = effect, volume = 1) {
+        const token = (this._exclusiveTokens.get(channel) ?? 0) + 1
+        this._exclusiveTokens.set(channel, token)
+        const source = this._getExclusiveSource(channel)
+        source.stop()
+
+        const clip = await this.load(effect)
+        if (!clip || this._exclusiveTokens.get(channel) !== token) return
+
+        source.stop()
+        source.clip = clip
+        this._exclusiveEffects.set(channel, effect)
+        this._exclusiveBaseVolumes.set(channel, volume)
+        source.volume = this._resolveEffectVolume(effect, volume)
+        source.loop = false
+        source.play()
+    }
+
+    public static playFoleyExclusive(effect: SoundEffect, channel: string = effect, pitchRange?: number, volume = 1) {
+        if (this._hasFoleyPlayedTooRecently(effect)) {
+            this.stopExclusive(channel)
+            return Promise.resolve()
+        }
+
+        const selectedEffect = this._pickFoleyEffect(effect)
+        const resolvedPitchRange = pitchRange ?? this._foleyPitchRanges[effect] ?? 0
+        if (resolvedPitchRange === 0) return this.playExclusive(selectedEffect, channel, volume)
+
+        return this.playWithPitch(selectedEffect, Math.random() * resolvedPitchRange, volume)
+    }
+
+    public static stopExclusive(channel: string) {
+        this._exclusiveTokens.set(channel, (this._exclusiveTokens.get(channel) ?? 0) + 1)
+        this._exclusiveSources.get(channel)?.stop()
+    }
+
     public static async playWithPitch(effect: SoundEffect, pitchSteps: number, volume = 1) {
         const clip = await this.load(effect)
         if (!clip) return
+        const resolvedVolume = this._resolveEffectVolume(effect, volume)
 
         if (pitchSteps === 0) {
-            this._getSource().playOneShot(clip, volume)
+            this._getSource().playOneShot(clip, resolvedVolume)
             return
         }
 
-        if (await this._playNativeWithPitch(clip, pitchSteps, volume)) {
+        if (await this._playNativeWithPitch(clip, pitchSteps, resolvedVolume)) {
             return
         }
 
         const context = this._getAudioContext()
         if (!context) {
-            this._getSource().playOneShot(clip, volume)
+            this._getSource().playOneShot(clip, resolvedVolume)
             return
         }
 
         const buffer = await this._loadAudioBuffer(effect, clip)
         if (!buffer) {
-            this._getSource().playOneShot(clip, volume)
+            this._getSource().playOneShot(clip, resolvedVolume)
             return
         }
 
@@ -209,7 +306,7 @@ export class SoundLoader {
         const gain = context.createGain()
         source.buffer = buffer
         source.playbackRate.value = Math.pow(this._pitchStepMultiplier, pitchSteps)
-        gain.gain.value = volume
+        gain.gain.value = resolvedVolume
         source.connect(gain)
         gain.connect(context.destination)
         source.start()
@@ -233,14 +330,29 @@ export class SoundLoader {
     private static _getSource() {
         if (this._source?.isValid) return this._source
 
-        const node = new Node('SoundLoader')
+        const node = this._createPersistentAudioNode('SoundLoader')
+        this._source = node.addComponent(AudioSource)
+        return this._source
+    }
+
+    private static _getExclusiveSource(channel: string) {
+        const cached = this._exclusiveSources.get(channel)
+        if (cached?.isValid) return cached
+
+        const node = this._createPersistentAudioNode(`SoundLoader_${channel}`)
+        const source = node.addComponent(AudioSource)
+        this._exclusiveSources.set(channel, source)
+        return source
+    }
+
+    private static _createPersistentAudioNode(name: string) {
+        const node = new Node(name)
         const scene = director.getScene()
         if (scene) {
             scene.addChild(node)
         }
         director.addPersistRootNode(node)
-        this._source = node.addComponent(AudioSource)
-        return this._source
+        return node
     }
 
     private static _pickFoleyEffect(effect: SoundEffect) {
@@ -270,6 +382,26 @@ export class SoundLoader {
 
         this._audioContext = new ContextCtor()
         return this._audioContext
+    }
+
+    private static _resolveEffectVolume(effect: SoundEffect, volume: number) {
+        const baseVolume = Number.isFinite(volume) ? Math.max(0, volume) : 1
+        const masterVolume = this._musicEffects.has(effect) ? this._musicVolume : this._sfxVolume
+        return baseVolume * masterVolume
+    }
+
+    private static _clampMasterVolume(volume: number, fallback: number) {
+        if (!Number.isFinite(volume)) return fallback
+        return Math.max(0, Math.min(1, volume))
+    }
+
+    private static _syncExclusiveSourceVolumes() {
+        for (const [channel, source] of this._exclusiveSources) {
+            const effect = this._exclusiveEffects.get(channel)
+            if (!source.isValid || !effect) continue
+
+            source.volume = this._resolveEffectVolume(effect, this._exclusiveBaseVolumes.get(channel) ?? 1)
+        }
     }
 
     private static _loadAudioBuffer(effect: SoundEffect, clip: AudioClip) {

@@ -36,6 +36,7 @@ import type {
 
 export interface GameSessionOptions {
     firstTimeAdventure?: boolean
+    initialMoney?: number
 }
 
 const SUN_COUNTDOWN = 425
@@ -58,6 +59,11 @@ const MONEY_DROP_ROLL_MAX = 29999
 const DIAMOND_DROP_THRESHOLD = 14
 const GOLD_DROP_THRESHOLD = 250
 const SILVER_DROP_THRESHOLD = 2500
+const MONEY_MIN = 0
+const MONEY_MAX = 99999
+const FIRST_ADVENTURE_MONEY_DROP_LEVEL = 11
+const FIRST_ADVENTURE_FIRST_MONEY_WAVE = 5
+const FIRST_ADVENTURE_FIRST_MONEY_ROLL = 1000
 const LAWN_MOWER_READY_X = -21
 const LAWN_MOWER_START_X = -160
 const LAWN_MOWER_Y_OFFSET = 23
@@ -104,6 +110,10 @@ const LATER_SUNFLOWER_ADVICE_DELAY = 500
 const LATER_SUNFLOWER_START_WAVE = 5
 const READY_SET_PLANT_TICKS = 183
 
+function clampMoney(amount: number) {
+    return Math.max(MONEY_MIN, Math.min(MONEY_MAX, Math.floor(amount)))
+}
+
 export class GameSession {
     readonly level: LevelDefinition
     readonly geometry = DAY_GEOMETRY
@@ -143,6 +153,7 @@ export class GameSession {
     private _finalWaveSoundCounter = 0
     private _levelWonNotified = false
     private _levelAwardDropped = false
+    private _droppedFirstMoney = false
     private _zombiesWithDroppedLoot: Set<number> = new Set()
     private _levelOneTutorialPhase: LevelOneTutorialPhase = 'done'
     private _levelOneTutorialTimer = 0
@@ -162,7 +173,9 @@ export class GameSession {
         this._firstTimeAdventure = options.firstTimeAdventure ?? true
         this.rechargingEnabled = GameDebugSettings.rechargingEnabled
         this.autoCollectEnabled = GameDebugSettings.autoCollectEnabled
+        if (level.skySunSpawning === false) this.sunSpawningEnabled = false
         this.sun = level.startingSun
+        this.money = clampMoney(options.initialMoney ?? 0)
         this.seedPackets = level.seedPackets.map((seedType) => {
             const cooldownTotal = this._initialSeedPacketCooldown(seedType)
             return {
@@ -183,10 +196,11 @@ export class GameSession {
             this._levelTwoTutorialTimer = LEVEL_2_FIRST_ADVICE_DELAY
             this.zombieCountDown = LEVEL_2_ZOMBIE_COUNTDOWN_FIRST_WAVE
             this.zombieCountDownStart = this.zombieCountDown
-        } else if (level.adventureLevel >= 3) {
+        } else if (level.adventureLevel >= 3 && !level.suppressReadySetPlant) {
             this._readySetPlantCounter = READY_SET_PLANT_TICKS
             this._setSeedPacketsActive(false)
         }
+        this._initInitialPlants()
         this._initLawnMowers()
         this._pushAdvice()
         if (level.adventureLevel === 2) {
@@ -280,8 +294,10 @@ export class GameSession {
         const item = this._findItemAt(x, y)
         if (!item) return false
 
+        const isMoney = this._isMoneyItem(item)
         const collected = item.collect(this._createItemUpdateContext(this.events))
         if (collected) this._handleLevelOneTutorialSunClicked(item)
+        if (collected && isMoney) this.events.push({ type: 'coinBankShown' })
         return collected
     }
 
@@ -289,8 +305,10 @@ export class GameSession {
         const item = this._findItemAt(x, y)
         if (!item || (!this._isSunItem(item) && !this._isMoneyItem(item))) return false
 
+        const isMoney = this._isMoneyItem(item)
         const collected = item.collect(this._createItemUpdateContext(this.events))
         if (collected && this._isSunItem(item)) this._handleLevelOneTutorialSunClicked(item)
+        if (collected && isMoney) this.events.push({ type: 'coinBankShown' })
         return collected
     }
 
@@ -303,15 +321,7 @@ export class GameSession {
     }
 
     debugAddPlant(type: PlantType, row: number, col: number) {
-        const pixel = this.geometry.gridToPixel(col, row)
-        const plant = createPlant({
-            id: this._allocateId(),
-            type,
-            col,
-            row,
-            x: pixel.x,
-            y: pixel.y,
-        })
+        const plant = this._createPlant(type, row, col)
         const isFirstPlant = !this.hasPlantedAtLeastOnce
         this.plants.push(plant)
         this.hasPlantedAtLeastOnce = true
@@ -436,6 +446,24 @@ export class GameSession {
     debugSetSun(amount: number) {
         this._setSun(amount)
         return this.sun
+    }
+
+    debugAddMoney(amount: number) {
+        this._addMoney(amount)
+        return this.money
+    }
+
+    debugSetMoney(amount: number) {
+        this._setMoney(amount)
+        return this.money
+    }
+
+    debugAddItem(type: ItemType, x: number, y: number, awardKind?: LevelAwardKind) {
+        const resolvedAwardKind = awardKind ?? this._levelAwardKindForLevel() ?? 'seed'
+        const awardSeedType = type === 'final-seed-packet'
+            ? this.level.awardSeedType ?? null
+            : null
+        return this._addItem(type, 'coin', x, y, awardSeedType, resolvedAwardKind)
     }
 
     debugSetRechargingEnabled(enabled: boolean) {
@@ -591,15 +619,7 @@ export class GameSession {
         }
 
         const seed = SEED_DEFINITIONS[seedType]
-        const pixel = this.geometry.gridToPixel(grid.col, grid.row)
-        const plant = createPlant({
-            id: this._allocateId(),
-            type: seed.plantType,
-            col: grid.col,
-            row: grid.row,
-            x: pixel.x,
-            y: pixel.y,
-        })
+        const plant = this._createPlant(seed.plantType, grid.row, grid.col)
         const isFirstPlant = !this.hasPlantedAtLeastOnce
         this.plants.push(plant)
         this.hasPlantedAtLeastOnce = true
@@ -620,6 +640,28 @@ export class GameSession {
         if (plant.type === 'cherrybomb') {
             this.events.push({ type: 'soundRequested', sound: SoundEffect.ReverseExplosion })
         }
+    }
+
+    private _createPlant(type: PlantType, row: number, col: number) {
+        const pixel = this.geometry.gridToPixel(col, row)
+        return createPlant({
+            id: this._allocateId(),
+            type,
+            col,
+            row,
+            x: pixel.x,
+            y: pixel.y,
+        })
+    }
+
+    private _initInitialPlants() {
+        for (const plant of this.level.initialPlants ?? []) {
+            if (!this.level.activeRows.includes(plant.row)) continue
+            if (plant.col < 0 || plant.col >= this.geometry.cols) continue
+            if (this.plants.some((item) => !item.dead && item.row === plant.row && item.col === plant.col)) continue
+            this.plants.push(this._createPlant(plant.type, plant.row, plant.col))
+        }
+        if (this.plants.length > 0) this.hasPlantedAtLeastOnce = true
     }
 
     private _clearCursor() {
@@ -873,6 +915,8 @@ export class GameSession {
     }
 
     private _initLawnMowers() {
+        if (this.level.hasLawnMowers === false) return
+
         for (const row of this.level.activeRows) {
             const mower = this._createLawnMower(row)
             mower.x = LAWN_MOWER_READY_X
@@ -1024,7 +1068,15 @@ export class GameSession {
     }
 
     private _addMoney(amount: number) {
-        this.money += amount
+        this._setMoney(this.money + amount)
+    }
+
+    private _setMoney(amount: number) {
+        const nextMoney = clampMoney(amount)
+        if (this.money === nextMoney) return
+
+        this.money = nextMoney
+        this.events.push({ type: 'moneyChanged', amount: this.money })
     }
 
     private _updateLevelOneTutorial() {
@@ -1917,7 +1969,7 @@ export class GameSession {
     }
 
     private _canDropMoneyLoot() {
-        return this.level.adventureLevel > 1
+        return !this._firstTimeAdventure || this.level.adventureLevel >= FIRST_ADVENTURE_MONEY_DROP_LEVEL
     }
 
     private _levelAwardKindForLevel(): LevelAwardKind | null {
@@ -1960,7 +2012,7 @@ export class GameSession {
     }
 
     private _dropMoneyLootPiece(x: number, y: number, dropFactor: number) {
-        const roll = this._randomInt(0, MONEY_DROP_ROLL_MAX)
+        const roll = this._moneyDropRoll()
         let type: ItemType | null = null
         if (roll < DIAMOND_DROP_THRESHOLD * dropFactor) {
             type = 'diamond'
@@ -1971,9 +2023,20 @@ export class GameSession {
         }
         if (!type) return
 
-        if (type === 'diamond') this.events.push({ type: 'soundRequested', sound: SoundEffect.Chime })
         this.events.push({ type: 'foleyRequested', sound: SoundEffect.Throw, pitchRange: 10 })
         this._addItem(type, 'coin', x - 40, y)
+        this._droppedFirstMoney = true
+    }
+
+    private _moneyDropRoll() {
+        if (this._firstTimeAdventure &&
+            this.level.adventureLevel === FIRST_ADVENTURE_MONEY_DROP_LEVEL &&
+            !this._droppedFirstMoney &&
+            this.currentWave > FIRST_ADVENTURE_FIRST_MONEY_WAVE) {
+            return FIRST_ADVENTURE_FIRST_MONEY_ROLL
+        }
+
+        return this._randomInt(0, MONEY_DROP_ROLL_MAX)
     }
 
     private _zombieLootDropFactor(type: ZombieType) {

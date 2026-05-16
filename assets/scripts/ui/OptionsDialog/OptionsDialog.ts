@@ -23,14 +23,17 @@ const { ccclass, property } = _decorator
 const MENU_WIDTH = 423
 const MENU_HEIGHT = 498
 const TEXT_COLOR = new Color(107, 109, 145)
+const DEFAULT_MUSIC_VOLUME = 0.85
+const SFX_VOLUME_SCALE = 0.65
+const DEFAULT_SFX_VOLUME = DEFAULT_MUSIC_VOLUME * SFX_VOLUME_SCALE
 
 @ccclass('OptionsDialog')
 export class OptionsDialog extends ModalDialog {
     @property
-    musicVolume = 0.5
+    musicVolume = DEFAULT_MUSIC_VOLUME
 
     @property
-    sfxVolume = 0.65
+    sfxVolume = DEFAULT_SFX_VOLUME
 
     @property
     hardwareAcceleration = false
@@ -114,8 +117,8 @@ export class OptionsDialog extends ModalDialog {
             this.musicVolume = value
             this.onMusicVolumeChanged?.(value)
         })
-        this._createSlider('SfxVolume', 199, 143 + sfxOffset, this.sfxVolume / 0.65, (value) => {
-            this.sfxVolume = value * 0.65
+        this._createSlider('SfxVolume', 199, 143 + sfxOffset, this.sfxVolume / SFX_VOLUME_SCALE, (value) => {
+            this.sfxVolume = value * SFX_VOLUME_SCALE
             this.onSfxVolumeChanged?.(this.sfxVolume)
         })
         this._createCheckbox(
