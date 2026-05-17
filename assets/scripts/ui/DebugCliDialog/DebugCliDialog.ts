@@ -32,7 +32,7 @@ import {
     getDebugCliCompletions,
     getDebugCliParameterHint,
 } from '@/ui/DebugCliDialog/DebugCliCommands'
-import { MessageBox } from '@/ui/MessageBox/MessageBox'
+import { DialogResult, MessageBox } from '@/ui/MessageBox/MessageBox'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 
 const { ccclass } = _decorator
@@ -46,6 +46,8 @@ const INPUT_CENTER_FROM_BOTTOM = 141
 const INPUT_CLIP_LEFT = 4
 const INPUT_CLIP_RIGHT = 8
 const INPUT_TEXT_TOP_Y = INPUT_HEIGHT / 2 - 4
+const NATIVE_TEXT_INPUT_SIZE = 1
+const NATIVE_TEXT_INPUT_SCALE = 0.01
 const MAX_COMMAND_LENGTH = 120
 const ORIGINAL_FRAME_SECONDS = 0.01
 const ORIGINAL_BLINK_DELAY_UPDATES = 14
@@ -110,6 +112,20 @@ interface DebugCliInputKey {
     }
 }
 
+interface MobilePageScrollState {
+    htmlOverflow: string
+    htmlOverscrollBehavior: string
+    bodyOverflow: string
+    bodyOverscrollBehavior: string
+    bodyTouchAction: string
+}
+
+interface NativeEditBoxElementHost {
+    _impl?: {
+        _edTxt?: HTMLInputElement | HTMLTextAreaElement | null
+    }
+}
+
 @ccclass('DebugCliDialog')
 export class DebugCliDialog extends MessageBox {
     private static _commandHistory: string[] = []
@@ -153,7 +169,12 @@ export class DebugCliDialog extends MessageBox {
     private _completionCycleCandidates: string[] = []
     private _completionCycleIndex = -1
     private _commandFlashTicks = 0
-
+    private _mobilePageScrollState: MobilePageScrollState | null = null
+    private _mobilePageScrollLocked = false
+    private _mobilePageScrollX = 0
+    private _mobilePageScrollY = 0
+    private readonly _mobilePageScrollBlocker = (event: Event) => event.preventDefault()
+    private readonly _mobilePageScrollRestorer = () => this._restoreMobilePageScroll()
     start() {
         this.title = 'DEBUG CLI'
         this.message = 'Enter debug command:'
@@ -162,7 +183,18 @@ export class DebugCliDialog extends MessageBox {
         this.spaceAfterHeader = 10
         this.extraWidth = 110
         this.extraHeight = 40
-        this.setButtons([])
+        this.setButtons([
+            {
+                label: 'OK',
+                result: DialogResult.Ok,
+                finishOnClick: false,
+                onClick: () => {
+                    this._captureCommand()
+                    this._submitCommand()
+                },
+            },
+            { label: 'Cancel', result: DialogResult.Cancel },
+        ])
         this._setCommand(this.initialCommand)
         super.start()
     }
@@ -218,6 +250,12 @@ export class DebugCliDialog extends MessageBox {
         void this._renderInput(actualWidth, actualHeight)
     }
 
+    public requestNativeTextInputFocus() {
+        this._setInputFocus(true)
+        this._createNativeTextInput(this._inputRoot ?? this.node)
+        this._focusNativeTextInput()
+    }
+
     protected onDialogKeyDown(event: EventKeyboard) {
         if (event.keyCode === DebugCliKeyCode.Enter) {
             this._captureCommand()
@@ -239,7 +277,7 @@ export class DebugCliDialog extends MessageBox {
     }
 
     private async _renderInput(dialogWidth: number, dialogHeight: number) {
-        this._destroyInput()
+        this._destroyInput(true)
 
         const [editBoxFrame, commandFont] = await Promise.all([
             SpriteLoader.load('editbox'),
@@ -529,16 +567,25 @@ export class DebugCliDialog extends MessageBox {
     }
 
     private _createNativeTextInput(parent: Node) {
-        if (sys.isBrowser || !sys.isMobile) return
+        if (!sys.isMobile) return
+
+        const existingNode = this._nativeTextInput?.node
+        if (existingNode?.isValid) {
+            const node = existingNode
+            if (node.parent !== parent) node.setParent(parent)
+            this._hideNativeTextInputNode(node)
+            this._syncNativeTextInput()
+            return
+        }
 
         const node = createUINode('NativeCommandTextInput', {
             parent,
             anchorX: 0.5,
             anchorY: 0.5,
-            width: 1,
-            height: 1,
-            x: -this._inputWidth / 2 - 16,
+            width: NATIVE_TEXT_INPUT_SIZE,
+            height: NATIVE_TEXT_INPUT_SIZE,
         })
+        this._hideNativeTextInputNode(node)
         node.addComponent(UIOpacity).opacity = 0
 
         const editBox = node.addComponent(EditBox)
@@ -552,29 +599,90 @@ export class DebugCliDialog extends MessageBox {
         node.on(EditBox.EventType.TEXT_CHANGED, this._onNativeTextInputChanged, this)
         node.on(EditBox.EventType.EDITING_RETURN, this._onNativeTextInputReturn, this)
         this._nativeTextInput = editBox
+        this._configureNativeTextInputElement()
+    }
+
+    private _hideNativeTextInputNode(node: Node) {
+        node.setPosition(0, 0, 0)
+        node.setScale(NATIVE_TEXT_INPUT_SCALE, NATIVE_TEXT_INPUT_SCALE, 1)
+        setUISize(node, NATIVE_TEXT_INPUT_SIZE, NATIVE_TEXT_INPUT_SIZE, 0.5, 0.5)
     }
 
     private _focusNativeTextInput() {
-        if (!this._nativeTextInput?.node.isValid) return
+        if (!this._nativeTextInput?.node?.isValid) return
         if (!this._hasInputFocus) return
 
+        this._lockMobilePageScroll()
         this._syncNativeTextInput()
+        this._configureNativeTextInputElement()
         this._nativeTextInput.focus()
+        this._syncNativeTextInputSelection()
+        this._restoreMobilePageScroll()
+    }
+
+    private _configureNativeTextInputElement() {
+        const element = this._nativeTextInputElement()
+        if (!element) return
+
+        element.autocomplete = 'off'
+        element.autocapitalize = 'off'
+        element.spellcheck = false
+        element.setAttribute('autocapitalize', 'off')
+        element.setAttribute('autocorrect', 'off')
+        element.setAttribute('autocomplete', 'off')
+        element.setAttribute('spellcheck', 'false')
+    }
+
+    private _nativeTextInputElement() {
+        return (this._nativeTextInput as NativeEditBoxElementHost | null)?._impl?._edTxt ?? null
     }
 
     private _blurNativeTextInput() {
-        if (!this._nativeTextInput?.node.isValid) return
-
-        this._nativeTextInput.blur()
+        if (this._nativeTextInput?.node?.isValid) {
+            this._nativeTextInput.blur()
+        }
+        this._unlockMobilePageScroll()
     }
 
     private _syncNativeTextInput() {
-        if (!this._nativeTextInput?.node.isValid) return
-        if (this._nativeTextInput.string === this._command) return
+        if (!this._nativeTextInput?.node?.isValid) return
 
-        this._syncingNativeTextInput = true
-        this._nativeTextInput.string = this._command
-        this._syncingNativeTextInput = false
+        if (this._nativeTextInput.string !== this._command) {
+            this._syncingNativeTextInput = true
+            this._nativeTextInput.string = this._command
+            this._syncingNativeTextInput = false
+        }
+        this._syncNativeTextInputSelection()
+    }
+
+    private _syncNativeTextInputSelection() {
+        const element = this._nativeTextInputElement()
+        if (!element?.setSelectionRange) return
+
+        const start = this._hasSelection() ? this._selectionStart() : this._cursorPos
+        const end = this._hasSelection() ? this._selectionEnd() : this._cursorPos
+        try {
+            element.setSelectionRange(
+                this._clampNativeTextInputPosition(start),
+                this._clampNativeTextInputPosition(end),
+            )
+        } catch {
+            return
+        }
+    }
+
+    private _readNativeTextInputSelection(commandLength: number) {
+        const element = this._nativeTextInputElement()
+        const start = this._clampNativeTextInputPosition(element?.selectionStart ?? commandLength, commandLength)
+        const end = this._clampNativeTextInputPosition(element?.selectionEnd ?? start, commandLength)
+        return {
+            cursorPos: end,
+            hilitePos: start === end ? -1 : start,
+        }
+    }
+
+    private _clampNativeTextInputPosition(position: number, commandLength = this._command.length) {
+        return Math.max(0, Math.min(commandLength, position))
     }
 
     private _onNativeTextInputChanged(editBox: EditBox) {
@@ -582,12 +690,13 @@ export class DebugCliDialog extends MessageBox {
         if (!this._hasInputFocus) return
 
         const sanitized = this._sanitizeClipboardText(editBox.string)
+        const selection = this._readNativeTextInputSelection(sanitized.length)
         if (sanitized !== editBox.string) {
             this._syncingNativeTextInput = true
             editBox.string = sanitized
             this._syncingNativeTextInput = false
         }
-        this._replaceCommandFromNativeTextInput(sanitized)
+        this._replaceCommandFromNativeTextInput(sanitized, selection.cursorPos, selection.hilitePos)
     }
 
     private _onNativeTextInputReturn() {
@@ -597,8 +706,17 @@ export class DebugCliDialog extends MessageBox {
         this._submitCommand()
     }
 
-    private _replaceCommandFromNativeTextInput(command: string) {
-        if (command === this._command) return
+    private _replaceCommandFromNativeTextInput(command: string, cursorPos: number, hilitePos: number) {
+        const clampedCursorPos = this._clampNativeTextInputPosition(cursorPos, command.length)
+        const clampedHilitePos =
+            hilitePos === -1 ? -1 : this._clampNativeTextInputPosition(hilitePos, command.length)
+        if (
+            command === this._command &&
+            clampedCursorPos === this._cursorPos &&
+            clampedHilitePos === this._hilitePos
+        ) {
+            return
+        }
 
         const oldCommand = this._command
         const oldCursor = this._cursorPos
@@ -606,12 +724,13 @@ export class DebugCliDialog extends MessageBox {
         this._resetCompletionCycle()
         this._resetHistoryNavigation()
         this._command = command
-        this._cursorPos = command.length
-        this._hilitePos = -1
-        this._setUndoSnapshot(oldCommand, oldCursor, oldHilitePos)
+        this._cursorPos = clampedCursorPos
+        this._hilitePos = clampedHilitePos
+        if (command !== oldCommand) this._setUndoSnapshot(oldCommand, oldCursor, oldHilitePos)
         this._lastModifyIdx = this._cursorPos
         this._enforceMaxPixels()
         this._cursorPos = Math.min(this._cursorPos, this._command.length)
+        if (this._hilitePos !== -1) this._hilitePos = Math.min(this._hilitePos, this._command.length)
         this._focusCursor(false)
         if (this._closeIfEmpty()) return
         this._showCursorNow()
@@ -782,17 +901,18 @@ export class DebugCliDialog extends MessageBox {
     private _submitCommand() {
         if (!this._command || !this.onCommand) {
             this._flashInvalidCommand()
+            this._refocusAfterInvalidCommand()
+            return
+        }
+
+        const result = this.onCommand(this._command)
+        if (!result.ok && result.failure !== 'condition') {
+            this._flashInvalidCommand()
+            this._refocusAfterInvalidCommand()
             return
         }
 
         this._setInputFocus(false)
-        const result = this.onCommand(this._command)
-        if (!result.ok && result.failure !== 'condition') {
-            this._setInputFocus(true)
-            this._flashInvalidCommand()
-            return
-        }
-
         this.lastCommandResult = result
         if (result.ok) {
             void SoundLoader.play(SoundEffect.ButtonClick)
@@ -801,6 +921,12 @@ export class DebugCliDialog extends MessageBox {
         }
         this._destroyInput()
         this.close()
+    }
+
+    private _refocusAfterInvalidCommand() {
+        this._setInputFocus(true)
+        this._focusNativeTextInput()
+        if (sys.isMobile) this.scheduleOnce(() => this._focusNativeTextInput(), 0)
     }
 
     private _flashInvalidCommand() {
@@ -1453,6 +1579,7 @@ export class DebugCliDialog extends MessageBox {
         if (!this.isTopDialog()) return
         if (!this._hasInputFocus) return
         if (event.key === 'Enter' || event.key === 'Escape') return
+        if (sys.isMobile && this._nativeTextInput?.node?.isValid) return
 
         this._handleInputKey({
             keyCode: event.keyCode,
@@ -1546,20 +1673,99 @@ export class DebugCliDialog extends MessageBox {
         if (canvas) canvas.style.cursor = style
     }
 
-    private _destroyInput() {
+    private _lockMobilePageScroll() {
+        if (!sys.isBrowser || !sys.isMobile || this._mobilePageScrollLocked) return
+
+        const doc = globalThis.document
+        const html = doc?.documentElement
+        const body = doc?.body
+        if (!doc || !html || !body) return
+
+        this._mobilePageScrollX = globalThis.scrollX || html.scrollLeft || body.scrollLeft || 0
+        this._mobilePageScrollY = globalThis.scrollY || html.scrollTop || body.scrollTop || 0
+        this._mobilePageScrollState = {
+            htmlOverflow: html.style.overflow,
+            htmlOverscrollBehavior: html.style.overscrollBehavior,
+            bodyOverflow: body.style.overflow,
+            bodyOverscrollBehavior: body.style.overscrollBehavior,
+            bodyTouchAction: body.style.touchAction,
+        }
+
+        html.style.overflow = 'hidden'
+        html.style.overscrollBehavior = 'none'
+        body.style.overflow = 'hidden'
+        body.style.overscrollBehavior = 'none'
+        body.style.touchAction = 'none'
+        doc.addEventListener('touchmove', this._mobilePageScrollBlocker, {
+            capture: true,
+            passive: false,
+        })
+        globalThis.addEventListener('scroll', this._mobilePageScrollRestorer, true)
+
+        this._mobilePageScrollLocked = true
+        this._restoreMobilePageScroll()
+    }
+
+    private _unlockMobilePageScroll() {
+        if (!this._mobilePageScrollLocked) return
+
+        const doc = globalThis.document
+        const html = doc?.documentElement
+        const body = doc?.body
+        doc?.removeEventListener('touchmove', this._mobilePageScrollBlocker, true)
+        globalThis.removeEventListener?.('scroll', this._mobilePageScrollRestorer, true)
+
+        if (html && body && this._mobilePageScrollState) {
+            html.style.overflow = this._mobilePageScrollState.htmlOverflow
+            html.style.overscrollBehavior = this._mobilePageScrollState.htmlOverscrollBehavior
+            body.style.overflow = this._mobilePageScrollState.bodyOverflow
+            body.style.overscrollBehavior = this._mobilePageScrollState.bodyOverscrollBehavior
+            body.style.touchAction = this._mobilePageScrollState.bodyTouchAction
+        }
+
+        this._mobilePageScrollLocked = false
+        this._mobilePageScrollState = null
+        this._restoreMobilePageScroll()
+    }
+
+    private _restoreMobilePageScroll() {
+        if (!sys.isBrowser || !sys.isMobile) return
+
+        const doc = globalThis.document
+        const html = doc?.documentElement
+        const body = doc?.body
+        if (html) {
+            html.scrollLeft = this._mobilePageScrollX
+            html.scrollTop = this._mobilePageScrollY
+        }
+        if (body) {
+            body.scrollLeft = this._mobilePageScrollX
+            body.scrollTop = this._mobilePageScrollY
+        }
+        globalThis.scrollTo?.(this._mobilePageScrollX, this._mobilePageScrollY)
+    }
+
+    private _destroyInput(preserveNativeTextInput = false) {
         this._draggingSelection = false
         this._setCanvasCursor('')
-        if (this._nativeTextInput?.node.isValid) {
-            this._nativeTextInput.node.off(EditBox.EventType.TEXT_CHANGED, this._onNativeTextInputChanged, this)
-            this._nativeTextInput.node.off(EditBox.EventType.EDITING_RETURN, this._onNativeTextInputReturn, this)
-            this._nativeTextInput.blur()
+        const nativeInputNode = this._nativeTextInput?.node
+        if (nativeInputNode?.isValid) {
+            if (preserveNativeTextInput) {
+                if (nativeInputNode.parent === this._inputRoot) nativeInputNode.setParent(this.node)
+            } else {
+                nativeInputNode.off(EditBox.EventType.TEXT_CHANGED, this._onNativeTextInputChanged, this)
+                nativeInputNode.off(EditBox.EventType.EDITING_RETURN, this._onNativeTextInputReturn, this)
+                this._nativeTextInput?.blur()
+                this._unlockMobilePageScroll()
+            }
         }
+        if (!preserveNativeTextInput) this._unlockMobilePageScroll()
         if (this._inputRoot?.isValid) {
             this._unbindInputPointerEvents(this._inputRoot)
             this._inputRoot.destroy()
         }
         this._inputRoot = null
-        this._nativeTextInput = null
+        if (!preserveNativeTextInput) this._nativeTextInput = null
         this._syncingNativeTextInput = false
         this._textNode = null
         this._textRenderer = null

@@ -30,6 +30,7 @@ export interface MessageBoxButton {
     result?: DialogResult
     width?: number
     height?: number
+    finishOnClick?: boolean
     onClick?: () => void
 }
 
@@ -647,7 +648,13 @@ export class MessageBox extends ModalDialog {
                     sprites,
                     buttonFonts.normal,
                     buttonFonts.highlight,
-                    () => this._finish(cfg.result ?? fallbackResult),
+                    () => {
+                        if (cfg.finishOnClick === false) {
+                            cfg.onClick?.()
+                            return
+                        }
+                        this._finish(cfg.result ?? fallbackResult)
+                    },
                 )
                 this._buttonContainer.addChild(btnNode)
                 this._buttonNodes.push(btnNode)
@@ -674,7 +681,13 @@ export class MessageBox extends ModalDialog {
                 sprites,
                 buttonFonts.normal,
                 buttonFonts.highlight,
-                () => this._finish(cfg.result ?? DialogResult.Footer),
+                () => {
+                    if (cfg.finishOnClick === false) {
+                        cfg.onClick?.()
+                        return
+                    }
+                    this._finish(cfg.result ?? DialogResult.Footer)
+                },
             )
             this._buttonContainer.addChild(btnNode)
             this._buttonNodes.push(btnNode)

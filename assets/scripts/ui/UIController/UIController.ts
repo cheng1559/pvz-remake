@@ -1,15 +1,23 @@
 import {
     _decorator,
+    BlockInputEvents,
     Component,
     EventKeyboard,
+    EventTouch,
     game,
     input,
     Input,
     Node,
     screen,
+    Sprite,
     sys,
+    UITransform,
+    UIOpacity,
+    Vec3,
+    view,
 } from 'cc'
 import { FontLoader } from '@/core/FontLoader'
+import { SpriteLoader } from '@/core/SpriteLoader'
 import { AdventureGameScreen } from '@/game/GameScreen'
 import {
     ADVENTURE_1_1,
@@ -39,6 +47,7 @@ import { HelpScreen } from '../HelpScreen'
 import { OptionsDialog } from '../OptionsDialog'
 import { PauseDialog } from '../PauseDialog'
 import { SelectorScreen } from '../SelectorScreen/SelectorScreen'
+import { StartupScreen } from '../StartupScreen/StartupScreen'
 import { StartupResourceLoader } from '../StartupResourceLoader'
 import { createStoneButton } from '../StoneButton'
 import { createUINode } from '../UIFactory'
@@ -62,9 +71,14 @@ const ACHIEVEMENT_SCREEN_HIDDEN_Y = -599
 const ACHIEVEMENT_SCREEN_SHOWN_Y = 1
 const NATIVE_UNCAPPED_FRAME_RATE = 1000
 const FULLSCREEN_CHANGE_EVENT = 'fullscreen-change' as never
-const FULLSCREEN_ERROR_TITLE = 'Error!'
+const FULLSCREEN_ERROR_TITLE = 'Fullscreen Error'
 const MOBILE_NATIVE_NO_WINDOWED_MESSAGE = 'Windowed mode is not available on mobile devices.'
 const NO_FULLSCREEN_MESSAGE = 'Full screen mode is not available in this browser.'
+const MOBILE_DEBUG_CLI_BUTTON_MARGIN = 16
+const MOBILE_DEBUG_CLI_DRAG_THRESHOLD = 8
+const DEBUG_CLI_BRAIN_SCALE = 1.2
+const DEBUG_CLI_BRAIN_OPACITY = 140
+const DEBUG_CLI_BUTTON_OPEN_OFFSET_Y = 100
 
 interface PvzNativeBridge {
     setFullScreen?: (fullScreen: boolean) => boolean
@@ -87,6 +101,10 @@ interface AlmanacDialogOptions {
     onClose?: () => void
 }
 
+interface DebugCliDialogOptions {
+    offsetY?: number
+}
+
 interface AchievementTransitionState {
     mode: 'show' | 'hide'
     elapsed: number
@@ -105,6 +123,7 @@ export class UIController extends Component {
     private _achievementScreen: Node | null = null
     private _modalScreen: Node | null = null
     private _debugCliScreen: Node | null = null
+    private _optionsDialog: OptionsDialog | null = null
     private _globalAdviceLayer: Node | null = null
     private _globalAdviceWidget: AdviceWidget | null = null
     private _globalAdviceTick = 0
@@ -112,6 +131,14 @@ export class UIController extends Component {
     private _profile: PlayerProfile | null = null
     private _adventureLevel: LevelDefinition = ADVENTURE_1_1
     private _gameOverMainMenuButton: Node | null = null
+    private _mobileDebugCliButton: Node | null = null
+    private _mobileDebugCliButtonWidth = 32 * DEBUG_CLI_BRAIN_SCALE
+    private _mobileDebugCliButtonHeight = 31 * DEBUG_CLI_BRAIN_SCALE
+    private _mobileDebugCliDragMouseX = 0
+    private _mobileDebugCliDragMouseY = 0
+    private _mobileDebugCliDragStartUi = new Vec3()
+    private _mobileDebugCliButtonDragged = false
+    private _mobileDebugCliPointerDown = false
     private _gameOverDialogDragging = false
     private _screenTransitioning = false
     private _achievementTransition: AchievementTransitionState | null = null
@@ -127,12 +154,13 @@ export class UIController extends Component {
         this._configurePlatformFrameRate()
         screen.on(FULLSCREEN_CHANGE_EVENT, this._onFullScreenChanged, this)
         input.on(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
-        void this._bootstrap()
+        void this._bootstrap().then(() => this._createMobileDebugCliButton())
     }
 
     onDestroy() {
         screen.off(FULLSCREEN_CHANGE_EVENT, this._onFullScreenChanged, this)
         input.off(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
+        this._destroyMobileDebugCliButton()
         MusicSystem.stop()
     }
 
@@ -145,6 +173,7 @@ export class UIController extends Component {
         if (this._currentScreen?.name !== 'AdventureGameScreen') {
             MusicSystem.update(scaledDt / GAME_TICK_SECONDS, { zombiesOnScreen: 0 })
         }
+        this._placeMobileDebugCliButton()
     }
 
     private _configurePlatformFrameRate() {
@@ -154,7 +183,7 @@ export class UIController extends Component {
     }
 
     private async _bootstrap() {
-        await StartupResourceLoader.preloadStartup()
+        await this._playStartupScreen()
         if (DEBUG_START_ADVENTURE_DIRECTLY) {
             this.showAdventureGame()
             return
@@ -164,6 +193,22 @@ export class UIController extends Component {
             return
         }
         await this.showSelectorScreen()
+    }
+
+    private async _playStartupScreen() {
+        const node = createUINode('StartupScreen', { active: false, width: 800, height: 600 })
+        const startupScreen = node.addComponent(StartupScreen)
+        this.uiRoot!.addChild(node)
+        node.active = true
+
+        try {
+            await startupScreen.play()
+        } catch (error) {
+            console.error('[UIController] Failed to play startup screen', error)
+            await StartupResourceLoader.preloadStartup()
+        } finally {
+            if (node.isValid) node.destroy()
+        }
     }
 
     async showSelectorScreen(): Promise<SelectorScreen | null> {
@@ -607,11 +652,16 @@ export class UIController extends Component {
     }
 
     showOptionsDialog(): OptionsDialog | null {
+        const activeOptionsDialog = this._activeOptionsDialog()
+        if (activeOptionsDialog) return activeOptionsDialog
+
         const node = createUINode('OptionsDialog', { active: false, width: 423, height: 498 })
         const optionsDialog = node.addComponent(OptionsDialog)
+        this._optionsDialog = optionsDialog
         this._configureOptionsDialog(optionsDialog)
         optionsDialog.onClose = () => {
             this._commitOptionsDialogSettings(optionsDialog)
+            if (this._optionsDialog === optionsDialog) this._optionsDialog = null
         }
 
         this.uiRoot!.addChild(node)
@@ -620,13 +670,18 @@ export class UIController extends Component {
     }
 
     showGameOptionsDialog(gameScreen?: AdventureGameScreen): OptionsDialog | null {
+        const activeOptionsDialog = this._activeOptionsDialog()
+        if (activeOptionsDialog) return activeOptionsDialog
+
         const node = createUINode('GameOptionsDialog', { active: false, width: 423, height: 498 })
         const optionsDialog = node.addComponent(OptionsDialog)
+        this._optionsDialog = optionsDialog
         optionsDialog.gameMenu = true
         optionsDialog.backButtonLabel = 'Back To Game'
         this._configureOptionsDialog(optionsDialog)
         optionsDialog.onClose = () => {
             this._commitOptionsDialogSettings(optionsDialog)
+            if (this._optionsDialog === optionsDialog) this._optionsDialog = null
             gameScreen?.resumeGame()
         }
         optionsDialog.onRestartLevel = () => {
@@ -634,6 +689,7 @@ export class UIController extends Component {
                 if (!confirmed) return
                 void SoundLoader.play(SoundEffect.ButtonClick)
                 this._commitOptionsDialogSettings(optionsDialog)
+                if (this._optionsDialog === optionsDialog) this._optionsDialog = null
                 if (node.isValid) node.destroy()
                 this.showAdventureGame()
             })
@@ -643,6 +699,7 @@ export class UIController extends Component {
                 if (!confirmed) return
                 void SoundLoader.play(SoundEffect.ButtonClick)
                 this._commitOptionsDialogSettings(optionsDialog)
+                if (this._optionsDialog === optionsDialog) this._optionsDialog = null
                 if (node.isValid) node.destroy()
                 void this.showSelectorScreen()
             })
@@ -651,6 +708,12 @@ export class UIController extends Component {
         this.uiRoot!.addChild(node)
         node.active = true
         return optionsDialog
+    }
+
+    private _activeOptionsDialog() {
+        if (this._optionsDialog?.node?.isValid) return this._optionsDialog
+        this._optionsDialog = null
+        return null
     }
 
     showPauseDialog(gameScreen?: AdventureGameScreen): PauseDialog | null {
@@ -670,7 +733,7 @@ export class UIController extends Component {
         return pauseDialog
     }
 
-    showDebugCliDialog(initialCommand = ''): DebugCliDialog | null {
+    showDebugCliDialog(initialCommand = '', options: DebugCliDialogOptions = {}): DebugCliDialog | null {
         if (this._debugCliScreen?.isValid) return null
 
         const gameScreenNode = this._adventureGameScreen?.node as Node | null | undefined
@@ -681,7 +744,12 @@ export class UIController extends Component {
         }
         pushGlobalGamePause()
 
+        const helpScreen = this._currentScreen?.getComponent(HelpScreen) ?? null
+        const previousHelpKeyboardExitEnabled = helpScreen?.keyboardExitEnabled ?? true
+        if (helpScreen) helpScreen.keyboardExitEnabled = false
+
         const node = createUINode('DebugCliDialog', { active: false, width: 100, height: 100 })
+        if (options.offsetY) node.setPosition(0, options.offsetY, 0)
         const dialog = node.addComponent(DebugCliDialog)
         let finalized = false
         let pendingCommandResult: ReturnType<typeof executeDebugCliCommand> | null = null
@@ -691,6 +759,9 @@ export class UIController extends Component {
 
             if (this._debugCliScreen === node) this._debugCliScreen = null
             popGlobalGamePause()
+            if (helpScreen?.node?.isValid) {
+                helpScreen.keyboardExitEnabled = previousHelpKeyboardExitEnabled
+            }
 
             const commandAction = commandResult?.action ?? null
             if (commandResult && !commandResult.ok && commandResult.failure === 'condition') {
@@ -710,6 +781,14 @@ export class UIController extends Component {
             }
             if (commandAction === 'help') {
                 this.showHelpScreen()
+                return
+            }
+            if (commandAction === 'menu') {
+                if (gameScreen?.node?.isValid) {
+                    this.showGameOptionsDialog(gameScreen)
+                } else {
+                    this.showOptionsDialog()
+                }
                 return
             }
             if (commandAction === 'store') {
@@ -738,6 +817,7 @@ export class UIController extends Component {
             result.action === 'level' ||
             result.action === 'quit' ||
             result.action === 'help' ||
+            result.action === 'menu' ||
             result.action === 'store' ||
             result.action === 'almanac' ||
             result.action === 'zenGarden'
@@ -748,6 +828,7 @@ export class UIController extends Component {
             const result = executeDebugCliCommand(command, activeGameScreen)
             if (result.ok) {
                 console.info(`[DebugCliDialog] ${result.message}`)
+                if (result.settingsChanged) this._reloadPersistedSettings()
             } else {
                 console.warn(`[DebugCliDialog] ${result.message}`)
             }
@@ -864,6 +945,118 @@ export class UIController extends Component {
         }
         this._gameOverMainMenuButton = null
         this._gameOverDialogDragging = false
+    }
+
+    private async _createMobileDebugCliButton() {
+        if (!sys.isMobile) return
+        if (!this.uiRoot?.isValid || this._mobileDebugCliButton?.isValid) return
+
+        const brainFrame = await SpriteLoader.load('brain')
+        if (!brainFrame || !this.uiRoot?.isValid || this._mobileDebugCliButton?.isValid) return
+
+        this._mobileDebugCliButtonWidth = brainFrame.originalSize.width * DEBUG_CLI_BRAIN_SCALE
+        this._mobileDebugCliButtonHeight = brainFrame.originalSize.height * DEBUG_CLI_BRAIN_SCALE
+        const button = createUINode('MobileDebugCliButton', {
+            parent: this.uiRoot,
+            layer: this.uiRoot.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: this._mobileDebugCliButtonWidth,
+            height: this._mobileDebugCliButtonHeight,
+        })
+        const sprite = button.addComponent(Sprite)
+        sprite.sizeMode = Sprite.SizeMode.CUSTOM
+        sprite.spriteFrame = brainFrame
+        button.getComponent(UITransform)?.setContentSize(
+            this._mobileDebugCliButtonWidth,
+            this._mobileDebugCliButtonHeight,
+        )
+        button.addComponent(UIOpacity).opacity = DEBUG_CLI_BRAIN_OPACITY
+        button.addComponent(BlockInputEvents)
+        const visibleSize = view.getVisibleSize()
+        button.setWorldPosition(
+            visibleSize.width - this._mobileDebugCliButtonWidth - MOBILE_DEBUG_CLI_BUTTON_MARGIN,
+            this._mobileDebugCliButtonHeight + MOBILE_DEBUG_CLI_BUTTON_MARGIN,
+            0,
+        )
+        this._mobileDebugCliButton = button
+        button.on(Node.EventType.TOUCH_START, this._onMobileDebugCliButtonTouchStart, this)
+        button.on(Node.EventType.TOUCH_MOVE, this._onMobileDebugCliButtonTouchMove, this)
+        button.on(Node.EventType.TOUCH_END, this._onMobileDebugCliButtonTouchEnd, this)
+        button.on(Node.EventType.TOUCH_CANCEL, this._onMobileDebugCliButtonTouchEnd, this)
+        this._placeMobileDebugCliButton()
+    }
+
+    private _destroyMobileDebugCliButton() {
+        this._mobileDebugCliButton?.destroy()
+        this._mobileDebugCliButton = null
+        this._mobileDebugCliButtonDragged = false
+        this._mobileDebugCliPointerDown = false
+    }
+
+    private _placeMobileDebugCliButton() {
+        if (!this._mobileDebugCliButton?.isValid) return
+
+        this._mobileDebugCliButton.active = !this._debugCliScreen?.isValid
+        this._mobileDebugCliButton.setSiblingIndex(Math.max(0, (this.uiRoot?.children.length ?? 1) - 1))
+    }
+
+    private _onMobileDebugCliButtonTouchStart(event: EventTouch) {
+        event.propagationStopped = true
+        if (!this._mobileDebugCliButton?.isValid) return
+
+        this._mobileDebugCliPointerDown = true
+        this._mobileDebugCliButtonDragged = false
+        const uiPos = event.getUILocation()
+        this._mobileDebugCliDragStartUi.set(uiPos.x, uiPos.y, 0)
+        const transform = this._mobileDebugCliButton.getComponent(UITransform)!
+        const pos = this._mobileDebugCliButton.worldPosition
+        this._mobileDebugCliDragMouseX =
+            uiPos.x - (pos.x - transform.contentSize.width * transform.anchorPoint.x)
+        this._mobileDebugCliDragMouseY =
+            pos.y + transform.contentSize.height * (1 - transform.anchorPoint.y) - uiPos.y
+        this._placeMobileDebugCliButton()
+    }
+
+    private _onMobileDebugCliButtonTouchMove(event: EventTouch) {
+        if (!this._mobileDebugCliPointerDown || !this._mobileDebugCliButton?.isValid) return
+        event.propagationStopped = true
+
+        const uiPos = event.getUILocation()
+        const dx = uiPos.x - this._mobileDebugCliDragStartUi.x
+        const dy = uiPos.y - this._mobileDebugCliDragStartUi.y
+        if (Math.hypot(dx, dy) >= MOBILE_DEBUG_CLI_DRAG_THRESHOLD) {
+            this._mobileDebugCliButtonDragged = true
+        }
+
+        const transform = this._mobileDebugCliButton.getComponent(UITransform)!
+        const { width, height } = transform.contentSize
+        const { width: screenWidth, height: screenHeight } = view.getVisibleSize()
+        const margin = MOBILE_DEBUG_CLI_BUTTON_MARGIN
+        let nextX = uiPos.x - this._mobileDebugCliDragMouseX
+        let nextY = uiPos.y + this._mobileDebugCliDragMouseY
+
+        nextX = Math.max(margin, Math.min(screenWidth - width - margin, nextX))
+        nextY = Math.max(height + margin, Math.min(screenHeight - margin, nextY))
+
+        this._mobileDebugCliDragMouseX = Math.max(margin, Math.min(width - margin - 1, uiPos.x - nextX))
+        this._mobileDebugCliDragMouseY = Math.max(margin, Math.min(height - margin - 1, nextY - uiPos.y))
+        this._mobileDebugCliButton.setWorldPosition(
+            nextX + width * transform.anchorPoint.x,
+            nextY - height * (1 - transform.anchorPoint.y),
+            0,
+        )
+    }
+
+    private _onMobileDebugCliButtonTouchEnd(event: EventTouch) {
+        if (!this._mobileDebugCliPointerDown) return
+        event.propagationStopped = true
+
+        const shouldClick = !this._mobileDebugCliButtonDragged
+        this._mobileDebugCliPointerDown = false
+        if (shouldClick && !this._debugCliScreen?.isValid) {
+            this.showDebugCliDialog('/', { offsetY: DEBUG_CLI_BUTTON_OPEN_OFFSET_Y })?.requestNativeTextInputFocus()
+        }
     }
 
     async showConfirmBox(title: string, message: string): Promise<boolean> {
@@ -1025,6 +1218,29 @@ export class UIController extends Component {
         SoundLoader.setMusicVolume(this._settings.musicVolume)
         SoundLoader.setSfxVolume(this._settings.sfxVolume)
         void this._applyFullScreenPreference(this._settings.fullScreen)
+    }
+
+    private _reloadPersistedSettings() {
+        this._settings = GameSettingsStore.load()
+        if (this._isNativeMobileFullScreenForced() && !this._settings.fullScreen) {
+            this._settings = GameSettingsStore.update({ fullScreen: true })
+        }
+        this._syncOpenOptionsDialogSettings()
+    }
+
+    private _syncOpenOptionsDialogSettings() {
+        const optionsDialog = this._optionsDialog
+        if (!optionsDialog?.node?.isValid) {
+            this._optionsDialog = null
+            return
+        }
+
+        const forceFullScreen = this._isNativeMobileFullScreenForced()
+        optionsDialog.musicVolume = this._settings.musicVolume
+        optionsDialog.sfxVolume = this._settings.sfxVolume
+        optionsDialog.forceFullScreen = forceFullScreen
+        optionsDialog.fullScreen = forceFullScreen ? true : this._settings.fullScreen
+        void optionsDialog.renderDialog()
     }
 
     private _configureOptionsDialog(optionsDialog: OptionsDialog) {

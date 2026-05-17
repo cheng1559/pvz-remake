@@ -186,6 +186,22 @@ export class MusicSystem {
         if (this._pauseRequested) this.pause()
     }
 
+    static async preloadTune(tuneId: MusicTuneId) {
+        const manifest = await this._loadManifest()
+        const tune = manifest?.tunes[tuneId] ?? null
+        if (!tune) return
+
+        await Promise.all(this._activeStems(tune).map((stem) => this._loadClip(tune.stems[stem]!)))
+    }
+
+    static async preloadAllTunes() {
+        const manifest = await this._loadManifest()
+        if (!manifest) return
+
+        const tuneIds = Object.keys(manifest.tunes) as MusicTuneId[]
+        await Promise.all(tuneIds.map((tuneId) => this.preloadTune(tuneId)))
+    }
+
     static stop() {
         this._playToken++
         for (const source of Object.values(this._sources)) {

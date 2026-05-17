@@ -829,6 +829,13 @@ export abstract class GameScreenCore extends Component {
         return rechargingEnabled
     }
 
+    public debugSetSunCostEnabled(enabled: boolean) {
+        GameDebugSettings.sunCostEnabled = enabled
+        const sunCostEnabled = this._session.debugSetSunCostEnabled(enabled)
+        if (this._bootstrapped) this._renderFrame()
+        return sunCostEnabled
+    }
+
     public debugSetSunSpawningEnabled(enabled: boolean) {
         if (!this.isLevelRunning()) return null
 
@@ -2358,7 +2365,8 @@ export abstract class GameScreenCore extends Component {
         }
 
         if (this._session.selectedTool === 'shovel') {
-            if (this._canShowCursorObjectPreview()) {
+            const mobileToolPressReady = !sys.isMobile || this._isMobileCursorPressReady()
+            if (this._canShowCursorObjectPreview() && mobileToolPressReady) {
                 this._updateShovelCursor()
                 if (sys.isMobile) {
                     this._syncShovelGridGuide()

@@ -1367,6 +1367,18 @@
             "animations": []
         }
     },
+    "loadbar_sprout": {
+        "default": {
+            "slots": [],
+            "animations": []
+        }
+    },
+    "loadbar_zombiehead": {
+        "default": {
+            "slots": [],
+            "animations": []
+        }
+    },
     "finalwave": {
         "default": {
             "slots": [],

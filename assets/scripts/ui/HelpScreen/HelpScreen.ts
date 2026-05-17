@@ -29,6 +29,8 @@ const MAIN_MENU_BUTTON_HEIGHT = 42
 
 @ccclass('HelpScreen')
 export class HelpScreen extends MenuScreenBase {
+    public keyboardExitEnabled = true
+
     private _fadeGraphics: Graphics | null = null
     private _fadeCounter = FADE_TICKS
     private _hasExited = false
@@ -215,6 +217,8 @@ export class HelpScreen extends MenuScreenBase {
     }
 
     private _onKeyDown(event: EventKeyboard) {
+        if (!this.keyboardExitEnabled) return
+
         if (
             event.keyCode === KeyCode.SPACE ||
             event.keyCode === KeyCode.ENTER ||

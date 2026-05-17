@@ -1,6 +1,9 @@
+import { screen, sys } from 'cc'
+import { SoundLoader } from '@/core/SoundLoader'
 import type { AdventureGameScreen } from '@/game/GameScreen'
 import { ADVENTURE_LEVELS, PLANT_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed, setGameSpeed } from '@/game/GameDefinitions'
 import { GameDebugSettings } from '@/game/GameDebugSettings'
+import { GameSettingsStore, SFX_VOLUME_SCALE } from '@/game/persistence/GameSettingsStore'
 import type { ItemType, LevelAwardKind, LevelDefinition, PlantType, ZombieType } from '@/game/GameTypes'
 
 const DEBUG_CLI_MIN_SPEED = 0
@@ -10,8 +13,9 @@ export interface DebugCliResult {
     ok: boolean
     message: string
     failure?: 'syntax' | 'condition'
-    action?: 'restart' | 'home' | 'level' | 'help' | 'store' | 'almanac' | 'zenGarden' | 'quit'
+    action?: 'restart' | 'home' | 'level' | 'help' | 'menu' | 'store' | 'almanac' | 'zenGarden' | 'quit'
     levelId?: LevelDefinition['id']
+    settingsChanged?: boolean
 }
 
 const DEBUG_PLANT_TYPES = Object.keys(PLANT_DEFINITIONS) as PlantType[]
@@ -33,6 +37,14 @@ const DEBUG_ITEM_LOOKUP = createDebugItemLookup(DEBUG_ITEM_SPECS)
 const DEBUG_BOOLEAN_VALUES = ['true', 'false']
 const DEBUG_LEVEL_IDS = ADVENTURE_LEVELS.map((level) => debugLevelId(level))
 const DEBUG_LEVEL_LOOKUP = new Map(DEBUG_LEVEL_IDS.map((id, index) => [id, ADVENTURE_LEVELS[index]]))
+type DebugNativeBridge = {
+    setFullScreen?: (fullScreen: boolean) => boolean
+}
+type DebugNativeBindings = typeof globalThis & {
+    jsb?: {
+        PvzNative?: DebugNativeBridge
+    }
+}
 const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
     {
         name: 'plant',
@@ -95,6 +107,11 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         parameterHints: [],
     },
     {
+        name: 'menu',
+        completions: [],
+        parameterHints: [],
+    },
+    {
         name: 'shop',
         completions: [],
         parameterHints: [],
@@ -117,7 +134,7 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
     {
         name: 'gamespeed',
         completions: [],
-        parameterHints: ['{speed}'],
+        parameterHints: ['{0-10}'],
     },
     {
         name: 'lawnmower',
@@ -145,6 +162,11 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         parameterHints: ['{enabled}'],
     },
     {
+        name: 'suncost',
+        completions: [DEBUG_BOOLEAN_VALUES],
+        parameterHints: ['{enabled}'],
+    },
+    {
         name: 'autocollect',
         completions: [DEBUG_BOOLEAN_VALUES],
         parameterHints: ['{enabled}'],
@@ -155,12 +177,27 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         parameterHints: ['{enabled}'],
     },
     {
-        name: 'summon',
+        name: 'zombie',
         completions: [DEBUG_ZOMBIE_TYPES],
         parameterHints: ['{zombie_name}', '[optional]{row}', '[optional]{col}'],
     },
     {
         name: 'cooldown',
+        completions: [DEBUG_BOOLEAN_VALUES],
+        parameterHints: ['{enabled}'],
+    },
+    {
+        name: 'music',
+        completions: [],
+        parameterHints: ['{0-100}'],
+    },
+    {
+        name: 'sfx',
+        completions: [],
+        parameterHints: ['{0-100}'],
+    },
+    {
+        name: 'fullscreen',
         completions: [DEBUG_BOOLEAN_VALUES],
         parameterHints: ['{enabled}'],
     },
@@ -216,6 +253,8 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugQuitCommand(tokens)
         case 'help':
             return executeDebugScreenCommand(tokens, 'help', 'Opening help')
+        case 'menu':
+            return executeDebugScreenCommand(tokens, 'menu', 'Opening menu')
         case 'shop':
             return executeDebugScreenCommand(tokens, 'store', 'Opening shop')
         case 'almanac':
@@ -224,7 +263,7 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugScreenCommand(tokens, 'zenGarden', 'Opening Zen Garden')
         case 'level':
             return executeDebugLevelCommand(tokens)
-        case 'summon':
+        case 'zombie':
             return executeDebugSummonCommand(tokens, gameScreen)
         case 'gamespeed':
             return executeDebugGameSpeedCommand(tokens)
@@ -240,10 +279,18 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugRechargingCommand(tokens, gameScreen)
         case 'sunspawning':
             return executeDebugSunSpawningCommand(tokens, gameScreen)
+        case 'suncost':
+            return executeDebugSunCostCommand(tokens, gameScreen)
         case 'autocollect':
             return executeDebugAutoCollectCommand(tokens, gameScreen)
         case 'hitboxes':
             return executeDebugHitboxesCommand(tokens, gameScreen)
+        case 'music':
+            return executeDebugMusicCommand(tokens)
+        case 'sfx':
+            return executeDebugSfxCommand(tokens)
+        case 'fullscreen':
+            return executeDebugFullScreenCommand(tokens)
         default:
             return { ok: false, message: `Unknown command: ${tokens[0]}` }
     }
@@ -523,11 +570,11 @@ function executeDebugLevelCommand(tokens: string[]): DebugCliResult {
 
 function executeDebugSummonCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
     if (tokens.length < 2 || tokens.length > 4) {
-        return { ok: false, message: 'Usage: /summon {zombie_name} [row] [col]' }
+        return { ok: false, message: 'Usage: /zombie {zombie_name} [row] [col]' }
     }
 
     if (!isLevelReady(gameScreen)) {
-        return conditionFailure('/summon can only run during an active level')
+        return conditionFailure('/zombie can only run during an active level')
     }
 
     const zombieType = parseDebugZombieType(tokens[1])
@@ -540,7 +587,7 @@ function executeDebugSummonCommand(tokens: string[], gameScreen: AdventureGameSc
 
     if (tokens.length === 2) {
         if (!gameScreen.debugSummonZombie(zombieType)) {
-            return conditionFailure('/summon can only run during an active level')
+            return conditionFailure('/zombie can only run during an active level')
         }
         return { ok: true, message: `Summoned ${zombieType} using spawn row logic` }
     }
@@ -557,7 +604,7 @@ function executeDebugSummonCommand(tokens: string[], gameScreen: AdventureGameSc
     if (boundsError) return { ok: false, message: boundsError }
 
     if (!gameScreen.debugSummonZombie(zombieType, row - 1, col == null ? undefined : col - 1)) {
-        return conditionFailure('/summon can only run during an active level')
+        return conditionFailure('/zombie can only run during an active level')
     }
 
     const position = col == null ? `row ${row}, right edge` : `row ${row}, col ${col}`
@@ -583,6 +630,57 @@ function executeDebugGameSpeedCommand(tokens: string[]): DebugCliResult {
     const previousSpeed = getGameSpeed()
     setGameSpeed(speed)
     return { ok: true, message: `Game speed changed from ${previousSpeed} to ${speed}` }
+}
+
+function executeDebugMusicCommand(tokens: string[]): DebugCliResult {
+    if (tokens.length !== 2) {
+        return { ok: false, message: 'Usage: /music {0-100}' }
+    }
+
+    const percent = parseDebugPercent(tokens[1])
+    if (percent == null) {
+        return { ok: false, message: `Invalid music volume: ${tokens[1]}. Use an integer from 0 to 100` }
+    }
+
+    const settings = GameSettingsStore.update({ musicVolume: percent / 100 })
+    SoundLoader.setMusicVolume(settings.musicVolume)
+    return { ok: true, message: `Music volume set to ${Math.round(settings.musicVolume * 100)}`, settingsChanged: true }
+}
+
+function executeDebugSfxCommand(tokens: string[]): DebugCliResult {
+    if (tokens.length !== 2) {
+        return { ok: false, message: 'Usage: /sfx {0-100}' }
+    }
+
+    const percent = parseDebugPercent(tokens[1])
+    if (percent == null) {
+        return { ok: false, message: `Invalid SFX volume: ${tokens[1]}. Use an integer from 0 to 100` }
+    }
+
+    const settings = GameSettingsStore.update({ sfxVolume: percent / 100 * SFX_VOLUME_SCALE })
+    SoundLoader.setSfxVolume(settings.sfxVolume)
+    return { ok: true, message: `SFX volume set to ${Math.round(settings.sfxVolume / SFX_VOLUME_SCALE * 100)}`, settingsChanged: true }
+}
+
+function executeDebugFullScreenCommand(tokens: string[]): DebugCliResult {
+    if (tokens.length !== 2) {
+        return { ok: false, message: 'Usage: /fullscreen {true|false}' }
+    }
+
+    const enabled = parseDebugBoolean(tokens[1])
+    if (enabled == null) {
+        return { ok: false, message: `Invalid fullscreen value: ${tokens[1]}. Use true or false` }
+    }
+    if (sys.isNative && sys.isMobile && !enabled) {
+        return conditionFailure('Windowed mode is not available on mobile devices')
+    }
+    if (!debugCanRequestFullScreen()) {
+        return conditionFailure('Full screen mode is not available')
+    }
+
+    const settings = GameSettingsStore.update({ fullScreen: enabled })
+    void applyDebugFullScreenPreference(settings.fullScreen)
+    return { ok: true, message: `Fullscreen ${settings.fullScreen ? 'enabled' : 'disabled'}`, settingsChanged: true }
 }
 
 function executeDebugRechargingCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
@@ -620,6 +718,22 @@ function executeDebugSunSpawningCommand(tokens: string[], gameScreen: AdventureG
         return conditionFailure('/sunspawning can only run during an active level')
     }
     return { ok: true, message: `Sun spawning ${sunSpawningEnabled ? 'enabled' : 'disabled'}` }
+}
+
+function executeDebugSunCostCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 2) {
+        return { ok: false, message: 'Usage: /suncost {true|false}' }
+    }
+
+    const enabled = parseDebugBoolean(tokens[1])
+    if (enabled == null) {
+        return { ok: false, message: `Invalid sun cost value: ${tokens[1]}. Use true or false` }
+    }
+
+    const sunCostEnabled = isLevelScreenAvailable(gameScreen)
+        ? gameScreen.debugSetSunCostEnabled(enabled)
+        : setDebugSunCostEnabled(enabled)
+    return { ok: true, message: `Sun cost ${sunCostEnabled ? 'enabled' : 'disabled'}` }
 }
 
 function executeDebugAutoCollectCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
@@ -818,6 +932,11 @@ function setDebugRechargingEnabled(enabled: boolean) {
     return GameDebugSettings.rechargingEnabled
 }
 
+function setDebugSunCostEnabled(enabled: boolean) {
+    GameDebugSettings.sunCostEnabled = enabled
+    return GameDebugSettings.sunCostEnabled
+}
+
 function setDebugAutoCollectEnabled(enabled: boolean) {
     GameDebugSettings.autoCollectEnabled = enabled
     return GameDebugSettings.autoCollectEnabled
@@ -972,6 +1091,40 @@ function parseDebugInteger(token: string) {
     if (!/^-?\d+$/.test(token)) return null
     const value = Number(token)
     return Number.isSafeInteger(value) ? value : null
+}
+
+function parseDebugPercent(token: string) {
+    const value = parseDebugInteger(token)
+    if (value == null || value < 0 || value > 100) return null
+    return value
+}
+
+function debugCanRequestFullScreen() {
+    if (sys.isNative) return sys.isMobile || !!debugNativeBridge()?.setFullScreen
+    return screen.supportsFullScreen
+}
+
+async function applyDebugFullScreenPreference(fullScreen: boolean) {
+    try {
+        const nativeBridge = debugNativeBridge()
+        if (sys.isNative) {
+            nativeBridge?.setFullScreen?.(fullScreen)
+            return
+        }
+
+        if (fullScreen) {
+            if (!screen.fullScreen()) await screen.requestFullScreen()
+            return
+        }
+
+        if (screen.fullScreen()) await screen.exitFullScreen()
+    } catch (error) {
+        console.warn('[DebugCliCommands] Failed to apply fullscreen preference', error)
+    }
+}
+
+function debugNativeBridge() {
+    return (globalThis as DebugNativeBindings).jsb?.PvzNative
 }
 
 function validateDebugGridPosition(gameScreen: AdventureGameScreen, row: number, col: number | null) {

@@ -139,6 +139,7 @@ export class GameSession {
     paused = false
     hasPlantedAtLeastOnce = false
     rechargingEnabled = true
+    sunCostEnabled = true
     sunSpawningEnabled = true
     autoCollectEnabled = false
 
@@ -172,6 +173,7 @@ export class GameSession {
         this.level = level
         this._firstTimeAdventure = options.firstTimeAdventure ?? true
         this.rechargingEnabled = GameDebugSettings.rechargingEnabled
+        this.sunCostEnabled = GameDebugSettings.sunCostEnabled
         this.autoCollectEnabled = GameDebugSettings.autoCollectEnabled
         if (level.skySunSpawning === false) this.sunSpawningEnabled = false
         this.sun = level.startingSun
@@ -484,6 +486,11 @@ export class GameSession {
         return this.rechargingEnabled
     }
 
+    debugSetSunCostEnabled(enabled: boolean) {
+        this.sunCostEnabled = enabled
+        return this.sunCostEnabled
+    }
+
     debugSetSunSpawningEnabled(enabled: boolean) {
         this.sunSpawningEnabled = enabled
         return this.sunSpawningEnabled
@@ -635,7 +642,9 @@ export class GameSession {
         const isFirstPlant = !this.hasPlantedAtLeastOnce
         this.plants.push(plant)
         this.hasPlantedAtLeastOnce = true
-        this.sun = Math.max(SUN_MIN, this.sun - seed.cost)
+        if (this.sunCostEnabled) {
+            this.sun = Math.max(SUN_MIN, this.sun - seed.cost)
+        }
 
         const packet = this.seedPackets.find((item) => item.seedType === seedType)
         if (packet) {
@@ -762,7 +771,7 @@ export class GameSession {
             events: plantEvents,
             hasTargetInRow: (row: number, plant: Plant) => this._hasTargetInRow(row, plant),
             hasTargetInPlantAttackRect: (plant: Plant) => this._hasTargetInPlantAttackRect(plant),
-            canProduceSun: () => this.result !== 'lost' && (!this._levelAwardDropped || this.result === 'won'),
+            canProduceSun: () => !this._levelAwardDropped && this.result === 'playing',
             randomInt: (minInclusive: number, maxInclusive: number) =>
                 this._randomInt(minInclusive, maxInclusive),
         }
@@ -775,7 +784,7 @@ export class GameSession {
     private _handlePlantEvents(events: GameEvent[]) {
         for (const event of events) {
             if (event.type === 'sunProduced') {
-                if (this._levelAwardDropped && this.result !== 'won') continue
+                if (this._levelAwardDropped || this.result !== 'playing') continue
                 this._addItem('sun', 'from-plant', event.x, event.y)
             } else if (event.type === 'projectileFired') {
                 this._addProjectile(event.projectileType, event.x, event.y, event.row)
@@ -1690,6 +1699,7 @@ export class GameSession {
     }
 
     private _canSpendSun(amount: number) {
+        if (!this.sunCostEnabled) return true
         return amount <= this.sun + this._countSunBeingCollected()
     }
 

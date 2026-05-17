@@ -96,6 +96,8 @@ export const SoundEffect = {
     FinalWave: 'finalwave',
     Frozen: 'frozen',
     LightFill: 'lightfill',
+    LoadingBarFlower: 'loadingbar_flower',
+    LoadingBarZombie: 'loadingbar_zombie',
     WinMusic: 'winmusic',
     ZombieFalling1: 'zombie_falling_1',
     ZombieFalling2: 'zombie_falling_2',
