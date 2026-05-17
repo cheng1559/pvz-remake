@@ -45,15 +45,19 @@ AGENTS.md
 
 tools/raw/
 tools/main.pak
-textures/
-assets/resources/images/
+assets/resources/textures/*
+!assets/resources/textures/background_left.png
+!assets/resources/textures/background_left.png.meta
+!assets/resources/textures/background_right.png
+!assets/resources/textures/background_right.png.meta
+assets/resources/images/*
 assets/resources/images.meta
-assets/resources/audio/
+assets/resources/audio/*
 assets/resources/audio.meta
-assets/resources/fonts/
+assets/resources/fonts/*
 assets/resources/fonts.meta
-assets/resources/animations/
+assets/resources/animations/*
 assets/resources/animations.meta
-assets/resources/properties/
+assets/resources/properties/*
 assets/resources/properties.meta
 reference*

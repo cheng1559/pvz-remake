@@ -126,6 +126,16 @@ interface NativeEditBoxElementHost {
     }
 }
 
+interface DebugCliNativeBridge {
+    hideKeyboardAccessory?: () => boolean
+}
+
+type NativeBindings = typeof globalThis & {
+    jsb?: {
+        PvzNative?: DebugCliNativeBridge
+    }
+}
+
 @ccclass('DebugCliDialog')
 export class DebugCliDialog extends MessageBox {
     private static _commandHistory: string[] = []
@@ -600,6 +610,7 @@ export class DebugCliDialog extends MessageBox {
         node.on(EditBox.EventType.EDITING_RETURN, this._onNativeTextInputReturn, this)
         this._nativeTextInput = editBox
         this._configureNativeTextInputElement()
+        this._hideNativeKeyboardAccessory()
     }
 
     private _hideNativeTextInputNode(node: Node) {
@@ -616,6 +627,7 @@ export class DebugCliDialog extends MessageBox {
         this._syncNativeTextInput()
         this._configureNativeTextInputElement()
         this._nativeTextInput.focus()
+        this._hideNativeKeyboardAccessory()
         this._syncNativeTextInputSelection()
         this._restoreMobilePageScroll()
     }
@@ -635,6 +647,12 @@ export class DebugCliDialog extends MessageBox {
 
     private _nativeTextInputElement() {
         return (this._nativeTextInput as NativeEditBoxElementHost | null)?._impl?._edTxt ?? null
+    }
+
+    private _hideNativeKeyboardAccessory() {
+        if (!sys.isNative || !sys.isMobile) return
+        const bridge = (globalThis as NativeBindings).jsb?.PvzNative
+        bridge?.hideKeyboardAccessory?.()
     }
 
     private _blurNativeTextInput() {

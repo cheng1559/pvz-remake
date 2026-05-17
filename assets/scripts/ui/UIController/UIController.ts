@@ -7,6 +7,7 @@ import {
     game,
     input,
     Input,
+    Mask,
     Node,
     screen,
     Sprite,
@@ -50,7 +51,8 @@ import { SelectorScreen } from '../SelectorScreen/SelectorScreen'
 import { StartupScreen } from '../StartupScreen/StartupScreen'
 import { StartupResourceLoader } from '../StartupResourceLoader'
 import { createStoneButton } from '../StoneButton'
-import { createUINode } from '../UIFactory'
+import { createSpriteNode, createUINode } from '../UIFactory'
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../MenuScreenBase'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import type { LevelAward } from '@/game/GameTypes'
 import type { LevelDefinition } from '@/game/GameTypes'
@@ -118,6 +120,8 @@ export class UIController extends Component {
     uiRoot: Node | null = null
 
     private _currentScreen: Node | null = null
+    private _backgroundLeft: Node | null = null
+    private _backgroundRight: Node | null = null
     private _selectorScreen: SelectorScreen | null = null
     private _adventureGameScreen: AdventureGameScreen | null = null
     private _achievementScreen: Node | null = null
@@ -184,6 +188,7 @@ export class UIController extends Component {
 
     private async _bootstrap() {
         await this._playStartupScreen()
+        await this._ensurePersistentWidescreenBackgrounds()
         if (DEBUG_START_ADVENTURE_DIRECTLY) {
             this.showAdventureGame()
             return
@@ -1108,8 +1113,66 @@ export class UIController extends Component {
     private _setCurrentScreen(node: Node) {
         this._destroyCurrentScreen()
         this._currentScreen = node
+        this._ensureScreenClip(node)
         this.uiRoot!.addChild(node)
         node.active = true
+        this._placePersistentWidescreenBackgrounds()
+    }
+
+    private _ensureScreenClip(node: Node) {
+        const transform = node.getComponent(UITransform)
+        if (transform) transform.setContentSize(SCREEN_WIDTH, SCREEN_HEIGHT)
+        const mask = node.getComponent(Mask) ?? node.addComponent(Mask)
+        mask.type = Mask.Type.GRAPHICS_RECT
+    }
+
+    private async _ensurePersistentWidescreenBackgrounds() {
+        if (!this.uiRoot?.isValid || this._backgroundLeft?.isValid || this._backgroundRight?.isValid) return
+
+        const [left, right] = await Promise.all([
+            SpriteLoader.load('background_left'),
+            SpriteLoader.load('background_right'),
+        ])
+        if (!this.uiRoot?.isValid) return
+
+        if (left) {
+            this._backgroundLeft = createSpriteNode({
+                name: 'PersistentBackgroundLeft',
+                spriteFrame: left,
+                parent: this.uiRoot,
+                layer: this.uiRoot.layer,
+                anchorX: 1,
+                anchorY: 1,
+            })
+        }
+        if (right) {
+            this._backgroundRight = createSpriteNode({
+                name: 'PersistentBackgroundRight',
+                spriteFrame: right,
+                parent: this.uiRoot,
+                layer: this.uiRoot.layer,
+                anchorX: 0,
+                anchorY: 1,
+            })
+        }
+        this._placePersistentWidescreenBackgrounds()
+    }
+
+    private _placePersistentWidescreenBackgrounds() {
+        this._layoutSideBackground(this._backgroundLeft, -SCREEN_WIDTH / 2)
+        this._layoutSideBackground(this._backgroundRight, SCREEN_WIDTH / 2)
+        this._backgroundRight?.setSiblingIndex(0)
+        this._backgroundLeft?.setSiblingIndex(0)
+    }
+
+    private _layoutSideBackground(node: Node | null, x: number) {
+        if (!node?.isValid) return
+
+        const transform = node.getComponent(UITransform)
+        const height = transform?.contentSize.height ?? SCREEN_HEIGHT
+        const scale = height > 0 ? SCREEN_HEIGHT / height : 1
+        node.setPosition(x, SCREEN_HEIGHT / 2, 0)
+        node.setScale(scale, scale, 1)
     }
 
     private _destroyCurrentScreen() {

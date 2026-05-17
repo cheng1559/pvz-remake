@@ -31,6 +31,8 @@ import { ZenGardenScreenAssets } from './ZenGardenScreen/ZenGardenScreenAssets'
 const STARTUP_TEXTURES = [
     'popcap_logo',
     'titlescreen',
+    'background_left',
+    'background_right',
     'pvz_logo',
     'loadbar_dirt',
     'loadbar_grass',
@@ -200,6 +202,8 @@ export class StartupResourceLoader {
         await Promise.all([
             SpriteLoader.load('popcap_logo'),
             SpriteLoader.load('titlescreen'),
+            SpriteLoader.load('background_left'),
+            SpriteLoader.load('background_right'),
             SpriteLoader.load('pvz_logo'),
             SpriteLoader.load('loadbar_dirt'),
             SpriteLoader.load('loadbar_grass'),
