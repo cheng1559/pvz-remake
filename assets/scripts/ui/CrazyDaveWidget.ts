@@ -358,7 +358,7 @@ export class CrazyDaveWidget extends Component {
 
         this._continueLabel = this._createBitmapText({
             name: 'CrazyDaveContinue',
-            text: 'click to continue',
+            text: 'Click to continue',
             baselineX: CRAZY_DAVE_BUBBLE_CONTINUE_X - CRAZY_DAVE_BUBBLE_X,
             baselineY: CRAZY_DAVE_BUBBLE_CONTINUE_BASELINE_Y - CRAZY_DAVE_BUBBLE_Y,
             font: options.continueFont ?? null,
@@ -393,7 +393,7 @@ export class CrazyDaveWidget extends Component {
         const metrics = FontMetricsUtil.getMetrics(args.font?.config ?? null)
         const width = FontMetricsUtil.measureTextWidth(args.font?.config ?? null, args.text) || renderer.contentWidth
         let x = args.baselineX
-        if (args.align === 'center') x -= width / 2
+        if (args.align === 'center') x -= Math.trunc(width / 2)
         if (args.align === 'right') x -= width
         node.setPosition(x, -(args.baselineY - metrics.ascent), 0)
         return renderer

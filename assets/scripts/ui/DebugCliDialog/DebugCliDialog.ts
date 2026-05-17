@@ -942,9 +942,15 @@ export class DebugCliDialog extends MessageBox {
     }
 
     private _refocusAfterInvalidCommand() {
+        if (sys.isMobile && this._nativeTextInput?.node?.isValid) {
+            this._hasInputFocus = true
+            this._showCursorNow()
+            this.scheduleOnce(() => this._focusNativeTextInput(), 0.25)
+            return
+        }
+
         this._setInputFocus(true)
         this._focusNativeTextInput()
-        if (sys.isMobile) this.scheduleOnce(() => this._focusNativeTextInput(), 0)
     }
 
     private _flashInvalidCommand() {

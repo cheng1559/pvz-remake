@@ -34,7 +34,7 @@ export function createTooltipNode(args: {
         height,
         active: args.active,
     })
-    node.setPosition((args.x ?? 0) - (args.centerX ? width / 2 : 0), args.y ?? 0, args.z ?? 0)
+    node.setPosition((args.x ?? 0) - (args.centerX ? Math.trunc(width / 2) : 0), args.y ?? 0, args.z ?? 0)
 
     const graphics = node.addComponent(Graphics)
     graphics.fillColor = new Color(255, 255, 200, 255)
@@ -58,7 +58,7 @@ export function createTooltipNode(args: {
         warningRenderer.fontColor = args.warningColor ?? new Color(255, 0, 0, 255)
         warningRenderer.string = warningText
         warningRenderer.forceRebuild()
-        warning.setPosition((width - warningWidth) / 2, labelY, 0)
+        warning.setPosition(Math.trunc((width - warningWidth) / 2), labelY, 0)
         labelY -= metrics.ascent + 2
     }
 
@@ -73,7 +73,7 @@ export function createTooltipNode(args: {
     renderer.fontColor = Color.BLACK
     renderer.string = args.text
     renderer.forceRebuild()
-    label.setPosition((width - textWidth) / 2, labelY, 0)
+    label.setPosition(Math.trunc((width - textWidth) / 2), labelY, 0)
 
     return node
 }
