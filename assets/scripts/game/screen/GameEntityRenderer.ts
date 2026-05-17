@@ -1,4 +1,4 @@
-import { Color, Graphics, Mask, Node, Rect, Size, UIOpacity } from 'cc'
+import { Color, Graphics, Mask, Node, Rect, Size, Sprite, UIOpacity } from 'cc'
 import { GameScreenEndSequences } from './GameScreenEndSequences'
 import { Animator } from '@/core/Animator'
 import { SpriteLoader } from '@/core/SpriteLoader'
@@ -66,6 +66,7 @@ import type {
     ItemEntity,
     LawnMowerEntity,
     PlantEntity,
+    PlantType,
     ProjectileEntity,
     ZombieEntity,
 } from '../GameTypes'

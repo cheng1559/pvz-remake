@@ -8,64 +8,16 @@ which is the most reliable shared format across the Cocos targets used here.
 """
 
 import argparse
-import json
 import shutil
 import subprocess
-import uuid
 from pathlib import Path
 
 
 SUPPORTED_SOUND_SUFFIXES = (".au", ".ogg", ".mp3", ".wav")
 OUTPUT_SUFFIX = ".wav"
-OUTPUT_AUDIO_FILES = [".json", OUTPUT_SUFFIX]
-
 
 def _resource_stem(path: Path) -> str:
     return path.with_suffix("").name.lower()
-
-
-def write_directory_meta(path: Path) -> None:
-    meta = path.with_name(path.name + ".meta")
-    if meta.exists():
-        return
-    meta.write_text(
-        json.dumps(
-            {
-                "ver": "1.2.0",
-                "importer": "directory",
-                "imported": True,
-                "uuid": str(uuid.uuid4()),
-                "files": [],
-                "subMetas": {},
-                "userData": {},
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-
-def write_audio_meta(path: Path) -> None:
-    meta = path.with_name(path.name + ".meta")
-    if meta.exists():
-        return
-    meta.write_text(
-        json.dumps(
-            {
-                "ver": "1.0.0",
-                "importer": "audio-clip",
-                "imported": True,
-                "uuid": str(uuid.uuid4()),
-                "files": OUTPUT_AUDIO_FILES,
-                "subMetas": {},
-                "userData": {"downloadMode": 0},
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
 
 
 def convert_sound(ffmpeg: str, src: Path, dst: Path, overwrite: bool) -> None:
@@ -112,7 +64,6 @@ def resolve_ffmpeg(ffmpeg: str) -> str:
 
 def copy_sounds(src_dir: Path, dst_dir: Path, overwrite: bool = False, ffmpeg: str = "ffmpeg") -> int:
     dst_dir.mkdir(parents=True, exist_ok=True)
-    write_directory_meta(dst_dir)
 
     sound_files: dict[str, list[Path]] = {}
     for src in sorted(src_dir.iterdir()):
@@ -136,12 +87,8 @@ def copy_sounds(src_dir: Path, dst_dir: Path, overwrite: bool = False, ffmpeg: s
             for old_dst in existing:
                 if old_dst != dst:
                     old_dst.unlink()
-                    meta_path = old_dst.with_name(old_dst.name + ".meta")
-                    if meta_path.exists():
-                        meta_path.unlink()
 
         convert_sound(ffmpeg, src, dst, overwrite=True)
-        write_audio_meta(dst)
         print(f"[sounds] Wrote: {dst}")
         copied += 1
 

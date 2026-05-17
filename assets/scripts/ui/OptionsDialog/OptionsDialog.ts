@@ -42,6 +42,9 @@ export class OptionsDialog extends ModalDialog {
     fullScreen = false
 
     @property
+    forceFullScreen = false
+
+    @property
     gameMenu = false
 
     @property
@@ -52,6 +55,7 @@ export class OptionsDialog extends ModalDialog {
     public onSfxVolumeChanged: ((value: number) => void) | null = null
     public onHardwareAccelerationChanged: ((checked: boolean) => void) | null = null
     public onFullScreenChanged: ((checked: boolean) => void) | null = null
+    public onForcedFullScreenClick: (() => void) | null = null
     public onRestartLevel: (() => void) | null = null
     public onMainMenu: (() => void) | null = null
 
@@ -131,10 +135,20 @@ export class OptionsDialog extends ModalDialog {
                 this.onHardwareAccelerationChanged?.(checked)
             },
         )
-        this._createCheckbox('FullScreen', 284, 206 + fullScreenOffset, this.fullScreen, (checked) => {
-            this.fullScreen = checked
-            this.onFullScreenChanged?.(checked)
-        })
+        this._createCheckbox(
+            'FullScreen',
+            284,
+            206 + fullScreenOffset,
+            this.forceFullScreen ? true : this.fullScreen,
+            (checked) => {
+                this.fullScreen = checked
+                this.onFullScreenChanged?.(checked)
+            },
+            this.forceFullScreen ? () => {
+                this.fullScreen = true
+                this.onForcedFullScreenClick?.()
+            } : null,
+        )
         if (this.gameMenu) {
             this._createGameButtons(fonts)
         }
@@ -266,6 +280,7 @@ export class OptionsDialog extends ModalDialog {
         cppY: number,
         checked: boolean,
         onChange: (checked: boolean) => void,
+        onForcedClick: (() => void) | null = null,
     ) {
         const sprites = this._sprites!
         const node = createUINode(name, {
@@ -299,6 +314,12 @@ export class OptionsDialog extends ModalDialog {
         ]
         button.onPress = () => {
             void SoundLoader.play(SoundEffect.ButtonClick)
+            if (onForcedClick) {
+                checked = true
+                sprite.spriteFrame = sprites.checkboxOn
+                onForcedClick()
+                return
+            }
             checked = !checked
             sprite.spriteFrame = checked ? sprites.checkboxOn : sprites.checkboxOff
             onChange(checked)

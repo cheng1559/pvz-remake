@@ -14,6 +14,8 @@ from typing import Any
 
 from PIL import Image
 
+MAX_FONT_ATLAS_SIZE = 4096
+
 
 def _normalize_image_stem(image_name: str) -> str:
     return image_name.lstrip('_') + '_atlas'
@@ -23,7 +25,7 @@ def _normalize_image_name(path: Path) -> str:
     return _normalize_image_stem(path.with_suffix('').name) + '.png'
 
 
-def _normalize_font_mask_image(src: Path, dst: Path):
+def _normalize_font_mask_rgba(src: Path) -> Image.Image:
     with Image.open(src) as image:
         rgba = image.convert('RGBA')
 
@@ -31,8 +33,7 @@ def _normalize_font_mask_image(src: Path, dst: Path):
     alpha_histogram = alpha.histogram()
     has_transparency = sum(alpha_histogram[:255]) > 0
     if has_transparency:
-        rgba.save(dst, 'PNG')
-        return
+        return rgba
 
     source = rgba.load()
     mask = Image.new('L', rgba.size, 0)
@@ -53,7 +54,60 @@ def _normalize_font_mask_image(src: Path, dst: Path):
 
     normalized = Image.new('RGBA', rgba.size, (255, 255, 255, 255))
     normalized.putalpha(mask)
-    normalized.save(dst, 'PNG')
+    return normalized
+
+
+def _wrap_font_atlas_if_needed(font_data: dict, image_name: str, image: Image.Image) -> Image.Image:
+    if image.width <= MAX_FONT_ATLAS_SIZE and image.height <= MAX_FONT_ATLAS_SIZE:
+        return image
+
+    if image.height > MAX_FONT_ATLAS_SIZE:
+        raise ValueError(f"Font atlas is too tall for mobile WebGL: {image_name} {image.size}")
+
+    layers = [layer for layer in font_data['layers'] if layer['image'] == image_name]
+    if not layers:
+        return image
+
+    glyphs = []
+    for layer in layers:
+        for char_code, char_info in layer['chars'].items():
+            rect = char_info['rect']
+            glyphs.append((rect[1], rect[0], char_code, char_info))
+
+    glyphs.sort()
+
+    placements: list[tuple[dict, tuple[int, int, int, int], tuple[int, int]]] = []
+    x = 0
+    y = 0
+    row_height = 0
+    used_width = 0
+
+    for _src_y, _src_x, _char_code, char_info in glyphs:
+        src_x, src_y, width, height = char_info['rect']
+        if width > MAX_FONT_ATLAS_SIZE:
+            raise ValueError(f"Font glyph is too wide for mobile WebGL: {image_name} {width}px")
+        if x > 0 and x + width > MAX_FONT_ATLAS_SIZE:
+            y += row_height
+            x = 0
+            row_height = 0
+        placements.append((char_info, (src_x, src_y, width, height), (x, y)))
+        x += width
+        used_width = max(used_width, x)
+        row_height = max(row_height, height)
+
+    used_height = y + row_height
+    if used_height > MAX_FONT_ATLAS_SIZE:
+        raise ValueError(f"Wrapped font atlas is still too tall for mobile WebGL: {image_name} {used_height}px")
+
+    wrapped = Image.new('RGBA', (used_width, used_height), (0, 0, 0, 0))
+    for char_info, src_rect, dst_pos in placements:
+        src_x, src_y, width, height = src_rect
+        dst_x, dst_y = dst_pos
+        wrapped.paste(image.crop((src_x, src_y, src_x + width, src_y + height)), dst_pos)
+        char_info['rect'] = [dst_x, dst_y, width, height]
+
+    print(f"[font] Wrapped oversized atlas: {image_name} {image.size} -> {wrapped.size}")
+    return wrapped
 
 
 class PvZFontParser:
@@ -558,19 +612,22 @@ def convert_font(input_path: Path, output_dir: Path):
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write JSON
-    json_path = output_dir / (base_name + '.json')
-    with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(font_data, f, indent=2)
-    print(f"[font] Wrote: {json_path}")
-
     # Cocos imports PNG atlases as textures, but the PvZ font atlases are masks.
     # Bake opaque mask images to RGBA so runtime loading is platform-neutral.
     for img_path in parser.get_image_files():
         dst = output_dir / _normalize_image_name(img_path)
         if not dst.exists() or not dst.samefile(img_path):
-            _normalize_font_mask_image(img_path, dst)
+            image_name = _normalize_image_stem(img_path.with_suffix('').name)
+            image = _normalize_font_mask_rgba(img_path)
+            image = _wrap_font_atlas_if_needed(font_data, image_name, image)
+            image.save(dst, 'PNG')
             print(f"[font] Wrote: {dst}")
+
+    # Write JSON after possible atlas wrapping has updated glyph rects.
+    json_path = output_dir / (base_name + '.json')
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(font_data, f, indent=2)
+    print(f"[font] Wrote: {json_path}")
 
 
 def main():

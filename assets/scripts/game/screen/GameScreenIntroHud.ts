@@ -1,4 +1,4 @@
-import { Color, EventMouse, EventTouch, Mask, Node, Rect, Size, SpriteFrame } from 'cc'
+import { Color, EventMouse, EventTouch, Mask, Node, Rect, Size, SpriteFrame, sys } from 'cc'
 import { Animator } from '@/core/Animator'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
@@ -21,6 +21,8 @@ import {
     CRAZY_DAVE_Y,
     type CrazyDaveMessagePhase,
 } from './CrazyDaveDialogConfig'
+import { eventToBoardPixel } from './BoardPixelUtils'
+import { linearFloat } from './GameScreenMath'
 import {
     BOARD_OFFSET,
     COIN_BANK_RIGHT_TEXT_OFFSET,
@@ -68,7 +70,7 @@ import {
     GameScreenCore,
 } from './GameScreenCore'
 import type { IntroStreetZombieSpec, ProgressFlagView } from './GameScreenViewTypes'
-import type { SeedPacketState, SeedType, ZombieEntity, ZombieType } from '../GameTypes'
+import type { GameEntity, SeedPacketState, SeedType, ZombieEntity, ZombieType } from '../GameTypes'
 
 export abstract class GameScreenIntroHud extends GameScreenCore {
     protected async _drawStaticBoard() {
@@ -813,6 +815,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
         this._crazyDaveDialogPhase = 'off'
         this._hideCrazyDaveAfterLeave()
         this._gameplayUpdatesPaused = false
+        this._startGameplayMusic()
     }
 
     protected _syncShovelTutorialAfterPickup() {

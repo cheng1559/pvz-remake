@@ -46,6 +46,7 @@ import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
 import {
     ADVENTURE_1_1,
     GAME_TICK_SECONDS,
+    getLevelGameplayMusicTune,
     PLANT_DEFINITIONS,
     SEED_DEFINITIONS,
     ZOMBIE_DEFINITIONS,
@@ -66,6 +67,7 @@ import {
 } from '../ZombieAnimation'
 import { GameSession } from '../GameSession'
 import { GameDebugSettings } from '../GameDebugSettings'
+import { MusicSystem } from '../music/MusicSystem'
 import {
     CRAZY_DAVE_ANIMATION_PATH,
     CRAZY_DAVE_FIRST_DIALOG_END,
@@ -275,6 +277,7 @@ export const HUGE_WAVE_TEXT_ENTER_TICKS = 20
 export const HUGE_WAVE_TEXT_LEAVE_TICKS = 40
 export const TUTORIAL_FLASH_TIME = 75
 export const READY_SET_PLANT_INTRO_TICKS = 183
+export const NO_READY_SET_PLANT_MUSIC_FADE_TICKS = 200
 export const READY_SET_PLANT_REANIM_X = 400
 export const READY_SET_PLANT_REANIM_Y = 324
 export const FINAL_WAVE_REANIM_X = 0
@@ -450,18 +453,20 @@ export abstract class GameScreenCore extends Component {
     protected _levelLabel: FontRenderer | null = null
     protected _introTime = 0
     protected _introReadySetPlantShown = false
+    protected _introMusicFadeStarted = false
     protected _gameAccumulator = 0
     protected _lastRightMouseDownAt = 0
     protected _lastRightMouseDownX = Number.NaN
     protected _lastRightMouseDownY = Number.NaN
-    protected _mobilePlantPressActive = false
-    protected _mobilePlantPressCancelOnReleaseInside = false
-    protected _mobilePlantPressLeftSeedPacket = false
-    protected _mobilePlantPressSeedPacketRect: BoardPixelRect | null = null
+    protected _mobileCursorPressActive = false
+    protected _mobileCursorPressCancelOnReleaseInside = false
+    protected _mobileCursorPressLeftSource = false
+    protected _mobileCursorPressSourceRect: BoardPixelRect | null = null
     protected _lastTouchPixel: { x: number, y: number } | null = null
     protected _refreshHoverAfterCursorRelease = true
     protected _plantCursorHoverBlocked = false
     protected _gameStarted = false
+    protected _gameplayMusicStarted = false
     protected _gameplayUpdatesPaused = false
     protected _bootstrapped = false
 
@@ -633,6 +638,11 @@ export abstract class GameScreenCore extends Component {
             this._updateTimedUiEffects(uiTicks)
             this._updateCrazyDave(uiTicks)
         }
+        if (!this._session.paused) {
+            MusicSystem.update(scaledDt / GAME_TICK_SECONDS, {
+                zombiesOnScreen: this._gameStarted ? this._session.countZombiesOnScreenForMusic() : 0,
+            })
+        }
         if (this._gameOverActive) this._syncGameOverScene()
         if (this._levelCompleteActive) this._syncLevelCompleteEffect()
         this._renderFrame()
@@ -640,6 +650,7 @@ export abstract class GameScreenCore extends Component {
 
     public pauseGame() {
         this._session.dispatch({ type: 'pause' })
+        MusicSystem.pause()
         this._gameAccumulator = 0
         this._previousEntitySnapshots.clear()
         this._setGameplayAnimationsPaused(true)
@@ -648,6 +659,7 @@ export abstract class GameScreenCore extends Component {
 
     public resumeGame() {
         this._session.dispatch({ type: 'resume' })
+        MusicSystem.resume()
         this._setGameplayAnimationsPaused(false)
         this._renderFrame()
     }
@@ -912,7 +924,20 @@ export abstract class GameScreenCore extends Component {
                 this._updateCursorPreview()
                 return
             }
+            if (this._session.selectedTool) {
+                const toolRect = this._hitTool(pixel) === this._session.selectedTool
+                    ? this._getToolBoardPixelRect(this._session.selectedTool)
+                    : null
+                this._beginMobileToolPress(pixel, toolRect, toolRect !== null)
+                this._updateCursorPreview()
+                return
+            }
+            const toolType = this._hitTool(pixel)
             this._handlePointerDown(pixel)
+            if (toolType && this._session.selectedTool === toolType) {
+                this._beginMobileToolPress(pixel, this._getToolBoardPixelRect(toolType))
+                this._updateCursorPreview()
+            }
         })
         this.node.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
             if (!sys.isMobile) return
@@ -929,10 +954,26 @@ export abstract class GameScreenCore extends Component {
         seedPacketRect: BoardPixelRect | null,
         cancelOnReleaseInside = false,
     ) {
-        this._mobilePlantPressActive = true
-        this._mobilePlantPressSeedPacketRect = seedPacketRect
-        this._mobilePlantPressCancelOnReleaseInside = cancelOnReleaseInside
-        this._mobilePlantPressLeftSeedPacket = this._isMobilePlantPressReady(pixel)
+        this._beginMobileCursorPress(pixel, seedPacketRect, cancelOnReleaseInside)
+    }
+
+    protected _beginMobileToolPress(
+        pixel: { x: number, y: number },
+        toolRect: BoardPixelRect | null,
+        cancelOnReleaseInside = false,
+    ) {
+        this._beginMobileCursorPress(pixel, toolRect, cancelOnReleaseInside)
+    }
+
+    protected _beginMobileCursorPress(
+        pixel: { x: number, y: number },
+        sourceRect: BoardPixelRect | null,
+        cancelOnReleaseInside = false,
+    ) {
+        this._mobileCursorPressActive = true
+        this._mobileCursorPressSourceRect = sourceRect
+        this._mobileCursorPressCancelOnReleaseInside = cancelOnReleaseInside
+        this._mobileCursorPressLeftSource = this._isMobileCursorPressReady(pixel)
         this._lastTouchPixel = pixel
     }
 
@@ -944,8 +985,8 @@ export abstract class GameScreenCore extends Component {
         this._hasCursorPointer = true
         this._lastTouchPixel = pixel
 
-        if (this._isMobilePlantPressReady(pixel)) {
-            this._mobilePlantPressLeftSeedPacket = true
+        if (this._isMobileCursorPressReady(pixel)) {
+            this._mobileCursorPressLeftSource = true
         }
         const collected = previous
             ? this._collectItemsAlongMobileSwipe(previous, pixel)
@@ -966,17 +1007,24 @@ export abstract class GameScreenCore extends Component {
         const collected = previous
             ? this._collectItemsAlongMobileSwipe(previous, pixel)
             : this._session.collectCurrencyItemAt(pixel.x, pixel.y)
-        const pressReady = this._isMobilePlantPressReady(pixel)
-        const shouldResolvePlantTouch = this._mobilePlantPressActive &&
+        const pressReady = this._isMobileCursorPressReady(pixel)
+        const shouldResolvePlantTouch = this._mobileCursorPressActive &&
             pressReady &&
             !!this._session.selectedSeed
-        const shouldCancelPlantTouch = this._mobilePlantPressActive &&
-            (this._mobilePlantPressCancelOnReleaseInside || this._mobilePlantPressLeftSeedPacket) &&
+        const shouldCancelPlantTouch = this._mobileCursorPressActive &&
+            (this._mobileCursorPressCancelOnReleaseInside || this._mobileCursorPressLeftSource) &&
             !pressReady &&
             !!this._session.selectedSeed
+        const shouldResolveToolTouch = this._mobileCursorPressActive &&
+            pressReady &&
+            !!this._session.selectedTool
+        const shouldCancelToolTouch = this._mobileCursorPressActive &&
+            (this._mobileCursorPressCancelOnReleaseInside || this._mobileCursorPressLeftSource) &&
+            !pressReady &&
+            !!this._session.selectedTool
         this._resetMobilePlantPress()
 
-        if (shouldCancelPlantTouch) {
+        if (shouldCancelPlantTouch || shouldCancelToolTouch) {
             this._session.dispatch({ type: 'clearCursor' })
             this._renderFrame()
             return
@@ -992,12 +1040,25 @@ export abstract class GameScreenCore extends Component {
             return
         }
 
+        if (shouldResolveToolTouch) {
+            const plantCount = this._session.plants.length
+            this._refreshHoverAfterCursorRelease = false
+            this._session.dispatch({ type: 'useToolAt', x: pixel.x, y: pixel.y })
+            this._syncShovelTutorialAfterDig(plantCount)
+            this._renderFrame()
+            return
+        }
+
+        if (this._session.selectedTool) {
+            this._hasCursorPointer = false
+        }
+
         this._updateCursorPreview()
         if (collected) this._renderFrame()
     }
 
     protected _onMobileTouchCancel(event: EventTouch) {
-        if (this._mobilePlantPressActive && this._session.selectedSeed) {
+        if (this._mobileCursorPressActive && (this._session.selectedSeed || this._session.selectedTool)) {
             this._onMobileTouchEnd(event)
             return
         }
@@ -1023,17 +1084,25 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _resetMobilePlantPress() {
-        this._mobilePlantPressActive = false
-        this._mobilePlantPressCancelOnReleaseInside = false
-        this._mobilePlantPressLeftSeedPacket = false
-        this._mobilePlantPressSeedPacketRect = null
+        this._resetMobileCursorPress()
+    }
+
+    protected _resetMobileCursorPress() {
+        this._mobileCursorPressActive = false
+        this._mobileCursorPressCancelOnReleaseInside = false
+        this._mobileCursorPressLeftSource = false
+        this._mobileCursorPressSourceRect = null
         this._lastTouchPixel = null
     }
 
     protected _isMobilePlantPressReady(pixel = this._mousePixel) {
-        if (!this._mobilePlantPressActive) return false
+        return this._isMobileCursorPressReady(pixel)
+    }
 
-        const rect = this._mobilePlantPressSeedPacketRect
+    protected _isMobileCursorPressReady(pixel = this._mousePixel) {
+        if (!this._mobileCursorPressActive) return false
+
+        const rect = this._mobileCursorPressSourceRect
         return !rect || !isPixelInRect(pixel, rect)
     }
 
@@ -1245,6 +1314,12 @@ export abstract class GameScreenCore extends Component {
             this._introReadySetPlantShown = true
             this._showReadySetPlant()
         }
+        if (!this._shouldPlayReadySetPlantIntro() &&
+            !this._introMusicFadeStarted &&
+            this._introTime >= introEnd - NO_READY_SET_PLANT_MUSIC_FADE_TICKS) {
+            this._introMusicFadeStarted = true
+            MusicSystem.fadeOut(NO_READY_SET_PLANT_MUSIC_FADE_TICKS)
+        }
         if (this._shouldPlayIntroSodRoll()) this._updateIntroSod()
         this._syncIntroLawnMower()
         this._syncIntroSeedBank()
@@ -1264,6 +1339,7 @@ export abstract class GameScreenCore extends Component {
         this._destroyIntroStreetZombies()
         this._applyGameplayHudState()
         this._restoreGameplayLayerOrder()
+        this._startGameplayMusic()
     }
 
     protected _startGameWithoutStandardIntro() {
@@ -1275,6 +1351,17 @@ export abstract class GameScreenCore extends Component {
         this._destroyIntroStreetZombies()
         this._applyGameplayHudState()
         this._restoreGameplayLayerOrder()
+        if (!this._gameplayUpdatesPaused) this._startGameplayMusic()
+    }
+
+    protected _startGameplayMusic() {
+        if (this._gameplayMusicStarted) return
+
+        const tune = getLevelGameplayMusicTune(this._session.level)
+        if (!tune) return
+
+        this._gameplayMusicStarted = true
+        void MusicSystem.playTune(tune)
     }
 
     protected _applyGameplayBoardState() {
@@ -1793,6 +1880,8 @@ export abstract class GameScreenCore extends Component {
 
     protected _showReadySetPlant() {
         this._clearAdvice()
+        this._introMusicFadeStarted = true
+        MusicSystem.fadeOut(150)
         void SoundLoader.play(SoundEffect.ReadySetPlant)
         void this._playReadySetPlant()
     }
@@ -2271,6 +2360,11 @@ export abstract class GameScreenCore extends Component {
         if (this._session.selectedTool === 'shovel') {
             if (this._canShowCursorObjectPreview()) {
                 this._updateShovelCursor()
+                if (sys.isMobile) {
+                    this._syncShovelGridGuide()
+                } else {
+                    this._hideMobileGridGuide()
+                }
             } else {
                 this._hideCursorObjectPreview()
             }
@@ -2388,6 +2482,16 @@ export abstract class GameScreenCore extends Component {
     protected _destroyShovelCursor() {
         if (this._shovelCursor?.isValid) this._shovelCursor.destroy()
         this._shovelCursor = null
+    }
+
+    protected _syncShovelGridGuide() {
+        const grid = this._session.geometry.pixelToGrid(this._mousePixel.x, this._mousePixel.y)
+        if (!grid) {
+            this._hideMobileGridGuide()
+            return
+        }
+
+        this._updateMobileGridGuide(grid.col, grid.row)
     }
 
     protected _createPlantPreviewNode(name: string, opacity: number, parent: Node = this._uiLayer) {
@@ -2520,11 +2624,19 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _hitTool(pixel: { x: number, y: number }): ToolType | null {
-        const rect = this._getShovelBoardPixelRect()
+        const rect = this._getToolBoardPixelRect('shovel')
         if (!rect) return null
         return pixel.x >= rect.x && pixel.x <= rect.x + rect.width && pixel.y >= rect.y && pixel.y <= rect.y + rect.height
             ? 'shovel'
             : null
+    }
+
+    protected _getToolBoardPixelRect(toolType: ToolType): BoardPixelRect | null {
+        switch (toolType) {
+            case 'shovel':
+                return this._getShovelBoardPixelRect()
+        }
+        return null
     }
 
     protected _refreshBoardHoverFromPointer(pointer: UIHoverPointer | null, activeModalRoot: Node | null) {

@@ -106,11 +106,6 @@ export type SoundEffect = (typeof SoundEffect)[keyof typeof SoundEffect]
 export class SoundLoader {
     private static readonly _basePath = 'audio/sfx'
     private static readonly _effects: SoundEffect[] = Object.values(SoundEffect)
-    private static readonly _musicEffects = new Set<SoundEffect>([
-        SoundEffect.FinalFanfare,
-        SoundEffect.LoseMusic,
-        SoundEffect.WinMusic,
-    ])
     private static readonly _pitchStepMultiplier = 1.0594630943592953
     private static readonly _foleyRecentSuppressMs = 100
     private static readonly _foleyPitchRanges: Partial<Record<SoundEffect, number>> = {
@@ -224,7 +219,15 @@ export class SoundLoader {
         if (!clip) return
 
         const source = this._getSource()
-        source.playOneShot(clip, this._resolveEffectVolume(effect, volume))
+        source.playOneShot(clip, this._resolveEffectVolume(volume))
+    }
+
+    public static async playSfx(effect: SoundEffect, volume = 1) {
+        const clip = await this.load(effect)
+        if (!clip) return
+
+        const source = this._getSource()
+        source.playOneShot(clip, this._resolveEffectVolume(volume))
     }
 
     public static playFoley(effect: SoundEffect, pitchRange?: number, volume = 1) {
@@ -249,7 +252,7 @@ export class SoundLoader {
         source.clip = clip
         this._exclusiveEffects.set(channel, effect)
         this._exclusiveBaseVolumes.set(channel, volume)
-        source.volume = this._resolveEffectVolume(effect, volume)
+        source.volume = this._resolveEffectVolume(volume)
         source.loop = false
         source.play()
     }
@@ -275,7 +278,7 @@ export class SoundLoader {
     public static async playWithPitch(effect: SoundEffect, pitchSteps: number, volume = 1) {
         const clip = await this.load(effect)
         if (!clip) return
-        const resolvedVolume = this._resolveEffectVolume(effect, volume)
+        const resolvedVolume = this._resolveEffectVolume(volume)
 
         if (pitchSteps === 0) {
             this._getSource().playOneShot(clip, resolvedVolume)
@@ -384,10 +387,9 @@ export class SoundLoader {
         return this._audioContext
     }
 
-    private static _resolveEffectVolume(effect: SoundEffect, volume: number) {
+    private static _resolveEffectVolume(volume: number) {
         const baseVolume = Number.isFinite(volume) ? Math.max(0, volume) : 1
-        const masterVolume = this._musicEffects.has(effect) ? this._musicVolume : this._sfxVolume
-        return baseVolume * masterVolume
+        return baseVolume * this._sfxVolume
     }
 
     private static _clampMasterVolume(volume: number, fallback: number) {
@@ -400,7 +402,7 @@ export class SoundLoader {
             const effect = this._exclusiveEffects.get(channel)
             if (!source.isValid || !effect) continue
 
-            source.volume = this._resolveEffectVolume(effect, this._exclusiveBaseVolumes.get(channel) ?? 1)
+            source.volume = this._resolveEffectVolume(this._exclusiveBaseVolumes.get(channel) ?? 1)
         }
     }
 

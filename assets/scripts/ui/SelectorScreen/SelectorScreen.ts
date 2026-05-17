@@ -147,6 +147,7 @@ export class SelectorScreen extends AnimationComponent {
     public onStoreRequest: (() => void) | null = null
     public onAlmanacRequest: (() => void) | null = null
     public onAdventureRequest: (() => void) | null = null
+    public onStartAdventureTransition: (() => void) | null = null
 
     public get adventureLevel(): number {
         return this._adventureLevel
@@ -797,7 +798,8 @@ export class SelectorScreen extends AnimationComponent {
     startAdventure() {
         if (this._startAdventureActive) return
 
-        void SoundLoader.play(SoundEffect.LoseMusic)
+        void SoundLoader.playSfx(SoundEffect.LoseMusic)
+        this.onStartAdventureTransition?.()
         this.playZombieHand()
         this._setButtonsInteractable(false)
         this._startAdventureActive = true

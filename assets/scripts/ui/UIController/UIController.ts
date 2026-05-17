@@ -18,6 +18,8 @@ import {
     ADVENTURE_1_4,
     ADVENTURE_1_5,
     ADVENTURE_LEVELS,
+    GAME_TICK_SECONDS,
+    getLevelIntroMusicTune,
     popGlobalGamePause,
     pushGlobalGamePause,
     scaleGameDeltaTime,
@@ -43,6 +45,7 @@ import { createUINode } from '../UIFactory'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import type { LevelAward } from '@/game/GameTypes'
 import type { LevelDefinition } from '@/game/GameTypes'
+import { MusicSystem, type MusicTuneId } from '@/game/music/MusicSystem'
 import { GameSettingsStore, type GameSettings } from '@/game/persistence/GameSettingsStore'
 import { ProfileStore, type PlayerProfile } from '@/game/persistence/ProfileStore'
 
@@ -59,6 +62,20 @@ const ACHIEVEMENT_SCREEN_HIDDEN_Y = -599
 const ACHIEVEMENT_SCREEN_SHOWN_Y = 1
 const NATIVE_UNCAPPED_FRAME_RATE = 1000
 const FULLSCREEN_CHANGE_EVENT = 'fullscreen-change' as never
+const FULLSCREEN_ERROR_TITLE = 'Error!'
+const MOBILE_NATIVE_NO_WINDOWED_MESSAGE = 'Windowed mode is not available on mobile devices.'
+const NO_FULLSCREEN_MESSAGE = 'Full screen mode is not available in this browser.'
+
+interface PvzNativeBridge {
+    setFullScreen?: (fullScreen: boolean) => boolean
+    isFullScreen?: () => boolean
+}
+
+type NativeBindings = typeof globalThis & {
+    jsb?: {
+        PvzNative?: PvzNativeBridge
+    }
+}
 
 interface StoreScreenOptions {
     initialPage?: number
@@ -116,6 +133,7 @@ export class UIController extends Component {
     onDestroy() {
         screen.off(FULLSCREEN_CHANGE_EVENT, this._onFullScreenChanged, this)
         input.off(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
+        MusicSystem.stop()
     }
 
     update(dt: number) {
@@ -124,6 +142,9 @@ export class UIController extends Component {
         this._globalAdviceWidget?.update(scaledDt * 100, this._globalAdviceTick)
         if (this._globalAdviceWidget?.node.active) this._placeGlobalAdviceLayer()
         this._updateAchievementTransition(scaledDt)
+        if (this._currentScreen?.name !== 'AdventureGameScreen') {
+            MusicSystem.update(scaledDt / GAME_TICK_SECONDS, { zombiesOnScreen: 0 })
+        }
     }
 
     private _configurePlatformFrameRate() {
@@ -231,11 +252,15 @@ export class UIController extends Component {
         selectorScreen.onAdventureRequest = () => {
             this.showAdventureGame(this._getProfileAdventureLevel())
         }
+        selectorScreen.onStartAdventureTransition = () => {
+            MusicSystem.stop()
+        }
 
         this._selectorScreen = null
         this._adventureGameScreen = null
         this._setCurrentScreen(node)
         this._selectorScreen = selectorScreen
+        this._playInterfaceMusic('title_theme')
         return selectorScreen
     }
 
@@ -269,6 +294,9 @@ export class UIController extends Component {
 
         this._setCurrentScreen(node)
         this._adventureGameScreen = gameScreen
+        const introMusic = getLevelIntroMusicTune(level)
+        if (introMusic) this._playInterfaceMusic(introMusic, true)
+        else MusicSystem.stop()
         return gameScreen
     }
 
@@ -298,6 +326,7 @@ export class UIController extends Component {
             this._selectorScreen = null
             this._adventureGameScreen = null
             this._setCurrentScreen(node)
+            this._playInterfaceMusic('zen_garden')
         }).catch((error) => {
             console.error('[UIController] Failed to prepare AwardScreen', error)
             if (node.isValid) node.destroy()
@@ -315,6 +344,7 @@ export class UIController extends Component {
         void helpScreen.ensureRendered().then(() => {
             if (!node.isValid) return
             this._setCurrentScreen(node)
+            MusicSystem.stop()
         }).catch((error) => {
             console.error('[UIController] Failed to prepare HelpScreen', error)
             if (node.isValid) node.destroy()
@@ -334,6 +364,7 @@ export class UIController extends Component {
             this._selectorScreen = null
             this._adventureGameScreen = null
             this._setCurrentScreen(node)
+            this._playInterfaceMusic('choose_seeds')
         }).catch((error) => {
             console.error('[UIController] Failed to prepare AlmanacScreen', error)
             if (node.isValid) node.destroy()
@@ -354,6 +385,7 @@ export class UIController extends Component {
             this._selectorScreen = null
             this._adventureGameScreen = null
             this._setCurrentScreen(node)
+            this._playInterfaceMusic('choose_seeds')
         }).catch((error) => {
             console.error('[UIController] Failed to prepare ChallengeScreen', error)
             if (node.isValid) node.destroy()
@@ -382,6 +414,7 @@ export class UIController extends Component {
             this._selectorScreen = null
             this._adventureGameScreen = null
             this._setCurrentScreen(node)
+            this._playInterfaceMusic('zen_garden')
         }).catch((error) => {
             console.error('[UIController] Failed to prepare ZenGardenScreen', error)
             if (node.isValid) node.destroy()
@@ -403,6 +436,7 @@ export class UIController extends Component {
             this._selectorScreen = null
             this._adventureGameScreen = null
             this._setCurrentScreen(node)
+            this._playInterfaceMusic('title_theme')
         }).catch((error) => {
             console.error('[UIController] Failed to prepare StoreScreen', error)
             if (node.isValid) node.destroy()
@@ -453,6 +487,9 @@ export class UIController extends Component {
         node.active = true
         this._modalScreen = node
         this._selectorScreen?.setButtonsInteractable(false)
+        if (this._currentScreen?.name !== 'AdventureGameScreen') {
+            this._playInterfaceMusic('choose_seeds')
+        }
         return almanacScreen
     }
 
@@ -463,6 +500,7 @@ export class UIController extends Component {
         this._modalScreen = null
         dialogNode.destroy()
         this._selectorScreen?.setButtonsInteractable(true)
+        this._restoreCurrentScreenMusic()
     }
 
     showAchievementScreen(): AchievementScreen | null {
@@ -904,6 +942,25 @@ export class UIController extends Component {
         this._adventureGameScreen = null
     }
 
+    private _playInterfaceMusic(tune: MusicTuneId, restart = false) {
+        void MusicSystem.playTune(tune, restart)
+    }
+
+    private _restoreCurrentScreenMusic() {
+        const screenName = this._currentScreen?.name
+        if (!screenName || screenName === 'AdventureGameScreen') return
+
+        if (screenName === 'AlmanacScreen' || screenName === 'ChallengeScreen') {
+            this._playInterfaceMusic('choose_seeds')
+            return
+        }
+        if (screenName === 'AwardScreen' || screenName === 'ZenGardenScreen') {
+            this._playInterfaceMusic('zen_garden')
+            return
+        }
+        this._playInterfaceMusic('title_theme')
+    }
+
     private _onGlobalKeyDown(event: EventKeyboard) {
         if (event.keyCode !== DEBUG_CLI_KEY_CODE) return
         if (this._debugCliScreen?.isValid) return
@@ -962,15 +1019,20 @@ export class UIController extends Component {
 
     private _applyPersistedSettings() {
         this._settings = GameSettingsStore.load()
+        if (this._isNativeMobileFullScreenForced() && !this._settings.fullScreen) {
+            this._settings = GameSettingsStore.update({ fullScreen: true })
+        }
         SoundLoader.setMusicVolume(this._settings.musicVolume)
         SoundLoader.setSfxVolume(this._settings.sfxVolume)
         void this._applyFullScreenPreference(this._settings.fullScreen)
     }
 
     private _configureOptionsDialog(optionsDialog: OptionsDialog) {
+        const forceFullScreen = this._isNativeMobileFullScreenForced()
         optionsDialog.musicVolume = this._settings.musicVolume
         optionsDialog.sfxVolume = this._settings.sfxVolume
-        optionsDialog.fullScreen = this._settings.fullScreen
+        optionsDialog.forceFullScreen = forceFullScreen
+        optionsDialog.fullScreen = forceFullScreen ? true : this._settings.fullScreen
         optionsDialog.onMusicVolumeChanged = (value) => {
             this._settings = GameSettingsStore.update({ musicVolume: value })
             SoundLoader.setMusicVolume(this._settings.musicVolume)
@@ -980,11 +1042,35 @@ export class UIController extends Component {
             SoundLoader.setSfxVolume(this._settings.sfxVolume)
         }
         optionsDialog.onFullScreenChanged = (checked) => {
+            if (checked && !this._canRequestFullScreen()) {
+                optionsDialog.fullScreen = false
+                void optionsDialog.renderDialog()
+                this.showMessageBox(FULLSCREEN_ERROR_TITLE, NO_FULLSCREEN_MESSAGE)
+                return
+            }
+
             optionsDialog.fullScreen = checked
+        }
+        optionsDialog.onForcedFullScreenClick = () => {
+            this.showMessageBox(FULLSCREEN_ERROR_TITLE, MOBILE_NATIVE_NO_WINDOWED_MESSAGE)
         }
     }
 
     private _commitOptionsDialogSettings(optionsDialog: OptionsDialog) {
+        if (this._isNativeMobileFullScreenForced()) {
+            if (!this._settings.fullScreen) {
+                this._settings = GameSettingsStore.update({ fullScreen: true })
+            }
+            return
+        }
+
+        if (optionsDialog.fullScreen && !this._canRequestFullScreen()) {
+            if (this._settings.fullScreen) {
+                this._settings = GameSettingsStore.update({ fullScreen: false })
+            }
+            return
+        }
+
         const fullScreen = !!optionsDialog.fullScreen
         if (this._settings.fullScreen === fullScreen) return
 
@@ -993,9 +1079,21 @@ export class UIController extends Component {
     }
 
     private async _applyFullScreenPreference(fullScreen: boolean) {
-        if (!screen.supportsFullScreen) return
+        if (this._isNativeMobileFullScreenForced()) {
+            if (!this._settings.fullScreen) {
+                this._settings = GameSettingsStore.update({ fullScreen: true })
+            }
+            return
+        }
+        if (!this._canRequestFullScreen()) return
 
         try {
+            const nativeBridge = this._nativeBridge()
+            if (sys.isNative) {
+                nativeBridge?.setFullScreen?.(fullScreen)
+                return
+            }
+
             if (fullScreen) {
                 if (!screen.fullScreen()) await screen.requestFullScreen()
                 return
@@ -1008,10 +1106,29 @@ export class UIController extends Component {
     }
 
     private _onFullScreenChanged() {
+        if (this._isNativeMobileFullScreenForced()) {
+            if (!this._settings.fullScreen) {
+                this._settings = GameSettingsStore.update({ fullScreen: true })
+            }
+            return
+        }
         const fullScreen = screen.fullScreen()
         if (this._settings.fullScreen === fullScreen) return
 
         this._settings = GameSettingsStore.update({ fullScreen })
+    }
+
+    private _isNativeMobileFullScreenForced() {
+        return sys.isNative && sys.isMobile
+    }
+
+    private _canRequestFullScreen() {
+        if (sys.isNative) return !!this._nativeBridge()?.setFullScreen
+        return screen.supportsFullScreen
+    }
+
+    private _nativeBridge() {
+        return (globalThis as NativeBindings).jsb?.PvzNative ?? null
     }
 
     private _showStoreFromDebugCommand() {

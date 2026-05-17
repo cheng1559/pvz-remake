@@ -6,6 +6,7 @@ import type {
     SeedDefinition,
     ZombieDefinition,
 } from './GameTypes'
+import type { MusicTuneId } from './music/MusicSystem'
 
 export const GAME_TICK_SECONDS = 0.01
 const DEFAULT_GAME_SPEED = 1
@@ -32,6 +33,19 @@ export function popGlobalGamePause() {
 export function scaleGameDeltaTime(dt: number) {
     if (globalPauseDepth > 0) return 0
     return dt * currentGameSpeed
+}
+
+export function getLevelIntroMusicTune(level: LevelDefinition): MusicTuneId | null {
+    if (level.id === 'adventure-1-5') return 'title_theme'
+
+    return 'choose_seeds'
+}
+
+export function getLevelGameplayMusicTune(level: LevelDefinition): MusicTuneId | null {
+    if (level.id === 'adventure-1-5') return 'minigame'
+    if (level.background === 'day') return 'day_grasswalk'
+
+    return null
 }
 
 export const DAY_GEOMETRY: BoardGeometry = {

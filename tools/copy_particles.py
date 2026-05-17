@@ -38,9 +38,6 @@ def copy_particles(src_dir: Path, dst_dir: Path, overwrite: bool = False) -> int
         if not is_valid_image(src):
             if dst.exists():
                 dst.unlink()
-                meta_path = dst.with_name(dst.name + ".meta")
-                if meta_path.exists():
-                    meta_path.unlink()
             continue
 
         if dst.exists() and not overwrite:

@@ -1,6 +1,5 @@
 import json
 import math
-import uuid
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -17,7 +16,6 @@ ROOT = Path(__file__).resolve().parents[1]
 ANIMATION_DIR = ROOT / "assets/resources/animations"
 TEXTURE_DIR = ROOT / "assets/resources/textures"
 OUTPUT_PATH = TEXTURE_DIR / "packet_plants_cached.png"
-OUTPUT_META_PATH = TEXTURE_DIR / "packet_plants_cached.png.meta"
 
 ANIMATION_NAMES: dict[int, str] = {
     0: "peashootersingle",
@@ -526,87 +524,6 @@ def render_seed(seed_id: int) -> Image.Image:
     return canvas
 
 
-def write_meta():
-    if OUTPUT_META_PATH.exists():
-        return
-
-    image_uuid = str(uuid.uuid4())
-    meta = {
-        "ver": "1.0.27",
-        "importer": "image",
-        "imported": True,
-        "uuid": image_uuid,
-        "files": [".json", ".png"],
-        "subMetas": {
-            "6c48a": {
-                "importer": "texture",
-                "uuid": f"{image_uuid}@6c48a",
-                "displayName": "packet_plants_cached",
-                "id": "6c48a",
-                "name": "texture",
-                "userData": {
-                    "wrapModeS": "clamp-to-edge",
-                    "wrapModeT": "clamp-to-edge",
-                    "imageUuidOrDatabaseUri": image_uuid,
-                    "isUuid": True,
-                    "visible": False,
-                    "minfilter": "linear",
-                    "magfilter": "linear",
-                    "mipfilter": "none",
-                    "anisotropy": 0,
-                },
-                "ver": "1.0.22",
-                "imported": True,
-                "files": [".json"],
-                "subMetas": {},
-            },
-            "f9941": {
-                "importer": "sprite-frame",
-                "uuid": f"{image_uuid}@f9941",
-                "displayName": "packet_plants_cached",
-                "id": "f9941",
-                "name": "spriteFrame",
-                "userData": {
-                    "trimThreshold": 1,
-                    "rotated": False,
-                    "offsetX": 0,
-                    "offsetY": 0,
-                    "trimX": 0,
-                    "trimY": 0,
-                    "width": ATLAS_COLUMNS * PACKET_WIDTH,
-                    "height": math.ceil(SEED_COUNT / ATLAS_COLUMNS) * PACKET_HEIGHT,
-                    "rawWidth": ATLAS_COLUMNS * PACKET_WIDTH,
-                    "rawHeight": math.ceil(SEED_COUNT / ATLAS_COLUMNS) * PACKET_HEIGHT,
-                    "borderTop": 0,
-                    "borderBottom": 0,
-                    "borderLeft": 0,
-                    "borderRight": 0,
-                    "packable": True,
-                    "pixelsToUnit": 100,
-                    "pivotX": 0.5,
-                    "pivotY": 0.5,
-                    "meshType": 0,
-                    "isUuid": True,
-                    "imageUuidOrDatabaseUri": f"{image_uuid}@6c48a",
-                    "atlasUuid": "",
-                    "trimType": "none",
-                },
-                "ver": "1.0.12",
-                "imported": True,
-                "files": [".json"],
-                "subMetas": {},
-            },
-        },
-        "userData": {
-            "type": "sprite-frame",
-            "fixAlphaTransparencyArtifacts": False,
-            "hasAlpha": True,
-            "redirect": f"{image_uuid}@6c48a",
-        },
-    }
-    OUTPUT_META_PATH.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
-
-
 def main():
     rows = math.ceil(SEED_COUNT / ATLAS_COLUMNS)
     atlas = Image.new("RGBA", (ATLAS_COLUMNS * PACKET_WIDTH, rows * PACKET_HEIGHT), (0, 0, 0, 0))
@@ -616,7 +533,6 @@ def main():
         y = seed_id // ATLAS_COLUMNS * PACKET_HEIGHT
         atlas.alpha_composite(cel, (x, y))
     atlas.save(OUTPUT_PATH)
-    write_meta()
     print(f"Wrote {OUTPUT_PATH}")
 
 

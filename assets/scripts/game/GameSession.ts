@@ -212,6 +212,16 @@ export class GameSession {
         return [...this.plants, ...this.zombies, ...this.projectiles, ...this.lawnMowers, ...this.items]
     }
 
+    countZombiesOnScreenForMusic() {
+        let count = 0
+        for (const zombie of this.zombies) {
+            if (!this._isZombieDamageable(zombie)) continue
+            const rect = zombie.getBodyRect()
+            if (rect.x < this.geometry.width && rect.x + rect.width > 0) count++
+        }
+        return count
+    }
+
     drainEvents(): GameEvent[] {
         return this.events.splice(0)
     }
@@ -258,30 +268,32 @@ export class GameSession {
     }
 
     update() {
-        if (this.result !== 'playing') {
-            if (this.result === 'won' && !this.paused) {
-                this._updateItems()
-                this._removeDeadEntities()
-            }
-            return
-        }
-        if (this.paused) return
+        if (this.paused || this.result === 'lost') return
 
         this.tick++
         this._updateReadySetPlant()
         this._updateSeedPackets()
         this._updateLevelOneTutorial()
         this._updateLevelTwoTutorial()
-        if (this.sunSpawningEnabled && !this._isLevelOneTutorialBlockingSun() && !this._isReadySetPlantBlockingGameplay()) {
+        if (
+            this.result === 'playing' &&
+            this.sunSpawningEnabled &&
+            !this._isLevelOneTutorialBlockingSun() &&
+            !this._isReadySetPlantBlockingGameplay()
+        ) {
             this._updateSunSpawning()
         }
-        if (!this._isLevelOneTutorialBlockingZombies() && !this._isReadySetPlantBlockingGameplay()) {
+        if (
+            this.result === 'playing' &&
+            !this._isLevelOneTutorialBlockingZombies() &&
+            !this._isReadySetPlantBlockingGameplay()
+        ) {
             this._updateZombieSpawning()
         }
         this._updateLaterSunflowerTutorial()
         this._updatePlants()
         this._updateZombies()
-        if (this.result !== 'playing') return
+        if (this.result === 'lost') return
         this._updateProjectiles()
         this._updateLawnMowers()
         this._updateItems()
@@ -750,7 +762,7 @@ export class GameSession {
             events: plantEvents,
             hasTargetInRow: (row: number, plant: Plant) => this._hasTargetInRow(row, plant),
             hasTargetInPlantAttackRect: (plant: Plant) => this._hasTargetInPlantAttackRect(plant),
-            canProduceSun: () => !this._levelAwardDropped && this.result === 'playing',
+            canProduceSun: () => this.result !== 'lost' && (!this._levelAwardDropped || this.result === 'won'),
             randomInt: (minInclusive: number, maxInclusive: number) =>
                 this._randomInt(minInclusive, maxInclusive),
         }
@@ -763,7 +775,7 @@ export class GameSession {
     private _handlePlantEvents(events: GameEvent[]) {
         for (const event of events) {
             if (event.type === 'sunProduced') {
-                if (this._levelAwardDropped) continue
+                if (this._levelAwardDropped && this.result !== 'won') continue
                 this._addItem('sun', 'from-plant', event.x, event.y)
             } else if (event.type === 'projectileFired') {
                 this._addProjectile(event.projectileType, event.x, event.y, event.row)
@@ -904,7 +916,7 @@ export class GameSession {
             const wasDying = zombie.state === 'dying'
             zombie.update(context)
             if (!wasDying && zombie.state === 'dying') this._dropZombieLoot(zombie)
-            if (this.result !== 'playing') break
+            if (this.result === 'lost') break
         }
     }
 

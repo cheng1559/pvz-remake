@@ -1,5 +1,3 @@
-import json
-import uuid
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +21,6 @@ DRAW_OFFSET_X = 10.0
 DRAW_OFFSET_Y = 0.0
 
 OUTPUT_PATH = TEXTURE_DIR / "lawnmower_cached.png"
-OUTPUT_META_PATH = TEXTURE_DIR / "lawnmower_cached.png.meta"
 
 
 def get_anim_node(animation_json: dict[str, Any]) -> dict[str, Any] | None:
@@ -81,91 +78,9 @@ def render_lawnmower_cache() -> Image.Image:
     return canvas
 
 
-def write_meta() -> None:
-    if OUTPUT_META_PATH.exists():
-        return
-
-    image_uuid = str(uuid.uuid4())
-    meta = {
-        "ver": "1.0.27",
-        "importer": "image",
-        "imported": True,
-        "uuid": image_uuid,
-        "files": [".json", ".png"],
-        "subMetas": {
-            "6c48a": {
-                "importer": "texture",
-                "uuid": f"{image_uuid}@6c48a",
-                "displayName": "lawnmower_cached",
-                "id": "6c48a",
-                "name": "texture",
-                "userData": {
-                    "wrapModeS": "clamp-to-edge",
-                    "wrapModeT": "clamp-to-edge",
-                    "imageUuidOrDatabaseUri": image_uuid,
-                    "isUuid": True,
-                    "visible": False,
-                    "minfilter": "linear",
-                    "magfilter": "linear",
-                    "mipfilter": "none",
-                    "anisotropy": 0,
-                },
-                "ver": "1.0.22",
-                "imported": True,
-                "files": [".json"],
-                "subMetas": {},
-            },
-            "f9941": {
-                "importer": "sprite-frame",
-                "uuid": f"{image_uuid}@f9941",
-                "displayName": "lawnmower_cached",
-                "id": "f9941",
-                "name": "spriteFrame",
-                "userData": {
-                    "trimThreshold": 1,
-                    "rotated": False,
-                    "offsetX": 0,
-                    "offsetY": 0,
-                    "trimX": 0,
-                    "trimY": 0,
-                    "width": OUTPUT_WIDTH,
-                    "height": OUTPUT_HEIGHT,
-                    "rawWidth": OUTPUT_WIDTH,
-                    "rawHeight": OUTPUT_HEIGHT,
-                    "borderTop": 0,
-                    "borderBottom": 0,
-                    "borderLeft": 0,
-                    "borderRight": 0,
-                    "packable": True,
-                    "pixelsToUnit": 100,
-                    "pivotX": 0.5,
-                    "pivotY": 0.5,
-                    "meshType": 0,
-                    "isUuid": True,
-                    "imageUuidOrDatabaseUri": f"{image_uuid}@6c48a",
-                    "atlasUuid": "",
-                    "trimType": "none",
-                },
-                "ver": "1.0.12",
-                "imported": True,
-                "files": [".json"],
-                "subMetas": {},
-            },
-        },
-        "userData": {
-            "type": "sprite-frame",
-            "fixAlphaTransparencyArtifacts": False,
-            "hasAlpha": True,
-            "redirect": f"{image_uuid}@6c48a",
-        },
-    }
-    OUTPUT_META_PATH.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
-
-
 def main() -> None:
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     render_lawnmower_cache().save(OUTPUT_PATH)
-    write_meta()
     print(f"Wrote {OUTPUT_PATH}")
 
 

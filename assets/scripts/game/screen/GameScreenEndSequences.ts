@@ -1,5 +1,6 @@
 import { Color, Graphics, UIOpacity } from 'cc'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { MusicSystem } from '../music/MusicSystem'
 import { GameScreenIntroHud } from './GameScreenIntroHud'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
@@ -52,7 +53,8 @@ export abstract class GameScreenEndSequences extends GameScreenIntroHud {
         this._releasePlantCursorHoverBlock()
         this._ensureLevelCompleteOverlay()
         this._syncLevelCompleteEffect()
-        void SoundLoader.play(SoundEffect.WinMusic)
+        MusicSystem.stop()
+        void SoundLoader.playSfx(SoundEffect.WinMusic)
     }
 
     protected _ensureLevelCompleteOverlay() {
@@ -153,7 +155,8 @@ export abstract class GameScreenEndSequences extends GameScreenIntroHud {
         this._syncSceneAnimationState()
         this._ensureGameOverOverlay()
         this._syncGameOverScene()
-        void SoundLoader.play(SoundEffect.LoseMusic)
+        MusicSystem.stop()
+        void SoundLoader.playSfx(SoundEffect.LoseMusic)
     }
 
     protected _hideGameplayUiForGameOver() {

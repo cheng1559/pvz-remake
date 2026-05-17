@@ -5,16 +5,18 @@ PvZ asset pipeline
 Steps:
   1. Extract main.pak -> tools/raw/
   2. Rename files to lowercase
-  3. Convert reanim animations
-  4. Convert fonts
-  5. Convert LawnStrings
-  6. Copy images to textures
-  7. Copy particle images to texture resources
-  8. Convert sounds to WAV audio resources
-  9. Generate cached packet plant atlas
- 10. Generate cached plant preview atlas
- 11. Generate cached zombie preview atlas
- 12. Generate cached lawn mower sprite
+  3. Decompile compiled particles/reanim
+  4. Convert reanim animations
+  5. Convert fonts
+  6. Convert LawnStrings
+  7. Copy images to textures
+  8. Copy particle images to texture resources
+  9. Convert sounds to WAV audio resources
+ 10. Convert MO3 music to WAV audio stems
+ 11. Generate cached packet plant atlas
+ 12. Generate cached plant preview atlas
+ 13. Generate cached zombie preview atlas
+ 14. Generate cached lawn mower sprite
 """
 
 from pathlib import Path
@@ -29,6 +31,7 @@ from font_converter import main as convert_font
 from lawnstrings_converter import convert_lawnstrings
 from copy_particles import copy_particles
 from copy_sounds import copy_sounds
+from convert_music import convert_music
 from generate_packet_plant_cache import main as generate_packet_plant_cache
 from generate_plant_preview_cache import main as generate_plant_preview_cache
 from generate_zombie_preview_cache import main as generate_zombie_preview_cache
@@ -60,9 +63,6 @@ def copy_images(src_dir: Path, dst_dir: Path) -> int:
             legacy_dst = dst_dir / src.name.lower()
             if legacy_dst.exists():
                 legacy_dst.unlink()
-            legacy_meta = dst_dir / f"{src.name.lower()}.meta"
-            if legacy_meta.exists():
-                legacy_meta.unlink()
 
         if write_preprocessed_resource(src, dst, resource_name=resource_name, alpha_src=alpha_src):
             print(f"[pipeline] Wrote: {dst}")
@@ -191,34 +191,44 @@ def main():
     sound_count = copy_sounds(sounds_dir, audio_dir, overwrite=True)
     print(f"[pipeline] Converted {sound_count} sounds -> {audio_dir}")
 
-    # ── Step 10: Generate cached packet plant atlas ────────────────
+    # ── Step 10: Convert music ────────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 10: Generate cached packet plant atlas")
+    print("[pipeline] Step 10: Convert MO3 music to WAV stems")
+    print("=" * 60)
+
+    music_dir = Path("./assets/resources/audio/music")
+    music_count = convert_music(sounds_dir, music_dir, overwrite=True)
+    print(f"[pipeline] Converted {music_count} music stems -> {music_dir}")
+
+    # ── Step 11: Generate cached packet plant atlas ────────────────
+    print()
+    print("=" * 60)
+    print("[pipeline] Step 11: Generate cached packet plant atlas")
     print("=" * 60)
 
     generate_packet_plant_cache()
 
-    # ── Step 11: Generate cached plant preview atlas ──────────────
+    # ── Step 12: Generate cached plant preview atlas ──────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 11: Generate cached plant preview atlas")
+    print("[pipeline] Step 12: Generate cached plant preview atlas")
     print("=" * 60)
 
     generate_plant_preview_cache()
 
-    # ── Step 12: Generate cached zombie preview atlas ─────────────
+    # ── Step 13: Generate cached zombie preview atlas ─────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 12: Generate cached zombie preview atlas")
+    print("[pipeline] Step 13: Generate cached zombie preview atlas")
     print("=" * 60)
 
     generate_zombie_preview_cache()
 
-    # Step 13: Generate cached lawn mower sprite
+    # Step 14: Generate cached lawn mower sprite
     print()
     print("=" * 60)
-    print("[pipeline] Step 13: Generate cached lawn mower sprite")
+    print("[pipeline] Step 14: Generate cached lawn mower sprite")
     print("=" * 60)
 
     generate_lawnmower_cache()
