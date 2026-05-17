@@ -16,9 +16,14 @@ type NativeAudioEngine = {
     setFinishCallback?: (audioId: number, callback: () => void) => void
 }
 
+type PvzNativeBridge = {
+    playSfxPitch?: (url: string, volume: number, pitch: number) => boolean
+}
+
 type NativeBindings = typeof globalThis & {
     jsb?: {
         AudioEngine?: NativeAudioEngine
+        PvzNative?: PvzNativeBridge
     }
 }
 
@@ -319,16 +324,21 @@ export class SoundLoader {
 
     private static async _playNativeWithPitch(clip: AudioClip, pitchSteps: number, volume: number) {
         const bindings = globalThis as NativeBindings
-        const audioEngine = bindings.jsb?.AudioEngine
-        if (!audioEngine?.play2d || !audioEngine.setPitch) return false
-
         const url = (clip as AudioClipWithNativeAsset)._nativeAsset?.url ?? (clip as AudioClipWithNativeAsset).nativeUrl
         if (!url) return false
+
+        const pitch = Math.pow(this._pitchStepMultiplier, pitchSteps)
+        if (bindings.jsb?.PvzNative?.playSfxPitch?.(url, volume, pitch)) {
+            return true
+        }
+
+        const audioEngine = bindings.jsb?.AudioEngine
+        if (!audioEngine?.play2d || !audioEngine.setPitch) return false
 
         const audioId = audioEngine.play2d(url, false, volume)
         if (typeof audioId !== 'number' || audioId < 0) return false
 
-        audioEngine.setPitch(audioId, Math.pow(this._pitchStepMultiplier, pitchSteps))
+        audioEngine.setPitch(audioId, pitch)
         return true
     }
 
