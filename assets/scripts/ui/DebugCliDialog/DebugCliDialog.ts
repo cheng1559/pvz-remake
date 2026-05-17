@@ -638,10 +638,16 @@ export class DebugCliDialog extends MessageBox {
 
         element.autocomplete = 'off'
         element.autocapitalize = 'off'
+        element.inputMode = 'latin'
+        element.lang = 'en'
+        element.pattern = '[\\x20-\\x7E]*'
         element.spellcheck = false
         element.setAttribute('autocapitalize', 'off')
         element.setAttribute('autocorrect', 'off')
         element.setAttribute('autocomplete', 'off')
+        element.setAttribute('inputmode', 'latin')
+        element.setAttribute('lang', 'en')
+        element.setAttribute('pattern', '[\\x20-\\x7E]*')
         element.setAttribute('spellcheck', 'false')
     }
 
@@ -942,15 +948,9 @@ export class DebugCliDialog extends MessageBox {
     }
 
     private _refocusAfterInvalidCommand() {
-        if (sys.isMobile && this._nativeTextInput?.node?.isValid) {
-            this._hasInputFocus = true
-            this._showCursorNow()
-            this.scheduleOnce(() => this._focusNativeTextInput(), 0.25)
-            return
-        }
-
         this._setInputFocus(true)
         this._focusNativeTextInput()
+        if (sys.isMobile) this.scheduleOnce(() => this._focusNativeTextInput(), 0)
     }
 
     private _flashInvalidCommand() {
