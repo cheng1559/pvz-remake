@@ -120,6 +120,7 @@ export class UIController extends Component {
     uiRoot: Node | null = null
 
     private _currentScreen: Node | null = null
+    private _screenClipRoot: Node | null = null
     private _backgroundLeft: Node | null = null
     private _backgroundRight: Node | null = null
     private _selectorScreen: SelectorScreen | null = null
@@ -504,13 +505,13 @@ export class UIController extends Component {
             return null
         }
 
-        const node = createUINode('StoreDialog', { active: false, width: 800, height: 600 })
+        const node = createUINode('StoreDialog', { active: false, width: SCREEN_WIDTH, height: SCREEN_HEIGHT })
         const storeScreen = node.addComponent(StoreScreen)
         storeScreen.onBackToMenu = () => {
             this.hideModalScreen()
         }
 
-        this.uiRoot!.addChild(node)
+        this._addToScreenClipRoot(node)
         node.active = true
         this._modalScreen = node
         this._selectorScreen.setButtonsInteractable(false)
@@ -526,14 +527,14 @@ export class UIController extends Component {
             return null
         }
 
-        const node = createUINode('AlmanacDialog', { active: false, width: 800, height: 600 })
+        const node = createUINode('AlmanacDialog', { active: false, width: SCREEN_WIDTH, height: SCREEN_HEIGHT })
         const almanacScreen = node.addComponent(AlmanacScreen)
         almanacScreen.onBackToMenu = () => {
             this.hideModalScreen()
             options.onClose?.()
         }
 
-        this.uiRoot!.addChild(node)
+        this._addToScreenClipRoot(node)
         node.active = true
         this._modalScreen = node
         this._selectorScreen?.setButtonsInteractable(false)
@@ -563,14 +564,14 @@ export class UIController extends Component {
             return null
         }
 
-        const node = createUINode('AchievementScreen', { active: false, width: 800, height: 600 })
+        const node = createUINode('AchievementScreen', { active: false, width: SCREEN_WIDTH, height: SCREEN_HEIGHT })
         const achievementScreen = node.addComponent(AchievementScreen)
         achievementScreen.earnedAchievements = this._profile?.earnedAchievements ?? []
         achievementScreen.onBackToMenu = () => {
             this.hideAchievementScreen()
         }
 
-        this.uiRoot!.addChild(node)
+        this._addToScreenClipRoot(node)
         node.setPosition(0, -599, 0)
         node.active = true
         this._achievementScreen = node
@@ -669,7 +670,7 @@ export class UIController extends Component {
             if (this._optionsDialog === optionsDialog) this._optionsDialog = null
         }
 
-        this.uiRoot!.addChild(node)
+        this._addToScreenClipRoot(node)
         node.active = true
         return optionsDialog
     }
@@ -710,7 +711,7 @@ export class UIController extends Component {
             })
         }
 
-        this.uiRoot!.addChild(node)
+        this._addToScreenClipRoot(node)
         node.active = true
         return optionsDialog
     }
@@ -727,7 +728,7 @@ export class UIController extends Component {
         const node = createUINode('PauseDialog', { active: false, width: 100, height: 100 })
         const pauseDialog = node.addComponent(PauseDialog)
 
-        this.uiRoot!.addChild(node)
+        this._addToScreenClipRoot(node)
         node.active = true
         this._modalScreen = node
 
@@ -846,7 +847,7 @@ export class UIController extends Component {
             return result
         }
 
-        this.uiRoot!.addChild(node)
+        this._addToScreenClipRoot(node)
         node.active = true
         this._debugCliScreen = node
         void SoundLoader.play(SoundEffect.GraveButton)
@@ -868,7 +869,7 @@ export class UIController extends Component {
         messageBox.message = message
         messageBox.setButtonMode(DialogButtonMode.Footer, 'OK')
 
-        this.uiRoot!.addChild(node)
+        this._addToScreenClipRoot(node)
         node.active = true
         return messageBox
     }
@@ -890,7 +891,7 @@ export class UIController extends Component {
             button.interactable = !dragging
         }
 
-        this.uiRoot!.addChild(node)
+        this._addToScreenClipRoot(node)
         node.active = true
         this._modalScreen = node
         void this._createGameOverMainMenuButton()
@@ -918,7 +919,7 @@ export class UIController extends Component {
 
         const button = createStoneButton({
             name: 'GameOverMainMenuButton',
-            parent: this.uiRoot,
+            parent: this._ensureScreenClipRoot(),
             layer: this.uiRoot.layer,
             label: 'Main Menu',
             x: GAME_OVER_MAIN_MENU_X,
@@ -1113,10 +1114,29 @@ export class UIController extends Component {
     private _setCurrentScreen(node: Node) {
         this._destroyCurrentScreen()
         this._currentScreen = node
-        this._ensureScreenClip(node)
-        this.uiRoot!.addChild(node)
+        this._addToScreenClipRoot(node)
         node.active = true
         this._placePersistentWidescreenBackgrounds()
+    }
+
+    private _addToScreenClipRoot(node: Node) {
+        const root = this._ensureScreenClipRoot()
+        root.addChild(node)
+        root.setSiblingIndex((this.uiRoot?.children.length ?? 1) - 1)
+    }
+
+    private _ensureScreenClipRoot() {
+        if (this._screenClipRoot?.isValid) return this._screenClipRoot
+
+        const root = createUINode('ScreenClipRoot', {
+            parent: this.uiRoot!,
+            layer: this.uiRoot!.layer,
+            width: SCREEN_WIDTH,
+            height: SCREEN_HEIGHT,
+        })
+        this._ensureScreenClip(root)
+        this._screenClipRoot = root
+        return root
     }
 
     private _ensureScreenClip(node: Node) {
@@ -1189,6 +1209,12 @@ export class UIController extends Component {
         }
         this._debugCliScreen = null
         this._destroyGameOverMainMenuButton()
+        if (this._screenClipRoot?.isValid) {
+            this._screenClipRoot.destroy()
+        }
+        this._screenClipRoot = null
+        this._globalAdviceLayer = null
+        this._globalAdviceWidget = null
         this._screenTransitioning = false
         if (this._currentScreen?.isValid) {
             this._currentScreen.destroy()
@@ -1231,7 +1257,7 @@ export class UIController extends Component {
         if (!this._globalAdviceWidget?.node.isValid) {
             if (!this._globalAdviceLayer?.isValid) {
                 this._globalAdviceLayer = createUINode('GlobalAdviceLayer', {
-                    parent: this.uiRoot,
+                    parent: this._ensureScreenClipRoot(),
                     layer: this.uiRoot.layer,
                     anchorX: 0,
                     anchorY: 1,
@@ -1252,9 +1278,9 @@ export class UIController extends Component {
     }
 
     private _placeGlobalAdviceLayer() {
-        if (!this.uiRoot?.isValid || !this._globalAdviceLayer?.isValid) return
+        if (!this._screenClipRoot?.isValid || !this._globalAdviceLayer?.isValid) return
 
-        this._globalAdviceLayer.setSiblingIndex(this.uiRoot.children.length - 1)
+        this._globalAdviceLayer.setSiblingIndex(this._screenClipRoot.children.length - 1)
     }
 
     private _advanceAdventureProgress(completedLevel: number) {
