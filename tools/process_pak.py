@@ -102,11 +102,11 @@ def main():
     print("[pipeline] Step 1: Extract main.pak")
     print("=" * 60)
 
-    raw = pak_path.read_bytes()
-    data = _decrypt(raw)
-    entries = parse_pak(data)
-    count = extract_entries(data, entries, raw_dir, verbose=False)
-    print(f"[pipeline] Extracted {count} files -> {raw_dir}\n")
+    # raw = pak_path.read_bytes()
+    # data = _decrypt(raw)
+    # entries = parse_pak(data)
+    # count = extract_entries(data, entries, raw_dir, verbose=False)
+    # print(f"[pipeline] Extracted {count} files -> {raw_dir}\n")
 
     # ── Step 2: Rename to lowercase ────────────────────────────────
     print("=" * 60)

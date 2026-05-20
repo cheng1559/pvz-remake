@@ -18,7 +18,7 @@
 #define PVZ_HAS_OPENAL_SFX 0
 #endif
 
-#if CC_PLATFORM == CC_PLATFORM_IOS
+#if CC_PLATFORM == CC_PLATFORM_IOS || CC_PLATFORM == CC_PLATFORM_MACOS
 #include <objc/message.h>
 #include <objc/runtime.h>
 #endif
@@ -38,7 +38,7 @@
 
 namespace {
 
-#if CC_PLATFORM == CC_PLATFORM_IOS
+#if CC_PLATFORM == CC_PLATFORM_IOS || CC_PLATFORM == CC_PLATFORM_MACOS
 using ObjcId = void*;
 
 ObjcId objcSendId(ObjcId target, SEL selector) {
@@ -68,7 +68,9 @@ void objcSendVoid(ObjcId target, SEL selector) {
 void objcSendVoidId(ObjcId target, SEL selector, ObjcId arg) {
     if (target) reinterpret_cast<void (*)(ObjcId, SEL, ObjcId)>(objc_msgSend)(target, selector, arg);
 }
+#endif
 
+#if CC_PLATFORM == CC_PLATFORM_IOS
 void hideKeyboardInputAssistant(ObjcId textInput) {
     if (!textInput || !objcSendBoolSel(textInput, sel_registerName("respondsToSelector:"), sel_registerName("inputAssistantItem"))) {
         return;
@@ -121,9 +123,32 @@ bool hideIosKeyboardAccessory() {
 }
 #endif
 
+#if CC_PLATFORM == CC_PLATFORM_MACOS
+bool setMacCursor(const std::string& style) {
+    const auto cursorClass = reinterpret_cast<ObjcId>(objc_getClass("NSCursor"));
+    if (!cursorClass) return false;
+
+    const char* selectorName = "arrowCursor";
+    if (style == "pointer") {
+        selectorName = "pointingHandCursor";
+    } else if (style == "move") {
+        selectorName = "closedHandCursor";
+    } else if (style == "text") {
+        selectorName = "IBeamCursor";
+    }
+
+    ObjcId cursor = objcSendId(cursorClass, sel_registerName(selectorName));
+    if (!cursor) return false;
+    objcSendVoid(cursor, sel_registerName("set"));
+    return true;
+}
+#endif
+
 #if CC_PLATFORM == CC_PLATFORM_WINDOWS
 bool g_isFullScreen = false;
 HWND g_window = nullptr;
+HCURSOR g_cursor = nullptr;
+WNDPROC g_originalWndProc = nullptr;
 WINDOWPLACEMENT g_windowPlacement = {sizeof(WINDOWPLACEMENT)};
 LONG_PTR g_windowStyle = 0;
 LONG_PTR g_windowExStyle = 0;
@@ -146,6 +171,16 @@ std::unordered_map<int, MusicSource> g_sfxSources;
 #endif
 
 #if CC_PLATFORM == CC_PLATFORM_WINDOWS
+LRESULT CALLBACK pvzWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    if (message == WM_SETCURSOR && LOWORD(lParam) == HTCLIENT && g_cursor) {
+        SetCursor(g_cursor);
+        return TRUE;
+    }
+    return g_originalWndProc
+        ? CallWindowProc(g_originalWndProc, hwnd, message, wParam, lParam)
+        : DefWindowProc(hwnd, message, wParam, lParam);
+}
+
 HWND getAppWindow() {
     if (g_window && IsWindow(g_window)) return g_window;
 
@@ -159,6 +194,14 @@ HWND getAppWindow() {
 
     g_window = hwnd;
     return hwnd;
+}
+
+void installCursorWindowProc(HWND hwnd) {
+    if (!hwnd || g_originalWndProc) return;
+    const auto previous = SetWindowLongPtr(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(pvzWindowProc));
+    if (previous) {
+        g_originalWndProc = reinterpret_cast<WNDPROC>(previous);
+    }
 }
 
 void applyFixedWindowStyle() {
@@ -227,6 +270,29 @@ bool setWindowsFullScreen(bool fullScreen) {
     ShowWindow(hwnd, SW_SHOW);
     g_isFullScreen = false;
     applyFixedWindowStyle();
+    return true;
+}
+
+bool setWindowsCursor(const std::string& style) {
+    HWND hwnd = getAppWindow();
+    if (!hwnd) return false;
+
+    LPCWSTR cursorName = IDC_ARROW;
+    if (style == "pointer") {
+        cursorName = IDC_HAND;
+    } else if (style == "move") {
+        cursorName = IDC_SIZEALL;
+    } else if (style == "text") {
+        cursorName = IDC_IBEAM;
+    }
+
+    HCURSOR cursor = LoadCursorW(nullptr, cursorName);
+    if (!cursor) return false;
+
+    installCursorWindowProc(hwnd);
+    g_cursor = cursor;
+    SetClassLongPtr(hwnd, GCLP_HCURSOR, reinterpret_cast<LONG_PTR>(cursor));
+    SetCursor(cursor);
     return true;
 }
 #endif
@@ -331,8 +397,10 @@ void cleanupStoppedOpenAlSources(std::unordered_map<int, MusicSource>& sources) 
     }
 }
 
-int playMusicWavSource(const std::string& url, bool loop, float volume) {
+int playOpenAlSource(std::unordered_map<int, MusicSource>& sources, const std::string& url, bool loop, float volume, float pitch) {
     if (!cc::AudioEngine::lazyInit()) return -1;
+
+    cleanupStoppedOpenAlSources(sources);
 
     WavBuffer wavBuffer;
     if (!loadWavBuffer(url, &wavBuffer)) return -1;
@@ -344,6 +412,7 @@ int playMusicWavSource(const std::string& url, bool loop, float volume) {
     alSourcei(source, AL_BUFFER, static_cast<ALint>(wavBuffer.buffer));
     alSourcei(source, AL_LOOPING, loop ? AL_TRUE : AL_FALSE);
     alSourcef(source, AL_GAIN, std::clamp(volume, 0.0F, 1.0F));
+    alSourcef(source, AL_PITCH, std::clamp(pitch, 0.5F, 2.0F));
     alSourcePlay(source);
     if (alGetError() != AL_NO_ERROR) {
         alDeleteSources(1, &source);
@@ -351,43 +420,30 @@ int playMusicWavSource(const std::string& url, bool loop, float volume) {
     }
 
     const int audioId = g_nextOpenAlSourceId++;
-    g_musicSources[audioId] = MusicSource{source};
+    sources[audioId] = MusicSource{source};
     return audioId;
 }
 
-void stopMusicWavSource(int audioId) {
-    auto* musicSource = findMusicSource(audioId);
-    if (!musicSource) return;
-    alSourceStop(musicSource->source);
-    alSourcei(musicSource->source, AL_BUFFER, 0);
-    alDeleteSources(1, &musicSource->source);
-    g_musicSources.erase(audioId);
+void stopOpenAlSource(std::unordered_map<int, MusicSource>& sources, int audioId) {
+    auto it = sources.find(audioId);
+    if (it == sources.end()) return;
+
+    alSourceStop(it->second.source);
+    alSourcei(it->second.source, AL_BUFFER, 0);
+    alDeleteSources(1, &it->second.source);
+    sources.erase(it);
 }
 
-bool playOpenAlSfxPitch(const std::string& url, float volume, float pitch) {
-    if (!cc::AudioEngine::lazyInit()) return false;
+int playMusicWavSource(const std::string& url, bool loop, float volume) {
+    return playOpenAlSource(g_musicSources, url, loop, volume, 1.0F);
+}
 
-    cleanupStoppedOpenAlSources(g_sfxSources);
+void stopMusicWavSource(int audioId) {
+    stopOpenAlSource(g_musicSources, audioId);
+}
 
-    WavBuffer wavBuffer;
-    if (!loadWavBuffer(url, &wavBuffer)) return false;
-
-    ALuint source = 0;
-    alGenSources(1, &source);
-    if (alGetError() != AL_NO_ERROR || source == 0) return false;
-
-    alSourcei(source, AL_BUFFER, static_cast<ALint>(wavBuffer.buffer));
-    alSourcei(source, AL_LOOPING, AL_FALSE);
-    alSourcef(source, AL_GAIN, std::clamp(volume, 0.0F, 1.0F));
-    alSourcef(source, AL_PITCH, std::clamp(pitch, 0.5F, 2.0F));
-    alSourcePlay(source);
-    if (alGetError() != AL_NO_ERROR) {
-        alDeleteSources(1, &source);
-        return false;
-    }
-
-    g_sfxSources[g_nextOpenAlSourceId++] = MusicSource{source};
-    return true;
+int playOpenAlSfxPitch(const std::string& url, float volume, float pitch) {
+    return playOpenAlSource(g_sfxSources, url, false, volume, pitch);
 }
 #endif
 
@@ -440,6 +496,24 @@ bool hideKeyboardAccessory(se::State& state) {
 }
 SE_BIND_FUNC(hideKeyboardAccessory)
 
+bool setCursor(se::State& state) {
+    const auto& args = state.args();
+    if (args.size() != 1 || !args[0].isString()) {
+        state.rval().setBoolean(false);
+        return true;
+    }
+
+#if CC_PLATFORM == CC_PLATFORM_WINDOWS
+    state.rval().setBoolean(setWindowsCursor(args[0].toString()));
+#elif CC_PLATFORM == CC_PLATFORM_MACOS
+    state.rval().setBoolean(setMacCursor(args[0].toString()));
+#else
+    state.rval().setBoolean(false);
+#endif
+    return true;
+}
+SE_BIND_FUNC(setCursor)
+
 bool playSfxPitch(se::State& state) {
     const auto& args = state.args();
     if (args.size() < 3 || !args[0].isString() || !args[1].isNumber() || !args[2].isNumber()) {
@@ -448,7 +522,7 @@ bool playSfxPitch(se::State& state) {
     }
 
 #if PVZ_HAS_OPENAL_SFX
-    state.rval().setBoolean(playOpenAlSfxPitch(args[0].toString(), args[1].toFloat(), args[2].toFloat()));
+    state.rval().setBoolean(playOpenAlSfxPitch(args[0].toString(), args[1].toFloat(), args[2].toFloat()) >= 0);
 #elif CC_PLATFORM == CC_PLATFORM_ANDROID
     state.rval().setBoolean(playAndroidSfxPitch(args[0].toString(), args[1].toFloat(), args[2].toFloat()));
 #else
@@ -457,6 +531,33 @@ bool playSfxPitch(se::State& state) {
     return true;
 }
 SE_BIND_FUNC(playSfxPitch)
+
+bool playSfxWav(se::State& state) {
+    const auto& args = state.args();
+    if (args.size() < 3 || !args[0].isString() || !args[1].isNumber() || !args[2].isNumber()) {
+        state.rval().setNumber(-1);
+        return true;
+    }
+
+#if PVZ_HAS_OPENAL_SFX
+    state.rval().setNumber(playOpenAlSfxPitch(args[0].toString(), args[1].toFloat(), args[2].toFloat()));
+#else
+    state.rval().setNumber(-1);
+#endif
+    return true;
+}
+SE_BIND_FUNC(playSfxWav)
+
+bool stopSfxWav(se::State& state) {
+    const auto& args = state.args();
+    if (args.size() < 1 || !args[0].isNumber()) return true;
+
+#if PVZ_HAS_OPENAL_SFX
+    stopOpenAlSource(g_sfxSources, args[0].toInt32());
+#endif
+    return true;
+}
+SE_BIND_FUNC(stopSfxWav)
 
 bool playMusicWav(se::State& state) {
     const auto& args = state.args();
@@ -571,7 +672,12 @@ bool registerPvzNativeBindings(se::Object* global) {
     bridge->defineFunction("setFullScreen", _SE(setFullScreen));
     bridge->defineFunction("isFullScreen", _SE(isFullScreen));
     bridge->defineFunction("hideKeyboardAccessory", _SE(hideKeyboardAccessory));
+    bridge->defineFunction("setCursor", _SE(setCursor));
     bridge->defineFunction("playSfxPitch", _SE(playSfxPitch));
+#if PVZ_HAS_OPENAL_SFX
+    bridge->defineFunction("playSfxWav", _SE(playSfxWav));
+    bridge->defineFunction("stopSfxWav", _SE(stopSfxWav));
+#endif
 #if CC_PLATFORM == CC_PLATFORM_WINDOWS
     bridge->defineFunction("playMusicWav", _SE(playMusicWav));
     bridge->defineFunction("stopMusicWav", _SE(stopMusicWav));

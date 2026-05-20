@@ -200,6 +200,7 @@ export type GameEvent =
     | { type: 'coinBankShown' }
     | { type: 'moneyChanged', amount: number }
     | { type: 'finalWave' }
+    | { type: 'musicBurstRequested' }
 
 export interface SeedPacketState {
     seedType: SeedType

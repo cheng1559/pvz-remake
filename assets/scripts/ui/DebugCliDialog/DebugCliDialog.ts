@@ -34,6 +34,7 @@ import {
 } from '@/ui/DebugCliDialog/DebugCliCommands'
 import { DialogResult, MessageBox } from '@/ui/MessageBox/MessageBox'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
+import { CursorManager } from '@/ui/CursorManager'
 
 const { ccclass } = _decorator
 
@@ -1697,9 +1698,7 @@ export class DebugCliDialog extends MessageBox {
     }
 
     private _setCanvasCursor(style: string) {
-        if (!sys.isBrowser) return
-        const canvas = game.canvas
-        if (canvas) canvas.style.cursor = style
+        CursorManager.set(style)
     }
 
     private _lockMobilePageScroll() {

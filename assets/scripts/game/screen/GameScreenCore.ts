@@ -4,7 +4,6 @@ import {
     EventKeyboard,
     EventMouse,
     EventTouch,
-    game,
     Graphics,
     input,
     Input,
@@ -43,6 +42,7 @@ import { createStoneButton } from '@/ui/StoneButton'
 import { createTooltipNode } from '@/ui/Tooltip/Tooltip'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
+import { CursorManager } from '@/ui/CursorManager'
 import {
     ADVENTURE_1_1,
     GAME_TICK_SECONDS,
@@ -1793,7 +1793,7 @@ export abstract class GameScreenCore extends Component {
         if (this._boardShakeTicks <= 0) return { x: 0, y: 0 }
 
         const t = 1 - this._boardShakeTicks / BOARD_SHAKE_TICKS
-        const bounce = Math.sin(t * Math.PI * 4) * (1 - t)
+        const bounce = 1 - Math.abs(2 * t - 1)
         return {
             x: Math.round(this._boardShakeAmountX * bounce),
             y: Math.round(this._boardShakeAmountY * bounce),
@@ -1865,6 +1865,9 @@ export abstract class GameScreenCore extends Component {
                     break
                 case 'finalWave':
                     this._showFinalWaveWarning()
+                    break
+                case 'musicBurstRequested':
+                    MusicSystem.startBurst()
                     break
                 case 'levelAwardCollected':
                     this._startLevelCompleteEffect()
@@ -2810,9 +2813,7 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _setCanvasCursor(style: string) {
-        if (!sys.isBrowser) return
-        const canvas = game.canvas
-        if (canvas) canvas.style.cursor = style
+        CursorManager.set(style)
     }
 
     protected _getShovelBoardPixelRect() {

@@ -13,8 +13,8 @@ export type MusicTuneId =
     | 'final_boss'
 
 type MusicStemName = 'main' | 'drums' | 'hihats'
-type MusicBurstState = 'off' | 'starting' | 'on' | 'finishing'
-type MusicDrumsState = 'off' | 'on-queued' | 'on' | 'off-queued' | 'fading'
+export type MusicBurstState = 'off' | 'starting' | 'on' | 'finishing'
+export type MusicDrumsState = 'off' | 'on-queued' | 'on' | 'off-queued' | 'fading'
 
 interface MusicTuneManifest {
     id: MusicTuneId
@@ -30,6 +30,22 @@ interface MusicManifest {
     version: number
     sampleRate: number
     tunes: Partial<Record<MusicTuneId, MusicTuneManifest>>
+}
+
+export interface MusicPlaybackSnapshot {
+    tuneId: MusicTuneId
+    timeSec: number
+    paused: boolean
+    mainVolume: number
+    drumsVolume: number
+    hihatsVolume: number
+    burstState: MusicBurstState
+    burstCounter: number
+    drumsState: MusicDrumsState
+    drumsCounter: number
+    queuedDrumsBoundarySec: number | null
+    queuedDrumsAtSec: number
+    queuedDrumsBoundaryWrapped: boolean
 }
 
 type NativeAudioAsset = {
@@ -108,6 +124,10 @@ export class MusicSystem {
     private static _node: Node | null = null
     private static _sources: Partial<Record<MusicStemName, AudioSource>> = {}
     private static _nativeAudioIds: Partial<Record<MusicStemName, number>> = {}
+    private static _overlaySources: Partial<Record<MusicStemName, AudioSource>> = {}
+    private static _overlayNativeAudioIds: Partial<Record<MusicStemName, number>> = {}
+    private static _overlayActiveStemNames: MusicStemName[] = []
+    private static _overlayPlayToken = 0
     private static _manifest: MusicManifest | null = null
     private static _manifestLoading: Promise<MusicManifest | null> | null = null
     private static _clipLoading: Map<string, Promise<AudioClip | null>> = new Map()
@@ -130,6 +150,8 @@ export class MusicSystem {
     private static _drumsState: MusicDrumsState = 'off'
     private static _drumsCounter = 0
     private static _queuedDrumsBoundarySec: number | null = null
+    private static _queuedDrumsAtSec = 0
+    private static _queuedDrumsBoundaryWrapped = false
 
     static async playTune(tuneId: MusicTuneId, restart = false) {
         if (!restart && this._playing && this._currentTuneId === tuneId && this._fadeOutCounter <= 0) return
@@ -202,6 +224,100 @@ export class MusicSystem {
         await Promise.all(tuneIds.map((tuneId) => this.preloadTune(tuneId)))
     }
 
+    static capturePlaybackSnapshot(): MusicPlaybackSnapshot | null {
+        if (!this._playing || !this._currentTuneId || !this._currentTune) return null
+
+        return {
+            tuneId: this._currentTuneId,
+            timeSec: this._paused ? this._pauseTime : this._mainTime(),
+            paused: this._paused || this._pauseRequested,
+            mainVolume: this._mainVolume,
+            drumsVolume: this._drumsVolume,
+            hihatsVolume: this._hihatsVolume,
+            burstState: this._burstState,
+            burstCounter: this._burstCounter,
+            drumsState: this._drumsState,
+            drumsCounter: this._drumsCounter,
+            queuedDrumsBoundarySec: this._queuedDrumsBoundarySec,
+            queuedDrumsAtSec: this._queuedDrumsAtSec,
+            queuedDrumsBoundaryWrapped: this._queuedDrumsBoundaryWrapped,
+        }
+    }
+
+    static async restorePlaybackSnapshot(snapshot: MusicPlaybackSnapshot | null) {
+        if (!snapshot) return
+
+        await this.playTune(snapshot.tuneId, true)
+        if (!this._playing || this._currentTuneId !== snapshot.tuneId) return
+
+        this._seekAll(snapshot.timeSec)
+        this._mainVolume = snapshot.mainVolume
+        this._drumsVolume = snapshot.drumsVolume
+        this._hihatsVolume = snapshot.hihatsVolume
+        this._burstState = snapshot.burstState
+        this._burstCounter = snapshot.burstCounter
+        this._drumsState = snapshot.drumsState
+        this._drumsCounter = snapshot.drumsCounter
+        this._queuedDrumsBoundarySec = snapshot.queuedDrumsBoundarySec
+        this._queuedDrumsAtSec = snapshot.queuedDrumsAtSec
+        this._queuedDrumsBoundaryWrapped = snapshot.queuedDrumsBoundaryWrapped
+        this._applyVolumes()
+
+        if (snapshot.paused) {
+            this._pauseTime = snapshot.timeSec
+            this.pause()
+            return
+        }
+
+        this._resumeSourcesAfterSeek()
+    }
+
+    static async playOverlayTune(tuneId: MusicTuneId) {
+        this.stopOverlayTune()
+        const token = ++this._overlayPlayToken
+        const manifest = await this._loadManifest()
+        if (token !== this._overlayPlayToken || !manifest) return
+
+        const tune = manifest.tunes[tuneId] ?? null
+        if (!tune) {
+            console.warn(`[MusicSystem] Missing overlay music tune in manifest: ${tuneId}`)
+            return
+        }
+
+        const activeStems = this._activeStems(tune)
+        const clips = await Promise.all(activeStems.map((stem) => this._loadClip(tune.stems[stem]!)))
+        if (token !== this._overlayPlayToken) return
+        if (clips.some((clip) => !clip)) {
+            console.warn(`[MusicSystem] Missing overlay music clips for tune: ${tuneId}`)
+            return
+        }
+
+        this._overlayActiveStemNames = activeStems
+        for (let i = 0; i < activeStems.length; i++) {
+            const stem = activeStems[i]
+            if (this._playNativeOverlayStem(stem, clips[i]!, tune)) continue
+
+            const source = this._getOverlaySource(stem)
+            source.stop()
+            source.clip = clips[i]
+            source.loop = this._usesBackendLoop(tune)
+            source.volume = this._overlayStemVolume(stem)
+            source.play()
+        }
+    }
+
+    static stopOverlayTune() {
+        this._overlayPlayToken++
+        for (const source of Object.values(this._overlaySources)) {
+            if (!source) continue
+            source.stop()
+            source.node.destroy()
+        }
+        this._overlaySources = {}
+        this._stopNativeOverlayStems()
+        this._overlayActiveStemNames = []
+    }
+
     static stop() {
         this._playToken++
         for (const source of Object.values(this._sources)) {
@@ -218,9 +334,12 @@ export class MusicSystem {
         this._currentTuneId = null
         this._activeStemNames = []
         this._queuedDrumsBoundarySec = null
+        this._queuedDrumsAtSec = 0
+        this._queuedDrumsBoundaryWrapped = false
         this._fadeOutCounter = 0
         this._fadeOutDuration = 0
         this._resetBurstState()
+        this.stopOverlayTune()
     }
 
     static fadeOut(durationTicks: number) {
@@ -232,6 +351,12 @@ export class MusicSystem {
         }
         this._fadeOutDuration = duration
         this._fadeOutCounter = duration
+    }
+
+    static startBurst() {
+        if (!this._playing || this._paused || !this._currentTune) return
+        if (this._currentTune.burstScheme !== 'day') return
+        this._startBurst()
     }
 
     static pause() {
@@ -312,6 +437,18 @@ export class MusicSystem {
         return source
     }
 
+    private static _getOverlaySource(stem: MusicStemName) {
+        const cached = this._overlaySources[stem]
+        if (cached?.isValid) return cached
+
+        const node = this._getNode()
+        const stemNode = new Node(`MusicOverlay_${stem}`)
+        node.addChild(stemNode)
+        const source = stemNode.addComponent(AudioSource)
+        this._overlaySources[stem] = source
+        return source
+    }
+
     private static _getNode() {
         if (this._node?.isValid) return this._node
 
@@ -367,8 +504,12 @@ export class MusicSystem {
         const target = this._wrapTime(tune.loopStartSec + overflow, tune)
         this._seekAll(target)
         this._resumeSourcesAfterSeek()
-        if (this._queuedDrumsBoundarySec !== null && this._queuedDrumsBoundarySec < target) {
-            this._queuedDrumsBoundarySec = this._nextBoundaryAfter(target)
+        if (
+            this._queuedDrumsBoundarySec !== null &&
+            !this._queuedDrumsBoundaryWrapped &&
+            this._queuedDrumsBoundarySec < target
+        ) {
+            this._setQueuedDrumsBoundary(target)
         }
     }
 
@@ -448,13 +589,13 @@ export class MusicSystem {
 
     private static _queueDrumsOn() {
         this._drumsState = 'on-queued'
-        this._queuedDrumsBoundarySec = this._nextBoundaryAfter(this._mainTime())
+        this._setQueuedDrumsBoundary(this._mainTime())
     }
 
     private static _queueDrumsOff() {
         if (this._drumsState === 'off') return
         this._drumsState = 'off-queued'
-        this._queuedDrumsBoundarySec = this._nextBoundaryAfter(this._mainTime())
+        this._setQueuedDrumsBoundary(this._mainTime())
     }
 
     private static _updateDrumsState() {
@@ -494,7 +635,19 @@ export class MusicSystem {
     private static _hasReachedQueuedBoundary() {
         const boundary = this._queuedDrumsBoundarySec
         if (boundary === null) return true
-        return this._mainTime() >= boundary
+
+        const time = this._mainTime()
+        if (this._queuedDrumsBoundaryWrapped) {
+            return time < this._queuedDrumsAtSec && time >= boundary
+        }
+        return time >= boundary
+    }
+
+    private static _setQueuedDrumsBoundary(time: number) {
+        const boundary = this._nextBoundaryAfter(time)
+        this._queuedDrumsAtSec = time
+        this._queuedDrumsBoundarySec = boundary
+        this._queuedDrumsBoundaryWrapped = boundary < time
     }
 
     private static _nextBoundaryAfter(time: number) {
@@ -571,6 +724,8 @@ export class MusicSystem {
         this._drumsState = 'off'
         this._drumsCounter = 0
         this._queuedDrumsBoundarySec = null
+        this._queuedDrumsAtSec = 0
+        this._queuedDrumsBoundaryWrapped = false
     }
 
     private static _activeStems(tune: MusicTuneManifest) {
@@ -592,6 +747,21 @@ export class MusicSystem {
         return true
     }
 
+    private static _playNativeOverlayStem(stem: MusicStemName, clip: AudioClip, tune: MusicTuneManifest) {
+        const player = this._nativePlayer()
+        if (!player) return false
+
+        const nativeClip = clip as MusicAudioClip
+        const url = nativeClip._nativeAsset?.url ?? nativeClip.nativeUrl
+        if (!url) return false
+
+        const audioId = player.play(url, this._usesBackendLoop(tune), this._overlayStemVolume(stem))
+        if (typeof audioId !== 'number' || audioId < 0) return false
+
+        this._overlayNativeAudioIds[stem] = audioId
+        return true
+    }
+
     private static _stopNativeStems() {
         const player = this._nativePlayer()
         for (const audioId of Object.values(this._nativeAudioIds)) {
@@ -600,10 +770,22 @@ export class MusicSystem {
         this._nativeAudioIds = {}
     }
 
+    private static _stopNativeOverlayStems() {
+        const player = this._nativePlayer()
+        for (const audioId of Object.values(this._overlayNativeAudioIds)) {
+            if (audioId !== undefined) player?.stop(audioId)
+        }
+        this._overlayNativeAudioIds = {}
+    }
+
     private static _stemVolume(stem: MusicStemName) {
         if (stem === 'main') return clamp01(this._mainVolume)
         if (stem === 'drums') return clamp01(this._drumsVolume)
         return clamp01(this._hihatsVolume)
+    }
+
+    private static _overlayStemVolume(stem: MusicStemName) {
+        return stem === 'main' ? SoundLoader.getMusicVolume() : 0
     }
 
     private static _nativePlayer(): MusicNativePlayer | null {

@@ -1,4 +1,5 @@
-import { EventMouse, EventTouch, game, Node, sys, Vec2 } from 'cc'
+import { EventMouse, EventTouch, Node, sys, Vec2 } from 'cc'
+import { CursorManager } from '@/ui/CursorManager'
 
 export interface UIHoverPointer {
     location: Vec2
@@ -119,8 +120,6 @@ export class UIHoverManager {
     }
 
     private static _setGlobalCursor(style: string) {
-        if (!sys.isBrowser) return
-        const canvas = game.canvas
-        if (canvas) canvas.style.cursor = style
+        CursorManager.set(style)
     }
 }

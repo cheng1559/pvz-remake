@@ -5,16 +5,15 @@ import {
     EventKeyboard,
     EventMouse,
     EventTouch,
-    game,
     input,
     Input,
     Layers,
     Node,
-    sys,
     UITransform,
     view,
 } from 'cc'
 import { UIHoverManager } from '@/ui/UIHoverManager'
+import { CursorManager } from '@/ui/CursorManager'
 
 const { ccclass, property } = _decorator
 
@@ -295,8 +294,6 @@ export class ModalDialog extends Component {
     }
 
     private _setCursor(style: string) {
-        if (!sys.isBrowser) return
-        const canvas = game.canvas
-        if (canvas) canvas.style.cursor = style
+        CursorManager.set(style)
     }
 }

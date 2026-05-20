@@ -17,12 +17,45 @@ from PIL import Image
 MAX_FONT_ATLAS_SIZE = 4096
 
 
+def _read_text_with_encoding_detection(path: Path) -> str:
+    data = path.read_bytes()
+    if data.startswith((b'\xff\xfe', b'\xfe\xff')):
+        return data.decode('utf-16')
+
+    sample = data[:2000]
+    if sample:
+        odd_nuls = sample[1::2].count(0)
+        even_nuls = sample[0::2].count(0)
+        half_len = max(1, len(sample) // 2)
+        if odd_nuls / half_len > 0.3:
+            return data.decode('utf-16le')
+        if even_nuls / half_len > 0.3:
+            return data.decode('utf-16be')
+
+    for encoding in ('utf-8-sig', 'cp1252', 'latin-1'):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+
+    return data.decode('utf-8', errors='replace')
+
+
 def _normalize_image_stem(image_name: str) -> str:
     return image_name.lstrip('_') + '_atlas'
 
 
 def _normalize_image_name(path: Path) -> str:
     return _normalize_image_stem(path.with_suffix('').name) + '.png'
+
+
+def _find_font_image(basedir: Path, image_name: str) -> Path | None:
+    for prefix in ['_', '']:
+        for ext in ['.png', '.gif']:
+            candidate = basedir / (prefix + image_name + ext)
+            if candidate.exists():
+                return candidate
+    return None
 
 
 def _normalize_font_mask_rgba(src: Path) -> Image.Image:
@@ -123,8 +156,7 @@ class PvZFontParser:
         self._parse()
 
     def _read_file(self) -> str:
-        with open(self.filepath, 'r', encoding='latin-1') as f:
-            return f.read()
+        return _read_text_with_encoding_detection(self.filepath)
 
     def _tokenize(self, text: str) -> list[str]:
         """Tokenize a full descriptor file."""
@@ -594,18 +626,24 @@ class PvZFontParser:
         for layer in self.layers:
             img_name = layer['image']
             if img_name:
-                for prefix in ['_', '']:
-                    for ext in ['.png', '.gif']:
-                        candidate = self.basedir / (prefix + img_name + ext)
-                        if candidate.exists():
-                            images.append(candidate)
-                            break
+                candidate = _find_font_image(self.basedir, img_name)
+                if candidate:
+                    images.append(candidate)
         return images
 
 
 def convert_font(input_path: Path, output_dir: Path):
     """Convert one font descriptor."""
     parser = PvZFontParser(input_path)
+
+    for layer in parser.layers:
+        image_name = layer['image']
+        if image_name and _find_font_image(parser.basedir, image_name) is None:
+            fallback = input_path.stem
+            if _find_font_image(parser.basedir, fallback) is not None:
+                print(f"[font] Using descriptor image fallback: {image_name} -> {fallback}")
+                layer['image'] = fallback
+
     font_data = parser.to_json()
 
     base_name = input_path.stem

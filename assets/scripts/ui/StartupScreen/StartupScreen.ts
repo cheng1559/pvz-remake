@@ -31,6 +31,7 @@ type StartupPhase = 'logo' | 'waitingForLoader' | 'loading' | 'ready' | 'done'
 @ccclass('StartupScreen')
 export class StartupScreen extends Component {
     private _root: Node | null = null
+    private _screenClipRoot: Node | null = null
     private _phase: StartupPhase = 'logo'
     private _frameAccumulator = 0
     private _titleAge = 0
@@ -197,6 +198,7 @@ export class StartupScreen extends Component {
 
     private _resetBlackRoot(name: string) {
         this._root?.destroy()
+        this._screenClipRoot = null
         this._root = createUINode(name, {
             parent: this.node,
             layer: this.node.layer,
@@ -211,18 +213,30 @@ export class StartupScreen extends Component {
         const graphics = background.addComponent(Graphics)
         graphics.fillColor = Color.BLACK
         graphics.fillRect(-screenWidth / 2, -SCREEN_HEIGHT / 2, screenWidth, SCREEN_HEIGHT)
+        this._screenClipRoot = this._createScreenClipRoot(this._root)
+    }
+
+    private _createScreenClipRoot(parent: Node) {
+        const clipRoot = createUINode('StartupClip', {
+            parent,
+            layer: this.node.layer,
+            width: SCREEN_WIDTH,
+            height: SCREEN_HEIGHT,
+        })
+        clipRoot.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT
+        return clipRoot
     }
 
     private async _showPopCapLogo() {
         const logo = await SpriteLoader.load('popcap_logo')
         this._phase = 'logo'
         this._titleAge = 0
-        if (!logo || !this._root?.isValid) return
+        if (!logo || !this._screenClipRoot?.isValid) return
 
         const logoNode = createSpriteNode({
             name: 'PopCapLogo',
             spriteFrame: logo,
-            parent: this._root,
+            parent: this._screenClipRoot,
             layer: this.node.layer,
             x: 0,
             y: 0,
@@ -244,10 +258,12 @@ export class StartupScreen extends Component {
         this._titleStateCounter = TITLE_SCREEN_COUNTER
         this._triggeredLoadBarEvents.clear()
         this._root?.destroy()
+        this._screenClipRoot = null
         this._root = createUINode('LoadingScreenRoot', {
             parent: this.node,
             layer: this.node.layer,
         })
+        this._screenClipRoot = this._createScreenClipRoot(this._root)
 
         const title = SpriteLoader.get('titlescreen')
         const backgroundLeft = await SpriteLoader.load('background_left')
@@ -263,7 +279,7 @@ export class StartupScreen extends Component {
         createSpriteNode({
             name: 'TitleScreen',
             spriteFrame: title,
-            parent: this._root,
+            parent: this._screenClipRoot,
             layer: this.node.layer,
             x: -SCREEN_WIDTH / 2,
             y: SCREEN_HEIGHT / 2,
@@ -274,7 +290,7 @@ export class StartupScreen extends Component {
         this._pvzLogo = createSpriteNode({
             name: 'PvzLogo',
             spriteFrame: pvzLogo,
-            parent: this._root,
+            parent: this._screenClipRoot,
             layer: this.node.layer,
             x: 0,
             y: this._cppY(-150),
@@ -283,7 +299,7 @@ export class StartupScreen extends Component {
         })
 
         this._barRoot = createUINode('LoadBar', {
-            parent: this._root,
+            parent: this._screenClipRoot,
             layer: this.node.layer,
             anchorX: 0,
             anchorY: 1,
@@ -331,7 +347,7 @@ export class StartupScreen extends Component {
             anchorY: 0.5,
         })
         this._loadBarReanimLayer = createUINode('LoadBarReanims', {
-            parent: this._root,
+            parent: this._screenClipRoot,
             layer: this.node.layer,
         })
         this._createStartButton()
@@ -367,7 +383,7 @@ export class StartupScreen extends Component {
         const dirt = SpriteLoader.get('loadbar_dirt')
         const x = dirt ? this._loadBarDirtX(dirt) : SCREEN_WIDTH / 2 - LOAD_BAR_WIDTH / 2
         this._startButtonNode = createUINode('StartButton', {
-            parent: this._root!,
+            parent: this._screenClipRoot!,
             layer: this.node.layer,
             anchorX: 0,
             anchorY: 1,

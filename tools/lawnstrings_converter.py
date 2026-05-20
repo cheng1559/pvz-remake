@@ -11,6 +11,30 @@ import json
 from pathlib import Path
 
 
+def read_lawnstrings_text(src_path: Path) -> str:
+    data = src_path.read_bytes()
+    if data.startswith((b'\xff\xfe', b'\xfe\xff')):
+        return data.decode('utf-16')
+
+    sample = data[:2000]
+    if sample:
+        odd_nuls = sample[1::2].count(0)
+        even_nuls = sample[0::2].count(0)
+        half_len = max(1, len(sample) // 2)
+        if odd_nuls / half_len > 0.3:
+            return data.decode('utf-16le')
+        if even_nuls / half_len > 0.3:
+            return data.decode('utf-16be')
+
+    for encoding in ('utf-8-sig', 'cp1252', 'latin1'):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+
+    return data.decode('utf-8', errors='replace')
+
+
 def parse_lawnstrings(text: str) -> dict[str, str]:
     strings: dict[str, str] = {}
     index = 0
@@ -43,7 +67,7 @@ def parse_lawnstrings(text: str) -> dict[str, str]:
 
 
 def convert_lawnstrings(src_path: Path, dst_path: Path) -> int:
-    text = src_path.read_text(encoding='cp1252')
+    text = read_lawnstrings_text(src_path)
     strings = parse_lawnstrings(text)
 
     dst_path.parent.mkdir(parents=True, exist_ok=True)

@@ -99,6 +99,13 @@ interface StoreScreenOptions {
     onBack?: () => void
 }
 
+interface StoreDialogOptions {
+    initialPage?: number
+    backButtonLabel?: string
+    onClose?: () => void
+    useOverlayMusic?: boolean
+}
+
 interface AlmanacDialogOptions {
     onClose?: () => void
 }
@@ -451,12 +458,9 @@ export class UIController extends Component {
             void this.showSelectorScreen()
         }
         zenGardenScreen.onStoreRequest = () => {
-            this.showStoreScreen({
+            this.showStoreDialog({
                 initialPage: 2,
                 backButtonLabel: 'GO BACK',
-                onBack: () => {
-                    this.showZenGardenScreen()
-                },
             })
         }
 
@@ -495,26 +499,45 @@ export class UIController extends Component {
         return storeScreen
     }
 
-    showStoreDialog(): StoreScreen | null {
+    showStoreDialog(options: StoreDialogOptions = {}): StoreScreen | null {
         if (
             this._screenTransitioning ||
             this._modalScreen?.isValid ||
-            !this._currentScreen?.isValid ||
-            !this._selectorScreen?.node.isValid
+            !this._currentScreen?.isValid
         ) {
             return null
         }
 
         const node = createUINode('StoreDialog', { active: false, width: SCREEN_WIDTH, height: SCREEN_HEIGHT })
+        node.addComponent(BlockInputEvents)
         const storeScreen = node.addComponent(StoreScreen)
+        storeScreen.initialPage = options.initialPage ?? 0
+        storeScreen.backButtonLabel = options.backButtonLabel ?? 'MAIN MENU'
         storeScreen.onBackToMenu = () => {
             this.hideModalScreen()
+            options.onClose?.()
         }
 
         this._addToScreenClipRoot(node)
-        node.active = true
         this._modalScreen = node
-        this._selectorScreen.setButtonsInteractable(false)
+        this._selectorScreen?.setButtonsInteractable(false)
+        void storeScreen.ensureRendered().then(() => {
+            if (!node.isValid || this._modalScreen !== node) return
+            node.active = true
+            if (options.useOverlayMusic) {
+                void MusicSystem.playOverlayTune('title_theme')
+            } else {
+                this._playInterfaceMusic('title_theme')
+            }
+        }).catch((error) => {
+            console.error('[UIController] Failed to prepare StoreDialog', error)
+            if (this._modalScreen === node) {
+                this._modalScreen = null
+                this._selectorScreen?.setButtonsInteractable(true)
+                this._restoreCurrentScreenMusic()
+            }
+            if (node.isValid) node.destroy()
+        })
         return storeScreen
     }
 
@@ -798,7 +821,7 @@ export class UIController extends Component {
                 return
             }
             if (commandAction === 'store') {
-                if (this._showStoreFromDebugCommand()) return
+                if (this._showStoreFromDebugCommand(gameScreen, !wasGamePaused)) return
             }
             if (commandAction === 'almanac') {
                 if (this._showAlmanacFromDebugCommand(gameScreen, !wasGamePaused)) return
@@ -1436,12 +1459,32 @@ export class UIController extends Component {
         return (globalThis as NativeBindings).jsb?.PvzNative ?? null
     }
 
-    private _showStoreFromDebugCommand() {
-        if (this._selectorScreen?.node.isValid && this._currentScreen?.isValid) {
-            return !!this.showStoreDialog()
+    private _showStoreFromDebugCommand(gameScreen?: AdventureGameScreen | null, resumeGameOnClose = false) {
+        if (this._currentScreen?.isValid) {
+            return !!this.showStoreDialog({
+                ...this._storeDialogOptionsForCurrentScreen(),
+                backButtonLabel: 'GO BACK',
+                useOverlayMusic: !!gameScreen,
+                onClose: () => {
+                    MusicSystem.stopOverlayTune()
+                    if (resumeGameOnClose) gameScreen?.resumeGame()
+                },
+            })
         }
 
-        return !!this.showStoreScreen()
+        return !!this.showStoreScreen({
+            backButtonLabel: 'GO BACK',
+        })
+    }
+
+    private _storeDialogOptionsForCurrentScreen(): StoreDialogOptions {
+        if (this._currentScreen?.name === 'ZenGardenScreen') {
+            return {
+                initialPage: 2,
+                backButtonLabel: 'GO BACK',
+            }
+        }
+        return {}
     }
 
     private _showAlmanacFromDebugCommand(gameScreen?: AdventureGameScreen | null, resumeGameOnClose = false) {

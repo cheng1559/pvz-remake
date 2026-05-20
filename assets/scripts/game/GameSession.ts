@@ -110,6 +110,13 @@ const LATER_SUNFLOWER_ADVICE_DELAY = 500
 const LATER_SUNFLOWER_START_WAVE = 5
 const READY_SET_PLANT_TICKS = 183
 
+interface RowPickState {
+    row: number
+    weight: number
+    lastPicked: number
+    secondLastPicked: number
+}
+
 function clampMoney(amount: number) {
     return Math.max(MONEY_MIN, Math.min(MONEY_MAX, Math.floor(amount)))
 }
@@ -168,6 +175,12 @@ export class GameSession {
     private _laterSunflowerTutorialShown = false
     private _readySetPlantCounter = 0
     private _waveRowGotLawnMowered = Array.from({ length: DAY_GEOMETRY.rows }, () => WAVE_ROW_GOT_LAWN_MOWERED_INITIAL)
+    private _rowPickState: RowPickState[] = Array.from({ length: DAY_GEOMETRY.rows }, (_, row) => ({
+        row,
+        weight: 0,
+        lastPicked: 0,
+        secondLastPicked: 0,
+    }))
 
     constructor(level: LevelDefinition = ADVENTURE_1_1, options: GameSessionOptions = {}) {
         this.level = level
@@ -1463,9 +1476,17 @@ export class GameSession {
         if (this.currentWave >= this.numWaves) return
 
         this.zombieCountDown--
+        const currentWaveHealth = this._totalZombiesHealthInWave(this.currentWave - 1)
+        const isCurrentWaveWeakerThanNext = currentWaveHealth <= this._zombieHealthToNextWave
+        const isNextWaveFlag = this._isFlagWave(this.currentWave)
+        const canSkipWave = (
+            isCurrentWaveWeakerThanNext &&
+            !isNextWaveFlag &&
+            this.currentWave !== 0
+        ) || currentWaveHealth <= 0
         if (this.zombieCountDown > 200 &&
             this.zombieCountDownStart - this.zombieCountDown > 400 &&
-            this._totalZombiesHealthInWave(this.currentWave - 1) <= this._zombieHealthToNextWave) {
+            canSkipWave) {
             this.zombieCountDown = 200
         }
         if (this.zombieCountDown === HUGE_WAVE_WARNING_COUNTDOWN && this._isFlagWave(this.currentWave)) {
@@ -1554,6 +1575,8 @@ export class GameSession {
             this.zombieCountDown = 1
         } else if (this._hugeWaveCountDown === 725) {
             this.events.push({ type: 'soundRequested', sound: SoundEffect.HugeWave })
+        } else if (this._hugeWaveCountDown === 400) {
+            this.events.push({ type: 'musicBurstRequested' })
         }
         return true
     }
@@ -1632,19 +1655,33 @@ export class GameSession {
     private _pickRowForNewZombie(_zombieType: ZombieType) {
         if (this.level.activeRows.length === 0) return 0
 
-        const weightedRows = this.level.activeRows.map((row) => ({
-            row,
-            weight: this._rowPickWeight(row),
-        }))
-        const totalWeight = weightedRows.reduce((total, item) => total + item.weight, 0)
-        if (totalWeight <= 0) return this.level.activeRows[this._randomInt(0, this.level.activeRows.length - 1)]
-
-        let pick = this._randomFloat(0, totalWeight)
-        for (const item of weightedRows) {
-            pick -= item.weight
-            if (pick < 0) return item.row
+        for (const state of this._rowPickState) {
+            state.weight = this.level.activeRows.includes(state.row)
+                ? this._rowPickWeight(state.row)
+                : 0
         }
-        return weightedRows[weightedRows.length - 1].row
+        const totalWeight = this._rowPickState.reduce((total, item) => total + item.weight, 0)
+        if (totalWeight <= 0) {
+            const fallbackRow = this.level.activeRows[this._randomInt(0, this.level.activeRows.length - 1)]
+            this._updateRowPickState(fallbackRow)
+            return fallbackRow
+        }
+
+        let adjustedTotalWeight = 0
+        for (const state of this._rowPickState) {
+            adjustedTotalWeight += this._smoothRowPickWeight(state.weight / totalWeight, state.lastPicked, state.secondLastPicked)
+        }
+        let pick = this._randomFloat(0, adjustedTotalWeight)
+        for (const state of this._rowPickState) {
+            pick -= this._smoothRowPickWeight(state.weight / totalWeight, state.lastPicked, state.secondLastPicked)
+            if (pick <= 0) {
+                this._updateRowPickState(state.row)
+                return state.row
+            }
+        }
+        const fallbackRow = this.level.activeRows[this.level.activeRows.length - 1]
+        this._updateRowPickState(fallbackRow)
+        return fallbackRow
     }
 
     private _rowPickWeight(row: number) {
@@ -1652,6 +1689,35 @@ export class GameSession {
         if (wavesMowered <= 1) return 0.01
         if (wavesMowered <= 2) return 0.5
         return 1.0
+    }
+
+    private _smoothRowPickWeight(weight: number, lastPicked: number, secondLastPicked: number) {
+        if (weight <= 0) return 0
+
+        const expectedLength = 1 / weight
+        const expectedSecondLength = expectedLength * 2
+        const advancedLength = lastPicked + 1 - expectedLength
+        const advancedSecondLength = secondLastPicked + 1 - expectedSecondLength
+        const factor = Math.max(0.01, Math.min(100,
+            (1 + advancedLength / expectedLength * 2) * 0.75 +
+            (1 + advancedSecondLength / expectedSecondLength * 2) * 0.25,
+        ))
+        return weight * factor
+    }
+
+    private _updateRowPickState(row: number) {
+        for (const state of this._rowPickState) {
+            if (state.weight > 0) {
+                state.lastPicked++
+                state.secondLastPicked++
+            }
+        }
+
+        const picked = this._rowPickState[row]
+        if (!picked) return
+
+        picked.secondLastPicked = picked.lastPicked
+        picked.lastPicked = 0
     }
 
     private _addItem(
@@ -2029,6 +2095,7 @@ export class GameSession {
     private _stopPostAwardBoardActivity() {
         this.sunSpawningEnabled = false
         for (const zombie of this.zombies) {
+            if (zombie.state === 'charred') continue
             zombie.dead = true
         }
     }

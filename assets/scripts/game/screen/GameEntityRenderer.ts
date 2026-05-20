@@ -1298,7 +1298,13 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             onFinish: () => {
                 if (view.shootingAnimationToken !== shootingToken) return
                 view.shootingAnimationActive = false
-                view.head?.play({ name: 'anim_head_idle', speed: view.idleSpeed, loop: true, blendTime: 0.1 })
+                view.head?.play({
+                    name: 'anim_head_idle',
+                    speed: view.idleSpeed,
+                    time: view.body?.time ?? 0,
+                    loop: true,
+                    blendTime: 0.1,
+                })
             },
         })
     }

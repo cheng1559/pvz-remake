@@ -18,6 +18,8 @@ type NativeAudioEngine = {
 
 type PvzNativeBridge = {
     playSfxPitch?: (url: string, volume: number, pitch: number) => boolean
+    playSfxWav?: (url: string, volume: number, pitch: number) => number
+    stopSfxWav?: (audioId: number) => void
 }
 
 type NativeBindings = typeof globalThis & {
@@ -173,6 +175,7 @@ export class SoundLoader {
     private static _exclusiveEffects: Map<string, SoundEffect> = new Map()
     private static _exclusiveBaseVolumes: Map<string, number> = new Map()
     private static _exclusiveTokens: Map<string, number> = new Map()
+    private static _exclusiveNativeAudioIds: Map<string, number> = new Map()
     private static _audioContext: AudioContext | null = null
     private static _source: AudioSource | null = null
     private static _musicVolume = DEFAULT_MUSIC_VOLUME
@@ -225,16 +228,20 @@ export class SoundLoader {
         const clip = await this.load(effect)
         if (!clip) return
 
-        const source = this._getSource()
-        source.playOneShot(clip, this._resolveEffectVolume(volume))
+        const resolvedVolume = this._resolveEffectVolume(volume)
+        if (await this._playNativeWithPitch(clip, 0, resolvedVolume)) return
+
+        this._getSource().playOneShot(clip, resolvedVolume)
     }
 
     public static async playSfx(effect: SoundEffect, volume = 1) {
         const clip = await this.load(effect)
         if (!clip) return
 
-        const source = this._getSource()
-        source.playOneShot(clip, this._resolveEffectVolume(volume))
+        const resolvedVolume = this._resolveEffectVolume(volume)
+        if (await this._playNativeWithPitch(clip, 0, resolvedVolume)) return
+
+        this._getSource().playOneShot(clip, resolvedVolume)
     }
 
     public static playFoley(effect: SoundEffect, pitchRange?: number, volume = 1) {
@@ -249,17 +256,27 @@ export class SoundLoader {
     public static async playExclusive(effect: SoundEffect, channel: string = effect, volume = 1) {
         const token = (this._exclusiveTokens.get(channel) ?? 0) + 1
         this._exclusiveTokens.set(channel, token)
+        this._stopNativeExclusive(channel)
         const source = this._getExclusiveSource(channel)
         source.stop()
 
         const clip = await this.load(effect)
         if (!clip || this._exclusiveTokens.get(channel) !== token) return
 
+        const resolvedVolume = this._resolveEffectVolume(volume)
+        const nativeAudioId = this._playNativeSfx(clip, 1, resolvedVolume, false)
+        if (nativeAudioId !== null) {
+            this._exclusiveNativeAudioIds.set(channel, nativeAudioId)
+            this._exclusiveEffects.set(channel, effect)
+            this._exclusiveBaseVolumes.set(channel, volume)
+            return
+        }
+
         source.stop()
         source.clip = clip
         this._exclusiveEffects.set(channel, effect)
         this._exclusiveBaseVolumes.set(channel, volume)
-        source.volume = this._resolveEffectVolume(volume)
+        source.volume = resolvedVolume
         source.loop = false
         source.play()
     }
@@ -279,6 +296,7 @@ export class SoundLoader {
 
     public static stopExclusive(channel: string) {
         this._exclusiveTokens.set(channel, (this._exclusiveTokens.get(channel) ?? 0) + 1)
+        this._stopNativeExclusive(channel)
         this._exclusiveSources.get(channel)?.stop()
     }
 
@@ -287,12 +305,12 @@ export class SoundLoader {
         if (!clip) return
         const resolvedVolume = this._resolveEffectVolume(volume)
 
-        if (pitchSteps === 0) {
-            this._getSource().playOneShot(clip, resolvedVolume)
+        if (await this._playNativeWithPitch(clip, pitchSteps, resolvedVolume)) {
             return
         }
 
-        if (await this._playNativeWithPitch(clip, pitchSteps, resolvedVolume)) {
+        if (pitchSteps === 0) {
+            this._getSource().playOneShot(clip, resolvedVolume)
             return
         }
 
@@ -323,15 +341,12 @@ export class SoundLoader {
     }
 
     private static async _playNativeWithPitch(clip: AudioClip, pitchSteps: number, volume: number) {
+        const pitch = Math.pow(this._pitchStepMultiplier, pitchSteps)
+        if (this._playNativeSfx(clip, pitch, volume, pitchSteps !== 0) !== null) return true
+
         const bindings = globalThis as NativeBindings
         const url = (clip as AudioClipWithNativeAsset)._nativeAsset?.url ?? (clip as AudioClipWithNativeAsset).nativeUrl
         if (!url) return false
-
-        const pitch = Math.pow(this._pitchStepMultiplier, pitchSteps)
-        if (bindings.jsb?.PvzNative?.playSfxPitch?.(url, volume, pitch)) {
-            return true
-        }
-
         const audioEngine = bindings.jsb?.AudioEngine
         if (!audioEngine?.play2d || !audioEngine.setPitch) return false
 
@@ -340,6 +355,29 @@ export class SoundLoader {
 
         audioEngine.setPitch(audioId, pitch)
         return true
+    }
+
+    private static _playNativeSfx(clip: AudioClip, pitch: number, volume: number, allowLegacyPitchBridge: boolean) {
+        const bindings = globalThis as NativeBindings
+        const url = (clip as AudioClipWithNativeAsset)._nativeAsset?.url ?? (clip as AudioClipWithNativeAsset).nativeUrl
+        if (!url) return null
+
+        const bridge = bindings.jsb?.PvzNative
+        const audioId = bridge?.playSfxWav?.(url, volume, pitch)
+        if (typeof audioId === 'number' && audioId >= 0) return audioId
+
+        if (allowLegacyPitchBridge && bridge?.playSfxPitch?.(url, volume, pitch)) return -1
+        return null
+    }
+
+    private static _stopNativeExclusive(channel: string) {
+        const audioId = this._exclusiveNativeAudioIds.get(channel)
+        if (audioId === undefined) return
+
+        this._exclusiveNativeAudioIds.delete(channel)
+        if (audioId >= 0) {
+            (globalThis as NativeBindings).jsb?.PvzNative?.stopSfxWav?.(audioId)
+        }
     }
 
     private static _getSource() {

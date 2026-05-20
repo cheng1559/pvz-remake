@@ -82,10 +82,19 @@ const DESCRIPTION_SCROLLBAR_WIDTH = 8
 const DESCRIPTION_WHEEL_SCROLL_SCALE = 0.6
 const DESCRIPTION_SCROLL_BOTTOM_PADDING_RATIO = 0.6
 const DESCRIPTION_SCROLLBAR_THUMB_SCALE = 1.5
-const PLANT_SCROLLBAR_COLOR = new Color(143, 67, 27)
-const PLANT_SCROLLBAR_BACK_COLOR = new Color(143, 67, 27, 75)
-const ZOMBIE_SCROLLBAR_COLOR = new Color(63, 63, 86)
-const ZOMBIE_SCROLLBAR_BACK_COLOR = new Color(95, 97, 129, 75)
+const ALMANAC_SCROLLBAR_THUMB_COLOR = new Color(63, 64, 86)
+const ALMANAC_SCROLLBAR_THUMB_INNER_HIGHLIGHT = new Color(80, 81, 108)
+const ALMANAC_SCROLLBAR_THUMB_INNER_HIGHLIGHT_2 = new Color(84, 85, 113)
+const ALMANAC_SCROLLBAR_THUMB_INNER_HIGHLIGHT_SHADOW = new Color(44, 45, 59)
+const ALMANAC_SCROLLBAR_THUMB_INNER_SHADOW = new Color(40, 41, 54)
+const ALMANAC_SCROLLBAR_THUMB_INNER_SHADOW_2 = new Color(34, 35, 46)
+const ALMANAC_SCROLLBAR_THUMB_OUTER_SHADOW = new Color(30, 28, 34)
+const ALMANAC_SCROLLBAR_THUMB_OUTER_SHADOW_2 = new Color(22, 19, 21)
+const ALMANAC_SCROLLBAR_BACKGROUND_COLOR = new Color(152, 149, 188)
+const PLANT_SCROLLBAR_COLOR = ALMANAC_SCROLLBAR_THUMB_COLOR
+const PLANT_SCROLLBAR_BACK_COLOR = ALMANAC_SCROLLBAR_BACKGROUND_COLOR
+const ZOMBIE_SCROLLBAR_COLOR = ALMANAC_SCROLLBAR_THUMB_COLOR
+const ZOMBIE_SCROLLBAR_BACK_COLOR = ALMANAC_SCROLLBAR_BACKGROUND_COLOR
 const ALMANAC_PLANT_POSITION_X = 578
 const ALMANAC_PLANT_POSITION_Y = 140
 const ALMANAC_INDEX_PLANT_POSITION_X = 167
@@ -1889,7 +1898,7 @@ export class AlmanacScreen extends MenuScreenBase {
                 text: run.text,
                 x,
                 y: args.y,
-                width: args.width,
+                width: 0,
                 font: args.font,
                 color: run.color,
                 parent: args.parent,
@@ -2059,20 +2068,58 @@ export class AlmanacScreen extends MenuScreenBase {
 
         graphics.clear()
         graphics.fillColor = this._descriptionScrollbarBackColor
-        graphics.fillRect(
-            0,
-            -this._descriptionDragRectHeight,
-            DESCRIPTION_SCROLLBAR_WIDTH,
-            this._descriptionDragRectHeight,
-        )
-        graphics.fillColor = this._descriptionScrollbarColor
         const thumbY = this._getDescriptionThumbY()
-        graphics.fillRect(
+        this._fillScrollbarRect(graphics, 0, 0, DESCRIPTION_SCROLLBAR_WIDTH, thumbY)
+        this._fillScrollbarRect(
+            graphics,
             0,
-            -(thumbY + this._descriptionThumbHeight),
+            thumbY + this._descriptionThumbHeight,
             DESCRIPTION_SCROLLBAR_WIDTH,
-            this._descriptionThumbHeight,
+            this._descriptionDragRectHeight - thumbY - this._descriptionThumbHeight,
         )
+        this._drawDescriptionScrollbarThumb(graphics, 0, thumbY)
+    }
+
+    private _drawDescriptionScrollbarThumb(graphics: Graphics, x: number, y: number) {
+        const width = DESCRIPTION_SCROLLBAR_WIDTH
+        const height = this._descriptionThumbHeight
+        if (width <= 0 || height <= 0) return
+
+        graphics.fillColor = this._descriptionScrollbarColor
+        this._fillScrollbarRect(graphics, x, y, width - 1, 1)
+        this._fillScrollbarRect(graphics, x, y + 1, 1, height - 2)
+        this._fillScrollbarRect(graphics, x + 2, y + 2, width - 4, height - 3)
+
+        graphics.fillColor = ALMANAC_SCROLLBAR_THUMB_INNER_HIGHLIGHT
+        this._fillScrollbarRect(graphics, x + 2, y + 1, width - 4, 1)
+        this._fillScrollbarRect(graphics, x + 1, y + 2, 1, height - 4)
+
+        graphics.fillColor = ALMANAC_SCROLLBAR_THUMB_INNER_HIGHLIGHT_2
+        this._fillScrollbarRect(graphics, x + 1, y + 1, 1, 1)
+
+        graphics.fillColor = ALMANAC_SCROLLBAR_THUMB_INNER_HIGHLIGHT_SHADOW
+        this._fillScrollbarRect(graphics, x + width - 2, y + 1, 1, 1)
+        this._fillScrollbarRect(graphics, x + 1, y + height - 2, 1, 1)
+
+        graphics.fillColor = ALMANAC_SCROLLBAR_THUMB_INNER_SHADOW
+        this._fillScrollbarRect(graphics, x + width - 2, y + 1, 1, height - 4)
+        this._fillScrollbarRect(graphics, x + 1, y + height - 2, width - 4, 1)
+
+        graphics.fillColor = ALMANAC_SCROLLBAR_THUMB_INNER_SHADOW_2
+        this._fillScrollbarRect(graphics, x + width - 2, y + height - 2, 1, 1)
+
+        graphics.fillColor = ALMANAC_SCROLLBAR_THUMB_OUTER_SHADOW
+        this._fillScrollbarRect(graphics, x + width - 1, y, 1, height - 1)
+        this._fillScrollbarRect(graphics, x, y + height - 1, width - 1, 1)
+
+        graphics.fillColor = ALMANAC_SCROLLBAR_THUMB_OUTER_SHADOW_2
+        this._fillScrollbarRect(graphics, x + width - 1, y + height - 1, 1, 1)
+    }
+
+    private _fillScrollbarRect(graphics: Graphics, x: number, y: number, width: number, height: number) {
+        if (width <= 0 || height <= 0) return
+
+        graphics.fillRect(x, -(y + height), width, height)
     }
 
     private _getDescriptionThumbY() {
@@ -2114,6 +2161,22 @@ export class AlmanacScreen extends MenuScreenBase {
                         currentWidth = 0
                     }
                     if (currentWidth === 0 && part.trim().length === 0) continue
+
+                    if (partWidth > width && part.trim().length > 0) {
+                        const result = this._appendAlmanacTextByCharacter({
+                            line: currentLine,
+                            currentWidth,
+                            text: part,
+                            color: run.color,
+                            font,
+                            width,
+                            wrapped,
+                        })
+                        currentLine = result.line
+                        currentWidth = result.currentWidth
+                        continue
+                    }
+
                     this._appendAlmanacRun(currentLine, part, run.color)
                     currentWidth += partWidth
                 }
@@ -2121,6 +2184,32 @@ export class AlmanacScreen extends MenuScreenBase {
             wrapped.push(currentLine)
         }
         return wrapped
+    }
+
+    private _appendAlmanacTextByCharacter(args: {
+        line: AlmanacTextLine
+        currentWidth: number
+        text: string
+        color: Color
+        font: BitmapFontAssets | null
+        width: number
+        wrapped: AlmanacTextLine[]
+    }) {
+        let currentLine = args.line
+        let currentWidth = args.currentWidth
+
+        for (const char of args.text) {
+            const charWidth = FontMetricsUtil.measureTextWidth(args.font?.config ?? null, char)
+            if (currentWidth > 0 && currentWidth + charWidth > args.width) {
+                args.wrapped.push(currentLine)
+                currentLine = { runs: [], spacingOffset: 0 }
+                currentWidth = 0
+            }
+            this._appendAlmanacRun(currentLine, char, args.color)
+            currentWidth += charWidth
+        }
+
+        return { line: currentLine, currentWidth }
     }
 
     private _parseAlmanacTextLines(text: string): AlmanacTextLine[] {
@@ -2250,6 +2339,8 @@ export class AlmanacScreen extends MenuScreenBase {
             12,
             BUTTON_TEXT_COLOR,
         )
+        const button = buttonNode.getComponent(UIButton)
+        if (button) button.rightClickPressesVisual = false
     }
 
     private _createSeedChooserButton(
@@ -2291,6 +2382,7 @@ export class AlmanacScreen extends MenuScreenBase {
         glowNode.setSiblingIndex(labelNode.getSiblingIndex() + 1)
 
         const button = buttonNode.getComponent(UIButton)
+        if (button) button.rightClickPressesVisual = false
         button!.onStateChange = (state) => {
             glowNode.active = state === 'hover' || state === 'pressed'
         }
@@ -2345,6 +2437,7 @@ export class AlmanacScreen extends MenuScreenBase {
         const button = buttonNode.addComponent(UIButton)
         button.pressOffset = new Vec3(0, 0, 0)
         button.releaseToNormalOnPressOut = true
+        button.rightClickPressesVisual = false
         button.onPress = () => {
             void SoundLoader.play(SoundEffect.GraveButton)
         }

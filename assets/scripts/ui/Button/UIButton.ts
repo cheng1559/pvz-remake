@@ -8,7 +8,6 @@ import {
     Vec2,
     Vec3,
     EventTouch,
-    game,
     input,
     Input,
     sys,
@@ -17,6 +16,7 @@ import {
     EventMouse,
 } from 'cc'
 import { UIHoverManager, type UIHoverPointer } from '@/ui/UIHoverManager'
+import { CursorManager } from '@/ui/CursorManager'
 
 const { ccclass, property } = _decorator
 const LEFT_MOUSE_BUTTON = 0
@@ -87,6 +87,7 @@ export class UIButton extends Component {
             UIButton._endPressCapture()
         }
         this._pressed = false
+        this._pressVisualActive = false
         this._hovering = false
         this._releaseOffset()
         this._applyState(ButtonState.NORMAL)
@@ -110,6 +111,7 @@ export class UIButton extends Component {
             UIButton._endPressCapture()
         }
         this._pressed = false
+        this._pressVisualActive = false
         this._releaseOffset()
         this._applyState(ButtonState.NORMAL)
         if (value) {
@@ -123,6 +125,9 @@ export class UIButton extends Component {
 
     @property
     rightClickTriggers: boolean = true
+
+    @property
+    rightClickPressesVisual: boolean = true
 
     @property
     refreshHoverOnEnable: boolean = true
@@ -153,6 +158,7 @@ export class UIButton extends Component {
     private _originPos = new Vec3()
     private _state: ButtonState = ButtonState.NORMAL
     private _pressed = false
+    private _pressVisualActive = false
     private _hovering = false
 
     public get isPressed(): boolean {
@@ -191,6 +197,7 @@ export class UIButton extends Component {
         this._endPressCapture()
         for (const button of this._instances) {
             button._pressed = false
+            button._pressVisualActive = false
             button._setHovering(false)
             button._releaseOffset()
         }
@@ -330,9 +337,7 @@ export class UIButton extends Component {
     }
 
     private static _setGlobalCursor(style: string) {
-        if (!sys.isBrowser) return
-        const canvas = game.canvas
-        if (canvas) canvas.style.cursor = style
+        CursorManager.set(style)
     }
 
     public static rememberTouchLocation(event: EventTouch) {
@@ -403,6 +408,7 @@ export class UIButton extends Component {
             UIButton._endPressCapture()
         }
         this._pressed = false
+        this._pressVisualActive = false
         this._setHovering(false)
         this._releaseOffset()
         this.node.off(Node.EventType.TOUCH_START, this._onTouchStart, this)
@@ -469,6 +475,7 @@ export class UIButton extends Component {
         UIButton.rememberTouchLocation(event)
         event.propagationStopped = true
         this._pressed = false
+        this._pressVisualActive = false
         this._releaseOffset()
 
         const inside = this._isTouchInside(event)
@@ -494,6 +501,7 @@ export class UIButton extends Component {
         if (!this._pressed) return
         UIButton.rememberTouchLocation(event)
         this._pressed = false
+        this._pressVisualActive = false
         this._releaseOffset()
         UIButton._activeButton = null
         this._setHovering(false, false, false)
@@ -556,12 +564,26 @@ export class UIButton extends Component {
         return this.rightClickTriggers || event.getButton() === LEFT_MOUSE_BUTTON
     }
 
+    private _shouldPressVisual(event: UIButtonPointerEvent) {
+        if (event instanceof EventMouse && event.getButton() !== LEFT_MOUSE_BUTTON) {
+            return this.rightClickPressesVisual
+        }
+        return true
+    }
+
     private _startPress(event: UIButtonPointerEvent) {
         this._pressed = true
+        this._pressVisualActive = this._shouldPressVisual(event)
         UIButton._activeButton = this
-        this._setHovering(!UIButton._isInputSuppressedForNode(this.node), false, false)
-        this._applyState(ButtonState.PRESSED)
-        this._applyOffset()
+        const hoverAllowed = !UIButton._isInputSuppressedForNode(this.node)
+        this._setHovering(hoverAllowed, false, false)
+        if (this._pressVisualActive) {
+            this._applyState(ButtonState.PRESSED)
+            this._applyOffset()
+        } else {
+            this._applyState(hoverAllowed ? ButtonState.HOVER : ButtonState.NORMAL)
+            this._releaseOffset()
+        }
         this.onPress?.(event)
     }
 
@@ -570,6 +592,7 @@ export class UIButton extends Component {
         if (!this._pressed) return
         event.propagationStopped = true
         this._pressed = false
+        this._pressVisualActive = false
         this._releaseOffset()
 
         const inside = this._isMouseInside(event)
@@ -599,6 +622,15 @@ export class UIButton extends Component {
         const inside = this._isMouseInside(event)
         const hoverAllowed = !UIButton._isInputSuppressedForNode(this.node)
         this._setHovering(hoverAllowed && inside, false)
+        if (!this._pressVisualActive) {
+            const state = hoverAllowed && inside ? ButtonState.HOVER : ButtonState.NORMAL
+            if (this._state !== state) {
+                this._applyState(state)
+            }
+            this._releaseOffset()
+            this._setCursor(hoverAllowed && inside ? 'pointer' : 'default')
+            return
+        }
         if (inside) {
             if (this._state !== ButtonState.PRESSED) {
                 this._applyState(ButtonState.PRESSED)
@@ -766,10 +798,7 @@ export class UIButton extends Component {
 
     private _setCursor(style: string) {
         if (!this.changeCursor) return
-        if (sys.isBrowser) {
-            const canvas = game.canvas
-            if (canvas) canvas.style.cursor = style
-        }
+        CursorManager.set(style)
     }
 
     private _setupHitTest() {

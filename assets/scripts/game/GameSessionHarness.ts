@@ -517,8 +517,34 @@ export function runAdventure11Harness(): GameHarnessResult {
         if (finalWaveZombies.some((zombie) => zombie.x !== 780)) {
             details.push('Zombies in one wave should each use the original 780 + Rand(40) start X without an added per-index spacing.')
         }
+        const finalWaveRows = new Set(finalWaveZombies.map((zombie) => zombie.row))
+        if (finalWaveRows.size <= 1) {
+            details.push('Row picking should use original smooth weighting so a multi-zombie wave does not collapse into one row.')
+        }
     } finally {
         Math.random = originalRandom
+    }
+
+    const hugeWaveMusicSession = new GameSession(ADVENTURE_1_2)
+    for (let i = 0; i < ADVENTURE_1_2.zombieWaves.length - 1; i++) hugeWaveMusicSession.debugSpawnNextWave()
+    hugeWaveMusicSession.zombieCountDown = 6
+    hugeWaveMusicSession.zombieCountDownStart = 6
+    hugeWaveMusicSession.drainEvents()
+    hugeWaveMusicSession.update()
+    for (let i = 0; i < 349; i++) hugeWaveMusicSession.update()
+    const hugeWaveMusicEvents = hugeWaveMusicSession.drainEvents()
+    if (!hugeWaveMusicEvents.some((event) => event.type === 'musicBurstRequested')) {
+        details.push('A huge wave warning should request the dynamic music burst at the original 400-tick countdown point.')
+    }
+
+    const flagWaveSkipSession = new GameSession(ADVENTURE_1_2)
+    for (let i = 0; i < ADVENTURE_1_2.zombieWaves.length - 1; i++) flagWaveSkipSession.debugSpawnNextWave()
+    ;(flagWaveSkipSession as unknown as { _zombieHealthToNextWave: number })._zombieHealthToNextWave = 99999
+    flagWaveSkipSession.zombieCountDown = 601
+    flagWaveSkipSession.zombieCountDownStart = 1002
+    flagWaveSkipSession.update()
+    if (flagWaveSkipSession.zombieCountDown === 200) {
+        details.push('A pending flag wave should not be accelerated to 200 ticks just because the current wave health is below the next-wave threshold.')
     }
 
     const level3WaveSession = new GameSession(ADVENTURE_1_3)
@@ -722,9 +748,24 @@ export function runAdventure11Harness(): GameHarnessResult {
             details.push('Sky sun spawning should stop once the level award item drops.')
         }
         if (awardDropSession.zombies.length !== 0) {
-            details.push('Dropping the level award should remove every zombie from the board like the original RemoveAllZombies path.')
+            details.push('Dropping the level award should remove non-charred zombies from the board like the original RemoveAllZombies path.')
         }
     }
+    const charredAwardSession = new GameSession(ADVENTURE_1_4)
+    charredAwardSession.currentWave = charredAwardSession.numWaves
+    const charredCherry = charredAwardSession.debugAddPlant('cherrybomb', 2, 2)
+    const charredAwardZombie = charredAwardSession.debugAddZombie('normal', 2, charredCherry.x + 80)
+    charredCherry.specialCounter = 1
+    charredAwardSession.drainEvents()
+    charredAwardSession.update()
+    const charredAwardItem = charredAwardSession.items.find((item) => item.type === 'final-seed-packet' && !item.dead)
+    if (!charredAwardItem) {
+        details.push('A Cherry Bomb killing the final zombie should still drop the level award item.')
+    }
+    if (!charredAwardZombie || !charredAwardSession.zombies.includes(charredAwardZombie) || charredAwardZombie.state !== 'charred' || charredAwardZombie.dead) {
+        details.push('Dropping the level award should not immediately remove a zombie burned into the charred ash animation.')
+    }
+
     const debugAwardFallbackSession = new GameSession(ADVENTURE_1_4)
     debugAwardFallbackSession.currentWave = debugAwardFallbackSession.numWaves
     debugAwardFallbackSession.addZombie('normal', 2, 500)
