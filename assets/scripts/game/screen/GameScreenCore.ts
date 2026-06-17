@@ -43,6 +43,7 @@ import { createTooltipNode } from '@/ui/Tooltip/Tooltip'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
 import { CursorManager } from '@/ui/CursorManager'
+import { ProfileStore } from '@/game/persistence/ProfileStore'
 import {
     ADVENTURE_1_1,
     GAME_TICK_SECONDS,
@@ -75,6 +76,7 @@ import {
     CRAZY_DAVE_INTRO_DELAY_SECONDS,
     CRAZY_DAVE_POST_SHOVEL_DIALOG_END,
     CRAZY_DAVE_POST_SHOVEL_DIALOG_START,
+    CRAZY_DAVE_WALLNUT_BOWLING_LINE_DIALOG,
     CRAZY_DAVE_X,
     CRAZY_DAVE_Y,
     type CrazyDaveDialogPhase,
@@ -114,7 +116,8 @@ import {
     PROJECTILE_SHADOW_HEIGHT,
     PROJECTILE_SHADOW_WIDTH,
     PROJECTILE_SPRITES,
-    SEED_TOOLTIP_NAMES,
+    SEED_TOOLTIP_FALLBACK_NAMES,
+    SEED_TOOLTIP_KEYS,
     SEED_TOOLTIP_NOT_ENOUGH_SUN,
     SEED_TOOLTIP_WAITING,
 } from './GameVisualConfig'
@@ -133,6 +136,7 @@ import type {
 import type {
     GameEntity,
     GameEvent,
+    ConveyorPacketState,
     ItemEntity,
     AdviceStyle,
     LawnMowerEntity,
@@ -175,11 +179,13 @@ export const INTRO_LAWN_MOWER_REANIM_Y_OFFSET = 19
 export const INTRO_LAWN_MOWER_SHADOW_X_OFFSET = -7
 export const INTRO_LAWN_MOWER_SHADOW_Y_OFFSET = 47
 export const INTRO_LAWN_MOWER_SCALE = 0.85
+export const GAMEPLAY_LAWN_MOWER_INTRO_START = 0
 export const LAWN_MOWER_Y_OFFSET = 23
 export const INTRO_SEED_BANK_ON_START = 800
 export const INTRO_SEED_BANK_ON_END = 825
 export const INTRO_SEED_BANK_NO_SOD_ON_START = 600
 export const INTRO_SEED_BANK_NO_SOD_ON_END = 625
+export const GAMEPLAY_SEED_BANK_INTRO_DURATION = 25
 export const INTRO_SEED_BANK_X = 10
 export const LAWN_MOWER_CACHED_DRAW_OFFSET_X = -20
 export const GAMEPLAY_LAWN_MOWER_REANIM_X_OFFSET = INTRO_LAWN_MOWER_REANIM_X_OFFSET
@@ -210,6 +216,23 @@ export const COIN_BANK_FADE_TICKS = 15
 export const INTRO_HOUSE_NAME_Y = 550
 export const INTRO_HOUSE_NAME_DURATION = 250
 export const DEFAULT_PLAYER_NAME = 'Player'
+
+const ADVICE_LAWN_STRING_KEYS: Record<string, string> = {
+    'Click on a seed packet to pick it up!': 'ADVICE_CLICK_SEED_PACKET',
+    'Click on the grass to plant your seed!': 'ADVICE_CLICK_ON_GRASS',
+    'Nicely done!': 'ADVICE_PLANTED_PEASHOOTER',
+    'Click on the falling sun to collect it!': 'ADVICE_CLICK_ON_SUN',
+    "Keep on collecting sun!\nYou'll need it to grow more plants!": 'ADVICE_CLICKED_ON_SUN',
+    "Excellent! You've collected\nenough for your next plant!": 'ADVICE_ENOUGH_SUN',
+    'Click on the peashooter to plant another one!': 'ADVICE_CLICK_PEASHOOTER',
+    "Don't let the zombies reach your house!": 'ADVICE_ZOMBIE_ONSLAUGHT',
+    'You need more sun to do that!': 'ADVICE_CANT_AFFORD_PLANT',
+    'Sunflowers are an extremely important plant!': 'ADVICE_PLANT_SUNFLOWER1',
+    'Try to plant at least 3 of them!': 'ADVICE_PLANT_SUNFLOWER2',
+    'Planting at least 3 sunflowers improves your\nchances of surviving a zombie attack!': 'ADVICE_PLANT_SUNFLOWER3',
+    'The more sunflowers you have,\nthe faster you can grow plants!': 'ADVICE_MORE_SUNFLOWERS',
+    'Planting sunflowers will improve your chances \nof surviving the zombie attack!': 'ADVICE_PLANT_SUNFLOWER3',
+}
 export const INTRO_STREET_ZOMBIE_GRID_SIZE = 5
 export const INTRO_STREET_ZOMBIE_PREVIEW_CAPACITY = 10
 export const INTRO_STREET_ZOMBIE_BASE_X = 830
@@ -342,6 +365,10 @@ export abstract class GameScreenCore extends Component {
     protected _uiLayer: Node = null!
     protected _itemLayer: Node = null!
     protected _seedBankNode: Node | null = null
+    protected _conveyorBackdropNode: Node | null = null
+    protected _conveyorBeltNode: Node | null = null
+    protected _conveyorPacketClipNode: Node | null = null
+    protected _bowlingStripeNode: Node | null = null
     protected _shovelBankNode: Node | null = null
     protected _shovelNode: Node | null = null
     protected _menuButtonNode: Node | null = null
@@ -390,6 +417,9 @@ export abstract class GameScreenCore extends Component {
     protected _seedPacketNodes: Map<SeedType, Node> = new Map()
     protected _seedPacketCooldownClips: Map<SeedType, Node> = new Map()
     protected _seedPacketSelectedHighlights: Map<SeedType, Node> = new Map()
+    protected _conveyorPacketNodes: Map<number, Node> = new Map()
+    protected _conveyorPacketSelectedHighlights: Map<number, Node> = new Map()
+    protected _bowlingStripeRevealed = false
     protected _seedTooltipNode: Node | null = null
     protected _seedTooltipKey = ''
     protected _shovelTooltipNode: Node | null = null
@@ -468,6 +498,9 @@ export abstract class GameScreenCore extends Component {
     protected _gameStarted = false
     protected _gameplayMusicStarted = false
     protected _gameplayUpdatesPaused = false
+    protected _gameplayLawnMowerIntroTicks = -1
+    protected _gameplaySeedBankIntroTicks = -1
+    protected _conveyorBeltAnimTicks = 0
     protected _bootstrapped = false
 
     onLoad() {
@@ -633,10 +666,16 @@ export abstract class GameScreenCore extends Component {
             this._updateAdviceWidget(gameTicks)
             this._updateTimedUiEffects(gameTicks)
             this._updateCrazyDave(gameTicks)
+            this._updateGameplayLawnMowerIntro(gameTicks)
+            this._updateGameplaySeedBankIntro(gameTicks)
+            this._updateConveyorBeltAnimation(gameTicks)
         } else if (!this._session.paused) {
             const uiTicks = scaledDt / GAME_TICK_SECONDS
             this._updateTimedUiEffects(uiTicks)
             this._updateCrazyDave(uiTicks)
+            this._updateGameplayLawnMowerIntro(uiTicks)
+            this._updateGameplaySeedBankIntro(uiTicks)
+            this._updateConveyorBeltAnimation(uiTicks)
         }
         if (!this._session.paused) {
             MusicSystem.update(scaledDt / GAME_TICK_SECONDS, {
@@ -1226,6 +1265,13 @@ export abstract class GameScreenCore extends Component {
             return
         }
 
+        const conveyorPacketId = this._hitConveyorPacket(pixel)
+        if (conveyorPacketId !== null) {
+            this._session.dispatch({ type: 'selectConveyorPacket', packetId: conveyorPacketId })
+            this._renderFrame()
+            return
+        }
+
         this._session.dispatch({ type: 'placePlant', x: pixel.x, y: pixel.y })
         this._renderFrame()
     }
@@ -1298,9 +1344,11 @@ export abstract class GameScreenCore extends Component {
         this._syncGameOverLayerOrder()
         this._syncPlantHighlights()
         this._syncSeedPacketState()
+        this._syncConveyorVisibility()
         this._syncProgressMeter()
         this._syncTutorialLawnFlash()
         this._syncShovelState()
+        this._syncGameplayHudVisibility()
         this._syncCrazyDaveState()
         this._crazyDave?.syncBubbleShake()
         this._updateCursorPreview()
@@ -1382,12 +1430,39 @@ export abstract class GameScreenCore extends Component {
 
     protected _applyGameplayHudState() {
         const minimalHud = this._usesMinimalHud()
+        const seedBankVisible = !minimalHud && (!this._gameplayUpdatesPaused || this._isGameplaySeedBankIntroActive())
         if (this._seedBankNode) {
-            this._seedBankNode.active = !minimalHud
-            this._seedBankNode.setPosition(INTRO_SEED_BANK_X, 0, 10)
+            this._seedBankNode.active = seedBankVisible
+            this._seedBankNode.setPosition(
+                this._gameplaySeedBankX(),
+                this._isGameplaySeedBankIntroActive() || (this._gameplayUpdatesPaused && this._session.level.pauseGameplayOnStart === true)
+                    ? this._seedBankHeight
+                    : 0,
+                10,
+            )
         }
-        if (this._menuButtonNode) this._menuButtonNode.active = !minimalHud
-        this._setSeedBankContentsVisible(!minimalHud)
+        this._syncGameplayHudVisibility()
+        this._setSeedBankContentsVisible(seedBankVisible)
+        this._syncConveyorVisibility()
+    }
+
+    protected _syncGameplayHudVisibility() {
+        if (this._menuButtonNode) {
+            this._menuButtonNode.active = !this._usesMinimalHud() && this._isGameplayHudVisible()
+        }
+    }
+
+    protected _isGameplayHudVisible() {
+        return this._gameStarted &&
+            !this._gameplayUpdatesPaused &&
+            !this._isGameplayLawnMowerIntroActive() &&
+            !this._isGameplaySeedBankIntroActive() &&
+            !this._gameOverActive &&
+            !this._levelCompleteActive
+    }
+
+    protected _gameplaySeedBankX() {
+        return INTRO_SEED_BANK_X
     }
 
     protected _shouldPlayReadySetPlantIntro() {
@@ -1559,6 +1634,132 @@ export abstract class GameScreenCore extends Component {
         return INTRO_LAWN_MOWER_END - INTRO_LAWN_MOWER_START
     }
 
+    protected _startGameplayLawnMowerIntro() {
+        if (this._session.level.hasLawnMowers === false || this._session.lawnMowers.length === 0) {
+            this._finishGameplayLawnMowerIntro()
+            return
+        }
+
+        this._gameplayLawnMowerIntroTicks = 0
+        this._gameplayUpdatesPaused = true
+        for (const view of this._introLawnMowerViews) {
+            view.node.active = false
+            view.shadowNode.active = false
+        }
+        this._syncGameplayLawnMowerIntro()
+        this._syncGameplayHudVisibility()
+    }
+
+    protected _updateGameplayLawnMowerIntro(ticks: number) {
+        if (!this._isGameplayLawnMowerIntroActive()) return
+
+        this._gameplayLawnMowerIntroTicks += ticks
+        this._syncGameplayLawnMowerIntro()
+        if (this._gameplayLawnMowerIntroTicks >= this._gameplayLawnMowerIntroEnd()) {
+            this._finishGameplayLawnMowerIntro()
+        }
+    }
+
+    protected _syncGameplayLawnMowerIntro() {
+        for (const mower of this._session.lawnMowers) this._syncEntity(mower)
+        this._restoreGameplayLayerOrder()
+    }
+
+    protected _finishGameplayLawnMowerIntro() {
+        this._gameplayLawnMowerIntroTicks = -1
+        for (const view of this._introLawnMowerViews) {
+            view.node.active = false
+            view.shadowNode.active = false
+        }
+        this._startGameplaySeedBankIntro()
+    }
+
+    protected _isGameplayLawnMowerIntroActive() {
+        return this._gameplayLawnMowerIntroTicks >= 0
+    }
+
+    protected _gameplayLawnMowerIntroStartTime(row: number) {
+        const starts = this._session.lawnMowers.map((mower) => (INTRO_LAWN_MOWER_ROW - mower.row) * INTRO_LAWN_MOWER_ROW_START_STEP)
+        const minStart = starts.length > 0 ? Math.min(...starts) : 0
+        return GAMEPLAY_LAWN_MOWER_INTRO_START + (INTRO_LAWN_MOWER_ROW - row) * INTRO_LAWN_MOWER_ROW_START_STEP - minStart
+    }
+
+    protected _gameplayLawnMowerIntroEnd() {
+        const starts = this._session.lawnMowers.map((mower) => this._gameplayLawnMowerIntroStartTime(mower.row))
+        return (starts.length > 0 ? Math.max(...starts) : 0) + this._introLawnMowerDuration()
+    }
+
+    protected _isGameplayLawnMowerEntityVisible(mower: LawnMowerEntity) {
+        if (!this._gameStarted || this._gameOverActive || this._levelCompleteActive || mower.dead) return false
+        if (!this._isGameplayLawnMowerIntroActive()) {
+            if (this._isGameplaySeedBankIntroActive()) return true
+            return !this._gameplayUpdatesPaused
+        }
+        return mower.state === 'ready' && this._gameplayLawnMowerIntroTicks >= this._gameplayLawnMowerIntroStartTime(mower.row)
+    }
+
+    protected _gameplayLawnMowerRenderX(mower: LawnMowerEntity, fallbackX: number) {
+        if (!this._isGameplayLawnMowerIntroActive() || mower.state !== 'ready') return fallbackX
+
+        const start = this._gameplayLawnMowerIntroStartTime(mower.row)
+        return easeInOut(
+            start,
+            start + this._introLawnMowerDuration(),
+            this._gameplayLawnMowerIntroTicks,
+            INTRO_LAWN_MOWER_START_X,
+            INTRO_LAWN_MOWER_END_X,
+        )
+    }
+
+    protected _startGameplaySeedBankIntro() {
+        if (!this._seedBankNode?.isValid || this._usesMinimalHud()) {
+            this._finishGameplaySeedBankIntro()
+            return
+        }
+
+        this._gameplaySeedBankIntroTicks = 0
+        this._gameplayUpdatesPaused = true
+        this._syncGameplaySeedBankIntro()
+        this._syncGameplayHudVisibility()
+    }
+
+    protected _updateGameplaySeedBankIntro(ticks: number) {
+        if (!this._isGameplaySeedBankIntroActive()) return
+
+        this._gameplaySeedBankIntroTicks += ticks
+        this._syncGameplaySeedBankIntro()
+        if (this._gameplaySeedBankIntroTicks >= GAMEPLAY_SEED_BANK_INTRO_DURATION) {
+            this._finishGameplaySeedBankIntro()
+        }
+    }
+
+    protected _syncGameplaySeedBankIntro() {
+        if (!this._seedBankNode?.isValid) return
+
+        const y = easeInOut(0, GAMEPLAY_SEED_BANK_INTRO_DURATION, this._gameplaySeedBankIntroTicks, this._seedBankHeight, 0)
+        this._seedBankNode.active = true
+        this._seedBankNode.setPosition(this._gameplaySeedBankX(), y, 10)
+        this._setSeedBankContentsVisible(true)
+        this._syncConveyorVisibility()
+    }
+
+    protected _finishGameplaySeedBankIntro() {
+        this._gameplaySeedBankIntroTicks = -1
+        if (this._seedBankNode?.isValid) {
+            this._seedBankNode.active = !this._usesMinimalHud()
+            this._seedBankNode.setPosition(this._gameplaySeedBankX(), 0, 10)
+        }
+        this._setSeedBankContentsVisible(!this._usesMinimalHud())
+        this._gameplayUpdatesPaused = false
+        this._syncGameplayHudVisibility()
+        this._syncConveyorVisibility()
+        this._startGameplayMusic()
+    }
+
+    protected _isGameplaySeedBankIntroActive() {
+        return this._gameplaySeedBankIntroTicks >= 0
+    }
+
     protected _introLawnMowerY(row: number) {
         return this._session.geometry.gridToPixel(0, row).y + LAWN_MOWER_Y_OFFSET
     }
@@ -1580,11 +1781,14 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _showIntroHouseName() {
-        this._showHouseName(`${DEFAULT_PLAYER_NAME}'s House`)
+        const playerName = ProfileStore.getCurrentProfile()?.name || DEFAULT_PLAYER_NAME
+        this._showHouseName(this._formatLawnString('PLAYERS_HOUSE', `${playerName}'s House`, {
+            PLAYER: playerName,
+        }))
     }
 
     protected _showAdvice(message: string, style: AdviceStyle) {
-        this._adviceWidget?.show(message, style)
+        this._adviceWidget?.show(this._localizedAdviceMessage(message), style)
         this._syncItemLayerBehindAdvice()
     }
 
@@ -1634,7 +1838,7 @@ export abstract class GameScreenCore extends Component {
         this._houseNameLabel = labelNode.addComponent(FontRenderer)
         if (this._adviceFont) this._houseNameLabel.setFontAssets(this._adviceFont)
         this._houseNameLabel.fontColor = Color.WHITE
-        this._houseNameLabel.fontSize = 28
+        this._houseNameLabel.fontSize = 0
         this._houseNameLabel.lineSpacing = 0
         this._houseNameLabel.maxWidth = this._session.geometry.width
         this._houseNameLabel.textAlign = 2
@@ -1670,7 +1874,7 @@ export abstract class GameScreenCore extends Component {
         if (!this._hugeWaveTextLabel) return
 
         this._hugeWaveTextTicks = HUGE_WAVE_TEXT_DURATION
-        this._hugeWaveTextLabel.string = HUGE_WAVE_TEXT
+        this._hugeWaveTextLabel.string = this._lawnString('ADVICE_HUGE_WAVE', HUGE_WAVE_TEXT)
         this._hugeWaveTextLabel.forceRebuild()
         if (this._hugeWaveTextNode) this._hugeWaveTextNode.active = true
         this._syncHugeWaveText()
@@ -1701,7 +1905,7 @@ export abstract class GameScreenCore extends Component {
         this._hugeWaveTextLabel = labelNode.addComponent(FontRenderer)
         if (this._adviceFont) this._hugeWaveTextLabel.setFontAssets(this._adviceFont)
         this._hugeWaveTextLabel.fontColor = new Color(255, 0, 0, 255)
-        this._hugeWaveTextLabel.fontSize = 28
+        this._hugeWaveTextLabel.fontSize = 0
         this._hugeWaveTextLabel.lineSpacing = 0
         this._hugeWaveTextLabel.maxWidth = this._session.geometry.width - 40
         this._hugeWaveTextLabel.textAlign = 2
@@ -1753,10 +1957,7 @@ export abstract class GameScreenCore extends Component {
     protected _hugeWaveTextLocalTopY() {
         const fontConfig = this._adviceFont?.config ?? null
         const metrics = FontMetricsUtil.getMetrics(fontConfig)
-        const rawConfig = fontConfig?.json as { defaultPointSize?: number } | undefined
-        const defaultPointSize = rawConfig?.defaultPointSize ?? 28
-        const scale = defaultPointSize > 0 ? 28 / defaultPointSize : 1
-        const ascent = metrics.ascent > 0 ? metrics.ascent * scale : 28
+        const ascent = metrics.ascent > 0 ? metrics.ascent : 28
 
         return HUGE_WAVE_TEXT_HEIGHT / 2 + ascent
     }
@@ -1996,6 +2197,202 @@ export abstract class GameScreenCore extends Component {
             this._syncSeedPacketSelectedHighlight(packet)
             this._syncSeedPacketCooldown(packet)
         }
+        this._syncConveyorPacketState()
+    }
+
+    protected _syncConveyorVisibility() {
+        const visible = this._isConveyorRendered()
+        if (this._conveyorBackdropNode?.isValid) this._conveyorBackdropNode.active = visible
+        if (this._conveyorBeltNode?.isValid) this._conveyorBeltNode.active = visible
+        if (this._conveyorPacketClipNode?.isValid) this._conveyorPacketClipNode.active = visible
+        this._syncConveyorBeltFrame(visible)
+        for (const packet of this._session.conveyorPackets) {
+            const node = this._conveyorPacketNodes.get(packet.id)
+            if (node?.isValid) node.active = visible
+        }
+        this._syncBowlingStripeVisibility()
+    }
+
+    protected _isConveyorVisible() {
+        return this._gameStarted &&
+            this._session.level.conveyor?.enabled === true &&
+            !this._gameplayUpdatesPaused &&
+            !this._isGameplaySeedBankIntroActive() &&
+            !this._gameOverActive &&
+            !this._levelCompleteActive
+    }
+
+    protected _isConveyorRendered() {
+        return this._gameStarted &&
+            this._session.level.conveyor?.enabled === true &&
+            !this._isGameplayLawnMowerIntroActive() &&
+            (this._isGameplaySeedBankIntroActive() || !this._gameplayUpdatesPaused) &&
+            !this._gameOverActive &&
+            !this._levelCompleteActive
+    }
+
+    protected _syncBowlingStripeVisibility() {
+    }
+
+    protected _revealBowlingStripeForCrazyDaveMessage(index: number) {
+        if (this._session.level.bowling?.showBowlingStripe !== true) return
+        if (index !== CRAZY_DAVE_WALLNUT_BOWLING_LINE_DIALOG) return
+
+        this._bowlingStripeRevealed = true
+        this._syncBowlingStripeVisibility()
+    }
+
+    protected _syncConveyorBeltFrame(visible: boolean) {
+        if (!visible || !this._conveyorBeltNode?.isValid) return
+
+        const belt = SpriteLoader.get('conveyorbelt')
+        const sprite = this._conveyorBeltNode.getComponent(Sprite)
+        if (!belt || !sprite) return
+
+        sprite.spriteFrame = getAtlasFrame(belt, Math.floor(this._conveyorBeltAnimTicks / 4) % 6, 502, 16, 1)
+    }
+
+    protected _updateConveyorBeltAnimation(ticks: number) {
+        if (!this._isConveyorRendered()) return
+        this._conveyorBeltAnimTicks += ticks
+    }
+
+    protected _syncConveyorPacketState() {
+        for (const [packetId, node] of this._conveyorPacketNodes) {
+            if (this._session.conveyorPackets.some((packet) => packet.id === packetId)) continue
+            if (node.isValid) node.destroy()
+            this._conveyorPacketNodes.delete(packetId)
+            this._conveyorPacketSelectedHighlights.delete(packetId)
+        }
+
+        for (const packet of this._session.conveyorPackets) {
+            const node = this._conveyorPacketNodes.get(packet.id) ?? this._createConveyorPacketNode(packet)
+            if (!node) continue
+
+            const x = this._conveyorPacketClipNode?.isValid ? this._conveyorPacketLocalX(packet) : packet.x
+            node.setPosition(x, -8, 10)
+            node.active = this._isConveyorRendered()
+            this._applyConveyorPacketColor(node, packet)
+            this._syncConveyorPacketSelectedHighlight(packet)
+        }
+    }
+
+    protected _createConveyorPacketNode(packet: ConveyorPacketState) {
+        const parent = this._conveyorPacketClipNode ?? this._seedBankNode ?? this._uiLayer
+        const packetNode = SeedPacketRenderer.drawSeedPacket({
+            name: `ConveyorPacket_${packet.id}_${packet.seedType}`,
+            x: parent === this._conveyorPacketClipNode ? this._conveyorPacketLocalX(packet) : packet.x,
+            y: -8,
+            parent,
+            layer: this.node.layer,
+            seedType: packet.seedType,
+            cost: SEED_DEFINITIONS[packet.seedType].cost,
+            drawCost: false,
+            seeds: SpriteLoader.get('seeds') ?? null,
+            packetPlants: SpriteLoader.get('packet_plants') ?? null,
+            cachedPacketPlants: SpriteLoader.get('packet_plants_cached') ?? null,
+            costFont: this._packetCostFont,
+        })
+        this._conveyorPacketNodes.set(packet.id, packetNode)
+        this._conveyorPacketSelectedHighlights.set(packet.id, this._createConveyorPacketSelectedHighlight(packetNode))
+        this._wireConveyorPacketInput(packetNode, packet.id)
+        return packetNode
+    }
+
+    protected _conveyorPacketLocalX(packet: ConveyorPacketState) {
+        return packet.x - 90
+    }
+
+    protected _createConveyorPacketSelectedHighlight(packetNode: Node) {
+        const highlight = createUINode('SelectedHighlight', {
+            parent: packetNode,
+            layer: this.node.layer,
+            active: false,
+            anchorX: 0,
+            anchorY: 1,
+            width: SEED_PACKET_WIDTH,
+            height: SEED_PACKET_HEIGHT,
+            x: 0,
+            y: 0,
+            z: 15,
+        })
+        const flash = SpriteLoader.get('particles/seedpacketflash')
+        if (flash) {
+            createSpriteNode({
+                name: 'SeedPacketFlash',
+                spriteFrame: flash,
+                parent: highlight,
+                layer: this.node.layer,
+                x: 0,
+                y: 0,
+                anchorX: 0,
+                anchorY: 1,
+            })
+        }
+        return highlight
+    }
+
+    protected _wireConveyorPacketInput(packetNode: Node, packetId: number) {
+        const onPress = (event: EventMouse | EventTouch) => {
+            if (!this._canUseBoardInput()) return false
+            if (this._session.selectedSeed) return false
+
+            event.propagationStopped = true
+            const pixel = eventToBoardPixel(this.node, event)
+            this._mousePixel = pixel
+            this._hasCursorPointer = true
+            this._session.dispatch({ type: 'selectConveyorPacket', packetId })
+            if (sys.isMobile) this._beginMobilePlantPress(pixel, this._findConveyorPacketAt(pixel)?.rect ?? null)
+            this._renderFrame()
+            return true
+        }
+        packetNode.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => {
+            if (sys.isMobile) return
+            if (event.getButton() !== 0) return
+            onPress(event)
+        }, this)
+        packetNode.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
+            if (!sys.isMobile) return
+            if (this._session.selectedSeed) {
+                event.propagationStopped = true
+                const pixel = eventToBoardPixel(this.node, event)
+                this._mousePixel = pixel
+                this._hasCursorPointer = true
+                this._resetMobilePlantPress()
+                this._updateCursorPreview()
+                return
+            }
+            onPress(event)
+        }, this)
+        packetNode.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
+            if (!sys.isMobile) return
+            event.propagationStopped = true
+            this._onMobileTouchMove(event)
+        }, this)
+        packetNode.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+            if (!sys.isMobile) return
+            event.propagationStopped = true
+            this._onMobileTouchEnd(event)
+        }, this)
+        packetNode.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => {
+            if (!sys.isMobile) return
+            event.propagationStopped = true
+            this._onMobileTouchEnd(event)
+        }, this)
+    }
+
+    protected _applyConveyorPacketColor(node: Node, packet: ConveyorPacketState) {
+        const color = this._gameStarted && packet.active && !packet.selected ? Color.WHITE : new Color(128, 128, 128, 255)
+        this._applySpriteColorRecursive(node, color, ['SelectedHighlight'])
+    }
+
+    protected _syncConveyorPacketSelectedHighlight(packet: ConveyorPacketState) {
+        const highlight = this._conveyorPacketSelectedHighlights.get(packet.id)
+        if (!highlight) return
+
+        highlight.active = sys.isMobile &&
+            this._gameStarted &&
+            packet.selected
     }
 
     protected _applyPacketColor(node: Node, packet: SeedPacketState) {
@@ -2146,7 +2543,7 @@ export abstract class GameScreenCore extends Component {
         const level = this._session.level.adventureLevel
         const area = Math.max(1, Math.floor((level - 1) / 10) + 1)
         const subLevel = ((level - 1) % 10) + 1
-        return `Level ${area}-${subLevel}`
+        return `${this._lawnString('LEVEL', 'Level')} ${area}-${subLevel}`
     }
 
     protected _syncShovelState() {
@@ -2621,6 +3018,13 @@ export abstract class GameScreenCore extends Component {
         return hit.packet.seedType
     }
 
+    protected _hitConveyorPacket(pixel: { x: number, y: number }): number | null {
+        const hit = this._findConveyorPacketAt(pixel)
+        if (!hit) return null
+        if (!hit.packet.active || hit.packet.selected) return null
+        return hit.packet.id
+    }
+
     protected _findSeedPacketAt(pixel: { x: number, y: number }) {
         for (let i = this._session.seedPackets.length - 1; i >= 0; i--) {
             const packet = this._session.seedPackets[i]
@@ -2646,6 +3050,24 @@ export abstract class GameScreenCore extends Component {
         switch (toolType) {
             case 'shovel':
                 return this._getShovelBoardPixelRect()
+        }
+        return null
+    }
+
+    protected _findConveyorPacketAt(pixel: { x: number, y: number }) {
+        if (!this._isConveyorVisible()) return null
+
+        for (let i = this._session.conveyorPackets.length - 1; i >= 0; i--) {
+            const packet = this._session.conveyorPackets[i]
+            if (packet.selected) continue
+
+            const node = this._conveyorPacketNodes.get(packet.id)
+            if (!node?.activeInHierarchy) continue
+            const rect = node ? getNodeBoardPixelRect(node, SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT) : null
+            if (!rect) continue
+            if (pixel.x >= rect.x && pixel.x <= rect.x + rect.width && pixel.y >= rect.y && pixel.y <= rect.y + rect.height) {
+                return { packet, rect }
+            }
         }
         return null
     }
@@ -2701,8 +3123,11 @@ export abstract class GameScreenCore extends Component {
         }
 
         const seedHit = this._findSeedPacketAt(this._mousePixel)
+        const conveyorHit = seedHit ? null : this._findConveyorPacketAt(this._mousePixel)
         if (seedHit) {
             this._showSeedTooltip(seedHit.packet, seedHit.rect)
+        } else if (conveyorHit) {
+            this._showConveyorSeedTooltip(conveyorHit.packet, conveyorHit.rect)
         } else {
             this._hideSeedTooltip()
         }
@@ -2717,8 +3142,9 @@ export abstract class GameScreenCore extends Component {
 
         const overCollectableItem = this._session.hasItemAt(this._mousePixel.x, this._mousePixel.y)
         const overPickableSeed = seedHit ? this._canPickUpSeedPacket(seedHit.packet) : false
+        const overPickableConveyorSeed = conveyorHit ? conveyorHit.packet.active && !conveyorHit.packet.selected : false
         const overMenuButton = this._isMenuButtonPixel(this._mousePixel)
-        const hovering = overCollectableItem || overPickableSeed || (shovelHit && shovelHoverEnabled) || overMenuButton
+        const hovering = overCollectableItem || overPickableSeed || overPickableConveyorSeed || (shovelHit && shovelHoverEnabled) || overMenuButton
         this._setCanvasCursor(hovering ? 'pointer' : 'default')
         return hovering
     }
@@ -2727,7 +3153,7 @@ export abstract class GameScreenCore extends Component {
         packet: SeedPacketState,
         rect: { x: number, y: number, width: number, height: number },
     ) {
-        const label = SEED_TOOLTIP_NAMES[packet.seedType]
+        const label = this._seedTooltipName(packet.seedType)
         const warningText = this._getSeedTooltipWarning(packet)
         const textWidth = FontMetricsUtil.measureTextWidth(this._packetCostFont?.config ?? null, label)
         const warningWidth = warningText ? FontMetricsUtil.measureTextWidth(this._packetCostFont?.config ?? null, warningText) : 0
@@ -2762,6 +3188,63 @@ export abstract class GameScreenCore extends Component {
         this._seedTooltipNode = null
     }
 
+    protected _lawnString(key: string, fallback = key) {
+        const text = LawnStringLoader.translateOptional(`[${key}]`, this._lawnStrings)
+        return text || fallback
+    }
+
+    protected _formatLawnString(key: string, fallback: string, replacements: Record<string, string | number>) {
+        let text = this._lawnString(key, fallback)
+        for (const [name, value] of Object.entries(replacements)) {
+            text = text.replace(new RegExp(`\\{${name}\\}`, 'g'), String(value))
+        }
+        return text
+    }
+
+    protected _localizedAdviceMessage(message: string) {
+        const directKey = message.length >= 3 && message[0] === '[' && message[message.length - 1] === ']'
+            ? message.slice(1, -1).trim()
+            : ''
+        const key = directKey || ADVICE_LAWN_STRING_KEYS[message]
+        return key ? this._lawnString(key, message) : message
+    }
+
+    protected _seedTooltipName(seedType: SeedType) {
+        const key = SEED_TOOLTIP_KEYS[seedType]
+        return key
+            ? this._lawnString(key, SEED_TOOLTIP_FALLBACK_NAMES[seedType] ?? seedType)
+            : SEED_TOOLTIP_FALLBACK_NAMES[seedType] ?? seedType
+    }
+
+    protected _showConveyorSeedTooltip(
+        packet: ConveyorPacketState,
+        rect: { x: number, y: number, width: number, height: number },
+    ) {
+        const label = this._seedTooltipName(packet.seedType)
+        const x = Math.round(rect.x + SEED_PACKET_WIDTH / 2)
+        const y = -Math.round(rect.y + SEED_TOOLTIP_OFFSET_Y)
+        const key = `conveyor|${packet.seedType}|${x}|${y}`
+        if (this._seedTooltipNode?.isValid && this._seedTooltipKey === key) {
+            this._seedTooltipNode.setSiblingIndex(this._uiLayer.children.length - 1)
+            return
+        }
+
+        this._hideSeedTooltip()
+        this._seedTooltipKey = key
+        this._seedTooltipNode = createTooltipNode({
+            name: 'ConveyorSeedTooltip',
+            text: label,
+            font: this._packetCostFont,
+            parent: this._uiLayer,
+            layer: this.node.layer,
+            x,
+            y,
+            z: CURSOR_PREVIEW_Z - 1,
+            centerX: true,
+        })
+        this._seedTooltipNode.setSiblingIndex(this._uiLayer.children.length - 1)
+    }
+
     protected _showShovelTooltip() {
         const rect = this._getShovelBoardPixelRect()
         if (!rect) return
@@ -2772,7 +3255,7 @@ export abstract class GameScreenCore extends Component {
 
         this._shovelTooltipNode = createTooltipNode({
             name: 'ShovelTooltip',
-            text: 'remove a plant',
+            text: this._lawnString('SHOVEL_TOOLTIP', 'remove a plant'),
             font: this._packetCostFont,
             parent: this._uiLayer,
             layer: this.node.layer,
@@ -2795,8 +3278,12 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _getSeedTooltipWarning(packet: SeedPacketState) {
-        if (!packet.active || packet.cooldownRemaining > 0) return SEED_TOOLTIP_WAITING
-        if (!this._session.canAffordSeed(packet.seedType)) return SEED_TOOLTIP_NOT_ENOUGH_SUN
+        if (!packet.active || packet.cooldownRemaining > 0) {
+            return this._lawnString('WAITING_FOR_SEED', SEED_TOOLTIP_WAITING)
+        }
+        if (!this._session.canAffordSeed(packet.seedType)) {
+            return this._lawnString('NOT_ENOUGH_SUN', SEED_TOOLTIP_NOT_ENOUGH_SUN)
+        }
         return ''
     }
 
@@ -2953,6 +3440,11 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _syncSunAmount() {
+        if (this._session.level.conveyor?.enabled === true) {
+            this._sunLabel.node.active = false
+            return
+        }
+
         const text = `${this._session.sun}`
         const color = this._sunAmountColor()
         if (this._sunLabel.string !== text) {

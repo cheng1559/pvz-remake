@@ -13,6 +13,7 @@ import { createZombie, Zombie } from './zombies/ZombieFactory'
 import { GameDebugSettings } from './GameDebugSettings'
 import type {
     GameCommand,
+    ConveyorPacketState,
     GameEntity,
     GameEvent,
     ItemMotion,
@@ -109,6 +110,8 @@ const LEVEL_2_ZOMBIE_WARNING_COUNTDOWN = 750
 const LATER_SUNFLOWER_ADVICE_DELAY = 500
 const LATER_SUNFLOWER_START_WAVE = 5
 const READY_SET_PLANT_TICKS = 183
+const CONVEYOR_PACKET_SPEED = 0.25
+const CONVEYOR_ENTRY_X = 606
 
 interface RowPickState {
     row: number
@@ -125,6 +128,7 @@ export class GameSession {
     readonly level: LevelDefinition
     readonly geometry = DAY_GEOMETRY
     readonly seedPackets: SeedPacketState[]
+    readonly conveyorPackets: ConveyorPacketState[] = []
     readonly plants: Plant[] = []
     readonly zombies: Zombie[] = []
     readonly projectiles: Projectile[] = []
@@ -142,6 +146,7 @@ export class GameSession {
     zombieCountDownStart = ZOMBIE_COUNTDOWN_FIRST_WAVE
     progressMeterWidth = 0
     selectedSeed: SeedType | null = null
+    selectedConveyorPacketId: number | null = null
     selectedTool: ToolType | null = null
     paused = false
     hasPlantedAtLeastOnce = false
@@ -174,6 +179,8 @@ export class GameSession {
     private _laterSunflowerTutorialTimer = -1
     private _laterSunflowerTutorialShown = false
     private _readySetPlantCounter = 0
+    private _nextConveyorPacketId = 1
+    private _conveyorCounter = 0
     private _waveRowGotLawnMowered = Array.from({ length: DAY_GEOMETRY.rows }, () => WAVE_ROW_GOT_LAWN_MOWERED_INITIAL)
     private _rowPickState: RowPickState[] = Array.from({ length: DAY_GEOMETRY.rows }, (_, row) => ({
         row,
@@ -201,6 +208,7 @@ export class GameSession {
                 selected: false,
             }
         })
+        this._initConveyor()
         if (level.background === 'day') {
             this._sunCountDown = this._randomInt(SKY_SUN_START_MIN, SKY_SUN_START_MAX)
         }
@@ -214,6 +222,10 @@ export class GameSession {
         } else if (level.adventureLevel >= 3 && !level.suppressReadySetPlant) {
             this._readySetPlantCounter = READY_SET_PLANT_TICKS
             this._setSeedPacketsActive(false)
+        }
+        if (level.challengeMode === 'wallnut-bowling') {
+            this.zombieCountDown = 200
+            this.zombieCountDownStart = this.zombieCountDown
         }
         this._initInitialPlants()
         this._initLawnMowers()
@@ -264,6 +276,9 @@ export class GameSession {
             case 'selectSeed':
                 this._selectSeed(command.seedType)
                 break
+            case 'selectConveyorPacket':
+                this._selectConveyorPacket(command.packetId)
+                break
             case 'selectTool':
                 this._selectTool(command.toolType)
                 break
@@ -287,6 +302,7 @@ export class GameSession {
 
         this.tick++
         this._updateReadySetPlant()
+        this._updateConveyor()
         this._updateSeedPackets()
         this._updateLevelOneTutorial()
         this._updateLevelTwoTutorial()
@@ -587,6 +603,14 @@ export class GameSession {
 
     getPlantingReason(seedType: SeedType, col: number, row: number): PlantingReason {
         const seed = SEED_DEFINITIONS[seedType]
+        if (this._isWallnutBowlingConveyorSeed(seedType)) {
+            if (!seed || !this._selectedConveyorPacket()) return 'not-here'
+            if (!this.level.activeRows.includes(row)) return 'not-here'
+            if (col < 0 || col >= this.geometry.cols) return 'not-here'
+            if (col > (this.level.bowling?.lineColMax ?? 2)) return 'not-here'
+            return 'ok'
+        }
+
         const packet = this.seedPackets.find((item) => item.seedType === seedType)
         if (!seed || !packet) return 'not-here'
         if (packet.cooldownRemaining > 0 || (!packet.active && this.selectedSeed !== seedType)) {
@@ -624,6 +648,20 @@ export class GameSession {
         this._handleLaterSunflowerTutorialSeedSelected(seedType)
     }
 
+    private _selectConveyorPacket(packetId: number) {
+        const packet = this.conveyorPackets.find((item) => item.id === packetId)
+        if (!packet || !packet.active || packet.selected) return
+        if (!this._isWallnutBowlingConveyorSeed(packet.seedType)) return
+
+        this._clearCursor()
+        this.selectedSeed = packet.seedType
+        this.selectedConveyorPacketId = packet.id
+        packet.active = false
+        packet.selected = true
+        this.events.push({ type: 'soundRequested', sound: SoundEffect.SeedLift })
+        this._retargetConveyorPackets()
+    }
+
     private _selectTool(toolType: ToolType) {
         this._refreshSeedPacketFromCursor()
         this.selectedTool = toolType
@@ -647,6 +685,11 @@ export class GameSession {
             } else if (reason === 'waiting-for-seed') {
                 this.events.push({ type: 'soundRequested', sound: SoundEffect.Buzzer })
             }
+            return
+        }
+
+        if (this._isWallnutBowlingConveyorSeed(seedType)) {
+            this._placeSelectedConveyorSeed(seedType, grid.row, grid.col)
             return
         }
 
@@ -676,6 +719,24 @@ export class GameSession {
         }
     }
 
+    private _placeSelectedConveyorSeed(seedType: SeedType, row: number, col: number) {
+        const packet = this._selectedConveyorPacket()
+        if (!packet || packet.seedType !== seedType) return
+
+        const seed = SEED_DEFINITIONS[seedType]
+        const plant = this._createPlant(seed.plantType, row, col)
+        const index = this.conveyorPackets.findIndex((item) => item.id === packet.id)
+        if (index >= 0) this.conveyorPackets.splice(index, 1)
+        this.selectedConveyorPacketId = null
+        this.plants.push(plant)
+        this.hasPlantedAtLeastOnce = true
+        this._clearCursor()
+        this._retargetConveyorPackets()
+        this.events.push({ type: 'entitySpawned', entityId: plant.id })
+        this.events.push({ type: 'soundRequested', sound: SoundEffect.Bowling })
+        this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant })
+    }
+
     private _createPlant(type: PlantType, row: number, col: number) {
         const pixel = this.geometry.gridToPixel(col, row)
         return createPlant({
@@ -699,6 +760,13 @@ export class GameSession {
     }
 
     private _clearCursor() {
+        const conveyorPacket = this._selectedConveyorPacket()
+        if (conveyorPacket) {
+            conveyorPacket.selected = false
+            conveyorPacket.active = true
+            this.selectedConveyorPacketId = null
+            this._retargetConveyorPackets()
+        }
         this.selectedSeed = null
         this.selectedTool = null
         for (const item of this.seedPackets) item.selected = false
@@ -721,6 +789,11 @@ export class GameSession {
     }
 
     private _refreshSeedPacketFromCursor() {
+        if (this.selectedConveyorPacketId !== null) {
+            this._clearCursor()
+            return
+        }
+
         const selectedSeed = this.selectedSeed
         this._clearCursor()
         if (!selectedSeed) return
@@ -730,6 +803,114 @@ export class GameSession {
         this._handleLevelOneTutorialSeedCanceled(selectedSeed)
         this._handleLevelTwoTutorialSeedCanceled(selectedSeed)
         this._handleLaterSunflowerTutorialSeedCanceled(selectedSeed)
+    }
+
+    private _initConveyor() {
+        const conveyor = this.level.conveyor
+        if (!conveyor?.enabled) return
+
+        this._conveyorCounter = conveyor.initialDelayTicks
+        const seedType = this._pickConveyorSeed()
+        if (seedType) this._addConveyorPacket(seedType)
+    }
+
+    private _updateConveyor() {
+        const conveyor = this.level.conveyor
+        if (!conveyor?.enabled || this._levelAwardDropped) return
+
+        this._moveConveyorPackets()
+        if (this._isReadySetPlantBlockingPackets()) return
+
+        this._conveyorCounter--
+        if (this._conveyorCounter > 0) return
+
+        if (this._activeConveyorPacketCount() < conveyor.maxPackets) {
+            const seedType = this._pickConveyorSeed()
+            if (seedType) this._addConveyorPacket(seedType)
+        }
+        this._conveyorCounter = this._nextConveyorDelay()
+    }
+
+    private _addConveyorPacket(seedType: SeedType) {
+        const packet: ConveyorPacketState = {
+            id: this._nextConveyorPacketId++,
+            seedType,
+            x: CONVEYOR_ENTRY_X,
+            targetX: CONVEYOR_ENTRY_X,
+            active: true,
+            selected: false,
+            entering: true,
+        }
+        this.conveyorPackets.push(packet)
+        this._retargetConveyorPackets()
+    }
+
+    private _moveConveyorPackets() {
+        for (const packet of this.conveyorPackets) {
+            const delta = packet.targetX - packet.x
+            if (Math.abs(delta) <= CONVEYOR_PACKET_SPEED) {
+                packet.x = packet.targetX
+                packet.entering = false
+            } else {
+                packet.x += Math.sign(delta) * CONVEYOR_PACKET_SPEED
+            }
+        }
+    }
+
+    private _retargetConveyorPackets() {
+        let index = 0
+        for (const packet of this.conveyorPackets) {
+            packet.targetX = this._conveyorPacketSlotX(index)
+            index++
+        }
+    }
+
+    private _conveyorPacketSlotX(index: number) {
+        return index * 50 + 91
+    }
+
+    private _nextConveyorDelay() {
+        const count = this._activeConveyorPacketCount()
+        if (count > 8) return 1000
+        if (count > 6) return 500
+        if (count > 4) return 425
+        return 400
+    }
+
+    private _activeConveyorPacketCount() {
+        return this.conveyorPackets.length
+    }
+
+    private _pickConveyorSeed(): SeedType | null {
+        const seedPool = this.level.conveyor?.seedPool ?? []
+        let totalWeight = 0
+        for (const entry of seedPool) {
+            if (!SEED_DEFINITIONS[entry.seedType] || entry.weight <= 0) continue
+            totalWeight += entry.weight
+        }
+        if (totalWeight <= 0) return null
+
+        let roll = this._randomInt(1, totalWeight)
+        let fallback: SeedType | null = null
+        for (const entry of seedPool) {
+            if (!SEED_DEFINITIONS[entry.seedType] || entry.weight <= 0) continue
+            fallback = entry.seedType
+            roll -= entry.weight
+            if (roll <= 0) return entry.seedType
+        }
+        return fallback
+    }
+
+    private _selectedConveyorPacket() {
+        const packetId = this.selectedConveyorPacketId
+        if (packetId === null) return null
+        return this.conveyorPackets.find((packet) => packet.id === packetId) ?? null
+    }
+
+    private _isWallnutBowlingConveyorSeed(seedType: SeedType) {
+        return this.level.challengeMode === 'wallnut-bowling' &&
+            this.level.conveyor?.enabled === true &&
+            seedType === 'wallnut'
     }
 
     private _updateSeedPackets() {
@@ -1939,6 +2120,8 @@ export class GameSession {
     }
 
     private _findZombiePlantTarget(zombie: Zombie) {
+        if (this.level.challengeMode === 'wallnut-bowling') return null
+
         const attackRect = zombie.getAttackRect()
         for (const plant of this.plants) {
             if (plant.dead || plant.row !== zombie.row) continue

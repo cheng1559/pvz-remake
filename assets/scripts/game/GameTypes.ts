@@ -16,6 +16,7 @@ export type ItemMotion = 'from-sky' | 'from-sky-slow' | 'from-plant' | 'coin'
 export type ToolType = 'shovel'
 export type BackgroundType = 'day'
 export type GameResult = 'playing' | 'won' | 'lost'
+export type ChallengeMode = 'none' | 'wallnut-bowling'
 export type ZombieType = 'normal' | 'flag' | 'traffic-cone' | 'bucket' | 'ducky-tube'
 export type ZombieSubclass = 'normal'
 export type ZombieState = 'walking' | 'eating' | 'dying' | 'mowered' | 'charred'
@@ -85,10 +86,13 @@ export interface LevelDefinition {
     id: 'adventure-1-1' | 'adventure-1-2' | 'adventure-1-3' | 'adventure-1-4' | 'adventure-1-5'
     adventureLevel: number
     background: BackgroundType
+    challengeMode?: ChallengeMode
     activeRows: number[]
     startingSun: number
     seedPackets: SeedType[]
     seedBankPacketSlots?: number
+    conveyor?: ConveyorDefinition
+    bowling?: WallnutBowlingDefinition
     zombieWaves: ZombieWaveDefinition[]
     tutorialAdvice: string[]
     initialPlants?: InitialPlantDefinition[]
@@ -103,6 +107,23 @@ export interface LevelDefinition {
     suppressReadySetPlant?: boolean
     awardKind?: LevelAwardKind
     awardSeedType?: SeedType
+}
+
+export interface ConveyorDefinition {
+    enabled: boolean
+    initialDelayTicks: number
+    maxPackets: number
+    seedPool: ConveyorSeedWeight[]
+}
+
+export interface ConveyorSeedWeight {
+    seedType: SeedType
+    weight: number
+}
+
+export interface WallnutBowlingDefinition {
+    lineColMax: number
+    showBowlingStripe: boolean
 }
 
 export interface ZombieWaveDefinition {
@@ -172,6 +193,7 @@ export interface BoardGeometry {
 
 export type GameCommand =
     | { type: 'selectSeed', seedType: SeedType }
+    | { type: 'selectConveyorPacket', packetId: number }
     | { type: 'selectTool', toolType: ToolType }
     | { type: 'placePlant', x: number, y: number }
     | { type: 'useToolAt', x: number, y: number }
@@ -208,6 +230,16 @@ export interface SeedPacketState {
     cooldownTotal: number
     active: boolean
     selected: boolean
+}
+
+export interface ConveyorPacketState {
+    id: number
+    seedType: SeedType
+    x: number
+    targetX: number
+    active: boolean
+    selected: boolean
+    entering: boolean
 }
 
 export interface PlantEntity {

@@ -613,7 +613,7 @@ export class AlmanacScreen extends MenuScreenBase {
             this._createBackground(sprites.almanacPlantBack)
             this._createText({
                 name: 'Title',
-                text: 'Suburban Almanac - Plants',
+                text: LawnStringLoader.translate('[SUBURBAN_ALMANAC_PLANTS]', lawnStrings),
                 baselineX: 400,
                 baselineY: 48,
                 font: fonts.plantTitle,
@@ -625,7 +625,7 @@ export class AlmanacScreen extends MenuScreenBase {
             this._createBackground(sprites.almanacZombieBack)
             this._createText({
                 name: 'Title',
-                text: 'Suburban Almanac - Zombies',
+                text: LawnStringLoader.translate('[SUBURBAN_ALMANAC_ZOMBIES]', lawnStrings),
                 baselineX: 400,
                 baselineY: 54,
                 font: fonts.zombieTitle,
@@ -637,7 +637,7 @@ export class AlmanacScreen extends MenuScreenBase {
             this._createBackground(sprites.almanacIndexBack)
             this._createText({
                 name: 'Title',
-                text: 'Suburban Almanac - Index',
+                text: LawnStringLoader.translate('[SUBURBAN_ALMANAC_INDEX]', lawnStrings),
                 baselineX: 400,
                 baselineY: 60,
                 font: fonts.indexTitle,
@@ -665,7 +665,7 @@ export class AlmanacScreen extends MenuScreenBase {
         if (this._almanacPage !== 'index') {
             this._createAlmanacFooterButton({
                 name: 'IndexButton',
-                label: 'ALMANAC INDEX',
+                label: LawnStringLoader.translate('[ALMANAC_INDEX]', lawnStrings),
                 x: 32,
                 y: 567,
                 normal: sprites.almanacIndexButton,
@@ -679,7 +679,7 @@ export class AlmanacScreen extends MenuScreenBase {
         }
         this._createAlmanacFooterButton({
             name: 'CloseButton',
-            label: 'CLOSE',
+            label: LawnStringLoader.translate('[CLOSE_BUTTON]', lawnStrings),
             x: 676,
             y: 567,
             normal: sprites.almanacCloseButton,
@@ -690,11 +690,11 @@ export class AlmanacScreen extends MenuScreenBase {
 
         if (this._almanacPage !== 'index') return
 
-        this._createSeedChooserButton('View Plants', 130, 345, 156, 42, sprites, fonts, () => {
+        this._createSeedChooserButton(LawnStringLoader.translate('[VIEW_PLANTS]', lawnStrings), 130, 345, 156, 42, sprites, fonts, () => {
             this._almanacPage = 'plants'
             void this.render()
         })
-        this._createStoneButton('View Zombies', 487, 345, 210, 48, sprites, fonts, () => {
+        this._createStoneButton(LawnStringLoader.translate('[VIEW_ZOMBIES]', lawnStrings), 487, 345, 210, 48, sprites, fonts, () => {
             this._almanacPage = 'zombies'
             void this.render()
         })

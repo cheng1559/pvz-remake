@@ -119,7 +119,12 @@ export class FontMetricsUtil {
             lineWidths.push(measureRange(lineStartPos, chars.length))
         }
         return {
-            height: lineWidths.length > 0 ? lineWidths.length * metrics.lineSpacing : 0,
+            height:
+                lineWidths.length > 0
+                    ? metrics.height -
+                      metrics.ascentPadding +
+                      (lineWidths.length - 1) * metrics.lineSpacing
+                    : 0,
             lineWidths,
         }
     }

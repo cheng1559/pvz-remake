@@ -32,8 +32,9 @@ const CRAZY_DAVE_BUBBLE_TEXT_WIDTH = 233
 const CRAZY_DAVE_BUBBLE_TEXT_HEIGHT = 144
 const CRAZY_DAVE_BUBBLE_CONTINUE_X = 424
 const CRAZY_DAVE_BUBBLE_CONTINUE_BASELINE_Y = 160
-const CRAZY_DAVE_BUBBLE_FONT_SIZE = 16
-const CRAZY_DAVE_BUBBLE_CONTINUE_FONT_SIZE = 9
+const PVZ_NATIVE_FONT_SIZE = 0
+const CRAZY_DAVE_BUBBLE_FONT_SIZE = PVZ_NATIVE_FONT_SIZE
+const CRAZY_DAVE_BUBBLE_CONTINUE_FONT_SIZE = PVZ_NATIVE_FONT_SIZE
 const CRAZY_DAVE_BUBBLE_SHAKE_PIXELS = 1
 const CRAZY_DAVE_BUBBLE_Z = -10000
 const CRAZY_DAVE_HAND_WALLNUT_X = 100
@@ -55,6 +56,7 @@ export interface CrazyDaveWidgetOptions {
     bubbleY?: number
     daveFont?: BitmapFontAssets | null
     continueFont?: BitmapFontAssets | null
+    continueText?: string
     wallnutAnimation?: JsonAsset | null
     layer?: number
     animationsEnabled?: boolean
@@ -358,7 +360,7 @@ export class CrazyDaveWidget extends Component {
 
         this._continueLabel = this._createBitmapText({
             name: 'CrazyDaveContinue',
-            text: 'Click to continue',
+            text: options.continueText ?? 'click to continue',
             baselineX: CRAZY_DAVE_BUBBLE_CONTINUE_X - CRAZY_DAVE_BUBBLE_X,
             baselineY: CRAZY_DAVE_BUBBLE_CONTINUE_BASELINE_Y - CRAZY_DAVE_BUBBLE_Y,
             font: options.continueFont ?? null,
@@ -407,13 +409,33 @@ export class CrazyDaveWidget extends Component {
         const label = this._bubbleLabel
         if (!label?.node.isValid) return
 
-        const textHeight = Math.max(1, label.contentHeight)
-        const centeredOffset = Math.max(0, Math.round((CRAZY_DAVE_BUBBLE_TEXT_HEIGHT - textHeight) / 2))
+        const textHeight = Math.max(1, this._measureWrappedBubbleTextHeight(label))
+        const centeredOffset = Math.trunc((CRAZY_DAVE_BUBBLE_TEXT_HEIGHT - textHeight) / 2)
         label.node.setPosition(
             CRAZY_DAVE_BUBBLE_TEXT_X - CRAZY_DAVE_BUBBLE_X + offsetX,
             -(CRAZY_DAVE_BUBBLE_TEXT_Y - CRAZY_DAVE_BUBBLE_Y + centeredOffset + offsetY),
             0,
         )
+    }
+
+    private _measureWrappedBubbleTextHeight(label: FontRenderer) {
+        const fontConfig = label.fontConfigJson
+        const metrics = FontMetricsUtil.getMetrics(fontConfig)
+        if (metrics.height <= 0) return label.contentHeight
+
+        const rawConfig = fontConfig?.json as { defaultPointSize?: number } | undefined
+        const defaultPointSize = rawConfig?.defaultPointSize ?? label.fontSize
+        const pointSize = label.fontSize > 0 ? label.fontSize : defaultPointSize
+        const scale = defaultPointSize > 0 ? pointSize / defaultPointSize : 1
+        const wrapped = FontMetricsUtil.measureWordWrapped(
+            fontConfig,
+            label.string,
+            scale > 0 ? CRAZY_DAVE_BUBBLE_TEXT_WIDTH / scale : CRAZY_DAVE_BUBBLE_TEXT_WIDTH,
+        )
+        const lineCount = Math.max(1, wrapped.lineWidths.length)
+        return (
+            metrics.height - metrics.ascentPadding + Math.max(0, lineCount - 1) * metrics.lineSpacing
+        ) * scale
     }
 
     private _randomBubbleShakeOffset() {

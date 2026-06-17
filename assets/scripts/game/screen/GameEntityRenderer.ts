@@ -108,13 +108,17 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             this._syncMoneyItemAnimation(entity)
             return
         }
-        node.setPosition(renderState.x, -renderState.y, this._entityZ(entity))
+        const renderX = entity.kind === 'lawnmower'
+            ? this._gameplayLawnMowerRenderX(entity, renderState.x)
+            : renderState.x
+        node.setPosition(renderX, -renderState.y, this._entityZ(entity))
         if (entity.kind === 'plant') {
             this._syncPlantAnimation(entity)
         } else if (entity.kind === 'zombie') {
             this._syncZombieGameOverClip(entity, renderState)
             this._syncZombieAnimation(entity)
         } else if (entity.kind === 'lawnmower') {
+            node.active = this._isGameplayLawnMowerEntityVisible(entity)
             this._syncLawnMowerAnimation(entity)
         }
     }

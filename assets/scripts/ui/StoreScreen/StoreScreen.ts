@@ -11,7 +11,7 @@ import { SoundEffect } from '@/core/SoundLoader'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { ProfileStore } from '@/game/persistence/ProfileStore'
 import { UIButton } from '@/ui/Button'
-import { DialogButtonMode, MessageBox } from '@/ui/MessageBox/MessageBox'
+import { DialogResult, MessageBox } from '@/ui/MessageBox/MessageBox'
 import { MoneyCounter } from '@/ui/MoneyCounter'
 import { SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
 import { CrazyDaveWidget } from '@/ui/CrazyDaveWidget'
@@ -92,6 +92,7 @@ interface StoreItemDefinition {
     slotText?: string
     quantityText?: string
     daveMessageIndex?: StoreDaveMessageIndex
+    slotCount?: number
 }
 
 const STORE_ITEM_POSITIONS = [
@@ -107,7 +108,7 @@ const STORE_ITEM_POSITIONS = [
 
 const STORE_PAGES: StoreItemDefinition[][] = [
     [
-        { price: '$750', spriteKey: 'storePacketUpgrade', offsetX: -7, offsetY: 7, highlightAlpha: 32, slotText: '7\nslots', daveMessageIndex: 'packetUpgrade', ...STORE_ITEM_POSITIONS[0] },
+        { price: '$750', spriteKey: 'storePacketUpgrade', offsetX: -7, offsetY: 7, highlightAlpha: 32, slotCount: 7, daveMessageIndex: 'packetUpgrade', ...STORE_ITEM_POSITIONS[0] },
         { price: '$1,000', spriteKey: 'iconPoolCleaner', offsetX: 1, offsetY: 7, daveMessageIndex: 2026, ...STORE_ITEM_POSITIONS[1] },
         { price: '$200', spriteKey: 'iconRake', offsetX: -5, offsetY: 10, daveMessageIndex: 2028, ...STORE_ITEM_POSITIONS[2] },
         { price: '$3,000', spriteKey: 'iconRoofCleaner', offsetX: 0, offsetY: 28, daveMessageIndex: 2027, ...STORE_ITEM_POSITIONS[3] },
@@ -247,7 +248,10 @@ export class StoreScreen extends MenuScreenBase {
         if (hatchOpen) {
             this._createText({
                 name: 'Page',
-                text: `Page ${this._storePage + 1} of ${STORE_PAGES.length}`,
+                text: this._formatLawnString('STORE_PAGE', `Page ${this._storePage + 1} of ${STORE_PAGES.length}`, {
+                    PAGE: this._storePage + 1,
+                    NUM_PAGES: STORE_PAGES.length,
+                }),
                 baselineX: 470,
                 baselineY: 500,
                 font: fonts.small,
@@ -411,6 +415,22 @@ export class StoreScreen extends MenuScreenBase {
         return `$${Math.max(0, Math.floor(coins)) * 10}`
     }
 
+    private _formatLawnString(key: string, fallback: string, replacements: Record<string, string | number>) {
+        let text = LawnStringLoader.translateOptional(`[${key}]`, this._lawnStrings) || fallback
+        for (const [name, value] of Object.entries(replacements)) {
+            text = text.replace(new RegExp(`\\{${name}\\}`, 'g'), String(value))
+        }
+        return text
+    }
+
+    private _localizedBackButtonLabel() {
+        const key = {
+            'MAIN MENU': 'STORE_MAIN_MENU_BUTTON',
+            'GO BACK': 'STORE_BACK_TO_GAME',
+        }[this.backButtonLabel.toUpperCase()]
+        return key ? LawnStringLoader.translateOptional(`[${key}]`, this._lawnStrings) || this.backButtonLabel : this.backButtonLabel
+    }
+
     private _pickCrazyDaveAmbientMessage() {
         const candidates = [2015, 2016, 2017, 2018].filter((messageIndex) => messageIndex !== this._previousCrazyDaveAmbientIndex)
         return candidates[Math.floor(Math.random() * candidates.length)] ?? 2015
@@ -448,6 +468,7 @@ export class StoreScreen extends MenuScreenBase {
             bubbleY: STORE_CRAZY_DAVE_BUBBLE_Y,
             daveFont: fonts.dave,
             continueFont: fonts.money,
+            continueText: LawnStringLoader.translate('[CLICK_TO_CONTINUE]', this._lawnStrings),
             layer: this.node.layer,
             animationsEnabled: true,
         }).then((ready) => {
@@ -499,8 +520,7 @@ export class StoreScreen extends MenuScreenBase {
 
     private _canInteractWithStoreItems() {
         return this._hatchTimer <= 0 &&
-            !this._waitForDialog &&
-            this._storeTime >= STORE_INTERACTION_READY_FRAME
+            !this._waitForDialog
     }
 
     private _canInteractWithButtons() {
@@ -572,10 +592,15 @@ export class StoreScreen extends MenuScreenBase {
         parent: Node,
         forHighlight: boolean,
     ) {
-        if (item.slotText) {
+        const slotText = item.slotCount == null
+            ? item.slotText
+            : this._formatLawnString('STORE_UPGRADE_SLOTS', `${item.slotCount}\nslots`, {
+                SLOTS: item.slotCount,
+            })
+        if (slotText) {
             this._createCenteredItemText(
                 forHighlight ? 'StoreItemSlotTextHighlight' : 'StoreItemSlotText',
-                item.slotText,
+                slotText,
                 item.x,
                 item.y + 6,
                 STORE_SLOT_TEXT_WIDTH,
@@ -800,10 +825,19 @@ export class StoreScreen extends MenuScreenBase {
         const dialog = node.addComponent(MessageBox)
         dialog.dialogWidth = 500
         dialog.dialogHeight = 300
-        dialog.title = 'Buy this item?'
-        dialog.message = 'Are you sure you want to buy this item?'
+        dialog.title = LawnStringLoader.translateOptional('[BUY_ITEM_HEADER]', this._lawnStrings) || 'Buy this item?'
+        dialog.message = LawnStringLoader.translateOptional('[BUY_ITEM]', this._lawnStrings) || 'Are you sure you want to buy this item?'
         dialog.setMessageLayout(0, 0, 2)
-        dialog.setButtonMode(DialogButtonMode.YesNo)
+        dialog.setButtons([
+            {
+                label: LawnStringLoader.translateOptional('[DIALOG_BUTTON_YES]', this._lawnStrings) || 'Yes',
+                result: DialogResult.Yes,
+            },
+            {
+                label: LawnStringLoader.translateOptional('[DIALOG_BUTTON_NO]', this._lawnStrings) || 'No',
+                result: DialogResult.No,
+            },
+        ])
 
         const parent = this.node.parent ?? this.node
         parent.addChild(node)
@@ -892,7 +926,7 @@ export class StoreScreen extends MenuScreenBase {
         const renderer = labelNode.addComponent(FontRenderer)
         if (fonts.title) renderer.setFontAssets(fonts.title)
         renderer.fontColor = STORE_BUTTON_COLOR
-        renderer.string = this.backButtonLabel
+        renderer.string = this._localizedBackButtonLabel()
         renderer.forceRebuild()
 
         const metrics = FontMetricsUtil.getMetrics(fonts.title?.config ?? null)

@@ -1,5 +1,6 @@
 import { _decorator, EventKeyboard, Node } from 'cc'
 import { Animator } from '@/core/Animator'
+import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { createZombieAnimationView, playZombieBodyAnimation, wireZombieAnimation } from '@/game/ZombieAnimation'
 import { DialogButtonMode, MessageBox } from '@/ui/MessageBox/MessageBox'
 import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
@@ -20,17 +21,27 @@ export class PauseDialog extends MessageBox {
     private _paperZombieRenderId = 0
 
     start() {
-        this.title = 'GAME PAUSED'
-        this.message = 'Click to resume game'
         this.spaceAfterHeader = 155
         this.extraHeight = 10
-        this.setButtonMode(DialogButtonMode.Footer, 'Resume Game')
-        super.start()
+        void this._startLocalized()
     }
 
     onDestroy() {
         this._destroyPaperZombie()
         super.onDestroy()
+    }
+
+    private async _startLocalized() {
+        const strings = await LawnStringLoader.load()
+        if (!this.node.isValid) return
+
+        this.title = LawnStringLoader.translateOptional('[GAME_PAUSED]', strings) || 'GAME PAUSED'
+        this.message = LawnStringLoader.translateOptional('[CLICK_TO_RESUME]', strings) || 'Click to resume game'
+        this.setButtonMode(
+            DialogButtonMode.Footer,
+            LawnStringLoader.translateOptional('[RESUME_GAME]', strings) || 'Resume Game',
+        )
+        super.start()
     }
 
     protected onDialogRendered(actualWidth: number, actualHeight: number) {

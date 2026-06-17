@@ -11,6 +11,7 @@ import {
 } from 'cc'
 import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
 import { ModalDialog } from '@/ui/Dialog'
@@ -330,13 +331,17 @@ export class MessageBox extends ModalDialog {
                 -titleMetrics.ascentPadding + titleMetrics.height + this.spaceAfterHeader
         }
         if (this.message) {
-            const linesAreaWidth =
+            const defaultLinesAreaWidth =
                 actualWidth -
                 CONTENT_INSET_LEFT -
                 CONTENT_INSET_RIGHT -
                 BG_INSET_LEFT -
                 BG_INSET_RIGHT -
                 LINES_RECT_EXTRA_WIDTH
+            const linesAreaWidth =
+                this.messageMaxWidth > 0
+                    ? Math.min(this.messageMaxWidth, defaultLinesAreaWidth)
+                    : defaultLinesAreaWidth
             desiredHeight +=
                 FontMetricsUtil.measureWordWrappedHeight(
                     msgFontData?.config ?? null,
@@ -408,7 +413,7 @@ export class MessageBox extends ModalDialog {
 
         // ── Create title FontRenderer ──
         this._destroyFontNode(this._titleNode)
-        if (titleFontData) {
+        if (titleFontData && this.title) {
             const titleCfg = titleFontData.config.json as any
             const titleL0 = titleCfg.layers?.[0]
             const titleAscentPad = titleL0?.ascentPadding ?? 0
@@ -571,6 +576,9 @@ export class MessageBox extends ModalDialog {
 
         if (this._buttons.length === 0) return
 
+        await this._localizeButtonLabels()
+        if (renderVersion !== this._renderVersion || !this.node.isValid) return
+
         const buttonFonts = await MessageBoxAssets.loadButtonFonts()
         if (renderVersion !== this._renderVersion || !this.node.isValid) return
 
@@ -694,6 +702,22 @@ export class MessageBox extends ModalDialog {
         }
 
         this._setButtonsInteractable(this.buttonDelay < 0)
+    }
+
+    private async _localizeButtonLabels() {
+        const strings = await LawnStringLoader.load()
+        const keyByLabel: Record<string, string> = {
+            OK: 'DIALOG_BUTTON_OK',
+            Cancel: 'DIALOG_BUTTON_CANCEL',
+            Yes: 'DIALOG_BUTTON_YES',
+            No: 'DIALOG_BUTTON_NO',
+            'Try Again': 'TRY_AGAIN',
+        }
+        for (const button of this._buttons) {
+            const key = keyByLabel[button.label]
+            if (!key) continue
+            button.label = LawnStringLoader.translateOptional(`[${key}]`, strings) || button.label
+        }
     }
 
     /**

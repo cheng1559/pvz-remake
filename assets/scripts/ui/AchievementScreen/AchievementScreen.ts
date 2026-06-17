@@ -17,6 +17,7 @@ import {
     Vec3,
 } from 'cc'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { UIButton } from '@/ui/Button'
@@ -57,6 +58,8 @@ const ACHIEVEMENT_DESC_COLOR = new Color(255, 255, 255)
 interface AchievementDefinition {
     title: string
     description: string
+    titleKey?: string
+    descriptionKey?: string
 }
 
 const ACHIEVEMENTS: AchievementDefinition[] = [
@@ -83,6 +86,7 @@ const ACHIEVEMENTS: AchievementDefinition[] = [
     {
         title: 'Explodonator',
         description: 'Take out 10 zombies with a single Cherry Bomb.',
+        descriptionKey: 'Take out 10 full-sized zombies with a single Cherry Bomb.',
     },
     {
         title: 'Morticulturalist',
@@ -102,6 +106,7 @@ const ACHIEVEMENTS: AchievementDefinition[] = [
     },
     {
         title: 'Cryptozombologist',
+        titleKey: 'Zombologist',
         description: 'Discover the Yeti zombie.',
     },
     {
@@ -111,6 +116,7 @@ const ACHIEVEMENTS: AchievementDefinition[] = [
     {
         title: 'Sunny Days',
         description: 'Accumulate 8,000 sun during a single level.',
+        descriptionKey: 'Get 8000 sun during a single level.',
     },
     {
         title: 'Popcorn Party',
@@ -185,9 +191,10 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     async render() {
-        const [sprites, fonts] = await Promise.all([
+        const [sprites, fonts, lawnStrings] = await Promise.all([
             AchievementScreenAssets.loadSprites(),
             AchievementScreenAssets.loadFonts(),
+            LawnStringLoader.load(),
         ])
         if (!sprites) return
 
@@ -196,7 +203,7 @@ export class AchievementScreen extends MenuScreenBase {
         this._resetRoot('AchievementScreenRoot')
 
         this._createBackground(sprites)
-        this._createAchievements(sprites, fonts)
+        this._createAchievements(sprites, fonts, lawnStrings)
         this._createBackButton(sprites)
         this._createRockButton(sprites)
         this._applyScrollPosition()
@@ -255,7 +262,11 @@ export class AchievementScreen extends MenuScreenBase {
         this._createBackgroundOverlay('Zuma', sprites.zuma, 11250)
     }
 
-    private _createAchievements(sprites: AchievementScreenSprites, fonts: AchievementScreenFonts) {
+    private _createAchievements(
+        sprites: AchievementScreenSprites,
+        fonts: AchievementScreenFonts,
+        lawnStrings: Record<string, string>,
+    ) {
         for (let i = 0; i < ACHIEVEMENTS.length; i++) {
             const row = Math.floor(i / 2)
             const xPos = (i % 2 !== 0 ? 380 : 90) + 120
@@ -282,7 +293,7 @@ export class AchievementScreen extends MenuScreenBase {
 
             this._createText({
                 name: `AchievementTitle_${i}`,
-                text: achievement.title,
+                text: this._achievementString(achievement.titleKey ?? achievement.title, achievement.title, lawnStrings),
                 font: fonts.title,
                 color: ACHIEVEMENT_TITLE_COLOR,
                 x: xPos - 20,
@@ -290,7 +301,11 @@ export class AchievementScreen extends MenuScreenBase {
             })
             this._createText({
                 name: `AchievementDescription_${i}`,
-                text: achievement.description,
+                text: this._achievementString(
+                    achievement.descriptionKey ?? achievement.description,
+                    achievement.description,
+                    lawnStrings,
+                ),
                 font: fonts.description,
                 color: ACHIEVEMENT_DESC_COLOR,
                 x: xPos - 20,
@@ -298,6 +313,10 @@ export class AchievementScreen extends MenuScreenBase {
                 maxWidth: ACHIEVEMENT_DESC_WIDTH,
             })
         }
+    }
+
+    private _achievementString(key: string, fallback: string, lawnStrings: Record<string, string>) {
+        return LawnStringLoader.translateOptional(`[${key}]`, lawnStrings) || fallback
     }
 
     private _isAchievementEarned(index: number) {

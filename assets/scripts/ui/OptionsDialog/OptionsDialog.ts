@@ -11,6 +11,7 @@ import {
 } from 'cc'
 import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
 import { ModalDialog } from '@/ui/Dialog'
@@ -26,6 +27,7 @@ const TEXT_COLOR = new Color(107, 109, 145)
 const DEFAULT_MUSIC_VOLUME = 0.85
 const SFX_VOLUME_SCALE = 0.65
 const DEFAULT_SFX_VOLUME = DEFAULT_MUSIC_VOLUME * SFX_VOLUME_SCALE
+type LawnStringMap = Record<string, string>
 
 @ccclass('OptionsDialog')
 export class OptionsDialog extends ModalDialog {
@@ -85,9 +87,10 @@ export class OptionsDialog extends ModalDialog {
     }
 
     async renderDialog() {
-        const [sprites, fonts] = await Promise.all([
+        const [sprites, fonts, lawnStrings] = await Promise.all([
             OptionsDialogAssets.loadSprites(),
             OptionsDialogAssets.loadFonts(),
+            LawnStringLoader.load(),
         ])
         if (!sprites) return
 
@@ -112,10 +115,10 @@ export class OptionsDialog extends ModalDialog {
         const accelerationOffset = this.gameMenu ? 0 : 15
         const fullScreenOffset = this.gameMenu ? 0 : 20
 
-        this._createLabel('Music', 186, 140 + musicOffset, fonts.label, 'right')
-        this._createLabel('Sound FX', 186, 167 + sfxOffset, fonts.label, 'right')
-        this._createLabel('3D Acceleration', 274, 197 + accelerationOffset, fonts.label, 'right')
-        this._createLabel('Full Screen', 274, 229 + fullScreenOffset, fonts.label, 'right')
+        this._createLabel(this._lawnString(lawnStrings, 'OPTIONS_MUSIC_LABEL', 'Music'), 186, 140 + musicOffset, fonts.label, 'right')
+        this._createLabel(this._lawnString(lawnStrings, 'OPTIONS_SOUNDFX', 'Sound FX'), 186, 167 + sfxOffset, fonts.label, 'right')
+        this._createLabel(this._lawnString(lawnStrings, 'OPTIONS_3D_ACCELERATION', '3D Acceleration'), 274, 197 + accelerationOffset, fonts.label, 'right')
+        this._createLabel(this._lawnString(lawnStrings, 'OPTIONS_FULL_SCREEN', 'Full Screen'), 274, 229 + fullScreenOffset, fonts.label, 'right')
 
         this._createSlider('MusicVolume', 199, 116 + musicOffset, this.musicVolume, (value) => {
             this.musicVolume = value
@@ -150,9 +153,24 @@ export class OptionsDialog extends ModalDialog {
             } : null,
         )
         if (this.gameMenu) {
-            this._createGameButtons(fonts)
+            this._createGameButtons(fonts, lawnStrings)
         }
-        this._createBackButton(fonts)
+        this._createBackButton(fonts, lawnStrings)
+    }
+
+    private _lawnString(strings: LawnStringMap, key: string, fallback: string) {
+        return LawnStringLoader.translateOptional(`[${key}]`, strings) || fallback
+    }
+
+    private _localizedLabel(label: string, strings: LawnStringMap) {
+        if (label.startsWith('[') && label.endsWith(']')) return LawnStringLoader.translate(label, strings)
+        const key = {
+            OK: 'DIALOG_BUTTON_OK',
+            'BACK TO GAME': 'BACK_TO_GAME',
+            'MAIN MENU': 'MAIN_MENU_BUTTON',
+            'GO BACK': 'BACK_TO_GAME',
+        }[label.toUpperCase()]
+        return key ? this._lawnString(strings, key, label) : label
     }
 
     private _createLabel(
@@ -326,7 +344,7 @@ export class OptionsDialog extends ModalDialog {
         }
     }
 
-    private _createGameButtons(fonts: OptionsDialogFonts) {
+    private _createGameButtons(fonts: OptionsDialogFonts, lawnStrings: LawnStringMap) {
         const sprites = this._sprites!
         const buttonSprites = {
             left: sprites.buttonLeft,
@@ -345,7 +363,7 @@ export class OptionsDialog extends ModalDialog {
             name: 'RestartLevelButton',
             parent: this._root!,
             layer: this.node.layer,
-            label: 'Restart Level',
+            label: this._lawnString(lawnStrings, 'RESTART_LEVEL_BUTTON', 'Restart Level'),
             x: this._cppX(107),
             y: this._cppY(284),
             width: 209,
@@ -359,7 +377,7 @@ export class OptionsDialog extends ModalDialog {
             name: 'MainMenuButton',
             parent: this._root!,
             layer: this.node.layer,
-            label: 'Main Menu',
+            label: this._lawnString(lawnStrings, 'MAIN_MENU_BUTTON', 'Main Menu'),
             x: this._cppX(107),
             y: this._cppY(327),
             width: 209,
@@ -370,9 +388,9 @@ export class OptionsDialog extends ModalDialog {
         })
     }
 
-    private _createBackButton(fonts: OptionsDialogFonts) {
+    private _createBackButton(fonts: OptionsDialogFonts, lawnStrings: LawnStringMap) {
         const sprites = this._sprites!
-        const labelText = this.backButtonLabel
+        const labelText = this._localizedLabel(this.backButtonLabel, lawnStrings)
         const buttonNode = createUINode('BackToGameButton', {
             parent: this._root!,
             layer: this.node.layer,

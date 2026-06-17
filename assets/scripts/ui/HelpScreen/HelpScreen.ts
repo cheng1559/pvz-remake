@@ -10,6 +10,7 @@ import {
     Vec3,
 } from 'cc'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { UIButton } from '@/ui/Button'
@@ -44,16 +45,17 @@ export class HelpScreen extends MenuScreenBase {
     }
 
     async render() {
-        const [sprites, fonts] = await Promise.all([
+        const [sprites, fonts, lawnStrings] = await Promise.all([
             HelpScreenAssets.loadSprites(),
             HelpScreenAssets.loadFonts(),
+            LawnStringLoader.load(),
         ])
         if (!sprites) return
 
         this._resetRoot('HelpScreenRoot')
 
         this._createNote(sprites)
-        this._createMainMenuButton(sprites, fonts)
+        this._createMainMenuButton(sprites, fonts, lawnStrings)
         this._createFadeOverlay()
 
         void SoundLoader.play(SoundEffect.Paper)
@@ -101,7 +103,11 @@ export class HelpScreen extends MenuScreenBase {
         })
     }
 
-    private _createMainMenuButton(sprites: HelpScreenSprites, fonts: HelpScreenFonts) {
+    private _createMainMenuButton(
+        sprites: HelpScreenSprites,
+        fonts: HelpScreenFonts,
+        lawnStrings: Record<string, string>,
+    ) {
         const buttonNode = createUINode('MainMenuButton', {
             parent: this._root!,
             layer: this.node.layer,
@@ -148,7 +154,7 @@ export class HelpScreen extends MenuScreenBase {
         const label = labelNode.addComponent(FontRenderer)
         if (fonts.button) label.setFontAssets(fonts.button)
         label.fontColor = BUTTON_TEXT_COLOR
-        label.string = 'Main Menu'
+        label.string = LawnStringLoader.translate('[MAIN_MENU_BUTTON]', lawnStrings)
         label.forceRebuild()
 
         const metrics = FontMetricsUtil.getMetrics(fonts.button?.config ?? null)

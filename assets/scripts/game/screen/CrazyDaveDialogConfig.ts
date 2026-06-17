@@ -6,6 +6,7 @@ export const CRAZY_DAVE_FIRST_DIALOG_START = 2400
 export const CRAZY_DAVE_FIRST_DIALOG_END = 2406
 export const CRAZY_DAVE_POST_SHOVEL_DIALOG_START = 2410
 export const CRAZY_DAVE_POST_SHOVEL_DIALOG_END = 2415
+export const CRAZY_DAVE_WALLNUT_BOWLING_LINE_DIALOG = 2411
 
 export type CrazyDaveDialogPhase = 'off' | 'intro' | 'shovel' | 'post-shovel'
 export type CrazyDaveMessagePhase = 'intro' | 'post-shovel'

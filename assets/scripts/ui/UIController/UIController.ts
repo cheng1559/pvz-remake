@@ -18,6 +18,7 @@ import {
     view,
 } from 'cc'
 import { FontLoader } from '@/core/FontLoader'
+import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { AdventureGameScreen } from '@/game/GameScreen'
 import {
@@ -249,13 +250,13 @@ export class UIController extends Component {
             zenGardenAvailable: this._canShowZenGarden(),
         })
         selectorScreen.onLockedModeClick = (name) => {
-            const message =
+            void this._showSelectorLockedDialog(
                 name === 'miniGames'
-                    ? 'Play more Adventure to \nunlock the Mini-games.'
+                    ? 'MINIGAME_LOCKED_MESSAGE'
                     : name === 'Puzzle'
-                        ? 'Play more Adventure to \nunlock Puzzle Mode.'
-                        : 'Play more Adventure to \nunlock Survival Mode.'
-            void this._showSelectorLockedDialog('Locked!', message)
+                        ? 'PUZZLE_LOCKED_MESSAGE'
+                        : 'SURVIVAL_LOCKED_MESSAGE',
+            )
         }
         selectorScreen.onMessageBoxRequest = () => {
             this.showMessageBox('Message', 'Hello from SelectorScreen!')
@@ -340,7 +341,7 @@ export class UIController extends Component {
             this.showPauseDialog(gameScreen)
         }
         gameScreen.onGameOverRequest = () => {
-            this.showGameOverDialog()
+            void this.showGameOverDialog()
         }
         gameScreen.onAwardScreenRequest = (award) => {
             const profileAdventureLevel = this._advanceAdventureProgress(gameScreen.levelDefinition.adventureLevel)
@@ -436,6 +437,11 @@ export class UIController extends Component {
         challengeScreen.page = page
         challengeScreen.onBackToMenu = () => {
             void this.showSelectorScreen()
+        }
+        challengeScreen.onChallengeSelected = (challengeName) => {
+            if (challengeName === 'Wall-nut Bowling') {
+                this.showAdventureGame(ADVENTURE_1_5)
+            }
         }
 
         void challengeScreen.ensureRendered().then(() => {
@@ -706,7 +712,7 @@ export class UIController extends Component {
         const optionsDialog = node.addComponent(OptionsDialog)
         this._optionsDialog = optionsDialog
         optionsDialog.gameMenu = true
-        optionsDialog.backButtonLabel = 'Back To Game'
+        optionsDialog.backButtonLabel = '[BACK_TO_GAME]'
         this._configureOptionsDialog(optionsDialog)
         optionsDialog.onClose = () => {
             this._commitOptionsDialogSettings(optionsDialog)
@@ -897,15 +903,17 @@ export class UIController extends Component {
         return messageBox
     }
 
-    showGameOverDialog(): MessageBox | null {
+    async showGameOverDialog(): Promise<MessageBox | null> {
+        if (this._modalScreen?.isValid) return null
+        const strings = await LawnStringLoader.load()
         if (this._modalScreen?.isValid) return null
 
         const node = createUINode('GameOverDialog', { active: false, width: 100, height: 100 })
         const dialog = node.addComponent(MessageBox)
-        dialog.title = 'GAME OVER'
+        dialog.title = this._lawnString(strings, 'GAME_OVER', 'GAME OVER')
         dialog.message = ''
         dialog.contentInsetTopExtra = 15
-        dialog.setButtonMode(DialogButtonMode.Footer, 'Try Again')
+        dialog.setButtonMode(DialogButtonMode.Footer, this._lawnString(strings, 'TRY_AGAIN', 'Try Again'))
         dialog.onDragStateChange = (dragging) => {
             this._gameOverDialogDragging = dragging
             const button = this._gameOverMainMenuButton?.getComponent(UIButton)
@@ -933,9 +941,10 @@ export class UIController extends Component {
     private async _createGameOverMainMenuButton() {
         this._destroyGameOverMainMenuButton()
 
-        const [sprites, fonts] = await Promise.all([
+        const [sprites, fonts, lawnStrings] = await Promise.all([
             MessageBoxAssets.loadButtonSprites(),
             MessageBoxAssets.loadButtonFonts(),
+            LawnStringLoader.load(),
         ])
         if (!sprites || !fonts || this._gameOverMainMenuButton?.isValid) return
         if (!this._modalScreen?.isValid || !this.uiRoot?.isValid) return
@@ -944,7 +953,7 @@ export class UIController extends Component {
             name: 'GameOverMainMenuButton',
             parent: this._ensureScreenClipRoot(),
             layer: this.uiRoot.layer,
-            label: 'Main Menu',
+            label: this._lawnString(lawnStrings, 'MAIN_MENU_BUTTON', 'Main Menu'),
             x: GAME_OVER_MAIN_MENU_X,
             y: GAME_OVER_MAIN_MENU_Y,
             width: GAME_OVER_MAIN_MENU_WIDTH,
@@ -1096,12 +1105,24 @@ export class UIController extends Component {
         return result === DialogResult.Yes
     }
 
+    private _lawnString(strings: Record<string, string>, key: string, fallback: string) {
+        return LawnStringLoader.translateOptional(`[${key}]`, strings) || fallback
+    }
+
     async confirmQuit(): Promise<void> {
-        const dialog = this.showMessageBox('Quit', 'Are you sure you wish to \nquit the game?')
+        const strings = await LawnStringLoader.load()
+        const dialog = this.showMessageBox(
+            this._lawnString(strings, 'QUIT_HEADER', 'Quit'),
+            this._lawnString(strings, 'QUIT_MESSAGE', 'Are you sure you wish to \nquit the game?'),
+        )
         if (!dialog) return
 
         dialog.setMessageLayout(0, 0, 2)
-        dialog.setButtonMode(DialogButtonMode.OkCancel, 'Quit', 'Cancel')
+        dialog.setButtonMode(
+            DialogButtonMode.OkCancel,
+            this._lawnString(strings, 'QUIT_BUTTON', 'Quit'),
+            this._lawnString(strings, 'DIALOG_BUTTON_CANCEL', 'Cancel'),
+        )
         const result = await dialog.waitForResult()
         if (result === DialogResult.Ok) {
             game.end()
@@ -1109,27 +1130,37 @@ export class UIController extends Component {
     }
 
     async confirmRestartLevel(): Promise<boolean> {
+        const strings = await LawnStringLoader.load()
         const dialog = this.showMessageBox(
-            'Restart Level?',
-            'Do you want to try this level \nagain from the beginning?',
+            this._lawnString(strings, 'RESTART_LEVEL_HEADER', 'Restart Level?'),
+            this._lawnString(strings, 'RESTART_LEVEL_BODY', 'Do you want to try this level \nagain from the beginning?'),
         )
         if (!dialog) return false
 
         dialog.setMessageLayout(0, 0, 2)
-        dialog.setButtonMode(DialogButtonMode.OkCancel, 'RESTART', 'CANCEL')
+        dialog.setButtonMode(
+            DialogButtonMode.OkCancel,
+            this._lawnString(strings, 'DIALOG_BUTTON_OK', 'OK'),
+            this._lawnString(strings, 'DIALOG_BUTTON_CANCEL', 'CANCEL'),
+        )
         const result = await dialog.waitForResult()
         return result === DialogResult.Ok
     }
 
     async confirmBackToMainMenu(): Promise<boolean> {
+        const strings = await LawnStringLoader.load()
         const dialog = this.showMessageBox(
-            'Leave Game?',
-            'Do you want to return\nto the main menu?\n\nYour game will be saved.',
+            this._lawnString(strings, 'LEAVE_GAME_HEADER', 'Leave Game?'),
+            this._lawnString(strings, 'LEAVE_GAME', 'Do you want to return\nto the main menu?\n\nYour game will be saved.'),
         )
         if (!dialog) return false
 
         dialog.setMessageLayout(0, 0, 2)
-        dialog.setButtonMode(DialogButtonMode.OkCancel, 'LEAVE', 'CANCEL')
+        dialog.setButtonMode(
+            DialogButtonMode.OkCancel,
+            this._lawnString(strings, 'LEAVE_BUTTON', 'LEAVE'),
+            this._lawnString(strings, 'DIALOG_BUTTON_CANCEL', 'CANCEL'),
+        )
         const result = await dialog.waitForResult()
         return result === DialogResult.Ok
     }
@@ -1543,9 +1574,12 @@ export class UIController extends Component {
         return profile.finishedAdventure > 0 || profile.adventureLevel >= 45
     }
 
-    private async _showSelectorLockedDialog(title: string, message: string) {
-        const dialog = this.showMessageBox(title, message)
-        dialog?.setMessageLayout(277, 0, 2)
+    private async _showSelectorLockedDialog(messageKey: string) {
+        const strings = await LawnStringLoader.load()
+        this.showMessageBox(
+            this._lawnString(strings, 'MODE_LOCKED', 'Locked!'),
+            this._lawnString(strings, messageKey, 'Play more Adventure to unlock this mode.'),
+        )
     }
 
     private _resolveAdventureLevel(progressLevel: number): LevelDefinition {

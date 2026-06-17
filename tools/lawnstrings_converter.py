@@ -7,7 +7,9 @@ Usage:
 """
 
 import argparse
+import html
 import json
+import re
 from pathlib import Path
 
 
@@ -66,9 +68,25 @@ def parse_lawnstrings(text: str) -> dict[str, str]:
         index = next_name_start
 
 
-def convert_lawnstrings(src_path: Path, dst_path: Path) -> int:
+def parse_default_xml_strings(text: str) -> dict[str, str]:
+    strings: dict[str, str] = {}
+    for match in re.finditer(r'<String\s+id="([^"]*)">(.*?)</String>', text, re.DOTALL):
+        name = html.unescape(match.group(1)).strip()
+        if not name:
+            continue
+        value = match.group(2).strip().replace('\r', '')
+        value = value.replace('&cr;', '\n').replace('&nbsp;', ' ')
+        strings[name.upper()] = html.unescape(value)
+    return strings
+
+
+def convert_lawnstrings(src_path: Path, dst_path: Path, default_xml_path: Path | None = None) -> int:
     text = read_lawnstrings_text(src_path)
     strings = parse_lawnstrings(text)
+    if default_xml_path and default_xml_path.exists():
+        default_strings = parse_default_xml_strings(read_lawnstrings_text(default_xml_path))
+        for key, value in default_strings.items():
+            strings.setdefault(key, value)
 
     dst_path.parent.mkdir(parents=True, exist_ok=True)
     dst_path.write_text(
@@ -92,9 +110,15 @@ def main():
         default=Path('./assets/resources/properties/lawnstrings.json'),
         help='Destination JSON resource path.',
     )
+    parser.add_argument(
+        '--default-xml',
+        type=Path,
+        default=Path('./tools/raw/properties/default.xml'),
+        help='Optional default.xml strings to merge without overriding LawnStrings keys.',
+    )
     args = parser.parse_args()
 
-    count = convert_lawnstrings(args.input, args.output)
+    count = convert_lawnstrings(args.input, args.output, args.default_xml)
     print(f"[lawnstrings] Wrote {count} strings -> {args.output}")
 
 

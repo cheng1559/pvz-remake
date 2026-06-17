@@ -102,11 +102,11 @@ def main():
     print("[pipeline] Step 1: Extract main.pak")
     print("=" * 60)
 
-    # raw = pak_path.read_bytes()
-    # data = _decrypt(raw)
-    # entries = parse_pak(data)
-    # count = extract_entries(data, entries, raw_dir, verbose=False)
-    # print(f"[pipeline] Extracted {count} files -> {raw_dir}\n")
+    raw = pak_path.read_bytes()
+    data = _decrypt(raw)
+    entries = parse_pak(data)
+    count = extract_entries(data, entries, raw_dir, verbose=False)
+    print(f"[pipeline] Extracted {count} files -> {raw_dir}\n")
 
     # ── Step 2: Rename to lowercase ────────────────────────────────
     print("=" * 60)
@@ -154,8 +154,9 @@ def main():
     print("=" * 60)
 
     lawnstrings_src = raw_dir / "properties/lawnstrings.txt"
+    default_xml_src = raw_dir / "properties/default.xml"
     lawnstrings_dst = Path("./assets/resources/properties/lawnstrings.json")
-    string_count = convert_lawnstrings(lawnstrings_src, lawnstrings_dst)
+    string_count = convert_lawnstrings(lawnstrings_src, lawnstrings_dst, default_xml_src)
     print(f"[pipeline] Converted {string_count} strings -> {lawnstrings_dst}")
 
     # ── Step 7: Copy images ────────────────────────────────────────

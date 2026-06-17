@@ -1,6 +1,7 @@
 import { _decorator, Color, Node, Rect, Size, Sprite, SpriteFrame, Vec2, Vec3 } from 'cc'
 import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
 import { MenuScreenBase } from '@/ui/MenuScreenBase'
@@ -35,6 +36,11 @@ const PAGE_TITLE: Record<ChallengePage, string> = {
     [ChallengePage.Puzzle]: 'Puzzle',
     [ChallengePage.Survival]: 'Survival',
 }
+const PAGE_TITLE_KEYS: Partial<Record<ChallengePage, string>> = {
+    [ChallengePage.MiniGames]: 'PICK_CHALLENGE',
+    [ChallengePage.Puzzle]: 'SCARY_POTTER',
+    [ChallengePage.Survival]: 'PICK_AREA',
+}
 
 interface ChallengeDefinition {
     page: ChallengePage
@@ -42,86 +48,91 @@ interface ChallengeDefinition {
     col: number
     iconIndex: number
     name: string
+    key?: string
 }
 
 const CHALLENGE_DEFINITIONS: ChallengeDefinition[] = [
-    { page: ChallengePage.Survival, row: 0, col: 0, iconIndex: 0, name: 'Survival:\nDay' },
-    { page: ChallengePage.Survival, row: 0, col: 1, iconIndex: 1, name: 'Survival:\nNight' },
-    { page: ChallengePage.Survival, row: 0, col: 2, iconIndex: 2, name: 'Survival:\nPool' },
-    { page: ChallengePage.Survival, row: 0, col: 3, iconIndex: 3, name: 'Survival:\nFog' },
-    { page: ChallengePage.Survival, row: 0, col: 4, iconIndex: 4, name: 'Survival:\nRoof' },
-    { page: ChallengePage.Survival, row: 1, col: 0, iconIndex: 5, name: 'Survival:\nDay (Hard)' },
-    { page: ChallengePage.Survival, row: 1, col: 1, iconIndex: 6, name: 'Survival:\nNight (Hard)' },
-    { page: ChallengePage.Survival, row: 1, col: 2, iconIndex: 7, name: 'Survival:\nPool (Hard)' },
-    { page: ChallengePage.Survival, row: 1, col: 3, iconIndex: 8, name: 'Survival:\nFog (Hard)' },
-    { page: ChallengePage.Survival, row: 1, col: 4, iconIndex: 9, name: 'Survival:\nRoof (Hard)' },
-    { page: ChallengePage.Survival, row: 2, col: 2, iconIndex: 10, name: 'Survival:\nEndless' },
+    { page: ChallengePage.Survival, row: 0, col: 0, iconIndex: 0, name: 'Survival:\nDay', key: 'SURVIVAL_DAY_NORMAL' },
+    { page: ChallengePage.Survival, row: 0, col: 1, iconIndex: 1, name: 'Survival:\nNight', key: 'SURVIVAL_NIGHT_NORMAL' },
+    { page: ChallengePage.Survival, row: 0, col: 2, iconIndex: 2, name: 'Survival:\nPool', key: 'SURVIVAL_POOL_NORMAL' },
+    { page: ChallengePage.Survival, row: 0, col: 3, iconIndex: 3, name: 'Survival:\nFog', key: 'SURVIVAL_FOG_NORMAL' },
+    { page: ChallengePage.Survival, row: 0, col: 4, iconIndex: 4, name: 'Survival:\nRoof', key: 'SURVIVAL_ROOF_NORMAL' },
+    { page: ChallengePage.Survival, row: 1, col: 0, iconIndex: 5, name: 'Survival:\nDay (Hard)', key: 'SURVIVAL_DAY_HARD' },
+    { page: ChallengePage.Survival, row: 1, col: 1, iconIndex: 6, name: 'Survival:\nNight (Hard)', key: 'SURVIVAL_NIGHT_HARD' },
+    { page: ChallengePage.Survival, row: 1, col: 2, iconIndex: 7, name: 'Survival:\nPool (Hard)', key: 'SURVIVAL_POOL_HARD' },
+    { page: ChallengePage.Survival, row: 1, col: 3, iconIndex: 8, name: 'Survival:\nFog (Hard)', key: 'SURVIVAL_FOG_HARD' },
+    { page: ChallengePage.Survival, row: 1, col: 4, iconIndex: 9, name: 'Survival:\nRoof (Hard)', key: 'SURVIVAL_ROOF_HARD' },
+    { page: ChallengePage.Survival, row: 2, col: 2, iconIndex: 10, name: 'Survival:\nEndless', key: 'SURVIVAL_DAY_ENDLESS' },
 
-    { page: ChallengePage.MiniGames, row: 0, col: 0, iconIndex: 0, name: 'Zombotany' },
-    { page: ChallengePage.MiniGames, row: 0, col: 1, iconIndex: 6, name: 'Wall-nut Bowling' },
-    { page: ChallengePage.MiniGames, row: 0, col: 2, iconIndex: 2, name: 'Slot Machine' },
-    { page: ChallengePage.MiniGames, row: 0, col: 3, iconIndex: 3, name: "It's Raining Seeds" },
-    { page: ChallengePage.MiniGames, row: 0, col: 4, iconIndex: 1, name: 'Beghouled' },
-    { page: ChallengePage.MiniGames, row: 1, col: 0, iconIndex: 8, name: 'Invisighoul' },
-    { page: ChallengePage.MiniGames, row: 1, col: 1, iconIndex: 5, name: 'Seeing Stars' },
-    { page: ChallengePage.MiniGames, row: 1, col: 2, iconIndex: 7, name: 'Zombiquarium' },
-    { page: ChallengePage.MiniGames, row: 1, col: 3, iconIndex: 20, name: 'Beghouled Twist' },
+    { page: ChallengePage.MiniGames, row: 0, col: 0, iconIndex: 0, name: 'Zombotany', key: 'WAR_AND_PEAS' },
+    { page: ChallengePage.MiniGames, row: 0, col: 1, iconIndex: 6, name: 'Wall-nut Bowling', key: 'WALL_NUT_BOWLING' },
+    { page: ChallengePage.MiniGames, row: 0, col: 2, iconIndex: 2, name: 'Slot Machine', key: 'SLOT_MACHINE' },
+    { page: ChallengePage.MiniGames, row: 0, col: 3, iconIndex: 3, name: "It's Raining Seeds", key: 'ITS_RAINING_SEEDS' },
+    { page: ChallengePage.MiniGames, row: 0, col: 4, iconIndex: 1, name: 'Beghouled', key: 'BEGHOULED' },
+    { page: ChallengePage.MiniGames, row: 1, col: 0, iconIndex: 8, name: 'Invisighoul', key: 'INVISIGHOUL' },
+    { page: ChallengePage.MiniGames, row: 1, col: 1, iconIndex: 5, name: 'Seeing Stars', key: 'SEEING_STARS' },
+    { page: ChallengePage.MiniGames, row: 1, col: 2, iconIndex: 7, name: 'Zombiquarium', key: 'ZOMBIQUARIUM' },
+    { page: ChallengePage.MiniGames, row: 1, col: 3, iconIndex: 20, name: 'Beghouled Twist', key: 'BEGHOULED_TWIST' },
     {
         page: ChallengePage.MiniGames,
         row: 1,
         col: 4,
         iconIndex: 12,
         name: 'Big Trouble Little Zombie',
+        key: 'LITTLE_TROUBLE',
     },
-    { page: ChallengePage.MiniGames, row: 2, col: 0, iconIndex: 15, name: 'Portal Combat' },
+    { page: ChallengePage.MiniGames, row: 2, col: 0, iconIndex: 15, name: 'Portal Combat', key: 'PORTAL_COMBAT' },
     {
         page: ChallengePage.MiniGames,
         row: 2,
         col: 1,
         iconIndex: 4,
         name: "Column Like You See 'Em",
+        key: 'COLUMN_AS_YOU_SEE_EM',
     },
-    { page: ChallengePage.MiniGames, row: 2, col: 2, iconIndex: 17, name: 'Bobsled Bonanza' },
+    { page: ChallengePage.MiniGames, row: 2, col: 2, iconIndex: 17, name: 'Bobsled Bonanza', key: 'BOBSLED_BONANZA' },
     {
         page: ChallengePage.MiniGames,
         row: 2,
         col: 3,
         iconIndex: 18,
         name: 'Zombie Nimble Zombie Quick',
+        key: 'ZOMBIES_ON_SPEED',
     },
-    { page: ChallengePage.MiniGames, row: 2, col: 4, iconIndex: 16, name: 'Whack a Zombie' },
-    { page: ChallengePage.MiniGames, row: 3, col: 0, iconIndex: 21, name: 'Last Stand' },
-    { page: ChallengePage.MiniGames, row: 3, col: 1, iconIndex: 0, name: 'Zombotany 2' },
-    { page: ChallengePage.MiniGames, row: 3, col: 2, iconIndex: 6, name: 'Wall-nut Bowling 2' },
-    { page: ChallengePage.MiniGames, row: 3, col: 3, iconIndex: 14, name: 'Pogo Party' },
-    { page: ChallengePage.MiniGames, row: 3, col: 4, iconIndex: 19, name: "Dr. Zomboss's Revenge" },
+    { page: ChallengePage.MiniGames, row: 2, col: 4, iconIndex: 16, name: 'Whack a Zombie', key: 'WHACK_A_ZOMBIE' },
+    { page: ChallengePage.MiniGames, row: 3, col: 0, iconIndex: 21, name: 'Last Stand', key: 'LAST_STAND' },
+    { page: ChallengePage.MiniGames, row: 3, col: 1, iconIndex: 0, name: 'Zombotany 2', key: 'WAR_AND_PEAS_2' },
+    { page: ChallengePage.MiniGames, row: 3, col: 2, iconIndex: 6, name: 'Wall-nut Bowling 2', key: 'WALL_NUT_BOWLING_EXTREME' },
+    { page: ChallengePage.MiniGames, row: 3, col: 3, iconIndex: 14, name: 'Pogo Party', key: 'POGO_PARTY' },
+    { page: ChallengePage.MiniGames, row: 3, col: 4, iconIndex: 19, name: "Dr. Zomboss's Revenge", key: 'FINAL_BOSS' },
 
-    { page: ChallengePage.Puzzle, row: 0, col: 0, iconIndex: 10, name: 'Vasebreaker' },
-    { page: ChallengePage.Puzzle, row: 0, col: 1, iconIndex: 10, name: 'To the Left' },
-    { page: ChallengePage.Puzzle, row: 0, col: 2, iconIndex: 10, name: 'Third Vase' },
-    { page: ChallengePage.Puzzle, row: 0, col: 3, iconIndex: 10, name: 'Chain Reaction' },
-    { page: ChallengePage.Puzzle, row: 0, col: 4, iconIndex: 10, name: 'M is for\nMetal' },
-    { page: ChallengePage.Puzzle, row: 1, col: 0, iconIndex: 10, name: 'Scary Potter' },
-    { page: ChallengePage.Puzzle, row: 1, col: 1, iconIndex: 10, name: 'Hokey Pokey' },
-    { page: ChallengePage.Puzzle, row: 1, col: 2, iconIndex: 10, name: 'Another Chain\nReaction' },
-    { page: ChallengePage.Puzzle, row: 1, col: 3, iconIndex: 10, name: 'Ace of Vase' },
-    { page: ChallengePage.Puzzle, row: 1, col: 4, iconIndex: 10, name: 'Vasebreaker Endless' },
-    { page: ChallengePage.Puzzle, row: 2, col: 0, iconIndex: 11, name: 'I, Zombie' },
-    { page: ChallengePage.Puzzle, row: 2, col: 1, iconIndex: 11, name: 'I, Zombie\nToo' },
-    { page: ChallengePage.Puzzle, row: 2, col: 2, iconIndex: 11, name: 'Can You\nDig It?' },
-    { page: ChallengePage.Puzzle, row: 2, col: 3, iconIndex: 11, name: 'Totally Nuts' },
-    { page: ChallengePage.Puzzle, row: 2, col: 4, iconIndex: 11, name: 'Dead\nZeppelin' },
-    { page: ChallengePage.Puzzle, row: 3, col: 0, iconIndex: 11, name: 'Me Smash!' },
-    { page: ChallengePage.Puzzle, row: 3, col: 1, iconIndex: 11, name: 'ZomBoogie' },
-    { page: ChallengePage.Puzzle, row: 3, col: 2, iconIndex: 11, name: 'Three Hit Wonder' },
+    { page: ChallengePage.Puzzle, row: 0, col: 0, iconIndex: 10, name: 'Vasebreaker', key: 'SCARY_POTTER_1' },
+    { page: ChallengePage.Puzzle, row: 0, col: 1, iconIndex: 10, name: 'To the Left', key: 'SCARY_POTTER_2' },
+    { page: ChallengePage.Puzzle, row: 0, col: 2, iconIndex: 10, name: 'Third Vase', key: 'SCARY_POTTER_3' },
+    { page: ChallengePage.Puzzle, row: 0, col: 3, iconIndex: 10, name: 'Chain Reaction', key: 'SCARY_POTTER_4' },
+    { page: ChallengePage.Puzzle, row: 0, col: 4, iconIndex: 10, name: 'M is for\nMetal', key: 'SCARY_POTTER_5' },
+    { page: ChallengePage.Puzzle, row: 1, col: 0, iconIndex: 10, name: 'Scary Potter', key: 'SCARY_POTTER_6' },
+    { page: ChallengePage.Puzzle, row: 1, col: 1, iconIndex: 10, name: 'Hokey Pokey', key: 'SCARY_POTTER_7' },
+    { page: ChallengePage.Puzzle, row: 1, col: 2, iconIndex: 10, name: 'Another Chain\nReaction', key: 'SCARY_POTTER_8' },
+    { page: ChallengePage.Puzzle, row: 1, col: 3, iconIndex: 10, name: 'Ace of Vase', key: 'SCARY_POTTER_9' },
+    { page: ChallengePage.Puzzle, row: 1, col: 4, iconIndex: 10, name: 'Vasebreaker Endless', key: 'SCARY_POTTER_ENDLESS' },
+    { page: ChallengePage.Puzzle, row: 2, col: 0, iconIndex: 11, name: 'I, Zombie', key: 'I_ZOMBIE_1' },
+    { page: ChallengePage.Puzzle, row: 2, col: 1, iconIndex: 11, name: 'I, Zombie\nToo', key: 'I_ZOMBIE_2' },
+    { page: ChallengePage.Puzzle, row: 2, col: 2, iconIndex: 11, name: 'Can You\nDig It?', key: 'I_ZOMBIE_3' },
+    { page: ChallengePage.Puzzle, row: 2, col: 3, iconIndex: 11, name: 'Totally Nuts', key: 'I_ZOMBIE_4' },
+    { page: ChallengePage.Puzzle, row: 2, col: 4, iconIndex: 11, name: 'Dead\nZeppelin', key: 'I_ZOMBIE_5' },
+    { page: ChallengePage.Puzzle, row: 3, col: 0, iconIndex: 11, name: 'Me Smash!', key: 'I_ZOMBIE_6' },
+    { page: ChallengePage.Puzzle, row: 3, col: 1, iconIndex: 11, name: 'ZomBoogie', key: 'I_ZOMBIE_7' },
+    { page: ChallengePage.Puzzle, row: 3, col: 2, iconIndex: 11, name: 'Three Hit Wonder', key: 'I_ZOMBIE_8' },
     {
         page: ChallengePage.Puzzle,
         row: 3,
         col: 3,
         iconIndex: 11,
         name: 'All your brainz r belong to us',
+        key: 'I_ZOMBIE_9',
     },
-    { page: ChallengePage.Puzzle, row: 3, col: 4, iconIndex: 11, name: 'I, Zombie Endless' },
+    { page: ChallengePage.Puzzle, row: 3, col: 4, iconIndex: 11, name: 'I, Zombie Endless', key: 'I_ZOMBIE_ENDLESS' },
 ]
 
 @ccclass('ChallengeScreen')
@@ -134,22 +145,27 @@ export class ChallengeScreen extends MenuScreenBase {
     private _thumbnailFrames: Map<string, SpriteFrame> = new Map()
 
     async render() {
-        const [sprites, fonts] = await Promise.all([
+        const [sprites, fonts, lawnStrings] = await Promise.all([
             ChallengeScreenAssets.loadSprites(),
             ChallengeScreenAssets.loadFonts(),
+            LawnStringLoader.load(),
         ])
         if (!sprites) return
 
         this._resetRoot('ChallengeScreenRoot')
         this._createBackground(sprites.background)
-        this._createTitle(fonts.title)
+        this._createTitle(fonts.title, lawnStrings)
         this._createTrophyCounter(sprites, fonts.small)
-        this._createChallengeButtons(sprites, fonts.button)
-        this._createBackButton(sprites, fonts)
+        this._createChallengeButtons(sprites, fonts.button, lawnStrings)
+        this._createBackButton(sprites, fonts, lawnStrings)
     }
 
-    private _createTitle(font: BitmapFontAssets | null) {
-        const title = PAGE_TITLE[this.page]
+    private _challengeString(key: string | undefined, fallback: string, lawnStrings: Record<string, string>) {
+        return key ? LawnStringLoader.translateOptional(`[${key}]`, lawnStrings) || fallback : fallback
+    }
+
+    private _createTitle(font: BitmapFontAssets | null, lawnStrings: Record<string, string>) {
+        const title = this._challengeString(PAGE_TITLE_KEYS[this.page], PAGE_TITLE[this.page], lawnStrings)
         this._createText({
             name: 'Title',
             text: title,
@@ -185,7 +201,11 @@ export class ChallengeScreen extends MenuScreenBase {
         })
     }
 
-    private _createBackButton(sprites: ChallengeScreenSprites, fonts: ChallengeScreenFonts) {
+    private _createBackButton(
+        sprites: ChallengeScreenSprites,
+        fonts: ChallengeScreenFonts,
+        lawnStrings: Record<string, string>,
+    ) {
         const buttonNode = createUINode('BackToMenuButton', {
             parent: this._root!,
             layer: this.node.layer,
@@ -210,7 +230,7 @@ export class ChallengeScreen extends MenuScreenBase {
         const label = labelNode.addComponent(FontRenderer)
         if (fonts.button) label.setFontAssets(fonts.button)
         label.fontColor = BUTTON_TEXT_COLOR
-        label.string = 'Back to Menu'
+        label.string = this._challengeString('BACK_TO_MENU', 'Back to Menu', lawnStrings)
         label.forceRebuild()
 
         const metrics = FontMetricsUtil.getMetrics(fonts.button?.config ?? null)
@@ -244,12 +264,13 @@ export class ChallengeScreen extends MenuScreenBase {
     private _createChallengeButtons(
         sprites: ChallengeScreenSprites,
         font: BitmapFontAssets | null,
+        lawnStrings: Record<string, string>,
     ) {
         const pageDefinitions = CHALLENGE_DEFINITIONS.filter(
             (definition) => definition.page === this.page,
         )
         for (const definition of pageDefinitions) {
-            this._createChallengeButton(definition, sprites, font)
+            this._createChallengeButton(definition, sprites, font, lawnStrings)
         }
     }
 
@@ -257,6 +278,7 @@ export class ChallengeScreen extends MenuScreenBase {
         definition: ChallengeDefinition,
         sprites: ChallengeScreenSprites,
         font: BitmapFontAssets | null,
+        lawnStrings: Record<string, string>,
     ) {
         const x = 38 + definition.col * 155
         const startY = definition.page === ChallengePage.Survival ? 125 : 93
@@ -319,7 +341,7 @@ export class ChallengeScreen extends MenuScreenBase {
         label.maxWidth = CHALLENGE_LABEL_WIDTH
         label.lineSpacing = 14
         label.textAlign = 2
-        label.string = definition.name
+        label.string = this._challengeString(definition.key, definition.name, lawnStrings)
         label.forceRebuild()
         const labelMetrics = FontMetricsUtil.getMetrics(font?.config ?? null)
         const singleLineOffsetY = label.contentHeight <= labelMetrics.height ? 1 : 0

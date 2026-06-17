@@ -1,4 +1,5 @@
 import { _decorator, Color, Node, Vec3 } from 'cc'
+import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { Animator } from '@/core/Animator'
 import { AnimNode } from '@/core/Animator/AnimNode'
@@ -35,20 +36,23 @@ export class ZenGardenScreen extends MenuScreenBase {
     private _sprites: ZenGardenScreenSprites | null = null
     private _fonts: ZenGardenScreenFonts | null = null
     private _animations: ZenGardenScreenAnimations | null = null
+    private _lawnStrings: Record<string, string> = {}
     private _backdrop: Node | null = null
     private _nextGardenTooltipNode: Node | null = null
 
     async render(): Promise<void> {
-        const [sprites, fonts, animations] = await Promise.all([
+        const [sprites, fonts, animations, lawnStrings] = await Promise.all([
             ZenGardenScreenAssets.loadSprites(),
             ZenGardenScreenAssets.loadFonts(),
             ZenGardenScreenAssets.loadAnimations(),
+            LawnStringLoader.load(),
         ])
         if (!sprites || !animations) return
 
         this._sprites = sprites
         this._fonts = fonts
         this._animations = animations
+        this._lawnStrings = lawnStrings
         this._hideNextGardenTooltip()
         this._resetRoot('ZenGardenScreenRoot')
         await this._replaceSceneBackdrop()
@@ -91,7 +95,7 @@ export class ZenGardenScreen extends MenuScreenBase {
 
         this._nextGardenTooltipNode = createTooltipNode({
             name: 'NextGardenTooltip',
-            text: NEXT_GARDEN_TOOLTIP,
+            text: this._lawnString('NEXT_GARDEN_TOOLTIP', NEXT_GARDEN_TOOLTIP),
             font: this._fonts.tooltip,
             parent: this._root,
             layer: this.node.layer,
@@ -233,10 +237,16 @@ export class ZenGardenScreen extends MenuScreenBase {
         return rate / fps
     }
 
+    private _lawnString(key: string, fallback: string) {
+        return LawnStringLoader.translateOptional(`[${key}]`, this._lawnStrings) || fallback
+    }
+
     private _createSceneLabel(parent: Node) {
         this._createText({
             name: 'SceneLabel',
-            text: this._scene === 'tree' ? 'Tree of Wisdom' : 'Zen Garden',
+            text: this._scene === 'tree'
+                ? this._lawnString('TREE_OF_WISDOM', 'Tree of Wisdom')
+                : this._lawnString('ZEN_GARDEN', 'Zen Garden'),
             baselineX: 780,
             baselineY: 595,
             font: this._fonts?.sceneLabel ?? null,
@@ -290,7 +300,7 @@ export class ZenGardenScreen extends MenuScreenBase {
             name: 'MainMenuButton',
             parent: this._root!,
             layer: this.node.layer,
-            label: 'Main Menu',
+            label: this._lawnString('MAIN_MENU_BUTTON', 'Main Menu'),
             x: this._cppX(628),
             y: this._cppY(-10),
             width: MAIN_MENU_WIDTH,

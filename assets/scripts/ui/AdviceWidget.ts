@@ -21,7 +21,8 @@ const ADVICE_TUTORIAL_LEVEL2_HEIGHT = 100
 const ADVICE_WIDTH = 800
 const ADVICE_DURATION_FAST = 500
 const ADVICE_DURATION_STAY = 10000
-const ADVICE_TEXT_SIZE = 28
+const PVZ_NATIVE_FONT_SIZE = 0
+const ADVICE_TEXT_SIZE = PVZ_NATIVE_FONT_SIZE
 const ADVICE_TEXT_OFFSET_Y = -4
 const ADVICE_TEXT_MIN_ALPHA = 192
 
@@ -199,11 +200,16 @@ export class AdviceWidget {
         const metrics = FontMetricsUtil.getMetrics(fontConfig)
         if (metrics.height <= 0) return this._label.contentHeight / 2 + layout.textOffsetY
 
-        const wrapped = FontMetricsUtil.measureWordWrapped(fontConfig, this._label.string, labelWidth)
-        const lineCount = Math.max(1, wrapped.lineWidths.length)
         const rawConfig = fontConfig?.json as { defaultPointSize?: number } | undefined
         const defaultPointSize = rawConfig?.defaultPointSize ?? layout.fontSize
-        const scale = defaultPointSize > 0 ? layout.fontSize / defaultPointSize : 1
+        const pointSize = layout.fontSize > 0 ? layout.fontSize : defaultPointSize
+        const scale = defaultPointSize > 0 ? pointSize / defaultPointSize : 1
+        const wrapped = FontMetricsUtil.measureWordWrapped(
+            fontConfig,
+            this._label.string,
+            scale > 0 ? labelWidth / scale : labelWidth,
+        )
+        const lineCount = Math.max(1, wrapped.lineWidths.length)
         const wrappedHeight = (
             metrics.height - metrics.ascentPadding + Math.max(0, lineCount - 1) * metrics.lineSpacing
         ) * scale

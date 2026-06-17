@@ -3,6 +3,7 @@ import { Animator } from '@/core/Animator'
 import type { AnimNode } from '@/core/Animator/AnimNode'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { FontLoader } from '@/core/FontLoader'
+import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { MusicSystem } from '@/game/music/MusicSystem'
@@ -59,8 +60,10 @@ export class StartupScreen extends Component {
     private _startButtonNode: Node | null = null
     private _startButton: UIButton | null = null
     private _loadingLabel: Node | null = null
+    private _lawnStrings: Record<string, string> = {}
 
     async play(): Promise<void> {
+        this._lawnStrings = await LawnStringLoader.load()
         setUISize(this.node, this._screenWidth(), SCREEN_HEIGHT)
         this._resetBlackRoot('StartupScreenRoot')
         void MusicSystem.playTune('title_theme', true)
@@ -132,7 +135,7 @@ export class StartupScreen extends Component {
             this._curBarWidth = Math.min(this._curBarWidth, LOAD_BAR_WIDTH * 0.99)
         } else if (this._curBarWidth > LOAD_BAR_WIDTH) {
             this._curBarWidth = LOAD_BAR_WIDTH
-            this._setLoadingLabel(CLICK_TO_START_TEXT)
+            this._setLoadingLabel(this._lawnString('CLICK_TO_START', CLICK_TO_START_TEXT))
         }
 
         if (loadingPercent > this._prevLoadingPercent + 0.01 || this._loadingComplete) {
@@ -421,7 +424,7 @@ export class StartupScreen extends Component {
         const font = FontLoader.get('briannetod16') ?? null
         if (font) renderer.setFontAssets(font)
         renderer.fontColor = START_BUTTON_NORMAL_COLOR.clone()
-        renderer.string = LOADING_TEXT
+        renderer.string = this._lawnString('LOADING', LOADING_TEXT)
         renderer.forceRebuild()
     }
 
@@ -490,7 +493,7 @@ export class StartupScreen extends Component {
 
         const renderer = this._loadingLabel.getComponent(FontRenderer)
         const font = FontLoader.get('briannetod16') ?? null
-        const text = renderer?.string ?? LOADING_TEXT
+        const text = renderer?.string ?? this._lawnString('LOADING', LOADING_TEXT)
         const metrics = FontMetricsUtil.getMetrics(font?.config ?? null)
         const width = FontMetricsUtil.measureTextWidth(font?.config ?? null, text) || renderer?.contentWidth || 0
         const fontX = Math.trunc((LOAD_BAR_WIDTH - width) / 2)
@@ -515,6 +518,10 @@ export class StartupScreen extends Component {
         renderer.string = text
         renderer.forceRebuild()
         this._layoutLoadingLabel()
+    }
+
+    private _lawnString(key: string, fallback: string) {
+        return LawnStringLoader.translateOptional(`[${key}]`, this._lawnStrings) || fallback
     }
 
     private _triggerLoadBarEvents(previousWidth: number, currentWidth: number) {

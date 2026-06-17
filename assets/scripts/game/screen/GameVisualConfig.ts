@@ -1,6 +1,17 @@
 import type { PlantType, ProjectileEntity, SeedType } from '../GameTypes'
 
-export const SEED_TOOLTIP_NAMES: Record<SeedType, string> = {
+export const SEED_TOOLTIP_KEYS: Record<SeedType, string> = {
+    peashooter: 'PEASHOOTER',
+    sunflower: 'SUNFLOWER',
+    cherrybomb: 'CHERRY_BOMB',
+    wallnut: 'WALL_NUT',
+    potatomine: 'POTATO_MINE',
+    snowpea: 'SNOW_PEA',
+    chomper: 'CHOMPER',
+    repeater: 'REPEATER',
+}
+
+export const SEED_TOOLTIP_FALLBACK_NAMES: Record<SeedType, string> = {
     peashooter: 'Peashooter',
     sunflower: 'Sunflower',
     cherrybomb: 'Cherry Bomb',

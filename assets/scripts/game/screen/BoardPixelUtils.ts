@@ -9,11 +9,17 @@ export function isPixelInRect(pixel: { x: number, y: number }, rect: BoardPixelR
 }
 
 export function getNodeBoardPixelRect(node: Node, width: number, height: number): BoardPixelRect {
-    const parentPos = node.parent?.position ?? Vec3.ZERO
-    const nodePos = node.position
+    let x = node.position.x
+    let y = node.position.y
+    let parent = node.parent
+    while (parent && parent.name !== 'BoardContent') {
+        x += parent.position.x
+        y += parent.position.y
+        parent = parent.parent
+    }
     return {
-        x: parentPos.x + nodePos.x,
-        y: -(parentPos.y + nodePos.y),
+        x,
+        y: -y,
         width,
         height,
     }

@@ -97,6 +97,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             this._soddedNode.active = this._startsWithFullLawn()
         }
         if (this._unsoddedNode) this._unsoddedNode.active = !this._startsWithFullLawn()
+        this._drawBowlingStripe()
 
         const sodLayout = this._introSodLayout()
         const baseSod = sodLayout.baseSprite ? SpriteLoader.get(sodLayout.baseSprite) : null
@@ -162,13 +163,44 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             }
         }
 
-        if (!this._shouldSkipStandardIntro() && SpriteLoader.get('lawnmower_cached') && SpriteLoader.get('plantshadow')) {
+        if (this._shouldCreateIntroLawnMower() && SpriteLoader.get('lawnmower_cached') && SpriteLoader.get('plantshadow')) {
             this._createIntroLawnMower()
         }
 
         if (!this._shouldSkipStandardIntro()) this._createIntroStreetZombies()
         this._createGameOverDoorLayers()
         this._entityLayer.setSiblingIndex(this._boardContent.children.length - 1)
+    }
+
+    protected _drawBowlingStripe() {
+        if (this._session.level.bowling?.showBowlingStripe !== true) return
+
+        const stripe = SpriteLoader.get('wallnut_bowlingstripe')
+        if (!stripe) return
+
+        const lineCol = this._session.level.bowling?.lineColMax ?? 2
+        const stripeX = this._session.geometry.gridToPixel(lineCol + 1, 0).x - 12
+        const stripeY = this._session.geometry.lawnYMin - 3
+        this._bowlingStripeNode = createSpriteNode({
+            name: 'WallnutBowlingStripe',
+            spriteFrame: stripe,
+            parent: this._boardContent,
+            layer: this.node.layer,
+            x: stripeX,
+            y: -stripeY,
+            anchorX: 0,
+            anchorY: 1,
+            z: 2,
+        })
+        this._bowlingStripeNode.active = false
+    }
+
+    protected _syncBowlingStripeVisibility() {
+        if (!this._bowlingStripeNode?.isValid) return
+        this._bowlingStripeNode.active = this._bowlingStripeRevealed &&
+            this._session.level.bowling?.showBowlingStripe === true &&
+            !this._gameOverActive &&
+            !this._levelCompleteActive
     }
 
     protected _introSodLayout() {
@@ -252,6 +284,11 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
 
     protected _shouldPlayIntroSodRoll() {
         return this._session.level.adventureLevel <= 2 || this._session.level.adventureLevel === 4
+    }
+
+    protected _shouldCreateIntroLawnMower() {
+        return !this._shouldSkipStandardIntro() ||
+            (this._session.level.pauseGameplayOnStart === true && this._session.level.hasLawnMowers !== false)
     }
 
     protected _createGameOverDoorLayers() {
@@ -485,19 +522,23 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
     }
 
     protected _drawHud() {
-        const bank = SpriteLoader.get('seedbank')
-        if (bank) {
-            this._seedBankHeight = bank.originalSize.height
-            this._seedBankNode = createSpriteNode({
-                name: 'SeedBank',
-                spriteFrame: bank,
-                parent: this._boardContent,
-                x: 0,
-                y: -bank.originalSize.height,
-            })
-            this._seedBankNode.setSiblingIndex(Math.max(0, this._entityLayer.getSiblingIndex()))
-            this._createSeedBankExtension(bank)
-            this._seedBankNode.active = false
+        if (this._session.level.conveyor?.enabled === true) {
+            this._drawConveyorSeedBank()
+        } else {
+            const bank = SpriteLoader.get('seedbank')
+            if (bank) {
+                this._seedBankHeight = bank.originalSize.height
+                this._seedBankNode = createSpriteNode({
+                    name: 'SeedBank',
+                    spriteFrame: bank,
+                    parent: this._boardContent,
+                    x: 0,
+                    y: -bank.originalSize.height,
+                })
+                this._seedBankNode.setSiblingIndex(Math.max(0, this._entityLayer.getSiblingIndex()))
+                this._createSeedBankExtension(bank)
+                this._seedBankNode.active = false
+            }
         }
 
         this._sunLabel = this._createBitmapText({
@@ -510,6 +551,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             parent: this._seedBankNode ?? this._uiLayer,
             align: 'center',
         })
+        if (this._session.level.conveyor?.enabled === true) this._sunLabel.node.active = false
         this._createMoneyCounter()
         this._createAdviceWidget()
         this._resultLabel = this._createLabel('Result', 400, -285, '', 42, new Color(255, 240, 120))
@@ -521,6 +563,62 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
         this._createProgressMeter()
         this._setSeedBankContentsVisible(false)
         this._syncItemLayerBehindAdvice()
+    }
+
+    protected _drawConveyorSeedBank() {
+        this._seedBankHeight = 87
+        this._seedBankNode = createUINode('SeedBank', {
+            parent: this._boardContent,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 600,
+            height: this._seedBankHeight,
+            x: 0,
+            y: -this._seedBankHeight,
+        })
+        this._seedBankNode.setSiblingIndex(Math.max(0, this._entityLayer.getSiblingIndex()))
+        this._seedBankNode.active = false
+
+        const backdrop = SpriteLoader.get('conveyorbelt_backdrop')
+        if (backdrop) {
+            this._conveyorBackdropNode = createSpriteNode({
+                name: 'ConveyorBeltBackdrop',
+                spriteFrame: backdrop,
+                parent: this._seedBankNode,
+                layer: this.node.layer,
+                x: 83,
+                y: 0,
+            })
+            this._conveyorBackdropNode.active = false
+        }
+
+        const belt = SpriteLoader.get('conveyorbelt')
+        if (belt) {
+            this._conveyorBeltNode = createSpriteNode({
+                name: 'ConveyorBelt',
+                spriteFrame: getAtlasFrame(belt, 0, 502, 16, 1),
+                parent: this._seedBankNode,
+                layer: this.node.layer,
+                x: 90,
+                y: -63,
+            })
+            this._conveyorBeltNode.active = false
+        }
+
+        this._conveyorPacketClipNode = createUINode('ConveyorPacketClip', {
+            parent: this._seedBankNode,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 501,
+            height: 87,
+            x: 90,
+            y: 0,
+            z: 5,
+        })
+        this._conveyorPacketClipNode.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT
+        this._conveyorPacketClipNode.active = false
     }
 
     protected _createMoneyCounter() {
@@ -715,7 +813,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
         this._shovelBankNode = createSpriteNode({
             name: 'ShovelBank',
             spriteFrame: bank,
-            parent: this._uiLayer,
+            parent: this._boardContent,
             layer: this.node.layer,
             x: this._getShovelButtonX(),
             y: -SHOVEL_BUTTON_Y,
@@ -753,6 +851,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             bubbleSprite: SpriteLoader.get('store_speechbubble2') ?? null,
             daveFont: this._daveFont,
             continueFont: this._packetCostFont,
+            continueText: LawnStringLoader.translate('[CLICK_TO_CONTINUE]', this._lawnStrings),
             wallnutAnimation: this._plantAnimations.get('wallnut') ?? null,
             layer: this.node.layer,
             animationsEnabled: this._isGameplaySceneAnimationEnabled(),
@@ -782,6 +881,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
 
         this._crazyDaveMessageIndex = index
         this._crazyDaveDialogPhase = phase
+        this._revealBowlingStripeForCrazyDaveMessage(index)
     }
 
     protected _advanceCrazyDaveDialog() {
@@ -813,9 +913,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
     protected _finishCrazyDavePostShovelDialog() {
         this._hideCrazyDaveBubble()
         this._crazyDaveDialogPhase = 'off'
-        this._hideCrazyDaveAfterLeave()
-        this._gameplayUpdatesPaused = false
-        this._startGameplayMusic()
+        this._hideCrazyDaveAfterLeave(() => this._startGameplayLawnMowerIntro())
     }
 
     protected _syncShovelTutorialAfterPickup() {
@@ -880,10 +978,18 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
         if (message) this._showAdvice(message, 'hint-stay')
     }
 
-    protected _hideCrazyDaveAfterLeave() {
-        this._crazyDave?.leave(true, () => {
+    protected _hideCrazyDaveAfterLeave(onHidden?: () => void) {
+        if (!this._crazyDave?.isValid) {
             this._crazyDaveHidden = true
             this._syncCrazyDaveState()
+            onHidden?.()
+            return
+        }
+
+        this._crazyDave.leave(true, () => {
+            this._crazyDaveHidden = true
+            this._syncCrazyDaveState()
+            onHidden?.()
         })
     }
 
@@ -899,7 +1005,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             name: 'MenuButton',
             parent: this._uiLayer,
             layer: this.node.layer,
-            label: 'Menu',
+            label: LawnStringLoader.translate('[MENU_BUTTON]', this._lawnStrings),
             x: 681,
             y: 10,
             width: MENU_BUTTON_WIDTH,
