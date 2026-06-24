@@ -25,6 +25,7 @@ export function createPlant(args: PlantCreateArgs): Plant {
         case 'cherrybomb':
             return new CherryBombPlant(args)
         case 'wallnut':
+        case 'explodenut':
             return new WallNutPlant(args)
         case 'potatomine':
             return new PotatoMinePlant(args)

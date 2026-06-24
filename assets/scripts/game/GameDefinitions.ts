@@ -116,6 +116,15 @@ export const SEED_DEFINITIONS: Record<string, SeedDefinition> = {
         cursorSprite: 'wallnut_body',
         placement: 'ground',
     },
+    explodenut: {
+        id: 'explodenut',
+        plantType: 'explodenut',
+        cost: 0,
+        cooldownTicks: 3000,
+        packetSprite: 'seedpacket_larger',
+        cursorSprite: 'wallnut_body',
+        placement: 'ground',
+    },
     potatomine: {
         id: 'potatomine',
         plantType: 'potatomine',
@@ -193,6 +202,18 @@ export const PLANT_DEFINITIONS: Record<string, PlantDefinition> = {
     },
     wallnut: {
         id: 'wallnut',
+        maxHealth: 4000,
+        attackCadenceTicks: 0,
+        firstAttackDelayTicks: 0,
+        shootingAnimationTicks: 0,
+        projectileType: 'pea',
+        projectileOffsetX: 0,
+        projectileOffsetY: 0,
+        animationPath: 'animations/wallnut',
+        bodyRect: { x: 10, y: 0, width: 60, height: 80 },
+    },
+    explodenut: {
+        id: 'explodenut',
         maxHealth: 4000,
         attackCadenceTicks: 0,
         firstAttackDelayTicks: 0,
@@ -444,7 +465,8 @@ export const ADVENTURE_1_5: LevelDefinition = {
         initialDelayTicks: 400,
         maxPackets: 10,
         seedPool: [
-            { seedType: 'wallnut', weight: 100 },
+            { seedType: 'wallnut', weight: 85 },
+            { seedType: 'explodenut', weight: 15 },
         ],
     },
     bowling: {

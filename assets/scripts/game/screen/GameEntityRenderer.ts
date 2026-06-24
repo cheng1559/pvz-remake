@@ -944,7 +944,10 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             const animationJson = plantAnimation.json as Record<string, any>
             void animator.parseJson(animationJson).then(() => {
                 animator.enabled = this._isGameplaySceneAnimationEnabled()
-                this._setAnimatorOpacity(animator, animationJson, opacity)
+                const tint = plantType === 'explodenut'
+                    ? new Color(255, 64, 64, opacity)
+                    : new Color(255, 255, 255, opacity)
+                this._setAnimatorColor(animator, animationJson, tint)
                 wirePlantAnimation(animator, view, plantType, { animated, staticAnimTime, shakeNode: animatorNode })
                 const currentPlant = plantId == null
                     ? null
@@ -964,7 +967,10 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
     }
 
     protected _setAnimatorOpacity(animator: Animator, animationJson: Record<string, any>, opacity: number) {
-        const color = new Color(255, 255, 255, opacity)
+        this._setAnimatorColor(animator, animationJson, new Color(255, 255, 255, opacity))
+    }
+
+    protected _setAnimatorColor(animator: Animator, animationJson: Record<string, any>, color: Color) {
         for (const nodeData of Object.values(animationJson)) {
             const tracks = (nodeData as { tracks?: Record<string, unknown> }).tracks
             if (!tracks) continue
@@ -1047,7 +1053,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
     protected _syncPlantAnimation(plant: PlantEntity) {
         const view = this._plantViews.get(plant.id)
         if (!view) return
-        if (plant.type !== 'wallnut') return
+        if (plant.type !== 'wallnut' && plant.type !== 'explodenut') return
 
         this._syncWallNutDamageState(view, plant)
         this._syncWallNutEatingFreeze(view, plant)

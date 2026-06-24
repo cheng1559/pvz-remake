@@ -414,11 +414,8 @@ export class MessageBox extends ModalDialog {
         // ── Create title FontRenderer ──
         this._destroyFontNode(this._titleNode)
         if (titleFontData && this.title) {
-            const titleCfg = titleFontData.config.json as any
-            const titleL0 = titleCfg.layers?.[0]
-            const titleAscentPad = titleL0?.ascentPadding ?? 0
-            const titleAscent = titleL0?.ascent ?? 0
-            const configuredTitleHeight = titleL0?.height ?? 0
+            const titleAscentPad = titleMetrics.ascentPadding
+            const titleAscent = titleMetrics.ascent
 
             // aOffsetY = aFontY - ascentPadding + ascent (baseline in C++ coords)
             const aOffsetY = aFontY - titleAscentPad + titleAscent
@@ -430,8 +427,6 @@ export class MessageBox extends ModalDialog {
             titleFont.string = this.title
             this.node.addChild(this._titleNode)
             titleFont.forceRebuild()
-            const titleFontHeight =
-                configuredTitleHeight > 0 ? configuredTitleHeight : titleFont.contentHeight
 
             // FontRenderer is positioned by glyph top, while the original DrawString uses baseline Y.
             const titleWidth =
@@ -443,8 +438,10 @@ export class MessageBox extends ModalDialog {
             this._titleNode.setPosition(titleX, titleY)
             this._titleRenderer = titleFont
 
-            // Advance aFontY past title: baseline - ascent + fontHeight + spaceAfterHeader
-            aFontY = aOffsetY - titleAscent + titleFontHeight + this.spaceAfterHeader
+            // Reference uses ImageFont::GetHeight(), which falls back to the font-wide
+            // default height when the descriptor's explicit height is zero. Using the
+            // rendered title's glyph bounds here makes the body area title-dependent.
+            aFontY = aOffsetY - titleAscent + titleMetrics.height + this.spaceAfterHeader
         }
 
         // ── Create message FontRenderer ──
@@ -475,12 +472,12 @@ export class MessageBox extends ModalDialog {
             msgFont.string = this.message
             this.node.addChild(this._messageNode)
             msgFont.forceRebuild()
-            msgUt.setContentSize(linesAreaWidth, msgFont.contentHeight)
             const wrapped = FontMetricsUtil.measureWordWrapped(
                 msgFontData.config,
                 this.message,
                 linesAreaWidth,
             )
+            msgUt.setContentSize(linesAreaWidth, wrapped.height)
             const msgMetrics = FontMetricsUtil.getMetrics(msgFontData.config)
 
             // Vertical centering (mVerticalCenterText = true)

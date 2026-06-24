@@ -253,8 +253,13 @@ export function runAdventure11Harness(): GameHarnessResult {
     if (!bucketZombie || bucketZombie.helmType !== 'bucket' || bucketZombie.helmHealth !== 1100) {
         details.push('Buckethead zombie should initialize with the original bucket helm health.')
     }
-    if (!flagZombie || !flagZombie.hasObject || flagZombie.velocityX !== ZOMBIE_DEFINITIONS.flag.velocityXMin) {
-        details.push('Flag zombie should keep the flag object and use the original fixed flag speed.')
+    if (
+        !flagZombie ||
+        !flagZombie.hasObject ||
+        flagZombie.velocityX !== ZOMBIE_DEFINITIONS.flag.velocityXMin ||
+        flagZombie.currentAnimation !== 'anim_walk2'
+    ) {
+        details.push('Flag zombie should keep the flag object and use the original fixed speed and steady walk animation.')
     }
     if (!duckyZombie || !duckyZombie.hasObject || !duckyZombie.inPool) {
         details.push('Ducky Tube zombie should keep the float object and start in pool movement state.')
@@ -601,7 +606,20 @@ export function runAdventure11Harness(): GameHarnessResult {
         details.push('Adventure 1-5 should apply the original wall-nut bowling 200-tick first-wave countdown.')
     }
 
-    const bowlingSession = new GameSession(ADVENTURE_1_5)
+    const wallnutOnlyBowlingLevel = {
+        ...ADVENTURE_1_5,
+        conveyor: {
+            ...ADVENTURE_1_5.conveyor!,
+            seedPool: [{ seedType: 'wallnut' as const, weight: 100 }],
+        },
+    }
+    const bowlingSeedWeights = ADVENTURE_1_5.conveyor?.seedPool ?? []
+    if (bowlingSeedWeights.find((entry) => entry.seedType === 'wallnut')?.weight !== 85 ||
+        bowlingSeedWeights.find((entry) => entry.seedType === 'explodenut')?.weight !== 15) {
+        details.push('Adventure 1-5 conveyor should use the original 85:15 wall-nut to Explode-o-nut weights.')
+    }
+
+    const bowlingSession = new GameSession(wallnutOnlyBowlingLevel)
     const bowlingPacket = bowlingSession.conveyorPackets[0]
     const bowlingCell = bowlingSession.geometry.gridToPixel(0, 2)
     if (!bowlingPacket) {
@@ -633,7 +651,7 @@ export function runAdventure11Harness(): GameHarnessResult {
         }
     }
 
-    const bowlingHelmSession = new GameSession(ADVENTURE_1_5)
+    const bowlingHelmSession = new GameSession(wallnutOnlyBowlingLevel)
     const bowlingHelmPacket = bowlingHelmSession.conveyorPackets[0]
     if (bowlingHelmPacket) {
         bowlingHelmSession.dispatch({ type: 'selectConveyorPacket', packetId: bowlingHelmPacket.id })
@@ -652,7 +670,58 @@ export function runAdventure11Harness(): GameHarnessResult {
         }
     }
 
-    const bowlingAdviceSession = new GameSession(ADVENTURE_1_5)
+    const explodeONutSession = new GameSession({
+        ...ADVENTURE_1_5,
+        conveyor: {
+            ...ADVENTURE_1_5.conveyor!,
+            seedPool: [{ seedType: 'explodenut', weight: 100 }],
+        },
+    })
+    const explodeONutPacket = explodeONutSession.conveyorPackets[0]
+    if (!explodeONutPacket || explodeONutPacket.seedType !== 'explodenut') {
+        details.push('Explode-o-nut should be available as a wall-nut bowling conveyor seed.')
+    } else {
+        explodeONutSession.dispatch({ type: 'selectConveyorPacket', packetId: explodeONutPacket.id })
+        explodeONutSession.dispatch({
+            type: 'placePlant',
+            x: bowlingCell.x + 40,
+            y: bowlingCell.y + 50,
+        })
+        const explodeONut = explodeONutSession.plants.find((plant) => plant.type === 'explodenut')
+        const centerZombie = explodeONutSession.debugAddZombie('normal', 2, 150)
+        const adjacentZombie = explodeONutSession.debugAddZombie('normal', 3, 150)
+        const farZombie = explodeONutSession.debugAddZombie('normal', 4, 150)
+        if (!explodeONut || !centerZombie || !adjacentZombie || !farZombie) {
+            details.push('Explode-o-nut collision test entities should be created.')
+        } else {
+            centerZombie.velocityX = 0
+            adjacentZombie.velocityX = 0
+            farZombie.velocityX = 0
+            explodeONutSession.drainEvents()
+            for (let i = 0; i < 60 && !explodeONut.dead; i++) explodeONutSession.update()
+            const explodeEvents = explodeONutSession.drainEvents()
+            if (!explodeONut.dead) {
+                details.push('Explode-o-nut should detonate and remove itself on its first zombie collision.')
+            }
+            if (centerZombie.state !== 'charred' || adjacentZombie.state !== 'charred') {
+                details.push('Explode-o-nut should burn zombies within 90 pixels and one adjacent row.')
+            }
+            if (farZombie.state === 'charred') {
+                details.push('Explode-o-nut should not burn zombies more than one row away.')
+            }
+            if (!explodeEvents.some((event) => event.type === 'explodeONutDetonated') ||
+                !explodeEvents.some((event) =>
+                    event.type === 'foleyRequested' &&
+                    event.sound === SoundEffect.CherryBomb) ||
+                !explodeEvents.some((event) =>
+                    event.type === 'soundRequested' &&
+                    event.sound === SoundEffect.BowlingImpact2)) {
+                details.push('Explode-o-nut should emit its detonation, cherrybomb, and bowlingimpact2 events.')
+            }
+        }
+    }
+
+    const bowlingAdviceSession = new GameSession(wallnutOnlyBowlingLevel)
     const bowlingAdvicePacket = bowlingAdviceSession.conveyorPackets[0]
     const invalidBowlingCell = bowlingAdviceSession.geometry.gridToPixel(3, 2)
     if (bowlingAdvicePacket) {

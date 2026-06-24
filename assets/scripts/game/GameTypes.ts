@@ -5,6 +5,7 @@ export type SeedType =
     | 'sunflower'
     | 'cherrybomb'
     | 'wallnut'
+    | 'explodenut'
     | 'potatomine'
     | 'snowpea'
     | 'chomper'
@@ -220,6 +221,7 @@ export type GameEvent =
     | { type: 'projectileFired', entityId: number, projectileType: ProjectileType, x: number, y: number, row: number }
     | { type: 'sunProduced', entityId: number, amount: number, x: number, y: number }
     | { type: 'cherryBombDetonated', entityId: number, x: number, y: number, row: number }
+    | { type: 'explodeONutDetonated', entityId: number, x: number, y: number, row: number }
     | { type: 'boardShake', amountX: number, amountY: number }
     | { type: 'soundRequested', sound: SoundEffect }
     | { type: 'foleyRequested', sound: SoundEffect, pitchRange?: number }

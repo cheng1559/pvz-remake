@@ -154,6 +154,7 @@ export function wirePlantAnimation(
             }
             break
         case 'wallnut':
+        case 'explodenut':
             view.face = animator.addAnimNode('face')
             if (view.body && view.face) {
                 view.face.attach({ node: view.body, slot: 'anim_face' })

@@ -512,7 +512,10 @@ export abstract class Zombie implements ZombieEntity {
     }
 
     private _pickWalkAnimation(type: ZombieType) {
-        if (type === 'flag') return 'anim_walk'
+        // PvZ forces flag zombies to the first walk variant, which resolves to
+        // anim_walk2 when that layer exists. Its flag-hand track is intentionally
+        // much steadier than anim_walk.
+        if (type === 'flag') return 'anim_walk2'
         return Math.random() < 0.5 ? 'anim_walk' : 'anim_walk2'
     }
 

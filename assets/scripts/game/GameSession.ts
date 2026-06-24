@@ -89,6 +89,8 @@ const PLANT_RECENTLY_EATEN_TICKS = 50
 const BOWLING_VERTICAL_SPEED = 2
 const BOWLING_HIT_DAMAGE = 1800
 const BOWLING_HELM_DAMAGE = 900
+const EXPLODE_O_NUT_RADIUS = 90
+const EXPLODE_O_NUT_ROW_RANGE = 1
 const BOWLING_ANIM_RATE_MIN = 12
 const BOWLING_ANIM_RATE_MAX = 18
 const BOWLING_GROUND_X = [
@@ -936,7 +938,7 @@ export class GameSession {
     private _isWallnutBowlingConveyorSeed(seedType: SeedType) {
         return this.level.challengeMode === 'wallnut-bowling' &&
             this.level.conveyor?.enabled === true &&
-            seedType === 'wallnut'
+            (seedType === 'wallnut' || seedType === 'explodenut')
     }
 
     private _updateSeedPackets() {
@@ -1033,6 +1035,7 @@ export class GameSession {
         const zombie = this._findBowlingCollisionTarget(plant)
         if (zombie) {
             this._hitZombieWithBowlingPlant(plant, zombie)
+            if (plant.dead) return
             if (plant.row >= this.geometry.rows - 1 || plant.state === 'bowling-down') {
                 nextDirection = 'bowling-up'
             } else if (plant.row <= 0 || plant.state === 'bowling-up') {
@@ -1099,6 +1102,24 @@ export class GameSession {
     }
 
     private _hitZombieWithBowlingPlant(plant: Plant, zombie: Zombie) {
+        if (plant.type === 'explodenut') {
+            const x = plant.x + 40
+            const y = plant.y + 40
+            this.events.push({ type: 'foleyRequested', sound: SoundEffect.CherryBomb })
+            this.events.push({ type: 'soundRequested', sound: SoundEffect.BowlingImpact2 })
+            this.events.push({
+                type: 'explodeONutDetonated',
+                entityId: plant.id,
+                x,
+                y,
+                row: plant.row,
+            })
+            this.events.push({ type: 'boardShake', amountX: 3, amountY: -4 })
+            this._detonateExplodeONut(x, y, plant.row)
+            plant.dead = true
+            return
+        }
+
         this.events.push({ type: 'foleyRequested', sound: SoundEffect.BowlingImpact })
         this.events.push({ type: 'boardShake', amountX: 1, amountY: -2 })
 
@@ -1118,6 +1139,16 @@ export class GameSession {
             if (this._levelAwardDropped) zombie.finishAfterLevelAwardDropped(deathContext)
         }
         plant.bowlingHitCount++
+    }
+
+    private _detonateExplodeONut(x: number, y: number, row: number) {
+        for (const zombie of this.zombies) {
+            if (!this._isZombieDamageable(zombie)) continue
+            if (Math.abs(zombie.row - row) > EXPLODE_O_NUT_ROW_RANGE) continue
+            if (!this._circleRectOverlap(x, y, EXPLODE_O_NUT_RADIUS, zombie.getBodyRect())) continue
+
+            if (zombie.applyBurn()) this._dropZombieLoot(zombie)
+        }
     }
 
     private _handlePlantEvents(events: GameEvent[]) {

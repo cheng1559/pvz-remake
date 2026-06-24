@@ -2383,7 +2383,7 @@ export abstract class GameScreenCore extends Component {
 
     protected _applyConveyorPacketColor(node: Node, packet: ConveyorPacketState) {
         const color = this._gameStarted && packet.active && !packet.selected ? Color.WHITE : new Color(128, 128, 128, 255)
-        this._applySpriteColorRecursive(node, color, ['SelectedHighlight'])
+        this._applySeedPacketColor(node, packet.seedType, color, ['SelectedHighlight'])
     }
 
     protected _syncConveyorPacketSelectedHighlight(packet: ConveyorPacketState) {
@@ -2397,7 +2397,12 @@ export abstract class GameScreenCore extends Component {
 
     protected _applyPacketColor(node: Node, packet: SeedPacketState) {
         if (!this._gameStarted) {
-            this._applySpriteColorRecursive(node, new Color(128, 128, 128, 255), ['CooldownClip', 'SelectedHighlight'])
+            this._applySeedPacketColor(
+                node,
+                packet.seedType,
+                new Color(128, 128, 128, 255),
+                ['CooldownClip', 'SelectedHighlight'],
+            )
             return
         }
 
@@ -2409,7 +2414,7 @@ export abstract class GameScreenCore extends Component {
             this._shouldShowFirstPlantSeedGuide(packet) ? this._getTutorialFlashingColor() :
                 cooling ? new Color(128, 128, 128, 255) :
                 affordable && !inactiveWithoutCooldown ? Color.WHITE : new Color(128, 128, 128, 255)
-        this._applySpriteColorRecursive(node, color, ['CooldownClip', 'SelectedHighlight'])
+        this._applySeedPacketColor(node, packet.seedType, color, ['CooldownClip', 'SelectedHighlight'])
     }
 
     protected _syncSeedPacketSelectedHighlight(packet: SeedPacketState) {
@@ -2616,6 +2621,32 @@ export abstract class GameScreenCore extends Component {
         for (const child of node.children) {
             this._applySpriteColorRecursive(child, color, skipName)
         }
+    }
+
+    protected _applySeedPacketColor(
+        node: Node,
+        seedType: SeedType,
+        color: Color,
+        skipName?: string | string[],
+    ) {
+        this._applySpriteColorRecursive(node, color, skipName)
+        if (seedType !== 'explodenut') return
+
+        const tintExplodeONutIcon = (current: Node) => {
+            if (current.name === 'PacketPlant' || current.name === 'CachedPlantPreview') {
+                const sprite = current.getComponent(Sprite)
+                if (sprite) {
+                    sprite.color = new Color(
+                        color.r,
+                        Math.round(color.g * 64 / 255),
+                        Math.round(color.b * 64 / 255),
+                        color.a,
+                    )
+                }
+            }
+            for (const child of current.children) tintExplodeONutIcon(child)
+        }
+        tintExplodeONutIcon(node)
     }
 
     protected _setGameplayAnimationsPaused(paused: boolean) {
@@ -2938,7 +2969,11 @@ export abstract class GameScreenCore extends Component {
             height: PLANT_PREVIEW_CACHE_CELL_HEIGHT,
         })
         const sprite = spriteNode.getComponent(Sprite)
-        if (sprite) sprite.color = new Color(255, 255, 255, opacity)
+        if (sprite) {
+            sprite.color = plantType === 'explodenut'
+                ? new Color(255, 64, 64, opacity)
+                : new Color(255, 255, 255, opacity)
+        }
         return node
     }
 

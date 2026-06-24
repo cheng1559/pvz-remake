@@ -138,7 +138,7 @@ export abstract class Plant implements PlantEntity {
     }
 
     private pickBlinkAnimation(context: PlantUpdateContext) {
-        if (this.type === 'wallnut') {
+        if (this.type === 'wallnut' || this.type === 'explodenut') {
             const hit = context.randomInt(0, 9)
             if (hit < NUT_BLINK_TWITCH_CHANCE) return 'anim_blink_twitch'
             return hit < NUT_BLINK_TWICE_CHANCE ? 'anim_blink_twice' : 'anim_blink_thrice'
@@ -148,6 +148,6 @@ export abstract class Plant implements PlantEntity {
     }
 
     private usesNutBlinkTiming() {
-        return this.type === 'wallnut'
+        return this.type === 'wallnut' || this.type === 'explodenut'
     }
 }

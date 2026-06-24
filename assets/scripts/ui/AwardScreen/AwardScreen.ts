@@ -46,6 +46,7 @@ const SEED_STRING_KEYS: Record<SeedType, string> = {
     sunflower: 'SUNFLOWER',
     cherrybomb: 'CHERRY_BOMB',
     wallnut: 'WALL_NUT',
+    explodenut: 'EXPLODE_O_NUT',
     potatomine: 'POTATO_MINE',
     snowpea: 'SNOW_PEA',
     chomper: 'CHOMPER',

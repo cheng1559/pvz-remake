@@ -45,6 +45,7 @@ export type SeedPacketSeedType =
     | 'sunflower'
     | 'cherrybomb'
     | 'wallnut'
+    | 'explodenut'
     | 'potatomine'
     | 'snowpea'
     | 'chomper'
@@ -55,6 +56,7 @@ const SEED_PACKET_ICON_IDS: Record<string, number> = {
     sunflower: 1,
     cherrybomb: 2,
     wallnut: 3,
+    explodenut: 3,
     potatomine: 4,
     snowpea: 5,
     chomper: 6,
@@ -203,7 +205,7 @@ export class SeedPacketRenderer {
         const atlas = packetPlantCel != null ? args.packetPlants : args.cachedPacketPlants
         if (!atlas) return
 
-        createSpriteNode({
+        const icon = createSpriteNode({
             name: 'PacketPlant',
             spriteFrame: getAtlasFrame(
                 atlas,
@@ -219,6 +221,10 @@ export class SeedPacketRenderer {
             width: SEED_PACKET_WIDTH,
             height: SEED_PACKET_HEIGHT,
         })
+        if (args.seedType === 'explodenut') {
+            const sprite = icon.getComponent(Sprite)
+            if (sprite) sprite.color = new Color(255, 64, 64)
+        }
     }
 
     private static _drawScaledCachedPlant(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number) {
@@ -239,7 +245,7 @@ export class SeedPacketRenderer {
         })
         plantRoot.setScale(placement.scale * scale, placement.scale * scale, 1)
 
-        createSpriteNode({
+        const icon = createSpriteNode({
             name: 'CachedPlantPreview',
             spriteFrame: getAtlasFrame(
                 atlas,
@@ -255,6 +261,10 @@ export class SeedPacketRenderer {
             width: PLANT_PREVIEW_CACHE_CELL_WIDTH,
             height: PLANT_PREVIEW_CACHE_CELL_HEIGHT,
         })
+        if (args.seedType === 'explodenut') {
+            const sprite = icon.getComponent(Sprite)
+            if (sprite) sprite.color = new Color(255, 64, 64)
+        }
     }
 
     private static _drawCost(
