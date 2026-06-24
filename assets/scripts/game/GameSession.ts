@@ -1,6 +1,7 @@
 import {
     ADVENTURE_1_1,
     DAY_GEOMETRY,
+    GAME_TICK_SECONDS,
     PLANT_DEFINITIONS,
     SEED_DEFINITIONS,
     ZOMBIE_DEFINITIONS,
@@ -85,6 +86,16 @@ const HEADLESS_ZOMBIE_EDGE_OFFSET = 70
 const HEADLESS_ZOMBIE_EDGE_DAMAGE = 1800
 const PLANT_EATEN_FLASH_TICKS = 25
 const PLANT_RECENTLY_EATEN_TICKS = 50
+const BOWLING_VERTICAL_SPEED = 2
+const BOWLING_HIT_DAMAGE = 1800
+const BOWLING_HELM_DAMAGE = 900
+const BOWLING_ANIM_RATE_MIN = 12
+const BOWLING_ANIM_RATE_MAX = 18
+const BOWLING_GROUND_X = [
+    44.8, 27.6, 8.9, -11.3, -31.5, -50.2, -67.4,
+    -84.6, -103.4, -123.6, -143.8, -162.5, -179.8,
+]
+const BOWLING_GROUND_FRAME_SPAN = BOWLING_GROUND_X.length - 1
 const LEVEL_1_ADVICE_PICK_SEED = 'Click on a seed packet to pick it up!'
 const LEVEL_1_ADVICE_PLANT_SEED = 'Click on the grass to plant your seed!'
 const LEVEL_1_ADVICE_FIRST_PLANT_DONE = 'Nicely done!'
@@ -109,6 +120,7 @@ const LEVEL_2_COMPLETED_ZOMBIE_COUNTDOWN = 999
 const LEVEL_2_ZOMBIE_WARNING_COUNTDOWN = 750
 const LATER_SUNFLOWER_ADVICE_DELAY = 500
 const LATER_SUNFLOWER_START_WAVE = 5
+const BOWLING_LINE_ADVICE = 'Place your wall-nut to the left of the bowling line'
 const READY_SET_PLANT_TICKS = 183
 const CONVEYOR_PACKET_SPEED = 0.25
 const CONVEYOR_ENTRY_X = 606
@@ -178,6 +190,7 @@ export class GameSession {
     private _laterSunflowerTutorialPhase: LaterSunflowerTutorialPhase = 'off'
     private _laterSunflowerTutorialTimer = -1
     private _laterSunflowerTutorialShown = false
+    private _bowlingLineAdviceShown = false
     private _readySetPlantCounter = 0
     private _nextConveyorPacketId = 1
     private _conveyorCounter = 0
@@ -560,6 +573,10 @@ export class GameSession {
         return this.level.zombieWaves.length
     }
 
+    get hasLevelAwardDropped() {
+        return this._levelAwardDropped
+    }
+
     getPlantAt(x: number, y: number) {
         return this._findPlantAt(x, y)
     }
@@ -680,7 +697,12 @@ export class GameSession {
 
         const reason = this.getPlantingReason(seedType, grid.col, grid.row)
         if (reason !== 'ok') {
-            if (reason === 'not-enough-sun') {
+            if (this._isWallnutBowlingConveyorSeed(seedType) &&
+                grid.col > (this.level.bowling?.lineColMax ?? 2) &&
+                !this._bowlingLineAdviceShown) {
+                this._bowlingLineAdviceShown = true
+                this.events.push({ type: 'advice', message: BOWLING_LINE_ADVICE, style: 'hint' })
+            } else if (reason === 'not-enough-sun') {
                 this._pushNotEnoughSunFeedback()
             } else if (reason === 'waiting-for-seed') {
                 this.events.push({ type: 'soundRequested', sound: SoundEffect.Buzzer })
@@ -725,6 +747,10 @@ export class GameSession {
 
         const seed = SEED_DEFINITIONS[seedType]
         const plant = this._createPlant(seed.plantType, row, col)
+        plant.isBowling = true
+        plant.bowlingAnimRate = this._randomFloat(BOWLING_ANIM_RATE_MIN, BOWLING_ANIM_RATE_MAX)
+        plant.bowlingAnimationTime = 0
+        plant.bowlingHitCount = 0
         const index = this.conveyorPackets.findIndex((item) => item.id === packet.id)
         if (index >= 0) this.conveyorPackets.splice(index, 1)
         this.selectedConveyorPacketId = null
@@ -970,9 +996,128 @@ export class GameSession {
                 this._randomInt(minInclusive, maxInclusive),
         }
         for (const plant of this.plants) {
+            if (plant.isBowling) {
+                this._updateBowlingPlant(plant)
+                continue
+            }
             plant.update(context)
         }
         this._handlePlantEvents(plantEvents)
+    }
+
+    private _updateBowlingPlant(plant: Plant) {
+        if (plant.dead) return
+
+        this._advanceBowlingPlant(plant)
+        if (plant.x > this.geometry.width) {
+            plant.dead = true
+            return
+        }
+
+        if (plant.state === 'bowling-up') {
+            plant.y -= BOWLING_VERTICAL_SPEED
+        } else if (plant.state === 'bowling-down') {
+            plant.y += BOWLING_VERTICAL_SPEED
+        }
+
+        const rowY = this.geometry.gridToPixel(0, plant.row).y
+        if (Math.abs(rowY - plant.y) > BOWLING_VERTICAL_SPEED) return
+
+        let nextDirection = plant.state
+        if (plant.state === 'bowling-up' && plant.row <= 0) {
+            nextDirection = 'bowling-down'
+        } else if (plant.state === 'bowling-down' && plant.row >= this.geometry.rows - 1) {
+            nextDirection = 'bowling-up'
+        }
+
+        const zombie = this._findBowlingCollisionTarget(plant)
+        if (zombie) {
+            this._hitZombieWithBowlingPlant(plant, zombie)
+            if (plant.row >= this.geometry.rows - 1 || plant.state === 'bowling-down') {
+                nextDirection = 'bowling-up'
+            } else if (plant.row <= 0 || plant.state === 'bowling-up') {
+                nextDirection = 'bowling-down'
+            } else {
+                nextDirection = this._randomInt(0, 1) === 0 ? 'bowling-up' : 'bowling-down'
+            }
+        }
+
+        if (nextDirection === 'bowling-up') {
+            plant.row--
+            plant.state = 'bowling-up'
+        } else if (nextDirection === 'bowling-down') {
+            plant.row++
+            plant.state = 'bowling-down'
+        }
+    }
+
+    private _advanceBowlingPlant(plant: Plant) {
+        const previousTime = plant.bowlingAnimationTime
+        const frameAdvance = plant.bowlingAnimRate * GAME_TICK_SECONDS
+        let nextTime = previousTime + frameAdvance
+        const previousX = this._sampleBowlingGroundX(previousTime)
+        let groundDistance = 0
+
+        if (nextTime < BOWLING_GROUND_FRAME_SPAN) {
+            groundDistance = this._sampleBowlingGroundX(nextTime) - previousX
+        } else {
+            groundDistance = BOWLING_GROUND_X[BOWLING_GROUND_X.length - 1] - previousX
+            nextTime -= BOWLING_GROUND_FRAME_SPAN
+            while (nextTime >= BOWLING_GROUND_FRAME_SPAN) {
+                groundDistance += BOWLING_GROUND_X[BOWLING_GROUND_X.length - 1] - BOWLING_GROUND_X[0]
+                nextTime -= BOWLING_GROUND_FRAME_SPAN
+            }
+            groundDistance += this._sampleBowlingGroundX(nextTime) - BOWLING_GROUND_X[0]
+        }
+
+        plant.x -= groundDistance
+        plant.bowlingAnimationTime = nextTime
+    }
+
+    private _sampleBowlingGroundX(time: number) {
+        const leftIndex = Math.max(0, Math.min(BOWLING_GROUND_X.length - 1, Math.floor(time)))
+        const rightIndex = Math.min(BOWLING_GROUND_X.length - 1, leftIndex + 1)
+        const t = time - leftIndex
+        return BOWLING_GROUND_X[leftIndex] +
+            (BOWLING_GROUND_X[rightIndex] - BOWLING_GROUND_X[leftIndex]) * t
+    }
+
+    private _findBowlingCollisionTarget(plant: Plant) {
+        const attackRect: Rect = {
+            x: plant.x,
+            y: plant.y,
+            width: 60,
+            height: 80,
+        }
+        let target: Zombie | null = null
+        for (const zombie of this.zombies) {
+            if (zombie.row !== plant.row || !this._isZombieDamageable(zombie)) continue
+            if (this._rectOverlap(attackRect, zombie.getBodyRect()) <= 0) continue
+            if (!target || zombie.x < target.x) target = zombie
+        }
+        return target
+    }
+
+    private _hitZombieWithBowlingPlant(plant: Plant, zombie: Zombie) {
+        this.events.push({ type: 'foleyRequested', sound: SoundEffect.BowlingImpact })
+        this.events.push({ type: 'boardShake', amountX: 1, amountY: -2 })
+
+        const deathContext = {
+            zombieCount: this._countLiveZombies(),
+            canUseSuperLongDeath: this._canUseSuperLongDeath(),
+        }
+        if (zombie.helmHealth > 0) {
+            this.events.push({
+                type: 'foleyRequested',
+                sound: zombie.helmType === 'bucket' ? SoundEffect.ShieldHit : SoundEffect.PlasticHit,
+            })
+            zombie.takeHelmDamage(BOWLING_HELM_DAMAGE)
+        } else {
+            const damageResult = zombie.takeBodyDamage(BOWLING_HIT_DAMAGE, deathContext)
+            if (damageResult.droppedHead || damageResult.startedDying) this._dropZombieLoot(zombie)
+            if (this._levelAwardDropped) zombie.finishAfterLevelAwardDropped(deathContext)
+        }
+        plant.bowlingHitCount++
     }
 
     private _handlePlantEvents(events: GameEvent[]) {
@@ -1736,15 +1881,49 @@ export class GameSession {
 
     private _waveZombies(waveIndex: number) {
         const wave = this.level.zombieWaves[waveIndex]
-        if (!wave?.flagWave) return wave?.zombies ?? []
+        if (!wave) return []
 
         const plainZombieCount = wave.flagNormalCount ??
             Math.min(FLAG_WAVE_EXTRA_NORMAL_ZOMBIES, Math.max(1, wave.zombies.length))
-        return [
-            ...Array.from({ length: plainZombieCount }, () => 'normal' as ZombieType),
-            'flag' as ZombieType,
-            ...wave.zombies,
-        ]
+        const zombies = wave.flagWave
+            ? [
+                ...Array.from({ length: plainZombieCount }, () => 'normal' as ZombieType),
+                'flag' as ZombieType,
+                ...wave.zombies,
+            ]
+            : [...wave.zombies]
+
+        let points = wave.zombiePoints ?? 0
+        for (const zombieType of wave.requiredZombies ?? []) {
+            if (zombies.includes(zombieType)) continue
+
+            const entry = wave.zombiePointPool?.find((item) => item.zombieType === zombieType)
+            zombies.push(zombieType)
+            points -= entry?.pointCost ?? 0
+        }
+
+        while (points > 0) {
+            const candidates = (wave.zombiePointPool ?? []).filter((entry) =>
+                entry.pointCost > 0 &&
+                entry.pointCost <= points &&
+                entry.weight > 0)
+            const totalWeight = candidates.reduce((total, entry) => total + entry.weight, 0)
+            if (totalWeight <= 0) break
+
+            let roll = this._randomInt(1, totalWeight)
+            let picked = candidates[candidates.length - 1]
+            for (const entry of candidates) {
+                roll -= entry.weight
+                if (roll <= 0) {
+                    picked = entry
+                    break
+                }
+            }
+            zombies.push(picked.zombieType)
+            points -= picked.pointCost
+        }
+
+        return zombies
     }
 
     private _updateHugeWaveWarning() {

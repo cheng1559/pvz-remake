@@ -1457,8 +1457,7 @@ export abstract class GameScreenCore extends Component {
             !this._gameplayUpdatesPaused &&
             !this._isGameplayLawnMowerIntroActive() &&
             !this._isGameplaySeedBankIntroActive() &&
-            !this._gameOverActive &&
-            !this._levelCompleteActive
+            !this._gameOverActive
     }
 
     protected _gameplaySeedBankX() {
@@ -1690,7 +1689,7 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _isGameplayLawnMowerEntityVisible(mower: LawnMowerEntity) {
-        if (!this._gameStarted || this._gameOverActive || this._levelCompleteActive || mower.dead) return false
+        if (!this._gameStarted || this._gameOverActive || mower.dead) return false
         if (!this._isGameplayLawnMowerIntroActive()) {
             if (this._isGameplaySeedBankIntroActive()) return true
             return !this._gameplayUpdatesPaused
@@ -2218,8 +2217,7 @@ export abstract class GameScreenCore extends Component {
             this._session.level.conveyor?.enabled === true &&
             !this._gameplayUpdatesPaused &&
             !this._isGameplaySeedBankIntroActive() &&
-            !this._gameOverActive &&
-            !this._levelCompleteActive
+            !this._gameOverActive
     }
 
     protected _isConveyorRendered() {
@@ -2227,8 +2225,7 @@ export abstract class GameScreenCore extends Component {
             this._session.level.conveyor?.enabled === true &&
             !this._isGameplayLawnMowerIntroActive() &&
             (this._isGameplaySeedBankIntroActive() || !this._gameplayUpdatesPaused) &&
-            !this._gameOverActive &&
-            !this._levelCompleteActive
+            !this._gameOverActive
     }
 
     protected _syncBowlingStripeVisibility() {
@@ -2253,7 +2250,7 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _updateConveyorBeltAnimation(ticks: number) {
-        if (!this._isConveyorRendered()) return
+        if (!this._isConveyorRendered() || this._session.hasLevelAwardDropped) return
         this._conveyorBeltAnimTicks += ticks
     }
 
@@ -2337,12 +2334,15 @@ export abstract class GameScreenCore extends Component {
             if (!this._canUseBoardInput()) return false
             if (this._session.selectedSeed) return false
 
-            event.propagationStopped = true
             const pixel = eventToBoardPixel(this.node, event)
+            const hit = this._findConveyorPacketAt(pixel)
+            if (hit?.packet.id !== packetId) return false
+
+            event.propagationStopped = true
             this._mousePixel = pixel
             this._hasCursorPointer = true
             this._session.dispatch({ type: 'selectConveyorPacket', packetId })
-            if (sys.isMobile) this._beginMobilePlantPress(pixel, this._findConveyorPacketAt(pixel)?.rect ?? null)
+            if (sys.isMobile) this._beginMobilePlantPress(pixel, hit.rect)
             this._renderFrame()
             return true
         }
@@ -3056,6 +3056,15 @@ export abstract class GameScreenCore extends Component {
 
     protected _findConveyorPacketAt(pixel: { x: number, y: number }) {
         if (!this._isConveyorVisible()) return null
+        if (this._conveyorPacketClipNode?.activeInHierarchy) {
+            const clipSize = this._conveyorPacketClipNode.getComponent(UITransform)?.contentSize
+            const clipRect = getNodeBoardPixelRect(
+                this._conveyorPacketClipNode,
+                clipSize?.width ?? 501,
+                clipSize?.height ?? this._seedBankHeight,
+            )
+            if (!isPixelInRect(pixel, clipRect)) return null
+        }
 
         for (let i = this._session.conveyorPackets.length - 1; i >= 0; i--) {
             const packet = this._session.conveyorPackets[i]
@@ -3309,7 +3318,7 @@ export abstract class GameScreenCore extends Component {
         return getNodeBoardPixelRect(
             this._shovelBankNode,
             bank?.originalSize.width ?? 70,
-            this._seedBankHeight,
+            bank?.originalSize.height ?? 72,
         )
     }
 
@@ -3362,7 +3371,14 @@ export abstract class GameScreenCore extends Component {
 
     protected _entityZ(entity: GameEntity) {
         if (entity.kind === 'item') return ITEM_Z
-        return this._session.geometry.rowZ(entity.row)
+        return this._session.geometry.rowZ(this._entityRenderRow(entity))
+    }
+
+    protected _entityRenderRow(entity: GameEntity) {
+        if (entity.kind === 'plant' && entity.isBowling && entity.state === 'bowling-down') {
+            return Math.max(0, entity.row - 1)
+        }
+        return entity.row
     }
 
     protected _removeEntityNode(entityId: number) {

@@ -9,6 +9,7 @@ import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH, SeedPacketRendere
 import { createStoneButton } from '@/ui/StoneButton'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import { SEED_DEFINITIONS, ZOMBIE_DEFINITIONS } from '../GameDefinitions'
+import { MusicSystem } from '../music/MusicSystem'
 import { createZombieAnimationView, playZombieBodyAnimation } from '../ZombieAnimation'
 import { getAnimationRateSpeed } from '../PlantAnimation'
 import {
@@ -199,8 +200,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
         if (!this._bowlingStripeNode?.isValid) return
         this._bowlingStripeNode.active = this._bowlingStripeRevealed &&
             this._session.level.bowling?.showBowlingStripe === true &&
-            !this._gameOverActive &&
-            !this._levelCompleteActive
+            !this._gameOverActive
     }
 
     protected _introSodLayout() {
@@ -913,6 +913,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
     protected _finishCrazyDavePostShovelDialog() {
         this._hideCrazyDaveBubble()
         this._crazyDaveDialogPhase = 'off'
+        MusicSystem.fadeOut(50)
         this._hideCrazyDaveAfterLeave(() => this._startGameplayLawnMowerIntro())
     }
 

@@ -31,9 +31,9 @@ export abstract class Plant implements PlantEntity {
     readonly type: PlantType
     readonly subclass: PlantSubclass
     readonly col: number
-    readonly row: number
-    readonly x: number
-    readonly y: number
+    row: number
+    x: number
+    y: number
     readonly maxHealth: number
     readonly launchRate: number
 
@@ -44,6 +44,10 @@ export abstract class Plant implements PlantEntity {
     specialCounter = 0
     eatenFlashCounter = 0
     recentlyEatenCounter = 0
+    isBowling = false
+    bowlingAnimRate = 0
+    bowlingAnimationTime = 0
+    bowlingHitCount = 0
     state: PlantState = 'not-ready'
     stateCountdown = 0
     dead = false

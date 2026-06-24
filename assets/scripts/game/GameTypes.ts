@@ -63,6 +63,8 @@ export type PlantState =
     | 'chomper-swallowing'
     | 'wallnut-cracked1'
     | 'wallnut-cracked2'
+    | 'bowling-up'
+    | 'bowling-down'
 
 export interface Rect {
     x: number
@@ -130,6 +132,15 @@ export interface ZombieWaveDefinition {
     zombies: ZombieType[]
     flagWave?: boolean
     flagNormalCount?: number
+    zombiePoints?: number
+    zombiePointPool?: readonly ZombiePointPoolEntry[]
+    requiredZombies?: ZombieType[]
+}
+
+export interface ZombiePointPoolEntry {
+    zombieType: ZombieType
+    pointCost: number
+    weight: number
 }
 
 export interface SeedDefinition {
@@ -260,6 +271,10 @@ export interface PlantEntity {
     specialCounter: number
     eatenFlashCounter: number
     recentlyEatenCounter: number
+    isBowling: boolean
+    bowlingAnimRate: number
+    bowlingAnimationTime: number
+    bowlingHitCount: number
     state: PlantState
     stateCountdown: number
     dead: boolean

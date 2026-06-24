@@ -15,6 +15,7 @@ import {
 import {
     getAnimationRateSpeed,
     playPotatoArmedAnimation,
+    playWallNutBowlingAnimation,
     wirePlantAnimation,
 } from '../PlantAnimation'
 import { lerp } from './GameScreenMath'
@@ -180,12 +181,16 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             const node = this._entityNodes.get(entity.id)
             if (!node?.isValid) continue
 
-            const rowOrder = entity.row * 10
+            const rowOrder = this._entityRenderRow(entity) * 10
             const typeOrder =
                 entity.kind === 'lawnmower' ? 3 :
                     entity.kind === 'projectile' ? 2 :
+                    entity.kind === 'plant' && entity.isBowling ? 2 :
                     entity.kind === 'zombie' ? 1 : 0
-            entries.push({ node, order: rowOrder + typeOrder })
+            const bowlingOffset = entity.kind === 'plant' && entity.isBowling
+                ? (this._session.geometry.width - entity.x) / 10000
+                : 0
+            entries.push({ node, order: rowOrder + typeOrder + bowlingOffset })
         }
 
         entries.sort((a, b) => a.order - b.order)
@@ -944,6 +949,13 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
                 const currentPlant = plantId == null
                     ? null
                     : this._session.plants.find((item) => item.id === plantId)
+                if (currentPlant?.isBowling) {
+                    playWallNutBowlingAnimation(
+                        view,
+                        currentPlant.bowlingAnimRate,
+                        currentPlant.bowlingAnimationTime,
+                    )
+                }
                 if (currentPlant) this._syncPlantAnimation(currentPlant)
                 this._syncSceneAnimationState()
             })

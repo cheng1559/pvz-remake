@@ -1,5 +1,5 @@
 import { GameSession } from './GameSession'
-import { ADVENTURE_1_1, ADVENTURE_1_2, ADVENTURE_1_3, ADVENTURE_1_4, ZOMBIE_DEFINITIONS } from './GameDefinitions'
+import { ADVENTURE_1_1, ADVENTURE_1_2, ADVENTURE_1_3, ADVENTURE_1_4, ADVENTURE_1_5, ZOMBIE_DEFINITIONS } from './GameDefinitions'
 import { SoundEffect } from '@/core/SoundLoader'
 import { createProjectile } from './projectiles/ProjectileFactory'
 
@@ -573,6 +573,110 @@ export function runAdventure11Harness(): GameHarnessResult {
     const level4FinalCones = level4FinalWave.filter((zombie) => zombie.type === 'traffic-cone').length
     if (ADVENTURE_1_4.zombieWaves.length !== 10 || level4FinalNormals !== 4 || level4FinalFlags !== 1 || level4FinalCones !== 1 || level4FinalWave.length !== 6) {
         details.push('Adventure 1-4 should have 10 waves and end with the original 4 normals, 1 flag, and 1 conehead reward wave.')
+    }
+
+    const level5WaveSession = new GameSession(ADVENTURE_1_5)
+    const level5FirstWaveCountdown = level5WaveSession.zombieCountDownStart
+    const level5OriginalRandom = Math.random
+    try {
+        Math.random = () => 0
+        for (let i = 0; i < ADVENTURE_1_5.zombieWaves.length; i++) level5WaveSession.debugSpawnNextWave()
+    } finally {
+        Math.random = level5OriginalRandom
+    }
+    const level5FinalWave = level5WaveSession.zombies.filter((zombie) => zombie.fromWave === ADVENTURE_1_5.zombieWaves.length - 1)
+    const level5FinalNormals = level5FinalWave.filter((zombie) => zombie.type === 'normal').length
+    const level5FinalFlags = level5FinalWave.filter((zombie) => zombie.type === 'flag').length
+    const level5FinalCones = level5FinalWave.filter((zombie) => zombie.type === 'traffic-cone').length
+    if (ADVENTURE_1_5.zombieWaves.length !== 8 ||
+        level5WaveSession.zombies.filter((zombie) => zombie.fromWave === 0).length !== 4 ||
+        level5WaveSession.zombies.filter((zombie) => zombie.fromWave === 3).length !== 8 ||
+        level5WaveSession.zombies.filter((zombie) => zombie.fromWave === 6).length !== 12 ||
+        level5FinalNormals !== 13 ||
+        level5FinalFlags !== 1 ||
+        level5FinalCones !== 1) {
+        details.push('Adventure 1-5 should use the original 8-wave, four-times wall-nut bowling zombie point curve and final flag wave.')
+    }
+    if (level5FirstWaveCountdown !== 200) {
+        details.push('Adventure 1-5 should apply the original wall-nut bowling 200-tick first-wave countdown.')
+    }
+
+    const bowlingSession = new GameSession(ADVENTURE_1_5)
+    const bowlingPacket = bowlingSession.conveyorPackets[0]
+    const bowlingCell = bowlingSession.geometry.gridToPixel(0, 2)
+    if (!bowlingPacket) {
+        details.push('Adventure 1-5 should start with a wall-nut on the conveyor.')
+    } else {
+        bowlingSession.dispatch({ type: 'selectConveyorPacket', packetId: bowlingPacket.id })
+        bowlingSession.dispatch({
+            type: 'placePlant',
+            x: bowlingCell.x + 40,
+            y: bowlingCell.y + 50,
+        })
+        const rollingWallnut = bowlingSession.plants.find((plant) => plant.isBowling)
+        const bowlingZombie = bowlingSession.debugAddZombie('normal', 2, 150)
+        if (!rollingWallnut || !bowlingZombie) {
+            details.push('Placing a conveyor wall-nut should create a rolling wall-nut that can target zombies.')
+        } else {
+            bowlingZombie.velocityX = 0
+            const startingX = rollingWallnut.x
+            for (let i = 0; i < 60 && bowlingZombie.state !== 'dying'; i++) bowlingSession.update()
+            if (rollingWallnut.x <= startingX) {
+                details.push('A bowling wall-nut should roll from left to right using the original ground-track velocity.')
+            }
+            if (bowlingZombie.state !== 'dying') {
+                details.push('A bowling wall-nut should deal lethal body damage to a normal zombie on contact.')
+            }
+            if (rollingWallnut.state !== 'bowling-up' && rollingWallnut.state !== 'bowling-down') {
+                details.push('A bowling wall-nut should start ricocheting between rows after its first zombie hit.')
+            }
+        }
+    }
+
+    const bowlingHelmSession = new GameSession(ADVENTURE_1_5)
+    const bowlingHelmPacket = bowlingHelmSession.conveyorPackets[0]
+    if (bowlingHelmPacket) {
+        bowlingHelmSession.dispatch({ type: 'selectConveyorPacket', packetId: bowlingHelmPacket.id })
+        bowlingHelmSession.dispatch({
+            type: 'placePlant',
+            x: bowlingCell.x + 40,
+            y: bowlingCell.y + 50,
+        })
+        const coneZombie = bowlingHelmSession.debugAddZombie('traffic-cone', 2, 150)
+        if (coneZombie) {
+            coneZombie.velocityX = 0
+            for (let i = 0; i < 60 && coneZombie.helmHealth > 0; i++) bowlingHelmSession.update()
+            if (coneZombie.helmHealth !== 0 || coneZombie.health !== coneZombie.maxHealth || coneZombie.state !== 'walking') {
+                details.push('A bowling wall-nut should apply 900 damage to a cone helmet without spilling damage into the zombie body.')
+            }
+        }
+    }
+
+    const bowlingAdviceSession = new GameSession(ADVENTURE_1_5)
+    const bowlingAdvicePacket = bowlingAdviceSession.conveyorPackets[0]
+    const invalidBowlingCell = bowlingAdviceSession.geometry.gridToPixel(3, 2)
+    if (bowlingAdvicePacket) {
+        bowlingAdviceSession.drainEvents()
+        bowlingAdviceSession.dispatch({ type: 'selectConveyorPacket', packetId: bowlingAdvicePacket.id })
+        bowlingAdviceSession.dispatch({
+            type: 'placePlant',
+            x: invalidBowlingCell.x + 40,
+            y: invalidBowlingCell.y + 50,
+        })
+        const firstBowlingAdvice = bowlingAdviceSession.drainEvents().filter((event) =>
+            event.type === 'advice' &&
+            event.message === 'Place your wall-nut to the left of the bowling line')
+        bowlingAdviceSession.dispatch({
+            type: 'placePlant',
+            x: invalidBowlingCell.x + 40,
+            y: invalidBowlingCell.y + 50,
+        })
+        const repeatedBowlingAdvice = bowlingAdviceSession.drainEvents().filter((event) =>
+            event.type === 'advice' &&
+            event.message === 'Place your wall-nut to the left of the bowling line')
+        if (firstBowlingAdvice.length !== 1 || repeatedBowlingAdvice.length !== 0) {
+            details.push('Adventure 1-5 should show the bowling-line advice only on the first invalid placement to the right of the line.')
+        }
     }
 
     const combatSession = new GameSession()

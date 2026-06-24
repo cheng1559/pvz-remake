@@ -197,6 +197,15 @@ export function playCherryBombAnimation(view: PlantAnimationView) {
     })
 }
 
+export function playWallNutBowlingAnimation(view: PlantAnimationView, animRate: number, time = 0) {
+    view.body?.play({
+        name: '_ground',
+        speed: getAnimationRateSpeed(view.body, '_ground', animRate),
+        time,
+        loop: true,
+    })
+}
+
 export function playPotatoArmedAnimation(
     view: PlantAnimationView,
     options: { includeGlow?: boolean, blendTime?: number } = {},

@@ -124,7 +124,7 @@ export async function attachFlagZombieAnimation(
     if (!flagNode.isValid || !view.body) return
 
     view.flag = flagAnimator.addAnimNode('flag')
-    view.flag?.attach({ node: view.body, slot: 'Zombie_flaghand' })
+    view.flag?.attach({ node: view.body, slot: 'Zombie_flaghand', basePoseFrame: 0 })
     view.flag?.play({ name: 'Zombie_flag', loop: true, speed: animated ? 15 / 12 : 0, time })
 }
 

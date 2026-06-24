@@ -425,6 +425,11 @@ export const ADVENTURE_1_4: LevelDefinition = {
     tutorialAdvice: [],
 }
 
+const WALLNUT_BOWLING_ZOMBIE_POOL = [
+    { zombieType: 'normal', pointCost: 1, weight: 4000 },
+    { zombieType: 'traffic-cone', pointCost: 2, weight: 4000 },
+] as const
+
 export const ADVENTURE_1_5: LevelDefinition = {
     id: 'adventure-1-5',
     adventureLevel: 5,
@@ -461,16 +466,21 @@ export const ADVENTURE_1_5: LevelDefinition = {
     pauseGameplayOnStart: true,
     suppressReadySetPlant: true,
     zombieWaves: [
-        { zombies: ['normal'] },
-        { zombies: ['normal'] },
-        { zombies: ['normal', 'normal'] },
-        { zombies: ['traffic-cone'] },
-        { zombies: ['normal', 'normal'] },
-        { zombies: ['traffic-cone', 'normal'] },
-        { zombies: ['normal', 'normal', 'normal'] },
-        { zombies: ['traffic-cone', 'normal'] },
-        { zombies: ['traffic-cone', 'normal', 'normal'] },
-        { zombies: ['traffic-cone'], flagWave: true, flagNormalCount: 5 },
+        { zombies: [], zombiePoints: 4, zombiePointPool: WALLNUT_BOWLING_ZOMBIE_POOL },
+        { zombies: [], zombiePoints: 4, zombiePointPool: WALLNUT_BOWLING_ZOMBIE_POOL },
+        { zombies: [], zombiePoints: 4, zombiePointPool: WALLNUT_BOWLING_ZOMBIE_POOL },
+        { zombies: [], zombiePoints: 8, zombiePointPool: WALLNUT_BOWLING_ZOMBIE_POOL },
+        { zombies: [], zombiePoints: 8, zombiePointPool: WALLNUT_BOWLING_ZOMBIE_POOL },
+        { zombies: [], zombiePoints: 8, zombiePointPool: WALLNUT_BOWLING_ZOMBIE_POOL },
+        { zombies: [], zombiePoints: 12, zombiePointPool: WALLNUT_BOWLING_ZOMBIE_POOL },
+        {
+            zombies: [],
+            zombiePoints: 12,
+            zombiePointPool: WALLNUT_BOWLING_ZOMBIE_POOL,
+            requiredZombies: ['traffic-cone'],
+            flagWave: true,
+            flagNormalCount: 3,
+        },
     ],
     awardKind: 'seed',
     awardSeedType: 'potatomine',

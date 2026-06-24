@@ -248,6 +248,35 @@ export abstract class Zombie implements ZombieEntity {
         return result
     }
 
+    takeHelmDamage(damage: number) {
+        if (this.state === 'dying' || this.state === 'mowered' || this.state === 'charred') return
+        if (damage > 0) this.hitFlashCounter = HIT_FLASH_TICKS
+        this.helmHealth = Math.max(0, this.helmHealth - damage)
+    }
+
+    takeBodyDamage(
+        damage: number,
+        deathContext: ZombieDeathContext = { zombieCount: 1, canUseSuperLongDeath: false },
+    ): ZombieDamageResult {
+        const result: ZombieDamageResult = {
+            droppedArm: false,
+            droppedHead: false,
+            startedDying: false,
+        }
+        if (this.state === 'dying' || this.state === 'mowered' || this.state === 'charred') return result
+
+        if (damage > 0) this.hitFlashCounter = HIT_FLASH_TICKS
+        this.health = Math.max(0, this.health - damage)
+        const damageStateResult = this._updateDamageStates()
+        result.droppedArm = damageStateResult.droppedArm
+        result.droppedHead = damageStateResult.droppedHead
+        if (this.health <= 0) {
+            this.startDeathAnimation(deathContext)
+            result.startedDying = true
+        }
+        return result
+    }
+
     applyChill(events: GameEvent[]) {
         if (this.state === 'dying' || this.state === 'mowered' || this.state === 'charred') return
         if (this.chilledCounter <= 0) {

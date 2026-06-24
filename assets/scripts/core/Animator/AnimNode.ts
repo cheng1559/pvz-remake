@@ -15,6 +15,7 @@ export class AnimNode {
     private _parentSlot: string | null = null
     private _parentTrack: string | null = null
     private _parentBasePoseFrame: number | null = null
+    private _parentBasePoseFrameOverride: number | null = null
 
     // Current animation
     private _currentAnim: AnimationData | null = null
@@ -127,7 +128,10 @@ export class AnimNode {
         this._loop = loop
         this._speed = speed
         this._time = time
-        this._parentBasePoseFrame = this._parentNode?.currentAnimationStartFrame ?? null
+        this._parentBasePoseFrame =
+            this._parentBasePoseFrameOverride ??
+            this._parentNode?.currentAnimationStartFrame ??
+            null
         this.isPlaying = true
         this._finished = false
         this._keepLastFrame = keepLastFrame
@@ -137,7 +141,7 @@ export class AnimNode {
         onStart?.()
     }
 
-    public attach(args: { node: AnimNode; slot: string }): void {
+    public attach(args: { node: AnimNode; slot: string; basePoseFrame?: number }): void {
         if (!(args.slot in args.node._data.slots)) {
             warn(
                 `[AnimNode] attach: slot '${args.slot}' not found in parent node. Available: ${Object.keys(args.node._data.slots).join(', ')}`,
@@ -146,7 +150,8 @@ export class AnimNode {
         this._parentNode = args.node
         this._parentSlot = args.slot
         this._parentTrack = null
-        this._parentBasePoseFrame = null
+        this._parentBasePoseFrameOverride = args.basePoseFrame ?? null
+        this._parentBasePoseFrame = this._parentBasePoseFrameOverride
     }
 
     public attachToTrack(args: { node: AnimNode; track: string }): void {
@@ -158,6 +163,7 @@ export class AnimNode {
         this._parentNode = args.node
         this._parentSlot = null
         this._parentTrack = args.track
+        this._parentBasePoseFrameOverride = null
         this._parentBasePoseFrame = null
     }
 
