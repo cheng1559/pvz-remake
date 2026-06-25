@@ -1,4 +1,5 @@
 import type { SoundEffect } from '@/core/SoundLoader'
+import type { TodParticleEffect } from '@/core/Particle'
 
 export type SeedType =
     | 'peashooter'
@@ -222,10 +223,14 @@ export type GameEvent =
     | { type: 'sunProduced', entityId: number, amount: number, x: number, y: number }
     | { type: 'cherryBombDetonated', entityId: number, x: number, y: number, row: number }
     | { type: 'explodeONutDetonated', entityId: number, x: number, y: number, row: number }
+    | { type: 'particleRequested', effect: TodParticleEffect, entityId: number }
+    | { type: 'particleAtRequested', effect: TodParticleEffect, x: number, y: number }
+    | { type: 'particleAttachedRequested', effect: TodParticleEffect, entityId: number, x: number, y: number }
+    | { type: 'seedPacketFlashRequested', seedType: SeedType }
     | { type: 'boardShake', amountX: number, amountY: number }
     | { type: 'soundRequested', sound: SoundEffect }
     | { type: 'foleyRequested', sound: SoundEffect, pitchRange?: number }
-    | { type: 'levelAwardCollected' }
+    | { type: 'levelAwardCollected', entityId: number, x: number, y: number }
     | { type: 'levelWon' }
     | { type: 'levelLost', zombieId: number | null }
     | { type: 'advice', message: string, style?: AdviceStyle }

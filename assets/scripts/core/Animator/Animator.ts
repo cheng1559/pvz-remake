@@ -12,6 +12,7 @@ import {
     SpriteFrame,
     UITransform,
     UISkew,
+    Vec3,
     toRadian,
 } from 'cc'
 import type { AnimNodeData, TrackFrameData } from './Animator.d'
@@ -115,6 +116,20 @@ export class Animator extends Component {
             }
         }
         return null
+    }
+
+    /**
+     * Returns the transformed center of the track image. This matches the
+     * original Reanimation::GetTrackMatrix position semantics.
+     */
+    public getTrackWorldPosition(trackName: string): Vec3 | null {
+        const node = this._trackNodes.get(trackName)
+        const spriteFrame = node?.getComponent(Sprite)?.spriteFrame
+        const transform = node?.getComponent(UITransform)
+        if (!node?.isValid || !spriteFrame || !transform) return null
+
+        const size = spriteFrame.originalSize
+        return transform.convertToWorldSpaceAR(new Vec3(size.width * 0.5, -size.height * 0.5, 0))
     }
 
     public setTrackColor(name: string, color: Color) {

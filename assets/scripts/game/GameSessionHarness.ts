@@ -26,6 +26,14 @@ export function runAdventure11Harness(): GameHarnessResult {
     if (session.plants.length !== 1 || session.sun !== ADVENTURE_1_1.startingSun - 100) {
         details.push('Plant placement did not consume one Peashooter packet cost.')
     }
+    const plantingEvents = session.drainEvents()
+    if (!plantingEvents.some((event) =>
+        event.type === 'particleAtRequested' &&
+        event.effect === 'planting' &&
+        event.x === center.x + 41 &&
+        event.y === center.y + 74)) {
+        details.push('Plant placement should request the original planting dirt particle at the grid offset.')
+    }
     const peashooter = session.plants[0]
     if (!peashooter || peashooter.type !== 'peashooter' || peashooter.subclass !== 'shooter') {
         details.push('Peashooter planting should create a shooter PeashooterPlant instance.')
@@ -149,6 +157,22 @@ export function runAdventure11Harness(): GameHarnessResult {
     if (!repeatedNotEnoughEvents.some((event) => event.type === 'sunFlash') ||
         repeatedNotEnoughEvents.some(isCantAffordAdvice)) {
         details.push('Repeated not-enough-sun seed clicks should keep flashing the sun counter without repeating the 1-1 advice.')
+    }
+
+    const affordabilityFlashSession = new GameSession()
+    affordabilityFlashSession.debugSetSun(75)
+    affordabilityFlashSession.debugSetRechargingEnabled(false)
+    affordabilityFlashSession.drainEvents()
+    const affordabilitySun = affordabilityFlashSession.debugAddItem('sun', 300, 300)
+    affordabilityFlashSession.collectItemAt(
+        affordabilitySun.x + affordabilitySun.width / 2,
+        affordabilitySun.y + affordabilitySun.height / 2,
+    )
+    const affordabilityFlashEvents = affordabilityFlashSession.drainEvents()
+    if (!affordabilityFlashEvents.some((event) =>
+        event.type === 'seedPacketFlashRequested' &&
+        event.seedType === 'peashooter')) {
+        details.push('Collecting enough in-flight sun to afford a ready seed packet should flash it immediately.')
     }
 
     const levelThreeCooldownSession = new GameSession(ADVENTURE_1_3)
@@ -323,6 +347,41 @@ export function runAdventure11Harness(): GameHarnessResult {
             details.push('Flag zombie should drop its flag object when losing its head.')
         }
     }
+    zombieSession.drainEvents()
+    zombieSession.update()
+    const droppedBodyPartEvents = zombieSession.drainEvents()
+    if (normalZombie && !droppedBodyPartEvents.some((event) =>
+        event.type === 'particleRequested' &&
+        event.entityId === normalZombie.id &&
+        event.effect === 'zombie-arm')) {
+        details.push('A zombie losing its arm should request the original zombie-arm particle effect.')
+    }
+    if (flagZombie && !droppedBodyPartEvents.some((event) =>
+        event.type === 'particleRequested' &&
+        event.entityId === flagZombie.id &&
+        event.effect === 'zombie-head')) {
+        details.push('A zombie losing its head should request the original zombie-head particle effect.')
+    }
+    if (coneZombie) coneZombie.takeHelmDamage(coneZombie.helmHealth)
+    if (bucketZombie) bucketZombie.takeHelmDamage(bucketZombie.helmHealth)
+    zombieSession.update()
+    const droppedHelmEvents = zombieSession.drainEvents()
+    if (coneZombie && !droppedHelmEvents.some((event) =>
+        event.type === 'particleRequested' &&
+        event.entityId === coneZombie.id &&
+        event.effect === 'zombie-traffic-cone')) {
+        details.push('A destroyed traffic cone should request the original cone drop particle effect.')
+    }
+    if (bucketZombie && !droppedHelmEvents.some((event) =>
+        event.type === 'particleRequested' &&
+        event.entityId === bucketZombie.id &&
+        event.effect === 'zombie-pail')) {
+        details.push('A destroyed bucket should request the original pail drop particle effect.')
+    }
+    zombieSession.update()
+    if (zombieSession.drainEvents().some((event) => event.type === 'particleRequested')) {
+        details.push('Dropped zombie body-part particles should only be requested once.')
+    }
 
     const mowerSession = new GameSession()
     const mower = mowerSession.lawnMowers[0]
@@ -346,13 +405,47 @@ export function runAdventure11Harness(): GameHarnessResult {
         !mowerEvents.some((event) => event.type === 'foleyRequested' && event.sound === SoundEffect.Splat)) {
         details.push('Triggering a lawn mower should request the original lawnmower foley and splat on impact.')
     }
+    if (mowerEvents.some((event) =>
+        event.type === 'particleRequested' &&
+        (event.effect === 'mowered-zombie-head' || event.effect === 'mowered-zombie-arm'))) {
+        details.push('A lawn mower should not launch the zombie head or arm on the impact frame.')
+    }
     for (let i = 0; i < 49; i++) mowerSession.update()
     if (mowerSession.zombies.length !== 1) {
         details.push('A mowered zombie should stay until the original lawnmowered animation window completes.')
     }
     mowerSession.update()
+    const mowerFinishEvents = mowerSession.drainEvents()
     if (mowerSession.zombies.length !== 0) {
         details.push('A mowered zombie should be removed after its lawnmowered zombie animation window.')
+    }
+    if (!mowerZombie ||
+        !mowerFinishEvents.some((event) =>
+            event.type === 'particleRequested' &&
+            event.entityId === mowerZombie.id &&
+            event.effect === 'mowered-zombie-head') ||
+        !mowerFinishEvents.some((event) =>
+            event.type === 'particleRequested' &&
+            event.entityId === mowerZombie.id &&
+            event.effect === 'mowered-zombie-arm')) {
+        details.push('The mowered zombie head and arm should launch only after the mowered animation completes.')
+    }
+
+    const mowerDropSession = new GameSession()
+    const mowerConeZombie = mowerDropSession.addZombie('traffic-cone', 2, -20)
+    mowerDropSession.drainEvents()
+    mowerDropSession.update()
+    const mowerDropEvents = mowerDropSession.drainEvents()
+    if (!mowerConeZombie || !mowerDropEvents.some((event) =>
+        event.type === 'particleRequested' &&
+        event.entityId === mowerConeZombie.id &&
+        event.effect === 'zombie-traffic-cone')) {
+        details.push('A lawn mower should immediately drop a zombie helmet before switching to the mowered animation.')
+    }
+    if (mowerDropEvents.some((event) =>
+        event.type === 'particleRequested' &&
+        (event.effect === 'mowered-zombie-head' || event.effect === 'mowered-zombie-arm'))) {
+        details.push('Mowered zombie body parts should wait for the mowered animation to finish.')
     }
 
     const freeMowerSession = new GameSession()
@@ -846,6 +939,33 @@ export function runAdventure11Harness(): GameHarnessResult {
         details.push('A pea should still resolve its collision on the tick where it crosses the right board edge.')
     }
 
+    const collisionBoundarySession = new GameSession()
+    const collisionBoundaryZombie = collisionBoundarySession.addZombie('normal', 2, 260)
+    if (!collisionBoundaryZombie) {
+        details.push('Projectile collision boundary setup should create a normal zombie.')
+    } else {
+        collisionBoundaryZombie.velocityX = 0
+        collisionBoundarySession.projectiles.push(createProjectile({
+            id: 3,
+            type: 'pea',
+            x: 252,
+            y: collisionBoundarySession.geometry.gridToPixel(0, 2).y + 10,
+            row: 2,
+            shadowY: collisionBoundarySession.geometry.gridToPixel(0, 2).y + 77,
+        }))
+        collisionBoundarySession.drainEvents()
+        collisionBoundarySession.update()
+        if (collisionBoundaryZombie.health !== 270 ||
+            collisionBoundarySession.projectiles.length !== 1) {
+            details.push('A pea should not hit before its original collision rect reaches the zombie body rect.')
+        }
+        collisionBoundarySession.update()
+        if (collisionBoundaryZombie.health !== 250 ||
+            collisionBoundarySession.projectiles.length !== 0) {
+            details.push('A pea should hit once its original collision rect overlaps the zombie body rect.')
+        }
+    }
+
     const edgeZombieSession = new GameSession()
     const edgeZombie = edgeZombieSession.addZombie('normal', 2, 780)
     edgeZombieSession.projectiles.push(createProjectile({
@@ -860,9 +980,19 @@ export function runAdventure11Harness(): GameHarnessResult {
         details.push('Edge projectile setup should create a partially entered zombie.')
     } else {
         edgeZombie.velocityX = 0
+        edgeZombieSession.drainEvents()
         edgeZombieSession.update()
+        const edgeProjectileEvents = edgeZombieSession.drainEvents()
         if (edgeZombie.health !== 250 || edgeZombieSession.projectiles.length !== 0) {
             details.push('A pea crossing the right edge should hit a zombie whose origin has entered even if its body rect is still offscreen.')
+        }
+        if (!edgeProjectileEvents.some((event) =>
+            event.type === 'particleAttachedRequested' &&
+            event.effect === 'pea-splat' &&
+            event.entityId === edgeZombie.id &&
+            event.x >= 20 && event.x <= 100 &&
+            event.y >= 20 && event.y <= 100)) {
+            details.push('A pea impact should attach the original pea-splat particle to the struck zombie body.')
         }
     }
 
@@ -987,6 +1117,9 @@ export function runAdventure11Harness(): GameHarnessResult {
             event.sound === SoundEffect.Juicy &&
             event.pitchRange === 2)) {
         details.push('Cherry Bomb detonation should play the cherrybomb and juicy sounds.')
+    }
+    if (!cherryEvents.some((event) => event.type === 'cherryBombDetonated')) {
+        details.push('Cherry Bomb should emit its detonation event for the original Powie particle effect.')
     }
 
     return {

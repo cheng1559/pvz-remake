@@ -1,5 +1,6 @@
 import { ZOMBIE_DEFINITIONS } from '../GameDefinitions'
 import { SoundEffect } from '@/core/SoundLoader'
+import type { TodParticleEffect } from '@/core/Particle'
 import type { GameEvent, PlantEntity, Rect, ZombieEntity, ZombieState, ZombieSubclass, ZombieType } from '../GameTypes'
 
 const ZOMBIE_START_X = 780
@@ -32,6 +33,8 @@ const ZOMBIE_DEATH2_FRAME_SPAN = 32
 const ZOMBIE_SUPER_LONG_DEATH_FRAME_SPAN = 136
 const ZOMBIE_WATER_DEATH_FRAME_SPAN = 24
 const ZOMBIE_DEATH_HOLD_TICKS = 40
+// The original mower driver is advanced once by EffectSystem and once again
+// while applying it to the zombie body, so its visible rate is effectively 16.
 const ZOMBIE_MOWERED_ANIM_RATE = 16
 const ZOMBIE_MOWERED_FRAME_COUNT = 8
 const ZOMBIE_MOWERED_FRAME_SPAN = ZOMBIE_MOWERED_FRAME_COUNT - 1
@@ -189,7 +192,7 @@ export abstract class Zombie implements ZombieEntity {
         }
         if (this.state === 'mowered') {
             this._updateChill()
-            this.updateMowered()
+            this.updateMowered(context)
             return
         }
         if (this.state === 'charred') {
@@ -231,9 +234,13 @@ export abstract class Zombie implements ZombieEntity {
             remainingDamage -= absorbed
         }
         if (this.helmHealth > 0 && remainingDamage > 0) {
+            const helmHealthBeforeDamage = this.helmHealth
             const absorbed = Math.min(this.helmHealth, remainingDamage)
             this.helmHealth -= absorbed
             remainingDamage -= absorbed
+            if (helmHealthBeforeDamage > 0 && this.helmHealth === 0) {
+                this._queueDroppedHelmParticle()
+            }
         }
         if (remainingDamage > 0) {
             this.health = Math.max(0, this.health - remainingDamage)
@@ -249,9 +256,15 @@ export abstract class Zombie implements ZombieEntity {
     }
 
     takeHelmDamage(damage: number) {
-        if (this.state === 'dying' || this.state === 'mowered' || this.state === 'charred') return
+        if (this.state === 'dying' || this.state === 'mowered' || this.state === 'charred') return false
+        const helmHealthBeforeDamage = this.helmHealth
         if (damage > 0) this.hitFlashCounter = HIT_FLASH_TICKS
         this.helmHealth = Math.max(0, this.helmHealth - damage)
+        if (helmHealthBeforeDamage > 0 && this.helmHealth === 0) {
+            this._queueDroppedHelmParticle()
+            return true
+        }
+        return false
     }
 
     takeBodyDamage(
@@ -285,9 +298,25 @@ export abstract class Zombie implements ZombieEntity {
         this.chilledCounter = Math.max(this.chilledCounter, CHILLED_TICKS)
     }
 
-    mowDown() {
+    mowDown(events?: GameEvent[]) {
         if (this.dead || this.state === 'mowered' || this.state === 'charred') return
 
+        const dropEvents = events ?? this._pendingEvents
+        const helmEffect = this._droppedHelmParticleEffect()
+        if (this.helmHealth > 0 && helmEffect) {
+            dropEvents.push({
+                type: 'particleRequested',
+                effect: helmEffect,
+                entityId: this.id,
+            })
+        }
+        if (this.type === 'flag' && this.hasObject) {
+            dropEvents.push({
+                type: 'particleRequested',
+                effect: 'zombie-flag',
+                entityId: this.id,
+            })
+        }
         this.state = 'mowered'
         this.health = 0
         this.helmHealth = 0
@@ -326,13 +355,39 @@ export abstract class Zombie implements ZombieEntity {
         return true
     }
 
-    protected updateMowered() {
+    protected updateMowered(context: ZombieUpdateContext) {
         this.moweredTime++
         this.animationTime = Math.min(
             ZOMBIE_MOWERED_FRAME_SPAN,
             this.animationTime + ZOMBIE_MOWERED_FRAME_SPAN / ZOMBIE_MOWERED_TICKS,
         )
         if (this.moweredTime >= ZOMBIE_MOWERED_TICKS) {
+            if (this.hasHead) {
+                context.events.push({
+                    type: 'foleyRequested',
+                    sound: SoundEffect.LimbsPop,
+                    pitchRange: 10,
+                })
+                context.events.push({
+                    type: 'particleRequested',
+                    effect: 'mowered-zombie-head',
+                    entityId: this.id,
+                })
+                this.hasHead = false
+            }
+            if (this.hasArm) {
+                context.events.push({
+                    type: 'foleyRequested',
+                    sound: SoundEffect.LimbsPop,
+                    pitchRange: 10,
+                })
+                context.events.push({
+                    type: 'particleRequested',
+                    effect: 'mowered-zombie-arm',
+                    entityId: this.id,
+                })
+                this.hasArm = false
+            }
             this.dead = true
         }
     }
@@ -607,6 +662,13 @@ export abstract class Zombie implements ZombieEntity {
             this.hasArm = false
             result.droppedArm = true
             this._pendingEvents.push({ type: 'foleyRequested', sound: SoundEffect.LimbsPop, pitchRange: 10 })
+            if (!this.inPool) {
+                this._pendingEvents.push({
+                    type: 'particleRequested',
+                    effect: 'zombie-arm',
+                    entityId: this.id,
+                })
+            }
         }
         if (this.hasHead && this.health < this.maxHealth / 3) {
             this.hasHead = false
@@ -614,8 +676,30 @@ export abstract class Zombie implements ZombieEntity {
             if (this.type === 'flag') this.hasObject = false
             result.droppedHead = true
             this._pendingEvents.push({ type: 'foleyRequested', sound: SoundEffect.LimbsPop, pitchRange: 10 })
+            this._pendingEvents.push({
+                type: 'particleRequested',
+                effect: 'zombie-head',
+                entityId: this.id,
+            })
         }
         return result
+    }
+
+    private _queueDroppedHelmParticle() {
+        const effect = this._droppedHelmParticleEffect()
+        if (!effect) return
+
+        this._pendingEvents.push({
+            type: 'particleRequested',
+            effect,
+            entityId: this.id,
+        })
+    }
+
+    private _droppedHelmParticleEffect(): TodParticleEffect | null {
+        if (this.helmType === 'traffic-cone') return 'zombie-traffic-cone'
+        if (this.helmType === 'bucket') return 'zombie-pail'
+        return null
     }
 
     private _canLoseBodyParts() {

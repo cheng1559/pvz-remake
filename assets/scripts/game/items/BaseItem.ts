@@ -12,10 +12,10 @@ const FINAL_SEED_PACKET_HEIGHT = 70
 const FINAL_SHOVEL_WIDTH = 80
 const FINAL_SHOVEL_HEIGHT = 80
 const DEFAULT_COLLECTION_EASE_DIVISOR = 21
-const FINAL_SEED_PACKET_COLLECTION_EASE_DIVISOR = 80
 const DEFAULT_COLLECTION_COMPLETE_DISTANCE = 8
 const MONEY_COLLECTION_COMPLETE_DISTANCE = 12
-const FINAL_SEED_PACKET_COLLECTION_COMPLETE_DISTANCE = 0.5
+const FINAL_SEED_PACKET_MOVE_DURATION = 350
+const FINAL_SEED_PACKET_SCALE_DURATION = 400
 
 export interface ItemUpdateContext {
     events: GameEvent[]
@@ -62,7 +62,8 @@ export class Item implements ItemEntity {
     private _disappearCounter = 0
     private _fadeCount = 0
     private _collectionDistance = 0
-    private _levelAwardCompleted = false
+    private _collectX = 0
+    private _collectY = 0
 
     constructor(args: ItemCreateArgs, context: ItemUpdateContext) {
         this.id = args.id
@@ -100,11 +101,16 @@ export class Item implements ItemEntity {
         this.beingCollected = true
         this._disappearCounter = 0
         this._fadeCount = 0
-        this._levelAwardCompleted = false
+        this._collectX = this.x
+        this._collectY = this.y
         this._pushCollectSound(context)
         if (this.type === 'final-seed-packet') {
-            context.events.push({ type: 'levelAwardCollected' })
-            this._levelAwardCompleted = true
+            context.events.push({
+                type: 'levelAwardCollected',
+                entityId: this.id,
+                x: this.x,
+                y: this.y,
+            })
             context.completeLevelAward(this)
         }
         return true
@@ -190,12 +196,28 @@ export class Item implements ItemEntity {
 
     private _updateCollected(context: ItemUpdateContext) {
         const destination = this._collectionDestination()
-        if (this.type === 'final-seed-packet') this._disappearCounter++
+        if (this.type === 'final-seed-packet') {
+            this._disappearCounter++
+
+            const moveTime = Math.min(1, this._disappearCounter / FINAL_SEED_PACKET_MOVE_DURATION)
+            const moveEaseOut = 2 * moveTime - moveTime * moveTime
+            this.x = this._collectX + (destination.x - this._collectX) * moveEaseOut
+            this.y = this._collectY + (destination.y - this._collectY) * moveEaseOut
+
+            const scaleTime = Math.min(1, this._disappearCounter / FINAL_SEED_PACKET_SCALE_DURATION)
+            const smoothStep = 3 * scaleTime * scaleTime - 2 * scaleTime * scaleTime * scaleTime
+            const scaleEaseInOut = 3 * smoothStep * smoothStep - 2 * smoothStep * smoothStep * smoothStep
+            this.scale = 1.01 + (2 - 1.01) * scaleEaseInOut
+
+            const deltaX = this.x - destination.x
+            const deltaY = this.y - destination.y
+            this._collectionDistance = Math.sqrt(deltaY * deltaY + deltaX * deltaX)
+            return
+        }
+
         const deltaX = Math.abs(this.x - destination.x)
         const deltaY = Math.abs(this.y - destination.y)
-        const divisor = this.type === 'final-seed-packet'
-            ? FINAL_SEED_PACKET_COLLECTION_EASE_DIVISOR
-            : DEFAULT_COLLECTION_EASE_DIVISOR
+        const divisor = DEFAULT_COLLECTION_EASE_DIVISOR
         if (this.x > destination.x) {
             this.x -= deltaX / divisor
         } else if (this.x < destination.x) {
@@ -210,17 +232,6 @@ export class Item implements ItemEntity {
         this._collectionDistance = Math.sqrt(deltaY * deltaY + deltaX * deltaX)
         const completeDistance = this._collectionCompleteDistance()
         if (this._collectionDistance < completeDistance) {
-            if (this.type === 'final-seed-packet') {
-                this.x = destination.x
-                this.y = destination.y
-                this.scale = 2
-                if (!this._levelAwardCompleted) {
-                    this._levelAwardCompleted = true
-                    context.completeLevelAward(this)
-                }
-                return
-            }
-
             this.dead = true
             if (this._isSun()) {
                 context.addSun(this._sunValue())
@@ -230,17 +241,10 @@ export class Item implements ItemEntity {
             return
         }
 
-        if (this.type === 'final-seed-packet') {
-            const t = Math.min(1, this._disappearCounter / 400)
-            const eased = t * t * (3 - 2 * t)
-            this.scale = 1.01 + (2 - 1.01) * eased
-        } else {
-            this.scale = Math.max(0.5, Math.min(1, this._collectionDistance * 0.05)) * this._sunScale()
-        }
+        this.scale = Math.max(0.5, Math.min(1, this._collectionDistance * 0.05)) * this._sunScale()
     }
 
     private _collectionCompleteDistance() {
-        if (this.type === 'final-seed-packet') return FINAL_SEED_PACKET_COLLECTION_COMPLETE_DISTANCE
         if (this._isMoney()) return MONEY_COLLECTION_COMPLETE_DISTANCE
         return DEFAULT_COLLECTION_COMPLETE_DISTANCE
     }

@@ -22,6 +22,7 @@ import {
 } from 'cc'
 import { Animator } from '@/core/Animator'
 import { AnimNode } from '@/core/Animator/AnimNode'
+import { TodParticleSystem, type TodParticleEffect } from '@/core/Particle'
 import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
@@ -379,6 +380,7 @@ export abstract class GameScreenCore extends Component {
     protected _sodClipRevealWidth = 771
     protected _tutorialLawnFlashNode: Node | null = null
     protected _sodRollViews: SodRollView[] = []
+    protected _sodRollParticleSystems: TodParticleSystem[] = []
     protected _introLawnMowerViews: IntroLawnMowerView[] = []
     protected _introStreetZombieNodes: Node[] = []
     protected _seedBankHeight = 87
@@ -417,6 +419,7 @@ export abstract class GameScreenCore extends Component {
     protected _seedPacketNodes: Map<SeedType, Node> = new Map()
     protected _seedPacketCooldownClips: Map<SeedType, Node> = new Map()
     protected _seedPacketSelectedHighlights: Map<SeedType, Node> = new Map()
+    protected _seedPacketTutorialArrows: Map<SeedType, TodParticleSystem> = new Map()
     protected _conveyorPacketNodes: Map<number, Node> = new Map()
     protected _conveyorPacketSelectedHighlights: Map<number, Node> = new Map()
     protected _bowlingStripeRevealed = false
@@ -1563,6 +1566,18 @@ export abstract class GameScreenCore extends Component {
                 keepLastFrame: true,
             })
         }
+        this._sodRollParticleSystems = this._introSodParticleSpecs().map((spec) =>
+            TodParticleSystem.spawn({
+                parent: this._boardContent,
+                effect: 'sod-roll',
+                x: spec.x,
+                y: -spec.y,
+                z: 0,
+            }),
+        )
+        for (const system of this._sodRollParticleSystems) {
+            system.node.setSiblingIndex(this._boardContent.children.length - 1)
+        }
         void SoundLoader.play(SoundEffect.DiggerZombie)
     }
 
@@ -1588,6 +1603,23 @@ export abstract class GameScreenCore extends Component {
                 view.node.setSiblingIndex(this._boardContent.children.length - 1)
             }
         }
+        this._sodRollParticleSystems = this._sodRollParticleSystems.filter((system) => {
+            const node = system?.node
+            if (!system?.isValid || !node?.isValid) return false
+
+            node.setSiblingIndex(this._boardContent.children.length - 1)
+            return true
+        })
+    }
+
+    protected _introSodParticleSpecs() {
+        if (this._session.level.adventureLevel === 4) {
+            return [{ x: 32, y: 150 }, { x: 32, y: 511 }]
+        }
+        if (this._session.level.adventureLevel === 2) {
+            return [{ x: 35, y: 246 }, { x: 35, y: 459 }]
+        }
+        return [{ x: 35, y: 348 }]
     }
 
     protected _syncIntroLawnMower(forcedX?: number) {
@@ -2063,6 +2095,27 @@ export abstract class GameScreenCore extends Component {
                 case 'boardShake':
                     this._startBoardShake(event.amountX, event.amountY)
                     break
+                case 'cherryBombDetonated':
+                case 'explodeONutDetonated':
+                    this._spawnParticleAt('powie', event.x, event.y)
+                    break
+                case 'particleRequested':
+                    this._spawnZombiePartParticle(event.entityId, event.effect)
+                    break
+                case 'particleAtRequested':
+                    this._spawnParticleAt(event.effect, event.x, event.y)
+                    break
+                case 'particleAttachedRequested':
+                    this._spawnAttachedZombieParticle(
+                        event.entityId,
+                        event.effect,
+                        event.x,
+                        event.y,
+                    )
+                    break
+                case 'seedPacketFlashRequested':
+                    this._spawnSeedPacketFlash(event.seedType)
+                    break
                 case 'finalWave':
                     this._showFinalWaveWarning()
                     break
@@ -2070,6 +2123,11 @@ export abstract class GameScreenCore extends Component {
                     MusicSystem.startBurst()
                     break
                 case 'levelAwardCollected':
+                    this._playLevelAwardCollectedEffects(
+                        event.entityId,
+                        event.x,
+                        event.y,
+                    )
                     this._startLevelCompleteEffect()
                     break
                 case 'levelWon':
@@ -2086,6 +2144,138 @@ export abstract class GameScreenCore extends Component {
         this._clearAdvice()
         this._clearHugeWaveText()
         void this._playFinalWaveWarning()
+    }
+
+    protected _spawnZombiePartParticle(entityId: number, effect: TodParticleEffect) {
+        const view = this._zombieViews.get(entityId)
+        if (!view?.node.isValid) return
+
+        const trackNames: Partial<Record<TodParticleEffect, string>> = {
+            'zombie-head': 'anim_head1',
+            'zombie-arm': 'Zombie_outerarm_lower',
+            'mowered-zombie-head': 'anim_head1',
+            'mowered-zombie-arm': 'Zombie_outerarm_lower',
+            'zombie-traffic-cone': 'anim_cone',
+            'zombie-pail': 'anim_bucket',
+            'zombie-flag': 'Zombie_flag',
+        }
+        const fallbackOffsets: Partial<Record<TodParticleEffect, { x: number; y: number }>> = {
+            'zombie-head': { x: 58, y: -30 },
+            'zombie-arm': { x: 25, y: -55 },
+            'mowered-zombie-head': { x: 58, y: -30 },
+            'mowered-zombie-arm': { x: 25, y: -55 },
+            'zombie-traffic-cone': { x: 58, y: -18 },
+            'zombie-pail': { x: 58, y: -18 },
+            'zombie-flag': { x: 18, y: -42 },
+        }
+
+        const trackName = trackNames[effect]
+        const fallback = fallbackOffsets[effect]
+        if (!trackName || !fallback) return
+
+        const trackWorldPosition = view.animator?.getTrackWorldPosition(trackName)
+        const entityLayerTransform = this._entityLayer.getComponent(UITransform)
+        const localPosition = trackWorldPosition && entityLayerTransform
+            ? entityLayerTransform.convertToNodeSpaceAR(trackWorldPosition)
+            : null
+        const x = localPosition?.x ?? view.node.position.x + fallback.x
+        const y = localPosition?.y ?? view.node.position.y + fallback.y
+        const zombie = this._session.zombies.find((candidate) => candidate.id === entityId)
+        const renderOrder = zombie
+            ? this._entityLayerOrder(zombie) + 0.01
+            : this._zombiePartFallbackRenderOrder(view.node.position.y)
+        TodParticleSystem.spawn({
+            parent: this._entityLayer,
+            effect,
+            x,
+            y,
+            renderOrder,
+        })
+    }
+
+    protected _zombiePartFallbackRenderOrder(nodeY: number) {
+        let nearestRow = this._session.level.activeRows[0] ?? 0
+        let nearestDistance = Number.POSITIVE_INFINITY
+        for (const row of this._session.level.activeRows) {
+            const rowY = this._session.geometry.gridToPixel(0, row).y
+            const distance = Math.abs(rowY + nodeY)
+            if (distance >= nearestDistance) continue
+
+            nearestDistance = distance
+            nearestRow = row
+        }
+        return nearestRow * 10 + 1.01
+    }
+
+    protected _spawnParticleAt(effect: TodParticleEffect, x: number, y: number) {
+        TodParticleSystem.spawn({
+            parent: this._entityLayer,
+            effect,
+            x,
+            y: -y,
+            renderOrder: 10000,
+        })
+    }
+
+    protected _spawnAttachedZombieParticle(
+        entityId: number,
+        effect: TodParticleEffect,
+        x: number,
+        y: number,
+    ) {
+        const view = this._zombieViews.get(entityId)
+        if (!view?.node.isValid) return
+
+        const system = TodParticleSystem.spawn({
+            parent: view.node,
+            effect,
+            x,
+            y: -y,
+            z: 1,
+        })
+        system.node.setSiblingIndex(view.node.children.length - 1)
+    }
+
+    protected _spawnSeedPacketFlash(seedType: SeedType) {
+        const packetNode = this._seedPacketNodes.get(seedType)
+        if (!packetNode?.isValid) return
+
+        const flash = TodParticleSystem.spawn({
+            parent: packetNode,
+            effect: 'seed-packet-flash',
+            x: 0,
+            y: 0,
+            z: 16,
+        })
+        flash.node.setSiblingIndex(packetNode.children.length - 1)
+    }
+
+    protected _playLevelAwardCollectedEffects(
+        entityId: number,
+        x: number,
+        y: number,
+    ) {
+        const itemNode = this._entityNodes.get(entityId)
+
+        const starburst = TodParticleSystem.spawn({
+            parent: this._itemLayer,
+            effect: 'starburst',
+            x: x + 30,
+            y: -(y + 30),
+            z: 1,
+        })
+        starburst.node.setSiblingIndex(this._itemLayer.children.length - 1)
+
+        if (!itemNode?.isValid) return
+
+        const pickup = TodParticleSystem.spawn({
+            parent: itemNode,
+            effect: 'seed-packet-pickup',
+            x: 0,
+            y: 0,
+            z: -1,
+        })
+        pickup.node.setSiblingIndex(0)
     }
 
     protected _showReadySetPlant() {
@@ -2195,8 +2385,31 @@ export abstract class GameScreenCore extends Component {
             this._applyPacketColor(node, packet)
             this._syncSeedPacketSelectedHighlight(packet)
             this._syncSeedPacketCooldown(packet)
+            this._syncSeedPacketTutorialArrow(packet, node)
         }
         this._syncConveyorPacketState()
+    }
+
+    protected _syncSeedPacketTutorialArrow(packet: SeedPacketState, packetNode: Node) {
+        const current = this._seedPacketTutorialArrows.get(packet.seedType)
+        const currentNode = current?.node
+        if (!this._shouldShowFirstPlantSeedGuide(packet)) {
+            if (current?.isValid && currentNode?.isValid) currentNode.destroy()
+            this._seedPacketTutorialArrows.delete(packet.seedType)
+            return
+        }
+        if (current?.isValid && currentNode?.isValid && currentNode.parent === packetNode) return
+        if (current?.isValid && currentNode?.isValid) currentNode.destroy()
+
+        const arrow = TodParticleSystem.spawn({
+            parent: packetNode,
+            effect: 'seed-packet-pick',
+            x: 0,
+            y: 0,
+            z: 20,
+        })
+        arrow.node.setSiblingIndex(packetNode.children.length - 1)
+        this._seedPacketTutorialArrows.set(packet.seedType, arrow)
     }
 
     protected _syncConveyorVisibility() {
@@ -2401,7 +2614,12 @@ export abstract class GameScreenCore extends Component {
                 node,
                 packet.seedType,
                 new Color(128, 128, 128, 255),
-                ['CooldownClip', 'SelectedHighlight'],
+                [
+                    'CooldownClip',
+                    'SelectedHighlight',
+                    'ParticleSystem_seed-packet-pick',
+                    'ParticleSystem_seed-packet-flash',
+                ],
             )
             return
         }
@@ -2414,7 +2632,17 @@ export abstract class GameScreenCore extends Component {
             this._shouldShowFirstPlantSeedGuide(packet) ? this._getTutorialFlashingColor() :
                 cooling ? new Color(128, 128, 128, 255) :
                 affordable && !inactiveWithoutCooldown ? Color.WHITE : new Color(128, 128, 128, 255)
-        this._applySeedPacketColor(node, packet.seedType, color, ['CooldownClip', 'SelectedHighlight'])
+        this._applySeedPacketColor(
+            node,
+            packet.seedType,
+            color,
+            [
+                'CooldownClip',
+                'SelectedHighlight',
+                'ParticleSystem_seed-packet-pick',
+                'ParticleSystem_seed-packet-flash',
+            ],
+        )
     }
 
     protected _syncSeedPacketSelectedHighlight(packet: SeedPacketState) {
@@ -2653,6 +2881,10 @@ export abstract class GameScreenCore extends Component {
         const animators = this.node.getComponentsInChildren(Animator)
         for (const animator of animators) {
             if (animator.isValid) animator.enabled = !paused
+        }
+        const particleSystems = this.node.getComponentsInChildren(TodParticleSystem)
+        for (const particleSystem of particleSystems) {
+            if (particleSystem.isValid) particleSystem.enabled = !paused
         }
         this._syncSceneAnimationState()
     }
@@ -3409,7 +3641,22 @@ export abstract class GameScreenCore extends Component {
         return this._session.geometry.rowZ(this._entityRenderRow(entity))
     }
 
+    protected _entityLayerOrder(entity: GameEntity) {
+        const rowOrder = this._entityRenderRow(entity) * 10
+        const typeOrder =
+            entity.kind === 'lawnmower' ? 3 :
+                entity.kind === 'projectile' ? 2 :
+                    entity.kind === 'plant' && entity.isBowling ? 2 :
+                        entity.kind === 'zombie' ? 1 : 0
+        const horizontalOffset = entity.kind === 'plant'
+            ? (this._session.geometry.width - entity.x) /
+                (entity.isBowling ? 10000 : 1000)
+            : 0
+        return rowOrder + typeOrder + horizontalOffset
+    }
+
     protected _entityRenderRow(entity: GameEntity) {
+        if (entity.kind === 'item') return 0
         if (entity.kind === 'plant' && entity.isBowling && entity.state === 'bowling-down') {
             return Math.max(0, entity.row - 1)
         }

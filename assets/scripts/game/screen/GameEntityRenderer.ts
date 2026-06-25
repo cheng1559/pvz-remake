@@ -1,6 +1,7 @@
 import { Color, Graphics, Mask, Node, Rect, Size, Sprite, UIOpacity } from 'cc'
 import { GameScreenEndSequences } from './GameScreenEndSequences'
 import { Animator } from '@/core/Animator'
+import { TodParticleSystem } from '@/core/Particle'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH, SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
@@ -106,6 +107,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             }
             const opacity = node.getComponent(UIOpacity) ?? node.addComponent(UIOpacity)
             opacity.opacity = renderState.alpha ?? entity.alpha
+            this._syncLevelAwardPickupEffect(node, entity, scale)
             this._syncMoneyItemAnimation(entity)
             return
         }
@@ -181,16 +183,11 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             const node = this._entityNodes.get(entity.id)
             if (!node?.isValid) continue
 
-            const rowOrder = this._entityRenderRow(entity) * 10
-            const typeOrder =
-                entity.kind === 'lawnmower' ? 3 :
-                    entity.kind === 'projectile' ? 2 :
-                    entity.kind === 'plant' && entity.isBowling ? 2 :
-                    entity.kind === 'zombie' ? 1 : 0
-            const bowlingOffset = entity.kind === 'plant' && entity.isBowling
-                ? (this._session.geometry.width - entity.x) / 10000
-                : 0
-            entries.push({ node, order: rowOrder + typeOrder + bowlingOffset })
+            entries.push({ node, order: this._entityLayerOrder(entity) })
+        }
+        for (const system of this._entityLayer.getComponentsInChildren(TodParticleSystem)) {
+            if (system.node.parent !== this._entityLayer) continue
+            entries.push({ node: system.node, order: system.renderOrder })
         }
 
         entries.sort((a, b) => a.order - b.order)
@@ -453,7 +450,38 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         } else {
             this._createMoneyItemVisual(node, item)
         }
+        if (item.type === 'final-seed-packet') {
+            const pickupEffect = TodParticleSystem.spawn({
+                parent: node,
+                effect: item.awardKind === 'shovel'
+                    ? 'award-pickup-arrow'
+                    : 'seed-packet-award',
+                x: 0,
+                y: 60,
+                z: -1,
+            })
+            pickupEffect.node.setSiblingIndex(0)
+        }
         return node
+    }
+
+    protected _syncLevelAwardPickupEffect(node: Node, item: ItemEntity, scale: number) {
+        if (item.type !== 'final-seed-packet') return
+
+        for (const system of node.getComponentsInChildren(TodParticleSystem)) {
+            if (!system.node?.isValid) continue
+
+            system.overrideScale(scale)
+            if (
+                item.beingCollected &&
+                (
+                    system.node.name === 'ParticleSystem_seed-packet-award' ||
+                    system.node.name === 'ParticleSystem_award-pickup-arrow'
+                )
+            ) {
+                system.node.destroy()
+            }
+        }
     }
 
     protected _createLawnMowerNode(mower: LawnMowerEntity) {

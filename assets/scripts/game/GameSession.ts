@@ -354,7 +354,7 @@ export class GameSession {
 
         const isMoney = this._isMoneyItem(item)
         const collected = item.collect(this._createItemUpdateContext(this.events))
-        if (collected) this._handleLevelOneTutorialSunClicked(item)
+        if (collected && this._isSunItem(item)) this._handleSunItemCollected(item)
         if (collected && isMoney) this.events.push({ type: 'coinBankShown' })
         return collected
     }
@@ -365,7 +365,7 @@ export class GameSession {
 
         const isMoney = this._isMoneyItem(item)
         const collected = item.collect(this._createItemUpdateContext(this.events))
-        if (collected && this._isSunItem(item)) this._handleLevelOneTutorialSunClicked(item)
+        if (collected && this._isSunItem(item)) this._handleSunItemCollected(item)
         if (collected && isMoney) this.events.push({ type: 'coinBankShown' })
         return collected
     }
@@ -734,6 +734,12 @@ export class GameSession {
         this._clearCursor()
         if (packet && !this.rechargingEnabled) packet.active = true
         this.events.push({ type: 'entitySpawned', entityId: plant.id })
+        this.events.push({
+            type: 'particleAtRequested',
+            effect: 'planting',
+            x: plant.x + 41,
+            y: plant.y + 74,
+        })
         this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant })
         this._handleLevelOneTutorialPlantPlaced(plant, isFirstPlant)
         this._handleLevelTwoTutorialPlantPlaced(plant)
@@ -761,6 +767,12 @@ export class GameSession {
         this._clearCursor()
         this._retargetConveyorPackets()
         this.events.push({ type: 'entitySpawned', entityId: plant.id })
+        this.events.push({
+            type: 'particleAtRequested',
+            effect: 'planting',
+            x: plant.x + 41,
+            y: plant.y + 74,
+        })
         this.events.push({ type: 'soundRequested', sound: SoundEffect.Bowling })
         this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant })
     }
@@ -957,6 +969,12 @@ export class GameSession {
                 if (!packet.selected) packet.active = true
             }
             if (!wasReady && packet.active && packet.cooldownRemaining <= 0) {
+                if (this.canAffordSeed(packet.seedType)) {
+                    this.events.push({
+                        type: 'seedPacketFlashRequested',
+                        seedType: packet.seedType,
+                    })
+                }
                 this._handleLevelTwoTutorialSeedPacketReady(packet.seedType)
                 this._handleLaterSunflowerTutorialSeedPacketReady(packet.seedType)
             }
@@ -972,6 +990,12 @@ export class GameSession {
             packet.cooldownTotal = 0
             if (!packet.selected) packet.active = true
             if (!wasReady && packet.active) {
+                if (this.canAffordSeed(packet.seedType)) {
+                    this.events.push({
+                        type: 'seedPacketFlashRequested',
+                        seedType: packet.seedType,
+                    })
+                }
                 this._handleLevelTwoTutorialSeedPacketReady(packet.seedType)
                 this._handleLaterSunflowerTutorialSeedPacketReady(packet.seedType)
             }
@@ -1209,6 +1233,15 @@ export class GameSession {
                     canUseSuperLongDeath: this._canUseSuperLongDeath(),
                 }
                 const damageResult = target.takeDamage(projectile.damage, deathContext)
+                const splatX = projectile.x + 49 - target.x
+                const splatY = Math.max(20, Math.min(100, projectile.y + 12 - target.y))
+                this.events.push({
+                    type: 'particleAttachedRequested',
+                    effect: projectile.type === 'snowpea' ? 'snowpea-splat' : 'pea-splat',
+                    entityId: target.id,
+                    x: splatX,
+                    y: splatY,
+                })
                 if (damageResult.droppedHead) {
                     this._dropZombieLoot(target)
                     if (this._levelAwardDropped) target.finishAfterLevelAwardDropped(deathContext)
@@ -1248,7 +1281,7 @@ export class GameSession {
             if (!this._isAutoCollectableItem(item)) continue
 
             const collected = item.collect(context)
-            if (collected && this._isSunItem(item)) this._handleLevelOneTutorialSunClicked(item)
+            if (collected && this._isSunItem(item)) this._handleSunItemCollected(item)
         }
     }
 
@@ -1409,7 +1442,7 @@ export class GameSession {
             mower.chompCounter = LAWN_MOWER_CHOMP_TRIGGERED_COUNTER
         }
         this.events.push({ type: 'foleyRequested', sound: SoundEffect.Splat })
-        zombie.mowDown()
+        zombie.mowDown(this.events)
         this._dropZombieLoot(zombie)
     }
 
@@ -2163,11 +2196,34 @@ export class GameSession {
     private _countSunBeingCollected() {
         return this.items.reduce((total, item) => {
             if (!item.beingCollected || item.dead) return total
-            if (item.type === 'small-sun') return total + 15
-            if (item.type === 'large-sun') return total + 50
-            if (item.type === 'sun') return total + 25
-            return total
+            return total + this._sunItemValue(item)
         }, 0)
+    }
+
+    private _handleSunItemCollected(item: Item) {
+        this._handleLevelOneTutorialSunClicked(item)
+        if (!this.sunCostEnabled) return
+
+        const collectedSunValue = this._sunItemValue(item)
+        const availableSun = this.sun + this._countSunBeingCollected()
+        for (const packet of this.seedPackets) {
+            if (!packet.active || packet.selected || packet.cooldownRemaining > 0) continue
+
+            const sunProfit = availableSun - SEED_DEFINITIONS[packet.seedType].cost
+            if (sunProfit >= 0 && sunProfit < collectedSunValue) {
+                this.events.push({
+                    type: 'seedPacketFlashRequested',
+                    seedType: packet.seedType,
+                })
+            }
+        }
+    }
+
+    private _sunItemValue(item: Item) {
+        if (item.type === 'small-sun') return 15
+        if (item.type === 'large-sun') return 50
+        if (item.type === 'sun') return 25
+        return 0
     }
 
     private _findItemAt(x: number, y: number) {

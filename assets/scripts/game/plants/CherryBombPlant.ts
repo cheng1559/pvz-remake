@@ -21,7 +21,7 @@ export class CherryBombPlant extends Plant {
             type: 'cherryBombDetonated',
             entityId: this.id,
             x: this.x + 40,
-            y: this.y + 50,
+            y: this.y + 40,
             row: this.row,
         })
         context.events.push({ type: 'foleyRequested', sound: SoundEffect.CherryBomb })
