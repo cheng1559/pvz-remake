@@ -140,6 +140,8 @@ export function configureZombieTracks(animator: Animator, zombieType: ZombieAnim
         'Zombie_innerarm_screendoor',
         'Zombie_innerarm_screendoor_hand',
         'Zombie_outerarm_screendoor',
+        'Zombie_polevaulter_pole',
+        'Zombie_polevaulter_pole2',
     ]
     for (const track of hiddenByDefault) {
         animator.hideTrack(track)
@@ -176,6 +178,10 @@ export function configureZombieTracks(animator: Animator, zombieType: ZombieAnim
             animator.hidePrefix('Zombie_outerarm_lower')
             animator.hidePrefix('Zombie_outerarm_upper')
             break
+        case 'pole-vaulting':
+            animator.showTrack('Zombie_polevaulter_pole')
+            animator.showTrack('Zombie_polevaulter_pole2')
+            break
     }
 }
 
@@ -203,13 +209,25 @@ export function syncZombieTrackVisibility(view: ZombieAnimationView, zombie: Zom
     }
 
     if (!zombie.hasArm) {
-        animator.hidePrefix('Zombie_outerarm_lower')
-        animator.hidePrefix('Zombie_outerarm_hand')
-        animator.setTrackImageOverride('Zombie_outerarm_upper', 'zombie_outerarm_upper2')
+        if (zombie.type === 'pole-vaulting') {
+            animator.hideTrack('Zombie_polevaulter_outerarm_lower')
+            animator.hideTrack('Zombie_outerarm_hand')
+            animator.setTrackImageOverride('Zombie_polevaulter_outerarm_upper', 'zombie_polevaulter_outerarm_upper2')
+        } else {
+            animator.hidePrefix('Zombie_outerarm_lower')
+            animator.hidePrefix('Zombie_outerarm_hand')
+            animator.setTrackImageOverride('Zombie_outerarm_upper', 'zombie_outerarm_upper2')
+        }
     } else {
-        animator.showPrefix('Zombie_outerarm_lower')
-        animator.showPrefix('Zombie_outerarm_hand')
-        animator.setTrackImageOverride('Zombie_outerarm_upper', null)
+        if (zombie.type === 'pole-vaulting') {
+            animator.showTrack('Zombie_polevaulter_outerarm_lower')
+            animator.showTrack('Zombie_outerarm_hand')
+            animator.setTrackImageOverride('Zombie_polevaulter_outerarm_upper', null)
+        } else {
+            animator.showPrefix('Zombie_outerarm_lower')
+            animator.showPrefix('Zombie_outerarm_hand')
+            animator.setTrackImageOverride('Zombie_outerarm_upper', null)
+        }
     }
 
     if (zombie.type === 'traffic-cone') {
@@ -231,6 +249,23 @@ export function syncZombieTrackVisibility(view: ZombieAnimationView, zombie: Zom
             animator.hideTrack('anim_bucket')
             animator.setTrackImageOverride('anim_bucket', null)
             if (zombie.hasHead) animator.showPrefix('anim_hair')
+        }
+    } else if (zombie.type === 'pole-vaulting') {
+        if (zombie.poleVaulting) {
+            animator.showTrack('Zombie_polevaulter_pole')
+            animator.showTrack('Zombie_polevaulter_pole2')
+            animator.showPrefix('Zombie_polevaulter_innerarm')
+            animator.showPrefix('Zombie_polevaulter_innerhand')
+        } else {
+            animator.hideTrack('Zombie_polevaulter_pole')
+            animator.hideTrack('Zombie_polevaulter_pole2')
+            if (!zombie.hasHead || zombie.state === 'mowered') {
+                animator.hidePrefix('Zombie_polevaulter_innerarm')
+                animator.hidePrefix('Zombie_polevaulter_innerhand')
+            } else {
+                animator.showPrefix('Zombie_polevaulter_innerarm')
+                animator.showPrefix('Zombie_polevaulter_innerhand')
+            }
         }
     }
 }

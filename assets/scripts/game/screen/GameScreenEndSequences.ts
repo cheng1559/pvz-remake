@@ -123,7 +123,9 @@ export abstract class GameScreenEndSequences extends GameScreenIntroHud {
         graphics.clear()
         if (alpha <= 0) return
 
-        graphics.fillColor = new Color(255, 255, 255, alpha)
+        graphics.fillColor = this._levelAward?.kind === 'note'
+            ? new Color(0, 0, 0, alpha)
+            : new Color(255, 255, 255, alpha)
         graphics.fillRect(0, -600, 800, 600)
     }
 
@@ -161,6 +163,11 @@ export abstract class GameScreenEndSequences extends GameScreenIntroHud {
 
     protected _hideGameplayUiForGameOver() {
         if (this._seedBankNode?.isValid) this._seedBankNode.active = false
+        for (const arrow of this._seedPacketTutorialArrows.values()) {
+            if (arrow.isValid && arrow.node?.isValid) arrow.node.destroy()
+        }
+        this._seedPacketTutorialArrows.clear()
+        if (this._tutorialLawnFlashNode?.isValid) this._tutorialLawnFlashNode.active = false
         if (this._menuButtonNode?.isValid) this._menuButtonNode.active = false
         if (this._shovelBankNode?.isValid) this._shovelBankNode.active = false
         if (this._shovelNode?.isValid) this._shovelNode.active = false

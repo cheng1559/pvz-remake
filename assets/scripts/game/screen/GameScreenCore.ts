@@ -20,9 +20,10 @@ import {
     UITransform,
     Vec2,
 } from 'cc'
+import { DEBUG } from 'cc/env'
 import { Animator } from '@/core/Animator'
 import { AnimNode } from '@/core/Animator/AnimNode'
-import { TodParticleSystem, type TodParticleEffect } from '@/core/Particle'
+import { ParticleDefinitionLoader, TodParticleSystem, type TodParticleEffect } from '@/core/Particle'
 import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
@@ -38,7 +39,7 @@ import { AdviceWidget } from '@/ui/AdviceWidget'
 import { UIHoverManager, type UIHoverPointer } from '@/ui/UIHoverManager'
 import { MoneyCounter } from '@/ui/MoneyCounter'
 import { CrazyDaveWidget } from '@/ui/CrazyDaveWidget'
-import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH, SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
+import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/ui/SeedPacketRenderer'
 import { createStoneButton } from '@/ui/StoneButton'
 import { createTooltipNode } from '@/ui/Tooltip/Tooltip'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
@@ -107,6 +108,7 @@ import {
 } from './MoneyItemVisualConfig'
 import { easeInOut, lerp, linearFloat } from './GameScreenMath'
 import { eventToBoardPixel, getNodeBoardPixelRect, isPixelInRect, uiLocationToBoardPixel } from './BoardPixelUtils'
+import { SeedPacketView, type SeedPacketViewArgs } from './SeedPacketView'
 import {
     PLANT_PREVIEW_CACHE_IDS,
     PLANT_SHADOW_ADJUSTMENTS,
@@ -153,6 +155,10 @@ import type {
     ZombieEntity,
     ZombieType,
 } from '../GameTypes'
+
+type SeedSourceHit =
+    | { kind: 'seed', packet: SeedPacketState, rect: BoardPixelRect, seedType: SeedType }
+    | { kind: 'conveyor', packet: ConveyorPacketState, rect: BoardPixelRect, seedType: SeedType, packetId: number }
 
 export const BOARD_OFFSET = 220
 export const BOARD_ROOT_X = -400
@@ -232,7 +238,8 @@ const ADVICE_LAWN_STRING_KEYS: Record<string, string> = {
     'Try to plant at least 3 of them!': 'ADVICE_PLANT_SUNFLOWER2',
     'Planting at least 3 sunflowers improves your\nchances of surviving a zombie attack!': 'ADVICE_PLANT_SUNFLOWER3',
     'The more sunflowers you have,\nthe faster you can grow plants!': 'ADVICE_MORE_SUNFLOWERS',
-    'Planting sunflowers will improve your chances \nof surviving the zombie attack!': 'ADVICE_PLANT_SUNFLOWER3',
+    'Try to plant at least 3 sunflowers!': 'ADVICE_PLANT_SUNFLOWER4',
+    'Planting sunflowers will improve your chances \nof surviving the zombie attack!': 'ADVICE_PLANT_SUNFLOWER5',
 }
 export const INTRO_STREET_ZOMBIE_GRID_SIZE = 5
 export const INTRO_STREET_ZOMBIE_PREVIEW_CAPACITY = 10
@@ -414,14 +421,13 @@ export abstract class GameScreenCore extends Component {
     protected _lawnMowerViews: Map<number, LawnMowerView> = new Map()
     protected _moneyItemViews: Map<number, MoneyItemView> = new Map()
     protected _moneyCounter: MoneyCounter | null = null
+    protected _domKeyDownListener: ((event: KeyboardEvent) => void) | null = null
+    protected _lastHandledKeyboardEvent: Event | KeyboardEvent | null = null
     protected _coinBankFadeTicks = 0
     protected _previousEntitySnapshots: Map<number, RenderEntitySnapshot> = new Map()
-    protected _seedPacketNodes: Map<SeedType, Node> = new Map()
-    protected _seedPacketCooldownClips: Map<SeedType, Node> = new Map()
-    protected _seedPacketSelectedHighlights: Map<SeedType, Node> = new Map()
+    protected _seedPacketViews: Map<SeedType, SeedPacketView> = new Map()
     protected _seedPacketTutorialArrows: Map<SeedType, TodParticleSystem> = new Map()
-    protected _conveyorPacketNodes: Map<number, Node> = new Map()
-    protected _conveyorPacketSelectedHighlights: Map<number, Node> = new Map()
+    protected _conveyorPacketViews: Map<number, SeedPacketView> = new Map()
     protected _bowlingStripeRevealed = false
     protected _seedTooltipNode: Node | null = null
     protected _seedTooltipKey = ''
@@ -550,6 +556,7 @@ export abstract class GameScreenCore extends Component {
 
     onDestroy() {
         UIHoverManager.unregisterClient(this._boardHoverClient)
+        this._unbindDomKeyboardEvents()
         input.off(Input.EventType.MOUSE_DOWN, this._onGlobalMouseDown, this)
         input.off(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this._releasePlantCursorHoverBlock()
@@ -574,6 +581,7 @@ export abstract class GameScreenCore extends Component {
             StartupResourceLoader.loadJson(GOLD_COIN_ANIMATION_PATH),
             StartupResourceLoader.loadJson(DIAMOND_ANIMATION_PATH),
             StartupResourceLoader.loadJson(CRAZY_DAVE_ANIMATION_PATH),
+            ...(DEBUG ? [] : [ParticleDefinitionLoader.preloadAll()]),
             FontLoader.load('continuumbold14'),
             FontLoader.load('pico129'),
             FontLoader.load('houseofterror28'),
@@ -608,6 +616,7 @@ export abstract class GameScreenCore extends Component {
         this._goldCoinAnimation = results[resultIndex++] as JsonAsset | null
         this._diamondAnimation = results[resultIndex++] as JsonAsset | null
         this._crazyDaveAnimation = results[resultIndex++] as JsonAsset | null
+        if (!DEBUG) resultIndex++ // ParticleDefinitionLoader.preloadAll()
         this._sunFont = results[resultIndex++] as BitmapFontAssets | null
         this._packetCostFont = results[resultIndex++] as BitmapFontAssets | null
         this._adviceFont = results[resultIndex++] as BitmapFontAssets | null
@@ -721,10 +730,10 @@ export abstract class GameScreenCore extends Component {
         }
     }
 
-    public debugPlacePlant(type: PlantType, row: number, col: number) {
+    public debugPlacePlant(type: PlantType, row: number, col: number, bowlingAnimRate?: number) {
         if (!this.isLevelRunning()) return false
 
-        this._session.debugAddPlant(type, row, col)
+        this._session.debugAddPlant(type, row, col, bowlingAnimRate)
         this._renderFrame()
         return true
     }
@@ -851,7 +860,7 @@ export abstract class GameScreenCore extends Component {
     }
 
     public debugSpawnItem(
-        type: ItemEntity['type'],
+        type: ItemEntity['type'] | 'level-award',
         row?: number,
         col?: number,
         awardKind?: LevelAwardKind,
@@ -865,14 +874,14 @@ export abstract class GameScreenCore extends Component {
     }
 
     public debugSetRechargingEnabled(enabled: boolean) {
-        GameDebugSettings.rechargingEnabled = enabled
+        GameDebugSettings.setRechargingEnabled(enabled)
         const rechargingEnabled = this._session.debugSetRechargingEnabled(enabled)
         if (this._bootstrapped) this._renderFrame()
         return rechargingEnabled
     }
 
     public debugSetSunCostEnabled(enabled: boolean) {
-        GameDebugSettings.sunCostEnabled = enabled
+        GameDebugSettings.setSunCostEnabled(enabled)
         const sunCostEnabled = this._session.debugSetSunCostEnabled(enabled)
         if (this._bootstrapped) this._renderFrame()
         return sunCostEnabled
@@ -887,14 +896,14 @@ export abstract class GameScreenCore extends Component {
     }
 
     public debugSetAutoCollectEnabled(enabled: boolean) {
-        GameDebugSettings.autoCollectEnabled = enabled
+        GameDebugSettings.setAutoCollectEnabled(enabled)
         const autoCollectEnabled = this._session.debugSetAutoCollectEnabled(enabled)
         if (this._bootstrapped) this._renderFrame()
         return autoCollectEnabled
     }
 
     public debugSetHitboxesVisible(visible: boolean) {
-        GameDebugSettings.hitboxesVisible = visible
+        GameDebugSettings.setHitboxesVisible(visible)
         this._debugHitboxesVisible = visible
         if (this._collisionDebugLayer?.isValid) {
             this._collisionDebugLayer.active = visible
@@ -931,6 +940,7 @@ export abstract class GameScreenCore extends Component {
     protected abstract _playPlantAnimation(entityId: number, animation: string): void
 
     protected _wireInput() {
+        this._bindDomKeyboardEvents()
         input.on(Input.EventType.MOUSE_DOWN, this._onGlobalMouseDown, this)
         input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this.node.on(Node.EventType.MOUSE_MOVE, (event: EventMouse) => {
@@ -969,7 +979,22 @@ export abstract class GameScreenCore extends Component {
             this._hasCursorPointer = true
             this._lastTouchPixel = pixel
             if (this._session.selectedSeed) {
-                this._beginMobilePlantPress(pixel, this._findSeedPacketAt(pixel)?.rect ?? null)
+                const source = this._findSeedSourceAt(pixel, true)
+                if (source) {
+                    const canPickUp = this._canPickUpSeedSource(source)
+                    if (canPickUp) {
+                        this._resetMobilePlantPress()
+                        this._session.dispatch({ type: 'clearCursor' })
+                        this._selectSeedSource(source)
+                        this._beginMobilePlantPress(pixel, source.rect)
+                        this._renderFrame()
+                    } else {
+                        this._beginMobilePlantPress(pixel, source.rect, true)
+                        this._updateCursorPreview()
+                    }
+                    return
+                }
+                this._beginMobilePlantPress(pixel, null)
                 this._updateCursorPreview()
                 return
             }
@@ -1157,19 +1182,52 @@ export abstract class GameScreenCore extends Component {
 
     protected _onKeyDown(event: EventKeyboard) {
         if (event.keyCode !== 32 && event.keyCode !== 13) return
-        if (!this._gameStarted || this._session.result !== 'playing') return
-        if (this._session.paused) return
 
+        const rawEvent = event.rawEvent as Event | undefined
+        if (rawEvent && rawEvent === this._lastHandledKeyboardEvent) return
+        this._handleAdvanceKey(event.keyCode)
+    }
+
+    protected _bindDomKeyboardEvents() {
+        if (this._domKeyDownListener || !sys.isBrowser || typeof globalThis.addEventListener !== 'function') return
+
+        this._domKeyDownListener = (event) => this._onDomKeyDown(event)
+        globalThis.addEventListener('keydown', this._domKeyDownListener, true)
+    }
+
+    protected _unbindDomKeyboardEvents() {
+        if (!this._domKeyDownListener) return
+        if (typeof globalThis.removeEventListener === 'function') {
+            globalThis.removeEventListener('keydown', this._domKeyDownListener, true)
+        }
+        this._domKeyDownListener = null
+    }
+
+    protected _onDomKeyDown(event: KeyboardEvent) {
+        const keyCode = event.key === 'Enter' ? 13 : event.key === ' ' || event.code === 'Space' ? 32 : 0
+        if (keyCode === 0) return
+
+        if (this._handleAdvanceKey(keyCode)) {
+            this._lastHandledKeyboardEvent = event
+            event.preventDefault()
+            event.stopPropagation()
+        }
+    }
+
+    protected _handleAdvanceKey(keyCode: number) {
         if (this._advanceCrazyDaveDialog()) {
             this._renderFrame()
-            return
+            return true
         }
-        if (this._gameplayUpdatesPaused) return
-        if (event.keyCode !== 32) return
+        if (!this._gameStarted || this._session.result !== 'playing') return false
+        if (this._session.paused) return false
+        if (this._gameplayUpdatesPaused) return false
+        if (keyCode !== 32) return false
 
         this.pauseGame()
         void SoundLoader.play(SoundEffect.Pause)
         this.onPauseRequest?.()
+        return true
     }
 
     protected _onGlobalMouseDown(event: EventMouse) {
@@ -1189,9 +1247,9 @@ export abstract class GameScreenCore extends Component {
         this._mousePixel = pixel
         this._hasCursorPointer = true
 
-        const seedHit = this._findSeedPacketAt(pixel)
-        if (seedHit && !this._hasCursorObject()) {
-            this._session.dispatch({ type: 'selectSeed', seedType: seedHit.packet.seedType })
+        const seedSource = this._findSeedSourceAt(pixel, true)
+        if (seedSource && !this._hasCursorObject()) {
+            this._selectSeedSource(seedSource)
             this._renderFrame()
             event.propagationStopped = true
             return
@@ -1229,6 +1287,11 @@ export abstract class GameScreenCore extends Component {
         if (this._isCrazyDaveBoardInputBlocked()) return
 
         if (this._session.selectedSeed) {
+            const seedSource = this._findSeedSourceAt(pixel, true)
+            if (seedSource) {
+                this._cancelCursor(true)
+                return
+            }
             const plantCount = this._session.plants.length
             this._refreshHoverAfterCursorRelease = false
             this._session.dispatch({ type: 'placePlant', x: pixel.x, y: pixel.y })
@@ -1253,9 +1316,9 @@ export abstract class GameScreenCore extends Component {
             return
         }
 
-        const seedType = this._hitSeedPacket(pixel)
-        if (seedType) {
-            this._session.dispatch({ type: 'selectSeed', seedType })
+        const seedSource = this._findSeedSourceAt(pixel)
+        if (seedSource) {
+            this._selectSeedSource(seedSource)
             this._renderFrame()
             return
         }
@@ -1264,13 +1327,6 @@ export abstract class GameScreenCore extends Component {
         if (toolType) {
             this._session.dispatch({ type: 'selectTool', toolType })
             this._syncShovelTutorialAfterPickup()
-            this._renderFrame()
-            return
-        }
-
-        const conveyorPacketId = this._hitConveyorPacket(pixel)
-        if (conveyorPacketId !== null) {
-            this._session.dispatch({ type: 'selectConveyorPacket', packetId: conveyorPacketId })
             this._renderFrame()
             return
         }
@@ -1515,6 +1571,8 @@ export abstract class GameScreenCore extends Component {
 
         this._seedBankNode.active = true
         this._setSeedBankContentsVisible(true)
+        this._syncConveyorPacketState()
+        this._syncConveyorVisibility()
         const y = this._introTime <= seedBankEnd
             ? easeInOut(seedBankStart, seedBankEnd, this._introTime, this._seedBankHeight, 0)
             : 0
@@ -1569,7 +1627,7 @@ export abstract class GameScreenCore extends Component {
         this._sodRollParticleSystems = this._introSodParticleSpecs().map((spec) =>
             TodParticleSystem.spawn({
                 parent: this._boardContent,
-                effect: 'sod-roll',
+                effect: 'sodroll',
                 x: spec.x,
                 y: -spec.y,
                 z: 0,
@@ -1771,6 +1829,7 @@ export abstract class GameScreenCore extends Component {
         this._seedBankNode.active = true
         this._seedBankNode.setPosition(this._gameplaySeedBankX(), y, 10)
         this._setSeedBankContentsVisible(true)
+        this._syncConveyorPacketState()
         this._syncConveyorVisibility()
     }
 
@@ -2058,6 +2117,9 @@ export abstract class GameScreenCore extends Component {
     protected _handleEvents(events: GameEvent[]) {
         for (const event of events) {
             switch (event.type) {
+                case 'entitySpawned':
+                    this._syncEntityById(event.entityId)
+                    break
                 case 'entityRemoved':
                     this._removeEntityNode(event.entityId)
                     break
@@ -2097,13 +2159,13 @@ export abstract class GameScreenCore extends Component {
                     break
                 case 'cherryBombDetonated':
                 case 'explodeONutDetonated':
-                    this._spawnParticleAt('powie', event.x, event.y)
+                    this._spawnParticleAt('powie', event.x, event.y, 10000)
                     break
                 case 'particleRequested':
                     this._spawnZombiePartParticle(event.entityId, event.effect)
                     break
                 case 'particleAtRequested':
-                    this._spawnParticleAt(event.effect, event.x, event.y)
+                    this._spawnParticleAt(event.effect, event.x, event.y, event.renderOrder, event.tint)
                     break
                 case 'particleAttachedRequested':
                     this._spawnAttachedZombieParticle(
@@ -2112,6 +2174,9 @@ export abstract class GameScreenCore extends Component {
                         event.x,
                         event.y,
                     )
+                    break
+                case 'particleEntityAttachedRequested':
+                    this._spawnAttachedEntityParticle(event.entityId, event.effect, event.x, event.y, event.z)
                     break
                 case 'seedPacketFlashRequested':
                     this._spawnSeedPacketFlash(event.seedType)
@@ -2151,22 +2216,30 @@ export abstract class GameScreenCore extends Component {
         if (!view?.node.isValid) return
 
         const trackNames: Partial<Record<TodParticleEffect, string>> = {
-            'zombie-head': 'anim_head1',
-            'zombie-arm': 'Zombie_outerarm_lower',
-            'mowered-zombie-head': 'anim_head1',
-            'mowered-zombie-arm': 'Zombie_outerarm_lower',
-            'zombie-traffic-cone': 'anim_cone',
-            'zombie-pail': 'anim_bucket',
-            'zombie-flag': 'Zombie_flag',
+            zombiehead: 'anim_head1',
+            zombiearm: 'Zombie_outerarm_lower',
+            zombiepolevaulterhead: 'anim_head1',
+            zombiepolevaulterarm: 'Zombie_polevaulter_outerarm_lower',
+            moweredzombiehead: 'anim_head1',
+            moweredzombiearm: 'Zombie_outerarm_lower',
+            moweredzombiepolevaulterhead: 'anim_head1',
+            moweredzombiepolevaulterarm: 'Zombie_polevaulter_outerarm_lower',
+            zombietrafficcone: 'anim_cone',
+            zombiepail: 'anim_bucket',
+            zombieflag: 'Zombie_flag',
         }
         const fallbackOffsets: Partial<Record<TodParticleEffect, { x: number; y: number }>> = {
-            'zombie-head': { x: 58, y: -30 },
-            'zombie-arm': { x: 25, y: -55 },
-            'mowered-zombie-head': { x: 58, y: -30 },
-            'mowered-zombie-arm': { x: 25, y: -55 },
-            'zombie-traffic-cone': { x: 58, y: -18 },
-            'zombie-pail': { x: 58, y: -18 },
-            'zombie-flag': { x: 18, y: -42 },
+            zombiehead: { x: 58, y: -30 },
+            zombiearm: { x: 25, y: -55 },
+            zombiepolevaulterhead: { x: 58, y: -30 },
+            zombiepolevaulterarm: { x: 25, y: -55 },
+            moweredzombiehead: { x: 58, y: -30 },
+            moweredzombiearm: { x: 25, y: -55 },
+            moweredzombiepolevaulterhead: { x: 58, y: -30 },
+            moweredzombiepolevaulterarm: { x: 25, y: -55 },
+            zombietrafficcone: { x: 58, y: -18 },
+            zombiepail: { x: 58, y: -18 },
+            zombieflag: { x: 18, y: -42 },
         }
 
         const trackName = trackNames[effect]
@@ -2207,14 +2280,59 @@ export abstract class GameScreenCore extends Component {
         return nearestRow * 10 + 1.01
     }
 
-    protected _spawnParticleAt(effect: TodParticleEffect, x: number, y: number) {
+    protected _spawnParticleAt(
+        effect: TodParticleEffect,
+        x: number,
+        y: number,
+        renderOrder = this._particleRenderOrderForEffect(effect, y),
+        tint?: { r: number, g: number, b: number },
+    ) {
         TodParticleSystem.spawn({
             parent: this._entityLayer,
             effect,
             x,
             y: -y,
-            renderOrder: 10000,
+            renderOrder,
+            tint: tint ? new Color(tint.r, tint.g, tint.b, 255) : undefined,
         })
+    }
+
+    protected _particleRenderOrderForEffect(effect: TodParticleEffect, y: number) {
+        const row = this._nearestRenderRowForY(y)
+        switch (effect) {
+            case 'planting':
+                return 10000
+            case 'potatominerise':
+                return this._rowParticleRenderOrder(row, 0.4)
+            case 'wallnuteatsmall':
+                return this._rowParticleRenderOrder(row, 1.1)
+            case 'snowpeapuff':
+                return this._rowParticleRenderOrder(row, 3.1)
+            case 'potatomine':
+                return this._rowParticleRenderOrder(row, 4)
+            case 'wallnuteatlarge':
+                return this._rowParticleRenderOrder(row, 0.9)
+            default:
+                return this._rowParticleRenderOrder(row, 0.4)
+        }
+    }
+
+    protected _rowParticleRenderOrder(row: number, offset: number) {
+        return row * 10 + offset
+    }
+
+    protected _nearestRenderRowForY(y: number) {
+        let nearestRow = this._session.level.activeRows[0] ?? 0
+        let nearestDistance = Number.POSITIVE_INFINITY
+        for (const row of this._session.level.activeRows) {
+            const rowY = this._session.geometry.gridToPixel(0, row).y
+            const distance = Math.abs(rowY - y)
+            if (distance >= nearestDistance) continue
+
+            nearestDistance = distance
+            nearestRow = row
+        }
+        return nearestRow
     }
 
     protected _spawnAttachedZombieParticle(
@@ -2236,13 +2354,47 @@ export abstract class GameScreenCore extends Component {
         system.node.setSiblingIndex(view.node.children.length - 1)
     }
 
+    protected _spawnAttachedEntityParticle(
+        entityId: number,
+        effect: TodParticleEffect,
+        x: number,
+        y: number,
+        z = 1,
+    ) {
+        const entity = this._findEntityById(entityId)
+        const node = this._entityNodes.get(entityId)
+        if (!entity || !node?.isValid) return false
+
+        const system = TodParticleSystem.spawn({
+            parent: node,
+            effect,
+            x,
+            y: -y,
+            z,
+        })
+        system.node.setSiblingIndex(z <= 0 ? 0 : node.children.length - 1)
+        return true
+    }
+
+    protected _findEntityById(entityId: number): GameEntity | null {
+        return this._session.allEntities().find((entity) => entity.id === entityId) ?? null
+    }
+
+    protected _syncEntityById(entityId: number) {
+        const entity = this._findEntityById(entityId)
+        if (!entity) return false
+
+        this._syncEntity(entity)
+        return true
+    }
+
     protected _spawnSeedPacketFlash(seedType: SeedType) {
-        const packetNode = this._seedPacketNodes.get(seedType)
+        const packetNode = this._seedPacketViews.get(seedType)?.node
         if (!packetNode?.isValid) return
 
         const flash = TodParticleSystem.spawn({
             parent: packetNode,
-            effect: 'seed-packet-flash',
+            effect: 'seedpacketflash',
             x: 0,
             y: 0,
             z: 16,
@@ -2270,7 +2422,7 @@ export abstract class GameScreenCore extends Component {
 
         const pickup = TodParticleSystem.spawn({
             parent: itemNode,
-            effect: 'seed-packet-pickup',
+            effect: 'award',
             x: 0,
             y: 0,
             z: -1,
@@ -2379,15 +2531,26 @@ export abstract class GameScreenCore extends Component {
     protected _syncSeedPacketState() {
         for (let i = 0; i < this._session.seedPackets.length; i++) {
             const packet = this._session.seedPackets[i]
-            const node = this._seedPacketNodes.get(packet.seedType)
-            if (!node) continue
-            node.setPosition(this._getSeedPacketPositionX(i), -8, 10)
-            this._applyPacketColor(node, packet)
-            this._syncSeedPacketSelectedHighlight(packet)
-            this._syncSeedPacketCooldown(packet)
-            this._syncSeedPacketTutorialArrow(packet, node)
+            const view = this._seedPacketViews.get(packet.seedType)
+            if (!view) continue
+            view.node.setPosition(this._getSeedPacketPositionX(i), -8, 10)
+            view.sync({
+                gameStarted: this._gameStarted,
+                active: packet.active,
+                selected: packet.selected,
+                cooldownRemaining: packet.cooldownRemaining,
+                cooldownTotal: packet.cooldownTotal,
+                canAfford: this._session.canAffordSeed(packet.seedType),
+                tutorialColor: this._shouldShowFirstPlantSeedGuide(packet) ? this._getTutorialFlashingColor() : null,
+                mobile: sys.isMobile,
+            })
+            this._syncSeedPacketTutorialArrow(packet, view.node)
         }
         this._syncConveyorPacketState()
+    }
+
+    protected _createSeedPacketView(args: SeedPacketViewArgs) {
+        return new SeedPacketView(args)
     }
 
     protected _syncSeedPacketTutorialArrow(packet: SeedPacketState, packetNode: Node) {
@@ -2398,17 +2561,21 @@ export abstract class GameScreenCore extends Component {
             this._seedPacketTutorialArrows.delete(packet.seedType)
             return
         }
-        if (current?.isValid && currentNode?.isValid && currentNode.parent === packetNode) return
+        const rect = getNodeBoardPixelRect(packetNode, SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT)
+        if (current?.isValid && currentNode?.isValid) {
+            currentNode.setPosition(rect.x, -rect.y, 20)
+            if (currentNode.parent === this._uiLayer) return
+        }
         if (current?.isValid && currentNode?.isValid) currentNode.destroy()
 
         const arrow = TodParticleSystem.spawn({
-            parent: packetNode,
-            effect: 'seed-packet-pick',
-            x: 0,
-            y: 0,
+            parent: this._uiLayer,
+            effect: 'seedpacketpick',
+            x: rect.x,
+            y: -rect.y,
             z: 20,
         })
-        arrow.node.setSiblingIndex(packetNode.children.length - 1)
+        arrow.node.setSiblingIndex(this._uiLayer.children.length - 1)
         this._seedPacketTutorialArrows.set(packet.seedType, arrow)
     }
 
@@ -2419,7 +2586,7 @@ export abstract class GameScreenCore extends Component {
         if (this._conveyorPacketClipNode?.isValid) this._conveyorPacketClipNode.active = visible
         this._syncConveyorBeltFrame(visible)
         for (const packet of this._session.conveyorPackets) {
-            const node = this._conveyorPacketNodes.get(packet.id)
+            const node = this._conveyorPacketViews.get(packet.id)?.node
             if (node?.isValid) node.active = visible
         }
         this._syncBowlingStripeVisibility()
@@ -2434,11 +2601,17 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _isConveyorRendered() {
-        return this._gameStarted &&
+        return (this._gameStarted || this._isGameplaySeedBankIntroActive() || this._isIntroSeedBankVisible()) &&
             this._session.level.conveyor?.enabled === true &&
             !this._isGameplayLawnMowerIntroActive() &&
-            (this._isGameplaySeedBankIntroActive() || !this._gameplayUpdatesPaused) &&
+            (this._isIntroSeedBankVisible() || this._isGameplaySeedBankIntroActive() || !this._gameplayUpdatesPaused) &&
             !this._gameOverActive
+    }
+
+    protected _isIntroSeedBankVisible() {
+        return !this._gameStarted &&
+            this._seedBankNode?.active === true &&
+            this._introTime > this._introSeedBankOnStart()
     }
 
     protected _syncBowlingStripeVisibility() {
@@ -2463,100 +2636,77 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _updateConveyorBeltAnimation(ticks: number) {
-        if (!this._isConveyorRendered() || this._session.hasLevelAwardDropped) return
+        if (!this._isConveyorVisible() || this._session.hasLevelAwardDropped) return
         this._conveyorBeltAnimTicks += ticks
     }
 
     protected _syncConveyorPacketState() {
-        for (const [packetId, node] of this._conveyorPacketNodes) {
+        for (const [packetId, view] of this._conveyorPacketViews) {
             if (this._session.conveyorPackets.some((packet) => packet.id === packetId)) continue
-            if (node.isValid) node.destroy()
-            this._conveyorPacketNodes.delete(packetId)
-            this._conveyorPacketSelectedHighlights.delete(packetId)
+            if (view.node.isValid) view.node.destroy()
+            this._conveyorPacketViews.delete(packetId)
         }
 
         for (const packet of this._session.conveyorPackets) {
-            const node = this._conveyorPacketNodes.get(packet.id) ?? this._createConveyorPacketNode(packet)
-            if (!node) continue
+            const view = this._conveyorPacketViews.get(packet.id) ?? this._createConveyorPacketNode(packet)
+            if (!view) continue
 
             const x = this._conveyorPacketClipNode?.isValid ? this._conveyorPacketLocalX(packet) : packet.x
-            node.setPosition(x, -8, 10)
-            node.active = this._isConveyorRendered()
-            this._applyConveyorPacketColor(node, packet)
-            this._syncConveyorPacketSelectedHighlight(packet)
+            view.node.setPosition(x, -8, 10)
+            view.node.active = this._isConveyorRendered()
+            view.sync({
+                gameStarted: this._gameStarted,
+                active: packet.active,
+                selected: packet.selected,
+                cooldownRemaining: 0,
+                cooldownTotal: 0,
+                canAfford: true,
+                tutorialColor: null,
+                mobile: sys.isMobile,
+                conveyor: true,
+            })
         }
     }
 
     protected _createConveyorPacketNode(packet: ConveyorPacketState) {
         const parent = this._conveyorPacketClipNode ?? this._seedBankNode ?? this._uiLayer
-        const packetNode = SeedPacketRenderer.drawSeedPacket({
+        const view = this._createSeedPacketView({
             name: `ConveyorPacket_${packet.id}_${packet.seedType}`,
             x: parent === this._conveyorPacketClipNode ? this._conveyorPacketLocalX(packet) : packet.x,
             y: -8,
             parent,
             layer: this.node.layer,
             seedType: packet.seedType,
-            cost: SEED_DEFINITIONS[packet.seedType].cost,
             drawCost: false,
-            seeds: SpriteLoader.get('seeds') ?? null,
-            packetPlants: SpriteLoader.get('packet_plants') ?? null,
-            cachedPacketPlants: SpriteLoader.get('packet_plants_cached') ?? null,
             costFont: this._packetCostFont,
         })
-        this._conveyorPacketNodes.set(packet.id, packetNode)
-        this._conveyorPacketSelectedHighlights.set(packet.id, this._createConveyorPacketSelectedHighlight(packetNode))
-        this._wireConveyorPacketInput(packetNode, packet.id)
-        return packetNode
+        this._conveyorPacketViews.set(packet.id, view)
+        this._wireConveyorPacketInput(view.node, packet.id)
+        return view
     }
 
     protected _conveyorPacketLocalX(packet: ConveyorPacketState) {
         return packet.x - 90
     }
 
-    protected _createConveyorPacketSelectedHighlight(packetNode: Node) {
-        const highlight = createUINode('SelectedHighlight', {
-            parent: packetNode,
-            layer: this.node.layer,
-            active: false,
-            anchorX: 0,
-            anchorY: 1,
-            width: SEED_PACKET_WIDTH,
-            height: SEED_PACKET_HEIGHT,
-            x: 0,
-            y: 0,
-            z: 15,
-        })
-        const flash = SpriteLoader.get('particles/seedpacketflash')
-        if (flash) {
-            createSpriteNode({
-                name: 'SeedPacketFlash',
-                spriteFrame: flash,
-                parent: highlight,
-                layer: this.node.layer,
-                x: 0,
-                y: 0,
-                anchorX: 0,
-                anchorY: 1,
-            })
-        }
-        return highlight
-    }
-
     protected _wireConveyorPacketInput(packetNode: Node, packetId: number) {
         const onPress = (event: EventMouse | EventTouch) => {
             if (!this._canUseBoardInput()) return false
             if (this._session.selectedSeed) return false
+            if (this._session.selectedTool) return false
 
             const pixel = eventToBoardPixel(this.node, event)
-            const hit = this._findConveyorPacketAt(pixel)
-            if (hit?.packet.id !== packetId) return false
+            const source = this._findSeedSourceAt(pixel)
+            if (source?.kind !== 'conveyor' || source.packetId !== packetId) return false
+            if (!this._canPickUpSeedSource(source)) return false
 
-            event.propagationStopped = true
             this._mousePixel = pixel
             this._hasCursorPointer = true
-            this._session.dispatch({ type: 'selectConveyorPacket', packetId })
-            if (sys.isMobile) this._beginMobilePlantPress(pixel, hit.rect)
+            this._resetMobilePlantPress()
+            this._selectSeedSource(source)
+            if (sys.isMobile) this._beginMobilePlantPress(pixel, source.rect)
             this._renderFrame()
+            event.propagationStopped = true
             return true
         }
         packetNode.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => {
@@ -2566,12 +2716,12 @@ export abstract class GameScreenCore extends Component {
         }, this)
         packetNode.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
             if (!sys.isMobile) return
-            if (this._session.selectedSeed) {
+            if (this._session.selectedTool) {
                 event.propagationStopped = true
                 const pixel = eventToBoardPixel(this.node, event)
                 this._mousePixel = pixel
                 this._hasCursorPointer = true
-                this._resetMobilePlantPress()
+                this._beginMobileToolPress(pixel, null)
                 this._updateCursorPreview()
                 return
             }
@@ -2592,87 +2742,6 @@ export abstract class GameScreenCore extends Component {
             event.propagationStopped = true
             this._onMobileTouchEnd(event)
         }, this)
-    }
-
-    protected _applyConveyorPacketColor(node: Node, packet: ConveyorPacketState) {
-        const color = this._gameStarted && packet.active && !packet.selected ? Color.WHITE : new Color(128, 128, 128, 255)
-        this._applySeedPacketColor(node, packet.seedType, color, ['SelectedHighlight'])
-    }
-
-    protected _syncConveyorPacketSelectedHighlight(packet: ConveyorPacketState) {
-        const highlight = this._conveyorPacketSelectedHighlights.get(packet.id)
-        if (!highlight) return
-
-        highlight.active = sys.isMobile &&
-            this._gameStarted &&
-            packet.selected
-    }
-
-    protected _applyPacketColor(node: Node, packet: SeedPacketState) {
-        if (!this._gameStarted) {
-            this._applySeedPacketColor(
-                node,
-                packet.seedType,
-                new Color(128, 128, 128, 255),
-                [
-                    'CooldownClip',
-                    'SelectedHighlight',
-                    'ParticleSystem_seed-packet-pick',
-                    'ParticleSystem_seed-packet-flash',
-                ],
-            )
-            return
-        }
-
-        const affordable = this._session.canAffordSeed(packet.seedType)
-        const cooling = packet.cooldownRemaining > 0
-        const mobileSelected = sys.isMobile && packet.selected
-        const inactiveWithoutCooldown = !packet.active && !cooling && !mobileSelected
-        const color =
-            this._shouldShowFirstPlantSeedGuide(packet) ? this._getTutorialFlashingColor() :
-                cooling ? new Color(128, 128, 128, 255) :
-                affordable && !inactiveWithoutCooldown ? Color.WHITE : new Color(128, 128, 128, 255)
-        this._applySeedPacketColor(
-            node,
-            packet.seedType,
-            color,
-            [
-                'CooldownClip',
-                'SelectedHighlight',
-                'ParticleSystem_seed-packet-pick',
-                'ParticleSystem_seed-packet-flash',
-            ],
-        )
-    }
-
-    protected _syncSeedPacketSelectedHighlight(packet: SeedPacketState) {
-        const highlight = this._seedPacketSelectedHighlights.get(packet.seedType)
-        if (!highlight) return
-
-        highlight.active = sys.isMobile &&
-            this._gameStarted &&
-            packet.selected &&
-            packet.cooldownRemaining <= 0
-    }
-
-    protected _syncSeedPacketCooldown(packet: SeedPacketState) {
-        const clip = this._seedPacketCooldownClips.get(packet.seedType)
-        if (!clip) return
-
-        if (!this._gameStarted) {
-            clip.active = false
-            return
-        }
-
-        const percentDark = packet.cooldownTotal > 0 ? packet.cooldownRemaining / packet.cooldownTotal : 0
-        if (percentDark <= 0) {
-            clip.active = false
-            return
-        }
-
-        const height = Math.min(SEED_PACKET_HEIGHT, Math.round(68 * percentDark) + 2)
-        setUISize(clip, SEED_PACKET_WIDTH, height, 0, 1)
-        clip.active = true
     }
 
     protected _syncProgressMeter() {
@@ -2824,6 +2893,7 @@ export abstract class GameScreenCore extends Component {
 
     protected _shouldShowFirstPlantSeedGuide(packet: SeedPacketState) {
         return this._gameStarted &&
+            !this._gameOverActive &&
             this._session.shouldShowTutorialSeedGuide(packet.seedType) &&
             packet.active &&
             packet.cooldownRemaining <= 0
@@ -2838,43 +2908,6 @@ export abstract class GameScreenCore extends Component {
 
     protected _levelHasShovel() {
         return this._session.level.adventureLevel >= 5
-    }
-
-    protected _applySpriteColorRecursive(node: Node, color: Color, skipName?: string | string[]) {
-        if (Array.isArray(skipName) ? skipName.includes(node.name) : node.name === skipName) return
-        if (node.getComponent(FontRenderer)) return
-
-        const sprite = node.getComponent(Sprite)
-        if (sprite) sprite.color = color
-        for (const child of node.children) {
-            this._applySpriteColorRecursive(child, color, skipName)
-        }
-    }
-
-    protected _applySeedPacketColor(
-        node: Node,
-        seedType: SeedType,
-        color: Color,
-        skipName?: string | string[],
-    ) {
-        this._applySpriteColorRecursive(node, color, skipName)
-        if (seedType !== 'explodenut') return
-
-        const tintExplodeONutIcon = (current: Node) => {
-            if (current.name === 'PacketPlant' || current.name === 'CachedPlantPreview') {
-                const sprite = current.getComponent(Sprite)
-                if (sprite) {
-                    sprite.color = new Color(
-                        color.r,
-                        Math.round(color.g * 64 / 255),
-                        Math.round(color.b * 64 / 255),
-                        color.a,
-                    )
-                }
-            }
-            for (const child of current.children) tintExplodeONutIcon(child)
-        }
-        tintExplodeONutIcon(node)
     }
 
     protected _setGameplayAnimationsPaused(paused: boolean) {
@@ -3278,25 +3311,46 @@ export abstract class GameScreenCore extends Component {
         this._cursorPreview.setSiblingIndex(this._uiLayer.children.length - 1)
     }
 
-    protected _hitSeedPacket(pixel: { x: number, y: number }): SeedType | null {
-        const hit = this._findSeedPacketAt(pixel)
-        if (!hit) return null
-        if (!hit.packet.active || hit.packet.cooldownRemaining > 0) return null
-        return hit.packet.seedType
+    protected _findSeedSourceAt(pixel: { x: number, y: number }, includeSelectedConveyor = false): SeedSourceHit | null {
+        const seedHit = this._findSeedPacketAt(pixel)
+        if (seedHit) {
+            return {
+                kind: 'seed',
+                packet: seedHit.packet,
+                rect: seedHit.rect,
+                seedType: seedHit.packet.seedType,
+            }
+        }
+
+        const conveyorHit = this._findConveyorPacketAt(pixel, includeSelectedConveyor)
+        if (!conveyorHit) return null
+        return {
+            kind: 'conveyor',
+            packet: conveyorHit.packet,
+            rect: conveyorHit.rect,
+            seedType: conveyorHit.packet.seedType,
+            packetId: conveyorHit.packet.id,
+        }
     }
 
-    protected _hitConveyorPacket(pixel: { x: number, y: number }): number | null {
-        const hit = this._findConveyorPacketAt(pixel)
-        if (!hit) return null
-        if (!hit.packet.active || hit.packet.selected) return null
-        return hit.packet.id
+    protected _selectSeedSource(source: SeedSourceHit) {
+        if (source.kind === 'seed') {
+            this._session.dispatch({ type: 'selectSeed', seedType: source.seedType })
+        } else {
+            this._session.dispatch({ type: 'selectConveyorPacket', packetId: source.packetId })
+        }
+    }
+
+    protected _canPickUpSeedSource(source: SeedSourceHit) {
+        return source.kind === 'seed'
+            ? this._canPickUpSeedPacket(source.packet)
+            : source.packet.active && !source.packet.selected
     }
 
     protected _findSeedPacketAt(pixel: { x: number, y: number }) {
         for (let i = this._session.seedPackets.length - 1; i >= 0; i--) {
             const packet = this._session.seedPackets[i]
-            const node = this._seedPacketNodes.get(packet.seedType)
-            const rect = node ? getNodeBoardPixelRect(node, SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT) : null
+            const rect = this._seedPacketViews.get(packet.seedType)?.rect() ?? null
             if (!rect) continue
             if (pixel.x >= rect.x && pixel.x <= rect.x + rect.width && pixel.y >= rect.y && pixel.y <= rect.y + rect.height) {
                 return { packet, rect }
@@ -3321,7 +3375,7 @@ export abstract class GameScreenCore extends Component {
         return null
     }
 
-    protected _findConveyorPacketAt(pixel: { x: number, y: number }) {
+    protected _findConveyorPacketAt(pixel: { x: number, y: number }, includeSelected = false) {
         if (!this._isConveyorVisible()) return null
         if (this._conveyorPacketClipNode?.activeInHierarchy) {
             const clipSize = this._conveyorPacketClipNode.getComponent(UITransform)?.contentSize
@@ -3335,11 +3389,11 @@ export abstract class GameScreenCore extends Component {
 
         for (let i = this._session.conveyorPackets.length - 1; i >= 0; i--) {
             const packet = this._session.conveyorPackets[i]
-            if (packet.selected) continue
+            if (packet.selected && !includeSelected) continue
 
-            const node = this._conveyorPacketNodes.get(packet.id)
-            if (!node?.activeInHierarchy) continue
-            const rect = node ? getNodeBoardPixelRect(node, SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT) : null
+            const view = this._conveyorPacketViews.get(packet.id)
+            if (!view?.node.activeInHierarchy) continue
+            const rect = view.rect()
             if (!rect) continue
             if (pixel.x >= rect.x && pixel.x <= rect.x + rect.width && pixel.y >= rect.y && pixel.y <= rect.y + rect.height) {
                 return { packet, rect }
@@ -3398,12 +3452,11 @@ export abstract class GameScreenCore extends Component {
             return hovering
         }
 
-        const seedHit = this._findSeedPacketAt(this._mousePixel)
-        const conveyorHit = seedHit ? null : this._findConveyorPacketAt(this._mousePixel)
-        if (seedHit) {
-            this._showSeedTooltip(seedHit.packet, seedHit.rect)
-        } else if (conveyorHit) {
-            this._showConveyorSeedTooltip(conveyorHit.packet, conveyorHit.rect)
+        const seedSource = this._findSeedSourceAt(this._mousePixel)
+        if (seedSource?.kind === 'seed') {
+            this._showSeedTooltip(seedSource.packet, seedSource.rect)
+        } else if (seedSource?.kind === 'conveyor') {
+            this._showConveyorSeedTooltip(seedSource.packet, seedSource.rect)
         } else {
             this._hideSeedTooltip()
         }
@@ -3417,10 +3470,9 @@ export abstract class GameScreenCore extends Component {
         }
 
         const overCollectableItem = this._session.hasItemAt(this._mousePixel.x, this._mousePixel.y)
-        const overPickableSeed = seedHit ? this._canPickUpSeedPacket(seedHit.packet) : false
-        const overPickableConveyorSeed = conveyorHit ? conveyorHit.packet.active && !conveyorHit.packet.selected : false
+        const overPickableSeed = seedSource ? this._canPickUpSeedSource(seedSource) : false
         const overMenuButton = this._isMenuButtonPixel(this._mousePixel)
-        const hovering = overCollectableItem || overPickableSeed || overPickableConveyorSeed || (shovelHit && shovelHoverEnabled) || overMenuButton
+        const hovering = overCollectableItem || overPickableSeed || (shovelHit && shovelHoverEnabled) || overMenuButton
         this._setCanvasCursor(hovering ? 'pointer' : 'default')
         return hovering
     }
@@ -3666,6 +3718,8 @@ export abstract class GameScreenCore extends Component {
     protected _removeEntityNode(entityId: number) {
         const node = this._entityNodes.get(entityId)
         if (node?.isValid) node.destroy()
+        const zombieShadow = this._zombieViews.get(entityId)?.shadowClipNode ?? this._zombieViews.get(entityId)?.shadowNode
+        if (zombieShadow?.isValid && zombieShadow.parent === this._entityLayer) zombieShadow.destroy()
         this._entityNodes.delete(entityId)
         this._plantViews.delete(entityId)
         this._zombieViews.delete(entityId)

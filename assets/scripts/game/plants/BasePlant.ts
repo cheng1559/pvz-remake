@@ -5,6 +5,7 @@ export interface PlantUpdateContext {
     events: GameEvent[]
     hasTargetInRow(row: number, plant: Plant): boolean
     hasTargetInPlantAttackRect(plant: Plant): boolean
+    biteChomperTarget(plant: Plant): 'ate' | 'bit' | 'missed'
     canProduceSun(): boolean
     randomInt(minInclusive: number, maxInclusive: number): number
 }
@@ -23,6 +24,7 @@ export interface PlantCreateArgs {
     row: number
     x: number
     y: number
+    bowlingAnimRate?: number
 }
 
 export abstract class Plant implements PlantEntity {
@@ -44,12 +46,13 @@ export abstract class Plant implements PlantEntity {
     specialCounter = 0
     eatenFlashCounter = 0
     recentlyEatenCounter = 0
-    isBowling = false
-    bowlingAnimRate = 0
+    isBowling: boolean
+    bowlingAnimRate: number
     bowlingAnimationTime = 0
     bowlingHitCount = 0
     state: PlantState = 'not-ready'
     stateCountdown = 0
+    closestZombieDistance = 1000
     dead = false
     protected blinkCountdown: number
 
@@ -62,6 +65,8 @@ export abstract class Plant implements PlantEntity {
         this.row = args.row
         this.x = args.x
         this.y = args.y
+        this.isBowling = args.bowlingAnimRate != null
+        this.bowlingAnimRate = args.bowlingAnimRate ?? 0
         this.maxHealth = definition.maxHealth
         this.health = definition.maxHealth
         this.launchRate = definition.attackCadenceTicks
@@ -81,10 +86,15 @@ export abstract class Plant implements PlantEntity {
         this.attackCounter = this.launchCounter
     }
 
-    takeChewDamage(damage: number) {
+    takeChewDamage(damage: number, context?: PlantUpdateContext) {
+        const previousState = this.state
         this.health = Math.max(0, this.health - damage)
         this.updateDamageState()
+        if (context && this.state !== previousState) this.onDamageStateChanged(context)
         if (this.health <= 0) this.dead = true
+    }
+
+    protected onDamageStateChanged(_context: PlantUpdateContext) {
     }
 
     protected updateAbilities(_context: PlantUpdateContext) {
@@ -95,6 +105,9 @@ export abstract class Plant implements PlantEntity {
 
     protected updateShooting(_context: PlantUpdateContext) {
         if (this.shootingCounter > 0) this.shootingCounter--
+    }
+
+    handleAnimationFinished(_animation: string, _context: PlantUpdateContext) {
     }
 
     protected canBlink() {

@@ -37,6 +37,7 @@ const MAIN_MENU_BUTTON_WIDTH = 111
 const MAIN_MENU_BUTTON_HEIGHT = 26
 const MAIN_MENU_BUTTON_TEXT_OFFSET_Y = 1
 const TITLE_COLOR = new Color(213, 159, 43, 255)
+const NOTE_TITLE_COLOR = new Color(255, 200, 0, 255)
 const DESCRIPTION_COLOR = new Color(40, 50, 90, 255)
 const BUTTON_TEXT_COLOR = new Color(213, 159, 43, 255)
 const MAIN_MENU_BUTTON_TEXT_COLOR = new Color(42, 42, 90, 255)
@@ -51,6 +52,7 @@ const SEED_STRING_KEYS: Record<SeedType, string> = {
     snowpea: 'SNOW_PEA',
     chomper: 'CHOMPER',
     repeater: 'REPEATER',
+    puffshroom: 'PUFF_SHROOM',
 }
 
 @ccclass('AwardScreen')
@@ -82,10 +84,13 @@ export class AwardScreen extends MenuScreenBase {
         this._resetRoot('AwardScreenRoot')
         this._fadeInCounter = FADE_IN_TICKS
         this._createInputBlocker()
-        this._createBackground(sprites.background)
-        if (this.awardKind === 'shovel') {
+        if (this.awardKind === 'note') {
+            this._drawNoteAward(sprites, fonts, lawnStrings)
+        } else if (this.awardKind === 'shovel') {
+            this._createBackground(sprites.background)
             this._drawShovelAward(sprites, fonts, lawnStrings)
         } else {
+            this._createBackground(sprites.background)
             this._drawSeedAward(sprites, fonts, lawnStrings)
         }
         this._drawNextButton(sprites, fonts, lawnStrings)
@@ -157,6 +162,55 @@ export class AwardScreen extends MenuScreenBase {
             fonts,
             lawnStrings.SHOVEL_DESCRIPTION ?? 'Use this to dig up plants.',
         )
+    }
+
+    private _drawNoteAward(
+        sprites: AwardScreenSprites,
+        fonts: AwardScreenFonts,
+        lawnStrings: Record<string, string>,
+    ) {
+        createSpriteNode({
+            name: 'Background',
+            spriteFrame: sprites.noteBackground,
+            parent: this._root!,
+            layer: this.node.layer,
+            x: this._cppX(-700),
+            y: this._cppY(-300),
+            anchorX: 0,
+            anchorY: 1,
+            width: 2800,
+            height: 1200,
+        })
+        createSpriteNode({
+            name: 'ZombieNote',
+            spriteFrame: sprites.zombieNote,
+            parent: this._root!,
+            layer: this.node.layer,
+            x: this._cppX(80),
+            y: this._cppY(80),
+            anchorX: 0,
+            anchorY: 1,
+        })
+        createSpriteNode({
+            name: 'ZombieNote1',
+            spriteFrame: sprites.zombieNote1,
+            parent: this._root!,
+            layer: this.node.layer,
+            x: this._cppX(131),
+            y: this._cppY(132),
+            anchorX: 0,
+            anchorY: 1,
+        })
+        this._createText({
+            name: 'FoundNote',
+            text: lawnStrings.FOUND_NOTE ?? 'You found a note:',
+            baselineX: TITLE_BASELINE_X,
+            baselineY: 70,
+            font: fonts.title,
+            color: NOTE_TITLE_COLOR,
+            align: 'center',
+        })
+        void SoundLoader.play(SoundEffect.Paper)
     }
 
     private _drawSeedPacket(sprites: AwardScreenSprites, fonts: AwardScreenFonts) {
@@ -401,7 +455,9 @@ export class AwardScreen extends MenuScreenBase {
         this._fadeGraphics.clear()
         if (alpha <= 0) return
 
-        this._fadeGraphics.fillColor = new Color(255, 255, 255, alpha)
+        this._fadeGraphics.fillColor = this.awardKind === 'note'
+            ? new Color(0, 0, 0, alpha)
+            : new Color(255, 255, 255, alpha)
         this._fadeGraphics.fillRect(0, -SCREEN_HEIGHT, SCREEN_WIDTH, SCREEN_HEIGHT)
     }
 }

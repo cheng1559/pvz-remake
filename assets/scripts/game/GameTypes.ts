@@ -11,21 +11,22 @@ export type SeedType =
     | 'snowpea'
     | 'chomper'
     | 'repeater'
+    | 'puffshroom'
 export type PlantType = SeedType
 export type ProjectileType = 'pea' | 'snowpea'
-export type ItemType = 'sun' | 'small-sun' | 'large-sun' | 'silver-coin' | 'gold-coin' | 'diamond' | 'final-seed-packet'
+export type ItemType = 'sun' | 'small-sun' | 'large-sun' | 'silver-coin' | 'gold-coin' | 'diamond' | 'final-seed-packet' | 'note'
 export type ItemMotion = 'from-sky' | 'from-sky-slow' | 'from-plant' | 'coin'
 export type ToolType = 'shovel'
 export type BackgroundType = 'day'
 export type GameResult = 'playing' | 'won' | 'lost'
 export type ChallengeMode = 'none' | 'wallnut-bowling'
-export type ZombieType = 'normal' | 'flag' | 'traffic-cone' | 'bucket' | 'ducky-tube'
+export type ZombieType = 'normal' | 'flag' | 'traffic-cone' | 'bucket' | 'ducky-tube' | 'pole-vaulting'
 export type ZombieSubclass = 'normal'
-export type ZombieState = 'walking' | 'eating' | 'dying' | 'mowered' | 'charred'
+export type ZombieState = 'walking' | 'eating' | 'dying' | 'mowered' | 'charred' | 'burned' | 'jumping'
 export type LawnMowerState = 'ready' | 'triggered'
 export type ZombieHelmType = 'none' | 'traffic-cone' | 'bucket'
 export type ZombieShieldType = 'none'
-export type LevelAwardKind = 'seed' | 'shovel'
+export type LevelAwardKind = 'seed' | 'shovel' | 'note'
 export type AdviceStyle =
     | 'hint'
     | 'hint-stay'
@@ -87,7 +88,7 @@ export interface InitialPlantDefinition {
 }
 
 export interface LevelDefinition {
-    id: 'adventure-1-1' | 'adventure-1-2' | 'adventure-1-3' | 'adventure-1-4' | 'adventure-1-5'
+    id: 'adventure-1-1' | 'adventure-1-2' | 'adventure-1-3' | 'adventure-1-4' | 'adventure-1-5' | 'adventure-1-6' | 'adventure-1-7' | 'adventure-1-8' | 'adventure-1-9' | 'adventure-1-10'
     adventureLevel: number
     background: BackgroundType
     challengeMode?: ChallengeMode
@@ -98,6 +99,7 @@ export interface LevelDefinition {
     conveyor?: ConveyorDefinition
     bowling?: WallnutBowlingDefinition
     zombieWaves: ZombieWaveDefinition[]
+    zombieWaveGenerator?: ZombieWaveGeneratorDefinition
     tutorialAdvice: string[]
     initialPlants?: InitialPlantDefinition[]
     showCrazyDave?: boolean
@@ -111,13 +113,15 @@ export interface LevelDefinition {
     suppressReadySetPlant?: boolean
     awardKind?: LevelAwardKind
     awardSeedType?: SeedType
+    initialZombieCountdownTicks?: number
+    introZombiePreviewCapacity?: number
 }
 
 export interface ConveyorDefinition {
     enabled: boolean
     initialDelayTicks: number
     maxPackets: number
-    seedPool: ConveyorSeedWeight[]
+    seedPool: readonly ConveyorSeedWeight[]
 }
 
 export interface ConveyorSeedWeight {
@@ -143,6 +147,13 @@ export interface ZombiePointPoolEntry {
     zombieType: ZombieType
     pointCost: number
     weight: number
+}
+
+export interface ZombieWaveGeneratorDefinition {
+    waveCount: number
+    zombiePointPool: readonly ZombiePointPoolEntry[]
+    introducedZombie?: ZombieType
+    pointMultiplier?: number
 }
 
 export interface SeedDefinition {
@@ -171,6 +182,9 @@ export interface PlantDefinition {
 export interface ZombieDefinition {
     id: ZombieType
     maxHealth: number
+    zombieValue: number
+    firstAllowedWave: number
+    pickWeight: number
     helmType: ZombieHelmType
     helmHealth: number
     shieldType: ZombieShieldType
@@ -214,18 +228,21 @@ export type GameCommand =
     | { type: 'clearCursor' }
     | { type: 'pause' }
     | { type: 'resume' }
+    | { type: 'plantAnimationFinished', entityId: number, animation: string }
 
 export type GameEvent =
     | { type: 'entitySpawned', entityId: number }
     | { type: 'entityRemoved', entityId: number }
     | { type: 'animationRequested', entityId: number, animation: string }
-    | { type: 'projectileFired', entityId: number, projectileType: ProjectileType, x: number, y: number, row: number }
+    | { type: 'projectileFired', entityId: number, projectileId?: number, projectileType: ProjectileType, x: number, y: number, row: number }
     | { type: 'sunProduced', entityId: number, amount: number, x: number, y: number }
     | { type: 'cherryBombDetonated', entityId: number, x: number, y: number, row: number }
     | { type: 'explodeONutDetonated', entityId: number, x: number, y: number, row: number }
+    | { type: 'potatoMineDetonated', entityId: number, x: number, y: number, row: number }
     | { type: 'particleRequested', effect: TodParticleEffect, entityId: number }
-    | { type: 'particleAtRequested', effect: TodParticleEffect, x: number, y: number }
+    | { type: 'particleAtRequested', effect: TodParticleEffect, x: number, y: number, renderOrder?: number, tint?: { r: number, g: number, b: number } }
     | { type: 'particleAttachedRequested', effect: TodParticleEffect, entityId: number, x: number, y: number }
+    | { type: 'particleEntityAttachedRequested', effect: TodParticleEffect, entityId: number, x: number, y: number, z?: number }
     | { type: 'seedPacketFlashRequested', seedType: SeedType }
     | { type: 'boardShake', amountX: number, amountY: number }
     | { type: 'soundRequested', sound: SoundEffect }
@@ -284,6 +301,7 @@ export interface PlantEntity {
     bowlingHitCount: number
     state: PlantState
     stateCountdown: number
+    closestZombieDistance: number
     dead: boolean
 }
 
@@ -318,6 +336,7 @@ export interface ZombieEntity {
     hasArm: boolean
     hasTongue: boolean
     hasObject: boolean
+    poleVaulting: boolean
     inPool: boolean
     dead: boolean
     bodyRect: Rect

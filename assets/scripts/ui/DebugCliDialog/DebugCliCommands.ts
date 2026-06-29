@@ -4,7 +4,7 @@ import type { AdventureGameScreen } from '@/game/GameScreen'
 import { ADVENTURE_LEVELS, PLANT_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed, setGameSpeed } from '@/game/GameDefinitions'
 import { GameDebugSettings } from '@/game/GameDebugSettings'
 import { GameSettingsStore, SFX_VOLUME_SCALE } from '@/game/persistence/GameSettingsStore'
-import type { ItemType, LevelAwardKind, LevelDefinition, PlantType, ZombieType } from '@/game/GameTypes'
+import type { ItemType, LevelDefinition, PlantType, ZombieType } from '@/game/GameTypes'
 
 const DEBUG_CLI_MIN_SPEED = 0
 const DEBUG_CLI_MAX_SPEED = 10
@@ -19,6 +19,7 @@ export interface DebugCliResult {
 }
 
 const DEBUG_PLANT_TYPES = Object.keys(PLANT_DEFINITIONS) as PlantType[]
+const DEBUG_PLANT_NAMES = [...DEBUG_PLANT_TYPES, 'bowling-wallnut', 'bowling-explodenut']
 const DEBUG_ZOMBIE_TYPES = Object.keys(ZOMBIE_DEFINITIONS) as ZombieType[]
 const DEBUG_ITEM_SPECS: DebugItemSpec[] = [
     { name: 'silver', type: 'silver-coin' },
@@ -27,9 +28,7 @@ const DEBUG_ITEM_SPECS: DebugItemSpec[] = [
     { name: 'sun', type: 'sun' },
     { name: 'small-sun', type: 'small-sun' },
     { name: 'large-sun', type: 'large-sun' },
-    { name: 'award', type: 'final-seed-packet' },
-    { name: 'seed-award', type: 'final-seed-packet', awardKind: 'seed' },
-    { name: 'shovel-award', type: 'final-seed-packet', awardKind: 'shovel' },
+    { name: 'award', type: 'level-award' },
 ]
 const DEBUG_PLANT_LOOKUP = createDebugTypeLookup(DEBUG_PLANT_TYPES)
 const DEBUG_ZOMBIE_LOOKUP = createDebugTypeLookup(DEBUG_ZOMBIE_TYPES)
@@ -48,7 +47,7 @@ type DebugNativeBindings = typeof globalThis & {
 const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
     {
         name: 'plant',
-        completions: [DEBUG_PLANT_TYPES],
+        completions: [DEBUG_PLANT_NAMES],
         parameterHints: ['{plant_name}', '{row}', '{col}'],
     },
     {
@@ -211,8 +210,7 @@ interface DebugCliCommandSpec {
 
 interface DebugItemSpec {
     name: string
-    type: ItemType
-    awardKind?: LevelAwardKind
+    type: ItemType | 'level-award'
 }
 
 interface DebugCliInputToken {
@@ -360,11 +358,11 @@ function executeDebugPlantCommand(tokens: string[], gameScreen: AdventureGameScr
         return conditionFailure('/plant can only run during an active level')
     }
 
-    const plantType = parseDebugPlantType(tokens[1])
-    if (!plantType) {
+    const plantSpec = parseDebugPlantSpec(tokens[1])
+    if (!plantSpec) {
         return {
             ok: false,
-            message: `Unknown plant: ${tokens[1]}. Valid plants: ${listDebugNames(DEBUG_PLANT_TYPES)}`,
+            message: `Unknown plant: ${tokens[1]}. Valid plants: ${listDebugNames(DEBUG_PLANT_NAMES)}`,
         }
     }
 
@@ -379,10 +377,10 @@ function executeDebugPlantCommand(tokens: string[], gameScreen: AdventureGameScr
     const boundsError = validateDebugGridPosition(gameScreen, row, col)
     if (boundsError) return { ok: false, message: boundsError }
 
-    if (!gameScreen.debugPlacePlant(plantType, row - 1, col - 1)) {
+    if (!gameScreen.debugPlacePlant(plantSpec.type, row - 1, col - 1, plantSpec.bowling ? 15 : undefined)) {
         return conditionFailure('/plant can only run during an active level')
     }
-    return { ok: true, message: `Planted ${plantType} at row ${row}, col ${col}` }
+    return { ok: true, message: `Planted ${tokens[1]} at row ${row}, col ${col}` }
 }
 
 function executeDebugRemovePlantCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
@@ -908,7 +906,7 @@ function executeDebugItemCommand(tokens: string[], gameScreen: AdventureGameScre
         col = parsedCol - 1
     }
 
-    const item = gameScreen.debugSpawnItem(itemSpec.type, row, col, itemSpec.awardKind)
+    const item = gameScreen.debugSpawnItem(itemSpec.type, row, col)
     if (!item) {
         return conditionFailure('/item can only run during an active level')
     }
@@ -928,31 +926,32 @@ function isLevelScreenAvailable(gameScreen: AdventureGameScreen | null): gameScr
 }
 
 function setDebugRechargingEnabled(enabled: boolean) {
-    GameDebugSettings.rechargingEnabled = enabled
-    return GameDebugSettings.rechargingEnabled
+    return GameDebugSettings.setRechargingEnabled(enabled)
 }
 
 function setDebugSunCostEnabled(enabled: boolean) {
-    GameDebugSettings.sunCostEnabled = enabled
-    return GameDebugSettings.sunCostEnabled
+    return GameDebugSettings.setSunCostEnabled(enabled)
 }
 
 function setDebugAutoCollectEnabled(enabled: boolean) {
-    GameDebugSettings.autoCollectEnabled = enabled
-    return GameDebugSettings.autoCollectEnabled
+    return GameDebugSettings.setAutoCollectEnabled(enabled)
 }
 
 function setDebugHitboxesVisible(visible: boolean) {
-    GameDebugSettings.hitboxesVisible = visible
-    return GameDebugSettings.hitboxesVisible
+    return GameDebugSettings.setHitboxesVisible(visible)
 }
 
 function conditionFailure(message: string): DebugCliResult {
     return { ok: false, message, failure: 'condition' }
 }
 
-function parseDebugPlantType(name: string): PlantType | null {
-    return DEBUG_PLANT_LOOKUP[normalizeDebugEntityName(name)] ?? null
+function parseDebugPlantSpec(name: string): { type: PlantType, bowling: boolean } | null {
+    const normalized = normalizeDebugEntityName(name)
+    if (normalized === 'bowlingwallnut') return { type: 'wallnut', bowling: true }
+    if (normalized === 'bowlingexplodenut') return { type: 'explodenut', bowling: true }
+
+    const type = DEBUG_PLANT_LOOKUP[normalized] ?? null
+    return type ? { type, bowling: false } : null
 }
 
 function getDebugCliCommandCompletions(

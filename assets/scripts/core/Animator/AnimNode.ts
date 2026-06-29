@@ -264,6 +264,10 @@ export class AnimNode {
         return this._data.animations[name]?.duration ?? null
     }
 
+    public setFrameCountOverride(frameCount: number | null): void {
+        this._frameCountOverride = frameCount == null ? null : Math.max(1, frameCount)
+    }
+
     public hasAnimation(name: string): boolean {
         return name in this._data.animations
     }

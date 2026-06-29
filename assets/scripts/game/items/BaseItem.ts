@@ -32,6 +32,8 @@ export interface ItemCreateArgs {
     motion: ItemMotion
     x: number
     y: number
+    width?: number
+    height?: number
     awardKind?: LevelAwardKind
     awardSeedType?: SeedType | null
 }
@@ -72,8 +74,8 @@ export class Item implements ItemEntity {
         this.awardKind = args.awardKind ?? 'seed'
         this.x = args.x
         this.y = args.y
-        this.width = this._initialWidth()
-        this.height = this._initialHeight()
+        this.width = args.width ?? this._initialWidth()
+        this.height = args.height ?? this._initialHeight()
         this.awardSeedType = args.awardSeedType ?? null
         this._adjustInitialPosition()
         this._initializeMotion(context)
@@ -104,7 +106,7 @@ export class Item implements ItemEntity {
         this._collectX = this.x
         this._collectY = this.y
         this._pushCollectSound(context)
-        if (this.type === 'final-seed-packet') {
+        if (this._isLevelAward()) {
             context.events.push({
                 type: 'levelAwardCollected',
                 entityId: this.id,
@@ -112,6 +114,7 @@ export class Item implements ItemEntity {
                 y: this.y,
             })
             context.completeLevelAward(this)
+            if (this.type === 'note') this._fadeCount = 50
         }
         return true
     }
@@ -151,7 +154,7 @@ export class Item implements ItemEntity {
                 this._velY = -3 - context.randomFloat(0, 2)
                 this._velX = -0.5 + context.randomFloat(0, 1)
                 this._groundY = Math.max(80, Math.min(521, this.y + 45 + context.randomInt(0, 19)))
-                if (this.type === 'final-seed-packet') this._groundY -= 30
+                if (this._isLevelAward()) this._groundY -= 30
                 break
         }
     }
@@ -195,8 +198,13 @@ export class Item implements ItemEntity {
     }
 
     private _updateCollected(context: ItemUpdateContext) {
+        if (this.type === 'note') {
+            this._updateFade()
+            return
+        }
+
         const destination = this._collectionDestination()
-        if (this.type === 'final-seed-packet') {
+        if (this._isLevelAward()) {
             this._disappearCounter++
 
             const moveTime = Math.min(1, this._disappearCounter / FINAL_SEED_PACKET_MOVE_DURATION)
@@ -283,7 +291,7 @@ export class Item implements ItemEntity {
     }
 
     private _canDisappearOnGround() {
-        return this.type !== 'final-seed-packet'
+        return !this._isLevelAward()
     }
 
     private _isSun() {
@@ -292,6 +300,10 @@ export class Item implements ItemEntity {
 
     private _isMoney() {
         return this.type === 'silver-coin' || this.type === 'gold-coin' || this.type === 'diamond'
+    }
+
+    private _isLevelAward() {
+        return this.type === 'final-seed-packet' || this.type === 'note'
     }
 
     private _initialWidth() {
@@ -319,6 +331,8 @@ export class Item implements ItemEntity {
             context.events.push({ type: 'foleyRequested', sound: SoundEffect.Points, pitchRange: 10 })
         } else if (this.type === 'final-seed-packet' && this.awardKind === 'shovel') {
             context.events.push({ type: 'soundRequested', sound: SoundEffect.Shovel })
+        } else if (this.type === 'note') {
+            context.events.push({ type: 'soundRequested', sound: SoundEffect.Paper })
         } else if (this.type === 'final-seed-packet') {
             context.events.push({ type: 'soundRequested', sound: SoundEffect.SeedLift })
             context.events.push({ type: 'soundRequested', sound: SoundEffect.Drop })
@@ -343,7 +357,7 @@ export class Item implements ItemEntity {
 
     private _collectionDestination() {
         if (this._isSun()) return { x: SUN_BANK_DEST_X, y: SUN_BANK_DEST_Y }
-        if (this.type === 'final-seed-packet') return { x: 400 - this.width / 2, y: 200 - this.height / 2 }
+        if (this._isLevelAward()) return { x: 400 - this.width / 2, y: 200 - this.height / 2 }
         return { x: COIN_BANK_DEST_X, y: COIN_BANK_DEST_Y }
     }
 }

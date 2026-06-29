@@ -3,15 +3,13 @@ from __future__ import annotations
 import io
 import shutil
 from pathlib import Path
+from xml.etree import ElementTree
 
 from PIL import Image
 
 
 IMAGE_SUFFIX_PRIORITY = {".png": 0, ".jpg": 1, ".jpeg": 1, ".gif": 2}
 TRANSPARENT_COLORS: dict[str, tuple[int, int, int]] = {}
-ALPHA_COMPOSE_COLORS: dict[str, tuple[int, int, int]] = {
-    "zombienotehelp": (0, 0, 0),
-}
 
 
 def get_image_resource_name(path: Path) -> str:
@@ -48,6 +46,24 @@ def get_alpha_companion_name(resource_name: str) -> str:
     return f"{resource_name}_"
 
 
+def load_alphagrid_resources(resources_xml: Path) -> dict[str, tuple[str, str]]:
+    if not resources_xml.exists():
+        return {}
+
+    root = ElementTree.parse(resources_xml).getroot()
+    result: dict[str, tuple[str, str]] = {}
+    for image in root.iter("Image"):
+        path = image.get("path")
+        alphagrid = image.get("alphagrid")
+        resource_id = image.get("id")
+        if path and alphagrid and resource_id:
+            result[get_image_resource_name(Path(path))] = (
+                get_image_resource_name(Path(alphagrid)),
+                resource_id.lower(),
+            )
+    return result
+
+
 def get_output_name(src: Path, resource_name: str, force_png: bool) -> str:
     if force_png or src.suffix.lower() == ".gif":
         return f"{resource_name}.png"
@@ -60,17 +76,17 @@ def write_preprocessed_resource(
     *,
     resource_name: str | None = None,
     alpha_src: Path | None = None,
+    alpha_grid_src: Path | None = None,
 ) -> bool:
     name = resource_name if resource_name is not None else get_image_resource_name(src)
     transparent_color = TRANSPARENT_COLORS.get(name)
-    alpha_compose_color = ALPHA_COMPOSE_COLORS.get(name)
+    alpha_src = alpha_src or alpha_grid_src
 
-    if alpha_src or transparent_color or alpha_compose_color or src.suffix.lower() == ".gif":
+    if alpha_src or transparent_color or src.suffix.lower() == ".gif":
         data = _preprocess_to_png_bytes(
             src,
             alpha_src=alpha_src,
             transparent_color=transparent_color,
-            alpha_compose_color=alpha_compose_color,
         )
         return _write_if_changed(dst, data)
 
@@ -87,7 +103,6 @@ def _preprocess_to_png_bytes(
     *,
     alpha_src: Path | None,
     transparent_color: tuple[int, int, int] | None,
-    alpha_compose_color: tuple[int, int, int] | None,
 ) -> bytes:
     with Image.open(src) as image:
         result = image.convert("RGBA")
@@ -99,18 +114,6 @@ def _preprocess_to_png_bytes(
             result.putalpha(alpha)
         else:
             print(f"[textures] Skipped alpha with mismatched size: {src} vs {alpha_src}")
-
-    if alpha_compose_color:
-        source = result.load()
-        alpha = Image.new("L", result.size, 0)
-        alpha_pixels = alpha.load()
-        width, height = result.size
-        for y in range(height):
-            for x in range(width):
-                r, g, b, _a = source[x, y]
-                alpha_pixels[x, y] = max(r, g, b)
-        result = Image.new("RGBA", result.size, (*alpha_compose_color, 255))
-        result.putalpha(alpha)
 
     if transparent_color:
         pixels = result.load()

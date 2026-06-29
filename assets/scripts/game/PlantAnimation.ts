@@ -7,7 +7,6 @@ const { ccclass } = _decorator
 
 export type PlantAnimationType =
     | PlantType
-    | 'puffshroom'
     | 'sunshroom'
     | 'fumeshroom'
     | 'gravebuster'

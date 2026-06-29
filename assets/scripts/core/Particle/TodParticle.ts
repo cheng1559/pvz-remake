@@ -9,14 +9,15 @@ import {
     Size,
     Sprite,
     SpriteFrame,
+    Texture2D,
     Vec2,
 } from 'cc'
 import { GAME_TICK_SECONDS, scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import { SpriteLoader } from '../SpriteLoader'
+import { ParticleDefinitionLoader } from './ParticleDefinitionLoader'
 import {
     evaluateTodTrack,
-    TOD_PARTICLE_DEFINITIONS,
     type TodEmitterDefinition,
     type TodParticleEffect,
     type TodParticleFieldDefinition,
@@ -87,6 +88,7 @@ class TodParticle {
         launchSpeed: number,
         launchAngle: number,
         randomLaunchSpin: boolean,
+        alignLaunchSpin: boolean,
         additive: boolean,
         fieldCount: number,
     ) {
@@ -105,7 +107,11 @@ class TodParticle {
         this.duration = Math.max(1, Math.round(duration))
         this.velocityX = Math.sin(launchAngle) * launchSpeed
         this.velocityY = Math.cos(launchAngle) * launchSpeed
-        this.spin = randomLaunchSpin ? Math.random() * Math.PI * 2 : 0
+        this.spin = randomLaunchSpin
+            ? Math.random() * Math.PI * 2
+            : alignLaunchSpin
+                ? launchAngle
+                : 0
         this.trackInterpolations = {
             red: Math.random(),
             green: Math.random(),
@@ -136,6 +142,7 @@ class TodParticleEmitter {
     readonly duration: number
 
     scaleOverride = 1
+    tint = Color.WHITE.clone()
     private _particles: TodParticle[] = []
     private _age = -1
     private _dead = false
@@ -145,6 +152,7 @@ class TodParticleEmitter {
     private _systemRedInterpolation = Math.random()
     private _systemGreenInterpolation = Math.random()
     private _systemBlueInterpolation = Math.random()
+    private _systemBrightnessInterpolation = Math.random()
     private _spawnRateInterpolation = Math.random()
     private _spawnMinActiveInterpolation = Math.random()
     private _spawnMaxActiveInterpolation = Math.random()
@@ -153,6 +161,8 @@ class TodParticleEmitter {
     private _systemFieldLastValues: Array<{ x: number; y: number }>
     private _systemCenterX = 0
     private _systemCenterY = 0
+    private _lastWorldX: number | null = null
+    private _lastWorldY: number | null = null
 
     constructor(parent: Node, definition: TodEmitterDefinition) {
         this.node = createUINode('Emitter', {
@@ -162,9 +172,10 @@ class TodParticleEmitter {
             anchorY: 1,
         })
         this.definition = definition
+        const durationTrack = definition.systemDuration ?? definition.particleDuration
         this.duration = Math.max(
             1,
-            Math.round(evaluateTodTrack(definition.systemDuration, 0, Math.random())),
+            Math.round(evaluateTodTrack(durationTrack, 0, Math.random())),
         )
         this._systemFieldInterpolations = definition.systemFields.map(() => ({
             x: Math.random(),
@@ -174,7 +185,6 @@ class TodParticleEmitter {
             x: 0,
             y: 0,
         }))
-        this.step()
     }
 
     get dead() {
@@ -184,6 +194,7 @@ class TodParticleEmitter {
     step() {
         if (this._dead) return
 
+        this._compensateParentMotion()
         this._age++
         let dying = this._age >= this.duration
         if (dying && this.definition.systemLoops) {
@@ -245,19 +256,44 @@ class TodParticleEmitter {
 
         if (!dying) {
             for (let i = 0; i < Math.max(0, spawnCount); i++) {
-                this._particles.push(this._spawnParticle(systemTime))
-                this._particlesSpawned++
+                const particle = this._spawnParticle(systemTime, i, Math.max(1, spawnCount))
+                if (particle) {
+                    this._particles.push(particle)
+                    this._particlesSpawned++
+                }
             }
         }
 
         if (dying) {
-            if (this._particles.length === 0) {
-                this._dead = true
+            for (const particle of this._particles) {
+                if (particle.node.isValid) particle.node.destroy()
             }
+            this._particles = []
+            this._dead = true
         }
     }
 
-    private _spawnParticle(systemTime: number) {
+    private _compensateParentMotion() {
+        const worldPosition = this.node.worldPosition
+        if (this._lastWorldX === null || this._lastWorldY === null) {
+            this._lastWorldX = worldPosition.x
+            this._lastWorldY = worldPosition.y
+            return
+        }
+
+        const deltaX = worldPosition.x - this._lastWorldX
+        const deltaY = worldPosition.y - this._lastWorldY
+        this._lastWorldX = worldPosition.x
+        this._lastWorldY = worldPosition.y
+        if (!this.definition.particlesDontFollow || (deltaX === 0 && deltaY === 0)) return
+
+        for (const particle of this._particles) {
+            particle.x -= deltaX
+            particle.y += deltaY
+        }
+    }
+
+    private _spawnParticle(systemTime: number, spawnIndex: number, spawnCount: number) {
         const durationInterpolation = Math.random()
         const speedInterpolation = Math.random()
         const angleInterpolation = Math.random()
@@ -271,15 +307,17 @@ class TodParticleEmitter {
             systemTime,
             speedInterpolation,
         ) * 0.01
-        const launchAngle = evaluateTodTrack(
+        const launchAngleDegrees = evaluateTodTrack(
             this.definition.launchAngle,
             systemTime,
             angleInterpolation,
         )
-        const resolvedLaunchAngle = this.definition.randomLaunchAngle
-            ? Math.random() * Math.PI * 2
-            : launchAngle * DEG_TO_RAD
+        const resolvedLaunchAngle = this._resolveLaunchAngle(systemTime, launchAngleDegrees, spawnIndex, spawnCount)
         const spriteFrame = this._pickSpriteFrame()
+        if (!spriteFrame) {
+            this._dead = true
+            return null
+        }
         const particle = new TodParticle(
             this.node,
             spriteFrame,
@@ -287,27 +325,70 @@ class TodParticleEmitter {
             launchSpeed,
             resolvedLaunchAngle,
             this.definition.randomLaunchSpin,
+            this.definition.alignLaunchSpin,
             this.definition.additive,
             this.definition.fields.length,
         )
-        particle.x = this._systemCenterX +
-            evaluateTodTrack(this.definition.emitterOffsetX, systemTime, Math.random()) +
-            evaluateTodTrack(this.definition.emitterBoxX, systemTime, Math.random())
-        particle.y = this._systemCenterY +
-            evaluateTodTrack(this.definition.emitterOffsetY, systemTime, Math.random()) +
-            evaluateTodTrack(this.definition.emitterBoxY, systemTime, Math.random())
-        const radius = evaluateTodTrack(
-            this.definition.emitterRadius,
-            systemTime,
-            Math.random(),
-        )
-        if (radius !== 0) {
-            const radiusAngle = Math.random() * Math.PI * 2
-            particle.x += Math.sin(radiusAngle) * radius
-            particle.y += Math.cos(radiusAngle) * radius
+        const position = this._resolveEmitterPosition(systemTime, resolvedLaunchAngle)
+        particle.x = position.x
+        particle.y = position.y
+        if (this.definition.randomStartTime) {
+            particle.age = Math.floor(Math.random() * particle.duration)
         }
         this._updateParticle(particle, systemTime)
         return particle
+    }
+
+    private _resolveLaunchAngle(
+        systemTime: number,
+        launchAngleDegrees: number,
+        spawnIndex: number,
+        spawnCount: number,
+    ) {
+        if (this.definition.emitterType === 'circlepath') {
+            const emitterPath = evaluateTodTrack(this.definition.emitterPath, systemTime, Math.random())
+            return emitterPath * Math.PI * 2 + launchAngleDegrees * DEG_TO_RAD
+        }
+        if (this.definition.emitterType === 'circleevenspacing') {
+            return Math.PI * 2 * spawnIndex / spawnCount + launchAngleDegrees * DEG_TO_RAD
+        }
+        if (this._isConstantZero(this.definition.launchAngle)) {
+            return Math.random() * Math.PI * 2
+        }
+        return launchAngleDegrees * DEG_TO_RAD
+    }
+
+    private _resolveEmitterPosition(systemTime: number, launchAngle: number) {
+        let x = 0
+        let y = 0
+        if (
+            this.definition.emitterType === 'box' ||
+            this.definition.emitterType === 'boxpath'
+        ) {
+            x = evaluateTodTrack(this.definition.emitterBoxX, systemTime, Math.random())
+            y = evaluateTodTrack(this.definition.emitterBoxY, systemTime, Math.random())
+        } else {
+            const radius = evaluateTodTrack(this.definition.emitterRadius, systemTime, Math.random())
+            x = Math.sin(launchAngle) * radius
+            y = Math.cos(launchAngle) * radius
+        }
+
+        const skewX = evaluateTodTrack(this.definition.emitterSkewX, systemTime, Math.random())
+        const skewY = evaluateTodTrack(this.definition.emitterSkewY, systemTime, Math.random())
+        return {
+            x: this._systemCenterX +
+                x +
+                y * skewX +
+                evaluateTodTrack(this.definition.emitterOffsetX, systemTime, Math.random()),
+            y: this._systemCenterY +
+                y +
+                x * skewY +
+                evaluateTodTrack(this.definition.emitterOffsetY, systemTime, Math.random()),
+        }
+    }
+
+    private _isConstantZero(track: TodEmitterDefinition['launchAngle']) {
+        return track.nodes.every((node) => node.low === 0 && node.high === 0)
     }
 
     private _updateParticle(particle: TodParticle, systemTime: number) {
@@ -371,7 +452,7 @@ class TodParticleEmitter {
     ) {
         const x = evaluateTodTrack(field.x, particleTime, interpolation.x)
         const y = evaluateTodTrack(field.y, particleTime, interpolation.y)
-        if (field.type === 'position') {
+        if (field.type === 'position' || field.type === 'system-position') {
             particle.x += x - lastValue.x
             particle.y += y - lastValue.y
             lastValue.x = x
@@ -428,6 +509,10 @@ class TodParticleEmitter {
             particle.trackInterpolations.alpha,
         )
         const brightness = evaluateTodTrack(
+            this.definition.systemBrightness,
+            systemTime,
+            this._systemBrightnessInterpolation,
+        ) * evaluateTodTrack(
             this.definition.particleBrightness,
             particleTime,
             particle.trackInterpolations.brightness,
@@ -466,9 +551,9 @@ class TodParticleEmitter {
         const sprite = particle.node.getComponent(Sprite)
         if (sprite) {
             sprite.color = new Color(
-                Math.round(255 * red * brightness),
-                Math.round(255 * green * brightness),
-                Math.round(255 * blue * brightness),
+                Math.round(this.tint.r * red * brightness),
+                Math.round(this.tint.g * green * brightness),
+                Math.round(this.tint.b * blue * brightness),
                 Math.round(255 * alpha * brightness),
             )
         }
@@ -488,10 +573,11 @@ class TodParticleEmitter {
         }
     }
 
-    private _pickSpriteFrame() {
+    private _pickSpriteFrame(): SpriteFrame | null {
         const atlas = SpriteLoader.get(this.definition.image)
         if (!atlas) {
-            throw new Error(`[TodParticle] Required sprite '${this.definition.image}' is not loaded`)
+            console.warn(`[TodParticle] Skipping emitter because sprite '${this.definition.image}' is not loaded`)
+            return null
         }
         atlas.packable = false
         const frameCount = Math.max(1, this.definition.imageFrames)
@@ -500,13 +586,18 @@ class TodParticleEmitter {
         if (frameCount === 1 && columnCount === 1 && rowCount === 1) return atlas
 
         const frameIndex = Math.floor(Math.random() * frameCount)
-        const width = atlas.originalSize.width / columnCount
-        const height = atlas.originalSize.height / rowCount
+        const texture = atlas.texture as Texture2D
+        const textureWidth = texture.width || atlas.originalSize.width
+        const textureHeight = texture.height || atlas.originalSize.height
+        const width = textureWidth / columnCount
+        const height = textureHeight / rowCount
+        const column = Math.min(columnCount - 1, Math.max(0, this.definition.imageCol + frameIndex))
+        const row = Math.min(rowCount - 1, Math.max(0, this.definition.imageRow))
         const frame = new SpriteFrame()
         frame.packable = false
         frame.reset({
             texture: atlas.texture,
-            rect: new Rect(frameIndex * width, 0, width, height),
+            rect: new Rect(column * width, row * height, width, height),
             originalSize: new Size(width, height),
             offset: new Vec2(0, 0),
             isRotate: false,
@@ -523,6 +614,7 @@ export interface TodParticleSpawnArgs {
     y: number
     z?: number
     renderOrder?: number
+    tint?: Color
 }
 
 @ccclass('TodParticleSystem')
@@ -530,9 +622,9 @@ export class TodParticleSystem extends Component {
     public renderOrder = 10000
     private _emitters: TodParticleEmitter[] = []
     private _accumulator = 0
+    private _tint: Color | null = null
 
     static spawn(args: TodParticleSpawnArgs) {
-        const definition = TOD_PARTICLE_DEFINITIONS[args.effect]
         const node = createUINode(`ParticleSystem_${args.effect}`, {
             parent: args.parent,
             layer: args.parent.layer,
@@ -544,9 +636,15 @@ export class TodParticleSystem extends Component {
         })
         const system = node.addComponent(TodParticleSystem)
         system.renderOrder = args.renderOrder ?? 10000
-        system._emitters = definition.emitters.map(
-            (emitterDefinition) => new TodParticleEmitter(node, emitterDefinition),
-        )
+        system._tint = args.tint?.clone() ?? null
+        const definition = ParticleDefinitionLoader.get(args.effect)
+        if (definition) {
+            system._emitters = definition.emitters.map(
+                (emitterDefinition) => system._createEmitter(node, emitterDefinition),
+            )
+        } else {
+            void system._loadEmitters(args.effect)
+        }
         return system
     }
 
@@ -557,7 +655,27 @@ export class TodParticleSystem extends Component {
         }
     }
 
+    private _createEmitter(node: Node, emitterDefinition: TodEmitterDefinition) {
+        const emitter = new TodParticleEmitter(node, emitterDefinition)
+        if (this._tint) emitter.tint = this._tint.clone()
+        return emitter
+    }
+
+    private async _loadEmitters(effect: TodParticleEffect) {
+        const definition = await ParticleDefinitionLoader.load(effect)
+        if (!this.node?.isValid) return
+        if (!definition) {
+            console.warn(`[TodParticle] Particle definition '${effect}' is not loaded`)
+            this.node.destroy()
+            return
+        }
+
+        this._emitters = definition.emitters.map((emitterDefinition) => this._createEmitter(this.node, emitterDefinition))
+    }
+
     protected update(dt: number) {
+        if (this._emitters.length === 0) return
+
         this._accumulator += scaleGameDeltaTime(dt)
         while (this._accumulator >= GAME_TICK_SECONDS) {
             this._accumulator -= GAME_TICK_SECONDS

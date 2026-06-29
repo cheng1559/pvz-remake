@@ -5,10 +5,10 @@ import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { MoneyCounter } from '@/ui/MoneyCounter'
 import { CrazyDaveWidget } from '@/ui/CrazyDaveWidget'
-import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH, SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
+import { getAtlasFrame } from '@/ui/SeedPacketRenderer'
 import { createStoneButton } from '@/ui/StoneButton'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
-import { SEED_DEFINITIONS, ZOMBIE_DEFINITIONS } from '../GameDefinitions'
+import { ZOMBIE_DEFINITIONS } from '../GameDefinitions'
 import { MusicSystem } from '../music/MusicSystem'
 import { createZombieAnimationView, playZombieBodyAnimation } from '../ZombieAnimation'
 import { getAnimationRateSpeed } from '../PlantAnimation'
@@ -403,13 +403,15 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
     protected _introStreetZombieSpecs(): IntroStreetZombieSpec[] {
         const zombieTypeCount = new Map<ZombieType, number>()
         let totalZombieCount = 0
+        const addZombie = (zombieType: ZombieType, count = 1) => {
+            if (zombieType === 'flag' || count <= 0) return
 
-        for (const wave of this._session.level.zombieWaves) {
-            for (const zombieType of wave.zombies) {
-                if (zombieType === 'flag') continue
-
-                zombieTypeCount.set(zombieType, (zombieTypeCount.get(zombieType) ?? 0) + 1)
-                totalZombieCount++
+            zombieTypeCount.set(zombieType, (zombieTypeCount.get(zombieType) ?? 0) + count)
+            totalZombieCount += count
+        }
+        for (let waveIndex = 0; waveIndex < this._session.numWaves; waveIndex++) {
+            for (const zombieType of this._session.zombiesInWave(waveIndex)) {
+                addZombie(zombieType)
             }
         }
         if (totalZombieCount <= 0) return []
@@ -422,12 +424,13 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             const count = zombieTypeCount.get(zombieType) ?? 0
             if (count <= 0) continue
 
+            const previewCapacity = this._session.level.introZombiePreviewCapacity ?? INTRO_STREET_ZOMBIE_PREVIEW_CAPACITY
             const previewCount = Math.max(
                 1,
-                Math.min(count, Math.floor(count * INTRO_STREET_ZOMBIE_PREVIEW_CAPACITY / totalZombieCount)),
+                Math.min(count, Math.floor(count * previewCapacity / totalZombieCount)),
             )
             for (let i = 0; i < previewCount; i++) {
-                const spot = this._pickIntroStreetZombieSpot(occupied)
+                const spot = this._pickIntroStreetZombieSpot(zombieType, occupied)
                 occupied[spot.gridX][spot.gridY] = true
                 specs.push({ type: zombieType, gridX: spot.gridX, gridY: spot.gridY })
             }
@@ -435,11 +438,11 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
         return specs
     }
 
-    protected _pickIntroStreetZombieSpot(occupied: boolean[][]) {
+    protected _pickIntroStreetZombieSpot(zombieType: ZombieType, occupied: boolean[][]) {
         const candidates: Array<{ gridX: number, gridY: number }> = []
         for (let gridX = 0; gridX < INTRO_STREET_ZOMBIE_GRID_SIZE; gridX++) {
             for (let gridY = 0; gridY < INTRO_STREET_ZOMBIE_GRID_SIZE; gridY++) {
-                if (!this._canIntroZombieGoInGridSpot(gridX, gridY, occupied)) continue
+                if (!this._canIntroZombieGoInGridSpot(zombieType, gridX, gridY, occupied)) continue
                 if (!occupied[gridX][gridY]) candidates.push({ gridX, gridY })
             }
         }
@@ -448,8 +451,9 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
         return candidates[Math.floor(Math.random() * candidates.length)]
     }
 
-    protected _canIntroZombieGoInGridSpot(gridX: number, gridY: number, occupied: boolean[][]) {
+    protected _canIntroZombieGoInGridSpot(zombieType: ZombieType, gridX: number, gridY: number, occupied: boolean[][]) {
         if (occupied[gridX][gridY]) return false
+        if (zombieType === 'pole-vaulting' && (gridX === 0 || (gridX === 1 && gridY === 0))) return false
         return gridX !== INTRO_STREET_ZOMBIE_GRID_SIZE - 1 || gridY !== 0
     }
 
@@ -493,6 +497,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             hasArm: true,
             hasTongue: false,
             hasObject: definition.hasFlag || definition.hasFloat,
+            poleVaulting: spec.type === 'pole-vaulting',
             inPool: definition.hasFloat,
             dead: false,
             bodyRect: { ...definition.bodyRect },
@@ -1034,88 +1039,18 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             const packet = this._session.seedPackets[i]
             const x = this._getSeedPacketPositionX(i)
             const y = -8
-            const packetNode = SeedPacketRenderer.drawSeedPacket({
+            const view = this._createSeedPacketView({
                 name: `SeedPacket_${packet.seedType}`,
                 x,
                 y,
                 parent,
                 layer: this.node.layer,
                 seedType: packet.seedType,
-                cost: SEED_DEFINITIONS[packet.seedType].cost,
-                seeds: SpriteLoader.get('seeds') ?? null,
-                packetPlants: SpriteLoader.get('packet_plants') ?? null,
-                cachedPacketPlants: SpriteLoader.get('packet_plants_cached') ?? null,
                 costFont: this._packetCostFont,
             })
-            this._seedPacketNodes.set(packet.seedType, packetNode)
-            this._seedPacketSelectedHighlights.set(packet.seedType, this._createSeedPacketSelectedHighlight(packetNode))
-            this._seedPacketCooldownClips.set(packet.seedType, this._createSeedPacketCooldownClip(packetNode, packet))
-            this._wireSeedPacketInput(packetNode, packet.seedType)
+            this._seedPacketViews.set(packet.seedType, view)
+            this._wireSeedPacketInput(view.node, packet.seedType)
         }
-    }
-
-    protected _createSeedPacketSelectedHighlight(packetNode: Node) {
-        const highlight = createUINode('SelectedHighlight', {
-            parent: packetNode,
-            layer: this.node.layer,
-            active: false,
-            anchorX: 0,
-            anchorY: 1,
-            width: SEED_PACKET_WIDTH,
-            height: SEED_PACKET_HEIGHT,
-            x: 0,
-            y: 0,
-            z: 15,
-        })
-        const flash = SpriteLoader.get('particles/seedpacketflash')
-        if (flash) {
-            createSpriteNode({
-                name: 'SeedPacketFlash',
-                spriteFrame: flash,
-                parent: highlight,
-                layer: this.node.layer,
-                x: 0,
-                y: 0,
-                anchorX: 0,
-                anchorY: 1,
-            })
-        }
-        return highlight
-    }
-
-    protected _createSeedPacketCooldownClip(packetNode: Node, packet: SeedPacketState) {
-        const clip = createUINode('CooldownClip', {
-            parent: packetNode,
-            layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
-            width: SEED_PACKET_WIDTH,
-            height: 0,
-            x: 0,
-            y: 0,
-            z: 20,
-        })
-        clip.addComponent(Mask).type = Mask.Type.GRAPHICS_RECT
-        clip.active = false
-
-        const darkPacket = SeedPacketRenderer.drawSeedPacket({
-            name: 'CooldownPacket',
-            x: 0,
-            y: 0,
-            parent: clip,
-            layer: this.node.layer,
-            seedType: packet.seedType,
-            cost: SEED_DEFINITIONS[packet.seedType].cost,
-            drawCost: false,
-            seeds: SpriteLoader.get('seeds') ?? null,
-            packetPlants: SpriteLoader.get('packet_plants') ?? null,
-            cachedPacketPlants: SpriteLoader.get('packet_plants_cached') ?? null,
-            costFont: this._packetCostFont,
-        })
-        this._applySpriteColorRecursive(darkPacket, new Color(64, 64, 64, 255))
-        const costNode = packetNode.children.find((child) => child.name === 'Cost')
-        if (costNode) clip.setSiblingIndex(costNode.getSiblingIndex())
-        return clip
     }
 
     protected _wireSeedPacketInput(packetNode: Node, seedType: SeedType) {
@@ -1123,13 +1058,16 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             if (!this._canUseBoardInput()) return false
             if (this._session.selectedSeed) return false
 
-            event.propagationStopped = true
             const pixel = eventToBoardPixel(this.node, event)
             this._mousePixel = pixel
             this._hasCursorPointer = true
-            this._session.dispatch({ type: 'selectSeed', seedType })
-            if (sys.isMobile) this._beginMobilePlantPress(pixel, this._findSeedPacketAt(pixel)?.rect ?? null)
+            const source = this._findSeedSourceAt(pixel)
+            if (source?.kind !== 'seed' || source.seedType !== seedType) return false
+
+            this._selectSeedSource(source)
+            if (sys.isMobile && this._session.selectedSeed) this._beginMobilePlantPress(pixel, source.rect)
             this._renderFrame()
+            event.propagationStopped = true
             return true
         }
         packetNode.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => {
@@ -1139,19 +1077,6 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
         }, this)
         packetNode.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
             if (!sys.isMobile) return
-            if (this._session.selectedSeed) {
-                event.propagationStopped = true
-                const pixel = eventToBoardPixel(this.node, event)
-                this._mousePixel = pixel
-                this._hasCursorPointer = true
-                if (this._session.selectedSeed === seedType) {
-                    this._beginMobilePlantPress(pixel, this._findSeedPacketAt(pixel)?.rect ?? null, true)
-                } else {
-                    this._resetMobilePlantPress()
-                    this._updateCursorPreview()
-                }
-                return
-            }
             onPress(event)
         }, this)
         packetNode.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {

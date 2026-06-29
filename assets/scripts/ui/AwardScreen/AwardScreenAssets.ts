@@ -4,6 +4,7 @@ import { SpriteLoader } from '@/core/SpriteLoader'
 
 const AWARD_SCREEN_SPRITES = [
     'awardscreen_back',
+    'background1',
     'seedpacket_larger',
     'plant_previews_cached',
     'seedchooser_button',
@@ -11,6 +12,8 @@ const AWARD_SCREEN_SPRITES = [
     'seedchooser_button2',
     'seedchooser_button2_glow',
     'shovel_hi_res',
+    'zombienote',
+    'zombie_note1',
 ] as const
 
 const AWARD_SCREEN_FONTS = [
@@ -24,6 +27,7 @@ const AWARD_SCREEN_FONTS = [
 
 export interface AwardScreenSprites {
     background: SpriteFrame
+    noteBackground: SpriteFrame
     seedPacketLarger: SpriteFrame
     plantPreviewsCached: SpriteFrame
     seedChooserButton: SpriteFrame
@@ -31,6 +35,8 @@ export interface AwardScreenSprites {
     seedChooserButton2: SpriteFrame
     seedChooserButton2Glow: SpriteFrame
     shovelHiRes: SpriteFrame
+    zombieNote: SpriteFrame
+    zombieNote1: SpriteFrame
 }
 
 export interface AwardScreenFonts {
@@ -58,6 +64,7 @@ export class AwardScreenAssets {
 
         const [
             background,
+            noteBackground,
             seedPacketLarger,
             plantPreviewsCached,
             seedChooserButton,
@@ -65,9 +72,12 @@ export class AwardScreenAssets {
             seedChooserButton2,
             seedChooserButton2Glow,
             shovelHiRes,
+            zombieNote,
+            zombieNote1,
         ] = sprites as SpriteFrame[]
         return {
             background,
+            noteBackground,
             seedPacketLarger,
             plantPreviewsCached,
             seedChooserButton,
@@ -75,6 +85,8 @@ export class AwardScreenAssets {
             seedChooserButton2,
             seedChooserButton2Glow,
             shovelHiRes,
+            zombieNote,
+            zombieNote1,
         }
     }
 

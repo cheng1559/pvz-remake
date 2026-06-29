@@ -56,6 +56,12 @@ export class PeashooterPlant extends Plant {
         context.events.push({ type: 'foleyRequested', sound: SoundEffect.Throw, pitchRange: 10 })
         if (definition.projectileType === 'snowpea') {
             context.events.push({ type: 'foleyRequested', sound: SoundEffect.SnowPeaSparkles, pitchRange: 10 })
+            context.events.push({
+                type: 'particleAtRequested',
+                effect: 'snowpeapuff',
+                x: this.x + definition.projectileOffsetX + 8,
+                y: this.y + definition.projectileOffsetY + 13,
+            })
         }
         context.events.push({
             type: 'projectileFired',

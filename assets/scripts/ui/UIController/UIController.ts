@@ -21,6 +21,7 @@ import { FontLoader } from '@/core/FontLoader'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { AdventureGameScreen } from '@/game/GameScreen'
+import { resetMoreSunTutorialState } from '@/game/GameSession'
 import {
     ADVENTURE_1_1,
     ADVENTURE_1_2,
@@ -75,8 +76,10 @@ const ACHIEVEMENT_SCREEN_SHOWN_Y = 1
 const NATIVE_UNCAPPED_FRAME_RATE = 1000
 const FULLSCREEN_CHANGE_EVENT = 'fullscreen-change' as never
 const FULLSCREEN_ERROR_TITLE = 'Fullscreen Error'
-const MOBILE_NATIVE_NO_WINDOWED_MESSAGE = 'Windowed mode is not available on mobile devices.'
+const MOBILE_NATIVE_NO_WINDOWED_MESSAGE = 'Full screen mode cannot be disabled on this device.'
 const NO_FULLSCREEN_MESSAGE = 'Full screen mode is not available in this browser.'
+const HARDWARE_ACCELERATION_LOCKED_TITLE = '3D Accelaration Error'
+const HARDWARE_ACCELERATION_LOCKED_MESSAGE = '3D acceleration cannot be disabled \nin this version.'
 const MOBILE_DEBUG_CLI_BUTTON_MARGIN = 16
 const MOBILE_DEBUG_CLI_DRAG_THRESHOLD = 8
 const DEBUG_CLI_BRAIN_SCALE = 1.2
@@ -162,6 +165,7 @@ export class UIController extends Component {
         }
 
         this._profile = ProfileStore.loadCurrentProfile()
+        resetMoreSunTutorialState()
         this._applyPersistedSettings()
         this._adventureLevel = this._getProfileAdventureLevel()
         this._configurePlatformFrameRate()
@@ -1383,6 +1387,7 @@ export class UIController extends Component {
         optionsDialog.sfxVolume = this._settings.sfxVolume
         optionsDialog.forceFullScreen = forceFullScreen
         optionsDialog.fullScreen = forceFullScreen ? true : this._settings.fullScreen
+        optionsDialog.hardwareAcceleration = true
         void optionsDialog.renderDialog()
     }
 
@@ -1392,6 +1397,7 @@ export class UIController extends Component {
         optionsDialog.sfxVolume = this._settings.sfxVolume
         optionsDialog.forceFullScreen = forceFullScreen
         optionsDialog.fullScreen = forceFullScreen ? true : this._settings.fullScreen
+        optionsDialog.hardwareAcceleration = true
         optionsDialog.onMusicVolumeChanged = (value) => {
             this._settings = GameSettingsStore.update({ musicVolume: value })
             SoundLoader.setMusicVolume(this._settings.musicVolume)
@@ -1412,6 +1418,9 @@ export class UIController extends Component {
         }
         optionsDialog.onForcedFullScreenClick = () => {
             this.showMessageBox(FULLSCREEN_ERROR_TITLE, MOBILE_NATIVE_NO_WINDOWED_MESSAGE)
+        }
+        optionsDialog.onForcedHardwareAccelerationClick = () => {
+            this.showMessageBox(HARDWARE_ACCELERATION_LOCKED_TITLE, HARDWARE_ACCELERATION_LOCKED_MESSAGE)
         }
     }
 
@@ -1594,11 +1603,8 @@ export class UIController extends Component {
     }
 
     private _nextAdventureLevel(): LevelDefinition {
-        if (this._adventureLevel.id === 'adventure-1-1') return ADVENTURE_1_2
-        if (this._adventureLevel.id === 'adventure-1-2') return ADVENTURE_1_3
-        if (this._adventureLevel.id === 'adventure-1-3') return ADVENTURE_1_4
-        if (this._adventureLevel.id === 'adventure-1-4') return ADVENTURE_1_5
-        return this._adventureLevel
+        const index = ADVENTURE_LEVELS.findIndex((level) => level.id === this._adventureLevel.id)
+        return ADVENTURE_LEVELS[index + 1] ?? this._adventureLevel
     }
 
     private _findAdventureLevel(levelId: LevelDefinition['id']) {

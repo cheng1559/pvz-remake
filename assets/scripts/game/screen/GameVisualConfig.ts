@@ -10,6 +10,7 @@ export const SEED_TOOLTIP_KEYS: Record<SeedType, string> = {
     snowpea: 'SNOW_PEA',
     chomper: 'CHOMPER',
     repeater: 'REPEATER',
+    puffshroom: 'PUFF_SHROOM',
 }
 
 export const SEED_TOOLTIP_FALLBACK_NAMES: Record<SeedType, string> = {
@@ -22,6 +23,7 @@ export const SEED_TOOLTIP_FALLBACK_NAMES: Record<SeedType, string> = {
     snowpea: 'Snow Pea',
     chomper: 'Chomper',
     repeater: 'Repeater',
+    puffshroom: 'Puff-shroom',
 }
 
 export const SEED_TOOLTIP_WAITING = 'recharging...'
@@ -41,6 +43,7 @@ export const PLANT_PREVIEW_CACHE_IDS: Record<PlantType, number> = {
     snowpea: 5,
     chomper: 6,
     repeater: 7,
+    puffshroom: 8,
 }
 
 export const PLANT_SHADOW_ADJUSTMENTS: Partial<Record<PlantType, { offsetX: number, offsetY: number, scale?: number }>> = {

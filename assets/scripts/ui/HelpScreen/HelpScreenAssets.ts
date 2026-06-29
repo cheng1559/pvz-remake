@@ -5,7 +5,7 @@ import type { SpriteFrame } from 'cc'
 const HELP_SCREEN_SPRITES = [
     'background1',
     'zombienote',
-    'zombienotehelp',
+    'zombie_note_help',
     'seedchooser_button',
     'seedchooser_button_glow',
     'seedchooser_button_disabled',

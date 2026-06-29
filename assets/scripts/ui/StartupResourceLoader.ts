@@ -1,7 +1,9 @@
 import { JsonAsset } from 'cc'
+import { DEBUG } from 'cc/env'
 import { AssetLoader } from '@/core/AssetLoader'
 import { FONT_NAMES, FontLoader } from '@/core/FontLoader'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
+import { ParticleDefinitionLoader } from '@/core/Particle'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { PLANT_DEFINITIONS, SEED_DEFINITIONS, ZOMBIE_DEFINITIONS } from '@/game/GameDefinitions'
@@ -144,9 +146,13 @@ export class StartupResourceLoader {
     private static async _runPreloadStartup(): Promise<void> {
         this._setProgress(0, 'animations')
         const animations = await this._loadStartupAnimations()
+        if (!DEBUG) {
+            this._setProgress(0.08, 'particles')
+            await ParticleDefinitionLoader.preloadAll()
+        }
         this._setProgress(0.1, 'textures')
         await this._loadStartupTextures(animations, 0.1, 0.55)
-        await this._runWeightedStartupTasks([
+        const startupTasks: WeightedStartupTask[] = [
             { phase: 'audio', weight: 0.15, task: (onProgress) => this._loadAudio(onProgress) },
             { phase: 'music', weight: 0.15, task: async (onProgress) => {
                 onProgress(0)
@@ -159,7 +165,10 @@ export class StartupResourceLoader {
                 await LawnStringLoader.load()
                 onProgress(1)
             } },
-        ], 0.55)
+        ]
+        await this._runWeightedStartupTasks(DEBUG
+            ? startupTasks.filter((task) => task.phase === 'strings')
+            : startupTasks, 0.55)
         this._setProgress(1, 'complete')
     }
 
@@ -220,6 +229,7 @@ export class StartupResourceLoader {
             FontLoader.load('briannetod16'),
             SoundLoader.load(SoundEffect.LoadingBarFlower),
             SoundLoader.load(SoundEffect.LoadingBarZombie),
+            ...(DEBUG ? [] : [ParticleDefinitionLoader.preloadAll()]),
             ...STARTUP_ANIMATION_PATHS.map((path) => this.loadJson(path)),
         ])
     }
@@ -268,6 +278,11 @@ export class StartupResourceLoader {
     }
 
     private static async _loadStartupAnimations(): Promise<JsonAsset[]> {
+        if (DEBUG) {
+            return (await Promise.all(STARTUP_ANIMATION_PATHS.map((path) => this.loadJson(path))))
+                .filter((animation): animation is JsonAsset => !!animation)
+        }
+
         const [dirAnimations, explicitAnimations] = await Promise.all([
             AssetLoader.loadDir(
                 'animations',
@@ -291,8 +306,10 @@ export class StartupResourceLoader {
         endProgress = 1,
     ): Promise<void> {
         const textureNames = new Set(STARTUP_TEXTURES)
-        for (const animation of animations) {
-            this._collectAnimationImages(animation.json as Record<string, any>, textureNames)
+        if (!DEBUG) {
+            for (const animation of animations) {
+                this._collectAnimationImages(animation.json as Record<string, any>, textureNames)
+            }
         }
 
         const names = [...textureNames]

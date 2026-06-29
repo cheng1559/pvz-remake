@@ -3,7 +3,6 @@ import type { PlantCreateArgs, PlantUpdateContext } from './BasePlant'
 import { Plant } from './BasePlant'
 
 const ARMING_TICKS = 1500
-const RISE_ANIMATION_TICKS = 105
 const ARMED_BLINK_COUNTDOWN_MIN = 400
 const ARMED_BLINK_COUNTDOWN_MAX = 4399
 
@@ -20,7 +19,6 @@ export class PotatoMinePlant extends Plant {
             return
         }
         if (this.state === 'potato-rising') {
-            this.updateRising(context)
             return
         }
         if (this.state === 'potato-armed') {
@@ -36,14 +34,18 @@ export class PotatoMinePlant extends Plant {
         if (this.stateCountdown > 0) return
 
         this.state = 'potato-rising'
-        this.stateCountdown = RISE_ANIMATION_TICKS
         context.events.push({ type: 'animationRequested', entityId: this.id, animation: 'potato-rise' })
+        context.events.push({
+            type: 'particleAtRequested',
+            effect: 'potatominerise',
+            x: this.x + 50,
+            y: this.y + 50,
+        })
         context.events.push({ type: 'foleyRequested', sound: SoundEffect.DirtRise, pitchRange: 5 })
     }
 
-    private updateRising(context: PlantUpdateContext) {
-        if (this.stateCountdown > 0) return
-
+    handleAnimationFinished(animation: string, context: PlantUpdateContext) {
+        if (animation !== 'potato-rise' || this.state !== 'potato-rising') return
         this.state = 'potato-armed'
         this.blinkCountdown = context.randomInt(ARMED_BLINK_COUNTDOWN_MIN, ARMED_BLINK_COUNTDOWN_MAX)
         context.events.push({ type: 'animationRequested', entityId: this.id, animation: 'potato-armed' })
@@ -54,6 +56,12 @@ export class PotatoMinePlant extends Plant {
 
         this.state = 'potato-mashed'
         this.dead = true
-        context.events.push({ type: 'soundRequested', sound: SoundEffect.PotatoMine })
+        context.events.push({
+            type: 'potatoMineDetonated',
+            entityId: this.id,
+            x: this.x + 20,
+            y: this.y + 40,
+            row: this.row,
+        })
     }
 }

@@ -318,7 +318,7 @@ export class CrazyDaveWidget extends Component {
             this._bubbleNode.setSiblingIndex(0)
         }
         if (bodyNode && blinkNode) {
-            blinkNode.attach({ node: bodyNode, slot: 'Dave_eye' })
+            blinkNode.attachToTrack({ node: bodyNode, track: 'Dave_head' })
         }
         blinkNode?.stop()
         this._bodyNode = bodyNode
@@ -628,7 +628,6 @@ export class CrazyDaveWidget extends Component {
         blinkNode.play({
             name: 'anim_blink',
             speed: getAnimationRateSpeed(blinkNode, 'anim_blink', CRAZY_DAVE_BLINK_RATE),
-            keepLastFrame: true,
             onFinish: () => {
                 this._stopBlink()
             },

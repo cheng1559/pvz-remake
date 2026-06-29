@@ -43,6 +43,7 @@ export function getLevelIntroMusicTune(level: LevelDefinition): MusicTuneId | nu
 
 export function getLevelGameplayMusicTune(level: LevelDefinition): MusicTuneId | null {
     if (level.id === 'adventure-1-5') return 'minigame'
+    if (level.conveyor?.enabled === true) return 'conveyer'
     if (level.background === 'day') return 'day_grasswalk'
 
     return null
@@ -119,7 +120,7 @@ export const SEED_DEFINITIONS: Record<string, SeedDefinition> = {
     explodenut: {
         id: 'explodenut',
         plantType: 'explodenut',
-        cost: 0,
+        cost: 150,
         cooldownTicks: 3000,
         packetSprite: 'seedpacket_larger',
         cursorSprite: 'wallnut_body',
@@ -159,6 +160,15 @@ export const SEED_DEFINITIONS: Record<string, SeedDefinition> = {
         cooldownTicks: 750,
         packetSprite: 'seedpacket_larger',
         cursorSprite: 'peashooter_head',
+        placement: 'ground',
+    },
+    puffshroom: {
+        id: 'puffshroom',
+        plantType: 'puffshroom',
+        cost: 0,
+        cooldownTicks: 750,
+        packetSprite: 'seedpacket_larger',
+        cursorSprite: 'puffshroom_head',
         placement: 'ground',
     },
 }
@@ -272,6 +282,18 @@ export const PLANT_DEFINITIONS: Record<string, PlantDefinition> = {
         animationPath: 'animations/peashooter',
         bodyRect: { x: 10, y: 0, width: 60, height: 80 },
     },
+    puffshroom: {
+        id: 'puffshroom',
+        maxHealth: 300,
+        attackCadenceTicks: 0,
+        firstAttackDelayTicks: 0,
+        shootingAnimationTicks: 0,
+        projectileType: 'pea',
+        projectileOffsetX: 0,
+        projectileOffsetY: 0,
+        animationPath: 'animations/puffshroom',
+        bodyRect: { x: 10, y: 0, width: 60, height: 80 },
+    },
 }
 
 const NORMAL_ZOMBIE_BODY_RECT = { x: 36, y: 0, width: 42, height: 115 }
@@ -282,6 +304,9 @@ export const ZOMBIE_DEFINITIONS: Record<string, ZombieDefinition> = {
     normal: {
         id: 'normal',
         maxHealth: 270,
+        zombieValue: 1,
+        firstAllowedWave: 1,
+        pickWeight: 4000,
         helmType: 'none',
         helmHealth: 0,
         shieldType: 'none',
@@ -298,6 +323,9 @@ export const ZOMBIE_DEFINITIONS: Record<string, ZombieDefinition> = {
     flag: {
         id: 'flag',
         maxHealth: 270,
+        zombieValue: 1,
+        firstAllowedWave: 1,
+        pickWeight: 0,
         helmType: 'none',
         helmHealth: 0,
         shieldType: 'none',
@@ -314,6 +342,9 @@ export const ZOMBIE_DEFINITIONS: Record<string, ZombieDefinition> = {
     'traffic-cone': {
         id: 'traffic-cone',
         maxHealth: 270,
+        zombieValue: 2,
+        firstAllowedWave: 1,
+        pickWeight: 4000,
         helmType: 'traffic-cone',
         helmHealth: 370,
         shieldType: 'none',
@@ -330,6 +361,9 @@ export const ZOMBIE_DEFINITIONS: Record<string, ZombieDefinition> = {
     bucket: {
         id: 'bucket',
         maxHealth: 270,
+        zombieValue: 4,
+        firstAllowedWave: 1,
+        pickWeight: 3000,
         helmType: 'bucket',
         helmHealth: 1100,
         shieldType: 'none',
@@ -346,6 +380,9 @@ export const ZOMBIE_DEFINITIONS: Record<string, ZombieDefinition> = {
     'ducky-tube': {
         id: 'ducky-tube',
         maxHealth: 270,
+        zombieValue: 1,
+        firstAllowedWave: 5,
+        pickWeight: 0,
         helmType: 'none',
         helmHealth: 0,
         shieldType: 'none',
@@ -358,6 +395,25 @@ export const ZOMBIE_DEFINITIONS: Record<string, ZombieDefinition> = {
         attackRect: NORMAL_ZOMBIE_ATTACK_RECT,
         hasFlag: false,
         hasFloat: true,
+    },
+    'pole-vaulting': {
+        id: 'pole-vaulting',
+        maxHealth: 500,
+        zombieValue: 2,
+        firstAllowedWave: 5,
+        pickWeight: 2000,
+        helmType: 'none',
+        helmHealth: 0,
+        shieldType: 'none',
+        shieldHealth: 0,
+        velocityXMin: 0.66,
+        velocityXMax: 0.66,
+        animationPath: 'animations/zombie_polevaulter',
+        defaultAnimation: 'anim_run',
+        bodyRect: NORMAL_ZOMBIE_BODY_RECT,
+        attackRect: { x: -29, y: 0, width: 70, height: 115 },
+        hasFlag: false,
+        hasFloat: false,
     },
 }
 
@@ -451,6 +507,35 @@ const WALLNUT_BOWLING_ZOMBIE_POOL = [
     { zombieType: 'traffic-cone', pointCost: 2, weight: 4000 },
 ] as const
 
+const DAY_1_6_ZOMBIE_POOL = [
+    { zombieType: 'normal', pointCost: 1, weight: 4000 },
+    { zombieType: 'traffic-cone', pointCost: 2, weight: 4000 },
+    { zombieType: 'pole-vaulting', pointCost: 2, weight: 2000 },
+] as const
+
+const DAY_1_8_ZOMBIE_POOL = [
+    { zombieType: 'normal', pointCost: 1, weight: 4000 },
+    { zombieType: 'traffic-cone', pointCost: 2, weight: 4000 },
+    { zombieType: 'bucket', pointCost: 4, weight: 3000 },
+] as const
+
+const DAY_1_9_ZOMBIE_POOL = [
+    { zombieType: 'normal', pointCost: 1, weight: 4000 },
+    { zombieType: 'traffic-cone', pointCost: 2, weight: 4000 },
+    { zombieType: 'pole-vaulting', pointCost: 2, weight: 2000 },
+    { zombieType: 'bucket', pointCost: 4, weight: 3000 },
+] as const
+
+const DAY_1_10_CONVEYOR_SEED_POOL = [
+    { seedType: 'peashooter', weight: 20 },
+    { seedType: 'cherrybomb', weight: 20 },
+    { seedType: 'wallnut', weight: 15 },
+    { seedType: 'repeater', weight: 20 },
+    { seedType: 'snowpea', weight: 10 },
+    { seedType: 'chomper', weight: 5 },
+    { seedType: 'potatomine', weight: 10 },
+] as const
+
 export const ADVENTURE_1_5: LevelDefinition = {
     id: 'adventure-1-5',
     adventureLevel: 5,
@@ -509,10 +594,117 @@ export const ADVENTURE_1_5: LevelDefinition = {
     tutorialAdvice: [],
 }
 
+export const ADVENTURE_1_6: LevelDefinition = {
+    id: 'adventure-1-6',
+    adventureLevel: 6,
+    background: 'day',
+    activeRows: [0, 1, 2, 3, 4],
+    startingSun: 50,
+    seedPackets: ['peashooter', 'sunflower', 'cherrybomb', 'wallnut', 'potatomine'],
+    startWithFullLawn: true,
+    zombieWaves: [],
+    zombieWaveGenerator: {
+        waveCount: 10,
+        zombiePointPool: DAY_1_6_ZOMBIE_POOL,
+        introducedZombie: 'pole-vaulting',
+    },
+    awardKind: 'seed',
+    awardSeedType: 'snowpea',
+    tutorialAdvice: [],
+}
+
+export const ADVENTURE_1_7: LevelDefinition = {
+    id: 'adventure-1-7',
+    adventureLevel: 7,
+    background: 'day',
+    activeRows: [0, 1, 2, 3, 4],
+    startingSun: 50,
+    seedPackets: ['peashooter', 'sunflower', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea'],
+    startWithFullLawn: true,
+    zombieWaves: [],
+    zombieWaveGenerator: {
+        waveCount: 20,
+        zombiePointPool: DAY_1_6_ZOMBIE_POOL,
+    },
+    awardKind: 'seed',
+    awardSeedType: 'chomper',
+    tutorialAdvice: [],
+}
+
+export const ADVENTURE_1_8: LevelDefinition = {
+    id: 'adventure-1-8',
+    adventureLevel: 8,
+    background: 'day',
+    activeRows: [0, 1, 2, 3, 4],
+    startingSun: 50,
+    seedPackets: ['peashooter', 'sunflower', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper'],
+    startWithFullLawn: true,
+    zombieWaves: [],
+    zombieWaveGenerator: {
+        waveCount: 10,
+        zombiePointPool: DAY_1_8_ZOMBIE_POOL,
+        introducedZombie: 'bucket',
+    },
+    awardKind: 'seed',
+    awardSeedType: 'repeater',
+    tutorialAdvice: [],
+}
+
+export const ADVENTURE_1_9: LevelDefinition = {
+    id: 'adventure-1-9',
+    adventureLevel: 9,
+    background: 'day',
+    activeRows: [0, 1, 2, 3, 4],
+    startingSun: 50,
+    seedPackets: ['peashooter', 'sunflower', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'repeater'],
+    startWithFullLawn: true,
+    zombieWaves: [],
+    zombieWaveGenerator: {
+        waveCount: 20,
+        zombiePointPool: DAY_1_9_ZOMBIE_POOL,
+    },
+    awardKind: 'note',
+    tutorialAdvice: [],
+}
+
+export const ADVENTURE_1_10: LevelDefinition = {
+    id: 'adventure-1-10',
+    adventureLevel: 10,
+    background: 'day',
+    activeRows: [0, 1, 2, 3, 4],
+    startingSun: 0,
+    seedPackets: [],
+    seedBankPacketSlots: 10,
+    conveyor: {
+        enabled: true,
+        initialDelayTicks: 0,
+        maxPackets: 10,
+        seedPool: DAY_1_10_CONVEYOR_SEED_POOL,
+    },
+    startWithFullLawn: true,
+    skySunSpawning: false,
+    zombieWaves: [],
+    zombieWaveGenerator: {
+        waveCount: 20,
+        zombiePointPool: DAY_1_9_ZOMBIE_POOL,
+        pointMultiplier: 3,
+    },
+    initialZombieCountdownTicks: 100,
+    introZombiePreviewCapacity: 18,
+    awardKind: 'seed',
+    awardSeedType: 'puffshroom',
+    tutorialAdvice: [],
+}
+
 export const ADVENTURE_LEVELS = [
     ADVENTURE_1_1,
     ADVENTURE_1_2,
     ADVENTURE_1_3,
     ADVENTURE_1_4,
     ADVENTURE_1_5,
+    ADVENTURE_1_6,
+    ADVENTURE_1_7,
+    ADVENTURE_1_8,
+    ADVENTURE_1_9,
+    ADVENTURE_1_10,
 ] as const

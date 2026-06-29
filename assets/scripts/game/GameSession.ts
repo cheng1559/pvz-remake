@@ -7,6 +7,7 @@ import {
     ZOMBIE_DEFINITIONS,
 } from './GameDefinitions'
 import { SoundEffect } from '@/core/SoundLoader'
+import { SpriteLoader } from '@/core/SpriteLoader'
 import { createItem, Item } from './items/ItemFactory'
 import { createPlant, Plant } from './plants/PlantFactory'
 import { createProjectile, Projectile } from './projectiles/ProjectileFactory'
@@ -33,12 +34,20 @@ import type {
     SeedPacketState,
     SeedType,
     ToolType,
+    ZombieWaveDefinition,
     ZombieType,
 } from './GameTypes'
+import type { ZombieDamageResult, ZombieDeathContext, ZombieUpdateContext } from './zombies/BaseZombie'
 
 export interface GameSessionOptions {
     firstTimeAdventure?: boolean
     initialMoney?: number
+}
+
+let shownMoreSunTutorial = false
+
+export function resetMoreSunTutorialState() {
+    shownMoreSunTutorial = false
 }
 
 const SUN_COUNTDOWN = 425
@@ -52,6 +61,7 @@ const SKY_SUN_Y = 60
 const ZOMBIE_COUNTDOWN_FIRST_WAVE = 1800
 const ZOMBIE_COUNTDOWN = 2500
 const ZOMBIE_COUNTDOWN_RANGE = 600
+const ZOMBIE_COUNTDOWN_BEFORE_FLAG = 4500
 const ZOMBIE_COUNTDOWN_BEFORE_HUGE_WAVE = 750
 const HUGE_WAVE_WARNING_COUNTDOWN = 5
 const FINAL_WAVE_SOUND_DELAY = 60
@@ -80,6 +90,11 @@ const CHERRY_BOMB_ROW_RANGE = 1
 const SUN_MIN = 0
 const SUN_MAX = 9990
 const WIDE_BOARD_WIDTH = 800
+const ZOMBIE_START_X = 780
+const ZOMBIE_START_RANDOM_OFFSET = 40
+const POLE_VAULT_START_X = WIDE_BOARD_WIDTH + 70
+const POLE_VAULT_START_RANDOM_OFFSET = 10
+const FLAG_WAVE_ZOMBIE_START_OFFSET = 40
 const SHOOTER_ATTACK_OFFSET_X = 60
 const BOARD_EDGE = -100
 const HEADLESS_ZOMBIE_EDGE_OFFSET = 70
@@ -91,6 +106,8 @@ const BOWLING_HIT_DAMAGE = 1800
 const BOWLING_HELM_DAMAGE = 900
 const EXPLODE_O_NUT_RADIUS = 90
 const EXPLODE_O_NUT_ROW_RANGE = 1
+const POTATO_MINE_RADIUS = 60
+const POTATO_MINE_DAMAGE = 1800
 const BOWLING_ANIM_RATE_MIN = 12
 const BOWLING_ANIM_RATE_MAX = 18
 const BOWLING_GROUND_X = [
@@ -196,6 +213,8 @@ export class GameSession {
     private _readySetPlantCounter = 0
     private _nextConveyorPacketId = 1
     private _conveyorCounter = 0
+    private _lastConveyorSeedType: SeedType | null = null
+    private _zombiesInWaves: ZombieType[][] = []
     private _waveRowGotLawnMowered = Array.from({ length: DAY_GEOMETRY.rows }, () => WAVE_ROW_GOT_LAWN_MOWERED_INITIAL)
     private _rowPickState: RowPickState[] = Array.from({ length: DAY_GEOMETRY.rows }, (_, row) => ({
         row,
@@ -242,8 +261,13 @@ export class GameSession {
             this.zombieCountDown = 200
             this.zombieCountDownStart = this.zombieCountDown
         }
+        if (level.initialZombieCountdownTicks != null) {
+            this.zombieCountDown = level.initialZombieCountdownTicks
+            this.zombieCountDownStart = this.zombieCountDown
+        }
         this._initInitialPlants()
         this._initLawnMowers()
+        this._zombiesInWaves = Array.from({ length: this._levelWaveCount() }, (_, waveIndex) => this._generateWaveZombies(waveIndex))
         this._pushAdvice()
         if (level.adventureLevel === 2) {
             this._pushLevelTwoTutorialAdvice(LEVEL_2_ADVICE_PLANT_SUNFLOWER_1)
@@ -266,6 +290,10 @@ export class GameSession {
 
     drainEvents(): GameEvent[] {
         return this.events.splice(0)
+    }
+
+    zombiesInWave(waveIndex: number): readonly ZombieType[] {
+        return this._zombiesInWaves[waveIndex] ?? []
     }
 
     completeReadySetPlantIntro() {
@@ -308,6 +336,9 @@ export class GameSession {
                 break
             case 'clearCursor':
                 this._refreshSeedPacketFromCursor()
+                break
+            case 'plantAnimationFinished':
+                this._handlePlantAnimationFinished(command.entityId, command.animation)
                 break
         }
     }
@@ -378,19 +409,10 @@ export class GameSession {
         return this._findPlantAt(x, y) !== null
     }
 
-    debugAddPlant(type: PlantType, row: number, col: number) {
-        const plant = this._createPlant(type, row, col)
-        const isFirstPlant = !this.hasPlantedAtLeastOnce
-        this.plants.push(plant)
-        this.hasPlantedAtLeastOnce = true
-        this.events.push({ type: 'entitySpawned', entityId: plant.id })
-        this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant })
-        this._handleLevelOneTutorialPlantPlaced(plant, isFirstPlant)
-        this._handleLevelTwoTutorialPlantPlaced(plant)
-        this._handleLaterSunflowerTutorialPlantPlaced(plant)
-        if (plant.type === 'cherrybomb') {
-            this.events.push({ type: 'soundRequested', sound: SoundEffect.ReverseExplosion })
-        }
+    debugAddPlant(type: PlantType, row: number, col: number, bowlingAnimRate?: number) {
+        const plant = this._createPlant(type, row, col, bowlingAnimRate)
+        const isFirstPlant = this._addPlantEntity(plant)
+        this._finishNormalPlantPlaced(plant, isFirstPlant)
         return plant
     }
 
@@ -439,12 +461,10 @@ export class GameSession {
         for (const zombie of this.zombies) {
             if (!this._isZombieDamageable(zombie)) continue
 
+            const deathContext = this._zombieDeathContext()
             const wasDying = zombie.state === 'dying'
-            zombie.takeDamage(damage, {
-                zombieCount: this._countLiveZombies(),
-                canUseSuperLongDeath: this._canUseSuperLongDeath(),
-            })
-            if (!wasDying && zombie.state === 'dying') this._dropZombieLoot(zombie)
+            const damageResult = zombie.takeDamage(damage, deathContext)
+            this._handleZombieDamageResult(zombie, damageResult, wasDying, deathContext)
             damaged++
         }
         return damaged
@@ -516,12 +536,15 @@ export class GameSession {
         return this.money
     }
 
-    debugAddItem(type: ItemType, x: number, y: number, awardKind?: LevelAwardKind) {
+    debugAddItem(type: ItemType | 'level-award', x: number, y: number, awardKind?: LevelAwardKind) {
         const resolvedAwardKind = awardKind ?? this._levelAwardKindForLevel() ?? 'seed'
-        const awardSeedType = type === 'final-seed-packet'
+        const resolvedType = type === 'level-award'
+            ? resolvedAwardKind === 'note' ? 'note' : 'final-seed-packet'
+            : type
+        const awardSeedType = resolvedType === 'final-seed-packet'
             ? this.level.awardSeedType ?? null
             : null
-        return this._addItem(type, 'coin', x, y, awardSeedType, resolvedAwardKind)
+        return this._addItem(resolvedType, 'coin', x, y, awardSeedType, resolvedAwardKind)
     }
 
     debugSetRechargingEnabled(enabled: boolean) {
@@ -550,18 +573,24 @@ export class GameSession {
         return this._plantRect(plant)
     }
 
+    debugGetPlantAttackRect(plant: PlantEntity): Rect | null {
+        if (plant.type !== 'potatomine' && plant.type !== 'chomper') return null
+        return this._instantPlantAttackRect(plant)
+    }
+
     debugGetLawnMowerAttackRect(mower: LawnMowerEntity): Rect {
         return this._lawnMowerAttackRect(mower)
     }
 
     private _addZombieUnchecked(type: ZombieType, row: number, x?: number, fromWave = -1) {
         const definition = ZOMBIE_DEFINITIONS[type]
+        const spawnX = x ?? this._zombieSpawnX(type, fromWave)
         const zombie = createZombie({
             id: this._allocateId(),
             type,
             fromWave,
             row,
-            x,
+            x: spawnX,
             y: this.geometry.gridToPixel(0, row).y - 30,
             velocityX: definition.velocityXMin + this._randomFloat(0, definition.velocityXMax - definition.velocityXMin),
             hasTongue: this._zombieCanHaveTongue(type) && this._randomInt(0, 4) === 0,
@@ -572,7 +601,7 @@ export class GameSession {
     }
 
     get numWaves() {
-        return this.level.zombieWaves.length
+        return this._zombiesInWaves.length
     }
 
     get hasLevelAwardDropped() {
@@ -622,11 +651,13 @@ export class GameSession {
 
     getPlantingReason(seedType: SeedType, col: number, row: number): PlantingReason {
         const seed = SEED_DEFINITIONS[seedType]
-        if (this._isWallnutBowlingConveyorSeed(seedType)) {
-            if (!seed || !this._selectedConveyorPacket()) return 'not-here'
+        const conveyorPacket = this._selectedConveyorPacket()
+        if (conveyorPacket) {
+            if (!seed || conveyorPacket.seedType !== seedType) return 'not-here'
             if (!this.level.activeRows.includes(row)) return 'not-here'
             if (col < 0 || col >= this.geometry.cols) return 'not-here'
-            if (col > (this.level.bowling?.lineColMax ?? 2)) return 'not-here'
+            if (this._isWallnutBowlingConveyorSeed(seedType) && col > (this.level.bowling?.lineColMax ?? 2)) return 'not-here'
+            if (this.plants.some((plant) => !plant.dead && plant.col === col && plant.row === row)) return 'not-here'
             return 'ok'
         }
 
@@ -668,9 +699,10 @@ export class GameSession {
     }
 
     private _selectConveyorPacket(packetId: number) {
+        if (this.selectedTool) return
+
         const packet = this.conveyorPackets.find((item) => item.id === packetId)
         if (!packet || !packet.active || packet.selected) return
-        if (!this._isWallnutBowlingConveyorSeed(packet.seedType)) return
 
         this._clearCursor()
         this.selectedSeed = packet.seedType
@@ -712,16 +744,14 @@ export class GameSession {
             return
         }
 
-        if (this._isWallnutBowlingConveyorSeed(seedType)) {
+        if (this._selectedConveyorPacket()) {
             this._placeSelectedConveyorSeed(seedType, grid.row, grid.col)
             return
         }
 
         const seed = SEED_DEFINITIONS[seedType]
         const plant = this._createPlant(seed.plantType, grid.row, grid.col)
-        const isFirstPlant = !this.hasPlantedAtLeastOnce
-        this.plants.push(plant)
-        this.hasPlantedAtLeastOnce = true
+        const isFirstPlant = this._addPlantEntity(plant)
         if (this.sunCostEnabled) {
             this.sun = Math.max(SUN_MIN, this.sun - seed.cost)
         }
@@ -732,14 +762,52 @@ export class GameSession {
             packet.cooldownRemaining = packet.cooldownTotal
         }
         this._clearCursor()
-        if (packet && !this.rechargingEnabled) packet.active = true
+        if (packet && !this.rechargingEnabled) {
+            packet.active = true
+            if (this.canAffordSeed(packet.seedType)) {
+                this.events.push({ type: 'seedPacketFlashRequested', seedType: packet.seedType })
+            }
+        }
+        this._finishNormalPlantPlaced(plant, isFirstPlant)
+    }
+
+    private _placeSelectedConveyorSeed(seedType: SeedType, row: number, col: number) {
+        const packet = this._selectedConveyorPacket()
+        if (!packet || packet.seedType !== seedType) return
+
+        const seed = SEED_DEFINITIONS[seedType]
+        const isBowling = this._isWallnutBowlingConveyorSeed(seedType)
+        const plant = this._createPlant(
+            seed.plantType,
+            row,
+            col,
+            isBowling ? this._randomFloat(BOWLING_ANIM_RATE_MIN, BOWLING_ANIM_RATE_MAX) : undefined,
+        )
+        const index = this.conveyorPackets.findIndex((item) => item.id === packet.id)
+        if (index >= 0) this.conveyorPackets.splice(index, 1)
+        this.selectedConveyorPacketId = null
+        const isFirstPlant = this._addPlantEntity(plant)
+        this._clearCursor()
+        this._retargetConveyorPackets()
+        if (isBowling) {
+            this._pushPlantingEffects(plant)
+            this.events.push({ type: 'soundRequested', sound: SoundEffect.Bowling })
+            this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant })
+        } else {
+            this._finishNormalPlantPlaced(plant, isFirstPlant)
+        }
+    }
+
+    private _addPlantEntity(plant: Plant) {
+        const isFirstPlant = !this.hasPlantedAtLeastOnce
+        this.plants.push(plant)
+        this.hasPlantedAtLeastOnce = true
         this.events.push({ type: 'entitySpawned', entityId: plant.id })
-        this.events.push({
-            type: 'particleAtRequested',
-            effect: 'planting',
-            x: plant.x + 41,
-            y: plant.y + 74,
-        })
+        return isFirstPlant
+    }
+
+    private _finishNormalPlantPlaced(plant: Plant, isFirstPlant: boolean) {
+        this._pushPlantingEffects(plant)
         this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant })
         this._handleLevelOneTutorialPlantPlaced(plant, isFirstPlant)
         this._handleLevelTwoTutorialPlantPlaced(plant)
@@ -749,35 +817,16 @@ export class GameSession {
         }
     }
 
-    private _placeSelectedConveyorSeed(seedType: SeedType, row: number, col: number) {
-        const packet = this._selectedConveyorPacket()
-        if (!packet || packet.seedType !== seedType) return
-
-        const seed = SEED_DEFINITIONS[seedType]
-        const plant = this._createPlant(seed.plantType, row, col)
-        plant.isBowling = true
-        plant.bowlingAnimRate = this._randomFloat(BOWLING_ANIM_RATE_MIN, BOWLING_ANIM_RATE_MAX)
-        plant.bowlingAnimationTime = 0
-        plant.bowlingHitCount = 0
-        const index = this.conveyorPackets.findIndex((item) => item.id === packet.id)
-        if (index >= 0) this.conveyorPackets.splice(index, 1)
-        this.selectedConveyorPacketId = null
-        this.plants.push(plant)
-        this.hasPlantedAtLeastOnce = true
-        this._clearCursor()
-        this._retargetConveyorPackets()
-        this.events.push({ type: 'entitySpawned', entityId: plant.id })
+    private _pushPlantingEffects(plant: PlantEntity) {
         this.events.push({
             type: 'particleAtRequested',
             effect: 'planting',
             x: plant.x + 41,
             y: plant.y + 74,
         })
-        this.events.push({ type: 'soundRequested', sound: SoundEffect.Bowling })
-        this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant })
     }
 
-    private _createPlant(type: PlantType, row: number, col: number) {
+    private _createPlant(type: PlantType, row: number, col: number, bowlingAnimRate?: number) {
         const pixel = this.geometry.gridToPixel(col, row)
         return createPlant({
             id: this._allocateId(),
@@ -786,6 +835,7 @@ export class GameSession {
             row,
             x: pixel.x,
             y: pixel.y,
+            bowlingAnimRate,
         })
     }
 
@@ -821,6 +871,11 @@ export class GameSession {
             this.events.push({ type: 'soundRequested', sound: SoundEffect.Drop })
             return
         }
+        if (plant.isBowling) {
+            this._clearCursor()
+            this.events.push({ type: 'soundRequested', sound: SoundEffect.Drop })
+            return
+        }
 
         plant.dead = true
         this.events.push({ type: 'foleyRequested', sound: SoundEffect.Plant2 })
@@ -850,8 +905,6 @@ export class GameSession {
         if (!conveyor?.enabled) return
 
         this._conveyorCounter = conveyor.initialDelayTicks
-        const seedType = this._pickConveyorSeed()
-        if (seedType) this._addConveyorPacket(seedType)
     }
 
     private _updateConveyor() {
@@ -925,20 +978,36 @@ export class GameSession {
         const seedPool = this.level.conveyor?.seedPool ?? []
         let totalWeight = 0
         for (const entry of seedPool) {
-            if (!SEED_DEFINITIONS[entry.seedType] || entry.weight <= 0) continue
-            totalWeight += entry.weight
+            const weight = this._adjustConveyorSeedWeight(entry.seedType, entry.weight, seedPool.length)
+            if (!SEED_DEFINITIONS[entry.seedType] || weight <= 0) continue
+            totalWeight += weight
         }
         if (totalWeight <= 0) return null
 
         let roll = this._randomInt(1, totalWeight)
         let fallback: SeedType | null = null
         for (const entry of seedPool) {
-            if (!SEED_DEFINITIONS[entry.seedType] || entry.weight <= 0) continue
+            const weight = this._adjustConveyorSeedWeight(entry.seedType, entry.weight, seedPool.length)
+            if (!SEED_DEFINITIONS[entry.seedType] || weight <= 0) continue
             fallback = entry.seedType
-            roll -= entry.weight
-            if (roll <= 0) return entry.seedType
+            roll -= weight
+            if (roll <= 0) {
+                this._lastConveyorSeedType = entry.seedType
+                return entry.seedType
+            }
         }
+        this._lastConveyorSeedType = fallback
         return fallback
+    }
+
+    private _adjustConveyorSeedWeight(seedType: SeedType, baseWeight: number, seedPickCount: number) {
+        if (seedPickCount <= 2) return baseWeight
+
+        const countInBank = this.conveyorPackets.filter((packet) => packet.seedType === seedType).length
+        if (countInBank >= 4) return 1
+        if (countInBank >= 3) return 5
+        if (seedType === this._lastConveyorSeedType) return Math.floor(baseWeight / 2)
+        return baseWeight
     }
 
     private _selectedConveyorPacket() {
@@ -1013,22 +1082,56 @@ export class GameSession {
 
     private _updatePlants() {
         const plantEvents: GameEvent[] = []
-        const context = {
-            events: plantEvents,
+        const context = this._createPlantUpdateContext(plantEvents)
+        for (const plant of this.plants) {
+            if (plant.isBowling) {
+                this._updateBowlingPlant(plant)
+                this._syncClosestZombieDistance(plant)
+                continue
+            }
+            plant.update(context)
+            this._syncClosestZombieDistance(plant)
+        }
+        this._handlePlantEvents(plantEvents)
+    }
+
+    private _createPlantUpdateContext(events: GameEvent[]) {
+        return {
+            events,
             hasTargetInRow: (row: number, plant: Plant) => this._hasTargetInRow(row, plant),
             hasTargetInPlantAttackRect: (plant: Plant) => this._hasTargetInPlantAttackRect(plant),
+            biteChomperTarget: (plant: Plant) => this._biteChomperTarget(plant),
             canProduceSun: () => !this._levelAwardDropped && this.result === 'playing',
             randomInt: (minInclusive: number, maxInclusive: number) =>
                 this._randomInt(minInclusive, maxInclusive),
         }
-        for (const plant of this.plants) {
-            if (plant.isBowling) {
-                this._updateBowlingPlant(plant)
-                continue
-            }
-            plant.update(context)
+    }
+
+    private _handlePlantAnimationFinished(entityId: number, animation: string) {
+        const plant = this.plants.find((item) => item.id === entityId)
+        if (!(plant instanceof Plant)) return
+
+        const events: GameEvent[] = []
+        plant.handleAnimationFinished(animation, this._createPlantUpdateContext(events))
+        this._handlePlantEvents(events)
+    }
+
+    private _syncClosestZombieDistance(plant: PlantEntity) {
+        if (plant.type !== 'potatomine' || plant.state !== 'potato-armed') {
+            plant.closestZombieDistance = 1000
+            return
         }
-        this._handlePlantEvents(plantEvents)
+
+        let closestDistance = 1000
+        for (const zombie of this.zombies) {
+            if (!this._canPotatoMineTargetZombie(plant, zombie)) continue
+
+            const attackRect = this._potatoMineAttackRectForZombie(plant, zombie)
+            const extraRange = zombie.state === 'eating' ? 30 : 0
+            const distance = Math.max(0, -this._rectOverlap(attackRect, zombie.getBodyRect()) - extraRange)
+            closestDistance = Math.min(closestDistance, distance)
+        }
+        plant.closestZombieDistance = closestDistance
     }
 
     private _updateBowlingPlant(plant: Plant) {
@@ -1127,30 +1230,16 @@ export class GameSession {
 
     private _hitZombieWithBowlingPlant(plant: Plant, zombie: Zombie) {
         if (plant.type === 'explodenut') {
-            const x = plant.x + 40
-            const y = plant.y + 40
-            this.events.push({ type: 'foleyRequested', sound: SoundEffect.CherryBomb })
             this.events.push({ type: 'soundRequested', sound: SoundEffect.BowlingImpact2 })
-            this.events.push({
-                type: 'explodeONutDetonated',
-                entityId: plant.id,
-                x,
-                y,
-                row: plant.row,
-            })
-            this.events.push({ type: 'boardShake', amountX: 3, amountY: -4 })
-            this._detonateExplodeONut(x, y, plant.row)
             plant.dead = true
+            this._detonateExplodeONutPlant(plant)
             return
         }
 
         this.events.push({ type: 'foleyRequested', sound: SoundEffect.BowlingImpact })
         this.events.push({ type: 'boardShake', amountX: 1, amountY: -2 })
 
-        const deathContext = {
-            zombieCount: this._countLiveZombies(),
-            canUseSuperLongDeath: this._canUseSuperLongDeath(),
-        }
+        const deathContext = this._zombieDeathContext()
         if (zombie.helmHealth > 0) {
             this.events.push({
                 type: 'foleyRequested',
@@ -1159,15 +1248,14 @@ export class GameSession {
             zombie.takeHelmDamage(BOWLING_HELM_DAMAGE)
         } else {
             const damageResult = zombie.takeBodyDamage(BOWLING_HIT_DAMAGE, deathContext)
-            if (damageResult.droppedHead || damageResult.startedDying) this._dropZombieLoot(zombie)
-            if (this._levelAwardDropped) zombie.finishAfterLevelAwardDropped(deathContext)
+            this._handleZombieDamageResult(zombie, damageResult, false, deathContext)
         }
         plant.bowlingHitCount++
     }
 
     private _detonateExplodeONut(x: number, y: number, row: number) {
         for (const zombie of this.zombies) {
-            if (!this._isZombieDamageable(zombie)) continue
+            if (!this._canApplyBurnToZombie(zombie)) continue
             if (Math.abs(zombie.row - row) > EXPLODE_O_NUT_ROW_RANGE) continue
             if (!this._circleRectOverlap(x, y, EXPLODE_O_NUT_RADIUS, zombie.getBodyRect())) continue
 
@@ -1181,21 +1269,62 @@ export class GameSession {
                 if (this._levelAwardDropped || this.result !== 'playing') continue
                 this._addItem('sun', 'from-plant', event.x, event.y)
             } else if (event.type === 'projectileFired') {
-                this._addProjectile(event.projectileType, event.x, event.y, event.row)
-                this.events.push(event)
+                const projectile = this._addProjectile(event.projectileType, event.x, event.y, event.row)
+                this.events.push({ ...event, projectileId: projectile.id })
+                if (projectile.type === 'snowpea') {
+                    this.events.push({
+                        type: 'particleEntityAttachedRequested',
+                        effect: 'snowpeatrail',
+                        entityId: projectile.id,
+                        x: 8,
+                        y: 13,
+                        z: -1,
+                    })
+                }
             } else if (event.type === 'cherryBombDetonated') {
                 this._detonateCherryBomb(event.x, event.y, event.row)
                 this.events.push(event)
                 this.events.push({ type: 'boardShake', amountX: 3, amountY: -4 })
+            } else if (event.type === 'explodeONutDetonated') {
+                this._detonateExplodeONut(event.x, event.y, event.row)
+                this.events.push(event)
+                this.events.push({ type: 'foleyRequested', sound: SoundEffect.CherryBomb })
+                this.events.push({ type: 'boardShake', amountX: 3, amountY: -4 })
+            } else if (event.type === 'potatoMineDetonated') {
+                this._detonatePotatoMine(event.x, event.y, event.row)
+                this.events.push(event)
+                this.events.push({
+                    type: 'particleAtRequested',
+                    effect: 'potatomine',
+                    x: event.x + 20,
+                    y: event.y,
+                })
+                this.events.push({ type: 'boardShake', amountX: 3, amountY: -4 })
+                this.events.push({ type: 'soundRequested', sound: SoundEffect.PotatoMine })
             } else {
                 this.events.push(event)
             }
         }
     }
 
-    private _detonateCherryBomb(x: number, y: number, row: number) {
+    private _detonatePotatoMine(x: number, y: number, row: number) {
+        const deathContext = this._zombieDeathContext()
         for (const zombie of this.zombies) {
             if (!this._isZombieDamageable(zombie)) continue
+            if (zombie.row !== row) continue
+            if (!this._circleRectOverlap(x, y, POTATO_MINE_RADIUS, zombie.getBodyRect())) continue
+
+            const damageResult = zombie.takeDamage(POTATO_MINE_DAMAGE, deathContext, {
+                hitsShieldAndBody: true,
+                leavesBody: false,
+            })
+            this._handleZombieDamageResult(zombie, damageResult, false, deathContext)
+        }
+    }
+
+    private _detonateCherryBomb(x: number, y: number, row: number) {
+        for (const zombie of this.zombies) {
+            if (!this._canApplyBurnToZombie(zombie)) continue
             if (Math.abs(zombie.row - row) > CHERRY_BOMB_ROW_RANGE) continue
             if (!this._circleRectOverlap(x, y, CHERRY_BOMB_RADIUS, zombie.getBodyRect())) continue
 
@@ -1228,25 +1357,18 @@ export class GameSession {
                 const wasDying = target.state === 'dying'
                 this._playProjectileImpactSound(target)
                 if (projectile.type === 'snowpea') target.applyChill(this.events)
-                const deathContext = {
-                    zombieCount: this._countLiveZombies(),
-                    canUseSuperLongDeath: this._canUseSuperLongDeath(),
-                }
+                const deathContext = this._zombieDeathContext()
                 const damageResult = target.takeDamage(projectile.damage, deathContext)
                 const splatX = projectile.x + 49 - target.x
                 const splatY = Math.max(20, Math.min(100, projectile.y + 12 - target.y))
                 this.events.push({
                     type: 'particleAttachedRequested',
-                    effect: projectile.type === 'snowpea' ? 'snowpea-splat' : 'pea-splat',
+                    effect: projectile.type === 'snowpea' ? 'snowpeasplat' : 'peasplat',
                     entityId: target.id,
                     x: splatX,
                     y: splatY,
                 })
-                if (damageResult.droppedHead) {
-                    this._dropZombieLoot(target)
-                    if (this._levelAwardDropped) target.finishAfterLevelAwardDropped(deathContext)
-                }
-                if (!wasDying && target.state === 'dying') this._dropZombieLoot(target)
+                this._handleZombieDamageResult(target, damageResult, wasDying, deathContext)
                 return true
             },
         }
@@ -1298,26 +1420,45 @@ export class GameSession {
     }
 
     private _updateZombies() {
-        const context = {
+        let context: ZombieUpdateContext
+        context = {
             events: this.events,
             zombieCount: this._countLiveZombies(),
+            deathZombieCount: this._countZombiesOnScreenForDeathAnim(),
             canUseSuperLongDeath: this._canUseSuperLongDeath(),
             findPlantTarget: (zombie: Zombie) => this._findZombiePlantTarget(zombie),
             canChewPlant: (plant: PlantEntity) => this._canZombieChewPlant(plant),
             damagePlant: (plant: PlantEntity, damage: number) => {
+                const wasAlive = !plant.dead
                 plant.recentlyEatenCounter = PLANT_RECENTLY_EATEN_TICKS
                 if (plant instanceof Plant) {
-                    plant.takeChewDamage(damage)
-                    return
+                    plant.takeChewDamage(damage, context)
+                } else {
+                    plant.health = Math.max(0, plant.health - damage)
+                    if (plant.health <= 0) plant.dead = true
                 }
-
-                plant.health = Math.max(0, plant.health - damage)
-                if (plant.health <= 0) plant.dead = true
+                if (wasAlive && plant.dead) {
+                    this.events.push({ type: 'soundRequested', sound: SoundEffect.Gulp })
+                }
+                if (wasAlive && plant.dead && plant.type === 'explodenut') {
+                    this._detonateExplodeONutPlant(plant)
+                }
             },
             flashChewedPlant: (plant: PlantEntity) => {
                 plant.eatenFlashCounter = Math.max(plant.eatenFlashCounter, PLANT_EATEN_FLASH_TICKS)
+                if (plant.type === 'wallnut' || plant.type === 'explodenut') {
+                    const zombie = this._zombiesEatingPlant(plant)[0] ?? null
+                    this.events.push({
+                        type: 'particleAtRequested',
+                        effect: 'wallnuteatsmall',
+                        x: zombie ? zombie.x + 37 : plant.x + 60,
+                        y: zombie ? zombie.y + 40 : plant.y + 40,
+                        tint: plant.type === 'explodenut' ? { r: 255, g: 64, b: 64 } : undefined,
+                    })
+                }
             },
             checkBoardEdge: (zombie: Zombie) => this._checkZombieBoardEdge(zombie),
+            rowY: (row: number) => this.geometry.gridToPixel(0, row).y - 30,
             randomInt: (minInclusive: number, maxInclusive: number) =>
                 this._randomInt(minInclusive, maxInclusive),
             randomFloat: (minInclusive: number, maxExclusive: number) =>
@@ -1327,15 +1468,44 @@ export class GameSession {
         for (const zombie of this.zombies) {
             const wasDying = zombie.state === 'dying'
             zombie.update(context)
-            if (!wasDying && zombie.state === 'dying') this._dropZombieLoot(zombie)
+            if (!wasDying && zombie.state === 'dying') {
+                this._handleZombieDamageResult(zombie, {
+                    droppedArm: false,
+                    droppedHead: false,
+                    startedDying: true,
+                }, wasDying, this._zombieDeathContext())
+            }
             if (this.result === 'lost') break
         }
+    }
+
+    private _detonateExplodeONutPlant(plant: PlantEntity) {
+        const x = plant.x + 40
+        const y = plant.y + 40
+        this._detonateExplodeONut(x, y, plant.row)
+        this.events.push({
+            type: 'explodeONutDetonated',
+            entityId: plant.id,
+            x,
+            y,
+            row: plant.row,
+        })
+        this.events.push({ type: 'foleyRequested', sound: SoundEffect.CherryBomb })
+        this.events.push({ type: 'boardShake', amountX: 3, amountY: -4 })
     }
 
     private _canZombieChewPlant(plant: PlantEntity) {
         if (plant.type === 'cherrybomb') return false
         if (plant.type === 'potatomine' && plant.state !== 'not-ready') return false
         return true
+    }
+
+    private _zombiesEatingPlant(plant: PlantEntity) {
+        const plantRect = this._plantRect(plant)
+        return this.zombies.filter((zombie) =>
+            zombie.state === 'eating' &&
+            zombie.row === plant.row &&
+            this._rectOverlapX(zombie.getAttackRect(), plantRect) >= 20)
     }
 
     private _initLawnMowers() {
@@ -1423,10 +1593,7 @@ export class GameSession {
     private _mowOverlappingZombies(mower: LawnMowerEntity) {
         const attackRect = this._lawnMowerAttackRect(mower)
         for (const zombie of this.zombies) {
-            if (zombie.dead || zombie.row !== mower.row) continue
-            if (zombie.state === 'dying') continue
-            if (zombie.state === 'mowered') continue
-            if (zombie.state === 'charred') continue
+            if (zombie.row !== mower.row || !this._isZombieDamageable(zombie)) continue
             if (this._rectOverlap(attackRect, zombie.getBodyRect()) <= 0) continue
             if (mower.state === 'ready' && !zombie.hasHead) continue
 
@@ -1681,6 +1848,7 @@ export class GameSession {
 
         if (this._shouldStartLaterSunflowerTutorial()) {
             this._laterSunflowerTutorialShown = true
+            shownMoreSunTutorial = true
             this._laterSunflowerTutorialPhase = 'pick-sunflower'
             this._laterSunflowerTutorialTimer = LATER_SUNFLOWER_ADVICE_DELAY
             this._pushLaterSunflowerTutorialAdvice(LATER_ADVICE_PLANT_SUNFLOWER, true)
@@ -1698,6 +1866,7 @@ export class GameSession {
         return this._canRunLaterSunflowerTutorial() &&
             this._laterSunflowerTutorialPhase === 'off' &&
             !this._laterSunflowerTutorialShown &&
+            !shownMoreSunTutorial &&
             this.currentWave >= LATER_SUNFLOWER_START_WAVE &&
             this._sunflowerPacketReady() &&
             this._countSunflowers() < 3
@@ -1901,7 +2070,9 @@ export class GameSession {
         this._zombieHealthToNextWave = this._randomFloat(0.5, 0.65) * this._zombieHealthWaveStart
         if (this._isFlagWave(waveIndex)) this.flagRaiseCounter = FLAG_RAISE_TIME
         this.currentWave++
-        this.zombieCountDown = ZOMBIE_COUNTDOWN + this._randomInt(0, ZOMBIE_COUNTDOWN_RANGE - 1)
+        this.zombieCountDown = this._isFlagWave(this.currentWave)
+            ? ZOMBIE_COUNTDOWN_BEFORE_FLAG
+            : ZOMBIE_COUNTDOWN + this._randomInt(0, ZOMBIE_COUNTDOWN_RANGE - 1)
         this.zombieCountDownStart = this.zombieCountDown
     }
 
@@ -1920,16 +2091,21 @@ export class GameSession {
     }
 
     private _spawnZombieWave(waveIndex: number) {
-        const wave = this.level.zombieWaves[waveIndex]
-        if (!wave) return
-
         const zombies = this._waveZombies(waveIndex)
         for (let i = 0; i < zombies.length; i++) {
             const zombieType = zombies[i]
             const row = this._pickRowForNewZombie(zombieType)
-            const x = 780 + this._randomInt(0, 39)
-            this.addZombie(zombieType, row, x, waveIndex)
+            this.addZombie(zombieType, row, undefined, waveIndex)
         }
+    }
+
+    private _zombieSpawnX(zombieType: ZombieType, waveIndex: number) {
+        if (zombieType === 'pole-vaulting') {
+            return POLE_VAULT_START_X + this._randomInt(0, POLE_VAULT_START_RANDOM_OFFSET - 1)
+        }
+        return ZOMBIE_START_X +
+            this._randomInt(0, ZOMBIE_START_RANDOM_OFFSET - 1) +
+            (waveIndex >= 0 && this._isFlagWave(waveIndex) ? FLAG_WAVE_ZOMBIE_START_OFFSET : 0)
     }
 
     private _totalZombiesHealthInWave(waveIndex: number) {
@@ -1937,16 +2113,79 @@ export class GameSession {
 
         let totalHealth = 0
         for (const zombie of this.zombies) {
-            if (zombie.fromWave !== waveIndex || zombie.dead || zombie.state === 'dying' || zombie.state === 'charred') continue
+            if (zombie.fromWave !== waveIndex || zombie.dead || zombie.state === 'dying' || zombie.state === 'charred' || zombie.state === 'burned') continue
             totalHealth += zombie.health + zombie.helmHealth + zombie.shieldHealth * 0.2
         }
         return totalHealth
     }
 
     private _waveZombies(waveIndex: number) {
-        const wave = this.level.zombieWaves[waveIndex]
+        return [...(this._zombiesInWaves[waveIndex] ?? [])]
+    }
+
+    private _levelWaveCount() {
+        const waveCount = this.level.zombieWaveGenerator?.waveCount ?? this.level.zombieWaves.length
+        if (!this._firstTimeAdventure && this.level.adventureLevel !== 5 && this.level.zombieWaveGenerator) {
+            return waveCount < 10 ? 20 : waveCount + 10
+        }
+        return waveCount
+    }
+
+    private _generateWaveZombies(waveIndex: number) {
+        const explicitWave = this.level.zombieWaves[waveIndex]
+        if (explicitWave) return this._generateExplicitWaveZombies(explicitWave)
+
+        const wave = this._generatedWaveDefinition(waveIndex)
         if (!wave) return []
 
+        let points = wave.zombiePoints ?? 0
+        const zombies: ZombieType[] = []
+        const addZombie = (zombieType: ZombieType) => {
+            zombies.push(zombieType)
+            points -= this._zombiePointCost(zombieType)
+        }
+        if (wave.flagWave) {
+            const plainZombieCount = wave.flagNormalCount ?? Math.min(points, 8)
+            points = Math.floor(points * 2.5)
+            for (let i = 0; i < plainZombieCount; i++) addZombie('normal')
+            addZombie('flag')
+        }
+        points *= this.level.zombieWaveGenerator?.pointMultiplier ?? 1
+        for (const zombieType of wave.zombies) addZombie(zombieType)
+
+        for (const zombieType of wave.requiredZombies ?? []) {
+            if (zombies.includes(zombieType)) continue
+
+            addZombie(zombieType)
+        }
+
+        while (points > 0) {
+            const candidates = (wave.zombiePointPool ?? []).filter((entry) => {
+                const definition = ZOMBIE_DEFINITIONS[entry.zombieType]
+                return definition &&
+                    definition.pickWeight > 0 &&
+                    definition.zombieValue <= points &&
+                    waveIndex + 1 >= definition.firstAllowedWave
+            })
+            const totalWeight = candidates.reduce((total, entry) => total + ZOMBIE_DEFINITIONS[entry.zombieType].pickWeight, 0)
+            if (totalWeight <= 0) break
+
+            let roll = this._randomInt(1, totalWeight)
+            let picked = candidates[candidates.length - 1]
+            for (const entry of candidates) {
+                roll -= ZOMBIE_DEFINITIONS[entry.zombieType].pickWeight
+                if (roll <= 0) {
+                    picked = entry
+                    break
+                }
+            }
+            addZombie(picked.zombieType)
+        }
+
+        return zombies
+    }
+
+    private _generateExplicitWaveZombies(wave: ZombieWaveDefinition) {
         const plainZombieCount = wave.flagNormalCount ??
             Math.min(FLAG_WAVE_EXTRA_NORMAL_ZOMBIES, Math.max(1, wave.zombies.length))
         const zombies = wave.flagWave
@@ -1988,6 +2227,37 @@ export class GameSession {
         }
 
         return zombies
+    }
+
+    private _generatedWaveDefinition(waveIndex: number): ZombieWaveDefinition | null {
+        const generator = this.level.zombieWaveGenerator
+        if (!generator) return null
+
+        const flagWave = this._isGeneratedFlagWave(waveIndex)
+        const basePoints = !this._firstTimeAdventure && this.level.adventureLevel !== 5
+            ? Math.floor(waveIndex * 2 / 5) + 1
+            : Math.floor(waveIndex / 3) + 1
+        const waveCount = this._levelWaveCount()
+        const requiredZombies = waveIndex === waveCount - 1
+            ? generator.zombiePointPool.map((entry) => entry.zombieType)
+            : generator.introducedZombie && (waveIndex === Math.floor(waveCount / 2) || waveIndex === waveCount - 1)
+                ? [generator.introducedZombie]
+                : undefined
+        return {
+            zombies: [],
+            zombiePoints: basePoints,
+            zombiePointPool: generator.zombiePointPool,
+            requiredZombies,
+            flagWave,
+        }
+    }
+
+    private _zombiePointCost(zombieType: ZombieType) {
+        return ZOMBIE_DEFINITIONS[zombieType]?.zombieValue ?? 0
+    }
+
+    private _isGeneratedFlagWave(waveIndex: number) {
+        return waveIndex > 0 && (waveIndex + 1) % 10 === 0
     }
 
     private _updateHugeWaveWarning() {
@@ -2064,7 +2334,8 @@ export class GameSession {
     }
 
     private _isFlagWave(waveIndex: number) {
-        return this.level.zombieWaves[waveIndex]?.flagWave === true
+        return this.level.zombieWaves[waveIndex]?.flagWave === true ||
+            (this.level.zombieWaveGenerator != null && this._isGeneratedFlagWave(waveIndex))
     }
 
     private _numWavesPerFlag() {
@@ -2158,6 +2429,7 @@ export class GameSession {
             motion,
             x,
             y,
+            ...this._itemSizeOverride(type),
             awardKind,
             awardSeedType,
         }, this._createItemUpdateContext(this.events))
@@ -2170,6 +2442,13 @@ export class GameSession {
             this._pushLevelOneClickOnSunAdvice()
         }
         return item
+    }
+
+    private _itemSizeOverride(type: ItemType) {
+        if (type !== 'note') return {}
+
+        const size = SpriteLoader.get('zombienotesmall')?.originalSize
+        return size ? { width: size.width, height: size.height } : {}
     }
 
     private _pushLevelOneClickOnSunAdvice() {
@@ -2253,16 +2532,116 @@ export class GameSession {
     }
 
     private _hasTargetInPlantAttackRect(plant: Plant) {
-        const attackRect = {
-            x: plant.x + 20,
-            y: plant.y - 75,
-            width: 100,
-            height: 75,
+        if (plant.type === 'chomper') return this._findChomperTarget(plant) !== null
+        if (plant.type === 'potatomine') return this._findPotatoMineTarget(plant) !== null
+
+        return this.zombies.some((zombie) => {
+            if (zombie.row !== plant.row || !this._isZombieTargetableByPlant(zombie)) return false
+
+            return this._rectOverlap(this._instantPlantAttackRect(plant), zombie.getBodyRect()) >= 0
+        })
+    }
+
+    private _biteChomperTarget(plant: Plant) {
+        const zombie = this._findChomperTarget(plant)
+        if (!zombie) return 'missed'
+        if (zombie.type === 'pole-vaulting' && (zombie.poleVaulting || zombie.state === 'jumping')) return 'missed'
+
+        if (zombie.maxHealth >= 1800) {
+            const deathContext = this._zombieDeathContext()
+            this.events.push({ type: 'foleyRequested', sound: SoundEffect.Splat })
+            const damageResult = zombie.takeDamage(40, deathContext)
+            this._handleZombieDamageResult(zombie, damageResult, false, deathContext)
+            return 'bit'
         }
-        return this.zombies.some((zombie) =>
-            zombie.row === plant.row &&
-            this._isZombieTargetableByPlant(zombie) &&
-            this._rectOverlapX(attackRect, zombie.getBodyRect()) > 0)
+
+        zombie.dead = true
+        this._dropZombieLoot(zombie)
+        this._removeDeadEntities()
+        this._checkLevelCompletion()
+        return 'ate'
+    }
+
+    private _findChomperTarget(plant: Plant) {
+        if (plant.type !== 'chomper') return null
+
+        const attackRect = this._instantPlantAttackRect(plant)
+        let target: Zombie | null = null
+        for (const zombie of this.zombies) {
+            if (zombie.row !== plant.row || !this._canChomperTargetZombie(zombie)) continue
+
+            const extraRange = zombie.state === 'eating' || plant.state === 'chomper-biting' ? 60 : 0
+            if (this._rectOverlap(attackRect, zombie.getBodyRect()) < -extraRange) continue
+            if (!target || zombie.x < target.x) target = zombie
+        }
+        return target
+    }
+
+    private _canPotatoMineTargetZombie(plant: PlantEntity, zombie: Zombie) {
+        if (zombie.row !== plant.row || !this._isZombieTargetableByPlant(zombie)) return false
+        if (!zombie.hasHead) return false
+        return !(zombie.type === 'pole-vaulting' && (zombie.poleVaulting || zombie.state === 'jumping'))
+    }
+
+    private _findPotatoMineTarget(plant: PlantEntity) {
+        for (const zombie of this.zombies) {
+            if (!this._canPotatoMineTargetZombie(plant, zombie)) continue
+
+            const attackRect = this._potatoMineAttackRectForZombie(plant, zombie)
+            const extraRange = zombie.state === 'eating' ? 30 : 0
+            if (this._rectOverlap(attackRect, zombie.getBodyRect()) >= -extraRange) return zombie
+        }
+        return null
+    }
+
+    private _potatoMineAttackRectForZombie(plant: PlantEntity, zombie: Zombie): Rect {
+        const attackRect = this._instantPlantAttackRect(plant)
+        if (zombie.type !== 'pole-vaulting') return attackRect
+
+        return {
+            ...attackRect,
+            x: attackRect.x + 40,
+            width: attackRect.width - 40,
+        }
+    }
+
+    private _canChomperTargetZombie(zombie: Zombie) {
+        if (
+            zombie.dead ||
+            zombie.state === 'dying' ||
+            zombie.state === 'mowered' ||
+            zombie.state === 'charred' ||
+            zombie.state === 'burned' ||
+            zombie.state === 'jumping'
+        ) return false
+        if (!this._isZombieVisibleForPlantTarget(zombie)) return false
+        if (!zombie.hasHead) return false
+        return true
+    }
+
+    private _instantPlantAttackRect(plant: PlantEntity): Rect {
+        if (plant.type === 'potatomine') {
+            return {
+                x: plant.x,
+                y: plant.y,
+                width: 55,
+                height: 80,
+            }
+        }
+        if (plant.type === 'chomper') {
+            return {
+                x: plant.x + 80,
+                y: plant.y,
+                width: 40,
+                height: 80,
+            }
+        }
+        return {
+            x: plant.x + 20,
+            y: plant.y,
+            width: 100,
+            height: 80,
+        }
     }
 
     private _findPlantAt(x: number, y: number) {
@@ -2305,7 +2684,7 @@ export class GameSession {
             this._dropLevelAward(WIDE_BOARD_WIDTH / 2, this.geometry.gridToPixel(0, row).y)
             return
         }
-        if (this._levelAwardKindForLevel() && this.items.some((item) => item.type === 'final-seed-packet' && !item.dead)) {
+        if (this._levelAwardKindForLevel() && this.items.some((item) => this._isLevelAwardItem(item) && !item.dead)) {
             return
         }
 
@@ -2332,7 +2711,7 @@ export class GameSession {
 
     private _checkZombieBoardEdge(zombie: Zombie) {
         if (this.result !== 'playing') return false
-        if (zombie.dead || zombie.state === 'dying' || zombie.state === 'mowered' || zombie.state === 'charred') return false
+        if (zombie.dead || zombie.state === 'dying' || zombie.state === 'mowered' || zombie.state === 'charred' || zombie.state === 'burned') return false
 
         const edgeX = this._zombieBoardEdgeX(zombie)
         const zombieX = zombie.getBoardX()
@@ -2341,17 +2720,15 @@ export class GameSession {
             return true
         }
         if (!zombie.hasHead && zombieX <= edgeX + HEADLESS_ZOMBIE_EDGE_OFFSET) {
-            zombie.takeDamage(HEADLESS_ZOMBIE_EDGE_DAMAGE, {
-                zombieCount: this._countLiveZombies(),
-                canUseSuperLongDeath: this._canUseSuperLongDeath(),
-            })
+            zombie.takeDamage(HEADLESS_ZOMBIE_EDGE_DAMAGE, this._zombieDeathContext())
             return true
         }
 
         return false
     }
 
-    private _zombieBoardEdgeX(_zombie: Zombie) {
+    private _zombieBoardEdgeX(zombie: Zombie) {
+        if (zombie.type === 'pole-vaulting') return -150
         return BOARD_EDGE
     }
 
@@ -2386,11 +2763,9 @@ export class GameSession {
     }
 
     private _findZombiePlantTarget(zombie: Zombie) {
-        if (this.level.challengeMode === 'wallnut-bowling') return null
-
         const attackRect = zombie.getAttackRect()
         for (const plant of this.plants) {
-            if (plant.dead || plant.row !== zombie.row) continue
+            if (plant.dead || plant.isBowling || plant.row !== zombie.row) continue
             if (this._rectOverlapX(attackRect, this._plantRect(plant)) >= 20) return plant
         }
         return null
@@ -2463,8 +2838,26 @@ export class GameSession {
         return this.zombies.filter((zombie) => !zombie.dead).length
     }
 
+    private _zombieDeathContext() {
+        return {
+            zombieCount: this._countZombiesOnScreenForDeathAnim(),
+            canUseSuperLongDeath: this._canUseSuperLongDeath(),
+        }
+    }
+
+    private _countZombiesOnScreenForDeathAnim() {
+        return this.zombies.filter((zombie) => (
+            zombie.hasHead &&
+            !zombie.dead &&
+            zombie.state !== 'dying' &&
+            zombie.state !== 'mowered' &&
+            zombie.state !== 'charred' &&
+            zombie.state !== 'burned'
+        )).length
+    }
+
     private _canUseSuperLongDeath() {
-        return this.level.adventureLevel > 5
+        return !this._firstTimeAdventure || this.level.adventureLevel > 5
     }
 
     private _isZombieVisibleForPlantTarget(zombie: Zombie) {
@@ -2476,7 +2869,14 @@ export class GameSession {
     }
 
     private _isZombieDamageable(zombie: Zombie) {
-        if (zombie.dead || zombie.state === 'dying' || zombie.state === 'mowered' || zombie.state === 'charred') return false
+        if (
+            zombie.dead ||
+            zombie.state === 'dying' ||
+            zombie.state === 'mowered' ||
+            zombie.state === 'charred' ||
+            zombie.state === 'burned' ||
+            zombie.state === 'jumping'
+        ) return false
         return true
     }
 
@@ -2488,6 +2888,26 @@ export class GameSession {
     private _isZombieDamageableForProjectileCollision(zombie: Zombie) {
         if (!this._isZombieDamageable(zombie)) return false
         return this._isZombieVisibleForProjectileCollision(zombie)
+    }
+
+    private _canApplyBurnToZombie(zombie: Zombie) {
+        return !zombie.dead &&
+            zombie.state !== 'charred' &&
+            zombie.state !== 'burned'
+    }
+
+    private _handleZombieDamageResult(
+        zombie: Zombie,
+        damageResult: ZombieDamageResult,
+        wasDying: boolean,
+        deathContext: ZombieDeathContext,
+    ) {
+        if (damageResult.droppedHead || damageResult.startedDying || zombie.dead || (!wasDying && zombie.state === 'dying')) {
+            this._dropZombieLoot(zombie)
+        }
+        if (damageResult.droppedHead && this._levelAwardDropped) {
+            zombie.finishAfterLevelAwardDropped(deathContext)
+        }
     }
 
     private _dropZombieLoot(zombie: Zombie) {
@@ -2528,7 +2948,8 @@ export class GameSession {
             !zombie.dead &&
             zombie.state !== 'dying' &&
             zombie.state !== 'mowered' &&
-            zombie.state !== 'charred'
+            zombie.state !== 'charred' &&
+            zombie.state !== 'burned'
     }
 
     private _dropLevelAward(x: number, y: number) {
@@ -2538,13 +2959,17 @@ export class GameSession {
         this._levelAwardDropped = true
         this._stopPostAwardBoardActivity()
         this.events.push({ type: 'foleyRequested', sound: SoundEffect.Throw, pitchRange: 10 })
-        this._addItem('final-seed-packet', 'coin', x, y, this.level.awardSeedType ?? null, awardKind)
+        this._addItem(awardKind === 'note' ? 'note' : 'final-seed-packet', 'coin', x, y, this.level.awardSeedType ?? null, awardKind)
+    }
+
+    private _isLevelAwardItem(item: ItemEntity) {
+        return item.type === 'final-seed-packet' || item.type === 'note'
     }
 
     private _stopPostAwardBoardActivity() {
         this.sunSpawningEnabled = false
         for (const zombie of this.zombies) {
-            if (zombie.state === 'charred') continue
+            if (zombie.state === 'charred' || zombie.state === 'burned') continue
             zombie.dead = true
         }
     }

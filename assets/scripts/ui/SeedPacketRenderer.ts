@@ -50,6 +50,7 @@ export type SeedPacketSeedType =
     | 'snowpea'
     | 'chomper'
     | 'repeater'
+    | 'puffshroom'
 
 const SEED_PACKET_ICON_IDS: Record<string, number> = {
     peashooter: 0,
@@ -61,6 +62,7 @@ const SEED_PACKET_ICON_IDS: Record<string, number> = {
     snowpea: 5,
     chomper: 6,
     repeater: 7,
+    puffshroom: 8,
 }
 
 interface SeedPacketPlantPlacement {

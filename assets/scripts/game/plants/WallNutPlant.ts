@@ -1,4 +1,4 @@
-import type { PlantCreateArgs } from './BasePlant'
+import type { PlantCreateArgs, PlantUpdateContext } from './BasePlant'
 import { Plant } from './BasePlant'
 
 export class WallNutPlant extends Plant {
@@ -20,4 +20,17 @@ export class WallNutPlant extends Plant {
     protected canBlink() {
         return super.canBlink() && this.recentlyEatenCounter <= 0
     }
+
+    protected onDamageStateChanged(context: PlantUpdateContext) {
+        if (this.state !== 'wallnut-cracked1' && this.state !== 'wallnut-cracked2') return
+
+        context.events.push({
+            type: 'particleAtRequested',
+            effect: 'wallnuteatlarge',
+            x: this.x + 40,
+            y: this.y + 10,
+            tint: this.type === 'explodenut' ? { r: 255, g: 64, b: 64 } : undefined,
+        })
+    }
+
 }

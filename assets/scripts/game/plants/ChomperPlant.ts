@@ -22,10 +22,6 @@ export class ChomperPlant extends Plant {
             case 'chomper-digesting':
                 this.updateDigesting(context)
                 break
-            case 'chomper-swallowing':
-            case 'chomper-biting-missed':
-                this.returnToIdle(context)
-                break
         }
     }
 
@@ -41,12 +37,13 @@ export class ChomperPlant extends Plant {
         if (this.stateCountdown > 0) return
 
         context.events.push({ type: 'foleyRequested', sound: SoundEffect.BigChomp, pitchRange: -2 })
-        if (context.hasTargetInPlantAttackRect(this)) {
+        const biteResult = context.biteChomperTarget(this)
+        if (biteResult === 'ate') {
             this.state = 'chomper-biting-got-one'
-            this.startDigesting(context)
+        } else if (biteResult === 'bit') {
+            this.state = 'chomper-biting-missed'
         } else {
             this.state = 'chomper-biting-missed'
-            this.stateCountdown = 35
         }
     }
 
@@ -60,12 +57,17 @@ export class ChomperPlant extends Plant {
         if (this.stateCountdown > 0) return
 
         this.state = 'chomper-swallowing'
-        this.stateCountdown = 115
         context.events.push({ type: 'animationRequested', entityId: this.id, animation: 'chomper-swallow' })
     }
 
-    private returnToIdle(context: PlantUpdateContext) {
-        if (this.stateCountdown > 0) return
+    handleAnimationFinished(animation: string, context: PlantUpdateContext) {
+        if (animation !== 'chomper-swallow' && animation !== 'chomper-bite') return
+        if (animation === 'chomper-swallow' && this.state !== 'chomper-swallowing') return
+        if (animation === 'chomper-bite' && this.state === 'chomper-biting-got-one') {
+            this.startDigesting(context)
+            return
+        }
+        if (animation === 'chomper-bite' && this.state !== 'chomper-biting-missed') return
 
         this.state = 'ready'
         context.events.push({ type: 'animationRequested', entityId: this.id, animation: 'idle' })

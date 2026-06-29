@@ -80,6 +80,15 @@ import type {
     ZombieView,
 } from './GameScreenViewTypes'
 
+const ZOMBIE_SHADOW_OFFSETS: Partial<Record<ZombieEntity['type'], { x: number; y: number }>> = {
+    'pole-vaulting': { x: 30, y: 92 },
+}
+const ZOMBIE_DRAW_OFFSETS: Partial<Record<ZombieEntity['type'], { x: number; y: number }>> = {
+    'pole-vaulting': { x: -6, y: -11 },
+}
+const DEFAULT_ZOMBIE_SHADOW_OFFSET = { x: 23, y: 92 }
+const CHILLED_ZOMBIE_COLOR = new Color(75, 75, 255, 255)
+
 export abstract class GameEntityRenderer extends GameScreenEndSequences {
     protected _syncEntity(entity: GameEntity) {
         let node = this._entityNodes.get(entity.id)
@@ -95,10 +104,12 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
                 this._entityZ(entity),
             )
             const scale = renderState.scale ?? entity.scale
-            if (entity.type === 'final-seed-packet') {
+            if (entity.type === 'final-seed-packet' || entity.type === 'note') {
                 node.setScale(1, 1, 1)
                 if (entity.awardKind === 'shovel') {
                     this._syncFinalShovelVisual(node, scale, entity.age, entity.beingCollected)
+                } else if (entity.type === 'note') {
+                    this._syncFinalNoteVisual(node, scale)
                 } else {
                     this._syncFinalSeedPacketVisual(node, scale)
                 }
@@ -118,8 +129,8 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         if (entity.kind === 'plant') {
             this._syncPlantAnimation(entity)
         } else if (entity.kind === 'zombie') {
-            this._syncZombieGameOverClip(entity, renderState)
             this._syncZombieAnimation(entity)
+            this._syncZombieGameOverClip(entity, renderState)
         } else if (entity.kind === 'lawnmower') {
             node.active = this._isGameplayLawnMowerEntityVisible(entity)
             this._syncLawnMowerAnimation(entity)
@@ -134,6 +145,14 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
                 x: entity.x,
                 y: entity.y,
             }
+        }
+
+        if (
+            entity.kind === 'zombie' &&
+            entity.type === 'pole-vaulting' &&
+            (entity.state === 'jumping' || entity.currentAnimation === 'anim_walk' && entity.animationTime === 0)
+        ) {
+            return this._createRenderEntitySnapshot(entity)
         }
 
         const previous = this._previousEntitySnapshots.get(entity.id)
@@ -184,6 +203,12 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             if (!node?.isValid) continue
 
             entries.push({ node, order: this._entityLayerOrder(entity) })
+            if (entity.kind === 'zombie') {
+                const shadowNode = this._zombieViews.get(entity.id)?.shadowClipNode ?? this._zombieViews.get(entity.id)?.shadowNode
+                if (shadowNode?.isValid && shadowNode.parent === this._entityLayer) {
+                    entries.push({ node: shadowNode, order: this._entityRenderRow(entity) * 10 - 0.1 })
+                }
+            }
         }
         for (const system of this._entityLayer.getComponentsInChildren(TodParticleSystem)) {
             if (system.node.parent !== this._entityLayer) continue
@@ -214,11 +239,22 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
                 rect.height,
                 DEBUG_BODY_RECT_COLOR,
             )
+            const attackRect = this._session.debugGetPlantAttackRect(plant)
+            if (attackRect) {
+                this._drawBoardDebugRect(
+                    graphics,
+                    attackRect.x,
+                    attackRect.y,
+                    attackRect.width,
+                    attackRect.height,
+                    DEBUG_ATTACK_RECT_COLOR,
+                )
+            }
         }
 
         for (const zombie of this._session.zombies) {
             if (zombie.dead) continue
-            if (zombie.state === 'dying' || zombie.state === 'mowered' || zombie.state === 'charred') continue
+            if (zombie.state === 'dying' || zombie.state === 'mowered' || zombie.state === 'charred' || zombie.state === 'burned') continue
             this._drawBoardDebugRect(
                 graphics,
                 zombie.x + zombie.bodyRect.x,
@@ -290,7 +326,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
 
     protected _createZombieNode(zombie: ZombieEntity) {
         const node = createUINode(`Zombie_${zombie.id}`, { parent: this._entityLayer, anchorX: 0, anchorY: 1, width: 120, height: 120 })
-        const view = this._createZombieVisual(node, zombie)
+        const view = this._createZombieVisual(node, zombie, { detachedShadow: true })
         this._zombieViews.set(zombie.id, view)
         return node
     }
@@ -348,13 +384,15 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
     protected _createZombieVisual(
         node: Node,
         zombie: ZombieEntity,
-        options: { manualTime?: boolean } = {},
+        options: { manualTime?: boolean, detachedShadow?: boolean } = {},
     ): ZombieView {
         const view: ZombieView = {
             node,
             clipNode: null,
             visualRootNode: null,
             bodyNode: null,
+            shadowClipNode: null,
+            shadowRootNode: null,
             shadowNode: null,
             moweredAnimNode: null,
             charredAnimNode: null,
@@ -383,19 +421,47 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         const visualParent = visualRootNode
         const shadow = SpriteLoader.get('plantshadow')
         if (shadow) {
+            const shadowOffset = ZOMBIE_SHADOW_OFFSETS[zombie.type] ?? DEFAULT_ZOMBIE_SHADOW_OFFSET
+            const shadowParent = options.detachedShadow
+                ? createUINode('ZombieShadowClip', {
+                    parent: this._entityLayer,
+                    layer: this.node.layer,
+                    anchorX: 0,
+                    anchorY: 1,
+                    width: this._session.geometry.width,
+                    height: this._session.geometry.height,
+                })
+                : visualParent
+            const shadowRoot = options.detachedShadow
+                ? createUINode('ZombieShadowRoot', {
+                    parent: shadowParent,
+                    layer: this.node.layer,
+                    anchorX: 0,
+                    anchorY: 1,
+                    width: 1,
+                    height: 1,
+                })
+                : shadowParent
+            view.shadowClipNode = options.detachedShadow ? shadowParent : null
+            view.shadowRootNode = options.detachedShadow ? shadowRoot : null
             view.shadowNode = createSpriteNode({
                 name: 'ZombieShadow',
                 spriteFrame: shadow,
-                parent: visualParent,
-                x: 23,
-                y: -92,
+                parent: shadowRoot,
+                x: shadowOffset.x,
+                y: -shadowOffset.y,
             })
         }
         const zombieAnimation = this._zombieAnimations.get(zombie.type)
         if (zombieAnimation?.json) {
             const animatorNode = new Node('Animator')
             animatorNode.layer = node.layer
-            animatorNode.setPosition(ZOMBIE_BODY_REANIM_OFFSET_X, ZOMBIE_BODY_REANIM_OFFSET_Y, 0)
+            const drawOffset = ZOMBIE_DRAW_OFFSETS[zombie.type]
+            animatorNode.setPosition(
+                ZOMBIE_BODY_REANIM_OFFSET_X + (drawOffset?.x ?? 0),
+                ZOMBIE_BODY_REANIM_OFFSET_Y - (drawOffset?.y ?? 0),
+                0,
+            )
             visualParent.addChild(animatorNode)
             view.bodyNode = animatorNode
             const animator = animatorNode.addComponent(Animator)
@@ -410,6 +476,8 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
                     this._syncMoweredZombieAnimation(view, zombie)
                 } else if (zombie.state === 'charred') {
                     this._syncCharredZombieAnimation(view, zombie)
+                } else if (zombie.state === 'burned') {
+                    this._syncBurnedZombieAnimation(view, zombie)
                 } else {
                     const animation = view.body?.hasAnimation(zombie.currentAnimation)
                         ? zombie.currentAnimation
@@ -445,17 +513,19 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             this._createSunVisual(node)
         } else if (item.type === 'final-seed-packet' && item.awardKind === 'shovel') {
             this._createFinalShovelVisual(node, item)
+        } else if (item.type === 'note') {
+            this._createFinalNoteVisual(node)
         } else if (item.type === 'final-seed-packet') {
             this._createFinalSeedPacketVisual(node, item)
         } else {
             this._createMoneyItemVisual(node, item)
         }
-        if (item.type === 'final-seed-packet') {
+        if (item.type === 'final-seed-packet' || item.type === 'note') {
             const pickupEffect = TodParticleSystem.spawn({
                 parent: node,
-                effect: item.awardKind === 'shovel'
-                    ? 'award-pickup-arrow'
-                    : 'seed-packet-award',
+                effect: item.awardKind === 'shovel' || item.type === 'note'
+                    ? 'awardpickuparrow'
+                    : 'seedpacket',
                 x: 0,
                 y: 60,
                 z: -1,
@@ -466,20 +536,21 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
     }
 
     protected _syncLevelAwardPickupEffect(node: Node, item: ItemEntity, scale: number) {
-        if (item.type !== 'final-seed-packet') return
+        if (item.type !== 'final-seed-packet' && item.type !== 'note') return
 
         for (const system of node.getComponentsInChildren(TodParticleSystem)) {
             if (!system.node?.isValid) continue
 
             system.overrideScale(scale)
-            if (
-                item.beingCollected &&
-                (
-                    system.node.name === 'ParticleSystem_seed-packet-award' ||
-                    system.node.name === 'ParticleSystem_award-pickup-arrow'
-                )
-            ) {
+            const isPickupEffect =
+                system.node.name === 'ParticleSystem_seedpacket' ||
+                system.node.name === 'ParticleSystem_awardpickuparrow'
+            if (!isPickupEffect) continue
+
+            if (item.beingCollected) {
                 system.node.destroy()
+            } else if (this._gameOverActive) {
+                system.enabled = false
             }
         }
     }
@@ -885,10 +956,34 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         flashOpacity.opacity = 255 - grayness
     }
 
+    protected _createFinalNoteVisual(node: Node) {
+        const note = SpriteLoader.get('zombienotesmall')
+        if (!note) return
+
+        createSpriteNode({
+            name: 'FinalNote',
+            spriteFrame: note,
+            parent: node,
+            layer: this.node.layer,
+            anchorX: 0.5,
+            anchorY: 0.5,
+        })
+    }
+
+    protected _syncFinalNoteVisual(node: Node, scale: number) {
+        const note = node.children.find((child) => child.name === 'FinalNote')
+        if (!note?.isValid) return
+
+        const visualScale = Math.max(0.001, scale)
+        note.setScale(visualScale, visualScale, 1)
+        note.setPosition(0, 0, 0)
+    }
+
     protected _syncPlantHighlights() {
-        const highlightedPlantId = this._session.selectedTool === 'shovel'
-            ? this._session.getPlantAt(this._mousePixel.x, this._mousePixel.y)?.id ?? null
+        const hoverPlant = this._session.selectedTool === 'shovel'
+            ? this._session.getPlantAt(this._mousePixel.x, this._mousePixel.y)
             : null
+        const highlightedPlantId = hoverPlant && !hoverPlant.isBowling ? hoverPlant.id : null
 
         for (const [plantId, view] of this._plantViews) {
             const plant = this._session.plants.find((item) => item.id === plantId)
@@ -1033,6 +1128,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
 
         const visible = this._gameOverTicks > GAME_OVER_WINNER_WALK_START_TICKS
         view.node.active = visible
+        if (view.shadowClipNode?.isValid) view.shadowClipNode.active = visible
         if (!visible) {
             this._clearZombieGameOverClip(view)
             return
@@ -1041,6 +1137,13 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         this._applyZombieBoardClip(
             view,
             renderState,
+            GAME_OVER_DAY_ZOMBIE_CLIP_X,
+            0,
+            this._session.geometry.width,
+            this._session.geometry.height,
+        )
+        this._applyZombieShadowBoardClip(
+            view,
             GAME_OVER_DAY_ZOMBIE_CLIP_X,
             0,
             this._session.geometry.width,
@@ -1069,6 +1172,26 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         mask.enabled = true
     }
 
+    protected _applyZombieShadowBoardClip(
+        view: ZombieView,
+        boardX: number,
+        boardY: number,
+        width: number,
+        height: number,
+    ) {
+        if (!view.shadowClipNode?.isValid || !view.shadowRootNode?.isValid) return
+
+        const shadowX = view.shadowClipNode.position.x
+        const shadowY = view.shadowClipNode.position.y
+        setUISize(view.shadowClipNode, width, height, 0, 1)
+        view.shadowClipNode.setPosition(boardX, -boardY, 0)
+        view.shadowRootNode.setPosition(shadowX - boardX, shadowY + boardY, 0)
+
+        const mask = view.shadowClipNode.getComponent(Mask) ?? view.shadowClipNode.addComponent(Mask)
+        mask.type = Mask.Type.GRAPHICS_RECT
+        mask.enabled = true
+    }
+
     protected _clearZombieGameOverClip(view: ZombieView) {
         if (!view.clipNode?.isValid) return
 
@@ -1076,15 +1199,34 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         if (mask) mask.enabled = false
         view.clipNode.setPosition(0, 0, 0)
         if (view.visualRootNode?.isValid) view.visualRootNode.setPosition(0, 0, 0)
+        const shadowMask = view.shadowClipNode?.getComponent(Mask)
+        if (shadowMask) shadowMask.enabled = false
     }
 
     protected _syncPlantAnimation(plant: PlantEntity) {
         const view = this._plantViews.get(plant.id)
         if (!view) return
-        if (plant.type !== 'wallnut' && plant.type !== 'explodenut') return
+        if (plant.type === 'wallnut' || plant.type === 'explodenut') {
+            this._syncWallNutDamageState(view, plant)
+            this._syncWallNutEatingFreeze(view, plant)
+            return
+        }
+        if (plant.type === 'potatomine') {
+            this._syncPotatoMineGlow(view, plant)
+        }
+    }
 
-        this._syncWallNutDamageState(view, plant)
-        this._syncWallNutEatingFreeze(view, plant)
+    protected _syncPotatoMineGlow(view: PlantView, plant: PlantEntity) {
+        if (!view.glow) return
+
+        if (plant.state !== 'potato-armed') {
+            view.glow.setFrameCountOverride(10)
+            return
+        }
+
+        const distance = Math.max(50, Math.min(200, plant.closestZombieDistance))
+        const progress = (distance - 200) / (50 - 200)
+        view.glow.setFrameCountOverride(Math.round(10 + (3 - 10) * progress))
     }
 
     protected _syncWallNutDamageState(view: PlantView, plant: PlantEntity) {
@@ -1125,6 +1267,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             if (view.showingCharred) this._clearCharredZombieAnimation(view)
             syncZombieTrackVisibility(view, zombie)
             this._syncZombieShadow(view, zombie)
+            this._syncZombieBaseColor(view, zombie)
             this._syncZombieHitFlash(view, zombie)
             playZombieBodyAnimation(view, zombie.currentAnimation, {
                 speed: zombie.animationSpeed,
@@ -1143,10 +1286,15 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             this._syncCharredZombieAnimation(view, zombie)
             return
         }
+        if (zombie.state === 'burned') {
+            this._syncBurnedZombieAnimation(view, zombie)
+            return
+        }
         if (view.showingMowered) this._clearMoweredZombieAnimation(view)
         if (view.showingCharred) this._clearCharredZombieAnimation(view)
         syncZombieTrackVisibility(view, zombie)
         this._syncZombieShadow(view, zombie)
+        this._syncZombieBaseColor(view, zombie)
         this._syncZombieHitFlash(view, zombie)
         const blendTime = this._getZombieAnimationBlendTime(view, zombie.currentAnimation)
         playZombieBodyAnimation(view, zombie.currentAnimation, {
@@ -1160,6 +1308,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         if (!view.body) return
 
         syncZombieTrackVisibility(view, zombie)
+        this._syncZombieBaseColor(view, zombie)
         this._syncZombieHitFlash(view, zombie)
         this._syncZombieShadow(view, zombie)
         view.showingMowered = true
@@ -1206,14 +1355,40 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         view.charredAnimNode.time = Math.min(Math.max(0, duration - 1), zombie.animationTime)
     }
 
+    protected _syncBurnedZombieAnimation(view: ZombieView, zombie: ZombieEntity) {
+        if (view.showingMowered) this._clearMoweredZombieAnimation(view)
+        if (view.showingCharred) this._clearCharredZombieAnimation(view)
+        syncZombieTrackVisibility(view, zombie)
+        this._syncZombieShadow(view, zombie)
+        view.animator?.setExtraAdditiveDraw(false)
+        this._setZombieViewColor(view, zombie, Color.BLACK)
+        if (view.body) view.body.speed = 0
+    }
+
+    protected _setZombieViewColor(view: ZombieView, zombie: ZombieEntity, color: Color) {
+        const animationJson = this._zombieAnimations.get(zombie.type)?.json
+        if (view.animator && animationJson) {
+            this._setAnimatorColor(view.animator, animationJson as Record<string, any>, color)
+        }
+    }
+
+    protected _syncZombieBaseColor(view: ZombieView, zombie: ZombieEntity) {
+        this._setZombieViewColor(view, zombie, zombie.chilledCounter > 0 ? CHILLED_ZOMBIE_COLOR : Color.WHITE)
+    }
+
     protected _syncZombieHitFlash(view: ZombieView, zombie: ZombieEntity) {
+        const additiveColor = zombie.chilledCounter > 0 ? CHILLED_ZOMBIE_COLOR.clone() : Color.BLACK.clone()
         if (zombie.hitFlashCounter <= 0) {
-            view.animator?.setExtraAdditiveDraw(false)
+            view.animator?.setExtraAdditiveDraw(zombie.chilledCounter > 0, additiveColor)
             return
         }
 
         const grayness = Math.min(255, zombie.hitFlashCounter * 10)
-        view.animator?.setExtraAdditiveDraw(true, new Color(grayness, grayness, grayness, 255))
+        additiveColor.r = Math.min(255, additiveColor.r + grayness)
+        additiveColor.g = Math.min(255, additiveColor.g + grayness)
+        additiveColor.b = Math.min(255, additiveColor.b + grayness)
+        additiveColor.a = 255
+        view.animator?.setExtraAdditiveDraw(true, additiveColor)
     }
 
     protected _syncZombieShadow(view: ZombieView, zombie: ZombieEntity) {
@@ -1221,7 +1396,23 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
 
         view.shadowNode.active = zombie.state !== 'dying' &&
             zombie.state !== 'mowered' &&
-            zombie.state !== 'charred'
+            zombie.state !== 'charred' &&
+            zombie.state !== 'burned' &&
+            !(zombie.type === 'pole-vaulting' && zombie.state === 'jumping')
+        if (!view.shadowNode.active) return
+
+        const base = ZOMBIE_SHADOW_OFFSETS[zombie.type] ?? DEFAULT_ZOMBIE_SHADOW_OFFSET
+        if (view.shadowClipNode?.isValid && view.shadowRootNode?.isValid) {
+            view.shadowClipNode.setPosition(
+                view.node.position.x + base.x,
+                view.node.position.y - base.y,
+                view.node.position.z - 1,
+            )
+            view.shadowRootNode.setPosition(0, 0, 0)
+            view.shadowNode.setPosition(0, 0, 0)
+        } else {
+            view.shadowNode.setPosition(base.x, -base.y, 0)
+        }
     }
 
     protected _createMoweredZombieDriver(view: ZombieView) {
@@ -1292,6 +1483,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
 
     protected _getZombieAnimationBlendTime(view: ZombieView, nextAnimation: string) {
         if (!view.currentAnimation || view.currentAnimation === nextAnimation) return 0
+        if (view.currentAnimation === 'anim_jump' || nextAnimation === 'anim_jump') return 0
         return ZOMBIE_REANIM_BLEND_TIME
     }
 
@@ -1313,19 +1505,25 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
                 this._playShooterAnimation(view)
                 break
             case 'potato-rise':
-                this._playBodyAnimation(view, 'anim_rise', POTATO_MINE_RISE_ANIM_RATE, false, 'anim_armed')
+                this._playBodyAnimation(view, 'anim_rise', POTATO_MINE_RISE_ANIM_RATE, true, undefined, false, () => {
+                    this._session.dispatch({ type: 'plantAnimationFinished', entityId, animation })
+                })
                 break
             case 'potato-armed':
                 playPotatoArmedAnimation(view)
                 break
             case 'chomper-bite':
-                this._playBodyAnimation(view, 'anim_bite', CHOMPER_BITE_ANIM_RATE, true)
+                this._playBodyAnimation(view, 'anim_bite', CHOMPER_BITE_ANIM_RATE, true, undefined, false, () => {
+                    this._session.dispatch({ type: 'plantAnimationFinished', entityId, animation })
+                })
                 break
             case 'chomper-chew':
-                this._playBodyAnimation(view, 'anim_chew', CHOMPER_CHEW_ANIM_RATE, false)
+                this._playBodyAnimation(view, 'anim_chew', CHOMPER_CHEW_ANIM_RATE, false, undefined, true)
                 break
             case 'chomper-swallow':
-                this._playBodyAnimation(view, 'anim_swallow', CHOMPER_SWALLOW_ANIM_RATE, true, 'anim_idle')
+                this._playBodyAnimation(view, 'anim_swallow', CHOMPER_SWALLOW_ANIM_RATE, true, undefined, false, () => {
+                    this._session.dispatch({ type: 'plantAnimationFinished', entityId, animation })
+                })
                 break
             case 'idle':
                 this._playBodyIdleAnimation(view)
@@ -1365,15 +1563,19 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         animRate: number,
         keepLastFrame: boolean,
         nextAnimation?: string,
+        loop = false,
+        onFinish?: () => void,
     ) {
         if (!view.body?.hasAnimation(animation)) return
 
         view.body.play({
             name: animation,
             speed: getAnimationRateSpeed(view.body, animation, animRate),
+            loop,
             blendTime: 0.1,
             keepLastFrame,
             onFinish: () => {
+                onFinish?.()
                 if (!nextAnimation) return
                 if (nextAnimation === 'anim_idle') {
                     this._playBodyIdleAnimation(view)

@@ -21,6 +21,8 @@ export interface ZombieView extends ZombieAnimationView {
     clipNode: Node | null
     visualRootNode: Node | null
     bodyNode: Node | null
+    shadowClipNode: Node | null
+    shadowRootNode: Node | null
     shadowNode: Node | null
     moweredAnimNode: AnimNode | null
     charredAnimNode: AnimNode | null

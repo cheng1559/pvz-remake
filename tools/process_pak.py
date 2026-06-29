@@ -11,12 +11,13 @@ Steps:
   6. Convert LawnStrings
   7. Copy images to textures
   8. Copy particle images to texture resources
-  9. Convert sounds to WAV audio resources
- 10. Convert MO3 music to WAV audio stems
- 11. Generate cached packet plant atlas
- 12. Generate cached plant preview atlas
- 13. Generate cached zombie preview atlas
- 14. Generate cached lawn mower sprite
+  9. Convert particle definitions
+ 10. Convert sounds to WAV audio resources
+ 11. Convert MO3 music to WAV audio stems
+ 12. Generate cached packet plant atlas
+ 13. Generate cached plant preview atlas
+ 14. Generate cached zombie preview atlas
+ 15. Generate cached lawn mower sprite
 """
 
 from pathlib import Path
@@ -26,6 +27,7 @@ from pak_extractor import parse_pak, extract_entries, _decrypt
 from rename_raw_to_lower import rename_all_to_lower
 from decompile_particle_compiled import convert_directory as decompile_particle_directory
 from decompile_reanim_compiled import convert_file as decompile_reanim_file
+from particle_converter import convert_directory as convert_particle_directory
 from reanim_converter import main as convert_reanim
 from font_converter import main as convert_font
 from lawnstrings_converter import convert_lawnstrings
@@ -40,6 +42,7 @@ from sprite_texture_preprocessor import (
     get_alpha_companion_name,
     get_output_name,
     is_alpha_companion_name,
+    load_alphagrid_resources,
     select_image_resources,
     write_preprocessed_resource,
 )
@@ -50,21 +53,27 @@ def copy_images(src_dir: Path, dst_dir: Path) -> int:
     dst_dir.mkdir(parents=True, exist_ok=True)
 
     resources = select_image_resources(src_dir)
+    alphagrid_resources = load_alphagrid_resources(src_dir.parent / "properties/resources.xml")
+    alphagrid_sources = {alpha_name for alpha_name, _output_name in alphagrid_resources.values()}
 
     copied = 0
     for resource_name, src in sorted(resources.items()):
         if is_alpha_companion_name(resource_name) and resource_name[:-1] in resources:
             continue
+        if resource_name in alphagrid_sources:
+            continue
 
         alpha_src = resources.get(get_alpha_companion_name(resource_name))
-        dst_name = get_output_name(src, resource_name, force_png=alpha_src is not None)
+        alphagrid_name, output_name = alphagrid_resources.get(resource_name, ("", resource_name))
+        alpha_grid_src = resources.get(alphagrid_name)
+        dst_name = get_output_name(src, output_name, force_png=alpha_src is not None or alpha_grid_src is not None)
         dst = dst_dir / dst_name
         if src.suffix.lower() == '.gif':
             legacy_dst = dst_dir / src.name.lower()
             if legacy_dst.exists():
                 legacy_dst.unlink()
 
-        if write_preprocessed_resource(src, dst, resource_name=resource_name, alpha_src=alpha_src):
+        if write_preprocessed_resource(src, dst, resource_name=resource_name, alpha_src=alpha_src, alpha_grid_src=alpha_grid_src):
             print(f"[pipeline] Wrote: {dst}")
             copied += 1
     return copied
@@ -181,10 +190,17 @@ def main():
     particle_count = copy_particles(particles_dir, particle_texture_dir)
     print(f"[pipeline] Copied {particle_count} new particle images -> {particle_texture_dir}")
 
-    # ── Step 9: Convert sounds ─────────────────────────────────────
+    # ── Step 9: Convert particle definitions ───────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 9: Convert sounds to WAV audio resources")
+    print("[pipeline] Step 9: Convert particle definitions")
+    print("=" * 60)
+    convert_particle_directory(particles_dir, Path("./assets/resources/particles"))
+
+    # ── Step 10: Convert sounds ────────────────────────────────────
+    print()
+    print("=" * 60)
+    print("[pipeline] Step 10: Convert sounds to WAV audio resources")
     print("=" * 60)
 
     sounds_dir = raw_dir / "sounds"
@@ -192,44 +208,44 @@ def main():
     sound_count = copy_sounds(sounds_dir, audio_dir, overwrite=True)
     print(f"[pipeline] Converted {sound_count} sounds -> {audio_dir}")
 
-    # ── Step 10: Convert music ────────────────────────────────────
+    # ── Step 11: Convert music ────────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 10: Convert MO3 music to WAV stems")
+    print("[pipeline] Step 11: Convert MO3 music to WAV stems")
     print("=" * 60)
 
     music_dir = Path("./assets/resources/audio/music")
     music_count = convert_music(sounds_dir, music_dir, overwrite=True)
     print(f"[pipeline] Converted {music_count} music stems -> {music_dir}")
 
-    # ── Step 11: Generate cached packet plant atlas ────────────────
+    # ── Step 12: Generate cached packet plant atlas ────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 11: Generate cached packet plant atlas")
+    print("[pipeline] Step 12: Generate cached packet plant atlas")
     print("=" * 60)
 
     generate_packet_plant_cache()
 
-    # ── Step 12: Generate cached plant preview atlas ──────────────
+    # ── Step 13: Generate cached plant preview atlas ──────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 12: Generate cached plant preview atlas")
+    print("[pipeline] Step 13: Generate cached plant preview atlas")
     print("=" * 60)
 
     generate_plant_preview_cache()
 
-    # ── Step 13: Generate cached zombie preview atlas ─────────────
+    # ── Step 14: Generate cached zombie preview atlas ─────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 13: Generate cached zombie preview atlas")
+    print("[pipeline] Step 14: Generate cached zombie preview atlas")
     print("=" * 60)
 
     generate_zombie_preview_cache()
 
-    # Step 14: Generate cached lawn mower sprite
+    # Step 15: Generate cached lawn mower sprite
     print()
     print("=" * 60)
-    print("[pipeline] Step 14: Generate cached lawn mower sprite")
+    print("[pipeline] Step 15: Generate cached lawn mower sprite")
     print("=" * 60)
 
     generate_lawnmower_cache()

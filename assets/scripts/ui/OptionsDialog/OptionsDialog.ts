@@ -38,7 +38,7 @@ export class OptionsDialog extends ModalDialog {
     sfxVolume = DEFAULT_SFX_VOLUME
 
     @property
-    hardwareAcceleration = false
+    hardwareAcceleration = true
 
     @property
     fullScreen = false
@@ -56,6 +56,7 @@ export class OptionsDialog extends ModalDialog {
     public onMusicVolumeChanged: ((value: number) => void) | null = null
     public onSfxVolumeChanged: ((value: number) => void) | null = null
     public onHardwareAccelerationChanged: ((checked: boolean) => void) | null = null
+    public onForcedHardwareAccelerationClick: (() => void) | null = null
     public onFullScreenChanged: ((checked: boolean) => void) | null = null
     public onForcedFullScreenClick: (() => void) | null = null
     public onRestartLevel: (() => void) | null = null
@@ -132,10 +133,14 @@ export class OptionsDialog extends ModalDialog {
             'HardwareAcceleration',
             284,
             175 + accelerationOffset,
-            this.hardwareAcceleration,
+            true,
             (checked) => {
                 this.hardwareAcceleration = checked
                 this.onHardwareAccelerationChanged?.(checked)
+            },
+            () => {
+                this.hardwareAcceleration = true
+                this.onForcedHardwareAccelerationClick?.()
             },
         )
         this._createCheckbox(
