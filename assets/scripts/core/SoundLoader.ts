@@ -8,6 +8,8 @@ type NativeAudioAsset = {
 type AudioClipWithNativeAsset = AudioClip & {
     _nativeAsset?: NativeAudioAsset | null
     nativeUrl?: string
+    duration?: number
+    getDuration?: () => number
 }
 
 type NativeAudioEngine = {
@@ -123,6 +125,7 @@ export class SoundLoader {
     private static readonly _effects: SoundEffect[] = Object.values(SoundEffect)
     private static readonly _pitchStepMultiplier = 1.0594630943592953
     private static readonly _foleyRecentSuppressMs = 100
+    private static readonly _maxNativeOneShots = 32
     private static readonly _foleyPitchRanges: Partial<Record<SoundEffect, number>> = {
         [SoundEffect.Points]: 10,
         [SoundEffect.ShieldHit]: 10,
@@ -179,6 +182,7 @@ export class SoundLoader {
     private static _loading: Map<SoundEffect, Promise<AudioClip | null>> = new Map()
     private static _audioBuffers: Map<SoundEffect, Promise<AudioBuffer | null>> = new Map()
     private static _foleyLastPlayedAt: Map<SoundEffect, number> = new Map()
+    private static _nativeOneShotIds: Set<number> = new Set()
     private static _exclusiveSources: Map<string, AudioSource> = new Map()
     private static _exclusiveEffects: Map<string, SoundEffect> = new Map()
     private static _exclusiveBaseVolumes: Map<string, number> = new Map()
@@ -357,10 +361,19 @@ export class SoundLoader {
         if (!url) return false
         const audioEngine = bindings.jsb?.AudioEngine
         if (!audioEngine?.play2d || !audioEngine.setPitch) return false
+        if (this._nativeOneShotIds.size >= this._maxNativeOneShots) return true
 
         const audioId = audioEngine.play2d(url, false, volume)
         if (typeof audioId !== 'number' || audioId < 0) return false
 
+        this._nativeOneShotIds.add(audioId)
+        const forgetAudioId = () => this._nativeOneShotIds.delete(audioId)
+        if (audioEngine.setFinishCallback) {
+            audioEngine.setFinishCallback(audioId, forgetAudioId)
+        } else {
+            const duration = (clip as AudioClipWithNativeAsset).getDuration?.() ?? (clip as AudioClipWithNativeAsset).duration ?? 1
+            setTimeout(forgetAudioId, Math.max(1000, duration * 1000 + 1000))
+        }
         audioEngine.setPitch(audioId, pitch)
         return true
     }
