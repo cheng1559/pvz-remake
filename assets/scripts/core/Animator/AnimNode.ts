@@ -38,6 +38,9 @@ export class AnimNode {
 
     // Computed output
     private _computedFrames: ComputedTrackFrame[] = []
+    private _computedFramePool: ComputedTrackFrame[] = []
+    private _trackSampleIndices: Record<string, number> = {}
+    private _slotSampleIndices: Record<string, number> = {}
 
     // Temp matrices
     private _m1 = new Mat4()
@@ -125,6 +128,8 @@ export class AnimNode {
 
         this._currentAnim = anim
         this._currentAnimName = name
+        this._trackSampleIndices = {}
+        this._slotSampleIndices = {}
         this._loop = loop
         this._speed = speed
         this._time = time
@@ -287,7 +292,7 @@ export class AnimNode {
     // ── Update ─────────────────────────────────────────────────
 
     public update(dt: number): void {
-        this._computedFrames = []
+        this._computedFrames.length = 0
         if (!this.isPlaying || !this._currentAnim) return
 
         let anim = this._currentAnim
@@ -363,11 +368,20 @@ export class AnimNode {
                 frame = this._applyParentTransform(frame, parentMat)
             }
 
-            this._computedFrames.push({
-                trackName,
-                zIndex: trackData.zIndex,
-                frame,
-            })
+            const outputIndex = this._computedFrames.length
+            let computed = this._computedFramePool[outputIndex]
+            if (!computed) {
+                computed = this._computedFramePool[outputIndex] = {
+                    trackName,
+                    zIndex: trackData.zIndex,
+                    frame,
+                }
+            } else {
+                computed.trackName = trackName
+                computed.zIndex = trackData.zIndex
+                computed.frame = frame
+            }
+            this._computedFrames.push(computed)
         }
     }
 
@@ -381,31 +395,36 @@ export class AnimNode {
         const track = this._data.tracks[trackName]
         if (!track || track.frames.length === 0) return null
         const targetFrame = anim.startFrame + time
-        return this._sampleTrackFramesAt(track.frames, targetFrame)
+        return this._sampleTrackFramesAt(track.frames, targetFrame, trackName)
     }
 
     private _sampleTrackFramesAt(
         frames: TrackFrameData[],
         targetFrame: number,
+        cacheKey?: string,
     ): TrackFrameData | null {
         if (frames.length === 0) return null
         if (targetFrame > frames[frames.length - 1].frameIndex) {
             const last = frames[frames.length - 1]
             if (!this._truncateDisappearingFrames && targetFrame < last.frameIndex + 1) {
-                return { ...last }
+                return last
             }
             return null
         }
 
-        let leftIdx = -1
-        for (let i = 0; i < frames.length; i++) {
-            if (frames[i].frameIndex <= targetFrame) leftIdx = i
-            else break
+        let leftIdx = cacheKey ? (this._trackSampleIndices[cacheKey] ?? 0) : 0
+        if (leftIdx >= frames.length) leftIdx = frames.length - 1
+        while (leftIdx + 1 < frames.length && frames[leftIdx + 1].frameIndex <= targetFrame) {
+            leftIdx++
         }
-        if (leftIdx === -1) return null
+        while (leftIdx > 0 && frames[leftIdx].frameIndex > targetFrame) {
+            leftIdx--
+        }
+        if (frames[leftIdx].frameIndex > targetFrame) return null
+        if (cacheKey) this._trackSampleIndices[cacheKey] = leftIdx
 
         const left = frames[leftIdx]
-        if (leftIdx + 1 >= frames.length) return { ...left }
+        if (leftIdx + 1 >= frames.length) return left
 
         const right = frames[leftIdx + 1]
         if (right.frameIndex - left.frameIndex > 1 && targetFrame >= left.frameIndex + 1) {
@@ -413,7 +432,7 @@ export class AnimNode {
         }
 
         const span = right.frameIndex - left.frameIndex
-        if (span <= 0) return { ...left }
+        if (span <= 0) return left
 
         const ratio = (targetFrame - left.frameIndex) / span
         return this._lerpTrackFrame(left, right, ratio)
@@ -423,7 +442,7 @@ export class AnimNode {
         const slotData = this._data.slots[slot]
         if (!slotData || slotData.frames.length === 0) return null
         const targetFrame = anim.startFrame + time
-        return this._sampleFrameDataAt(slotData.frames, targetFrame)
+        return this._sampleFrameDataAt(slotData.frames, targetFrame, slot)
     }
 
     private _sampleCurrentTrackForBlend(
@@ -470,23 +489,31 @@ export class AnimNode {
         return this._sampleTrackFramesAt(trackData.frames, basePoseFrame) ?? trackData.frames[0]
     }
 
-    private _sampleFrameDataAt(frames: FrameData[], targetFrame: number): FrameData | null {
+    private _sampleFrameDataAt(
+        frames: FrameData[],
+        targetFrame: number,
+        cacheKey?: string,
+    ): FrameData | null {
         if (frames.length === 0) return null
         if (targetFrame > frames[frames.length - 1].frameIndex) return null
 
-        let leftIdx = -1
-        for (let i = 0; i < frames.length; i++) {
-            if (frames[i].frameIndex <= targetFrame) leftIdx = i
-            else break
+        let leftIdx = cacheKey ? (this._slotSampleIndices[cacheKey] ?? 0) : 0
+        if (leftIdx >= frames.length) leftIdx = frames.length - 1
+        while (leftIdx + 1 < frames.length && frames[leftIdx + 1].frameIndex <= targetFrame) {
+            leftIdx++
         }
-        if (leftIdx === -1) return null
+        while (leftIdx > 0 && frames[leftIdx].frameIndex > targetFrame) {
+            leftIdx--
+        }
+        if (frames[leftIdx].frameIndex > targetFrame) return null
+        if (cacheKey) this._slotSampleIndices[cacheKey] = leftIdx
 
         const left = frames[leftIdx]
-        if (leftIdx + 1 >= frames.length) return { ...left }
+        if (leftIdx + 1 >= frames.length) return left
 
         const right = frames[leftIdx + 1]
         const span = right.frameIndex - left.frameIndex
-        if (span <= 0) return { ...left }
+        if (span <= 0) return left
 
         const ratio = (targetFrame - left.frameIndex) / span
         return this._lerpFrameData(left, right, ratio)

@@ -28,12 +28,14 @@ export type ZombieAnimationType =
 
 export interface ZombieAnimationView {
     animator: Animator | null
+    flagAnimator: Animator | null
     body: AnimNode | null
     flag: AnimNode | null
     propeller: AnimNode | null
     currentAnimation: string
     currentAnimationSpeed: number
     currentAnimationTime: number
+    trackVisibilitySignature: string
 }
 
 export interface PlayZombieBodyAnimationOptions {
@@ -61,12 +63,14 @@ const BALLOON_PROPELLER_FRAME_COUNT = 3
 export function createZombieAnimationView(animator: Animator | null = null): ZombieAnimationView {
     return {
         animator,
+        flagAnimator: null,
         body: null,
         flag: null,
         propeller: null,
         currentAnimation: '',
         currentAnimationSpeed: 1,
         currentAnimationTime: 0,
+        trackVisibilitySignature: '',
     }
 }
 
@@ -119,6 +123,7 @@ export async function attachFlagZombieAnimation(
         parentNode.addChild(flagNode)
     }
     const flagAnimator = flagNode.addComponent(Animator)
+    view.flagAnimator = flagAnimator
     flagAnimator.enabled = enabled
     await flagAnimator.parseJson(animationJson)
     if (!flagNode.isValid || !view.body) return
@@ -185,9 +190,17 @@ export function configureZombieTracks(animator: Animator, zombieType: ZombieAnim
     }
 }
 
-export function syncZombieTrackVisibility(view: ZombieAnimationView, zombie: ZombieEntity) {
+export function syncZombieTrackVisibility(
+    view: ZombieAnimationView,
+    zombie: ZombieEntity,
+    force = false,
+) {
     const animator = view.animator
     if (!animator) return
+
+    const signature = zombieTrackVisibilitySignature(zombie)
+    if (!force && view.trackVisibilitySignature === signature) return
+    view.trackVisibilitySignature = signature
 
     syncFlagZombieObjectVisibility(view, zombie)
 
@@ -268,6 +281,24 @@ export function syncZombieTrackVisibility(view: ZombieAnimationView, zombie: Zom
             }
         }
     }
+}
+
+function zombieTrackVisibilitySignature(zombie: ZombieEntity) {
+    const helmImage = zombie.type === 'traffic-cone' && zombie.helmHealth > 0
+        ? zombieHelmDamageImage(zombie, 'zombie_cone')
+        : zombie.type === 'bucket' && zombie.helmHealth > 0
+            ? zombieHelmDamageImage(zombie, 'zombie_bucket')
+            : ''
+    return [
+        zombie.type,
+        zombie.state,
+        zombie.hasHead ? 1 : 0,
+        zombie.hasArm ? 1 : 0,
+        zombie.hasTongue ? 1 : 0,
+        zombie.hasObject ? 1 : 0,
+        zombie.poleVaulting ? 1 : 0,
+        helmImage,
+    ].join('|')
 }
 
 function zombieHelmDamageImage(zombie: ZombieEntity, imagePrefix: 'zombie_cone' | 'zombie_bucket') {

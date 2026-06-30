@@ -22,6 +22,12 @@ import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 
 const { ccclass, property } = _decorator
 let additiveSpriteMaterial: Material | null = null
+const DEFAULT_ADDITIVE_COLOR = new Color(255, 255, 255, 196)
+
+interface FrameMapValue {
+    zIndex: number
+    frame: TrackFrameData
+}
 
 @ccclass('Animator')
 export class Animator extends Component {
@@ -31,13 +37,23 @@ export class Animator extends Component {
     private _animNodes: AnimNode[] = []
     private _trackNodes: Map<string, Node> = new Map()
     private _additiveTrackNodes: Map<string, Node> = new Map()
+    private _trackSprites: Map<string, Sprite> = new Map()
+    private _additiveTrackSprites: Map<string, Sprite> = new Map()
+    private _trackSkews: Map<string, UISkew> = new Map()
+    private _additiveTrackSkews: Map<string, UISkew> = new Map()
     private _trackZ: Map<string, number> = new Map()
     private _hiddenTracks: Set<string> = new Set()
     private _externalNodes: Set<string> = new Set()
     private _trackColors: Map<string, Color> = new Map()
     private _trackImageOverrides: Map<string, string> = new Map()
     private _enableExtraAdditiveDraw = false
-    private _extraAdditiveColor = new Color(255, 255, 255, 196)
+    private _extraAdditiveColor = DEFAULT_ADDITIVE_COLOR.clone()
+    private _frameMap: Map<string, FrameMapValue> = new Map()
+    private _frameValuePool: Map<string, FrameMapValue> = new Map()
+    private _touchedTracks: Set<string> = new Set()
+    private _sortedTracks: [string, Node][] = []
+    private _trackNameCache: string[] | null = null
+    private _sortDirty = true
 
     // ── Initialization ─────────────────────────────────────────
 
@@ -46,7 +62,17 @@ export class Animator extends Component {
         this._animNodes = []
         this._trackNodes.clear()
         this._additiveTrackNodes.clear()
+        this._trackSprites.clear()
+        this._additiveTrackSprites.clear()
+        this._trackSkews.clear()
+        this._additiveTrackSkews.clear()
         this._trackZ.clear()
+        this._frameMap.clear()
+        this._frameValuePool.clear()
+        this._touchedTracks.clear()
+        this._sortedTracks.length = 0
+        this._trackNameCache = null
+        this._sortDirty = true
 
         await this._preloadImages(json)
     }
@@ -70,10 +96,10 @@ export class Animator extends Component {
         const trackNames = animNode.computedFrames.map((frame) => frame.trackName)
         animNode.stop()
         for (const trackName of trackNames) {
-            const sprite = this._trackNodes.get(trackName)?.getComponent(Sprite)
+            const sprite = this._trackSprites.get(trackName)
             if (sprite) sprite.enabled = false
 
-            const additiveSprite = this._additiveTrackNodes.get(trackName)?.getComponent(Sprite)
+            const additiveSprite = this._additiveTrackSprites.get(trackName)
             if (additiveSprite) additiveSprite.enabled = false
         }
     }
@@ -105,8 +131,12 @@ export class Animator extends Component {
     public insertExternalNode(name: string, node: Node, zIndex: number) {
         node.parent = this.node
         this._trackNodes.set(name, node)
-        this._trackZ.set(name, zIndex)
+        if (this._trackZ.get(name) !== zIndex) {
+            this._trackZ.set(name, zIndex)
+            this._sortDirty = true
+        }
         this._externalNodes.add(name)
+        this._sortDirty = true
     }
 
     public getTrackFrame(trackName: string): TrackFrameData | null {
@@ -133,6 +163,16 @@ export class Animator extends Component {
     }
 
     public setTrackColor(name: string, color: Color) {
+        const current = this._trackColors.get(name)
+        if (
+            current &&
+            current.r === color.r &&
+            current.g === color.g &&
+            current.b === color.b &&
+            current.a === color.a
+        ) {
+            return
+        }
         this._trackColors.set(name, color.clone())
     }
 
@@ -148,13 +188,23 @@ export class Animator extends Component {
         }
     }
 
-    public setExtraAdditiveDraw(enabled: boolean, color: Color = new Color(255, 255, 255, 196)) {
+    public setExtraAdditiveDraw(enabled: boolean, color: Color = DEFAULT_ADDITIVE_COLOR) {
+        const wasEnabled = this._enableExtraAdditiveDraw
+        if (
+            wasEnabled === enabled &&
+            this._extraAdditiveColor.r === color.r &&
+            this._extraAdditiveColor.g === color.g &&
+            this._extraAdditiveColor.b === color.b &&
+            this._extraAdditiveColor.a === color.a
+        ) {
+            return
+        }
         this._enableExtraAdditiveDraw = enabled
         this._extraAdditiveColor = color.clone()
+        if (wasEnabled !== enabled) this._sortDirty = true
         if (!enabled) {
-            this._additiveTrackNodes.forEach((node) => {
-                const sprite = node.getComponent(Sprite)
-                if (sprite) sprite.enabled = false
+            this._additiveTrackSprites.forEach((sprite) => {
+                sprite.enabled = false
             })
         }
     }
@@ -169,57 +219,66 @@ export class Animator extends Component {
             animNode.update(scaledDt)
         }
 
-        // 2. Collect computed frames, later nodes override earlier ones per track
-        const frameMap = new Map<string, { zIndex: number; frame: TrackFrameData }>()
-        for (const animNode of this._animNodes) {
-            for (const cf of animNode.computedFrames) {
-                frameMap.set(cf.trackName, { zIndex: cf.zIndex, frame: cf.frame })
+        // 2. Apply frames to scene nodes (skip hidden tracks)
+        const touched = this._touchedTracks
+        touched.clear()
+        if (this._animNodes.length === 1) {
+            for (const cf of this._animNodes[0].computedFrames) {
+                this._applyComputedFrame(cf.trackName, cf.zIndex, cf.frame, touched)
             }
+        } else {
+            this._frameMap.clear()
+            for (const animNode of this._animNodes) {
+                for (const cf of animNode.computedFrames) {
+                    let value = this._frameValuePool.get(cf.trackName)
+                    if (!value) {
+                        value = { zIndex: cf.zIndex, frame: cf.frame }
+                        this._frameValuePool.set(cf.trackName, value)
+                    } else {
+                        value.zIndex = cf.zIndex
+                        value.frame = cf.frame
+                    }
+                    this._frameMap.set(cf.trackName, value)
+                }
+            }
+            this._frameMap.forEach((value, trackName) => {
+                this._applyComputedFrame(trackName, value.zIndex, value.frame, touched)
+            })
         }
 
-        // 3. Apply frames to scene nodes (skip hidden tracks)
-        const touched = new Set<string>()
-        frameMap.forEach((value, trackName) => {
-            touched.add(trackName)
-            if (this._hiddenTracks.has(trackName)) return
-            const targetNode = this._getOrCreateTrackNode(trackName, value.zIndex)
-            this._applyFrameToNode(targetNode, value.frame, trackName)
-            if (this._enableExtraAdditiveDraw) {
-                const additiveNode = this._getOrCreateAdditiveTrackNode(trackName)
-                this._applyFrameToNode(additiveNode, value.frame, trackName, this._extraAdditiveColor)
-            }
-        })
-
-        // 4. Hide untouched / hidden track nodes
+        // 3. Hide untouched / hidden track nodes
         this._trackNodes.forEach((n, name) => {
             if (this._externalNodes.has(name)) return
             if (!touched.has(name) || this._hiddenTracks.has(name)) {
-                const sp = n.getComponent(Sprite)
+                const sp = this._trackSprites.get(name)
                 if (sp) sp.enabled = false
             }
         })
-        this._additiveTrackNodes.forEach((n, name) => {
+        this._additiveTrackNodes.forEach((_n, name) => {
             if (!this._enableExtraAdditiveDraw || !touched.has(name) || this._hiddenTracks.has(name)) {
-                const sp = n.getComponent(Sprite)
+                const sp = this._additiveTrackSprites.get(name)
                 if (sp) sp.enabled = false
             }
         })
 
-        // 5. Sort sibling order by z-index
-        const sorted: [string, Node][] = []
-        this._trackNodes.forEach((node, name) => sorted.push([name, node]))
-        sorted.sort((a, b) => {
-            const za = this._trackZ.get(a[0]) ?? 0
-            const zb = this._trackZ.get(b[0]) ?? 0
-            return za - zb
-        })
+        // 4. Sort sibling order by z-index
+        if (this._sortDirty) {
+            this._sortedTracks.length = 0
+            this._trackNodes.forEach((node, name) => this._sortedTracks.push([name, node]))
+            this._sortedTracks.sort((a, b) => {
+                const za = this._trackZ.get(a[0]) ?? 0
+                const zb = this._trackZ.get(b[0]) ?? 0
+                return za - zb
+            })
+            this._sortDirty = false
+        }
         let siblingIndex = 0
-        for (let i = 0; i < sorted.length; i++) {
-            const [trackName, node] = sorted[i]
+        for (let i = 0; i < this._sortedTracks.length; i++) {
+            const [trackName, node] = this._sortedTracks[i]
             if (node.getSiblingIndex() !== siblingIndex) node.setSiblingIndex(siblingIndex)
             siblingIndex++
             const additiveNode = this._additiveTrackNodes.get(trackName)
-            const additiveSprite = additiveNode?.getComponent(Sprite)
+            const additiveSprite = this._additiveTrackSprites.get(trackName)
             if (additiveNode?.isValid && additiveSprite?.enabled) {
                 if (additiveNode.getSiblingIndex() !== siblingIndex) additiveNode.setSiblingIndex(siblingIndex)
                 siblingIndex++
@@ -244,12 +303,18 @@ export class Animator extends Component {
             sprite.trim = false
             sprite.enabled = false
 
-            node.addComponent(UISkew)
+            const skew = node.addComponent(UISkew)
 
             this._trackNodes.set(name, node)
+            this._trackSprites.set(name, sprite)
+            this._trackSkews.set(name, skew)
+            this._sortDirty = true
         }
 
-        this._trackZ.set(name, z)
+        if (this._trackZ.get(name) !== z) {
+            this._trackZ.set(name, z)
+            this._sortDirty = true
+        }
         return node
     }
 
@@ -269,9 +334,12 @@ export class Animator extends Component {
             sprite.enabled = false
             sprite.customMaterial = Animator._getAdditiveSpriteMaterial()
 
-            node.addComponent(UISkew)
+            const skew = node.addComponent(UISkew)
 
             this._additiveTrackNodes.set(name, node)
+            this._additiveTrackSprites.set(name, sprite)
+            this._additiveTrackSkews.set(name, skew)
+            this._sortDirty = true
         }
 
         return node
@@ -279,12 +347,47 @@ export class Animator extends Component {
 
     // ── Frame Rendering ────────────────────────────────────────
 
-    private _applyFrameToNode(node: Node, f: TrackFrameData, trackName?: string, colorOverride?: Color) {
+    private _applyComputedFrame(
+        trackName: string,
+        zIndex: number,
+        frame: TrackFrameData,
+        touched: Set<string>,
+    ) {
+        touched.add(trackName)
+        if (this._hiddenTracks.has(trackName)) return
+
+        const targetNode = this._getOrCreateTrackNode(trackName, zIndex)
+        const sprite = this._trackSprites.get(trackName)
+        const skew = this._trackSkews.get(trackName)
+        if (sprite && skew) this._applyFrameToNode(targetNode, sprite, skew, frame, trackName)
+
+        if (this._enableExtraAdditiveDraw) {
+            const additiveNode = this._getOrCreateAdditiveTrackNode(trackName)
+            const additiveSprite = this._additiveTrackSprites.get(trackName)
+            const additiveSkew = this._additiveTrackSkews.get(trackName)
+            if (additiveSprite && additiveSkew) {
+                this._applyFrameToNode(
+                    additiveNode,
+                    additiveSprite,
+                    additiveSkew,
+                    frame,
+                    trackName,
+                    this._extraAdditiveColor,
+                )
+            }
+        }
+    }
+
+    private _applyFrameToNode(
+        node: Node,
+        sprite: Sprite,
+        uiSkew: UISkew,
+        f: TrackFrameData,
+        trackName?: string,
+        colorOverride?: Color,
+    ) {
         node.setPosition(f.x, -f.y, 0)
         node.angle = -f.kx
-
-        let uiSkew = node.getComponent(UISkew)
-        if (!uiSkew) uiSkew = node.addComponent(UISkew)
 
         const skewDiff = f.kx - f.ky
         const skewRad = toRadian(skewDiff)
@@ -304,42 +407,39 @@ export class Animator extends Component {
         uiSkew.setSkew(-appliedSkew, 0)
         node.setScale(scaleX, scaleY, 1)
 
-        const sprite = node.getComponent(Sprite)
-        if (sprite) {
-            sprite.enabled = true
+        sprite.enabled = true
 
-            // Combine track color with frame alpha.
-            const trackColor = colorOverride ?? (trackName ? this._trackColors.get(trackName) : undefined)
-            const alphaVal = Math.round(f.alpha * 255)
-            if (trackColor) {
-                const finalR = Math.round(trackColor.r)
-                const finalG = Math.round(trackColor.g)
-                const finalB = Math.round(trackColor.b)
-                const finalA = Math.round(trackColor.a * f.alpha)
-                const c = sprite.color
-                if (c.r !== finalR || c.g !== finalG || c.b !== finalB || c.a !== finalA) {
-                    sprite.color = new Color(finalR, finalG, finalB, finalA)
-                }
-            } else {
-                if (
-                    sprite.color.r !== 255 ||
-                    sprite.color.g !== 255 ||
-                    sprite.color.b !== 255 ||
-                    sprite.color.a !== alphaVal
-                ) {
-                    sprite.color = new Color(255, 255, 255, alphaVal)
-                }
+        // Combine track color with frame alpha.
+        const trackColor = colorOverride ?? (trackName ? this._trackColors.get(trackName) : undefined)
+        const alphaVal = Math.round(f.alpha * 255)
+        if (trackColor) {
+            const finalR = Math.round(trackColor.r)
+            const finalG = Math.round(trackColor.g)
+            const finalB = Math.round(trackColor.b)
+            const finalA = Math.round(trackColor.a * f.alpha)
+            const c = sprite.color
+            if (c.r !== finalR || c.g !== finalG || c.b !== finalB || c.a !== finalA) {
+                sprite.color = new Color(finalR, finalG, finalB, finalA)
             }
-
-            const imageName = trackName ? this._trackImageOverrides.get(trackName) ?? f.image : f.image
-            const normalizedImageName = Animator._normalizeImageName(imageName)
+        } else {
             if (
-                normalizedImageName &&
-                sprite.spriteFrame?.name !== normalizedImageName
+                sprite.color.r !== 255 ||
+                sprite.color.g !== 255 ||
+                sprite.color.b !== 255 ||
+                sprite.color.a !== alphaVal
             ) {
-                const sf = SpriteLoader.get(normalizedImageName)
-                if (sf) sprite.spriteFrame = sf
+                sprite.color = new Color(255, 255, 255, alphaVal)
             }
+        }
+
+        const imageName = trackName ? this._trackImageOverrides.get(trackName) ?? f.image : f.image
+        const normalizedImageName = Animator._normalizeImageName(imageName)
+        if (
+            normalizedImageName &&
+            sprite.spriteFrame?.name !== normalizedImageName
+        ) {
+            const sf = SpriteLoader.get(normalizedImageName)
+            if (sf) sprite.spriteFrame = sf
         }
     }
 
@@ -407,12 +507,15 @@ export class Animator extends Component {
     }
 
     private _getTrackNames() {
+        if (this._trackNameCache) return this._trackNameCache
+
         const trackNames = new Set<string>()
         for (const nodeData of Object.values(this._nodeDataMap)) {
             for (const trackName of Object.keys(nodeData.tracks)) {
                 trackNames.add(trackName)
             }
         }
-        return trackNames
+        this._trackNameCache = [...trackNames]
+        return this._trackNameCache
     }
 }

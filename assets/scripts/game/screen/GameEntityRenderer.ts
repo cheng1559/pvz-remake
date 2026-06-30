@@ -396,10 +396,14 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             shadowClipNode: null,
             shadowRootNode: null,
             shadowNode: null,
+            moweredAnimator: null,
             moweredAnimNode: null,
+            charredAnimator: null,
             charredAnimNode: null,
             showingMowered: false,
             showingCharred: false,
+            baseColorSignature: '',
+            additiveSignature: '',
             ...createZombieAnimationView(),
         }
         const clipNode = createUINode('ZombieClip', {
@@ -1113,7 +1117,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             enabled: this._isZombieSceneAnimationEnabled(zombie.id),
             sortHost: view.animator,
         }).then(() => {
-            syncZombieTrackVisibility(view, zombie)
+            syncZombieTrackVisibility(view, zombie, true)
             this._syncSceneAnimationState()
         })
     }
@@ -1261,7 +1265,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
     protected _syncZombieAnimation(zombie: ZombieEntity) {
         const view = this._zombieViews.get(zombie.id)
         if (!view) return
-        this._setNodeAnimatorsEnabled(view.node, this._isZombieSceneAnimationEnabled(zombie.id))
+        this._setZombieAnimatorsEnabled(view, this._isZombieSceneAnimationEnabled(zombie.id))
         if (this._gameOverActive && zombie.id !== this._gameOverWinnerZombieId) return
 
         if (this._gameOverActive && zombie.id === this._gameOverWinnerZombieId) {
@@ -1333,6 +1337,21 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         view.moweredAnimNode.time = Math.min(Math.max(0, duration - 1), zombie.animationTime)
     }
 
+    protected _setZombieAnimatorsEnabled(view: ZombieView, enabled: boolean) {
+        if (view.animator?.isValid && view.animator.enabled !== enabled) {
+            view.animator.enabled = enabled
+        }
+        if (view.flagAnimator?.isValid && view.flagAnimator.enabled !== enabled) {
+            view.flagAnimator.enabled = enabled
+        }
+        if (view.moweredAnimator?.isValid && view.moweredAnimator.enabled !== enabled) {
+            view.moweredAnimator.enabled = enabled
+        }
+        if (view.charredAnimator?.isValid && view.charredAnimator.enabled !== enabled) {
+            view.charredAnimator.enabled = enabled
+        }
+    }
+
     protected _syncCharredZombieAnimation(view: ZombieView, zombie: ZombieEntity) {
         if (!view.bodyNode) return
 
@@ -1368,6 +1387,10 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
     }
 
     protected _setZombieViewColor(view: ZombieView, zombie: ZombieEntity, color: Color) {
+        const signature = `${zombie.type}|${color.r}|${color.g}|${color.b}|${color.a}`
+        if (view.baseColorSignature === signature) return
+        view.baseColorSignature = signature
+
         const animationJson = this._zombieAnimations.get(zombie.type)?.json
         if (view.animator && animationJson) {
             this._setAnimatorColor(view.animator, animationJson as Record<string, any>, color)
@@ -1379,17 +1402,25 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
     }
 
     protected _syncZombieHitFlash(view: ZombieView, zombie: ZombieEntity) {
-        const additiveColor = zombie.chilledCounter > 0 ? CHILLED_ZOMBIE_COLOR.clone() : Color.BLACK.clone()
+        const chilled = zombie.chilledCounter > 0
         if (zombie.hitFlashCounter <= 0) {
-            view.animator?.setExtraAdditiveDraw(zombie.chilledCounter > 0, additiveColor)
+            const signature = chilled ? 'chilled' : 'off'
+            if (view.additiveSignature !== signature) {
+                view.additiveSignature = signature
+                view.animator?.setExtraAdditiveDraw(chilled, chilled ? CHILLED_ZOMBIE_COLOR : Color.BLACK)
+            }
             return
         }
 
+        const additiveColor = chilled ? CHILLED_ZOMBIE_COLOR.clone() : Color.BLACK.clone()
         const grayness = Math.min(255, zombie.hitFlashCounter * 10)
         additiveColor.r = Math.min(255, additiveColor.r + grayness)
         additiveColor.g = Math.min(255, additiveColor.g + grayness)
         additiveColor.b = Math.min(255, additiveColor.b + grayness)
         additiveColor.a = 255
+        const signature = `${additiveColor.r}|${additiveColor.g}|${additiveColor.b}|${additiveColor.a}`
+        if (view.additiveSignature === signature) return
+        view.additiveSignature = signature
         view.animator?.setExtraAdditiveDraw(true, additiveColor)
     }
 
@@ -1429,6 +1460,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             height: 1,
         })
         const driver = driverNode.addComponent(Animator)
+        view.moweredAnimator = driver
         driver.enabled = !this._session.paused
         void driver.parseJson(this._moweredZombieAnimation.json as Record<string, any>).then(() => {
             if (!view.node.isValid) return
@@ -1451,6 +1483,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             y: 10,
         })
         const driver = driverNode.addComponent(Animator)
+        view.charredAnimator = driver
         driver.enabled = !this._session.paused
         void driver.parseJson(this._charredZombieAnimation.json as Record<string, any>).then(() => {
             if (!view.node.isValid) return

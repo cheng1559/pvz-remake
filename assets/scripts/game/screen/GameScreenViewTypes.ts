@@ -24,10 +24,14 @@ export interface ZombieView extends ZombieAnimationView {
     shadowClipNode: Node | null
     shadowRootNode: Node | null
     shadowNode: Node | null
+    moweredAnimator: Animator | null
     moweredAnimNode: AnimNode | null
+    charredAnimator: Animator | null
     charredAnimNode: AnimNode | null
     showingMowered: boolean
     showingCharred: boolean
+    baseColorSignature: string
+    additiveSignature: string
 }
 
 export interface LawnMowerView {
