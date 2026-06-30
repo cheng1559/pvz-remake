@@ -93,8 +93,8 @@ export class StartupScreen extends Component {
         this._frameAccumulator += dt * ORIGINAL_FPS
         let ticks = Math.floor(this._frameAccumulator)
         if (ticks <= 0) return
-        this._frameAccumulator -= ticks
         ticks = Math.min(ticks, 12)
+        this._frameAccumulator -= ticks
 
         for (let i = 0; i < ticks; i++) {
             this._tick()
