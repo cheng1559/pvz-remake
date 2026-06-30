@@ -29,6 +29,7 @@ export class AnimNode {
     private _frameCountOverride: number | null = null
     private _truncateDisappearingFrames: boolean = true
     private _visibleTracks: Set<string> | null = null
+    private _hiddenTrackPrefixes: Set<string> | null = null
 
     // Blend transition (snapshot-based)
     private _blendTrackSnapshot: Record<string, TrackFrameData> = {}
@@ -253,6 +254,11 @@ export class AnimNode {
         this._visibleTracks = null
     }
 
+    public hidePrefix(prefix: string): void {
+        if (!this._hiddenTrackPrefixes) this._hiddenTrackPrefixes = new Set()
+        this._hiddenTrackPrefixes.add(prefix)
+    }
+
     public get speed(): number {
         return this._speed
     }
@@ -352,6 +358,16 @@ export class AnimNode {
         const tracks = this._data.tracks
         for (const trackName in tracks) {
             if (this._visibleTracks && !this._visibleTracks.has(trackName)) continue
+            if (this._hiddenTrackPrefixes) {
+                let hidden = false
+                for (const prefix of this._hiddenTrackPrefixes) {
+                    if (trackName.startsWith(prefix)) {
+                        hidden = true
+                        break
+                    }
+                }
+                if (hidden) continue
+            }
 
             const trackData = tracks[trackName]
             let frame = this._sampleTrack(trackName, this._time, anim)

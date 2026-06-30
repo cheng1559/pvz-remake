@@ -1,12 +1,13 @@
 import { sys } from 'cc'
 
-const DEBUG_SETTINGS_KEY = 'pvz.debug.settings'
+const DEBUG_SETTINGS_KEY = 'pvz-remake:debug:settings'
 
 type DebugSettings = {
     rechargingEnabled: boolean
     sunCostEnabled: boolean
     autoCollectEnabled: boolean
     hitboxesVisible: boolean
+    mobileEnabled: boolean
 }
 
 const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
@@ -14,6 +15,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     sunCostEnabled: true,
     autoCollectEnabled: false,
     hitboxesVisible: false,
+    mobileEnabled: sys.isMobile,
 }
 
 function loadDebugSettings(): DebugSettings {
@@ -27,6 +29,7 @@ function loadDebugSettings(): DebugSettings {
             sunCostEnabled: parsed.sunCostEnabled ?? DEFAULT_DEBUG_SETTINGS.sunCostEnabled,
             autoCollectEnabled: parsed.autoCollectEnabled ?? DEFAULT_DEBUG_SETTINGS.autoCollectEnabled,
             hitboxesVisible: parsed.hitboxesVisible ?? DEFAULT_DEBUG_SETTINGS.hitboxesVisible,
+            mobileEnabled: parsed.mobileEnabled ?? DEFAULT_DEBUG_SETTINGS.mobileEnabled,
         }
     } catch {
         return { ...DEFAULT_DEBUG_SETTINGS }
@@ -62,5 +65,15 @@ export const GameDebugSettings = {
         this.hitboxesVisible = visible
         saveDebugSettings(this)
         return this.hitboxesVisible
+    },
+
+    setMobileEnabled(enabled: boolean) {
+        this.mobileEnabled = enabled
+        saveDebugSettings(this)
+        return this.mobileEnabled
+    },
+
+    isMobileMode() {
+        return this.mobileEnabled
     },
 }

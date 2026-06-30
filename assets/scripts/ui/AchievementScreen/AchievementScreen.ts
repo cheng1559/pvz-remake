@@ -12,13 +12,13 @@ import {
     Size,
     Sprite,
     SpriteFrame,
-    sys,
     Vec2,
     Vec3,
 } from 'cc'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { GameDebugSettings } from '@/game/GameDebugSettings'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { UIButton } from '@/ui/Button'
 import { MenuScreenBase } from '@/ui/MenuScreenBase'
@@ -172,7 +172,7 @@ export class AchievementScreen extends MenuScreenBase {
     onEnable() {
         input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this.node.on(Node.EventType.MOUSE_WHEEL, this._onMouseWheel, this)
-        if (sys.isMobile) {
+        if (GameDebugSettings.isMobileMode()) {
             this.node.on(Node.EventType.TOUCH_START, this._onTouchStart, this)
             this.node.on(Node.EventType.TOUCH_MOVE, this._onTouchMove, this)
             this.node.on(Node.EventType.TOUCH_END, this._onTouchEnd, this)

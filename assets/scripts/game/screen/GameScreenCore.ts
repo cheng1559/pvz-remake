@@ -944,11 +944,11 @@ export abstract class GameScreenCore extends Component {
         input.on(Input.EventType.MOUSE_DOWN, this._onGlobalMouseDown, this)
         input.on(Input.EventType.KEY_DOWN, this._onKeyDown, this)
         this.node.on(Node.EventType.MOUSE_MOVE, (event: EventMouse) => {
-            if (sys.isMobile) return
+            if (GameDebugSettings.isMobileMode()) return
             UIHoverManager.rememberMouseEvent(event)
         })
         this.node.on(Node.EventType.MOUSE_LEAVE, () => {
-            if (sys.isMobile) return
+            if (GameDebugSettings.isMobileMode()) return
             if (UIHoverManager.isModalBlocked) {
                 this._clearBoardHoverState()
                 return
@@ -956,7 +956,7 @@ export abstract class GameScreenCore extends Component {
             UIHoverManager.clearPointer()
         })
         this.node.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => {
-            if (sys.isMobile) return
+            if (GameDebugSettings.isMobileMode()) return
             if (event.getButton() === MOUSE_BUTTON_RIGHT) {
                 this._onRightMouseCancel(event)
                 return
@@ -968,11 +968,11 @@ export abstract class GameScreenCore extends Component {
             this._handlePointerDown(pixel)
         })
         this.node.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             this._onMobileTouchMove(event)
         })
         this.node.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             UIHoverManager.rememberTouchEvent(event, false)
             const pixel = eventToBoardPixel(this.node, event)
             this._mousePixel = pixel
@@ -1014,11 +1014,11 @@ export abstract class GameScreenCore extends Component {
             }
         })
         this.node.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             this._onMobileTouchEnd(event)
         })
         this.node.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             this._onMobileTouchCancel(event)
         })
     }
@@ -1231,7 +1231,7 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _onGlobalMouseDown(event: EventMouse) {
-        if (sys.isMobile) return
+        if (GameDebugSettings.isMobileMode()) return
 
         if (event.getButton() !== MOUSE_BUTTON_RIGHT) return
         this._onRightMouseCancel(event)
@@ -2542,7 +2542,7 @@ export abstract class GameScreenCore extends Component {
                 cooldownTotal: packet.cooldownTotal,
                 canAfford: this._session.canAffordSeed(packet.seedType),
                 tutorialColor: this._shouldShowFirstPlantSeedGuide(packet) ? this._getTutorialFlashingColor() : null,
-                mobile: sys.isMobile,
+                mobile: GameDebugSettings.isMobileMode(),
             })
             this._syncSeedPacketTutorialArrow(packet, view.node)
         }
@@ -2662,7 +2662,7 @@ export abstract class GameScreenCore extends Component {
                 cooldownTotal: 0,
                 canAfford: true,
                 tutorialColor: null,
-                mobile: sys.isMobile,
+                mobile: GameDebugSettings.isMobileMode(),
                 conveyor: true,
             })
         }
@@ -2704,18 +2704,18 @@ export abstract class GameScreenCore extends Component {
             this._hasCursorPointer = true
             this._resetMobilePlantPress()
             this._selectSeedSource(source)
-            if (sys.isMobile) this._beginMobilePlantPress(pixel, source.rect)
+            if (GameDebugSettings.isMobileMode()) this._beginMobilePlantPress(pixel, source.rect)
             this._renderFrame()
             event.propagationStopped = true
             return true
         }
         packetNode.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => {
-            if (sys.isMobile) return
+            if (GameDebugSettings.isMobileMode()) return
             if (event.getButton() !== 0) return
             onPress(event)
         }, this)
         packetNode.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             if (this._session.selectedTool) {
                 event.propagationStopped = true
                 const pixel = eventToBoardPixel(this.node, event)
@@ -2728,17 +2728,17 @@ export abstract class GameScreenCore extends Component {
             onPress(event)
         }, this)
         packetNode.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             event.propagationStopped = true
             this._onMobileTouchMove(event)
         }, this)
         packetNode.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             event.propagationStopped = true
             this._onMobileTouchEnd(event)
         }, this)
         packetNode.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             event.propagationStopped = true
             this._onMobileTouchEnd(event)
         }, this)
@@ -3061,10 +3061,10 @@ export abstract class GameScreenCore extends Component {
         }
 
         if (this._session.selectedTool === 'shovel') {
-            const mobileToolPressReady = !sys.isMobile || this._isMobileCursorPressReady()
+            const mobileToolPressReady = !GameDebugSettings.isMobileMode() || this._isMobileCursorPressReady()
             if (this._canShowCursorObjectPreview() && mobileToolPressReady) {
                 this._updateShovelCursor()
-                if (sys.isMobile) {
+                if (GameDebugSettings.isMobileMode()) {
                     this._syncShovelGridGuide()
                 } else {
                     this._hideMobileGridGuide()
@@ -3094,14 +3094,14 @@ export abstract class GameScreenCore extends Component {
             this._previewSeedType = this._session.selectedSeed
         }
         const mobilePlantPressReady = this._isMobilePlantPressReady()
-        const showCursorPreview = !sys.isMobile || mobilePlantPressReady
+        const showCursorPreview = !GameDebugSettings.isMobileMode() || mobilePlantPressReady
         if (showCursorPreview && !this._cursorPreview?.isValid) {
             this._cursorPreview = this._createPlantPreviewNode('CursorPreview', CURSOR_PLANT_PREVIEW_OPACITY)
         } else if (!showCursorPreview) {
             if (this._cursorPreview?.isValid) this._cursorPreview.destroy()
             this._cursorPreview = null
         }
-        const showGridPreview = !sys.isMobile
+        const showGridPreview = !GameDebugSettings.isMobileMode()
         if (showGridPreview && !this._gridPreview?.isValid) {
             this._gridPreview = this._createPlantPreviewNode('GridPreview', GRID_PLANT_PREVIEW_OPACITY, this._itemLayer)
         } else if (!showGridPreview) {
@@ -3135,7 +3135,7 @@ export abstract class GameScreenCore extends Component {
             this._gridPreview.active = false
         }
         if (
-            sys.isMobile &&
+            GameDebugSettings.isMobileMode() &&
             mobilePlantPressReady &&
             seedType &&
             grid &&
@@ -3430,7 +3430,7 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _updateHoverItemAndSeedPacketState() {
-        if (sys.isMobile) return false
+        if (GameDebugSettings.isMobileMode()) return false
         if (this._levelAwardScreenShown) return false
         if (this._gameOverActive || this._levelCompleteActive) {
             this._hideTooltips()

@@ -40,6 +40,8 @@ import { AchievementScreen } from '../AchievementScreen'
 import { AwardScreen } from '../AwardScreen'
 import { AlmanacScreen } from '../AlmanacScreen/AlmanacScreen'
 import { StoreScreen } from '../StoreScreen/StoreScreen'
+import { NewUserDialog } from '../UserDialog/NewUserDialog'
+import { UserDialog } from '../UserDialog/UserDialog'
 import { ZenGardenScreen } from '../ZenGardenScreen/ZenGardenScreen'
 import { ChallengePage, ChallengeScreen } from '../ChallengeScreen'
 import { UIButton } from '../Button'
@@ -56,6 +58,7 @@ import { createStoneButton } from '../StoneButton'
 import { createSpriteNode, createUINode } from '../UIFactory'
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../MenuScreenBase'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { GameDebugSettings } from '@/game/GameDebugSettings'
 import type { LevelAward } from '@/game/GameTypes'
 import type { LevelDefinition } from '@/game/GameTypes'
 import { MusicSystem, type MusicTuneId } from '@/game/music/MusicSystem'
@@ -85,6 +88,8 @@ const MOBILE_DEBUG_CLI_DRAG_THRESHOLD = 8
 const DEBUG_CLI_BRAIN_SCALE = 1.2
 const DEBUG_CLI_BRAIN_OPACITY = 140
 const DEBUG_CLI_BUTTON_OPEN_OFFSET_Y = 100
+const WIDESCREEN_BACKGROUND_SETTINGS_KEY = 'pvz-remake:ui:widescreen-backgrounds'
+const BACKGROUND_DOUBLE_CLICK_MS = 350
 
 interface PvzNativeBridge {
     setFullScreen?: (fullScreen: boolean) => boolean
@@ -134,11 +139,14 @@ export class UIController extends Component {
     private _screenClipRoot: Node | null = null
     private _backgroundLeft: Node | null = null
     private _backgroundRight: Node | null = null
+    private _startupScreen: Node | null = null
+    private _lastBackgroundClickTime = 0
     private _selectorScreen: SelectorScreen | null = null
     private _adventureGameScreen: AdventureGameScreen | null = null
     private _achievementScreen: Node | null = null
     private _modalScreen: Node | null = null
     private _debugCliScreen: Node | null = null
+    private _userSubDialog: Node | null = null
     private _optionsDialog: OptionsDialog | null = null
     private _globalAdviceLayer: Node | null = null
     private _globalAdviceWidget: AdviceWidget | null = null
@@ -200,13 +208,14 @@ export class UIController extends Component {
     }
 
     private async _bootstrap() {
+        const backgroundsReady = this._ensurePersistentWidescreenBackgrounds()
         await this._playStartupScreen()
-        await this._ensurePersistentWidescreenBackgrounds()
-        if (DEBUG_START_ADVENTURE_DIRECTLY) {
+        await backgroundsReady
+        if (DEBUG_START_ADVENTURE_DIRECTLY && this._profile) {
             this.showAdventureGame()
             return
         }
-        if (this._shouldStartDebugAdventure()) {
+        if (this._shouldStartDebugAdventure() && this._profile) {
             this.showAdventureGame()
             return
         }
@@ -216,6 +225,8 @@ export class UIController extends Component {
     private async _playStartupScreen() {
         const node = createUINode('StartupScreen', { active: false, width: 800, height: 600 })
         const startupScreen = node.addComponent(StartupScreen)
+        this._startupScreen = node
+        this._placeMobileDebugCliButton()
         this.uiRoot!.addChild(node)
         node.active = true
 
@@ -225,6 +236,8 @@ export class UIController extends Component {
             console.error('[UIController] Failed to play startup screen', error)
             await StartupResourceLoader.preloadStartup()
         } finally {
+            if (this._startupScreen === node) this._startupScreen = null
+            this._placeMobileDebugCliButton()
             if (node.isValid) node.destroy()
         }
     }
@@ -241,8 +254,10 @@ export class UIController extends Component {
         const selectorScreen = node.addComponent(SelectorScreen)
         selectorScreen.animation = animation
         selectorScreen.zombieArmAnimation = zombieArmAnimation
+        selectorScreen.hasProfile = this._profile != null
         const playableAdventureLevel = this._getProfileAdventureLevel()
         this._adventureLevel = playableAdventureLevel
+        selectorScreen.profileName = this._profile?.name ?? ''
         selectorScreen.adventureLevel = playableAdventureLevel.adventureLevel
         selectorScreen.finishedAdventure = this._profile?.finishedAdventure ?? 0
         selectorScreen.setAccessState({
@@ -318,6 +333,14 @@ export class UIController extends Component {
         selectorScreen.onStartAdventureTransition = () => {
             MusicSystem.stop()
         }
+        selectorScreen.onChangeUserRequest = () => {
+            void this.showUserDialog()
+        }
+        selectorScreen.onCreateUserRequired = () => {
+            if (!this._profile) {
+                void this.showNewUserDialog()
+            }
+        }
 
         this._selectorScreen = null
         this._adventureGameScreen = null
@@ -328,6 +351,11 @@ export class UIController extends Component {
     }
 
     showAdventureGame(level: LevelDefinition = this._adventureLevel): AdventureGameScreen | null {
+        if (!this._profile) {
+            void this._requireProfileBeforePlaying()
+            return null
+        }
+
         this._adventureLevel = level
         this._selectorScreen = null
         const node = createUINode('AdventureGameScreen', { active: false, width: 800, height: 600 })
@@ -774,6 +802,7 @@ export class UIController extends Component {
 
     showDebugCliDialog(initialCommand = '', options: DebugCliDialogOptions = {}): DebugCliDialog | null {
         if (this._debugCliScreen?.isValid) return null
+        if (this._isStartupScreenActive()) return null
 
         const gameScreenNode = this._adventureGameScreen?.node as Node | null | undefined
         const gameScreen = gameScreenNode?.isValid === true ? this._adventureGameScreen : null
@@ -808,6 +837,10 @@ export class UIController extends Component {
             }
             if (commandAction === 'restart') {
                 this.showAdventureGame(this._adventureLevel)
+                return
+            }
+            if (commandAction === 'reload') {
+                void this._reloadGame()
                 return
             }
             if (commandAction === 'home') {
@@ -852,6 +885,7 @@ export class UIController extends Component {
         }
         const isNavigationDebugCommand = (result: ReturnType<typeof executeDebugCliCommand>) =>
             result.action === 'restart' ||
+            result.action === 'reload' ||
             result.action === 'home' ||
             result.action === 'level' ||
             result.action === 'quit' ||
@@ -905,6 +939,262 @@ export class UIController extends Component {
         this._addToScreenClipRoot(node)
         node.active = true
         return messageBox
+    }
+
+    async showUserDialog(): Promise<UserDialog | null> {
+        const strings = await LawnStringLoader.load()
+        if (!this._currentScreen?.isValid) return null
+
+        const node = createUINode('UserDialog', { active: false, width: 100, height: 100 })
+        const dialog = node.addComponent(UserDialog)
+        dialog.configure({
+            profiles: ProfileStore.loadProfiles(),
+            currentProfileId: this._profile?.id ?? null,
+            strings: {
+                title: this._lawnString(strings, 'WHO_ARE_YOU', 'WHO ARE YOU?'),
+                createNewUser: this._lawnString(strings, 'CREATE_NEW_USER', '(Create a New User)'),
+                rename: this._lawnString(strings, 'RENAME_BUTTON', 'Rename'),
+                delete: this._lawnString(strings, 'DELETE_BUTTON', 'Delete'),
+                ok: this._lawnString(strings, 'BUTTON_OK', 'Ok'),
+                cancel: this._lawnString(strings, 'BUTTON_CANCEL', 'Cancel'),
+            },
+        })
+        dialog.onCreateUserRequest = () => {
+            void this.showNewUserDialog(dialog)
+        }
+        dialog.onRenameUserRequest = (name) => {
+            void this.showRenameUserDialog(dialog, name)
+        }
+        dialog.onDeleteUserRequest = (name) => {
+            void this.showConfirmDeleteUserDialog(dialog, name)
+        }
+        dialog.onSelectUserRequest = (name) => {
+            this._runWithSwitchUserLoading(() => {
+                const profile = ProfileStore.loadProfileByName(name)
+                if (profile) this._setCurrentProfile(profile)
+                dialog.close()
+            })
+        }
+
+        this._addToScreenClipRoot(node)
+        node.active = true
+        return dialog
+    }
+
+    async showNewUserDialog(userDialog: UserDialog | null = null): Promise<NewUserDialog | null> {
+        const strings = await LawnStringLoader.load()
+        if (userDialog && !userDialog.node?.isValid) return null
+        if (!userDialog && !this._currentScreen?.isValid) return null
+        if (this._userSubDialog?.isValid) return this._userSubDialog.getComponent(NewUserDialog)
+
+        const node = createUINode('NewUserDialog', { active: false, width: 100, height: 100 })
+        const dialog = node.addComponent(NewUserDialog)
+        dialog.configure({
+            mode: 'new',
+            strings: {
+                title: this._lawnString(strings, 'NEW_USER', 'NEW USER'),
+                prompt: this._lawnString(strings, 'PLEASE_ENTER_NAME', 'Please enter your name:'),
+                ok: this._lawnString(strings, 'BUTTON_OK', 'Ok'),
+                cancel: this._lawnString(strings, 'BUTTON_CANCEL', 'Cancel'),
+            },
+        })
+        dialog.requireNameBeforeCancel = !this._profile
+        dialog.onEmptyName = () => {
+            void this.showEnterYourNameDialog(dialog)
+        }
+        dialog.onSubmitName = (name) => {
+            this._runWithSwitchUserLoading(() => {
+                const profile = ProfileStore.createProfile(name)
+                if (!profile) {
+                    void this.showNameConflictDialog(dialog)
+                    return
+                }
+
+                this._setCurrentProfile(profile)
+                dialog.finishInputDialog()
+                if (userDialog?.node?.isValid) userDialog.close()
+                if (!userDialog) this._selectorScreen?.showProfileSign()
+            })
+        }
+
+        this._addToScreenClipRoot(node)
+        node.active = true
+        this._userSubDialog = node
+        void dialog.waitForResult().then(() => {
+            if (this._userSubDialog === node) this._userSubDialog = null
+        })
+        return dialog
+    }
+
+    async showRenameUserDialog(userDialog: UserDialog, name: string): Promise<NewUserDialog | null> {
+        const strings = await LawnStringLoader.load()
+        if (!userDialog.node?.isValid) return null
+        if (this._userSubDialog?.isValid) return this._userSubDialog.getComponent(NewUserDialog)
+
+        const node = createUINode('RenameUserDialog', { active: false, width: 100, height: 100 })
+        const dialog = node.addComponent(NewUserDialog)
+        dialog.configure({
+            mode: 'rename',
+            initialName: name,
+            strings: {
+                title: this._lawnString(strings, 'RENAME_USER', 'RENAME USER'),
+                prompt: this._lawnString(strings, 'PLEASE_ENTER_NAME', 'Please enter your name:'),
+                ok: this._lawnString(strings, 'BUTTON_OK', 'Ok'),
+                cancel: this._lawnString(strings, 'BUTTON_CANCEL', 'Cancel'),
+            },
+        })
+        dialog.onSubmitName = (newName) => {
+            const renamingCurrent = this._sameProfileName(this._profile?.name ?? '', name)
+            if (!ProfileStore.renameProfile(name, newName)) {
+                void this.showNameConflictDialog(dialog)
+                return
+            }
+
+            if (renamingCurrent) {
+                const profile = ProfileStore.loadProfileByName(newName)
+                if (profile) this._setCurrentProfile(profile)
+            }
+            userDialog.finishRenameUser(newName)
+            dialog.finishInputDialog()
+        }
+
+        this._addToScreenClipRoot(node)
+        node.active = true
+        this._userSubDialog = node
+        void dialog.waitForResult().then(() => {
+            if (this._userSubDialog === node) this._userSubDialog = null
+        })
+        return dialog
+    }
+
+    async showConfirmDeleteUserDialog(userDialog: UserDialog, name: string): Promise<MessageBox | null> {
+        const strings = await LawnStringLoader.load()
+        if (!userDialog.node?.isValid) return null
+        if (this._userSubDialog?.isValid) return this._userSubDialog.getComponent(MessageBox)
+
+        const warning = this._lawnString(
+            strings,
+            'DELETE_USER_WARNING',
+            "This will permanently remove '%s' from the player roster!",
+        ).replace('%s', name)
+        const dialog = this.showMessageBox(
+            this._lawnString(strings, 'ARE_YOU_SURE', 'Are You Sure?'),
+            warning,
+        )
+        if (!dialog) return null
+        this._userSubDialog = dialog.node
+
+        dialog.setButtons([
+            {
+                label: this._lawnString(strings, 'BUTTON_YES', 'Yes'),
+                result: DialogResult.Yes,
+                localize: false,
+            },
+            {
+                label: this._lawnString(strings, 'BUTTON_NO', 'No'),
+                result: DialogResult.No,
+                localize: false,
+            },
+        ])
+        void dialog.waitForResult().then((result) => {
+            if (this._userSubDialog === dialog.node) this._userSubDialog = null
+            if (result === DialogResult.Yes && userDialog.node?.isValid) {
+                this._runWithSwitchUserLoading(() => {
+                    const deletingCurrent = this._sameProfileName(this._profile?.name ?? '', name)
+                    if (!ProfileStore.deleteProfile(name)) return
+
+                    userDialog.finishDeleteUser()
+                    if (deletingCurrent) {
+                        const selectedName = userDialog.selectedName()
+                        const nextProfile = selectedName
+                            ? ProfileStore.loadProfileByName(selectedName)
+                            : ProfileStore.getAnyProfile()
+                        this._setCurrentProfile(nextProfile)
+                    } else {
+                        this._syncSelectorProfile()
+                    }
+                    if (!this._profile || !userDialog.selectedName()) {
+                        void this.showNewUserDialog(userDialog)
+                    }
+                })
+            }
+        })
+        return dialog
+    }
+
+    async showEnterYourNameDialog(nameDialog: NewUserDialog): Promise<MessageBox | null> {
+        const strings = await LawnStringLoader.load()
+        if (!nameDialog.node?.isValid) return null
+        if (this._userSubDialog?.isValid && this._userSubDialog !== nameDialog.node) {
+            return this._userSubDialog.getComponent(MessageBox)
+        }
+
+        const dialog = this.showMessageBox(
+            this._lawnString(strings, 'ENTER_YOUR_NAME', 'Enter Your Name'),
+            this._lawnString(
+                strings,
+                'USER_ERROR_MESSAGE',
+                'Please enter your name to create a new user profile for storing high score data and game progress.',
+            ),
+        )
+        if (!dialog) return null
+        this._userSubDialog = dialog.node
+
+        dialog.setButtonMode(DialogButtonMode.Footer, this._lawnString(strings, 'DIALOG_BUTTON_OK', 'OK'))
+        void dialog.waitForResult().then(() => {
+            if (this._userSubDialog === dialog.node) this._userSubDialog = null
+            if (nameDialog.node?.isValid) nameDialog.requestInputFocus()
+        })
+        return dialog
+    }
+
+    async showNameConflictDialog(nameDialog: NewUserDialog): Promise<MessageBox | null> {
+        const strings = await LawnStringLoader.load()
+        if (!nameDialog.node?.isValid) return null
+        if (this._userSubDialog?.isValid && this._userSubDialog !== nameDialog.node) {
+            return this._userSubDialog.getComponent(MessageBox)
+        }
+
+        const dialog = this.showMessageBox(
+            this._lawnString(strings, 'NAME_CONFLICT', 'Name Conflict'),
+            this._lawnString(
+                strings,
+                'ENTER_UNIQUE_PLAYER_NAME',
+                'The name you entered is already being used.  Please enter a unique player name.',
+            ),
+        )
+        if (!dialog) return null
+        this._userSubDialog = dialog.node
+
+        dialog.setButtonMode(DialogButtonMode.Footer, this._lawnString(strings, 'DIALOG_BUTTON_OK', 'OK'))
+        void dialog.waitForResult().then(() => {
+            if (this._userSubDialog === dialog.node) this._userSubDialog = null
+            if (nameDialog.node?.isValid) nameDialog.requestInputFocus()
+        })
+        return dialog
+    }
+
+    showSwitchUserLoadingDialog(): MessageBox | null {
+        if (!this._currentScreen?.isValid) return null
+
+        const node = createUINode('SwitchUserLoadingDialog', { active: false, width: 100, height: 100 })
+        const dialog = node.addComponent(MessageBox)
+        dialog.title = 'Loading...'
+        dialog.message = ''
+        dialog.setButtonMode(DialogButtonMode.None)
+
+        this._addToScreenClipRoot(node)
+        node.active = true
+        return dialog
+    }
+
+    private _runWithSwitchUserLoading<T>(operation: () => T): T {
+        const loadingDialog = this.showSwitchUserLoadingDialog()
+        try {
+            return operation()
+        } finally {
+            if (loadingDialog?.node?.isValid) loadingDialog.node.destroy()
+        }
     }
 
     async showGameOverDialog(): Promise<MessageBox | null> {
@@ -990,7 +1280,8 @@ export class UIController extends Component {
     }
 
     private async _createMobileDebugCliButton() {
-        if (!sys.isMobile) return
+        if (!GameDebugSettings.isMobileMode()) return
+        if (this._isStartupScreenActive()) return
         if (!this.uiRoot?.isValid || this._mobileDebugCliButton?.isValid) return
 
         const brainFrame = await SpriteLoader.load('brain')
@@ -1039,7 +1330,7 @@ export class UIController extends Component {
     private _placeMobileDebugCliButton() {
         if (!this._mobileDebugCliButton?.isValid) return
 
-        this._mobileDebugCliButton.active = !this._debugCliScreen?.isValid
+        this._mobileDebugCliButton.active = !this._debugCliScreen?.isValid && !this._isStartupScreenActive()
         this._mobileDebugCliButton.setSiblingIndex(Math.max(0, (this.uiRoot?.children.length ?? 1) - 1))
     }
 
@@ -1222,6 +1513,7 @@ export class UIController extends Component {
                 anchorX: 1,
                 anchorY: 1,
             })
+            this._bindWidescreenBackgroundToggle(this._backgroundLeft)
         }
         if (right) {
             this._backgroundRight = createSpriteNode({
@@ -1232,6 +1524,7 @@ export class UIController extends Component {
                 anchorX: 0,
                 anchorY: 1,
             })
+            this._bindWidescreenBackgroundToggle(this._backgroundRight)
         }
         this._placePersistentWidescreenBackgrounds()
     }
@@ -1241,6 +1534,7 @@ export class UIController extends Component {
         this._layoutSideBackground(this._backgroundRight, SCREEN_WIDTH / 2)
         this._backgroundRight?.setSiblingIndex(0)
         this._backgroundLeft?.setSiblingIndex(0)
+        this._applyWidescreenBackgroundVisibility()
     }
 
     private _layoutSideBackground(node: Node | null, x: number) {
@@ -1251,6 +1545,41 @@ export class UIController extends Component {
         const scale = height > 0 ? SCREEN_HEIGHT / height : 1
         node.setPosition(x, SCREEN_HEIGHT / 2, 0)
         node.setScale(scale, scale, 1)
+    }
+
+    private _bindWidescreenBackgroundToggle(node: Node) {
+        node.on(Node.EventType.TOUCH_START, this._onWidescreenBackgroundPointerDown, this)
+    }
+
+    private _onWidescreenBackgroundPointerDown(event: EventTouch) {
+        const now = Date.now()
+        const doubleClick = now - this._lastBackgroundClickTime <= BACKGROUND_DOUBLE_CLICK_MS
+        this._lastBackgroundClickTime = now
+        if (!doubleClick) return
+
+        event.propagationStopped = true
+        const visible = this._widescreenBackgroundsVisible()
+        sys.localStorage.setItem(WIDESCREEN_BACKGROUND_SETTINGS_KEY, visible ? '0' : '1')
+        this._applyWidescreenBackgroundVisibility()
+        this._lastBackgroundClickTime = 0
+    }
+
+    private _applyWidescreenBackgroundVisibility() {
+        const visible = this._widescreenBackgroundsVisible()
+        this._setWidescreenBackgroundVisible(this._backgroundLeft, visible)
+        this._setWidescreenBackgroundVisible(this._backgroundRight, visible)
+    }
+
+    private _widescreenBackgroundsVisible() {
+        return sys.localStorage.getItem(WIDESCREEN_BACKGROUND_SETTINGS_KEY) !== '0'
+    }
+
+    private _setWidescreenBackgroundVisible(node: Node | null, visible: boolean) {
+        if (!node?.isValid) return
+
+        node.active = true
+        const opacity = node.getComponent(UIOpacity) ?? node.addComponent(UIOpacity)
+        opacity.opacity = visible ? 255 : 0
     }
 
     private _destroyCurrentScreen() {
@@ -1274,12 +1603,23 @@ export class UIController extends Component {
         this._globalAdviceLayer = null
         this._globalAdviceWidget = null
         this._screenTransitioning = false
+        this._startupScreen = null
         if (this._currentScreen?.isValid) {
             this._currentScreen.destroy()
         }
         this._currentScreen = null
         this._selectorScreen = null
         this._adventureGameScreen = null
+    }
+
+    private async _reloadGame() {
+        this._destroyCurrentScreen()
+        await this._bootstrap()
+        void this._createMobileDebugCliButton()
+    }
+
+    private _isStartupScreenActive() {
+        return this._startupScreen?.isValid === true
     }
 
     private _playInterfaceMusic(tune: MusicTuneId, restart = false) {
@@ -1343,12 +1683,15 @@ export class UIController extends Component {
 
     private _advanceAdventureProgress(completedLevel: number) {
         const profile = this._profile ?? ProfileStore.loadCurrentProfile()
+        if (!profile) return this._adventureLevel.adventureLevel
+
         this._profile = ProfileStore.advanceAdventureProgress(profile, completedLevel)
         return this._profile.adventureLevel
     }
 
     private _setProfileCoins(amount: number) {
         const profile = this._profile ?? ProfileStore.loadCurrentProfile()
+        if (!profile) return
         if (profile.coins === amount) return
 
         this._profile = ProfileStore.saveProfile({
@@ -1373,6 +1716,11 @@ export class UIController extends Component {
             this._settings = GameSettingsStore.update({ fullScreen: true })
         }
         this._syncOpenOptionsDialogSettings()
+        if (GameDebugSettings.isMobileMode()) {
+            void this._createMobileDebugCliButton()
+        } else {
+            this._destroyMobileDebugCliButton()
+        }
     }
 
     private _syncOpenOptionsDialogSettings() {
@@ -1541,6 +1889,44 @@ export class UIController extends Component {
 
     private _showZenGardenFromDebugCommand() {
         return !!this.showZenGardenScreen()
+    }
+
+    private _setCurrentProfile(profile: PlayerProfile | null) {
+        this._profile = profile
+        this._adventureLevel = this._getProfileAdventureLevel()
+        this._syncSelectorProfile()
+    }
+
+    private _syncSelectorProfile() {
+        const selectorScreen = this._selectorScreen
+        if (!selectorScreen?.node?.isValid) return
+
+        const playableAdventureLevel = this._getProfileAdventureLevel()
+        this._adventureLevel = playableAdventureLevel
+        selectorScreen.hasProfile = this._profile != null
+        selectorScreen.profileName = this._profile?.name ?? ''
+        selectorScreen.adventureLevel = playableAdventureLevel.adventureLevel
+        selectorScreen.finishedAdventure = this._profile?.finishedAdventure ?? 0
+        selectorScreen.setAccessState({
+            minigamesLocked: !this._canShowMinigames(),
+            puzzleLocked: !this._canShowPuzzle(),
+            survivalLocked: !this._canShowSurvival(),
+            almanacAvailable: this._canShowAlmanac(),
+            storeAvailable: this._canShowStore(),
+            zenGardenAvailable: this._canShowZenGarden(),
+        })
+    }
+
+    private _sameProfileName(a: string, b: string) {
+        return a.toLowerCase() === b.toLowerCase()
+    }
+
+    private async _requireProfileBeforePlaying() {
+        if (!this._profile) {
+            void this.showNewUserDialog()
+            return
+        }
+        void this.showUserDialog()
     }
 
     private _getProfileAdventureLevel() {

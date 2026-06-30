@@ -15,7 +15,6 @@ import {
     Vec2,
     Vec3,
     input,
-    sys,
 } from 'cc'
 import { Animator } from '@/core/Animator/Animator'
 import type { AnimNode } from '@/core/Animator/AnimNode'
@@ -23,6 +22,7 @@ import type { BitmapFontAssets } from '@/core/FontLoader'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { GameDebugSettings } from '@/game/GameDebugSettings'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import {
     getAnimationRateSpeed,
@@ -1843,7 +1843,7 @@ export class AlmanacScreen extends MenuScreenBase {
             event.propagationStopped = true
             this._scrollDescriptionByWheel(event)
         })
-        if (sys.isMobile) {
+        if (GameDebugSettings.isMobileMode()) {
             clipNode.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
                 if (this._descriptionSliderDragging) return
                 event.propagationStopped = true

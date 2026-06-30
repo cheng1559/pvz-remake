@@ -1,7 +1,7 @@
 import { sys } from 'cc'
 
 const SAVE_VERSION = 1
-const SAVE_KEY_PREFIX = 'pvz.save.'
+const SAVE_KEY_PREFIX = 'pvz-remake:saves:'
 
 export interface GameSaveRecord {
     version: number
@@ -18,7 +18,7 @@ function getStorage() {
 }
 
 function makeKey(profileId: number, gameMode: string) {
-    return `${SAVE_KEY_PREFIX}${profileId}.${gameMode}`
+    return `${SAVE_KEY_PREFIX}${profileId}:${gameMode}`
 }
 
 function readRecord(raw: string | null): GameSaveRecord | null {
@@ -64,7 +64,7 @@ export class GameSaveStore {
 
     static deleteAllForProfile(profileId: number) {
         const storage = getStorage()
-        const prefix = `${SAVE_KEY_PREFIX}${profileId}.`
+        const prefix = `${SAVE_KEY_PREFIX}${profileId}:`
         for (let i = storage.length - 1; i >= 0; i--) {
             const key = storage.key(i)
             if (key && key.startsWith(prefix)) {

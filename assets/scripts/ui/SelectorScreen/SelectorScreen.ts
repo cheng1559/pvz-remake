@@ -14,6 +14,8 @@ import {
 } from 'cc'
 import { AnimationComponent } from '@/components/AnimationComponent'
 import { AnimNode } from '@/core/Animator/AnimNode'
+import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
+import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { UIButton } from '@/ui/Button'
@@ -71,6 +73,12 @@ const SELECTOR_LEVEL_SUB_X = 509
 const SELECTOR_LEVEL_SUB_Y = 50
 const SELECTOR_LEVEL_SUB_TEN_X = 518
 const SELECTOR_LEVEL_SUB_TEN_Y = 51
+const SELECTOR_PROFILE_NAME_FONT = 'briannetod16'
+const SELECTOR_PROFILE_NAME_COLOR = new Color(255, 245, 200)
+const SELECTOR_PROFILE_NAME_TRACK = 'woodsign1'
+const SELECTOR_PROFILE_NAME_CENTER_X = 170.5
+const SELECTOR_PROFILE_NAME_BASELINE_Y = 102.5
+const SELECTOR_PROFILE_NAME_Z = 46
 
 interface CloudLoopState {
     node: AnimNode
@@ -122,11 +130,19 @@ export class SelectorScreen extends AnimationComponent {
     private _grassLoopActive = false
     private _grassLoopElapsed = 0
     private _grassLoopInterval = 0
+    private _hasProfile = true
     private _adventureLevel = 1
     private _finishedAdventure = 0
     private _levelNumberContainer: Node | null = null
     private _levelNumberAtlas: SpriteFrame | null = null
     private _levelNumberSprites: Sprite[] = []
+    private _profileName = ''
+    private _profileNameNode: Node | null = null
+    private _profileNameRenderer: FontRenderer | null = null
+    private _profileNameFont: BitmapFontAssets | null = null
+    private _profileNameText = ''
+    private _profileNameVisible = false
+    private _profileNameBaseFrame: number | null = null
     private _accessState: SelectorAccessState = {
         minigamesLocked: true,
         puzzleLocked: true,
@@ -148,6 +164,19 @@ export class SelectorScreen extends AnimationComponent {
     public onAlmanacRequest: (() => void) | null = null
     public onAdventureRequest: (() => void) | null = null
     public onStartAdventureTransition: (() => void) | null = null
+    public onChangeUserRequest: (() => void) | null = null
+    public onCreateUserRequired: (() => void) | null = null
+
+    public set hasProfile(value: boolean) {
+        if (this._hasProfile === value) return
+        this._hasProfile = value
+        if (!value) this._hideGrass()
+        else this.playGrassLoop()
+    }
+
+    public get hasProfile() {
+        return this._hasProfile
+    }
 
     public get adventureLevel(): number {
         return this._adventureLevel
@@ -180,6 +209,17 @@ export class SelectorScreen extends AnimationComponent {
         this._applyAccessState()
     }
 
+    public set profileName(value: string) {
+        const normalized = value.trim()
+        if (this._profileName === normalized) return
+        this._profileName = normalized
+        this._refreshProfileNameText()
+    }
+
+    public get profileName() {
+        return this._profileName
+    }
+
     async init() {
         const cloudNames = ['cloud1', 'cloud2', 'cloud4', 'cloud5', 'cloud6', 'cloud7']
         for (const name of cloudNames) {
@@ -189,6 +229,8 @@ export class SelectorScreen extends AnimationComponent {
         this.openNode = this.animator.addAnimNode('open')
         this.signNode = this.animator.addAnimNode('sign')
         this.grassNode = this.animator.addAnimNode('grass')
+        this.openNode.hidePrefix('leaf')
+        this.signNode.hidePrefix('leaf')
         const flowerNames = ['flower1', 'flower2', 'flower3']
         for (const name of flowerNames) {
             const node = this.animator.addAnimNode(name)
@@ -197,6 +239,7 @@ export class SelectorScreen extends AnimationComponent {
 
         this._initButtonContainer()
         await this._initLevelNumbers()
+        await this._initProfileName()
         await this._createButtons()
         this._updateAdventureButtonMode()
         this._applyAccessState()
@@ -273,6 +316,35 @@ export class SelectorScreen extends AnimationComponent {
         this._renderLevelNumbers()
     }
 
+    private async _initProfileName() {
+        this._profileNameFont = await FontLoader.load(SELECTOR_PROFILE_NAME_FONT)
+
+        const node = createUINode('ProfileName', {
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+        })
+        const renderer = node.addComponent(FontRenderer)
+        if (this._profileNameFont) renderer.setFontAssets(this._profileNameFont)
+        renderer.fontColor = SELECTOR_PROFILE_NAME_COLOR
+
+        this._profileNameNode = node
+        this._profileNameRenderer = renderer
+        this._initProfileNameBasePose()
+        this.animator.insertExternalNode('__profile_name__', node, SELECTOR_PROFILE_NAME_Z)
+        this._refreshProfileNameText()
+    }
+
+    private _initProfileNameBasePose() {
+        const frame = this._lastTrackFrame('sign', SELECTOR_PROFILE_NAME_TRACK)
+        this._profileNameBaseFrame = frame?.frameIndex ?? null
+    }
+
+    private _lastTrackFrame(animationName: string, trackName: string) {
+        const frames = this.animation?.json?.[animationName]?.tracks?.[trackName]?.frames
+        return Array.isArray(frames) ? frames[frames.length - 1] as { frameIndex?: number } : null
+    }
+
     private _renderLevelNumbers() {
         const container = this._levelNumberContainer
         const atlas = this._levelNumberAtlas
@@ -322,6 +394,51 @@ export class SelectorScreen extends AnimationComponent {
 
         this._syncLevelNumberColor()
         this._updateLevelNumberPosition()
+    }
+
+    private _refreshProfileNameText() {
+        const renderer = this._profileNameRenderer
+        const node = this._profileNameNode
+        if (!renderer || !node) return
+
+        const text = this._profileName ? `${this._profileName}!` : ''
+        node.active = this._profileNameVisible && text.length > 0
+        if (this._profileNameText === text) return
+
+        this._profileNameText = text
+        renderer.string = text
+        renderer.forceRebuild()
+        this._updateProfileNamePosition()
+    }
+
+    private _updateProfileNamePosition() {
+        const node = this._profileNameNode
+        if (!node || !this._profileNameText) return
+        if (!this._profileNameVisible) {
+            node.active = false
+            return
+        }
+
+        const matrix = this.signNode.computeTrackTransformMatrix(
+            SELECTOR_PROFILE_NAME_TRACK,
+            this._profileNameBaseFrame,
+        )
+        if (!matrix) {
+            node.active = false
+            return
+        }
+
+        const textWidth = FontMetricsUtil.measureTextWidth(this._profileNameFont?.config ?? null, this._profileNameText)
+        const metrics = FontMetricsUtil.getMetrics(this._profileNameFont?.config ?? null)
+        const textTopY = SELECTOR_PROFILE_NAME_BASELINE_Y - metrics.ascent
+        const localX = SELECTOR_PROFILE_NAME_CENTER_X - Math.trunc(textWidth * 0.5)
+        const localY = -textTopY
+        node.active = true
+        node.setPosition(
+            matrix.m00 * localX + matrix.m04 * localY + matrix.m12,
+            matrix.m01 * localX + matrix.m05 * localY + matrix.m13,
+            0,
+        )
     }
 
     private _createLevelNumberSprite(name: string, cel: number, x: number, y: number) {
@@ -571,6 +688,9 @@ export class SelectorScreen extends AnimationComponent {
         this._bindButtonClick('almanac', () => {
             this.onAlmanacRequest?.()
         })
+        this._bindButtonClick('changeUser', () => {
+            this.onChangeUserRequest?.()
+        })
 
         this._applyAccessState()
     }
@@ -597,6 +717,24 @@ export class SelectorScreen extends AnimationComponent {
 
     public setButtonsInteractable(interactable: boolean) {
         this._setButtonsInteractable(interactable)
+    }
+
+    public showProfileSign() {
+        if (!this.node?.isValid || !this.signNode) return
+
+        this.hasProfile = true
+        this.playGrassLoop()
+        this.signNode.play({
+            name: 'anim_sign',
+            speed: this._speedForReanimRate(this.signNode, 'anim_sign', SELECTOR_SIGN_RATE),
+            keepLastFrame: true,
+            onFinish: () => {
+                this._createFlowerButtons()
+            },
+        })
+        this._profileNameVisible = true
+        this._refreshProfileNameText()
+        this._updateProfileNamePosition()
     }
 
     private _configureButtonSounds(name: string, button: UIButton) {
@@ -793,6 +931,7 @@ export class SelectorScreen extends AnimationComponent {
         }
         this._updateLevelNumberPosition()
         this._syncLevelNumberColor()
+        this._updateProfileNamePosition()
     }
 
     startAdventure() {
@@ -894,6 +1033,8 @@ export class SelectorScreen extends AnimationComponent {
     }
 
     playGrassLoop() {
+        if (!this.hasProfile) return
+
         this.grassNode.play({
             name: 'anim_grass',
             speed: this._speedForReanimRate(
@@ -909,6 +1050,10 @@ export class SelectorScreen extends AnimationComponent {
     }
 
     private _updateGrassLoop(dt: number) {
+        if (!this.hasProfile) {
+            this._hideGrass()
+            return
+        }
         if (!this._grassLoopActive || this._grassLoopInterval <= 0) return
 
         this._grassLoopElapsed += dt
@@ -927,6 +1072,11 @@ export class SelectorScreen extends AnimationComponent {
         }
     }
 
+    private _hideGrass() {
+        this.animator?.stopAnimNode(this.grassNode)
+        this._grassLoopActive = false
+    }
+
     playOpenAnimation() {
         this.openNode.play({
             name: 'anim_open',
@@ -937,15 +1087,15 @@ export class SelectorScreen extends AnimationComponent {
             },
             onFinish: () => {
                 this._setButtonsInteractable(true)
-                this.signNode.play({
-                    name: 'anim_sign',
-                    speed: this._speedForReanimRate(this.signNode, 'anim_sign', SELECTOR_SIGN_RATE),
-                    keepLastFrame: true,
-                    onFinish: () => {
-                        this._createFlowerButtons()
-                    },
-                })
-                this.playGrassLoop()
+                if (!this.hasProfile) {
+                    this._profileNameVisible = false
+                    this._refreshProfileNameText()
+                    this._hideGrass()
+                    this.onCreateUserRequired?.()
+                    return
+                }
+
+                this.showProfileSign()
             },
         })
     }

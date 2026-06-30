@@ -1,4 +1,5 @@
 import { _decorator, Color, Component, EventKeyboard, EventMouse, EventTouch, Graphics, input, Input, Mask, Node, UIOpacity, UITransform, Vec3, view, type SpriteFrame } from 'cc'
+import { DEBUG } from 'cc/env'
 import { Animator } from '@/core/Animator'
 import type { AnimNode } from '@/core/Animator/AnimNode'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
@@ -49,8 +50,6 @@ export class StartupScreen extends Component {
     private _resolveLogo: (() => void) | null = null
     private _resolveStarted: (() => void) | null = null
     private _logoOpacity: UIOpacity | null = null
-    private _backgroundLeft: Node | null = null
-    private _backgroundRight: Node | null = null
     private _pvzLogo: Node | null = null
     private _barRoot: Node | null = null
     private _barGrassClip: Node | null = null
@@ -147,7 +146,7 @@ export class StartupScreen extends Component {
             this._barVel += diff * Math.abs(diff) * acceleration
             this._barVel = Math.max(
                 this._lerp(0.2, 0.01, loadingPercent),
-                Math.min(2, this._barVel),
+                Math.min(DEBUG && this._loadingComplete ? LOAD_BAR_WIDTH / 30 : 2, this._barVel),
             )
             this._prevLoadingPercent = loadingPercent
         }
@@ -185,8 +184,6 @@ export class StartupScreen extends Component {
     }
 
     private _renderLoadingScreen() {
-        this._layoutWidescreenBackgrounds()
-
         const logoY = this._titleStateCounter > 60
             ? this._animateCurveInt(TITLE_SCREEN_COUNTER, 60, this._titleStateCounter, -150, 10, 'easeIn')
             : this._animateCurveInt(60, 50, this._titleStateCounter, 10, 15, 'bounce')
@@ -269,15 +266,11 @@ export class StartupScreen extends Component {
         this._screenClipRoot = this._createScreenClipRoot(this._root)
 
         const title = SpriteLoader.get('titlescreen')
-        const backgroundLeft = await SpriteLoader.load('background_left')
-        const backgroundRight = await SpriteLoader.load('background_right')
         const pvzLogo = SpriteLoader.get('pvz_logo')
         const dirt = SpriteLoader.get('loadbar_dirt')
         const grass = SpriteLoader.get('loadbar_grass')
         const sodRollCap = SpriteLoader.get('sodrollcap')
         if (!title || !pvzLogo || !dirt || !grass || !sodRollCap) return
-
-        this._createWidescreenBackgrounds(backgroundLeft, backgroundRight)
 
         createSpriteNode({
             name: 'TitleScreen',
@@ -358,30 +351,6 @@ export class StartupScreen extends Component {
         this._renderLoadingScreen()
     }
 
-    private _createWidescreenBackgrounds(left: SpriteFrame | null, right: SpriteFrame | null) {
-        if (left) {
-            this._backgroundLeft = createSpriteNode({
-                name: 'BackgroundLeft',
-                spriteFrame: left,
-                parent: this._root!,
-                layer: this.node.layer,
-                anchorX: 1,
-                anchorY: 1,
-            })
-        }
-        if (right) {
-            this._backgroundRight = createSpriteNode({
-                name: 'BackgroundRight',
-                spriteFrame: right,
-                parent: this._root!,
-                layer: this.node.layer,
-                anchorX: 0,
-                anchorY: 1,
-            })
-        }
-        this._layoutWidescreenBackgrounds()
-    }
-
     private _createStartButton() {
         const dirt = SpriteLoader.get('loadbar_dirt')
         const x = dirt ? this._loadBarDirtX(dirt) : SCREEN_WIDTH / 2 - LOAD_BAR_WIDTH / 2
@@ -454,25 +423,6 @@ export class StartupScreen extends Component {
         }
         this._layoutSodRollCap()
         this._layoutLoadingLabel()
-    }
-
-    private _layoutWidescreenBackgrounds() {
-        if (this._backgroundLeft?.isValid) {
-            this._backgroundLeft.active = true
-            this._layoutSideBackground(this._backgroundLeft, -SCREEN_WIDTH / 2)
-        }
-        if (this._backgroundRight?.isValid) {
-            this._backgroundRight.active = true
-            this._layoutSideBackground(this._backgroundRight, SCREEN_WIDTH / 2)
-        }
-    }
-
-    private _layoutSideBackground(node: Node, x: number) {
-        const transform = node.getComponent(UITransform)
-        const height = transform?.contentSize.height ?? SCREEN_HEIGHT
-        const scale = height > 0 ? SCREEN_HEIGHT / height : 1
-        node.setPosition(x, SCREEN_HEIGHT / 2, 0)
-        node.setScale(scale, scale, 1)
     }
 
     private _layoutSodRollCap() {
@@ -631,6 +581,7 @@ export class StartupScreen extends Component {
 
     private _onStartPointerDown(event: EventMouse | EventTouch) {
         if (this._isStartButtonPointer(event)) return
+        if (!this._isScreenPointer(event)) return
         this._completeStartupWithSound()
     }
 
@@ -649,6 +600,19 @@ export class StartupScreen extends Component {
         const local = transform.convertToNodeSpaceAR(new Vec3(uiLocation.x, uiLocation.y, 0))
         const size = transform.contentSize
         return local.x >= 0 && local.x <= size.width && local.y <= 0 && local.y >= -size.height
+    }
+
+    private _isScreenPointer(event: EventMouse | EventTouch) {
+        const transform = this._screenClipRoot?.getComponent(UITransform)
+        if (!transform) return false
+
+        const uiLocation = event.getUILocation()
+        const local = transform.convertToNodeSpaceAR(new Vec3(uiLocation.x, uiLocation.y, 0))
+        const size = transform.contentSize
+        return local.x >= -size.width / 2 &&
+            local.x <= size.width / 2 &&
+            local.y >= -size.height / 2 &&
+            local.y <= size.height / 2
     }
 
     private _canCompleteStartup() {

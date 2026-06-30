@@ -10,13 +10,13 @@ import {
     EventTouch,
     input,
     Input,
-    sys,
     Camera,
     Color,
     EventMouse,
 } from 'cc'
 import { UIHoverManager, type UIHoverPointer } from '@/ui/UIHoverManager'
 import { CursorManager } from '@/ui/CursorManager'
+import { GameDebugSettings } from '@/game/GameDebugSettings'
 
 const { ccclass, property } = _decorator
 const LEFT_MOUSE_BUTTON = 0
@@ -195,6 +195,7 @@ export class UIButton extends Component {
         this._activeButton = null
         this._inputSuppressedPointerActive = false
         this._endPressCapture()
+        this._pruneDeadInstances()
         for (const button of this._instances) {
             button._pressed = false
             button._pressVisualActive = false
@@ -212,6 +213,7 @@ export class UIButton extends Component {
             this.clearHoverStates()
             return false
         }
+        this._pruneDeadInstances()
         if (this._activeButton) return false
         if (!this._lastPointerCanHover) {
             this.clearHoverStates()
@@ -238,6 +240,20 @@ export class UIButton extends Component {
         this._applyState(this._state)
     }
 
+    private static _pruneDeadInstances() {
+        for (const button of this._instances) {
+            if (!this._isButtonAlive(button)) this._instances.delete(button)
+        }
+        if (this._activeButton && !this._isButtonAlive(this._activeButton)) {
+            this._activeButton = null
+            this._endPressCapture()
+        }
+    }
+
+    private static _isButtonAlive(button: UIButton) {
+        return button.isValid && !!button.node?.isValid
+    }
+
     private static _ensureMouseTracking() {
         if (this._mouseTrackingStarted) return
         this._mouseTrackingStarted = true
@@ -252,7 +268,7 @@ export class UIButton extends Component {
     }
 
     private static _onGlobalMouseMove(event: EventMouse) {
-        if (sys.isMobile) {
+        if (GameDebugSettings.isMobileMode()) {
             UIButton._lastPointerCanHover = false
             return
         }
@@ -263,7 +279,7 @@ export class UIButton extends Component {
     }
 
     private static _onGlobalMouseDown(event: EventMouse) {
-        if (sys.isMobile) {
+        if (GameDebugSettings.isMobileMode()) {
             UIButton._lastPointerCanHover = false
             return
         }
@@ -277,7 +293,7 @@ export class UIButton extends Component {
             UIButton._activeButton._finishMousePress(event)
         }
         UIButton._inputSuppressedPointerActive = false
-        if (sys.isMobile) {
+        if (GameDebugSettings.isMobileMode()) {
             UIButton._lastPointerCanHover = false
             return
         }
@@ -327,7 +343,7 @@ export class UIButton extends Component {
     }
 
     private static _onGlobalTouch(event: EventTouch) {
-        if (!sys.isMobile) return
+        if (!GameDebugSettings.isMobileMode()) return
         UIButton._lastMouseLocation = event.touch?.getLocation() ?? event.getUILocation()
         UIButton._lastPointerCanHover = false
         UIHoverManager.rememberTouchEvent(event, false)
@@ -343,7 +359,7 @@ export class UIButton extends Component {
     public static rememberTouchLocation(event: EventTouch) {
         UIButton._lastMouseLocation = event.touch?.getLocation() ?? event.getUILocation()
         UIHoverManager.rememberTouchEvent(event, false)
-        if (sys.isMobile) {
+        if (GameDebugSettings.isMobileMode()) {
             UIButton._lastPointerCanHover = false
         } else {
             UIButton._lastPointerCanHover = true
@@ -351,7 +367,7 @@ export class UIButton extends Component {
     }
 
     public static rememberMouseLocation(event: EventMouse) {
-        if (sys.isMobile) {
+        if (GameDebugSettings.isMobileMode()) {
             UIButton._lastPointerCanHover = false
             return
         }
@@ -422,8 +438,17 @@ export class UIButton extends Component {
         this.node.off(Node.EventType.MOUSE_LEAVE, this._onMouseLeave, this)
     }
 
+    onDestroy() {
+        UIButton._instances.delete(this)
+        if (UIButton._activeButton === this) {
+            UIButton._activeButton = null
+            UIButton._endPressCapture()
+        }
+        this._sprite = null
+    }
+
     private _onTouchStart(event: EventTouch) {
-        if (!sys.isMobile) return
+        if (!GameDebugSettings.isMobileMode()) return
         if (UIButton._isInputSuppressedForNode(this.node)) {
             UIButton._inputSuppressedPointerActive = true
             UIButton._ignoreHoverUntilMouseMove = true
@@ -437,7 +462,7 @@ export class UIButton extends Component {
     }
 
     private _onTouchMove(event: EventTouch) {
-        if (!sys.isMobile) return
+        if (!GameDebugSettings.isMobileMode()) return
         if (UIButton._isInputSuppressedForNode(this.node) || UIButton._inputSuppressedPointerActive) return
         if (!this._interactable) return
         if (!this._pressed) return
@@ -465,7 +490,7 @@ export class UIButton extends Component {
     }
 
     private _onTouchEnd(event: EventTouch) {
-        if (!sys.isMobile) return
+        if (!GameDebugSettings.isMobileMode()) return
         if (UIButton._isInputSuppressedForNode(this.node) || UIButton._inputSuppressedPointerActive) {
             UIButton._inputSuppressedPointerActive = false
             return
@@ -480,7 +505,7 @@ export class UIButton extends Component {
 
         const inside = this._isTouchInside(event)
         UIButton._activeButton = null
-        const shouldHover = !sys.isMobile && inside && !UIButton._isInputSuppressedForNode(this.node)
+        const shouldHover = !GameDebugSettings.isMobileMode() && inside && !UIButton._isInputSuppressedForNode(this.node)
         this._setHovering(shouldHover, false, false)
         this._applyState(shouldHover ? ButtonState.HOVER : ButtonState.NORMAL)
         this._setCursor(shouldHover ? 'pointer' : 'default')
@@ -492,7 +517,7 @@ export class UIButton extends Component {
     }
 
     private _onTouchCancel(event: EventTouch) {
-        if (!sys.isMobile) return
+        if (!GameDebugSettings.isMobileMode()) return
         if (UIButton._isInputSuppressedForNode(this.node) || UIButton._inputSuppressedPointerActive) {
             UIButton._inputSuppressedPointerActive = false
             return
@@ -514,7 +539,7 @@ export class UIButton extends Component {
     }
 
     private _onMouseDown(event: EventMouse) {
-        if (sys.isMobile) return
+        if (GameDebugSettings.isMobileMode()) return
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
         UIHoverManager.rememberMouseEvent(event, false)
@@ -533,7 +558,7 @@ export class UIButton extends Component {
     }
 
     private _onMouseUp(event: EventMouse) {
-        if (sys.isMobile) return
+        if (GameDebugSettings.isMobileMode()) return
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
         UIHoverManager.rememberMouseEvent(event, false)
@@ -663,7 +688,7 @@ export class UIButton extends Component {
     }
 
     private _onMouseEnter() {
-        if (sys.isMobile) return
+        if (GameDebugSettings.isMobileMode()) return
         if (!this._interactable) return
         if (UIButton._isInputSuppressedForNode(this.node)) return
         if (UIButton._activeButton && UIButton._activeButton !== this) return
@@ -676,7 +701,7 @@ export class UIButton extends Component {
     }
 
     private _onMouseMove(event: EventMouse) {
-        if (sys.isMobile) return
+        if (GameDebugSettings.isMobileMode()) return
         UIButton._lastMouseLocation = event.getLocation()
         UIButton._lastPointerCanHover = true
         UIHoverManager.rememberMouseEvent(event, false)
@@ -691,7 +716,7 @@ export class UIButton extends Component {
     }
 
     private _onMouseLeave() {
-        if (sys.isMobile) return
+        if (GameDebugSettings.isMobileMode()) return
         if (!this._interactable) return
         if (UIButton._isInputSuppressedForNode(this.node)) return
         if (UIButton._activeButton && UIButton._activeButton !== this) return
@@ -707,6 +732,11 @@ export class UIButton extends Component {
         pointerLocation: Vec2 | null = null,
         activeModalRoot: Node | null = null,
     ) {
+        if (!UIButton._isButtonAlive(this)) {
+            UIButton._instances.delete(this)
+            if (UIButton._activeButton === this) UIButton._activeButton = null
+            return false
+        }
         if (
             !this._interactable ||
             !this.node.activeInHierarchy ||
@@ -736,6 +766,7 @@ export class UIButton extends Component {
     }
 
     private _setHovering(hovering: boolean, applyVisual = true, emitEvent = true, updateCursor = true) {
+        if (!UIButton._isButtonAlive(this)) return
         const wasHovering = this._hovering
         this._hovering = hovering
         if (!this._interactable) return
@@ -772,18 +803,33 @@ export class UIButton extends Component {
                 visualState = 'disabled'
                 break
         }
-        if (frame && this._sprite) this._sprite.spriteFrame = frame
-        if (this._sprite) this._applyColor()
+        const sprite = this._getLiveSprite()
+        if (frame && sprite) sprite.spriteFrame = frame
+        if (sprite) this._applyColor()
         this.onStateChange?.(visualState)
     }
 
     private _applyColor() {
-        if (!this._sprite) return
+        const sprite = this._getLiveSprite()
+        if (!sprite) return
         const c = this._color
-        const cur = this._sprite.color
-        if (cur.r !== c.r || cur.g !== c.g || cur.b !== c.b || cur.a !== c.a) {
-            this._sprite.color = new Color(c.r, c.g, c.b, c.a)
+        const cur = sprite.color
+        if (!cur) {
+            // ponytail: repair Cocos' null renderer color before using its setter.
+            const renderer = sprite as Sprite & { _color?: Color | null, _updateColor?: () => void }
+            renderer._color = new Color(c.r, c.g, c.b, c.a)
+            renderer._updateColor?.()
+            return
         }
+        if (cur.r !== c.r || cur.g !== c.g || cur.b !== c.b || cur.a !== c.a) {
+            sprite.color = new Color(c.r, c.g, c.b, c.a)
+        }
+    }
+
+    private _getLiveSprite() {
+        if (this._sprite?.isValid && this._sprite.node?.isValid) return this._sprite
+        this._sprite = null
+        return null
     }
 
     private _applyOffset() {

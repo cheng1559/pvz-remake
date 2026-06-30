@@ -1,7 +1,7 @@
 import { sys } from 'cc'
 
 const SETTINGS_VERSION = 1
-const SETTINGS_KEY = 'pvz.settings.options'
+const SETTINGS_KEY = 'pvz-remake:settings:options'
 
 export const DEFAULT_MUSIC_VOLUME = 0.85
 export const SFX_VOLUME_SCALE = 0.65

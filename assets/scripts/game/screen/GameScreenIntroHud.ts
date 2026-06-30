@@ -1,4 +1,4 @@
-import { Color, EventMouse, EventTouch, Mask, Node, Rect, Size, SpriteFrame, sys } from 'cc'
+import { Color, EventMouse, EventTouch, Mask, Node, Rect, Size, SpriteFrame } from 'cc'
 import { Animator } from '@/core/Animator'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
@@ -9,6 +9,7 @@ import { getAtlasFrame } from '@/ui/SeedPacketRenderer'
 import { createStoneButton } from '@/ui/StoneButton'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import { ZOMBIE_DEFINITIONS } from '../GameDefinitions'
+import { GameDebugSettings } from '../GameDebugSettings'
 import { MusicSystem } from '../music/MusicSystem'
 import { createZombieAnimationView, playZombieBodyAnimation } from '../ZombieAnimation'
 import { getAnimationRateSpeed } from '../PlantAnimation'
@@ -1065,32 +1066,32 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             if (source?.kind !== 'seed' || source.seedType !== seedType) return false
 
             this._selectSeedSource(source)
-            if (sys.isMobile && this._session.selectedSeed) this._beginMobilePlantPress(pixel, source.rect)
+            if (GameDebugSettings.isMobileMode() && this._session.selectedSeed) this._beginMobilePlantPress(pixel, source.rect)
             this._renderFrame()
             event.propagationStopped = true
             return true
         }
         packetNode.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => {
-            if (sys.isMobile) return
+            if (GameDebugSettings.isMobileMode()) return
             if (event.getButton() !== 0) return
             onPress(event)
         }, this)
         packetNode.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             onPress(event)
         }, this)
         packetNode.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             event.propagationStopped = true
             this._onMobileTouchMove(event)
         }, this)
         packetNode.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             event.propagationStopped = true
             this._onMobileTouchEnd(event)
         }, this)
         packetNode.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => {
-            if (!sys.isMobile) return
+            if (!GameDebugSettings.isMobileMode()) return
             event.propagationStopped = true
             this._onMobileTouchEnd(event)
         }, this)

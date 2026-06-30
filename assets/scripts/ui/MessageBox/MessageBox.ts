@@ -32,6 +32,7 @@ export interface MessageBoxButton {
     width?: number
     height?: number
     finishOnClick?: boolean
+    localize?: boolean
     onClick?: () => void
 }
 
@@ -711,6 +712,7 @@ export class MessageBox extends ModalDialog {
             'Try Again': 'TRY_AGAIN',
         }
         for (const button of this._buttons) {
+            if (button.localize === false) continue
             const key = keyByLabel[button.label]
             if (!key) continue
             button.label = LawnStringLoader.translateOptional(`[${key}]`, strings) || button.label

@@ -1,5 +1,6 @@
-import { EventMouse, EventTouch, Node, sys, Vec2 } from 'cc'
+import { EventMouse, EventTouch, Node, Vec2 } from 'cc'
 import { CursorManager } from '@/ui/CursorManager'
+import { GameDebugSettings } from '@/game/GameDebugSettings'
 
 export interface UIHoverPointer {
     location: Vec2
@@ -50,7 +51,7 @@ export class UIHoverManager {
     }
 
     public static rememberMouseEvent(event: EventMouse, refreshHover = true) {
-        if (sys.isMobile) {
+        if (GameDebugSettings.isMobileMode()) {
             this._lastPointer = null
             if (refreshHover && !this.isModalBlocked) this.clearHoverStates()
             return

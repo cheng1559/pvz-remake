@@ -2,8 +2,8 @@ import { sys } from 'cc'
 import { GameSaveStore } from './GameSaveStore'
 
 const PROFILE_VERSION = 1
-const PROFILE_REGISTRY_KEY = 'pvz.profile.registry'
-const PROFILE_DATA_KEY_PREFIX = 'pvz.profile.'
+const PROFILE_REGISTRY_KEY = 'pvz-remake:profiles:registry'
+const PROFILE_DATA_KEY_PREFIX = 'pvz-remake:profiles:'
 const DEFAULT_PROFILE_NAME = 'Player'
 const MAX_PROFILES = 200
 const CHALLENGE_RECORD_COUNT = 100
@@ -303,6 +303,20 @@ function pruneProfiles(registry: ProfileRegistry) {
     }
 }
 
+function removeMissingProfilesFromRegistry(registry: ProfileRegistry) {
+    const summaries = registry.summaries.filter((summary) => readProfile(summary.id) != null)
+    if (summaries.length === registry.summaries.length) return false
+
+    registry.summaries = summaries
+    if (
+        registry.currentProfileId != null &&
+        !registry.summaries.some((summary) => summary.id === registry.currentProfileId)
+    ) {
+        registry.currentProfileId = registry.summaries[0]?.id ?? null
+    }
+    return true
+}
+
 export class ProfileStore {
     static loadRegistry() {
         return readRegistry()
@@ -334,7 +348,7 @@ export class ProfileStore {
         return profile ? cloneProfile(profile) : null
     }
 
-    static loadCurrentProfile(): PlayerProfile {
+    static loadCurrentProfile(): PlayerProfile | null {
         const registry = readRegistry()
         const existing =
             (registry.currentProfileId != null ? readProfile(registry.currentProfileId) : null) ??
@@ -343,17 +357,24 @@ export class ProfileStore {
             return touchProfile(existing)
         }
 
-        return this.createProfile(DEFAULT_PROFILE_NAME)
-    }
-
-    static createProfile(name: string) {
-        const registry = readRegistry()
-        const existing = registry.summaries.find((entry) => entry.name.toLowerCase() === name.toLowerCase())
-        if (existing) {
-            return this.loadProfileById(existing.id) ?? defaultProfile(existing.id, existing.name, existing.useSeq)
+        if (removeMissingProfilesFromRegistry(registry)) {
+            writeRegistry(registry)
+            const recovered =
+                (registry.currentProfileId != null ? readProfile(registry.currentProfileId) : null) ??
+                (registry.summaries[0] ? readProfile(registry.summaries[0].id) : null)
+            if (recovered) return touchProfile(recovered)
         }
 
-        const profile = defaultProfile(registry.nextProfileId, name || DEFAULT_PROFILE_NAME, registry.nextProfileUseSeq)
+        return null
+    }
+
+    static createProfile(name: string): PlayerProfile | null {
+        const registry = readRegistry()
+        const profileName = name || DEFAULT_PROFILE_NAME
+        const existing = registry.summaries.find((entry) => entry.name.toLowerCase() === profileName.toLowerCase())
+        if (existing) return null
+
+        const profile = defaultProfile(registry.nextProfileId, profileName, registry.nextProfileUseSeq)
         syncRegistryEntry(registry, profile)
         writeProfile(profile)
         pruneProfiles(registry)

@@ -13,7 +13,7 @@ export interface DebugCliResult {
     ok: boolean
     message: string
     failure?: 'syntax' | 'condition'
-    action?: 'restart' | 'home' | 'level' | 'help' | 'menu' | 'store' | 'almanac' | 'zenGarden' | 'quit'
+    action?: 'restart' | 'reload' | 'home' | 'level' | 'help' | 'menu' | 'store' | 'almanac' | 'zenGarden' | 'quit'
     levelId?: LevelDefinition['id']
     settingsChanged?: boolean
 }
@@ -87,6 +87,11 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
     },
     {
         name: 'restart',
+        completions: [],
+        parameterHints: [],
+    },
+    {
+        name: 'reload',
         completions: [],
         parameterHints: [],
     },
@@ -200,6 +205,11 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         completions: [DEBUG_BOOLEAN_VALUES],
         parameterHints: ['{enabled}'],
     },
+    {
+        name: 'mobile',
+        completions: [DEBUG_BOOLEAN_VALUES],
+        parameterHints: ['{enabled}'],
+    },
 ]
 
 interface DebugCliCommandSpec {
@@ -245,6 +255,8 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugKillCommand(tokens, gameScreen)
         case 'restart':
             return executeDebugRestartCommand(tokens, gameScreen)
+        case 'reload':
+            return executeDebugReloadCommand(tokens)
         case 'home':
             return executeDebugHomeCommand(tokens, gameScreen)
         case 'quit':
@@ -289,6 +301,8 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugSfxCommand(tokens)
         case 'fullscreen':
             return executeDebugFullScreenCommand(tokens)
+        case 'mobile':
+            return executeDebugMobileCommand(tokens)
         default:
             return { ok: false, message: `Unknown command: ${tokens[0]}` }
     }
@@ -518,6 +532,14 @@ function executeDebugRestartCommand(tokens: string[], gameScreen: AdventureGameS
     return { ok: true, message: 'Restarting level', action: 'restart' }
 }
 
+function executeDebugReloadCommand(tokens: string[]): DebugCliResult {
+    if (tokens.length !== 1) {
+        return { ok: false, message: 'Usage: /reload' }
+    }
+
+    return { ok: true, message: 'Reloading game', action: 'reload' }
+}
+
 function executeDebugHomeCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
     if (tokens.length !== 1) {
         return { ok: false, message: 'Usage: /home' }
@@ -679,6 +701,20 @@ function executeDebugFullScreenCommand(tokens: string[]): DebugCliResult {
     const settings = GameSettingsStore.update({ fullScreen: enabled })
     void applyDebugFullScreenPreference(settings.fullScreen)
     return { ok: true, message: `Fullscreen ${settings.fullScreen ? 'enabled' : 'disabled'}`, settingsChanged: true }
+}
+
+function executeDebugMobileCommand(tokens: string[]): DebugCliResult {
+    if (tokens.length !== 2) {
+        return { ok: false, message: 'Usage: /mobile {true|false}' }
+    }
+
+    const enabled = parseDebugBoolean(tokens[1])
+    if (enabled == null) {
+        return { ok: false, message: `Invalid mobile value: ${tokens[1]}. Use true or false` }
+    }
+
+    const mobileEnabled = GameDebugSettings.setMobileEnabled(enabled)
+    return { ok: true, message: `Mobile mode ${mobileEnabled ? 'enabled' : 'disabled'}`, settingsChanged: true }
 }
 
 function executeDebugRechargingCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
