@@ -216,11 +216,13 @@ export class Animator extends Component {
         let siblingIndex = 0
         for (let i = 0; i < sorted.length; i++) {
             const [trackName, node] = sorted[i]
-            node.setSiblingIndex(siblingIndex++)
+            if (node.getSiblingIndex() !== siblingIndex) node.setSiblingIndex(siblingIndex)
+            siblingIndex++
             const additiveNode = this._additiveTrackNodes.get(trackName)
             const additiveSprite = additiveNode?.getComponent(Sprite)
             if (additiveNode?.isValid && additiveSprite?.enabled) {
-                additiveNode.setSiblingIndex(siblingIndex++)
+                if (additiveNode.getSiblingIndex() !== siblingIndex) additiveNode.setSiblingIndex(siblingIndex)
+                siblingIndex++
             }
         }
     }

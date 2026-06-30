@@ -48,8 +48,9 @@ export class ParticleDefinitionLoader {
             'particle definitions',
         )
         for (const asset of assets) {
-            const definition = this._dropPlaceholderEmitters(
-                normalizeTodParticleDefinition(asset.json),
+            const definition = await this._loadDefinitionImages(
+                asset.name,
+                this._dropPlaceholderEmitters(normalizeTodParticleDefinition(asset.json)),
             )
             this._definitions.set(asset.name, definition)
         }

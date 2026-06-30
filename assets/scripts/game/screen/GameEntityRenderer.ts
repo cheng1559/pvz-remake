@@ -210,14 +210,16 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
                 }
             }
         }
-        for (const system of this._entityLayer.getComponentsInChildren(TodParticleSystem)) {
-            if (system.node.parent !== this._entityLayer) continue
+        for (const child of this._entityLayer.children) {
+            const system = child.getComponent(TodParticleSystem)
+            if (!system) continue
             entries.push({ node: system.node, order: system.renderOrder })
         }
 
         entries.sort((a, b) => a.order - b.order)
         for (let i = 0; i < entries.length; i++) {
-            entries[i].node.setSiblingIndex(i)
+            const node = entries[i].node
+            if (node.getSiblingIndex() !== i) node.setSiblingIndex(i)
         }
     }
 

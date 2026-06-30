@@ -1,10 +1,11 @@
-import { SpriteFrame, Texture2D, warn } from 'cc'
+import { dynamicAtlasManager, macro, SpriteFrame, Texture2D, warn } from 'cc'
 import { AssetLoader } from './AssetLoader'
 import { SpriteResourceManifest, type SpriteSampling } from './SpriteResourceManifest'
 
 export class SpriteLoader {
     private static _cache: Map<string, SpriteFrame> = new Map()
     private static _pending: Map<string, Promise<SpriteFrame | null>> = new Map()
+    private static _dynamicAtlasConfigured = false
 
     // ── Public API ─────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ export class SpriteLoader {
     }
 
     private static async _loadUncached(name: string): Promise<SpriteFrame | null> {
+        this._configureDynamicAtlas()
         const mainSf = await this._loadRaw(name)
 
         if (mainSf) {
@@ -103,6 +105,14 @@ export class SpriteLoader {
             if (sf) return sf
             return AssetLoader.load(`textures/${name}`, SpriteFrame, null)
         })
+    }
+
+    private static _configureDynamicAtlas() {
+        if (this._dynamicAtlasConfigured) return
+
+        this._dynamicAtlasConfigured = true
+        macro.CLEANUP_IMAGE_CACHE = false
+        dynamicAtlasManager.enabled = true
     }
 
     private static _applyTextureSampling(texture: Texture2D, sampling: SpriteSampling = 'nearest') {
