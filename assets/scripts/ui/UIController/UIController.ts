@@ -446,15 +446,31 @@ export class UIController extends Component {
         awardScreen.awardKind = award.kind
         awardScreen.seedType = award.seedType
         awardScreen.adventureLevel = adventureLevel
+        let finalAdventureDialogQueued = false
+        const showSelectorAfterFinalAdventure = () => {
+            if (finalAdventureDialogQueued) return
+            finalAdventureDialogQueued = true
+            void this.showSelectorScreen().then((selectorScreen) => {
+                if (!selectorScreen) return
+                this.showMessageBox(
+                    'Thanks for Playing!',
+                    'More levels are in development.\n\nFollow cheng1559/pvz-remake on GitHub for future updates.',
+                )
+            })
+        }
         awardScreen.onNextLevelRequest = () => {
             const nextLevel = this._nextAdventureLevel()
             if (nextLevel.id === this._adventureLevel.id) {
-                void this.showSelectorScreen()
+                showSelectorAfterFinalAdventure()
                 return
             }
             this.showAdventureGame(nextLevel, { forceNewGame: true, skipSavedGamePrompt: true })
         }
         awardScreen.onBackToMenu = () => {
+            if (this._nextAdventureLevel().id === this._adventureLevel.id) {
+                showSelectorAfterFinalAdventure()
+                return
+            }
             void this.showSelectorScreen()
         }
 
