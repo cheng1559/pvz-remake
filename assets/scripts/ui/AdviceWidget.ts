@@ -12,6 +12,13 @@ export type AdviceWidgetStyle =
     | 'tutorial-later'
     | 'tutorial-later-stay'
 
+export interface AdviceWidgetSnapshot {
+    message: string
+    style: AdviceWidgetStyle
+    durationTicks: number
+    pulseTick: number
+}
+
 const ADVICE_HINT_Y = 527
 const ADVICE_HINT_HEIGHT = 55
 const ADVICE_TUTORIAL_LEVEL1_Y = 400
@@ -83,6 +90,33 @@ export class AdviceWidget {
         this._label.forceRebuild()
         this._applyLayout()
         this.node.active = true
+        this._drawBackdrop()
+    }
+
+    snapshot(): AdviceWidgetSnapshot | null {
+        if (!this.node.isValid || !this.node.active || !this._label.string) return null
+
+        return {
+            message: this._label.string,
+            style: this._style,
+            durationTicks: this._durationTicks,
+            pulseTick: this._pulseTick,
+        }
+    }
+
+    restore(snapshot: AdviceWidgetSnapshot | null) {
+        if (!snapshot) {
+            this.clear()
+            return
+        }
+
+        this._style = snapshot.style
+        this._durationTicks = snapshot.durationTicks
+        this._pulseTick = snapshot.pulseTick
+        this._label.string = snapshot.message
+        this._label.forceRebuild()
+        this._applyLayout()
+        this.node.active = snapshot.durationTicks > 0
         this._drawBackdrop()
     }
 

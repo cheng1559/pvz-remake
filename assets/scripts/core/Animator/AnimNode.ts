@@ -26,6 +26,7 @@ export class AnimNode {
     private _finished: boolean = false
     private _keepLastFrame: boolean = false
     private _onFinish?: () => void
+    private _onPoseDirty?: () => void
     private _frameCountOverride: number | null = null
     private _truncateDisappearingFrames: boolean = true
     private _visibleTracks: Set<string> | null = null
@@ -52,8 +53,9 @@ export class AnimNode {
         return this._computedFrames
     }
 
-    constructor(data: AnimNodeData) {
+    constructor(data: AnimNodeData, onPoseDirty?: () => void) {
         this._data = data
+        this._onPoseDirty = onPoseDirty
     }
 
     // ── Public API ─────────────────────────────────────────────
@@ -145,6 +147,7 @@ export class AnimNode {
         this._truncateDisappearingFrames = truncateDisappearingFrames
         this._onFinish = onFinish
         onStart?.()
+        this._onPoseDirty?.()
     }
 
     public attach(args: { node: AnimNode; slot: string; basePoseFrame?: number }): void {
@@ -293,6 +296,7 @@ export class AnimNode {
 
     public set time(value: number) {
         this._time = value
+        this._onPoseDirty?.()
     }
 
     // ── Update ─────────────────────────────────────────────────

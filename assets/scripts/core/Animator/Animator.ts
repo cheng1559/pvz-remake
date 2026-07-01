@@ -54,6 +54,7 @@ export class Animator extends Component {
     private _sortedTracks: [string, Node][] = []
     private _trackNameCache: string[] | null = null
     private _sortDirty = true
+    private _applyingPose = false
 
     // ── Initialization ─────────────────────────────────────────
 
@@ -85,7 +86,7 @@ export class Animator extends Component {
             warn(`[Animator] AnimNode data '${name}' not found`)
             return null
         }
-        const node = new AnimNode(data)
+        const node = new AnimNode(data, () => this._applyCurrentPose())
         this._animNodes.push(node)
         return node
     }
@@ -212,78 +213,88 @@ export class Animator extends Component {
     // ── Update Loop ────────────────────────────────────────────
 
     protected update(dt: number) {
-        const scaledDt = scaleGameDeltaTime(dt) * Animator.timeScale
+        this._applyingPose = true
+        try {
+            const scaledDt = scaleGameDeltaTime(dt) * Animator.timeScale
 
-        // 1. Update all AnimNodes (compute frames)
-        for (const animNode of this._animNodes) {
-            animNode.update(scaledDt)
-        }
-
-        // 2. Apply frames to scene nodes (skip hidden tracks)
-        const touched = this._touchedTracks
-        touched.clear()
-        if (this._animNodes.length === 1) {
-            for (const cf of this._animNodes[0].computedFrames) {
-                this._applyComputedFrame(cf.trackName, cf.zIndex, cf.frame, touched)
-            }
-        } else {
-            this._frameMap.clear()
+            // 1. Update all AnimNodes (compute frames)
             for (const animNode of this._animNodes) {
-                for (const cf of animNode.computedFrames) {
-                    let value = this._frameValuePool.get(cf.trackName)
-                    if (!value) {
-                        value = { zIndex: cf.zIndex, frame: cf.frame }
-                        this._frameValuePool.set(cf.trackName, value)
-                    } else {
-                        value.zIndex = cf.zIndex
-                        value.frame = cf.frame
+                animNode.update(scaledDt)
+            }
+
+            // 2. Apply frames to scene nodes (skip hidden tracks)
+            const touched = this._touchedTracks
+            touched.clear()
+            if (this._animNodes.length === 1) {
+                for (const cf of this._animNodes[0].computedFrames) {
+                    this._applyComputedFrame(cf.trackName, cf.zIndex, cf.frame, touched)
+                }
+            } else {
+                this._frameMap.clear()
+                for (const animNode of this._animNodes) {
+                    for (const cf of animNode.computedFrames) {
+                        let value = this._frameValuePool.get(cf.trackName)
+                        if (!value) {
+                            value = { zIndex: cf.zIndex, frame: cf.frame }
+                            this._frameValuePool.set(cf.trackName, value)
+                        } else {
+                            value.zIndex = cf.zIndex
+                            value.frame = cf.frame
+                        }
+                        this._frameMap.set(cf.trackName, value)
                     }
-                    this._frameMap.set(cf.trackName, value)
+                }
+                this._frameMap.forEach((value, trackName) => {
+                    this._applyComputedFrame(trackName, value.zIndex, value.frame, touched)
+                })
+            }
+
+            // 3. Hide untouched / hidden track nodes
+            this._trackNodes.forEach((n, name) => {
+                if (this._externalNodes.has(name)) return
+                if (!touched.has(name) || this._hiddenTracks.has(name)) {
+                    const sp = this._trackSprites.get(name)
+                    if (sp) sp.enabled = false
+                }
+            })
+            this._additiveTrackNodes.forEach((_n, name) => {
+                if (!this._enableExtraAdditiveDraw || !touched.has(name) || this._hiddenTracks.has(name)) {
+                    const sp = this._additiveTrackSprites.get(name)
+                    if (sp) sp.enabled = false
+                }
+            })
+
+            // 4. Sort sibling order by z-index
+            if (this._sortDirty) {
+                this._sortedTracks.length = 0
+                this._trackNodes.forEach((node, name) => this._sortedTracks.push([name, node]))
+                this._sortedTracks.sort((a, b) => {
+                    const za = this._trackZ.get(a[0]) ?? 0
+                    const zb = this._trackZ.get(b[0]) ?? 0
+                    return za - zb
+                })
+                this._sortDirty = false
+            }
+            let siblingIndex = 0
+            for (let i = 0; i < this._sortedTracks.length; i++) {
+                const [trackName, node] = this._sortedTracks[i]
+                if (node.getSiblingIndex() !== siblingIndex) node.setSiblingIndex(siblingIndex)
+                siblingIndex++
+                const additiveNode = this._additiveTrackNodes.get(trackName)
+                const additiveSprite = this._additiveTrackSprites.get(trackName)
+                if (additiveNode?.isValid && additiveSprite?.enabled) {
+                    if (additiveNode.getSiblingIndex() !== siblingIndex) additiveNode.setSiblingIndex(siblingIndex)
+                    siblingIndex++
                 }
             }
-            this._frameMap.forEach((value, trackName) => {
-                this._applyComputedFrame(trackName, value.zIndex, value.frame, touched)
-            })
+        } finally {
+            this._applyingPose = false
         }
+    }
 
-        // 3. Hide untouched / hidden track nodes
-        this._trackNodes.forEach((n, name) => {
-            if (this._externalNodes.has(name)) return
-            if (!touched.has(name) || this._hiddenTracks.has(name)) {
-                const sp = this._trackSprites.get(name)
-                if (sp) sp.enabled = false
-            }
-        })
-        this._additiveTrackNodes.forEach((_n, name) => {
-            if (!this._enableExtraAdditiveDraw || !touched.has(name) || this._hiddenTracks.has(name)) {
-                const sp = this._additiveTrackSprites.get(name)
-                if (sp) sp.enabled = false
-            }
-        })
-
-        // 4. Sort sibling order by z-index
-        if (this._sortDirty) {
-            this._sortedTracks.length = 0
-            this._trackNodes.forEach((node, name) => this._sortedTracks.push([name, node]))
-            this._sortedTracks.sort((a, b) => {
-                const za = this._trackZ.get(a[0]) ?? 0
-                const zb = this._trackZ.get(b[0]) ?? 0
-                return za - zb
-            })
-            this._sortDirty = false
-        }
-        let siblingIndex = 0
-        for (let i = 0; i < this._sortedTracks.length; i++) {
-            const [trackName, node] = this._sortedTracks[i]
-            if (node.getSiblingIndex() !== siblingIndex) node.setSiblingIndex(siblingIndex)
-            siblingIndex++
-            const additiveNode = this._additiveTrackNodes.get(trackName)
-            const additiveSprite = this._additiveTrackSprites.get(trackName)
-            if (additiveNode?.isValid && additiveSprite?.enabled) {
-                if (additiveNode.getSiblingIndex() !== siblingIndex) additiveNode.setSiblingIndex(siblingIndex)
-                siblingIndex++
-            }
-        }
+    private _applyCurrentPose() {
+        if (this._applyingPose) return
+        this.update(0)
     }
 
     // ── Track Node Management ──────────────────────────────────

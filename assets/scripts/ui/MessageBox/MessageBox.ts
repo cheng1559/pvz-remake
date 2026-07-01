@@ -626,15 +626,25 @@ export class MessageBox extends ModalDialog {
 
             // Yes button (left)
             const yesX = aButtonAreaX
-            const yesY = aButtonAreaY
+            const yesY = numButtons >= 3 ? aButtonAreaY - btnH : aButtonAreaY
             // No button (right)
             const noX = aButtonAreaWidth - btnW + aButtonAreaX
-            const noY = aButtonAreaY
+            const noY = yesY
 
             const cfgs = [
                 { cfg: this._buttons[0], cx: yesX, cy: yesY, w: btnW },
                 { cfg: this._buttons[1], cx: noX, cy: noY, w: btnW },
             ]
+            if (numButtons >= 3) {
+                const footerExtraW = roundExtra(aButtonAreaWidth - btnMidW - btnMinW + 1)
+                const footerW = btnMinW + footerExtraW
+                cfgs.push({
+                    cfg: this._buttons[2],
+                    cx: aButtonAreaX + Math.floor((aButtonAreaWidth - footerW) / 2),
+                    cy: aButtonAreaY,
+                    w: footerW,
+                })
+            }
 
             for (let i = 0; i < cfgs.length; i++) {
                 const { cfg, cx, cy, w } = cfgs[i]

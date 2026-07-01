@@ -863,6 +863,19 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             animationsEnabled: this._isGameplaySceneAnimationEnabled(),
         }).then((ready) => {
             if (!ready || !widget.isValid) return
+            if (this._restoredFromSnapshot) {
+                const state = this.initialSnapshot?.state.crazyDave
+                this._crazyDaveHidden = state?.hidden ?? true
+                this._crazyDaveMessageIndex = state?.messageIndex ?? -1
+                this._crazyDaveDialogPhase = state?.dialogPhase ?? 'off'
+                this._crazyDaveDialogStarted = state?.dialogStarted ?? true
+                this._crazyDaveShovelDugPlant = state?.shovelDugPlant ?? false
+                this._syncCrazyDaveState()
+                if (this._crazyDaveMessageIndex >= 0 && this._crazyDaveDialogPhase !== 'off') {
+                    this._showCrazyDaveMessage(this._crazyDaveMessageIndex, this._crazyDaveDialogPhase)
+                }
+                return
+            }
             this.scheduleOnce(() => {
                 if (!widget.isValid) return
                 widget.playIntro(this._session.level.crazyDaveIntro === true, () => {

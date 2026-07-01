@@ -1,5 +1,5 @@
 import { PLANT_DEFINITIONS } from '../GameDefinitions'
-import type { GameEvent, PlantEntity, PlantState, PlantSubclass, PlantType } from '../GameTypes'
+import type { GameEvent, PlantBodyAnimationState, PlantEntity, PlantState, PlantSubclass, PlantType } from '../GameTypes'
 
 export interface PlantUpdateContext {
     events: GameEvent[]
@@ -44,6 +44,9 @@ export abstract class Plant implements PlantEntity {
     attackCounter: number
     shootingCounter = 0
     specialCounter = 0
+    animationSpeed = 0
+    animationTime = 0
+    bodyAnimation: PlantBodyAnimationState | null = null
     eatenFlashCounter = 0
     recentlyEatenCounter = 0
     isBowling: boolean

@@ -277,6 +277,11 @@ export interface ConveyorPacketState {
     entering: boolean
 }
 
+export interface PlantBodyAnimationState {
+    animation: string
+    time: number
+}
+
 export interface PlantEntity {
     id: number
     kind: 'plant'
@@ -293,6 +298,9 @@ export interface PlantEntity {
     attackCounter: number
     shootingCounter: number
     specialCounter: number
+    animationSpeed: number
+    animationTime: number
+    bodyAnimation: PlantBodyAnimationState | null
     eatenFlashCounter: number
     recentlyEatenCounter: number
     isBowling: boolean

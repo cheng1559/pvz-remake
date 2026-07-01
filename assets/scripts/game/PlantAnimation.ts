@@ -49,6 +49,8 @@ export interface WirePlantAnimationOptions {
     potatoInitialState?: 'idle' | 'armed'
     cherryBombInitialState?: 'idle' | 'explode'
     sunShroomInitialState?: 'small' | 'big' | 'sleep' | 'bigsleep'
+    initialAnimTime?: number
+    initialAnimSpeed?: number
     shakeNode?: Node | null
     enableCherryShake?: boolean
 }
@@ -66,12 +68,14 @@ export function wirePlantAnimation(
         potatoInitialState = 'idle',
         cherryBombInitialState = animated ? 'explode' : 'idle',
         sunShroomInitialState = 'small',
+        initialAnimTime = 0,
+        initialAnimSpeed,
         shakeNode = null,
         enableCherryShake = true,
     } = options
     view.body = animator.addAnimNode('body')
-    view.idleSpeed = getPlantIdleSpeed(view.body, plantType, animated)
-    const playTime = animated ? 0 : getStaticAnimTime(view.body, 'anim_idle', staticAnimTime)
+    view.idleSpeed = initialAnimSpeed ?? getPlantIdleSpeed(view.body, plantType, animated)
+    const playTime = animated ? initialAnimTime : getStaticAnimTime(view.body, 'anim_idle', staticAnimTime)
 
     switch (plantType) {
         case 'peashooter':
@@ -107,8 +111,8 @@ export function wirePlantAnimation(
             break
         case 'sunshroom': {
             const initialAnim = getSunShroomInitialAnimation(sunShroomInitialState)
-            const initialTime = animated ? 0 : getStaticAnimTime(view.body, initialAnim, staticAnimTime)
-            view.idleSpeed = getPlantIdleSpeed(view.body, plantType, animated, initialAnim)
+            const initialTime = animated ? initialAnimTime : getStaticAnimTime(view.body, initialAnim, staticAnimTime)
+            view.idleSpeed = initialAnimSpeed ?? getPlantIdleSpeed(view.body, plantType, animated, initialAnim)
             view.face = animator.addAnimNode('face')
             if (view.body && view.face) {
                 view.face.attach({ node: view.body, slot: 'anim_face' })

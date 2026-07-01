@@ -321,9 +321,20 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
 
     protected _createPlantNode(plant: PlantEntity) {
         const node = createUINode(`Plant_${plant.id}`, { parent: this._entityLayer, anchorX: 0, anchorY: 1, width: 100, height: 100 })
-        const view = this._createPlantVisual(node, plant.type, true, 255, true, 0, plant.id)
+        const view = this._createPlantVisual(node, plant.type, true, 255, true, plant.animationTime, plant.id)
         this._plantViews.set(plant.id, view)
         return node
+    }
+
+    protected _syncPlantAnimationStateToSession() {
+        for (const plant of this._session.plants) {
+            const view = this._plantViews.get(plant.id)
+            if (!view?.body) continue
+
+            plant.animationTime = view.body.time
+            plant.animationSpeed = view.idleSpeed
+            if (plant.bodyAnimation) plant.bodyAnimation.time = view.body.time
+        }
     }
 
     protected _createZombieNode(zombie: ZombieEntity) {
@@ -1077,10 +1088,21 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
                     ? new Color(255, 64, 64, opacity)
                     : new Color(255, 255, 255, opacity)
                 this._setAnimatorColor(animator, animationJson, tint)
-                wirePlantAnimation(animator, view, plantType, { animated, staticAnimTime, shakeNode: animatorNode })
                 const currentPlant = plantId == null
                     ? null
                     : this._session.plants.find((item) => item.id === plantId)
+                wirePlantAnimation(animator, view, plantType, {
+                    animated,
+                    staticAnimTime,
+                    potatoInitialState: currentPlant?.state === 'potato-armed' ? 'armed' : 'idle',
+                    initialAnimTime: staticAnimTime,
+                    initialAnimSpeed: currentPlant && currentPlant.animationSpeed > 0 ? currentPlant.animationSpeed : undefined,
+                    shakeNode: animatorNode,
+                })
+                if (currentPlant && currentPlant.animationSpeed <= 0) {
+                    currentPlant.animationSpeed = view.idleSpeed
+                }
+                if (currentPlant) this._restorePlantBodyAnimation(view, currentPlant)
                 if (currentPlant?.isBowling) {
                     playWallNutBowlingAnimation(
                         view,
@@ -1093,6 +1115,12 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             })
         }
         return view
+    }
+
+    protected _restorePlantBodyAnimation(view: PlantView, plant: PlantEntity) {
+        if (!plant.bodyAnimation) return
+
+        this._playPlantAnimation(plant.id, plant.bodyAnimation.animation, plant.bodyAnimation.time)
     }
 
     protected _setAnimatorOpacity(animator: Animator, animationJson: Record<string, any>, opacity: number) {
@@ -1522,7 +1550,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         return ZOMBIE_REANIM_BLEND_TIME
     }
 
-    protected _playPlantAnimation(entityId: number, animation: string) {
+    protected _playPlantAnimation(entityId: number, animation: string, time = 0) {
         const view = this._plantViews.get(entityId)
         if (!view) return
 
@@ -1540,30 +1568,44 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
                 this._playShooterAnimation(view)
                 break
             case 'potato-rise':
-                this._playBodyAnimation(view, 'anim_rise', POTATO_MINE_RISE_ANIM_RATE, true, undefined, false, () => {
+                this._setPlantBodyAnimationState(entityId, animation, time)
+                this._playBodyAnimation(view, 'anim_rise', POTATO_MINE_RISE_ANIM_RATE, true, time, false, () => {
+                    this._setPlantBodyAnimationState(entityId, null)
                     this._session.dispatch({ type: 'plantAnimationFinished', entityId, animation })
                 })
                 break
             case 'potato-armed':
+                this._setPlantBodyAnimationState(entityId, null)
                 playPotatoArmedAnimation(view)
                 break
             case 'chomper-bite':
-                this._playBodyAnimation(view, 'anim_bite', CHOMPER_BITE_ANIM_RATE, true, undefined, false, () => {
+                this._setPlantBodyAnimationState(entityId, animation, time)
+                this._playBodyAnimation(view, 'anim_bite', CHOMPER_BITE_ANIM_RATE, true, time, false, () => {
+                    this._setPlantBodyAnimationState(entityId, null)
                     this._session.dispatch({ type: 'plantAnimationFinished', entityId, animation })
                 })
                 break
             case 'chomper-chew':
-                this._playBodyAnimation(view, 'anim_chew', CHOMPER_CHEW_ANIM_RATE, false, undefined, true)
+                this._setPlantBodyAnimationState(entityId, animation, time)
+                this._playBodyAnimation(view, 'anim_chew', CHOMPER_CHEW_ANIM_RATE, false, time, true)
                 break
             case 'chomper-swallow':
-                this._playBodyAnimation(view, 'anim_swallow', CHOMPER_SWALLOW_ANIM_RATE, true, undefined, false, () => {
+                this._setPlantBodyAnimationState(entityId, animation, time)
+                this._playBodyAnimation(view, 'anim_swallow', CHOMPER_SWALLOW_ANIM_RATE, true, time, false, () => {
+                    this._setPlantBodyAnimationState(entityId, null)
                     this._session.dispatch({ type: 'plantAnimationFinished', entityId, animation })
                 })
                 break
             case 'idle':
+                this._setPlantBodyAnimationState(entityId, null)
                 this._playBodyIdleAnimation(view)
                 break
         }
+    }
+
+    protected _setPlantBodyAnimationState(entityId: number, animation: string | null, time = 0) {
+        const plant = this._session.plants.find((item) => item.id === entityId)
+        if (plant) plant.bodyAnimation = animation ? { animation, time } : null
     }
 
     protected _playShooterAnimation(view: PlantView) {
@@ -1597,15 +1639,18 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
         animation: string,
         animRate: number,
         keepLastFrame: boolean,
-        nextAnimation?: string,
+        timeOrNextAnimation?: number | string,
         loop = false,
         onFinish?: () => void,
     ) {
         if (!view.body?.hasAnimation(animation)) return
+        const time = typeof timeOrNextAnimation === 'number' ? timeOrNextAnimation : 0
+        const nextAnimation = typeof timeOrNextAnimation === 'string' ? timeOrNextAnimation : undefined
 
         view.body.play({
             name: animation,
             speed: getAnimationRateSpeed(view.body, animation, animRate),
+            time,
             loop,
             blendTime: 0.1,
             keepLastFrame,

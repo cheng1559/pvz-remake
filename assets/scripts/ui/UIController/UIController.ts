@@ -62,6 +62,7 @@ import { GameDebugSettings } from '@/game/GameDebugSettings'
 import type { LevelAward } from '@/game/GameTypes'
 import type { LevelDefinition } from '@/game/GameTypes'
 import { MusicSystem, type MusicTuneId } from '@/game/music/MusicSystem'
+import { AdventureProgressStore } from '@/game/persistence/AdventureProgressStore'
 import { GameSettingsStore, type GameSettings } from '@/game/persistence/GameSettingsStore'
 import { ProfileStore, type PlayerProfile } from '@/game/persistence/ProfileStore'
 
@@ -90,6 +91,7 @@ const DEBUG_CLI_BRAIN_OPACITY = 140
 const DEBUG_CLI_BUTTON_OPEN_OFFSET_Y = 100
 const WIDESCREEN_BACKGROUND_SETTINGS_KEY = 'pvz-remake:ui:widescreen-backgrounds'
 const BACKGROUND_DOUBLE_CLICK_MS = 350
+const CONTINUE_GAME_RESULT_RESTART = 2001
 
 interface PvzNativeBridge {
     setFullScreen?: (fullScreen: boolean) => boolean
@@ -128,6 +130,11 @@ interface AchievementTransitionState {
     elapsed: number
     selectorNode: Node
     achievementNode: Node
+}
+
+interface AdventureLaunchOptions {
+    skipSavedGamePrompt?: boolean
+    forceNewGame?: boolean
 }
 
 @ccclass('UIController')
@@ -183,6 +190,7 @@ export class UIController extends Component {
     }
 
     onDestroy() {
+        this._saveAdventureGame(this._adventureGameScreen)
         screen.off(FULLSCREEN_CHANGE_EVENT, this._onFullScreenChanged, this)
         input.off(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
         this._destroyMobileDebugCliButton()
@@ -350,20 +358,35 @@ export class UIController extends Component {
         return selectorScreen
     }
 
-    showAdventureGame(level: LevelDefinition = this._adventureLevel): AdventureGameScreen | null {
+    showAdventureGame(
+        level: LevelDefinition = this._adventureLevel,
+        options: AdventureLaunchOptions = {},
+    ): AdventureGameScreen | null {
         if (!this._profile) {
             void this._requireProfileBeforePlaying()
             return null
         }
 
+        const savedSnapshot = options.forceNewGame ? null : this._loadAdventureSnapshot(level)
+
         this._adventureLevel = level
         this._selectorScreen = null
         const node = createUINode('AdventureGameScreen', { active: false, width: 800, height: 600 })
+        node.addComponent(BlockInputEvents)
         const gameScreen = node.addComponent(AdventureGameScreen)
         gameScreen.levelDefinition = level
         gameScreen.firstTimeAdventure = (this._profile?.finishedAdventure ?? 0) <= 0
         gameScreen.initialMoney = this._profile?.coins ?? 0
+        gameScreen.initialSnapshot = savedSnapshot
+        if (savedSnapshot && !options.skipSavedGamePrompt) {
+            gameScreen.onReady = () => {
+                if (!gameScreen.node?.isValid) return
+                gameScreen.pauseGame()
+                void this.showContinueGameDialog(gameScreen)
+            }
+        }
         gameScreen.onBackToMenu = () => {
+            this._saveAdventureGame(gameScreen)
             void this.showSelectorScreen()
         }
         gameScreen.onMenuRequest = () => {
@@ -373,9 +396,11 @@ export class UIController extends Component {
             this.showPauseDialog(gameScreen)
         }
         gameScreen.onGameOverRequest = () => {
+            this._deleteAdventureSave()
             void this.showGameOverDialog()
         }
         gameScreen.onAwardScreenRequest = (award) => {
+            this._deleteAdventureSave()
             const profileAdventureLevel = this._advanceAdventureProgress(gameScreen.levelDefinition.adventureLevel)
             this.showAwardScreen(award, profileAdventureLevel)
         }
@@ -383,7 +408,13 @@ export class UIController extends Component {
             this._setProfileCoins(amount)
         }
 
-        this._setCurrentScreen(node)
+        const previousScreen = this._currentScreen?.isValid ? this._currentScreen : null
+        const onReady = gameScreen.onReady
+        gameScreen.onReady = () => {
+            if (previousScreen?.isValid) previousScreen.destroy()
+            onReady?.()
+        }
+        this._setCurrentScreen(node, { keepPreviousScreen: true })
         this._adventureGameScreen = gameScreen
         const introMusic = getLevelIntroMusicTune(level)
         if (introMusic) this._playInterfaceMusic(introMusic, true)
@@ -406,7 +437,7 @@ export class UIController extends Component {
                 void this.showSelectorScreen()
                 return
             }
-            this.showAdventureGame(nextLevel)
+            this.showAdventureGame(nextLevel, { forceNewGame: true, skipSavedGamePrompt: true })
         }
         awardScreen.onBackToMenu = () => {
             void this.showSelectorScreen()
@@ -472,7 +503,7 @@ export class UIController extends Component {
         }
         challengeScreen.onChallengeSelected = (challengeName) => {
             if (challengeName === 'Wall-nut Bowling') {
-                this.showAdventureGame(ADVENTURE_1_5)
+                this.showAdventureGame(ADVENTURE_1_5, { forceNewGame: true, skipSavedGamePrompt: true })
             }
         }
 
@@ -755,16 +786,18 @@ export class UIController extends Component {
             void this.confirmRestartLevel().then((confirmed) => {
                 if (!confirmed) return
                 void SoundLoader.play(SoundEffect.ButtonClick)
+                this._deleteAdventureSave()
                 this._commitOptionsDialogSettings(optionsDialog)
                 if (this._optionsDialog === optionsDialog) this._optionsDialog = null
                 if (node.isValid) node.destroy()
-                this.showAdventureGame()
+                this.showAdventureGame(undefined, { forceNewGame: true, skipSavedGamePrompt: true })
             })
         }
         optionsDialog.onMainMenu = () => {
             void this.confirmBackToMainMenu().then((confirmed) => {
                 if (!confirmed) return
                 void SoundLoader.play(SoundEffect.ButtonClick)
+                this._saveAdventureGame(gameScreen)
                 this._commitOptionsDialogSettings(optionsDialog)
                 if (this._optionsDialog === optionsDialog) this._optionsDialog = null
                 if (node.isValid) node.destroy()
@@ -786,6 +819,7 @@ export class UIController extends Component {
     showPauseDialog(gameScreen?: AdventureGameScreen): PauseDialog | null {
         if (this._modalScreen?.isValid) return null
 
+        this._saveAdventureGame(gameScreen)
         const node = createUINode('PauseDialog', { active: false, width: 100, height: 100 })
         const pauseDialog = node.addComponent(PauseDialog)
 
@@ -836,7 +870,8 @@ export class UIController extends Component {
                 this._showGlobalAdvice(commandResult.message)
             }
             if (commandAction === 'restart') {
-                this.showAdventureGame(this._adventureLevel)
+                this._deleteAdventureSave()
+                this.showAdventureGame(this._adventureLevel, { forceNewGame: true, skipSavedGamePrompt: true })
                 return
             }
             if (commandAction === 'reload') {
@@ -844,6 +879,7 @@ export class UIController extends Component {
                 return
             }
             if (commandAction === 'home') {
+                this._saveAdventureGame(gameScreen)
                 void this.showSelectorScreen()
                 return
             }
@@ -874,7 +910,11 @@ export class UIController extends Component {
             }
             if (commandAction === 'level' && commandResult?.levelId) {
                 const level = this._findAdventureLevel(commandResult.levelId)
-                if (level) this.showAdventureGame(level)
+                if (level) {
+                    this._setAdventureProgress(level.adventureLevel)
+                    this._deleteAdventureSave()
+                    this.showAdventureGame(level, { forceNewGame: true, skipSavedGamePrompt: true })
+                }
                 return
             }
 
@@ -1227,7 +1267,7 @@ export class UIController extends Component {
             if (result !== DialogResult.Footer && result !== DialogResult.Ok) return
 
             void SoundLoader.play(SoundEffect.ButtonClick)
-            this.showAdventureGame()
+            this.showAdventureGame(undefined, { forceNewGame: true, skipSavedGamePrompt: true })
         })
         return dialog
     }
@@ -1460,8 +1500,65 @@ export class UIController extends Component {
         return result === DialogResult.Ok
     }
 
-    private _setCurrentScreen(node: Node) {
-        this._destroyCurrentScreen()
+    async showContinueGameDialog(gameScreen: AdventureGameScreen): Promise<MessageBox | null> {
+        const strings = await LawnStringLoader.load()
+        const dialog = this.showMessageBox(
+            this._lawnString(strings, 'CONTINUE_GAME_HEADER', 'CONTINUE GAME?'),
+            this._lawnString(
+                strings,
+                'CONTINUE_GAME_OR_RESTART',
+                'Do you want to continue your current game or restart the level?',
+            ),
+        )
+        if (!dialog) return null
+
+        dialog.dialogType = 1
+        dialog.extraWidth = 10
+        dialog.extraHeight = 60
+        dialog.setMessageLayout(0, 0, 2)
+        let restarting = false
+        dialog.setButtons([
+            {
+                label: this._lawnString(strings, 'CONTINUE_BUTTON', 'Continue'),
+                result: DialogResult.Yes,
+                localize: false,
+            },
+            {
+                label: this._lawnString(strings, 'RESTART_LEVEL_BUTTON', 'Restart Level'),
+                result: CONTINUE_GAME_RESULT_RESTART,
+                localize: false,
+                finishOnClick: false,
+                onClick: () => {
+                    void this.confirmRestartLevel().then((confirmed) => {
+                        if (!confirmed) return
+                        restarting = true
+                        dialog.close()
+                        this._deleteAdventureSave()
+                        this.showAdventureGame(gameScreen.levelDefinition, { forceNewGame: true, skipSavedGamePrompt: true })
+                    })
+                },
+            },
+            {
+                label: this._lawnString(strings, 'DIALOG_BUTTON_CANCEL', 'Cancel'),
+                result: DialogResult.Cancel,
+                localize: false,
+            },
+        ])
+        const result = await dialog.waitForResult()
+        if (restarting) return dialog
+        if (result === DialogResult.Yes) {
+            gameScreen.resumeGame()
+        } else if (result === DialogResult.Cancel) {
+            void this.showSelectorScreen()
+        }
+        return dialog
+    }
+
+    private _setCurrentScreen(node: Node, options: { keepPreviousScreen?: boolean } = {}) {
+        this._destroyCurrentScreen({
+            keepScreenClipRoot: true,
+            keepCurrentScreen: options.keepPreviousScreen,
+        })
         this._currentScreen = node
         this._addToScreenClipRoot(node)
         node.active = true
@@ -1582,7 +1679,7 @@ export class UIController extends Component {
         opacity.opacity = visible ? 255 : 0
     }
 
-    private _destroyCurrentScreen() {
+    private _destroyCurrentScreen(options: { keepScreenClipRoot?: boolean, keepCurrentScreen?: boolean } = {}) {
         if (this._achievementScreen?.isValid) {
             this._achievementScreen.destroy()
         }
@@ -1596,18 +1693,18 @@ export class UIController extends Component {
         }
         this._debugCliScreen = null
         this._destroyGameOverMainMenuButton()
-        if (this._screenClipRoot?.isValid) {
+        if (!options.keepScreenClipRoot && this._screenClipRoot?.isValid) {
             this._screenClipRoot.destroy()
+            this._screenClipRoot = null
         }
-        this._screenClipRoot = null
         this._globalAdviceLayer = null
         this._globalAdviceWidget = null
         this._screenTransitioning = false
         this._startupScreen = null
-        if (this._currentScreen?.isValid) {
+        if (!options.keepCurrentScreen && this._currentScreen?.isValid) {
             this._currentScreen.destroy()
         }
-        this._currentScreen = null
+        if (!options.keepCurrentScreen) this._currentScreen = null
         this._selectorScreen = null
         this._adventureGameScreen = null
     }
@@ -1685,19 +1782,24 @@ export class UIController extends Component {
         const profile = this._profile ?? ProfileStore.loadCurrentProfile()
         if (!profile) return this._adventureLevel.adventureLevel
 
-        this._profile = ProfileStore.advanceAdventureProgress(profile, completedLevel)
+        this._profile = AdventureProgressStore.advanceProgress(profile, completedLevel)
         return this._profile.adventureLevel
+    }
+
+    private _setAdventureProgress(adventureLevel: number) {
+        const profile = this._profile ?? ProfileStore.loadCurrentProfile()
+        if (!profile) return
+
+        this._profile = AdventureProgressStore.setProgress(profile, adventureLevel)
+        this._adventureLevel = this._resolveAdventureLevel(adventureLevel)
+        this._syncSelectorProfile()
     }
 
     private _setProfileCoins(amount: number) {
         const profile = this._profile ?? ProfileStore.loadCurrentProfile()
         if (!profile) return
-        if (profile.coins === amount) return
 
-        this._profile = ProfileStore.saveProfile({
-            ...profile,
-            coins: amount,
-        })
+        this._profile = AdventureProgressStore.setCoins(profile, amount)
     }
 
     private _applyPersistedSettings() {
@@ -1895,6 +1997,25 @@ export class UIController extends Component {
         this._profile = profile
         this._adventureLevel = this._getProfileAdventureLevel()
         this._syncSelectorProfile()
+    }
+
+    private _loadAdventureSnapshot(level: LevelDefinition) {
+        if (!this._profile) return null
+        return AdventureProgressStore.loadSnapshot(this._profile, level)
+    }
+
+    private _saveAdventureGame(gameScreen?: AdventureGameScreen | null) {
+        if (!this._profile || !gameScreen?.node?.isValid) return
+
+        const snapshot = gameScreen.createSaveSnapshot()
+        if (!snapshot) return
+
+        AdventureProgressStore.saveSnapshot(this._profile, gameScreen.levelDefinition, snapshot)
+    }
+
+    private _deleteAdventureSave() {
+        if (!this._profile) return
+        AdventureProgressStore.deleteSave(this._profile)
     }
 
     private _syncSelectorProfile() {

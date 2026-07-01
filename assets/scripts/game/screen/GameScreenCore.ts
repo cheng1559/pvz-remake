@@ -69,6 +69,12 @@ import {
     wireZombieAnimation,
 } from '../ZombieAnimation'
 import { GameSession } from '../GameSession'
+import {
+    createGameSessionSnapshot,
+    restoreGameSessionSnapshot,
+    type GameParticleSnapshot,
+    type GameSessionSnapshot,
+} from '../GameSessionSnapshot'
 import { GameDebugSettings } from '../GameDebugSettings'
 import { MusicSystem } from '../music/MusicSystem'
 import {
@@ -359,9 +365,11 @@ export abstract class GameScreenCore extends Component {
     public onGameOverRequest: (() => void) | null = null
     public onAwardScreenRequest: ((award: LevelAward) => void) | null = null
     public onMoneyChanged: ((amount: number) => void) | null = null
+    public onReady: (() => void) | null = null
     public levelDefinition: LevelDefinition = ADVENTURE_1_1
     public firstTimeAdventure = true
     public initialMoney = 0
+    public initialSnapshot: GameSessionSnapshot | null = null
 
     protected _session = new GameSession()
     protected _boardRoot: Node = null!
@@ -420,6 +428,7 @@ export abstract class GameScreenCore extends Component {
     protected _zombieViews: Map<number, ZombieView> = new Map()
     protected _lawnMowerViews: Map<number, LawnMowerView> = new Map()
     protected _moneyItemViews: Map<number, MoneyItemView> = new Map()
+    protected _gameplayParticles: Map<TodParticleSystem, { parentEntityId?: number }> = new Map()
     protected _moneyCounter: MoneyCounter | null = null
     protected _domKeyDownListener: ((event: KeyboardEvent) => void) | null = null
     protected _lastHandledKeyboardEvent: Event | KeyboardEvent | null = null
@@ -511,12 +520,17 @@ export abstract class GameScreenCore extends Component {
     protected _gameplaySeedBankIntroTicks = -1
     protected _conveyorBeltAnimTicks = 0
     protected _bootstrapped = false
+    protected _restoredFromSnapshot = false
 
     onLoad() {
-        this._session = new GameSession(this.levelDefinition, {
+        this._restoredFromSnapshot = this.initialSnapshot !== null
+        const sessionOptions = {
             firstTimeAdventure: this.firstTimeAdventure,
             initialMoney: this.initialMoney,
-        })
+        }
+        this._session = this.initialSnapshot
+            ? restoreGameSessionSnapshot(this.levelDefinition, this.initialSnapshot, sessionOptions)
+            : new GameSession(this.levelDefinition, sessionOptions)
         this._debugHitboxesVisible = GameDebugSettings.hitboxesVisible
         setUISize(this.node, 800, 600)
         this._boardRoot = createUINode('BoardRoot', {
@@ -636,8 +650,10 @@ export abstract class GameScreenCore extends Component {
         ])
 
         await this._drawStaticBoard()
+        this._bowlingStripeRevealed = this.initialSnapshot?.state.bowlingStripeRevealed === true
+        this._syncBowlingStripeVisibility()
         this._drawHud()
-        if (this._shouldSkipStandardIntro()) {
+        if (this._restoredFromSnapshot || this._shouldSkipStandardIntro()) {
             this._startGameWithoutStandardIntro()
         } else {
             this._showIntroHouseName()
@@ -646,6 +662,14 @@ export abstract class GameScreenCore extends Component {
         UIHoverManager.registerClient(this._boardHoverClient)
         this._bootstrapped = true
         this._renderFrame()
+        if (this.initialSnapshot?.state.advice !== undefined) {
+            this._adviceWidget?.restore(this.initialSnapshot.state.advice ?? null)
+            this._syncItemLayerBehindAdvice()
+        }
+        if (this.initialSnapshot?.state.particles?.length) {
+            this._restoreGameplayParticles(this.initialSnapshot.state.particles)
+        }
+        this.onReady?.()
     }
 
     update(dt: number) {
@@ -721,6 +745,26 @@ export abstract class GameScreenCore extends Component {
 
     public isLevelRunning() {
         return this._bootstrapped && this._gameStarted && this._session.result === 'playing'
+    }
+
+    public createSaveSnapshot() {
+        if (!this._bootstrapped || this._session.result !== 'playing') return null
+        this._syncPlantAnimationStateToSession()
+        const snapshot = createGameSessionSnapshot(this._session)
+        snapshot.state.particles = this._createGameplayParticleSnapshots()
+        snapshot.state.advice = this._adviceWidget?.snapshot() ?? null
+        snapshot.state.crazyDave = {
+            hidden: this._crazyDaveHidden,
+            messageIndex: this._crazyDaveMessageIndex,
+            dialogPhase: this._crazyDaveDialogPhase,
+            dialogStarted: this._crazyDaveDialogStarted,
+            shovelDugPlant: this._crazyDaveShovelDugPlant,
+        }
+        snapshot.state.bowlingStripeRevealed = this._bowlingStripeRevealed
+        return snapshot
+    }
+
+    protected _syncPlantAnimationStateToSession() {
     }
 
     public getGridSize() {
@@ -937,7 +981,7 @@ export abstract class GameScreenCore extends Component {
     protected abstract _drawHitboxDebug(): void
     protected abstract _syncPlantHighlights(): void
     protected abstract _playZombieAnimation(entityId: number, animation: string): void
-    protected abstract _playPlantAnimation(entityId: number, animation: string): void
+    protected abstract _playPlantAnimation(entityId: number, animation: string, time?: number): void
 
     protected _wireInput() {
         this._bindDomKeyboardEvents()
@@ -1459,7 +1503,7 @@ export abstract class GameScreenCore extends Component {
     protected _startGameWithoutStandardIntro() {
         this._session.completeReadySetPlantIntro()
         this._gameStarted = true
-        this._gameplayUpdatesPaused = this._session.level.pauseGameplayOnStart === true
+        this._gameplayUpdatesPaused = !this._restoredFromSnapshot && this._session.level.pauseGameplayOnStart === true
         this._boardContent.setPosition(0, 0, 0)
         this._applyGameplayBoardState()
         this._destroyIntroStreetZombies()
@@ -1483,7 +1527,11 @@ export abstract class GameScreenCore extends Component {
         if (this._soddedNode) this._soddedNode.active = fullLawn
         if (this._unsoddedNode) this._unsoddedNode.active = !fullLawn
         if (this._sodBaseNode) this._sodBaseNode.active = !fullLawn
-        if (this._sodClipNode) this._sodClipNode.active = !fullLawn
+        if (this._sodClipNode) {
+            this._sodClipNode.active = !fullLawn
+            const height = this._sodClipNode.getComponent(UITransform)?.height ?? 0
+            setUISize(this._sodClipNode, this._sodClipRevealWidth, height, 0, 1)
+        }
         for (const view of this._sodRollViews) view.node.active = false
     }
 
@@ -2257,13 +2305,15 @@ export abstract class GameScreenCore extends Component {
         const renderOrder = zombie
             ? this._entityLayerOrder(zombie) + 0.01
             : this._zombiePartFallbackRenderOrder(view.node.position.y)
-        TodParticleSystem.spawn({
+        const system = TodParticleSystem.spawn({
             parent: this._entityLayer,
             effect,
             x,
             y,
             renderOrder,
         })
+        system.enabled = this._isGameplaySceneAnimationEnabled()
+        this._trackGameplayParticle(system)
     }
 
     protected _zombiePartFallbackRenderOrder(nodeY: number) {
@@ -2287,7 +2337,7 @@ export abstract class GameScreenCore extends Component {
         renderOrder = this._particleRenderOrderForEffect(effect, y),
         tint?: { r: number, g: number, b: number },
     ) {
-        TodParticleSystem.spawn({
+        const system = TodParticleSystem.spawn({
             parent: this._entityLayer,
             effect,
             x,
@@ -2295,6 +2345,8 @@ export abstract class GameScreenCore extends Component {
             renderOrder,
             tint: tint ? new Color(tint.r, tint.g, tint.b, 255) : undefined,
         })
+        system.enabled = this._isGameplaySceneAnimationEnabled()
+        this._trackGameplayParticle(system)
     }
 
     protected _particleRenderOrderForEffect(effect: TodParticleEffect, y: number) {
@@ -2351,7 +2403,9 @@ export abstract class GameScreenCore extends Component {
             y: -y,
             z: 1,
         })
+        system.enabled = this._isGameplaySceneAnimationEnabled()
         system.node.setSiblingIndex(view.node.children.length - 1)
+        this._trackGameplayParticle(system, entityId)
     }
 
     protected _spawnAttachedEntityParticle(
@@ -2372,8 +2426,59 @@ export abstract class GameScreenCore extends Component {
             y: -y,
             z,
         })
+        system.enabled = this._isGameplaySceneAnimationEnabled()
         system.node.setSiblingIndex(z <= 0 ? 0 : node.children.length - 1)
+        this._trackGameplayParticle(system, entityId)
         return true
+    }
+
+    protected _trackGameplayParticle(system: TodParticleSystem, parentEntityId?: number) {
+        this._gameplayParticles.set(system, { parentEntityId })
+    }
+
+    protected _createGameplayParticleSnapshots(): GameParticleSnapshot[] {
+        const snapshots: GameParticleSnapshot[] = []
+        for (const [system, meta] of this._gameplayParticles) {
+            if (!system.isValid || !system.node?.isValid || !system.effect) {
+                this._gameplayParticles.delete(system)
+                continue
+            }
+            const tint = system.tint
+            const snapshot: GameParticleSnapshot = {
+                effect: system.effect,
+                ageTicks: system.ageTicks,
+                x: system.node.position.x,
+                y: system.node.position.y,
+                z: system.node.position.z,
+                renderOrder: system.renderOrder,
+            }
+            if (meta.parentEntityId != null) snapshot.parentEntityId = meta.parentEntityId
+            if (tint) snapshot.tint = { r: tint.r, g: tint.g, b: tint.b }
+            snapshots.push(snapshot)
+        }
+        return snapshots
+    }
+
+    protected _restoreGameplayParticles(particles: GameParticleSnapshot[]) {
+        for (const particle of particles) {
+            const parent = particle.parentEntityId == null
+                ? this._entityLayer
+                : this._entityNodes.get(particle.parentEntityId)
+            if (!parent?.isValid) continue
+
+            const system = TodParticleSystem.spawn({
+                parent,
+                effect: particle.effect,
+                x: particle.x,
+                y: particle.y,
+                z: particle.z,
+                renderOrder: particle.renderOrder,
+                tint: particle.tint ? new Color(particle.tint.r, particle.tint.g, particle.tint.b, 255) : undefined,
+            })
+            system.enabled = this._isGameplaySceneAnimationEnabled()
+            system.fastForward(particle.ageTicks)
+            this._trackGameplayParticle(system, particle.parentEntityId)
+        }
     }
 
     protected _findEntityById(entityId: number): GameEntity | null {

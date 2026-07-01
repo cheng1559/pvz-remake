@@ -620,9 +620,12 @@ export interface TodParticleSpawnArgs {
 @ccclass('TodParticleSystem')
 export class TodParticleSystem extends Component {
     public renderOrder = 10000
+    public effect: TodParticleEffect = ''
     private _emitters: TodParticleEmitter[] = []
     private _accumulator = 0
     private _tint: Color | null = null
+    private _ageTicks = 0
+    private _pendingFastForwardTicks = 0
 
     static spawn(args: TodParticleSpawnArgs) {
         const node = createUINode(`ParticleSystem_${args.effect}`, {
@@ -635,6 +638,7 @@ export class TodParticleSystem extends Component {
             z: args.z ?? 1000,
         })
         const system = node.addComponent(TodParticleSystem)
+        system.effect = args.effect
         system.renderOrder = args.renderOrder ?? 10000
         system._tint = args.tint?.clone() ?? null
         const definition = ParticleDefinitionLoader.get(args.effect)
@@ -642,10 +646,31 @@ export class TodParticleSystem extends Component {
             system._emitters = definition.emitters.map(
                 (emitterDefinition) => system._createEmitter(node, emitterDefinition),
             )
+            system._primeFirstFrame()
         } else {
             void system._loadEmitters(args.effect)
         }
         return system
+    }
+
+    get ageTicks() {
+        return this._ageTicks
+    }
+
+    get tint() {
+        return this._tint?.clone() ?? null
+    }
+
+    fastForward(ticks: number) {
+        const resolvedTicks = Math.max(0, Math.floor(ticks))
+        if (this._emitters.length === 0) {
+            this._pendingFastForwardTicks += resolvedTicks
+            return
+        }
+
+        for (let i = 0; i < resolvedTicks && this.node?.isValid; i++) {
+            this._stepOnce()
+        }
     }
 
     overrideScale(scale: number) {
@@ -671,6 +696,13 @@ export class TodParticleSystem extends Component {
         }
 
         this._emitters = definition.emitters.map((emitterDefinition) => this._createEmitter(this.node, emitterDefinition))
+        if (this._pendingFastForwardTicks > 0) {
+            const ticks = this._pendingFastForwardTicks
+            this._pendingFastForwardTicks = 0
+            this.fastForward(ticks)
+        } else {
+            this._primeFirstFrame()
+        }
     }
 
     protected update(dt: number) {
@@ -679,11 +711,21 @@ export class TodParticleSystem extends Component {
         this._accumulator += scaleGameDeltaTime(dt)
         while (this._accumulator >= GAME_TICK_SECONDS) {
             this._accumulator -= GAME_TICK_SECONDS
-            for (const emitter of this._emitters) emitter.step()
-            if (this._emitters.every((emitter) => emitter.dead)) {
-                this.node.destroy()
-                return
-            }
+            if (!this._stepOnce()) return
         }
+    }
+
+    private _primeFirstFrame() {
+        this._stepOnce(false)
+    }
+
+    private _stepOnce(countAge = true) {
+        for (const emitter of this._emitters) emitter.step()
+        if (countAge) this._ageTicks++
+        if (this._emitters.every((emitter) => emitter.dead)) {
+            this.node.destroy()
+            return false
+        }
+        return true
     }
 }
