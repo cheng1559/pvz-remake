@@ -656,8 +656,9 @@ export class GameSession {
             if (!seed || conveyorPacket.seedType !== seedType) return 'not-here'
             if (!this.level.activeRows.includes(row)) return 'not-here'
             if (col < 0 || col >= this.geometry.cols) return 'not-here'
-            if (this._isWallnutBowlingConveyorSeed(seedType) && col > (this.level.bowling?.lineColMax ?? 2)) return 'not-here'
-            if (this.plants.some((plant) => !plant.dead && plant.col === col && plant.row === row)) return 'not-here'
+            const isBowlingSeed = this._isWallnutBowlingConveyorSeed(seedType)
+            if (isBowlingSeed && col > (this.level.bowling?.lineColMax ?? 2)) return 'not-here'
+            if (!isBowlingSeed && this.plants.some((plant) => !plant.dead && plant.col === col && plant.row === row)) return 'not-here'
             return 'ok'
         }
 
@@ -1426,6 +1427,7 @@ export class GameSession {
             zombieCount: this._countLiveZombies(),
             deathZombieCount: this._countZombiesOnScreenForDeathAnim(),
             canUseSuperLongDeath: this._canUseSuperLongDeath(),
+            levelAwardDropped: this._levelAwardDropped,
             findPlantTarget: (zombie: Zombie) => this._findZombiePlantTarget(zombie),
             canChewPlant: (plant: PlantEntity) => this._canZombieChewPlant(plant),
             damagePlant: (plant: PlantEntity, damage: number) => {

@@ -227,6 +227,7 @@ export class StartupResourceLoader {
             SpriteLoader.load('zombie_head'),
             SpriteLoader.load('zombie_jaw'),
             FontLoader.load('briannetod16'),
+            FontLoader.load('houseofterror28'),
             SoundLoader.load(SoundEffect.LoadingBarFlower),
             SoundLoader.load(SoundEffect.LoadingBarZombie),
             ...(DEBUG ? [] : [ParticleDefinitionLoader.preloadAll()]),

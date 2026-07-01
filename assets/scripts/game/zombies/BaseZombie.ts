@@ -98,6 +98,7 @@ export interface ZombieUpdateContext {
     zombieCount: number
     deathZombieCount: number
     canUseSuperLongDeath: boolean
+    levelAwardDropped: boolean
     findPlantTarget(zombie: Zombie): PlantEntity | null
     canChewPlant(plant: PlantEntity): boolean
     damagePlant(plant: PlantEntity, damage: number): void
@@ -245,6 +246,7 @@ export abstract class Zombie implements ZombieEntity {
         }
 
         this._updateChill()
+        this._updateGroan(context)
         const target = this.hasHead || this.state === 'eating'
             ? context.findPlantTarget(this)
             : null
@@ -512,7 +514,6 @@ export abstract class Zombie implements ZombieEntity {
         if (this.inPool) {
             this.animationTime = this._advanceLoopingAnimationTime(this.animationTime, this.animationSpeed, this._walkFrameSpan())
         }
-        this._updateGroan(context)
         this._eatCounter = TICKS_BETWEEN_EATS
     }
 
@@ -966,7 +967,7 @@ export abstract class Zombie implements ZombieEntity {
     }
 
     private _updateGroan(context: ZombieUpdateContext) {
-        if (!this.hasHead || this.state !== 'walking') return
+        if (!this.hasHead || context.levelAwardDropped) return
 
         this._groanCounter--
         if (this._groanCounter !== 0) return
