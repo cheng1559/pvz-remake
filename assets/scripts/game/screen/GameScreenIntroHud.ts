@@ -396,7 +396,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
                 z: this._introStreetZombieZ(spec),
             })
             this._createZombieVisual(node, zombie, { manualTime: false })
-            this._introStreetZombieNodes.push(node)
+            this._introStreetZombies.push({ node, type: spec.type, bodyRect: { ...zombie.bodyRect } })
         }
         this._syncIntroStreetZombieLayerOrder()
     }
@@ -521,9 +521,9 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
     }
 
     protected _syncIntroStreetZombieLayerOrder() {
-        const sorted = [...this._introStreetZombieNodes].sort((a, b) => a.position.z - b.position.z)
-        for (const node of sorted) {
-            if (node.isValid) node.setSiblingIndex(this._entityLayer.children.length - 1)
+        const sorted = [...this._introStreetZombies].sort((a, b) => a.node.position.z - b.node.position.z)
+        for (const zombie of sorted) {
+            if (zombie.node.isValid) zombie.node.setSiblingIndex(this._entityLayer.children.length - 1)
         }
     }
 
@@ -562,7 +562,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
         this._createAdviceWidget()
         this._resultLabel = this._createLabel('Result', 400, -285, '', 42, new Color(255, 240, 120))
         this._resultLabel.node.active = false
-        this._drawSeedPackets()
+        if (!this._shouldUseSeedChooser()) this._drawSeedPackets()
         this._createShovel()
         this._createCrazyDave()
         this._createMenuButton()
@@ -1049,6 +1049,8 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
 
     protected _drawSeedPackets() {
         const parent = this._seedBankNode ?? this._uiLayer
+        for (const view of this._seedPacketViews.values()) view.destroy()
+        this._seedPacketViews.clear()
         for (let i = 0; i < this._session.seedPackets.length; i++) {
             const packet = this._session.seedPackets[i]
             const x = this._getSeedPacketPositionX(i)

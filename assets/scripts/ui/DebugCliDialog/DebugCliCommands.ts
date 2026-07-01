@@ -3,6 +3,7 @@ import { SoundLoader } from '@/core/SoundLoader'
 import type { AdventureGameScreen } from '@/game/GameScreen'
 import { ADVENTURE_LEVELS, PLANT_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed, setGameSpeed } from '@/game/GameDefinitions'
 import { GameDebugSettings } from '@/game/GameDebugSettings'
+import type { DebugCollectMode } from '@/game/GameDebugSettings'
 import { GameSettingsStore, SFX_VOLUME_SCALE } from '@/game/persistence/GameSettingsStore'
 import type { ItemType, LevelDefinition, PlantType, ZombieType } from '@/game/GameTypes'
 
@@ -34,6 +35,7 @@ const DEBUG_PLANT_LOOKUP = createDebugTypeLookup(DEBUG_PLANT_TYPES)
 const DEBUG_ZOMBIE_LOOKUP = createDebugTypeLookup(DEBUG_ZOMBIE_TYPES)
 const DEBUG_ITEM_LOOKUP = createDebugItemLookup(DEBUG_ITEM_SPECS)
 const DEBUG_BOOLEAN_VALUES = ['true', 'false']
+const DEBUG_COLLECT_MODES: DebugCollectMode[] = ['auto', 'click', 'move']
 const DEBUG_LEVEL_IDS = ADVENTURE_LEVELS.map((level) => debugLevelId(level))
 const DEBUG_LEVEL_LOOKUP = new Map(DEBUG_LEVEL_IDS.map((id, index) => [id, ADVENTURE_LEVELS[index]]))
 type DebugNativeBridge = {
@@ -141,6 +143,11 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         parameterHints: ['{0-10}'],
     },
     {
+        name: 'hotkeys',
+        completions: [DEBUG_BOOLEAN_VALUES],
+        parameterHints: ['{enabled}'],
+    },
+    {
         name: 'lawnmower',
         completions: [['trigger', 'reset']],
         parameterHints: ['{action}', '[optional]{row}'],
@@ -171,9 +178,9 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         parameterHints: ['{enabled}'],
     },
     {
-        name: 'autocollect',
-        completions: [DEBUG_BOOLEAN_VALUES],
-        parameterHints: ['{enabled}'],
+        name: 'collect',
+        completions: [DEBUG_COLLECT_MODES],
+        parameterHints: ['{auto|click|move}'],
     },
     {
         name: 'hitboxes',
@@ -277,6 +284,8 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugSummonCommand(tokens, gameScreen)
         case 'gamespeed':
             return executeDebugGameSpeedCommand(tokens)
+        case 'hotkeys':
+            return executeDebugHotkeysCommand(tokens)
         case 'lawnmower':
             return executeDebugLawnMowerCommand(tokens, gameScreen)
         case 'sun':
@@ -291,8 +300,8 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugSunSpawningCommand(tokens, gameScreen)
         case 'suncost':
             return executeDebugSunCostCommand(tokens, gameScreen)
-        case 'autocollect':
-            return executeDebugAutoCollectCommand(tokens, gameScreen)
+        case 'collect':
+            return executeDebugCollectCommand(tokens, gameScreen)
         case 'hitboxes':
             return executeDebugHitboxesCommand(tokens, gameScreen)
         case 'music':
@@ -652,6 +661,20 @@ function executeDebugGameSpeedCommand(tokens: string[]): DebugCliResult {
     return { ok: true, message: `Game speed changed from ${previousSpeed} to ${speed}` }
 }
 
+function executeDebugHotkeysCommand(tokens: string[]): DebugCliResult {
+    if (tokens.length !== 2) {
+        return { ok: false, message: 'Usage: /hotkeys {true|false}' }
+    }
+
+    const enabled = parseDebugBoolean(tokens[1])
+    if (enabled == null) {
+        return { ok: false, message: `Invalid hotkeys value: ${tokens[1]}. Use true or false` }
+    }
+
+    const hotkeysEnabled = GameDebugSettings.setHotkeysEnabled(enabled)
+    return { ok: true, message: `Hotkeys ${hotkeysEnabled ? 'enabled' : 'disabled'}` }
+}
+
 function executeDebugMusicCommand(tokens: string[]): DebugCliResult {
     if (tokens.length !== 2) {
         return { ok: false, message: 'Usage: /music {0-100}' }
@@ -770,20 +793,20 @@ function executeDebugSunCostCommand(tokens: string[], gameScreen: AdventureGameS
     return { ok: true, message: `Sun cost ${sunCostEnabled ? 'enabled' : 'disabled'}` }
 }
 
-function executeDebugAutoCollectCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+function executeDebugCollectCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
     if (tokens.length !== 2) {
-        return { ok: false, message: 'Usage: /autocollect {true|false}' }
+        return { ok: false, message: 'Usage: /collect {auto|click|move}' }
     }
 
-    const enabled = parseDebugBoolean(tokens[1])
-    if (enabled == null) {
-        return { ok: false, message: `Invalid auto collect value: ${tokens[1]}. Use true or false` }
+    const mode = parseDebugCollectMode(tokens[1])
+    if (!mode) {
+        return { ok: false, message: `Invalid collect mode: ${tokens[1]}. Use auto, click, or move` }
     }
 
-    const autoCollectEnabled = isLevelScreenAvailable(gameScreen)
-        ? gameScreen.debugSetAutoCollectEnabled(enabled)
-        : setDebugAutoCollectEnabled(enabled)
-    return { ok: true, message: `Auto collect ${autoCollectEnabled ? 'enabled' : 'disabled'}` }
+    const collectMode = isLevelScreenAvailable(gameScreen)
+        ? gameScreen.debugSetCollectMode(mode)
+        : setDebugCollectMode(mode)
+    return { ok: true, message: `Collect mode: ${collectMode}` }
 }
 
 function executeDebugHitboxesCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
@@ -969,8 +992,8 @@ function setDebugSunCostEnabled(enabled: boolean) {
     return GameDebugSettings.setSunCostEnabled(enabled)
 }
 
-function setDebugAutoCollectEnabled(enabled: boolean) {
-    return GameDebugSettings.setAutoCollectEnabled(enabled)
+function setDebugCollectMode(mode: DebugCollectMode) {
+    return GameDebugSettings.setCollectMode(mode)
 }
 
 function setDebugHitboxesVisible(visible: boolean) {
@@ -1078,6 +1101,12 @@ function parseLawnMowerStatus(status: string): 'trigger' | 'reset' | null {
 function parseAmountAction(action: string): 'add' | 'set' | null {
     const normalized = action.toLowerCase()
     if (normalized === 'add' || normalized === 'set') return normalized
+    return null
+}
+
+function parseDebugCollectMode(value: string): DebugCollectMode | null {
+    const normalized = value.toLowerCase()
+    if (normalized === 'auto' || normalized === 'click' || normalized === 'move') return normalized
     return null
 }
 

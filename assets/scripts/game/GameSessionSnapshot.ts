@@ -16,6 +16,7 @@ import type {
 } from './GameTypes'
 import type { AdviceWidgetSnapshot } from '@/ui/AdviceWidget'
 import type { CrazyDaveDialogPhase } from './screen/CrazyDaveDialogConfig'
+import type { MusicPlaybackSnapshot } from './music/MusicSystem'
 
 const GAME_SESSION_SNAPSHOT_VERSION = 1
 
@@ -44,6 +45,7 @@ export interface GameSessionSnapshot {
             shovelDugPlant: boolean
         }
         bowlingStripeRevealed?: boolean
+        music?: MusicPlaybackSnapshot | null
     }
 }
 
@@ -73,7 +75,7 @@ export function createGameSessionSnapshot(session: GameSession): GameSessionSnap
             rechargingEnabled: session.rechargingEnabled,
             sunCostEnabled: session.sunCostEnabled,
             sunSpawningEnabled: session.sunSpawningEnabled,
-            autoCollectEnabled: session.autoCollectEnabled,
+            collectMode: session.collectMode,
             seedPackets: session.seedPackets,
             conveyorPackets: session.conveyorPackets,
             plants: session.plants,
@@ -113,7 +115,7 @@ export function restoreGameSessionSnapshot(
         rechargingEnabled: state.rechargingEnabled,
         sunCostEnabled: state.sunCostEnabled,
         sunSpawningEnabled: state.sunSpawningEnabled,
-        autoCollectEnabled: state.autoCollectEnabled,
+        collectMode: state.collectMode,
     })
     session.paused = false
     session.events.length = 0

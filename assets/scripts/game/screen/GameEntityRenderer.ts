@@ -332,7 +332,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             if (!view?.body) continue
 
             plant.animationTime = view.body.time
-            plant.animationSpeed = view.idleSpeed
+            plant.animationSpeed = view.body.speed
             if (plant.bodyAnimation) plant.bodyAnimation.time = view.body.time
         }
     }

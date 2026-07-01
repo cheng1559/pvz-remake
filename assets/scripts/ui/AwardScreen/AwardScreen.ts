@@ -1,11 +1,12 @@
-import { _decorator, Color, EventMouse, EventTouch, Graphics, Node, Vec3 } from 'cc'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { _decorator, Color, EventMouse, EventTouch, Graphics, Node } from 'cc'
+import { FontRenderer } from '@/core/FontRenderer'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { SEED_DEFINITIONS, scaleGameDeltaTime } from '@/game/GameDefinitions'
 import type { LevelAwardKind, SeedType } from '@/game/GameTypes'
 import { UIButton } from '@/ui/Button'
 import { MenuScreenBase, SCREEN_HEIGHT, SCREEN_WIDTH } from '@/ui/MenuScreenBase'
+import { createSeedChooserButton, createSeedChooserSmallButton } from '@/ui/SeedChooserButton'
 import { SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import { AwardScreenAssets, type AwardScreenFonts, type AwardScreenSprites } from './AwardScreenAssets'
@@ -28,14 +29,10 @@ const DESCRIPTION_WIDTH = 230
 const DESCRIPTION_HEIGHT = 90
 const NEXT_BUTTON_X = 324
 const NEXT_BUTTON_Y = 500
-const NEXT_BUTTON_WIDTH = 156
-const NEXT_BUTTON_HEIGHT = 42
-const NEXT_BUTTON_TEXT_OFFSET_Y = -1
 const MAIN_MENU_BUTTON_X = 677
 const MAIN_MENU_BUTTON_Y = 16
 const MAIN_MENU_BUTTON_WIDTH = 111
 const MAIN_MENU_BUTTON_HEIGHT = 26
-const MAIN_MENU_BUTTON_TEXT_OFFSET_Y = 1
 const TITLE_COLOR = new Color(213, 159, 43, 255)
 const NOTE_TITLE_COLOR = new Color(255, 200, 0, 255)
 const DESCRIPTION_COLOR = new Color(40, 50, 90, 255)
@@ -272,54 +269,26 @@ export class AwardScreen extends MenuScreenBase {
         fonts: AwardScreenFonts,
         lawnStrings: Record<string, string>,
     ) {
-        const buttonNode = createSpriteNode({
+        const { button, label, glow } = createSeedChooserButton({
             name: 'NextLevelButton',
-            spriteFrame: sprites.seedChooserButton,
             parent: this._root!,
             layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
             x: this._cppX(NEXT_BUTTON_X),
             y: this._cppY(NEXT_BUTTON_Y),
-            width: NEXT_BUTTON_WIDTH,
-            height: NEXT_BUTTON_HEIGHT,
+            label: lawnStrings.NEXT_LEVEL_BUTTON ?? 'NEXT LEVEL!',
+            normal: sprites.seedChooserButton,
+            glow: sprites.seedChooserButtonGlow,
+            font: fonts.button,
+            color: BUTTON_TEXT_COLOR,
+            onClick: () => this.onNextLevelRequest?.(),
         })
-        const glowNode = createSpriteNode({
-            name: 'Glow',
-            spriteFrame: sprites.seedChooserButtonGlow,
-            parent: buttonNode,
-            layer: this.node.layer,
-            z: 2,
-            anchorX: 0,
-            anchorY: 1,
-            width: sprites.seedChooserButtonGlow.originalSize.width,
-            height: sprites.seedChooserButtonGlow.originalSize.height,
-        })
-        glowNode.active = false
-        this._applyAdditiveSpriteMaterial(glowNode)
-
-        const label = this._createNextButtonLabel(
-            buttonNode,
-            lawnStrings.NEXT_LEVEL_BUTTON ?? 'NEXT LEVEL!',
-            fonts,
-        )
-        glowNode.setSiblingIndex(label.getSiblingIndex() + 1)
-        const button = buttonNode.addComponent(UIButton)
-        button.normalSprite = sprites.seedChooserButton
-        button.hoverSprite = sprites.seedChooserButton
-        button.pressedSprite = sprites.seedChooserButton
-        button.pressOffset = new Vec3(1, -1, 0)
         button.rightClickTriggers = false
-        button.releaseToNormalOnPressOut = true
-        button.onPress = () => {
-            void SoundLoader.play(SoundEffect.Tap)
-        }
+        this._applyAdditiveSpriteMaterial(glow)
         button.onStateChange = (state) => {
             const highlighted = state === 'hover' || state === 'pressed'
-            glowNode.active = highlighted
-            label.setPosition(label.awardBaseX, label.awardBaseY, 1)
+            glow.active = highlighted
+            label.node.setPosition(label.baseX, label.baseY, 1)
         }
-        button.onClick = () => this.onNextLevelRequest?.()
     }
 
     private _drawMainMenuButton(
@@ -327,85 +296,22 @@ export class AwardScreen extends MenuScreenBase {
         fonts: AwardScreenFonts,
         lawnStrings: Record<string, string>,
     ) {
-        const buttonNode = createSpriteNode({
+        const { button } = createSeedChooserSmallButton({
             name: 'MainMenuButton',
-            spriteFrame: sprites.seedChooserButton2,
             parent: this._root!,
             layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
             x: this._cppX(MAIN_MENU_BUTTON_X),
             y: this._cppY(MAIN_MENU_BUTTON_Y),
             width: MAIN_MENU_BUTTON_WIDTH,
             height: MAIN_MENU_BUTTON_HEIGHT,
+            label: lawnStrings.AWARD_MAIN_MENU_BUTTON ?? 'MAIN MENU',
+            normal: sprites.seedChooserButton2,
+            glow: sprites.seedChooserButton2Glow,
+            font: fonts.mainMenuButton,
+            color: MAIN_MENU_BUTTON_TEXT_COLOR,
+            onClick: () => this.onBackToMenu?.(),
         })
-        const label = this._createSmallButtonLabel(
-            buttonNode,
-            lawnStrings.AWARD_MAIN_MENU_BUTTON ?? 'MAIN MENU',
-            fonts,
-        )
-
-        const button = buttonNode.addComponent(UIButton)
-        button.normalSprite = sprites.seedChooserButton2
-        button.hoverSprite = sprites.seedChooserButton2Glow
-        button.pressedSprite = sprites.seedChooserButton2Glow
-        button.pressOffset = new Vec3(0, 0, 0)
         button.rightClickTriggers = false
-        button.releaseToNormalOnPressOut = true
-        button.onPress = () => {
-            void SoundLoader.play(SoundEffect.Tap)
-        }
-        button.onStateChange = (state) => {
-            const pressed = state === 'pressed'
-            label.setPosition(label.awardBaseX + (pressed ? 1 : 0), label.awardBaseY - (pressed ? 1 : 0), 1)
-        }
-        button.onClick = () => this.onBackToMenu?.()
-    }
-
-    private _createNextButtonLabel(parent: Node, text: string, fonts: AwardScreenFonts) {
-        const node = createUINode('Label', {
-            parent,
-            layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
-        }) as Node & { awardBaseX: number, awardBaseY: number }
-        const renderer = node.addComponent(FontRenderer)
-        if (fonts.button) renderer.setFontAssets(fonts.button)
-        renderer.fontColor = BUTTON_TEXT_COLOR
-        renderer.string = text
-        renderer.forceRebuild()
-
-        const metrics = FontMetricsUtil.getMetrics(fonts.button?.config ?? null)
-        const width = FontMetricsUtil.measureTextWidth(fonts.button?.config ?? null, text) || renderer.contentWidth
-        const baselineY = (NEXT_BUTTON_HEIGHT - metrics.ascent / 6 + metrics.ascent - 1) / 2 + NEXT_BUTTON_TEXT_OFFSET_Y
-        node.awardBaseX = (NEXT_BUTTON_WIDTH - width) / 2
-        node.awardBaseY = -(baselineY - metrics.ascent)
-        node.setPosition(node.awardBaseX, node.awardBaseY, 1)
-        return node
-    }
-
-    private _createSmallButtonLabel(parent: Node, text: string, fonts: AwardScreenFonts) {
-        const node = createUINode('Label', {
-            parent,
-            layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
-        }) as Node & { awardBaseX: number, awardBaseY: number }
-        const renderer = node.addComponent(FontRenderer)
-        if (fonts.mainMenuButton) renderer.setFontAssets(fonts.mainMenuButton)
-        renderer.fontColor = MAIN_MENU_BUTTON_TEXT_COLOR
-        renderer.string = text
-        renderer.forceRebuild()
-
-        const metrics = FontMetricsUtil.getMetrics(fonts.mainMenuButton?.config ?? null)
-        const width = FontMetricsUtil.measureTextWidth(fonts.mainMenuButton?.config ?? null, text) || renderer.contentWidth
-        const baselineY = Math.trunc(
-            (MAIN_MENU_BUTTON_HEIGHT - Math.trunc(metrics.ascent / 6) + metrics.ascent - 1) / 2,
-        ) + MAIN_MENU_BUTTON_TEXT_OFFSET_Y
-        node.awardBaseX = (MAIN_MENU_BUTTON_WIDTH - width) / 2
-        node.awardBaseY = -(baselineY - metrics.ascent + 1)
-        node.setPosition(node.awardBaseX, node.awardBaseY, 1)
-        return node
     }
 
     private _createInputBlocker() {

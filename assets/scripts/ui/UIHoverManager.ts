@@ -62,7 +62,7 @@ export class UIHoverManager {
             uiLocation: event.getUILocation().clone(),
             canHover: true,
         }
-        if (refreshHover && !this.isModalBlocked) {
+        if (refreshHover) {
             this.refreshHoverStates()
         }
     }

@@ -37,6 +37,7 @@ import {
     wireZombieAnimation,
     type ZombieAnimationType,
 } from '@/game/ZombieAnimation'
+import type { ZombieType } from '@/game/GameTypes'
 import { UIButton } from '@/ui/Button'
 import { TouchScrollGesture } from '@/ui/ScrollGesture'
 import {
@@ -544,6 +545,15 @@ const ALMANAC_ZOMBIES: AlmanacZombieDefinition[] = [
     { id: 25, key: 'BOSS' },
 ]
 
+const ALMANAC_ZOMBIE_KEY_BY_GAME_TYPE: Record<ZombieType, string> = {
+    normal: 'ZOMBIE',
+    flag: 'FLAG_ZOMBIE',
+    'traffic-cone': 'CONEHEAD_ZOMBIE',
+    bucket: 'BUCKETHEAD_ZOMBIE',
+    'ducky-tube': 'DUCKY_TUBE_ZOMBIE',
+    'pole-vaulting': 'POLE_VAULTING_ZOMBIE',
+}
+
 @ccclass('AlmanacScreen')
 export class AlmanacScreen extends MenuScreenBase {
     private _almanacPage: AlmanacPage = 'index'
@@ -568,6 +578,16 @@ export class AlmanacScreen extends MenuScreenBase {
     private _descriptionContentNode: Node | null = null
     private _zombiePreviewMotions: AlmanacZombiePreviewMotion[] = []
     private readonly _descriptionTouchScrollGesture = new TouchScrollGesture()
+
+    public openZombieType(zombieType: ZombieType) {
+        const zombieKey = ALMANAC_ZOMBIE_KEY_BY_GAME_TYPE[zombieType]
+        const zombie = ALMANAC_ZOMBIES.find((entry) => entry.key === zombieKey)
+        if (!zombie) return
+
+        this._almanacPage = 'zombies'
+        this._selectedZombieId = zombie.id
+        this._hoveredZombieId = zombie.id
+    }
 
     onEnable() {
         input.on(Input.EventType.MOUSE_MOVE, this._onGlobalMouseMove, this)
@@ -2330,14 +2350,16 @@ export class AlmanacScreen extends MenuScreenBase {
             pressSound: SoundEffect.Tap,
             onClick: args.onClick,
         })
-        this._createTextInNode(
+        const textOffsetX = args.name === 'CloseButton' ? -8 : 8
+        this._createButtonLabel(
             buttonNode,
             args.label,
+            args.normal.originalSize.width,
+            args.normal.originalSize.height,
             args.font,
             BUTTON_TEXT_COLOR,
-            args.normal.originalSize.width / 2 - (args.name === 'CloseButton' ? 8 : -7),
-            12,
-            BUTTON_TEXT_COLOR,
+            1,
+            textOffsetX,
         )
         const button = buttonNode.getComponent(UIButton)
         if (button) button.rightClickPressesVisual = false
@@ -2378,7 +2400,7 @@ export class AlmanacScreen extends MenuScreenBase {
         })
         glowNode.active = false
         this._applyAdditiveSpriteMaterial(glowNode)
-        const labelNode = this._createButtonLabel(buttonNode, label, width, fonts.plantButton, 19)
+        const labelNode = this._createButtonLabel(buttonNode, label, width, height, fonts.plantButton, WHITE, -1)
         glowNode.setSiblingIndex(labelNode.getSiblingIndex() + 1)
 
         const button = buttonNode.getComponent(UIButton)
@@ -2476,8 +2498,11 @@ export class AlmanacScreen extends MenuScreenBase {
         parent: Node,
         text: string,
         width: number,
+        height: number,
         font: BitmapFontAssets | null,
-        centerY: number,
+        color: Color = WHITE,
+        textOffsetY = 0,
+        textOffsetX = 0,
     ) {
         const node = createUINode('Label', {
             parent,
@@ -2487,14 +2512,15 @@ export class AlmanacScreen extends MenuScreenBase {
         })
         const renderer = node.addComponent(FontRenderer)
         if (font) renderer.setFontAssets(font)
-        renderer.fontColor = WHITE
+        renderer.fontColor = color
         renderer.string = text
         renderer.forceRebuild()
 
         const metrics = FontMetricsUtil.getMetrics(font?.config ?? null)
         const textWidth =
             FontMetricsUtil.measureTextWidth(font?.config ?? null, text) || renderer.contentWidth
-        node.setPosition((width - textWidth) / 2, -(centerY - metrics.ascent / 2), 0)
+        const baselineY = textOffsetY + (height - metrics.ascent / 6 + metrics.ascent - 1) / 2
+        node.setPosition(textOffsetX + (width - textWidth) / 2, -(baselineY - metrics.ascent), 0)
         return node
     }
 

@@ -19,6 +19,7 @@ import {
     UIOpacity,
     UITransform,
     Vec2,
+    Vec3,
 } from 'cc'
 import { DEBUG } from 'cc/env'
 import { Animator } from '@/core/Animator'
@@ -40,8 +41,9 @@ import { UIHoverManager, type UIHoverPointer } from '@/ui/UIHoverManager'
 import { MoneyCounter } from '@/ui/MoneyCounter'
 import { CrazyDaveWidget } from '@/ui/CrazyDaveWidget'
 import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/ui/SeedPacketRenderer'
+import { createSeedChooserButton, createSeedChooserSmallButton } from '@/ui/SeedChooserButton'
 import { createStoneButton } from '@/ui/StoneButton'
-import { createTooltipNode } from '@/ui/Tooltip/Tooltip'
+import { createTooltipNode, measureTooltip } from '@/ui/Tooltip/Tooltip'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
 import { CursorManager } from '@/ui/CursorManager'
@@ -49,11 +51,13 @@ import { ProfileStore } from '@/game/persistence/ProfileStore'
 import {
     ADVENTURE_1_1,
     GAME_TICK_SECONDS,
+    getGameSpeed,
     getLevelGameplayMusicTune,
     PLANT_DEFINITIONS,
     SEED_DEFINITIONS,
     ZOMBIE_DEFINITIONS,
     scaleGameDeltaTime,
+    setGameSpeed,
 } from '../GameDefinitions'
 import {
     getAnimationRateSpeed,
@@ -76,6 +80,7 @@ import {
     type GameSessionSnapshot,
 } from '../GameSessionSnapshot'
 import { GameDebugSettings } from '../GameDebugSettings'
+import type { DebugCollectMode } from '../GameDebugSettings'
 import { MusicSystem } from '../music/MusicSystem'
 import {
     CRAZY_DAVE_ANIMATION_PATH,
@@ -166,6 +171,37 @@ type SeedSourceHit =
     | { kind: 'seed', packet: SeedPacketState, rect: BoardPixelRect, seedType: SeedType }
     | { kind: 'conveyor', packet: ConveyorPacketState, rect: BoardPixelRect, seedType: SeedType, packetId: number }
 
+type SeedChooserSeedState = 'chooser' | 'bank' | 'to-bank' | 'to-chooser'
+type SeedChooserPanelState = 'hidden' | 'choosing' | 'closing'
+
+interface IntroStreetZombie {
+    node: Node
+    type: ZombieType
+    bodyRect: BoardPixelRect
+}
+
+interface SeedChooserSeed {
+    seedType: SeedType
+    state: SeedChooserSeedState
+    bankIndex: number
+    x: number
+    y: number
+    startX: number
+    startY: number
+    endX: number
+    endY: number
+    startAge: number
+    endAge: number
+    view: SeedPacketView | null
+    shadowView: SeedPacketView | null
+}
+
+interface SeedChooserSeedHit {
+    seed: SeedChooserSeed
+    packet: SeedPacketState
+    rect: BoardPixelRect
+}
+
 export const BOARD_OFFSET = 220
 export const BOARD_ROOT_X = -400
 export const BOARD_ROOT_Y = 300
@@ -176,6 +212,10 @@ export const INTRO_PAN_RIGHT_START = 150
 export const INTRO_PAN_RIGHT_END = 350
 export const INTRO_PAN_LEFT_START = 450
 export const INTRO_PAN_LEFT_END = 600
+export const INTRO_SEED_CHOOSER_SLIDE_ON_START = 400
+export const INTRO_SEED_CHOOSER_SLIDE_ON_END = 425
+export const INTRO_SEED_CHOOSER_SLIDE_OFF_START = 450
+export const INTRO_SEED_CHOOSER_SLIDE_OFF_END = 475
 export const INTRO_ROLL_SOD_START = 600
 export const INTRO_ROLL_SOD_END = 800
 export const INTRO_SOD_READY_SET_PLANT_END = 1038
@@ -199,6 +239,7 @@ export const INTRO_SEED_BANK_ON_END = 825
 export const INTRO_SEED_BANK_NO_SOD_ON_START = 600
 export const INTRO_SEED_BANK_NO_SOD_ON_END = 625
 export const GAMEPLAY_SEED_BANK_INTRO_DURATION = 25
+export const INTRO_SEED_BANK_START_X = 0
 export const INTRO_SEED_BANK_X = 10
 export const LAWN_MOWER_CACHED_DRAW_OFFSET_X = -20
 export const GAMEPLAY_LAWN_MOWER_REANIM_X_OFFSET = INTRO_LAWN_MOWER_REANIM_X_OFFSET
@@ -247,6 +288,22 @@ const ADVICE_LAWN_STRING_KEYS: Record<string, string> = {
     'Try to plant at least 3 sunflowers!': 'ADVICE_PLANT_SUNFLOWER4',
     'Planting sunflowers will improve your chances \nof surviving the zombie attack!': 'ADVICE_PLANT_SUNFLOWER5',
 }
+const ZOMBIE_TOOLTIP_KEYS: Record<ZombieType, string> = {
+    normal: 'ZOMBIE',
+    flag: 'FLAG_ZOMBIE',
+    'traffic-cone': 'CONEHEAD_ZOMBIE',
+    bucket: 'BUCKETHEAD_ZOMBIE',
+    'ducky-tube': 'DUCKY_TUBE_ZOMBIE',
+    'pole-vaulting': 'POLE_VAULTING_ZOMBIE',
+}
+const ZOMBIE_TOOLTIP_FALLBACK_NAMES: Record<ZombieType, string> = {
+    normal: 'Zombie',
+    flag: 'Flag Zombie',
+    'traffic-cone': 'Conehead Zombie',
+    bucket: 'Buckethead Zombie',
+    'ducky-tube': 'Ducky Tube Zombie',
+    'pole-vaulting': 'Pole Vaulting Zombie',
+}
 export const INTRO_STREET_ZOMBIE_GRID_SIZE = 5
 export const INTRO_STREET_ZOMBIE_PREVIEW_CAPACITY = 10
 export const INTRO_STREET_ZOMBIE_BASE_X = 830
@@ -259,6 +316,25 @@ export const INTRO_STREET_ZOMBIE_WAVE = -2
 export const INTRO_STREET_ZOMBIE_Z_BASE = 100
 export const INTRO_STREET_ZOMBIE_ROW_Z_STEP = 4
 export const INTRO_STREET_ZOMBIE_ODD_COLUMN_Z_OFFSET = 2
+export const SEED_CHOOSER_BACKGROUND_Y = 87
+export const SEED_CHOOSER_OFFSET_Y = 516
+export const SEED_CHOOSER_TITLE_X = 229
+export const SEED_CHOOSER_TITLE_BASELINE_Y = 110
+export const SEED_CHOOSER_LETS_ROCK_X = 154
+export const SEED_CHOOSER_LETS_ROCK_Y = 545
+export const SEED_CHOOSER_BUTTON_WIDTH = 156
+export const SEED_CHOOSER_BUTTON_HEIGHT = 42
+export const SEED_CHOOSER_ALMANAC_X = 560
+export const SEED_CHOOSER_ALMANAC_Y = 572
+export const SEED_CHOOSER_SMALL_BUTTON_WIDTH = 120
+export const SEED_CHOOSER_SMALL_BUTTON_HEIGHT = 25
+export const SEED_CHOOSER_GRID_SLOT_COUNT = 40
+export const SEED_CHOOSER_FLY_TO_BANK_TICKS = 25
+export const SEED_CHOOSER_FLY_TO_CHOOSER_TICKS = 25
+export const SEED_CHOOSER_BANK_SHIFT_TICKS = 15
+export const SEED_CHOOSER_TITLE_COLOR = new Color(255, 255, 255)
+export const SEED_CHOOSER_SMALL_BUTTON_COLOR = new Color(42, 42, 90)
+export const SEED_CHOOSER_DISABLED_COLOR = new Color(64, 64, 64)
 export const INTRO_END = 855
 export const INTRO_NO_SOD_READY_SET_PLANT_END = 838
 export const LEVEL_AWARD_FLASH_TIME = 75
@@ -355,13 +431,15 @@ export const GAME_OVER_TITLE_KEYS = [
     { x: 129.9, y: 59.4, scale: 1.000 },
 ]
 export const LEVEL_COMPLETE_FADE_TICKS = 600
+export const LEVEL_COMPLETE_NOTE_FADE_TICKS = 500
 export const LEVEL_COMPLETE_LIGHT_FILL_TICK = 300
-export const LEVEL_COMPLETE_FADE_START_TICKS = 400
 export const LEVEL_COMPLETE_FADE_DURATION_TICKS = 200
 export abstract class GameScreenCore extends Component {
     public onBackToMenu: (() => void) | null = null
     public onMenuRequest: (() => void) | null = null
     public onPauseRequest: (() => void) | null = null
+    public onAlmanacRequest: ((zombieType?: ZombieType) => void) | null = null
+    public onSeedChooserWarningRequest: ((warningKey: string, continueStart: () => void) => void) | null = null
     public onGameOverRequest: (() => void) | null = null
     public onAwardScreenRequest: ((award: LevelAward) => void) | null = null
     public onMoneyChanged: ((amount: number) => void) | null = null
@@ -397,7 +475,7 @@ export abstract class GameScreenCore extends Component {
     protected _sodRollViews: SodRollView[] = []
     protected _sodRollParticleSystems: TodParticleSystem[] = []
     protected _introLawnMowerViews: IntroLawnMowerView[] = []
-    protected _introStreetZombieNodes: Node[] = []
+    protected _introStreetZombies: IntroStreetZombie[] = []
     protected _seedBankHeight = 87
     protected _cursorPreview: Node | null = null
     protected _gridPreview: Node | null = null
@@ -441,6 +519,8 @@ export abstract class GameScreenCore extends Component {
     protected _seedTooltipNode: Node | null = null
     protected _seedTooltipKey = ''
     protected _shovelTooltipNode: Node | null = null
+    protected _introZombieTooltipNode: Node | null = null
+    protected _introZombieTooltipKey = ''
     protected _mousePixel = { x: -1, y: -1 }
     protected _hasCursorPointer = false
     protected readonly _boardHoverClient = {
@@ -490,6 +570,7 @@ export abstract class GameScreenCore extends Component {
     protected _levelAward: LevelAward | null = null
     protected _sunFont: BitmapFontAssets | null = null
     protected _packetCostFont: BitmapFontAssets | null = null
+    protected _tooltipTitleFont: BitmapFontAssets | null = null
     protected _levelFont: BitmapFontAssets | null = null
     protected _buttonSprites: MessageBoxButtonSprites | null = null
     protected _buttonFonts: MessageBoxButtonFonts | null = null
@@ -499,6 +580,23 @@ export abstract class GameScreenCore extends Component {
     protected _progressMeterHeadNode: Node | null = null
     protected _progressFlagViews: ProgressFlagView[] = []
     protected _levelLabel: FontRenderer | null = null
+    protected _seedChooserNode: Node | null = null
+    protected _seedChooserShadowLayer: Node | null = null
+    protected _seedChooserChooserLayer: Node | null = null
+    protected _seedChooserFlyingLayer: Node | null = null
+    protected _seedChooserBankLayer: Node | null = null
+    protected _seedChooserBankShadowLayer: Node | null = null
+    protected _seedChooserSeeds: SeedChooserSeed[] = []
+    protected _seedChooserAge = 0
+    protected _seedChooserSeedsInBank = 0
+    protected _seedChooserSeedsInFlight = 0
+    protected _seedChooserPanelState: SeedChooserPanelState = 'hidden'
+    protected _seedChooserActive = false
+    protected _seedChooserCompleted = false
+    protected _seedChooserStartButton: UIButton | null = null
+    protected _seedChooserStartLabel: FontRenderer | null = null
+    protected _seedChooserStartGlow: Node | null = null
+    protected _seedChooserButtonFont: BitmapFontAssets | null = null
     protected _introTime = 0
     protected _introReadySetPlantShown = false
     protected _introMusicFadeStarted = false
@@ -519,6 +617,7 @@ export abstract class GameScreenCore extends Component {
     protected _gameplayLawnMowerIntroTicks = -1
     protected _gameplaySeedBankIntroTicks = -1
     protected _conveyorBeltAnimTicks = 0
+    protected _keyboardPausedGameSpeed = 1
     protected _bootstrapped = false
     protected _restoredFromSnapshot = false
 
@@ -527,6 +626,7 @@ export abstract class GameScreenCore extends Component {
         const sessionOptions = {
             firstTimeAdventure: this.firstTimeAdventure,
             initialMoney: this.initialMoney,
+            chooseSeeds: this._shouldUseSeedChooser(),
         }
         this._session = this.initialSnapshot
             ? restoreGameSessionSnapshot(this.levelDefinition, this.initialSnapshot, sessionOptions)
@@ -598,9 +698,11 @@ export abstract class GameScreenCore extends Component {
             ...(DEBUG ? [] : [ParticleDefinitionLoader.preloadAll()]),
             FontLoader.load('continuumbold14'),
             FontLoader.load('pico129'),
+            FontLoader.load('pix118bold'),
             FontLoader.load('houseofterror28'),
             FontLoader.load('houseofterror16'),
             FontLoader.load('briannetod16'),
+            FontLoader.load('dwarventodcraft18yellow'),
             MessageBoxAssets.loadButtonSprites(),
             MessageBoxAssets.loadButtonFonts(),
         ])
@@ -633,9 +735,11 @@ export abstract class GameScreenCore extends Component {
         if (!DEBUG) resultIndex++ // ParticleDefinitionLoader.preloadAll()
         this._sunFont = results[resultIndex++] as BitmapFontAssets | null
         this._packetCostFont = results[resultIndex++] as BitmapFontAssets | null
+        this._tooltipTitleFont = results[resultIndex++] as BitmapFontAssets | null
         this._adviceFont = results[resultIndex++] as BitmapFontAssets | null
         this._levelFont = results[resultIndex++] as BitmapFontAssets | null
         this._daveFont = results[resultIndex++] as BitmapFontAssets | null
+        this._seedChooserButtonFont = results[resultIndex++] as BitmapFontAssets | null
         this._buttonSprites = results[resultIndex++] as MessageBoxButtonSprites | null
         this._buttonFonts = results[resultIndex++] as MessageBoxButtonFonts | null
         this._lawnStrings = await LawnStringLoader.load()
@@ -669,6 +773,9 @@ export abstract class GameScreenCore extends Component {
         if (this.initialSnapshot?.state.particles?.length) {
             this._restoreGameplayParticles(this.initialSnapshot.state.particles)
         }
+        if (this.initialSnapshot?.state.music !== undefined) {
+            void MusicSystem.restorePlaybackSnapshot(this.initialSnapshot.state.music ?? null)
+        }
         this.onReady?.()
     }
 
@@ -689,7 +796,11 @@ export abstract class GameScreenCore extends Component {
                 if (this._gameplayUpdatesPaused) this._gameAccumulator = 0
             }
         } else if (!this._session.paused) {
-            this._updateIntro(scaledDt)
+            if (this._seedChooserActive) {
+                this._updateSeedChooser(scaledDt / GAME_TICK_SECONDS)
+            } else {
+                this._updateIntro(scaledDt)
+            }
             this._updateAdviceWidget(scaledDt * 100)
         }
         if (this._gameOverActive && !this._session.paused) {
@@ -748,7 +859,7 @@ export abstract class GameScreenCore extends Component {
     }
 
     public createSaveSnapshot() {
-        if (!this._bootstrapped || this._session.result !== 'playing') return null
+        if (!this._bootstrapped || !this._gameStarted || this._session.result !== 'playing') return null
         this._syncPlantAnimationStateToSession()
         const snapshot = createGameSessionSnapshot(this._session)
         snapshot.state.particles = this._createGameplayParticleSnapshots()
@@ -761,7 +872,12 @@ export abstract class GameScreenCore extends Component {
             shovelDugPlant: this._crazyDaveShovelDugPlant,
         }
         snapshot.state.bowlingStripeRevealed = this._bowlingStripeRevealed
+        snapshot.state.music = MusicSystem.capturePlaybackSnapshot()
         return snapshot
+    }
+
+    public isChoosingSeeds() {
+        return this._seedChooserActive
     }
 
     protected _syncPlantAnimationStateToSession() {
@@ -939,11 +1055,11 @@ export abstract class GameScreenCore extends Component {
         return sunSpawningEnabled
     }
 
-    public debugSetAutoCollectEnabled(enabled: boolean) {
-        GameDebugSettings.setAutoCollectEnabled(enabled)
-        const autoCollectEnabled = this._session.debugSetAutoCollectEnabled(enabled)
+    public debugSetCollectMode(mode: DebugCollectMode) {
+        GameDebugSettings.setCollectMode(mode)
+        const collectMode = this._session.debugSetCollectMode(mode)
         if (this._bootstrapped) this._renderFrame()
-        return autoCollectEnabled
+        return collectMode
     }
 
     public debugSetHitboxesVisible(visible: boolean) {
@@ -982,6 +1098,12 @@ export abstract class GameScreenCore extends Component {
     protected abstract _syncPlantHighlights(): void
     protected abstract _playZombieAnimation(entityId: number, animation: string): void
     protected abstract _playPlantAnimation(entityId: number, animation: string, time?: number): void
+    protected abstract _drawSeedPackets(): void
+    protected abstract _shouldPlayIntroSodRoll(): boolean
+    protected abstract _capturePreviousEntitySnapshots(): void
+    protected abstract _syncItemLayerBehindAdvice(): void
+    protected abstract _syncGameOverScene(): void
+    protected abstract _syncGameOverLayerOrder(): void
 
     protected _wireInput() {
         this._bindDomKeyboardEvents()
@@ -990,6 +1112,10 @@ export abstract class GameScreenCore extends Component {
         this.node.on(Node.EventType.MOUSE_MOVE, (event: EventMouse) => {
             if (GameDebugSettings.isMobileMode()) return
             UIHoverManager.rememberMouseEvent(event)
+            if (this._session.collectMode !== 'move') return
+            if (!this._canUseBoardInput()) return
+            const pixel = eventToBoardPixel(this.node, event)
+            if (this._session.collectCurrencyItemAt(pixel.x, pixel.y)) this._renderFrame()
         })
         this.node.on(Node.EventType.MOUSE_LEAVE, () => {
             if (GameDebugSettings.isMobileMode()) return
@@ -1225,11 +1351,12 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _onKeyDown(event: EventKeyboard) {
-        if (event.keyCode !== 32 && event.keyCode !== 13) return
-
         const rawEvent = event.rawEvent as Event | undefined
         if (rawEvent && rawEvent === this._lastHandledKeyboardEvent) return
-        this._handleAdvanceKey(event.keyCode)
+        const key = this._eventKeyName(event.keyCode, rawEvent)
+        if (this._handleKeyboardShortcut(key) || this._handleAdvanceKey(event.keyCode)) {
+            if (rawEvent) this._lastHandledKeyboardEvent = rawEvent
+        }
     }
 
     protected _bindDomKeyboardEvents() {
@@ -1248,14 +1375,94 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _onDomKeyDown(event: KeyboardEvent) {
-        const keyCode = event.key === 'Enter' ? 13 : event.key === ' ' || event.code === 'Space' ? 32 : 0
-        if (keyCode === 0) return
+        if (event === this._lastHandledKeyboardEvent) return
 
-        if (this._handleAdvanceKey(keyCode)) {
+        const keyCode = event.key === 'Enter' ? 13 : event.key === ' ' || event.code === 'Space' ? 32 : event.keyCode
+
+        if (this._handleKeyboardShortcut(event.key) || this._handleAdvanceKey(keyCode)) {
             this._lastHandledKeyboardEvent = event
             event.preventDefault()
             event.stopPropagation()
         }
+    }
+
+    protected _eventKeyName(keyCode: number, rawEvent: Event | undefined) {
+        const key = (rawEvent as KeyboardEvent | undefined)?.key
+        if (key) return key
+        if (keyCode >= 65 && keyCode <= 90) return String.fromCharCode(keyCode).toLowerCase()
+        if (keyCode >= 48 && keyCode <= 57) return String.fromCharCode(keyCode)
+        return ''
+    }
+
+    protected _handleKeyboardShortcut(key: string) {
+        if (!GameDebugSettings.hotkeysEnabled) return false
+        if (!this._canUseBoardInput() || this._isCrazyDaveBoardInputBlocked()) return false
+
+        const normalized = key.toLowerCase()
+        const seedIndex = normalized.length === 1 ? '1234qweras'.indexOf(normalized) : -1
+        if (seedIndex >= 0) return this._selectSeedSourceByIndex(seedIndex)
+
+        if (normalized === 'f') {
+            if (!this._levelHasShovel()) return false
+            if (this._session.selectedTool === 'shovel') {
+                this._cancelCursor()
+            } else {
+                this._session.dispatch({ type: 'selectTool', toolType: 'shovel' })
+                this._syncShovelTutorialAfterPickup()
+                this._renderFrame()
+            }
+            return true
+        }
+
+        if (normalized === 'd') {
+            const speed = getGameSpeed()
+            if (speed === 0) {
+                setGameSpeed(this._keyboardPausedGameSpeed)
+            } else {
+                this._keyboardPausedGameSpeed = speed
+                setGameSpeed(0)
+            }
+            return true
+        }
+
+        return false
+    }
+
+    protected _selectSeedSourceByIndex(index: number) {
+        const source = this._seedSourceByIndex(index)
+        if (!source) return false
+        const sameSourceSelected = source.kind === 'seed'
+            ? this._session.selectedSeed === source.seedType && this._session.selectedConveyorPacketId === null
+            : this._session.selectedConveyorPacketId === source.packetId
+        if (sameSourceSelected) {
+            this._cancelCursor()
+            return true
+        }
+        this._cancelCursor(false)
+        this._selectSeedSource(source)
+        this._renderFrame()
+        return true
+    }
+
+    protected _seedSourceByIndex(index: number): SeedSourceHit | null {
+        if (this._session.level.conveyor?.enabled === true) {
+            const packet = this._session.conveyorPackets[index]
+            return packet ? {
+                kind: 'conveyor',
+                packet,
+                rect: this._conveyorPacketViews.get(packet.id)?.rect() ?? { x: 0, y: 0, width: 0, height: 0 },
+                seedType: packet.seedType,
+                packetId: packet.id,
+            } : null
+        }
+
+        const packet = this._session.seedPackets[index]
+        return packet ? {
+            kind: 'seed',
+            packet,
+            rect: this._seedPacketViews.get(packet.seedType)?.rect() ?? { x: 0, y: 0, width: 0, height: 0 },
+            seedType: packet.seedType,
+        } : null
     }
 
     protected _handleAdvanceKey(keyCode: number) {
@@ -1321,7 +1528,11 @@ export abstract class GameScreenCore extends Component {
         return isDuplicate
     }
 
-    protected _handlePointerDown(pixel: { x: number, y: number }) {
+    protected _handlePointerDown(pixel: { x: number, y: number }, button = 0) {
+        if (this._seedChooserActive) {
+            this._handleSeedChooserPointerDown(pixel, button)
+            return
+        }
         if (!this._canUseBoardInput()) return
 
         if (this._advanceCrazyDaveDialog()) {
@@ -1346,7 +1557,10 @@ export abstract class GameScreenCore extends Component {
             return
         }
 
-        if (this._session.collectItemAt(pixel.x, pixel.y)) {
+        const collectedItem = this._session.collectMode === 'click'
+            ? this._session.collectItemAt(pixel.x, pixel.y)
+            : this._session.collectLevelAwardItemAt(pixel.x, pixel.y)
+        if (collectedItem) {
             this._renderFrame()
             return
         }
@@ -1377,6 +1591,30 @@ export abstract class GameScreenCore extends Component {
 
         this._session.dispatch({ type: 'placePlant', x: pixel.x, y: pixel.y })
         this._renderFrame()
+    }
+
+    protected _handleSeedChooserPointerDown(pixel: { x: number, y: number }, button = 0) {
+        if (this._seedChooserAge < this._seedChooserSlideTicks()) return
+        if (this._seedChooserSeedsInFlight > 0) {
+            for (const seed of this._seedChooserSeeds) this._landSeedChooserSeed(seed)
+            this._syncSeedChooser()
+        }
+
+        if (button === 0 && this._canShowAlmanacInSeedChooser() && !this._isSeedChooserUiPixel(pixel)) {
+            const introZombieHit = this._findIntroStreetZombieAt(pixel)
+            if (introZombieHit) {
+                void SoundLoader.play(SoundEffect.Tap)
+                this.onAlmanacRequest?.(introZombieHit.type)
+                return
+            }
+        }
+
+        const hit = this._findSeedChooserPacketAt(pixel)
+        if (!hit) return
+        if (hit.seed.state === 'chooser') this._clickedSeedChooserSeed(hit.seed)
+        if (hit.seed.state === 'bank') this._clickedSeedBankChooserSeed(hit.seed)
+        this._hideSeedTooltip()
+        this._updateHoverItemAndSeedPacketState()
     }
 
     protected _canUseBoardInput() {
@@ -1462,6 +1700,13 @@ export abstract class GameScreenCore extends Component {
         const previousIntroTime = this._introTime
         this._introTime += dt * 100
         this._boardContent.setPosition(this._introBoardX(), 0, 0)
+        this._syncSeedChooserClosing()
+        if (this._shouldPauseIntroForSeedChooser()) {
+            this._introTime = INTRO_SEED_CHOOSER_SLIDE_ON_START
+            this._boardContent.setPosition(this._introBoardX(), 0, 0)
+            this._startSeedChooser()
+            return
+        }
         if (this._shouldPlayIntroSodRoll() && previousIntroTime < INTRO_ROLL_SOD_START && this._introTime >= INTRO_ROLL_SOD_START) {
             this._startSodRoll()
         }
@@ -1500,6 +1745,617 @@ export abstract class GameScreenCore extends Component {
         this._startGameplayMusic()
     }
 
+    protected _shouldPauseIntroForSeedChooser() {
+        return this._shouldUseSeedChooser() &&
+            !this._seedChooserCompleted &&
+            !this._seedChooserActive &&
+            this._introTime >= INTRO_SEED_CHOOSER_SLIDE_ON_START
+    }
+
+    protected _shouldUseSeedChooser() {
+        if (this.initialSnapshot) return false
+        if (this.levelDefinition.conveyor?.enabled === true) return false
+        if (this.levelDefinition.adventureLevel <= 5) return false
+        return this.levelDefinition.seedPackets.length > this._seedChooserSlotCount()
+    }
+
+    protected _seedChooserSlotCount() {
+        return this.levelDefinition.seedBankPacketSlots ?? 6
+    }
+
+    protected _startSeedChooser() {
+        this._seedChooserActive = true
+        this._seedChooserAge = 0
+        this._seedChooserSeedsInBank = 0
+        this._seedChooserSeedsInFlight = 0
+        this._seedChooserSeeds = this.levelDefinition.seedPackets.map((seedType, index) => {
+            const pos = this._seedChooserPosition(index)
+            return {
+                seedType,
+                state: 'chooser',
+                bankIndex: 0,
+                x: pos.x,
+                y: pos.y,
+                startX: pos.x,
+                startY: pos.y,
+                endX: pos.x,
+                endY: pos.y,
+                startAge: 0,
+                endAge: 0,
+                view: null,
+                shadowView: null,
+            }
+        })
+        this._createSeedChooser()
+        this._seedChooserPanelState = 'choosing'
+        this._syncSeedChooser()
+        if (this._seedBankNode) {
+            if (this._seedBankNode.parent !== this._uiLayer) this._seedBankNode.setParent(this._uiLayer)
+            this._seedBankNode.active = true
+            this._wireSeedChooserPointerInput(this._seedBankNode)
+        }
+        this._syncIntroSeedBank()
+        this._syncGameplayHudVisibility()
+        this._setSeedBankContentsVisible(true)
+        this._syncSeedPacketState()
+    }
+
+    protected _createSeedChooser() {
+        this._destroySeedChooser()
+
+        this._seedChooserNode = createUINode('SeedChooser', {
+            parent: this._uiLayer,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            width: 800,
+            height: 600,
+            x: 0,
+            y: 0,
+            z: 600,
+        })
+        this._wireSeedChooserPointerInput(this._seedChooserNode)
+
+        const background = SpriteLoader.get('seedchooser_background')
+        if (background) {
+            createSpriteNode({
+                name: 'SeedChooserBackground',
+                spriteFrame: background,
+                parent: this._seedChooserNode,
+                layer: this.node.layer,
+                x: 0,
+                y: -SEED_CHOOSER_BACKGROUND_Y,
+            })
+        }
+
+        this._seedChooserShadowLayer = createUINode('SeedChooserShadows', {
+            parent: this._seedChooserNode,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+        })
+        this._seedChooserChooserLayer = createUINode('SeedChooserCards', {
+            parent: this._seedChooserNode,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+        })
+        this._seedChooserFlyingLayer = createUINode('SeedChooserFlyingCards', {
+            parent: this._uiLayer,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+            z: 650,
+        })
+        if (this._seedBankNode) {
+            this._seedChooserBankShadowLayer = createUINode('SeedChooserBankShadows', {
+                parent: this._seedBankNode,
+                layer: this.node.layer,
+                anchorX: 0,
+                anchorY: 1,
+                z: 3,
+            })
+            this._seedChooserBankLayer = createUINode('SeedChooserBankCards', {
+                parent: this._seedBankNode,
+                layer: this.node.layer,
+                anchorX: 0,
+                anchorY: 1,
+                z: 5,
+            })
+        }
+
+        this._createSeedChooserText(
+            'SeedChooserTitle',
+            this._lawnString('CHOOSE_YOUR_PLANTS', 'CHOOSE YOUR PLANTS!'),
+            SEED_CHOOSER_TITLE_X,
+            SEED_CHOOSER_TITLE_BASELINE_Y,
+            this._seedChooserButtonFont,
+            SEED_CHOOSER_TITLE_COLOR,
+            'center',
+        )
+        this._createSeedChooserStartButton()
+        if (this._canShowAlmanacInSeedChooser()) this._createSeedChooserAlmanacButton()
+        this._syncSeedChooserPosition()
+    }
+
+    protected _wireSeedChooserPointerInput(node: Node) {
+        node.on(Node.EventType.MOUSE_DOWN, (event: EventMouse) => {
+            if (!this._seedChooserActive) return
+            if (GameDebugSettings.isMobileMode()) return
+            if (event.getButton() !== 0 && event.getButton() !== MOUSE_BUTTON_RIGHT) return
+            const pixel = eventToBoardPixel(this.node, event)
+            this._mousePixel = pixel
+            this._hasCursorPointer = true
+            this._handlePointerDown(pixel, event.getButton())
+            event.propagationStopped = true
+        }, this)
+        node.on(Node.EventType.MOUSE_MOVE, (event: EventMouse) => {
+            if (!this._seedChooserActive) return
+            if (GameDebugSettings.isMobileMode()) return
+            UIHoverManager.rememberMouseEvent(event)
+            this._mousePixel = eventToBoardPixel(this.node, event)
+            this._hasCursorPointer = true
+            this._updateHoverItemAndSeedPacketState()
+            event.propagationStopped = true
+        }, this)
+        node.on(Node.EventType.MOUSE_LEAVE, () => {
+            if (!this._seedChooserActive) return
+            if (GameDebugSettings.isMobileMode()) return
+            this._clearBoardHoverState()
+        }, this)
+        node.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
+            if (!this._seedChooserActive) return
+            if (!GameDebugSettings.isMobileMode()) return
+            const pixel = eventToBoardPixel(this.node, event)
+            this._mousePixel = pixel
+            this._hasCursorPointer = true
+            this._handlePointerDown(pixel)
+            event.propagationStopped = true
+        }, this)
+    }
+
+    protected _destroySeedChooser() {
+        for (const seed of this._seedChooserSeeds) {
+            seed.view?.destroy()
+            seed.view = null
+            seed.shadowView?.destroy()
+            seed.shadowView = null
+        }
+        if (this._seedChooserNode?.isValid) this._seedChooserNode.destroy()
+        if (this._seedChooserFlyingLayer?.isValid) this._seedChooserFlyingLayer.destroy()
+        this._seedChooserNode = null
+        this._seedChooserShadowLayer = null
+        this._seedChooserChooserLayer = null
+        this._seedChooserFlyingLayer = null
+        this._destroySeedChooserBankLayers()
+        this._seedChooserStartButton = null
+        this._seedChooserStartLabel = null
+        this._seedChooserStartGlow = null
+        this._seedChooserPanelState = 'hidden'
+        this._hideSeedTooltip()
+    }
+
+    protected _updateSeedChooser(ticks: number) {
+        if (!this._seedChooserActive) return
+
+        this._seedChooserAge += ticks
+        this._syncSeedChooserPosition()
+        this._syncIntroSeedBank()
+        this._syncGameplayHudVisibility()
+        for (const seed of this._seedChooserSeeds) {
+            if (seed.state !== 'to-bank' && seed.state !== 'to-chooser') continue
+
+            seed.x = easeInOut(seed.startAge, seed.endAge, this._seedChooserAge, seed.startX, seed.endX)
+            seed.y = easeInOut(seed.startAge, seed.endAge, this._seedChooserAge, seed.startY, seed.endY)
+            seed.view?.node.setPosition(seed.x, -seed.y, 20)
+            if (this._seedChooserAge >= seed.endAge) this._landSeedChooserSeed(seed)
+        }
+    }
+
+    protected _syncSeedChooser() {
+        if (!this._seedChooserActive) return
+
+        this._syncSeedChooserShadows()
+        this._syncSeedChooserCards()
+        this._syncSeedChooserStartButton()
+        this._syncSeedChooserPosition()
+    }
+
+    protected _syncSeedChooserPosition() {
+        if (!this._seedChooserNode) return
+        const y = this._seedChooserPanelY()
+        this._seedChooserNode.setPosition(0, y, 600)
+        if (this._seedChooserFlyingLayer?.isValid) {
+            this._seedChooserFlyingLayer.setPosition(0, y, 650)
+            const menuIndex = this._menuButtonNode?.activeInHierarchy ? this._menuButtonNode.getSiblingIndex() : -1
+            this._seedChooserFlyingLayer.setSiblingIndex(menuIndex > 0 ? menuIndex - 1 : this._uiLayer.children.length - 1)
+        }
+    }
+
+    protected _seedChooserSlideTicks() {
+        return INTRO_SEED_CHOOSER_SLIDE_ON_END - INTRO_SEED_CHOOSER_SLIDE_ON_START
+    }
+
+    protected _seedChooserPanelY() {
+        if (this._seedChooserPanelState === 'closing') {
+            return easeInOut(INTRO_SEED_CHOOSER_SLIDE_OFF_START, INTRO_SEED_CHOOSER_SLIDE_OFF_END, this._introTime, 0, -SEED_CHOOSER_OFFSET_Y)
+        }
+        const slideTicks = this._seedChooserSlideTicks()
+        return this._seedChooserAge < slideTicks
+            ? easeInOut(0, slideTicks, this._seedChooserAge, -SEED_CHOOSER_OFFSET_Y, 0)
+            : 0
+    }
+
+    protected _syncSeedChooserClosing() {
+        if (this._seedChooserPanelState !== 'closing') return
+        this._syncSeedChooserPosition()
+        this._syncGameplayHudVisibility()
+        if (this._introTime >= INTRO_SEED_CHOOSER_SLIDE_OFF_END) {
+            this._destroySeedChooser()
+            this._syncGameplayHudVisibility()
+        }
+    }
+
+    protected _syncSeedChooserShadows() {
+        if (!this._seedChooserShadowLayer) return
+        this._clearNodeChildren(this._seedChooserShadowLayer)
+        if (this._seedChooserBankShadowLayer) this._clearNodeChildren(this._seedChooserBankShadowLayer)
+        for (const seed of this._seedChooserSeeds) seed.shadowView = null
+
+        const silhouette = SpriteLoader.get('seedpacketsilhouette')
+        for (let i = 0; i < this._seedChooserGridSlotCount(); i++) {
+            const seed = this._seedChooserSeeds[i]
+            if (seed?.state === 'chooser') continue
+            const pos = this._seedChooserPosition(i)
+            if (seed) {
+                seed.shadowView = this._createChooserSeedPacket(seed, this._seedChooserShadowLayer, pos.x, -pos.y)
+                seed.shadowView.applyColor(new Color(55, 55, 55, 255))
+            } else if (silhouette) {
+                createSpriteNode({
+                    name: `ChooserShadow_${i}`,
+                    spriteFrame: silhouette,
+                    parent: this._seedChooserShadowLayer,
+                    layer: this.node.layer,
+                    x: pos.x,
+                    y: -pos.y,
+                })
+            }
+        }
+
+        if (!silhouette) return
+        for (let i = 0; i < this._seedChooserSlotCount(); i++) {
+            if (this._findSeedChooserSeedInBank(i)) continue
+            const x = this._getSeedPacketPositionX(i)
+            createSpriteNode({
+                name: `BankShadow_${i}`,
+                spriteFrame: silhouette,
+                parent: this._seedChooserBankShadowLayer ?? this._seedChooserShadowLayer,
+                layer: this.node.layer,
+                x,
+                y: -8,
+                z: 4,
+            })
+        }
+    }
+
+    protected _seedChooserGridSlotCount() {
+        return SEED_CHOOSER_GRID_SLOT_COUNT
+    }
+
+    protected _syncSeedChooserCards() {
+        if (!this._seedChooserChooserLayer || !this._seedChooserFlyingLayer) return
+
+        this._clearNodeChildren(this._seedChooserChooserLayer)
+        this._clearNodeChildren(this._seedChooserFlyingLayer)
+        if (this._seedChooserBankLayer) this._clearNodeChildren(this._seedChooserBankLayer)
+        for (const seed of this._seedChooserSeeds) seed.view = null
+
+        for (const seed of this._seedChooserSeeds) {
+            if (seed.state === 'bank') {
+                if (!this._seedChooserBankLayer) continue
+                seed.view = this._createChooserSeedPacket(seed, this._seedChooserBankLayer, this._getSeedPacketPositionX(seed.bankIndex), -8)
+                continue
+            }
+            const parent = seed.state === 'to-bank' || seed.state === 'to-chooser'
+                ? this._seedChooserFlyingLayer
+                : this._seedChooserChooserLayer
+            seed.view = this._createChooserSeedPacket(seed, parent, seed.x, -seed.y)
+        }
+    }
+
+    protected _createChooserSeedPacket(seed: SeedChooserSeed, parent: Node, x: number, y: number) {
+        const view = this._createSeedPacketView({
+            name: `SeedChooserPacket_${seed.seedType}`,
+            x,
+            y,
+            parent,
+            layer: this.node.layer,
+            seedType: seed.seedType,
+            costFont: this._packetCostFont,
+        })
+        view.sync({
+            gameStarted: true,
+            active: true,
+            selected: false,
+            cooldownRemaining: 0,
+            cooldownTotal: 0,
+            canAfford: true,
+            tutorialColor: null,
+            mobile: GameDebugSettings.isMobileMode(),
+        })
+        return view
+    }
+
+    protected _clickedSeedChooserSeed(seed: SeedChooserSeed) {
+        if (this._seedChooserSeedsInBank >= this._seedChooserSlotCount()) return
+
+        const end = this._seedChooserBankPosition(this._seedChooserSeedsInBank)
+        this._startSeedChooserSeedMotion(seed, 'to-bank', this._seedChooserSeedsInBank, end.x, end.y, SEED_CHOOSER_FLY_TO_BANK_TICKS)
+        this._seedChooserSeedsInBank++
+        void SoundLoader.play(SoundEffect.Tap)
+        this._syncSeedChooser()
+    }
+
+    protected _clickedSeedBankChooserSeed(seed: SeedChooserSeed) {
+        for (let i = seed.bankIndex + 1; i < this._seedChooserSlotCount(); i++) {
+            const shifted = this._findSeedChooserSeedInBank(i)
+            if (!shifted) continue
+            const end = this._seedChooserBankPosition(i - 1)
+            this._startSeedChooserSeedMotion(
+                shifted,
+                'to-bank',
+                i - 1,
+                end.x,
+                end.y,
+                SEED_CHOOSER_BANK_SHIFT_TICKS,
+            )
+        }
+
+        const chooserIndex = this._seedChooserSeeds.indexOf(seed)
+        const end = this._seedChooserPosition(chooserIndex)
+        this._startSeedChooserSeedMotion(seed, 'to-chooser', 0, end.x, end.y, SEED_CHOOSER_FLY_TO_CHOOSER_TICKS)
+        this._seedChooserSeedsInBank--
+        void SoundLoader.play(SoundEffect.Tap)
+        this._syncSeedChooser()
+    }
+
+    protected _startSeedChooserSeedMotion(
+        seed: SeedChooserSeed,
+        state: SeedChooserSeedState,
+        bankIndex: number,
+        endX: number,
+        endY: number,
+        ticks: number,
+    ) {
+        seed.state = state
+        seed.bankIndex = bankIndex
+        seed.startX = seed.x
+        seed.startY = seed.y
+        seed.endX = endX
+        seed.endY = endY
+        seed.startAge = this._seedChooserAge
+        seed.endAge = this._seedChooserAge + ticks
+        this._seedChooserSeedsInFlight++
+    }
+
+    protected _landSeedChooserSeed(seed: SeedChooserSeed) {
+        if (seed.state !== 'to-bank' && seed.state !== 'to-chooser') return
+
+        seed.x = seed.endX
+        seed.y = seed.endY
+        seed.startX = seed.x
+        seed.startY = seed.y
+        seed.state = seed.state === 'to-bank' ? 'bank' : 'chooser'
+        seed.startAge = 0
+        seed.endAge = 0
+        this._seedChooserSeedsInFlight = Math.max(0, this._seedChooserSeedsInFlight - 1)
+        this._syncSeedChooser()
+    }
+
+    protected _finishSeedChooser() {
+        if (this._seedChooserSeedsInBank !== this._seedChooserSlotCount()) return
+
+        for (const seed of this._seedChooserSeeds) this._landSeedChooserSeed(seed)
+        const chosen = Array.from(
+            { length: this._seedChooserSlotCount() },
+            (_, index) => this._findSeedChooserSeedInBank(index)?.seedType,
+        ).filter((seedType): seedType is SeedType => !!seedType)
+        const warningKey = this._seedChooserStartWarningKey(chosen)
+        if (warningKey) {
+            if (this.onSeedChooserWarningRequest) {
+                this.onSeedChooserWarningRequest(warningKey, () => this._completeSeedChooser(chosen))
+            } else {
+                this._completeSeedChooser(chosen)
+            }
+            return
+        }
+
+        this._completeSeedChooser(chosen)
+    }
+
+    protected _completeSeedChooser(chosen: SeedType[]) {
+        this._session.setSeedPackets(chosen)
+        this._drawSeedPackets()
+        this._destroySeedChooserBankLayers()
+        this._seedChooserActive = false
+        this._seedChooserCompleted = true
+        this._seedChooserPanelState = 'closing'
+        this._introTime = Math.max(this._introTime, INTRO_SEED_CHOOSER_SLIDE_ON_END + 1)
+        this._setSeedBankContentsVisible(true)
+        this._syncSeedPacketState()
+        this._syncGameplayHudVisibility()
+        UIButton.refreshHoverStates()
+    }
+
+    protected _seedChooserStartWarningKey(chosen: SeedType[]) {
+        if (this._seedChooserHasSunProducer(chosen)) return ''
+        return this.levelDefinition.background === 'day'
+            ? 'SEED_CHOOSER_SUN_WARNING'
+            : 'SEED_CHOOSER_NIGHT_SUN_WARNING'
+    }
+
+    protected _seedChooserHasSunProducer(chosen: SeedType[]) {
+        return chosen.some((seedType) => seedType === 'sunflower')
+    }
+
+    protected _destroySeedChooserBankLayers() {
+        if (this._seedChooserBankLayer?.isValid) this._seedChooserBankLayer.destroy()
+        if (this._seedChooserBankShadowLayer?.isValid) this._seedChooserBankShadowLayer.destroy()
+        this._seedChooserBankLayer = null
+        this._seedChooserBankShadowLayer = null
+    }
+
+    protected _findSeedChooserSeedInBank(index: number) {
+        return this._seedChooserSeeds.find((seed) => seed.state === 'bank' && seed.bankIndex === index) ?? null
+    }
+
+    protected _seedChooserPosition(index: number) {
+        const row = Math.floor(index / 8)
+        const col = index % 8
+        return { x: col * 53 + 22, y: row * 73 + 128 }
+    }
+
+    protected _seedChooserBankPosition(index: number) {
+        const bankPos = this._seedBankNode?.position
+        return {
+            x: (bankPos?.x ?? INTRO_SEED_BANK_X) + this._getSeedPacketPositionX(index),
+            y: -(bankPos?.y ?? 0) + 8,
+        }
+    }
+
+    protected _createSeedChooserStartButton() {
+        if (!this._seedChooserNode) return
+        const normal = SpriteLoader.get('seedchooser_button')
+        const glow = SpriteLoader.get('seedchooser_button_glow')
+        const disabled = SpriteLoader.get('seedchooser_button_disabled')
+        if (!normal || !glow || !disabled) return
+
+        const { button, label, glow: glowNode } = createSeedChooserButton({
+            name: 'LetsRockButton',
+            parent: this._seedChooserNode,
+            layer: this.node.layer,
+            x: SEED_CHOOSER_LETS_ROCK_X,
+            y: -SEED_CHOOSER_LETS_ROCK_Y,
+            label: this._lawnString('LETS_ROCK_BUTTON', "LET'S ROCK!"),
+            normal,
+            glow,
+            font: this._seedChooserButtonFont,
+            onClick: (_button, event) => {
+                if (event instanceof EventMouse && event.getButton() === MOUSE_BUTTON_RIGHT) return
+                this._finishSeedChooser()
+            },
+        })
+        this._seedChooserStartButton = button
+        this._seedChooserStartButton.disabledSprite = disabled
+        this._seedChooserStartButton.rightClickTriggers = true
+        this._seedChooserStartButton.rightClickPressesVisual = false
+        this._seedChooserStartGlow = glowNode
+        this._seedChooserStartLabel = label.renderer
+        this._seedChooserStartButton.onStateChange = (state) => {
+            if (this._seedChooserStartGlow) this._seedChooserStartGlow.active = state === 'hover' || state === 'pressed'
+            label.node.setPosition(label.baseX, label.baseY, 1)
+        }
+        this._syncSeedChooserStartButton()
+    }
+
+    protected _createSeedChooserAlmanacButton() {
+        if (!this._seedChooserNode) return
+        const normal = SpriteLoader.get('seedchooser_button2')
+        const glow = SpriteLoader.get('seedchooser_button2_glow')
+        if (!normal || !glow) return
+
+        const { button } = createSeedChooserSmallButton({
+            name: 'AlmanacButton',
+            parent: this._seedChooserNode,
+            layer: this.node.layer,
+            x: SEED_CHOOSER_ALMANAC_X,
+            y: -SEED_CHOOSER_ALMANAC_Y,
+            width: SEED_CHOOSER_SMALL_BUTTON_WIDTH,
+            height: SEED_CHOOSER_SMALL_BUTTON_HEIGHT,
+            label: this._lawnString('ALMANAC_BUTTON', 'ALMANAC'),
+            normal,
+            glow,
+            font: this._packetCostFont,
+            color: SEED_CHOOSER_SMALL_BUTTON_COLOR,
+            onClick: () => this.onAlmanacRequest?.(),
+        })
+        button.rightClickTriggers = false
+    }
+
+    protected _syncSeedChooserStartButton() {
+        if (!this._seedChooserStartButton) return
+
+        const normal = SpriteLoader.get('seedchooser_button')
+        const glow = SpriteLoader.get('seedchooser_button_glow')
+        const disabled = SpriteLoader.get('seedchooser_button_disabled')
+        const enabled = this._seedChooserSeedsInBank === this._seedChooserSlotCount()
+        if (normal && glow && disabled) {
+            this._seedChooserStartButton.normalSprite = enabled ? normal : disabled
+            this._seedChooserStartButton.hoverSprite = enabled ? normal : disabled
+            this._seedChooserStartButton.pressedSprite = enabled ? normal : disabled
+        }
+        this._seedChooserStartButton.interactable = enabled
+        if (!enabled && this._seedChooserStartGlow) this._seedChooserStartGlow.active = false
+        if (this._seedChooserStartLabel) {
+            this._seedChooserStartLabel.fontColor = enabled ? Color.WHITE : SEED_CHOOSER_DISABLED_COLOR
+        }
+    }
+
+    protected _createSeedChooserText(
+        name: string,
+        text: string,
+        baselineX: number,
+        baselineY: number,
+        font: BitmapFontAssets | null,
+        color: Color,
+        align: 'left' | 'center' = 'left',
+    ) {
+        if (!this._seedChooserNode) return null
+        const node = createUINode(name, { parent: this._seedChooserNode, layer: this.node.layer, anchorX: 0, anchorY: 1 })
+        const renderer = node.addComponent(FontRenderer)
+        if (font) renderer.setFontAssets(font)
+        renderer.fontColor = color
+        renderer.string = text
+        renderer.forceRebuild()
+
+        const metrics = FontMetricsUtil.getMetrics(font?.config ?? null)
+        const width = FontMetricsUtil.measureTextWidth(font?.config ?? null, text) || renderer.contentWidth
+        node.setPosition(align === 'center' ? baselineX - width / 2 : baselineX, -(baselineY - metrics.ascent), 0)
+        return renderer
+    }
+
+    protected _createSeedChooserLabel(
+        parent: Node,
+        text: string,
+        width: number,
+        height: number,
+        font: BitmapFontAssets | null,
+        color: Color = Color.WHITE,
+        textOffsetY = 0,
+    ) {
+        const node = createUINode('Label', { parent, layer: this.node.layer, anchorX: 0, anchorY: 1, z: 2 })
+        const renderer = node.addComponent(FontRenderer)
+        if (font) renderer.setFontAssets(font)
+        renderer.fontColor = color
+        renderer.string = text
+        renderer.forceRebuild()
+
+        const metrics = FontMetricsUtil.getMetrics(font?.config ?? null)
+        const textWidth = FontMetricsUtil.measureTextWidth(font?.config ?? null, text) || renderer.contentWidth
+        const baselineY = textOffsetY + (height - metrics.ascent / 6 + metrics.ascent - 1) / 2
+        node.setPosition((width - textWidth) / 2, -(baselineY - metrics.ascent), 2)
+        return renderer
+    }
+
+    protected _canShowAlmanacInSeedChooser() {
+        const profile = ProfileStore.getCurrentProfile()
+        return !!profile && (profile.finishedAdventure > 0 || profile.adventureLevel >= 15)
+    }
+
+    protected _clearNodeChildren(node: Node) {
+        for (const child of [...node.children]) child.destroy()
+    }
+
     protected _startGameWithoutStandardIntro() {
         this._session.completeReadySetPlantIntro()
         this._gameStarted = true
@@ -1509,7 +2365,7 @@ export abstract class GameScreenCore extends Component {
         this._destroyIntroStreetZombies()
         this._applyGameplayHudState()
         this._restoreGameplayLayerOrder()
-        if (!this._gameplayUpdatesPaused) this._startGameplayMusic()
+        if (!this._gameplayUpdatesPaused && !this._restoredFromSnapshot) this._startGameplayMusic()
     }
 
     protected _startGameplayMusic() {
@@ -1555,8 +2411,32 @@ export abstract class GameScreenCore extends Component {
 
     protected _syncGameplayHudVisibility() {
         if (this._menuButtonNode) {
-            this._menuButtonNode.active = !this._usesMinimalHud() && this._isGameplayHudVisible()
+            const seedChooserHudVisible = (this._seedChooserActive || this._seedChooserCompleted) && !this._gameStarted
+            const gameplayHudVisible = this._isGameplayHudVisible()
+            const seedChooserMenuReady = this._seedChooserActive &&
+                this._seedChooserPanelState === 'choosing' &&
+                this._seedChooserAge >= this._seedChooserSlideTicks()
+            this._menuButtonNode.active = !this._usesMinimalHud() && (gameplayHudVisible || seedChooserHudVisible)
+            this._menuButtonNode.setPosition(681, this._seedChooserMenuY(), seedChooserHudVisible ? 700 : 0)
+            const button = this._menuButtonNode.getComponent(UIButton)
+            if (button) button.interactable = (gameplayHudVisible || seedChooserMenuReady) && !this._levelCompleteActive
+            if (this._menuButtonNode.activeInHierarchy) {
+                this._menuButtonNode.setSiblingIndex(this._uiLayer.children.length - 1)
+            }
+            if (this._levelCompleteActive && this._itemLayer?.isValid && this._itemLayer.parent === this._uiLayer) {
+                this._itemLayer.setSiblingIndex(this._uiLayer.children.length - 1)
+            }
+            if (this._levelCompleteOverlayNode?.isValid && this._levelCompleteOverlayNode.parent === this._uiLayer) {
+                this._levelCompleteOverlayNode.setSiblingIndex(this._uiLayer.children.length - 1)
+            }
         }
+    }
+
+    protected _seedChooserMenuY() {
+        if (!this._seedChooserActive) return 10
+        return this._seedChooserAge < this._seedChooserSlideTicks()
+            ? easeInOut(0, this._seedChooserSlideTicks(), this._seedChooserAge, 50, 10)
+            : 10
     }
 
     protected _isGameplayHudVisible() {
@@ -1599,10 +2479,11 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _destroyIntroStreetZombies() {
-        for (const node of this._introStreetZombieNodes) {
+        for (const { node } of this._introStreetZombies) {
             if (node.isValid) node.destroy()
         }
-        this._introStreetZombieNodes = []
+        this._introStreetZombies = []
+        this._hideIntroZombieTooltip()
     }
 
     protected _syncIntroSeedBank() {
@@ -1610,9 +2491,21 @@ export abstract class GameScreenCore extends Component {
 
         const seedBankStart = this._introSeedBankOnStart()
         const seedBankEnd = this._introSeedBankOnEnd()
-        if (this._introTime <= seedBankStart) {
+        const choosingSeeds = this._seedChooserActive && !this._seedChooserCompleted
+        const holdingChosenSeedBank = this._seedChooserCompleted && !this._gameStarted
+        if (this._introTime > seedBankStart && this._seedBankNode.parent !== this._boardContent) {
+            this._seedBankNode.setParent(this._boardContent)
+            this._seedBankNode.setSiblingIndex(Math.max(0, this._entityLayer.getSiblingIndex()))
+        }
+        if (holdingChosenSeedBank) {
+            this._seedBankNode.active = true
+            this._setSeedBankContentsVisible(true)
+            this._seedBankNode.setPosition(this._introSeedBankX(), 0, 10)
+            return
+        }
+        if (this._introTime <= seedBankStart && !choosingSeeds) {
             this._seedBankNode.active = false
-            this._seedBankNode.setPosition(INTRO_SEED_BANK_X, this._seedBankHeight, 10)
+            this._seedBankNode.setPosition(this._introSeedBankX(), this._seedBankHeight, 10)
             this._setSeedBankContentsVisible(false)
             return
         }
@@ -1621,10 +2514,22 @@ export abstract class GameScreenCore extends Component {
         this._setSeedBankContentsVisible(true)
         this._syncConveyorPacketState()
         this._syncConveyorVisibility()
-        const y = this._introTime <= seedBankEnd
-            ? easeInOut(seedBankStart, seedBankEnd, this._introTime, this._seedBankHeight, 0)
-            : 0
-        this._seedBankNode.setPosition(INTRO_SEED_BANK_X, y, 10)
+        const y = choosingSeeds
+            ? this._seedChooserHudSlideY()
+            : this._introTime <= seedBankEnd
+                ? easeInOut(seedBankStart, seedBankEnd, this._introTime, this._seedBankHeight, 0)
+                : 0
+        this._seedBankNode.setPosition(this._introSeedBankX(), y, 10)
+    }
+
+    protected _seedChooserHudSlideY() {
+        return easeInOut(0, this._seedChooserSlideTicks(), this._seedChooserAge, this._seedBankHeight, 0)
+    }
+
+    protected _introSeedBankX() {
+        return this._introTime <= INTRO_PAN_LEFT_START + 25
+            ? INTRO_SEED_BANK_START_X
+            : easeInOut(INTRO_PAN_LEFT_START + 25, INTRO_PAN_LEFT_END, this._introTime, INTRO_SEED_BANK_START_X, INTRO_SEED_BANK_X)
     }
 
     protected _introSeedBankOnStart() {
@@ -2649,6 +3554,7 @@ export abstract class GameScreenCore extends Component {
                 tutorialColor: this._shouldShowFirstPlantSeedGuide(packet) ? this._getTutorialFlashingColor() : null,
                 mobile: GameDebugSettings.isMobileMode(),
             })
+            this._syncCutSceneSeedPacketColor(view)
             this._syncSeedPacketTutorialArrow(packet, view.node)
         }
         this._syncConveyorPacketState()
@@ -2656,6 +3562,20 @@ export abstract class GameScreenCore extends Component {
 
     protected _createSeedPacketView(args: SeedPacketViewArgs) {
         return new SeedPacketView(args)
+    }
+
+    protected _syncCutSceneSeedPacketColor(view: SeedPacketView) {
+        if (this._gameStarted) return
+        view.applyColor(this._cutSceneSeedPacketColor())
+    }
+
+    protected _cutSceneSeedPacketColor() {
+        const start = INTRO_PAN_LEFT_START + 25
+        const end = INTRO_PAN_LEFT_END
+        const t = this._introTime <= start ? 0 : Math.max(0, Math.min(1, (this._introTime - start) / (end - start)))
+        const eased = 1 - (1 - t) * (1 - t)
+        const value = Math.round(lerp(255, 128, eased))
+        return new Color(value, value, value, 255)
     }
 
     protected _syncSeedPacketTutorialArrow(packet: SeedPacketState, packetNode: Node) {
@@ -3417,6 +4337,16 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _findSeedSourceAt(pixel: { x: number, y: number }, includeSelectedConveyor = false): SeedSourceHit | null {
+        const chooserHit = this._findSeedChooserPacketAt(pixel)
+        if (chooserHit) {
+            return {
+                kind: 'seed',
+                packet: chooserHit.packet,
+                rect: chooserHit.rect,
+                seedType: chooserHit.packet.seedType,
+            }
+        }
+
         const seedHit = this._findSeedPacketAt(pixel)
         if (seedHit) {
             return {
@@ -3447,6 +4377,9 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _canPickUpSeedSource(source: SeedSourceHit) {
+        if (source.kind === 'seed' && this._findSeedChooserPacketAt(this._mousePixel)?.seed.seedType === source.seedType) {
+            return true
+        }
         return source.kind === 'seed'
             ? this._canPickUpSeedPacket(source.packet)
             : source.packet.active && !source.packet.selected
@@ -3462,6 +4395,38 @@ export abstract class GameScreenCore extends Component {
             }
         }
         return null
+    }
+
+    protected _findSeedChooserPacketAt(pixel: { x: number, y: number }): SeedChooserSeedHit | null {
+        if (!this._seedChooserActive || this._seedChooserAge < this._seedChooserSlideTicks()) return null
+
+        for (let i = this._seedChooserSeeds.length - 1; i >= 0; i--) {
+            const seed = this._seedChooserSeeds[i]
+            if (seed.state !== 'chooser' && seed.state !== 'bank') continue
+            const view = seed.view
+            if (!view?.node.activeInHierarchy) continue
+            const rect = view.rect()
+            if (!isPixelInRect(pixel, rect)) continue
+            return {
+                seed,
+                rect,
+                packet: {
+                    seedType: seed.seedType,
+                    active: true,
+                    selected: false,
+                    cooldownRemaining: 0,
+                    cooldownTotal: 0,
+                },
+            }
+        }
+        return null
+    }
+
+    protected _isSeedChooserStartButtonPixel(pixel: { x: number, y: number }) {
+        if (!this._seedChooserStartButton?.interactable) return false
+        const node = this._seedChooserStartButton.node
+        if (!node.activeInHierarchy) return false
+        return isPixelInRect(pixel, getNodeBoardPixelRect(node, SEED_CHOOSER_BUTTON_WIDTH, SEED_CHOOSER_BUTTON_HEIGHT))
     }
 
     protected _hitTool(pixel: { x: number, y: number }): ToolType | null {
@@ -3550,9 +4515,16 @@ export abstract class GameScreenCore extends Component {
             this._setCanvasCursor('default')
             return false
         }
-        if (!this._gameStarted || this._mousePixel.x < 0 || this._mousePixel.y < 0) {
+        if (this._seedChooserActive && this._seedChooserSeedsInFlight > 0) {
             this._hideTooltips()
+            this._setCanvasCursor('default')
+            return false
+        }
+        if ((!this._gameStarted && !this._seedChooserActive) || this._mousePixel.x < 0 || this._mousePixel.y < 0) {
+            this._hideSeedTooltip()
+            this._hideShovelTooltip()
             const hovering = this._isMenuButtonPixel(this._mousePixel)
+            this._hideIntroZombieTooltip()
             this._setCanvasCursor(hovering ? 'pointer' : 'default')
             return hovering
         }
@@ -3566,6 +4538,11 @@ export abstract class GameScreenCore extends Component {
             this._hideSeedTooltip()
         }
 
+        const introZombieHovering = this._seedChooserActive && !seedSource && !this._isSeedChooserUiPixel(this._mousePixel)
+            ? this._showIntroZombieTooltipAt(this._mousePixel)
+            : false
+        if (!introZombieHovering) this._hideIntroZombieTooltip()
+
         const shovelHit = this._hitTool(this._mousePixel) === 'shovel'
         const shovelHoverEnabled = !this._gameplayUpdatesPaused || this._canUseShovelTutorialInput()
         if (shovelHit && !this._gameplayUpdatesPaused) {
@@ -3577,7 +4554,8 @@ export abstract class GameScreenCore extends Component {
         const overCollectableItem = this._session.hasItemAt(this._mousePixel.x, this._mousePixel.y)
         const overPickableSeed = seedSource ? this._canPickUpSeedSource(seedSource) : false
         const overMenuButton = this._isMenuButtonPixel(this._mousePixel)
-        const hovering = overCollectableItem || overPickableSeed || (shovelHit && shovelHoverEnabled) || overMenuButton
+        const overSeedChooserStartButton = this._isSeedChooserStartButtonPixel(this._mousePixel)
+        const hovering = overCollectableItem || overPickableSeed || (shovelHit && shovelHoverEnabled) || overMenuButton || overSeedChooserStartButton
         this._setCanvasCursor(hovering ? 'pointer' : 'default')
         return hovering
     }
@@ -3586,14 +4564,25 @@ export abstract class GameScreenCore extends Component {
         packet: SeedPacketState,
         rect: { x: number, y: number, width: number, height: number },
     ) {
-        const label = this._seedTooltipName(packet.seedType)
+        const chooserHit = this._findSeedChooserPacketAt(this._mousePixel)
+        const title = chooserHit ? this._seedTooltipName(packet.seedType) : ''
+        const label = chooserHit ? this._seedTooltipDescription(packet.seedType) : this._seedTooltipName(packet.seedType)
         const warningText = this._getSeedTooltipWarning(packet)
-        const textWidth = FontMetricsUtil.measureTextWidth(this._packetCostFont?.config ?? null, label)
-        const warningWidth = warningText ? FontMetricsUtil.measureTextWidth(this._packetCostFont?.config ?? null, warningText) : 0
-        const width = Math.max(textWidth, warningWidth) + 10
-        const x = Math.round(rect.x + (SEED_PACKET_WIDTH - width) / 2)
+        const width = chooserHit
+            ? measureTooltip({
+                title,
+                text: label,
+                warningText,
+                font: this._packetCostFont,
+                titleFont: this._tooltipTitleFont,
+            }).width
+            : Math.max(
+                FontMetricsUtil.measureTextWidth(this._packetCostFont?.config ?? null, label),
+                warningText ? FontMetricsUtil.measureTextWidth(this._packetCostFont?.config ?? null, warningText) : 0,
+            ) + 10
+        const x = Math.max(0, Math.min(800 - width, Math.round(rect.x + (SEED_PACKET_WIDTH - width) / 2)))
         const y = -Math.round(rect.y + SEED_TOOLTIP_OFFSET_Y)
-        const key = `${packet.seedType}|${warningText}|${x}|${y}`
+        const key = `${packet.seedType}|${label}|${warningText}|${x}|${y}`
         if (this._seedTooltipNode?.isValid && this._seedTooltipKey === key) {
             this._seedTooltipNode.setSiblingIndex(this._uiLayer.children.length - 1)
             return
@@ -3601,17 +4590,31 @@ export abstract class GameScreenCore extends Component {
 
         this._hideSeedTooltip()
         this._seedTooltipKey = key
-        this._seedTooltipNode = createTooltipNode({
-            name: 'SeedTooltip',
-            text: label,
-            warningText,
-            font: this._packetCostFont,
-            parent: this._uiLayer,
-            layer: this.node.layer,
-            x,
-            y,
-            z: CURSOR_PREVIEW_Z - 1,
-        })
+        this._seedTooltipNode = chooserHit
+            ? createTooltipNode({
+                name: 'SeedTooltip',
+                title,
+                text: label,
+                warningText,
+                font: this._packetCostFont,
+                titleFont: this._tooltipTitleFont,
+                parent: this._uiLayer,
+                layer: this.node.layer,
+                x,
+                y,
+                z: CURSOR_PREVIEW_Z - 1,
+            })
+            : createTooltipNode({
+                name: 'SeedTooltip',
+                text: label,
+                warningText,
+                font: this._packetCostFont,
+                parent: this._uiLayer,
+                layer: this.node.layer,
+                x,
+                y,
+                z: CURSOR_PREVIEW_Z - 1,
+            })
         this._seedTooltipNode.setSiblingIndex(this._uiLayer.children.length - 1)
     }
 
@@ -3647,6 +4650,13 @@ export abstract class GameScreenCore extends Component {
         return key
             ? this._lawnString(key, SEED_TOOLTIP_FALLBACK_NAMES[seedType] ?? seedType)
             : SEED_TOOLTIP_FALLBACK_NAMES[seedType] ?? seedType
+    }
+
+    protected _seedTooltipDescription(seedType: SeedType) {
+        const key = SEED_TOOLTIP_KEYS[seedType]
+        return key
+            ? this._lawnString(`${key}_TOOLTIP`, this._seedTooltipName(seedType))
+            : this._seedTooltipName(seedType)
     }
 
     protected _showConveyorSeedTooltip(
@@ -3708,9 +4718,108 @@ export abstract class GameScreenCore extends Component {
     protected _hideTooltips() {
         this._hideSeedTooltip()
         this._hideShovelTooltip()
+        this._hideIntroZombieTooltip()
+    }
+
+    protected _showIntroZombieTooltipAt(pixel: { x: number, y: number }) {
+        const hit = this._findIntroStreetZombieAt(pixel)
+        if (!hit) {
+            this._hideIntroZombieTooltip()
+            return false
+        }
+
+        const title = this._zombieTooltipName(hit.type)
+        const label = this._canShowAlmanacInSeedChooser() ? this._lawnString('CLICK_TO_VIEW', 'click to view') : ''
+        const x = Math.max(0, Math.min(800, Math.round(hit.rect.x + hit.rect.width / 2 + 5)))
+        const y = -Math.round(hit.rect.y + hit.rect.height - 10)
+        const key = `${hit.type}|${label}|${x}|${y}`
+        if (this._introZombieTooltipNode?.isValid && this._introZombieTooltipKey === key) {
+            this._introZombieTooltipNode.setSiblingIndex(this._uiLayer.children.length - 1)
+            return true
+        }
+
+        this._hideIntroZombieTooltip()
+        this._introZombieTooltipKey = key
+        this._introZombieTooltipNode = createTooltipNode({
+            name: 'IntroZombieTooltip',
+            title,
+            text: label,
+            font: this._packetCostFont,
+            titleFont: this._tooltipTitleFont,
+            parent: this._uiLayer,
+            layer: this.node.layer,
+            x,
+            y,
+            z: CURSOR_PREVIEW_Z - 1,
+            centerX: true,
+        })
+        this._introZombieTooltipNode.setSiblingIndex(this._uiLayer.children.length - 1)
+        return true
+    }
+
+    protected _hideIntroZombieTooltip() {
+        this._introZombieTooltipKey = ''
+        if (this._introZombieTooltipNode?.isValid) this._introZombieTooltipNode.destroy()
+        this._introZombieTooltipNode = null
+    }
+
+    protected _findIntroStreetZombieAt(pixel: { x: number, y: number }): { type: ZombieType, rect: BoardPixelRect } | null {
+        if (this._gameStarted || !this._seedChooserActive || this._introStreetZombies.length === 0) return null
+
+        for (let i = this._introStreetZombies.length - 1; i >= 0; i--) {
+            const zombie = this._introStreetZombies[i]
+            if (!zombie.node.activeInHierarchy) continue
+            const rect = this._introStreetZombieRect(zombie)
+            if (isPixelInRect(pixel, rect)) return { type: zombie.type, rect }
+        }
+        return null
+    }
+
+    protected _introStreetZombieRect(zombie: IntroStreetZombie): BoardPixelRect {
+        let x = zombie.node.position.x
+        let y = zombie.node.position.y
+        let parent = zombie.node.parent
+        while (parent && parent !== this._boardRoot) {
+            x += parent.position.x
+            y += parent.position.y
+            parent = parent.parent
+        }
+        return {
+            x: x + zombie.bodyRect.x,
+            y: -y + zombie.bodyRect.y,
+            width: zombie.bodyRect.width,
+            height: zombie.bodyRect.height,
+        }
+    }
+
+    protected _isSeedChooserUiPixel(pixel: { x: number, y: number }) {
+        if (!this._seedChooserActive) return false
+        if (this._findSeedChooserPacketAt(pixel)) return true
+        if (this._isSeedChooserStartButtonPixel(pixel)) return true
+        if (this._isMenuButtonPixel(pixel)) return true
+        if (this._seedBankNode?.activeInHierarchy) {
+            const seedBankWidth = this._seedBankNode.getComponent(UITransform)?.width ?? 0
+            const rect = getNodeBoardPixelRect(this._seedBankNode, seedBankWidth, this._seedBankHeight)
+            if (isPixelInRect(pixel, rect)) return true
+        }
+        if (this._seedChooserNode?.activeInHierarchy) {
+            for (const child of this._seedChooserNode.children) {
+                if (!child.activeInHierarchy || child.name !== 'AlmanacButton') continue
+                if (isPixelInRect(pixel, getNodeBoardPixelRect(child, SEED_CHOOSER_SMALL_BUTTON_WIDTH, SEED_CHOOSER_SMALL_BUTTON_HEIGHT))) return true
+            }
+        }
+        return false
+    }
+
+    protected _zombieTooltipName(zombieType: ZombieType) {
+        const key = ZOMBIE_TOOLTIP_KEYS[zombieType]
+        return this._lawnString(key, ZOMBIE_TOOLTIP_FALLBACK_NAMES[zombieType] ?? zombieType)
     }
 
     protected _getSeedTooltipWarning(packet: SeedPacketState) {
+        if (this._findSeedChooserPacketAt(this._mousePixel)?.seed.seedType === packet.seedType) {
+            return ''
+        }
         if (!packet.active || packet.cooldownRemaining > 0) {
             return this._lawnString('WAITING_FOR_SEED', SEED_TOOLTIP_WAITING)
         }
@@ -3728,8 +4837,9 @@ export abstract class GameScreenCore extends Component {
 
     protected _isMenuButtonPixel(pixel: { x: number, y: number }) {
         if (!this._menuButtonNode?.activeInHierarchy) return false
-        const rect = this._session.geometry.menuButtonRect
-        return pixel.x >= rect.x && pixel.x <= rect.x + rect.width && pixel.y >= rect.y && pixel.y <= rect.y + rect.height
+        if (this._menuButtonNode.getComponent(UIButton)?.interactable === false) return false
+        const rect = getNodeBoardPixelRect(this._menuButtonNode, MENU_BUTTON_WIDTH, MENU_BUTTON_HEIGHT)
+        return isPixelInRect(pixel, rect)
     }
 
     protected _setCanvasCursor(style: string) {
@@ -3781,12 +4891,16 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _getSeedBankExtraWidth() {
-        const packetCount = this._session.level.seedBankPacketSlots ?? this._session.seedPackets.length
+        const packetCount = this._seedBankSlotCount()
         if (packetCount <= 6) return 0
         if (packetCount === 7) return 60
         if (packetCount === 8) return 76
         if (packetCount === 9) return 112
         return 153
+    }
+
+    protected _seedBankSlotCount() {
+        return this._session.level.seedBankPacketSlots ?? this._session.seedPackets.length
     }
 
     protected _getShovelButtonX() {

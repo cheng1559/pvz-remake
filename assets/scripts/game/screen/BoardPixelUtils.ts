@@ -12,7 +12,7 @@ export function getNodeBoardPixelRect(node: Node, width: number, height: number)
     let x = node.position.x
     let y = node.position.y
     let parent = node.parent
-    while (parent && parent.name !== 'BoardContent') {
+    while (parent && parent.name !== 'BoardContent' && parent.name !== 'HUD') {
         x += parent.position.x
         y += parent.position.y
         parent = parent.parent

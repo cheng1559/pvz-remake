@@ -7,13 +7,12 @@ import {
     Input,
     KeyCode,
     Node,
-    Vec3,
 } from 'cc'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { UIButton } from '@/ui/Button'
+import { createSeedChooserButton } from '@/ui/SeedChooserButton'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import { MenuScreenBase, SCREEN_HEIGHT, SCREEN_WIDTH } from '@/ui/MenuScreenBase'
 import { HelpScreenAssets, type HelpScreenFonts, type HelpScreenSprites } from './HelpScreenAssets'
@@ -25,8 +24,6 @@ const FADE_TICK_SECONDS = 0.01
 const BUTTON_TEXT_COLOR = new Color(213, 159, 43)
 const MAIN_MENU_BUTTON_X = 324
 const MAIN_MENU_BUTTON_Y = 520
-const MAIN_MENU_BUTTON_WIDTH = 156
-const MAIN_MENU_BUTTON_HEIGHT = 42
 
 @ccclass('HelpScreen')
 export class HelpScreen extends MenuScreenBase {
@@ -108,95 +105,22 @@ export class HelpScreen extends MenuScreenBase {
         fonts: HelpScreenFonts,
         lawnStrings: Record<string, string>,
     ) {
-        const buttonNode = createUINode('MainMenuButton', {
+        const { button, glow } = createSeedChooserButton({
+            name: 'MainMenuButton',
             parent: this._root!,
             layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
-            width: MAIN_MENU_BUTTON_WIDTH,
-            height: MAIN_MENU_BUTTON_HEIGHT,
+            x: this._cppX(MAIN_MENU_BUTTON_X),
+            y: this._cppY(MAIN_MENU_BUTTON_Y),
+            label: LawnStringLoader.translate('[MAIN_MENU_BUTTON]', lawnStrings),
+            normal: sprites.mainMenuButton,
+            glow: sprites.mainMenuButtonGlow,
+            font: fonts.button,
+            color: BUTTON_TEXT_COLOR,
+            onClick: () => this._exitScreen(),
         })
-        buttonNode.setPosition(this._cppX(MAIN_MENU_BUTTON_X), this._cppY(MAIN_MENU_BUTTON_Y), 0)
-
-        const buttonImageNode = createSpriteNode({
-            name: 'ButtonImage',
-            spriteFrame: sprites.mainMenuButton,
-            parent: buttonNode,
-            layer: this.node.layer,
-            x: 0,
-            y: 0,
-            anchorX: 0,
-            anchorY: 1,
-            width: MAIN_MENU_BUTTON_WIDTH,
-            height: MAIN_MENU_BUTTON_HEIGHT,
-        })
-        const overlayNode = createSpriteNode({
-            name: 'HoverOverlay',
-            spriteFrame: sprites.mainMenuButtonGlow,
-            parent: buttonNode,
-            layer: this.node.layer,
-            x: 0,
-            y: 0,
-            anchorX: 0,
-            anchorY: 1,
-            width: MAIN_MENU_BUTTON_WIDTH,
-            height: MAIN_MENU_BUTTON_HEIGHT,
-        })
-        overlayNode.active = false
-        this._applyAdditiveSpriteMaterial(overlayNode)
-
-        const labelNode = createUINode('Label', {
-            parent: buttonNode,
-            layer: this.node.layer,
-            anchorX: 0,
-            anchorY: 1,
-        })
-        const label = labelNode.addComponent(FontRenderer)
-        if (fonts.button) label.setFontAssets(fonts.button)
-        label.fontColor = BUTTON_TEXT_COLOR
-        label.string = LawnStringLoader.translate('[MAIN_MENU_BUTTON]', lawnStrings)
-        label.forceRebuild()
-
-        const metrics = FontMetricsUtil.getMetrics(fonts.button?.config ?? null)
-        const width =
-            FontMetricsUtil.measureTextWidth(fonts.button?.config ?? null, label.string) ||
-            label.contentWidth
-        const baseline = Math.trunc(
-            (MAIN_MENU_BUTTON_HEIGHT - Math.trunc(metrics.ascent / 6) + metrics.ascent - 1) / 2,
-        )
-        const labelOrigin = new Vec3(
-            (MAIN_MENU_BUTTON_WIDTH - width) / 2,
-            -(baseline - metrics.ascent - 1),
-            0,
-        )
-        labelNode.setPosition(labelOrigin)
-        overlayNode.setSiblingIndex(labelNode.getSiblingIndex() + 1)
-
-        const button = buttonNode.addComponent(UIButton)
-        button.normalSprite = sprites.mainMenuButton
-        button.hoverSprite = sprites.mainMenuButton
-        button.pressedSprite = sprites.mainMenuButton
         button.disabledSprite = sprites.mainMenuButtonDisabled
-        button.pressOffset = new Vec3(0, 0, 0)
         button.rightClickTriggers = false
-        button.releaseToNormalOnPressOut = true
-        button.onPress = () => {
-            void SoundLoader.play(SoundEffect.Tap)
-        }
-        button.onStateChange = (state) => {
-            const pressed = state === 'pressed'
-            const highlighted = state === 'hover' || state === 'pressed'
-            buttonImageNode.setPosition(pressed ? 1 : 0, pressed ? -1 : 0, 0)
-            overlayNode.active = highlighted
-            labelNode.setPosition(
-                labelOrigin.x + (pressed ? 1 : 0),
-                labelOrigin.y + (pressed ? -1 : 0),
-                0,
-            )
-        }
-        button.onClick = () => {
-            this._exitScreen()
-        }
+        this._applyAdditiveSpriteMaterial(glow)
     }
 
     private _createFadeOverlay() {

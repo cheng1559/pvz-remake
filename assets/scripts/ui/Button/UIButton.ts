@@ -93,6 +93,8 @@ export class UIButton extends Component {
         this._applyState(ButtonState.NORMAL)
         if (!value) {
             this._setCursor('default')
+        } else if (this.refreshHoverOnEnable) {
+            UIHoverManager.refreshHoverStates()
         }
     }
 

@@ -151,7 +151,7 @@ export function wirePlantAnimation(
                 enablePlantShake(shakeNode)
             }
             if (cherryBombInitialState === 'explode') {
-                playCherryBombAnimation(view)
+                playCherryBombAnimation(view, playTime, initialAnimSpeed)
             } else {
                 view.body?.play({ name: 'anim_idle', speed: animated ? view.idleSpeed : 0, time: playTime, loop: true })
             }
@@ -190,13 +190,14 @@ export class PlantShake extends Component {
     }
 }
 
-export function playCherryBombAnimation(view: PlantAnimationView) {
+export function playCherryBombAnimation(view: PlantAnimationView, time = 0, speed?: number) {
     const animRate =
         CHERRYBOMB_EXPLODE_ANIM_RATE_MIN +
         Math.random() * (CHERRYBOMB_EXPLODE_ANIM_RATE_MAX - CHERRYBOMB_EXPLODE_ANIM_RATE_MIN)
     view.body?.play({
         name: 'anim_explode',
-        speed: getAnimationRateSpeed(view.body, 'anim_explode', animRate),
+        speed: speed ?? getAnimationRateSpeed(view.body, 'anim_explode', animRate),
+        time,
         keepLastFrame: true,
     })
 }

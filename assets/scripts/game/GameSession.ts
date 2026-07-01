@@ -13,6 +13,7 @@ import { createPlant, Plant } from './plants/PlantFactory'
 import { createProjectile, Projectile } from './projectiles/ProjectileFactory'
 import { createZombie, Zombie } from './zombies/ZombieFactory'
 import { GameDebugSettings } from './GameDebugSettings'
+import type { DebugCollectMode } from './GameDebugSettings'
 import type {
     GameCommand,
     ConveyorPacketState,
@@ -42,6 +43,7 @@ import type { ZombieDamageResult, ZombieDeathContext, ZombieUpdateContext } from
 export interface GameSessionOptions {
     firstTimeAdventure?: boolean
     initialMoney?: number
+    chooseSeeds?: boolean
 }
 
 let shownMoreSunTutorial = false
@@ -184,7 +186,7 @@ export class GameSession {
     rechargingEnabled = true
     sunCostEnabled = true
     sunSpawningEnabled = true
-    autoCollectEnabled = false
+    collectMode: DebugCollectMode = 'click'
 
     private readonly _firstTimeAdventure: boolean
     private _nextEntityId = 1
@@ -228,11 +230,11 @@ export class GameSession {
         this._firstTimeAdventure = options.firstTimeAdventure ?? true
         this.rechargingEnabled = GameDebugSettings.rechargingEnabled
         this.sunCostEnabled = GameDebugSettings.sunCostEnabled
-        this.autoCollectEnabled = GameDebugSettings.autoCollectEnabled
+        this.collectMode = GameDebugSettings.collectMode
         if (level.skySunSpawning === false) this.sunSpawningEnabled = false
         this.sun = level.startingSun
         this.money = clampMoney(options.initialMoney ?? 0)
-        this.seedPackets = level.seedPackets.map((seedType) => {
+        this.seedPackets = (options.chooseSeeds ? [] : level.seedPackets).map((seedType) => {
             const cooldownTotal = this._initialSeedPacketCooldown(seedType)
             return {
                 seedType,
@@ -272,6 +274,19 @@ export class GameSession {
         if (level.adventureLevel === 2) {
             this._pushLevelTwoTutorialAdvice(LEVEL_2_ADVICE_PLANT_SUNFLOWER_1)
         }
+    }
+
+    setSeedPackets(seedTypes: SeedType[]) {
+        this.seedPackets.splice(0, this.seedPackets.length, ...seedTypes.map((seedType) => {
+            const cooldownTotal = this._initialSeedPacketCooldown(seedType)
+            return {
+                seedType,
+                cooldownRemaining: cooldownTotal,
+                cooldownTotal,
+                active: cooldownTotal <= 0,
+                selected: false,
+            }
+        }))
     }
 
     allEntities(): GameEntity[] {
@@ -399,6 +414,13 @@ export class GameSession {
         if (collected && this._isSunItem(item)) this._handleSunItemCollected(item)
         if (collected && isMoney) this.events.push({ type: 'coinBankShown' })
         return collected
+    }
+
+    collectLevelAwardItemAt(x: number, y: number) {
+        const item = this._findItemAt(x, y)
+        if (!item || !this._isLevelAwardItem(item)) return false
+
+        return item.collect(this._createItemUpdateContext(this.events))
     }
 
     hasItemAt(x: number, y: number) {
@@ -563,10 +585,10 @@ export class GameSession {
         return this.sunSpawningEnabled
     }
 
-    debugSetAutoCollectEnabled(enabled: boolean) {
-        this.autoCollectEnabled = enabled
-        if (enabled) this._autoCollectAvailableItems()
-        return this.autoCollectEnabled
+    debugSetCollectMode(mode: DebugCollectMode) {
+        this.collectMode = mode
+        if (mode === 'auto') this._autoCollectAvailableItems()
+        return this.collectMode
     }
 
     debugGetPlantBodyRect(plant: PlantEntity): Rect {
@@ -1395,7 +1417,7 @@ export class GameSession {
         for (const item of this.items) {
             item.update(context)
         }
-        if (this.autoCollectEnabled) this._autoCollectAvailableItems()
+        if (this.collectMode === 'auto') this._autoCollectAvailableItems()
     }
 
     private _autoCollectAvailableItems() {

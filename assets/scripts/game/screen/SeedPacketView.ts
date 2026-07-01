@@ -100,6 +100,10 @@ export class SeedPacketView {
         return getNodeBoardPixelRect(this.node, SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT)
     }
 
+    destroy() {
+        if (this.node.isValid) this.node.destroy()
+    }
+
     private _createSelectedHighlight(layer: number) {
         const highlight = createUINode('SelectedHighlight', {
             parent: this.node,
@@ -165,7 +169,7 @@ export class SeedPacketView {
     }
 
     private _applySpriteColorRecursive(node: Node, color: Color, skipName?: string | string[]) {
-        if (Array.isArray(skipName) ? skipName.includes(node.name) : node.name === skipName) return
+        if (Array.isArray(skipName) ? skipName.indexOf(node.name) >= 0 : node.name === skipName) return
         if (node.getComponent(FontRenderer)) return
 
         const sprite = node.getComponent(Sprite)

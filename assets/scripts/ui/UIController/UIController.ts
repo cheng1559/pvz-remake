@@ -59,8 +59,7 @@ import { createSpriteNode, createUINode } from '../UIFactory'
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../MenuScreenBase'
 import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
 import { GameDebugSettings } from '@/game/GameDebugSettings'
-import type { LevelAward } from '@/game/GameTypes'
-import type { LevelDefinition } from '@/game/GameTypes'
+import type { LevelAward, LevelDefinition, ZombieType } from '@/game/GameTypes'
 import { MusicSystem, type MusicTuneId } from '@/game/music/MusicSystem'
 import { AdventureProgressStore } from '@/game/persistence/AdventureProgressStore'
 import { GameSettingsStore, type GameSettings } from '@/game/persistence/GameSettingsStore'
@@ -90,7 +89,7 @@ const DEBUG_CLI_BRAIN_SCALE = 1.2
 const DEBUG_CLI_BRAIN_OPACITY = 140
 const DEBUG_CLI_BUTTON_OPEN_OFFSET_Y = 100
 const WIDESCREEN_BACKGROUND_SETTINGS_KEY = 'pvz-remake:ui:widescreen-backgrounds'
-const BACKGROUND_DOUBLE_CLICK_MS = 350
+const BACKGROUND_MULTI_CLICK_MS = 350
 const CONTINUE_GAME_RESULT_RESTART = 2001
 
 interface PvzNativeBridge {
@@ -119,6 +118,7 @@ interface StoreDialogOptions {
 
 interface AlmanacDialogOptions {
     onClose?: () => void
+    initialZombieType?: ZombieType
 }
 
 interface DebugCliDialogOptions {
@@ -148,6 +148,7 @@ export class UIController extends Component {
     private _backgroundRight: Node | null = null
     private _startupScreen: Node | null = null
     private _lastBackgroundClickTime = 0
+    private _backgroundClickCount = 0
     private _selectorScreen: SelectorScreen | null = null
     private _adventureGameScreen: AdventureGameScreen | null = null
     private _achievementScreen: Node | null = null
@@ -368,7 +369,6 @@ export class UIController extends Component {
         }
 
         const savedSnapshot = options.forceNewGame ? null : this._loadAdventureSnapshot(level)
-
         this._adventureLevel = level
         this._selectorScreen = null
         const node = createUINode('AdventureGameScreen', { active: false, width: 800, height: 600 })
@@ -395,6 +395,19 @@ export class UIController extends Component {
         gameScreen.onPauseRequest = () => {
             this.showPauseDialog(gameScreen)
         }
+        gameScreen.onAlmanacRequest = (zombieType) => {
+            if (!this._canShowAlmanac()) return
+            gameScreen.pauseGame()
+            this.showAlmanacDialog({
+                initialZombieType: zombieType,
+                onClose: () => gameScreen.resumeGame(),
+            })
+        }
+        gameScreen.onSeedChooserWarningRequest = (warningKey, continueStart) => {
+            void this.confirmSeedChooserWarning(warningKey).then((confirmed) => {
+                if (confirmed) continueStart()
+            })
+        }
         gameScreen.onGameOverRequest = () => {
             this._deleteAdventureSave()
             void this.showGameOverDialog()
@@ -410,15 +423,17 @@ export class UIController extends Component {
 
         const previousScreen = this._currentScreen?.isValid ? this._currentScreen : null
         const onReady = gameScreen.onReady
+        const introMusic = getLevelIntroMusicTune(level)
         gameScreen.onReady = () => {
             if (previousScreen?.isValid) previousScreen.destroy()
+            if (savedSnapshot?.state.music === undefined) {
+                if (introMusic) this._playInterfaceMusic(introMusic, true)
+                else MusicSystem.stop()
+            }
             onReady?.()
         }
         this._setCurrentScreen(node, { keepPreviousScreen: true })
         this._adventureGameScreen = gameScreen
-        const introMusic = getLevelIntroMusicTune(level)
-        if (introMusic) this._playInterfaceMusic(introMusic, true)
-        else MusicSystem.stop()
         return gameScreen
     }
 
@@ -621,6 +636,7 @@ export class UIController extends Component {
 
         const node = createUINode('AlmanacDialog', { active: false, width: SCREEN_WIDTH, height: SCREEN_HEIGHT })
         const almanacScreen = node.addComponent(AlmanacScreen)
+        if (options.initialZombieType) almanacScreen.openZombieType(options.initialZombieType)
         almanacScreen.onBackToMenu = () => {
             this.hideModalScreen()
             options.onClose?.()
@@ -775,6 +791,7 @@ export class UIController extends Component {
         const optionsDialog = node.addComponent(OptionsDialog)
         this._optionsDialog = optionsDialog
         optionsDialog.gameMenu = true
+        optionsDialog.showRestartLevel = !gameScreen?.isChoosingSeeds()
         optionsDialog.backButtonLabel = '[BACK_TO_GAME]'
         this._configureOptionsDialog(optionsDialog)
         optionsDialog.onClose = () => {
@@ -1482,6 +1499,23 @@ export class UIController extends Component {
         return result === DialogResult.Ok
     }
 
+    async confirmSeedChooserWarning(warningKey: string): Promise<boolean> {
+        const strings = await LawnStringLoader.load()
+        const dialog = this.showMessageBox(
+            this._lawnString(strings, 'DIALOG_WARNING', 'Warning'),
+            this._lawnString(strings, warningKey, 'Are you sure you want to continue?'),
+        )
+        if (!dialog) return false
+
+        dialog.setButtonMode(
+            DialogButtonMode.OkCancel,
+            this._lawnString(strings, 'DIALOG_BUTTON_YES', 'YES'),
+            this._lawnString(strings, 'REPICK_BUTTON', 'Re-pick'),
+        )
+        const result = await dialog.waitForResult()
+        return result === DialogResult.Ok
+    }
+
     async confirmBackToMainMenu(): Promise<boolean> {
         const strings = await LawnStringLoader.load()
         const dialog = this.showMessageBox(
@@ -1650,15 +1684,18 @@ export class UIController extends Component {
 
     private _onWidescreenBackgroundPointerDown(event: EventTouch) {
         const now = Date.now()
-        const doubleClick = now - this._lastBackgroundClickTime <= BACKGROUND_DOUBLE_CLICK_MS
+        this._backgroundClickCount = now - this._lastBackgroundClickTime <= BACKGROUND_MULTI_CLICK_MS
+            ? this._backgroundClickCount + 1
+            : 1
         this._lastBackgroundClickTime = now
-        if (!doubleClick) return
+        if (this._backgroundClickCount < 3) return
 
         event.propagationStopped = true
         const visible = this._widescreenBackgroundsVisible()
         sys.localStorage.setItem(WIDESCREEN_BACKGROUND_SETTINGS_KEY, visible ? '0' : '1')
         this._applyWidescreenBackgroundVisibility()
         this._lastBackgroundClickTime = 0
+        this._backgroundClickCount = 0
     }
 
     private _applyWidescreenBackgroundVisibility() {

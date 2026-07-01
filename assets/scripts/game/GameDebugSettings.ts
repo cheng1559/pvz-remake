@@ -2,20 +2,30 @@ import { sys } from 'cc'
 
 const DEBUG_SETTINGS_KEY = 'pvz-remake:debug:settings'
 
+export type DebugCollectMode = 'auto' | 'click' | 'move'
+
 type DebugSettings = {
     rechargingEnabled: boolean
     sunCostEnabled: boolean
-    autoCollectEnabled: boolean
+    collectMode: DebugCollectMode
     hitboxesVisible: boolean
     mobileEnabled: boolean
+    hotkeysEnabled: boolean
 }
 
 const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     rechargingEnabled: true,
     sunCostEnabled: true,
-    autoCollectEnabled: false,
+    collectMode: 'click',
     hitboxesVisible: false,
     mobileEnabled: sys.isMobile,
+    hotkeysEnabled: false,
+}
+
+function normalizeCollectMode(value: unknown): DebugCollectMode {
+    return value === 'auto' || value === 'click' || value === 'move'
+        ? value
+        : DEFAULT_DEBUG_SETTINGS.collectMode
 }
 
 function loadDebugSettings(): DebugSettings {
@@ -27,9 +37,10 @@ function loadDebugSettings(): DebugSettings {
         return {
             rechargingEnabled: parsed.rechargingEnabled ?? DEFAULT_DEBUG_SETTINGS.rechargingEnabled,
             sunCostEnabled: parsed.sunCostEnabled ?? DEFAULT_DEBUG_SETTINGS.sunCostEnabled,
-            autoCollectEnabled: parsed.autoCollectEnabled ?? DEFAULT_DEBUG_SETTINGS.autoCollectEnabled,
+            collectMode: normalizeCollectMode(parsed.collectMode),
             hitboxesVisible: parsed.hitboxesVisible ?? DEFAULT_DEBUG_SETTINGS.hitboxesVisible,
             mobileEnabled: parsed.mobileEnabled ?? DEFAULT_DEBUG_SETTINGS.mobileEnabled,
+            hotkeysEnabled: parsed.hotkeysEnabled ?? DEFAULT_DEBUG_SETTINGS.hotkeysEnabled,
         }
     } catch {
         return { ...DEFAULT_DEBUG_SETTINGS }
@@ -55,10 +66,10 @@ export const GameDebugSettings = {
         return this.sunCostEnabled
     },
 
-    setAutoCollectEnabled(enabled: boolean) {
-        this.autoCollectEnabled = enabled
+    setCollectMode(mode: DebugCollectMode) {
+        this.collectMode = mode
         saveDebugSettings(this)
-        return this.autoCollectEnabled
+        return this.collectMode
     },
 
     setHitboxesVisible(visible: boolean) {
@@ -71,6 +82,12 @@ export const GameDebugSettings = {
         this.mobileEnabled = enabled
         saveDebugSettings(this)
         return this.mobileEnabled
+    },
+
+    setHotkeysEnabled(enabled: boolean) {
+        this.hotkeysEnabled = enabled
+        saveDebugSettings(this)
+        return this.hotkeysEnabled
     },
 
     isMobileMode() {

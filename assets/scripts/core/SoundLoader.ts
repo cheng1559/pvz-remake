@@ -256,6 +256,12 @@ export class SoundLoader {
         this._getSource().playOneShot(clip, resolvedVolume)
     }
 
+    public static playMusicVolumeSfx(effect: SoundEffect, volume = 1) {
+        const sfxVolume = this._sfxVolume
+        const musicScaledVolume = sfxVolume < 1e-6 ? 0 : volume * this._musicVolume / sfxVolume
+        return this.playSfx(effect, musicScaledVolume)
+    }
+
     public static playFoley(effect: SoundEffect, pitchRange?: number, volume = 1) {
         if (this._hasFoleyPlayedTooRecently(effect)) return Promise.resolve()
 

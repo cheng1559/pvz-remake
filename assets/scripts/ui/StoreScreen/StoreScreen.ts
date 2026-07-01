@@ -1,4 +1,4 @@
-import { _decorator, Color, gfx, JsonAsset, Material, Node, Rect, Size, Sprite, SpriteFrame, Vec2, Vec3 } from 'cc'
+import { _decorator, Color, gfx, JsonAsset, Material, Node, Rect, Size, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from 'cc'
 import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import {
@@ -929,10 +929,12 @@ export class StoreScreen extends MenuScreenBase {
         renderer.string = this._localizedBackButtonLabel()
         renderer.forceRebuild()
 
+        const size = buttonNode.getComponent(UITransform)!
         const metrics = FontMetricsUtil.getMetrics(fonts.title?.config ?? null)
         const width = FontMetricsUtil.measureTextWidth(fonts.title?.config ?? null, renderer.string) || renderer.contentWidth
-        const normalX = 62 - width / 2
-        const normalY = -(38 - metrics.ascent / 2)
+        const baselineY = 2 + (size.height - metrics.ascent / 6 + metrics.ascent - 1) / 2
+        const normalX = -6 + (size.width - width) / 2
+        const normalY = -(baselineY - metrics.ascent)
         labelNode.setPosition(normalX, normalY, 0)
 
         const button = buttonNode.getComponent(UIButton)!

@@ -50,6 +50,9 @@ export class OptionsDialog extends ModalDialog {
     gameMenu = false
 
     @property
+    showRestartLevel = true
+
+    @property
     backButtonLabel = 'OK'
 
     public onClose: (() => void) | null = null
@@ -364,19 +367,21 @@ export class OptionsDialog extends ModalDialog {
             highlight: fonts.smallButtonHighlight,
         }
 
-        createStoneButton({
-            name: 'RestartLevelButton',
-            parent: this._root!,
-            layer: this.node.layer,
-            label: this._lawnString(lawnStrings, 'RESTART_LEVEL_BUTTON', 'Restart Level'),
-            x: this._cppX(107),
-            y: this._cppY(284),
-            width: 209,
-            height: 46,
-            sprites: buttonSprites,
-            fonts: buttonFonts,
-            onClick: () => this.onRestartLevel?.(),
-        })
+        if (this.showRestartLevel) {
+            createStoneButton({
+                name: 'RestartLevelButton',
+                parent: this._root!,
+                layer: this.node.layer,
+                label: this._lawnString(lawnStrings, 'RESTART_LEVEL_BUTTON', 'Restart Level'),
+                x: this._cppX(107),
+                y: this._cppY(284),
+                width: 209,
+                height: 46,
+                sprites: buttonSprites,
+                fonts: buttonFonts,
+                onClick: () => this.onRestartLevel?.(),
+            })
+        }
 
         createStoneButton({
             name: 'MainMenuButton',

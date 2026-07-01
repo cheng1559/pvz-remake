@@ -26,9 +26,9 @@ import {
     GAME_OVER_TITLE_MAX_OPACITY,
     GAME_OVER_WINNER_WALK_START_TICKS,
     LEVEL_COMPLETE_FADE_DURATION_TICKS,
-    LEVEL_COMPLETE_FADE_START_TICKS,
     LEVEL_COMPLETE_FADE_TICKS,
     LEVEL_COMPLETE_LIGHT_FILL_TICK,
+    LEVEL_COMPLETE_NOTE_FADE_TICKS,
 } from './GameScreenCore'
 
 export abstract class GameScreenEndSequences extends GameScreenIntroHud {
@@ -54,7 +54,7 @@ export abstract class GameScreenEndSequences extends GameScreenIntroHud {
         this._ensureLevelCompleteOverlay()
         this._syncLevelCompleteEffect()
         MusicSystem.stop()
-        void SoundLoader.playSfx(SoundEffect.WinMusic)
+        void SoundLoader.playMusicVolumeSfx(SoundEffect.WinMusic)
     }
 
     protected _ensureLevelCompleteOverlay() {
@@ -89,8 +89,10 @@ export abstract class GameScreenEndSequences extends GameScreenIntroHud {
         if (ticks <= 0) return
 
         const previousTicks = this._levelCompleteTicks
-        this._levelCompleteTicks = Math.min(LEVEL_COMPLETE_FADE_TICKS, this._levelCompleteTicks + ticks)
+        const fadeTicks = this._levelCompleteFadeTicks()
+        this._levelCompleteTicks = Math.min(fadeTicks, this._levelCompleteTicks + ticks)
         if (
+            this._levelAward?.kind !== 'note' &&
             !this._levelCompleteLightFillPlayed &&
             previousTicks < LEVEL_COMPLETE_LIGHT_FILL_TICK &&
             this._levelCompleteTicks >= LEVEL_COMPLETE_LIGHT_FILL_TICK
@@ -98,7 +100,7 @@ export abstract class GameScreenEndSequences extends GameScreenIntroHud {
             this._levelCompleteLightFillPlayed = true
             void SoundLoader.play(SoundEffect.LightFill)
         }
-        if (this._levelCompleteTicks >= LEVEL_COMPLETE_FADE_TICKS) {
+        if (this._levelCompleteTicks >= fadeTicks) {
             this._requestLevelAwardScreen()
         }
         this._syncLevelCompleteEffect()
@@ -116,7 +118,7 @@ export abstract class GameScreenEndSequences extends GameScreenIntroHud {
         const graphics = this._levelCompleteFadeNode?.getComponent(Graphics)
         if (!graphics) return
 
-        const fadeT = Math.max(0, this._levelCompleteTicks - LEVEL_COMPLETE_FADE_START_TICKS) /
+        const fadeT = Math.max(0, this._levelCompleteTicks - this._levelCompleteFadeStartTicks()) /
             LEVEL_COMPLETE_FADE_DURATION_TICKS
         const alpha = Math.round(255 * Math.max(0, Math.min(1, fadeT)))
         this._levelCompleteFadeNode!.active = alpha > 0
@@ -127,6 +129,14 @@ export abstract class GameScreenEndSequences extends GameScreenIntroHud {
             ? new Color(0, 0, 0, alpha)
             : new Color(255, 255, 255, alpha)
         graphics.fillRect(0, -600, 800, 600)
+    }
+
+    protected _levelCompleteFadeTicks() {
+        return this._levelAward?.kind === 'note' ? LEVEL_COMPLETE_NOTE_FADE_TICKS : LEVEL_COMPLETE_FADE_TICKS
+    }
+
+    protected _levelCompleteFadeStartTicks() {
+        return this._levelCompleteFadeTicks() - LEVEL_COMPLETE_FADE_DURATION_TICKS
     }
 
     protected _requestLevelAwardScreen() {

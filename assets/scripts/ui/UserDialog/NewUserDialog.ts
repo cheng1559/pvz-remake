@@ -230,9 +230,6 @@ export class NewUserDialog extends MessageBox {
             }
             if (filtered.length >= NAME_INPUT_MAX_CHARS) break
         }
-        if (filtered.length > 0 && filtered[0] >= 'a' && filtered[0] <= 'z') {
-            filtered = filtered[0].toUpperCase() + filtered.slice(1)
-        }
         return filtered
     }
 
