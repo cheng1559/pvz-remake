@@ -932,7 +932,7 @@ export class GameSession {
 
     private _updateConveyor() {
         const conveyor = this.level.conveyor
-        if (!conveyor?.enabled || this._levelAwardDropped) return
+        if (!conveyor?.enabled || this.result !== 'playing' || this._levelAwardDropped) return
 
         this._moveConveyorPackets()
         if (this._isReadySetPlantBlockingPackets()) return

@@ -3661,7 +3661,7 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _updateConveyorBeltAnimation(ticks: number) {
-        if (!this._isConveyorVisible() || this._session.hasLevelAwardDropped) return
+        if (!this._isConveyorVisible() || this._session.result !== 'playing' || this._session.hasLevelAwardDropped) return
         this._conveyorBeltAnimTicks += ticks
     }
 
