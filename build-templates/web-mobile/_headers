@@ -1,0 +1,29 @@
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/application.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/src/settings.json
+  Cache-Control: public, max-age=0, must-revalidate
+
+/assets/main/index.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/assets/resources/config.json
+  Cache-Control: public, max-age=0, must-revalidate
+
+/cocos-js/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/resources/import/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/resources/native/*
+  Cache-Control: public, max-age=31536000, immutable
