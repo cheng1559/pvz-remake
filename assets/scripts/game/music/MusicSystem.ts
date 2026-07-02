@@ -78,6 +78,7 @@ type NativeMusicBridge = {
 }
 
 type MusicNativePlayer = {
+    kind: 'wav' | 'engine'
     play: (url: string, loop: boolean, volume: number) => number
     setVolume: (audioId: number, volume: number) => boolean
     pause: (audioId: number) => void
@@ -739,6 +740,7 @@ export class MusicSystem {
         const nativeClip = clip as MusicAudioClip
         const url = nativeClip._nativeAsset?.url ?? nativeClip.nativeUrl
         if (!url) return false
+        if (!this._isWavUrl(url) && player.kind === 'wav') return false
 
         const audioId = player.play(url, this._usesBackendLoop(), this._stemVolume(stem) * SoundLoader.getMusicVolume())
         if (typeof audioId !== 'number' || audioId < 0) return false
@@ -754,6 +756,7 @@ export class MusicSystem {
         const nativeClip = clip as MusicAudioClip
         const url = nativeClip._nativeAsset?.url ?? nativeClip.nativeUrl
         if (!url) return false
+        if (!this._isWavUrl(url) && player.kind === 'wav') return false
 
         const audioId = player.play(url, this._usesBackendLoop(tune), this._overlayStemVolume(stem))
         if (typeof audioId !== 'number' || audioId < 0) return false
@@ -801,6 +804,7 @@ export class MusicSystem {
             bridge.getMusicWavCurrentTime
         ) {
             return {
+                kind: 'wav',
                 play: bridge.playMusicWav.bind(bridge),
                 stop: bridge.stopMusicWav.bind(bridge),
                 pause: bridge.pauseMusicWav.bind(bridge),
@@ -827,6 +831,7 @@ export class MusicSystem {
             return null
         }
         return {
+            kind: 'engine',
             play: engine.play2d.bind(engine),
             stop: engine.stop.bind(engine),
             pause: engine.pause.bind(engine),
@@ -835,5 +840,9 @@ export class MusicSystem {
             setCurrentTime: engine.setCurrentTime.bind(engine),
             getCurrentTime: engine.getCurrentTime.bind(engine),
         }
+    }
+
+    private static _isWavUrl(url: string) {
+        return /\.wav(?:$|[?#])/i.test(url)
     }
 }

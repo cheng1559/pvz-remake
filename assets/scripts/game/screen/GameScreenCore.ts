@@ -3993,7 +3993,7 @@ export abstract class GameScreenCore extends Component {
             this._collectAnimationImages(animation.json as Record<string, any>, textureNames)
         }
         textureNames.add('plantshadow')
-        await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
+        await this._preloadTextureSet(textureNames)
     }
 
     protected async _preloadZombieAnimationTextures(extraAnimation: JsonAsset | null) {
@@ -4019,7 +4019,7 @@ export abstract class GameScreenCore extends Component {
         textureNames.add('zombie_bucket2')
         textureNames.add('zombie_bucket3')
         textureNames.add('plantshadow')
-        await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
+        await this._preloadTextureSet(textureNames)
     }
 
     protected async _preloadSunAnimationTextures() {
@@ -4027,7 +4027,7 @@ export abstract class GameScreenCore extends Component {
 
         const textureNames = new Set<string>()
         this._collectAnimationImages(this._sunAnimation.json as Record<string, any>, textureNames)
-        await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
+        await this._preloadTextureSet(textureNames)
     }
 
     protected async _preloadCoinAnimationTextures() {
@@ -4035,7 +4035,7 @@ export abstract class GameScreenCore extends Component {
         for (const animation of [this._silverCoinAnimation, this._goldCoinAnimation, this._diamondAnimation]) {
             if (animation?.json) this._collectAnimationImages(animation.json as Record<string, any>, textureNames)
         }
-        await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
+        await this._preloadTextureSet(textureNames)
     }
 
     protected async _preloadCrazyDaveAnimationTextures() {
@@ -4043,7 +4043,7 @@ export abstract class GameScreenCore extends Component {
 
         const textureNames = new Set<string>()
         this._collectAnimationImages(this._crazyDaveAnimation.json as Record<string, any>, textureNames)
-        await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
+        await this._preloadTextureSet(textureNames)
     }
 
     protected async _preloadFinalWaveAnimationTextures() {
@@ -4051,7 +4051,7 @@ export abstract class GameScreenCore extends Component {
 
         const textureNames = new Set<string>()
         this._collectAnimationImages(this._finalWaveAnimation.json as Record<string, any>, textureNames)
-        await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
+        await this._preloadTextureSet(textureNames)
     }
 
     protected async _preloadReadySetPlantAnimationTextures() {
@@ -4059,7 +4059,13 @@ export abstract class GameScreenCore extends Component {
 
         const textureNames = new Set<string>()
         this._collectAnimationImages(this._readySetPlantAnimation.json as Record<string, any>, textureNames)
-        await Promise.all([...textureNames].map((name) => SpriteLoader.load(name)))
+        await this._preloadTextureSet(textureNames)
+    }
+
+    protected async _preloadTextureSet(textureNames: Set<string>) {
+        const names: string[] = []
+        textureNames.forEach((name) => names.push(name))
+        await Promise.all(names.map((name) => SpriteLoader.load(name)))
     }
 
     protected _collectAnimationImages(json: Record<string, any>, output: Set<string>) {

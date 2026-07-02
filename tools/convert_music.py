@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import subprocess
 import sys
-import wave
 from ctypes import c_int16
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,7 +18,8 @@ from music.openmpt_ctypes import OpenMptError, OpenMptLibrary
 SAMPLE_RATE = 44100
 CHUNK_FRAMES = 4096
 MANIFEST_NAME = "music_manifest.json"
-OUTPUT_SUFFIX = ".wav"
+OUTPUT_SUFFIX = ".mp3"
+OUTPUT_AUDIO_SUFFIXES = (".wav", ".mp3", ".ogg", ".m4a")
 
 
 @dataclass(frozen=True)
@@ -65,36 +67,88 @@ STATIC_TUNES = [
 ]
 
 
-def render_stem(
+def resolve_ffmpeg(ffmpeg: str) -> str:
+    resolved = shutil.which(ffmpeg)
+    if resolved:
+        return resolved
+
+    for candidate in (
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+    ):
+        if Path(candidate).exists():
+            return candidate
+
+    raise OpenMptError(
+        "ffmpeg is required to convert rendered music to MP3. "
+        "Install it with `brew install ffmpeg` on macOS, or pass --ffmpeg /path/to/ffmpeg."
+    )
+
+
+def render_stem_output(
     library: OpenMptLibrary,
+    ffmpeg_path: str,
     src: Path,
     dst: Path,
     channels: tuple[int, ...] | None,
     start_order: int = 0,
     start_row: int = 0,
 ) -> int:
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    buffer = (c_int16 * (CHUNK_FRAMES * 2))()
-    frames_written = 0
+    if dst:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+    ffmpeg_process = subprocess.Popen(
+        [
+            ffmpeg_path,
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "s16le",
+            "-ar",
+            str(SAMPLE_RATE),
+            "-ac",
+            "2",
+            "-i",
+            "pipe:0",
+            "-vn",
+            "-acodec",
+            "libmp3lame",
+            "-q:a",
+            "2",
+            str(dst),
+        ],
+        stdin=subprocess.PIPE,
+    ) if dst else None
 
+    buffer = (c_int16 * (CHUNK_FRAMES * 2))()
+    frames = 0
     with library.open_module(src) as module:
         if channels is not None:
             module.set_channel_mutes(set(channels))
         if start_order != 0 or start_row != 0:
             module.set_position_order_row(start_order, start_row)
-        with wave.open(str(dst), "wb") as wav:
-            wav.setnchannels(2)
-            wav.setsampwidth(2)
-            wav.setframerate(SAMPLE_RATE)
-            while True:
-                frames = module.read_interleaved_stereo(SAMPLE_RATE, CHUNK_FRAMES, buffer)
-                if frames <= 0:
-                    break
-                wav.writeframes(bytes(buffer)[: frames * 2 * 2])
-                frames_written += frames
+        while True:
+            chunk_frames = module.read_interleaved_stereo(SAMPLE_RATE, CHUNK_FRAMES, buffer)
+            if chunk_frames <= 0:
+                break
+            data = bytes(buffer)[: chunk_frames * 2 * 2]
+            if ffmpeg_process and ffmpeg_process.stdin:
+                ffmpeg_process.stdin.write(data)
+            frames += chunk_frames
 
-    print(f"[music] Wrote: {dst} ({frames_written / SAMPLE_RATE:.3f}s)")
-    return frames_written
+    if ffmpeg_process and ffmpeg_process.stdin:
+        ffmpeg_process.stdin.close()
+    if ffmpeg_process and ffmpeg_process.wait() != 0:
+        raise OpenMptError(f"ffmpeg failed while writing {dst}")
+    if dst:
+        print(f"[music] Wrote: {dst} ({frames / SAMPLE_RATE:.3f}s)")
+    return frames
+
+
+def remove_old_audio_outputs(dst_dir: Path, output_stem: str) -> None:
+    for path in dst_dir.glob(f"{output_stem}.*"):
+        if path.suffix.lower() in OUTPUT_AUDIO_SUFFIXES:
+            path.unlink()
 
 
 def tune_manifest_entry(spec: StaticTuneSpec, frames: int) -> dict:
@@ -152,6 +206,7 @@ def convert_music(
     dst_dir: Path,
     overwrite: bool = False,
     libopenmpt: str | None = None,
+    ffmpeg: str = "ffmpeg",
 ) -> int:
     required = sorted({spec.source for spec in DAY_GRASSWALK_STEMS} | {spec.source for spec in STATIC_TUNES})
     missing = [name for name in required if not (src_dir / name).exists()]
@@ -159,16 +214,22 @@ def convert_music(
         raise FileNotFoundError(f"Missing source music files in {src_dir}: {', '.join(missing)}")
 
     library = OpenMptLibrary(libopenmpt)
+    ffmpeg_path = resolve_ffmpeg(ffmpeg)
     dst_dir.mkdir(parents=True, exist_ok=True)
 
     stem_frames: dict[str, int] = {}
     for spec in DAY_GRASSWALK_STEMS:
         dst = dst_dir / spec.output_name
-        if dst.exists() and not overwrite:
-            with wave.open(str(dst), "rb") as wav:
-                stem_frames[spec.stem] = wav.getnframes()
-            continue
-        stem_frames[spec.stem] = render_stem(library, src_dir / spec.source, dst, spec.channels)
+        should_write = overwrite or not dst.exists()
+        if overwrite:
+            remove_old_audio_outputs(dst_dir, spec.output_stem)
+        stem_frames[spec.stem] = render_stem_output(
+            library,
+            ffmpeg_path,
+            src_dir / spec.source,
+            dst if should_write else None,
+            spec.channels,
+        )
 
     frame_counts = set(stem_frames.values())
     if len(frame_counts) != 1:
@@ -181,11 +242,18 @@ def convert_music(
     static_count = 0
     for spec in STATIC_TUNES:
         dst = dst_dir / spec.output_name
-        if dst.exists() and not overwrite:
-            with wave.open(str(dst), "rb") as wav:
-                frames = wav.getnframes()
-        else:
-            frames = render_stem(library, src_dir / spec.source, dst, None, spec.order, spec.row)
+        should_write = overwrite or not dst.exists()
+        if overwrite:
+            remove_old_audio_outputs(dst_dir, spec.tune)
+        frames = render_stem_output(
+            library,
+            ffmpeg_path,
+            src_dir / spec.source,
+            dst if should_write else None,
+            None,
+            spec.order,
+            spec.row,
+        )
         tune_entries[spec.tune] = tune_manifest_entry(spec, frames)
         static_count += 1
 
@@ -216,10 +284,11 @@ def main() -> None:
     )
     parser.add_argument("--overwrite", action="store_true", help="Replace existing music stems.")
     parser.add_argument("--libopenmpt", help="Path to libopenmpt dynamic library.")
+    parser.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg executable used for MP3 conversion.")
     args = parser.parse_args()
 
     try:
-        count = convert_music(args.src, args.dst, args.overwrite, args.libopenmpt)
+        count = convert_music(args.src, args.dst, args.overwrite, args.libopenmpt, args.ffmpeg)
     except (FileNotFoundError, OpenMptError) as error:
         print(f"[music] Error: {error}", file=sys.stderr)
         raise SystemExit(1) from error

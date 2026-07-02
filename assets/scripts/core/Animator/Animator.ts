@@ -526,7 +526,8 @@ export class Animator extends Component {
                 trackNames.add(trackName)
             }
         }
-        this._trackNameCache = [...trackNames]
+        this._trackNameCache = []
+        trackNames.forEach((trackName) => this._trackNameCache!.push(trackName))
         return this._trackNameCache
     }
 }

@@ -30,6 +30,23 @@ import { SELECTOR_SCREEN_SPRITES } from './SelectorScreen/SelectorScreenConfig'
 import { StoreScreenAssets } from './StoreScreen/StoreScreenAssets'
 import { ZenGardenScreenAssets } from './ZenGardenScreen/ZenGardenScreenAssets'
 
+function uniqueStrings(values: string[]): string[] {
+    const result: string[] = []
+    const seen = new Set<string>()
+    for (const value of values) {
+        if (seen.has(value)) continue
+        seen.add(value)
+        result.push(value)
+    }
+    return result
+}
+
+function setToArray(values: Set<string>): string[] {
+    const result: string[] = []
+    values.forEach((value) => result.push(value))
+    return result
+}
+
 const STARTUP_TEXTURES = [
     'popcap_logo',
     'titlescreen',
@@ -69,7 +86,7 @@ const STARTUP_TEXTURES = [
     ...SELECTOR_SCREEN_SPRITES,
 ]
 
-const STARTUP_ANIMATION_PATHS = [...new Set([
+const STARTUP_ANIMATION_PATHS = uniqueStrings([
     ...Object.values(PLANT_DEFINITIONS).map((plant) => plant.animationPath),
     ...Object.values(ZOMBIE_DEFINITIONS).map((zombie) => zombie.animationPath),
     'animations/zombie_flagpole',
@@ -89,7 +106,7 @@ const STARTUP_ANIMATION_PATHS = [...new Set([
     GOLD_COIN_ANIMATION_PATH,
     DIAMOND_ANIMATION_PATH,
     CRAZY_DAVE_ANIMATION_PATH,
-])]
+])
 
 export interface StartupPreloadProgress {
     progress: number
@@ -259,7 +276,7 @@ export class StartupResourceLoader {
     }
 
     private static async _loadFonts(onProgress?: StartupTaskProgress): Promise<void> {
-        const fontNames = [...new Set([
+        const fontNames = uniqueStrings([
             ...FONT_NAMES,
             ...AwardScreenAssets.preload.fonts,
             ...AchievementScreenAssets.preload.fonts,
@@ -268,7 +285,7 @@ export class StartupResourceLoader {
             ...HelpScreenAssets.preload.fonts,
             ...StoreScreenAssets.preload.fonts,
             ...ZenGardenScreenAssets.preload.fonts,
-        ])]
+        ])
         let completed = 0
         onProgress?.(0)
         await Promise.all(fontNames.map(async (name) => {
@@ -313,7 +330,7 @@ export class StartupResourceLoader {
             }
         }
 
-        const names = [...textureNames]
+        const names = setToArray(textureNames)
         let completed = 0
         await Promise.all(names.map(async (name) => {
             await SpriteLoader.load(name)

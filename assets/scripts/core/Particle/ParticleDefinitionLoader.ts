@@ -66,14 +66,22 @@ export class ParticleDefinitionLoader {
     }
 
     private static async _loadImages(imageNames: Iterable<string>) {
-        const uniqueNames = [...new Set(imageNames)]
+        const uniqueNames: string[] = []
+        const seen = new Set<string>()
+        for (const name of imageNames) {
+            if (seen.has(name)) continue
+            seen.add(name)
+            uniqueNames.push(name)
+        }
         const loadedEntries = await Promise.all(uniqueNames.map(async (name) => ({
             name,
             loaded: await SpriteLoader.load(name) != null,
         })))
-        return new Set(loadedEntries
-            .filter((entry) => entry.loaded)
-            .map((entry) => entry.name))
+        const loadedImages = new Set<string>()
+        for (const entry of loadedEntries) {
+            if (entry.loaded) loadedImages.add(entry.name)
+        }
+        return loadedImages
     }
 
     private static _dropPlaceholderEmitters(

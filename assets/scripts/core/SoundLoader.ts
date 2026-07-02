@@ -390,11 +390,17 @@ export class SoundLoader {
         if (!url) return null
 
         const bridge = bindings.jsb?.PvzNative
-        const audioId = bridge?.playSfxWav?.(url, volume, pitch)
-        if (typeof audioId === 'number' && audioId >= 0) return audioId
+        if (this._isWavUrl(url)) {
+            const audioId = bridge?.playSfxWav?.(url, volume, pitch)
+            if (typeof audioId === 'number' && audioId >= 0) return audioId
+        }
 
         if (allowLegacyPitchBridge && bridge?.playSfxPitch?.(url, volume, pitch)) return -1
         return null
+    }
+
+    private static _isWavUrl(url: string) {
+        return /\.wav(?:$|[?#])/i.test(url)
     }
 
     private static _stopNativeExclusive(channel: string) {
