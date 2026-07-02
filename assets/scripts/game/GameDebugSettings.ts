@@ -39,7 +39,7 @@ function loadDebugSettings(): DebugSettings {
             sunCostEnabled: parsed.sunCostEnabled ?? DEFAULT_DEBUG_SETTINGS.sunCostEnabled,
             collectMode: normalizeCollectMode(parsed.collectMode),
             hitboxesVisible: parsed.hitboxesVisible ?? DEFAULT_DEBUG_SETTINGS.hitboxesVisible,
-            mobileEnabled: parsed.mobileEnabled ?? DEFAULT_DEBUG_SETTINGS.mobileEnabled,
+            mobileEnabled: DEFAULT_DEBUG_SETTINGS.mobileEnabled,
             hotkeysEnabled: parsed.hotkeysEnabled ?? DEFAULT_DEBUG_SETTINGS.hotkeysEnabled,
         }
     } catch {
@@ -48,7 +48,8 @@ function loadDebugSettings(): DebugSettings {
 }
 
 function saveDebugSettings(settings: DebugSettings) {
-    sys.localStorage.setItem(DEBUG_SETTINGS_KEY, JSON.stringify(settings))
+    const { mobileEnabled: _mobileEnabled, ...persistedSettings } = settings
+    sys.localStorage.setItem(DEBUG_SETTINGS_KEY, JSON.stringify(persistedSettings))
 }
 
 export const GameDebugSettings = {
@@ -80,7 +81,6 @@ export const GameDebugSettings = {
 
     setMobileEnabled(enabled: boolean) {
         this.mobileEnabled = enabled
-        saveDebugSettings(this)
         return this.mobileEnabled
     },
 
