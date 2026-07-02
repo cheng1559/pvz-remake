@@ -454,7 +454,7 @@ export class UIController extends Component {
                 if (!selectorScreen) return
                 this.showMessageBox(
                     'Thanks for Playing!',
-                    'More levels are in development.\n\nFollow cheng1559/pvz-remake on GitHub for future updates.',
+                    'More levels are in development.\nFollow cheng1559/pvz-remake on GitHub for future updates.',
                 )
             })
         }
