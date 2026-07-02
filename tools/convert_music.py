@@ -44,6 +44,8 @@ class StaticTuneSpec:
     source: str
     order: int
     row: int = 0
+    loop_start: float = 0.0
+    loop_end: float | None = None
 
     @property
     def output_name(self) -> str:
@@ -61,8 +63,8 @@ STATIC_TUNES = [
     StaticTuneSpec("title_theme", "mainmusic.mo3", 0x98),
     StaticTuneSpec("zen_garden", "mainmusic.mo3", 0xDD),
     StaticTuneSpec("puzzle", "mainmusic.mo3", 0xB1),
-    StaticTuneSpec("minigame", "mainmusic.mo3", 0xA6),
-    StaticTuneSpec("conveyer", "mainmusic.mo3", 0xD4),
+    StaticTuneSpec("minigame", "mainmusic.mo3", 0xA6, loop_start=1.5, loop_end=106.5),
+    StaticTuneSpec("conveyer", "mainmusic.mo3", 0xD4, loop_start=16.0, loop_end=120.0),
     StaticTuneSpec("final_boss", "mainmusic.mo3", 0x9E),
 ]
 
@@ -153,14 +155,15 @@ def remove_old_audio_outputs(dst_dir: Path, output_stem: str) -> None:
 
 def tune_manifest_entry(spec: StaticTuneSpec, frames: int) -> dict:
     duration = frames / SAMPLE_RATE
+    loop_end = spec.loop_end if spec.loop_end is not None else duration
     return {
         "id": spec.tune,
         "source": spec.source,
         "startOrder": spec.order,
         "startRow": spec.row,
         "durationSec": round(duration, 6),
-        "loopStartSec": 0,
-        "loopEndSec": round(duration, 6),
+        "loopStartSec": round(spec.loop_start, 6),
+        "loopEndSec": round(loop_end, 6),
         "stems": {
             "main": f"audio/music/{spec.tune}",
         },

@@ -525,7 +525,7 @@ export class MusicSystem {
 
     private static _usesBackendLoop(tune?: MusicTuneManifest | null) {
         const target = tune ?? this._currentTune
-        return !!target && target.loopStartSec <= 0 && target.loopEndSec > 0
+        return !!target && target.loopStartSec <= 0 && target.loopEndSec >= target.durationSec
     }
 
     private static _updateFadeOut(ticks: number) {
