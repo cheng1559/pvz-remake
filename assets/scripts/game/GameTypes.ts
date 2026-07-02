@@ -88,7 +88,7 @@ export interface InitialPlantDefinition {
 }
 
 export interface LevelDefinition {
-    id: 'adventure-1-1' | 'adventure-1-2' | 'adventure-1-3' | 'adventure-1-4' | 'adventure-1-5' | 'adventure-1-6' | 'adventure-1-7' | 'adventure-1-8' | 'adventure-1-9' | 'adventure-1-10'
+    id: 'adventure-1-1' | 'adventure-1-2' | 'adventure-1-3' | 'adventure-1-4' | 'adventure-1-5' | 'adventure-1-6' | 'adventure-1-7' | 'adventure-1-8' | 'adventure-1-9' | 'adventure-1-10' | 'adventure-stress'
     adventureLevel: number
     background: BackgroundType
     challengeMode?: ChallengeMode

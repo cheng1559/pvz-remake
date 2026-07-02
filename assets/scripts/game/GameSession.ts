@@ -153,6 +153,11 @@ interface RowPickState {
     secondLastPicked: number
 }
 
+interface EntityRowCache {
+    plants: Plant[][]
+    zombies: Zombie[][]
+}
+
 function clampMoney(amount: number) {
     return Math.max(MONEY_MIN, Math.min(MONEY_MAX, Math.floor(amount)))
 }
@@ -217,6 +222,7 @@ export class GameSession {
     private _conveyorCounter = 0
     private _lastConveyorSeedType: SeedType | null = null
     private _zombiesInWaves: ZombieType[][] = []
+    private _entityRowCache: EntityRowCache | null = null
     private _waveRowGotLawnMowered = Array.from({ length: DAY_GEOMETRY.rows }, () => WAVE_ROW_GOT_LAWN_MOWERED_INITIAL)
     private _rowPickState: RowPickState[] = Array.from({ length: DAY_GEOMETRY.rows }, (_, row) => ({
         row,
@@ -362,6 +368,7 @@ export class GameSession {
         if (this.paused || this.result === 'lost') return
 
         this.tick++
+        this._entityRowCache = null
         this._updateReadySetPlant()
         this._updateConveyor()
         this._updateSeedPackets()
@@ -614,7 +621,9 @@ export class GameSession {
             row,
             x: spawnX,
             y: this.geometry.gridToPixel(0, row).y - 30,
-            velocityX: definition.velocityXMin + this._randomFloat(0, definition.velocityXMax - definition.velocityXMin),
+            velocityX: type === 'pole-vaulting'
+                ? 0.66 + this._randomFloat(0, 0.02)
+                : definition.velocityXMin + this._randomFloat(0, definition.velocityXMax - definition.velocityXMin),
             hasTongue: this._zombieCanHaveTongue(type) && this._randomInt(0, 4) === 0,
         })
         this.zombies.push(zombie)
@@ -1146,7 +1155,7 @@ export class GameSession {
         }
 
         let closestDistance = 1000
-        for (const zombie of this.zombies) {
+        for (const zombie of this._zombiesInRow(plant.row)) {
             if (!this._canPotatoMineTargetZombie(plant, zombie)) continue
 
             const attackRect = this._potatoMineAttackRectForZombie(plant, zombie)
@@ -1444,10 +1453,11 @@ export class GameSession {
 
     private _updateZombies() {
         let context: ZombieUpdateContext
+        const zombieCounts = this._countZombies()
         context = {
             events: this.events,
-            zombieCount: this._countLiveZombies(),
-            deathZombieCount: this._countZombiesOnScreenForDeathAnim(),
+            zombieCount: zombieCounts.live,
+            deathZombieCount: zombieCounts.deathAnim,
             canUseSuperLongDeath: this._canUseSuperLongDeath(),
             levelAwardDropped: this._levelAwardDropped,
             findPlantTarget: (zombie: Zombie) => this._findZombiePlantTarget(zombie),
@@ -1526,9 +1536,8 @@ export class GameSession {
 
     private _zombiesEatingPlant(plant: PlantEntity) {
         const plantRect = this._plantRect(plant)
-        return this.zombies.filter((zombie) =>
+        return this._zombiesInRow(plant.row).filter((zombie) =>
             zombie.state === 'eating' &&
-            zombie.row === plant.row &&
             this._rectOverlapX(zombie.getAttackRect(), plantRect) >= 20)
     }
 
@@ -2539,8 +2548,7 @@ export class GameSession {
 
     private _hasTargetInRow(row: number, plant: Plant) {
         const attackRect = this._plantAttackRect(plant)
-        return this.zombies.some((zombie) => {
-            if (zombie.row !== row) return false
+        return this._zombiesInRow(row).some((zombie) => {
             if (!this._isZombieTargetableByPlant(zombie)) return false
             return this._rectOverlapX(attackRect, zombie.getBodyRect()) >= 0
         })
@@ -2559,8 +2567,8 @@ export class GameSession {
         if (plant.type === 'chomper') return this._findChomperTarget(plant) !== null
         if (plant.type === 'potatomine') return this._findPotatoMineTarget(plant) !== null
 
-        return this.zombies.some((zombie) => {
-            if (zombie.row !== plant.row || !this._isZombieTargetableByPlant(zombie)) return false
+        return this._zombiesInRow(plant.row).some((zombie) => {
+            if (!this._isZombieTargetableByPlant(zombie)) return false
 
             return this._rectOverlap(this._instantPlantAttackRect(plant), zombie.getBodyRect()) >= 0
         })
@@ -2591,8 +2599,8 @@ export class GameSession {
 
         const attackRect = this._instantPlantAttackRect(plant)
         let target: Zombie | null = null
-        for (const zombie of this.zombies) {
-            if (zombie.row !== plant.row || !this._canChomperTargetZombie(zombie)) continue
+        for (const zombie of this._zombiesInRow(plant.row)) {
+            if (!this._canChomperTargetZombie(zombie)) continue
 
             const extraRange = zombie.state === 'eating' || plant.state === 'chomper-biting' ? 60 : 0
             if (this._rectOverlap(attackRect, zombie.getBodyRect()) < -extraRange) continue
@@ -2608,7 +2616,7 @@ export class GameSession {
     }
 
     private _findPotatoMineTarget(plant: PlantEntity) {
-        for (const zombie of this.zombies) {
+        for (const zombie of this._zombiesInRow(plant.row)) {
             if (!this._canPotatoMineTargetZombie(plant, zombie)) continue
 
             const attackRect = this._potatoMineAttackRectForZombie(plant, zombie)
@@ -2689,6 +2697,7 @@ export class GameSession {
         this._removeDead(this.projectiles)
         this._removeDead(this.items)
         this._removeDead(this.lawnMowers)
+        this._entityRowCache = null
     }
 
     private _removeDead<T extends { id: number, dead: boolean }>(items: T[]) {
@@ -2788,8 +2797,8 @@ export class GameSession {
 
     private _findZombiePlantTarget(zombie: Zombie) {
         const attackRect = zombie.getAttackRect()
-        for (const plant of this.plants) {
-            if (plant.dead || plant.isBowling || plant.row !== zombie.row) continue
+        for (const plant of this._plantsInRow(zombie.row)) {
+            if (plant.dead || plant.isBowling) continue
             if (this._rectOverlapX(attackRect, this._plantRect(plant)) >= 20) return plant
         }
         return null
@@ -2849,8 +2858,7 @@ export class GameSession {
     private _findProjectileCollisionTarget(projectile: Projectile) {
         const projectileRect = projectile.getProjectileRect()
         let target: Zombie | null = null
-        for (const zombie of this.zombies) {
-            if (zombie.row !== projectile.row) continue
+        for (const zombie of this._zombiesInRow(projectile.row)) {
             if (!this._isZombieDamageableForProjectileCollision(zombie)) continue
             if (this._rectOverlap(projectileRect, zombie.getBodyRect()) <= 0) continue
             if (!target || zombie.x < target.x) target = zombie
@@ -2858,8 +2866,48 @@ export class GameSession {
         return target
     }
 
-    private _countLiveZombies() {
-        return this.zombies.filter((zombie) => !zombie.dead).length
+    private _rebuildEntityRowCache() {
+        const plants = Array.from({ length: this.geometry.rows }, () => [] as Plant[])
+        const zombies = Array.from({ length: this.geometry.rows }, () => [] as Zombie[])
+        for (const plant of this.plants) {
+            if (plant.dead) continue
+            plants[plant.row]?.push(plant)
+        }
+        for (const zombie of this.zombies) {
+            if (zombie.dead) continue
+            zombies[zombie.row]?.push(zombie)
+        }
+        this._entityRowCache = { plants, zombies }
+    }
+
+    private _plantsInRow(row: number) {
+        if (!this._entityRowCache) this._rebuildEntityRowCache()
+        return this._entityRowCache?.plants[row] ?? []
+    }
+
+    private _zombiesInRow(row: number) {
+        if (!this._entityRowCache) this._rebuildEntityRowCache()
+        return this._entityRowCache?.zombies[row] ?? []
+    }
+
+    private _countZombies() {
+        let live = 0
+        let deathAnim = 0
+        for (const zombie of this.zombies) {
+            if (zombie.dead) continue
+
+            live++
+            if (
+                zombie.hasHead &&
+                zombie.state !== 'dying' &&
+                zombie.state !== 'mowered' &&
+                zombie.state !== 'charred' &&
+                zombie.state !== 'burned'
+            ) {
+                deathAnim++
+            }
+        }
+        return { live, deathAnim }
     }
 
     private _zombieDeathContext() {
@@ -2870,14 +2918,7 @@ export class GameSession {
     }
 
     private _countZombiesOnScreenForDeathAnim() {
-        return this.zombies.filter((zombie) => (
-            zombie.hasHead &&
-            !zombie.dead &&
-            zombie.state !== 'dying' &&
-            zombie.state !== 'mowered' &&
-            zombie.state !== 'charred' &&
-            zombie.state !== 'burned'
-        )).length
+        return this._countZombies().deathAnim
     }
 
     private _canUseSuperLongDeath() {

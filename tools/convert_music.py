@@ -59,7 +59,7 @@ DAY_GRASSWALK_STEMS = [
 ]
 
 STATIC_TUNES = [
-    StaticTuneSpec("choose_seeds", "mainmusic.mo3", 0x7A),
+    StaticTuneSpec("choose_seeds", "mainmusic.mo3", 0x7A, loop_start=3.6, loop_end=21.6),
     StaticTuneSpec("title_theme", "mainmusic.mo3", 0x98),
     StaticTuneSpec("zen_garden", "mainmusic.mo3", 0xDD),
     StaticTuneSpec("puzzle", "mainmusic.mo3", 0xB1),

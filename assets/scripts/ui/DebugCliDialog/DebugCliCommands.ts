@@ -1,9 +1,9 @@
 import { screen, sys } from 'cc'
 import { SoundLoader } from '@/core/SoundLoader'
 import type { AdventureGameScreen } from '@/game/GameScreen'
-import { ADVENTURE_LEVELS, PLANT_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed, setGameSpeed } from '@/game/GameDefinitions'
+import { ADVENTURE_LEVELS, DEBUG_LEVELS, PLANT_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed, setGameSpeed } from '@/game/GameDefinitions'
 import { GameDebugSettings } from '@/game/GameDebugSettings'
-import type { DebugCollectMode } from '@/game/GameDebugSettings'
+import type { DebugCollectMode, DebugPerfToggle } from '@/game/GameDebugSettings'
 import { GameSettingsStore, SFX_VOLUME_SCALE } from '@/game/persistence/GameSettingsStore'
 import type { ItemType, LevelDefinition, PlantType, ZombieType } from '@/game/GameTypes'
 
@@ -36,8 +36,10 @@ const DEBUG_ZOMBIE_LOOKUP = createDebugTypeLookup(DEBUG_ZOMBIE_TYPES)
 const DEBUG_ITEM_LOOKUP = createDebugItemLookup(DEBUG_ITEM_SPECS)
 const DEBUG_BOOLEAN_VALUES = ['true', 'false']
 const DEBUG_COLLECT_MODES: DebugCollectMode[] = ['auto', 'click', 'move']
-const DEBUG_LEVEL_IDS = ADVENTURE_LEVELS.map((level) => debugLevelId(level))
-const DEBUG_LEVEL_LOOKUP = new Map(DEBUG_LEVEL_IDS.map((id, index) => [id, ADVENTURE_LEVELS[index]]))
+const DEBUG_PERF_TOGGLES: DebugPerfToggle[] = ['plants', 'zombies', 'particles', 'sfx', 'logic']
+const DEBUG_LEVELS_FOR_CLI = [...ADVENTURE_LEVELS, ...DEBUG_LEVELS]
+const DEBUG_LEVEL_IDS = DEBUG_LEVELS_FOR_CLI.map((level) => debugLevelId(level))
+const DEBUG_LEVEL_LOOKUP = new Map(DEBUG_LEVEL_IDS.map((id, index) => [id, DEBUG_LEVELS_FOR_CLI[index]]))
 type DebugNativeBridge = {
     setFullScreen?: (fullScreen: boolean) => boolean
 }
@@ -146,6 +148,11 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         name: 'hotkeys',
         completions: [DEBUG_BOOLEAN_VALUES],
         parameterHints: ['{enabled}'],
+    },
+    {
+        name: 'perf',
+        completions: [DEBUG_PERF_TOGGLES, DEBUG_BOOLEAN_VALUES],
+        parameterHints: ['{plants|zombies|particles|sfx|logic}', '{enabled}'],
     },
     {
         name: 'lawnmower',
@@ -286,6 +293,8 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugGameSpeedCommand(tokens)
         case 'hotkeys':
             return executeDebugHotkeysCommand(tokens)
+        case 'perf':
+            return executeDebugPerfCommand(tokens, gameScreen)
         case 'lawnmower':
             return executeDebugLawnMowerCommand(tokens, gameScreen)
         case 'sun':
@@ -673,6 +682,26 @@ function executeDebugHotkeysCommand(tokens: string[]): DebugCliResult {
 
     const hotkeysEnabled = GameDebugSettings.setHotkeysEnabled(enabled)
     return { ok: true, message: `Hotkeys ${hotkeysEnabled ? 'enabled' : 'disabled'}` }
+}
+
+function executeDebugPerfCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {
+    if (tokens.length !== 3) {
+        return { ok: false, message: 'Usage: /perf {plants|zombies|particles|sfx|logic} {true|false}' }
+    }
+
+    const toggle = parseDebugPerfToggle(tokens[1])
+    if (!toggle) {
+        return { ok: false, message: `Invalid perf toggle: ${tokens[1]}. Use plants, zombies, particles, sfx, or logic` }
+    }
+
+    const enabled = parseDebugBoolean(tokens[2])
+    if (enabled == null) {
+        return { ok: false, message: `Invalid perf value: ${tokens[2]}. Use true or false` }
+    }
+
+    const applied = GameDebugSettings.setPerfToggle(toggle, enabled)
+    gameScreen?.debugRefreshPerfToggles()
+    return { ok: true, message: `Perf ${toggle} ${applied ? 'enabled' : 'disabled'}` }
 }
 
 function executeDebugMusicCommand(tokens: string[]): DebugCliResult {
@@ -1107,6 +1136,18 @@ function parseAmountAction(action: string): 'add' | 'set' | null {
 function parseDebugCollectMode(value: string): DebugCollectMode | null {
     const normalized = value.toLowerCase()
     if (normalized === 'auto' || normalized === 'click' || normalized === 'move') return normalized
+    return null
+}
+
+function parseDebugPerfToggle(value: string): DebugPerfToggle | null {
+    const normalized = value.toLowerCase()
+    if (
+        normalized === 'plants' ||
+        normalized === 'zombies' ||
+        normalized === 'particles' ||
+        normalized === 'sfx' ||
+        normalized === 'logic'
+    ) return normalized
     return null
 }
 

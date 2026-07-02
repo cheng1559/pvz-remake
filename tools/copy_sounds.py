@@ -3,7 +3,7 @@
 Convert extracted PvZ sound effects into the Cocos resources library.
 
 The original package also contains tracker music and a few legacy audio formats.
-This script intentionally imports sound effects only and normalizes them to MP3.
+This script intentionally imports sound effects only and normalizes them to PCM WAV.
 """
 
 import argparse
@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 SUPPORTED_SOUND_SUFFIXES = (".au", ".ogg", ".mp3", ".wav")
-OUTPUT_SUFFIX = ".mp3"
+OUTPUT_SUFFIX = ".wav"
 
 def _resource_stem(path: Path) -> str:
     return path.with_suffix("").name.lower()
@@ -30,9 +30,7 @@ def convert_sound(ffmpeg: str, src: Path, dst: Path, overwrite: bool) -> None:
         str(src),
         "-vn",
         "-acodec",
-        "libmp3lame",
-        "-q:a",
-        "4",
+        "pcm_s16le",
         "-ar",
         "44100",
         "-ac",
@@ -55,7 +53,7 @@ def resolve_ffmpeg(ffmpeg: str) -> str:
             return candidate
 
     raise RuntimeError(
-        "ffmpeg is required to convert PvZ sound files to MP3. "
+        "ffmpeg is required to convert PvZ sound files to PCM WAV. "
         "Install it with `brew install ffmpeg` on macOS, or pass --ffmpeg /path/to/ffmpeg."
     )
 
@@ -107,7 +105,7 @@ def main():
         help="Destination under the Cocos resources directory.",
     )
     parser.add_argument("--overwrite", action="store_true", help="Replace existing copied files.")
-    parser.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg executable used for MP3 conversion.")
+    parser.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg executable used for PCM WAV conversion.")
     args = parser.parse_args()
 
     if not args.src.exists():

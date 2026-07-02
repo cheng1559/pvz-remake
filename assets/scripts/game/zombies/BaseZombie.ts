@@ -560,7 +560,8 @@ export abstract class Zombie implements ZombieEntity {
 
         this.x -= 150
         this.poleVaulting = false
-        this.velocityX = this._randomSpeedForState(this.type, false)
+        this.velocityX = POLE_VAULT_SLOW_SPEED_MIN +
+            context.randomFloat(0, POLE_VAULT_SLOW_SPEED_MAX - POLE_VAULT_SLOW_SPEED_MIN)
         this._walkAnimation = 'anim_walk'
         this._walkGroundTime = 0
         this.attackRect.x = POLE_VAULT_ATTACK_RECT_AFTER_JUMP.x

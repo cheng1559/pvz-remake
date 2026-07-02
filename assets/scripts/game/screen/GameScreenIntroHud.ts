@@ -1039,6 +1039,12 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             onClick: () => {
                 if (this._cancelCursor()) return
 
+                if (this.isChoosingSeeds()) {
+                    this._finishSeedChooserMotions()
+                    this.pauseGame({ pauseMusic: false })
+                    this.onMenuRequest?.()
+                    return
+                }
                 this.pauseGame()
                 void SoundLoader.play(SoundEffect.Pause)
                 this.onMenuRequest?.()

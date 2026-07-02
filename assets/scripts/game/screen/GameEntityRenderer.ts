@@ -3,6 +3,7 @@ import { GameScreenEndSequences } from './GameScreenEndSequences'
 import { Animator } from '@/core/Animator'
 import { TodParticleSystem } from '@/core/Particle'
 import { SpriteLoader } from '@/core/SpriteLoader'
+import { GameDebugSettings } from '@/game/GameDebugSettings'
 import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH, SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { GAME_TICK_SECONDS, SEED_DEFINITIONS } from '../GameDefinitions'
@@ -90,11 +91,38 @@ const DEFAULT_ZOMBIE_SHADOW_OFFSET = { x: 23, y: 92 }
 const CHILLED_ZOMBIE_COLOR = new Color(75, 75, 255, 255)
 
 export abstract class GameEntityRenderer extends GameScreenEndSequences {
+    public debugRefreshPerfToggles() {
+        for (const view of this._plantViews.values()) {
+            this._setPlantPerfVisible(view, GameDebugSettings.perfPlantsVisible)
+        }
+        for (const entity of this._session.projectiles) {
+            this._setProjectilePerfVisible(this._entityNodes.get(entity.id), GameDebugSettings.perfPlantsVisible)
+        }
+        for (const view of this._zombieViews.values()) {
+            this._setZombiePerfVisible(view, GameDebugSettings.perfZombiesVisible)
+        }
+        this._syncGameplayParticlePerfState()
+        if (this._bootstrapped) this._renderFrame()
+    }
+
     protected _syncEntity(entity: GameEntity) {
         let node = this._entityNodes.get(entity.id)
         if (!node) {
             node = this._createEntityNode(entity)
             this._entityNodes.set(entity.id, node)
+        }
+        if (entity.kind === 'plant') {
+            const visible = GameDebugSettings.perfPlantsVisible
+            this._setPlantPerfVisible(this._plantViews.get(entity.id), visible)
+            if (!visible) return
+        } else if (entity.kind === 'projectile') {
+            const visible = GameDebugSettings.perfPlantsVisible
+            this._setProjectilePerfVisible(node, visible)
+            if (!visible) return
+        } else if (entity.kind === 'zombie') {
+            const visible = GameDebugSettings.perfZombiesVisible
+            this._setZombiePerfVisible(this._zombieViews.get(entity.id), visible)
+            if (!visible) return
         }
         const renderState = this._getRenderEntityState(entity)
         if (entity.kind === 'item') {
@@ -135,6 +163,22 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             node.active = this._isGameplayLawnMowerEntityVisible(entity)
             this._syncLawnMowerAnimation(entity)
         }
+    }
+
+    protected _setPlantPerfVisible(view: PlantView | undefined, visible: boolean) {
+        if (view?.node.isValid) view.node.active = visible
+    }
+
+    protected _setProjectilePerfVisible(node: Node | undefined, visible: boolean) {
+        if (node?.isValid) node.active = visible
+    }
+
+    protected _setZombiePerfVisible(view: ZombieView | undefined, visible: boolean) {
+        if (!view) return
+
+        if (view.node.isValid) view.node.active = visible
+        if (view.shadowClipNode?.isValid) view.shadowClipNode.active = visible
+        else if (view.shadowNode?.isValid) view.shadowNode.active = visible
     }
 
     protected _getRenderEntityState(entity: GameEntity): RenderEntitySnapshot {
@@ -200,7 +244,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             ...this._session.lawnMowers,
         ]) {
             const node = this._entityNodes.get(entity.id)
-            if (!node?.isValid) continue
+            if (!node?.isValid || node.parent !== this._entityLayer) continue
 
             entries.push({ node, order: this._entityLayerOrder(entity) })
             if (entity.kind === 'zombie') {
@@ -1153,6 +1197,7 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
     protected _syncZombieGameOverClip(zombie: ZombieEntity, renderState: RenderEntitySnapshot) {
         const view = this._zombieViews.get(zombie.id)
         if (!view) return
+        this._syncZombieGameOverParent(view, zombie.id)
 
         if (!this._gameOverActive || zombie.id !== this._gameOverWinnerZombieId) {
             view.node.active = true
@@ -1183,6 +1228,26 @@ export abstract class GameEntityRenderer extends GameScreenEndSequences {
             this._session.geometry.width,
             this._session.geometry.height,
         )
+    }
+
+    protected _syncZombieGameOverParent(view: ZombieView, zombieId: number) {
+        const parent = this._gameOverActive && zombieId === this._gameOverWinnerZombieId
+            ? this._gameOverWinnerLayer()
+            : this._entityLayer
+        if (view.node.isValid && view.node.parent !== parent) view.node.setParent(parent)
+        if (view.shadowClipNode?.isValid && view.shadowClipNode.parent !== parent) view.shadowClipNode.setParent(parent)
+    }
+
+    protected _gameOverWinnerLayer() {
+        if (this._gameOverWinnerLayerNode?.isValid) return this._gameOverWinnerLayerNode
+
+        this._gameOverWinnerLayerNode = createUINode('GameOverWinner', {
+            parent: this._boardContent,
+            layer: this.node.layer,
+            anchorX: 0,
+            anchorY: 1,
+        })
+        return this._gameOverWinnerLayerNode
     }
 
     protected _applyZombieBoardClip(

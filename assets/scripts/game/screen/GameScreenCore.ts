@@ -554,6 +554,7 @@ export abstract class GameScreenCore extends Component {
     protected _crazyDaveShovelDugPlant = false
     protected _houseDoorBottomNode: Node | null = null
     protected _houseDoorTopNode: Node | null = null
+    protected _gameOverWinnerLayerNode: Node | null = null
     protected _gameOverOverlayNode: Node | null = null
     protected _gameOverBlackNode: Node | null = null
     protected _gameOverTitleNode: Node | null = null
@@ -787,13 +788,17 @@ export abstract class GameScreenCore extends Component {
         if (this._gameStarted) {
             if (!this._session.paused) {
                 this._gameAccumulator += scaledDt
-                while (!this._gameplayUpdatesPaused && this._gameAccumulator >= GAME_TICK_SECONDS) {
+                while (
+                    GameDebugSettings.perfLogicEnabled &&
+                    !this._gameplayUpdatesPaused &&
+                    this._gameAccumulator >= GAME_TICK_SECONDS
+                ) {
                     this._capturePreviousEntitySnapshots()
                     this._session.update()
                     this._gameAccumulator -= GAME_TICK_SECONDS
                     gameTicks++
                 }
-                if (this._gameplayUpdatesPaused) this._gameAccumulator = 0
+                if (this._gameplayUpdatesPaused || !GameDebugSettings.perfLogicEnabled) this._gameAccumulator = 0
             }
         } else if (!this._session.paused) {
             if (this._seedChooserActive) {
@@ -834,18 +839,18 @@ export abstract class GameScreenCore extends Component {
         this._renderFrame()
     }
 
-    public pauseGame() {
+    public pauseGame(options: { pauseMusic?: boolean } = {}) {
         this._session.dispatch({ type: 'pause' })
-        MusicSystem.pause()
+        if (options.pauseMusic !== false) MusicSystem.pause()
         this._gameAccumulator = 0
         this._previousEntitySnapshots.clear()
         this._setGameplayAnimationsPaused(true)
         this._renderFrame()
     }
 
-    public resumeGame() {
+    public resumeGame(options: { resumeMusic?: boolean } = {}) {
         this._session.dispatch({ type: 'resume' })
-        MusicSystem.resume()
+        if (options.resumeMusic !== false) MusicSystem.resume()
         this._setGameplayAnimationsPaused(false)
         this._renderFrame()
     }
@@ -1595,10 +1600,7 @@ export abstract class GameScreenCore extends Component {
 
     protected _handleSeedChooserPointerDown(pixel: { x: number, y: number }, button = 0) {
         if (this._seedChooserAge < this._seedChooserSlideTicks()) return
-        if (this._seedChooserSeedsInFlight > 0) {
-            for (const seed of this._seedChooserSeeds) this._landSeedChooserSeed(seed)
-            this._syncSeedChooser()
-        }
+        this._finishSeedChooserMotions()
 
         if (button === 0 && this._canShowAlmanacInSeedChooser() && !this._isSeedChooserUiPixel(pixel)) {
             const introZombieHit = this._findIntroStreetZombieAt(pixel)
@@ -1615,6 +1617,13 @@ export abstract class GameScreenCore extends Component {
         if (hit.seed.state === 'bank') this._clickedSeedBankChooserSeed(hit.seed)
         this._hideSeedTooltip()
         this._updateHoverItemAndSeedPacketState()
+    }
+
+    protected _finishSeedChooserMotions() {
+        if (this._seedChooserSeedsInFlight <= 0) return
+
+        for (const seed of this._seedChooserSeeds) this._landSeedChooserSeed(seed)
+        this._syncSeedChooser()
     }
 
     protected _canUseBoardInput() {
@@ -3165,6 +3174,8 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _spawnZombiePartParticle(entityId: number, effect: TodParticleEffect) {
+        if (!this._areGameplayParticlesEnabled()) return
+
         const view = this._zombieViews.get(entityId)
         if (!view?.node.isValid) return
 
@@ -3242,6 +3253,8 @@ export abstract class GameScreenCore extends Component {
         renderOrder = this._particleRenderOrderForEffect(effect, y),
         tint?: { r: number, g: number, b: number },
     ) {
+        if (!this._areGameplayParticlesEnabled()) return
+
         const system = TodParticleSystem.spawn({
             parent: this._entityLayer,
             effect,
@@ -3298,6 +3311,8 @@ export abstract class GameScreenCore extends Component {
         x: number,
         y: number,
     ) {
+        if (!this._areGameplayParticlesEnabled()) return
+
         const view = this._zombieViews.get(entityId)
         if (!view?.node.isValid) return
 
@@ -3320,6 +3335,8 @@ export abstract class GameScreenCore extends Component {
         y: number,
         z = 1,
     ) {
+        if (!this._areGameplayParticlesEnabled()) return false
+
         const entity = this._findEntityById(entityId)
         const node = this._entityNodes.get(entityId)
         if (!entity || !node?.isValid) return false
@@ -3339,6 +3356,22 @@ export abstract class GameScreenCore extends Component {
 
     protected _trackGameplayParticle(system: TodParticleSystem, parentEntityId?: number) {
         this._gameplayParticles.set(system, { parentEntityId })
+    }
+
+    protected _areGameplayParticlesEnabled() {
+        return GameDebugSettings.perfParticlesEnabled
+    }
+
+    protected _syncGameplayParticlePerfState() {
+        const enabled = GameDebugSettings.perfParticlesEnabled && this._isGameplaySceneAnimationEnabled()
+        for (const system of this._gameplayParticles.keys()) {
+            if (system.isValid) system.enabled = enabled
+            if (system.node?.isValid) system.node.active = enabled
+        }
+        for (const system of this._seedPacketTutorialArrows.values()) {
+            if (system.isValid) system.enabled = enabled
+            if (system.node?.isValid) system.node.active = enabled
+        }
     }
 
     protected _createGameplayParticleSnapshots(): GameParticleSnapshot[] {
@@ -3365,6 +3398,8 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _restoreGameplayParticles(particles: GameParticleSnapshot[]) {
+        if (!this._areGameplayParticlesEnabled()) return
+
         for (const particle of particles) {
             const parent = particle.parentEntityId == null
                 ? this._entityLayer
@@ -3399,6 +3434,8 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _spawnSeedPacketFlash(seedType: SeedType) {
+        if (!this._areGameplayParticlesEnabled()) return
+
         const packetNode = this._seedPacketViews.get(seedType)?.node
         if (!packetNode?.isValid) return
 
@@ -3417,6 +3454,8 @@ export abstract class GameScreenCore extends Component {
         x: number,
         y: number,
     ) {
+        if (!this._areGameplayParticlesEnabled()) return
+
         const itemNode = this._entityNodes.get(entityId)
 
         const starburst = TodParticleSystem.spawn({
@@ -3592,6 +3631,7 @@ export abstract class GameScreenCore extends Component {
             if (currentNode.parent === this._uiLayer) return
         }
         if (current?.isValid && currentNode?.isValid) currentNode.destroy()
+        if (!this._areGameplayParticlesEnabled()) return
 
         const arrow = TodParticleSystem.spawn({
             parent: this._uiLayer,
@@ -3942,7 +3982,7 @@ export abstract class GameScreenCore extends Component {
         }
         const particleSystems = this.node.getComponentsInChildren(TodParticleSystem)
         for (const particleSystem of particleSystems) {
-            if (particleSystem.isValid) particleSystem.enabled = !paused
+            if (particleSystem.isValid) particleSystem.enabled = !paused && GameDebugSettings.perfParticlesEnabled
         }
         this._syncSceneAnimationState()
     }

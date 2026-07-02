@@ -1,5 +1,6 @@
-import { AudioClip, AudioSource, director, Node } from 'cc'
+import { AudioClip, AudioSource, director, Node, sys } from 'cc'
 import { AssetLoader } from './AssetLoader'
+import { GameDebugSettings } from '@/game/GameDebugSettings'
 
 type NativeAudioAsset = {
     url?: string
@@ -19,6 +20,7 @@ type NativeAudioEngine = {
 }
 
 type PvzNativeBridge = {
+    preloadSfx?: (url: string) => boolean
     playSfxPitch?: (url: string, volume: number, pitch: number) => boolean
     playSfxWav?: (url: string, volume: number, pitch: number) => number
     stopSfxWav?: (audioId: number) => void
@@ -126,6 +128,7 @@ export class SoundLoader {
     private static readonly _pitchStepMultiplier = 1.0594630943592953
     private static readonly _foleyRecentSuppressMs = 100
     private static readonly _maxNativeOneShots = 32
+    private static readonly _isAndroidNative = sys.isNative && sys.os === sys.OS.ANDROID
     private static readonly _foleyPitchRanges: Partial<Record<SoundEffect, number>> = {
         [SoundEffect.Points]: 10,
         [SoundEffect.ShieldHit]: 10,
@@ -228,7 +231,10 @@ export class SoundLoader {
             `sound: ${effect}`,
         ).then((clip) => {
             this._loading.delete(effect)
-            if (clip) this._clips.set(effect, clip)
+            if (clip) {
+                this._clips.set(effect, clip)
+                this._preloadNativeSfx(clip)
+            }
             return clip
         })
 
@@ -237,7 +243,9 @@ export class SoundLoader {
     }
 
     public static async play(effect: SoundEffect, volume = 1) {
+        if (!GameDebugSettings.perfSfxEnabled) return
         const clip = await this.load(effect)
+        if (!GameDebugSettings.perfSfxEnabled) return
         if (!clip) return
 
         const resolvedVolume = this._resolveEffectVolume(volume)
@@ -247,7 +255,9 @@ export class SoundLoader {
     }
 
     public static async playSfx(effect: SoundEffect, volume = 1) {
+        if (!GameDebugSettings.perfSfxEnabled) return
         const clip = await this.load(effect)
+        if (!GameDebugSettings.perfSfxEnabled) return
         if (!clip) return
 
         const resolvedVolume = this._resolveEffectVolume(volume)
@@ -263,6 +273,7 @@ export class SoundLoader {
     }
 
     public static playFoley(effect: SoundEffect, pitchRange?: number, volume = 1) {
+        if (!GameDebugSettings.perfSfxEnabled) return Promise.resolve()
         if (this._hasFoleyPlayedTooRecently(effect)) return Promise.resolve()
 
         const selectedEffect = this._pickFoleyEffect(effect)
@@ -272,6 +283,7 @@ export class SoundLoader {
     }
 
     public static async playExclusive(effect: SoundEffect, channel: string = effect, volume = 1) {
+        if (!GameDebugSettings.perfSfxEnabled) return
         const token = (this._exclusiveTokens.get(channel) ?? 0) + 1
         this._exclusiveTokens.set(channel, token)
         this._stopNativeExclusive(channel)
@@ -279,16 +291,18 @@ export class SoundLoader {
         source.stop()
 
         const clip = await this.load(effect)
+        if (!GameDebugSettings.perfSfxEnabled) return
         if (!clip || this._exclusiveTokens.get(channel) !== token) return
 
         const resolvedVolume = this._resolveEffectVolume(volume)
-        const nativeAudioId = this._playNativeSfx(clip, 1, resolvedVolume, false)
+        const nativeAudioId = this._playNativeSfx(clip, 1, resolvedVolume, this._isAndroidNative)
         if (nativeAudioId !== null) {
             this._exclusiveNativeAudioIds.set(channel, nativeAudioId)
             this._exclusiveEffects.set(channel, effect)
             this._exclusiveBaseVolumes.set(channel, volume)
             return
         }
+        if (this._isAndroidNative) return
 
         source.stop()
         source.clip = clip
@@ -300,6 +314,7 @@ export class SoundLoader {
     }
 
     public static playFoleyExclusive(effect: SoundEffect, channel: string = effect, pitchRange?: number, volume = 1) {
+        if (!GameDebugSettings.perfSfxEnabled) return Promise.resolve()
         if (this._hasFoleyPlayedTooRecently(effect)) {
             this.stopExclusive(channel)
             return Promise.resolve()
@@ -319,7 +334,9 @@ export class SoundLoader {
     }
 
     public static async playWithPitch(effect: SoundEffect, pitchSteps: number, volume = 1) {
+        if (!GameDebugSettings.perfSfxEnabled) return
         const clip = await this.load(effect)
+        if (!GameDebugSettings.perfSfxEnabled) return
         if (!clip) return
         const resolvedVolume = this._resolveEffectVolume(volume)
 
@@ -360,7 +377,8 @@ export class SoundLoader {
 
     private static async _playNativeWithPitch(clip: AudioClip, pitchSteps: number, volume: number) {
         const pitch = Math.pow(this._pitchStepMultiplier, pitchSteps)
-        if (this._playNativeSfx(clip, pitch, volume, pitchSteps !== 0) !== null) return true
+        if (this._playNativeSfx(clip, pitch, volume, pitchSteps !== 0 || this._isAndroidNative) !== null) return true
+        if (this._isAndroidNative) return true
 
         const bindings = globalThis as NativeBindings
         const url = (clip as AudioClipWithNativeAsset)._nativeAsset?.url ?? (clip as AudioClipWithNativeAsset).nativeUrl
@@ -455,6 +473,13 @@ export class SoundLoader {
 
         this._foleyLastPlayedAt.set(effect, now)
         return false
+    }
+
+    private static _preloadNativeSfx(clip: AudioClip) {
+        const url = (clip as AudioClipWithNativeAsset)._nativeAsset?.url ?? (clip as AudioClipWithNativeAsset).nativeUrl
+        if (!url) return
+        const bridge = (globalThis as NativeBindings).jsb?.PvzNative
+        bridge?.preloadSfx?.(url)
     }
 
     private static _getAudioContext(): AudioContext | null {

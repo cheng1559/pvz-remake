@@ -29,6 +29,7 @@ import {
     ADVENTURE_1_4,
     ADVENTURE_1_5,
     ADVENTURE_LEVELS,
+    DEBUG_LEVELS,
     GAME_TICK_SECONDS,
     getLevelIntroMusicTune,
     popGlobalGamePause,
@@ -806,14 +807,16 @@ export class UIController extends Component {
         const node = createUINode('GameOptionsDialog', { active: false, width: 423, height: 498 })
         const optionsDialog = node.addComponent(OptionsDialog)
         this._optionsDialog = optionsDialog
+        const choosingSeeds = gameScreen?.isChoosingSeeds() === true
+        const shouldResumeGame = gameScreen?.isPaused() === true
         optionsDialog.gameMenu = true
-        optionsDialog.showRestartLevel = !gameScreen?.isChoosingSeeds()
+        optionsDialog.showRestartLevel = !choosingSeeds
         optionsDialog.backButtonLabel = '[BACK_TO_GAME]'
         this._configureOptionsDialog(optionsDialog)
         optionsDialog.onClose = () => {
             this._commitOptionsDialogSettings(optionsDialog)
             if (this._optionsDialog === optionsDialog) this._optionsDialog = null
-            gameScreen?.resumeGame()
+            if (shouldResumeGame) gameScreen?.resumeGame({ resumeMusic: !choosingSeeds })
         }
         optionsDialog.onRestartLevel = () => {
             void this.confirmRestartLevel().then((confirmed) => {
@@ -827,6 +830,14 @@ export class UIController extends Component {
             })
         }
         optionsDialog.onMainMenu = () => {
+            if (choosingSeeds) {
+                void SoundLoader.play(SoundEffect.ButtonClick)
+                this._commitOptionsDialogSettings(optionsDialog)
+                if (this._optionsDialog === optionsDialog) this._optionsDialog = null
+                if (node.isValid) node.destroy()
+                void this.showSelectorScreen()
+                return
+            }
             void this.confirmBackToMainMenu().then((confirmed) => {
                 if (!confirmed) return
                 void SoundLoader.play(SoundEffect.ButtonClick)
@@ -852,7 +863,9 @@ export class UIController extends Component {
     showPauseDialog(gameScreen?: AdventureGameScreen): PauseDialog | null {
         if (this._modalScreen?.isValid) return null
 
-        this._saveAdventureGame(gameScreen)
+        const choosingSeeds = gameScreen?.isChoosingSeeds() === true
+        const shouldResumeGame = gameScreen?.isPaused() === true
+        if (!choosingSeeds) this._saveAdventureGame(gameScreen)
         const node = createUINode('PauseDialog', { active: false, width: 100, height: 100 })
         const pauseDialog = node.addComponent(PauseDialog)
 
@@ -862,7 +875,7 @@ export class UIController extends Component {
 
         void pauseDialog.waitForResult().then(() => {
             if (this._modalScreen === node) this._modalScreen = null
-            gameScreen?.resumeGame()
+            if (shouldResumeGame) gameScreen?.resumeGame({ resumeMusic: !choosingSeeds })
         })
         return pauseDialog
     }
@@ -944,8 +957,10 @@ export class UIController extends Component {
             if (commandAction === 'level' && commandResult?.levelId) {
                 const level = this._findAdventureLevel(commandResult.levelId)
                 if (level) {
-                    this._setAdventureProgress(level.adventureLevel)
-                    this._deleteAdventureSave()
+                    if (!this._isDebugLevel(level)) {
+                        this._setAdventureProgress(level.adventureLevel)
+                        this._deleteAdventureSave()
+                    }
                     this.showAdventureGame(level, { forceNewGame: true, skipSavedGamePrompt: true })
                 }
                 return
@@ -2168,7 +2183,13 @@ export class UIController extends Component {
     }
 
     private _findAdventureLevel(levelId: LevelDefinition['id']) {
-        return ADVENTURE_LEVELS.find((level) => level.id === levelId) ?? null
+        return ADVENTURE_LEVELS.find((level) => level.id === levelId) ??
+            DEBUG_LEVELS.find((level) => level.id === levelId) ??
+            null
+    }
+
+    private _isDebugLevel(level: LevelDefinition) {
+        return DEBUG_LEVELS.some((debugLevel) => debugLevel.id === level.id)
     }
 
     private _shouldStartDebugAdventure() {

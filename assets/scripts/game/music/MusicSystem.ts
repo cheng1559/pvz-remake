@@ -205,7 +205,6 @@ export class MusicSystem {
             if (this._nativeAudioIds[stem] !== undefined) continue
             this._sources[stem]?.play()
         }
-        if (tune.loopStartSec > 0) this._seekAll(tune.loopStartSec)
         if (this._pauseRequested) this.pause()
     }
 
@@ -519,7 +518,7 @@ export class MusicSystem {
         const loopEnd = tune.loopEndSec
         const loopLength = loopEnd - loopStart
         if (loopLength <= 0) return Math.max(0, time)
-        if (time < loopEnd) return Math.max(loopStart, time)
+        if (time < loopEnd) return Math.max(0, time)
         return loopStart + ((time - loopStart) % loopLength)
     }
 

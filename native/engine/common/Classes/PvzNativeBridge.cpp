@@ -33,7 +33,7 @@
 #endif
 
 #if CC_PLATFORM == CC_PLATFORM_ANDROID
-#include "platform/java/jni/JniHelper.h"
+#include "PvzOboeSfx.h"
 #endif
 
 namespace {
@@ -448,15 +448,12 @@ int playOpenAlSfxPitch(const std::string& url, float volume, float pitch) {
 #endif
 
 #if CC_PLATFORM == CC_PLATFORM_ANDROID
+bool preloadAndroidSfx(const std::string& url) {
+    return pvz::PreloadOboeSfx(url);
+}
+
 bool playAndroidSfxPitch(const std::string& url, float volume, float pitch) {
-    const auto fullPath = cc::FileUtils::getInstance()->fullPathForFilename(url);
-    return cc::JniHelper::callStaticBooleanMethod(
-        "com/cocos/game/PvzSfxPlayer",
-        "playSfxPitch",
-        url,
-        fullPath.empty() ? url : fullPath,
-        std::clamp(volume, 0.0F, 1.0F),
-        std::clamp(pitch, 0.5F, 2.0F));
+    return pvz::PlayOboeSfxPitch(url, volume, pitch);
 }
 #endif
 
@@ -531,6 +528,22 @@ bool playSfxPitch(se::State& state) {
     return true;
 }
 SE_BIND_FUNC(playSfxPitch)
+
+bool preloadSfx(se::State& state) {
+    const auto& args = state.args();
+    if (args.size() < 1 || !args[0].isString()) {
+        state.rval().setBoolean(false);
+        return true;
+    }
+
+#if CC_PLATFORM == CC_PLATFORM_ANDROID
+    state.rval().setBoolean(preloadAndroidSfx(args[0].toString()));
+#else
+    state.rval().setBoolean(false);
+#endif
+    return true;
+}
+SE_BIND_FUNC(preloadSfx)
 
 bool playSfxWav(se::State& state) {
     const auto& args = state.args();
@@ -673,6 +686,7 @@ bool registerPvzNativeBindings(se::Object* global) {
     bridge->defineFunction("isFullScreen", _SE(isFullScreen));
     bridge->defineFunction("hideKeyboardAccessory", _SE(hideKeyboardAccessory));
     bridge->defineFunction("setCursor", _SE(setCursor));
+    bridge->defineFunction("preloadSfx", _SE(preloadSfx));
     bridge->defineFunction("playSfxPitch", _SE(playSfxPitch));
 #if PVZ_HAS_OPENAL_SFX
     bridge->defineFunction("playSfxWav", _SE(playSfxWav));

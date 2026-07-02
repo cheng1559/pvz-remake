@@ -19,8 +19,11 @@ native/engine/common/Classes/*
 !native/engine/common/Classes/Game.cpp
 !native/engine/common/Classes/PvzNativeBridge.h
 !native/engine/common/Classes/PvzNativeBridge.cpp
+!native/engine/common/Classes/PvzOboeSfx.h
+!native/engine/common/Classes/PvzOboeSfx.cpp
 !native/engine/android/
 native/engine/android/*
+!native/engine/android/CMakeLists.txt
 !native/engine/android/src/
 native/engine/android/src/*
 !native/engine/android/src/com/
@@ -32,6 +35,7 @@ native/engine/android/src/com/cocos/game/*
 !native/engine/android/src/com/cocos/game/PvzSfxPlayer.java
 !native/engine/android/app/
 native/engine/android/app/*
+!native/engine/android/app/build.gradle
 !native/engine/android/app/proguard-rules.pro
 !native/engine/android/instantapp/
 native/engine/android/instantapp/*

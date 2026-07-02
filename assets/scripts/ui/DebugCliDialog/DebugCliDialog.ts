@@ -284,7 +284,9 @@ export class DebugCliDialog extends MessageBox {
     }
 
     private _refocusAfterInvalidCommand() {
-        this._textInput?.focus()
+        this.scheduleOnce(() => {
+            if (this.node?.isValid) this._textInput?.focus()
+        }, 0)
     }
 
     private _flashInvalidCommand() {

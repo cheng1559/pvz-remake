@@ -536,6 +536,20 @@ const DAY_1_10_CONVEYOR_SEED_POOL = [
     { seedType: 'potatomine', weight: 10 },
 ] as const
 
+const STRESS_INITIAL_REPEATERS = Array.from({ length: DAY_GEOMETRY.rows * DAY_GEOMETRY.cols }, (_, index) => ({
+    type: 'repeater' as const,
+    row: Math.floor(index / DAY_GEOMETRY.cols),
+    col: index % DAY_GEOMETRY.cols,
+}))
+
+const STRESS_BUCKET_WAVE = [
+    'bucket', 'bucket', 'bucket', 'bucket', 'bucket',
+    'bucket', 'bucket', 'bucket', 'bucket', 'bucket',
+    'bucket', 'bucket', 'bucket', 'bucket', 'bucket',
+    'bucket', 'bucket', 'bucket', 'bucket', 'bucket',
+    'bucket', 'bucket', 'bucket', 'bucket', 'bucket',
+] as const
+
 export const ADVENTURE_1_5: LevelDefinition = {
     id: 'adventure-1-5',
     adventureLevel: 5,
@@ -695,6 +709,36 @@ export const ADVENTURE_1_10: LevelDefinition = {
     awardSeedType: 'puffshroom',
     tutorialAdvice: [],
 }
+
+export const ADVENTURE_STRESS: LevelDefinition = {
+    id: 'adventure-stress',
+    adventureLevel: 10,
+    background: 'day',
+    activeRows: [0, 1, 2, 3, 4],
+    startingSun: 0,
+    seedPackets: [],
+    initialPlants: STRESS_INITIAL_REPEATERS,
+    startWithFullLawn: true,
+    skipIntro: true,
+    hideSeedBank: true,
+    hasLawnMowers: false,
+    skySunSpawning: false,
+    suppressReadySetPlant: true,
+    initialZombieCountdownTicks: 1,
+    introZombiePreviewCapacity: 30,
+    zombieWaves: [
+        { zombies: [...STRESS_BUCKET_WAVE] },
+        { zombies: [...STRESS_BUCKET_WAVE] },
+        { zombies: [...STRESS_BUCKET_WAVE], flagWave: true, flagNormalCount: 0 },
+        { zombies: [...STRESS_BUCKET_WAVE, ...STRESS_BUCKET_WAVE] },
+        { zombies: [...STRESS_BUCKET_WAVE, ...STRESS_BUCKET_WAVE], flagWave: true, flagNormalCount: 0 },
+    ],
+    tutorialAdvice: [],
+}
+
+export const DEBUG_LEVELS = [
+    ADVENTURE_STRESS,
+] as const
 
 export const ADVENTURE_LEVELS = [
     ADVENTURE_1_1,

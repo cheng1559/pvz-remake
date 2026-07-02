@@ -57,3 +57,10 @@ list(APPEND CC_COMMON_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/Classes/PvzNativeBridge.h
     ${CMAKE_CURRENT_LIST_DIR}/Classes/PvzNativeBridge.cpp
 )
+
+if(ANDROID)
+    list(APPEND CC_COMMON_SOURCES
+        ${CMAKE_CURRENT_LIST_DIR}/Classes/PvzOboeSfx.h
+        ${CMAKE_CURRENT_LIST_DIR}/Classes/PvzOboeSfx.cpp
+    )
+endif()

@@ -301,10 +301,18 @@ export abstract class GameScreenEndSequences extends GameScreenIntroHud {
 
         if (this._houseDoorBottomNode?.isValid) {
             this._houseDoorBottomNode.setSiblingIndex(Math.max(0, this._entityLayer.getSiblingIndex()))
-            this._entityLayer.setSiblingIndex(this._houseDoorBottomNode.getSiblingIndex() + 1)
+        }
+        if (this._gameOverWinnerLayerNode?.isValid && this._houseDoorBottomNode?.isValid) {
+            this._gameOverWinnerLayerNode.setSiblingIndex(this._houseDoorBottomNode.getSiblingIndex() + 1)
         }
         if (this._houseDoorTopNode?.isValid) {
-            this._houseDoorTopNode.setSiblingIndex(this._entityLayer.getSiblingIndex() + 1)
+            this._houseDoorTopNode.setSiblingIndex(
+                (this._gameOverWinnerLayerNode?.isValid
+                    ? this._gameOverWinnerLayerNode
+                    : this._houseDoorBottomNode ?? this._entityLayer
+                ).getSiblingIndex() + 1,
+            )
+            this._entityLayer.setSiblingIndex(this._houseDoorTopNode.getSiblingIndex() + 1)
         }
     }
 
