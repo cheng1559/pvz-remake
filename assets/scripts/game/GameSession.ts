@@ -456,6 +456,12 @@ export class GameSession {
     }
 
     debugCompleteLevel() {
+        if (this.result !== 'playing') return false
+
+        for (const zombie of this.zombies) {
+            zombie.dead = true
+        }
+        this._removeDeadEntities()
         this._completeLevel()
         return this.result === 'won'
     }
