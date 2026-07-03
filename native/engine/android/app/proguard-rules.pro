@@ -19,7 +19,6 @@
 # Proguard Cocos2d-x-lite for release
 -keep public class com.cocos.** { *; }
 -dontwarn com.cocos.**
--keep public class com.cocos.game.PvzSfxPlayer { *; }
 
 # Proguard Apache HTTP for release
 -keep class org.apache.http.** { *; }

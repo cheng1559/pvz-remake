@@ -226,29 +226,12 @@ export class StartupResourceLoader {
 
     static async loadStartupLoaderAssets(): Promise<void> {
         await Promise.all([
-            SpriteLoader.load('popcap_logo'),
             SpriteLoader.load('titlescreen'),
-            SpriteLoader.load('background_left'),
-            SpriteLoader.load('background_right'),
             SpriteLoader.load('pvz_logo'),
             SpriteLoader.load('loadbar_dirt'),
             SpriteLoader.load('loadbar_grass'),
-            SpriteLoader.load('plantshadow'),
-            SpriteLoader.load('potatomine_rock1'),
-            SpriteLoader.load('potatomine_rock3'),
-            SpriteLoader.load('sodroll'),
             SpriteLoader.load('sodrollcap'),
-            SpriteLoader.load('sprout_body'),
-            SpriteLoader.load('sprout_petal'),
-            SpriteLoader.load('zombie_hair'),
-            SpriteLoader.load('zombie_head'),
-            SpriteLoader.load('zombie_jaw'),
             FontLoader.load('briannetod16'),
-            FontLoader.load('houseofterror28'),
-            SoundLoader.load(SoundEffect.LoadingBarFlower),
-            SoundLoader.load(SoundEffect.LoadingBarZombie),
-            ...(DEBUG ? [] : [ParticleDefinitionLoader.preloadAll()]),
-            ...STARTUP_ANIMATION_PATHS.map((path) => this.loadJson(path)),
         ])
     }
 

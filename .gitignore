@@ -32,7 +32,6 @@ native/engine/android/src/com/*
 native/engine/android/src/com/cocos/*
 !native/engine/android/src/com/cocos/game/
 native/engine/android/src/com/cocos/game/*
-!native/engine/android/src/com/cocos/game/PvzSfxPlayer.java
 !native/engine/android/app/
 native/engine/android/app/*
 !native/engine/android/app/build.gradle

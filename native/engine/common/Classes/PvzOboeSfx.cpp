@@ -1,5 +1,7 @@
 #include "PvzOboeSfx.h"
 
+#include "audio/android/AudioDecoder.h"
+#include "audio/android/AudioDecoderProvider.h"
 #include "cocos/cocos.h"
 #include "platform/FileUtils.h"
 
@@ -39,65 +41,38 @@ std::vector<Voice> g_voices;
 AAudioStream* g_stream = nullptr;
 int32_t g_outputSampleRate = kRequestedSampleRate;
 
-uint16_t readU16(const uint8_t* data) {
-    return static_cast<uint16_t>(data[0] | (data[1] << 8));
-}
-
-uint32_t readU32(const uint8_t* data) {
-    return static_cast<uint32_t>(data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24));
-}
-
-std::shared_ptr<PcmSound> loadPcmWav(const std::string& url) {
+std::shared_ptr<PcmSound> loadSound(const std::string& url) {
     const auto fullPath = cc::FileUtils::getInstance()->fullPathForFilename(url);
-    cc::Data fileData = cc::FileUtils::getInstance()->getDataFromFile(fullPath.empty() ? url : fullPath);
-    if (fileData.isNull() || fileData.getSize() < 44) return nullptr;
+    const std::string path = fullPath.empty() ? url : fullPath;
+    auto* decoder = cc::AudioDecoderProvider::createAudioDecoder(nullptr, path, 0, kRequestedSampleRate, {});
+    if (!decoder) return nullptr;
 
-    const auto* bytes = fileData.getBytes();
-    const auto size = static_cast<size_t>(fileData.getSize());
-    if (std::memcmp(bytes, "RIFF", 4) != 0 || std::memcmp(bytes + 8, "WAVE", 4) != 0) return nullptr;
-
-    uint16_t audioFormat = 0;
-    uint16_t channels = 0;
-    uint32_t sampleRate = 0;
-    uint16_t bitsPerSample = 0;
-    const uint8_t* pcm = nullptr;
-    uint32_t pcmBytes = 0;
-
-    size_t offset = 12;
-    while (offset + 8 <= size) {
-        const uint8_t* chunk = bytes + offset;
-        const uint32_t chunkSize = readU32(chunk + 4);
-        const size_t dataOffset = offset + 8;
-        if (dataOffset + chunkSize > size) break;
-
-        if (std::memcmp(chunk, "fmt ", 4) == 0 && chunkSize >= 16) {
-            audioFormat = readU16(bytes + dataOffset);
-            channels = readU16(bytes + dataOffset + 2);
-            sampleRate = readU32(bytes + dataOffset + 4);
-            bitsPerSample = readU16(bytes + dataOffset + 14);
-        } else if (std::memcmp(chunk, "data", 4) == 0) {
-            pcm = bytes + dataOffset;
-            pcmBytes = chunkSize;
-        }
-
-        offset = dataOffset + chunkSize + (chunkSize & 1U);
-    }
-
-    if (audioFormat != 1 || bitsPerSample != 16 || sampleRate == 0 || pcm == nullptr || pcmBytes == 0) {
+    if (!decoder->start()) {
+        cc::AudioDecoderProvider::destroyAudioDecoder(&decoder);
         return nullptr;
     }
-    if (channels != 1 && channels != 2) return nullptr;
 
-    const size_t inputFrames = pcmBytes / (sizeof(int16_t) * channels);
+    const cc::PcmData pcm = decoder->getResult();
+    cc::AudioDecoderProvider::destroyAudioDecoder(&decoder);
+    if (!pcm.isValid() || !pcm.pcmBuffer || pcm.bitsPerSample != 16 || (pcm.numChannels != 1 && pcm.numChannels != 2)) {
+        return nullptr;
+    }
+
+    const auto channels = static_cast<size_t>(pcm.numChannels);
+    const auto inputFrames = std::min(
+        static_cast<size_t>(pcm.numFrames),
+        pcm.pcmBuffer->size() / (sizeof(int16_t) * channels));
+    if (inputFrames == 0) return nullptr;
+
     auto sound = std::make_shared<PcmSound>();
-    sound->sampleRate = static_cast<int32_t>(sampleRate);
+    sound->sampleRate = pcm.sampleRate;
     sound->frames = inputFrames;
     sound->samples.resize(inputFrames * 2);
 
-    const auto* src = reinterpret_cast<const int16_t*>(pcm);
+    const auto* src = reinterpret_cast<const int16_t*>(pcm.pcmBuffer->data());
     for (size_t i = 0; i < inputFrames; ++i) {
         const float left = static_cast<float>(src[i * channels]) / 32768.0F;
-        const float right = channels == 1 ? left : static_cast<float>(src[i * channels + 1]) / 32768.0F;
+        const float right = pcm.numChannels == 1 ? left : static_cast<float>(src[i * channels + 1]) / 32768.0F;
         sound->samples[i * 2] = left;
         sound->samples[i * 2 + 1] = right;
     }
@@ -188,7 +163,7 @@ std::shared_ptr<PcmSound> getSound(const std::string& url) {
         if (it != g_sounds.end()) return it->second;
     }
 
-    auto loaded = loadPcmWav(url);
+    auto loaded = loadSound(url);
     if (!loaded) return nullptr;
 
     std::lock_guard<std::mutex> lock(g_mutex);
