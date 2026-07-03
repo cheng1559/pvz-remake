@@ -33,7 +33,6 @@ export const GAME_TEXTURES = [
     'particles/zombiehead',
     'particles/zombiearm',
     'particles/zombiepolevaulterhead',
-    'zombie_polevaulter_outerarm_lower',
     'zombie_outerarm_hand',
     'zombie_flag3',
     'particles/pea_splats',

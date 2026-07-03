@@ -3182,12 +3182,8 @@ export abstract class GameScreenCore extends Component {
         const trackNames: Partial<Record<TodParticleEffect, string>> = {
             zombiehead: 'anim_head1',
             zombiearm: 'Zombie_outerarm_lower',
-            zombiepolevaulterhead: 'anim_head1',
-            zombiepolevaulterarm: 'Zombie_polevaulter_outerarm_lower',
             moweredzombiehead: 'anim_head1',
             moweredzombiearm: 'Zombie_outerarm_lower',
-            moweredzombiepolevaulterhead: 'anim_head1',
-            moweredzombiepolevaulterarm: 'Zombie_polevaulter_outerarm_lower',
             zombietrafficcone: 'anim_cone',
             zombiepail: 'anim_bucket',
             zombieflag: 'Zombie_flag',
@@ -3195,18 +3191,25 @@ export abstract class GameScreenCore extends Component {
         const fallbackOffsets: Partial<Record<TodParticleEffect, { x: number; y: number }>> = {
             zombiehead: { x: 58, y: -30 },
             zombiearm: { x: 25, y: -55 },
-            zombiepolevaulterhead: { x: 58, y: -30 },
-            zombiepolevaulterarm: { x: 25, y: -55 },
             moweredzombiehead: { x: 58, y: -30 },
             moweredzombiearm: { x: 25, y: -55 },
-            moweredzombiepolevaulterhead: { x: 58, y: -30 },
-            moweredzombiepolevaulterarm: { x: 25, y: -55 },
             zombietrafficcone: { x: 58, y: -18 },
             zombiepail: { x: 58, y: -18 },
             zombieflag: { x: 18, y: -42 },
         }
 
-        const trackName = trackNames[effect]
+        const zombie = this._session.zombies.find((candidate) => candidate.id === entityId)
+        const isPoleVaultingZombie = zombie?.type === 'pole-vaulting'
+        const isZombieHeadEffect = effect === 'zombiehead' || effect === 'moweredzombiehead'
+        const isZombieArmEffect = effect === 'zombiearm' || effect === 'moweredzombiearm'
+        const trackName = isPoleVaultingZombie && isZombieArmEffect
+            ? 'Zombie_polevaulter_outerarm_lower'
+            : trackNames[effect]
+        const imageOverride = isPoleVaultingZombie && isZombieHeadEffect
+            ? 'particles/zombiepolevaulterhead'
+            : isPoleVaultingZombie && isZombieArmEffect
+                ? 'zombie_outerarm_hand'
+                : undefined
         const fallback = fallbackOffsets[effect]
         if (!trackName || !fallback) return
 
@@ -3217,7 +3220,6 @@ export abstract class GameScreenCore extends Component {
             : null
         const x = localPosition?.x ?? view.node.position.x + fallback.x
         const y = localPosition?.y ?? view.node.position.y + fallback.y
-        const zombie = this._session.zombies.find((candidate) => candidate.id === entityId)
         const renderOrder = zombie
             ? this._entityLayerOrder(zombie) + 0.01
             : this._zombiePartFallbackRenderOrder(view.node.position.y)
@@ -3227,6 +3229,7 @@ export abstract class GameScreenCore extends Component {
             x,
             y,
             renderOrder,
+            imageOverride,
         })
         system.enabled = this._isGameplaySceneAnimationEnabled()
         this._trackGameplayParticle(system)

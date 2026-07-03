@@ -615,6 +615,7 @@ export interface TodParticleSpawnArgs {
     z?: number
     renderOrder?: number
     tint?: Color
+    imageOverride?: string
 }
 
 @ccclass('TodParticleSystem')
@@ -624,6 +625,7 @@ export class TodParticleSystem extends Component {
     private _emitters: TodParticleEmitter[] = []
     private _accumulator = 0
     private _tint: Color | null = null
+    private _imageOverride: string | null = null
     private _ageTicks = 0
     private _pendingFastForwardTicks = 0
 
@@ -641,6 +643,7 @@ export class TodParticleSystem extends Component {
         system.effect = args.effect
         system.renderOrder = args.renderOrder ?? 10000
         system._tint = args.tint?.clone() ?? null
+        system._imageOverride = args.imageOverride ?? null
         const definition = ParticleDefinitionLoader.get(args.effect)
         if (definition) {
             system._emitters = definition.emitters.map(
@@ -681,7 +684,10 @@ export class TodParticleSystem extends Component {
     }
 
     private _createEmitter(node: Node, emitterDefinition: TodEmitterDefinition) {
-        const emitter = new TodParticleEmitter(node, emitterDefinition)
+        const resolvedDefinition = this._imageOverride
+            ? { ...emitterDefinition, image: this._imageOverride }
+            : emitterDefinition
+        const emitter = new TodParticleEmitter(node, resolvedDefinition)
         if (this._tint) emitter.tint = this._tint.clone()
         return emitter
     }

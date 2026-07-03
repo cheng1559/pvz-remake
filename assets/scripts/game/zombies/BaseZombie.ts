@@ -442,7 +442,7 @@ export abstract class Zombie implements ZombieEntity {
                 })
                 context.events.push({
                     type: 'particleRequested',
-                    effect: this.type === 'pole-vaulting' ? 'moweredzombiepolevaulterhead' : 'moweredzombiehead',
+                    effect: 'moweredzombiehead',
                     entityId: this.id,
                 })
                 this.hasHead = false
@@ -455,7 +455,7 @@ export abstract class Zombie implements ZombieEntity {
                 })
                 context.events.push({
                     type: 'particleRequested',
-                    effect: this.type === 'pole-vaulting' ? 'moweredzombiepolevaulterarm' : 'moweredzombiearm',
+                    effect: 'moweredzombiearm',
                     entityId: this.id,
                 })
                 this.hasArm = false
@@ -866,7 +866,7 @@ export abstract class Zombie implements ZombieEntity {
             if (!this.inPool) {
                 this._pendingEvents.push({
                     type: 'particleRequested',
-                    effect: this.type === 'pole-vaulting' ? 'zombiepolevaulterarm' : 'zombiearm',
+                    effect: 'zombiearm',
                     entityId: this.id,
                 })
             }
@@ -880,7 +880,7 @@ export abstract class Zombie implements ZombieEntity {
             this._pendingEvents.push({ type: 'foleyRequested', sound: SoundEffect.LimbsPop, pitchRange: 10 })
             this._pendingEvents.push({
                 type: 'particleRequested',
-                effect: this.type === 'pole-vaulting' ? 'zombiepolevaulterhead' : 'zombiehead',
+                effect: 'zombiehead',
                 entityId: this.id,
             })
         }
