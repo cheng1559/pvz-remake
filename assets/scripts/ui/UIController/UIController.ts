@@ -10,12 +10,9 @@ import {
     Mask,
     Node,
     screen,
-    Sprite,
     sys,
     UITransform,
     UIOpacity,
-    Vec3,
-    view,
 } from 'cc'
 import { FontLoader } from '@/core/FontLoader'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
@@ -84,10 +81,8 @@ const MOBILE_NATIVE_NO_WINDOWED_MESSAGE = 'Full screen mode cannot be disabled o
 const NO_FULLSCREEN_MESSAGE = 'Full screen mode is not available in this browser.'
 const HARDWARE_ACCELERATION_LOCKED_TITLE = '3D Accelaration Error'
 const HARDWARE_ACCELERATION_LOCKED_MESSAGE = '3D acceleration cannot be disabled \nin this version.'
-const MOBILE_DEBUG_CLI_BUTTON_MARGIN = 16
-const MOBILE_DEBUG_CLI_DRAG_THRESHOLD = 8
-const DEBUG_CLI_BRAIN_SCALE = 1.2
-const DEBUG_CLI_BRAIN_OPACITY = 140
+const MOBILE_DEBUG_CLI_CORNER_SIZE = 30
+const MOBILE_DEBUG_CLI_DOUBLE_TAP_MS = 350
 const DEBUG_CLI_BUTTON_OPEN_OFFSET_Y = 100
 const WIDESCREEN_BACKGROUND_SETTINGS_KEY = 'pvz-remake:ui:widescreen-backgrounds'
 const BACKGROUND_MULTI_CLICK_MS = 350
@@ -164,14 +159,11 @@ export class UIController extends Component {
     private _profile: PlayerProfile | null = null
     private _adventureLevel: LevelDefinition = ADVENTURE_1_1
     private _gameOverMainMenuButton: Node | null = null
-    private _mobileDebugCliButton: Node | null = null
-    private _mobileDebugCliButtonWidth = 32 * DEBUG_CLI_BRAIN_SCALE
-    private _mobileDebugCliButtonHeight = 31 * DEBUG_CLI_BRAIN_SCALE
-    private _mobileDebugCliDragMouseX = 0
-    private _mobileDebugCliDragMouseY = 0
-    private _mobileDebugCliDragStartUi = new Vec3()
-    private _mobileDebugCliButtonDragged = false
-    private _mobileDebugCliPointerDown = false
+    private _lastMobileDebugCliTapTime = 0
+    private _lastMobileDebugCliRawTapTime = 0
+    private _lastMobileDebugCliRawTapId: number | null = null
+    private _lastMobileDebugCliRawTapX = 0
+    private _lastMobileDebugCliRawTapY = 0
     private _gameOverDialogDragging = false
     private _screenTransitioning = false
     private _achievementTransition: AchievementTransitionState | null = null
@@ -188,14 +180,15 @@ export class UIController extends Component {
         this._configurePlatformFrameRate()
         screen.on(FULLSCREEN_CHANGE_EVENT, this._onFullScreenChanged, this)
         input.on(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
-        void this._bootstrap().then(() => this._createMobileDebugCliButton())
+        input.on(Input.EventType.TOUCH_START, this._onGlobalTouchStart, this)
+        void this._bootstrap()
     }
 
     onDestroy() {
         this._saveAdventureGame(this._adventureGameScreen)
         screen.off(FULLSCREEN_CHANGE_EVENT, this._onFullScreenChanged, this)
         input.off(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
-        this._destroyMobileDebugCliButton()
+        input.off(Input.EventType.TOUCH_START, this._onGlobalTouchStart, this)
         MusicSystem.stop()
     }
 
@@ -208,7 +201,6 @@ export class UIController extends Component {
         if (this._currentScreen?.name !== 'AdventureGameScreen') {
             MusicSystem.update(scaledDt / GAME_TICK_SECONDS, { zombiesOnScreen: 0 })
         }
-        this._placeMobileDebugCliButton()
     }
 
     private _configurePlatformFrameRate() {
@@ -236,7 +228,6 @@ export class UIController extends Component {
         const node = createUINode('StartupScreen', { active: false, width: 800, height: 600 })
         const startupScreen = node.addComponent(StartupScreen)
         this._startupScreen = node
-        this._placeMobileDebugCliButton()
         this.uiRoot!.addChild(node)
         node.active = true
 
@@ -247,7 +238,6 @@ export class UIController extends Component {
             await StartupResourceLoader.preloadStartup()
         } finally {
             if (this._startupScreen === node) this._startupScreen = null
-            this._placeMobileDebugCliButton()
             if (node.isValid) node.destroy()
         }
     }
@@ -1367,119 +1357,6 @@ export class UIController extends Component {
         this._gameOverDialogDragging = false
     }
 
-    private async _createMobileDebugCliButton() {
-        if (!GameDebugSettings.isMobileMode()) return
-        if (this._isStartupScreenActive()) return
-        if (!this.uiRoot?.isValid || this._mobileDebugCliButton?.isValid) return
-
-        const brainFrame = await SpriteLoader.load('brain')
-        if (!brainFrame || !this.uiRoot?.isValid || this._mobileDebugCliButton?.isValid) return
-
-        this._mobileDebugCliButtonWidth = brainFrame.originalSize.width * DEBUG_CLI_BRAIN_SCALE
-        this._mobileDebugCliButtonHeight = brainFrame.originalSize.height * DEBUG_CLI_BRAIN_SCALE
-        const button = createUINode('MobileDebugCliButton', {
-            parent: this.uiRoot,
-            layer: this.uiRoot.layer,
-            anchorX: 0,
-            anchorY: 1,
-            width: this._mobileDebugCliButtonWidth,
-            height: this._mobileDebugCliButtonHeight,
-        })
-        const sprite = button.addComponent(Sprite)
-        sprite.sizeMode = Sprite.SizeMode.CUSTOM
-        sprite.spriteFrame = brainFrame
-        button.getComponent(UITransform)?.setContentSize(
-            this._mobileDebugCliButtonWidth,
-            this._mobileDebugCliButtonHeight,
-        )
-        button.addComponent(UIOpacity).opacity = DEBUG_CLI_BRAIN_OPACITY
-        button.addComponent(BlockInputEvents)
-        const visibleSize = view.getVisibleSize()
-        button.setWorldPosition(
-            visibleSize.width - this._mobileDebugCliButtonWidth - MOBILE_DEBUG_CLI_BUTTON_MARGIN,
-            this._mobileDebugCliButtonHeight + MOBILE_DEBUG_CLI_BUTTON_MARGIN,
-            0,
-        )
-        this._mobileDebugCliButton = button
-        button.on(Node.EventType.TOUCH_START, this._onMobileDebugCliButtonTouchStart, this)
-        button.on(Node.EventType.TOUCH_MOVE, this._onMobileDebugCliButtonTouchMove, this)
-        button.on(Node.EventType.TOUCH_END, this._onMobileDebugCliButtonTouchEnd, this)
-        button.on(Node.EventType.TOUCH_CANCEL, this._onMobileDebugCliButtonTouchEnd, this)
-        this._placeMobileDebugCliButton()
-    }
-
-    private _destroyMobileDebugCliButton() {
-        this._mobileDebugCliButton?.destroy()
-        this._mobileDebugCliButton = null
-        this._mobileDebugCliButtonDragged = false
-        this._mobileDebugCliPointerDown = false
-    }
-
-    private _placeMobileDebugCliButton() {
-        if (!this._mobileDebugCliButton?.isValid) return
-
-        this._mobileDebugCliButton.active = !this._debugCliScreen?.isValid && !this._isStartupScreenActive()
-        this._mobileDebugCliButton.setSiblingIndex(Math.max(0, (this.uiRoot?.children.length ?? 1) - 1))
-    }
-
-    private _onMobileDebugCliButtonTouchStart(event: EventTouch) {
-        event.propagationStopped = true
-        if (!this._mobileDebugCliButton?.isValid) return
-
-        this._mobileDebugCliPointerDown = true
-        this._mobileDebugCliButtonDragged = false
-        const uiPos = event.getUILocation()
-        this._mobileDebugCliDragStartUi.set(uiPos.x, uiPos.y, 0)
-        const transform = this._mobileDebugCliButton.getComponent(UITransform)!
-        const pos = this._mobileDebugCliButton.worldPosition
-        this._mobileDebugCliDragMouseX =
-            uiPos.x - (pos.x - transform.contentSize.width * transform.anchorPoint.x)
-        this._mobileDebugCliDragMouseY =
-            pos.y + transform.contentSize.height * (1 - transform.anchorPoint.y) - uiPos.y
-        this._placeMobileDebugCliButton()
-    }
-
-    private _onMobileDebugCliButtonTouchMove(event: EventTouch) {
-        if (!this._mobileDebugCliPointerDown || !this._mobileDebugCliButton?.isValid) return
-        event.propagationStopped = true
-
-        const uiPos = event.getUILocation()
-        const dx = uiPos.x - this._mobileDebugCliDragStartUi.x
-        const dy = uiPos.y - this._mobileDebugCliDragStartUi.y
-        if (Math.hypot(dx, dy) >= MOBILE_DEBUG_CLI_DRAG_THRESHOLD) {
-            this._mobileDebugCliButtonDragged = true
-        }
-
-        const transform = this._mobileDebugCliButton.getComponent(UITransform)!
-        const { width, height } = transform.contentSize
-        const { width: screenWidth, height: screenHeight } = view.getVisibleSize()
-        const margin = MOBILE_DEBUG_CLI_BUTTON_MARGIN
-        let nextX = uiPos.x - this._mobileDebugCliDragMouseX
-        let nextY = uiPos.y + this._mobileDebugCliDragMouseY
-
-        nextX = Math.max(margin, Math.min(screenWidth - width - margin, nextX))
-        nextY = Math.max(height + margin, Math.min(screenHeight - margin, nextY))
-
-        this._mobileDebugCliDragMouseX = Math.max(margin, Math.min(width - margin - 1, uiPos.x - nextX))
-        this._mobileDebugCliDragMouseY = Math.max(margin, Math.min(height - margin - 1, nextY - uiPos.y))
-        this._mobileDebugCliButton.setWorldPosition(
-            nextX + width * transform.anchorPoint.x,
-            nextY - height * (1 - transform.anchorPoint.y),
-            0,
-        )
-    }
-
-    private _onMobileDebugCliButtonTouchEnd(event: EventTouch) {
-        if (!this._mobileDebugCliPointerDown) return
-        event.propagationStopped = true
-
-        const shouldClick = !this._mobileDebugCliButtonDragged
-        this._mobileDebugCliPointerDown = false
-        if (shouldClick && !this._debugCliScreen?.isValid) {
-            this.showDebugCliDialog('/', { offsetY: DEBUG_CLI_BUTTON_OPEN_OFFSET_Y })?.requestNativeTextInputFocus()
-        }
-    }
-
     async showConfirmBox(title: string, message: string): Promise<boolean> {
         const dialog = this.showMessageBox(title, message)
         if (!dialog) return false
@@ -1714,6 +1591,8 @@ export class UIController extends Component {
     }
 
     private _onWidescreenBackgroundPointerDown(event: EventTouch) {
+        if (event.propagationStopped || this._handleMobileDebugCliTap(event)) return
+
         const now = Date.now()
         this._backgroundClickCount = now - this._lastBackgroundClickTime <= BACKGROUND_MULTI_CLICK_MS
             ? this._backgroundClickCount + 1
@@ -1780,7 +1659,6 @@ export class UIController extends Component {
     private async _reloadGame() {
         this._destroyCurrentScreen()
         await this._bootstrap()
-        void this._createMobileDebugCliButton()
     }
 
     private _isStartupScreenActive() {
@@ -1812,6 +1690,52 @@ export class UIController extends Component {
 
         event.propagationStopped = true
         this.showDebugCliDialog('/')
+    }
+
+    private _onGlobalTouchStart(event: EventTouch) {
+        this._handleMobileDebugCliTap(event)
+    }
+
+    private _handleMobileDebugCliTap(event: EventTouch) {
+        if (!GameDebugSettings.isMobileMode() || this._debugCliScreen?.isValid || this._isStartupScreenActive()) {
+            this._lastMobileDebugCliTapTime = 0
+            return false
+        }
+
+        const location = event.getLocation()
+        const touchId = event.getID()
+        const now = Date.now()
+        if (
+            now - this._lastMobileDebugCliRawTapTime < 50 &&
+            touchId === this._lastMobileDebugCliRawTapId &&
+            Math.abs(location.x - this._lastMobileDebugCliRawTapX) < 1 &&
+            Math.abs(location.y - this._lastMobileDebugCliRawTapY) < 1
+        ) {
+            return false
+        }
+        this._lastMobileDebugCliRawTapTime = now
+        this._lastMobileDebugCliRawTapId = touchId
+        this._lastMobileDebugCliRawTapX = location.x
+        this._lastMobileDebugCliRawTapY = location.y
+
+        const windowSize = screen.windowSize
+        const cornerSize = MOBILE_DEBUG_CLI_CORNER_SIZE * screen.devicePixelRatio
+        if (location.x < windowSize.width - cornerSize || location.y > cornerSize) {
+            this._lastMobileDebugCliTapTime = 0
+            return false
+        }
+
+        if (now - this._lastMobileDebugCliTapTime > MOBILE_DEBUG_CLI_DOUBLE_TAP_MS) {
+            this._lastMobileDebugCliTapTime = now
+            return false
+        }
+
+        event.propagationStopped = true
+        this._lastMobileDebugCliTapTime = 0
+        this._lastBackgroundClickTime = 0
+        this._backgroundClickCount = 0
+        this.showDebugCliDialog('/', { offsetY: DEBUG_CLI_BUTTON_OPEN_OFFSET_Y })?.requestNativeTextInputFocus()
+        return true
     }
 
     private _showGlobalAdvice(message: string) {
@@ -1886,11 +1810,6 @@ export class UIController extends Component {
             this._settings = GameSettingsStore.update({ fullScreen: true })
         }
         this._syncOpenOptionsDialogSettings()
-        if (GameDebugSettings.isMobileMode()) {
-            void this._createMobileDebugCliButton()
-        } else {
-            this._destroyMobileDebugCliButton()
-        }
     }
 
     private _syncOpenOptionsDialogSettings() {
