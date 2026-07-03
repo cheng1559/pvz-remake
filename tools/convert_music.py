@@ -63,7 +63,7 @@ STATIC_TUNES = [
     StaticTuneSpec("title_theme", "mainmusic.mo3", 0x98),
     StaticTuneSpec("zen_garden", "mainmusic.mo3", 0xDD),
     StaticTuneSpec("puzzle", "mainmusic.mo3", 0xB1),
-    StaticTuneSpec("minigame", "mainmusic.mo3", 0xA6, loop_start=1.5, loop_end=106.5),
+    StaticTuneSpec("minigame", "mainmusic.mo3", 0xA6, loop_start=0.1, loop_end=106.5),
     StaticTuneSpec("conveyer", "mainmusic.mo3", 0xD4, loop_start=16.0, loop_end=120.0),
     StaticTuneSpec("final_boss", "mainmusic.mo3", 0x9E),
 ]
