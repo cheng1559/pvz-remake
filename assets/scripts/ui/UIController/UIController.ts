@@ -85,6 +85,8 @@ const MOBILE_DEBUG_CLI_CORNER_SIZE = 60
 const MOBILE_DEBUG_CLI_DOUBLE_TAP_MS = 350
 const DEBUG_CLI_BUTTON_OPEN_OFFSET_Y = 100
 const CONTINUE_GAME_RESULT_RESTART = 2001
+const FINAL_ADVENTURE_GITHUB_RESULT = 2002
+const PROJECT_GITHUB_URL = 'https://github.com/cheng1559/pvz-remake'
 
 interface PvzNativeBridge {
     setFullScreen?: (fullScreen: boolean) => boolean
@@ -439,10 +441,22 @@ export class UIController extends Component {
             finalAdventureDialogQueued = true
             void this.showSelectorScreen().then((selectorScreen) => {
                 if (!selectorScreen) return
-                this.showMessageBox(
+                const dialog = this.showMessageBox(
                     'Thanks for Playing!',
                     'More levels are in development.\nFollow cheng1559/pvz-remake on GitHub for future updates.',
                 )
+                dialog?.setButtons([
+                    {
+                        label: 'GitHub',
+                        result: FINAL_ADVENTURE_GITHUB_RESULT,
+                        localize: false,
+                        onClick: () => sys.openURL(PROJECT_GITHUB_URL),
+                    },
+                    {
+                        label: 'OK',
+                        result: DialogResult.Ok,
+                    },
+                ])
             })
         }
         awardScreen.onNextLevelRequest = () => {
