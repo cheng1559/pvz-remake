@@ -5,6 +5,7 @@
 #include "audio/include/AudioEngine.h"
 #include "cocos/cocos.h"
 #include "platform/FileUtils.h"
+#include "platform/interfaces/modules/ISystemWindow.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -24,6 +25,7 @@
 #endif
 
 #if CC_PLATFORM == CC_PLATFORM_WINDOWS
+#include "SDL2/SDL.h"
 #include <OpenalSoft/al.h>
 #include <windows.h>
 #endif
@@ -149,9 +151,6 @@ bool g_isFullScreen = false;
 HWND g_window = nullptr;
 HCURSOR g_cursor = nullptr;
 WNDPROC g_originalWndProc = nullptr;
-WINDOWPLACEMENT g_windowPlacement = {sizeof(WINDOWPLACEMENT)};
-LONG_PTR g_windowStyle = 0;
-LONG_PTR g_windowExStyle = 0;
 #endif
 
 #if PVZ_HAS_OPENAL_SFX
@@ -196,6 +195,40 @@ HWND getAppWindow() {
     return hwnd;
 }
 
+SDL_Window* getSdlWindow() {
+    return SDL_GetWindowFromID(cc::ISystemWindow::mainWindowId);
+}
+
+void syncWindowFullScreenState() {
+    SDL_Window* window = getSdlWindow();
+    if (!window) return;
+    g_isFullScreen = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
+void applyWindowIcon() {
+    HWND hwnd = getAppWindow();
+    if (!hwnd) return;
+
+    HINSTANCE instance = GetModuleHandleW(nullptr);
+    HICON bigIcon = static_cast<HICON>(LoadImageW(
+        instance,
+        L"GLFW_ICON",
+        IMAGE_ICON,
+        GetSystemMetrics(SM_CXICON),
+        GetSystemMetrics(SM_CYICON),
+        LR_DEFAULTCOLOR));
+    HICON smallIcon = static_cast<HICON>(LoadImageW(
+        instance,
+        L"GLFW_ICON",
+        IMAGE_ICON,
+        GetSystemMetrics(SM_CXSMICON),
+        GetSystemMetrics(SM_CYSMICON),
+        LR_DEFAULTCOLOR));
+
+    if (bigIcon) SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(bigIcon));
+    if (smallIcon) SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(smallIcon));
+}
+
 void installCursorWindowProc(HWND hwnd) {
     if (!hwnd || g_originalWndProc) return;
     const auto previous = SetWindowLongPtr(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(pvzWindowProc));
@@ -223,53 +256,46 @@ void applyFixedWindowStyle() {
         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
 }
 
+void restoreMouseRatio(SDL_Window* window, int oldX, int oldY, int oldWidth, int oldHeight) {
+    if (oldWidth <= 0 || oldHeight <= 0 || oldX < 0 || oldY < 0 || oldX >= oldWidth || oldY >= oldHeight) return;
+
+    int newWidth = 0;
+    int newHeight = 0;
+    SDL_GetWindowSize(window, &newWidth, &newHeight);
+    if (newWidth <= 0 || newHeight <= 0) return;
+
+    const int newX = std::clamp(static_cast<int>(static_cast<double>(oldX) / oldWidth * newWidth), 0, newWidth - 1);
+    const int newY = std::clamp(static_cast<int>(static_cast<double>(oldY) / oldHeight * newHeight), 0, newHeight - 1);
+    SDL_WarpMouseInWindow(window, newX, newY);
+}
+
 bool setWindowsFullScreen(bool fullScreen) {
-    HWND hwnd = getAppWindow();
-    if (!hwnd) return false;
+    SDL_Window* window = getSdlWindow();
+    if (!window) return false;
+
+    syncWindowFullScreenState();
     if (g_isFullScreen == fullScreen) return true;
 
-    if (fullScreen) {
-        g_windowStyle = GetWindowLongPtr(hwnd, GWL_STYLE);
-        g_windowExStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-        g_windowPlacement.length = sizeof(WINDOWPLACEMENT);
-        if (!GetWindowPlacement(hwnd, &g_windowPlacement)) return false;
+    int oldWidth = 0;
+    int oldHeight = 0;
+    int oldMouseX = 0;
+    int oldMouseY = 0;
+    SDL_GetWindowSize(window, &oldWidth, &oldHeight);
+    SDL_GetMouseState(&oldMouseX, &oldMouseY);
 
-        HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-        MONITORINFO monitorInfo = {sizeof(MONITORINFO)};
-        if (!GetMonitorInfo(monitor, &monitorInfo)) return false;
-
-        SetWindowLongPtr(hwnd, GWL_STYLE, g_windowStyle & ~WS_OVERLAPPEDWINDOW);
-        SetWindowLongPtr(
-            hwnd,
-            GWL_EXSTYLE,
-            g_windowExStyle & ~(WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE));
-        SetWindowPos(
-            hwnd,
-            HWND_TOP,
-            monitorInfo.rcMonitor.left,
-            monitorInfo.rcMonitor.top,
-            monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
-            monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
-            SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-        ShowWindow(hwnd, SW_SHOW);
-        g_isFullScreen = true;
-        return true;
+    if (SDL_SetWindowFullscreen(window, fullScreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0) != 0) {
+        return false;
     }
 
-    SetWindowLongPtr(hwnd, GWL_STYLE, g_windowStyle);
-    SetWindowLongPtr(hwnd, GWL_EXSTYLE, g_windowExStyle);
-    SetWindowPlacement(hwnd, &g_windowPlacement);
-    SetWindowPos(
-        hwnd,
-        nullptr,
-        0,
-        0,
-        0,
-        0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-    ShowWindow(hwnd, SW_SHOW);
-    g_isFullScreen = false;
-    applyFixedWindowStyle();
+    g_isFullScreen = fullScreen;
+    if (!fullScreen) {
+        SDL_SetWindowSize(window, 800, 600);
+        SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        applyFixedWindowStyle();
+    }
+    restoreMouseRatio(window, oldMouseX, oldMouseY, oldWidth, oldHeight);
+    applyWindowIcon();
+    SDL_RaiseWindow(window);
     return true;
 }
 
@@ -475,6 +501,7 @@ SE_BIND_FUNC(setFullScreen)
 
 bool isFullScreen(se::State& state) {
 #if CC_PLATFORM == CC_PLATFORM_WINDOWS
+    syncWindowFullScreenState();
     state.rval().setBoolean(g_isFullScreen);
 #else
     state.rval().setBoolean(false);
@@ -711,7 +738,9 @@ bool registerPvzNativeBindings(se::Object* global) {
 
 void ApplyPvzWindowStyle() {
 #if CC_PLATFORM == CC_PLATFORM_WINDOWS
+    syncWindowFullScreenState();
     applyFixedWindowStyle();
+    applyWindowIcon();
 #endif
 }
 
