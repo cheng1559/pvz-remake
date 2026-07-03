@@ -81,11 +81,9 @@ const MOBILE_NATIVE_NO_WINDOWED_MESSAGE = 'Full screen mode cannot be disabled o
 const NO_FULLSCREEN_MESSAGE = 'Full screen mode is not available in this browser.'
 const HARDWARE_ACCELERATION_LOCKED_TITLE = '3D Accelaration Error'
 const HARDWARE_ACCELERATION_LOCKED_MESSAGE = '3D acceleration cannot be disabled \nin this version.'
-const MOBILE_DEBUG_CLI_CORNER_SIZE = 30
+const MOBILE_DEBUG_CLI_CORNER_SIZE = 60
 const MOBILE_DEBUG_CLI_DOUBLE_TAP_MS = 350
 const DEBUG_CLI_BUTTON_OPEN_OFFSET_Y = 100
-const WIDESCREEN_BACKGROUND_SETTINGS_KEY = 'pvz-remake:ui:widescreen-backgrounds'
-const BACKGROUND_MULTI_CLICK_MS = 350
 const CONTINUE_GAME_RESULT_RESTART = 2001
 
 interface PvzNativeBridge {
@@ -143,8 +141,6 @@ export class UIController extends Component {
     private _backgroundLeft: Node | null = null
     private _backgroundRight: Node | null = null
     private _startupScreen: Node | null = null
-    private _lastBackgroundClickTime = 0
-    private _backgroundClickCount = 0
     private _selectorScreen: SelectorScreen | null = null
     private _adventureGameScreen: AdventureGameScreen | null = null
     private _achievementScreen: Node | null = null
@@ -1552,7 +1548,6 @@ export class UIController extends Component {
                 anchorX: 1,
                 anchorY: 1,
             })
-            this._bindWidescreenBackgroundToggle(this._backgroundLeft)
         }
         if (right) {
             this._backgroundRight = createSpriteNode({
@@ -1563,7 +1558,6 @@ export class UIController extends Component {
                 anchorX: 0,
                 anchorY: 1,
             })
-            this._bindWidescreenBackgroundToggle(this._backgroundRight)
         }
         this._placePersistentWidescreenBackgrounds()
     }
@@ -1586,28 +1580,6 @@ export class UIController extends Component {
         node.setScale(scale, scale, 1)
     }
 
-    private _bindWidescreenBackgroundToggle(node: Node) {
-        node.on(Node.EventType.TOUCH_START, this._onWidescreenBackgroundPointerDown, this)
-    }
-
-    private _onWidescreenBackgroundPointerDown(event: EventTouch) {
-        if (event.propagationStopped || this._handleMobileDebugCliTap(event)) return
-
-        const now = Date.now()
-        this._backgroundClickCount = now - this._lastBackgroundClickTime <= BACKGROUND_MULTI_CLICK_MS
-            ? this._backgroundClickCount + 1
-            : 1
-        this._lastBackgroundClickTime = now
-        if (this._backgroundClickCount < 3) return
-
-        event.propagationStopped = true
-        const visible = this._widescreenBackgroundsVisible()
-        sys.localStorage.setItem(WIDESCREEN_BACKGROUND_SETTINGS_KEY, visible ? '0' : '1')
-        this._applyWidescreenBackgroundVisibility()
-        this._lastBackgroundClickTime = 0
-        this._backgroundClickCount = 0
-    }
-
     private _applyWidescreenBackgroundVisibility() {
         const visible = this._widescreenBackgroundsVisible()
         this._setWidescreenBackgroundVisible(this._backgroundLeft, visible)
@@ -1615,7 +1587,7 @@ export class UIController extends Component {
     }
 
     private _widescreenBackgroundsVisible() {
-        return sys.localStorage.getItem(WIDESCREEN_BACKGROUND_SETTINGS_KEY) !== '0'
+        return GameDebugSettings.widescreenBackgroundsVisible
     }
 
     private _setWidescreenBackgroundVisible(node: Node | null, visible: boolean) {
@@ -1732,8 +1704,6 @@ export class UIController extends Component {
 
         event.propagationStopped = true
         this._lastMobileDebugCliTapTime = 0
-        this._lastBackgroundClickTime = 0
-        this._backgroundClickCount = 0
         this.showDebugCliDialog('/', { offsetY: DEBUG_CLI_BUTTON_OPEN_OFFSET_Y })?.requestNativeTextInputFocus()
         return true
     }
@@ -1810,6 +1780,7 @@ export class UIController extends Component {
             this._settings = GameSettingsStore.update({ fullScreen: true })
         }
         this._syncOpenOptionsDialogSettings()
+        this._applyWidescreenBackgroundVisibility()
     }
 
     private _syncOpenOptionsDialogSettings() {

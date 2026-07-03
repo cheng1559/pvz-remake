@@ -12,6 +12,7 @@ type DebugSettings = {
     hitboxesVisible: boolean
     mobileEnabled: boolean
     hotkeysEnabled: boolean
+    widescreenBackgroundsVisible: boolean
     perfPlantsVisible: boolean
     perfZombiesVisible: boolean
     perfParticlesEnabled: boolean
@@ -26,6 +27,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     hitboxesVisible: false,
     mobileEnabled: sys.isMobile,
     hotkeysEnabled: false,
+    widescreenBackgroundsVisible: true,
     perfPlantsVisible: true,
     perfZombiesVisible: true,
     perfParticlesEnabled: true,
@@ -52,6 +54,8 @@ function loadDebugSettings(): DebugSettings {
             hitboxesVisible: parsed.hitboxesVisible ?? DEFAULT_DEBUG_SETTINGS.hitboxesVisible,
             mobileEnabled: DEFAULT_DEBUG_SETTINGS.mobileEnabled,
             hotkeysEnabled: parsed.hotkeysEnabled ?? DEFAULT_DEBUG_SETTINGS.hotkeysEnabled,
+            widescreenBackgroundsVisible:
+                parsed.widescreenBackgroundsVisible ?? DEFAULT_DEBUG_SETTINGS.widescreenBackgroundsVisible,
             perfPlantsVisible: DEFAULT_DEBUG_SETTINGS.perfPlantsVisible,
             perfZombiesVisible: DEFAULT_DEBUG_SETTINGS.perfZombiesVisible,
             perfParticlesEnabled: DEFAULT_DEBUG_SETTINGS.perfParticlesEnabled,
@@ -112,6 +116,12 @@ export const GameDebugSettings = {
         this.hotkeysEnabled = enabled
         saveDebugSettings(this)
         return this.hotkeysEnabled
+    },
+
+    setWidescreenBackgroundsVisible(visible: boolean) {
+        this.widescreenBackgroundsVisible = visible
+        saveDebugSettings(this)
+        return this.widescreenBackgroundsVisible
     },
 
     setPerfToggle(toggle: DebugPerfToggle, enabled: boolean) {

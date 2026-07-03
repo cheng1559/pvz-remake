@@ -224,6 +224,11 @@ const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
         completions: [DEBUG_BOOLEAN_VALUES],
         parameterHints: ['{enabled}'],
     },
+    {
+        name: 'background',
+        completions: [DEBUG_BOOLEAN_VALUES],
+        parameterHints: ['{enabled}'],
+    },
 ]
 
 interface DebugCliCommandSpec {
@@ -321,6 +326,8 @@ export function executeDebugCliCommand(command: string, gameScreen: AdventureGam
             return executeDebugFullScreenCommand(tokens)
         case 'mobile':
             return executeDebugMobileCommand(tokens)
+        case 'background':
+            return executeDebugBackgroundCommand(tokens)
         default:
             return { ok: false, message: `Unknown command: ${tokens[0]}` }
     }
@@ -767,6 +774,20 @@ function executeDebugMobileCommand(tokens: string[]): DebugCliResult {
 
     const mobileEnabled = GameDebugSettings.setMobileEnabled(enabled)
     return { ok: true, message: `Mobile mode ${mobileEnabled ? 'enabled' : 'disabled'}`, settingsChanged: true }
+}
+
+function executeDebugBackgroundCommand(tokens: string[]): DebugCliResult {
+    if (tokens.length !== 2) {
+        return { ok: false, message: 'Usage: /background {true|false}' }
+    }
+
+    const enabled = parseDebugBoolean(tokens[1])
+    if (enabled == null) {
+        return { ok: false, message: `Invalid background value: ${tokens[1]}. Use true or false` }
+    }
+
+    const visible = GameDebugSettings.setWidescreenBackgroundsVisible(enabled)
+    return { ok: true, message: `Background ${visible ? 'enabled' : 'disabled'}`, settingsChanged: true }
 }
 
 function executeDebugRechargingCommand(tokens: string[], gameScreen: AdventureGameScreen | null): DebugCliResult {

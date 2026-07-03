@@ -103,9 +103,6 @@ export class DebugCliDialog extends MessageBox {
     }
 
     onDisable() {
-        if (this.node.isValid) {
-            void SoundLoader.play(SoundEffect.GraveButton)
-        }
         input.off(Input.EventType.MOUSE_DOWN, this._onGlobalPointerDown, this)
         input.off(Input.EventType.TOUCH_START, this._onGlobalPointerDown, this)
         game.off(Game.EVENT_HIDE, this._onInputFocusLost, this)
