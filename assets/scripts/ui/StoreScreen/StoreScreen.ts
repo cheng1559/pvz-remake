@@ -9,6 +9,7 @@ import {
 import { MenuScreenBase } from '../MenuScreenBase'
 import { SoundEffect } from '@/core/SoundLoader'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
+import { GameDebugSettings } from '@/game/GameDebugSettings'
 import { ProfileStore } from '@/game/persistence/ProfileStore'
 import { UIButton } from '@/ui/Button'
 import { DialogResult, MessageBox } from '@/ui/MessageBox/MessageBox'
@@ -712,6 +713,11 @@ export class StoreScreen extends MenuScreenBase {
             }
         }
         button.onPress = () => {
+            if (GameDebugSettings.isMobileMode()) return
+            void this._showPurchaseConfirmation(highlightNode)
+        }
+        button.onClick = () => {
+            if (!GameDebugSettings.isMobileMode()) return
             void this._showPurchaseConfirmation(highlightNode)
         }
         this._itemButtons.push(button)
