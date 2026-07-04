@@ -637,7 +637,7 @@ export class TodParticleSystem extends Component {
             anchorY: 1,
             x: args.x,
             y: args.y,
-            z: args.z ?? 1000,
+            z: args.z ?? 0,
         })
         const system = node.addComponent(TodParticleSystem)
         system.effect = args.effect
