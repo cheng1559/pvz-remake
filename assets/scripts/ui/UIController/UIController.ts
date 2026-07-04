@@ -1077,6 +1077,7 @@ export class UIController extends Component {
         if (this._userSubDialog?.isValid) return this._userSubDialog.getComponent(NewUserDialog)
 
         const node = createUINode('NewUserDialog', { active: false, width: 100, height: 100 })
+        if (GameDebugSettings.isMobileMode()) node.setPosition(0, DEBUG_CLI_BUTTON_OPEN_OFFSET_Y, 0)
         const dialog = node.addComponent(NewUserDialog)
         dialog.configure({
             mode: 'new',
@@ -1121,6 +1122,7 @@ export class UIController extends Component {
         if (this._userSubDialog?.isValid) return this._userSubDialog.getComponent(NewUserDialog)
 
         const node = createUINode('RenameUserDialog', { active: false, width: 100, height: 100 })
+        if (GameDebugSettings.isMobileMode()) node.setPosition(0, DEBUG_CLI_BUTTON_OPEN_OFFSET_Y, 0)
         const dialog = node.addComponent(NewUserDialog)
         dialog.configure({
             mode: 'rename',
