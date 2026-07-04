@@ -64,6 +64,7 @@ export class OptionsDialog extends ModalDialog {
     public onForcedFullScreenClick: (() => void) | null = null
     public onRestartLevel: (() => void) | null = null
     public onMainMenu: (() => void) | null = null
+    public onGithub: (() => void) | null = null
 
     private _root: Node | null = null
     private _sprites: OptionsDialogSprites | null = null
@@ -162,6 +163,8 @@ export class OptionsDialog extends ModalDialog {
         )
         if (this.gameMenu) {
             this._createGameButtons(fonts, lawnStrings)
+        } else {
+            this._createGithubButton(fonts)
         }
         this._createBackButton(fonts, lawnStrings)
     }
@@ -395,6 +398,33 @@ export class OptionsDialog extends ModalDialog {
             sprites: buttonSprites,
             fonts: buttonFonts,
             onClick: () => this.onMainMenu?.(),
+        })
+    }
+
+    private _createGithubButton(fonts: OptionsDialogFonts) {
+        const sprites = this._sprites!
+        createStoneButton({
+            name: 'GitHubButton',
+            parent: this._root!,
+            layer: this.node.layer,
+            label: 'GitHub',
+            x: this._cppX(107),
+            y: this._cppY(327),
+            width: 209,
+            height: 46,
+            sprites: {
+                left: sprites.buttonLeft,
+                middle: sprites.buttonMiddle,
+                right: sprites.buttonRight,
+                downLeft: sprites.buttonDownLeft,
+                downMiddle: sprites.buttonDownMiddle,
+                downRight: sprites.buttonDownRight,
+            },
+            fonts: {
+                normal: fonts.smallButton,
+                highlight: fonts.smallButtonHighlight,
+            },
+            onClick: () => this.onGithub?.(),
         })
     }
 

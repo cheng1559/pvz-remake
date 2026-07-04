@@ -1847,6 +1847,9 @@ export class UIController extends Component {
         optionsDialog.onForcedHardwareAccelerationClick = () => {
             this.showMessageBox(HARDWARE_ACCELERATION_LOCKED_TITLE, HARDWARE_ACCELERATION_LOCKED_MESSAGE)
         }
+        optionsDialog.onGithub = () => {
+            sys.openURL(PROJECT_GITHUB_URL)
+        }
     }
 
     private _commitOptionsDialogSettings(optionsDialog: OptionsDialog) {
