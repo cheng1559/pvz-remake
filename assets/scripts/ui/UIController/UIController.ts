@@ -450,6 +450,7 @@ export class UIController extends Component {
                         label: 'GitHub',
                         result: FINAL_ADVENTURE_GITHUB_RESULT,
                         localize: false,
+                        finishOnClick: false,
                         onClick: () => sys.openURL(PROJECT_GITHUB_URL),
                     },
                     {
