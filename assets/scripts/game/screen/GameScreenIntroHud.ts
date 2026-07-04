@@ -692,6 +692,8 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             y: 0,
         })
 
+        this._createProgressMeterFlags(parts)
+
         createSpriteNode({
             name: 'ProgressLevelTrack',
             spriteFrame: levelProgress,
@@ -717,8 +719,6 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
             y: -(PROGRESS_METER_HEAD_Y - PROGRESS_METER_Y),
             z: 3,
         })
-
-        this._createProgressMeterFlags(parts)
         this._progressMeterHeadNode.setSiblingIndex(this._progressMeterNode.children.length - 1)
 
         this._levelLabel = this._createBitmapText({
