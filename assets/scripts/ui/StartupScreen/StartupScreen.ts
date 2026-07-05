@@ -129,7 +129,7 @@ export class StartupScreen extends Component {
         const previousWidth = this._curBarWidth
         const maxWidth = this._loadingComplete
             ? Number.POSITIVE_INFINITY
-            : Math.min(LOAD_BAR_WIDTH * 0.99, LOAD_BAR_WIDTH * loadingPercent)
+            : Math.min(LOAD_BAR_WIDTH * 0.99, LOAD_BAR_WIDTH * Math.max(0.5, loadingPercent))
         this._curBarWidth = Math.min(maxWidth, this._curBarWidth + this._barVel)
         if (!this._loadingComplete) {
             this._curBarWidth = Math.min(this._curBarWidth, LOAD_BAR_WIDTH * 0.99)
