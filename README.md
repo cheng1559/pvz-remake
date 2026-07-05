@@ -94,6 +94,12 @@ It is statically hosted on Cloudflare Pages. The first load can take a while bec
 - [Debug CLI Guide](docs/DEBUG_CLI.md)
 - [License](LICENSE)
 
+## Acknowledgements
+
+- [Electr0Gunner/PvZ-Quality-of-the-Lawn-Decompile](https://github.com/Electr0Gunner/PvZ-Quality-of-the-Lawn-Decompile)
+- [wszqkzqk/PvZ-Portable](https://github.com/wszqkzqk/PvZ-Portable)
+- PopCap Games, for creating the original Plants vs. Zombies
+
 ## Disclaimer
 
 This is an unofficial fan remake project.

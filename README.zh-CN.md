@@ -94,6 +94,12 @@ Web 版已发布在：
 - [Debug CLI 说明](docs/DEBUG_CLI.zh-CN.md)
 - [开源协议](LICENSE)
 
+## 鸣谢
+
+- [Electr0Gunner/PvZ-Quality-of-the-Lawn-Decompile](https://github.com/Electr0Gunner/PvZ-Quality-of-the-Lawn-Decompile)
+- [wszqkzqk/PvZ-Portable](https://github.com/wszqkzqk/PvZ-Portable)
+- 宝开游戏，感谢其创作原版 Plants vs. Zombies
+
 ## 免责声明
 
 这是一个非官方 fan remake 项目。
