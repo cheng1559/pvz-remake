@@ -22,7 +22,7 @@ import { GameDebugSettings } from '@/game/GameDebugSettings'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { UIButton } from '@/ui/Button'
 import { MenuScreenBase } from '@/ui/MenuScreenBase'
-import { TouchScrollGesture } from '@/ui/ScrollGesture'
+import { getWheelScrollSteps, TouchScrollGesture } from '@/ui/ScrollGesture'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import {
     AchievementScreenAssets,
@@ -225,6 +225,14 @@ export class AchievementScreen extends MenuScreenBase {
                 this._scrollTargetPosition = this._scrollPosition
             }
         }
+        this._touchScrollGesture.applyInertiaY(
+            scaledDt,
+            () => this._scrollPosition,
+            (position) => {
+                this._setScrollPosition(position)
+                this._scrollTargetPosition = this._scrollPosition
+            },
+        )
     }
 
     private _createBackground(sprites: AchievementScreenSprites) {
@@ -511,7 +519,7 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     private _onMouseWheel(event: EventMouse) {
-        const delta = Math.sign(event.getScrollY())
+        const delta = getWheelScrollSteps(event)
         if (delta === 0) return
         event.propagationStopped = true
         const requestedTarget = this._scrollTargetPosition + WHEEL_SCROLL_DISTANCE * delta
@@ -525,30 +533,24 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     private _onTouchStart(event: EventTouch) {
-        this._touchScrollGesture.begin()
         this._cancelScrollTween()
-        event.propagationStopped = true
+        this._touchScrollGesture.beginTouch(event)
     }
 
     private _onTouchMove(event: EventTouch) {
-        if (!this._touchScrollGesture.dragging) return
-
-        const delta = this._touchScrollGesture.getDeltaY(event)
-        if (delta !== 0) {
+        this._touchScrollGesture.dragByTouchY(event, (delta) => {
             this._setScrollPosition(this._scrollPosition + delta)
             this._scrollTargetPosition = this._scrollPosition
-        }
-        event.propagationStopped = true
+        })
     }
 
     private _onTouchEnd(event: EventTouch) {
-        if (!this._touchScrollGesture.end()) return
-
+        if (!this._touchScrollGesture.endTouch(event, event.type === Node.EventType.TOUCH_END)) return
         this._scrollTargetPosition = this._scrollPosition
-        event.propagationStopped = true
     }
 
     private _startScrollTween(target: number, duration = MORE_TWEEN_SECONDS) {
+        this._touchScrollGesture.stopInertia()
         const clampedTarget = this._clampScrollPosition(target)
         this._scrollTweenStart = this._scrollPosition
         this._scrollTweenEnd = clampedTarget
@@ -561,6 +563,7 @@ export class AchievementScreen extends MenuScreenBase {
         this._scrollTweenDuration = 0
         this._scrollTweenElapsed = 0
         this._scrollTargetPosition = this._scrollPosition
+        this._touchScrollGesture.stopInertia()
     }
 
     private _setScrollPosition(position: number) {

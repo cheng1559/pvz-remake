@@ -39,7 +39,7 @@ import {
 } from '@/game/ZombieAnimation'
 import type { ZombieType } from '@/game/GameTypes'
 import { UIButton } from '@/ui/Button'
-import { TouchScrollGesture } from '@/ui/ScrollGesture'
+import { getWheelScrollSteps, TouchScrollGesture } from '@/ui/ScrollGesture'
 import {
     getAtlasFrame,
     SeedPacketRenderer,
@@ -603,7 +603,13 @@ export class AlmanacScreen extends MenuScreenBase {
     }
 
     protected update(dt: number) {
-        this._updateZombiePreviewMotions(scaleGameDeltaTime(dt))
+        const scaledDt = scaleGameDeltaTime(dt)
+        this._updateZombiePreviewMotions(scaledDt)
+        this._descriptionTouchScrollGesture.applyInertiaY(
+            scaledDt,
+            () => this._descriptionScroll,
+            (scroll) => this._setDescriptionScroll(scroll, this._descriptionMaxScroll),
+        )
     }
 
     async render(): Promise<void> {
@@ -1817,6 +1823,7 @@ export class AlmanacScreen extends MenuScreenBase {
         this._descriptionContentNode = null
         this._descriptionScrollbarGraphics = null
         this._descriptionScrollbarNode = null
+        this._descriptionTouchScrollGesture.stopInertia()
         this._descriptionScroll = scroll
         this._descriptionMaxScroll = maxScroll
         this._descriptionLineSpacing = metrics.lineSpacing
@@ -1866,28 +1873,22 @@ export class AlmanacScreen extends MenuScreenBase {
         if (GameDebugSettings.isMobileMode()) {
             clipNode.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
                 if (this._descriptionSliderDragging) return
-                event.propagationStopped = true
-                this._descriptionTouchScrollGesture.begin()
+                this._descriptionTouchScrollGesture.beginTouch(event)
             })
             clipNode.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
-                if (
-                    !this._descriptionTouchScrollGesture.dragging ||
-                    this._descriptionSliderDragging
-                )
-                    return
-                event.propagationStopped = true
-                this._setDescriptionScroll(
-                    this._descriptionScroll + this._descriptionTouchScrollGesture.getDeltaY(event),
-                    this._descriptionMaxScroll,
-                )
+                if (this._descriptionSliderDragging) return
+                this._descriptionTouchScrollGesture.dragByTouchY(event, (delta) => {
+                    this._setDescriptionScroll(
+                        this._descriptionScroll + delta,
+                        this._descriptionMaxScroll,
+                    )
+                })
             })
             clipNode.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
-                if (!this._descriptionTouchScrollGesture.end()) return
-                event.propagationStopped = true
+                this._descriptionTouchScrollGesture.endTouch(event)
             })
             clipNode.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => {
-                if (!this._descriptionTouchScrollGesture.end()) return
-                event.propagationStopped = true
+                this._descriptionTouchScrollGesture.endTouch(event, false)
             })
         }
         this._createDescriptionScrollbar(args, visualMaxScroll, maxScroll)
@@ -2011,7 +2012,8 @@ export class AlmanacScreen extends MenuScreenBase {
 
     private _scrollDescriptionByWheel(event: EventMouse) {
         if (this._descriptionSliderDragging) return
-        const delta = Math.sign(event.getScrollY())
+        this._descriptionTouchScrollGesture.stopInertia()
+        const delta = getWheelScrollSteps(event)
         if (delta === 0) return
         this._setDescriptionScroll(
             this._descriptionScroll -
