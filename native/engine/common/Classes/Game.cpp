@@ -33,6 +33,8 @@
 #include <windows.h>
 
 #include <string>
+#elif CC_PLATFORM == CC_PLATFORM_MACOS
+#include <cstdlib>
 #endif
 
 #ifndef PVZ_APP_DISPLAY_NAME
@@ -48,8 +50,8 @@ constexpr const char* SETTINGS_KEY = "pvz-remake:settings:options";
 constexpr int DEFAULT_WINDOW_WIDTH = 800;
 constexpr int DEFAULT_WINDOW_HEIGHT = 600;
 
-#if CC_PLATFORM == CC_PLATFORM_WINDOWS
 ccstd::string startupLocalStoragePath() {
+#if CC_PLATFORM == CC_PLATFORM_WINDOWS
   wchar_t fullPath[MAX_PATH + 1] = {};
   const DWORD length = GetModuleFileNameW(nullptr, fullPath, MAX_PATH);
   if (length == 0 || length >= MAX_PATH) return "";
@@ -80,8 +82,16 @@ ccstd::string startupLocalStoragePath() {
   if (sqlitePathLength <= 0) return "";
 
   return ccstd::string(sqlitePath) + "jsb.sqlite";
+#elif CC_PLATFORM == CC_PLATFORM_MACOS
+  const char* home = std::getenv("HOME");
+  if (!home || !home[0]) return "";
+  return ccstd::string(home) + "/Documents/jsb.sqlite";
+#else
+  return "";
+#endif
 }
 
+#if CC_PLATFORM == CC_PLATFORM_WINDOWS
 void centerStartupWindow(int width, int height, int* x, int* y) {
   RECT workArea = {};
   if (!SystemParametersInfoW(SPI_GETWORKAREA, 0, &workArea, 0)) return;
@@ -97,7 +107,7 @@ void centerStartupWindow(int width, int height, int* x, int* y) {
 #endif
 
 bool isStartupFullScreenEnabled() {
-#if CC_PLATFORM == CC_PLATFORM_WINDOWS
+#if CC_PLATFORM == CC_PLATFORM_WINDOWS || CC_PLATFORM == CC_PLATFORM_MACOS
   const ccstd::string storagePath = startupLocalStoragePath();
   if (storagePath.empty()) return false;
 
@@ -125,9 +135,11 @@ int Game::init() {
 
   if (isStartupFullScreenEnabled()) {
     _windowInfo.flags = cc::ISystemWindow::CC_WINDOW_SHOWN |
-                        cc::ISystemWindow::CC_WINDOW_RESIZABLE |
                         cc::ISystemWindow::CC_WINDOW_INPUT_FOCUS |
                         cc::ISystemWindow::CC_WINDOW_FULLSCREEN_DESKTOP;
+#if CC_PLATFORM == CC_PLATFORM_WINDOWS
+    _windowInfo.flags |= cc::ISystemWindow::CC_WINDOW_RESIZABLE;
+#endif
   } else {
     _windowInfo.flags = cc::ISystemWindow::CC_WINDOW_SHOWN |
                         cc::ISystemWindow::CC_WINDOW_INPUT_FOCUS;

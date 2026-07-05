@@ -4,6 +4,7 @@
 #include "bindings/manual/jsb_global.h"
 #include "audio/include/AudioEngine.h"
 #include "cocos/cocos.h"
+#include "platform/BasePlatform.h"
 #include "platform/FileUtils.h"
 #include "platform/interfaces/modules/ISystemWindow.h"
 
@@ -24,8 +25,11 @@
 #include <objc/runtime.h>
 #endif
 
-#if CC_PLATFORM == CC_PLATFORM_WINDOWS
+#if CC_PLATFORM == CC_PLATFORM_WINDOWS || CC_PLATFORM == CC_PLATFORM_MACOS
 #include "SDL2/SDL.h"
+#endif
+
+#if CC_PLATFORM == CC_PLATFORM_WINDOWS
 #include <OpenalSoft/al.h>
 #include <windows.h>
 #endif
@@ -125,7 +129,61 @@ bool hideIosKeyboardAccessory() {
 }
 #endif
 
+#if CC_PLATFORM == CC_PLATFORM_WINDOWS || CC_PLATFORM == CC_PLATFORM_MACOS
+SDL_Window* getSdlWindow() {
+    return SDL_GetWindowFromID(cc::ISystemWindow::mainWindowId);
+}
+
+bool isSdlWindowFullScreen() {
+    SDL_Window* window = getSdlWindow();
+    return window && (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+#endif
+
 #if CC_PLATFORM == CC_PLATFORM_MACOS
+ObjcId getMacApplication() {
+    const auto applicationClass = reinterpret_cast<ObjcId>(objc_getClass("NSApplication"));
+    return objcSendId(applicationClass, sel_registerName("sharedApplication"));
+}
+
+ObjcId getMacWindow() {
+    ObjcId application = getMacApplication();
+    if (!application) return nullptr;
+
+    ObjcId window = objcSendId(application, sel_registerName("keyWindow"));
+    if (window) return window;
+
+    window = objcSendId(application, sel_registerName("mainWindow"));
+    if (window) return window;
+
+    ObjcId windows = objcSendId(application, sel_registerName("windows"));
+    const unsigned long count = objcSendUnsignedLong(windows, sel_registerName("count"));
+    return count > 0 ? objcSendId(windows, sel_registerName("objectAtIndex:"), 0) : nullptr;
+}
+
+void centerMacWindow() {
+    ObjcId window = getMacWindow();
+    if (window) objcSendVoid(window, sel_registerName("center"));
+}
+
+bool setMacFullScreen(bool fullScreen) {
+    SDL_Window* window = getSdlWindow();
+    if (!window) return false;
+    if (isSdlWindowFullScreen() == fullScreen) return true;
+
+    if (SDL_SetWindowFullscreen(window, fullScreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0) != 0) {
+        return false;
+    }
+
+    if (!fullScreen) {
+        SDL_SetWindowSize(window, 800, 600);
+        SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        centerMacWindow();
+    }
+    SDL_RaiseWindow(window);
+    return true;
+}
+
 bool setMacCursor(const std::string& style) {
     const auto cursorClass = reinterpret_cast<ObjcId>(objc_getClass("NSCursor"));
     if (!cursorClass) return false;
@@ -195,14 +253,8 @@ HWND getAppWindow() {
     return hwnd;
 }
 
-SDL_Window* getSdlWindow() {
-    return SDL_GetWindowFromID(cc::ISystemWindow::mainWindowId);
-}
-
 void syncWindowFullScreenState() {
-    SDL_Window* window = getSdlWindow();
-    if (!window) return;
-    g_isFullScreen = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0;
+    g_isFullScreen = isSdlWindowFullScreen();
 }
 
 void applyWindowIcon() {
@@ -492,6 +544,8 @@ bool setFullScreen(se::State& state) {
 
 #if CC_PLATFORM == CC_PLATFORM_WINDOWS
     state.rval().setBoolean(setWindowsFullScreen(args[0].toBoolean()));
+#elif CC_PLATFORM == CC_PLATFORM_MACOS
+    state.rval().setBoolean(setMacFullScreen(args[0].toBoolean()));
 #else
     state.rval().setBoolean(false);
 #endif
@@ -503,6 +557,8 @@ bool isFullScreen(se::State& state) {
 #if CC_PLATFORM == CC_PLATFORM_WINDOWS
     syncWindowFullScreenState();
     state.rval().setBoolean(g_isFullScreen);
+#elif CC_PLATFORM == CC_PLATFORM_MACOS
+    state.rval().setBoolean(isSdlWindowFullScreen());
 #else
     state.rval().setBoolean(false);
 #endif
@@ -700,6 +756,17 @@ bool getMusicWavCurrentTime(se::State& state) {
 }
 SE_BIND_FUNC(getMusicWavCurrentTime)
 
+bool quit(se::State& state) {
+#if CC_PLATFORM == CC_PLATFORM_MACOS
+    cc::BasePlatform::getPlatform()->exit();
+    state.rval().setBoolean(true);
+#else
+    state.rval().setBoolean(false);
+#endif
+    return true;
+}
+SE_BIND_FUNC(quit)
+
 bool registerPvzNativeBindings(se::Object* global) {
     se::Value jsbValue;
     if (!global->getProperty("jsb", &jsbValue) || !jsbValue.isObject()) {
@@ -711,6 +778,7 @@ bool registerPvzNativeBindings(se::Object* global) {
     se::HandleObject bridge(se::Object::createPlainObject());
     bridge->defineFunction("setFullScreen", _SE(setFullScreen));
     bridge->defineFunction("isFullScreen", _SE(isFullScreen));
+    bridge->defineFunction("quit", _SE(quit));
     bridge->defineFunction("hideKeyboardAccessory", _SE(hideKeyboardAccessory));
     bridge->defineFunction("setCursor", _SE(setCursor));
     bridge->defineFunction("preloadSfx", _SE(preloadSfx));
@@ -741,6 +809,8 @@ void ApplyPvzWindowStyle() {
     syncWindowFullScreenState();
     applyFixedWindowStyle();
     applyWindowIcon();
+#elif CC_PLATFORM == CC_PLATFORM_MACOS
+    if (!isSdlWindowFullScreen()) centerMacWindow();
 #endif
 }
 
