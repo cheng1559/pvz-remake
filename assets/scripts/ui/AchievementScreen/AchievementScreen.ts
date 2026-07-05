@@ -167,6 +167,7 @@ export class AchievementScreen extends MenuScreenBase {
     private _scrollTweenStart = 0
     private _scrollTweenEnd = 0
     private _iconFrames: SpriteFrame[] = []
+    private _exiting = false
     private readonly _touchScrollGesture = new TouchScrollGesture({ direction: -1 })
 
     onEnable() {
@@ -199,6 +200,7 @@ export class AchievementScreen extends MenuScreenBase {
         if (!sprites) return
 
         this._sprites = sprites
+        this._exiting = false
         this._clearIconFrames()
         this._resetRoot('AchievementScreenRoot')
 
@@ -210,6 +212,8 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     update(dt: number) {
+        if (this._exiting) return
+
         const scaledDt = scaleGameDeltaTime(dt)
         if (this._scrollTweenDuration > 0) {
             this._scrollTweenElapsed = Math.min(
@@ -489,6 +493,7 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     private _toggleRockButton() {
+        if (this._exiting) return
         if (!this._sprites || !this._moreButton || !this._rockButtonImage) return
 
         this._showingTop = !this._showingTop
@@ -505,6 +510,8 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     private _onKeyDown(event: EventKeyboard) {
+        if (this._exiting) return
+
         if (event.keyCode === KeyCode.ARROW_UP) {
             this._cancelScrollTween()
             this._setScrollPosition(this._scrollPosition + 15)
@@ -519,6 +526,8 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     private _onMouseWheel(event: EventMouse) {
+        if (this._exiting) return
+
         const delta = getWheelScrollSteps(event)
         if (delta === 0) return
         event.propagationStopped = true
@@ -533,11 +542,15 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     private _onTouchStart(event: EventTouch) {
+        if (this._exiting) return
+
         this._cancelScrollTween()
         this._touchScrollGesture.beginTouch(event)
     }
 
     private _onTouchMove(event: EventTouch) {
+        if (this._exiting) return
+
         this._touchScrollGesture.dragByTouchY(event, (delta) => {
             this._setScrollPosition(this._scrollPosition + delta)
             this._scrollTargetPosition = this._scrollPosition
@@ -545,6 +558,8 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     private _onTouchEnd(event: EventTouch) {
+        if (this._exiting) return
+
         if (!this._touchScrollGesture.endTouch(event, event.type === Node.EventType.TOUCH_END)) return
         this._scrollTargetPosition = this._scrollPosition
     }
@@ -586,6 +601,11 @@ export class AchievementScreen extends MenuScreenBase {
     }
 
     private _exitScreen() {
+        if (this._exiting) return
+
+        this._exiting = true
+        this._cancelScrollTween()
+        this._touchScrollGesture.cancel()
         this.onBackToMenu?.()
     }
 
