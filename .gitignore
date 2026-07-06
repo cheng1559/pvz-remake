@@ -43,6 +43,9 @@ native/engine/android/instantapp/*
 # NPM
 #//////////////////////////
 node_modules/
+dist/
+release/
+settings/v2/packages/project.json
 
 #//////////////////////////
 # Python
