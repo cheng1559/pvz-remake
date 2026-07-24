@@ -89,18 +89,6 @@ const CONTINUE_GAME_RESULT_RESTART = 2001
 const FINAL_ADVENTURE_GITHUB_RESULT = 2002
 const PROJECT_GITHUB_URL = 'https://github.com/cheng1559/pvz-remake'
 
-interface PvzNativeBridge {
-    setFullScreen?: (fullScreen: boolean) => boolean
-    isFullScreen?: () => boolean
-    quit?: () => boolean
-}
-
-type NativeBindings = typeof globalThis & {
-    jsb?: {
-        PvzNative?: PvzNativeBridge
-    }
-}
-
 interface StoreScreenOptions {
     initialPage?: number
     backButtonLabel?: string
@@ -1886,12 +1874,6 @@ export class UIController extends Component {
         if (!this._canRequestFullScreen()) return
 
         try {
-            const nativeBridge = this._nativeBridge()
-            if (sys.isNative) {
-                nativeBridge?.setFullScreen?.(fullScreen)
-                return
-            }
-
             if (fullScreen) {
                 if (!screen.fullScreen()) await screen.requestFullScreen()
                 return
@@ -1921,16 +1903,10 @@ export class UIController extends Component {
     }
 
     private _canRequestFullScreen() {
-        if (sys.isNative) return !!this._nativeBridge()?.setFullScreen
         return screen.supportsFullScreen
     }
 
-    private _nativeBridge() {
-        return (globalThis as NativeBindings).jsb?.PvzNative ?? null
-    }
-
     private _quitGame() {
-        if (sys.isNative && this._nativeBridge()?.quit?.()) return
         game.end()
     }
 

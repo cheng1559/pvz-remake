@@ -48,15 +48,6 @@ export interface MusicPlaybackSnapshot {
     queuedDrumsBoundaryWrapped: boolean
 }
 
-type NativeAudioAsset = {
-    url?: string
-}
-
-type MusicAudioClip = AudioClip & {
-    _nativeAsset?: NativeAudioAsset | null
-    nativeUrl?: string
-}
-
 type NativeAudioEngine = {
     play2d?: (url: string, loop: boolean, volume: number) => number
     setVolume?: (audioId: number, volume: number) => boolean
@@ -67,18 +58,7 @@ type NativeAudioEngine = {
     getCurrentTime?: (audioId: number) => number
 }
 
-type NativeMusicBridge = {
-    playMusicWav?: (url: string, loop: boolean, volume: number) => number
-    stopMusicWav?: (audioId: number) => void
-    pauseMusicWav?: (audioId: number) => void
-    resumeMusicWav?: (audioId: number) => void
-    setMusicWavVolume?: (audioId: number, volume: number) => void
-    setMusicWavCurrentTime?: (audioId: number, time: number) => boolean
-    getMusicWavCurrentTime?: (audioId: number) => number
-}
-
 type MusicNativePlayer = {
-    kind: 'wav' | 'engine'
     play: (url: string, loop: boolean, volume: number) => number
     setVolume: (audioId: number, volume: number) => boolean
     pause: (audioId: number) => void
@@ -91,7 +71,6 @@ type MusicNativePlayer = {
 type NativeBindings = typeof globalThis & {
     jsb?: {
         AudioEngine?: NativeAudioEngine
-        PvzNative?: NativeMusicBridge
     }
 }
 
@@ -736,11 +715,8 @@ export class MusicSystem {
         const player = this._nativePlayer()
         if (!player) return false
 
-        const nativeClip = clip as MusicAudioClip
-        const url = nativeClip._nativeAsset?.url ?? nativeClip.nativeUrl
+        const url = clip.nativeUrl
         if (!url) return false
-        if (!this._isWavUrl(url) && player.kind === 'wav') return false
-
         const audioId = player.play(url, this._usesBackendLoop(), this._stemVolume(stem) * SoundLoader.getMusicVolume())
         if (typeof audioId !== 'number' || audioId < 0) return false
 
@@ -752,11 +728,8 @@ export class MusicSystem {
         const player = this._nativePlayer()
         if (!player) return false
 
-        const nativeClip = clip as MusicAudioClip
-        const url = nativeClip._nativeAsset?.url ?? nativeClip.nativeUrl
+        const url = clip.nativeUrl
         if (!url) return false
-        if (!this._isWavUrl(url) && player.kind === 'wav') return false
-
         const audioId = player.play(url, this._usesBackendLoop(tune), this._overlayStemVolume(stem))
         if (typeof audioId !== 'number' || audioId < 0) return false
 
@@ -792,31 +765,6 @@ export class MusicSystem {
 
     private static _nativePlayer(): MusicNativePlayer | null {
         if (!sys.isNative) return null
-        const bridge = (globalThis as NativeBindings).jsb?.PvzNative
-        if (
-            bridge?.playMusicWav &&
-            bridge.stopMusicWav &&
-            bridge.pauseMusicWav &&
-            bridge.resumeMusicWav &&
-            bridge.setMusicWavVolume &&
-            bridge.setMusicWavCurrentTime &&
-            bridge.getMusicWavCurrentTime
-        ) {
-            return {
-                kind: 'wav',
-                play: bridge.playMusicWav.bind(bridge),
-                stop: bridge.stopMusicWav.bind(bridge),
-                pause: bridge.pauseMusicWav.bind(bridge),
-                resume: bridge.resumeMusicWav.bind(bridge),
-                setVolume: (audioId, volume) => {
-                    bridge.setMusicWavVolume!(audioId, volume)
-                    return true
-                },
-                setCurrentTime: bridge.setMusicWavCurrentTime.bind(bridge),
-                getCurrentTime: bridge.getMusicWavCurrentTime.bind(bridge),
-            }
-        }
-
         const engine = (globalThis as NativeBindings).jsb?.AudioEngine
         if (
             !engine?.play2d ||
@@ -830,7 +778,6 @@ export class MusicSystem {
             return null
         }
         return {
-            kind: 'engine',
             play: engine.play2d.bind(engine),
             stop: engine.stop.bind(engine),
             pause: engine.pause.bind(engine),
@@ -841,7 +788,4 @@ export class MusicSystem {
         }
     }
 
-    private static _isWavUrl(url: string) {
-        return /\.wav(?:$|[?#])/i.test(url)
-    }
 }

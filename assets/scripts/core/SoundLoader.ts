@@ -2,34 +2,17 @@ import { AudioClip, AudioSource, director, Node, sys } from 'cc'
 import { AssetLoader } from './AssetLoader'
 import { GameDebugSettings } from '@/game/GameDebugSettings'
 
-type NativeAudioAsset = {
-    url?: string
-}
-
-type AudioClipWithNativeAsset = AudioClip & {
-    _nativeAsset?: NativeAudioAsset | null
-    nativeUrl?: string
-    duration?: number
-    getDuration?: () => number
-}
-
 type NativeAudioEngine = {
     play2d?: (url: string, loop: boolean, volume: number) => number
     setPitch?: (audioId: number, pitch: number) => boolean
     setFinishCallback?: (audioId: number, callback: () => void) => void
-}
-
-type PvzNativeBridge = {
-    preloadSfx?: (url: string) => boolean
-    playSfxPitch?: (url: string, volume: number, pitch: number) => boolean
-    playSfxWav?: (url: string, volume: number, pitch: number) => number
-    stopSfxWav?: (audioId: number) => void
+    preload?: (url: string, callback: (success: boolean) => void) => void
+    stop?: (audioId: number) => void
 }
 
 type NativeBindings = typeof globalThis & {
     jsb?: {
         AudioEngine?: NativeAudioEngine
-        PvzNative?: PvzNativeBridge
     }
 }
 
@@ -128,7 +111,6 @@ export class SoundLoader {
     private static readonly _pitchStepMultiplier = 1.0594630943592953
     private static readonly _foleyRecentSuppressMs = 100
     private static readonly _maxNativeOneShots = 32
-    private static readonly _isAndroidNative = sys.isNative && sys.os === sys.OS.ANDROID
     private static readonly _foleyPitchRanges: Partial<Record<SoundEffect, number>> = {
         [SoundEffect.Points]: 10,
         [SoundEffect.ShieldHit]: 10,
@@ -295,15 +277,13 @@ export class SoundLoader {
         if (!clip || this._exclusiveTokens.get(channel) !== token) return
 
         const resolvedVolume = this._resolveEffectVolume(volume)
-        const nativeAudioId = this._playNativeSfx(clip, 1, resolvedVolume, this._isAndroidNative)
+        const nativeAudioId = this._playNativeSfx(clip, 1, resolvedVolume)
         if (nativeAudioId !== null) {
             this._exclusiveNativeAudioIds.set(channel, nativeAudioId)
             this._exclusiveEffects.set(channel, effect)
             this._exclusiveBaseVolumes.set(channel, volume)
             return
         }
-        if (this._isAndroidNative) return
-
         source.stop()
         source.clip = clip
         this._exclusiveEffects.set(channel, effect)
@@ -377,48 +357,36 @@ export class SoundLoader {
 
     private static async _playNativeWithPitch(clip: AudioClip, pitchSteps: number, volume: number) {
         const pitch = Math.pow(this._pitchStepMultiplier, pitchSteps)
-        if (this._playNativeSfx(clip, pitch, volume, pitchSteps !== 0 || this._isAndroidNative) !== null) return true
-        if (this._isAndroidNative) return true
-
-        const bindings = globalThis as NativeBindings
-        const url = (clip as AudioClipWithNativeAsset)._nativeAsset?.url ?? (clip as AudioClipWithNativeAsset).nativeUrl
-        if (!url) return false
-        const audioEngine = bindings.jsb?.AudioEngine
-        if (!audioEngine?.play2d || !audioEngine.setPitch) return false
         if (this._nativeOneShotIds.size >= this._maxNativeOneShots) return true
-
-        const audioId = audioEngine.play2d(url, false, volume)
-        if (typeof audioId !== 'number' || audioId < 0) return false
+        const audioId = this._playNativeSfx(clip, pitch, volume)
+        if (audioId === null) return false
 
         this._nativeOneShotIds.add(audioId)
         const forgetAudioId = () => this._nativeOneShotIds.delete(audioId)
-        if (audioEngine.setFinishCallback) {
+        const audioEngine = (globalThis as NativeBindings).jsb?.AudioEngine
+        if (audioEngine?.setFinishCallback) {
             audioEngine.setFinishCallback(audioId, forgetAudioId)
         } else {
-            const duration = (clip as AudioClipWithNativeAsset).getDuration?.() ?? (clip as AudioClipWithNativeAsset).duration ?? 1
+            const duration = clip.getDuration()
             setTimeout(forgetAudioId, Math.max(1000, duration * 1000 + 1000))
         }
-        audioEngine.setPitch(audioId, pitch)
         return true
     }
 
-    private static _playNativeSfx(clip: AudioClip, pitch: number, volume: number, allowLegacyPitchBridge: boolean) {
-        const bindings = globalThis as NativeBindings
-        const url = (clip as AudioClipWithNativeAsset)._nativeAsset?.url ?? (clip as AudioClipWithNativeAsset).nativeUrl
+    private static _playNativeSfx(clip: AudioClip, pitch: number, volume: number) {
+        if (!sys.isNative) return null
+        const url = clip.nativeUrl
         if (!url) return null
 
-        const bridge = bindings.jsb?.PvzNative
-        if (this._isWavUrl(url)) {
-            const audioId = bridge?.playSfxWav?.(url, volume, pitch)
-            if (typeof audioId === 'number' && audioId >= 0) return audioId
+        const audioEngine = (globalThis as NativeBindings).jsb?.AudioEngine
+        if (!audioEngine?.play2d) return null
+        const audioId = audioEngine.play2d(url, false, volume)
+        if (typeof audioId !== 'number' || audioId < 0) return null
+        if (pitch !== 1 && !audioEngine.setPitch?.(audioId, pitch)) {
+            audioEngine.stop?.(audioId)
+            return null
         }
-
-        if (allowLegacyPitchBridge && bridge?.playSfxPitch?.(url, volume, pitch)) return -1
-        return null
-    }
-
-    private static _isWavUrl(url: string) {
-        return /\.wav(?:$|[?#])/i.test(url)
+        return audioId
     }
 
     private static _stopNativeExclusive(channel: string) {
@@ -426,9 +394,7 @@ export class SoundLoader {
         if (audioId === undefined) return
 
         this._exclusiveNativeAudioIds.delete(channel)
-        if (audioId >= 0) {
-            (globalThis as NativeBindings).jsb?.PvzNative?.stopSfxWav?.(audioId)
-        }
+        ;(globalThis as NativeBindings).jsb?.AudioEngine?.stop?.(audioId)
     }
 
     private static _getSource() {
@@ -476,10 +442,9 @@ export class SoundLoader {
     }
 
     private static _preloadNativeSfx(clip: AudioClip) {
-        const url = (clip as AudioClipWithNativeAsset)._nativeAsset?.url ?? (clip as AudioClipWithNativeAsset).nativeUrl
+        const url = clip.nativeUrl
         if (!url) return
-        const bridge = (globalThis as NativeBindings).jsb?.PvzNative
-        bridge?.preloadSfx?.(url)
+        ;(globalThis as NativeBindings).jsb?.AudioEngine?.preload?.(url, () => {})
     }
 
     private static _getAudioContext(): AudioContext | null {
@@ -525,7 +490,7 @@ export class SoundLoader {
 
     private static async _decodeAudioBuffer(clip: AudioClip): Promise<AudioBuffer | null> {
         const context = this._getAudioContext()
-        const url = (clip as AudioClipWithNativeAsset)._nativeAsset?.url
+        const url = clip.nativeUrl
         if (!context || !url || typeof fetch !== 'function') return null
 
         try {
