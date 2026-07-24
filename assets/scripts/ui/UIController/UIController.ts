@@ -177,7 +177,7 @@ export class UIController extends Component {
         resetMoreSunTutorialState()
         this._applyPersistedSettings()
         this._adventureLevel = this._getProfileAdventureLevel()
-        this._configurePlatformFrameRate()
+        this._configureFrameRate()
         screen.on(FULLSCREEN_CHANGE_EVENT, this._onFullScreenChanged, this)
         input.on(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
         input.on(Input.EventType.TOUCH_START, this._onGlobalTouchStart, this)
@@ -203,8 +203,8 @@ export class UIController extends Component {
         }
     }
 
-    private _configurePlatformFrameRate() {
-        if (sys.isNative && game.frameRate < NATIVE_UNCAPPED_FRAME_RATE) {
+    private _configureFrameRate() {
+        if (game.frameRate < NATIVE_UNCAPPED_FRAME_RATE) {
             game.frameRate = NATIVE_UNCAPPED_FRAME_RATE
         }
     }
