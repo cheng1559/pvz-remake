@@ -1,0 +1,10 @@
+{
+    "debug": false,
+    "sourceMaps": false,
+    "outputName": "android-arm64-release",
+    "packages": {
+        "android": {
+            "appABIs": ["arm64-v8a"]
+        }
+    }
+}

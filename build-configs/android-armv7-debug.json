@@ -1,0 +1,9 @@
+{
+    "debug": true,
+    "outputName": "android-armv7-debug",
+    "packages": {
+        "android": {
+            "appABIs": ["armeabi-v7a"]
+        }
+    }
+}
