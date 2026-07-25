@@ -1,6 +1,7 @@
 {
     "debug": false,
     "sourceMaps": false,
+    "useSplashScreen": false,
     "outputName": "android-armv7-release",
     "packages": {
         "android": {

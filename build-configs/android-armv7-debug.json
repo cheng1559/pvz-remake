@@ -1,5 +1,6 @@
 {
     "debug": true,
+    "useSplashScreen": false,
     "outputName": "android-armv7-debug",
     "packages": {
         "android": {
