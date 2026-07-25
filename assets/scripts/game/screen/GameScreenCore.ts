@@ -4780,7 +4780,13 @@ export abstract class GameScreenCore extends Component {
 
         const title = this._zombieTooltipName(hit.type)
         const label = this._canShowAlmanacInSeedChooser() ? this._lawnString('CLICK_TO_VIEW', 'click to view') : ''
-        const x = Math.max(0, Math.min(800, Math.round(hit.rect.x + hit.rect.width / 2 + 5)))
+        const width = measureTooltip({
+            title,
+            text: label,
+            font: this._packetCostFont,
+            titleFont: this._tooltipTitleFont,
+        }).width
+        const x = Math.max(0, Math.min(800 - width, Math.round(hit.rect.x + hit.rect.width / 2 + 5 - width / 2)))
         const y = -Math.round(hit.rect.y + hit.rect.height - 10)
         const key = `${hit.type}|${label}|${x}|${y}`
         if (this._introZombieTooltipNode?.isValid && this._introZombieTooltipKey === key) {
@@ -4801,7 +4807,6 @@ export abstract class GameScreenCore extends Component {
             x,
             y,
             z: CURSOR_PREVIEW_Z - 1,
-            centerX: true,
         })
         this._introZombieTooltipNode.setSiblingIndex(this._uiLayer.children.length - 1)
         return true
