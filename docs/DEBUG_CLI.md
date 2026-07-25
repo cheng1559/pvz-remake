@@ -56,7 +56,7 @@ Commands may be entered with or without `/`. This document uses `/command` consi
 ## Opening The CLI
 
 - Desktop: press `/`. The input box starts with `/`.
-- Mobile: in mobile mode, double tap the bottom-right screen area, roughly a square of `60 * devicePixelRatio` pixels.
+- Mobile: in mobile mode, double tap the bottom-right screen area, roughly a square of `100 * devicePixelRatio` pixels.
 
 Input supports:
 
