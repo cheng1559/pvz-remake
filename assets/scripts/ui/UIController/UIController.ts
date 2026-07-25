@@ -84,7 +84,7 @@ const HARDWARE_ACCELERATION_LOCKED_TITLE = '3D Acceleration Required'
 const HARDWARE_ACCELERATION_LOCKED_MESSAGE = '3D acceleration is required for this version.'
 const MOBILE_DEBUG_CLI_CORNER_SIZE = 100
 const MOBILE_DEBUG_CLI_DOUBLE_TAP_MS = 350
-const DEBUG_CLI_BUTTON_OPEN_OFFSET_Y = 100
+const MOBILE_TEXT_INPUT_DIALOG_OFFSET_Y = 150
 const CONTINUE_GAME_RESULT_RESTART = 2001
 const FINAL_ADVENTURE_GITHUB_RESULT = 2002
 const PROJECT_GITHUB_URL = 'https://github.com/cheng1559/pvz-remake'
@@ -1067,7 +1067,7 @@ export class UIController extends Component {
         if (this._userSubDialog?.isValid) return this._userSubDialog.getComponent(NewUserDialog)
 
         const node = createUINode('NewUserDialog', { active: false, width: 100, height: 100 })
-        if (GameDebugSettings.isMobileMode()) node.setPosition(0, DEBUG_CLI_BUTTON_OPEN_OFFSET_Y, 0)
+        if (GameDebugSettings.isMobileMode()) node.setPosition(0, MOBILE_TEXT_INPUT_DIALOG_OFFSET_Y, 0)
         const dialog = node.addComponent(NewUserDialog)
         dialog.configure({
             mode: 'new',
@@ -1112,7 +1112,7 @@ export class UIController extends Component {
         if (this._userSubDialog?.isValid) return this._userSubDialog.getComponent(NewUserDialog)
 
         const node = createUINode('RenameUserDialog', { active: false, width: 100, height: 100 })
-        if (GameDebugSettings.isMobileMode()) node.setPosition(0, DEBUG_CLI_BUTTON_OPEN_OFFSET_Y, 0)
+        if (GameDebugSettings.isMobileMode()) node.setPosition(0, MOBILE_TEXT_INPUT_DIALOG_OFFSET_Y, 0)
         const dialog = node.addComponent(NewUserDialog)
         dialog.configure({
             mode: 'rename',
@@ -1711,7 +1711,7 @@ export class UIController extends Component {
 
         event.propagationStopped = true
         this._lastMobileDebugCliTapTime = 0
-        this.showDebugCliDialog('/', { offsetY: DEBUG_CLI_BUTTON_OPEN_OFFSET_Y })?.requestNativeTextInputFocus()
+        this.showDebugCliDialog('/', { offsetY: MOBILE_TEXT_INPUT_DIALOG_OFFSET_Y })?.requestNativeTextInputFocus()
         return true
     }
 
