@@ -365,6 +365,7 @@ export const DEBUG_ATTACK_RECT_COLOR = new Color(255, 0, 0, 255)
 export const ZOMBIE_BODY_REANIM_OFFSET_X = 15
 export const ZOMBIE_BODY_REANIM_OFFSET_Y = 8
 export const ZOMBIE_REANIM_BLEND_TIME = 0.2
+export const CHILLED_ZOMBIE_COLOR = new Color(75, 75, 255, 255)
 export const PLANT_PREVIEW_CACHE_CELL_WIDTH = 220
 export const PLANT_PREVIEW_CACHE_CELL_HEIGHT = 160
 export const PLANT_PREVIEW_CACHE_COLUMNS = 8
@@ -3215,6 +3216,8 @@ export abstract class GameScreenCore extends Component {
         const renderOrder = zombie
             ? this._entityLayerOrder(zombie) + 0.01
             : this._zombiePartFallbackRenderOrder(view.node.position.y)
+        const inheritsZombieColor = isZombieHeadEffect || isZombieArmEffect || effect === 'zombieflag'
+        const chilled = inheritsZombieColor && (zombie?.chilledCounter ?? 0) > 0
         const system = TodParticleSystem.spawn({
             parent: this._entityLayer,
             effect,
@@ -3222,6 +3225,8 @@ export abstract class GameScreenCore extends Component {
             y,
             renderOrder,
             imageOverride,
+            tint: chilled ? CHILLED_ZOMBIE_COLOR : undefined,
+            extraAdditive: chilled,
         })
         system.enabled = this._isGameplaySceneAnimationEnabled()
         this._trackGameplayParticle(system)
@@ -3387,6 +3392,7 @@ export abstract class GameScreenCore extends Component {
             }
             if (meta.parentEntityId != null) snapshot.parentEntityId = meta.parentEntityId
             if (tint) snapshot.tint = { r: tint.r, g: tint.g, b: tint.b }
+            if (system.extraAdditive) snapshot.extraAdditive = true
             snapshots.push(snapshot)
         }
         return snapshots
@@ -3409,6 +3415,7 @@ export abstract class GameScreenCore extends Component {
                 z: particle.z,
                 renderOrder: particle.renderOrder,
                 tint: particle.tint ? new Color(particle.tint.r, particle.tint.g, particle.tint.b, 255) : undefined,
+                extraAdditive: particle.extraAdditive,
             })
             system.enabled = this._isGameplaySceneAnimationEnabled()
             system.fastForward(particle.ageTicks)

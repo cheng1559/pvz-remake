@@ -67,6 +67,7 @@ interface ParticleTrackInterpolations {
 
 class TodParticle {
     readonly node: Node
+    readonly extraAdditiveSprite: Sprite | null
     readonly duration: number
     readonly trackInterpolations: ParticleTrackInterpolations
     readonly fieldInterpolations: Array<{ x: number; y: number }>
@@ -90,6 +91,7 @@ class TodParticle {
         randomLaunchSpin: boolean,
         alignLaunchSpin: boolean,
         additive: boolean,
+        extraAdditive: boolean,
         fieldCount: number,
     ) {
         this.node = createSpriteNode({
@@ -100,9 +102,21 @@ class TodParticle {
             anchorX: 0.5,
             anchorY: 0.5,
         })
-        if (additive) {
-            const sprite = this.node.getComponent(Sprite)
-            if (sprite) sprite.customMaterial = getAdditiveSpriteMaterial()
+        const sprite = this.node.getComponent(Sprite)
+        if (additive && sprite) sprite.customMaterial = getAdditiveSpriteMaterial()
+        if (extraAdditive) {
+            const additiveNode = createSpriteNode({
+                name: 'ParticleExtraAdditive',
+                spriteFrame,
+                parent: this.node,
+                layer: parent.layer,
+                anchorX: 0.5,
+                anchorY: 0.5,
+            })
+            this.extraAdditiveSprite = additiveNode.getComponent(Sprite)
+            if (this.extraAdditiveSprite) this.extraAdditiveSprite.customMaterial = getAdditiveSpriteMaterial()
+        } else {
+            this.extraAdditiveSprite = null
         }
         this.duration = Math.max(1, Math.round(duration))
         this.velocityX = Math.sin(launchAngle) * launchSpeed
@@ -143,6 +157,7 @@ class TodParticleEmitter {
 
     scaleOverride = 1
     tint = Color.WHITE.clone()
+    extraAdditive = false
     private _particles: TodParticle[] = []
     private _age = -1
     private _dead = false
@@ -327,6 +342,7 @@ class TodParticleEmitter {
             this.definition.randomLaunchSpin,
             this.definition.alignLaunchSpin,
             this.definition.additive,
+            this.extraAdditive,
             this.definition.fields.length,
         )
         const position = this._resolveEmitterPosition(systemTime, resolvedLaunchAngle)
@@ -550,12 +566,14 @@ class TodParticleEmitter {
         particle.node.angle = -particle.spin / DEG_TO_RAD
         const sprite = particle.node.getComponent(Sprite)
         if (sprite) {
-            sprite.color = new Color(
+            const color = new Color(
                 Math.round(this.tint.r * red * brightness),
                 Math.round(this.tint.g * green * brightness),
                 Math.round(this.tint.b * blue * brightness),
                 Math.round(255 * alpha * brightness),
             )
+            sprite.color = color
+            if (particle.extraAdditiveSprite) particle.extraAdditiveSprite.color = color
         }
     }
 
@@ -615,6 +633,7 @@ export interface TodParticleSpawnArgs {
     z?: number
     renderOrder?: number
     tint?: Color
+    extraAdditive?: boolean
     imageOverride?: string
 }
 
@@ -625,6 +644,7 @@ export class TodParticleSystem extends Component {
     private _emitters: TodParticleEmitter[] = []
     private _accumulator = 0
     private _tint: Color | null = null
+    private _extraAdditive = false
     private _imageOverride: string | null = null
     private _ageTicks = 0
     private _pendingFastForwardTicks = 0
@@ -643,6 +663,7 @@ export class TodParticleSystem extends Component {
         system.effect = args.effect
         system.renderOrder = args.renderOrder ?? 10000
         system._tint = args.tint?.clone() ?? null
+        system._extraAdditive = args.extraAdditive ?? false
         system._imageOverride = args.imageOverride ?? null
         const definition = ParticleDefinitionLoader.get(args.effect)
         if (definition) {
@@ -662,6 +683,10 @@ export class TodParticleSystem extends Component {
 
     get tint() {
         return this._tint?.clone() ?? null
+    }
+
+    get extraAdditive() {
+        return this._extraAdditive
     }
 
     fastForward(ticks: number) {
@@ -689,6 +714,7 @@ export class TodParticleSystem extends Component {
             : emitterDefinition
         const emitter = new TodParticleEmitter(node, resolvedDefinition)
         if (this._tint) emitter.tint = this._tint.clone()
+        emitter.extraAdditive = this._extraAdditive
         return emitter
     }
 

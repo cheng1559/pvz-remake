@@ -29,6 +29,7 @@ export interface GameParticleSnapshot {
     renderOrder: number
     parentEntityId?: number
     tint?: { r: number, g: number, b: number }
+    extraAdditive?: boolean
 }
 
 export interface GameSessionSnapshot {

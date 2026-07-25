@@ -48,6 +48,7 @@ import {
     CHOMPER_BITE_ANIM_RATE,
     CHOMPER_CHEW_ANIM_RATE,
     CHOMPER_SWALLOW_ANIM_RATE,
+    CHILLED_ZOMBIE_COLOR,
     DEBUG_ATTACK_RECT_COLOR,
     DEBUG_BODY_RECT_COLOR,
     DEBUG_HITBOX_EDGE_WIDTH,
@@ -88,8 +89,6 @@ const ZOMBIE_DRAW_OFFSETS: Partial<Record<ZombieEntity['type'], { x: number; y: 
     'pole-vaulting': { x: -6, y: -11 },
 }
 const DEFAULT_ZOMBIE_SHADOW_OFFSET = { x: 23, y: 92 }
-const CHILLED_ZOMBIE_COLOR = new Color(75, 75, 255, 255)
-
 export abstract class GameEntityRenderer extends GameScreenEndSequences {
     public debugRefreshPerfToggles() {
         for (const view of this._plantViews.values()) {
