@@ -4551,6 +4551,7 @@ export abstract class GameScreenCore extends Component {
     protected _updateHoverItemAndSeedPacketState() {
         if (GameDebugSettings.isMobileMode()) return false
         if (this._levelAwardScreenShown) return false
+        if (UIHoverManager.isModalBlocked) return false
         if (this._gameOverActive || this._levelCompleteActive) {
             this._hideTooltips()
             return false
