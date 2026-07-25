@@ -941,6 +941,7 @@ export class SelectorScreen extends AnimationComponent {
         this.onStartAdventureTransition?.()
         this.playZombieHand()
         this._setButtonsInteractable(false)
+        for (const button of this._flowerButtons) button.interactable = true
         this._startAdventureActive = true
         this._startAdventureElapsed = 0
         this._startAdventureFlashCounter = 0
