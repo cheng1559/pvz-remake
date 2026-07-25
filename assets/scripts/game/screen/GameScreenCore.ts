@@ -814,23 +814,15 @@ export abstract class GameScreenCore extends Component {
         if (this._levelCompleteActive && !this._session.paused) {
             this._updateLevelCompleteEffect(scaledDt / GAME_TICK_SECONDS)
         }
-        if (gameTicks > 0) {
-            this._updateAdviceWidget(gameTicks)
-            this._updateTimedUiEffects(gameTicks)
-            this._updateCrazyDave(gameTicks)
-            this._updateGameplayLawnMowerIntro(gameTicks)
-            this._updateGameplaySeedBankIntro(gameTicks)
-            this._updateConveyorBeltAnimation(gameTicks)
-        } else if (!this._session.paused) {
+        if (gameTicks > 0) this._updateAdviceWidget(gameTicks)
+        if (!this._session.paused) {
             const uiTicks = scaledDt / GAME_TICK_SECONDS
             this._updateTimedUiEffects(uiTicks)
             this._updateCrazyDave(uiTicks)
             this._updateGameplayLawnMowerIntro(uiTicks)
             this._updateGameplaySeedBankIntro(uiTicks)
             this._updateConveyorBeltAnimation(uiTicks)
-        }
-        if (!this._session.paused) {
-            MusicSystem.update(scaledDt / GAME_TICK_SECONDS, {
+            MusicSystem.update(uiTicks, {
                 zombiesOnScreen: this._gameStarted ? this._session.countZombiesOnScreenForMusic() : 0,
             })
         }
