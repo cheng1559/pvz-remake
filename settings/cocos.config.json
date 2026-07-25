@@ -1,17 +1,5 @@
 {
     "builder": {
-        "common": {
-            "binGroupConfig": {
-                "threshold": 16,
-                "enable": false
-            },
-            "polyfills": {
-                "asyncFunctions": true
-            },
-            "buildPath": "project://build",
-            "mainBundleCompressionType": "merge_dep",
-            "useSplashScreen": false
-        },
         "textureCompressConfig": {
             "genMipmaps": false
         }
@@ -68,5 +56,5 @@
         "tick": false
     },
     "version": "1.0.0",
-    "$schema": "./temp/cocos.config.schema.json"
+    "$schema": "../temp/cocos.config.schema.json"
 }
