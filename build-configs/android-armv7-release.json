@@ -1,0 +1,10 @@
+{
+    "debug": false,
+    "sourceMaps": false,
+    "outputName": "android-armv7-release",
+    "packages": {
+        "android": {
+            "appABIs": ["armeabi-v7a"]
+        }
+    }
+}

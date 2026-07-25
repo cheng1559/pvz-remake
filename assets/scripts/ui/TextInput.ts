@@ -105,12 +105,12 @@ interface MobilePageScrollState {
 }
 
 interface NativeBridge {
-    hideKeyboardAccessory?: () => boolean
+    hideInputBoxAccessory?: () => boolean
 }
 
 type NativeBindings = typeof globalThis & {
     jsb?: {
-        PvzNative?: NativeBridge
+        hideInputBoxAccessory?: NativeBridge['hideInputBoxAccessory']
     }
 }
 
@@ -554,8 +554,7 @@ export class SelfDrawTextInput {
 
     private _hideNativeKeyboardAccessory() {
         if (!sys.isNative || !sys.isMobile) return
-        const bridge = (globalThis as NativeBindings).jsb?.PvzNative
-        bridge?.hideKeyboardAccessory?.()
+        ;(globalThis as NativeBindings).jsb?.hideInputBoxAccessory?.()
     }
 
     private _blurNativeTextInput() {

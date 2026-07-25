@@ -45,7 +45,6 @@ native/engine/android/instantapp/*
 node_modules/
 dist/
 release/
-settings/v2/packages/project.json
 
 #//////////////////////////
 # Python
@@ -97,3 +96,4 @@ assets/resources/properties.meta
 assets/resources/particles/*
 assets/resources/particles.meta
 reference*
+.wrangler

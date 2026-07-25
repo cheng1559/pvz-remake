@@ -40,14 +40,6 @@ const DEBUG_PERF_TOGGLES: DebugPerfToggle[] = ['plants', 'zombies', 'particles',
 const DEBUG_LEVELS_FOR_CLI = [...ADVENTURE_LEVELS, ...DEBUG_LEVELS]
 const DEBUG_LEVEL_IDS = DEBUG_LEVELS_FOR_CLI.map((level) => debugLevelId(level))
 const DEBUG_LEVEL_LOOKUP = new Map(DEBUG_LEVEL_IDS.map((id, index) => [id, DEBUG_LEVELS_FOR_CLI[index]]))
-type DebugNativeBridge = {
-    setFullScreen?: (fullScreen: boolean) => boolean
-}
-type DebugNativeBindings = typeof globalThis & {
-    jsb?: {
-        PvzNative?: DebugNativeBridge
-    }
-}
 const DEBUG_CLI_COMMAND_SPECS: DebugCliCommandSpec[] = [
     {
         name: 'plant',
@@ -1226,18 +1218,11 @@ function parseDebugPercent(token: string) {
 }
 
 function debugCanRequestFullScreen() {
-    if (sys.isNative) return sys.isMobile || !!debugNativeBridge()?.setFullScreen
-    return screen.supportsFullScreen
+    return sys.isNative && sys.isMobile ? true : screen.supportsFullScreen
 }
 
 async function applyDebugFullScreenPreference(fullScreen: boolean) {
     try {
-        const nativeBridge = debugNativeBridge()
-        if (sys.isNative) {
-            nativeBridge?.setFullScreen?.(fullScreen)
-            return
-        }
-
         if (fullScreen) {
             if (!screen.fullScreen()) await screen.requestFullScreen()
             return
@@ -1247,10 +1232,6 @@ async function applyDebugFullScreenPreference(fullScreen: boolean) {
     } catch (error) {
         console.warn('[DebugCliCommands] Failed to apply fullscreen preference', error)
     }
-}
-
-function debugNativeBridge() {
-    return (globalThis as DebugNativeBindings).jsb?.PvzNative
 }
 
 function validateDebugGridPosition(gameScreen: AdventureGameScreen, row: number, col: number | null) {
