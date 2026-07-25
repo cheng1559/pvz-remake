@@ -45,6 +45,8 @@ const ZOMBIE_CHARRED_FRAME_SPAN = ZOMBIE_CHARRED_FRAME_COUNT - 1
 const ZOMBIE_CHARRED_TICKS = Math.ceil(
     ZOMBIE_CHARRED_FRAME_COUNT / ZOMBIE_CHARRED_ANIM_RATE * GAME_TICKS_PER_SECOND,
 )
+const ZOMBIE_CHARRED_ANIM_RATE_SCALE_MIN = 0.9
+const ZOMBIE_CHARRED_ANIM_RATE_SCALE_MAX = 1.1
 const ZOMBIE_BURNED_TICKS = 300
 const ZOMBIE_DEATH_FALL_TIME = 0.77
 const ZOMBIE_DEATH2_FALL_TIME = 0.71
@@ -421,7 +423,10 @@ export abstract class Zombie implements ZombieEntity {
         this.chilledCounter = 0
         this.hitFlashCounter = 0
         this.animationTime = 0
-        this.animationSpeed = ZOMBIE_CHARRED_ANIM_RATE / ZOMBIE_WALK_ASSET_FPS
+        this.animationSpeed = ZOMBIE_CHARRED_ANIM_RATE / ZOMBIE_WALK_ASSET_FPS * (
+            ZOMBIE_CHARRED_ANIM_RATE_SCALE_MIN +
+            Math.random() * (ZOMBIE_CHARRED_ANIM_RATE_SCALE_MAX - ZOMBIE_CHARRED_ANIM_RATE_SCALE_MIN)
+        )
         this.charredTime = 0
         this.currentAnimation = 'anim_crumble'
         return true
@@ -468,9 +473,10 @@ export abstract class Zombie implements ZombieEntity {
         this.charredTime++
         this.animationTime = Math.min(
             ZOMBIE_CHARRED_FRAME_SPAN,
-            this.animationTime + ZOMBIE_CHARRED_FRAME_SPAN / ZOMBIE_CHARRED_TICKS,
+            this.animationTime + ZOMBIE_CHARRED_FRAME_SPAN / ZOMBIE_CHARRED_TICKS *
+                this.animationSpeed * ZOMBIE_WALK_ASSET_FPS / ZOMBIE_CHARRED_ANIM_RATE,
         )
-        if (this.charredTime >= ZOMBIE_CHARRED_TICKS) {
+        if (this.animationTime >= ZOMBIE_CHARRED_FRAME_SPAN) {
             this.dead = true
         }
     }
