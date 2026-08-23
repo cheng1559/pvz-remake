@@ -1,10 +1,10 @@
 import { Color, Graphics, UIOpacity } from 'cc'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
-import { MusicSystem } from '../music/MusicSystem'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { MusicSystem } from '@/client/music/MusicSystem'
 import { GameScreenIntroHud } from './GameScreenIntroHud'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
-import { easeInOut, lerp } from './GameScreenMath'
+import { easeInOut, lerp } from '@/client/view/GameScreenMath'
 import {
     BOARD_OFFSET,
     BOARD_ROOT_X,

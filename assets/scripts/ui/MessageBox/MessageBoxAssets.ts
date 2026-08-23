@@ -1,7 +1,7 @@
 import { SpriteFrame } from 'cc'
 
 import { FontLoader } from '@/core/FontLoader'
-import type { BitmapFontAssets } from '@/core/FontLoader'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { SpriteLoader } from '@/core/SpriteLoader'
 
 const BUTTON_SPRITES = [

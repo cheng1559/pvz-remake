@@ -6,14 +6,14 @@ import {
     SEED_DEFINITIONS,
     ZOMBIE_DEFINITIONS,
 } from './GameDefinitions'
-import { SoundEffect } from '@/core/SoundLoader'
+import { SoundEffect } from '@/client/sound/LegacySoundSystem'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { createItem, Item } from './items/ItemFactory'
 import { createPlant, Plant } from './plants/PlantFactory'
 import { createProjectile, Projectile } from './projectiles/ProjectileFactory'
 import { createZombie, Zombie } from './zombies/ZombieFactory'
-import { GameDebugSettings } from './GameDebugSettings'
-import type { DebugCollectMode } from './GameDebugSettings'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import type { DebugCollectMode } from '@/platform/debug/GameDebugSettings'
 import type {
     GameCommand,
     ConveyorPacketState,

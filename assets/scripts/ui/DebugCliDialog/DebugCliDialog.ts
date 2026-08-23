@@ -12,8 +12,9 @@ import {
     Node,
     UITransform,
 } from 'cc'
-import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { FontLoader } from '@/core/FontLoader'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import {
     type DebugCliResult,

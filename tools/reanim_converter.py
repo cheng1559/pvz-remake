@@ -1,4 +1,6 @@
+import hashlib
 import json
+import re
 from xml.etree import ElementTree
 from pathlib import Path
 from typing import Any
@@ -10,6 +12,9 @@ from sprite_texture_preprocessor import (
     select_image_resources,
     write_preprocessed_resource,
 )
+
+
+QUALIFIED_ID = re.compile(r"^[a-z0-9][a-z0-9_-]*:[a-z0-9][a-z0-9_./-]*$")
 
 
 def get_float(xml_elem: ElementTree.Element, tag: str) -> float | None:
@@ -43,12 +48,17 @@ def load_anim_xml(xml_dir: Path, anim_name: str) -> ElementTree.Element:
     return root
 
 
-def parse_track_data(track_node: ElementTree.Element) -> tuple[str, int, list[dict[str, Any]]]:
+def parse_track_data(
+    track_node: ElementTree.Element,
+    include_inactive: bool = False,
+) -> tuple[str, int, list[dict[str, Any]]]:
     name_node = track_node.find('name')
     if name_node is None or name_node.text is None:
         raise ValueError(
             "Track is missing required <name> element or it has no text")
     name = name_node.text.strip()
+    if not name:
+        raise ValueError("Track name must not be empty")
 
     curr = {
         'x': 0.0, 'y': 0.0, 'sx': 1.0, 'sy': 1.0,
@@ -89,13 +99,109 @@ def parse_track_data(track_node: ElementTree.Element) -> tuple[str, int, list[di
 
         val_i = get_string(frame_node, 'i')
         if val_i is not None:
-            assert val_i.startswith('IMAGE_REANIM_'), "Unexpected image format"
+            if not val_i.startswith('IMAGE_REANIM_'):
+                raise ValueError(f"Unexpected image format: {val_i}")
             curr['image'] = val_i.replace('IMAGE_REANIM_', '', 1).lower()
 
         if is_active:
             frames.append(curr.copy())
+        elif include_inactive:
+            hidden = curr.copy()
+            hidden['image'] = None
+            frames.append(hidden)
 
     return name, duration, frames
+
+
+def build_reanim_v2(
+    source: Path,
+    content_id: str,
+    available_sprites: set[str],
+    namespace: str = "pvz",
+) -> dict[str, Any]:
+    """Convert one Reanim file to the small, runtime-independent v2 format."""
+    if not QUALIFIED_ID.fullmatch(content_id):
+        raise ValueError(f"invalid reanim id: {content_id}")
+
+    root = ElementTree.fromstring(f"<root>{source.read_text(encoding='utf-8')}</root>")
+    fps_text = root.findtext("fps", "12")
+    try:
+        fps = int(fps_text)
+    except ValueError as error:
+        raise ValueError(f"invalid fps: {fps_text}") from error
+    if fps <= 0:
+        raise ValueError("fps must be positive")
+
+    duration: int | None = None
+    tracks: list[dict[str, Any]] = []
+    track_ids: set[str] = set()
+    missing_sprites: set[str] = set()
+    for z_index, track_node in enumerate(root.findall("track")):
+        track_id, track_duration, frames = parse_track_data(track_node, include_inactive=True)
+        if track_id in track_ids:
+            raise ValueError(f"duplicate track id: {track_id}")
+        track_ids.add(track_id)
+        if duration is None:
+            duration = track_duration
+        elif duration != track_duration:
+            raise ValueError(
+                f"track '{track_id}' has duration {track_duration}, expected {duration}"
+            )
+
+        keyframes = []
+        for frame in frames:
+            if not 0 <= frame["alpha"] <= 1:
+                raise ValueError(f"track '{track_id}' alpha must be between 0 and 1")
+            sprite = f"{namespace}:{frame['image']}" if frame["image"] else None
+            if sprite is not None and sprite not in available_sprites:
+                missing_sprites.add(sprite)
+            keyframes.append({
+                "timeSeconds": frame["frameIndex"] / fps,
+                "x": frame["x"],
+                "y": frame["y"],
+                "scaleX": frame["sx"],
+                "scaleY": frame["sy"],
+                "skewX": frame["kx"],
+                "skewY": frame["ky"],
+                "alpha": frame["alpha"],
+                "sprite": sprite,
+                "interpolation": "linear",
+            })
+        if keyframes:
+            tracks.append({"id": track_id, "zIndex": z_index, "keyframes": keyframes})
+
+    if duration is None:
+        raise ValueError("reanim has no tracks")
+    if duration == 0 or not tracks:
+        raise ValueError("reanim has no active frames")
+    if missing_sprites:
+        raise ValueError(f"missing sprite references: {', '.join(sorted(missing_sprites))}")
+    return {
+        "schemaVersion": 2,
+        "id": content_id,
+        "durationSeconds": duration / fps,
+        "tracks": tracks,
+    }
+
+
+def write_reanim_v2(
+    source: Path,
+    output: Path,
+    content_id: str,
+    available_sprites: set[str],
+    namespace: str = "pvz",
+) -> str:
+    payload = json.dumps(
+        build_reanim_v2(source, content_id, available_sprites, namespace),
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    payload += b"\n"
+    output.write_bytes(payload)
+    return hashlib.sha256(payload).hexdigest()
 
 
 def warn_missing_track(anim_name: str, node_name: str, track_name: str, usage: str) -> None:
@@ -270,6 +376,101 @@ def get_anim_nodes(
         }
 
     return anim_nodes
+
+
+def build_reanim_clip_v2(
+    source: Path,
+    anim_info: dict[str, Any],
+    node_id: str,
+    clip_id: str,
+    content_id: str,
+    available_sprites: set[str],
+    namespace: str = "pvz",
+) -> dict[str, Any]:
+    if not QUALIFIED_ID.fullmatch(content_id):
+        raise ValueError(f"invalid reanim id: {content_id}")
+    root = ElementTree.fromstring(f"<root>{source.read_text(encoding='utf-8')}</root>")
+    nodes = get_anim_nodes(source.stem, anim_info, root)
+    node = nodes.get(node_id)
+    if node is None:
+        raise ValueError(f"unknown reanim node: {node_id}")
+    clip = node["animations"].get(clip_id)
+    if clip is None:
+        raise ValueError(f"unknown reanim clip: {node_id}/{clip_id}")
+
+    fps = clip["fps"]
+    start = clip["startFrame"]
+    end = clip["endFrame"]
+    tracks = []
+    missing_sprites: set[str] = set()
+    for track_id, track in sorted(node["tracks"].items(), key=lambda item: (item[1]["zIndex"], item[0])):
+        if any(track_id.startswith(prefix) for prefix in anim_info[node_id].get("hiddenTrackPrefixes", [])):
+            continue
+        frames = [frame for frame in track["frames"] if start <= frame["frameIndex"] <= end]
+        if not frames:
+            continue
+        keyframes = []
+        previous = None
+        for frame in frames:
+            if previous is not None and frame["frameIndex"] > previous["frameIndex"] + 1:
+                keyframes.append(_legacy_frame_v2(previous, previous["frameIndex"] + 1, start, fps, None))
+            sprite = f"{namespace}:{frame['image']}" if frame["image"] else None
+            if sprite is not None and sprite not in available_sprites:
+                missing_sprites.add(sprite)
+            keyframes.append(_legacy_frame_v2(frame, frame["frameIndex"], start, fps, sprite))
+            previous = frame
+        if previous is not None and previous["frameIndex"] < end:
+            keyframes.append(_legacy_frame_v2(previous, previous["frameIndex"] + 1, start, fps, None))
+        tracks.append({"id": track_id, "zIndex": track["zIndex"], "keyframes": keyframes})
+
+    if missing_sprites:
+        raise ValueError(f"missing sprite references: {', '.join(sorted(missing_sprites))}")
+    return {
+        "schemaVersion": 2,
+        "id": content_id,
+        "durationSeconds": (end - start + 1) / fps,
+        "tracks": tracks,
+    }
+
+
+def write_reanim_clip_v2(
+    source: Path,
+    output: Path,
+    anim_info: dict[str, Any],
+    node_id: str,
+    clip_id: str,
+    content_id: str,
+    available_sprites: set[str],
+    namespace: str = "pvz",
+) -> str:
+    data = build_reanim_clip_v2(
+        source, anim_info, node_id, clip_id, content_id, available_sprites, namespace
+    )
+    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode() + b"\n"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(payload)
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _legacy_frame_v2(
+    frame: dict[str, Any],
+    frame_index: int,
+    start_frame: int,
+    fps: int,
+    sprite: str | None,
+) -> dict[str, Any]:
+    return {
+        "timeSeconds": (frame_index - start_frame) / fps,
+        "x": frame["x"],
+        "y": frame["y"],
+        "scaleX": frame["sx"],
+        "scaleY": frame["sy"],
+        "skewX": frame["kx"],
+        "skewY": frame["ky"],
+        "alpha": frame["alpha"],
+        "sprite": sprite,
+        "interpolation": "linear",
+    }
 
 
 def save_anim_data(output_dir: Path, anim_name: str, anim_nodes: dict[str, Any]):

@@ -1,6 +1,6 @@
 import { EventMouse, EventTouch, Node, Vec2 } from 'cc'
-import { CursorManager } from '@/ui/CursorManager'
-import { GameDebugSettings } from '@/game/GameDebugSettings'
+import { CursorManager } from '@/client/input/CursorManager'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 export interface UIHoverPointer {
     location: Vec2

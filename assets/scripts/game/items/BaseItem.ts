@@ -1,5 +1,5 @@
 import type { GameEvent, ItemEntity, ItemMotion, ItemType, LevelAwardKind, SeedType } from '../GameTypes'
-import { SoundEffect } from '@/core/SoundLoader'
+import { SoundEffect } from '@/client/sound/LegacySoundSystem'
 
 const BOARD_WIDTH = 800
 const SUN_BANK_DEST_X = 15

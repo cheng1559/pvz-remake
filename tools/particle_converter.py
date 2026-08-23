@@ -78,6 +78,10 @@ FIELD_TYPES = {
 IMAGE_PREFIX = "IMAGE_"
 REANIM_IMAGE_PREFIX = "IMAGE_REANIM_"
 TOKEN_RE = re.compile(r"\[[^\]]+\]|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
+NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+PVZ_TRACK_TOKEN_RE = re.compile(
+    rf"\s*(?P<value>\[[^\]]+\]|{NUMBER})(?:,(?P<time>{NUMBER}))?"
+)
 
 
 def constant(value: float) -> dict[str, Any]:
@@ -119,6 +123,213 @@ def parse_track(text: str | None, default: float = 0.0) -> dict[str, Any]:
         })
 
     return {"nodes": nodes} if nodes else constant(default)
+
+
+def parse_pvz_track(text: str | None, default: float = 0.0) -> dict[str, Any]:
+    """Parse the original PvZ XML form: [low high],time."""
+    if not text or not text.strip():
+        return {"nodes": [{"timeRatio": 0, "low": default, "high": default}]}
+
+    nodes: list[dict[str, Any]] = []
+    position = 0
+    while position < len(text):
+        if not text[position:].strip():
+            break
+        match = PVZ_TRACK_TOKEN_RE.match(text, position)
+        if not match:
+            raise ValueError(f"invalid PvZ particle track: {text!r}")
+        token = match.group("value")
+        values = [float(value) for value in re.findall(NUMBER, token)]
+        if len(values) not in (1, 2):
+            raise ValueError(f"unsupported PvZ particle track value: {token!r}")
+        node = {
+            "timeRatio": None,
+            "low": normalize_number(values[0]),
+            "high": normalize_number(values[-1]),
+        }
+        if match.group("time") is not None:
+            node["timeRatio"] = normalize_number(round(float(match.group("time")) * 0.01, 10))
+        nodes.append(node)
+        position = match.end()
+
+    if text[position:].strip():
+        raise ValueError(f"invalid PvZ particle track: {text!r}")
+    _fill_track_times(nodes)
+    return {"nodes": nodes}
+
+
+def _fill_track_times(nodes: list[dict[str, Any]]) -> None:
+    block_start = 0
+    previous_time = 0.0
+    while block_start < len(nodes):
+        explicit = next(
+            (index for index in range(block_start, len(nodes)) if nodes[index]["timeRatio"] is not None),
+            len(nodes),
+        )
+        next_time = float(nodes[explicit]["timeRatio"]) if explicit < len(nodes) else 1.0
+        missing_count = explicit - block_start
+        for offset in range(missing_count):
+            if missing_count == 1 and block_start == 0:
+                ratio = 0.0
+            elif missing_count == 1:
+                ratio = 1.0
+            else:
+                ratio = offset / (missing_count - 1)
+            nodes[block_start + offset]["timeRatio"] = normalize_number(
+                previous_time + (next_time - previous_time) * ratio
+            )
+        if explicit == len(nodes):
+            break
+        previous_time = next_time
+        block_start = explicit + 1
+
+
+def build_particle_v2(
+    source: Path,
+    content_id: str,
+    namespace: str = "pvz",
+    image_grids: dict[str, dict[str, int]] | None = None,
+) -> dict[str, Any]:
+    raw = source.read_text(encoding="utf-8", errors="strict")
+    root = ElementTree.fromstring(f"<root>{raw}</root>")
+    emitter_nodes = root.findall("Emitter")
+    if not emitter_nodes:
+        raise ValueError(f"particle has no emitters: {source}")
+
+    grids = image_grids if image_grids is not None else load_image_grid_metadata(
+        Path("tools/raw/properties/resources.xml")
+    )
+    emitters = [_build_emitter_v2(node, namespace, grids) for node in emitter_nodes]
+    duration = max(emitter["durationSeconds"] for emitter in emitters)
+    return {
+        "schemaVersion": 2,
+        "id": content_id,
+        "durationSeconds": duration,
+        "emitters": emitters,
+    }
+
+
+def write_particle_v2(
+    source: Path,
+    output: Path,
+    content_id: str,
+    namespace: str = "pvz",
+    image_grids: dict[str, dict[str, int]] | None = None,
+) -> dict[str, Any]:
+    data = build_particle_v2(source, content_id, namespace, image_grids)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(data, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return data
+
+
+def _build_emitter_v2(
+    node: ElementTree.Element,
+    namespace: str,
+    image_grids: dict[str, dict[str, int]],
+) -> dict[str, Any]:
+    supported = {
+        "Name", "Image", "ImageFrames", "ImageRow", "ImageCol", "SpawnMinActive",
+        "SpawnMaxLaunched", "ParticleAlpha", "ParticleScale", "EmitterType",
+        "EmitterRadius", "LaunchSpeed", "LaunchAngle", "ParticleDuration",
+        "SystemDuration", "EmitterOffsetX", "EmitterOffsetY", "RandomLaunchSpin",
+        "ParticleSpinSpeed", "Field",
+    }
+    for child in node:
+        if child.tag not in supported:
+            raise ValueError(f"unsupported Particle v2 emitter field: {child.tag}")
+
+    image = strip_image_prefix(_required_text(node, "Image"))
+    image_frames = int(_optional_text(node, "ImageFrames", "1"))
+    if image_frames <= 0:
+        raise ValueError("particle ImageFrames must be positive")
+    system_ticks = _constant_track_value(node, "SystemDuration", 0)
+    particle_ticks = _constant_track_value(node, "ParticleDuration", 100)
+    duration_ticks = system_ticks or particle_ticks
+    emitter_type = _optional_text(node, "EmitterType", "circle").lower()
+    if emitter_type != "circle":
+        raise ValueError(f"unsupported Particle v2 emitter type: {emitter_type}")
+    launch_angle = _track(node, "LaunchAngle", 0)
+    if any(value != 0 for point in launch_angle["nodes"] for value in (point["low"], point["high"])):
+        raise ValueError("Particle v2 does not support directed LaunchAngle yet")
+    grid = image_grids.get(image.upper(), {})
+    columns = grid.get("imageColumns", image_frames)
+    rows = grid.get("imageRows", 1)
+    return {
+        "sprite": f"{namespace}:{image.lower()}",
+        "columns": columns,
+        "rows": rows,
+        "firstFrame": int(_optional_text(node, "ImageRow", "0")) * columns
+        + int(_optional_text(node, "ImageCol", "0")),
+        "frameCount": image_frames,
+        "durationSeconds": normalize_number(duration_ticks * 0.01),
+        "emitterOffsetX": _track(node, "EmitterOffsetX", 0),
+        "emitterOffsetY": _track(node, "EmitterOffsetY", 0),
+        "spawnMinActive": _track(node, "SpawnMinActive", -1),
+        "spawnMaxLaunched": _track(node, "SpawnMaxLaunched", -1),
+        "emitterRadius": _track(node, "EmitterRadius", 0),
+        "particleDurationSeconds": _scale_track(_track(node, "ParticleDuration", 100), 0.01),
+        "launchSpeed": _track(node, "LaunchSpeed", 0),
+        "particleAlpha": _track(node, "ParticleAlpha", 1),
+        "particleScale": _track(node, "ParticleScale", 1),
+        "particleSpinSpeed": _track(node, "ParticleSpinSpeed", 0),
+        "randomLaunchSpin": node.find("RandomLaunchSpin") is not None
+        and parse_bool(node.findtext("RandomLaunchSpin")),
+        "fields": [_build_field_v2(field) for field in node.findall("Field")],
+    }
+
+
+def _build_field_v2(node: ElementTree.Element) -> dict[str, Any]:
+    for child in node:
+        if child.tag not in {"FieldType", "X", "x", "Y", "y"}:
+            raise ValueError(f"unsupported Particle v2 field property: {child.tag}")
+    field_type = _required_text(node, "FieldType").lower()
+    if field_type not in {"friction", "acceleration"}:
+        raise ValueError(f"unsupported Particle v2 field: {field_type}")
+    scale = 100 if field_type == "acceleration" else 1
+    return {
+        "type": field_type,
+        "x": _scale_track(parse_pvz_track(node.findtext("X") or node.findtext("x"), 0), scale),
+        "y": _scale_track(parse_pvz_track(node.findtext("Y") or node.findtext("y"), 0), scale),
+    }
+
+
+def _track(node: ElementTree.Element, name: str, default: float) -> dict[str, Any]:
+    return parse_pvz_track(node.findtext(name), default)
+
+
+def _scale_track(track: dict[str, Any], scale: float) -> dict[str, Any]:
+    return {
+        "nodes": [
+            {
+                **node,
+                "low": normalize_number(float(node["low"]) * scale),
+                "high": normalize_number(float(node["high"]) * scale),
+            }
+            for node in track["nodes"]
+        ]
+    }
+
+
+def _constant_track_value(node: ElementTree.Element, name: str, default: float) -> float:
+    track = _track(node, name, default)["nodes"]
+    if len(track) != 1 or track[0]["low"] != track[0]["high"]:
+        raise ValueError(f"Particle v2 requires constant {name}")
+    return float(track[0]["low"])
+
+
+def _required_text(node: ElementTree.Element, name: str) -> str:
+    value = node.findtext(name)
+    if value is None or not value.strip():
+        raise ValueError(f"particle emitter is missing {name}")
+    return value.strip()
+
+
+def _optional_text(node: ElementTree.Element, name: str, default: str) -> str:
+    value = node.findtext(name)
+    return value.strip() if value and value.strip() else default
 
 
 def parse_bool(text: str | None) -> bool:

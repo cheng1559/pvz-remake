@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 2,
+  "levels": {
+    "pvz:adventure-1-1": {
+      "adventureIndex": 1,
+      "board": "pvz:day",
+      "activeRows": [2],
+      "startingSun": 150,
+      "seedPackets": ["pvz:peashooter"],
+      "lawnMower": "pvz:standard",
+      "skySun": "pvz:sun",
+      "waves": [
+        { "zombies": ["pvz:normal"] },
+        { "zombies": ["pvz:normal"] },
+        { "zombies": ["pvz:normal"] },
+        { "zombies": ["pvz:normal", "pvz:normal"] }
+      ],
+      "tutorial": "pvz:adventure-1-1",
+      "award": { "kind": "seed", "id": "pvz:sunflower", "packetCost": 50 }
+    }
+  }
+}

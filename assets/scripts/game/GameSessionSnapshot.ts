@@ -14,9 +14,9 @@ import type {
     SeedPacketState,
     ZombieEntity,
 } from './GameTypes'
-import type { AdviceWidgetSnapshot } from '@/ui/AdviceWidget'
+import type { AdviceWidgetSnapshot } from '@/client/hud/advice/AdviceWidget'
 import type { CrazyDaveDialogPhase } from './screen/CrazyDaveDialogConfig'
-import type { MusicPlaybackSnapshot } from './music/MusicSystem'
+import type { MusicPlaybackSnapshot } from '@/client/music/MusicSystem'
 
 const GAME_SESSION_SNAPSHOT_VERSION = 1
 

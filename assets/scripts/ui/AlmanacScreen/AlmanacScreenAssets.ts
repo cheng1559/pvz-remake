@@ -1,6 +1,7 @@
 import { JsonAsset, type SpriteFrame } from 'cc'
-import { AssetLoader } from '@/core/AssetLoader'
-import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
+import { AssetLoader } from '@/client/content/LegacyAssetLoader'
+import { FontLoader } from '@/core/FontLoader'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { SpriteLoader } from '@/core/SpriteLoader'
 
 export const ALMANAC_PLANT_ANIMATIONS = [

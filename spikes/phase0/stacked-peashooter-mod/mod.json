@@ -1,0 +1,12 @@
+{
+    "schemaVersion": 1,
+    "id": "phase0:stacked-peashooter",
+    "version": "1.0.0",
+    "apiVersion": 1,
+    "contentHash": "phase0-stacked-peashooter-v1",
+    "dependencies": [],
+    "gameplay": {
+        "nodeModule": "gameplay/node/index.js",
+        "cocosModule": "gameplay/cocos/index.js"
+    }
+}

@@ -4,7 +4,7 @@
 
   <p>
     <a href="README.md"><img alt="Language: English" src="https://img.shields.io/badge/lang-English-blue"></a>
-    <img alt="Cocos Creator 3.8.8" src="https://img.shields.io/badge/Cocos%20Creator-3.8.8-55c2e1">
+    <img alt="Cocos Creator 4.0.0 alpha.27" src="https://img.shields.io/badge/Cocos%20Creator-4.0.0--alpha.27-55c2e1">
     <img alt="TypeScript" src="https://img.shields.io/badge/code-TypeScript-3178c6">
     <img alt="Status" src="https://img.shields.io/badge/status-early%20playable-7cc576">
     <a href="https://space.bilibili.com/3494365624273288"><img alt="Bilibili: 金色初华犬" src="https://img.shields.io/badge/Bilibili-%E9%87%91%E8%89%B2%E5%88%9D%E5%8D%8E%E7%8A%AC-00a1d6"></a>

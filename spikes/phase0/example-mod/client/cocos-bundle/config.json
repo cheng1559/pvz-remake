@@ -1,0 +1,27 @@
+{
+    "importBase": "import",
+    "nativeBase": "native",
+    "name": "phase0-client",
+    "deps": [],
+    "uuids": [
+        "4a1525c3-4a1d-4bc6-ba7d-dc40437c3857"
+    ],
+    "paths": {
+        "4a1525c3-4a1d-4bc6-ba7d-dc40437c3857": [
+            "marker",
+            "cc.JsonAsset",
+            1
+        ]
+    },
+    "scenes": {},
+    "packs": {},
+    "versions": {
+        "import": [],
+        "native": []
+    },
+    "redirect": [],
+    "debug": true,
+    "extensionMap": {},
+    "hasPreloadScript": true,
+    "dependencyRelationships": {}
+}

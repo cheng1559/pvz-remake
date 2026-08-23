@@ -1,5 +1,5 @@
 import { PLANT_DEFINITIONS } from '../GameDefinitions'
-import { SoundEffect } from '@/core/SoundLoader'
+import { SoundEffect } from '@/client/sound/LegacySoundSystem'
 import type { PlantCreateArgs, PlantUpdateContext } from './BasePlant'
 import { Plant } from './BasePlant'
 

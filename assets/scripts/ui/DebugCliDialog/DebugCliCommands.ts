@@ -1,9 +1,9 @@
 import { screen, sys } from 'cc'
-import { SoundLoader } from '@/core/SoundLoader'
+import { SoundLoader } from '@/client/sound/LegacySoundSystem'
 import type { AdventureGameScreen } from '@/game/GameScreen'
 import { ADVENTURE_LEVELS, DEBUG_LEVELS, PLANT_DEFINITIONS, ZOMBIE_DEFINITIONS, getGameSpeed, setGameSpeed } from '@/game/GameDefinitions'
-import { GameDebugSettings } from '@/game/GameDebugSettings'
-import type { DebugCollectMode, DebugPerfToggle } from '@/game/GameDebugSettings'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import type { DebugCollectMode, DebugPerfToggle } from '@/platform/debug/GameDebugSettings'
 import { GameSettingsStore, SFX_VOLUME_SCALE } from '@/game/persistence/GameSettingsStore'
 import type { ItemType, LevelDefinition, PlantType, ZombieType } from '@/game/GameTypes'
 

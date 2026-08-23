@@ -1,4 +1,5 @@
-import { Layers, Node, Sprite, SpriteFrame, UITransform, Vec3 } from 'cc'
+import { Node, Sprite, SpriteFrame } from 'cc'
+import { uiNode } from '@/client/view/uiNode'
 
 export interface UINodeOptions {
     layer?: number
@@ -14,29 +15,23 @@ export interface UINodeOptions {
 }
 
 export function createUINode(name: string, options: UINodeOptions = {}): Node {
-    const node = new Node(name)
-    node.layer = options.layer ?? Layers.Enum.UI_2D
-    node.active = options.active ?? true
-
-    const transform = node.addComponent(UITransform)
-    transform.setAnchorPoint(options.anchorX ?? 0.5, options.anchorY ?? 0.5)
-    if (options.width != null || options.height != null) {
-        transform.setContentSize(options.width ?? 0, options.height ?? 0)
-    }
-
-    if (options.x != null || options.y != null || options.z != null) {
-        node.setPosition(options.x ?? 0, options.y ?? 0, options.z ?? 0)
-    }
-
-    options.parent?.addChild(node)
-    return node
+    return uiNode({
+        name,
+        parent: options.parent,
+        layer: options.layer,
+        active: options.active,
+        position: options.x != null || options.y != null || options.z != null
+            ? { x: options.x ?? 0, y: options.y ?? 0, z: options.z ?? 0 }
+            : undefined,
+        size: options.width != null || options.height != null
+            ? { width: options.width ?? 0, height: options.height ?? 0 }
+            : undefined,
+        anchor: { x: options.anchorX ?? 0.5, y: options.anchorY ?? 0.5 },
+    }).node
 }
 
 export function setUISize(node: Node, width: number, height: number, anchorX = 0.5, anchorY = 0.5) {
-    const transform = node.getComponent(UITransform) ?? node.addComponent(UITransform)
-    transform.setContentSize(width, height)
-    transform.setAnchorPoint(anchorX, anchorY)
-    return transform
+    return uiNode({ node, size: { width, height }, anchor: { x: anchorX, y: anchorY } }).transform
 }
 
 export function createSpriteNode(args: {
@@ -52,25 +47,17 @@ export function createSpriteNode(args: {
     width?: number
     height?: number
 }): Node {
-    const node = createUINode(args.name ?? '', {
+    return uiNode({
+        name: args.name ?? '',
+        parent: args.parent,
         layer: args.layer,
-        anchorX: args.anchorX ?? 0,
-        anchorY: args.anchorY ?? 1,
-        width: args.width,
-        height: args.height,
-    })
-
-    const sprite = node.addComponent(Sprite)
-    sprite.spriteFrame = args.spriteFrame
-    sprite.sizeMode = Sprite.SizeMode.RAW
-    sprite.trim = false
-    if (args.width != null || args.height != null) {
-        setUISize(node, args.width ?? 0, args.height ?? 0, args.anchorX ?? 0, args.anchorY ?? 1)
-    }
-
-    node.setPosition(new Vec3(args.x ?? 0, args.y ?? 0, args.z ?? 0))
-    args.parent?.addChild(node)
-    return node
+        position: { x: args.x ?? 0, y: args.y ?? 0, z: args.z ?? 0 },
+        size: args.width != null || args.height != null
+            ? { width: args.width ?? 0, height: args.height ?? 0 }
+            : undefined,
+        anchor: { x: args.anchorX ?? 0, y: args.anchorY ?? 1 },
+        sprite: { frame: args.spriteFrame, sizeMode: Sprite.SizeMode.RAW, trim: false },
+    }).node
 }
 
 export function buildThreeSliceRow(args: {

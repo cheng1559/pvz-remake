@@ -1,0 +1,16 @@
+{
+    "schemaVersion": 1,
+    "id": "phase0:example",
+    "version": "1.0.0",
+    "apiVersion": 1,
+    "contentHash": "phase0-example-v3",
+    "dependencies": [],
+    "gameplay": {
+        "nodeModule": "gameplay/node/index.js",
+        "cocosModule": "gameplay/cocos/index.js"
+    },
+    "client": {
+        "module": "client/cocos/index.js",
+        "bundle": "client/cocos-bundle"
+    }
+}

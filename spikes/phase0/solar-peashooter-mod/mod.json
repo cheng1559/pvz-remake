@@ -1,0 +1,12 @@
+{
+    "schemaVersion": 1,
+    "id": "phase0:solar-peashooter",
+    "version": "1.0.0",
+    "apiVersion": 1,
+    "contentHash": "phase0-solar-peashooter-v3",
+    "dependencies": [],
+    "gameplay": {
+        "nodeModule": "gameplay/node/index.js",
+        "cocosModule": "gameplay/cocos/index.js"
+    }
+}

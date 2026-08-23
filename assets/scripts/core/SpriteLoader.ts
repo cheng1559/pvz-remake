@@ -1,5 +1,5 @@
 import { dynamicAtlasManager, macro, SpriteFrame, Texture2D, warn } from 'cc'
-import { AssetLoader } from './AssetLoader'
+import { AssetLoader } from '@/client/content/LegacyAssetLoader'
 import { SpriteResourceManifest, type SpriteSampling } from './SpriteResourceManifest'
 
 export class SpriteLoader {

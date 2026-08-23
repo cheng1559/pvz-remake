@@ -4,7 +4,8 @@ This document covers local setup, asset import, development workflow, and build 
 
 ## Requirements
 
-- Cocos Creator `3.8.8`
+- Cocos Creator `4.0.0-alpha.27`
+- Node.js `22` or newer
 - Python `3.10` or newer
 - `ffmpeg` available in `PATH`
 - Original Plants vs. Zombies game files
@@ -37,7 +38,7 @@ The pipeline extracts original resources, converts animations, particles, fonts,
 
 ## Open In Cocos Creator
 
-1. Open the repository with Cocos Creator `3.8.8`.
+1. Open the repository with Cocos Creator `4.0.0-alpha.27`.
 2. Go to `Project` > `Project Settings` > `Scripting`.
 3. Set `Import Map` to the absolute path of this repository's `import-map.json`.
 
@@ -70,6 +71,13 @@ Useful debug entry points:
 - Desktop: press `/` to open the debug CLI.
 - Mobile mode: double tap the bottom-right screen corner to open the debug CLI.
 - Use `/background true|false` to toggle widescreen side backgrounds.
+
+Run the Cocos-independent strict TypeScript checks with:
+
+```bash
+npm install
+npm run test:server
+```
 
 ## Repository Layout
 

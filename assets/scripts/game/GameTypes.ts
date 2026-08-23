@@ -1,4 +1,4 @@
-import type { SoundEffect } from '@/core/SoundLoader'
+import type { SoundEffect } from '@/client/sound/LegacySoundSystem'
 import type { TodParticleEffect } from '@/core/Particle'
 
 export type SeedType =

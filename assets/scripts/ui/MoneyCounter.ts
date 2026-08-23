@@ -1,6 +1,6 @@
 import { Color, Node, SpriteFrame, UIOpacity } from 'cc'
-import type { BitmapFontAssets } from '@/core/FontLoader'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 
 const MONEY_COUNTER_COLOR = new Color(180, 255, 90)

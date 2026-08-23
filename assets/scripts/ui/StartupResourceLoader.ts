@@ -1,13 +1,13 @@
 import { JsonAsset } from 'cc'
 import { DEBUG } from 'cc/env'
-import { AssetLoader } from '@/core/AssetLoader'
+import { AssetLoader } from '@/client/content/LegacyAssetLoader'
 import { FONT_NAMES, FontLoader } from '@/core/FontLoader'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { ParticleDefinitionLoader } from '@/core/Particle'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { PLANT_DEFINITIONS, SEED_DEFINITIONS, ZOMBIE_DEFINITIONS } from '@/game/GameDefinitions'
-import { MusicSystem } from '@/game/music/MusicSystem'
+import { MusicSystem } from '@/client/music/MusicSystem'
 import { CRAZY_DAVE_ANIMATION_PATH } from '@/game/screen/CrazyDaveDialogConfig'
 import {
     DIAMOND_ANIMATION_PATH,

@@ -3,8 +3,8 @@ import { GameScreenEndSequences } from './GameScreenEndSequences'
 import { Animator } from '@/core/Animator'
 import { TodParticleSystem } from '@/core/Particle'
 import { SpriteLoader } from '@/core/SpriteLoader'
-import { GameDebugSettings } from '@/game/GameDebugSettings'
-import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH, SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH, SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { GAME_TICK_SECONDS, SEED_DEFINITIONS } from '../GameDefinitions'
 import {
@@ -20,7 +20,7 @@ import {
     playWallNutBowlingAnimation,
     wirePlantAnimation,
 } from '../PlantAnimation'
-import { lerp } from './GameScreenMath'
+import { lerp } from '@/client/view/GameScreenMath'
 import {
     MONEY_COIN_ANIMATION_SPEED_MAX,
     MONEY_COIN_ANIMATION_SPEED_MIN,

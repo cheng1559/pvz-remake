@@ -1,9 +1,9 @@
 import { _decorator, Color, Component, JsonAsset, Node, SpriteFrame } from 'cc'
 import { Animator } from '@/core/Animator'
 import type { AnimNode } from '@/core/Animator/AnimNode'
-import type { BitmapFontAssets } from '@/core/FontLoader'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import {
     getAnimationRateSpeed,
     wirePlantAnimation,

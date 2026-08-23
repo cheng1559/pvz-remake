@@ -1,5 +1,6 @@
 import { type SpriteFrame } from 'cc'
-import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
+import { FontLoader } from '@/core/FontLoader'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { SpriteLoader } from '@/core/SpriteLoader'
 
 const AWARD_SCREEN_SPRITES = [

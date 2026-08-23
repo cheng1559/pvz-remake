@@ -15,8 +15,8 @@ import {
     EventMouse,
 } from 'cc'
 import { UIHoverManager, type UIHoverPointer } from '@/ui/UIHoverManager'
-import { CursorManager } from '@/ui/CursorManager'
-import { GameDebugSettings } from '@/game/GameDebugSettings'
+import { CursorManager } from '@/client/input/CursorManager'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 const { ccclass, property } = _decorator
 const LEFT_MOUSE_BUTTON = 0

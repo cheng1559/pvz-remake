@@ -1,5 +1,5 @@
 import { ZOMBIE_DEFINITIONS } from '../GameDefinitions'
-import { SoundEffect } from '@/core/SoundLoader'
+import { SoundEffect } from '@/client/sound/LegacySoundSystem'
 import type { TodParticleEffect } from '@/core/Particle'
 import type { GameEvent, PlantEntity, Rect, ZombieEntity, ZombieState, ZombieSubclass, ZombieType } from '../GameTypes'
 

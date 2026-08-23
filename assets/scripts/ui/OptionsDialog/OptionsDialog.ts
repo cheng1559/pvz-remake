@@ -9,10 +9,10 @@ import {
     Vec2,
     Vec3,
 } from 'cc'
-import type { BitmapFontAssets } from '@/core/FontLoader'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { UIButton } from '@/ui/Button'
 import { ModalDialog } from '@/ui/Dialog'
 import { createStoneButton } from '@/ui/StoneButton'

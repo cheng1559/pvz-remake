@@ -1,5 +1,5 @@
 import { JsonAsset } from 'cc'
-import { AssetLoader } from './AssetLoader'
+import { AssetLoader } from '@/client/content/LegacyAssetLoader'
 
 type LawnStringMap = Record<string, string>
 

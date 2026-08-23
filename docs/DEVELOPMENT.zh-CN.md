@@ -4,7 +4,8 @@
 
 ## 环境要求
 
-- Cocos Creator `3.8.8`
+- Cocos Creator `4.0.0-alpha.27`
+- Node.js `22` 或更高版本
 - Python `3.10` 或更高版本
 - `ffmpeg` 可在 `PATH` 中访问
 - Plants vs. Zombies 原版游戏文件
@@ -37,7 +38,7 @@
 
 ## 使用 Cocos Creator 打开
 
-1. 使用 Cocos Creator `3.8.8` 打开本仓库。
+1. 使用 Cocos Creator `4.0.0-alpha.27` 打开本仓库。
 2. 进入 `项目` > `项目设置` > `脚本`。
 3. 将 `Import Map` 设置为本仓库 `import-map.json` 的绝对路径。
 
@@ -70,6 +71,13 @@
 - 桌面端：按 `/` 打开 Debug CLI。
 - 移动端模式：双击屏幕右下角打开 Debug CLI。
 - 使用 `/background true|false` 控制宽屏两侧背景显示。
+
+使用以下命令运行不依赖 Cocos 的 strict TypeScript 检查：
+
+```bash
+npm install
+npm run test:server
+```
 
 ## 仓库结构
 

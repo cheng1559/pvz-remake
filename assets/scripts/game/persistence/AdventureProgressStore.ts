@@ -1,7 +1,7 @@
 import type { GameSessionSnapshot } from '../GameSessionSnapshot'
 import type { LevelDefinition } from '../GameTypes'
-import { GameSaveStore } from './GameSaveStore'
-import { ProfileStore, type PlayerProfile } from './ProfileStore'
+import { GameSaveStore } from '@/app/persistence/GameSaveStore'
+import { ProfileStore, type PlayerProfile } from '@/app/persistence/ProfileStore'
 
 const ADVENTURE_SAVE_MODE = 'adventure'
 

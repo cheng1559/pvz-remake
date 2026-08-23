@@ -1,7 +1,7 @@
 import { Color, Node, Vec3, type EventMouse, type EventTouch, type SpriteFrame } from 'cc'
-import type { BitmapFontAssets } from '@/core/FontLoader'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { UIButton } from '@/ui/Button'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 

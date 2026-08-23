@@ -1,0 +1,134 @@
+{
+  "ver": "1.0.27",
+  "importer": "image",
+  "imported": true,
+  "uuid": "d15e4296-a3d2-48c6-b13a-0792abfbb479",
+  "files": [
+    ".json",
+    ".png"
+  ],
+  "subMetas": {
+    "6c48a": {
+      "importer": "texture",
+      "uuid": "d15e4296-a3d2-48c6-b13a-0792abfbb479@6c48a",
+      "displayName": "HouseofTerror28_atlas",
+      "id": "6c48a",
+      "name": "texture",
+      "userData": {
+        "wrapModeS": "clamp-to-edge",
+        "wrapModeT": "clamp-to-edge",
+        "imageUuidOrDatabaseUri": "d15e4296-a3d2-48c6-b13a-0792abfbb479",
+        "isUuid": true,
+        "visible": false,
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "none",
+        "anisotropy": 0
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "f9941": {
+      "importer": "sprite-frame",
+      "uuid": "d15e4296-a3d2-48c6-b13a-0792abfbb479@f9941",
+      "displayName": "HouseofTerror28_atlas",
+      "id": "f9941",
+      "name": "spriteFrame",
+      "userData": {
+        "trimThreshold": 1,
+        "rotated": false,
+        "offsetX": 2,
+        "offsetY": -0.5,
+        "trimX": 4,
+        "trimY": 1,
+        "width": 4078,
+        "height": 107,
+        "rawWidth": 4082,
+        "rawHeight": 108,
+        "borderTop": 0,
+        "borderBottom": 0,
+        "borderLeft": 0,
+        "borderRight": 0,
+        "packable": true,
+        "pixelsToUnit": 100,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "meshType": 0,
+        "vertices": {
+          "rawPosition": [
+            -2039,
+            -53.5,
+            0,
+            2039,
+            -53.5,
+            0,
+            -2039,
+            53.5,
+            0,
+            2039,
+            53.5,
+            0
+          ],
+          "indexes": [
+            0,
+            1,
+            2,
+            2,
+            1,
+            3
+          ],
+          "uv": [
+            4,
+            107,
+            4082,
+            107,
+            4,
+            0,
+            4082,
+            0
+          ],
+          "nuv": [
+            0.0009799118079372856,
+            0,
+            1,
+            0,
+            0.0009799118079372856,
+            0.9907407407407407,
+            1,
+            0.9907407407407407
+          ],
+          "minPos": [
+            -2039,
+            -53.5,
+            0
+          ],
+          "maxPos": [
+            2039,
+            53.5,
+            0
+          ]
+        },
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "d15e4296-a3d2-48c6-b13a-0792abfbb479@6c48a",
+        "atlasUuid": "",
+        "trimType": "auto"
+      },
+      "ver": "1.0.12",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "type": "sprite-frame",
+    "fixAlphaTransparencyArtifacts": false,
+    "hasAlpha": true,
+    "redirect": "d15e4296-a3d2-48c6-b13a-0792abfbb479@6c48a"
+  }
+}

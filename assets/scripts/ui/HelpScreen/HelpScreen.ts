@@ -9,7 +9,7 @@ import {
     Node,
 } from 'cc'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { UIButton } from '@/ui/Button'
 import { createSeedChooserButton } from '@/ui/SeedChooserButton'

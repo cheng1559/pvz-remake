@@ -13,7 +13,7 @@ import {
     view,
 } from 'cc'
 import { UIHoverManager } from '@/ui/UIHoverManager'
-import { CursorManager } from '@/ui/CursorManager'
+import { CursorManager } from '@/client/input/CursorManager'
 
 const { ccclass, property } = _decorator
 

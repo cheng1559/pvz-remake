@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 2,
+  "tickSeconds": 0.01,
+  "boards": {
+    "pvz:day": {
+      "rows": 5,
+      "columns": 9,
+      "origin": { "x": 40, "y": 80 },
+      "cell": { "width": 80, "height": 100 }
+    }
+  },
+  "seeds": {
+    "pvz:peashooter": {
+      "plant": "pvz:peashooter",
+      "sunCost": 100,
+      "cooldownTicks": 750,
+      "placement": "ground"
+    },
+    "pvz:repeater": {
+      "plant": "pvz:repeater",
+      "sunCost": 200,
+      "cooldownTicks": 750,
+      "placement": "ground"
+    }
+  },
+  "plants": {
+    "pvz:peashooter": {
+      "maxHealth": 300,
+      "body": { "x": 10, "y": 0, "width": 60, "height": 80 },
+      "shooter": {
+        "cadenceTicks": 150,
+        "initialDelayTicks": 75,
+        "windupTicks": 33,
+        "shotsPerBurst": 1,
+        "burstIntervalTicks": 0,
+        "projectile": "pvz:pea",
+        "offset": { "x": 56, "y": 10 }
+      }
+    },
+    "pvz:repeater": {
+      "maxHealth": 300,
+      "body": { "x": 10, "y": 0, "width": 60, "height": 80 },
+      "shooter": {
+        "cadenceTicks": 150,
+        "initialDelayTicks": 75,
+        "windupTicks": 26,
+        "shotsPerBurst": 2,
+        "burstIntervalTicks": 26,
+        "projectile": "pvz:pea",
+        "offset": { "x": 56, "y": 10 }
+      }
+    }
+  },
+  "zombies": {
+    "pvz:normal": {
+      "maxHealth": 270,
+      "speedPerTick": { "min": 0.23, "max": 0.37 },
+      "body": { "x": 36, "y": 0, "width": 42, "height": 115 },
+      "attack": { "x": 20, "y": 0, "width": 50, "height": 115 },
+      "bite": { "damage": 4, "cadenceTicks": 4 }
+    }
+  },
+  "projectiles": {
+    "pvz:pea": {
+      "damage": 20,
+      "speedPerTick": { "x": 3.33, "y": 0 },
+      "hitbox": { "x": -15, "y": 0, "width": 55, "height": 40 }
+    }
+  },
+  "items": {
+    "pvz:sun": { "value": 25, "width": 60, "height": 60 }
+  },
+  "lawnMowers": {
+    "pvz:standard": {
+      "speedPerTick": 3.33,
+      "attack": { "x": 0, "y": 0, "width": 50, "height": 80 }
+    }
+  }
+}

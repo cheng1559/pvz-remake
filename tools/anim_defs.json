@@ -988,6 +988,17 @@
             "slots": [
                 "Zombie_flaghand"
             ],
+            "hiddenTrackPrefixes": [
+                "anim_cone",
+                "anim_bucket",
+                "anim_screendoor",
+                "Zombie_flaghand",
+                "Zombie_duckytube",
+                "anim_tongue",
+                "Zombie_mustache",
+                "Zombie_innerarm_screendoor",
+                "Zombie_outerarm_screendoor"
+            ],
             "animations": [
                 "anim_idle",
                 "anim_idle2",

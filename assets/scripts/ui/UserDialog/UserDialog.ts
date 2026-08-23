@@ -8,8 +8,8 @@ import {
     Vec3,
 } from 'cc'
 import { FontLoader } from '@/core/FontLoader'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
-import type { PlayerProfileSummary } from '@/game/persistence/ProfileStore'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
+import type { PlayerProfileSummary } from '@/app/persistence/ProfileStore'
 import { UIButton } from '@/ui/Button'
 import { DialogResult, MessageBox } from '@/ui/MessageBox/MessageBox'
 import { MessageBoxAssets } from '@/ui/MessageBox/MessageBoxAssets'

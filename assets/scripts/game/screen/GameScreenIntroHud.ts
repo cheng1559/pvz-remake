@@ -1,16 +1,16 @@
 import { Color, EventMouse, EventTouch, Mask, Node, Rect, Size, SpriteFrame } from 'cc'
 import { Animator } from '@/core/Animator'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { MoneyCounter } from '@/ui/MoneyCounter'
 import { CrazyDaveWidget } from '@/ui/CrazyDaveWidget'
-import { getAtlasFrame } from '@/ui/SeedPacketRenderer'
+import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { createStoneButton } from '@/ui/StoneButton'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
-import { ZOMBIE_DEFINITIONS } from '../GameDefinitions'
-import { GameDebugSettings } from '../GameDebugSettings'
-import { MusicSystem } from '../music/MusicSystem'
+import { SEED_DEFINITIONS, ZOMBIE_DEFINITIONS } from '../GameDefinitions'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { MusicSystem } from '@/client/music/MusicSystem'
 import { createZombieAnimationView, playZombieBodyAnimation } from '../ZombieAnimation'
 import { getAnimationRateSpeed } from '../PlantAnimation'
 import {
@@ -24,7 +24,7 @@ import {
     type CrazyDaveMessagePhase,
 } from './CrazyDaveDialogConfig'
 import { eventToBoardPixel } from './BoardPixelUtils'
-import { linearFloat } from './GameScreenMath'
+import { linearFloat } from '@/client/view/GameScreenMath'
 import {
     BOARD_OFFSET,
     COIN_BANK_RIGHT_TEXT_OFFSET,
@@ -1068,6 +1068,7 @@ export abstract class GameScreenIntroHud extends GameScreenCore {
                 parent,
                 layer: this.node.layer,
                 seedType: packet.seedType,
+                cost: SEED_DEFINITIONS[packet.seedType].cost,
                 costFont: this._packetCostFont,
             })
             this._seedPacketViews.set(packet.seedType, view)

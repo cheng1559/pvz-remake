@@ -632,8 +632,7 @@ class PvZFontParser:
         return images
 
 
-def convert_font(input_path: Path, output_dir: Path):
-    """Convert one font descriptor."""
+def _build_font(input_path: Path) -> tuple[PvZFontParser, dict]:
     parser = PvZFontParser(input_path)
 
     for layer in parser.layers:
@@ -644,14 +643,11 @@ def convert_font(input_path: Path, output_dir: Path):
                 print(f"[font] Using descriptor image fallback: {image_name} -> {fallback}")
                 layer['image'] = fallback
 
-    font_data = parser.to_json()
+    return parser, parser.to_json()
 
-    base_name = input_path.stem
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Cocos imports PNG atlases as textures, but the PvZ font atlases are masks.
-    # Bake opaque mask images to RGBA so runtime loading is platform-neutral.
+def _write_font_atlases(parser: PvZFontParser, font_data: dict, output_dir: Path) -> list[Path]:
+    outputs = []
     for img_path in parser.get_image_files():
         dst = output_dir / _normalize_image_name(img_path)
         if not dst.exists() or not dst.samefile(img_path):
@@ -660,12 +656,41 @@ def convert_font(input_path: Path, output_dir: Path):
             image = _wrap_font_atlas_if_needed(font_data, image_name, image)
             image.save(dst, 'PNG')
             print(f"[font] Wrote: {dst}")
+        outputs.append(dst)
+    return outputs
+
+
+def convert_font(input_path: Path, output_dir: Path):
+    """Convert one font descriptor."""
+    parser, font_data = _build_font(input_path)
+
+    base_name = input_path.stem
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Cocos imports PNG atlases as textures, but the PvZ font atlases are masks.
+    # Bake opaque mask images to RGBA so runtime loading is platform-neutral.
+    _write_font_atlases(parser, font_data, output_dir)
 
     # Write JSON after possible atlas wrapping has updated glyph rects.
     json_path = output_dir / (base_name + '.json')
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(font_data, f, indent=2)
     print(f"[font] Wrote: {json_path}")
+
+
+def write_font_v2(input_path: Path, output_dir: Path, content_id: str) -> list[Path]:
+    parser, font_data = _build_font(input_path)
+    font_data = {"schemaVersion": 2, "id": content_id, **font_data}
+    output_dir.mkdir(parents=True, exist_ok=True)
+    outputs = _write_font_atlases(parser, font_data, output_dir)
+    json_path = output_dir / f"{input_path.stem.lower()}.json"
+    json_path.write_text(
+        json.dumps(font_data, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    outputs.append(json_path)
+    return outputs
 
 
 def main():

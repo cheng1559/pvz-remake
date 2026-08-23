@@ -1,5 +1,5 @@
 import { _decorator, Color, gfx, JsonAsset, Material, Node, Rect, Size, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from 'cc'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import { createSpriteNode, createUINode } from '@/ui/UIFactory'
 import {
     StoreScreenAssets,
@@ -7,14 +7,14 @@ import {
     type StoreScreenSprites,
 } from './StoreScreenAssets'
 import { MenuScreenBase } from '../MenuScreenBase'
-import { SoundEffect } from '@/core/SoundLoader'
+import { SoundEffect } from '@/client/sound/LegacySoundSystem'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
-import { GameDebugSettings } from '@/game/GameDebugSettings'
-import { ProfileStore } from '@/game/persistence/ProfileStore'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { ProfileStore } from '@/app/persistence/ProfileStore'
 import { UIButton } from '@/ui/Button'
 import { DialogResult, MessageBox } from '@/ui/MessageBox/MessageBox'
 import { MoneyCounter } from '@/ui/MoneyCounter'
-import { SeedPacketRenderer } from '@/ui/SeedPacketRenderer'
+import { SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import { CrazyDaveWidget } from '@/ui/CrazyDaveWidget'
 import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
 import { LawnStringLoader } from '@/core/LawnStringLoader'

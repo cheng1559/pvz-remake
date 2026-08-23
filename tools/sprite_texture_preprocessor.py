@@ -77,12 +77,13 @@ def write_preprocessed_resource(
     resource_name: str | None = None,
     alpha_src: Path | None = None,
     alpha_grid_src: Path | None = None,
+    force_png: bool = False,
 ) -> bool:
     name = resource_name if resource_name is not None else get_image_resource_name(src)
     transparent_color = TRANSPARENT_COLORS.get(name)
     alpha_src = alpha_src or alpha_grid_src
 
-    if alpha_src or transparent_color or src.suffix.lower() == ".gif":
+    if force_png or alpha_src or transparent_color or src.suffix.lower() == ".gif":
         data = _preprocess_to_png_bytes(
             src,
             alpha_src=alpha_src,

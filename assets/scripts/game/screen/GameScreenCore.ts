@@ -25,10 +25,11 @@ import { DEBUG } from 'cc/env'
 import { Animator } from '@/core/Animator'
 import { AnimNode } from '@/core/Animator/AnimNode'
 import { ParticleDefinitionLoader, TodParticleSystem, type TodParticleEffect } from '@/core/Particle'
-import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { FontLoader } from '@/core/FontLoader'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import {
     MessageBoxAssets,
@@ -36,18 +37,18 @@ import {
     type MessageBoxButtonSprites,
 } from '@/ui/MessageBox/MessageBoxAssets'
 import { UIButton } from '@/ui/Button'
-import { AdviceWidget } from '@/ui/AdviceWidget'
+import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { UIHoverManager, type UIHoverPointer } from '@/ui/UIHoverManager'
 import { MoneyCounter } from '@/ui/MoneyCounter'
 import { CrazyDaveWidget } from '@/ui/CrazyDaveWidget'
-import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/ui/SeedPacketRenderer'
+import { getAtlasFrame, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/client/hud/SeedPacketRenderer'
 import { createSeedChooserButton, createSeedChooserSmallButton } from '@/ui/SeedChooserButton'
 import { createStoneButton } from '@/ui/StoneButton'
 import { createTooltipNode, measureTooltip } from '@/ui/Tooltip/Tooltip'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import { StartupResourceLoader } from '@/ui/StartupResourceLoader'
-import { CursorManager } from '@/ui/CursorManager'
-import { ProfileStore } from '@/game/persistence/ProfileStore'
+import { CursorManager } from '@/client/input/CursorManager'
+import { ProfileStore } from '@/app/persistence/ProfileStore'
 import {
     ADVENTURE_1_1,
     GAME_TICK_SECONDS,
@@ -79,9 +80,9 @@ import {
     type GameParticleSnapshot,
     type GameSessionSnapshot,
 } from '../GameSessionSnapshot'
-import { GameDebugSettings } from '../GameDebugSettings'
-import type { DebugCollectMode } from '../GameDebugSettings'
-import { MusicSystem } from '../music/MusicSystem'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import type { DebugCollectMode } from '@/platform/debug/GameDebugSettings'
+import { MusicSystem } from '@/client/music/MusicSystem'
 import {
     CRAZY_DAVE_ANIMATION_PATH,
     CRAZY_DAVE_FIRST_DIALOG_END,
@@ -117,9 +118,9 @@ import {
     MONEY_STATIC_GLOW_X,
     MONEY_STATIC_GLOW_Y,
 } from './MoneyItemVisualConfig'
-import { easeInOut, lerp, linearFloat } from './GameScreenMath'
+import { easeInOut, lerp, linearFloat } from '@/client/view/GameScreenMath'
 import { eventToBoardPixel, getNodeBoardPixelRect, isPixelInRect, uiLocationToBoardPixel } from './BoardPixelUtils'
-import { SeedPacketView, type SeedPacketViewArgs } from './SeedPacketView'
+import { SeedPacketView, type SeedPacketViewArgs } from '@/client/hud/SeedPacketView'
 import {
     PLANT_PREVIEW_CACHE_IDS,
     PLANT_SHADOW_ADJUSTMENTS,
@@ -2073,6 +2074,7 @@ export abstract class GameScreenCore extends Component {
             parent,
             layer: this.node.layer,
             seedType: seed.seedType,
+            cost: SEED_DEFINITIONS[seed.seedType].cost,
             costFont: this._packetCostFont,
         })
         view.sync({
@@ -3602,7 +3604,13 @@ export abstract class GameScreenCore extends Component {
     }
 
     protected _createSeedPacketView(args: SeedPacketViewArgs) {
-        return new SeedPacketView(args)
+        return new SeedPacketView({
+            ...args,
+            seeds: args.seeds ?? SpriteLoader.get('seeds'),
+            packetPlants: args.packetPlants ?? SpriteLoader.get('packet_plants'),
+            cachedPacketPlants: args.cachedPacketPlants ?? SpriteLoader.get('packet_plants_cached'),
+            seedPacketFlash: args.seedPacketFlash ?? SpriteLoader.get('particles/seedpacketflash'),
+        })
     }
 
     protected _syncCutSceneSeedPacketColor(view: SeedPacketView) {
@@ -3744,6 +3752,7 @@ export abstract class GameScreenCore extends Component {
             parent,
             layer: this.node.layer,
             seedType: packet.seedType,
+            cost: SEED_DEFINITIONS[packet.seedType].cost,
             drawCost: false,
             costFont: this._packetCostFont,
         })

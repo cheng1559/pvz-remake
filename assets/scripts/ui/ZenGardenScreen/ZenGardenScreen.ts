@@ -1,6 +1,6 @@
 import { _decorator, Color, Node, Vec3 } from 'cc'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { Animator } from '@/core/Animator'
 import { AnimNode } from '@/core/Animator/AnimNode'
 import { UIButton } from '@/ui/Button'

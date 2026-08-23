@@ -15,10 +15,10 @@ import {
     Vec2,
     Vec3,
 } from 'cc'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
-import { GameDebugSettings } from '@/game/GameDebugSettings'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import { UIButton } from '@/ui/Button'
 import { MenuScreenBase } from '@/ui/MenuScreenBase'

@@ -18,11 +18,11 @@ import {
 } from 'cc'
 import { Animator } from '@/core/Animator/Animator'
 import type { AnimNode } from '@/core/Animator/AnimNode'
-import type { BitmapFontAssets } from '@/core/FontLoader'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
-import { GameDebugSettings } from '@/game/GameDebugSettings'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { scaleGameDeltaTime } from '@/game/GameDefinitions'
 import {
     getAnimationRateSpeed,
@@ -45,7 +45,7 @@ import {
     SeedPacketRenderer,
     SEED_PACKET_HEIGHT,
     SEED_PACKET_WIDTH,
-} from '@/ui/SeedPacketRenderer'
+} from '@/client/hud/SeedPacketRenderer'
 import { buildThreeSliceRow, createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 import {
     AlmanacScreenAssets,

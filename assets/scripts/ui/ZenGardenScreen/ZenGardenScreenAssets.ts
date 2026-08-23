@@ -1,6 +1,7 @@
-import { FontLoader, type BitmapFontAssets } from '@/core/FontLoader'
+import { FontLoader } from '@/core/FontLoader'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { SpriteLoader } from '@/core/SpriteLoader'
-import { AssetLoader } from '@/core/AssetLoader'
+import { AssetLoader } from '@/client/content/LegacyAssetLoader'
 import { JsonAsset, type SpriteFrame } from 'cc'
 
 const ZEN_GARDEN_SCREEN_SPRITES = [

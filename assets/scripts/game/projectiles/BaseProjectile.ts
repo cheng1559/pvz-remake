@@ -1,5 +1,5 @@
 import type { GameEvent, ProjectileEntity, ProjectileType, Rect } from '../GameTypes'
-import { SoundEffect } from '@/core/SoundLoader'
+import { SoundEffect } from '@/client/sound/LegacySoundSystem'
 
 const PROJECTILE_WIDTH = 40
 const PROJECTILE_HEIGHT = 40

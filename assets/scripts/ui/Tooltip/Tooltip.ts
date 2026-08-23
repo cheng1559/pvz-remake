@@ -1,6 +1,6 @@
 import { Color, Graphics, Layers, Node } from 'cc'
-import type { BitmapFontAssets } from '@/core/FontLoader'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import { createUINode } from '@/ui/UIFactory'
 
 export function createTooltipNode(args: {

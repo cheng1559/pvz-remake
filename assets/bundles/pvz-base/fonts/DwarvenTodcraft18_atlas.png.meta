@@ -1,0 +1,134 @@
+{
+  "ver": "1.0.27",
+  "importer": "image",
+  "imported": true,
+  "uuid": "f5f95221-825c-4f17-82e8-4af8bcd6a36b",
+  "files": [
+    ".json",
+    ".png"
+  ],
+  "subMetas": {
+    "6c48a": {
+      "importer": "texture",
+      "uuid": "f5f95221-825c-4f17-82e8-4af8bcd6a36b@6c48a",
+      "displayName": "DwarvenTodcraft18_atlas",
+      "id": "6c48a",
+      "name": "texture",
+      "userData": {
+        "wrapModeS": "clamp-to-edge",
+        "wrapModeT": "clamp-to-edge",
+        "imageUuidOrDatabaseUri": "f5f95221-825c-4f17-82e8-4af8bcd6a36b",
+        "isUuid": true,
+        "visible": false,
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "none",
+        "anisotropy": 0
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "f9941": {
+      "importer": "sprite-frame",
+      "uuid": "f5f95221-825c-4f17-82e8-4af8bcd6a36b@f9941",
+      "displayName": "DwarvenTodcraft18_atlas",
+      "id": "f9941",
+      "name": "spriteFrame",
+      "userData": {
+        "trimThreshold": 1,
+        "rotated": false,
+        "offsetX": -1,
+        "offsetY": 0.5,
+        "trimX": 0,
+        "trimY": 0,
+        "width": 2941,
+        "height": 27,
+        "rawWidth": 2943,
+        "rawHeight": 28,
+        "borderTop": 0,
+        "borderBottom": 0,
+        "borderLeft": 0,
+        "borderRight": 0,
+        "packable": true,
+        "pixelsToUnit": 100,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "meshType": 0,
+        "vertices": {
+          "rawPosition": [
+            -1470.5,
+            -13.5,
+            0,
+            1470.5,
+            -13.5,
+            0,
+            -1470.5,
+            13.5,
+            0,
+            1470.5,
+            13.5,
+            0
+          ],
+          "indexes": [
+            0,
+            1,
+            2,
+            2,
+            1,
+            3
+          ],
+          "uv": [
+            0,
+            28,
+            2941,
+            28,
+            0,
+            1,
+            2941,
+            1
+          ],
+          "nuv": [
+            0,
+            0.03571428571428571,
+            0.99932042133877,
+            0.03571428571428571,
+            0,
+            1,
+            0.99932042133877,
+            1
+          ],
+          "minPos": [
+            -1470.5,
+            -13.5,
+            0
+          ],
+          "maxPos": [
+            1470.5,
+            13.5,
+            0
+          ]
+        },
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "f5f95221-825c-4f17-82e8-4af8bcd6a36b@6c48a",
+        "atlasUuid": "",
+        "trimType": "auto"
+      },
+      "ver": "1.0.12",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "type": "sprite-frame",
+    "fixAlphaTransparencyArtifacts": false,
+    "hasAlpha": true,
+    "redirect": "f5f95221-825c-4f17-82e8-4af8bcd6a36b@6c48a"
+  }
+}

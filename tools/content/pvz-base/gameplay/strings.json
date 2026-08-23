@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 2,
+  "locale": "en-US",
+  "entries": {
+    "ADVICE_CANT_AFFORD_PLANT": "You need more sun to do that!",
+    "ADVICE_CLICKED_ON_SUN": "Keep on collecting sun!\nYou'll need it to grow more plants!",
+    "ADVICE_CLICK_ON_GRASS": "Click on the grass to plant your seed!",
+    "ADVICE_CLICK_ON_SUN": "Click on the falling sun to collect it!",
+    "ADVICE_CLICK_PEASHOOTER": "Click on the peashooter to plant another one!",
+    "ADVICE_CLICK_SEED_PACKET": "Click on a seed packet to pick it up!",
+    "ADVICE_ENOUGH_SUN": "Excellent! You've collected\nenough for your next plant!",
+    "ADVICE_PLANTED_PEASHOOTER": "Nicely done!",
+    "ADVICE_SEED_REFRESH": "Seeds need time to refresh before planting again",
+    "ADVICE_ZOMBIES_ATE_BRAINS": "THE ZOMBIES ATE YOUR BRAINS!",
+    "ADVICE_ZOMBIE_ONSLAUGHT": "Don't let the zombies reach your house!"
+  }
+}

@@ -6,7 +6,7 @@ import type {
     SeedDefinition,
     ZombieDefinition,
 } from './GameTypes'
-import type { MusicTuneId } from './music/MusicSystem'
+import type { MusicTuneId } from '@/client/music/MusicSystem'
 
 export const GAME_TICK_SECONDS = 0.01
 const DEFAULT_GAME_SPEED = 1

@@ -1,5 +1,6 @@
 import { JsonAsset, Texture2D } from 'cc'
-import { AssetLoader } from './AssetLoader'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { AssetLoader } from '@/client/content/LegacyAssetLoader'
 
 export const FONT_NAMES = [
     'briannetod12',
@@ -23,11 +24,6 @@ export const FONT_NAMES = [
     'pico129',
     'pix118bold',
 ]
-
-export interface BitmapFontAssets {
-    config: JsonAsset
-    textures: Texture2D[]
-}
 
 export class FontLoader {
     private static _cache: Map<string, BitmapFontAssets> = new Map()

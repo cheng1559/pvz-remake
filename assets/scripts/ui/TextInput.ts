@@ -11,9 +11,9 @@ import {
     UITransform,
     Vec3,
 } from 'cc'
-import type { BitmapFontAssets } from '@/core/FontLoader'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
-import { CursorManager } from '@/ui/CursorManager'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
+import { CursorManager } from '@/client/input/CursorManager'
 import { createUINode, setUISize } from '@/ui/UIFactory'
 import type { Label } from 'cc'
 

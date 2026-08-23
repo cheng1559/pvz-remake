@@ -1,7 +1,7 @@
 import { Color, Component, gfx, Material, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
-import type { BitmapFontAssets } from '@/core/FontLoader'
-import { FontMetricsUtil, FontRenderer } from '@/core/FontRenderer'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { FontMetricsUtil, FontRenderer } from '@/client/font'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { UIButton } from '@/ui/Button'
 import { createSpriteNode, createUINode, setUISize } from '@/ui/UIFactory'
 

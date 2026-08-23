@@ -5,6 +5,7 @@ import {
     EventKeyboard,
     EventTouch,
     game,
+    Game,
     input,
     Input,
     Mask,
@@ -14,6 +15,7 @@ import {
     UITransform,
     UIOpacity,
 } from 'cc'
+import { DEBUG } from 'cc/env'
 import { FontLoader } from '@/core/FontLoader'
 import { LawnStringLoader } from '@/core/LawnStringLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
@@ -33,7 +35,7 @@ import {
     pushGlobalGamePause,
     scaleGameDeltaTime,
 } from '@/game/GameDefinitions'
-import { AdviceWidget } from '../AdviceWidget'
+import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { AchievementScreen } from '../AchievementScreen'
 import { AwardScreen } from '../AwardScreen'
 import { AlmanacScreen } from '../AlmanacScreen/AlmanacScreen'
@@ -55,17 +57,26 @@ import { StartupResourceLoader } from '../StartupResourceLoader'
 import { createStoneButton } from '../StoneButton'
 import { createSpriteNode, createUINode } from '../UIFactory'
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../MenuScreenBase'
-import { SoundEffect, SoundLoader } from '@/core/SoundLoader'
-import { GameDebugSettings } from '@/game/GameDebugSettings'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { LevelAward, LevelDefinition, ZombieType } from '@/game/GameTypes'
-import { MusicSystem, type MusicTuneId } from '@/game/music/MusicSystem'
+import { MusicSystem, type MusicTuneId } from '@/client/music/MusicSystem'
 import { AdventureProgressStore } from '@/game/persistence/AdventureProgressStore'
 import { GameSettingsStore, type GameSettings } from '@/game/persistence/GameSettingsStore'
-import { ProfileStore, type PlayerProfile } from '@/game/persistence/ProfileStore'
+import { ProfileStore, type PlayerProfile } from '@/app/persistence/ProfileStore'
+import { installPhase0PlatformProbe } from '@/platform/phase0/PlatformProbe'
+import { loadInstalledMods } from '@/client/content/ModLoader'
+import { installContentShowcaseProbe } from '@/client/showcase/ContentShowcase'
+import {
+    createIntegratedAdventure11Controller,
+    installIntegratedAdventure11Probe,
+    type IntegratedAdventure11Controller,
+} from '@/app/IntegratedAdventure11Probe'
 
 const { ccclass, property } = _decorator
 const DEBUG_START_ADVENTURE_DIRECTLY = false
 const DEBUG_CLI_KEY_CODE = 191
+const ESCAPE_KEY_CODE = 27
 const GAME_OVER_MAIN_MENU_X = 235
 const GAME_OVER_MAIN_MENU_Y = 310
 const GAME_OVER_MAIN_MENU_WIDTH = 163
@@ -135,6 +146,7 @@ export class UIController extends Component {
     private _startupScreen: Node | null = null
     private _selectorScreen: SelectorScreen | null = null
     private _adventureGameScreen: AdventureGameScreen | null = null
+    private _integratedAdventure11: IntegratedAdventure11Controller | null = null
     private _achievementScreen: Node | null = null
     private _modalScreen: Node | null = null
     private _debugCliScreen: Node | null = null
@@ -155,10 +167,21 @@ export class UIController extends Component {
     private _gameOverDialogDragging = false
     private _screenTransitioning = false
     private _achievementTransition: AchievementTransitionState | null = null
+    private _bootstrapPromise: Promise<void> | null = null
 
     onLoad() {
+        if (DEBUG) installPhase0PlatformProbe()
+
         if (!this.uiRoot) {
             this.uiRoot = this.node
+        }
+        this._integratedAdventure11 = createIntegratedAdventure11Controller(this.uiRoot, {
+            onComplete: () => this._completeIntegratedAdventure11(),
+            onGameOver: () => this._handleIntegratedAdventure11GameOver(),
+        })
+        if (DEBUG) {
+            installContentShowcaseProbe(this.uiRoot)
+            installIntegratedAdventure11Probe(this._integratedAdventure11)
         }
 
         this._profile = ProfileStore.loadCurrentProfile()
@@ -169,14 +192,19 @@ export class UIController extends Component {
         screen.on(FULLSCREEN_CHANGE_EVENT, this._onFullScreenChanged, this)
         input.on(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
         input.on(Input.EventType.TOUCH_START, this._onGlobalTouchStart, this)
+        game.on(Game.EVENT_HIDE, this._onGameHidden, this)
         void this._bootstrap()
     }
 
     onDestroy() {
         this._saveAdventureGame(this._adventureGameScreen)
+        void this._integratedAdventure11?.saveIfRunning().catch((error) => {
+            console.error('[UIController] Failed to save integrated Adventure 1-1', error)
+        })
         screen.off(FULLSCREEN_CHANGE_EVENT, this._onFullScreenChanged, this)
         input.off(Input.EventType.KEY_DOWN, this._onGlobalKeyDown, this)
         input.off(Input.EventType.TOUCH_START, this._onGlobalTouchStart, this)
+        game.off(Game.EVENT_HIDE, this._onGameHidden, this)
         MusicSystem.stop()
     }
 
@@ -197,10 +225,25 @@ export class UIController extends Component {
         }
     }
 
-    private async _bootstrap() {
+    private _bootstrap(): Promise<void> {
+        return this._bootstrapPromise ??= this._runBootstrap().finally(() => {
+            this._bootstrapPromise = null
+        })
+    }
+
+    private async _runBootstrap() {
+        try {
+            await loadInstalledMods()
+        } catch (error) {
+            console.error('[UIController] Failed to load Mods', error)
+            if (this.node.isValid) this.showMessageBox('Mod Load Failed', error instanceof Error ? error.message : String(error))
+            return
+        }
+        if (!this.node.isValid) return
         const backgroundsReady = this._ensurePersistentWidescreenBackgrounds()
         await this._playStartupScreen()
         await backgroundsReady
+        if (!this.node.isValid) return
         if (DEBUG_START_ADVENTURE_DIRECTLY && this._profile) {
             this.showAdventureGame()
             return
@@ -347,6 +390,12 @@ export class UIController extends Component {
             return null
         }
 
+        if (level.id === ADVENTURE_1_1.id) {
+            this._adventureLevel = level
+            void this._showIntegratedAdventure11(options)
+            return null
+        }
+
         const savedSnapshot = options.forceNewGame ? null : this._loadAdventureSnapshot(level)
         this._adventureLevel = level
         this._selectorScreen = null
@@ -414,6 +463,126 @@ export class UIController extends Component {
         this._setCurrentScreen(node, { keepPreviousScreen: true })
         this._adventureGameScreen = gameScreen
         return gameScreen
+    }
+
+    private async _showIntegratedAdventure11(options: AdventureLaunchOptions) {
+        const controller = this._integratedAdventure11
+        if (!controller) return
+
+        try {
+            const root = await controller.play({ forceNewGame: options.forceNewGame })
+            if (!this.node.isValid || !root.isValid) return
+            this._selectorScreen = null
+            this._adventureGameScreen = null
+            if (this._currentScreen !== root) this._setCurrentScreen(root)
+            void this._createIntegratedAdventure11MenuButton(root)
+        } catch (error) {
+            console.error('[UIController] Failed to start integrated Adventure 1-1', error)
+            if (this.node.isValid) {
+                this.showMessageBox(
+                    'Adventure 1-1 Load Failed',
+                    error instanceof Error ? error.message : String(error),
+                )
+            }
+        }
+    }
+
+    private async _createIntegratedAdventure11MenuButton(root: Node) {
+        const layout = root.getChildByName('adventure11') ?? root.children[0]
+        const hud = layout?.getChildByName('HUD')
+        if (!hud || hud.getChildByName('MenuButton')) return
+        const [sprites, fonts, strings] = await Promise.all([
+            MessageBoxAssets.loadButtonSprites(),
+            MessageBoxAssets.loadButtonFonts(),
+            LawnStringLoader.load(),
+        ])
+        if (!sprites || !root.isValid || !hud.isValid || this._currentScreen !== root) return
+
+        createStoneButton({
+            name: 'MenuButton',
+            parent: hud,
+            layer: root.layer,
+            label: this._lawnString(strings, 'MENU_BUTTON', 'Menu'),
+            x: 681,
+            y: 10,
+            width: 117,
+            height: 46,
+            sprites,
+            fonts,
+            rightClickTriggers: false,
+            onClick: () => {
+                this._integratedAdventure11?.pause()
+                void SoundLoader.play(SoundEffect.Pause)
+                this._showIntegratedAdventure11OptionsDialog()
+            },
+        })
+    }
+
+    private _showIntegratedAdventure11OptionsDialog(): OptionsDialog | null {
+        const controller = this._integratedAdventure11
+        if (!controller?.isRunning()) return null
+        const activeOptionsDialog = this._activeOptionsDialog()
+        if (activeOptionsDialog) return activeOptionsDialog
+
+        controller.pause()
+        void controller.saveIfRunning().catch((error) => {
+            console.error('[UIController] Failed to save integrated Adventure 1-1', error)
+        })
+        const node = createUINode('GameOptionsDialog', { active: false, width: 423, height: 498 })
+        const optionsDialog = node.addComponent(OptionsDialog)
+        this._optionsDialog = optionsDialog
+        optionsDialog.gameMenu = true
+        optionsDialog.showRestartLevel = true
+        optionsDialog.backButtonLabel = '[BACK_TO_GAME]'
+        this._configureOptionsDialog(optionsDialog)
+        optionsDialog.onClose = () => {
+            this._commitOptionsDialogSettings(optionsDialog)
+            if (this._optionsDialog === optionsDialog) this._optionsDialog = null
+            controller.resume()
+        }
+        optionsDialog.onRestartLevel = () => {
+            void this.confirmRestartLevel().then((confirmed) => {
+                if (!confirmed) return
+                void SoundLoader.play(SoundEffect.ButtonClick)
+                controller.deleteSave()
+                this._commitOptionsDialogSettings(optionsDialog)
+                if (this._optionsDialog === optionsDialog) this._optionsDialog = null
+                if (node.isValid) node.destroy()
+                this.showAdventureGame(ADVENTURE_1_1, { forceNewGame: true, skipSavedGamePrompt: true })
+            })
+        }
+        optionsDialog.onMainMenu = () => {
+            void this.confirmBackToMainMenu().then(async (confirmed) => {
+                if (!confirmed) return
+                try {
+                    await controller.save()
+                } catch (error) {
+                    console.error('[UIController] Failed to save integrated Adventure 1-1', error)
+                    this.showMessageBox('Save Failed', error instanceof Error ? error.message : String(error))
+                    return
+                }
+                void SoundLoader.play(SoundEffect.ButtonClick)
+                this._commitOptionsDialogSettings(optionsDialog)
+                if (this._optionsDialog === optionsDialog) this._optionsDialog = null
+                if (node.isValid) node.destroy()
+                void this.showSelectorScreen()
+            })
+        }
+
+        this._addToScreenClipRoot(node)
+        node.active = true
+        return optionsDialog
+    }
+
+    private _completeIntegratedAdventure11() {
+        this._integratedAdventure11?.deleteSave()
+        const adventureLevel = this._advanceAdventureProgress(ADVENTURE_1_1.adventureLevel)
+        this.showAwardScreen({ kind: 'seed', seedType: 'sunflower' }, adventureLevel)
+    }
+
+    private _handleIntegratedAdventure11GameOver() {
+        this._integratedAdventure11?.deleteSave()
+        void this.showGameOverDialog()
     }
 
     showAwardScreen(
@@ -1636,6 +1805,7 @@ export class UIController extends Component {
     }
 
     private async _reloadGame() {
+        if (this._bootstrapPromise) return
         this._destroyCurrentScreen()
         await this._bootstrap()
     }
@@ -1664,11 +1834,26 @@ export class UIController extends Component {
     }
 
     private _onGlobalKeyDown(event: EventKeyboard) {
+        if (
+            event.keyCode === ESCAPE_KEY_CODE &&
+            this._currentScreen?.name === 'IntegratedAdventure11' &&
+            this._integratedAdventure11?.isRunning()
+        ) {
+            event.propagationStopped = true
+            this._showIntegratedAdventure11OptionsDialog()
+            return
+        }
         if (event.keyCode !== DEBUG_CLI_KEY_CODE) return
         if (this._debugCliScreen?.isValid) return
 
         event.propagationStopped = true
         this.showDebugCliDialog('/')
+    }
+
+    private _onGameHidden() {
+        void this._integratedAdventure11?.saveIfRunning().catch((error) => {
+            console.error('[UIController] Failed to save integrated Adventure 1-1', error)
+        })
     }
 
     private _onGlobalTouchStart(event: EventTouch) {

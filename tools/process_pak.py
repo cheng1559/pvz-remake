@@ -18,6 +18,7 @@ Steps:
  13. Generate cached plant preview atlas
  14. Generate cached zombie preview atlas
  15. Generate cached lawn mower sprite
+ 16. Build the Content v2 pvz-base Bundle
 """
 
 from pathlib import Path
@@ -46,6 +47,7 @@ from sprite_texture_preprocessor import (
     select_image_resources,
     write_preprocessed_resource,
 )
+from build_pvz_base import build_pvz_base
 
 
 def copy_images(src_dir: Path, dst_dir: Path) -> int:
@@ -249,6 +251,14 @@ def main():
     print("=" * 60)
 
     generate_lawnmower_cache()
+
+    # Step 16: Build the Content v2 base Bundle
+    print()
+    print("=" * 60)
+    print("[pipeline] Step 16: Build Content v2 pvz-base Bundle")
+    print("=" * 60)
+
+    build_pvz_base()
 
     print()
     print("=" * 60)

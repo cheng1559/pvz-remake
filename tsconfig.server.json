@@ -1,0 +1,22 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "strict": true,
+        "noEmit": true,
+        "isolatedModules": true,
+        "skipLibCheck": true,
+        "types": ["node"],
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["assets/scripts/*"]
+        }
+    },
+    "include": [
+        "assets/scripts/ecs/**/*.ts",
+        "assets/scripts/shared/**/*.ts",
+        "assets/scripts/server/**/*.ts",
+        "tests/**/*.ts"
+    ]
+}
