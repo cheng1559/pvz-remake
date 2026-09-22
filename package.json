@@ -4,7 +4,7 @@
     "version": "0.1.0",
     "uuid": "9814cd28-be9a-426e-9590-3aae15254ff3",
     "creator": {
-        "version": "4.0.0-alpha.27"
+        "version": "4.0.0-alpha.35"
     },
     "scripts": {
         "build:content-v2": "python tools/build_pvz_base.py",
