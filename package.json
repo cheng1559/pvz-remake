@@ -1,43 +1,14 @@
 {
     "name": "pvz-remake",
-    "type": "3d",
+    "type": "2d",
     "version": "0.1.0",
     "uuid": "9814cd28-be9a-426e-9590-3aae15254ff3",
     "creator": {
         "version": "4.0.0-alpha.35"
     },
     "scripts": {
-        "build:content-v2": "python tools/build_pvz_base.py",
-        "mod:init": "node tools/mod.mjs init",
-        "mod:build": "node tools/mod.mjs build",
-        "mod:test": "node tools/mod.mjs test",
-        "mod:pack": "node tools/mod.mjs pack",
-        "build:phase0-mod": "node tools/mod.mjs build spikes/phase0/example-mod",
-        "build:solar-peashooter-mod": "node tools/mod.mjs build spikes/phase0/solar-peashooter-mod",
-        "build:stacked-peashooter-mod": "node tools/mod.mjs build spikes/phase0/stacked-peashooter-mod",
-        "typecheck:server": "tsc -p tsconfig.server.json",
-        "test:server": "npm run build:phase0-mod && npm run build:solar-peashooter-mod && npm run build:stacked-peashooter-mod && npm run typecheck:server && tsx --tsconfig tsconfig.server.json --test \"tests/**/*.test.ts\"",
-        "preview:debug": "cocos preview --project .",
-        "preview:release": "cocos preview --project . --no-debug",
-        "build:web:debug": "cocos build --project . --platform web-mobile --build-config build-configs/debug.json --no-interactive",
-        "build:web:release": "cocos build --project . --platform web-mobile --build-config build-configs/release.json --no-interactive",
-        "build:windows:debug": "cocos build --project . --platform windows --build-config build-configs/debug.json --no-interactive",
-        "build:windows:release": "cocos build --project . --platform windows --build-config build-configs/release.json --no-interactive",
-        "compile:windows:debug": "npm run build:windows:debug && cocos make --platform windows --dest build/windows",
-        "compile:windows:release": "npm run build:windows:release && cocos make --platform windows --dest build/windows",
-        "build:android:arm64:debug": "cocos build --project . --platform android --build-config build-configs/android-arm64-debug.json --no-interactive",
-        "build:android:arm64:release": "cocos build --project . --platform android --build-config build-configs/android-arm64-release.json --no-interactive",
-        "compile:android:arm64:debug": "npm run build:android:arm64:debug && cocos make --platform android --dest build/android-arm64-debug",
-        "compile:android:arm64:release": "npm run build:android:arm64:release && cocos make --platform android --dest build/android-arm64-release",
-        "build:android:armv7:debug": "cocos build --project . --platform android --build-config build-configs/android-armv7-debug.json --no-interactive",
-        "build:android:armv7:release": "cocos build --project . --platform android --build-config build-configs/android-armv7-release.json --no-interactive",
-        "compile:android:armv7:debug": "npm run build:android:armv7:debug && cocos make --platform android --dest build/android-armv7-debug",
-        "compile:android:armv7:release": "npm run build:android:armv7:release && cocos make --platform android --dest build/android-armv7-release"
+        "preview": "cocos preview --project .",
+        "build": "cocos build --project . --platform web-mobile --build-config build-configs/debug.json --no-interactive"
     },
-    "license": "MIT",
-    "devDependencies": {
-        "@types/node": "^22.20.1",
-        "tsx": "^4.23.1",
-        "typescript": "^5.9.3"
-    }
+    "license": "MIT"
 }

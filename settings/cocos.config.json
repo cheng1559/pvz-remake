@@ -8,38 +8,15 @@
         "configs": {
             "defaultConfig": {
                 "name": "Default Config",
-                "flags": {
-                    "LOAD_SPINE_MANUALLY": false
-                },
                 "includeModules": [
                     "2d",
-                    "affine-transform",
-                    "animation",
-                    "audio",
                     "base",
                     "custom-pipeline",
-                    "dragon-bones",
                     "gfx-webgl",
                     "gfx-webgl2",
-                    "graphics",
-                    "intersection-2d",
-                    "mask",
-                    "particle-2d",
-                    "physics-2d-box2d",
                     "profiler",
-                    "rich-text",
-                    "spine-4.2",
-                    "tiled-map",
-                    "tween",
-                    "ui",
-                    "ui-skew",
-                    "video",
-                    "webview"
-                ],
-                "noDeprecatedFeatures": {
-                    "value": false,
-                    "version": ""
-                }
+                    "ui"
+                ]
             }
         },
         "globalConfigKey": "defaultConfig",
@@ -48,9 +25,6 @@
             "height": 600,
             "fitHeight": true
         }
-    },
-    "script": {
-        "importMap": "project://import-map.json"
     },
     "scene": {
         "tick": false

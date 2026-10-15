@@ -1,100 +1,20 @@
+# Cocos 生成目录
+/library/
+/temp/
+/local/
+/build/
+/profiles/
+/native/
 
-#///////////////////////////
-# Cocos Creator 3D Project
-#///////////////////////////
-library/
-temp/
-local/
-build/
-profiles/
-native/*
-!native/engine/
-native/engine/*
-!native/engine/common/
-native/engine/common/*
-!native/engine/common/CMakeLists.txt
-!native/engine/common/Classes/
-native/engine/common/Classes/*
-!native/engine/common/Classes/Game.h
-!native/engine/common/Classes/Game.cpp
-!native/engine/common/Classes/PvzNativeBridge.h
-!native/engine/common/Classes/PvzNativeBridge.cpp
-!native/engine/common/Classes/PvzOboeSfx.h
-!native/engine/common/Classes/PvzOboeSfx.cpp
-!native/engine/android/
-native/engine/android/*
-!native/engine/android/CMakeLists.txt
-!native/engine/android/src/
-native/engine/android/src/*
-!native/engine/android/src/com/
-native/engine/android/src/com/*
-!native/engine/android/src/com/cocos/
-native/engine/android/src/com/cocos/*
-!native/engine/android/src/com/cocos/game/
-native/engine/android/src/com/cocos/game/*
-!native/engine/android/app/
-native/engine/android/app/*
-!native/engine/android/app/build.gradle
-!native/engine/android/app/proguard-rules.pro
-!native/engine/android/instantapp/
-native/engine/android/instantapp/*
-!native/engine/android/instantapp/proguard-rules.pro
-#//////////////////////////
-# NPM
-#//////////////////////////
+# 依赖和工具输出
 node_modules/
-dist/
-release/
-
-#//////////////////////////
-# Python
-#//////////////////////////
+/dist/
+/release/
 __pycache__/
+npm-debug.log
 
-#//////////////////////////
-# VSCode
-#//////////////////////////
-.vscode/
-
-#//////////////////////////
-# WebStorm
-#//////////////////////////
-.idea/
-
-#//////////////////////////
-# MacOS
-#//////////////////////////
+# 本机配置
+/.vscode/
+/.idea/
 .DS_Store
-
-#//////////////////////////
-# Windows
-#//////////////////////////
 Thumbs.db
-
-#//////////////////////////
-# Agent
-#//////////////////////////
-AGENTS.md
-ai-docs/
-
-tools/raw/
-tools/main.pak
-assets/resources/textures/*
-!assets/resources/textures/background_left.png
-!assets/resources/textures/background_left.png.meta
-!assets/resources/textures/background_right.png
-!assets/resources/textures/background_right.png.meta
-assets/resources/images/*
-assets/resources/images.meta
-assets/resources/audio/*
-assets/resources/audio.meta
-assets/resources/fonts/*
-assets/resources/fonts.meta
-assets/resources/animations/*
-assets/resources/animations.meta
-assets/resources/properties/*
-assets/resources/properties.meta
-assets/resources/particles/*
-assets/resources/particles.meta
-reference*
-.wrangler
