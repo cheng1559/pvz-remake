@@ -9,6 +9,7 @@ test('runtime imports preserve client-server architecture boundaries', () => {
     const violations: string[] = []
     check('app', /(?:@\/(?:core|ui|game)|(?:\.\.\/)+(?:core|ui|game))(?:\/|['"])/, 'app -> legacy runtime', violations)
     check('client', /(?:@\/(?:server|ui|game)|(?:\.\.\/)+(?:server|ui|game))(?:\/|['"])/, 'client -> server/legacy ui/game', violations)
+    check('core', /(?:@\/(?:ui|game)|(?:\.\.\/)+(?:ui|game))(?:\/|['"])/, 'core -> legacy ui/game', violations)
     check('server', /(?:(?:@\/(?:client|platform|core|ui|game)|(?:\.\.\/)+(?:client|platform|core|ui|game))(?:\/|['"])|from ['"]cc(?:\/|['"]))/, 'server -> client/platform/runtime/cc', violations)
     check('shared', /(?:(?:@\/(?:client|server|platform)|(?:\.\.\/)+(?:client|server|platform))(?:\/|['"])|from ['"]cc(?:\/|['"]))/, 'shared -> client/server/platform/cc', violations)
     check('ecs', /(?:(?:@\/(?:shared|server|client|platform)|(?:\.\.\/)+(?:shared|server|client|platform))(?:\/|['"])|from ['"]cc(?:\/|['"]))/, 'ecs -> shared/server/client/platform/cc', violations)

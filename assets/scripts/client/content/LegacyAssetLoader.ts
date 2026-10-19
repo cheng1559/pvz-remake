@@ -14,7 +14,7 @@ export class AssetLoader {
         if (pending) return pending
 
         const promise = new Promise<T | null>((resolve) => {
-            resources.load(path, type, (err, asset) => {
+            resources.load<T>(path, type, (err, asset) => {
                 this._pending.delete(key)
                 if (err || !asset) {
                     if (label) {
@@ -40,7 +40,7 @@ export class AssetLoader {
         if (pending) return pending
 
         const promise = new Promise<T[]>((resolve) => {
-            resources.loadDir(path, type, (err, assets) => {
+            resources.loadDir<T>(path, type, (err, assets) => {
                 this._pendingDirs.delete(key)
                 if (err || !assets) {
                     if (label) {
@@ -49,7 +49,7 @@ export class AssetLoader {
                     resolve([])
                     return
                 }
-                resolve(assets as T[])
+                resolve(assets)
             })
         })
         this._pendingDirs.set(key, promise as Promise<Asset[]>)

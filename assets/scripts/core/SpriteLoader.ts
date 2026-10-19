@@ -101,9 +101,9 @@ export class SpriteLoader {
     // ── Raw Loading ────────────────────────────────────────────
 
     private static _loadRaw(name: string): Promise<SpriteFrame | null> {
-        return AssetLoader.load(`textures/${name}/spriteFrame`, SpriteFrame, null).then((sf) => {
+        return AssetLoader.load<SpriteFrame>(`textures/${name}/spriteFrame`, SpriteFrame, null).then((sf) => {
             if (sf) return sf
-            return AssetLoader.load(`textures/${name}`, SpriteFrame, null)
+            return AssetLoader.load<SpriteFrame>(`textures/${name}`, SpriteFrame, null)
         })
     }
 

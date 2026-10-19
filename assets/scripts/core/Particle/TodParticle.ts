@@ -12,8 +12,7 @@ import {
     Texture2D,
     Vec2,
 } from 'cc'
-import { GAME_TICK_SECONDS, scaleGameDeltaTime } from '@/game/GameDefinitions'
-import { createSpriteNode, createUINode } from '@/ui/UIFactory'
+import { uiNode } from '@/client/view/uiNode'
 import { SpriteLoader } from '../SpriteLoader'
 import { ParticleDefinitionLoader } from './ParticleDefinitionLoader'
 import {
@@ -30,6 +29,7 @@ import {
 } from './TodParticleSnapshot'
 
 const { ccclass } = _decorator
+const GAME_TICK_SECONDS = 0.01
 const DEG_TO_RAD = Math.PI / 180
 let additiveSpriteMaterial: Material | null = null
 
@@ -101,25 +101,21 @@ class TodParticle {
         fieldCount: number,
         rng: TodParticleRng,
     ) {
-        this.node = createSpriteNode({
+        this.node = uiNode({
             name: 'Particle',
-            spriteFrame,
+            sprite: { frame: spriteFrame, sizeMode: Sprite.SizeMode.RAW, trim: false },
             parent,
             layer: parent.layer,
-            anchorX: 0.5,
-            anchorY: 0.5,
-        })
+        }).node
         const sprite = this.node.getComponent(Sprite)
         if (additive && sprite) sprite.customMaterial = getAdditiveSpriteMaterial()
         if (extraAdditive) {
-            const additiveNode = createSpriteNode({
+            const additiveNode = uiNode({
                 name: 'ParticleExtraAdditive',
-                spriteFrame,
+                sprite: { frame: spriteFrame, sizeMode: Sprite.SizeMode.RAW, trim: false },
                 parent: this.node,
                 layer: parent.layer,
-                anchorX: 0.5,
-                anchorY: 0.5,
-            })
+            }).node
             this.extraAdditiveSprite = additiveNode.getComponent(Sprite)
             if (this.extraAdditiveSprite) this.extraAdditiveSprite.customMaterial = getAdditiveSpriteMaterial()
         } else {
@@ -187,12 +183,12 @@ class TodParticleEmitter {
     private _lastWorldY: number | null = null
 
     constructor(parent: Node, definition: TodEmitterDefinition, private readonly _rng: TodParticleRng) {
-        this.node = createUINode('Emitter', {
+        this.node = uiNode({
+            name: 'Emitter',
             parent,
             layer: parent.layer,
-            anchorX: 0,
-            anchorY: 1,
-        })
+            anchor: { x: 0, y: 1 },
+        }).node
         this.definition = definition
         this._systemAlphaInterpolation = _rng.nextFloat()
         this._systemRedInterpolation = _rng.nextFloat()
@@ -676,21 +672,19 @@ export class TodParticleSystem extends Component {
     private _imageOverride: string | null = null
     private _ageTicks = 0
     private _pendingFastForwardTicks = 0
-    private _useGameTime = true
+    private _useGameTime = true // Retained in v2 saves; the new presentation uses unscaled time.
     private _scaleOverride = 1
     private _seed = 0
     private _rng = new TodParticleRng(0)
 
     static spawn(args: TodParticleSpawnArgs) {
-        const node = createUINode(`ParticleSystem_${args.effect}`, {
+        const node = uiNode({
+            name: `ParticleSystem_${args.effect}`,
             parent: args.parent,
             layer: args.parent.layer,
-            anchorX: 0,
-            anchorY: 1,
-            x: args.x,
-            y: args.y,
-            z: args.z ?? 0,
-        })
+            anchor: { x: 0, y: 1 },
+            position: { x: args.x, y: args.y, z: args.z ?? 0 },
+        }).node
         const system = node.addComponent(TodParticleSystem)
         system._seed = args.seed ?? nextTodParticleSeed()
         system._rng = new TodParticleRng(system._seed)
@@ -813,7 +807,7 @@ export class TodParticleSystem extends Component {
     protected update(dt: number) {
         if (this._emitters.length === 0) return
 
-        this._accumulator += this._useGameTime ? scaleGameDeltaTime(dt) : dt
+        this._accumulator += dt
         while (this._accumulator >= GAME_TICK_SECONDS) {
             this._accumulator -= GAME_TICK_SECONDS
             if (!this._stepOnce()) return

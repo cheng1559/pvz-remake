@@ -168,6 +168,7 @@ export class Adventure11EntityRenderer {
         }
         for (const id of changes.removed) this.remove(id)
         for (const id of changes.added) {
+            if (this.pending.has(id) || this.entities.has(id)) continue
             const task = this.create(id, snapshot)
                 .catch(error => console.error('[Phase4] Failed to create entity', error))
                 .finally(() => this.creationTasks.delete(id))
@@ -234,14 +235,13 @@ export class Adventure11EntityRenderer {
     }
 
     private async create(id: number, snapshot: WorldSnapshot): Promise<void> {
-        if (this.pending.has(id) || this.entities.has(id)) return
         const entity = allEntities(snapshot).find(value => value.entityId === id)
         if (!entity) return
         this.pending.add(id)
-        const isItem = snapshot.items.some(value => value.entityId === id)
-        const isAward = entity.typeId === this.content.levels.levels[snapshot.levelId].award.id
+        const item = snapshot.items.find(value => value.entityId === id)
+        const isAward = item?.typeId === this.content.levels.levels[snapshot.levelId].award.id
         const node = uiNode({
-            name: `Entity-${id}`, parent: isAward ? this.awardLayer : isItem ? this.coinLayer : this.entityLayer,
+            name: `Entity-${id}`, parent: isAward ? this.awardLayer : item ? this.coinLayer : this.entityLayer,
             anchor: { x: 0, y: 1 },
         }).node
         this.entities.set(id, node)

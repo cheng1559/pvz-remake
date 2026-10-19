@@ -1,105 +1,29 @@
-# Development Guide
+# Development
 
-This document covers local setup, asset import, development workflow, and build notes for PvZ Remake.
+The main scene mounts `app/GameApp.ts`, which starts `LocalIntegratedGame` through the existing Adventure 1-1 controller. Gameplay runs in `server`; the client consumes protocol snapshots and events. Keep engine imports out of `server`, `shared`, and `ecs`.
 
-## Requirements
+Only Adventure 1-1 is connected. The old menu, debug CLI, and Adventure 1-2 onward are not part of this worktree. Refer to the workspace's `pvz-remake` when porting their behavior.
 
-- Cocos Creator `4.0.0-alpha.27`
-- Node.js `22` or newer
-- Python `3.10` or newer
-- `ffmpeg` available in `PATH`
-- Original Plants vs. Zombies game files
-  - Recommended: Steam Game of the Year Edition `1.2.0.1096`
-  - Other versions may not match the current asset pipeline.
+## Resources
 
-## Asset Import
+The v2 base Bundle is in `assets/bundles/pvz-base`. The presenters also use audio, particle definitions, and particle textures under `assets/resources`; keep these available.
 
-Original assets are not committed to this repository. To prepare the project locally:
+Place your game's `main.pak` at `tools/main.pak`, then run from the project root:
 
-1. Copy `main.pak` from your Plants vs. Zombies installation into:
+```sh
+python3 tools/process_pak.py
+```
 
-   ```text
-   tools/main.pak
-   ```
+The existing pipeline prepares shared resources and builds the v2 Bundle. It requires Python 3.10+, Pillow, ffmpeg, and the music converter's libopenmpt backend. If the raw files and shared resources are already available, rebuild only the v2 Bundle with `npm run build:content-v2`.
 
-2. Run the asset pipeline from the repository root:
+## Checks and builds
 
-   ```bash
-   python tools/process_pak.py
-   ```
-
-   On macOS/Linux, `python3` may be required:
-
-   ```bash
-   python3 tools/process_pak.py
-   ```
-
-The pipeline extracts original resources, converts animations, particles, fonts, text, images, sound effects, and music, then writes generated runtime resources into the Cocos project.
-
-## Open In Cocos Creator
-
-1. Open the repository with Cocos Creator `4.0.0-alpha.27`.
-2. Go to `Project` > `Project Settings` > `Scripting`.
-3. Set `Import Map` to the absolute path of this repository's `import-map.json`.
-
-   Example:
-
-   ```text
-   C:\path\to\pvz-remake\import-map.json
-   ```
-
-4. Open the main scene:
-
-   ```text
-   assets/scenes/scene
-   ```
-
-5. Use Browser Preview or Editor Preview.
-
-Simulator Preview currently has known compatibility issues.
-
-## Development Notes
-
-- Source code lives mainly in `assets/scripts`.
-- Runtime resources generated from original PvZ files live under `assets/resources`.
-- Native bridge code lives under `native/engine`.
-- Asset conversion scripts live under `tools`.
-- Generated folders such as `library`, `temp`, `build`, `tools/raw`, and original asset outputs are intentionally ignored by git.
-
-Useful debug entry points:
-
-- Desktop: press `/` to open the debug CLI.
-- Mobile mode: double tap the bottom-right screen corner to open the debug CLI.
-- Use `/background true|false` to toggle widescreen side backgrounds.
-
-Run the Cocos-independent strict TypeScript checks with:
-
-```bash
-npm install
+```sh
+npm run typecheck:server
 npm run test:server
+npm run build:web:debug
 ```
 
-## Repository Layout
+Prefer existing focused tests for changed critical logic. Avoid browser automation unless visual or interaction validation is required. Windows and Android build commands remain available; native compilation and device checks are separate from Web validation.
 
-```text
-assets/
-  scenes/               Cocos scenes
-  scripts/              TypeScript game, UI, renderer, and persistence code
-  resources/            Generated runtime assets
-native/
-  engine/               Native bridge and Android project files
-tools/
-  process_pak.py        One-step original asset import pipeline
-  *.py                  Asset conversion utilities
-```
-
-## Build
-
-Use Cocos Creator's Build panel for target platforms.
-
-Recommended before building:
-
-1. Re-run the asset pipeline after changing conversion scripts.
-2. Test in Browser Preview.
-3. Verify mobile mode and full-screen behavior if targeting mobile.
-4. Keep generated build output out of git unless it is explicitly attached to a release.
+The `pvzPhase0`, `pvzPhase2`, and `pvzPhase4` probes remain available in debug builds. Mod examples are documented in [the Phase 0 guide](../spikes/phase0/README.md).

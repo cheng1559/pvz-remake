@@ -94,7 +94,7 @@ export class ReanimPlayer extends Component {
         const loaded = await Promise.all([...spriteIds].sort().map(async spriteId =>
             [spriteId, await sprites.load(spriteId)] as const,
         ))
-        if (!this.node.isValid) throw new Error('reanim player was destroyed while loading')
+        if (!this.node?.isValid) throw new Error('reanim player was destroyed while loading')
 
         this.clearViews()
         this.data = data
