@@ -5,9 +5,9 @@ import {
     parseReanimPlaybackSnapshot,
     validateReanimPlaybackSnapshotContent,
 } from '@/client/reanim/ReanimPlaybackSnapshot'
-import { parseReanimV2 } from '@/shared/content/reanim'
+import { parseReanim } from '@/shared/content/reanim'
 
-const data = parseReanimV2({
+const data = parseReanim({
     schemaVersion: 2,
     id: 'pvz:peashooter_idle',
     durationSeconds: 2,

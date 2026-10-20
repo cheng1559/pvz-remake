@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, EditBox, EventMouse, Graphics, input, Input, KeyCode, Mask, Node, UITransform, Vec3, type EventKeyboard, type EventTouch } from 'cc'
+import { _decorator, Color, Component, EditBox, EventMouse, game, Graphics, input, Input, KeyCode, Mask, Node, UITransform, Vec3, type EventKeyboard, type EventTouch } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil } from '@/client/font'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
@@ -21,6 +21,8 @@ export interface UIInputOptions {
     onChange?: (value: string) => void
     onSubmit?: (value: string) => void
     onCancel?: () => void
+    onKey?: (key: string, shift: boolean) => boolean
+    completion?: (value: string) => string
 }
 
 /** Cocos owns text entry/IME/clipboard; the game draws its original bitmap text and selection. */
@@ -28,6 +30,7 @@ export interface UIInputOptions {
 export class UIInput extends Component {
     private static active: UIInput | null = null
     private static readonly instances = new Set<UIInput>()
+    static get hasFocusedInput(): boolean { return !!this.active?.available() }
     private static readonly hoverClient = {
         cursor: 'text' as const,
         clearHover: () => { if (UIInput.active && !UIInput.active.available()) UIInput.active.blur() },
@@ -41,6 +44,7 @@ export class UIInput extends Component {
     private area!: Node
     private text!: UILabel
     private selectedText!: UILabel
+    private completionText!: UILabel
     private selection!: Node
     private ink!: Graphics
     private captureRoot: Node | null = null
@@ -65,6 +69,8 @@ export class UIInput extends Component {
         event.propagationStopped = true
         // DOM editing handles these keys before they reach the game. Never treat typing Space as dialog confirmation.
         if (!active.element) {
+            const key = ({ 9: 'Tab', 38: 'ArrowUp', 40: 'ArrowDown' } as Record<number, string>)[event.keyCode]
+            if (key && active.options.onKey?.(key, false)) return true
             if (event.keyCode === KeyCode.ESCAPE) active.onCancel()
             else if (event.keyCode === KeyCode.ENTER) active.submit()
         }
@@ -84,6 +90,7 @@ export class UIInput extends Component {
         }).node
         this.ink = uiNode({ parent: this.area, graphics: true }).graphics!
         this.text = new UILabel(this.area, font, { text: '', color: options.color ?? new Color(240, 240, 255) })
+        this.completionText = new UILabel(this.area, font, { text: '', color: new Color(240, 240, 255, 95) })
         this.selection = uiNode({ parent: this.area, anchor: { x: 0, y: 1 }, mask: Mask.Type.GRAPHICS_RECT }).node
         this.selectedText = new UILabel(this.selection, font, { text: '', color: Color.BLACK })
         const bridge = uiNode({ name: 'Keyboard', parent: this.node, size: { width: 1, height: 1 }, opacity: 0 }).node
@@ -111,6 +118,9 @@ export class UIInput extends Component {
         this.draw()
     }
     get hasFocus(): boolean { return this.focused }
+    get hasSelection(): boolean { return this.anchor !== this.caret }
+    get cursorPosition(): number { return this.caret }
+    set color(value: Color) { this.options.color = value; this.text.color = value; this.draw() }
     get interactable(): boolean { return this.interactive }
     set interactable(value: boolean) { this.interactive = value; if (!value) this.blur() }
 
@@ -141,10 +151,12 @@ export class UIInput extends Component {
     }
 
     blur(): void {
+        const restoreGameFocus = this.focused && this.element !== null
         this.element?.removeEventListener('keydown', this.domKey, true)
         this.element = null
         this.ended()
         this.native?.blur()
+        if (restoreGameFocus) game.canvas?.focus({ preventScroll: true })
     }
 
     selectAll(): void { this.anchor = 0; this.caret = this.content.length; this.syncSelection(); this.draw() }
@@ -216,6 +228,11 @@ export class UIInput extends Component {
     private readonly domKey = (event: KeyboardEvent) => {
         event.stopPropagation()
         if (event.isComposing) { if (event.key === 'Enter') event.stopImmediatePropagation(); return }
+        if (this.available() && this.options.onKey?.(event.key, event.shiftKey)) {
+            event.preventDefault()
+            event.stopImmediatePropagation()
+            return
+        }
         if (event.key === 'Enter' || event.key === 'Escape' || event.key === 'Tab') {
             event.preventDefault()
             event.stopImmediatePropagation()
@@ -311,6 +328,9 @@ export class UIInput extends Component {
         const shown = this.content || (!this.focused ? this.options.placeholder ?? '' : '')
         if (this.text.text !== shown) this.text.text = shown
         this.text.node.setPosition(4 - this.scroll, y)
+        const completion = this.focused && !this.hasSelection && this.caret === this.content.length ? this.options.completion?.(this.content) ?? '' : ''
+        if (this.completionText.text !== completion) this.completionText.text = completion
+        this.completionText.node.setPosition(4 + this.measure(this.content.length) - this.scroll, y)
         this.ink.clear()
         this.selection.active = this.focused && this.anchor !== this.caret
         if (this.selection.active) {

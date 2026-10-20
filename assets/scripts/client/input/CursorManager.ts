@@ -23,7 +23,7 @@ export class CursorManager {
         }
 
         if (sys.isNative) {
-            ;(globalThis as NativeBindings).jsb?.setCursorStyle?.(normalized)
+            ;(globalThis as NativeBindings).jsb?.setCursorStyle?.(normalized === 'grabbing' ? 'pointer' : normalized)
         }
     }
 

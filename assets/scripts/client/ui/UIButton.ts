@@ -32,6 +32,8 @@ export class UIButton extends Component {
     releaseToNormalOnPressOut = false
     refreshHoverOnEnable = true
     changeCursor = true
+    /** Temporary input gate; keeps the normal appearance when blocked. */
+    canInteract: () => boolean = () => true
     polygon: UIButtonPolygon = []
     private interactive = true
     private pressed = false
@@ -118,7 +120,7 @@ export class UIButton extends Component {
 
     private available(modal = UIHoverManager.activeModalRoot, requireInteractive = true): boolean {
         return this.enabledInHierarchy && this.node.activeInHierarchy && (!requireInteractive || this.interactable)
-            && !UIHoverManager.isInputBlocked && (!modal || this.node === modal || this.node.isChildOf(modal))
+            && this.canInteract() && !UIHoverManager.isInputBlocked && (!modal || this.node === modal || this.node.isChildOf(modal))
     }
 
     private hit(pointer: Pick<UIHoverPointer, 'location' | 'windowId'>): boolean {

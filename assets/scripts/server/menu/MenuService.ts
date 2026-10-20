@@ -1,4 +1,5 @@
-import type { MenuRequest, MenuResponse, MenuStorage, StoreItemView, StoreView, UserResult, UserView } from '@/shared/menu'
+import type { AwardView, MenuRequest, MenuResponse, MenuStorage, StoreItemView, StoreView, UserResult, UserView } from '@/shared/menu'
+import type { LevelDefinition } from '@/shared/content/gameplay'
 import { ALMANAC_PLANTS, ALMANAC_ZOMBIES } from './AlmanacCatalog'
 import { ACHIEVEMENT_DEFINITIONS } from './AchievementCatalog'
 import { CHALLENGES } from './ChallengeCatalog'
@@ -14,7 +15,11 @@ export class MenuService {
     private readonly profiles
     private readonly settings
 
-    constructor(storage: MenuStorage, private readonly now = Date.now) {
+    constructor(
+        storage: MenuStorage,
+        private readonly now = Date.now,
+        private readonly getLevel: () => LevelDefinition | null = () => null,
+    ) {
         this.profiles = createProfileStore(storage)
         this.settings = createGameSettingsStore(storage)
     }
@@ -63,7 +68,19 @@ export class MenuService {
                 const items = ACHIEVEMENT_DEFINITIONS.map(item => ({ ...item, earned: earned[item.id] === true }))
                 return { items, total: items.length, completed: items.filter(item => item.earned).length }
             }
+            case 'getAward': return this.award()
             default: throw new Error('Unknown menu API method')
+        }
+    }
+
+    private award(): AwardView {
+        const level = this.getLevel()
+        if (!level) throw new Error('Award requires a loaded level')
+        const plant = ALMANAC_PLANTS.find(plant => `pvz:${plant.key.replace(/_/g, '').toLowerCase()}` === level.award.id)
+        if (!plant) throw new Error(`Unknown plant award: ${level.award.id}`)
+        return {
+            seed: plant.id, cost: level.award.packetCost, name: plant.name,
+            nameKey: plant.key, descriptionKey: `${plant.key}_TOOLTIP`,
         }
     }
 

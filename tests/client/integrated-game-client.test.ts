@@ -5,13 +5,13 @@ import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { IntegratedGameClient } from '@/client/game/IntegratedGameClient'
 import { LocalGameChannel } from '@/shared/channel/index'
-import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 
 const source = (name: string): unknown => JSON.parse(
     readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'),
 )
-const definitions = parseGameplayDefinitionsV2(source('definitions'))
-const levels = parseGameplayLevelsV2(source('levels'), definitions)
+const definitions = parseGameplayDefinitions(source('definitions'))
+const levels = parseGameplayLevels(source('levels'), definitions)
 
 test('integrated client hides channel packets behind start, command, update, and render', () => {
     const game = new LocalIntegratedGame(definitions, levels)

@@ -11,7 +11,7 @@ npm install
 npm run preview:debug
 ```
 
-Requires the local Cocos CLI and Cocos 4.0.0-alpha.35. Use the menu buttons to enter Adventure 1-1. Escape opens/closes its pause menu; other pages use Escape to go back. After winning or losing, press R to play again. Entering Adventure resumes the current player's v2 save automatically; the game saves when it is hidden.
+Requires the local Cocos CLI and Cocos 4.0.0-alpha.35. Use the menu buttons to enter Adventure 1-1. Escape opens/closes its pause menu; other pages use Escape to go back. After winning or losing, press R to play again. Entering Adventure resumes the current player's save automatically; the game saves when it is hidden.
 
 ## Structure
 
@@ -20,7 +20,7 @@ Requires the local Cocos CLI and Cocos 4.0.0-alpha.35. Use the menu buttons to e
 - `assets/scripts/shared` and `ecs`: protocol, content schemas, channel, and ECS.
 - `assets/scripts/client`: input, rendering, audio, content loading, and Adventure 1-1 presenters.
 - `assets/scripts/core`: particle and sprite utilities still used by the new presentation layer.
-- `assets/bundles/pvz-base`: Content v2 assets and the Adventure 1-1 prefab.
+- `assets/bundles/pvz-base`: Content assets and the Adventure 1-1 prefab.
 - `tools`: shared resource conversion and Mod tooling.
 
 Menu backgrounds, audio, and particle helpers reuse the existing resources loader. The gameplay Bundle and its save content hash are unchanged. They are not a fallback to the previous game loop.

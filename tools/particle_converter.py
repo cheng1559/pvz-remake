@@ -184,7 +184,7 @@ def _fill_track_times(nodes: list[dict[str, Any]]) -> None:
         block_start = explicit + 1
 
 
-def build_particle_v2(
+def build_particle(
     source: Path,
     content_id: str,
     namespace: str = "pvz",
@@ -199,7 +199,7 @@ def build_particle_v2(
     grids = image_grids if image_grids is not None else load_image_grid_metadata(
         Path("tools/raw/properties/resources.xml")
     )
-    emitters = [_build_emitter_v2(node, namespace, grids) for node in emitter_nodes]
+    emitters = [_build_emitter(node, namespace, grids) for node in emitter_nodes]
     duration = max(emitter["durationSeconds"] for emitter in emitters)
     return {
         "schemaVersion": 2,
@@ -209,14 +209,14 @@ def build_particle_v2(
     }
 
 
-def write_particle_v2(
+def write_particle(
     source: Path,
     output: Path,
     content_id: str,
     namespace: str = "pvz",
     image_grids: dict[str, dict[str, int]] | None = None,
 ) -> dict[str, Any]:
-    data = build_particle_v2(source, content_id, namespace, image_grids)
+    data = build_particle(source, content_id, namespace, image_grids)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         json.dumps(data, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n",
@@ -225,7 +225,7 @@ def write_particle_v2(
     return data
 
 
-def _build_emitter_v2(
+def _build_emitter(
     node: ElementTree.Element,
     namespace: str,
     image_grids: dict[str, dict[str, int]],
@@ -239,7 +239,7 @@ def _build_emitter_v2(
     }
     for child in node:
         if child.tag not in supported:
-            raise ValueError(f"unsupported Particle v2 emitter field: {child.tag}")
+            raise ValueError(f"unsupported Particle emitter field: {child.tag}")
 
     image = strip_image_prefix(_required_text(node, "Image"))
     image_frames = int(_optional_text(node, "ImageFrames", "1"))
@@ -250,10 +250,10 @@ def _build_emitter_v2(
     duration_ticks = system_ticks or particle_ticks
     emitter_type = _optional_text(node, "EmitterType", "circle").lower()
     if emitter_type != "circle":
-        raise ValueError(f"unsupported Particle v2 emitter type: {emitter_type}")
+        raise ValueError(f"unsupported Particle emitter type: {emitter_type}")
     launch_angle = _track(node, "LaunchAngle", 0)
     if any(value != 0 for point in launch_angle["nodes"] for value in (point["low"], point["high"])):
-        raise ValueError("Particle v2 does not support directed LaunchAngle yet")
+        raise ValueError("Particle does not support directed LaunchAngle yet")
     grid = image_grids.get(image.upper(), {})
     columns = grid.get("imageColumns", image_frames)
     rows = grid.get("imageRows", 1)
@@ -277,17 +277,17 @@ def _build_emitter_v2(
         "particleSpinSpeed": _track(node, "ParticleSpinSpeed", 0),
         "randomLaunchSpin": node.find("RandomLaunchSpin") is not None
         and parse_bool(node.findtext("RandomLaunchSpin")),
-        "fields": [_build_field_v2(field) for field in node.findall("Field")],
+        "fields": [_build_field(field) for field in node.findall("Field")],
     }
 
 
-def _build_field_v2(node: ElementTree.Element) -> dict[str, Any]:
+def _build_field(node: ElementTree.Element) -> dict[str, Any]:
     for child in node:
         if child.tag not in {"FieldType", "X", "x", "Y", "y"}:
-            raise ValueError(f"unsupported Particle v2 field property: {child.tag}")
+            raise ValueError(f"unsupported Particle field property: {child.tag}")
     field_type = _required_text(node, "FieldType").lower()
     if field_type not in {"friction", "acceleration"}:
-        raise ValueError(f"unsupported Particle v2 field: {field_type}")
+        raise ValueError(f"unsupported Particle field: {field_type}")
     scale = 100 if field_type == "acceleration" else 1
     return {
         "type": field_type,
@@ -316,7 +316,7 @@ def _scale_track(track: dict[str, Any], scale: float) -> dict[str, Any]:
 def _constant_track_value(node: ElementTree.Element, name: str, default: float) -> float:
     track = _track(node, name, default)["nodes"]
     if len(track) != 1 or track[0]["low"] != track[0]["high"]:
-        raise ValueError(f"Particle v2 requires constant {name}")
+        raise ValueError(f"Particle requires constant {name}")
     return float(track[0]["low"])
 
 

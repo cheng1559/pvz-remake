@@ -1,6 +1,6 @@
 import { _decorator, Component, EventTouch, KeyCode, Node, UITransform, Vec3, type EventKeyboard } from 'cc'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
-import { UIHoverManager } from '@/client/input/UIHoverManager'
+import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { UIInput } from './UIInput'
 
 const { ccclass } = _decorator
@@ -10,6 +10,7 @@ export class UIDialog extends Component {
     private static readonly stack: UIDialog[] = []
     content!: Node
     draggable = true
+    clickSound: SoundEffect | null = SoundEffect.ButtonClick
     onConfirm: () => void = () => this.close(true)
     onCancel: () => void = () => this.close(false)
     onClose?: (confirmed: boolean) => void
@@ -18,6 +19,13 @@ export class UIDialog extends Component {
     readonly result = new Promise<boolean>(resolve => { this.resolve = resolve })
     private closed = false
     private dragOffset: Vec3 | null = null
+    get isDragging(): boolean { return this.dragOffset !== null }
+    private readonly dragHover = {
+        cursor: 'grabbing' as const,
+        clearHover: () => { this.dragOffset = null },
+        refreshHover: (pointer: UIHoverPointer, modal: Node | null) =>
+            pointer.canHover && this.dragOffset !== null && modal === this.node,
+    }
 
     static handleKey(event: EventKeyboard): boolean {
         if (UIInput.handleKey(event)) return true
@@ -26,10 +34,10 @@ export class UIDialog extends Component {
         event.propagationStopped = true
         if (dialog.onKeyDown?.(event)) return true
         if (event.keyCode === KeyCode.ESCAPE) {
-            void SoundLoader.play(SoundEffect.ButtonClick)
+            if (dialog.clickSound !== null) void SoundLoader.play(dialog.clickSound)
             dialog.onCancel()
         } else if (event.keyCode === KeyCode.ENTER || event.keyCode === KeyCode.SPACE) {
-            void SoundLoader.play(SoundEffect.ButtonClick)
+            if (dialog.clickSound !== null) void SoundLoader.play(dialog.clickSound)
             dialog.onConfirm()
         }
         return true
@@ -47,6 +55,7 @@ export class UIDialog extends Component {
     onEnable(): void {
         UIDialog.stack.push(this)
         UIHoverManager.beginModalBlock(this.node)
+        UIHoverManager.registerClient(this.dragHover)
         this.content.on(Node.EventType.TOUCH_START, this.startDrag, this)
         this.content.on(Node.EventType.TOUCH_MOVE, this.moveDrag, this)
         this.content.on(Node.EventType.TOUCH_END, this.endDrag, this)
@@ -56,12 +65,13 @@ export class UIDialog extends Component {
     onDisable(): void {
         const index = UIDialog.stack.indexOf(this)
         if (index >= 0) UIDialog.stack.splice(index, 1)
+        this.dragOffset = null
+        UIHoverManager.unregisterClient(this.dragHover)
         UIHoverManager.endModalBlock(this.node)
         this.content.off(Node.EventType.TOUCH_START, this.startDrag, this)
         this.content.off(Node.EventType.TOUCH_MOVE, this.moveDrag, this)
         this.content.off(Node.EventType.TOUCH_END, this.endDrag, this)
         this.content.off(Node.EventType.TOUCH_CANCEL, this.endDrag, this)
-        this.dragOffset = null
     }
 
     onDestroy(): void { this.resolve(false) }
@@ -74,6 +84,7 @@ export class UIDialog extends Component {
     private startDrag(event: EventTouch): void {
         if (!this.draggable || event.target !== this.content) return
         this.dragOffset = this.localPoint(event).subtract(this.content.position)
+        UIHoverManager.refreshHoverStates()
         event.propagationStopped = true
     }
 
@@ -88,5 +99,8 @@ export class UIDialog extends Component {
         event.propagationStopped = true
     }
 
-    private endDrag(): void { this.dragOffset = null }
+    private endDrag(): void {
+        this.dragOffset = null
+        UIHoverManager.refreshHoverStates()
+    }
 }

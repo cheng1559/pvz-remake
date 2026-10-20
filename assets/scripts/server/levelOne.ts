@@ -1,5 +1,5 @@
 import { defineComponent, defineResource, type CommandBuffer, type GameSystem, type World } from '@/ecs/index'
-import type { GameplayDefinitionsV2 } from '@/shared/content/gameplay'
+import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import {
     EconomyStateResource,
     LevelStateResource,
@@ -11,6 +11,7 @@ import {
     spawnZombie,
 } from './gameplay'
 import { EventQueueResource, emitServerEvent } from './events'
+import { getDebugRules } from './debug/DebugRules'
 
 export interface Item {
     typeId: string
@@ -124,7 +125,7 @@ export function noteLevelOneSunCollected(world: World, tick: number, canAfford: 
     }
 }
 
-export function createLevelOneTutorialSystem(definitions: GameplayDefinitionsV2): GameSystem {
+export function createLevelOneTutorialSystem(definitions: GameplayDefinitions): GameSystem {
     return {
         id: 'pvz:level-one-tutorial',
         run({ world, commands, tick }) {
@@ -140,7 +141,7 @@ export function createLevelOneTutorialSystem(definitions: GameplayDefinitionsV2)
                 tutorial.step = 'first-plant-done'
                 tutorial.sunAtTick = tick + FIRST_SUN_DELAY_TICKS
             }
-            if (tutorial.sunAtTick !== undefined && tick >= tutorial.sunAtTick) {
+            if (getDebugRules(world).sunSpawning && tutorial.sunAtTick !== undefined && tick >= tutorial.sunAtTick) {
                 spawnSkySun(world, commands, definitions, level.definition.skySun)
                 if (tutorial.step === 'first-plant-done') tutorial.step = 'collect-first-sun'
                 // ponytail: 1-1 uses the base random interval; add escalating cadence when later day levels migrate.
@@ -243,10 +244,10 @@ export function createLevelOneZombieGroanSystem(): GameSystem {
     }
 }
 
-export function createLevelOneWaveSystem(definitions: GameplayDefinitionsV2): GameSystem {
+export function createLevelOneWaveSystem(definitions: GameplayDefinitions): GameSystem {
     return {
         id: 'pvz:level-one-waves',
-        run({ world, tick }) {
+        run({ world, tick, commands }) {
             const level = world.resources.get(LevelStateResource)
             if (level.result !== 'playing' || level.paused) return
 
@@ -286,7 +287,10 @@ export function createLevelOneWaveSystem(definitions: GameplayDefinitionsV2): Ga
                     entityId: entity,
                     typeId: level.definition.award.id,
                 })
-                for (const zombieEntity of zombies) world.get(zombieEntity, ZombieComponent)!.health = 0
+                for (const zombieEntity of zombies) {
+                    const zombie = world.get(zombieEntity, ZombieComponent)!
+                    if (zombie.state !== 'dying' && zombie.state !== 'mowered') commands.destroyEntity(zombieEntity)
+                }
                 return
             }
             if (waves.nextWaveAtTick === undefined) return
@@ -343,7 +347,7 @@ export function createLevelOneWaveSystem(definitions: GameplayDefinitionsV2): Ga
 function spawnSkySun(
     world: World,
     commands: CommandBuffer,
-    definitions: GameplayDefinitionsV2,
+    definitions: GameplayDefinitions,
     typeId: string,
 ): void {
     const definition = definitions.items[typeId]

@@ -150,12 +150,7 @@ export const MENU_PAGES: Record<MenuPageId, MenuPage> = {
         title: 'Quit', backgrounds: MAIN_BACKGROUND, buttons: [], back: 'main',
     },
     pause: {
-        title: 'Paused', backgrounds: [OPTIONS_BACKGROUND], overlay: true,
-        buttons: [
-            { label: 'Restart', target: 'restart' },
-            { label: 'Options', target: 'gameOptions' },
-            { label: 'Main menu', target: 'main' },
-        ], back: 'resume',
+        title: 'GAME PAUSED', backgrounds: [], overlay: true, buttons: [], back: 'resume',
     },
     gameOptions: {
         title: 'Options', backgrounds: [OPTIONS_BACKGROUND], overlay: true, buttons: [], back: 'resume',
@@ -166,9 +161,7 @@ export const MENU_PAGES: Record<MenuPageId, MenuPage> = {
         buttons: [{ label: 'Play again', target: 'restart' }], back: 'main',
     },
     gameOver: {
-        title: 'Game over', backgrounds: [
-            { image: 'background1', x: -220 },
-            { image: 'zombieswon', x: 118, y: 66 },
-        ], buttons: [{ label: 'Try again', target: 'restart' }], back: 'main',
+        title: 'Game over', backgrounds: [], overlay: true,
+        buttons: [{ label: 'Try again', target: 'restart' }], back: 'main',
     },
 }

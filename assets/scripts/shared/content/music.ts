@@ -1,6 +1,6 @@
 import { isQualifiedId } from '@/shared/mod/index'
 
-export interface MusicV2 {
+export interface Music {
     schemaVersion: 2
     id: string
     durationSeconds: number
@@ -13,7 +13,7 @@ export interface MusicV2 {
     }
 }
 
-export function parseMusicV2(value: unknown): MusicV2 {
+export function parseMusic(value: unknown): Music {
     const source = exactObject(value, [
         'schemaVersion', 'id', 'durationSeconds', 'loopStartSeconds', 'loopEndSeconds', 'stems',
     ], 'music')

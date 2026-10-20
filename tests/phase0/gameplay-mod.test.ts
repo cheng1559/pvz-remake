@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import test from 'node:test'
 import { GameplaySystemMods, type GameplaySystemEnhancer } from '@/server/GameplaySystemMods'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from '../server/run-command'
 
@@ -106,10 +106,10 @@ test('phase0 gameplay module registers without Cocos', async () => {
     assert.equal(enhanced, true)
     assert.deepEqual(events, [{ type: 'plantFiring', data: { plantId: 1 } }])
 
-    const gameplayDefinitions = parseGameplayDefinitionsV2(JSON.parse(
+    const gameplayDefinitions = parseGameplayDefinitions(JSON.parse(
         await readFile('tools/content/pvz-base/gameplay/definitions.json', 'utf8'),
     ))
-    const gameplayLevels = parseGameplayLevelsV2(JSON.parse(
+    const gameplayLevels = parseGameplayLevels(JSON.parse(
         await readFile('tools/content/pvz-base/gameplay/levels.json', 'utf8'),
     ), gameplayDefinitions)
     const systemMods = new GameplaySystemMods()

@@ -2,10 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { IntegratedGameClient } from '@/client/game/IntegratedGameClient'
-import { parseClientPresentationSnapshotV2 } from '@/client/game/ClientPresentationSnapshot'
+import { parseClientPresentationSnapshot } from '@/client/game/ClientPresentationSnapshot'
 import { LocalGameChannel } from '@/shared/channel/index'
 import type { WorldSnapshot } from '@/shared/protocol/index'
-import { adventure11Presentation } from './adventure11-test-snapshot'
+import { levelPresentation } from './level-test-snapshot'
 
 function snapshot(tick: number, x: number): WorldSnapshot {
     return {
@@ -33,7 +33,15 @@ test('client presentation snapshot restores interpolation, sequence, and consume
     source.update()
     source.drainEvents()
 
-    const saved = source.snapshot(adventure11Presentation(source.world.current!))
+    const saved = source.snapshot(levelPresentation(source.world.current!))
+    const { level, ...transport } = saved
+    assert.deepEqual(parseClientPresentationSnapshot({ ...transport, adventure11: level }), saved,
+        'the previous  adventure11 wire field remains readable')
+    const anotherLevel = JSON.parse(JSON.stringify(saved))
+    for (const world of [anotherLevel.transport.previous, anotherLevel.transport.current]) {
+        if (world) world.levelId = 'example:another-level'
+    }
+    assert.equal(parseClientPresentationSnapshot(anotherLevel).transport.current.levelId, 'example:another-level')
     const restoredChannel = new LocalGameChannel()
     const restored = new IntegratedGameClient(restoredChannel)
     restored.restore(JSON.parse(JSON.stringify(saved)))
@@ -53,35 +61,35 @@ test('client presentation snapshot restores interpolation, sequence, and consume
     assert.deepEqual(restored.drainEvents().map(event => event.type), ['new'])
 
     assert.throws(
-        () => parseClientPresentationSnapshotV2({ ...saved, extra: true }),
+        () => parseClientPresentationSnapshot({ ...saved, extra: true }),
         /extra is not supported/,
     )
     assert.throws(
-        () => parseClientPresentationSnapshotV2({ ...saved, adventure11: { ...saved.adventure11, extra: true } }),
+        () => parseClientPresentationSnapshot({ ...saved, level: { ...saved.level, extra: true } }),
         /extra is not supported/,
     )
     assert.throws(
-        () => parseClientPresentationSnapshotV2({
+        () => parseClientPresentationSnapshot({
             ...saved,
             transport: { ...saved.transport, previous: saved.transport.current },
         }),
         /previous tick must be below current tick/,
     )
     assert.throws(
-        () => parseClientPresentationSnapshotV2({
+        () => parseClientPresentationSnapshot({
             ...saved,
-            adventure11: {
-                ...saved.adventure11,
-                advice: { ...saved.adventure11.advice, lastSyncedTick: saved.transport.current.gameplayTick + 1 },
+            level: {
+                ...saved.level,
+                advice: { ...saved.level.advice, lastSyncedTick: saved.transport.current.gameplayTick + 1 },
             },
         }),
         /presenter ticks must match/,
     )
     assert.throws(
-        () => parseClientPresentationSnapshotV2({
+        () => parseClientPresentationSnapshot({
             ...saved,
-            adventure11: {
-                ...saved.adventure11,
+            level: {
+                ...saved.level,
                 entities: [{ kind: 'sun', entityId: 999, animation: null }],
             },
         }),

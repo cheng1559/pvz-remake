@@ -12,6 +12,7 @@ import {
     RandomResource,
     ZombieComponent,
     createZombieSystem,
+    mowZombie,
     spawnZombie,
 } from '@/server/gameplay'
 import {
@@ -24,13 +25,13 @@ import {
     createItemSystem,
     initializeLevelOne,
 } from '@/server/levelOne'
-import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 
 const source = (name: string): unknown => JSON.parse(
     readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'),
 )
-const definitions = parseGameplayDefinitionsV2(source('definitions'))
-const levels = parseGameplayLevelsV2(source('levels'), definitions)
+const definitions = parseGameplayDefinitions(source('definitions'))
+const levels = parseGameplayLevels(source('levels'), definitions)
 
 function setup() {
     const world = new World()
@@ -128,6 +129,10 @@ test('level one drops its award from the last effective zombie before its corpse
     world.resources.get(WaveResource).index = levels.levels['pvz:adventure-1-1'].waves.length
     const zombieId = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
     world.get(zombieId, ZombieComponent)!.health = 0
+    const headless = spawnZombie(world, definitions, 'pvz:normal', 2, 100, 250)
+    world.get(headless, ZombieComponent)!.hasHead = false
+    const mowered = spawnZombie(world, definitions, 'pvz:normal', 2, 500, 250)
+    mowZombie(world.get(mowered, ZombieComponent)!)
     const schedule = new Schedule()
     schedule.add('spawn', createLevelOneWaveSystem(definitions))
     schedule.add('zombie', createZombieSystem(definitions))
@@ -140,6 +145,9 @@ test('level one drops its award from the last effective zombie before its corpse
     const awardPosition = world.get(awardId, PositionComponent)!
     const award = world.get(awardId, ItemComponent)!
     assert.equal(world.hasEntity(zombieId), true)
+    assert.equal(world.hasEntity(headless), false, 'award drop removes active headless zombies without starting a death animation')
+    assert.equal(world.get(zombieId, ZombieComponent)!.state, 'dying')
+    assert.equal(world.get(mowered, ZombieComponent)!.state, 'mowered', 'award drop preserves mowered animation')
     assert.equal(awardPosition.x, 750)
     assert.ok(awardPosition.y >= 302.5 && awardPosition.y < 304.5)
     assert.equal(award.width, 50)

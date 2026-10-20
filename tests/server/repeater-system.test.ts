@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from './run-command'
 
@@ -12,8 +12,8 @@ const source = (name: string): unknown => JSON.parse(
 )
 
 test('Repeater fires twice 26 ticks apart and restores between shots', () => {
-    const definitions = parseGameplayDefinitionsV2(source('definitions'))
-    const levels = parseGameplayLevelsV2(source('levels'), definitions)
+    const definitions = parseGameplayDefinitions(source('definitions'))
+    const levels = parseGameplayLevels(source('levels'), definitions)
     const level = levels.levels['pvz:adventure-1-1']
     levels.levels['pvz:adventure-1-1'] = {
         ...level,

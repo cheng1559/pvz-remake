@@ -3,7 +3,7 @@ import { gameClock } from './GameClock'
 
 /** Keeps running Cocos tweens in sync with the clock and releases subscriptions with their owner. */
 export function startGameTween<T extends object>(owner: Node, animation: Tween<T>): Tween<T> {
-    animation.timeScale(gameClock.speed)
+    animation.timeScale(gameClock.effectiveSpeed)
     const unsubscribe = gameClock.onSpeedChange(speed => { animation.timeScale(speed) })
     const cleanup = () => {
         unsubscribe()

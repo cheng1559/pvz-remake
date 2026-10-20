@@ -1,6 +1,6 @@
 import { isQualifiedId } from '@/shared/mod/index'
 
-export interface FontCharV2 {
+export interface FontChar {
     rect: [number, number, number, number]
     offset: [number, number]
     width: number
@@ -8,7 +8,7 @@ export interface FontCharV2 {
     kerning: Record<string, number>
 }
 
-export interface FontLayerV2 {
+export interface FontLayer {
     name: string
     image: string
     ascent: number
@@ -22,18 +22,18 @@ export interface FontLayerV2 {
     baseOrder: number
     colorMult: [number, number, number, number]
     colorAdd: [number, number, number, number]
-    chars: Record<string, FontCharV2>
+    chars: Record<string, FontChar>
 }
 
-export interface FontV2 {
+export interface Font {
     schemaVersion: 2
     id: string
     defaultPointSize: number
     charMap: Record<string, number>
-    layers: FontLayerV2[]
+    layers: FontLayer[]
 }
 
-export function parseFontV2(value: unknown): FontV2 {
+export function parseFont(value: unknown): Font {
     const source = exactObject(
         value,
         ['schemaVersion', 'id', 'defaultPointSize', 'charMap', 'layers'],
@@ -54,7 +54,7 @@ export function parseFontV2(value: unknown): FontV2 {
     }
 }
 
-function parseLayer(value: unknown, name: string): FontLayerV2 {
+function parseLayer(value: unknown, name: string): FontLayer {
     const layer = exactObject(value, [
         'name', 'image', 'ascent', 'ascentPadding', 'lineSpacingOffset', 'pointSize',
         'height', 'spacing', 'offset', 'drawMode', 'baseOrder', 'colorMult', 'colorAdd', 'chars',
@@ -63,7 +63,7 @@ function parseLayer(value: unknown, name: string): FontLayerV2 {
     if (!/^[A-Za-z0-9_-]+$/.test(image)) throw new Error(`${name}.image must be an asset name`)
     const chars = object(layer.chars, `${name}.chars`)
     if (Object.keys(chars).length === 0) throw new Error(`${name}.chars must not be empty`)
-    const parsedChars: Record<string, FontCharV2> = {}
+    const parsedChars: Record<string, FontChar> = {}
     for (const key of Object.keys(chars).sort((a, b) => Number(a) - Number(b))) {
         codeKey(key, `${name}.chars`)
         parsedChars[key] = parseChar(chars[key], `${name}.chars.${key}`)
@@ -87,7 +87,7 @@ function parseLayer(value: unknown, name: string): FontLayerV2 {
     }
 }
 
-function parseChar(value: unknown, name: string): FontCharV2 {
+function parseChar(value: unknown, name: string): FontChar {
     const char = exactObject(value, ['rect', 'offset', 'width', 'order', 'kerning'], name)
     return {
         rect: tuple(char.rect, 4, nonNegativeNumber, `${name}.rect`),

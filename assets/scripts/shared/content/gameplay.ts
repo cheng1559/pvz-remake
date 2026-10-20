@@ -1,45 +1,45 @@
 import { isQualifiedId } from '@/shared/mod/index'
 
-export interface GameplayDefinitionsV2 {
+export interface GameplayDefinitions {
     schemaVersion: 2
     tickSeconds: number
-    boards: Record<string, BoardDefinitionV2>
-    seeds: Record<string, SeedDefinitionV2>
-    plants: Record<string, PlantDefinitionV2>
-    zombies: Record<string, ZombieDefinitionV2>
-    projectiles: Record<string, ProjectileDefinitionV2>
-    items: Record<string, ItemDefinitionV2>
-    lawnMowers: Record<string, LawnMowerDefinitionV2>
+    boards: Record<string, BoardDefinition>
+    seeds: Record<string, SeedDefinition>
+    plants: Record<string, PlantDefinition>
+    zombies: Record<string, ZombieDefinition>
+    projectiles: Record<string, ProjectileDefinition>
+    items: Record<string, ItemDefinition>
+    lawnMowers: Record<string, LawnMowerDefinition>
 }
 
-export interface GameplayLevelsV2 {
+export interface GameplayLevels {
     schemaVersion: 2
-    levels: Record<string, LevelDefinitionV2>
+    levels: Record<string, LevelDefinition>
 }
 
-export interface GameplayStringsV2 {
+export interface GameplayStrings {
     schemaVersion: 2
     locale: string
     entries: Record<string, string>
 }
 
-export interface BoardDefinitionV2 {
+export interface BoardDefinition {
     rows: number
     columns: number
-    origin: PointV2
+    origin: Point
     cell: { width: number; height: number }
 }
 
-export interface SeedDefinitionV2 {
+export interface SeedDefinition {
     plant: string
     sunCost: number
     cooldownTicks: number
     placement: 'ground'
 }
 
-export interface PlantDefinitionV2 {
+export interface PlantDefinition {
     maxHealth: number
-    body: RectV2
+    body: Rect
     shooter: {
         cadenceTicks: number
         initialDelayTicks: number
@@ -47,36 +47,36 @@ export interface PlantDefinitionV2 {
         shotsPerBurst: number
         burstIntervalTicks: number
         projectile: string
-        offset: PointV2
+        offset: Point
     }
 }
 
-export interface ZombieDefinitionV2 {
+export interface ZombieDefinition {
     maxHealth: number
     speedPerTick: { min: number; max: number }
-    body: RectV2
-    attack: RectV2
+    body: Rect
+    attack: Rect
     bite: { damage: number; cadenceTicks: number }
 }
 
-export interface ProjectileDefinitionV2 {
+export interface ProjectileDefinition {
     damage: number
-    speedPerTick: PointV2
-    hitbox: RectV2
+    speedPerTick: Point
+    hitbox: Rect
 }
 
-export interface ItemDefinitionV2 {
+export interface ItemDefinition {
     value: number
     width: number
     height: number
 }
 
-export interface LawnMowerDefinitionV2 {
+export interface LawnMowerDefinition {
     speedPerTick: number
-    attack: RectV2
+    attack: Rect
 }
 
-export interface LevelDefinitionV2 {
+export interface LevelDefinition {
     adventureIndex: number
     board: string
     activeRows: number[]
@@ -89,17 +89,17 @@ export interface LevelDefinitionV2 {
     award: { kind: 'seed'; id: string; packetCost: number }
 }
 
-interface PointV2 { x: number; y: number }
-interface RectV2 extends PointV2 { width: number; height: number }
+interface Point { x: number; y: number }
+interface Rect extends Point { width: number; height: number }
 
-export function parseGameplayDefinitionsV2(value: unknown): GameplayDefinitionsV2 {
+export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
     const source = exactObject(value, [
         'schemaVersion', 'tickSeconds', 'boards', 'seeds', 'plants', 'zombies',
         'projectiles', 'items', 'lawnMowers',
     ], 'gameplay definitions')
     if (source.schemaVersion !== 2) throw new Error('gameplay definitions.schemaVersion must be 2')
 
-    const definitions: GameplayDefinitionsV2 = {
+    const definitions: GameplayDefinitions = {
         schemaVersion: 2,
         tickSeconds: positiveFinite(source.tickSeconds, 'gameplay definitions.tickSeconds'),
         boards: mapped(source.boards, 'boards', parseBoard),
@@ -120,17 +120,17 @@ export function parseGameplayDefinitionsV2(value: unknown): GameplayDefinitionsV
     return definitions
 }
 
-export function parseGameplayLevelsV2(
+export function parseGameplayLevels(
     value: unknown,
-    definitions: GameplayDefinitionsV2,
-): GameplayLevelsV2 {
+    definitions: GameplayDefinitions,
+): GameplayLevels {
     const source = exactObject(value, ['schemaVersion', 'levels'], 'gameplay levels')
     if (source.schemaVersion !== 2) throw new Error('gameplay levels.schemaVersion must be 2')
     const levels = mapped(source.levels, 'levels', (entry, name) => parseLevel(entry, name, definitions))
     return { schemaVersion: 2, levels }
 }
 
-export function parseGameplayStringsV2(value: unknown): GameplayStringsV2 {
+export function parseGameplayStrings(value: unknown): GameplayStrings {
     const source = exactObject(value, ['schemaVersion', 'locale', 'entries'], 'gameplay strings')
     if (source.schemaVersion !== 2) throw new Error('gameplay strings.schemaVersion must be 2')
     const entriesSource = object(source.entries, 'gameplay strings.entries')
@@ -146,7 +146,7 @@ export function parseGameplayStringsV2(value: unknown): GameplayStringsV2 {
     }
 }
 
-function parseBoard(value: unknown, name: string): BoardDefinitionV2 {
+function parseBoard(value: unknown, name: string): BoardDefinition {
     const source = exactObject(value, ['rows', 'columns', 'origin', 'cell'], name)
     const cell = exactObject(source.cell, ['width', 'height'], `${name}.cell`)
     return {
@@ -160,7 +160,7 @@ function parseBoard(value: unknown, name: string): BoardDefinitionV2 {
     }
 }
 
-function parseSeed(value: unknown, name: string): SeedDefinitionV2 {
+function parseSeed(value: unknown, name: string): SeedDefinition {
     const source = exactObject(value, ['plant', 'sunCost', 'cooldownTicks', 'placement'], name)
     if (source.placement !== 'ground') throw new Error(`${name}.placement must be ground`)
     return {
@@ -171,7 +171,7 @@ function parseSeed(value: unknown, name: string): SeedDefinitionV2 {
     }
 }
 
-function parsePlant(value: unknown, name: string): PlantDefinitionV2 {
+function parsePlant(value: unknown, name: string): PlantDefinition {
     const source = exactObject(value, ['maxHealth', 'body', 'shooter'], name)
     const shooter = exactObject(
         source.shooter,
@@ -193,7 +193,7 @@ function parsePlant(value: unknown, name: string): PlantDefinitionV2 {
     }
 }
 
-function parseZombie(value: unknown, name: string): ZombieDefinitionV2 {
+function parseZombie(value: unknown, name: string): ZombieDefinition {
     const source = exactObject(value, ['maxHealth', 'speedPerTick', 'body', 'attack', 'bite'], name)
     const speed = exactObject(source.speedPerTick, ['min', 'max'], `${name}.speedPerTick`)
     const min = nonNegativeFinite(speed.min, `${name}.speedPerTick.min`)
@@ -212,7 +212,7 @@ function parseZombie(value: unknown, name: string): ZombieDefinitionV2 {
     }
 }
 
-function parseProjectile(value: unknown, name: string): ProjectileDefinitionV2 {
+function parseProjectile(value: unknown, name: string): ProjectileDefinition {
     const source = exactObject(value, ['damage', 'speedPerTick', 'hitbox'], name)
     return {
         damage: positiveInteger(source.damage, `${name}.damage`),
@@ -221,7 +221,7 @@ function parseProjectile(value: unknown, name: string): ProjectileDefinitionV2 {
     }
 }
 
-function parseItem(value: unknown, name: string): ItemDefinitionV2 {
+function parseItem(value: unknown, name: string): ItemDefinition {
     const source = exactObject(value, ['value', 'width', 'height'], name)
     return {
         value: positiveInteger(source.value, `${name}.value`),
@@ -230,7 +230,7 @@ function parseItem(value: unknown, name: string): ItemDefinitionV2 {
     }
 }
 
-function parseLawnMower(value: unknown, name: string): LawnMowerDefinitionV2 {
+function parseLawnMower(value: unknown, name: string): LawnMowerDefinition {
     const source = exactObject(value, ['speedPerTick', 'attack'], name)
     return {
         speedPerTick: positiveFinite(source.speedPerTick, `${name}.speedPerTick`),
@@ -238,7 +238,7 @@ function parseLawnMower(value: unknown, name: string): LawnMowerDefinitionV2 {
     }
 }
 
-function parseLevel(value: unknown, name: string, definitions: GameplayDefinitionsV2): LevelDefinitionV2 {
+function parseLevel(value: unknown, name: string, definitions: GameplayDefinitions): LevelDefinition {
     const source = exactObject(value, [
         'adventureIndex', 'board', 'activeRows', 'startingSun', 'seedPackets',
         'lawnMower', 'skySun', 'waves', 'tutorial', 'award',
@@ -307,12 +307,12 @@ function qualifiedIdArray(value: unknown, name: string): string[] {
     return array(value, name).map((entry, index) => qualifiedId(entry, `${name}[${index}]`))
 }
 
-function point(value: unknown, name: string): PointV2 {
+function point(value: unknown, name: string): Point {
     const source = exactObject(value, ['x', 'y'], name)
     return { x: finite(source.x, `${name}.x`), y: finite(source.y, `${name}.y`) }
 }
 
-function rect(value: unknown, name: string): RectV2 {
+function rect(value: unknown, name: string): Rect {
     const source = exactObject(value, ['x', 'y', 'width', 'height'], name)
     return {
         x: finite(source.x, `${name}.x`),

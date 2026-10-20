@@ -5,14 +5,14 @@ import test from 'node:test'
 import { IntegratedGameHost } from '@/server/IntegratedGameHost'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { LocalGameChannel } from '@/shared/channel/index'
-import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { ClientPacket, StartSessionPacket } from '@/shared/protocol/index'
 
 const source = (name: string): unknown => JSON.parse(
     readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'),
 )
-const definitions = parseGameplayDefinitionsV2(source('definitions'))
-const levels = parseGameplayLevelsV2(source('levels'), definitions)
+const definitions = parseGameplayDefinitions(source('definitions'))
+const levels = parseGameplayLevels(source('levels'), definitions)
 const startPacket: StartSessionPacket = {
     protocolVersion: 1,
     sequence: 1,

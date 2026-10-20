@@ -1,4 +1,4 @@
-import type { ReanimKeyframeV2, ReanimV2 } from '@/shared/content/reanim'
+import type { ReanimKeyframe, Reanim } from '@/shared/content/reanim'
 import { isQualifiedId } from '@/shared/mod/index'
 
 export interface ReanimPlaybackSnapshot {
@@ -14,7 +14,7 @@ export interface ReanimPlaybackSnapshot {
     blend: {
         durationSeconds: number
         elapsedSeconds: number
-        fromPoses: Array<{ trackId: string, pose: ReanimKeyframeV2 }>
+        fromPoses: Array<{ trackId: string, pose: ReanimKeyframe }>
     } | null
     attachmentTrackId: string | null
 }
@@ -92,7 +92,7 @@ export function parseReanimPlaybackSnapshot(value: unknown): ReanimPlaybackSnaps
 
 export function validateReanimPlaybackSnapshotContent(
     snapshot: ReanimPlaybackSnapshot,
-    data: ReanimV2,
+    data: Reanim,
 ): ReanimPlaybackSnapshot {
     if (snapshot.id !== data.id) throw new Error(`cannot restore ${snapshot.id} into ${data.id}`)
     if (snapshot.loop
@@ -109,7 +109,7 @@ export function validateReanimPlaybackSnapshotContent(
     return snapshot
 }
 
-function parsePose(value: unknown, name: string): ReanimKeyframeV2 {
+function parsePose(value: unknown, name: string): ReanimKeyframe {
     const source = exactObject(value, [
         'timeSeconds', 'x', 'y', 'scaleX', 'scaleY', 'skewX', 'skewY',
         'alpha', 'sprite', 'interpolation',
@@ -135,7 +135,7 @@ function parsePose(value: unknown, name: string): ReanimKeyframeV2 {
         alpha,
         sprite: source.sprite,
         interpolation: source.interpolation,
-    } as ReanimKeyframeV2
+    } as ReanimKeyframe
 }
 
 function exactObject(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {

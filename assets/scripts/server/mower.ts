@@ -1,4 +1,4 @@
-import type { GameplayDefinitionsV2 } from '@/shared/content/gameplay'
+import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { GameSystem } from '@/ecs/index'
 import {
     LawnMowerComponent,
@@ -15,12 +15,12 @@ const BOARD_RIGHT = 800
 const CHOMP_READY_TICKS = 25
 const CHOMP_ACTIVE_TICKS = 50
 
-export function createMowerSystem(definitions: GameplayDefinitionsV2): GameSystem {
+export function createMowerSystem(definitions: GameplayDefinitions): GameSystem {
     return {
         id: 'pvz:mower',
         run({ world }) {
             const level = world.resources.get(LevelStateResource)
-            if (level.result !== 'playing' || level.paused) return
+            if (level.result === 'lost' || level.paused) return
 
             for (const entity of world.query(PositionComponent, LawnMowerComponent)) {
                 const position = world.get(entity, PositionComponent)!

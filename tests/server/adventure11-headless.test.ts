@@ -3,15 +3,15 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { GameCommand, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
 
 const source = (name: string): unknown => JSON.parse(
     readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'),
 )
-const definitions = parseGameplayDefinitionsV2(source('definitions'))
-const levels = parseGameplayLevelsV2(source('levels'), definitions)
+const definitions = parseGameplayDefinitions(source('definitions'))
+const levels = parseGameplayLevels(source('levels'), definitions)
 const start: StartSessionPacket = {
     protocolVersion: 1,
     sequence: 1,

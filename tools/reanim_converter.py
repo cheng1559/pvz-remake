@@ -113,13 +113,13 @@ def parse_track_data(
     return name, duration, frames
 
 
-def build_reanim_v2(
+def build_reanim(
     source: Path,
     content_id: str,
     available_sprites: set[str],
     namespace: str = "pvz",
 ) -> dict[str, Any]:
-    """Convert one Reanim file to the small, runtime-independent v2 format."""
+    """Convert one Reanim file to the small, runtime-independent format."""
     if not QUALIFIED_ID.fullmatch(content_id):
         raise ValueError(f"invalid reanim id: {content_id}")
 
@@ -184,7 +184,7 @@ def build_reanim_v2(
     }
 
 
-def write_reanim_v2(
+def write_reanim(
     source: Path,
     output: Path,
     content_id: str,
@@ -192,7 +192,7 @@ def write_reanim_v2(
     namespace: str = "pvz",
 ) -> str:
     payload = json.dumps(
-        build_reanim_v2(source, content_id, available_sprites, namespace),
+        build_reanim(source, content_id, available_sprites, namespace),
         ensure_ascii=False,
         allow_nan=False,
         separators=(",", ":"),
@@ -378,7 +378,7 @@ def get_anim_nodes(
     return anim_nodes
 
 
-def build_reanim_clip_v2(
+def build_reanim_clip(
     source: Path,
     anim_info: dict[str, Any],
     node_id: str,
@@ -413,14 +413,14 @@ def build_reanim_clip_v2(
         previous = None
         for frame in frames:
             if previous is not None and frame["frameIndex"] > previous["frameIndex"] + 1:
-                keyframes.append(_legacy_frame_v2(previous, previous["frameIndex"] + 1, start, fps, None))
+                keyframes.append(_legacy_frame(previous, previous["frameIndex"] + 1, start, fps, None))
             sprite = f"{namespace}:{frame['image']}" if frame["image"] else None
             if sprite is not None and sprite not in available_sprites:
                 missing_sprites.add(sprite)
-            keyframes.append(_legacy_frame_v2(frame, frame["frameIndex"], start, fps, sprite))
+            keyframes.append(_legacy_frame(frame, frame["frameIndex"], start, fps, sprite))
             previous = frame
         if previous is not None and previous["frameIndex"] < end:
-            keyframes.append(_legacy_frame_v2(previous, previous["frameIndex"] + 1, start, fps, None))
+            keyframes.append(_legacy_frame(previous, previous["frameIndex"] + 1, start, fps, None))
         tracks.append({"id": track_id, "zIndex": track["zIndex"], "keyframes": keyframes})
 
     if missing_sprites:
@@ -433,7 +433,7 @@ def build_reanim_clip_v2(
     }
 
 
-def write_reanim_clip_v2(
+def write_reanim_clip(
     source: Path,
     output: Path,
     anim_info: dict[str, Any],
@@ -443,7 +443,7 @@ def write_reanim_clip_v2(
     available_sprites: set[str],
     namespace: str = "pvz",
 ) -> str:
-    data = build_reanim_clip_v2(
+    data = build_reanim_clip(
         source, anim_info, node_id, clip_id, content_id, available_sprites, namespace
     )
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode() + b"\n"
@@ -452,7 +452,7 @@ def write_reanim_clip_v2(
     return hashlib.sha256(payload).hexdigest()
 
 
-def _legacy_frame_v2(
+def _legacy_frame(
     frame: dict[str, Any],
     frame_index: int,
     start_frame: int,

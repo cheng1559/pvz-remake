@@ -5,10 +5,13 @@ import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistr
 import { loadInstalledMods } from '@/client/content/ModLoader'
 import { CONTENT_CATEGORIES, type ContentCategory } from '@/shared/content'
 import {
-    parseGameplayDefinitionsV2,
-    parseGameplayLevelsV2,
-    parseGameplayStringsV2,
+    parseGameplayDefinitions,
+    parseGameplayLevels,
+    parseGameplayStrings,
 } from '@/shared/content/gameplay'
+
+// Preserve the installed asset ID and prefab UUID for existing content packs and saves.
+export const LEVEL_PREFAB_ID = 'pvz:adventure11'
 
 export async function loadIntegratedGameContent(location = 'pvz-base') {
     const loader = new ClientContentLoader()
@@ -20,20 +23,20 @@ export async function loadIntegratedGameContent(location = 'pvz-base') {
     const loadJson = (path: string) => new Promise<JsonAsset>((resolve, reject) => {
         bundle.load(path.replace(/\.json$/i, ''), JsonAsset, (error, asset) => error ? reject(error) : resolve(asset))
     })
-    const prefabPath = manifest.client.prefabs['pvz:adventure11']
+    const prefabPath = manifest.client.prefabs[LEVEL_PREFAB_ID]
     if (!prefabPath) throw new Error('Bundle pvz-base does not define prefab pvz:adventure11')
     const loadPrefab = () => new Promise<Prefab>((resolve, reject) => {
         bundle.load(prefabPath.replace(/\.prefab$/i, ''), Prefab, (error, asset) => error ? reject(error) : resolve(asset))
     })
-    const [definitionsAsset, levelsAsset, stringsAsset, adventure11Prefab] = await Promise.all([
+    const [definitionsAsset, levelsAsset, stringsAsset, levelPrefab] = await Promise.all([
         loadJson(manifest.gameplay.definitions),
         loadJson(manifest.gameplay.levels),
         loadJson(manifest.gameplay.strings),
         loadPrefab(),
     ])
-    const definitions = parseGameplayDefinitionsV2(definitionsAsset.json)
-    const levels = parseGameplayLevelsV2(levelsAsset.json, definitions)
-    const strings = parseGameplayStringsV2(stringsAsset.json)
+    const definitions = parseGameplayDefinitions(definitionsAsset.json)
+    const levels = parseGameplayLevels(levelsAsset.json, definitions)
+    const strings = parseGameplayStrings(stringsAsset.json)
     const registry = new ContentRegistry()
     registry.register(manifest)
     for (const [, content] of loadedMods.clientContent.entries()) {
@@ -59,7 +62,7 @@ export async function loadIntegratedGameContent(location = 'pvz-base') {
         .filter(mod => mod.gameplay !== undefined)
         .map(mod => ({ id: mod.id, version: mod.version, contentHash: mod.contentHash }))
     return {
-        definitions, levels, strings, adventure11Prefab, registry, loader,
+        definitions, levels, strings, levelPrefab, registry, loader,
         contentHash: manifest.contentHash, loadedMods, enabledMods, animations,
         saveCompatibleHashes: manifest.saveCompatibleHashes ?? [],
     }

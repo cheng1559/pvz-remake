@@ -1,3 +1,5 @@
+import type { DebugCliResult } from '@/shared/debug/DebugCli'
+
 export type JsonValue = null | boolean | number | string | JsonValue[] | JsonObject
 export type JsonObject = { [key: string]: JsonValue }
 
@@ -133,6 +135,8 @@ export interface ZombieSnapshot {
     animationTime: number
     animationSpeed: number
     moweredTicksRemaining: number
+    /** Omitted by older snapshots; defaults to fully opaque. */
+    alpha?: number
     hasHead: boolean
     hasArm: boolean
     hitFlashCounter: number
@@ -198,6 +202,12 @@ export interface CommandRejectedPacket {
     sequence: ClientSequence
     code: string
 }
+export interface DebugResultPacket {
+    protocolVersion: 1
+    type: 'debugResult'
+    sequence: ClientSequence
+    result: DebugCliResult
+}
 
 export interface SaveReadyPacket {
     protocolVersion: 1
@@ -223,6 +233,7 @@ export type ServerPacket =
     | SessionStartedPacket
     | ServerFramePacket
     | CommandRejectedPacket
+    | DebugResultPacket
     | SaveReadyPacket
     | SessionStoppedPacket
     | FatalServerErrorPacket
@@ -284,6 +295,20 @@ export function parseServerPacket(value: unknown): ServerPacket {
             integer(packet.sequence, 'commandRejected.sequence')
             nonEmptyString(packet.code, 'commandRejected.code')
             break
+        case 'debugResult': {
+            integer(packet.sequence, 'debugResult.sequence')
+            const result = record(packet.result, 'debugResult.result')
+            boolean(result.ok, 'debugResult.result.ok')
+            nonEmptyString(result.message, 'debugResult.result.message')
+            if (result.failure !== undefined && result.failure !== 'syntax' && result.failure !== 'condition') throw new TypeError('Unknown debug failure')
+            if (result.catalog !== undefined) {
+                const catalog = record(result.catalog, 'debugResult.result.catalog')
+                for (const kind of ['plants', 'zombies', 'items', 'levels']) {
+                    array(catalog[kind], `debug catalog.${kind}`).forEach(value => nonEmptyString(value, `debug catalog.${kind} entry`))
+                }
+            }
+            break
+        }
         case 'saveReady':
             integer(packet.acknowledgedSequence, 'saveReady.acknowledgedSequence')
             if (!('save' in packet)) throw new TypeError('saveReady.save is required')
@@ -485,6 +510,12 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         finite(zombie.animationTime, `${name}.animationTime`)
         finite(zombie.animationSpeed, `${name}.animationSpeed`)
         integer(zombie.moweredTicksRemaining, `${name}.moweredTicksRemaining`)
+        if (zombie.alpha !== undefined) {
+            integer(zombie.alpha, `${name}.alpha`)
+            if ((zombie.alpha as number) < 0 || (zombie.alpha as number) > 255) {
+                throw new TypeError(`${name}.alpha must be between 0 and 255`)
+            }
+        }
         if ((zombie.animationTime as number) < 0 || (zombie.animationSpeed as number) <= 0) {
             throw new TypeError(`${name}.animation playback must be positive`)
         }

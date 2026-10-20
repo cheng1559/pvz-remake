@@ -2,7 +2,7 @@ import { Color, Node } from 'cc'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { BitmapTextRenderer, type BitmapTextSnapshot } from '@/client/font/BitmapTextRenderer'
-import { MusicPlayer, type MusicPlaybackSnapshotV2 } from '@/client/music/MusicPlayer'
+import { MusicPlayer, type MusicPlayerSnapshot } from '@/client/music/MusicPlayer'
 import { ParticlePlayer, type ParticlePlayerSnapshot } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer, type ReanimPlaybackSnapshot } from '@/client/reanim/ReanimPlayer'
 import { SoundPlayer } from '@/client/sound/SoundPlayer'
@@ -14,18 +14,18 @@ export async function showContentShowcase(parent: Node): Promise<Node> {
     const registry = new ContentRegistry()
     registry.register(await loader.loadManifest('pvz-base'))
     registry.freeze()
-    const animationRoot = uiNode({ name: 'ReanimV2' }).node
+    const animationRoot = uiNode({ name: 'Reanim' }).node
     const body = uiNode({ name: 'SunflowerBody', parent: animationRoot }).node.addComponent(ReanimPlayer)
     const face = uiNode({ name: 'SunflowerFace', parent: animationRoot }).node.addComponent(ReanimPlayer)
     const zombieNode = uiNode({ name: 'ZombieIdle' }).node
     const zombie = zombieNode.addComponent(ReanimPlayer)
-    const textNode = uiNode({ name: 'BitmapFontV2', anchor: { x: 0, y: 1 } }).node
+    const textNode = uiNode({ name: 'BitmapFont', anchor: { x: 0, y: 1 } }).node
     const text = textNode.addComponent(BitmapTextRenderer)
-    const particleNode = uiNode({ name: 'ParticleV2' }).node
+    const particleNode = uiNode({ name: 'Particle' }).node
     const particle = particleNode.addComponent(ParticlePlayer)
-    const soundNode = uiNode({ name: 'SoundV2' }).node
+    const soundNode = uiNode({ name: 'Sound' }).node
     const sound = soundNode.addComponent(SoundPlayer)
-    const musicNode = uiNode({ name: 'MusicV2' }).node
+    const musicNode = uiNode({ name: 'Music' }).node
     const music = musicNode.addComponent(MusicPlayer)
     try {
         await Promise.all([
@@ -64,7 +64,7 @@ export async function showContentShowcase(parent: Node): Promise<Node> {
     }
 
     const root = uiNode({
-        name: 'ContentV2Showcase',
+        name: 'ContentShowcase',
         parent,
         size: { width: 800, height: 600 },
         graphics: true,
@@ -98,7 +98,7 @@ interface ContentShowcaseSnapshot {
     zombie: ReanimPlaybackSnapshot
     text: BitmapTextSnapshot
     particle: ParticlePlayerSnapshot
-    music: MusicPlaybackSnapshotV2
+    music: MusicPlayerSnapshot
 }
 
 interface ContentShowcaseProbe {
@@ -211,14 +211,14 @@ function requireContent(showcase: Node | null): {
     sound: SoundPlayer
     music: MusicPlayer
 } {
-    const root = showcase?.getChildByName('ReanimV2')
+    const root = showcase?.getChildByName('Reanim')
     const body = root?.getChildByName('SunflowerBody')?.getComponent(ReanimPlayer)
     const face = root?.getChildByName('SunflowerFace')?.getComponent(ReanimPlayer)
     const zombie = showcase?.getChildByName('ZombieIdle')?.getComponent(ReanimPlayer)
-    const text = showcase?.getChildByName('BitmapFontV2')?.getComponent(BitmapTextRenderer)
-    const particle = showcase?.getChildByName('ParticleV2')?.getComponent(ParticlePlayer)
-    const sound = showcase?.getChildByName('SoundV2')?.getComponent(SoundPlayer)
-    const music = showcase?.getChildByName('MusicV2')?.getComponent(MusicPlayer)
+    const text = showcase?.getChildByName('BitmapFont')?.getComponent(BitmapTextRenderer)
+    const particle = showcase?.getChildByName('Particle')?.getComponent(ParticlePlayer)
+    const sound = showcase?.getChildByName('Sound')?.getComponent(SoundPlayer)
+    const music = showcase?.getChildByName('Music')?.getComponent(MusicPlayer)
     if (!body || !face || !zombie || !text || !particle || !sound || !music) {
         throw new Error('content showcase is not open')
     }

@@ -7,11 +7,12 @@ import {
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import {
     PARTICLE_STEP_SECONDS,
     ParticleSimulation,
     type ParticlePose,
-    type ParticleV2,
+    type Particle,
 } from '@/shared/content/particle'
 import {
     parseParticlePlayerSnapshot,
@@ -25,7 +26,7 @@ const { ccclass } = _decorator
 
 @ccclass('ParticlePlayer')
 export class ParticlePlayer extends Component {
-    private data: ParticleV2 | null = null
+    private data: Particle | null = null
     private simulation: ParticleSimulation | null = null
     private accumulatorSeconds = 0
     private readiness: Promise<void> | null = null
@@ -115,6 +116,10 @@ export class ParticlePlayer extends Component {
     }
 
     protected update(dt: number): void {
+        if (!GameDebugSettings.perfParticlesEnabled) {
+            for (const sprite of this.views) sprite.enabled = false
+            return
+        }
         if (this.simulation) this.advance(gameClock.delta(dt))
     }
 
@@ -151,7 +156,7 @@ export class ParticlePlayer extends Component {
         sprite.node.angle = -pose.angleDegrees
     }
 
-    private requireData(): ParticleV2 {
+    private requireData(): Particle {
         if (!this.data) throw new Error('particle player is not loaded')
         return this.data
     }

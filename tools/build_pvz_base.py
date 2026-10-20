@@ -5,7 +5,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from content_v2_converter import build_sprite_content
+from content_converter import build_sprite_content
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -68,7 +68,7 @@ def build_main_menu(clips: list | None = None) -> dict:
 
 def build_pvz_base() -> dict:
     return build_sprite_content(
-        ROOT / "tools/fixtures/content-v2",
+        ROOT / "tools/fixtures/content",
         ROOT / "assets/bundles/pvz-base",
         sprite_sources=[
             (ROOT / "tools/raw/images/background1.jpg", "pvz:background1"),
@@ -90,7 +90,7 @@ def build_pvz_base() -> dict:
             (ROOT / "assets/resources/textures/lawnmower_cached.png", "pvz:lawnmower_cached"),
             (ROOT / "tools/raw/reanim/zombie_outerarm_upper2.png", "pvz:zombie_outerarm_upper2"),
         ],
-        reanim_sources=[ROOT / "tools/fixtures/reanim-v2/phase2.reanim"],
+        reanim_sources=[ROOT / "tools/fixtures/reanim/phase2.reanim"],
         reanim_clips=[
             (ROOT / "tools/raw/reanim/sunflower.reanim", "body", "anim_idle", "pvz:sunflower"),
             (ROOT / "tools/raw/reanim/sunflower.reanim", "face", "anim_blink", "pvz:sunflower_blink"),

@@ -5,8 +5,9 @@ import { MenuApi } from '@/client/api/MenuApi'
 import { createLocalMenuTransport } from '@/app/LocalMenuApi'
 import { createProfileStore } from '@/server/menu/ProfileStore'
 import { SFX_VOLUME_SCALE, type MenuStorage } from '@/shared/menu'
+import type { GameplayLevels, LevelDefinition } from '@/shared/content/gameplay'
 
-function fixture() {
+function fixture(getLevel?: () => LevelDefinition | null) {
     const data = new Map<string, string>()
     const storage: MenuStorage = {
         getItem: key => data.get(key) ?? null,
@@ -16,7 +17,7 @@ function fixture() {
         get length() { return data.size },
     }
     const profiles = createProfileStore(storage)
-    const api = new MenuApi(createLocalMenuTransport(storage))
+    const api = new MenuApi(createLocalMenuTransport(storage, getLevel))
     return { data, storage, profiles, api }
 }
 
@@ -139,6 +140,24 @@ test('achievement entries preserve saved flag/icon order and expose only the act
     assert.equal((await api.getAchievements()).items[1].earned, false)
     await api.createUser('Bob')
     assert.equal((await api.getAchievements()).completed, 0)
+})
+
+test('award API resolves the loaded level reward and packet cost instead of choosing a plant in the UI', async () => {
+    const levels = JSON.parse(readFileSync('tools/content/pvz-base/gameplay/levels.json', 'utf8')) as GameplayLevels
+    let level: LevelDefinition | null = levels.levels['pvz:adventure-1-1']
+    const { api } = fixture(() => level)
+    const award = await api.getAward()
+    assert.deepEqual(award, {
+        seed: 1, cost: 50, name: 'Sunflower', nameKey: 'SUNFLOWER', descriptionKey: 'SUNFLOWER_TOOLTIP',
+    })
+    award.seed = 22
+    assert.equal((await api.getAward()).seed, 1, 'the returned view cannot change the reward')
+    level = { ...level, award: { kind: 'seed', id: 'pvz:torchwood', packetCost: 175 } }
+    assert.deepEqual(await api.getAward(), {
+        seed: 22, cost: 175, name: 'Torchwood', nameKey: 'TORCHWOOD', descriptionKey: 'TORCHWOOD_TOOLTIP',
+    })
+    level = null
+    await assert.rejects(api.getAward(), /loaded level/)
 })
 
 test('menu data and business rules stay behind the API without Cocos or frontend imports', () => {

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { Schedule, World } from '@/ecs/index'
-import { parseGameplayDefinitionsV2 } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions } from '@/shared/content/gameplay'
 import { DeterministicRng } from '@/server/DeterministicRng'
 import { EventQueueResource, createEventQueue } from '@/server/events'
 import {
@@ -17,7 +17,7 @@ import {
     spawnZombie,
 } from '@/server/gameplay'
 
-const definitions = parseGameplayDefinitionsV2(JSON.parse(
+const definitions = parseGameplayDefinitions(JSON.parse(
     readFileSync('tools/content/pvz-base/gameplay/definitions.json', 'utf8'),
 ))
 const board = definitions.boards['pvz:day']
@@ -88,6 +88,19 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     )
     eating.run()
     assert.equal(eating.world.get(plant, PlantComponent)!.eatenFlashCounter, 24)
+    const eatEvents = eating.world.resources.get(EventQueueResource).events
+    assert.equal(eatEvents.filter(event => event.type === 'plantEaten').length, 0)
+    eating.world.get(plant, PlantComponent)!.health = definitions.zombies['pvz:normal'].bite.damage
+    const otherEater = spawnZombie(eating.world, definitions, 'pvz:normal', 2, 40, 280)
+    for (const zombie of [eater, otherEater]) {
+        eating.world.get(zombie, ZombieComponent)!.biteTicks = definitions.zombies['pvz:normal'].bite.cadenceTicks - 1
+    }
+    eating.run()
+    assert.equal([...eating.world.query(PlantComponent)].length, 0)
+    assert.equal(eatEvents.filter(event => event.type === 'plantEaten').length, 1, 'simultaneous bites emit one eaten event')
+    assert.equal(eatEvents.find(event => event.type === 'plantEaten')!.data.plantId, plant)
+    eating.run()
+    assert.equal(eatEvents.filter(event => event.type === 'plantEaten').length, 1)
 
     const headless = game()
     const ignoredPlant = headless.world.createEntity()
@@ -124,6 +137,9 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     )
     damageZombie(dying.world, corpse, 70)
     const deathTicks = dying.world.get(corpse, ZombieComponent)!.deathTicksRemaining
+    const dyingZombie = dying.world.get(corpse, ZombieComponent)!
+    const deathFrames = dyingZombie.animation === 'anim_death2' ? 32 : 38
+    assert.equal(deathTicks, Math.ceil((deathFrames + 1) / (dyingZombie.animationSpeed * 12) * 100) + 100)
     assert.equal(dying.world.get(corpse, ZombieComponent)!.state, 'dying')
     assert.equal(
         dying.world.resources.get(EventQueueResource).events.some(event => event.type === 'zombieDying'),

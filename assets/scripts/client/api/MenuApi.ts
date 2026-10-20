@@ -20,6 +20,7 @@ export class MenuApi {
     getChallenges(page: MenuEndpoints['getChallenges']['args']['page']) { return this.request('getChallenges', { page }) }
     getAlmanac() { return this.request('getAlmanac', {}) }
     getAchievements() { return this.request('getAchievements', {}) }
+    getAward() { return this.request('getAward', {}) }
 }
 
 let transport: MenuTransport | undefined

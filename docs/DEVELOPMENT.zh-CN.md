@@ -1,6 +1,6 @@
 # 开发说明
 
-主场景挂载 `app/GameApp.ts`，协调菜单页面，并通过已有的 1-1 控制器启动 `LocalIntegratedGame`。战斗逻辑在 `server` 中运行，客户端处理协议快照和事件。`server`、`shared`、`ecs` 不应引入引擎依赖。
+主场景挂载 `app/GameApp.ts`，协调菜单页面，并通过 `app/LevelController.ts` 启动 `LocalIntegratedGame`。战斗逻辑在 `server` 中运行，客户端处理协议快照和事件。`server`、`shared`、`ecs` 不应引入引擎依赖。
 
 菜单数据按 `screens → client/api/MenuApi → MenuTransport → server/menu/MenuService` 流转，`shared/menu` 定义请求和响应 DTO。后端负责用户档案与名称校验、商店目录／价格／库存／购买、挑战成绩、图鉴条目、成就条目／解锁状态和设置持久化。页面只渲染 API 返回的数据、提交 ID 和操作，不导入仓库或修改档案；确认购买时由后端重新校验当前用户、价格、库存和余额。请求与响应经过 JSON 往返，前端修改副本不会影响后端状态。
 
@@ -8,7 +8,7 @@
 
 `app/LocalMenuApi.ts` 接入项目现有的进程内本地后端，`GameApp` 启动时注入 Cocos 存储适配器；后端不依赖 Cocos 或 client。用户、设置和各用户存档继续沿用原键名。贴图、位图字体、本地化文案、布局、音效和实际全屏操作由前端负责。以后可替换同一 `MenuTransport` 接入网络服务，目前使用本地传输。
 
-当前仅接通冒险 1-1。主菜单已使用原版图片按钮和 Reanim 入场动画，Options 已接通设置与游戏内操作，图鉴和商店已接入内容与交互；其他模式玩法尚未实现。旧 Debug CLI 和后续关卡不再属于本 worktree；迁移行为时可参考工作区的 `pvz-remake` 仓库。
+当前仅接通冒险 1-1。Debug 构建按 `/` 打开调试 CLI；移动模式双击右下角打开，命令见 [Debug CLI](DEBUG_CLI.zh-CN.md)。主菜单已使用原版图片按钮和 Reanim 入场动画，Options 已接通设置与游戏内操作，图鉴和商店已接入内容与交互；后续关卡及其他模式玩法尚未实现。迁移行为时可参考工作区的 `pvz-remake` 仓库。
 
 `StartupScreen` 自动播放 PopCap Logo 的 200 tick 淡入停留淡出，再进入标题／加载页：标题下落、草皮卷展开，在原版五个进度点播放新版 `ReanimPlayer` 小花／僵尸头动画和音效。计时使用全局时钟的 100Hz 游戏 tick。进度来自主菜单图片和动画的实际准备，预加载的主菜单保持隐藏，点击进入时复用并开始入场。资源全部就绪后，加载条内按按钮规则响应左右键，背景按下、触摸或任意键也可进入；返回标题页不重播 PopCap Logo。新增动画可用 `python tools/build_pvz_base.py --startup-only --raw-root <raw目录>` 单独生成，沿用原 Bundle 的存档兼容哈希。
 
@@ -24,7 +24,17 @@
 
 `core/GameClock.ts` 提供统一的 `gameClock`。转场、主菜单计时、Reanim、粒子和本地战斗入口共同应用其倍率；`startGameTween()` 复用 Cocos Tween 并同步运行期间的倍率变化，完成或所属节点销毁后取消订阅。只在帧时间入口缩放一次，服务端固定步长仍为 0.01 秒，显式 `advance()`／存档恢复使用传入的游戏时间。Debug 预览可调用 `pvzTime.setSpeed(2)` 设置 2 倍速，`setSpeed(1)` 恢复，`setSpeed(0)` 冻结游戏时间。Options 的战斗暂停独立于全局时钟，菜单和转场仍可正常操作；音频播放速率保持原样。
 
+## 关卡展示结构
+
+`client/level/LevelScene` 负责通用的开场 → 战斗 → 领奖／失败流程、全局时钟倍率、输入挂起和表现存档，只依赖 `LevelGame` 客户端接口。`LevelView` 组合 HUD、输入、实体、粒子、音频和结算 presenter；`LevelSeedBank` 按关卡配置创建种子包，分别处理费用、冷却、闪光和按钮输入。棋盘行列、可种行、种子费用和关卡编号均读取现有后端关卡定义。
+
+`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`LevelPlantVisuals` 只保存已实现植物的客户端图集位置。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前仍只安装了 1-1 内容。
+
+客户端存档统一写入 `level` 字段，读取时兼容原 `adventure11` 字段；开场专属的状态校验放在各自的实现中。保留已有 `pvz:adventure11` 预制体资源 ID 和脚本 UUID，避免影响已有内容包和存档的资源解析。`client/showcase` 仅保留独立资源预览探针。
+
 ## UI 组件
+
+关卡右上角 Menu 使用原版 (681, 10) 的 117×46 石头按钮，入场完成后显示；手持植物时先取消，随后点击打开游戏内 Options，复用设置、确认重开和保存后返回主菜单的逻辑。空格打开独立的 `GAME PAUSED` 弹窗，保留 Escape 暂停快捷键；Resume／Enter／Space／Escape 返回同一局，长按空格不会反复开关。暂停时保存当前局，冻结服务端逻辑、关卡 Reanim／粒子／Tween 和音乐，不修改全局时钟；恢复时只启用原先开启的动画组件。暂停框保留原版标题下方间距，报纸僵尸动画暂不创建。
 
 `client/ui/UI.ts` 统一创建 label、button、input、checkbox、select、slider、scroll、dialog。坐标相对父节点，x 向右、y 向下；文字复用 `FontRenderer`，默认使用原版位图字形与控件贴图。创建后修改控件值不触发 `onChange`，用户操作才触发回调。
 
@@ -41,11 +51,13 @@ const confirmed = await ui.dialog(parent, { title: 'Continue?', cancelText: 'CAN
 
 `ui.scroll(parent, { x, y, width, height, contentHeight, wheelStep?, bottomPadding?, scrollbar?, wheelDuration? })` 创建纵向 `UIScroll`。文字、图片等节点添加到 `scroll.content`，按 `scroll.contentWidth` 排版；`scroll.offset` 以像素读写滚动位置，内容变化后调用 `scroll.setContentHeight(height)`。组件负责裁剪、滚动条自动显隐、旧版滑块绘制和拖动、触摸惯性及监听清理，计时接全局时钟。图鉴传入 0.6 行的滚轮步长和底部留白。`scrollbar: false` 保留完整内容宽度；`wheelDuration` 开启原双 S 缓动，`scroll.scrollTo(offset, seconds)` 提供程序控制的平滑滚动。
 
-label 通过 `text` 更新；button 提供 `setText()` 和 `interactable`；其余输入控件通过 `value` 读写。dialog 支持模态遮挡、拖动和顶层键盘处理：Enter／Space 确认、Escape 取消，关闭也可调用 `close()`。
+label 通过 `text`／`color` 和 `setPosition(x, y)` 更新；button 提供 `setText()` 和 `interactable`；其余输入控件通过 `value` 读写。dialog 支持模态遮挡、拖动和顶层键盘处理：Enter／Space 确认、Escape 取消，关闭也可调用 `close()`。
+
+`UI.label` 的 `font` 可传字体预设或已加载的 `BitmapFontAssets`，`node` 可绑定已有预制体文字节点，不重复添加渲染器；`pixelAlign` 将最终位置对齐整数像素。1-1 的阳光数、关卡文字、房屋名称和教程提示均复用 Label，字体仍从关卡内容注册表读取，保留 Mod 覆盖。种子包复用 `UIButton` 的按下、捕获和模态处理，输入挂起时禁用组件；冷却、选中、闪光、提示动画和关卡进度条保留专用绘制。
 
 `UIInput` 提供 `value`、`interactable`、`focus()`、`blur()`、`selectAll()`，以及 `onChange`／`onSubmit`／`onCancel`；`filter` 过滤用户输入，`maxLength` 限制长度。Cocos `EditBox` 负责键盘、输入法和剪贴板，画面仍由原版位图字体、编辑框贴图、选区和光标绘制；Web 只在组件内部读取输入元素的选区。鼠标可定位和拖选、双击全选，输入框使用 I 型光标。聚焦时空格作为输入，不触发对话框确认；打开上层弹窗会释放焦点，校验提示关闭后恢复。
 
-`screens/UserDialog.ts` 通过 `MenuApi` 完成用户选择、新建、重命名和删除，由后端校验并保存。列表最多显示 8 个用户，当前用户置顶；单击选择、双击或 OK 提交，取消不更换当前用户。命名规则沿用原版的最多 12 个英文字母／数字／空格，提交时折叠多余空格，并提示空名和不区分大小写的重名。删除必须确认，同时清理该用户的旧存档与 V2 主／临时存档；删除最后一个用户或首次启动时要求创建用户。主菜单保留原实例并刷新姓名、冒险入口和关卡数字。用户对话框复用 `dialog` 的原版加高底部、额外尺寸和顶部正文布局。
+`screens/UserDialog.ts` 通过 `MenuApi` 完成用户选择、新建、重命名和删除，由后端校验并保存。列表最多显示 8 个用户，当前用户置顶；单击选择、双击或 OK 提交，取消不更换当前用户。命名规则沿用原版的最多 12 个英文字母／数字／空格，提交时折叠多余空格，并提示空名和不区分大小写的重名。删除必须确认，同时清理该用户的旧存档与主／临时存档；删除最后一个用户或首次启动时要求创建用户。主菜单保留原实例并刷新姓名、冒险入口和关卡数字。用户对话框复用 `dialog` 的原版加高底部、额外尺寸和顶部正文布局。
 
 按钮支持 `onPress`（鼠标／触摸按下）与 `onClick`（在按钮内释放）；花园切换使用 `onPress`。配置 `tooltip: '提示文字'` 或 `tooltip: { text, font?, maxWidth?, gap?, offset? }` 即可显示上一版 Pico129 字体、浅黄底黑边的提示。`offset: [x, y]` 按 x 向右、y 向下微调，花园提示对齐上一版中心 x=599、顶部 y=52。提示跟随真实 hover，默认在按钮下方，底部空间不足时翻到上方，长文字换行并限制在所属视口／Canvas 内。也可用 `ui.tooltip(anchor, options)` 手动调用 `show()`／`hide()`；锚点禁用或销毁时自动隐藏和清理。
 
@@ -95,7 +107,7 @@ Options 保留旧版位置和操作：音量实时保存（音效上限为 0.65�
 python3 tools/process_pak.py
 ```
 
-现有管线会准备共用资源并构建 v2 Bundle，需要 Python 3.10+、Pillow、ffmpeg 和音乐转换器使用的 libopenmpt 后端。若原始文件和共用资源已经准备好，仅重建 v2 Bundle 可执行 `npm run build:content-v2`。
+现有管线会准备共用资源并构建 Bundle，需要 Python 3.10+、Pillow、ffmpeg 和音乐转换器使用的 libopenmpt 后端。若原始文件和共用资源已经准备好，仅重建 Bundle 可执行 `npm run build:content`。
 
 只调整主菜单动画时，可执行 `python tools/build_pvz_base.py --main-menu-only`，复用现有转换器更新 13 个菜单片段和引用贴图，保留 Bundle 中其他资源。
 

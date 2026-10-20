@@ -1,6 +1,14 @@
 # Development
 
-The main scene mounts `app/GameApp.ts`, which coordinates the menu shell and starts `LocalIntegratedGame` through the existing Adventure 1-1 controller. Gameplay runs in `server`; the client consumes protocol snapshots and events. Keep engine imports out of `server`, `shared`, and `ecs`.
+The main scene mounts `app/GameApp.ts`, which coordinates the menu shell and starts `LocalIntegratedGame` through `app/LevelController.ts`. Gameplay runs in `server`; the client consumes protocol snapshots and events. Keep engine imports out of `server`, `shared`, and `ecs`.
+
+## Level presentation
+
+`client/level/LevelScene` owns the common intro → gameplay → award/game-over lifecycle, game-clock scaling, input suspension and presentation saves. It depends on the `LevelGame` client API. `LevelView` composes the HUD, input, entities, particles, audio and end presenters; `LevelSeedBank` creates and updates each configured packet independently. Board geometry, active rows, seed costs and the level number come from installed gameplay definitions.
+
+`LevelPresentation` selects the intro and tutorial text/guide configuration using the backend tutorial ID. The accepted 1-1 grass-roll sequence, preview zombies and guide steps live in `level/adventure/Adventure11*`; the shared scene contains no 1-1 timings. `level/boards/DayBoard` owns the day background, music and doorway geometry. `LevelPlantVisuals` holds client atlas positions for currently implemented plants. Later levels add backend content and a presentation entry (or reuse an existing one); new environments implement their board presentation. They do not copy the scene, input, HUD or save controller. Only 1-1 content is currently installed.
+
+Client saves now write `level`; the decoder accepts the previous `adventure11` field. Intro-specific validation belongs to that intro implementation. The installed `pvz:adventure11` prefab ID and script UUIDs remain stable so existing content packs and saves keep resolving their assets. `client/showcase` only contains the standalone content preview probe.
 
 Menu data follows `screens → client/api/MenuApi → MenuTransport → server/menu/MenuService`. `shared/menu` defines request and response DTOs. The backend owns profile storage/name validation, store catalog/prices/availability/purchases, challenge progress, almanac definitions, achievement entries/unlocks, and persisted options. Views render API responses and submit IDs/actions; they never import repositories or write profiles. Price, current-user identity, stock and balance are rechecked by the backend at purchase confirmation. JSON round trips isolate client copies from backend state.
 
@@ -8,7 +16,7 @@ Store responses specify `highlight` (`none`, `seedPacket`, or `additive` with op
 
 `app/LocalMenuApi.ts` connects this API to the existing in-process backend; `GameApp` injects Cocos storage at startup. Backend modules have no Cocos/client imports. Existing profile, options and per-user save keys remain compatible. Presentation assets, localized strings, layout, sound and actual fullscreen operations stay on the client. A network transport can implement the same `MenuTransport`; this worktree currently uses the local transport.
 
-Only Adventure 1-1 is connected. The old debug CLI and Adventure 1-2 onward are not part of this worktree. The main menu uses original image buttons and its Reanim entrance; Options has working settings and in-game actions. Almanac and Store have their own content and interactions; other game modes remain unimplemented. Refer to the workspace's `pvz-remake` when porting their behavior.
+Only Adventure 1-1 is connected. The debug CLI is available in Debug builds: press `/`, or double-tap the bottom-right corner in mobile mode. See [Debug CLI](DEBUG_CLI.md). Adventure 1-2 onward remains unimplemented. The main menu uses original image buttons and its Reanim entrance; Options has working settings and in-game actions. Almanac and Store have their own content and interactions; other game modes remain unimplemented. Refer to the workspace's `pvz-remake` when porting their behavior.
 
 `StartupScreen` automatically plays the 200-tick PopCap fade/hold/fade, followed by the falling title, rolling grass bar, and flower/zombie-head effects at the five reference thresholds. Timing uses 100Hz ticks from the global clock; effects use the current `ReanimPlayer`. Progress tracks actual main-menu image/animation preparation. The prepared menu stays hidden and is reused when input starts its entrance. Once resources are ready, the bar follows button mouse rules; background presses, touches, or any key can also start. Returning to the title skips PopCap. Generate the new clips with `python tools/build_pvz_base.py --startup-only --raw-root <raw-directory>`; the scoped build retains save compatibility with previous Bundle hashes.
 
@@ -26,6 +34,8 @@ Temporary black title bars are removed. `MenuPages.heading` declares original ti
 
 ## UI components
 
+The in-level Menu is the original 117×46 stone button at (681, 10), shown after the entrance. It first cancels a held plant, then opens the existing game Options dialog for settings, confirmed restart, and saved return to the main menu. Space opens the separate `GAME PAUSED` dialog; Escape remains a pause shortcut. Resume/Enter/Space/Escape return to the same board, and holding Space cannot toggle repeatedly. Pause saves the current game and freezes server logic, scene Reanim/particles/tweens and music without changing the global clock. Only previously enabled animation components resume. The pause dialog reserves the reference header spacing for its deferred newspaper-zombie animation.
+
 `client/ui/UI.ts` creates labels, buttons, inputs, checkboxes, selects, sliders, scroll areas, and dialogs. Coordinates are parent-local pixels, with x pointing right and y pointing down. Text uses the existing `FontRenderer` and original bitmap fonts. Controls reuse the reference textures and interactions. Programmatic `value` changes are silent; user input invokes `onChange`.
 
 ```ts
@@ -41,11 +51,13 @@ const confirmed = await ui.dialog(parent, { title: 'Continue?', cancelText: 'CAN
 
 `ui.scroll(parent, { x, y, width, height, contentHeight, wheelStep?, bottomPadding?, scrollbar?, wheelDuration? })` creates a vertical `UIScroll`. Add labels, images, or other nodes to `scroll.content`, using `scroll.contentWidth` for layout. Set `scroll.offset` to scroll in pixels, and call `scroll.setContentHeight(height)` after content changes. The component owns clipping, automatic scrollbar visibility, legacy thumb rendering/dragging, touch inertia, and listener cleanup; it uses the global clock. Almanac supplies its 0.6-line wheel step and bottom padding. `scrollbar: false` retains full content width; `wheelDuration` enables the previous double-S easing, and `scroll.scrollTo(offset, seconds)` animates programmatic movement.
 
-Labels expose `text`; buttons expose `setText()` and `interactable`; input controls expose `value`. Dialogs support modal input blocking, dragging, topmost Enter/Space/Escape handling, and `close()`.
+Labels expose `text`, `color`, and `setPosition(x, y)`; buttons expose `setText()` and `interactable`; input controls expose `value`. Dialogs support modal input blocking, dragging, topmost Enter/Space/Escape handling, and `close()`.
+
+`UI.label` accepts a font preset or loaded `BitmapFontAssets`, and `node` binds an existing prefab text node without adding a second renderer. `pixelAlign` rounds the final position for original HUD text. Adventure 1-1 uses these labels for sun, level, house name and advice; fonts still come from its content registry so Mod overrides apply. Seed packets use `UIButton` for press/capture/modal handling, with suspension disabling the component. Cooldown, selection, flashes, advice animation and the progress meter remain specialized rendering.
 
 `UIInput` exposes `value`, `interactable`, `focus()`, `blur()`, `selectAll()`, and `onChange`/`onSubmit`/`onCancel`. `filter` sanitizes input and `maxLength` limits it. Cocos `EditBox` handles keyboard, IME, and clipboard input; original bitmap text, edit-box art, selection, and caret remain game-rendered. Web selection access stays inside the component. Pointer input positions/drags the caret or selects all on double click, with a text cursor. Focused typing Space does not confirm a dialog. Upper modals release focus; closing validation feedback restores it.
 
-`screens/UserDialog.ts` calls `MenuApi` for selecting, creating, renaming, and deleting users; the backend validates and persists these operations. It shows up to eight users with the current user first; single click selects, double click/OK commits, and Cancel preserves the current user. Names follow the reference limit of 12 ASCII letters/digits/spaces, with collapsed spaces and empty/case-insensitive duplicate validation. Confirmed deletion removes only that user's legacy and V2 primary/temp saves. First launch and deleting the last user require creating a user. The retained main menu refreshes its name and Adventure state. User dialogs reuse the shared tall-bottom frame, extra sizing, and top-aligned message layout.
+`screens/UserDialog.ts` calls `MenuApi` for selecting, creating, renaming, and deleting users; the backend validates and persists these operations. It shows up to eight users with the current user first; single click selects, double click/OK commits, and Cancel preserves the current user. Names follow the reference limit of 12 ASCII letters/digits/spaces, with collapsed spaces and empty/case-insensitive duplicate validation. Confirmed deletion removes only that user's legacy and primary/temp saves. First launch and deleting the last user require creating a user. The retained main menu refreshes its name and Adventure state. User dialogs reuse the shared tall-bottom frame, extra sizing, and top-aligned message layout.
 
 Buttons select original presets through `skin`. Sizes default to the source image, except stone buttons (180×46):
 
@@ -87,7 +99,7 @@ Options preserves immediate volume updates, the 0.65 sound-effect scale, fullscr
 
 ## Resources
 
-The v2 base Bundle is in `assets/bundles/pvz-base`. Menus and presenters also use backgrounds, widget textures, bitmap fonts, audio, particle definitions, and particle textures under `assets/resources`; keep these available.
+The base Bundle is in `assets/bundles/pvz-base`. Menus and presenters also use backgrounds, widget textures, bitmap fonts, audio, particle definitions, and particle textures under `assets/resources`; keep these available.
 
 Place your game's `main.pak` at `tools/main.pak`, then run from the project root:
 
@@ -95,7 +107,7 @@ Place your game's `main.pak` at `tools/main.pak`, then run from the project root
 python3 tools/process_pak.py
 ```
 
-The existing pipeline prepares shared resources and builds the v2 Bundle. It requires Python 3.10+, Pillow, ffmpeg, and the music converter's libopenmpt backend. If the raw files and shared resources are already available, rebuild only the v2 Bundle with `npm run build:content-v2`.
+The existing pipeline prepares shared resources and builds the Bundle. It requires Python 3.10+, Pillow, ffmpeg, and the music converter's libopenmpt backend. If the raw files and shared resources are already available, rebuild only the Bundle with `npm run build:content`.
 
 For menu animation changes, run `python tools/build_pvz_base.py --main-menu-only`. This reuses the existing converter to update the 13 menu clips and their images while preserving other Bundle assets.
 

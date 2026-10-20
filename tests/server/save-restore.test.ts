@@ -3,16 +3,16 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { parseServerSaveSnapshotV2 } from '@/server/save'
-import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
+import { parseServerSaveSnapshot } from '@/server/save'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { GameCommand, JsonValue, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
 
 const source = (name: string): unknown => JSON.parse(
     readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'),
 )
-const definitions = parseGameplayDefinitionsV2(source('definitions'))
-const levels = parseGameplayLevelsV2(source('levels'), definitions)
+const definitions = parseGameplayDefinitions(source('definitions'))
+const levels = parseGameplayLevels(source('levels'), definitions)
 const start: StartSessionPacket = {
     protocolVersion: 1,
     sequence: 1,
@@ -23,6 +23,33 @@ const start: StartSessionPacket = {
     firstAdventure: true,
     mods: [{ id: 'phase3:test', version: '1.0.0', contentHash: 'content-a' }],
 }
+
+test('corpse opacity follows the final ten server ticks and resumes from a save', () => {
+    const original = new IntegratedGameServer(definitions, levels)
+    original.start(start)
+    runCommand(original, { type: 'completeIntro' })
+    const zombieId = (original as unknown as {
+        spawnZombie(typeId: string, row: number, x: number): number
+    }).spawnZombie('pvz:normal', 2, 700)
+    const setup = original.save()
+    setup.entities.find(entity => entity.entityId === zombieId)!.zombie!.health = 0
+    original.start({ ...start, save: setup as unknown as JsonValue })
+    original.tick()
+    const deathTicks = original.save().entities.find(entity => entity.entityId === zombieId)!.zombie!.deathTicksRemaining
+    for (let tick = 0; tick < deathTicks - 10; tick++) original.tick()
+    assert.equal(original.snapshot().zombies.find(zombie => zombie.entityId === zombieId)!.alpha, 255)
+    original.drainEvents()
+    const restored = new IntegratedGameServer(definitions, levels)
+    restored.start({ ...start, save: original.save() as unknown as JsonValue })
+    for (let remaining = 9; remaining >= 0; remaining--) {
+        const snapshot = original.tick()
+        assert.deepEqual(restored.tick(), snapshot)
+        assert.deepEqual(restored.drainEvents(), original.drainEvents())
+        const corpse = snapshot.zombies.find(zombie => zombie.entityId === zombieId)
+        if (remaining > 0) assert.equal(corpse!.alpha, Math.trunc(255 * remaining / 10))
+        else assert.equal(corpse, undefined)
+    }
+})
 
 test('server save resumes a mowered zombie through its final limb drops', () => {
     const original = new IntegratedGameServer(definitions, levels)
@@ -36,7 +63,7 @@ test('server save resumes a mowered zombie through its final limb drops', () => 
     const saved = original.save()
     const savedZombie = saved.entities.find(entity => entity.entityId === zombieId)!.zombie!
     assert.ok(Number.isInteger(savedZombie.groanCounter))
-    assert.throws(() => parseServerSaveSnapshotV2({
+    assert.throws(() => parseServerSaveSnapshot({
         ...saved,
         entities: saved.entities.map(entity => entity.entityId === zombieId
             ? { ...entity, zombie: { ...entity.zombie!, groanCounter: 0.5 } }
@@ -50,7 +77,7 @@ test('server save resumes a mowered zombie through its final limb drops', () => 
     assert.deepEqual(restored.snapshot(), original.snapshot())
     original.drainEvents()
     restored.drainEvents()
-    for (let tick = 0; tick < 50; tick++) {
+    for (let tick = 0; tick < savedZombie.moweredTicksRemaining; tick++) {
         assert.deepEqual(restored.tick(), original.tick())
         assert.deepEqual(restored.drainEvents(), original.drainEvents())
     }
@@ -73,10 +100,10 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
     const saved = original.save()
     assert.deepEqual(saved.mods, start.mods)
     assert.equal(saved.entities.some(entity => entity.item !== undefined), true)
-    assert.deepEqual(parseServerSaveSnapshotV2(saved), saved)
-    assert.throws(() => parseServerSaveSnapshotV2({ ...saved, tick: -1 }), /tick/)
-    assert.throws(() => parseServerSaveSnapshotV2({ ...saved, gameplayTick: -1 }), /gameplayTick/)
-    assert.throws(() => parseServerSaveSnapshotV2({ ...saved, gameplayTick: saved.tick + 1 }), /must not exceed/)
+    assert.deepEqual(parseServerSaveSnapshot(saved), saved)
+    assert.throws(() => parseServerSaveSnapshot({ ...saved, tick: -1 }), /tick/)
+    assert.throws(() => parseServerSaveSnapshot({ ...saved, gameplayTick: -1 }), /gameplayTick/)
+    assert.throws(() => parseServerSaveSnapshot({ ...saved, gameplayTick: saved.tick + 1 }), /must not exceed/)
     const restored = new IntegratedGameServer(definitions, levels)
     assert.deepEqual(restored.start({
         ...start,
@@ -141,7 +168,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
         /enabled mods do not match/,
     )
     assert.throws(
-        () => parseServerSaveSnapshotV2({ ...saved, mods: [...saved.mods, saved.mods[0]] }),
+        () => parseServerSaveSnapshot({ ...saved, mods: [...saved.mods, saved.mods[0]] }),
         /duplicate IDs/,
     )
 

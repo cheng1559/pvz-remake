@@ -7,7 +7,7 @@
         "version": "4.0.0-alpha.35"
     },
     "scripts": {
-        "build:content-v2": "python tools/build_pvz_base.py",
+        "build:content": "python tools/build_pvz_base.py",
         "mod:init": "node tools/mod.mjs init",
         "mod:build": "node tools/mod.mjs build",
         "mod:test": "node tools/mod.mjs test",

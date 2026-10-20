@@ -1,8 +1,8 @@
 import {
-    parseClientPresentationSnapshotV2,
-    type ClientPresentationSnapshotV2,
+    parseClientPresentationSnapshot,
+    type ClientPresentationSnapshot,
 } from '@/client/game/ClientPresentationSnapshot'
-import { parseServerSaveSnapshotV2, type ServerSaveSnapshotV2 } from '@/server/save'
+import { parseServerSaveSnapshot, type ServerSaveSnapshot } from '@/server/save'
 import { jsonRoundTrip, type EnabledMod } from '@/shared/protocol/index'
 
 export interface ContentSetSnapshot {
@@ -10,7 +10,7 @@ export interface ContentSetSnapshot {
     mods: EnabledMod[]
 }
 
-export interface GameSaveV2 {
+export interface GameSave {
     schemaVersion: 2
     profileId: number
     mode: 'adventure'
@@ -18,14 +18,14 @@ export interface GameSaveV2 {
     createdAt: number
     updatedAt: number
     contentSet: ContentSetSnapshot
-    server: ServerSaveSnapshotV2
-    client: ClientPresentationSnapshotV2
+    server: ServerSaveSnapshot
+    client: ClientPresentationSnapshot
 }
 
-export type GameSaveV2Input = Omit<GameSaveV2, 'schemaVersion'>
+export type GameSaveInput = Omit<GameSave, 'schemaVersion'>
 
-export function createGameSaveV2(input: GameSaveV2Input): GameSaveV2 {
-    return parseGameSaveV2({ schemaVersion: 2, ...input })
+export function createGameSave(input: GameSaveInput): GameSave {
+    return parseGameSave({ schemaVersion: 2, ...input })
 }
 
 export function isCompatibleBaseContent(saved: EnabledMod, installed: EnabledMod, compatibleHashes: readonly string[] = []): boolean {
@@ -33,7 +33,7 @@ export function isCompatibleBaseContent(saved: EnabledMod, installed: EnabledMod
         && (saved.contentHash === installed.contentHash || compatibleHashes.includes(saved.contentHash))
 }
 
-export function parseGameSaveV2(value: unknown): GameSaveV2 {
+export function parseGameSave(value: unknown): GameSave {
     const save = exact(jsonRoundTrip(value), [
         'schemaVersion', 'profileId', 'mode', 'levelId', 'createdAt', 'updatedAt',
         'contentSet', 'server', 'client',
@@ -47,8 +47,8 @@ export function parseGameSaveV2(value: unknown): GameSaveV2 {
     if (updatedAt < createdAt) throw new TypeError('game save.updatedAt must not be below createdAt')
 
     const contentSet = parseContentSet(save.contentSet)
-    const server = parseServerSaveSnapshotV2(save.server)
-    const client = parseClientPresentationSnapshotV2(save.client)
+    const server = parseServerSaveSnapshot(save.server)
+    const client = parseClientPresentationSnapshot(save.client)
     if (server.levelId !== levelId || client.transport.current.levelId !== levelId) {
         throw new TypeError('game save levelId must match server and client snapshots')
     }

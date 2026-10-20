@@ -267,7 +267,7 @@ export class MainMenuScreen extends Component {
             this.startingSeconds = 0
             this.laughPlayed = false
             MusicSystem.stop()
-            void SoundLoader.playMusicVolumeSfx(SoundEffect.LoseMusic)
+            void SoundLoader.playSfx(SoundEffect.LoseMusic)
             void SoundLoader.playFoley(SoundEffect.DirtRise)
             for (const hand of this.hand) hand.play({ loop: false, timeSeconds: 0, hideOnFinish: false })
         } else if (config.target) void this.onNavigate(config.target)

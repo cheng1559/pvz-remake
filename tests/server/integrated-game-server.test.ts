@@ -4,12 +4,12 @@ import test from 'node:test'
 
 import { DeterministicRng } from '@/server/DeterministicRng'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { EconomyStateResource, PositionComponent } from '@/server/gameplay'
+import { damageZombie, EconomyStateResource, LawnMowerComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, spawnZombie, ZombieComponent } from '@/server/gameplay'
 import { ItemComponent, TutorialResource } from '@/server/levelOne'
 import type { World } from '@/ecs/index'
 import {
-    parseGameplayDefinitionsV2,
-    parseGameplayLevelsV2,
+    parseGameplayDefinitions,
+    parseGameplayLevels,
 } from '@/shared/content/gameplay'
 import { isJsonValue, parseServerPacket, type JsonValue, type StartSessionPacket } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
@@ -18,8 +18,8 @@ const source = (name: string): unknown => JSON.parse(
     readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'),
 )
 
-const definitions = parseGameplayDefinitionsV2(source('definitions'))
-const levels = parseGameplayLevelsV2(source('levels'), definitions)
+const definitions = parseGameplayDefinitions(source('definitions'))
+const levels = parseGameplayLevels(source('levels'), definitions)
 const startPacket: StartSessionPacket = {
     protocolVersion: 1,
     sequence: 1,
@@ -426,10 +426,24 @@ test('collecting sun used for a purchase is not credited again at the bank', () 
     assert.equal(snapshot.availableSun, 0)
 })
 
-test('level award stops sky sun spawning and auto-collects remaining sun', () => {
+test('collecting the award keeps existing entity updates running while spawning and input stop', () => {
     const server = new IntegratedGameServer(definitions, levels)
     startGameplay(server)
     const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
+    const mowerId = server.snapshot().lawnMowers[0].entityId
+    world.get(mowerId, LawnMowerComponent)!.state = 'active'
+    const peaId = world.createEntity()
+    world.add(peaId, PositionComponent, { x: 100, y: 290, row: 2 })
+    world.add(peaId, ProjectileComponent, { typeId: 'pvz:pea' })
+    const plantId = world.createEntity()
+    world.add(plantId, PositionComponent, { x: 40, y: 280, row: 2 })
+    world.add(plantId, PlantComponent, {
+        typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0,
+        health: 300, maxHealth: 300, eatenFlashCounter: 0,
+    })
+    world.add(plantId, PlantAttackComponent, { readyAtTick: 150, fireAtTick: 2, shotsRemaining: 1 })
+    const corpseId = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
+    damageZombie(world, corpseId, 270)
     world.resources.get(TutorialResource).sunAtTick = 1
     const sunId = world.createEntity()
     world.add(sunId, PositionComponent, { x: 300, y: 300, row: -1 })
@@ -448,9 +462,22 @@ test('level award stops sky sun spawning and auto-collects remaining sun', () =>
     assert.equal(runCommand(server, { type: 'collectItemAt', itemId: awardId }), undefined)
     assert.equal(server.snapshot().items.find(item => item.entityId === sunId)?.state, 'collecting')
     const winTick = server.snapshot().tick
+    const mowerX = server.snapshot().lawnMowers[0].x
+    const peaX = world.get(peaId, PositionComponent)!.x
+    const corpseTicks = world.get(corpseId, ZombieComponent)!.deathTicksRemaining
     let snapshot = server.tick()
     assert.equal(snapshot.tick, winTick + 1)
+    assert.equal(snapshot.result, 'won')
+    assert.ok(snapshot.lawnMowers[0].x > mowerX, 'collecting the award must not stop an active mower')
+    assert.equal(world.get(peaId, PositionComponent)!.x, peaX + definitions.projectiles['pvz:pea'].speedPerTick.x)
+    assert.equal(snapshot.projectiles.length, 2, 'a pending shot completes after victory')
+    assert.equal(world.get(corpseId, ZombieComponent)!.deathTicksRemaining, corpseTicks - 1)
+    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), 'game-not-playing')
     assert.ok(snapshot.items.find(item => item.entityId === sunId)!.x < 300)
     while (snapshot.items.some(item => item.entityId === sunId)) snapshot = server.tick()
     assert.equal(snapshot.sun, 175)
+    for (let tick = 0; tick < 250; tick++) snapshot = server.tick()
+    assert.equal(snapshot.projectiles.length, 0, 'peas leave the board after victory')
+    assert.equal(snapshot.zombies.length, 0, 'death animations finish after victory')
+    assert.equal(snapshot.result, 'won')
 })

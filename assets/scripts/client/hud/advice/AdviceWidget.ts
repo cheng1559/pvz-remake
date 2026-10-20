@@ -1,7 +1,9 @@
 import { Color, Graphics, Node } from 'cc'
 import { uiNode } from '@/client/view/uiNode'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
-import { FontMetricsUtil, FontRenderer } from '@/client/font'
+import { FontMetricsUtil } from '@/client/font'
+import type { UI } from '@/client/ui/UI'
+import type { UILabel } from '@/client/ui/UILabel'
 import {
     parseAdviceWidgetSnapshot,
     type AdviceWidgetSnapshot,
@@ -27,18 +29,19 @@ const ADVICE_TEXT_MIN_ALPHA = 192
 export class AdviceWidget {
     readonly node: Node
 
-    private readonly _font: BitmapFontAssets | null
+    private readonly _font: BitmapFontAssets
     private readonly _backdrop: Graphics
-    private readonly _label: FontRenderer
+    private readonly _label: UILabel
     private _durationTicks = 0
     private _style: AdviceWidgetStyle = 'hint'
     private _pulseTick = 0
 
     constructor(args: {
+        ui: UI
         node?: Node
         parent: Node
         layer?: number
-        font: BitmapFontAssets | null
+        font: BitmapFontAssets
     }) {
         this._font = args.font
         const parts = uiNode({
@@ -55,21 +58,10 @@ export class AdviceWidget {
         this.node = parts.node
         this._backdrop = parts.graphics!
 
-        const labelNode = uiNode({
-            name: 'AdviceLabel',
-            parent: this.node,
-            layer: args.layer,
-            anchor: { x: 0, y: 1 },
-            size: { width: ADVICE_WIDTH - 40, height: ADVICE_HINT_HEIGHT },
-        }).node
-        this._label = labelNode.addComponent(FontRenderer)
-        if (this._font) this._label.setFontAssets(this._font)
-        this._label.fontSize = ADVICE_TEXT_SIZE
-        this._label.lineSpacing = 0
-        this._label.maxWidth = ADVICE_WIDTH - 40
-        this._label.textAlign = 2
-        this._label.string = ''
-        this._label.forceRebuild()
+        this._label = args.ui.label(this.node, {
+            text: '', font: this._font, fontSize: ADVICE_TEXT_SIZE, width: ADVICE_WIDTH - 40, align: 'center',
+        })
+        this._label.node.name = 'AdviceLabel'
         this.node.active = false
     }
 
@@ -78,18 +70,17 @@ export class AdviceWidget {
 
         this._style = style
         this._durationTicks = this._durationForStyle(style)
-        this._label.string = message
-        this._label.forceRebuild()
+        this._label.text = message
         this._applyLayout()
         this.node.active = true
         this._drawBackdrop()
     }
 
     snapshot(): AdviceWidgetSnapshot | null {
-        if (!this.node.isValid || !this.node.active || !this._label.string) return null
+        if (!this.node.isValid || !this.node.active || !this._label.text) return null
 
         return parseAdviceWidgetSnapshot({
-            message: this._label.string,
+            message: this._label.text,
             style: this._style,
             durationTicks: this._durationTicks,
             pulseTick: this._pulseTick,
@@ -106,8 +97,7 @@ export class AdviceWidget {
         this._style = snapshot.style
         this._durationTicks = snapshot.durationTicks
         this._pulseTick = snapshot.pulseTick
-        this._label.string = snapshot.message
-        this._label.forceRebuild()
+        this._label.text = snapshot.message
         this._applyLayout()
         this.node.active = snapshot.durationTicks > 0
         this._drawBackdrop()
@@ -116,8 +106,7 @@ export class AdviceWidget {
     clear() {
         if (!this.node.isValid) return
 
-        this._label.string = ''
-        this._label.forceRebuild()
+        this._label.text = ''
         this._backdrop.clear()
         this.node.active = false
         this.node.setScale(1, 1, 1)
@@ -147,12 +136,10 @@ export class AdviceWidget {
     private _applyLayout() {
         const layout = this._layout()
         const labelWidth = ADVICE_WIDTH - 40
-        this._label.fontColor = layout.textColor
-        this._label.fontSize = layout.fontSize
-        this._label.lineSpacing = layout.lineHeight
-        this._label.maxWidth = labelWidth
-        this._label.textAlign = 2
-        this._label.forceRebuild()
+        this._label.color = layout.textColor
+        this._label.renderer.fontSize = layout.fontSize
+        this._label.renderer.lineSpacing = layout.lineHeight
+        this._label.renderer.forceRebuild()
         uiNode({ node: this.node, size: { width: ADVICE_WIDTH, height: layout.height } })
         this.node.setPosition(ADVICE_WIDTH / 2, -(layout.y + layout.height / 2), 0)
         uiNode({ node: this._label.node, size: { width: labelWidth, height: layout.height }, anchor: { x: 0, y: 1 } })
@@ -223,7 +210,7 @@ export class AdviceWidget {
     }, labelWidth: number) {
         const fontConfig = this._font?.config ?? null
         const metrics = FontMetricsUtil.getMetrics(fontConfig)
-        if (metrics.height <= 0) return this._label.contentHeight / 2 + layout.textOffsetY
+        if (metrics.height <= 0) return this._label.renderer.contentHeight / 2 + layout.textOffsetY
 
         const rawConfig = fontConfig?.json as { defaultPointSize?: number } | undefined
         const defaultPointSize = rawConfig?.defaultPointSize ?? layout.fontSize
@@ -231,7 +218,7 @@ export class AdviceWidget {
         const scale = defaultPointSize > 0 ? pointSize / defaultPointSize : 1
         const wrapped = FontMetricsUtil.measureWordWrapped(
             fontConfig,
-            this._label.string,
+            this._label.text,
             scale > 0 ? labelWidth / scale : labelWidth,
         )
         const lineCount = Math.max(1, wrapped.lineWidths.length)

@@ -1,5 +1,5 @@
 import { sys } from 'cc'
-import { GAME_SAVE_V2_KEY } from '../GameSaveV2Store'
+import { GAME_SAVE_KEY } from '../GameSaveStore'
 
 const SAVE_VERSION = 1
 const SAVE_KEY_PREFIX = 'pvz-remake:saves:'
@@ -65,7 +65,7 @@ export class GameSaveStore {
 
     static deleteAllForProfile(profileId: number) {
         const storage = getStorage()
-        const prefixes = [`${SAVE_KEY_PREFIX}${profileId}:`, `${GAME_SAVE_V2_KEY}:${profileId}:`]
+        const prefixes = [`${SAVE_KEY_PREFIX}${profileId}:`, `${GAME_SAVE_KEY}:${profileId}:`]
         for (let i = storage.length - 1; i >= 0; i--) {
             const key = storage.key(i)
             if (key && prefixes.some(prefix => key.startsWith(prefix))) {

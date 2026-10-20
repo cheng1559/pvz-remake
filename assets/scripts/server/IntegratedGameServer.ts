@@ -3,8 +3,8 @@ import {
     World,
 } from '@/ecs/index'
 import type {
-    GameplayDefinitionsV2,
-    GameplayLevelsV2,
+    GameplayDefinitions,
+    GameplayLevels,
 } from '@/shared/content/gameplay'
 import type { EnabledMod, ServerEvent, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import type { GameCommand } from '@/shared/protocol/index'
@@ -51,10 +51,13 @@ import {
     noteLevelOneSunCollected,
 } from './levelOne'
 import { createMowerSystem } from './mower'
+import { debugSuccess, parseDebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
+import { executeDebugGameCommand } from './debug/DebugCommands'
+import { DebugRulesResource, getDebugRules } from './debug/DebugRules'
 import {
-    parseServerSaveSnapshotV2,
-    type SavedEntityV2,
-    type ServerSaveSnapshotV2,
+    parseServerSaveSnapshot,
+    type SavedEntity,
+    type ServerSaveSnapshot,
 } from './save'
 
 const CANT_AFFORD_ADVICE = 'ADVICE_CANT_AFFORD_PLANT'
@@ -75,22 +78,24 @@ export type CommandRejectionCode =
     | 'intro-already-complete'
     | 'unsupported-command'
 
+type QueuedCommand = GameCommand | { type: 'debug'; command: string }
+interface CommandResult { sequence: number, rejection?: CommandRejectionCode, debug?: DebugCliResult }
 interface Session {
     world: World
     schedule: Schedule
     tick: number
     gameplayTick: number
     mods: EnabledMod[]
-    commands: Array<{ sequence: number, command: GameCommand }>
-    commandResults: Array<{ sequence: number, rejection?: CommandRejectionCode }>
+    commands: Array<{ sequence: number, command: QueuedCommand }>
+    commandResults: CommandResult[]
 }
 
 export class IntegratedGameServer {
     private session?: Session
 
     constructor(
-        private readonly definitions: GameplayDefinitionsV2,
-        private readonly levels: GameplayLevelsV2,
+        private readonly definitions: GameplayDefinitions,
+        private readonly levels: GameplayLevels,
         private readonly systemMods = new GameplaySystemMods(),
     ) {
         if (definitions.tickSeconds !== 0.01) {
@@ -147,11 +152,11 @@ export class IntegratedGameServer {
         return this.snapshot()
     }
 
-    save(): ServerSaveSnapshotV2 {
+    save(): ServerSaveSnapshot {
         const { world, tick, gameplayTick, mods } = this.requireSession()
         const level = world.resources.get(LevelStateResource)
         const entities = world.queryableEntities().map(entityId => {
-            const entity: SavedEntityV2 = { entityId }
+            const entity: SavedEntity = { entityId }
             const position = world.get(entityId, PositionComponent)
             const lawnMower = world.get(entityId, LawnMowerComponent)
             const plant = world.get(entityId, PlantComponent)
@@ -176,7 +181,7 @@ export class IntegratedGameServer {
         const tutorial = world.resources.get(TutorialResource)
         const wave = world.resources.get(WaveResource)
         const eventQueue = world.resources.get(EventQueueResource)
-        return parseServerSaveSnapshotV2({
+        return parseServerSaveSnapshot({
             schemaVersion: 2,
             levelId: level.id,
             mods: mods.map(mod => ({ ...mod })),
@@ -225,7 +230,7 @@ export class IntegratedGameServer {
         expectedLevelId?: string,
         expectedMods?: readonly EnabledMod[],
     ): WorldSnapshot {
-        const save = parseServerSaveSnapshotV2(value)
+        const save = parseServerSaveSnapshot(value)
         if (expectedLevelId !== undefined && save.levelId !== expectedLevelId) {
             throw new Error(`Save level ${save.levelId} does not match requested level ${expectedLevelId}`)
         }
@@ -294,11 +299,15 @@ export class IntegratedGameServer {
         this.requireSession().commands.push({ sequence, command })
     }
 
+    enqueueDebugCommand(sequence: number, command: string): void {
+        this.requireSession().commands.push({ sequence, command: { type: 'debug', command } })
+    }
+
     hasPendingCommands(): boolean {
         return this.requireSession().commands.length > 0
     }
 
-    drainCommandResults(): Array<{ sequence: number, rejection?: CommandRejectionCode }> {
+    drainCommandResults(): CommandResult[] {
         return this.requireSession().commandResults.splice(0)
     }
 
@@ -315,7 +324,7 @@ export class IntegratedGameServer {
             const previousPaused = level.paused
             const rejection = this.processNextCommand(session)
             if (rejection === undefined && isSessionCommand(command)
-                && (level.phase !== previousPhase || level.paused !== previousPaused)) {
+                && (command.type === 'debug' || level.phase !== previousPhase || level.paused !== previousPaused)) {
                 session.tick++
                 changed = true
             }
@@ -333,7 +342,7 @@ export class IntegratedGameServer {
     private executeCommand(command: GameCommand): CommandRejectionCode | undefined {
         const session = this.requireSession()
         const level = session.world.resources.get(LevelStateResource)
-        if (level.result !== 'playing') return 'game-not-playing'
+        if (level.result !== 'playing' && command.type !== 'pause' && command.type !== 'resume') return 'game-not-playing'
         if (command.type === 'completeIntro') {
             if (level.phase !== 'intro') return 'intro-already-complete'
             level.phase = 'gameplay'
@@ -372,6 +381,12 @@ export class IntegratedGameServer {
         session.tick++
         session.gameplayTick++
         session.schedule.run(session.world, session.gameplayTick)
+        if (getDebugRules(session.world).collect === 'auto') {
+            for (const entity of session.world.query(ItemComponent)) {
+                const item = session.world.get(entity, ItemComponent)!
+                if (this.definitions.items[item.typeId] && item.state === 'available') this.collectItem(session, entity)
+            }
+        }
         return this.snapshot()
     }
 
@@ -413,6 +428,7 @@ export class IntegratedGameServer {
                 animationTime: zombie.animationTime,
                 animationSpeed: zombie.animationSpeed,
                 moweredTicksRemaining: zombie.moweredTicksRemaining,
+                alpha: zombie.state === 'dying' ? Math.min(255, Math.trunc(255 * zombie.deathTicksRemaining / 10)) : 255,
                 hasHead: zombie.hasHead,
                 hasArm: zombie.hasArm,
                 hitFlashCounter: zombie.hitFlashCounter,
@@ -469,7 +485,7 @@ export class IntegratedGameServer {
             items,
             lawnMowers,
             tutorial: { id: level.definition.tutorial, step: tutorial.step },
-            extensions: {},
+            extensions: world.resources.has(DebugRulesResource) ? { 'pvz:debug': { ...getDebugRules(world) } } : {},
         }
     }
 
@@ -504,6 +520,22 @@ export class IntegratedGameServer {
 
     private processNextCommand(session: Session): CommandRejectionCode | undefined {
         const queued = session.commands.shift()!
+        if (queued.command.type === 'debug') {
+            const command = queued.command.command
+            const parsed = parseDebugCliCommand(command)
+            const debug = command === 'catalog' ? {
+                ...debugSuccess('Installed debug content'),
+                catalog: {
+                    plants: Object.keys(this.definitions.seeds).map(id => id.replace(/^pvz:/, '')),
+                    zombies: Object.keys(this.definitions.zombies).map(id => id.replace(/^pvz:/, '')),
+                    items: [...Object.keys(this.definitions.items).map(id => id.replace(/^pvz:/, '')), 'award'],
+                    levels: Object.keys(this.levels.levels).map(id => id.replace(/^pvz:adventure-/, '')),
+                },
+            } : 'name' in parsed ? executeDebugGameCommand(session.world, this.definitions, session.gameplayTick, parsed,
+                (seedId, row, column) => this.placePlant(session, row, column, seedId)) : parsed
+            session.commandResults.push({ sequence: queued.sequence, debug })
+            return
+        }
         const rejection = this.executeCommand(queued.command)
         session.commandResults.push({
             sequence: queued.sequence,
@@ -512,7 +544,7 @@ export class IntegratedGameServer {
         return rejection
     }
 
-    private restoreEntity(world: World, saved: SavedEntityV2): void {
+    private restoreEntity(world: World, saved: SavedEntity): void {
         if (!saved.position) throw new Error(`Saved entity ${saved.entityId} has no position`)
         const kinds = [saved.lawnMower, saved.plant, saved.zombie, saved.projectile, saved.item]
             .filter(value => value !== undefined).length
@@ -522,6 +554,7 @@ export class IntegratedGameServer {
         }
         const level = world.resources.get(LevelStateResource)
         const activeRow = level.definition.activeRows.includes(saved.position.row)
+        const boardRow = saved.position.row >= 0 && saved.position.row < level.board.rows
         if (saved.lawnMower && !this.definitions.lawnMowers[saved.lawnMower.typeId]) {
             throw new Error(`Unknown saved mower: ${saved.lawnMower.typeId}`)
         }
@@ -534,7 +567,7 @@ export class IntegratedGameServer {
             if (!plant || !seed || seed.plant !== saved.plant.typeId) {
                 throw new Error(`Unknown saved plant: ${saved.plant.typeId}`)
             }
-            if (!activeRow || saved.plant.column >= level.board.columns ||
+            if (!boardRow || saved.plant.column >= level.board.columns ||
                 saved.plant.maxHealth !== plant.maxHealth) {
                 throw new Error(`Saved plant ${saved.entityId} is invalid for the level`)
             }
@@ -546,11 +579,11 @@ export class IntegratedGameServer {
         if (saved.zombie) {
             const zombie = this.definitions.zombies[saved.zombie.typeId]
             if (!zombie) throw new Error(`Unknown saved zombie: ${saved.zombie.typeId}`)
-            if (!activeRow || saved.zombie.maxHealth !== zombie.maxHealth) {
+            if (!boardRow || saved.zombie.maxHealth !== zombie.maxHealth) {
                 throw new Error(`Saved zombie ${saved.entityId} is invalid for the level`)
             }
         }
-        if (saved.projectile && (!activeRow || !this.definitions.projectiles[saved.projectile.typeId])) {
+        if (saved.projectile && (!boardRow || !this.definitions.projectiles[saved.projectile.typeId])) {
             throw new Error(`Unknown saved projectile: ${saved.projectile.typeId}`)
         }
         if (saved.item && ((saved.item.typeId === level.definition.award.id
@@ -575,12 +608,12 @@ export class IntegratedGameServer {
         const seedBank = session.world.resources.get(SeedBankResource)
         const packet = seedBank.packets.find(packet => packet.seedId === seedId)
         if (!packet) return 'seed-not-available'
-        if (packet.readyAtTick > session.gameplayTick) {
+        if (getDebugRules(session.world).cooldown && packet.readyAtTick > session.gameplayTick) {
             this.emitSeedRefreshFeedback(session.world)
             return 'seed-not-ready'
         }
 
-        if (this.availableSun(session.world) < this.definitions.seeds[seedId].sunCost) {
+        if (getDebugRules(session.world).sunCost && this.availableSun(session.world) < this.definitions.seeds[seedId].sunCost) {
             this.emitNotEnoughSunFeedback(session.world)
             return 'not-enough-sun'
         }
@@ -597,22 +630,26 @@ export class IntegratedGameServer {
         session: Session,
         row: number,
         column: number,
+        debugSeedId?: string,
     ): CommandRejectionCode | undefined {
         const { world, gameplayTick } = session
         const level = world.resources.get(LevelStateResource)
         const seedBank = world.resources.get(SeedBankResource)
-        const seedId = seedBank.selectedSeedId
+        const seedId = debugSeedId ?? seedBank.selectedSeedId
         if (!seedId) return 'no-seed-selected'
 
-        const packet = seedBank.packets.find(packet => packet.seedId === seedId)!
+        const packet = seedBank.packets.find(packet => packet.seedId === seedId)
         const seed = this.definitions.seeds[seedId]
+        const rules = getDebugRules(world)
+        const sunCost = !debugSeedId && rules.sunCost ? seed.sunCost : 0
         const economy = world.resources.get(EconomyStateResource)
-        if (packet.readyAtTick > gameplayTick) return 'seed-not-ready'
-        if (this.availableSun(world) < seed.sunCost) {
+        if (!debugSeedId && rules.cooldown && packet && packet.readyAtTick > gameplayTick) return 'seed-not-ready'
+        if (this.availableSun(world) < sunCost) {
             this.emitNotEnoughSunFeedback(world)
             return 'not-enough-sun'
         }
-        if (!level.definition.activeRows.includes(row)) return 'row-not-active'
+        if (!Number.isInteger(row) || row < 0 || row >= level.board.rows ||
+            !debugSeedId && !level.definition.activeRows.includes(row)) return 'row-not-active'
         if (!Number.isInteger(column) || column < 0 || column >= level.board.columns) {
             return 'column-out-of-range'
         }
@@ -653,11 +690,13 @@ export class IntegratedGameServer {
         world.add(entity, PlantAttackComponent, {
             readyAtTick: gameplayTick + definition.shooter.initialDelayTicks,
         })
-        const bankSpend = Math.min(economy.sun, seed.sunCost)
+        const bankSpend = Math.min(economy.sun, sunCost)
         economy.sun -= bankSpend
-        economy.pendingSunSpend += seed.sunCost - bankSpend
-        packet.readyAtTick = gameplayTick + seed.cooldownTicks
-        seedBank.selectedSeedId = undefined
+        economy.pendingSunSpend += sunCost - bankSpend
+        if (!debugSeedId) {
+            if (packet) packet.readyAtTick = gameplayTick + (rules.cooldown ? seed.cooldownTicks : 0)
+            seedBank.selectedSeedId = undefined
+        }
         noteLevelOnePlantPlaced(world, gameplayTick, occupiedEntity !== undefined)
         emitServerEvent(world.resources.get(EventQueueResource), 'plantPlaced', {
             entityId: entity,
@@ -772,7 +811,8 @@ export class IntegratedGameServer {
     }
 }
 
-function isSessionCommand(command: GameCommand): boolean {
+function isSessionCommand(command: QueuedCommand): boolean {
+    if (command.type === 'debug') return true
     return command.type === 'pause' || command.type === 'resume' || command.type === 'completeIntro'
 }
 

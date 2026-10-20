@@ -1,9 +1,9 @@
 import { Asset, assetManager, AudioClip, JsonAsset, SpriteFrame, Texture2D } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
-import { parseFontV2 } from '@/shared/content/font'
-import { parseContentManifestV2, type ContentManifestV2 } from '@/shared/content/index'
-import { parseMusicV2, type MusicV2 } from '@/shared/content/music'
-import { parseParticleV2, type ParticleV2 } from '@/shared/content/particle'
+import { parseFont } from '@/shared/content/font'
+import { parseContentManifest, type ContentManifest } from '@/shared/content/index'
+import { parseMusic, type Music } from '@/shared/content/music'
+import { parseParticle, type Particle } from '@/shared/content/particle'
 import { ContentRegistry, type ResolvedContent } from './ContentRegistry'
 
 type AssetBundle = NonNullable<ReturnType<typeof assetManager.getBundle>>
@@ -12,7 +12,7 @@ type AssetType<T extends Asset> = new (...args: any[]) => T
 export class ClientContentLoader {
     private readonly bundles = new Map<string, Promise<AssetBundle>>()
     private readonly assets = new Map<string, Promise<Asset>>()
-    private readonly manifests = new Map<string, Promise<ContentManifestV2>>()
+    private readonly manifests = new Map<string, Promise<ContentManifest>>()
 
     loadBundle(location: string): Promise<AssetBundle> {
         const loaded = assetManager.getBundle(location)
@@ -46,13 +46,13 @@ export class ClientContentLoader {
         return promise
     }
 
-    loadManifest(location: string): Promise<ContentManifestV2> {
+    loadManifest(location: string): Promise<ContentManifest> {
         const cached = this.manifests.get(location)
         if (cached) return cached
 
         const promise = this.loadBundle(location).then(bundle => new Promise<JsonAsset>((resolve, reject) => {
             bundle.load('manifest', JsonAsset, (error, asset) => error ? reject(error) : resolve(asset))
-        })).then(asset => parseContentManifestV2(asset.json)).catch(error => {
+        })).then(asset => parseContentManifest(asset.json)).catch(error => {
             this.manifests.delete(location)
             throw error
         })
@@ -92,7 +92,7 @@ export class FontRepository {
             this.loader.load(content, JsonAsset),
             this.loader.loadBundle(content.bundle),
         ]).then(async ([config, bundle]) => {
-            const data = parseFontV2(config.json)
+            const data = parseFont(config.json)
             if (data.id !== id) throw new Error(`font ID mismatch: expected ${id}, got ${data.id}`)
             const directory = content.path.slice(0, Math.max(0, content.path.lastIndexOf('/') + 1))
             const textures = await Promise.all(data.layers.map(layer => new Promise<Texture2D>((resolve, reject) => {
@@ -115,21 +115,21 @@ export class FontRepository {
 }
 
 export class ParticleRepository {
-    private readonly cache = new Map<string, Promise<ParticleV2>>()
+    private readonly cache = new Map<string, Promise<Particle>>()
 
     constructor(
         private readonly registry: ContentRegistry,
         private readonly loader = new ClientContentLoader(),
     ) {}
 
-    load(id: string): Promise<ParticleV2> {
+    load(id: string): Promise<Particle> {
         const cached = this.cache.get(id)
         if (cached) return cached
         const content = this.registry.resolve('particles', id)
         if (!content) return Promise.reject(new Error(`unknown particle: ${id}`))
 
         const promise = this.loader.load(content, JsonAsset).then(asset => {
-            const data = parseParticleV2(asset.json)
+            const data = parseParticle(asset.json)
             if (data.id !== id) throw new Error(`particle ID mismatch: expected ${id}, got ${data.id}`)
             return data
         }).catch(error => {
@@ -155,7 +155,7 @@ export class SoundRepository {
 }
 
 export interface MusicAssets {
-    definition: MusicV2
+    definition: Music
     clip: AudioClip
 }
 
@@ -169,7 +169,7 @@ export class MusicRepository {
         const content = this.registry.resolve('music', id)
         if (!content) throw new Error(`unknown music: ${id}`)
         const asset = await this.loader.load(content, JsonAsset)
-        const definition = parseMusicV2(asset.json)
+        const definition = parseMusic(asset.json)
         if (definition.id !== id) throw new Error(`music ID mismatch: expected ${id}, got ${definition.id}`)
         if (definition.stems.drums !== null || definition.stems.hihats !== null) {
             throw new Error(`music ${id} uses unsupported extra stems`)

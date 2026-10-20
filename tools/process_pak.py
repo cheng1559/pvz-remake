@@ -18,7 +18,7 @@ Steps:
  13. Generate cached plant preview atlas
  14. Generate cached zombie preview atlas
  15. Generate cached lawn mower sprite
- 16. Build the Content v2 pvz-base Bundle
+ 16. Build the Content pvz-base Bundle
 """
 
 from pathlib import Path
@@ -252,10 +252,10 @@ def main():
 
     generate_lawnmower_cache()
 
-    # Step 16: Build the Content v2 base Bundle
+    # Step 16: Build the Content base Bundle
     print()
     print("=" * 60)
-    print("[pipeline] Step 16: Build Content v2 pvz-base Bundle")
+    print("[pipeline] Step 16: Build Content pvz-base Bundle")
     print("=" * 60)
 
     build_pvz_base()

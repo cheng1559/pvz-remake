@@ -7,48 +7,48 @@ const MAX_PARTICLES = 4096
 const MAX_ATLAS_FRAMES = 4096
 const MAX_ABSOLUTE_VALUE = 1_000_000
 
-export interface ParticleTrackNodeV2 {
+export interface ParticleTrackNode {
     timeRatio: number
     low: number
     high: number
 }
 
-export interface ParticleTrackV2 {
-    nodes: ParticleTrackNodeV2[]
+export interface ParticleTrack {
+    nodes: ParticleTrackNode[]
 }
 
-export interface ParticleFieldV2 {
+export interface ParticleField {
     type: 'friction' | 'acceleration'
-    x: ParticleTrackV2
-    y: ParticleTrackV2
+    x: ParticleTrack
+    y: ParticleTrack
 }
 
-export interface ParticleEmitterV2 {
+export interface ParticleEmitter {
     sprite: string
     columns: number
     rows: number
     firstFrame: number
     frameCount: number
     durationSeconds: number
-    emitterOffsetX: ParticleTrackV2
-    emitterOffsetY: ParticleTrackV2
-    spawnMinActive: ParticleTrackV2
-    spawnMaxLaunched: ParticleTrackV2
-    emitterRadius: ParticleTrackV2
-    particleDurationSeconds: ParticleTrackV2
-    launchSpeed: ParticleTrackV2
-    particleAlpha: ParticleTrackV2
-    particleScale: ParticleTrackV2
-    particleSpinSpeed: ParticleTrackV2
+    emitterOffsetX: ParticleTrack
+    emitterOffsetY: ParticleTrack
+    spawnMinActive: ParticleTrack
+    spawnMaxLaunched: ParticleTrack
+    emitterRadius: ParticleTrack
+    particleDurationSeconds: ParticleTrack
+    launchSpeed: ParticleTrack
+    particleAlpha: ParticleTrack
+    particleScale: ParticleTrack
+    particleSpinSpeed: ParticleTrack
     randomLaunchSpin: boolean
-    fields: ParticleFieldV2[]
+    fields: ParticleField[]
 }
 
-export interface ParticleV2 {
+export interface Particle {
     schemaVersion: 2
     id: string
     durationSeconds: number
-    emitters: ParticleEmitterV2[]
+    emitters: ParticleEmitter[]
 }
 
 export interface ParticlePose {
@@ -108,7 +108,7 @@ export class ParticleRng {
 }
 
 export class ParticleSimulation {
-    readonly definition: ParticleV2
+    readonly definition: Particle
     readonly seed: number
     readonly rng: ParticleRng
     playing = true
@@ -116,7 +116,7 @@ export class ParticleSimulation {
     ageTicks = 0
     private emitters: EmitterState[]
 
-    constructor(definition: ParticleV2, seed: number) {
+    constructor(definition: Particle, seed: number) {
         this.definition = definition
         this.seed = uint32(seed, 'particle seed')
         this.rng = new ParticleRng(this.seed)
@@ -200,7 +200,7 @@ export class ParticleSimulation {
         }
     }
 
-    private stepEmitter(state: EmitterState, definition: ParticleEmitterV2): void {
+    private stepEmitter(state: EmitterState, definition: ParticleEmitter): void {
         const emitterTicks = secondsToTicks(definition.durationSeconds)
         if (this.ageTicks >= emitterTicks) {
             state.particles = []
@@ -226,7 +226,7 @@ export class ParticleSimulation {
         }
     }
 
-    private updateParticle(particle: ParticleState, definition: ParticleEmitterV2): boolean {
+    private updateParticle(particle: ParticleState, definition: ParticleEmitter): boolean {
         if (particle.ageTicks >= particle.durationTicks) return false
         const ratio = lifetimeRatio(particle.ageTicks, particle.durationTicks)
         for (let index = 0; index < definition.fields.length; index++) {
@@ -249,7 +249,7 @@ export class ParticleSimulation {
         return true
     }
 
-    private spawn(definition: ParticleEmitterV2, emitterRatio: number): ParticleState {
+    private spawn(definition: ParticleEmitter, emitterRatio: number): ParticleState {
         const angle = this.rng.next() * Math.PI * 2
         const radius = sampleTrack(definition.emitterRadius, emitterRatio, this.rng.next())
         const speed = sampleTrack(definition.launchSpeed, emitterRatio, this.rng.next())
@@ -270,11 +270,11 @@ export class ParticleSimulation {
     }
 }
 
-export function sampleParticleTrack(track: ParticleTrackV2, timeRatio: number, interpolation: number): number {
+export function sampleParticleTrack(track: ParticleTrack, timeRatio: number, interpolation: number): number {
     return sampleTrack(track, timeRatio, interpolation)
 }
 
-export function parseParticleV2(value: unknown): ParticleV2 {
+export function parseParticle(value: unknown): Particle {
     const source = exactObject(value, ['schemaVersion', 'id', 'durationSeconds', 'emitters'], 'particle')
     if (source.schemaVersion !== 2) throw new Error('particle.schemaVersion must be 2')
     if (!isQualifiedId(source.id)) throw new Error('particle.id must be a qualified ID')
@@ -294,10 +294,10 @@ export function parseParticleV2(value: unknown): ParticleV2 {
         ...emitter.spawnMinActive.nodes.flatMap(node => [node.low, node.high]),
     ), 0)
     if (maximumActive > MAX_PARTICLES) throw new Error('particle can spawn too many active particles')
-    return { schemaVersion: 2, id: source.id, durationSeconds, emitters } as ParticleV2
+    return { schemaVersion: 2, id: source.id, durationSeconds, emitters } as Particle
 }
 
-function parseEmitter(value: unknown, index: number): ParticleEmitterV2 {
+function parseEmitter(value: unknown, index: number): ParticleEmitter {
     const name = `particle.emitters[${index}]`
     const source = exactObject(value, [
         'sprite', 'columns', 'rows', 'firstFrame', 'frameCount', 'durationSeconds',
@@ -348,7 +348,7 @@ function parseEmitter(value: unknown, index: number): ParticleEmitterV2 {
     }
 }
 
-function parseField(value: unknown, name: string): ParticleFieldV2 {
+function parseField(value: unknown, name: string): ParticleField {
     const source = exactObject(value, ['type', 'x', 'y'], name)
     if (source.type !== 'friction' && source.type !== 'acceleration') {
         throw new Error(`${name}.type must be friction or acceleration`)
@@ -362,7 +362,7 @@ function parseField(value: unknown, name: string): ParticleFieldV2 {
     }
 }
 
-function parseTrack(value: unknown, name: string, minimum = -Infinity, maximum = Infinity): ParticleTrackV2 {
+function parseTrack(value: unknown, name: string, minimum = -Infinity, maximum = Infinity): ParticleTrack {
     const source = exactObject(value, ['nodes'], name)
     if (!Array.isArray(source.nodes) || source.nodes.length === 0) throw new Error(`${name}.nodes must be non-empty`)
     let previousTime = -1
@@ -384,9 +384,9 @@ function parseTrack(value: unknown, name: string, minimum = -Infinity, maximum =
     return { nodes }
 }
 
-function sampleTrack(track: ParticleTrackV2, timeRatio: number, interpolation: number): number {
+function sampleTrack(track: ParticleTrack, timeRatio: number, interpolation: number): number {
     const nodes = track.nodes
-    const at = (node: ParticleTrackNodeV2) => node.low + (node.high - node.low) * interpolation
+    const at = (node: ParticleTrackNode) => node.low + (node.high - node.low) * interpolation
     if (timeRatio <= nodes[0].timeRatio) return at(nodes[0])
     for (let index = 1; index < nodes.length; index++) {
         const right = nodes[index]

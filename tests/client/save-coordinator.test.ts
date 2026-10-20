@@ -3,17 +3,17 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
-import { createGameSaveV2, isCompatibleBaseContent, parseGameSaveV2 } from '@/app/SaveCoordinator'
-import type { ServerSaveSnapshotV2 } from '@/server/save'
+import { createGameSave, isCompatibleBaseContent, parseGameSave } from '@/app/SaveCoordinator'
+import type { ServerSaveSnapshot } from '@/server/save'
 import { GameplaySystemMods } from '@/server/GameplaySystemMods'
-import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
-import { adventure11Presentation } from './adventure11-test-snapshot'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import { levelPresentation } from './level-test-snapshot'
 
 const source = (name: string): unknown => JSON.parse(
     readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'),
 )
-const definitions = parseGameplayDefinitionsV2(source('definitions'))
-const levels = parseGameplayLevelsV2(source('levels'), definitions)
+const definitions = parseGameplayDefinitions(source('definitions'))
+const levels = parseGameplayLevels(source('levels'), definitions)
 
 test('base save compatibility accepts declared UI-only updates while keeping identity and version checks', () => {
     const installed = { id: 'pvz:base', version: '2.0.0', contentHash: 'new-menu' }
@@ -46,7 +46,7 @@ test('LocalIntegratedGame applies gameplay system Mod enhancements', () => {
     assert.equal(runs, 1)
 })
 
-test('SaveCoordinator strictly composes matching server and client v2 snapshots', () => {
+test('SaveCoordinator strictly composes matching server and client snapshots', () => {
     const game = new LocalIntegratedGame(definitions, levels)
     game.start({
         levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0,
@@ -55,7 +55,7 @@ test('SaveCoordinator strictly composes matching server and client v2 snapshots'
     game.requestSave()
     game.update(0)
 
-    const saved = createGameSaveV2({
+    const saved = createGameSave({
         profileId: 1,
         mode: 'adventure',
         levelId: 'pvz:adventure-1-1',
@@ -65,14 +65,14 @@ test('SaveCoordinator strictly composes matching server and client v2 snapshots'
             base: { id: 'pvz:base', version: '2.0.0', contentHash: 'hash' },
             mods: [],
         },
-        server: game.lastSave as unknown as ServerSaveSnapshotV2,
-        client: game.snapshotPresentation(adventure11Presentation(game.render())),
+        server: game.lastSave as unknown as ServerSaveSnapshot,
+        client: game.snapshotPresentation(levelPresentation(game.render())),
     })
-    assert.deepEqual(parseGameSaveV2(JSON.parse(JSON.stringify(saved))), saved)
+    assert.deepEqual(parseGameSave(JSON.parse(JSON.stringify(saved))), saved)
 
-    assert.throws(() => parseGameSaveV2({ ...saved, extra: true }), /extra is not supported/)
-    assert.throws(() => parseGameSaveV2({ ...saved, updatedAt: 99 }), /updatedAt/)
-    assert.throws(() => parseGameSaveV2({
+    assert.throws(() => parseGameSave({ ...saved, extra: true }), /extra is not supported/)
+    assert.throws(() => parseGameSave({ ...saved, updatedAt: 99 }), /updatedAt/)
+    assert.throws(() => parseGameSave({
         ...saved,
         client: {
             ...saved.client,
@@ -82,7 +82,7 @@ test('SaveCoordinator strictly composes matching server and client v2 snapshots'
             },
         },
     }), /ticks must match/)
-    assert.throws(() => parseGameSaveV2({
+    assert.throws(() => parseGameSave({
         ...saved,
         client: {
             ...saved.client,
@@ -100,14 +100,14 @@ test('SaveCoordinator strictly composes matching server and client v2 snapshots'
             gameplayTick: saved.server.gameplayTick + 1,
         },
     }), /gameplay ticks must match/)
-    assert.throws(() => parseGameSaveV2({
+    assert.throws(() => parseGameSave({
         ...saved,
         contentSet: {
             ...saved.contentSet,
             mods: [{ id: 'example:mod', version: '1.0.0', contentHash: 'other' }],
         },
     }), /must match server mods/)
-    assert.throws(() => parseGameSaveV2({
+    assert.throws(() => parseGameSave({
         ...saved,
         client: {
             ...saved.client,
@@ -123,7 +123,7 @@ test('LocalIntegratedGame returns a server save from the requested boundary', ()
         firstAdventure: false, mods: [],
     })
 
-    const save = game.saveAtBoundary() as unknown as ServerSaveSnapshotV2
+    const save = game.saveAtBoundary() as unknown as ServerSaveSnapshot
 
     assert.equal(save.tick, game.render().tick)
     assert.equal(save.levelId, game.render().levelId)
@@ -140,7 +140,7 @@ test('LocalIntegratedGame finishes a queued gameplay command before saving', () 
     const beforeTick = game.render().tick
     game.command({ type: 'selectSeed', seedId: 'pvz:peashooter' })
 
-    const save = game.saveAtBoundary() as unknown as ServerSaveSnapshotV2
+    const save = game.saveAtBoundary() as unknown as ServerSaveSnapshot
 
     assert.equal(save.tick, beforeTick + 1)
     assert.equal(save.seedBank.selectedSeedId, 'pvz:peashooter')
@@ -159,7 +159,7 @@ test('LocalIntegratedGame saves before a command queued after the request', () =
 
     game.update(0)
 
-    const save = game.lastSave as unknown as ServerSaveSnapshotV2
+    const save = game.lastSave as unknown as ServerSaveSnapshot
     assert.equal(game.lastSaveSequence, saveSequence)
     assert.equal(save.seedBank.selectedSeedId, undefined)
     game.update(definitions.tickSeconds)
@@ -177,7 +177,7 @@ test('LocalIntegratedGame advances every gameplay and session boundary before sa
     game.command({ type: 'selectSeed', seedId: 'pvz:peashooter' })
     game.command({ type: 'pause' })
 
-    const save = game.saveAtBoundary() as unknown as ServerSaveSnapshotV2
+    const save = game.saveAtBoundary() as unknown as ServerSaveSnapshot
 
     assert.equal(save.seedBank.selectedSeedId, 'pvz:peashooter')
     assert.equal(save.level.paused, true)

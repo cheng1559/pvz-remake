@@ -2,9 +2,9 @@ import { _decorator, AudioSource, Component } from 'cc'
 import { ClientContentLoader, MusicRepository } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { SoundLoader } from '@/client/sound/LegacySoundSystem'
-import type { MusicV2 } from '@/shared/content/music'
+import type { Music } from '@/shared/content/music'
 
-export interface MusicPlaybackSnapshotV2 {
+export interface MusicPlayerSnapshot {
     id: string
     timeSeconds: number
     playing: boolean
@@ -16,7 +16,7 @@ const { ccclass } = _decorator
 
 @ccclass('MusicPlayer')
 export class MusicPlayer extends Component {
-    private definition: MusicV2 | null = null
+    private definition: Music | null = null
     private source: AudioSource | null = null
     private playing = false
     private paused = false
@@ -88,7 +88,7 @@ export class MusicPlayer extends Component {
         this.pausedTimeSeconds = 0
     }
 
-    snapshot(): MusicPlaybackSnapshotV2 {
+    snapshot(): MusicPlayerSnapshot {
         return {
             id: this.requireDefinition().id,
             timeSeconds: this.playing ? this.currentTimeSeconds() : 0,
@@ -98,7 +98,7 @@ export class MusicPlayer extends Component {
         }
     }
 
-    restore(snapshot: MusicPlaybackSnapshotV2): void {
+    restore(snapshot: MusicPlayerSnapshot): void {
         const definition = this.requireDefinition()
         validateSnapshot(snapshot, definition)
         const source = this.requireSource()
@@ -122,7 +122,7 @@ export class MusicPlayer extends Component {
         this.requireSource().volume = this.volume * SoundLoader.getMusicVolume()
     }
 
-    private requireDefinition(): MusicV2 {
+    private requireDefinition(): Music {
         if (!this.definition) throw new Error('music player is not loaded')
         return this.definition
     }
@@ -133,7 +133,7 @@ export class MusicPlayer extends Component {
     }
 }
 
-function validateSnapshot(snapshot: MusicPlaybackSnapshotV2, definition: MusicV2): void {
+function validateSnapshot(snapshot: MusicPlayerSnapshot, definition: Music): void {
     if (typeof snapshot !== 'object' || snapshot === null || Array.isArray(snapshot)) {
         throw new Error('music snapshot must be an object')
     }

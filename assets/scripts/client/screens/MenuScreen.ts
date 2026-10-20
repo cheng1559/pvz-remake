@@ -16,6 +16,7 @@ import { showUserDialog } from './UserDialog'
 import { showAlmanacScreen } from './AlmanacScreen'
 import { StoreScreen } from './StoreScreen'
 import { AchievementScreen } from './AchievementScreen'
+import { showAwardScreen } from './AwardScreen'
 
 const { ccclass } = _decorator
 
@@ -52,7 +53,7 @@ export class MenuScreen extends Component {
             return { id, root, enter: () => startup.show() }
         }
         const page = MENU_PAGES[id]
-        const optionsPage = id === 'options' || id === 'gameOptions' || id === 'pause'
+        const optionsPage = id === 'options' || id === 'gameOptions'
         const overMain = !!this.mainMenu?.node.isValid && (id === 'options' || id === 'players' || id === 'quit')
         const backgrounds = page.backgrounds.filter(background =>
             !(optionsPage && background.image === 'options_menuback')
@@ -66,7 +67,7 @@ export class MenuScreen extends Component {
         if (!this.node?.isValid) throw new Error('Menu was destroyed while loading')
         const root = uiNode({
             name: id, parent: this.node, size: { width: 800, height: 600 }, active: false,
-            graphics: !optionsPage && !overMain,
+            graphics: !optionsPage && id !== 'pause' && id !== 'gameOver' && !overMain,
         })
         if (page.retainPrevious) root.node.addComponent(BlockInputEvents)
         if (root.graphics) {
@@ -90,6 +91,24 @@ export class MenuScreen extends Component {
                 onClose: () => this.onNavigate(inGame ? 'resume' : 'back'),
                 onRestart: () => this.onNavigate('restart'),
                 onMainMenu: () => this.onNavigate('main'),
+            })
+        } else if (id === 'gameOver') {
+            const dialog = ui.dialog(root.node, {
+                title: ui.text('GAME_OVER'), contentInsetTopExtra: 15,
+                confirmText: ui.text('TRY_AGAIN'),
+                onClose: retry => { void this.onNavigate(retry ? 'restart' : 'main') },
+            })
+            const mainMenu = ui.button(dialog.node, {
+                text: ui.text('MAIN_MENU_BUTTON'), x: 235, y: -310, width: 163, height: 46,
+                onClick: () => dialog.close(false),
+            })
+            mainMenu.canInteract = () => !dialog.isDragging
+        } else if (id === 'pause') {
+            ui.dialog(root.node, {
+                title: ui.text('GAME_PAUSED'), message: ui.text('CLICK_TO_RESUME'),
+                confirmText: ui.text('RESUME_GAME'), spaceAfterHeader: 155, extraHeight: 10,
+                clickSound: null,
+                onClose: () => { void this.onNavigate('resume') },
             })
         } else {
             const controls = uiNode({
@@ -139,6 +158,9 @@ export class MenuScreen extends Component {
                     await controls.addComponent(StoreScreen).initialize(ui, action => { void this.onNavigate(action) }, ui.text(fromGarden ? 'STORE_BACK_TO_GAME' : 'STORE_MAIN_MENU_BUTTON'))
                 } catch (error) { root.node.destroy(); throw error }
             } else if (id === 'award') {
+                try {
+                    await showAwardScreen(controls, ui)
+                } catch (error) { root.node.destroy(); throw error }
                 navigateButton('restart', { skin: 'seed', text: 'Play again', x: 324, y: 500 })
                 navigateButton('main', { skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON', 'Main Menu'), x: 677, y: 16 })
             } else if (!await showMenuPageControls(controls, ui, id, action => { void this.onNavigate(action) }).catch(error => {

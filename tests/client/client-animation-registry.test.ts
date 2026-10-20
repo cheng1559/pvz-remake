@@ -69,9 +69,9 @@ test('client animations reject unknown slots and invalid playback values', () =>
 
 test('Adventure 1-1 presenters resolve plant and zombie animations through the registry', () => {
     const source = (file: string) => readFileSync(resolve(process.cwd(), file), 'utf8')
-    const view = source('assets/scripts/client/showcase/Adventure11View.ts')
-    const entities = source('assets/scripts/client/showcase/Adventure11EntityRenderer.ts')
-    const zombies = source('assets/scripts/client/showcase/Adventure11ZombieView.ts')
+    const view = source('assets/scripts/client/level/LevelView.ts')
+    const entities = source('assets/scripts/client/level/LevelEntityRenderer.ts')
+    const zombies = source('assets/scripts/client/level/LevelZombieView.ts')
 
     assert.match(view, /const animations = content\.animations \?\? new ClientAnimationRegistry\(\)/)
     assert.match(entities, /this\.animations\.resolve\(animationTarget\)/)

@@ -14,6 +14,7 @@ import {
 } from 'cc'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '../GameClock'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { SpriteLoader } from '../SpriteLoader'
 import { ParticleDefinitionLoader } from './ParticleDefinitionLoader'
 import {
@@ -667,13 +668,14 @@ export class TodParticleSystem extends Component {
     public renderOrder = 10000
     public effect: TodParticleEffect = ''
     private _emitters: TodParticleEmitter[] = []
+    private _perfVisible = true
     private _accumulator = 0
     private _tint: Color | null = null
     private _extraAdditive = false
     private _imageOverride: string | null = null
     private _ageTicks = 0
     private _pendingFastForwardTicks = 0
-    private _useGameTime = true // Retained in v2 saves; presentation effects now share the global clock.
+    private _useGameTime = true // Retained in saves; presentation effects now share the global clock.
     private _scaleOverride = 1
     private _seed = 0
     private _rng = new TodParticleRng(0)
@@ -806,6 +808,11 @@ export class TodParticleSystem extends Component {
     }
 
     protected update(dt: number) {
+        if (this._perfVisible !== GameDebugSettings.perfParticlesEnabled) {
+            this._perfVisible = GameDebugSettings.perfParticlesEnabled
+            for (const sprite of this.node.getComponentsInChildren(Sprite)) sprite.enabled = this._perfVisible
+        }
+        if (!this._perfVisible) return
         if (this._emitters.length === 0) return
 
         this._accumulator += gameClock.delta(dt)

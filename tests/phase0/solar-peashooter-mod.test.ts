@@ -8,7 +8,7 @@ import { GameplaySystemMods, type GameplaySystemEnhancer } from '@/server/Gamepl
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { ItemComponent } from '@/server/levelOne'
 import type { World } from '@/ecs'
-import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { parseModManifest } from '@/shared/mod'
 import { runCommand } from '../server/run-command'
@@ -34,10 +34,10 @@ test('solar Peashooter Mod produces one small sun when a pea hits a zombie', asy
         },
     })
 
-    const definitions = parseGameplayDefinitionsV2(JSON.parse(
+    const definitions = parseGameplayDefinitions(JSON.parse(
         await readFile('tools/content/pvz-base/gameplay/definitions.json', 'utf8'),
     ))
-    const levels = parseGameplayLevelsV2(JSON.parse(
+    const levels = parseGameplayLevels(JSON.parse(
         await readFile('tools/content/pvz-base/gameplay/levels.json', 'utf8'),
     ), definitions)
     const mods = new GameplaySystemMods()

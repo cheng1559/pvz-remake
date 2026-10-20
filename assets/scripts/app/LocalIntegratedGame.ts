@@ -3,9 +3,10 @@ import { IntegratedGameHost } from '@/server/IntegratedGameHost'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { GameplaySystemMods } from '@/server/GameplaySystemMods'
 import { LocalGameChannel } from '@/shared/channel/index'
-import type { GameplayDefinitionsV2, GameplayLevelsV2 } from '@/shared/content/gameplay'
+import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
 import type { GameCommand, JsonValue, StartSessionPacket } from '@/shared/protocol/index'
-import type { Adventure11PresentationSnapshotV2 } from '@/client/showcase/Adventure11PresentationSnapshotV2'
+import type { LevelPresentationSnapshot } from '@/client/level/LevelPresentationSnapshot'
+import type { DebugCliResult } from '@/shared/debug/DebugCli'
 
 export class LocalIntegratedGame {
     private readonly channel = new LocalGameChannel()
@@ -13,11 +14,12 @@ export class LocalIntegratedGame {
     private readonly client = new IntegratedGameClient(this.channel)
 
     constructor(
-        readonly definitions: GameplayDefinitionsV2,
-        levels: GameplayLevelsV2,
+        readonly definitions: GameplayDefinitions,
+        levels: GameplayLevels,
         systemMods = new GameplaySystemMods(),
+        debugEnabled = false,
     ) {
-        this.host = new IntegratedGameHost(new IntegratedGameServer(definitions, levels, systemMods), this.channel)
+        this.host = new IntegratedGameHost(new IntegratedGameServer(definitions, levels, systemMods), this.channel, debugEnabled)
     }
 
     start(options: Omit<StartSessionPacket, 'protocolVersion' | 'sequence' | 'type'>): void {
@@ -33,6 +35,17 @@ export class LocalIntegratedGame {
         return this.client.requestSave()
     }
 
+    debugCommand(command: string): DebugCliResult {
+        const sequence = this.client.debugCommand(command)
+        this.update(0)
+        for (let attempts = 0; this.client.lastDebugResult?.sequence !== sequence && attempts < 1000; attempts++) {
+            if (this.client.lastRejection?.sequence === sequence) throw new Error(this.client.lastRejection.code)
+            this.update(this.definitions.tickSeconds)
+        }
+        if (this.client.lastDebugResult?.sequence !== sequence) throw new Error('Server did not return the debug command result')
+        return this.client.lastDebugResult.result
+    }
+
     saveAtBoundary(): JsonValue {
         const sequence = this.client.requestSave()
         this.update(0)
@@ -45,11 +58,11 @@ export class LocalIntegratedGame {
         return this.client.lastSave
     }
 
-    snapshotPresentation(adventure11: Adventure11PresentationSnapshotV2) {
-        return this.client.snapshot(adventure11)
+    snapshotPresentation(level: LevelPresentationSnapshot) {
+        return this.client.snapshot(level)
     }
 
-    restorePresentation(value: unknown): Adventure11PresentationSnapshotV2 {
+    restorePresentation(value: unknown): LevelPresentationSnapshot {
         return this.client.restore(value)
     }
 

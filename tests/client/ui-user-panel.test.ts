@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import { MenuApi } from '@/client/api/MenuApi'
 import { createLocalMenuTransport } from '@/app/LocalMenuApi'
-import { GAME_SAVE_V2_KEY } from '@/app/GameSaveV2Store'
+import { GAME_SAVE_KEY } from '@/app/GameSaveStore'
 
 function load(path: string, modules: Record<string, unknown>) {
     const module = { exports: {} as Record<string, any> }
@@ -104,9 +104,9 @@ test('user panel validates names, keeps rename IDs/saves, and confirms isolated 
     const fixture = panelFixture()
     const { ProfileStore: store, data, dialogs, inputs } = fixture
     const alice = store.createProfile('Alice'), bob = store.createProfile('Bob')
-    data.set(`${GAME_SAVE_V2_KEY}:${alice.id}:adventure`, 'alice save')
-    data.set(`${GAME_SAVE_V2_KEY}:${bob.id}:adventure`, 'bob save')
-    data.set(`${GAME_SAVE_V2_KEY}:${bob.id}:adventure:temp`, 'bob temp')
+    data.set(`${GAME_SAVE_KEY}:${alice.id}:adventure`, 'alice save')
+    data.set(`${GAME_SAVE_KEY}:${bob.id}:adventure`, 'bob save')
+    data.set(`${GAME_SAVE_KEY}:${bob.id}:adventure:temp`, 'bob temp')
     data.set(`pvz-remake:saves:${bob.id}:adventure`, 'bob legacy save')
     const panel = await fixture.show()
     fixture.action(panel, 'RENAME_BUTTON')
@@ -114,7 +114,7 @@ test('user panel validates names, keeps rename IDs/saves, and confirms isolated 
     await dialogs.at(-1).onConfirm()
     assert.equal(store.getCurrentProfile().name, 'Bob Two')
     assert.equal(store.getCurrentProfile().id, bob.id)
-    assert.equal(data.get(`${GAME_SAVE_V2_KEY}:${bob.id}:adventure`), 'bob save')
+    assert.equal(data.get(`${GAME_SAVE_KEY}:${bob.id}:adventure`), 'bob save')
     fixture.action(panel, 'RENAME_BUTTON')
     inputs.at(-1).value = 'alice'
     await dialogs.at(-1).onConfirm()
@@ -129,8 +129,8 @@ test('user panel validates names, keeps rename IDs/saves, and confirms isolated 
     dialogs.at(-1).close(true)
     await setImmediate()
     assert.equal(store.getCurrentProfile().id, alice.id)
-    assert.equal(data.get(`${GAME_SAVE_V2_KEY}:${alice.id}:adventure`), 'alice save')
-    assert.equal([...data.keys()].some(key => key.startsWith(`${GAME_SAVE_V2_KEY}:${bob.id}:`)), false)
+    assert.equal(data.get(`${GAME_SAVE_KEY}:${alice.id}:adventure`), 'alice save')
+    assert.equal([...data.keys()].some(key => key.startsWith(`${GAME_SAVE_KEY}:${bob.id}:`)), false)
     assert.equal(data.has(`pvz-remake:saves:${bob.id}:adventure`), false)
     fixture.action(panel, 'DELETE_BUTTON')
     dialogs.at(-1).close(true)
@@ -176,8 +176,13 @@ test('user selection is committed by confirmation or double click, while cancel 
 
 test('input keeps programmatic values silent, filters pasted text, and releases modal keyboard focus', () => {
     const scope = { activeModalRoot: null as any, isInputBlocked: false }
+    let canvasFocuses = 0
     const { UIInput } = load('client/ui/UIInput', {
-        cc: { Component: class {}, Color: class {}, KeyCode: { SPACE: 32, ENTER: 13, ESCAPE: 27 }, _decorator: { ccclass: () => (value: unknown) => value } },
+        cc: {
+            Component: class {}, Color: class {}, KeyCode: { SPACE: 32, ENTER: 13, ESCAPE: 27 },
+            _decorator: { ccclass: () => (value: unknown) => value },
+            game: { canvas: { focus(options: FocusOptions) { assert.equal(options.preventScroll, true); canvasFocuses++ } } },
+        },
         '@/client/input/UIHoverManager': { UIHoverManager: scope },
     })
     const field = new UIInput()
@@ -213,9 +218,13 @@ test('input keeps programmatic values silent, filters pasted text, and releases 
     assert.equal(UIInput.handleKey({ keyCode: 32 }), true)
     field.domKey({ key: 'Enter', preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {} })
     assert.equal(submitted, 'New Name')
+    field.blur()
+    assert.equal(canvasFocuses, 1, 'closing text entry returns keyboard focus to the game without another click')
+    assert.equal(UIInput.handleKey({ keyCode: 191 }), false, 'slash can reach the game after submission')
+    field.focus()
     scope.activeModalRoot = {}
     UIInput.hoverClient.clearHover()
     assert.equal(field.hasFocus, false)
-    assert.equal(blurs, 1)
+    assert.equal(blurs, 2)
     assert.equal(UIInput.handleKey({ keyCode: 32 }), false, 'the top modal receives keys after the field loses focus')
 })

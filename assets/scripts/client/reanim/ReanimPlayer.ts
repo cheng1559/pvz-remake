@@ -5,11 +5,11 @@ import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
 import {
     attachReanimPose,
-    parseReanimV2,
+    parseReanim,
     sampleReanimTrack,
-    type ReanimKeyframeV2,
-    type ReanimTrackV2,
-    type ReanimV2,
+    type ReanimKeyframe,
+    type ReanimTrack,
+    type Reanim,
 } from '@/shared/content/reanim'
 import {
     parseReanimPlaybackSnapshot,
@@ -33,25 +33,25 @@ let additiveSpriteMaterial: Material | null = null
 interface TrackAttachment {
     parent: ReanimPlayer
     trackId: string
-    basePose: ReanimKeyframeV2
+    basePose: ReanimKeyframe
 }
 
 export class ReanimRepository {
-    private readonly cache = new Map<string, Promise<ReanimV2>>()
+    private readonly cache = new Map<string, Promise<Reanim>>()
 
     constructor(
         private readonly registry: ContentRegistry,
         private readonly loader = new ClientContentLoader(),
     ) {}
 
-    load(id: string): Promise<ReanimV2> {
+    load(id: string): Promise<Reanim> {
         const cached = this.cache.get(id)
         if (cached) return cached
         const content = this.registry.resolve('reanim', id)
         if (!content) return Promise.reject(new Error(`unknown reanim: ${id}`))
 
         const promise = this.loader.load(content, JsonAsset).then(asset => {
-            const data = parseReanimV2(asset.json)
+            const data = parseReanim(asset.json)
             if (data.id !== id) throw new Error(`reanim ID mismatch: expected ${id}, got ${data.id}`)
             return data
         }).catch(error => {
@@ -65,7 +65,7 @@ export class ReanimRepository {
 
 @ccclass('ReanimPlayer')
 export class ReanimPlayer extends Component {
-    private data: ReanimV2 | null = null
+    private data: Reanim | null = null
     private readonly frames = new Map<string, SpriteFrame>()
     private readonly views = new Map<string, TrackView>()
     private timeSeconds = 0
@@ -75,7 +75,7 @@ export class ReanimPlayer extends Component {
     private visible = true
     private hideOnFinish = true
     private onFinish: (() => void) | null = null
-    private readonly blendFromPoses = new Map<string, ReanimKeyframeV2>()
+    private readonly blendFromPoses = new Map<string, ReanimKeyframe>()
     private blendDuration = 0
     private blendElapsed = 0
     private readonly frameOverrides = new Map<string, SpriteFrame>()
@@ -86,6 +86,9 @@ export class ReanimPlayer extends Component {
     private colorOverride = Color.WHITE.clone()
 
     get durationSeconds(): number { return this.requireData().durationSeconds }
+    get lastFrameTimeSeconds(): number {
+        return Math.max(0, ...this.requireData().tracks.map(track => track.keyframes[track.keyframes.length - 1].timeSeconds))
+    }
 
     getTrackNode(trackId: string): Node | null {
         return this.views.get(trackId)?.node ?? null
@@ -310,7 +313,7 @@ export class ReanimPlayer extends Component {
         this.clearViews()
     }
 
-    private createTrackView(track: ReanimTrackV2): void {
+    private createTrackView(track: ReanimTrack): void {
         const parts = uiNode({
             name: track.id,
             parent: this.node,
@@ -380,14 +383,14 @@ export class ReanimPlayer extends Component {
         }
     }
 
-    private requireData(): ReanimV2 {
+    private requireData(): Reanim {
         if (!this.data) throw new Error('reanim player is not loaded')
         return this.data
     }
 
-    private sampleTrack(trackId: string): ReanimKeyframeV2 | null {
+    sampleTrack(trackId: string, timeSeconds = this.timeSeconds): ReanimKeyframe | null {
         const track = this.requireData().tracks.find(candidate => candidate.id === trackId)
-        return track ? sampleReanimTrack(track, this.timeSeconds) : null
+        return track ? sampleReanimTrack(track, timeSeconds) : null
     }
 
     private clearViews(): void {
@@ -417,7 +420,7 @@ function getAdditiveSpriteMaterial(): Material {
     return additiveSpriteMaterial
 }
 
-function compareTracks(a: ReanimTrackV2, b: ReanimTrackV2): number {
+function compareTracks(a: ReanimTrack, b: ReanimTrack): number {
     return a.zIndex - b.zIndex || a.id.localeCompare(b.id)
 }
 
@@ -426,7 +429,7 @@ function positiveFinite(value: number, name: string): number {
     return value
 }
 
-function blendPose(from: ReanimKeyframeV2, to: ReanimKeyframeV2, ratio: number): ReanimKeyframeV2 {
+function blendPose(from: ReanimKeyframe, to: ReanimKeyframe, ratio: number): ReanimKeyframe {
     const lerp = (a: number, b: number) => a + (b - a) * ratio
     const lerpAngle = (a: number, b: number) => {
         while (a > b + 180) a -= 360

@@ -13,7 +13,7 @@ export const CONTENT_CATEGORIES = [
 export type ContentCategory = typeof CONTENT_CATEGORIES[number]
 export type ContentEntries = Readonly<Record<string, string>>
 
-export interface ContentManifestV2 {
+export interface ContentManifest {
     schemaVersion: 2
     id: string
     version: string
@@ -39,7 +39,7 @@ export interface ContentManifestV2 {
 
 const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/
 
-export function parseContentManifestV2(value: unknown): ContentManifestV2 {
+export function parseContentManifest(value: unknown): ContentManifest {
     const manifest = exactObject(
         value,
         ['schemaVersion', 'id', 'version', 'contentHash', 'gameplay', 'client'],

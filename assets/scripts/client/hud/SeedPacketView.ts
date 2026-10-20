@@ -112,7 +112,7 @@ export class SeedPacketView {
         let x = this.node.position.x
         let y = this.node.position.y
         let parent = this.node.parent
-        while (parent && parent.name !== 'BoardContent' && parent.name !== 'HUD') {
+        while (parent && parent.name !== 'BoardContent' && parent.name !== 'HUD' && parent.name !== 'SeedBankLayer') {
             x += parent.position.x
             y += parent.position.y
             parent = parent.parent

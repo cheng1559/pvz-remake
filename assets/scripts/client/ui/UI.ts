@@ -1,5 +1,6 @@
 import { BlockInputEvents, Button, Canvas, Color, gfx, Material, Node, Sprite, type SpriteFrame } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { uiNode } from '@/client/view/uiNode'
 import { loadUIAssets, type UIAssets, type UIFont } from './UIAssets'
@@ -52,10 +53,16 @@ export interface UIDialogOptions {
     tall?: boolean
     centerMessage?: boolean
     messageOffsetY?: number
+    contentInsetTopExtra?: number
+    spaceAfterHeader?: number
     background?: SpriteFrame
     footer?: boolean
     confirmText?: string
     cancelText?: string
+    /** Up to two action buttons, with an optional third footer button. */
+    buttons?: readonly { text: string, onClick: (dialog: UIDialog) => void }[]
+    /** Footer release and keyboard confirmation/cancellation sound. */
+    clickSound?: SoundEffect | null
     onClose?: (confirmed: boolean) => void
 }
 
@@ -69,8 +76,9 @@ export class UI {
 
     text(key: string, fallback = key): string { return this.assets.strings[key] ?? fallback }
 
-    label(parent: Node, options: UILabelOptions & { font?: UIFont }): UILabel {
-        return new UILabel(parent, this.assets.fonts[options.font ?? 'label'], options)
+    label(parent: Node, options: UILabelOptions & { font?: UIFont | BitmapFontAssets }): UILabel {
+        const font = typeof options.font === 'object' ? options.font : this.assets.fonts[options.font ?? 'label']
+        return new UILabel(parent, font, options)
     }
 
     tooltip(anchor: Node, options: string | UITooltipOptions): UITooltip {
@@ -322,17 +330,18 @@ export class UI {
         const dialog = root.addComponent(UIDialog)
         dialog.content = panel
         dialog.onClose = options.onClose
+        dialog.clickSound = options.clickSound === undefined ? SoundEffect.ButtonClick : options.clickSound
         const textColor = new Color(0xe0, 0xbb, 0x62)
-        let textTop = 80
+        let textTop = 80 + (options.contentInsetTopExtra ?? 0)
         if (options.title) this.label(panel, {
             text: options.title, font: 'title', x: width / 2, y: textTop - titleMetrics.ascentPadding,
             align: 'center', color: textColor,
         })
-        if (options.title) textTop += titleMetrics.height - titleMetrics.ascentPadding + 10
+        if (options.title) textTop += titleMetrics.height - titleMetrics.ascentPadding + (options.spaceAfterHeader ?? 10)
         if (options.message) {
             const textWidth = width - 86
             const textHeight = FontMetricsUtil.measureWordWrappedHeight(bodyFont, options.message, textWidth)
-            const areaHeight = height - 36 - 24 - textTop - 55
+            const areaHeight = height - 36 - 24 - textTop - 55 - (options.tall ? 36 : 0)
             this.label(panel, {
                 text: options.message, font: 'body', x: 38, width: textWidth, align: 'center', color: textColor,
                 y: textTop + (options.centerMessage === false ? 0 : Math.trunc((areaHeight - textHeight) / 2))
@@ -340,18 +349,26 @@ export class UI {
             })
         }
         if (options.footer !== false) {
-            const count = options.cancelText ? 2 : 1
+            const buttons = options.buttons ?? [
+                { text: options.confirmText ?? 'OK', onClick: (dialog: UIDialog) => dialog.onConfirm() },
+                ...(options.cancelText ? [{ text: options.cancelText, onClick: (dialog: UIDialog) => dialog.onCancel() }] : []),
+            ]
+            const count = buttons.length
             const areaWidth = width - 74
             const minimum = this.assets.sprites.button_left.originalSize.width + this.assets.sprites.button_right.originalSize.width
             const tileWidth = this.assets.sprites.button_middle.originalSize.width
-            const extra = count === 2 ? Math.floor((areaWidth - 10) / 2) - tileWidth - minimum + 1 : areaWidth - tileWidth - minimum + 1
-            const buttonWidth = minimum + Math.ceil(Math.max(0, extra) / tileWidth) * tileWidth
-            for (let index = 0; index < count; index++) this.button(panel, {
-                text: index === 0 ? options.confirmText ?? 'OK' : options.cancelText!,
-                color: new Color(213, 255, 196),
-                x: 31 + (count === 1 ? Math.floor((areaWidth - buttonWidth) / 2) : index * (areaWidth - buttonWidth)),
-                y: height - (options.tall ? 75 : 80), width: buttonWidth,
-                onClick: () => index === 0 ? dialog.onConfirm() : dialog.onCancel(),
+            buttons.forEach((button, index) => {
+                const fullWidth = count === 1 || index === 2
+                const extra = fullWidth ? areaWidth - tileWidth - minimum + 1
+                    : Math.floor((areaWidth - 10) / 2) - tileWidth - minimum + 1
+                const buttonWidth = minimum + Math.ceil(Math.max(0, extra) / tileWidth) * tileWidth
+                this.button(panel, {
+                    text: button.text, color: new Color(213, 255, 196),
+                    x: 31 + (fullWidth ? Math.floor((areaWidth - buttonWidth) / 2) : index * (areaWidth - buttonWidth)),
+                    y: height - (options.tall ? 75 : 80) - (count === 3 && index < 2 ? 46 : 0), width: buttonWidth,
+                    clickSound: options.clickSound,
+                    onClick: () => button.onClick(dialog),
+                })
             })
         }
         root.active = true
@@ -387,8 +404,8 @@ export class UI {
         const titleWidth = 82 + (options.extraWidth ?? 0) + FontMetricsUtil.measureTextWidth(title, options.title ?? '')
         const naturalWidth = topWidth + Math.max(1, Math.ceil((titleWidth - topWidth) / tileWidth)) * tileWidth + (options.message ? tileWidth : 0)
         const width = topWidth + Math.max(1, Math.ceil(((options.width ?? naturalWidth) - topWidth) / tileWidth)) * tileWidth
-        let contentHeight = 35 + 36 + 45 + 24 + (options.extraHeight ?? 0)
-        if (options.title) contentHeight += titleMetrics.height - titleMetrics.ascentPadding + 10
+        let contentHeight = 35 + 36 + 45 + 24 + (options.extraHeight ?? 0) + (options.contentInsetTopExtra ?? 0)
+        if (options.title) contentHeight += titleMetrics.height - titleMetrics.ascentPadding + (options.spaceAfterHeader ?? 10)
         if (options.message) contentHeight += FontMetricsUtil.measureWordWrappedHeight(
             this.assets.fonts.body.config, options.message, width - 86,
         ) + 30

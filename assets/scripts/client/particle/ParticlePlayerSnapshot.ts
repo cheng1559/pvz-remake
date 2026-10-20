@@ -1,7 +1,7 @@
 import {
     PARTICLE_STEP_SECONDS,
     type ParticlePlaybackSnapshot,
-    type ParticleV2,
+    type Particle,
 } from '@/shared/content/particle'
 import { isQualifiedId } from '@/shared/mod/index'
 
@@ -34,7 +34,7 @@ export function parseParticlePlayerSnapshot(value: unknown): ParticlePlayerSnaps
 
 export function validateParticlePlayerSnapshotContent(
     snapshot: ParticlePlayerSnapshot,
-    data: Pick<ParticleV2, 'id' | 'durationSeconds'>,
+    data: Pick<Particle, 'id' | 'durationSeconds'>,
 ): ParticlePlayerSnapshot {
     if (snapshot.id !== data.id) {
         throw new Error(`particle ID mismatch: expected ${data.id}, got ${snapshot.id}`)

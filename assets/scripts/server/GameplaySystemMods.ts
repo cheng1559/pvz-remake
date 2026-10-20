@@ -6,7 +6,7 @@ import {
     type World,
 } from '@/ecs/index'
 import { isQualifiedId } from '@/shared/mod'
-import type { GameplayDefinitionsV2 } from '@/shared/content/gameplay'
+import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { JsonObject } from '@/shared/protocol'
 import {
     EconomyStateResource,
@@ -24,7 +24,7 @@ import { ItemComponent, TutorialResource, WaveResource } from './levelOne'
 import { EventQueueResource, emitServerEvent } from './events'
 
 export interface GameplaySystemBindings {
-    readonly definitions: Readonly<GameplayDefinitionsV2>
+    readonly definitions: Readonly<GameplayDefinitions>
     readonly emitEvent: (world: World, type: string, data: JsonObject) => void
     readonly components: Readonly<{
         position: typeof PositionComponent
@@ -201,7 +201,7 @@ function plantUpgradeKey(seedId: string, targetPlantId: string): string {
     return `${seedId}\0${targetPlantId}`
 }
 
-export function createGameplaySystemBindings(definitions: GameplayDefinitionsV2): GameplaySystemBindings {
+export function createGameplaySystemBindings(definitions: GameplayDefinitions): GameplaySystemBindings {
     return Object.freeze({
         definitions,
         emitEvent: (world: World, type: string, data: JsonObject) =>

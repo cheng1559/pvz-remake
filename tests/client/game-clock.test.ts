@@ -6,11 +6,69 @@ import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { GameClock, gameClock } from '@/core/GameClock'
-import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+
+test('nested CLI clock pauses freeze time and tweens while preserving changes to the selected speed', () => {
+    const clock = new GameClock()
+    const speeds: number[] = []
+    clock.onSpeedChange(speed => speeds.push(speed))
+    clock.setSpeed(2)
+    const release = clock.pause(), releaseInner = clock.pause()
+    assert.equal(clock.delta(1), 0)
+    clock.setSpeed(3)
+    assert.equal(clock.speed, 3)
+    releaseInner()
+    assert.equal(clock.delta(1), 0)
+    release()
+    release()
+    assert.equal(clock.delta(1), 3)
+    assert.equal(speeds.at(-1), 3)
+    assert.ok(speeds.slice(1, -1).every(speed => speed === 0))
+})
+
+test('adventure pause freezes scene animation, particles and tweens without changing the global clock', () => {
+    class Component { enabled = true; isValid = true }
+    class ReanimPlayer extends Component {}
+    class ParticlePlayer extends Component {}
+    class TodParticleSystem extends Component {}
+    const reanim = new ReanimPlayer(), disabled = new ReanimPlayer(), particle = new ParticlePlayer(), legacy = new TodParticleSystem(), ui = new Component()
+    disabled.enabled = false
+    const components = [reanim, disabled, particle, legacy, ui]
+    const child = { children: [] }
+    const root = { children: [child], getComponentsInChildren: () => components }
+    const paused = new Set<object>(), resumed = new Set<object>()
+    const module = { exports: {} as Record<string, any> }
+    const compiled = transpileModule(readFileSync('assets/scripts/client/level/LevelView.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+    })
+    const modules: Record<string, unknown> = {
+        cc: { Component, Tween: { pauseAllByTarget: (node: object) => paused.add(node), resumeAllByTarget: (node: object) => resumed.add(node) } },
+        '@/client/reanim/ReanimPlayer': { ReanimPlayer }, '@/client/particle/ParticlePlayer': { ParticlePlayer },
+        '@/core/Particle': { TodParticleSystem },
+    }
+    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {} })
+    const view = new module.exports.LevelView(root)
+    view.gameOver = { active: false }
+    const speed = gameClock.speed
+    view.setPaused(true)
+    view.setPaused(true)
+    assert.deepEqual(components.map(component => component.enabled), [false, false, false, false, true])
+    assert.deepEqual(paused, new Set([root, child]))
+    assert.equal(gameClock.speed, speed)
+    particle.isValid = false
+    view.setPaused(false)
+    assert.deepEqual(components.map(component => component.enabled), [true, false, false, true, true])
+    assert.deepEqual(resumed, new Set([root, child]))
+    assert.equal(gameClock.speed, speed)
+    view.gameOver.active = true
+    view.setPaused(false)
+    assert.equal(reanim.enabled, false, 'a finished game cannot resume ordinary scene animation')
+    assert.equal(gameClock.speed, speed)
+})
 
 test('one clock scales fixed-tick gameplay across frame rates, live speed changes, and freezing', () => {
-    const definitions = parseGameplayDefinitionsV2(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/definitions.json', 'utf8')))
-    const levels = parseGameplayLevelsV2(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/levels.json', 'utf8')), definitions)
+    const definitions = parseGameplayDefinitions(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/definitions.json', 'utf8')))
+    const levels = parseGameplayLevels(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/levels.json', 'utf8')), definitions)
     for (const fps of [30, 60, 144]) {
         const clock = new GameClock()
         const game = new LocalIntegratedGame(definitions, levels)

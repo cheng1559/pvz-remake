@@ -9,7 +9,7 @@ npm install
 npm run preview:debug
 ```
 
-使用本机 Cocos CLI 和 Cocos 4.0.0-alpha.35。通过主菜单进入冒险 1-1；Escape 打开／关闭暂停菜单，其他页面按 Escape 返回。胜利或失败后按 R 重新开始。进入冒险时自动读取当前玩家的 v2 存档，游戏隐藏时保存。
+使用本机 Cocos CLI 和 Cocos 4.0.0-alpha.35。通过主菜单进入冒险 1-1；Escape 打开／关闭暂停菜单，其他页面按 Escape 返回。胜利或失败后按 R 重新开始。进入冒险时自动读取当前玩家的 存档，游戏隐藏时保存。
 
 ## 目录
 
@@ -18,7 +18,7 @@ npm run preview:debug
 - `assets/scripts/shared`、`ecs`：通信协议、资源格式、通道和 ECS。
 - `assets/scripts/client`：输入、渲染、音频、资源加载和 1-1 展示逻辑。
 - `assets/scripts/core`：新版展示层仍在使用的粒子、精灵工具。
-- `assets/bundles/pvz-base`：Content v2 资源和 1-1 预制体。
+- `assets/bundles/pvz-base`：Content 资源和 1-1 预制体。
 - `tools`：共用资源转换和 Mod 工具。
 
 界面背景、音频和粒子复用已有 resources 加载工具，游戏 Bundle 及存档资源指纹保持不变，不再回退到旧战斗流程。资源准备、检查和构建见[开发说明](docs/DEVELOPMENT.zh-CN.md)。源码采用 [MIT](LICENSE) 许可证，原版游戏资源的权利归各自所有者。

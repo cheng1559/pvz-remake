@@ -1,7 +1,7 @@
 import {
     CONTENT_CATEGORIES,
     type ContentCategory,
-    type ContentManifestV2,
+    type ContentManifest,
 } from '@/shared/content/index'
 
 export interface ResolvedContent<K extends ContentCategory = ContentCategory> {
@@ -24,7 +24,7 @@ export class ContentRegistry {
         for (const category of CONTENT_CATEGORIES) this.values.set(category, new Map())
     }
 
-    register(manifest: ContentManifestV2): void {
+    register(manifest: ContentManifest): void {
         if (this.frozen) throw new Error('content registry is frozen')
         if (this.contentIds.has(manifest.id)) throw new Error(`duplicate content manifest: ${manifest.id}`)
         for (const category of CONTENT_CATEGORIES) {

@@ -2,7 +2,7 @@ import { isQualifiedId } from '@/shared/mod/index'
 
 export type ReanimInterpolation = 'linear' | 'step'
 
-export interface ReanimKeyframeV2 {
+export interface ReanimKeyframe {
     timeSeconds: number
     x: number
     y: number
@@ -15,20 +15,20 @@ export interface ReanimKeyframeV2 {
     interpolation: ReanimInterpolation
 }
 
-export interface ReanimTrackV2 {
+export interface ReanimTrack {
     id: string
     zIndex: number
-    keyframes: ReanimKeyframeV2[]
+    keyframes: ReanimKeyframe[]
 }
 
-export interface ReanimV2 {
+export interface Reanim {
     schemaVersion: 2
     id: string
     durationSeconds: number
-    tracks: ReanimTrackV2[]
+    tracks: ReanimTrack[]
 }
 
-export function sampleReanimTrack(track: ReanimTrackV2, timeSeconds: number): ReanimKeyframeV2 | null {
+export function sampleReanimTrack(track: ReanimTrack, timeSeconds: number): ReanimKeyframe | null {
     const frames = track.keyframes
     if (timeSeconds < frames[0].timeSeconds) return null
 
@@ -55,10 +55,10 @@ export function sampleReanimTrack(track: ReanimTrackV2, timeSeconds: number): Re
 }
 
 export function attachReanimPose(
-    pose: ReanimKeyframeV2,
-    parentPose: ReanimKeyframeV2,
-    parentBasePose: ReanimKeyframeV2,
-): ReanimKeyframeV2 {
+    pose: ReanimKeyframe,
+    parentPose: ReanimKeyframe,
+    parentBasePose: ReanimKeyframe,
+): ReanimKeyframe {
     const baseInverse = invertMatrix(poseMatrix(parentBasePose))
     const attached = multiplyMatrix(
         multiplyMatrix(poseMatrix(parentPose), baseInverse),
@@ -83,7 +83,7 @@ export function attachReanimPose(
     }
 }
 
-export function parseReanimV2(value: unknown): ReanimV2 {
+export function parseReanim(value: unknown): Reanim {
     const source = exactObject(value, ['schemaVersion', 'id', 'durationSeconds', 'tracks'], 'reanim')
     if (source.schemaVersion !== 2) throw new Error('reanim.schemaVersion must be 2')
     if (!isQualifiedId(source.id)) throw new Error('reanim.id must be a qualified ID')
@@ -141,13 +141,13 @@ export function parseReanimV2(value: unknown): ReanimV2 {
                 alpha,
                 sprite: frame.sprite,
                 interpolation: frame.interpolation,
-            } as ReanimKeyframeV2
+            } as ReanimKeyframe
         })
 
         return { id, zIndex: record.zIndex as number, keyframes }
     })
 
-    return { schemaVersion: 2, id: source.id, durationSeconds, tracks } as ReanimV2
+    return { schemaVersion: 2, id: source.id, durationSeconds, tracks } as Reanim
 }
 
 function exactObject(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {
@@ -190,7 +190,7 @@ interface PoseMatrix {
     ty: number
 }
 
-function poseMatrix(pose: ReanimKeyframeV2): PoseMatrix {
+function poseMatrix(pose: ReanimKeyframe): PoseMatrix {
     const skewX = -pose.skewX * Math.PI / 180
     const skewY = -pose.skewY * Math.PI / 180
     return {

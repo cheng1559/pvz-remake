@@ -55,6 +55,13 @@ export interface AchievementView {
     total: number
     items: { id: number, icon: number, titleKey: string, descriptionKey: string, earned: boolean }[]
 }
+export interface AwardView {
+    seed: number
+    cost: number
+    name: string
+    nameKey: string
+    descriptionKey: string
+}
 
 export interface MenuEndpoints {
     getCurrentUser: { args: Record<string, never>, result: UserView | null }
@@ -70,6 +77,7 @@ export interface MenuEndpoints {
     getChallenges: { args: { page: ChallengePageId }, result: ChallengeView }
     getAlmanac: { args: Record<string, never>, result: AlmanacView }
     getAchievements: { args: Record<string, never>, result: AchievementView }
+    getAward: { args: Record<string, never>, result: AwardView }
 }
 export type MenuMethod = keyof MenuEndpoints
 export type MenuRequest = { [K in MenuMethod]: { method: K, args: MenuEndpoints[K]['args'] } }[MenuMethod]

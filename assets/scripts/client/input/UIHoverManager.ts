@@ -4,7 +4,7 @@ import { CursorManager } from './CursorManager'
 
 export interface UIHoverPointer { location: Vec2, windowId: number, canHover: boolean }
 export interface UIHoverClient {
-    cursor?: 'pointer' | 'text'
+    cursor?: 'pointer' | 'text' | 'grabbing'
     clearHover(): void
     refreshHover(pointer: UIHoverPointer, modalRoot: Node | null): boolean
 }
@@ -100,7 +100,7 @@ export class UIHoverManager {
         if (this.isInputBlocked || !this.pointer) { this.clearHoverStates(); return }
         let cursor = 'default'
         for (const client of this.clients) {
-            if (client.refreshHover(this.pointer, this.activeModalRoot)) cursor = client.cursor ?? 'pointer'
+            if (client.refreshHover(this.pointer, this.activeModalRoot) && cursor !== 'grabbing') cursor = client.cursor ?? 'pointer'
         }
         this.hasHover = cursor !== 'default'
         CursorManager.set(cursor)

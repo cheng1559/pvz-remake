@@ -9,7 +9,7 @@ test('repeated entity additions keep restore waiting for the original animation 
     // Exercise the renderer's task scheduling without initializing the Cocos runtime.
     const module = { exports: {} as Record<string, any> }
     const compiled = transpileModule(
-        readFileSync('assets/scripts/client/showcase/Adventure11EntityRenderer.ts', 'utf8'),
+        readFileSync('assets/scripts/client/level/LevelEntityRenderer.ts', 'utf8'),
         { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } },
     )
     runInNewContext(compiled.outputText, {
@@ -17,7 +17,7 @@ test('repeated entity additions keep restore waiting for the original animation 
         require: () => ({}),
         console,
     })
-    const renderer = new module.exports.Adventure11EntityRenderer(
+    const renderer = new module.exports.LevelEntityRenderer(
         0, { loadedMods: { plantUpgrades: [] } }, {}, {}, { children: [] },
     )
     let release!: () => void

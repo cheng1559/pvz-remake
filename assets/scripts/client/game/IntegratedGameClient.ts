@@ -9,10 +9,11 @@ import type {
 } from '@/shared/protocol/index'
 import { ClientWorld, type ClientWorldChanges } from './ClientWorld'
 import {
-    parseClientPresentationSnapshotV2,
-    type ClientPresentationSnapshotV2,
+    parseClientPresentationSnapshot,
+    type ClientPresentationSnapshot,
 } from './ClientPresentationSnapshot'
-import type { Adventure11PresentationSnapshotV2 } from '@/client/showcase/Adventure11PresentationSnapshotV2'
+import type { LevelPresentationSnapshot } from '@/client/level/LevelPresentationSnapshot'
+import type { DebugCliResult } from '@/shared/debug/DebugCli'
 
 export class IntegratedGameClient {
     readonly world = new ClientWorld()
@@ -23,6 +24,7 @@ export class IntegratedGameClient {
     lastRejection?: { sequence: number, code: string }
     lastSave?: JsonValue
     lastSaveSequence?: number
+    lastDebugResult?: { sequence: number, result: DebugCliResult }
 
     constructor(private readonly channel: Pick<LocalGameChannel, 'sendToServer' | 'drainClientPackets'>) {}
 
@@ -50,12 +52,18 @@ export class IntegratedGameClient {
         return sequence
     }
 
-    snapshot(adventure11: Adventure11PresentationSnapshotV2): ClientPresentationSnapshotV2 {
+    debugCommand(command: string): number {
+        const sequence = ++this.sequence
+        this.channel.sendToServer({ protocolVersion: 1, sequence, type: 'debugCommand', command, args: null })
+        return sequence
+    }
+
+    snapshot(level: LevelPresentationSnapshot): ClientPresentationSnapshot {
         const current = this.world.current
         if (!current) throw new Error('Cannot snapshot client presentation before the session starts')
-        return parseClientPresentationSnapshotV2({
+        return parseClientPresentationSnapshot({
             schemaVersion: 2,
-            adventure11,
+            level,
             transport: {
                 sequence: this.sequence,
                 highestEventId: this.highestEventId,
@@ -65,8 +73,8 @@ export class IntegratedGameClient {
         })
     }
 
-    restore(value: unknown): Adventure11PresentationSnapshotV2 {
-        const snapshot = parseClientPresentationSnapshotV2(value)
+    restore(value: unknown): LevelPresentationSnapshot {
+        const snapshot = parseClientPresentationSnapshot(value)
         this.sequence = snapshot.transport.sequence
         this.highestEventId = snapshot.transport.highestEventId
         this.changes = this.world.restore(snapshot.transport.previous, snapshot.transport.current)
@@ -74,7 +82,8 @@ export class IntegratedGameClient {
         this.lastRejection = undefined
         this.lastSave = undefined
         this.lastSaveSequence = undefined
-        return snapshot.adventure11
+        this.lastDebugResult = undefined
+        return snapshot.level
     }
 
     update(): void {
@@ -120,6 +129,9 @@ export class IntegratedGameClient {
             }
             case 'commandRejected':
                 this.lastRejection = { sequence: packet.sequence, code: packet.code }
+                return
+            case 'debugResult':
+                this.lastDebugResult = { sequence: packet.sequence, result: packet.result }
                 return
             case 'saveReady':
                 this.lastSave = packet.save

@@ -18,7 +18,7 @@ import type {
 } from './gameplay'
 import type { Item, TutorialState, WaveState } from './levelOne'
 
-export interface SavedEntityV2 {
+export interface SavedEntity {
     entityId: EntityId
     position?: Position
     lawnMower?: LawnMower
@@ -29,7 +29,7 @@ export interface SavedEntityV2 {
     item?: Item
 }
 
-export interface ServerSaveSnapshotV2 {
+export interface ServerSaveSnapshot {
     schemaVersion: 2
     levelId: string
     mods: EnabledMod[]
@@ -43,10 +43,10 @@ export interface ServerSaveSnapshotV2 {
     tutorial: TutorialState
     wave: WaveState
     eventQueue: EventQueue
-    entities: SavedEntityV2[]
+    entities: SavedEntity[]
 }
 
-export function parseServerSaveSnapshotV2(value: unknown): ServerSaveSnapshotV2 {
+export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     assertJsonValue(value)
     const save = exact(value, [
         'schemaVersion', 'levelId', 'mods', 'tick', 'gameplayTick', 'allocator', 'random', 'level', 'economy',
@@ -231,14 +231,14 @@ function parseEventQueue(value: unknown): EventQueue {
     return { nextEventId, events }
 }
 
-function parseEntity(value: unknown, index: number, nextEntity: number): SavedEntityV2 {
+function parseEntity(value: unknown, index: number, nextEntity: number): SavedEntity {
     const name = `server save.entities[${index}]`
     const source = optionalExact(value, ['entityId', 'position'], [
         'lawnMower', 'plant', 'plantAttack', 'zombie', 'projectile', 'item',
     ], name)
     const entityId = positiveInteger(source.entityId, `${name}.entityId`)
     if (entityId >= nextEntity) throw new TypeError(`${name}.entityId must be below allocator.nextEntity`)
-    const entity: SavedEntityV2 = {
+    const entity: SavedEntity = {
         entityId,
         position: parsePosition(source.position, `${name}.position`),
     }

@@ -5,9 +5,9 @@ import {
     type World,
 } from '@/ecs/index'
 import type {
-    BoardDefinitionV2,
-    GameplayDefinitionsV2,
-    LevelDefinitionV2,
+    BoardDefinition,
+    GameplayDefinitions,
+    LevelDefinition,
 } from '@/shared/content/gameplay'
 import type { DeterministicRng } from './DeterministicRng'
 import { EventQueueResource, emitServerEvent } from './events'
@@ -76,8 +76,8 @@ export interface EconomyState {
 
 export interface LevelState {
     id: string
-    definition: LevelDefinitionV2
-    board: BoardDefinitionV2
+    definition: LevelDefinition
+    board: BoardDefinition
     phase: 'intro' | 'gameplay'
     result: 'playing' | 'won' | 'lost'
     paused: boolean
@@ -111,10 +111,12 @@ const ZOMBIE_DEATH_FRAME_SPAN = 38
 const ZOMBIE_DEATH2_FRAME_SPAN = 32
 const ZOMBIE_DEATH_FALL_TIME = 0.77
 const ZOMBIE_DEATH2_FALL_TIME = 0.71
-const ZOMBIE_DEATH_HOLD_TICKS = 40
+const ZOMBIE_DEATH_HOLD_TICKS = 100
 const ZOMBIE_MOWERED_FRAME_SPAN = 7
-const ZOMBIE_MOWERED_TICKS = 50
+// The original 8 fps driver advances in both EffectSystem and Zombie.UpdateReanim.
 const ZOMBIE_MOWERED_ANIMATION_SPEED = 16 / ZOMBIE_ASSET_FPS
+const ZOMBIE_MOWERED_TICKS = Math.ceil((ZOMBIE_MOWERED_FRAME_SPAN + 1) /
+    (ZOMBIE_MOWERED_ANIMATION_SPEED * ZOMBIE_ASSET_FPS) * TICKS_PER_SECOND)
 const ZOMBIE_WALK_GROUND_X = [
     -9.8, -8.4, -7.0, -5.6, -4.1, -2.7, -1.3, 0.0, 1.4, 2.8, 4.2, 5.7,
     7.1, 7.9, 8.8, 9.7, 10.5, 10.6, 10.8, 10.9, 11.0, 11.0, 11.0, 11.0,
@@ -124,12 +126,12 @@ const ZOMBIE_WALK_GROUND_X = [
 const ZOMBIE_WALK_FRAME_SPAN = ZOMBIE_WALK_GROUND_X.length - 1
 const ZOMBIE_WALK_DISTANCE = ZOMBIE_WALK_GROUND_X.at(-1)! - ZOMBIE_WALK_GROUND_X[0]
 
-export function createPeashooterSystem(definitions: GameplayDefinitionsV2): GameSystem {
+export function createPeashooterSystem(definitions: GameplayDefinitions): GameSystem {
     return {
         id: 'pvz:peashooter',
         run({ world, commands, tick }) {
             const level = world.resources.get(LevelStateResource)
-            if (level.result !== 'playing' || level.paused) return
+            if (level.result === 'lost' || level.paused) return
             for (const entity of world.query(PositionComponent, PlantComponent, PlantAttackComponent)) {
                 const position = world.get(entity, PositionComponent)!
                 const plant = world.get(entity, PlantComponent)!
@@ -169,7 +171,7 @@ export function createPeashooterSystem(definitions: GameplayDefinitionsV2): Game
                 }
                 if (tick < attack.readyAtTick) continue
 
-                // ponytail: v2 uses fixed timing; add range fields when original cadence jitter is migrated.
+                // ponytail: uses fixed timing; add range fields when original cadence jitter is migrated.
                 attack.readyAtTick = tick + shooter.cadenceTicks
                 if (!hasTargetAhead(world, definitions, position, plant)) continue
                 attack.fireAtTick = tick + shooter.windupTicks - 1
@@ -182,12 +184,12 @@ export function createPeashooterSystem(definitions: GameplayDefinitionsV2): Game
     }
 }
 
-export function createProjectileSystem(definitions: GameplayDefinitionsV2): GameSystem {
+export function createProjectileSystem(definitions: GameplayDefinitions): GameSystem {
     return {
         id: 'pvz:projectile',
         run({ world, commands }) {
             const level = world.resources.get(LevelStateResource)
-            if (level.result !== 'playing' || level.paused) return
+            if (level.result === 'lost' || level.paused) return
             for (const entity of world.query(PositionComponent, ProjectileComponent)) {
                 const position = world.get(entity, PositionComponent)!
                 const projectile = world.get(entity, ProjectileComponent)!
@@ -219,12 +221,12 @@ export function createProjectileSystem(definitions: GameplayDefinitionsV2): Game
     }
 }
 
-export function createZombieSystem(definitions: GameplayDefinitionsV2): GameSystem {
+export function createZombieSystem(definitions: GameplayDefinitions): GameSystem {
     return {
         id: 'pvz:zombie-lifecycle',
         run({ world, commands }) {
             const level = world.resources.get(LevelStateResource)
-            if (level.result !== 'playing' || level.paused) return
+            if (level.result === 'lost' || level.paused) return
 
             for (const entity of world.query(PlantComponent)) {
                 const plant = world.get(entity, PlantComponent)!
@@ -258,7 +260,8 @@ export function createZombieSystem(definitions: GameplayDefinitionsV2): GameSyst
                     const previousAnimationTime = zombie.animationTime
                     zombie.animationTime = Math.min(
                         deathFrameSpan(zombie.animation),
-                        zombie.animationTime + zombie.animationSpeed * ZOMBIE_ASSET_FPS / TICKS_PER_SECOND,
+                        zombie.animationTime + deathFrameSpan(zombie.animation) * zombie.animationSpeed * ZOMBIE_ASSET_FPS /
+                            ((deathFrameSpan(zombie.animation) + 1) * TICKS_PER_SECOND),
                     )
                     const fallTime = deathFrameSpan(zombie.animation) *
                         (zombie.animation === 'anim_death2' ? ZOMBIE_DEATH2_FALL_TIME : ZOMBIE_DEATH_FALL_TIME)
@@ -324,11 +327,17 @@ export function createZombieSystem(definitions: GameplayDefinitionsV2): GameSyst
                         zombie.biteTicks = 0
                         const plant = world.get(target, PlantComponent)!
                         plant.health = Math.max(0, plant.health - definition.bite.damage)
-                        if (plant.health === 0) commands.destroyEntity(target)
+                        if (plant.health === 0) {
+                            emitServerEvent(world.resources.get(EventQueueResource), 'plantEaten', {
+                                zombieId: entity,
+                                plantId: target,
+                            })
+                            commands.destroyEntity(target)
+                        }
                     }
                 }
 
-                if (position.x <= BOARD_EDGE) {
+                if (level.result === 'playing' && position.x <= BOARD_EDGE) {
                     level.result = 'lost'
                     emitServerEvent(world.resources.get(EventQueueResource), 'levelLost', {
                         zombieId: entity,
@@ -342,7 +351,7 @@ export function createZombieSystem(definitions: GameplayDefinitionsV2): GameSyst
 
 export function spawnZombie(
     world: World,
-    definitions: GameplayDefinitionsV2,
+    definitions: GameplayDefinitions,
     typeId: string,
     row: number,
     x: number,
@@ -417,7 +426,7 @@ function startZombieDeath(world: World, entity: number, zombie: Zombie): void {
     zombie.animationTime = 0
     const rate = ZOMBIE_DEATH_RATE_MIN + random.nextFloat() * (ZOMBIE_DEATH_RATE_MAX - ZOMBIE_DEATH_RATE_MIN)
     zombie.animationSpeed = rate / ZOMBIE_ASSET_FPS
-    zombie.deathTicksRemaining = Math.ceil(deathFrameSpan(zombie.animation) / rate * TICKS_PER_SECOND) + ZOMBIE_DEATH_HOLD_TICKS
+    zombie.deathTicksRemaining = Math.ceil((deathFrameSpan(zombie.animation) + 1) / rate * TICKS_PER_SECOND) + ZOMBIE_DEATH_HOLD_TICKS
 }
 
 function updateHeadlessZombie(world: World, entity: number, zombie: Zombie): void {
@@ -453,7 +462,7 @@ function deathFrameSpan(animation: Zombie['animation']): number {
 
 function findPlantTarget(
     world: World,
-    definitions: GameplayDefinitionsV2,
+    definitions: GameplayDefinitions,
     zombiePosition: Position,
     attack: { x: number, y: number, width: number, height: number },
 ): number | undefined {
@@ -463,6 +472,7 @@ function findPlantTarget(
         const position = world.get(entity, PositionComponent)!
         if (position.row !== zombiePosition.row) continue
         const plant = world.get(entity, PlantComponent)!
+        if (plant.health <= 0) continue
         const body = definitions.plants[plant.typeId].body
         const overlap = Math.min(
             zombiePosition.x + attack.x + attack.width,
@@ -479,7 +489,7 @@ function findPlantTarget(
 
 function hasTargetAhead(
     world: World,
-    definitions: GameplayDefinitionsV2,
+    definitions: GameplayDefinitions,
     plantPosition: Position,
     plant: Plant,
 ): boolean {
@@ -497,7 +507,7 @@ function hasTargetAhead(
 
 function findProjectileTarget(
     world: World,
-    definitions: GameplayDefinitionsV2,
+    definitions: GameplayDefinitions,
     projectilePosition: Position,
     hitbox: { x: number, y: number, width: number, height: number },
 ): number | undefined {

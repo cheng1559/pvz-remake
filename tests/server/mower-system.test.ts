@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { Schedule, World } from '@/ecs/index'
-import { parseGameplayDefinitionsV2 } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions } from '@/shared/content/gameplay'
 import {
     LawnMowerComponent,
     LevelStateResource,
@@ -16,7 +16,7 @@ import { createMowerSystem } from '@/server/mower'
 import { EventQueueResource, createEventQueue } from '@/server/events'
 import { DeterministicRng } from '@/server/DeterministicRng'
 
-const definitions = parseGameplayDefinitionsV2(JSON.parse(
+const definitions = parseGameplayDefinitions(JSON.parse(
     readFileSync('tools/content/pvz-base/gameplay/definitions.json', 'utf8'),
 ))
 const board = definitions.boards['pvz:day']
@@ -59,6 +59,8 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
     schedule.run(world, 3)
     assert.equal(world.hasEntity(zombie), true)
     assert.equal(world.get(zombie, ZombieComponent)!.state, 'mowered')
+    assert.equal(world.get(zombie, ZombieComponent)!.animationSpeed, 16 / 12)
+    assert.equal(world.get(zombie, ZombieComponent)!.moweredTicksRemaining, 50)
     assert.equal(world.get(mowerEntity, LawnMowerComponent)!.state, 'active')
     assert.equal(world.get(mowerEntity, LawnMowerComponent)!.chompCounter, 24)
     assert.equal(world.get(mowerEntity, PositionComponent)!.x, -19.996272)
@@ -81,7 +83,9 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
     )
 
     assert.equal(world.get(mowerEntity, LawnMowerComponent)!.chompCounter, 49)
-    for (let tick = 5; tick <= 52; tick++) schedule.run(world, tick)
+    for (let tick = 5; tick <= 28; tick++) schedule.run(world, tick)
+    assert.ok(Math.abs(world.get(zombie, ZombieComponent)!.animationTime - 3.5) < 1e-9)
+    for (let tick = 29; tick <= 52; tick++) schedule.run(world, tick)
     assert.equal(world.hasEntity(zombie), true)
     schedule.run(world, 53)
     assert.equal(world.hasEntity(zombie), false)
@@ -95,6 +99,7 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
         [['head', true], ['arm', true]],
     )
 
+    world.resources.get(LevelStateResource).result = 'won'
     world.get(mowerEntity, PositionComponent)!.x = 799
     schedule.run(world, 55)
     assert.equal((world.get(mowerEntity, LawnMowerComponent) as { state: string }).state, 'spent')

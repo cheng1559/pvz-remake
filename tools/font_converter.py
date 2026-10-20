@@ -679,7 +679,7 @@ def convert_font(input_path: Path, output_dir: Path):
     print(f"[font] Wrote: {json_path}")
 
 
-def write_font_v2(input_path: Path, output_dir: Path, content_id: str) -> list[Path]:
+def write_font(input_path: Path, output_dir: Path, content_id: str) -> list[Path]:
     parser, font_data = _build_font(input_path)
     font_data = {"schemaVersion": 2, "id": content_id, **font_data}
     output_dir.mkdir(parents=True, exist_ok=True)

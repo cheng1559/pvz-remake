@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import { MENU_PAGES, type MenuAction, type MenuPageId } from '@/client/screens/MenuPages'
 import { gameClock } from '@/core/GameClock'
+import type { DebugCliResult } from '@/shared/debug/DebugCli'
 
 test('every menu page is reachable and all navigation targets exist', () => {
     const reached = new Set<MenuPageId>()
@@ -19,7 +20,7 @@ test('every menu page is reachable and all navigation targets exist', () => {
         const actions: MenuAction[] = page.buttons.map(button => button.target)
         if (page.back) actions.push(page.back)
         for (const action of actions) {
-            if (action === 'play' || action === 'restart') pending.push('pause', 'award', 'gameOver')
+            if (action === 'play' || action === 'restart') pending.push('pause', 'gameOptions', 'award', 'gameOver')
             else if (action !== 'back' && action !== 'resume') {
                 assert.ok(MENU_PAGES[action], `invalid target ${action} from ${id}`)
                 pending.push(action)
@@ -31,6 +32,12 @@ test('every menu page is reachable and all navigation targets exist', () => {
 
 test('menu navigation preserves caller, pauses gameplay, and resumes without restarting', async () => {
     const errors: unknown[][] = []
+    let dialogKeys = 0
+    let restoreOnPlay = false
+    let prompts = 0
+    let chooseContinue!: (action: 'continue' | 'restart' | 'cancel') => void
+    let closeCli!: (result: DebugCliResult | null) => void
+    const sounds: string[] = []
     const module = { exports: {} as Record<string, any> }
     const compiled = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
@@ -39,10 +46,22 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         cc: {
             Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
             KeyCode: { ENTER: 13, SPACE: 32, ESCAPE: 27, KEY_R: 82 },
+            game: { restart() { assert.fail('CLI reload must retain loaded assets') } },
         },
+        'cc/env': { DEBUG: true },
+        '@/core/GameClock': { gameClock },
+        '@/client/screens/DebugCliDialog': { showDebugCliDialog: () => new Promise(resolve => { closeCli = resolve }) },
         '@/client/screens/MenuPages': { MENU_PAGES },
-        '@/client/ui/UIDialog': { UIDialog: { handleKey: () => false } },
+        '@/client/ui/UIDialog': { UIDialog: { handleKey: () => { dialogKeys++; return false } } },
         '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1 }) } },
+        '@/client/ui/UI': { UI: { load: async () => ({}) } },
+        '@/client/screens/ContinueGameDialog': {
+            showContinueGameDialog: () => {
+                prompts++
+                return new Promise(resolve => { chooseContinue = resolve })
+            },
+        },
+        '@/client/sound/LegacySoundSystem': { SoundEffect: { Pause: 'pause' }, SoundLoader: { play: async (sound: string) => { sounds.push(sound) } } },
     }
     runInNewContext(compiled.outputText, {
         exports: module.exports, require: (id: string) => modules[id] ?? {},
@@ -51,30 +70,39 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     const app = new module.exports.GameApp()
     let running = false
     let paused = false
+    let introReady = true
+    let saves = 0
     const freshGames: boolean[] = []
+    const commits: string[] = []
     app.node = { isValid: true }
     app.controller = {
-        async play(options: { forceNewGame: boolean }) { freshGames.push(options.forceNewGame); running = true },
+        async play(options: { forceNewGame: boolean, onRestore?: () => void }) {
+            freshGames.push(options.forceNewGame)
+            running = true
+            if (restoreOnPlay && !options.forceNewGame) { paused = true; options.onRestore?.() }
+        },
         resume() { paused = false },
         pause() { if (running) paused = true },
         isRunning: () => running,
-        hide() { running = false },
+        isPaused: () => paused,
+        canPause: () => running && introReady && !paused,
+        debugCommand: () => ({ ok: true, catalog: { plants: [], zombies: [], items: [], levels: ['1-1'] } }),
+        hide() { commits.push('hide-game'); running = false },
         deleteSave() {},
-        async saveIfRunning() { return null },
+        async saveIfRunning() { saves++; return null },
     }
     let prepare = async (id: MenuPageId) => id
     let shown: MenuPageId | null = null
     app.menu = {
         node: { active: false },
         prepare: (id: MenuPageId) => prepare(id),
-        async show(id: MenuPageId) { shown = id },
+        async show(id: MenuPageId) { commits.push(`show-${id}`); shown = id },
         hide() { this.node.active = false },
     }
     app.transitions = {
         async run(prepare: () => Promise<() => Promise<void>>) { await (await prepare())() },
     }
     app.gameLayer = { active: false }
-    app.gameControls = { active: false }
 
     for (const action of ['splash', 'title', 'main', 'garden', 'mushroom', 'store', 'back']) {
         await app.navigate(action)
@@ -118,19 +146,50 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     await app.navigate('play')
     assert.equal(app.currentPage, null)
     assert.equal(app.menu.node.active, false)
-    await app.navigate('pause')
+    const cli = app.showDebugCli()
+    await setImmediate()
+    assert.equal(paused, true)
+    assert.equal(gameClock.delta(1), 0)
+    gameClock.setSpeed(2)
+    closeCli(null)
+    await cli
+    assert.equal(paused, false)
+    assert.equal(gameClock.delta(1), 2, 'closing the CLI keeps the newly selected speed')
+    gameClock.setSpeed(1)
+    introReady = false
+    app.onKeyDown({ keyCode: 32 })
+    await setImmediate()
+    assert.equal(paused, false, 'pause is unavailable during the entrance')
+    app.onKeyUp({ keyCode: 32 })
+    introReady = true
+    const beforeSave = saves
+    app.onKeyDown({ keyCode: 32 })
+    await setImmediate()
+    assert.equal(app.currentPage, 'pause')
+    assert.equal(saves, beforeSave + 1, 'the pause shortcut saves the current game')
     assert.equal(paused, true)
     assert.equal(app.gameLayer.active, true)
+    const beforeRepeat = dialogKeys
+    app.onKeyDown({ keyCode: 32 })
+    assert.equal(dialogKeys, beforeRepeat, 'holding Space cannot immediately dismiss the pause dialog')
+    app.onKeyUp({ keyCode: 32 })
+    assert.equal(sounds.at(-1), 'pause')
     await app.navigate('gameOptions')
     await app.navigate('pause')
     await app.navigate('resume')
     assert.equal(paused, false)
+    prepare = async () => { throw new Error('missing game menu') }
+    await app.navigate('gameOptions')
+    assert.equal(paused, false, 'a failed menu load restores the running game')
+    assert.equal(app.currentPage, null)
+    prepare = async id => id
     assert.deepEqual(freshGames, [false])
     await app.navigate('main')
     assert.equal(paused, true)
     assert.equal(app.gameLayer.active, false)
     assert.equal(app.menu.node.active, true)
     assert.equal(running, false, 'returning to the main menu disposes the saved board')
+    assert.deepEqual(commits.slice(-2), ['hide-game', 'show-main'], 'old battle audio must stop before the new menu starts its music')
     await app.finish('award')
     assert.equal(app.currentPage, 'award')
     assert.equal(running, false)
@@ -138,12 +197,109 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     await setImmediate()
     assert.equal(running, true)
     assert.deepEqual(freshGames, [false, true])
+    assert.equal(prompts, 0, 'fresh levels and explicit restarts skip the save prompt')
+    for (const action of ['continue', 'restart', 'cancel'] as const) {
+        await app.navigate('main')
+        restoreOnPlay = true
+        const loaded = app.navigate('play')
+        await setImmediate()
+        assert.equal(paused, true, 'the restored board waits for the user decision')
+        assert.equal(app.loading, false, 'dialog keyboard input must remain available')
+        assert.equal(app.gameLayer.active, true)
+        const beforeKeys = dialogKeys
+        app.onKeyDown({ keyCode: 13 })
+        assert.equal(dialogKeys, beforeKeys + 1)
+        chooseContinue(action)
+        await loaded
+        if (action === 'cancel') {
+            assert.equal(app.currentPage, 'main')
+            assert.equal(running, false)
+        } else {
+            assert.equal(app.currentPage, null)
+            assert.equal(paused, false)
+            assert.equal(freshGames.at(-1), action === 'restart')
+        }
+    }
+    assert.equal(prompts, 3)
+    restoreOnPlay = false
+    let clearedAdvice = 0
+    app.advice = { clear() { clearedAdvice++ } }
+    for (const source of ['play', 'main']) {
+        await app.navigate(source)
+        const savesBeforeReload = saves
+        const reload = app.showDebugCli()
+        await setImmediate()
+        closeCli({ ok: true, message: 'Reloading game', action: 'reload' })
+        await reload
+        assert.equal(saves, savesBeforeReload + 1, 'reload saves before disposing the current board')
+        assert.equal(running, false)
+        assert.equal(app.gameLayer.active, false)
+        assert.equal(app.currentPage, 'splash')
+        assert.equal(shown, 'splash')
+        assert.equal(app.history.length, 0)
+    }
+    assert.equal(clearedAdvice, 2, 'reload clears transient advice from the previous UI')
+    await app.navigate('play')
+    await app.finish('gameOver')
+    assert.equal(running, true, 'the failure dialog keeps the real board mounted')
+    assert.equal(app.gameLayer.active, true)
+    assert.equal(paused, true)
+    await app.navigate('restart')
+    assert.equal(paused, false)
+    assert.equal(freshGames.at(-1), true)
+})
+
+test('saved-game prompt offers continue/restart/cancel and confirms a restart before closing', async () => {
+    const module = { exports: {} as Record<string, any> }
+    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/ContinueGameDialog.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+    })
+    runInNewContext(compiled.outputText, { exports: module.exports })
+    const dialogs: Array<{ dialog: any, options: any }> = []
+    const ui = {
+        text: (key: string) => key,
+        dialog(_parent: unknown, options: any) {
+            let resolve!: (confirmed: boolean) => void
+            const dialog = {
+                node: { isValid: true },
+                result: new Promise<boolean>(done => { resolve = done }),
+                close(confirmed: boolean) { this.node.isValid = false; resolve(confirmed) },
+                onConfirm() { this.close(true) }, onCancel() { this.close(false) },
+            }
+            dialogs.push({ dialog, options })
+            return dialog
+        },
+    }
+    for (const action of ['continue', 'cancel', 'restart', 'rejectRestart'] as const) {
+        dialogs.length = 0
+        const result = module.exports.showContinueGameDialog({}, ui)
+        const prompt = dialogs[0]
+        assert.deepEqual(Array.from(prompt.options.buttons, (button: any) => button.text),
+            ['CONTINUE_BUTTON', 'RESTART_LEVEL_BUTTON', 'DIALOG_BUTTON_CANCEL'])
+        assert.equal(prompt.options.clickSound, null)
+        if (action === 'continue') prompt.dialog.onConfirm()
+        else if (action === 'cancel') prompt.dialog.onCancel()
+        else {
+            prompt.options.buttons[1].onClick(prompt.dialog)
+            const confirm = dialogs[1]
+            assert.equal(confirm.options.title, 'RESTART_LEVEL_HEADER')
+            if (action === 'restart') confirm.dialog.onConfirm()
+            else {
+                confirm.dialog.onCancel()
+                await setImmediate()
+                assert.equal(prompt.dialog.node.isValid, true, 'rejecting restart keeps the saved-game prompt open')
+                prompt.dialog.onConfirm()
+            }
+        }
+        assert.equal(await result, action === 'rejectRestart' ? 'continue' : action)
+    }
 })
 
 test('modal pages retain their caller, full pages destroy it, and gameplay releases menu nodes', async () => {
     const music: string[] = []
     const navigation: string[] = []
     let quitOptions: any
+    let gameOptions: any
     let quits = 0
     const module = { exports: {} as Record<string, any> }
     const compiled = transpileModule(readFileSync('assets/scripts/client/screens/MenuScreen.ts', 'utf8'), {
@@ -156,6 +312,7 @@ test('modal pages retain their caller, full pages destroy it, and gameplay relea
             UIHoverManager: { beginModalBlock() {}, endModalBlock() {} },
             MENU_PAGES, MusicSystem: { playTune: async (tune: string) => { music.push(tune) } },
             game: { end() { quits++ } },
+            showOptionsDialog: async (_parent: unknown, _ui: unknown, options: unknown) => { gameOptions = options },
             UI: { load: async () => ({
                 text: (key: string) => key,
                 dialog: (_parent: unknown, options: unknown) => { quitOptions = options },
@@ -186,6 +343,20 @@ test('modal pages retain their caller, full pages destroy it, and gameplay relea
         await screen.show(main)
         assert.equal(main.root.isValid, true)
     }
+    const pause = await screen.prepare('pause')
+    assert.deepEqual([quitOptions.title, quitOptions.message, quitOptions.confirmText], ['GAME_PAUSED', 'CLICK_TO_RESUME', 'RESUME_GAME'])
+    assert.equal(quitOptions.spaceAfterHeader, 155)
+    assert.equal(quitOptions.clickSound, null)
+    quitOptions.onClose(true)
+    assert.equal(navigation.at(-1), 'resume')
+    pause.root.destroy()
+    const options = await screen.prepare('gameOptions')
+    assert.equal(gameOptions.inGame, true)
+    gameOptions.onClose()
+    gameOptions.onRestart()
+    gameOptions.onMainMenu()
+    assert.deepEqual(navigation.slice(-3), ['resume', 'restart', 'main'])
+    options.root.destroy()
     for (const id of ['options', 'players', 'quit', 'almanac', 'store', 'achievements'] as const) {
         const modal = page(id)
         await screen.show(modal)

@@ -5,26 +5,31 @@ import {
     type WorldSnapshot,
 } from '@/shared/protocol/index'
 import {
-    parseAdventure11PresentationSnapshotV2,
-    type Adventure11PresentationSnapshotV2,
-} from '@/client/showcase/Adventure11PresentationSnapshotV2'
+    parseLevelPresentationSnapshot,
+    type LevelPresentationSnapshot,
+} from '@/client/level/LevelPresentationSnapshot'
 
-export interface ClientTransportSnapshotV2 {
+export interface ClientTransportSnapshot {
     sequence: number
     highestEventId: number
     previous: WorldSnapshot | null
     current: WorldSnapshot
 }
 
-export interface ClientPresentationSnapshotV2 {
+export interface ClientPresentationSnapshot {
     schemaVersion: 2
-    transport: ClientTransportSnapshotV2
-    adventure11: Adventure11PresentationSnapshotV2
+    transport: ClientTransportSnapshot
+    level: LevelPresentationSnapshot
 }
 
-export function parseClientPresentationSnapshotV2(value: unknown): ClientPresentationSnapshotV2 {
+export function parseClientPresentationSnapshot(value: unknown): ClientPresentationSnapshot {
     assertJsonValue(value)
-    const save = exact(value, ['schemaVersion', 'transport', 'adventure11'], 'client presentation')
+    // Read existing  saves, but always return the reusable level representation.
+    if (typeof value === 'object' && value !== null && 'adventure11' in value && !('level' in value)) {
+        const { adventure11, ...rest } = value as Record<string, unknown>
+        value = { ...rest, level: adventure11 }
+    }
+    const save = exact(value, ['schemaVersion', 'transport', 'level'], 'client presentation')
     if (save.schemaVersion !== 2) throw new TypeError('client presentation.schemaVersion must be 2')
     const source = exact(
         save.transport,
@@ -41,12 +46,12 @@ export function parseClientPresentationSnapshotV2(value: unknown): ClientPresent
     if (previous && previous.tick >= current.tick) {
         throw new TypeError('client presentation previous tick must be below current tick')
     }
-    const adventure11 = parseAdventure11PresentationSnapshotV2(save.adventure11)
-    validateAdventure11(adventure11, current)
+    const level = parseLevelPresentationSnapshot(save.level)
+    validateLevel(level, current)
 
     return {
         schemaVersion: 2,
-        adventure11,
+        level,
         transport: {
             sequence: nonNegativeInteger(source.sequence, 'client presentation.transport.sequence'),
             highestEventId: nonNegativeInteger(
@@ -59,32 +64,29 @@ export function parseClientPresentationSnapshotV2(value: unknown): ClientPresent
     }
 }
 
-function validateAdventure11(snapshot: Adventure11PresentationSnapshotV2, current: WorldSnapshot): void {
-    if (current.levelId !== 'pvz:adventure-1-1') {
-        throw new TypeError('client presentation.adventure11 requires pvz:adventure-1-1')
-    }
+function validateLevel(snapshot: LevelPresentationSnapshot, current: WorldSnapshot): void {
     if (snapshot.flow.introCompletionSent !== (current.phase === 'gameplay')) {
-        throw new TypeError('client presentation Adventure 1-1 intro flow does not match the current phase')
+        throw new TypeError('client presentation Level intro flow does not match the current phase')
     }
     if ((snapshot.end.ticks >= 0) !== (current.result === 'won')) {
-        throw new TypeError('client presentation Adventure 1-1 end flow does not match the current result')
+        throw new TypeError('client presentation Level end flow does not match the current result')
     }
     if (snapshot.advice.lastSyncedTick !== current.gameplayTick ||
         snapshot.hud.progressTick !== current.gameplayTick) {
-        throw new TypeError('client presentation Adventure 1-1 presenter ticks must match the current tick')
+        throw new TypeError('client presentation Level presenter ticks must match the current tick')
     }
     if (snapshot.hud.progressWave !== current.wave.index) {
-        throw new TypeError('client presentation Adventure 1-1 progress wave must match the current wave')
+        throw new TypeError('client presentation Level progress wave must match the current wave')
     }
 
-    const kinds = new Map<number, Adventure11PresentationSnapshotV2['entities'][number]['kind']>()
+    const kinds = new Map<number, LevelPresentationSnapshot['entities'][number]['kind']>()
     for (const plant of current.plants) kinds.set(plant.entityId, 'plant')
     for (const zombie of current.zombies) kinds.set(zombie.entityId, 'zombie')
     for (const mower of current.lawnMowers) kinds.set(mower.entityId, 'mower')
     for (const item of current.items) if (item.typeId === 'pvz:sun') kinds.set(item.entityId, 'sun')
     for (const entity of snapshot.entities) {
         if (kinds.get(entity.entityId) !== entity.kind) {
-            throw new TypeError(`client presentation Adventure 1-1 ${entity.kind} ${entity.entityId} is not in the current frame`)
+            throw new TypeError(`client presentation Level ${entity.kind} ${entity.entityId} is not in the current frame`)
         }
     }
 
@@ -94,7 +96,7 @@ function validateAdventure11(snapshot: Adventure11PresentationSnapshotV2, curren
     ].map(entity => entity.entityId))
     for (const particle of snapshot.particles) {
         if (particle.owner.kind === 'entity' && !worldIds.has(particle.owner.entityId)) {
-            throw new TypeError(`client presentation Adventure 1-1 particle owner ${particle.owner.entityId} is not in the current frame`)
+            throw new TypeError(`client presentation Level particle owner ${particle.owner.entityId} is not in the current frame`)
         }
     }
 }

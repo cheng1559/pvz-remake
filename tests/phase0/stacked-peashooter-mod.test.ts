@@ -6,7 +6,7 @@ import test from 'node:test'
 
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { GameplaySystemMods } from '@/server/GameplaySystemMods'
-import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
+import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from '../server/run-command'
 
@@ -23,8 +23,8 @@ interface GameplayModule {
 }
 
 test('Peashooter stays plantable on empty cells and upgrades an occupied Peashooter', async () => {
-    const definitions = parseGameplayDefinitionsV2(source('definitions'))
-    const levels = parseGameplayLevelsV2(source('levels'), definitions)
+    const definitions = parseGameplayDefinitions(source('definitions'))
+    const levels = parseGameplayLevels(source('levels'), definitions)
     const level = levels.levels['pvz:adventure-1-1']
     levels.levels['pvz:adventure-1-1'] = {
         ...level,

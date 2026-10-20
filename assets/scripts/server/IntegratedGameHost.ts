@@ -21,6 +21,7 @@ export class IntegratedGameHost {
     constructor(
         private readonly server: IntegratedGameServer,
         private readonly channel: LocalGameChannel,
+        private readonly debugEnabled = false,
     ) {}
 
     get interpolationAlpha(): number {
@@ -117,7 +118,8 @@ export class IntegratedGameHost {
                 this.stopped = true
                 return false
             case 'debugCommand':
-                this.reject(packet.sequence, 'unsupported-command')
+                if (this.debugEnabled) this.server.enqueueDebugCommand(packet.sequence, packet.command)
+                else this.reject(packet.sequence, 'unsupported-command')
                 return false
         }
     }
@@ -172,6 +174,7 @@ export class IntegratedGameHost {
     private flushCommandResults(): void {
         for (const result of this.server.drainCommandResults()) {
             if (result.rejection) this.reject(result.sequence, result.rejection)
+            if (result.debug) this.channel.sendToClient({ protocolVersion: 1, type: 'debugResult', sequence: result.sequence, result: result.debug })
         }
     }
 
