@@ -177,6 +177,7 @@ export class SoundLoader {
     private static _source: AudioSource | null = null
     private static _musicVolume = DEFAULT_MUSIC_VOLUME
     private static _sfxVolume = DEFAULT_SFX_VOLUME
+    private static readonly _musicVolumeListeners = new Set<() => void>()
 
     public static preloadAll() {
         return Promise.all(this._effects.map((effect) => this.load(effect)))
@@ -189,6 +190,12 @@ export class SoundLoader {
     public static setMusicVolume(volume: number) {
         this._musicVolume = this._clampMasterVolume(volume, DEFAULT_MUSIC_VOLUME)
         this._syncExclusiveSourceVolumes()
+        for (const listener of this._musicVolumeListeners) listener()
+    }
+
+    public static onMusicVolumeChange(listener: () => void): () => void {
+        this._musicVolumeListeners.add(listener)
+        return () => { this._musicVolumeListeners.delete(listener) }
     }
 
     public static getSfxVolume() {

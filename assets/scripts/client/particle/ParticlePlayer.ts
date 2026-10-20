@@ -6,6 +6,7 @@ import {
 } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { uiNode } from '@/client/view/uiNode'
+import { gameClock } from '@/core/GameClock'
 import {
     PARTICLE_STEP_SECONDS,
     ParticleSimulation,
@@ -114,7 +115,7 @@ export class ParticlePlayer extends Component {
     }
 
     protected update(dt: number): void {
-        if (this.simulation) this.advance(dt)
+        if (this.simulation) this.advance(gameClock.delta(dt))
     }
 
     protected onDestroy(): void {

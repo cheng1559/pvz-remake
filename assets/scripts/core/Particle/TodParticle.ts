@@ -13,6 +13,7 @@ import {
     Vec2,
 } from 'cc'
 import { uiNode } from '@/client/view/uiNode'
+import { gameClock } from '../GameClock'
 import { SpriteLoader } from '../SpriteLoader'
 import { ParticleDefinitionLoader } from './ParticleDefinitionLoader'
 import {
@@ -672,7 +673,7 @@ export class TodParticleSystem extends Component {
     private _imageOverride: string | null = null
     private _ageTicks = 0
     private _pendingFastForwardTicks = 0
-    private _useGameTime = true // Retained in v2 saves; the new presentation uses unscaled time.
+    private _useGameTime = true // Retained in v2 saves; presentation effects now share the global clock.
     private _scaleOverride = 1
     private _seed = 0
     private _rng = new TodParticleRng(0)
@@ -807,7 +808,7 @@ export class TodParticleSystem extends Component {
     protected update(dt: number) {
         if (this._emitters.length === 0) return
 
-        this._accumulator += dt
+        this._accumulator += gameClock.delta(dt)
         while (this._accumulator >= GAME_TICK_SECONDS) {
             this._accumulator -= GAME_TICK_SECONDS
             if (!this._stepOnce()) return

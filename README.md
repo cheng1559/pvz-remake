@@ -2,7 +2,7 @@
 
 [中文说明](README.zh-CN.md)
 
-This worktree contains the new client/server implementation. The scene starts Adventure 1-1 directly. The previous game loop, menus, and later-level implementations have been removed; the workspace's `../pvz-remake` worktree remains the reference implementation.
+This worktree contains the new client/server implementation. The scene starts with the splash/title screens and a menu shell. Simple buttons connect the main menu, challenge categories, almanac, store, gardens, achievements, help/options, and the new Adventure 1-1. The previous game loop and later-level implementations have been removed; the workspace's `../pvz-remake` worktree remains the reference implementation.
 
 ## Run
 
@@ -11,7 +11,7 @@ npm install
 npm run preview:debug
 ```
 
-Requires the local Cocos CLI and Cocos 4.0.0-alpha.35. Press Escape to pause/resume. After winning or losing, press R to play again. The current player's v2 save is resumed automatically; the game saves when it is hidden.
+Requires the local Cocos CLI and Cocos 4.0.0-alpha.35. Use the menu buttons to enter Adventure 1-1. Escape opens/closes its pause menu; other pages use Escape to go back. After winning or losing, press R to play again. Entering Adventure resumes the current player's v2 save automatically; the game saves when it is hidden.
 
 ## Structure
 
@@ -23,6 +23,6 @@ Requires the local Cocos CLI and Cocos 4.0.0-alpha.35. Press Escape to pause/res
 - `assets/bundles/pvz-base`: Content v2 assets and the Adventure 1-1 prefab.
 - `tools`: shared resource conversion and Mod tooling.
 
-Resource-based audio and particle helpers remain in use. They are not a fallback to the previous game loop.
+Menu backgrounds, audio, and particle helpers reuse the existing resources loader. The gameplay Bundle and its save content hash are unchanged. They are not a fallback to the previous game loop.
 
 See [Development Guide](docs/DEVELOPMENT.md) for resource preparation, validation, and builds. Source code is licensed under [MIT](LICENSE); original game assets retain their respective ownership.

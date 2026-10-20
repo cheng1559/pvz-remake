@@ -1,0 +1,57 @@
+import type { Node } from 'cc'
+import { SoundEffect } from '@/client/sound/LegacySoundSystem'
+import type { UI } from '@/client/ui/UI'
+import { SpriteLoader } from '@/core/SpriteLoader'
+import type { MenuAction, MenuPageId } from './MenuPages'
+
+const GARDENS: readonly MenuPageId[] = ['garden', 'mushroom', 'aquarium', 'tree']
+
+/** Returns false for pages that still use the basic navigation controls. */
+export async function showMenuPageControls(
+    parent: Node, ui: UI, id: MenuPageId, navigate: (action: MenuAction) => void,
+): Promise<boolean> {
+    const gardenIndex = GARDENS.indexOf(id)
+    const names = gardenIndex >= 0 ? ['zen_nextgarden', 'zenshopbutton', 'zenshopbutton_highlight']
+        : id === 'achievements' ? ['acheesements_back_highlight'] : []
+    if (!names.length) return false
+    const frames = await Promise.all(names.map(async name => {
+        const frame = await SpriteLoader.load(name)
+        if (!frame) throw new Error(`Missing page control: ${name}`)
+        return frame
+    }))
+    if (!parent.isValid) throw new Error('Menu page was destroyed while loading controls')
+    if (gardenIndex >= 0) {
+        const [next, shop, shopHighlight] = frames
+        ui.button(parent, {
+            text: ui.text('MAIN_MENU_BUTTON', 'Main Menu'), x: 628, y: -10, width: 163, height: 46,
+            rightClickTriggers: false, onClick: () => navigate('main'),
+        })
+        ui.button(parent, {
+            images: { normal: next }, x: 566, y: 0, pressSound: SoundEffect.Tap,
+            releaseToNormalOnPressOut: true,
+            // Previous garden tooltip: center x=599, top y=52 for the 60×60 button at (566, 0).
+            tooltip: { text: ui.text('NEXT_GARDEN_TOOLTIP', 'visit other garden'), offset: [3, -12] },
+            onPress: () => navigate(GARDENS[(gardenIndex + 1) % GARDENS.length]),
+        })
+        ui.button(parent, {
+            images: { normal: shop, hover: shopHighlight }, x: 678, y: 33, height: 40,
+            imageBox: { height: shop.originalSize.height }, rightClickTriggers: false,
+            releaseToNormalOnPressOut: true, pressSound: SoundEffect.Tap, onClick: () => navigate('store'),
+        })
+    } else {
+        const button = ui.button(parent, {
+            images: { normal: frames[0] }, x: 120, y: 37, width: 130, height: 80,
+            imageBox: { x: 8, y: 18, width: frames[0].originalSize.width, height: frames[0].originalSize.height },
+            releaseToNormalOnPressOut: true, pressSound: SoundEffect.GraveButton, onClick: () => navigate('main'),
+        })
+        button.changeCursor = false
+        const visual = button.node.getChildByName('Visual')!
+        const updateState = button.onStateChange!
+        button.onStateChange = state => {
+            updateState(state)
+            visual.active = state === 'hover' || state === 'pressed'
+        }
+        visual.active = false
+    }
+    return true
+}

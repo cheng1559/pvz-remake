@@ -2,6 +2,7 @@ import { Node, tween, Vec3 } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { uiNode } from '@/client/view/uiNode'
+import { startGameTween } from '@/core/GameTween'
 import { TodParticleSystem } from '@/core/Particle'
 import { PARTICLE_STEP_SECONDS } from '@/shared/content/particle'
 import type { Adventure11ParticleOwnerSnapshotV2, Adventure11ParticleSnapshotV2 } from './Adventure11PresentationSnapshotV2'
@@ -67,15 +68,15 @@ export class Adventure11ParticlePresenter {
             player.restore(snapshot.playback)
             if (snapshot.playback.id === 'pvz:peasplat') {
                 const elapsed = snapshot.playback.ageTicks * PARTICLE_STEP_SECONDS + snapshot.playback.accumulatorSeconds
-                tween(node).delay(Math.max(0, 0.21 - elapsed)).call(() => {
+                startGameTween(node, tween(node).delay(Math.max(0, 0.21 - elapsed)).call(() => {
                     if (node.isValid) node.destroy()
-                }).start()
+                }))
             }
             if (snapshot.playback.id === 'pvz:seedpacketflash') {
                 const elapsed = snapshot.playback.ageTicks * PARTICLE_STEP_SECONDS + snapshot.playback.accumulatorSeconds
-                tween(node).delay(Math.max(0, 0.26 - elapsed)).call(() => {
+                startGameTween(node, tween(node).delay(Math.max(0, 0.26 - elapsed)).call(() => {
                     if (node.isValid) node.destroy()
-                }).start()
+                }))
             }
         }
     }

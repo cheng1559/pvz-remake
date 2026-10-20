@@ -2,6 +2,7 @@ import { _decorator, Color, Component, gfx, JsonAsset, Material, Node, Sprite, S
 import { ClientContentLoader, SpriteRepository } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { uiNode } from '@/client/view/uiNode'
+import { gameClock } from '@/core/GameClock'
 import {
     attachReanimPose,
     parseReanimV2,
@@ -83,6 +84,12 @@ export class ReanimPlayer extends Component {
     private extraAdditive = false
     private extraAdditiveColor = Color.BLACK.clone()
     private colorOverride = Color.WHITE.clone()
+
+    get durationSeconds(): number { return this.requireData().durationSeconds }
+
+    getTrackNode(trackId: string): Node | null {
+        return this.views.get(trackId)?.node ?? null
+    }
 
     async load(id: string, registry: ContentRegistry, loader = new ClientContentLoader()): Promise<void> {
         const data = await new ReanimRepository(registry, loader).load(id)
@@ -296,7 +303,7 @@ export class ReanimPlayer extends Component {
     }
 
     protected update(dt: number): void {
-        this.advance(dt)
+        this.advance(gameClock.delta(dt))
     }
 
     protected onDestroy(): void {

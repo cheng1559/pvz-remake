@@ -44,6 +44,15 @@ test('ContentManifestV2 validates its complete shape and trust boundaries', () =
     assert.throws(invalid(value => { delete value.client.music }), /music is required/)
 })
 
+test('ContentManifestV2 accepts explicit save compatibility and rejects malformed declarations', () => {
+    const base = manifest()
+    assert.equal(base.saveCompatibleHashes, undefined)
+    assert.deepEqual(parseContentManifestV2({ ...base, saveCompatibleHashes: ['before-menu'] }).saveCompatibleHashes, ['before-menu'])
+    for (const saveCompatibleHashes of ['before-menu', [''], [42], ['same', 'same']]) {
+        assert.throws(() => parseContentManifestV2({ ...base, saveCompatibleHashes }), /saveCompatibleHashes/)
+    }
+})
+
 test('ContentRegistry resolves by category, rejects duplicates, and freezes', () => {
     const base = manifest()
     const registry = new ContentRegistry()

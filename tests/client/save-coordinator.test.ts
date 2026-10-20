@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
-import { createGameSaveV2, parseGameSaveV2 } from '@/app/SaveCoordinator'
+import { createGameSaveV2, isCompatibleBaseContent, parseGameSaveV2 } from '@/app/SaveCoordinator'
 import type { ServerSaveSnapshotV2 } from '@/server/save'
 import { GameplaySystemMods } from '@/server/GameplaySystemMods'
 import { parseGameplayDefinitionsV2, parseGameplayLevelsV2 } from '@/shared/content/gameplay'
@@ -14,6 +14,17 @@ const source = (name: string): unknown => JSON.parse(
 )
 const definitions = parseGameplayDefinitionsV2(source('definitions'))
 const levels = parseGameplayLevelsV2(source('levels'), definitions)
+
+test('base save compatibility accepts declared UI-only updates while keeping identity and version checks', () => {
+    const installed = { id: 'pvz:base', version: '2.0.0', contentHash: 'new-menu' }
+    const saved = { ...installed, contentHash: 'before-menu' }
+    assert.equal(isCompatibleBaseContent(installed, installed), true)
+    assert.equal(isCompatibleBaseContent(saved, installed), false)
+    assert.equal(isCompatibleBaseContent(saved, installed, ['before-menu']), true)
+    assert.equal(isCompatibleBaseContent({ ...saved, id: 'other:base' }, installed, ['before-menu']), false)
+    assert.equal(isCompatibleBaseContent({ ...saved, version: '1.0.0' }, installed, ['before-menu']), false)
+    assert.equal(isCompatibleBaseContent({ ...saved, contentHash: 'different-gameplay' }, installed, ['before-menu']), false)
+})
 
 test('LocalIntegratedGame applies gameplay system Mod enhancements', () => {
     let runs = 0

@@ -1,9 +1,69 @@
+import argparse
+import hashlib
+import json
+import shutil
+import tempfile
 from pathlib import Path
 
 from content_v2_converter import build_sprite_content
 
 
 ROOT = Path(__file__).resolve().parents[1]
+MAIN_MENU_CLIPS = [
+    (ROOT / "tools/raw/reanim/selectorscreen.reanim", name, f"anim_{name}", f"pvz:selector_{name}")
+    for name in ["open", "sign", "grass", "flower1", "flower2", "flower3", "cloud1", "cloud2", "cloud4", "cloud5", "cloud6", "cloud7"]
+] + [(ROOT / "tools/raw/reanim/zombie_hand.reanim", "default", "default", "pvz:selector_zombie_hand")]
+STARTUP_CLIPS = [
+    (ROOT / f"tools/raw/reanim/{name}.reanim", "default", "default", f"pvz:{name}")
+    for name in ("loadbar_sprout", "loadbar_zombiehead")
+]
+
+
+def content_hash(bundle: Path, manifest: dict) -> str:
+    payload = {**manifest, "contentHash": ""}
+    encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")).encode()
+    digest = hashlib.sha256(encoded)
+    assets = (path for path in bundle.rglob("*") if path.is_file() and path != bundle / "manifest.json" and not path.name.endswith(".meta"))
+    for path in sorted(assets, key=lambda item: item.relative_to(bundle).as_posix()):
+        digest.update(path.relative_to(bundle).as_posix().encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def build_main_menu(clips: list | None = None) -> dict:
+    """Convert just menu clips and merge their assets into the existing base Bundle."""
+    bundle = ROOT / "assets/bundles/pvz-base"
+    manifest_path = bundle / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    previous_hash = manifest["contentHash"]
+    if content_hash(bundle, manifest) != previous_hash:
+        raise ValueError("base Bundle has changed outside the menu build; rebuild the full Bundle first")
+    changed = False
+    with tempfile.TemporaryDirectory() as directory:
+        temporary = Path(directory)
+        source = temporary / "source"
+        source.mkdir()
+        output = temporary / "bundle"
+        generated = build_sprite_content(
+            source, output, reanim_clips=MAIN_MENU_CLIPS if clips is None else clips, anim_config=ROOT / "tools",
+            gameplay_source=ROOT / "tools/content/pvz-base/gameplay",
+        )
+        for category in ("reanim", "sprites"):
+            (bundle / category).mkdir(parents=True, exist_ok=True)
+            for path in (output / category).iterdir():
+                target = bundle / category / path.name
+                if not target.is_file() or target.read_bytes() != path.read_bytes():
+                    changed = True
+                    shutil.copyfile(path, target)
+            if any(manifest["client"][category].get(key) != value for key, value in generated["client"][category].items()):
+                changed = True
+            manifest["client"][category].update(generated["client"][category])
+
+    if changed:
+        manifest["saveCompatibleHashes"] = sorted({*manifest.get("saveCompatibleHashes", []), previous_hash})
+    manifest["contentHash"] = content_hash(bundle, manifest)
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+    return manifest
 
 
 def build_pvz_base() -> dict:
@@ -53,6 +113,8 @@ def build_pvz_base() -> dict:
             (ROOT / "tools/raw/reanim/sun.reanim", "default", "default", "pvz:sun"),
             (ROOT / "tools/raw/reanim/sodroll.reanim", "default", "default", "pvz:sodroll"),
             (ROOT / "tools/raw/reanim/finalwave.reanim", "default", "default", "pvz:finalwave"),
+            *MAIN_MENU_CLIPS,
+            *STARTUP_CLIPS,
         ],
         fonts=[
             (ROOT / "tools/raw/data/dwarventodcraft18.txt", "pvz:dwarventodcraft18"),
@@ -81,4 +143,14 @@ def build_pvz_base() -> dict:
 
 
 if __name__ == "__main__":
-    build_pvz_base()
+    parser = argparse.ArgumentParser()
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument("--main-menu-only", action="store_true", help="rebuild only menu animation assets in an existing base Bundle")
+    scope.add_argument("--startup-only", action="store_true", help="rebuild only loading-bar animation assets in an existing base Bundle")
+    parser.add_argument("--raw-root", type=Path, default=ROOT / "tools/raw", help="raw asset directory for a scoped menu/startup build")
+    args = parser.parse_args()
+    if args.main_menu_only or args.startup_only:
+        clips = STARTUP_CLIPS if args.startup_only else MAIN_MENU_CLIPS
+        build_main_menu([(args.raw_root / "reanim" / path.name, node, clip, content_id) for path, node, clip, content_id in clips])
+    else:
+        build_pvz_base()

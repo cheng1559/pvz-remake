@@ -18,6 +18,8 @@ export interface ContentManifestV2 {
     id: string
     version: string
     contentHash: string
+    /** Previous package hashes whose saves remain compatible with this version. */
+    saveCompatibleHashes?: readonly string[]
     gameplay: {
         definitions: string
         levels: string
@@ -42,6 +44,7 @@ export function parseContentManifestV2(value: unknown): ContentManifestV2 {
         value,
         ['schemaVersion', 'id', 'version', 'contentHash', 'gameplay', 'client'],
         'content manifest',
+        ['saveCompatibleHashes'],
     )
     if (manifest.schemaVersion !== 2) throw new Error('content manifest.schemaVersion must be 2')
     if (!isQualifiedId(manifest.id)) throw new Error('content manifest.id must be a qualified ID')
@@ -49,6 +52,15 @@ export function parseContentManifestV2(value: unknown): ContentManifestV2 {
     const id = manifest.id
     const version = semanticVersion(manifest.version, 'content manifest.version')
     const contentHash = nonEmptyString(manifest.contentHash, 'content manifest.contentHash')
+    let saveCompatibleHashes: string[] | undefined
+    if ('saveCompatibleHashes' in manifest) {
+        if (!Array.isArray(manifest.saveCompatibleHashes)) throw new Error('content manifest.saveCompatibleHashes must be an array')
+        saveCompatibleHashes = manifest.saveCompatibleHashes.map((hash, index) =>
+            nonEmptyString(hash, `content manifest.saveCompatibleHashes[${index}]`))
+        if (new Set(saveCompatibleHashes).size !== saveCompatibleHashes.length) {
+            throw new Error('content manifest.saveCompatibleHashes must not contain duplicates')
+        }
+    }
     const gameplay = exactObject(
         manifest.gameplay,
         ['definitions', 'levels', 'strings'],
@@ -66,6 +78,7 @@ export function parseContentManifestV2(value: unknown): ContentManifestV2 {
         id,
         version,
         contentHash,
+        ...(saveCompatibleHashes === undefined ? {} : { saveCompatibleHashes }),
         gameplay: {
             definitions: relativePath(gameplay.definitions, 'content manifest.gameplay.definitions'),
             levels: relativePath(gameplay.levels, 'content manifest.gameplay.levels'),
@@ -122,9 +135,9 @@ function semanticVersion(value: unknown, name: string): string {
     return version
 }
 
-function exactObject(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {
+function exactObject(value: unknown, keys: readonly string[], name: string, optionalKeys: readonly string[] = []): Record<string, unknown> {
     const record = object(value, name)
-    const expected = new Set(keys)
+    const expected = new Set([...keys, ...optionalKeys])
     for (const key of Object.keys(record)) {
         if (!expected.has(key)) throw new Error(`${name}.${key} is not supported`)
     }

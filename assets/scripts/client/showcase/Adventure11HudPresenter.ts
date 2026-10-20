@@ -1,7 +1,8 @@
-import { Color, EventMouse, EventTouch, Node, Sprite, tween } from 'cc'
+import { Color, EventMouse, EventTouch, isValid, Node, Sprite, tween } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
 import { uiNode } from '@/client/view/uiNode'
+import { startGameTween } from '@/core/GameTween'
 import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { TodParticleSystem } from '@/core/Particle'
@@ -9,6 +10,8 @@ import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { SeedPacketView } from '@/client/hud/SeedPacketView'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { CursorManager } from '@/client/input/CursorManager'
+import { UIHoverManager } from '@/client/input/UIHoverManager'
+import { UIButton } from '@/client/ui/UIButton'
 import type { ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
 import type { Adventure11AdviceSnapshotV2, Adventure11HudSnapshotV2 } from './Adventure11PresentationSnapshotV2'
 
@@ -54,7 +57,6 @@ export class Adventure11HudPresenter {
     private adviceTick = 0
     private sunFlashTicks = 0
     private pointer?: { x: number, y: number }
-    private tutorialArrow: TodParticleSystem | null = null
     private previousPacketCooldown?: number
     private progressWave = 0
     private progressCountdownStart = 0
@@ -316,6 +318,7 @@ export class Adventure11HudPresenter {
     }
 
     private syncCursor(snapshot: WorldSnapshot): void {
+        if (UIHoverManager.isModalBlocked || UIHoverManager.hasHover || UIButton.hasActivePress) return
         if (snapshot.result !== 'playing' || GameDebugSettings.isMobileMode() || !this.pointer || snapshot.cursor.mode === 'seed') {
             CursorManager.set('default')
             return
@@ -331,17 +334,21 @@ export class Adventure11HudPresenter {
     }
 
     private syncSeedTutorialArrow(visible: boolean): void {
+        // Restore recreates particle nodes, so reuse the live arrow instead of caching its component.
+        const [arrow, ...duplicates] = this.tutorialArrowLayer.children.filter(node =>
+            node.name === 'ParticleSystem_seedpacketpick' && isValid(node, true),
+        )
+        for (const duplicate of duplicates) duplicate.destroy()
         if (!visible) {
-            if (this.tutorialArrow?.node.isValid) this.tutorialArrow.node.destroy()
-            this.tutorialArrow = null
+            arrow?.destroy()
             return
         }
         const rect = this.seedPacket.rect()
-        if (this.tutorialArrow?.node.isValid) {
-            this.tutorialArrow.node.setPosition(rect.x, -rect.y, 20)
+        if (arrow) {
+            arrow.setPosition(rect.x, -rect.y, 20)
             return
         }
-        this.tutorialArrow = TodParticleSystem.spawn({ parent: this.tutorialArrowLayer, effect: 'seedpacketpick', x: rect.x, y: -rect.y, z: 20 })
+        TodParticleSystem.spawn({ parent: this.tutorialArrowLayer, effect: 'seedpacketpick', x: rect.x, y: -rect.y, z: 20 })
     }
 
     private spawnSeedPacketFlash(): void {
@@ -353,7 +360,7 @@ export class Adventure11HudPresenter {
         void player.load('pvz:seedpacketflash', this.content.registry, this.content.loader).then(() => {
             if (!node.isValid) return
             player.play()
-            tween(node).delay(0.26).call(() => { if (node.isValid) node.destroy() }).start()
+            startGameTween(node, tween(node).delay(0.26).call(() => { if (node.isValid) node.destroy() }))
         }).catch(error => {
             if (node.isValid) node.destroy()
             console.error('[Phase4] Failed to play seed packet flash', error)

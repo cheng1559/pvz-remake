@@ -1,7 +1,9 @@
 import tempfile
 import unittest
 import json
+import shutil
 from pathlib import Path
+from unittest.mock import patch
 
 import sys
 
@@ -10,10 +12,40 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parents[2] / "tools"))
 
 from content_v2_converter import build_sprite_content
+from build_pvz_base import build_main_menu
 from font_converter import write_font_v2
 
 
 class ContentV2ConverterTest(unittest.TestCase):
+    def test_menu_build_preserves_save_compatibility_and_rejects_unverified_base_changes(self):
+        fixtures = Path(__file__).parents[2] / "tools" / "fixtures"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bundle = root / "assets/bundles/pvz-base"
+            original = build_sprite_content(fixtures / "content-v2", bundle)
+            raw = root / "tools/raw/reanim"
+            raw.mkdir(parents=True)
+            source = raw / "phase2.reanim"
+            shutil.copyfile(fixtures / "reanim-v2/phase2.reanim", source)
+            shutil.copyfile(bundle / "sprites/phase2_checker.png", raw / "phase2_checker.png")
+            (root / "tools/anim_defs.json").write_text(json.dumps({
+                "phase2": {"body": {"animations": ["back"], "slots": []}},
+            }))
+            shutil.copytree(fixtures / "content-v2/gameplay", root / "tools/content/pvz-base/gameplay")
+            clips = [(source, "body", "back", "pvz:selector_test")]
+            with patch("build_pvz_base.ROOT", root), patch("build_pvz_base.MAIN_MENU_CLIPS", clips):
+                first = build_main_menu()
+                self.assertEqual(first["saveCompatibleHashes"], [original["contentHash"]])
+                self.assertNotEqual(first["contentHash"], original["contentHash"])
+                self.assertIn("pvz:selector_test", first["client"]["reanim"])
+                self.assertEqual(build_main_menu(), first)
+                before = (bundle / "manifest.json").read_bytes()
+                definitions = bundle / "gameplay/definitions.json"
+                definitions.write_bytes(definitions.read_bytes() + b"\n")
+                with self.assertRaisesRegex(ValueError, "base Bundle has changed"):
+                    build_main_menu()
+                self.assertEqual((bundle / "manifest.json").read_bytes(), before)
+
     def test_explicit_sprites_are_stable_and_merge_alpha(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

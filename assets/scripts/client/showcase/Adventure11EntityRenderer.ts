@@ -6,6 +6,7 @@ import type { ClientAnimationRegistry, ClientAnimationTarget } from '@/client/co
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
+import { startGameTween } from '@/core/GameTween'
 import { TodParticleSystem } from '@/core/Particle'
 import { SeedPacketRenderer, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/client/hud/SeedPacketRenderer'
 import type { LawnMowerSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
@@ -405,7 +406,7 @@ export class Adventure11EntityRenderer {
         void player.load('pvz:peasplat', this.content.registry, this.content.loader).then(() => {
             if (!node.isValid) return
             player.play(event.eventId >>> 0)
-            tween(node).delay(0.21).call(() => { if (node.isValid) node.destroy() }).start()
+            startGameTween(node, tween(node).delay(0.21).call(() => { if (node.isValid) node.destroy() }))
         }).catch(error => {
             if (node.isValid) node.destroy()
             console.error('[Phase4] Failed to play pea splat', error)

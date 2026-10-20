@@ -28,6 +28,11 @@ export function createGameSaveV2(input: GameSaveV2Input): GameSaveV2 {
     return parseGameSaveV2({ schemaVersion: 2, ...input })
 }
 
+export function isCompatibleBaseContent(saved: EnabledMod, installed: EnabledMod, compatibleHashes: readonly string[] = []): boolean {
+    return saved.id === installed.id && saved.version === installed.version
+        && (saved.contentHash === installed.contentHash || compatibleHashes.includes(saved.contentHash))
+}
+
 export function parseGameSaveV2(value: unknown): GameSaveV2 {
     const save = exact(jsonRoundTrip(value), [
         'schemaVersion', 'profileId', 'mode', 'levelId', 'createdAt', 'updatedAt',

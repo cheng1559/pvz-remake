@@ -118,6 +118,7 @@ export class MusicSystem {
     private static _queuedDrumsBoundarySec: number | null = null
     private static _queuedDrumsAtSec = 0
     private static _queuedDrumsBoundaryWrapped = false
+    private static _unsubscribeMusicVolume: (() => void) | null = null
 
     static async playTune(tuneId: MusicTuneId, restart = false) {
         if (!restart && this._playing && this._currentTuneId === tuneId && this._fadeOutCounter <= 0) return
@@ -154,6 +155,7 @@ export class MusicSystem {
         this._fadeOutDuration = 0
         this._syncCounter = 0
 
+        this._unsubscribeMusicVolume ??= SoundLoader.onMusicVolumeChange(() => this._applyVolumes())
         for (let i = 0; i < activeStems.length; i++) {
             const stem = activeStems[i]
             if (this._playNativeStem(stem, clips[i]!)) continue
@@ -278,6 +280,7 @@ export class MusicSystem {
         }
 
         this._overlayActiveStemNames = activeStems
+        this._unsubscribeMusicVolume ??= SoundLoader.onMusicVolumeChange(() => this._applyVolumes())
         for (let i = 0; i < activeStems.length; i++) {
             const stem = activeStems[i]
             if (this._playNativeOverlayStem(stem, clips[i]!, tune)) continue
@@ -301,6 +304,10 @@ export class MusicSystem {
         this._overlaySources = {}
         this._stopNativeOverlayStems()
         this._overlayActiveStemNames = []
+        if (!this._playing) {
+            this._unsubscribeMusicVolume?.()
+            this._unsubscribeMusicVolume = null
+        }
     }
 
     static stop() {
@@ -700,6 +707,12 @@ export class MusicSystem {
             const source = this._sources[stem]
             if (!source) continue
             source.volume = volume
+        }
+        for (const stem of this._overlayActiveStemNames) {
+            const volume = this._overlayStemVolume(stem)
+            const audioId = this._overlayNativeAudioIds[stem]
+            if (audioId !== undefined) this._nativePlayer()?.setVolume(audioId, volume)
+            else if (this._overlaySources[stem]) this._overlaySources[stem]!.volume = volume
         }
     }
 

@@ -3,6 +3,7 @@ import {
     Component,
 } from 'cc'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
+import { gameClock } from '@/core/GameClock'
 import type { GameplayDefinitionsV2 } from '@/shared/content/gameplay'
 import type {
     GameCommand,
@@ -122,6 +123,7 @@ export class IntegratedAdventure11Showcase extends Component {
 
     update(dt: number): void {
         if (this.snapshotting || this.completing || this.gameOverNotified || !this.game || !this.view || !this.audio || this.game.render().paused) return
+        dt = gameClock.delta(dt)
         const introComplete = this.view.updateIntro(dt)
         if (introComplete && !this.introCompletionSent) {
             this.introCompletionSent = true

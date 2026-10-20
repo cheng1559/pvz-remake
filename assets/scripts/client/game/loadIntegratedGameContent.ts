@@ -61,5 +61,6 @@ export async function loadIntegratedGameContent(location = 'pvz-base') {
     return {
         definitions, levels, strings, adventure11Prefab, registry, loader,
         contentHash: manifest.contentHash, loadedMods, enabledMods, animations,
+        saveCompatibleHashes: manifest.saveCompatibleHashes ?? [],
     }
 }

@@ -22,6 +22,17 @@ export class MusicPlayer extends Component {
     private paused = false
     private pausedTimeSeconds = 0
     private volume = 1
+    private unsubscribeVolume?: () => void
+
+    onEnable(): void {
+        this.unsubscribeVolume = SoundLoader.onMusicVolumeChange(() => { if (this.source) this.applyVolume() })
+        if (this.source) this.applyVolume()
+    }
+
+    onDisable(): void {
+        this.unsubscribeVolume?.()
+        this.unsubscribeVolume = undefined
+    }
 
     async load(id: string, registry: ContentRegistry, loader = new ClientContentLoader()): Promise<void> {
         const { definition, clip } = await new MusicRepository(registry, loader).load(id)

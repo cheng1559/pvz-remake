@@ -1,4 +1,5 @@
-import { assetManager, native, sys } from 'cc'
+import { assetManager, JsonAsset, native, resources, sys } from 'cc'
+import { PREVIEW } from 'cc/env'
 import {
     isQualifiedId,
     parseModManifest,
@@ -142,10 +143,18 @@ async function findManifestLocations(): Promise<string[]> {
     }
 
     const indexUrl = new URL('mods.json', location.href).href
-    const response = await fetch(indexUrl)
-    if (response.status === 404) return []
-    if (!response.ok) throw new Error(`Failed to load ${indexUrl}: HTTP ${response.status}`)
-    const value: unknown = await response.json()
+    let value: unknown
+    if (PREVIEW) {
+        // CLI previews serve imported assets rather than project-root files.
+        value = await new Promise<unknown>((resolve, reject) => {
+            resources.load('mods', JsonAsset, (error, asset) => error ? reject(error) : resolve(asset.json))
+        })
+    } else {
+        const response = await fetch(indexUrl)
+        if (response.status === 404) return []
+        if (!response.ok) throw new Error(`Failed to load ${indexUrl}: HTTP ${response.status}`)
+        value = await response.json()
+    }
     if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string')) {
         throw new Error('mods.json must be an array of manifest URLs')
     }

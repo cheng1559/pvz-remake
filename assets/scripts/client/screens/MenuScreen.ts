@@ -1,0 +1,241 @@
+import { _decorator, BlockInputEvents, Color, Component, game, Node, Sprite } from 'cc'
+import { SpriteLoader } from '@/core/SpriteLoader'
+import { uiNode } from '@/client/view/uiNode'
+import { UI, type UIButtonOptions } from '@/client/ui/UI'
+import { MENU_PAGES, type MenuAction, type MenuPageId } from './MenuPages'
+import { showOptionsDialog } from './OptionsDialog'
+import { MainMenuScreen } from './MainMenuScreen'
+import { PageFade } from './PageFade'
+import { MusicSystem } from '@/client/music/MusicSystem'
+import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { UIHoverManager } from '@/client/input/UIHoverManager'
+import { showChallengeScreen } from './ChallengeScreen'
+import { showMenuPageControls } from './MenuPageControls'
+import { StartupScreen } from './StartupScreen'
+import { showUserDialog } from './UserDialog'
+import { showAlmanacScreen } from './AlmanacScreen'
+import { StoreScreen } from './StoreScreen'
+import { AchievementScreen } from './AchievementScreen'
+
+const { ccclass } = _decorator
+
+export interface PreparedMenuPage {
+    id: MenuPageId
+    root: Node
+    retainPrevious?: boolean
+    enter?: () => void
+}
+
+@ccclass('MenuScreen')
+export class MenuScreen extends Component {
+    onNavigate: (action: MenuAction) => void | Promise<void> = () => {}
+    private page: PreparedMenuPage | null = null
+    private retainedPage: PreparedMenuPage | null = null
+    private mainMenu: MainMenuScreen | null = null
+    private mainPreparation: Promise<PreparedMenuPage> | null = null
+
+    async prepare(id: MenuPageId): Promise<PreparedMenuPage> {
+        if (this.retainedPage?.id === id && this.retainedPage.root.isValid) return this.retainedPage
+        if (id === 'main') {
+            return this.prepareMain()
+        }
+        if (id === 'splash' || id === 'title') {
+            const root = uiNode({ name: 'Startup', parent: this.node, size: { width: 800, height: 600 }, active: false }).node
+            const startup = root.addComponent(StartupScreen)
+            startup.onStart = () => { void this.onNavigate('main') }
+            try {
+                await startup.initialize(id === 'splash', progress => this.prepareMain(progress).then(() => {}))
+            } catch (error) {
+                root.destroy()
+                throw error
+            }
+            return { id, root, enter: () => startup.show() }
+        }
+        const page = MENU_PAGES[id]
+        const optionsPage = id === 'options' || id === 'gameOptions' || id === 'pause'
+        const overMain = !!this.mainMenu?.node.isValid && (id === 'options' || id === 'players' || id === 'quit')
+        const backgrounds = page.backgrounds.filter(background =>
+            !(optionsPage && background.image === 'options_menuback')
+            && !(overMain && MENU_PAGES.main.backgrounds.some(main => main.image === background.image)),
+        )
+        const [ui, frames] = await Promise.all([UI.load(), Promise.all(backgrounds.map(async background => {
+            const frame = await SpriteLoader.load(background.image)
+            if (!frame) throw new Error(`Missing menu background: ${background.image}`)
+            return frame
+        }))])
+        if (!this.node?.isValid) throw new Error('Menu was destroyed while loading')
+        const root = uiNode({
+            name: id, parent: this.node, size: { width: 800, height: 600 }, active: false,
+            graphics: !optionsPage && !overMain,
+        })
+        if (page.retainPrevious) root.node.addComponent(BlockInputEvents)
+        if (root.graphics) {
+            root.graphics.fillColor = new Color(0, 0, 0, page.overlay ? 160 : 255)
+            root.graphics.fillRect(-400, -300, 800, 600)
+        }
+        backgrounds.forEach((background, index) => {
+            const frame = frames[index]
+            uiNode({
+                name: background.image, parent: root.node,
+                position: { x: (background.x ?? 0) - 400, y: 300 - (background.y ?? 0) },
+                anchor: { x: 0, y: 1 },
+                size: { width: background.width ?? frame.originalSize.width, height: background.height ?? frame.originalSize.height },
+                sprite: { frame, sizeMode: Sprite.SizeMode.CUSTOM, trim: false },
+            })
+        })
+        if (optionsPage) {
+            const inGame = id !== 'options'
+            await showOptionsDialog(root.node, ui, {
+                inGame,
+                onClose: () => this.onNavigate(inGame ? 'resume' : 'back'),
+                onRestart: () => this.onNavigate('restart'),
+                onMainMenu: () => this.onNavigate('main'),
+            })
+        } else {
+            const controls = uiNode({
+                name: 'Controls', parent: root.node, position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 },
+            }).node
+            if (page.heading) {
+                const { key, font, y, color } = page.heading
+                ui.label(controls, {
+                    text: ui.text(key, page.title), font, x: 400, y, color: new Color(...color),
+                    baseline: true, align: 'center',
+                })
+            }
+            const navigateButton = (target: MenuAction, options: UIButtonOptions) => ui.button(controls, {
+                ...options, onClick: () => this.onNavigate(target),
+            })
+            if (id === 'players') {
+                await showUserDialog(root.node, ui, () => { void this.onNavigate('main') }, () => this.mainMenu?.refreshProfile())
+            } else if (id === 'quit') {
+                ui.dialog(root.node, {
+                    title: ui.text('QUIT_HEADER'), message: ui.text('QUIT_MESSAGE'),
+                    confirmText: ui.text('QUIT_BUTTON'), cancelText: ui.text('DIALOG_BUTTON_CANCEL'),
+                    onClose: confirmed => {
+                        void this.onNavigate('main')
+                        if (confirmed) game.end()
+                    },
+                })
+            } else if (id === 'minigames' || id === 'puzzle' || id === 'survival') {
+                try {
+                    await showChallengeScreen(controls, ui, id, () => { void this.onNavigate('main') })
+                } catch (error) {
+                    root.node.destroy()
+                    throw error
+                }
+            } else if (id === 'achievements') {
+                try {
+                    await controls.addComponent(AchievementScreen).initialize(ui, () => { void this.onNavigate('main') })
+                } catch (error) { root.node.destroy(); throw error }
+            } else if (id === 'help') {
+                navigateButton('main', { skin: 'seed', text: 'Main Menu', x: 324, y: 520, rightClickTriggers: false })
+            } else if (id === 'almanac' || id === 'plants' || id === 'zombies') {
+                try {
+                    await showAlmanacScreen(controls, ui, id, action => { void this.onNavigate(action) })
+                } catch (error) { root.node.destroy(); throw error }
+            } else if (id === 'store') {
+                try {
+                    const fromGarden = this.page && ['garden', 'mushroom', 'aquarium', 'tree'].includes(this.page.id)
+                    await controls.addComponent(StoreScreen).initialize(ui, action => { void this.onNavigate(action) }, ui.text(fromGarden ? 'STORE_BACK_TO_GAME' : 'STORE_MAIN_MENU_BUTTON'))
+                } catch (error) { root.node.destroy(); throw error }
+            } else if (id === 'award') {
+                navigateButton('restart', { skin: 'seed', text: 'Play again', x: 324, y: 500 })
+                navigateButton('main', { skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON', 'Main Menu'), x: 677, y: 16 })
+            } else if (!await showMenuPageControls(controls, ui, id, action => { void this.onNavigate(action) }).catch(error => {
+                root.node.destroy()
+                throw error
+            })) {
+                const buttons = [...page.buttons]
+                if (page.back) buttons.push({ label: page.back === 'resume' ? 'Resume' : 'Back', target: page.back })
+                const rows = Math.ceil(buttons.length / 4)
+                buttons.forEach((button, index) => {
+                    const count = Math.min(4, buttons.length - Math.floor(index / 4) * 4)
+                    const x = (index % 4 - (count - 1) / 2) * 190
+                    const y = -258 + (rows - 1 - Math.floor(index / 4)) * 44
+                    navigateButton(button.target, {
+                        text: button.label, x: x + 310, y: 282 - y, width: 180, height: 36,
+                    })
+                })
+            }
+        }
+        if (id === 'help' || id === 'award') PageFade.create(root.node, id === 'help' ? Color.BLACK : Color.WHITE)
+        return {
+            id, root: root.node, retainPrevious: page.retainPrevious,
+            enter: id === 'help' ? () => {
+                MusicSystem.stop()
+                void SoundLoader.play(SoundEffect.Paper)
+            } : undefined,
+        }
+    }
+
+    async show(page: PreparedMenuPage, animate?: (previous: Node, next: Node) => Promise<void>): Promise<void> {
+        page.root.active = true
+        const music = MENU_PAGES[page.id].music
+        if (music) void MusicSystem.playTune(music)
+        page.enter?.()
+        if (animate && this.page?.root.isValid && this.page.root !== page.root) await animate(this.page.root, page.root)
+        if (this.node?.isValid) this.replacePage(page)
+    }
+
+    hide(): void {
+        if (this.page) UIHoverManager.endModalBlock(this.page.root)
+        this.destroyPage(this.page)
+        if (this.retainedPage !== this.page) this.destroyPage(this.retainedPage)
+        if (this.mainMenu?.node.isValid) this.destroyPage({ id: 'main', root: this.mainMenu.node })
+        this.page = this.retainedPage = null
+        this.node.active = false
+    }
+
+    private replacePage(page: PreparedMenuPage): void {
+        const previous = this.page
+        if (this.retainedPage?.root === page.root) this.retainedPage = null
+        else if (page.retainPrevious) this.retainedPage ??= previous
+        else {
+            if (this.retainedPage !== previous) this.destroyPage(this.retainedPage)
+            this.retainedPage = null
+        }
+        if (previous?.root !== page.root && previous !== this.retainedPage) this.destroyPage(previous)
+        if (this.retainedPage?.root.isValid) this.retainedPage.root.active = true
+        page.root.active = true
+        this.page = page
+        if (previous) UIHoverManager.endModalBlock(previous.root)
+        UIHoverManager.beginModalBlock(page.root)
+    }
+
+    private destroyPage(page: PreparedMenuPage | null): void {
+        if (!page?.root.isValid) return
+        if (this.mainMenu?.node === page.root) {
+            this.mainMenu = null
+            this.mainPreparation = null
+        }
+        page.root.active = false
+        page.root.destroy()
+    }
+
+    private prepareMain(onProgress: (progress: number) => void = () => {}): Promise<PreparedMenuPage> {
+        if (this.mainMenu?.node.isValid && !this.mainPreparation) {
+            onProgress(1)
+            return Promise.resolve({ id: 'main', root: this.mainMenu.node, enter: () => this.mainMenu!.show() })
+        }
+        return this.mainPreparation ??= this.createMain(onProgress).catch(error => {
+            this.mainPreparation = null
+            throw error
+        })
+    }
+
+    private async createMain(onProgress: (progress: number) => void): Promise<PreparedMenuPage> {
+        const root = uiNode({ name: 'MainMenu', parent: this.node, size: { width: 800, height: 600 }, active: false }).node
+        const menu = root.addComponent(MainMenuScreen)
+        this.mainMenu = menu
+        menu.onNavigate = action => this.onNavigate(action)
+        try {
+            await menu.initialize(await UI.load(), onProgress)
+            if (!this.node?.isValid || !root.isValid) throw new Error('Menu was destroyed while loading')
+        } catch (error) {
+            if (this.mainMenu === menu) this.mainMenu = null
+            root.destroy()
+            throw error
+        }
+        return { id: 'main', root, enter: () => menu.show() }
+    }
+}

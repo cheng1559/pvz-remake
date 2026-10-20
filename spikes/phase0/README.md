@@ -99,7 +99,7 @@ Native installs each complete Mod under:
   client/cocos-bundle/
 ```
 
-The application scans that directory before showing the startup screen. Web builds read a `mods.json` array next to the built `index.html`; each entry is a manifest URL relative to `mods.json`:
+The application scans that directory before starting gameplay. CLI previews read `assets/resources/mods.json`; Web builds read a `mods.json` array next to the built `index.html`. Both default to an empty list. Entries are manifest URLs relative to the preview root or the built `mods.json`:
 
 ```json
 [

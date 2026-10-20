@@ -1,4 +1,5 @@
 import { Node, tween } from 'cc'
+import { startGameTween } from '@/core/GameTween'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import type { ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
@@ -84,7 +85,7 @@ export class Adventure11AudioPresenter {
     }
 
     finalWave(node: Node): void {
-        tween(node).delay(0.6).call(() => void SoundLoader.play(SoundEffect.FinalWave)).start()
+        startGameTween(node, tween(node).delay(0.6).call(() => void SoundLoader.play(SoundEffect.FinalWave)))
     }
 
     play(event: ServerEvent): void {

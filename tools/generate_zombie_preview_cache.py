@@ -1,8 +1,10 @@
+import argparse
 import math
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
+from reanim_converter import load_anim_xml, parse_track_data
 
 from generate_packet_plant_cache import (
     ANIMATION_DIR,
@@ -184,7 +186,35 @@ def draw_reanim(
         paste_transformed(canvas, load_texture(item["image"]), matrix, item["alpha"])
 
 
-def render_zombie_cache(zombie_id: int) -> Image.Image:
+def render_boss_cache(raw_root: Path) -> Image.Image:
+    cache = Image.new("RGBA", (CACHE_WIDTH, CACHE_HEIGHT), (0, 0, 0, 0))
+
+    def draw(animation: str, layer: str, x: float, y: float, hidden: tuple[str, ...] = ()) -> None:
+        root = load_anim_xml(raw_root, animation)
+        tracks = [parse_track_data(track, include_inactive=True) for track in root.findall("track")]
+        marker = next(track for track in root.findall("track") if track.findtext("name") == layer)
+        _, _, active_frames = parse_track_data(marker)
+        start = active_frames[0]["frameIndex"]
+        for name, _, frames in tracks:
+            if name in hidden:
+                continue
+            frame = sample_frames(frames, start)
+            if not frame or not frame.get("image"):
+                continue
+            matrix = render_frame_to_matrix(frame)
+            matrix = (*matrix[:4], matrix[4] + x, matrix[5] + y)
+            paste_transformed(cache, load_texture(frame["image"]), matrix, frame["alpha"])
+
+    # ReanimatorCache::MakeCachedZombieFrame draws the driver between the rear and front robot layers.
+    draw("zombie_boss", "anim_head_idle", -524.0, -88.0)
+    draw("zombie_boss_driver", "anim_idle", 46.0, 22.0)
+    draw("zombie_boss", "anim_head_idle", -524.0, -88.0, ("boss_body1", "boss_neck", "boss_head2"))
+    return cache
+
+
+def render_zombie_cache(zombie_id: int, raw_root: Path | None = None) -> Image.Image:
+    if zombie_id == 25:
+        return render_boss_cache(raw_root or ROOT / "tools/raw/reanim")
     definition = ZOMBIE_DEFINITIONS.get(zombie_id)
     cache = Image.new("RGBA", (CACHE_WIDTH, CACHE_HEIGHT), (0, 0, 0, 0))
     if definition is None:
@@ -219,11 +249,12 @@ def render_zombie_cache(zombie_id: int) -> Image.Image:
     return cache
 
 
-def render_zombie_preview(zombie_id: int) -> Image.Image:
+def render_zombie_preview(zombie_id: int, raw_root: Path | None = None) -> Image.Image:
     cell = Image.new("RGBA", (CELL_WIDTH, CELL_HEIGHT), (0, 0, 0, 0))
     definition = ZOMBIE_DEFINITIONS.get(zombie_id)
-    if definition is None:
+    if definition is None and zombie_id != 25:
         return cell
+    definition = definition or {}
 
     offset_x, offset_y = definition.get("previewOffset", (0.0, 0.0))
     definition_scale = definition.get("previewScale", 1.0)
@@ -238,15 +269,18 @@ def render_zombie_preview(zombie_id: int) -> Image.Image:
         ALMANAC_BASE_X + offset_x + scale_offset_x,
         ALMANAC_BASE_Y + offset_y + scale_offset_y,
     )
-    paste_transformed(cell, render_zombie_cache(zombie_id), matrix, 1.0)
+    paste_transformed(cell, render_zombie_cache(zombie_id, raw_root), matrix, 1.0)
     return cell
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Build static almanac zombie portraits, including Dr. Zomboss.")
+    parser.add_argument("--raw-root", type=Path, default=ROOT / "tools/raw/reanim", help="Directory containing zombie_boss.reanim and zombie_boss_driver.reanim")
+    args = parser.parse_args()
     rows = math.ceil(ZOMBIE_COUNT / ATLAS_COLUMNS)
     atlas = Image.new("RGBA", (ATLAS_COLUMNS * CELL_WIDTH, rows * CELL_HEIGHT), (0, 0, 0, 0))
     for zombie_id in range(ZOMBIE_COUNT):
-        cell = render_zombie_preview(zombie_id)
+        cell = render_zombie_preview(zombie_id, args.raw_root)
         x = zombie_id % ATLAS_COLUMNS * CELL_WIDTH
         y = zombie_id // ATLAS_COLUMNS * CELL_HEIGHT
         atlas.alpha_composite(cell, (x, y))

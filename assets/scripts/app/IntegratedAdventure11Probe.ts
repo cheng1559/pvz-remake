@@ -2,7 +2,7 @@ import { BlockInputEvents, Mask, Node } from 'cc'
 import { LocalIntegratedGame } from './LocalIntegratedGame'
 import { createLocalGameSaveV2Store } from './CocosGameSaveV2Store'
 import { GAME_SAVE_V2_KEY } from './GameSaveV2Store'
-import { createGameSaveV2, parseGameSaveV2, type GameSaveV2 } from './SaveCoordinator'
+import { createGameSaveV2, isCompatibleBaseContent, parseGameSaveV2, type GameSaveV2 } from './SaveCoordinator'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { Adventure11View } from '@/client/showcase/Adventure11View'
 import {
@@ -10,7 +10,7 @@ import {
     type IntegratedAdventure11Lifecycle,
 } from '@/client/showcase/IntegratedAdventure11Showcase'
 import { uiNode } from '@/client/view/uiNode'
-import { ProfileStore } from '@/app/persistence/ProfileStore'
+import { menuApi } from '@/client/api/MenuApi'
 import type { EnabledMod, JsonValue } from '@/shared/protocol/index'
 import type { ServerSaveSnapshotV2 } from '@/server/save'
 import {
@@ -31,7 +31,7 @@ export interface IntegratedAdventure11Controller {
     restore(save?: unknown): Promise<Node>
     save(): Promise<GameSaveV2>
     saveIfRunning(): Promise<GameSaveV2 | null>
-    deleteSave(): void
+    deleteSave(): Promise<void>
 }
 type ProbeGlobal = typeof globalThis & { pvzPhase4?: IntegratedAdventure11Controller }
 
@@ -61,12 +61,12 @@ export function createIntegratedAdventure11Controller(
     let saving: Promise<GameSaveV2> | null = null
     let revision = 0
 
-    const profileId = () => {
-        const id = ProfileStore.getCurrentProfile()?.id
+    const profileId = async () => {
+        const id = (await menuApi.getCurrentUser())?.id
         if (!id) throw new Error('Phase 4 save requires a current player profile')
         return id
     }
-    const storeForProfile = (id = profileId()) =>
+    const storeForProfile = (id: number) =>
         createLocalGameSaveV2Store(`${GAME_SAVE_V2_KEY}:${id}:adventure`)
     const load = async (save?: GameSaveV2): Promise<RunningAdventure11> => {
         const rollback = current?.root.isValid ? await current.showcase.snapshotPresentation() : undefined
@@ -87,10 +87,8 @@ export function createIntegratedAdventure11Controller(
                 contentHash: resolvedBase.contentHash,
             }
             if (save) {
-                if (save.profileId !== profileId()) throw new Error('GameSaveV2 belongs to another player profile')
-                if (save.contentSet.base.id !== base.id ||
-                    save.contentSet.base.version !== base.version ||
-                    save.contentSet.base.contentHash !== base.contentHash) {
+                if (save.profileId !== await profileId()) throw new Error('GameSaveV2 belongs to another player profile')
+                if (!isCompatibleBaseContent(save.contentSet.base, base, content.saveCompatibleHashes)) {
                     throw new Error('GameSaveV2 base content does not match the installed content')
                 }
                 if (!sameMods(save.contentSet.mods, content.enabledMods)) {
@@ -119,7 +117,7 @@ export function createIntegratedAdventure11Controller(
             for (const upgrade of content.loadedMods.plantUpgrades) {
                 systemMods.registerPlantUpgrade(upgrade.ownerId, upgrade)
             }
-            const playerName = ProfileStore.getCurrentProfile()?.name || 'Player'
+            const playerName = (await menuApi.getCurrentUser())?.name || 'Player'
             const view = await Adventure11View.create(root, content, playerName)
             const game = new LocalIntegratedGame(content.definitions, content.levels, systemMods)
             showcase = root.addComponent(IntegratedAdventure11Showcase)
@@ -169,7 +167,7 @@ export function createIntegratedAdventure11Controller(
     const snapshot = async (): Promise<GameSaveV2> => {
         if (loading) await loading
         if (!current?.root.isValid) throw new Error('Phase 4 showcase is not running')
-        const currentProfileId = profileId()
+        const currentProfileId = await profileId()
         const server = current.game.saveAtBoundary() as unknown as ServerSaveSnapshotV2
         current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())
         const now = Date.now()
@@ -198,11 +196,11 @@ export function createIntegratedAdventure11Controller(
             if (loading) await loading
             if (options.forceNewGame) {
                 controller.hide()
-                storeForProfile().delete()
+                storeForProfile(await profileId()).delete()
             } else if (current?.root.isValid) {
                 return current.root
             }
-            const save = options.forceNewGame ? null : storeForProfile().load()
+            const save = options.forceNewGame ? null : storeForProfile(await profileId()).load()
             const root = await startLoading(save ?? undefined)
             if (save && current?.root.isValid) current.showcase.resume()
             return root
@@ -227,7 +225,7 @@ export function createIntegratedAdventure11Controller(
         snapshot,
         async restore(value?: unknown) {
             if (loading) await loading
-            const save = value === undefined ? storeForProfile().load() : parseGameSaveV2(value)
+            const save = value === undefined ? storeForProfile(await profileId()).load() : parseGameSaveV2(value)
             if (!save) throw new Error('No GameSaveV2 exists for the current player profile')
             return startLoading(save)
         },
@@ -237,8 +235,8 @@ export function createIntegratedAdventure11Controller(
             if (!current?.root.isValid) return null
             return save()
         },
-        deleteSave() {
-            storeForProfile().delete()
+        async deleteSave() {
+            storeForProfile(await profileId()).delete()
         },
     }
     return controller
