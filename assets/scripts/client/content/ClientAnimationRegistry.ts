@@ -21,10 +21,21 @@ export interface ZombieAnimationDefinition {
     readonly mowered: ClientAnimationClip
 }
 
+export interface SunflowerAnimationDefinition {
+    readonly body: ClientAnimationClip
+    readonly blink: ClientAnimationClip
+}
+
+export interface FlagZombieAnimationDefinition extends ZombieAnimationDefinition {
+    readonly flag: ClientAnimationClip
+}
+
 export interface ClientAnimationDefinitions {
     readonly 'pvz:peashooter': ShooterAnimationDefinition
     readonly 'pvz:repeater': ShooterAnimationDefinition
     readonly 'pvz:normal': ZombieAnimationDefinition
+    readonly 'pvz:flag': FlagZombieAnimationDefinition
+    readonly 'pvz:sunflower': SunflowerAnimationDefinition
 }
 
 export type ClientAnimationTarget = keyof ClientAnimationDefinitions
@@ -44,6 +55,16 @@ const DEFAULTS: ClientAnimationDefinitions = {
         idleHead: clip('pvz:repeater_head_idle', { attachmentTrackId: 'anim_stem' }),
         shootHead: clip('pvz:repeater_shoot', { attachmentTrackId: 'anim_stem', rateScale: 45 / 35 }),
     },
+    'pvz:sunflower': { body: clip('pvz:sunflower'), blink: clip('pvz:sunflower_blink', { attachmentTrackId: 'anim_idle' }) },
+    'pvz:flag': {
+        walk: clip('pvz:flag_walk', { x: 15, y: 8 }),
+        walk2: clip('pvz:flag_walk2', { x: 15, y: 8 }),
+        eat: clip('pvz:flag_eat', { x: 15, y: 8 }),
+        death: clip('pvz:flag_death', { x: 15, y: 8 }),
+        death2: clip('pvz:flag_death2', { x: 15, y: 8 }),
+        mowered: clip('pvz:lawnmowered_zombie', { attachmentTrackId: 'locator' }),
+        flag: clip('pvz:zombie_flag', { x: 15, y: 8, attachmentTrackId: 'Zombie_flaghand' }),
+    },
     'pvz:normal': {
         walk: clip('pvz:zombie_walk', { x: 15, y: 8 }),
         walk2: clip('pvz:zombie_walk2', { x: 15, y: 8 }),
@@ -55,7 +76,7 @@ const DEFAULTS: ClientAnimationDefinitions = {
 }
 
 export class ClientAnimationRegistry {
-    private readonly values = new Map<ClientAnimationTarget, ShooterAnimationDefinition | ZombieAnimationDefinition>(
+    private readonly values = new Map<ClientAnimationTarget, ShooterAnimationDefinition | ZombieAnimationDefinition | SunflowerAnimationDefinition>(
         Object.entries(DEFAULTS).map(([target, value]) => [target as ClientAnimationTarget, cloneDefinition(value)]),
     )
     private readonly replacements = new Map<ClientAnimationTarget, string>()
@@ -148,7 +169,7 @@ function clip(reanimId: string, options: Partial<Omit<ClientAnimationClip, 'rean
     return { reanimId, rateScale: 1, x: 0, y: 0, ...options }
 }
 
-function cloneDefinition<T extends ShooterAnimationDefinition | ZombieAnimationDefinition>(value: T): T {
+function cloneDefinition<T extends ShooterAnimationDefinition | ZombieAnimationDefinition | SunflowerAnimationDefinition>(value: T): T {
     return Object.fromEntries(Object.entries(value).map(([slot, animation]) => [slot, { ...animation }])) as T
 }
 

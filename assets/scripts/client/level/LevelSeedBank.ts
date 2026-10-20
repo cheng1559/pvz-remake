@@ -68,7 +68,7 @@ export class LevelSeedBank {
             entry.view.sync({
                 gameStarted: introComplete, active: packet.ready, selected: packet.selected,
                 cooldownRemaining: packet.cooldownRemaining, cooldownTotal: packet.cooldownTotal, canAfford,
-                tutorialColor: packet.ready && canAfford ? tutorialColor : null, mobile: false,
+                tutorialColor: packet.ready && canAfford && (!this.options.presentation.guideSeed || this.options.presentation.guideSeed === entry.seedId) ? tutorialColor : null, mobile: false,
             })
             const cooldownFinished = entry.previousCooldown !== undefined && entry.previousCooldown > 0 && packet.cooldownRemaining === 0 && canAfford
             const flashRequested = events.some(event => event.type === 'seedPacketFlashRequested' && event.data.seedId === entry.seedId)

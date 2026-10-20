@@ -41,7 +41,7 @@ test('Adventure 1-1 presentation waits for entity creation and redraws restored 
     assert.match(end, /graphics\.fillRect\(-400, -300, 800, 600\)/)
     assert.doesNotMatch(view, /ProfileStore/)
     assert.match(view, /static async create\(root: Node, content: LoadedContent, levelId: string, playerName: string\)/)
-    assert.match(probe, /const playerName = \(await menuApi\.getCurrentUser\(\)\)\?\.name \|\| 'Player'/)
+    assert.match(probe, /const playerName = profile\?\.name \|\| 'Player'/)
     assert.match(probe, /LevelView\.create\(root, content, save\?\.levelId \?\? levelId, playerName\)/)
     assert.match(app, /createLevelController\(this\.gameLayer, \{/)
     assert.match(app, /onComplete: \(\) => this\.finish\(/)

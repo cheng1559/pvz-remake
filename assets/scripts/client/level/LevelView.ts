@@ -153,9 +153,22 @@ export class LevelView {
             sprite: { frame: flagMeterLevelProgress, sizeMode: Sprite.SizeMode.RAW, trim: false },
         })
         const progressHead = uiNode({
-            node: slots.progressHead, position: { x: 138, y: 3 }, anchor: { x: 0, y: 1 },
+            node: slots.progressHead, position: { x: 138, y: 3, z: 3 }, anchor: { x: 0, y: 1 },
             sprite: { frame: getAtlasFrame(flagMeterParts, 0, 25, 25, 3), sizeMode: Sprite.SizeMode.RAW, trim: false },
         }).node
+        level.waves.forEach((wave, index) => {
+            if (!wave.flagWave) return
+            const x = 148 - 142 * (index + 1) / level.waves.length
+            uiNode({
+                name: `ProgressFlagPole-${index}`, parent: progressMeter, position: { x, y: 4, z: 2 }, anchor: { x: 0, y: 1 },
+                sprite: { frame: getAtlasFrame(flagMeterParts, 1, 25, 25, 3), sizeMode: Sprite.SizeMode.RAW, trim: false },
+            })
+            uiNode({
+                name: `ProgressFlag-${index}`, parent: progressMeter, position: { x, y: 3, z: 2 }, anchor: { x: 0, y: 1 },
+                sprite: { frame: getAtlasFrame(flagMeterParts, 2, 25, 25, 3), sizeMode: Sprite.SizeMode.RAW, trim: false },
+            })
+        })
+        progressHead.setSiblingIndex(progressMeter.children.length - 1)
         const levelText = ui.label(slots.levelText.parent!, {
             node: slots.levelText, text: '', font: houseOfTerror16, color: new Color(224, 187, 98, 255),
             x: 780, y: 595, align: 'right', baseline: true,
@@ -210,7 +223,7 @@ export class LevelView {
         let view!: LevelView
         let entityRenderer!: LevelEntityRenderer
         const intro = await presentation.createIntro({
-            content, slots, board, entityLayer, bank, houseName, audio, mowerShadow,
+            content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow,
             entityNodes: () => entityRenderer.nodes(),
         })
         entityRenderer = new LevelEntityRenderer(
@@ -223,7 +236,7 @@ export class LevelView {
         )
         const end = new LevelEndPresenter(
             content, awardLayer, overlayLayer, levelCompleteFade,
-            id => entityRenderer.node(id), audio,
+            id => entityRenderer.node(id), audio, ui,
         )
         const hudPresenter = LevelHudPresenter.create({
             ui, content, level, presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,

@@ -31,6 +31,7 @@ export interface LevelController {
     isPaused(): boolean
     canPause(): boolean
     getLevelDefinition(): LevelDefinition | null
+    isWon(): boolean
     debugCommand(command: string): DebugCliResult
     pause(): void
     resume(): void
@@ -126,7 +127,8 @@ export function createLevelController(
             for (const upgrade of content.loadedMods.plantUpgrades) {
                 systemMods.registerPlantUpgrade(upgrade.ownerId, upgrade)
             }
-            const playerName = (await menuApi.getCurrentUser())?.name || 'Player'
+            const profile = await menuApi.getCurrentUser()
+            const playerName = profile?.name || 'Player'
             const view = await LevelView.create(root, content, save?.levelId ?? levelId, playerName)
             const game = new LocalIntegratedGame(content.definitions, content.levels, systemMods, DEBUG)
             scene = root.addComponent(LevelScene)
@@ -135,7 +137,7 @@ export function createLevelController(
                 levelId: save.levelId,
                 mods: save.contentSet.mods,
                 save: save.server as unknown as JsonValue,
-            } : { ...DEFAULT_START_OPTIONS, levelId, mods: content.enabledMods }, lifecycle)
+            } : { ...DEFAULT_START_OPTIONS, firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods }, lifecycle)
             if (save) await scene.restorePresentation(save.client)
             if (DEBUG) {
                 if (!GameDebugSettings.rechargingEnabled) game.debugCommand('/cooldown false')
@@ -208,15 +210,17 @@ export function createLevelController(
         },
         async play(options = {}) {
             if (loading) await loading
+            const requestedLevelId = options.levelId ?? (options.forceNewGame && current?.root.isValid ? current.game.render().levelId : undefined)
             if (options.forceNewGame) {
                 controller.hide()
                 storeForProfile(await profileId()).delete()
-            } else if (current?.root.isValid && (!options.levelId || options.levelId === current.game.render().levelId)) {
+            } else if (current?.root.isValid && (!requestedLevelId || requestedLevelId === current.game.render().levelId)) {
                 return current.root
             }
             const stored = options.forceNewGame ? null : storeForProfile(await profileId()).load()
-            const save = !options.levelId || stored?.levelId === options.levelId ? stored : null
-            const root = await startLoading(save ?? undefined, options.levelId)
+            const save = !requestedLevelId || stored?.levelId === requestedLevelId ? stored : null
+            const levelId = requestedLevelId ?? save?.levelId ?? (await menuApi.getAdventure()).levelId
+            const root = await startLoading(save ?? undefined, levelId)
             if (save && current?.root.isValid) {
                 if (options.onRestore) {
                     current.scene.pause()
@@ -236,6 +240,9 @@ export function createLevelController(
         },
         isRunning() {
             return current?.root.isValid === true
+        },
+        isWon() {
+            return current?.root.isValid === true && current.game.render().result === 'won'
         },
         getLevelDefinition() {
             return current?.root.isValid ? current.level : null

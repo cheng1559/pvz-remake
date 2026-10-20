@@ -2,6 +2,12 @@
 
 The main scene mounts `app/GameApp.ts`, which coordinates the menu shell and starts `LocalIntegratedGame` through `app/LevelController.ts`. Gameplay runs in `server`; the client consumes protocol snapshots and events. Keep engine imports out of `server`, `shared`, and `ecs`.
 
+## Server level structure
+
+`server/level.ts` initializes shared level state and advances level progress; `levelState.ts` defines the runtime components and resources. `sun.ts`, `items.ts`, `waves.ts`, and `zombieGroans.ts` provide shared sky-sun, item, wave/award, and zombie-groan logic. The corresponding progress, wave, and groan Mod system IDs are `pvz:level-progress`, `pvz:waves`, and `pvz:zombie-groans`.
+
+`server/tutorials/index.ts` selects a script by the level definition's `tutorial` ID and routes seed selection, cancellation, planting, cooldown completion, and sun collection callbacks. `PlantingTutorial.ts` and `SunflowerTutorial.ts` contain only their special guides. Levels without a tutorial script use the shared flow. Ordinary levels configure rows, starting sun, seeds, waves, and awards in `tools/content/pvz-base/gameplay/levels.json`; they do not need numbered server files. Special tutorials register a script without adding level branches to the main server.
+
 ## Level presentation
 
 `client/level/LevelScene` owns the common intro → gameplay → award/game-over lifecycle, game-clock scaling, input suspension and presentation saves. It depends on the `LevelGame` client API. `LevelView` composes the HUD, input, entities, particles, audio and end presenters; `LevelSeedBank` creates and updates each configured packet independently. Board geometry, active rows, seed costs and the level number come from installed gameplay definitions.

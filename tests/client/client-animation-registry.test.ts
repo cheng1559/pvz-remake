@@ -76,5 +76,5 @@ test('Adventure 1-1 presenters resolve plant and zombie animations through the r
     assert.match(view, /const animations = content\.animations \?\? new ClientAnimationRegistry\(\)/)
     assert.match(entities, /this\.animations\.resolve\(animationTarget\)/)
     assert.match(entities, /this\.animations\.resolve\(view\.animationTarget\)/)
-    assert.match(zombies, /this\.animations\.resolve\('pvz:normal'\)/)
+    assert.match(zombies, /this\.animations\.resolve\(this\.typeId === 'pvz:flag' \? 'pvz:flag' : 'pvz:normal'\)/)
 })

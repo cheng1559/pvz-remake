@@ -1,8 +1,8 @@
 import type { LevelPresentation } from '../LevelPresentation'
-import { Adventure11Intro } from './Adventure11Intro'
+import { AdventureIntro } from './AdventureIntro'
 
 export const adventure11Presentation: LevelPresentation = {
-    createIntro: context => Adventure11Intro.create(context),
+    createIntro: context => AdventureIntro.create(context, { sod: 'pvz:sod1row', x: 19, y: 265, rolls: [0] }),
     seedGuideSteps: ['pick-first-seed', 'pick-second-seed'],
     lawnGuideSteps: ['plant-first-seed', 'plant-second-seed'],
     advice: {

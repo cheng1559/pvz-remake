@@ -56,6 +56,8 @@ export interface AchievementView {
     items: { id: number, icon: number, titleKey: string, descriptionKey: string, earned: boolean }[]
 }
 export interface AwardView {
+    nextLevelId: string | null
+    showMainMenu: boolean
     seed: number
     cost: number
     name: string
@@ -77,6 +79,8 @@ export interface MenuEndpoints {
     getChallenges: { args: { page: ChallengePageId }, result: ChallengeView }
     getAlmanac: { args: Record<string, never>, result: AlmanacView }
     getAchievements: { args: Record<string, never>, result: AchievementView }
+    getAdventure: { args: Record<string, never>, result: { levelId: string } }
+    completeLevel: { args: Record<string, never>, result: AwardView }
     getAward: { args: Record<string, never>, result: AwardView }
 }
 export type MenuMethod = keyof MenuEndpoints

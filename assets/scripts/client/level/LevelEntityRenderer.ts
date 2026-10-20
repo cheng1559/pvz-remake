@@ -12,6 +12,8 @@ import { SeedPacketRenderer, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/cli
 import type { LawnMowerSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
+import { LevelSunflowerView } from './LevelSunflowerView'
+import { levelPlantVisual } from './LevelPlantVisuals'
 import { LevelZombieView } from './LevelZombieView'
 import type { LevelEntitySnapshot, LevelParticleOwnerSnapshot } from './LevelPresentationSnapshot'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
@@ -50,6 +52,7 @@ export class LevelEntityRenderer {
     private readonly pending = new Set<number>()
     private readonly creationTasks = new Map<number, Promise<void>>()
     private readonly shooterPlants = new Map<number, ShooterPlantView>()
+    private readonly sunflowers = new Map<number, LevelSunflowerView>()
     private readonly zombies = new Map<number, LevelZombieView>()
     private readonly mowerPlayersReady = new Set<number>()
     private readonly mowerStates = new Map<number, LawnMowerSnapshot['state']>()
@@ -119,15 +122,18 @@ export class LevelEntityRenderer {
         for (const [entityId, view] of this.shooterPlants) {
             result.push({
                 kind: 'plant', entityId,
-                body: view.body.snapshot(),
-                idleHead: view.idleHead.snapshot(),
-                shootHead: view.shootHead.snapshot(),
+                animations: {
+                    body: view.body.snapshot(),
+                    idleHead: view.idleHead.snapshot(),
+                    shootHead: view.shootHead.snapshot(),
+                },
                 idleRate: view.idleRate,
             })
         }
+        for (const [entityId, view] of this.sunflowers) result.push(view.snapshot(entityId))
         for (const [entityId, view] of this.zombies) result.push(view.snapshot(entityId))
         for (const [entityId, node] of this.entities) {
-            if (this.shooterPlants.has(entityId) || this.zombies.has(entityId)) continue
+            if (this.shooterPlants.has(entityId) || this.sunflowers.has(entityId) || this.zombies.has(entityId)) continue
             const mower = node.getChildByName('MowerAnimation')?.getComponent(ReanimPlayer)
             if (mower) result.push({ kind: 'mower', entityId, animation: mower.snapshot() })
             else {
@@ -142,15 +148,21 @@ export class LevelEntityRenderer {
         await Promise.all(this.creationTasks.values())
         for (const snapshot of snapshots) {
             if (snapshot.kind === 'plant') {
+                const sunflower = this.sunflowers.get(snapshot.entityId)
+                if (sunflower) { sunflower.restore(snapshot); continue }
                 const view = this.shooterPlants.get(snapshot.entityId)
                 if (!view) continue
+                const { body, idleHead, shootHead } = snapshot.animations
+                if (!idleHead || !shootHead || snapshot.idleRate === undefined) {
+                    throw new Error(`Missing shooter animation state for plant ${snapshot.entityId}`)
+                }
                 view.idleRate = snapshot.idleRate
-                view.body.restore(snapshot.body)
-                view.idleHead.restore(snapshot.idleHead)
-                view.shootHead.restore(snapshot.shootHead)
-                if (snapshot.idleHead.attachmentTrackId) view.idleHead.reattachAfterRestore(view.body)
-                if (snapshot.shootHead.attachmentTrackId) view.shootHead.reattachAfterRestore(view.body)
-                if (snapshot.shootHead.playing) view.shootHead.setOnFinish(() => this.finishShooterPlantShoot(view))
+                view.body.restore(body)
+                view.idleHead.restore(idleHead)
+                view.shootHead.restore(shootHead)
+                if (idleHead.attachmentTrackId) view.idleHead.reattachAfterRestore(view.body)
+                if (shootHead.attachmentTrackId) view.shootHead.reattachAfterRestore(view.body)
+                if (shootHead.playing) view.shootHead.setOnFinish(() => this.finishShooterPlantShoot(view))
             } else if (snapshot.kind === 'zombie') {
                 const view = this.zombies.get(snapshot.entityId)
                 if (view) await view.restore(snapshot)
@@ -169,7 +181,7 @@ export class LevelEntityRenderer {
             if (event.type !== 'zombiePartDropped') continue
             const entityId = event.data.entityId
             const part = event.data.part
-            if (typeof entityId !== 'number' || (part !== 'head' && part !== 'arm')) continue
+            if (typeof entityId !== 'number' || (part !== 'head' && part !== 'arm' && part !== 'flag')) continue
             const zombie = snapshot.zombies.find(candidate => candidate.entityId === entityId)
             const node = this.entities.get(entityId)
             if (zombie && node) {
@@ -206,6 +218,7 @@ export class LevelEntityRenderer {
             .filter(upgrade => upgrade.seedId === selectedSeedId)
             .map(upgrade => upgrade.targetPlantId))
         for (const plant of snapshot.plants) {
+            this.sunflowers.get(plant.entityId)?.sync(plant.eatenFlashCounter, snapshot.gameplayTick)
             this.syncShooterPlant(
                 plant.entityId,
                 plant.eatenFlashCounter,
@@ -224,11 +237,13 @@ export class LevelEntityRenderer {
         }
         this.syncLayerOrder(snapshot)
         this.playEvents(snapshot, events)
+        if (!this.intro.complete) this.intro.sync()
     }
 
     private remove(id: number): void {
         this.pending.delete(id)
         this.shooterPlants.delete(id)
+        this.sunflowers.delete(id)
         this.zombies.get(id)?.destroy()
         this.zombies.delete(id)
         this.mowerPlayersReady.delete(id)
@@ -272,12 +287,15 @@ export class LevelEntityRenderer {
                 await this.createMower(id, node, snapshot)
             } else if (snapshot.plants.some(value => value.entityId === id)) {
                 const plant = snapshot.plants.find(value => value.entityId === id)!
-                await this.createShooterPlant(id, node, plant.typeId)
+                if (plant.typeId === 'pvz:sunflower') {
+                    const view = await LevelSunflowerView.create(node, this.content, this.animations.resolve('pvz:sunflower'), this.assets.mowerShadow, snapshot.gameplayTick)
+                    if (node.isValid) this.sunflowers.set(id, view)
+                } else await this.createShooterPlant(id, node, plant.typeId)
             } else if (snapshot.zombies.some(value => value.entityId === id)) {
                 const zombie = snapshot.zombies.find(value => value.entityId === id)!
                 const view = new LevelZombieView(
                     node, this.content.registry, this.content.loader, this.animations, this.entityLayer,
-                    this.assets.mowerShadow, this.assets.damagedZombieArm,
+                    this.assets.mowerShadow, this.assets.damagedZombieArm, zombie.typeId,
                 )
                 this.zombies.set(id, view)
                 view.sync(zombie)
@@ -301,16 +319,18 @@ export class LevelEntityRenderer {
         uiNode({ node, size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT }, anchor: { x: 0.5, y: 0.5 } })
         const backEffects = uiNode({ name: 'AwardBackEffects', parent: node }).node
         TodParticleSystem.spawn({ parent: backEffects, effect: 'seedpacket', x: 0, y: 60, z: -1 })
-        const cost = this.content.levels.levels[snapshot.levelId].award.packetCost
+        const award = this.content.levels.levels[snapshot.levelId].award
+        const cost = award.packetCost
+        const seedType = levelPlantVisual(award.id).seedType
         SeedPacketRenderer.drawSeedPacket({
             name: 'FinalSeedPacketNormal', parent: node, layer: this.rootLayer, x: 0, y: 0,
-            seedType: 'sunflower', cost, costFont: this.assets.packetCostFont,
+            seedType, cost, costFont: this.assets.packetCostFont,
             seeds: this.assets.seeds, packetPlants: this.assets.packetPlants,
             cachedPacketPlants: this.assets.cachedPacketPlants,
         })
         const large = SeedPacketRenderer.drawSeedPacket({
             name: 'FinalSeedPacketLarge', parent: node, layer: this.rootLayer, x: 0, y: 0,
-            scale: 2, seedType: 'sunflower', cost, costFont: this.assets.packetCostFont,
+            scale: 2, seedType, cost, costFont: this.assets.packetCostFont,
             seeds: null, seedPacketLarger: this.assets.seedPacketLarger,
             plantPreviews: this.assets.plantPreviews,
         })
@@ -382,20 +402,20 @@ export class LevelEntityRenderer {
         })
     }
 
-    private spawnZombiePart(entityId: number, part: 'head' | 'arm', mowered: boolean, row: number): void {
+    private spawnZombiePart(entityId: number, part: 'head' | 'arm' | 'flag', mowered: boolean, row: number): void {
         const node = this.entities.get(entityId)
         if (!node) return
-        const trackPosition = this.zombies.get(entityId)?.getTrackWorldPosition(part === 'head' ? 'anim_head1' : 'Zombie_outerarm_lower')
+        const trackPosition = this.zombies.get(entityId)?.getTrackWorldPosition(part === 'flag' ? 'Zombie_flag' : part === 'head' ? 'anim_head1' : 'Zombie_outerarm_lower')
         const localPosition = trackPosition ? uiNode({ node: this.entityLayer }).transform.convertToNodeSpaceAR(trackPosition) : null
         TodParticleSystem.spawn({
             parent: this.entityLayer,
-            effect: mowered ? part === 'head' ? 'moweredzombiehead' : 'moweredzombiearm' : part === 'head' ? 'zombiehead' : 'zombiearm',
-            x: localPosition?.x ?? node.position.x + (part === 'head' ? 58 : 25),
-            y: localPosition?.y ?? node.position.y + (part === 'head' ? -30 : -55),
+            effect: part === 'flag' ? 'zombieflag' : mowered ? part === 'head' ? 'moweredzombiehead' : 'moweredzombiearm' : part === 'head' ? 'zombiehead' : 'zombiearm',
+            x: localPosition?.x ?? node.position.x + (part === 'flag' ? 18 : part === 'head' ? 58 : 25),
+            y: localPosition?.y ?? node.position.y + (part === 'flag' ? -42 : part === 'head' ? -30 : -55),
             renderOrder: row * 10 + 1.01,
             useGameTime: false,
         })
-        this.audio.zombiePartDropped()
+        if (part !== 'flag') this.audio.zombiePartDropped()
     }
 
     private spawnPlantingParticle(snapshot: WorldSnapshot, entityId: number): void {

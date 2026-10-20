@@ -5,10 +5,12 @@ import type { LevelSlots } from './LevelSlots'
 import type { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
 import { getBoardPresentation } from './boards/DayBoard'
+import { adventure12Presentation } from './adventure/Adventure12'
 import { adventure11Presentation } from './adventure/Adventure11'
 
 export interface LevelIntroContext {
     content: LoadedContent
+    level: LevelDefinition
     slots: LevelSlots
     board: Node
     entityLayer: Node
@@ -22,12 +24,14 @@ export interface LevelIntroContext {
 export interface LevelPresentation {
     createIntro(context: LevelIntroContext): Promise<LevelIntro>
     advice: Readonly<Record<string, string>>
+    guideSeed?: string
     seedGuideSteps: readonly string[]
     lawnGuideSteps: readonly string[]
 }
 
 const PRESENTATIONS: Record<string, LevelPresentation> = {
     'pvz:adventure-1-1': adventure11Presentation,
+    'pvz:adventure-1-2': adventure12Presentation,
 }
 
 export function getLevelPresentation(level: LevelDefinition) {

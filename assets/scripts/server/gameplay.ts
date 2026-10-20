@@ -137,6 +137,7 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                 const plant = world.get(entity, PlantComponent)!
                 const attack = world.get(entity, PlantAttackComponent)!
                 const shooter = definitions.plants[plant.typeId].shooter
+                if (!shooter) continue
 
                 if (attack.fireAtTick !== undefined) {
                     if (tick < attack.fireAtTick) continue
@@ -400,6 +401,7 @@ export function damageZombie(world: World, entity: number, damage: number): void
         emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'arm' })
     }
     if (zombie.hasHead && zombie.health < zombie.maxHealth / 3) {
+        dropZombieFlag(world, entity)
         zombie.hasHead = false
         emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'head' })
     }
@@ -418,8 +420,16 @@ export function mowZombie(zombie: Zombie): void {
     zombie.moweredTicksRemaining = ZOMBIE_MOWERED_TICKS
 }
 
+export function dropZombieFlag(world: World, entity: number): void {
+    const zombie = world.get(entity, ZombieComponent)!
+    if (zombie.typeId !== 'pvz:flag' || !zombie.hasHead ||
+        zombie.state === 'dying' || zombie.state === 'mowered') return
+    emitServerEvent(world.resources.get(EventQueueResource), 'zombiePartDropped', { entityId: entity, part: 'flag' })
+}
+
 function startZombieDeath(world: World, entity: number, zombie: Zombie): void {
     if (zombie.state === 'dying') return
+    dropZombieFlag(world, entity)
     const random = world.resources.get(RandomResource)
     zombie.state = 'dying'
     zombie.animation = random.integer(0, 99) >= 51 ? 'anim_death2' : 'anim_death'

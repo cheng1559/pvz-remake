@@ -3,6 +3,7 @@
   "levels": {
     "pvz:adventure-1-1": {
       "adventureIndex": 1,
+      "nextLevel": "pvz:adventure-1-2",
       "board": "pvz:day",
       "activeRows": [2],
       "startingSun": 150,
@@ -17,6 +18,25 @@
       ],
       "tutorial": "pvz:adventure-1-1",
       "award": { "kind": "seed", "id": "pvz:sunflower", "packetCost": 50 }
+    },
+    "pvz:adventure-1-2": {
+      "adventureIndex": 2,
+      "board": "pvz:day",
+      "activeRows": [1, 2, 3],
+      "startingSun": 50,
+      "seedPackets": ["pvz:peashooter", "pvz:sunflower"],
+      "lawnMower": "pvz:standard",
+      "skySun": "pvz:sun",
+      "waves": [
+        { "zombies": ["pvz:normal"] },
+        { "zombies": ["pvz:normal"] },
+        { "zombies": ["pvz:normal"] },
+        { "zombies": ["pvz:normal", "pvz:normal"] },
+        { "zombies": ["pvz:normal", "pvz:normal"] },
+        { "zombies": ["pvz:normal", "pvz:normal", "pvz:flag", "pvz:normal", "pvz:normal"], "flagWave": true }
+      ],
+      "tutorial": "pvz:adventure-1-2",
+      "award": { "kind": "seed", "id": "pvz:cherrybomb", "packetCost": 150 }
     }
   }
 }

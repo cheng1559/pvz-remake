@@ -159,10 +159,16 @@ export class MenuScreen extends Component {
                 } catch (error) { root.node.destroy(); throw error }
             } else if (id === 'award') {
                 try {
-                    await showAwardScreen(controls, ui)
+                    const award = await showAwardScreen(controls, ui)
+                    navigateButton('nextLevel', {
+                        skin: 'seed', text: ui.text('NEXT_LEVEL_BUTTON', 'NEXT LEVEL!'), x: 324, y: 500,
+                        pressOffset: [0, 0], rightClickTriggers: false,
+                    })
+                    if (award.showMainMenu) navigateButton('main', {
+                        skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON', 'Main Menu'), x: 677, y: 16,
+                        rightClickTriggers: false,
+                    })
                 } catch (error) { root.node.destroy(); throw error }
-                navigateButton('restart', { skin: 'seed', text: 'Play again', x: 324, y: 500 })
-                navigateButton('main', { skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON', 'Main Menu'), x: 677, y: 16 })
             } else if (!await showMenuPageControls(controls, ui, id, action => { void this.onNavigate(action) }).catch(error => {
                 root.node.destroy()
                 throw error

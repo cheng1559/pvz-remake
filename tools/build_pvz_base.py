@@ -5,6 +5,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from PIL import Image
+
 from content_converter import build_sprite_content
 
 
@@ -18,6 +20,11 @@ STARTUP_CLIPS = [
     for name in ("loadbar_sprout", "loadbar_zombiehead")
 ]
 
+ADVENTURE_12_CLIPS = [
+    (ROOT / "tools/raw/reanim/zombie.reanim", "flagbody", f"anim_{name}", f"pvz:flag_{name}")
+    for name in ("walk", "walk2", "eat", "death", "death2")
+] + [(ROOT / "tools/raw/reanim/zombie_flagpole.reanim", "flag", "Zombie_flag", "pvz:zombie_flag")]
+
 
 def content_hash(bundle: Path, manifest: dict) -> str:
     payload = {**manifest, "contentHash": ""}
@@ -30,8 +37,20 @@ def content_hash(bundle: Path, manifest: dict) -> str:
     return digest.hexdigest()
 
 
-def build_main_menu(clips: list | None = None) -> dict:
-    """Convert just menu clips and merge their assets into the existing base Bundle."""
+def same_asset(source: Path, target: Path) -> bool:
+    if not target.is_file():
+        return False
+    if source.read_bytes() == target.read_bytes():
+        return True
+    if source.suffix != ".png":
+        return False
+    # Pillow versions may encode identical pixels differently; retain the installed sprite bytes.
+    with Image.open(source) as first, Image.open(target) as second:
+        return first.size == second.size and first.convert("RGBA").tobytes() == second.convert("RGBA").tobytes()
+
+
+def build_main_menu(clips: list | None = None, sprite_sources: list | None = None, update_gameplay: bool = False) -> dict:
+    """Convert selected assets and merge them into the existing base Bundle."""
     bundle = ROOT / "assets/bundles/pvz-base"
     manifest_path = bundle / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -45,19 +64,25 @@ def build_main_menu(clips: list | None = None) -> dict:
         source.mkdir()
         output = temporary / "bundle"
         generated = build_sprite_content(
-            source, output, reanim_clips=MAIN_MENU_CLIPS if clips is None else clips, anim_config=ROOT / "tools",
+            source, output, reanim_clips=MAIN_MENU_CLIPS if clips is None else clips, anim_config=ROOT / "tools", sprite_sources=sprite_sources,
             gameplay_source=ROOT / "tools/content/pvz-base/gameplay",
         )
         for category in ("reanim", "sprites"):
             (bundle / category).mkdir(parents=True, exist_ok=True)
             for path in (output / category).iterdir():
                 target = bundle / category / path.name
-                if not target.is_file() or target.read_bytes() != path.read_bytes():
+                if not same_asset(path, target):
                     changed = True
                     shutil.copyfile(path, target)
             if any(manifest["client"][category].get(key) != value for key, value in generated["client"][category].items()):
                 changed = True
             manifest["client"][category].update(generated["client"][category])
+        if update_gameplay:
+            for path in (output / "gameplay").iterdir():
+                target = bundle / "gameplay" / path.name
+                if target.read_bytes() != path.read_bytes():
+                    changed = True
+                    shutil.copyfile(path, target)
 
     if changed:
         manifest["saveCompatibleHashes"] = sorted({*manifest.get("saveCompatibleHashes", []), previous_hash})
@@ -74,6 +99,7 @@ def build_pvz_base() -> dict:
             (ROOT / "tools/raw/images/background1.jpg", "pvz:background1"),
             (ROOT / "tools/raw/images/background1unsodded.jpg", "pvz:background1unsodded"),
             (ROOT / "tools/raw/images/sod1row.jpg", "pvz:sod1row"),
+            (ROOT / "tools/raw/images/sod3row.jpg", "pvz:sod3row"),
             (ROOT / "tools/raw/images/projectilepea.png", "pvz:projectilepea"),
             (ROOT / "tools/raw/images/pea_shadows.png", "pvz:pea_shadows"),
             (ROOT / "tools/raw/images/plantshadow.png", "pvz:plantshadow"),
@@ -113,6 +139,7 @@ def build_pvz_base() -> dict:
             (ROOT / "tools/raw/reanim/sun.reanim", "default", "default", "pvz:sun"),
             (ROOT / "tools/raw/reanim/sodroll.reanim", "default", "default", "pvz:sodroll"),
             (ROOT / "tools/raw/reanim/finalwave.reanim", "default", "default", "pvz:finalwave"),
+            *ADVENTURE_12_CLIPS,
             *MAIN_MENU_CLIPS,
             *STARTUP_CLIPS,
         ],
@@ -147,9 +174,15 @@ if __name__ == "__main__":
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--main-menu-only", action="store_true", help="rebuild only menu animation assets in an existing base Bundle")
     scope.add_argument("--startup-only", action="store_true", help="rebuild only loading-bar animation assets in an existing base Bundle")
+    scope.add_argument("--adventure-1-2-only", action="store_true", help="install Adventure 1-2 assets and gameplay into the existing Bundle")
     parser.add_argument("--raw-root", type=Path, default=ROOT / "tools/raw", help="raw asset directory for a scoped menu/startup build")
     args = parser.parse_args()
-    if args.main_menu_only or args.startup_only:
+    if args.adventure_1_2_only:
+        build_main_menu(
+            [(args.raw_root / "reanim" / path.name, node, clip, content_id) for path, node, clip, content_id in ADVENTURE_12_CLIPS],
+            [(args.raw_root / "images/sod3row.jpg", "pvz:sod3row")], update_gameplay=True,
+        )
+    elif args.main_menu_only or args.startup_only:
         clips = STARTUP_CLIPS if args.startup_only else MAIN_MENU_CLIPS
         build_main_menu([(args.raw_root / "reanim" / path.name, node, clip, content_id) for path, node, clip, content_id in clips])
     else:

@@ -10,6 +10,12 @@
     }
   },
   "seeds": {
+    "pvz:sunflower": {
+      "plant": "pvz:sunflower",
+      "sunCost": 50,
+      "cooldownTicks": 750,
+      "placement": "ground"
+    },
     "pvz:peashooter": {
       "plant": "pvz:peashooter",
       "sunCost": 100,
@@ -24,6 +30,15 @@
     }
   },
   "plants": {
+    "pvz:sunflower": {
+      "maxHealth": 300,
+      "body": { "x": 10, "y": 0, "width": 60, "height": 80 },
+      "producer": {
+        "item": "pvz:sun",
+        "cadenceTicks": 2500,
+        "initialDelayTicks": { "min": 300, "max": 1250 }
+      }
+    },
     "pvz:peashooter": {
       "maxHealth": 300,
       "body": { "x": 10, "y": 0, "width": 60, "height": 80 },
@@ -52,6 +67,13 @@
     }
   },
   "zombies": {
+    "pvz:flag": {
+      "maxHealth": 270,
+      "speedPerTick": { "min": 0.45, "max": 0.45 },
+      "body": { "x": 36, "y": 0, "width": 42, "height": 115 },
+      "attack": { "x": 20, "y": 0, "width": 50, "height": 115 },
+      "bite": { "damage": 4, "cadenceTicks": 4 }
+    },
     "pvz:normal": {
       "maxHealth": 270,
       "speedPerTick": { "min": 0.23, "max": 0.37 },

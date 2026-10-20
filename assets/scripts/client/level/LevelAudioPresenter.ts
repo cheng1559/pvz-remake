@@ -94,6 +94,9 @@ export class LevelAudioPresenter {
     play(event: ServerEvent): void {
         switch (event.type) {
             case 'plantPlaced': void SoundLoader.playFoley(SoundEffect.Plant); break
+            case 'musicBurst': MusicSystem.startBurst(); break
+            case 'sunProduced': void SoundLoader.playFoley(SoundEffect.Throw, 10); break
+            case 'hugeWaveSound': void SoundLoader.play(SoundEffect.HugeWave); break
             case 'projectileFired': void SoundLoader.playFoley(SoundEffect.Throw, 10); break
             case 'itemCollected': void SoundLoader.playFoley(SoundEffect.Points, 10); break
             case 'sunFlash': void SoundLoader.play(SoundEffect.Buzzer); break

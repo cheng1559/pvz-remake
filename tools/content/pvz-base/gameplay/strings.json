@@ -12,6 +12,11 @@
     "ADVICE_PLANTED_PEASHOOTER": "Nicely done!",
     "ADVICE_SEED_REFRESH": "Seeds need time to refresh before planting again",
     "ADVICE_ZOMBIES_ATE_BRAINS": "THE ZOMBIES ATE YOUR BRAINS!",
-    "ADVICE_ZOMBIE_ONSLAUGHT": "Don't let the zombies reach your house!"
+    "ADVICE_ZOMBIE_ONSLAUGHT": "Don't let the zombies reach your house!",
+    "ADVICE_PLANT_SUNFLOWER1": "Sunflowers are an extremely important plant!",
+    "ADVICE_PLANT_SUNFLOWER2": "Try to plant at least 3 of them!",
+    "ADVICE_PLANT_SUNFLOWER3": "Planting at least 3 sunflowers improves your\nchances of surviving a zombie attack!",
+    "ADVICE_MORE_SUNFLOWERS": "The more sunflowers you have,\nthe faster you can grow plants!",
+    "ADVICE_HUGE_WAVE": "A HUGE WAVE OF ZOMBIES IS APPROACHING!"
   }
 }

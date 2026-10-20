@@ -25,6 +25,8 @@ export class LevelZombieView {
     private parts = ''
     private mowerDriver: ReanimPlayer | null = null
     private mowerPending = false
+    private flag: ReanimPlayer | null = null
+    private holdingFlag = false
 
     constructor(
         private readonly node: Node,
@@ -34,6 +36,7 @@ export class LevelZombieView {
         shadowParent: Node,
         shadow: SpriteFrame,
         private readonly damagedArm: SpriteFrame,
+        private readonly typeId = 'pvz:normal',
     ) {
         this.shadowNode = uiNode({
             name: 'ZombieShadow', parent: shadowParent, anchor: { x: 0, y: 1 },
@@ -42,6 +45,7 @@ export class LevelZombieView {
     }
 
     sync(zombie: ZombieSnapshot): void {
+        this.holdingFlag = this.typeId === 'pvz:flag' && zombie.hasHead && zombie.state !== 'dying' && zombie.state !== 'mowered'
         uiNode({ node: this.node, opacity: zombie.alpha ?? 255 })
         this.shadowNode.setPosition(this.node.position.x + 23, this.node.position.y - 92)
         this.shadowNode.active = zombie.state !== 'dying' && zombie.state !== 'mowered'
@@ -65,7 +69,7 @@ export class LevelZombieView {
     }
 
     getTrackWorldPosition(trackId: string): Vec3 | null {
-        return this.player?.getTrackWorldPosition(trackId) ?? null
+        return (trackId === 'Zombie_flag' ? this.flag : this.player)?.getTrackWorldPosition(trackId) ?? null
     }
 
     syncGameOverWalk(zombie: ZombieSnapshot, ticks: number, y: number): void {
@@ -93,6 +97,7 @@ export class LevelZombieView {
             entityId,
             body: this.player?.snapshot() ?? null,
             mowerDriver: this.mowerDriver?.snapshot() ?? null,
+            ...(this.flag ? { flag: this.flag.snapshot() } : {}),
         }
     }
 
@@ -101,6 +106,10 @@ export class LevelZombieView {
         this.pendingAnimation = null
         this.player = await this.restorePlayer(this.player, 'ZombieAnimation', snapshot.body)
         this.mowerDriver = await this.restorePlayer(this.mowerDriver, 'MoweredDriver', snapshot.mowerDriver)
+        this.flag = await this.restorePlayer(this.flag, 'Flag', snapshot.flag ?? null)
+        if (this.flag && this.player) {
+            this.attachFlag(this.flag, this.player, snapshot.flag?.attachmentTrackId ?? 'Zombie_flaghand')
+        }
         if (snapshot.body?.attachmentTrackId && this.player && this.mowerDriver) {
             this.player.reattachAfterRestore(this.mowerDriver)
         }
@@ -138,11 +147,14 @@ export class LevelZombieView {
     }
 
     private syncMowered(zombie: ZombieSnapshot): void {
+        this.flag?.hide()
+        this.applyParts(zombie)
         this.player?.pause()
         const animation = this.definition('mowered')
         if (this.mowerDriver) {
             this.mowerDriver.seek(zombie.animationTime / 12 * animation.rateScale)
             if (this.player) this.player.seek(this.player.snapshot().timeSeconds)
+            this.flag?.seek(this.flag.snapshot().timeSeconds)
             return
         }
         if (this.mowerPending || !this.player) return
@@ -179,16 +191,27 @@ export class LevelZombieView {
         try {
             await player.load(animation.reanimId, this.registry, this.loader)
             if (!animationNode.isValid) return
+            let flag: ReanimPlayer | null = null
+            if (this.holdingFlag) {
+                const animation = this.animations.resolve('pvz:flag').flag
+                flag = uiNode({ name: 'Flag', parent: animationNode, position: animation }).node.addComponent(ReanimPlayer)
+                await flag.load(animation.reanimId, this.registry, this.loader)
+                if (!animationNode.isValid) return
+                this.attachFlag(flag, player, animation.attachmentTrackId ?? 'Zombie_flaghand')
+                flag.play({ loop: true, rate: 15 / 12 * animation.rateScale })
+            }
             if (version !== this.loadVersion) {
                 animationNode.destroy()
                 return
             }
             const previousPlayer = this.player
+            if (this.flag?.node.isValid && this.flag.node.parent !== previousPlayer?.node) this.flag.node.destroy()
             animationNode.name = 'ZombieAnimation'
             this.animation = zombie.animation
             this.pendingAnimation = null
             this.parts = ''
             this.player = player
+            this.flag = flag
             player.play({
                 loop: zombie.state !== 'dying',
                 rate: zombie.animationSpeed * animation.rateScale,
@@ -207,10 +230,24 @@ export class LevelZombieView {
         }
     }
 
+    private attachFlag(flag: ReanimPlayer, body: ReanimPlayer, trackId: string): void {
+        flag.node.setParent(body.node)
+        flag.node.setPosition(0, 0)
+        flag.attachToTrack(body, trackId)
+        const arm = body.getTrackNode('Zombie_innerarm_screendoor')
+        if (arm) flag.node.setSiblingIndex(arm.getSiblingIndex() + 1)
+    }
+
     private applyParts(zombie: ZombieSnapshot): void {
-        const signature = `${zombie.hasHead ? 1 : 0}|${zombie.hasArm ? 1 : 0}`
+        const signature = `${zombie.hasHead ? 1 : 0}|${zombie.hasArm ? 1 : 0}|${this.holdingFlag ? 1 : 0}`
         if (!this.player || signature === this.parts) return
         this.parts = signature
+        if (this.typeId === 'pvz:flag') {
+            this.player.setTrackPrefixVisible('anim_innerarm', !this.holdingFlag)
+            this.player.setTrackPrefixVisible('Zombie_flaghand', this.holdingFlag)
+            this.player.setTrackPrefixVisible('Zombie_innerarm_screendoor', this.holdingFlag)
+            if (!this.holdingFlag) this.flag?.hide()
+        }
         this.player.setTrackPrefixVisible('anim_head', zombie.hasHead)
         this.player.setTrackPrefixVisible('anim_hair', zombie.hasHead)
         this.player.setTrackPrefixVisible('anim_tongue', zombie.hasHead)
@@ -221,6 +258,7 @@ export class LevelZombieView {
 
     private applyHitFlash(counter: number): void {
         const grayness = Math.min(255, counter * 10)
+        this.flag?.setExtraAdditiveDraw(counter > 0, new Color(grayness, grayness, grayness, 255))
         this.player?.setExtraAdditiveDraw(
             counter > 0,
             new Color(grayness, grayness, grayness, 255),
@@ -229,10 +267,10 @@ export class LevelZombieView {
 
     private definition(animation: ZombieSnapshot['animation'] | keyof ZombieAnimationDefinition): ClientAnimationClip {
         const slot = animation in SLOTS ? SLOTS[animation as ZombieSnapshot['animation']] : animation as keyof ZombieAnimationDefinition
-        return this.animations.resolve('pvz:normal')[slot]
+        return this.animations.resolve(this.typeId === 'pvz:flag' ? 'pvz:flag' : 'pvz:normal')[slot]
     }
 
     private definitionFromReanim(reanimId: string): ClientAnimationClip | undefined {
-        return Object.values(this.animations.resolve('pvz:normal')).find(value => value.reanimId === reanimId)
+        return Object.values(this.animations.resolve(this.typeId === 'pvz:flag' ? 'pvz:flag' : 'pvz:normal')).find(value => value.reanimId === reanimId)
     }
 }

@@ -35,8 +35,7 @@ test('client presentation snapshot restores interpolation, sequence, and consume
 
     const saved = source.snapshot(levelPresentation(source.world.current!))
     const { level, ...transport } = saved
-    assert.deepEqual(parseClientPresentationSnapshot({ ...transport, adventure11: level }), saved,
-        'the previous  adventure11 wire field remains readable')
+    assert.throws(() => parseClientPresentationSnapshot({ ...transport, adventure11: level }), /adventure11 is not supported/)
     const anotherLevel = JSON.parse(JSON.stringify(saved))
     for (const world of [anotherLevel.transport.previous, anotherLevel.transport.current]) {
         if (world) world.levelId = 'example:another-level'

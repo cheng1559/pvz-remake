@@ -1,3 +1,4 @@
+import type { BoardDefinition } from '@/shared/content/gameplay'
 import { Mask, Node, Sprite, Vec3 } from 'cc'
 import { TodParticleSystem } from '@/core/Particle'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -30,30 +31,51 @@ const SEED_BANK_START = 800
 const SEED_BANK_END = 825
 const HOUSE_NAME_DURATION = 250
 
-export class Adventure11Intro implements LevelIntro {
+export interface AdventureIntroLayout {
+    sod: string
+    x: number
+    y: number
+    existingMiddleRow?: boolean
+    rolls: readonly number[]
+}
+
+export class AdventureIntro implements LevelIntro {
     private ticks = 0
     private destroyed = false
 
-    static async create(context: LevelIntroContext): Promise<Adventure11Intro> {
-        const { content, slots, board, entityLayer, bank, houseName, audio, mowerShadow, entityNodes } = context
+    static async create(context: LevelIntroContext, layout: AdventureIntroLayout): Promise<AdventureIntro> {
+        const { content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow, entityNodes } = context
         const sprites = new SpriteRepository(content.registry, content.loader)
-        const [sod] = await Promise.all([sprites.load('pvz:sod1row'), ParticleDefinitionLoader.load('sodroll')])
+        const [sod] = await Promise.all([sprites.load(layout.sod), ParticleDefinitionLoader.load('sodroll')])
         const sodClip = uiNode({
-            node: slots.sodClip, position: { x: -381, y: 35 }, anchor: { x: 0, y: 1 },
+            node: slots.sodClip, position: { x: layout.x - 400, y: 300 - layout.y }, anchor: { x: 0, y: 1 },
             size: { width: 0, height: sod.originalSize.height }, mask: Mask.Type.GRAPHICS_RECT,
         }).node
         uiNode({ node: slots.sodRow, anchor: { x: 0, y: 1 }, sprite: { frame: sod, sizeMode: Sprite.SizeMode.RAW, trim: false } })
-        uiNode({ node: slots.tutorialLawnFlash, position: { x: -381, y: 35 }, anchor: { x: 0, y: 1 },
+        uiNode({ node: slots.tutorialLawnFlash, position: { x: layout.x - 400, y: 300 - layout.y }, anchor: { x: 0, y: 1 },
             sprite: { frame: sod, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node.active = false
-        const sodRollNode = uiNode({
-            node: slots.sodRoll, position: { x: -WIDTH / 2, y: HEIGHT / 2 },
-            size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
-        }).node
-        const sodRoll = sodRollNode.addComponent(ReanimPlayer)
-        await sodRoll.load('pvz:sodroll', content.registry, content.loader)
-        sodRoll.play({ loop: false, rate: 1, hideOnFinish: false })
-        sodRoll.pause()
-        sodRollNode.active = false
+        if (layout.existingMiddleRow) {
+            const middle = await sprites.load('pvz:sod1row')
+            const node = uiNode({
+                name: 'ExistingSod', parent: board, position: { x: -381, y: 35 }, anchor: { x: 0, y: 1 },
+                sprite: { frame: middle, sizeMode: Sprite.SizeMode.RAW, trim: false },
+            }).node
+            node.setSiblingIndex(sodClip.getSiblingIndex())
+        }
+        const sodRolls = await Promise.all(layout.rolls.map(async (offset, index) => {
+            const node = uiNode({
+                ...(index === 0 ? { node: slots.sodRoll } : { name: 'SodRoll', parent: board }),
+                position: { x: -WIDTH / 2, y: HEIGHT / 2 - offset },
+                size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
+            }).node
+            node.setSiblingIndex(slots.sodRoll.getSiblingIndex() + index)
+            const player = node.addComponent(ReanimPlayer)
+            await player.load('pvz:sodroll', content.registry, content.loader)
+            player.play({ loop: false, rate: 1, hideOnFinish: false })
+            player.pause()
+            node.active = false
+            return player
+        }))
 
         const introZombies: Node[] = []
         const introPositions: Array<{ x: number, y: number, z: number }> = []
@@ -87,17 +109,20 @@ export class Adventure11Intro implements LevelIntro {
         }))
         introZombies.sort((left, right) => left.position.z - right.position.z)
             .forEach((node, index) => node.setSiblingIndex(index))
-        return new Adventure11Intro(board, sodClip, sodRoll, introZombies, bank, houseName,
+        return new AdventureIntro(board, sodClip, sodRolls, layout.rolls, introZombies, bank, houseName,
+            content.definitions.boards[level.board],
             entityNodes, audio, content.registry, content.loader)
     }
 
     constructor(
         private readonly board: Node,
         private readonly sodClip: Node,
-        private readonly sodRoll: ReanimPlayer,
+        private readonly sodRolls: ReanimPlayer[],
+        private readonly rollOffsets: readonly number[],
         private readonly introZombies: Node[],
         private readonly bank: Node,
         private readonly houseName: Node,
+        private readonly geometry: BoardDefinition,
         private readonly entityNodes: () => Iterable<Node>,
         private readonly audio: LevelAudioPresenter,
         private readonly registry: ContentRegistry,
@@ -137,7 +162,7 @@ export class Adventure11Intro implements LevelIntro {
 
     async restore(snapshot: LevelIntroSnapshot): Promise<void> {
         if (snapshot.ticks > INTRO_END || snapshot.previews.length !== (snapshot.ticks < INTRO_END ? 5 : 0)) {
-            throw new Error('Invalid Adventure 1-1 intro state')
+            throw new Error('Invalid adventure intro state')
         }
         this.ticks = snapshot.ticks
         this.destroyed = this.complete
@@ -196,8 +221,10 @@ export class Adventure11Intro implements LevelIntro {
         const sodTransform = uiNode({ node: this.sodClip }).transform
         sodTransform.setContentSize(771 * sodProgress, sodTransform.height)
         const rollProgress = linearFloat(ROLL_SOD_START, ROLL_SOD_END, tick + 1, 0, 1)
-        this.sodRoll.node.active = tick >= ROLL_SOD_START && rollProgress < 1
-        if (this.sodRoll.node.active) this.sodRoll.seek(this.sodRoll.lastFrameTimeSeconds * rollProgress)
+        for (const roll of this.sodRolls) {
+            roll.node.active = tick >= ROLL_SOD_START && rollProgress < 1
+            if (roll.node.active) roll.seek(roll.lastFrameTimeSeconds * rollProgress)
+        }
 
         const houseNameTicks = Math.max(0, HOUSE_NAME_DURATION - tick)
         this.houseName.active = houseNameTicks > 0
@@ -212,10 +239,12 @@ export class Adventure11Intro implements LevelIntro {
 
         for (const node of this.entityNodes()) {
             if (!node.getChildByName('CachedMower')) continue
-            node.active = tick > LAWN_MOWER_START || this.complete
+            const row = Math.round((HEIGHT / 2 - node.position.y - this.geometry.origin.y - 23) / this.geometry.cell.height)
+            const start = LAWN_MOWER_START + (2 - row) * 5
+            node.active = tick > start || this.complete
             if (node.active && !this.complete) {
                 node.setPosition(
-                    easeInOut(LAWN_MOWER_START, LAWN_MOWER_END, tick, -480, -421),
+                    easeInOut(start, start + LAWN_MOWER_END - LAWN_MOWER_START, tick, -480, -421),
                     node.position.y,
                 )
             }
@@ -223,11 +252,11 @@ export class Adventure11Intro implements LevelIntro {
     }
 
     private startSodRoll(): void {
-        TodParticleSystem.spawn({
+        for (const offset of this.rollOffsets) TodParticleSystem.spawn({
             parent: this.board,
             effect: 'sodroll',
             x: 35 - WIDTH / 2,
-            y: HEIGHT / 2 - 348,
+            y: HEIGHT / 2 - 348 - offset,
             useGameTime: false,
         })
         this.audio.sodRollStarted()

@@ -213,7 +213,7 @@ export class LevelHudPresenter {
     ): void {
         const showSeedGuide = introComplete && snapshot.result === 'playing' && this.presentation.seedGuideSteps.includes(snapshot.tutorial.step)
         this.seedBank.sync(snapshot, events, introComplete, showSeedGuide ? tutorialFlashColor(snapshot.gameplayTick) : null, allowTransientEffects)
-        const packet = snapshot.seedPackets[0]
+        const packet = snapshot.seedPackets.find(packet => packet.seedId === (this.presentation.guideSeed ?? this.level.seedPackets[0]))
         const canAfford = packet && ((snapshot.extensions['pvz:debug'] as { sunCost?: boolean } | undefined)?.sunCost === false
             || snapshot.availableSun >= this.content.definitions.seeds[packet.seedId].sunCost)
         this.syncSeedTutorialArrow(!!(showSeedGuide && packet?.ready && canAfford))
@@ -238,7 +238,7 @@ export class LevelHudPresenter {
             if (event.type === 'levelWon') this.advice.clear()
             else if (event.type === 'advice') {
                 const key = event.data.key
-                if (typeof key === 'string') this.advice.show(contentText(this.content.strings.entries, key), 'tutorial-level1')
+                if (typeof key === 'string') this.advice.show(contentText(this.content.strings.entries, key), event.data.style === 'tutorial-level2' ? 'tutorial-level2' : 'tutorial-level1')
             } else if (event.type === 'adviceCleared') {
                 const key = event.data.key
                 if (typeof key === 'string' && this.advice.snapshot()?.message === contentText(this.content.strings.entries, key)) this.advice.clear()
@@ -253,12 +253,15 @@ export class LevelHudPresenter {
             this.progressCountdownStart = snapshot.wave.countdown
         } else this.progressCountdownStart = Math.max(this.progressCountdownStart, snapshot.wave.countdown)
         const denominator = Math.max(1, snapshot.wave.total - 1)
-        const waveStart = (snapshot.wave.index - 1) / denominator
-        const waveEnd = snapshot.wave.index / denominator
+        const flagCount = this.level.waves.filter(wave => wave.flagWave).length
+        const passedFlags = this.level.waves.filter((wave, index) => wave.flagWave && index < snapshot.wave.index).length
+        const meterWidth = 150 - flagCount * 12
+        const waveStart = ((snapshot.wave.index - 1) * meterWidth / denominator + passedFlags * 12) / 150
+        const waveEnd = (snapshot.wave.index * meterWidth / denominator + passedFlags * 12) / 150
         const waveProgress = this.progressCountdownStart > 0 ? 1 - snapshot.wave.countdown / this.progressCountdownStart : 0
         const targetWidth = snapshot.wave.index > 0 ? Math.max(1 / 150, Math.min(1, waveStart + (waveEnd - waveStart) * waveProgress)) : 0
         const targetMeterWidth = Math.round(150 * targetWidth)
-        const waveLength = 150 / denominator
+        const waveLength = meterWidth / denominator
         for (let tick = this.progressTick + 1; tick <= snapshot.gameplayTick; tick++) {
             const delta = targetMeterWidth - this.progressMeterWidth
             if ((delta > waveLength && tick % 5 === 0) || (delta > 0 && tick % 20 === 0)) this.progressMeterWidth++
@@ -273,12 +276,21 @@ export class LevelHudPresenter {
         if (this.levelText.text !== level) this.levelText.text = level
         this.levelText.setPosition(progress > 0 ? 593 : 780, 595)
         if (progress <= 0) return
+        this.level.waves.forEach((wave, index) => {
+            if (wave.flagWave) {
+                const flag = this.progressMeter.getChildByName(`ProgressFlag-${index}`)
+                const raised = snapshot.wave.index > index + 1 ? 1 : snapshot.wave.index === index + 1
+                    ? Math.min(1, (this.progressCountdownStart - snapshot.wave.countdown) / 100) : 0
+                if (flag) flag.setPosition(flag.position.x, 3 + Math.round(14 * raised), 2)
+            }
+        })
         const fillWidth = Math.max(1, Math.round(PROGRESS_FILL_WIDTH * progress))
         const fillX = PROGRESS_METER_WIDTH - fillWidth - 7
         uiNode({ node: this.progressFillClip }).transform.setContentSize(fillWidth, PROGRESS_METER_HEIGHT)
         this.progressFillClip.setPosition(fillX, 0)
         this.progressFill.setPosition(-fillX, 0)
-        this.progressHead.setPosition(138 - Math.round(135 * progress), 3)
+        this.progressHead.setPosition(138 - Math.round(135 * progress), 3, 3)
+        this.progressHead.setSiblingIndex(this.progressMeter.children.length - 1)
     }
 
     private syncSun(value: number): void {
@@ -329,7 +341,7 @@ export class LevelHudPresenter {
             arrow?.destroy()
             return
         }
-        const rect = this.seedBank.packets[0].view.rect()
+        const rect = this.seedBank.packets.find(packet => packet.seedId === (this.presentation.guideSeed ?? this.level.seedPackets[0]))!.view.rect()
         if (arrow) {
             arrow.setPosition(rect.x, -rect.y, 20)
             return

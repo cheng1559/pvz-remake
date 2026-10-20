@@ -6,7 +6,9 @@ import {
     PositionComponent,
     ZombieComponent,
     mowZombie,
+    dropZombieFlag,
 } from './gameplay'
+import { WaveResource } from './levelState'
 import { EventQueueResource, emitServerEvent } from './events'
 
 const READY_X = -21
@@ -41,6 +43,11 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
                     if (!overlaps(position.x + definition.attack.x, definition.attack.width,
                         zombiePosition.x + body.x, body.width)) continue
                     if (mower.state === 'ready') {
+                        if (world.resources.has(WaveResource)) {
+                            const wave = world.resources.get(WaveResource)
+                            const row = wave.rowPicks?.find(state => state.row === position.row)
+                            if (row) row.mowedAtWave = wave.index
+                        }
                         emitServerEvent(world.resources.get(EventQueueResource), 'mowerActivated', {
                             entityId: entity,
                             row: position.row,
@@ -50,6 +57,7 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
                         mower.chompCounter = CHOMP_ACTIVE_TICKS
                     }
                     mower.state = 'active'
+                    dropZombieFlag(world, zombieEntity)
                     mowZombie(zombie)
                     emitServerEvent(world.resources.get(EventQueueResource), 'zombieMowered', {
                         mowerId: entity,

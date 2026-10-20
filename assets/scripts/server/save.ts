@@ -16,7 +16,7 @@ import type {
     SeedBankState,
     Zombie,
 } from './gameplay'
-import type { Item, TutorialState, WaveState } from './levelOne'
+import type { Item, TutorialState, WaveState } from './levelState'
 
 export interface SavedEntity {
     entityId: EntityId
@@ -147,20 +147,23 @@ function parseTutorial(value: unknown): TutorialState {
     const source = optionalExact(
         value,
         ['firstAdventure', 'step'],
-        ['sunAtTick', 'promptAtTick', 'cantAffordAdviceShown', 'seedRefreshAdviceShown'],
+        ['sunAtTick', 'promptAtTick', 'cantAffordAdviceShown', 'seedRefreshAdviceShown', 'zombieWarningShown', 'sunsFallen'],
         'server save.tutorial',
     )
     if (source.step !== 'pick-first-seed' && source.step !== 'plant-first-seed' &&
         source.step !== 'first-plant-done' && source.step !== 'collect-first-sun' &&
         source.step !== 'collect-more-sun' && source.step !== 'enough-sun' &&
         source.step !== 'pick-second-seed' && source.step !== 'plant-second-seed' &&
-        source.step !== 'complete') {
+        source.step !== 'pick-sunflower' && source.step !== 'plant-sunflower' &&
+        source.step !== 'refresh-sunflower' && source.step !== 'complete') {
         throw new TypeError('server save.tutorial.step is unknown')
     }
     const result: TutorialState = {
         firstAdventure: boolean(source.firstAdventure, 'server save.tutorial.firstAdventure'),
         step: source.step,
     }
+    if (source.zombieWarningShown !== undefined) result.zombieWarningShown = boolean(source.zombieWarningShown, 'server save.tutorial.zombieWarningShown')
+    if (source.sunsFallen !== undefined) result.sunsFallen = nonNegativeInteger(source.sunsFallen, 'server save.tutorial.sunsFallen')
     if (source.sunAtTick !== undefined) {
         result.sunAtTick = nonNegativeInteger(source.sunAtTick, 'server save.tutorial.sunAtTick')
     }
@@ -186,7 +189,7 @@ function parseWave(value: unknown): WaveState {
     const source = optionalExact(
         value,
         ['index'],
-        ['nextWaveAtTick', 'accelerateAtTick', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced'],
+        ['nextWaveAtTick', 'accelerateAtTick', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced', 'rowPicks'],
         'server save.wave',
     )
     const result: WaveState = { index: nonNegativeInteger(source.index, 'server save.wave.index') }
@@ -203,6 +206,20 @@ function parseWave(value: unknown): WaveState {
     if (source.healthToNextWave !== undefined) {
         result.healthToNextWave = nonNegativeFinite(source.healthToNextWave, 'server save.wave.healthToNextWave')
     }
+    if (source.rowPicks !== undefined) {
+        result.rowPicks = array(source.rowPicks, 'server save.wave.rowPicks').map((value, index) => {
+            const name = `server save.wave.rowPicks[${index}]`
+            const row = optionalExact(value, ['row', 'lastPicked', 'secondLastPicked'], ['mowedAtWave'], name)
+            return {
+                row: nonNegativeInteger(row.row, `${name}.row`),
+                lastPicked: nonNegativeInteger(row.lastPicked, `${name}.lastPicked`),
+                secondLastPicked: nonNegativeInteger(row.secondLastPicked, `${name}.secondLastPicked`),
+                ...(row.mowedAtWave === undefined ? {} : { mowedAtWave: nonNegativeInteger(row.mowedAtWave, `${name}.mowedAtWave`) }),
+            }
+        })
+        if (new Set(result.rowPicks.map(row => row.row)).size !== result.rowPicks.length) throw new TypeError('Saved wave row history contains duplicate rows')
+    }
+    if (source.hugeWaveAnnounced !== undefined) result.hugeWaveAnnounced = boolean(source.hugeWaveAnnounced, 'server save.wave.hugeWaveAnnounced')
     if (source.finalWaveAnnounced !== undefined) {
         result.finalWaveAnnounced = boolean(source.finalWaveAnnounced, 'server save.wave.finalWaveAnnounced')
     }

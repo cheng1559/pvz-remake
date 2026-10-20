@@ -6,7 +6,7 @@ import test from 'node:test'
 
 import { GameplaySystemMods, type GameplaySystemEnhancer } from '@/server/GameplaySystemMods'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { ItemComponent } from '@/server/levelOne'
+import { ItemComponent } from '@/server/levelState'
 import type { World } from '@/ecs'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'

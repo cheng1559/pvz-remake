@@ -36,20 +36,13 @@ import {
     drainServerEvents,
     emitServerEvent,
 } from './events'
-import {
-    ItemComponent,
-    TutorialResource,
-    WaveResource,
-    createLevelOneTutorialSystem,
-    createLevelOneZombieGroanSystem,
-    createLevelOneWaveSystem,
-    createItemSystem,
-    initializeLevelOne,
-    noteLevelOnePlantPlaced,
-    noteLevelOneSeedCanceled,
-    noteLevelOneSeedSelected,
-    noteLevelOneSunCollected,
-} from './levelOne'
+import { ItemComponent, TutorialResource, WaveResource } from './levelState'
+import { initializeLevel, createLevelProgressSystem } from './level'
+import { createItemSystem, getAvailableSun } from './items'
+import { createWaveSystem } from './waves'
+import { createZombieGroanSystem } from './zombieGroans'
+import { getActiveTutorial } from './tutorials'
+import { createProductionSystem } from './production'
 import { createMowerSystem } from './mower'
 import { debugSuccess, parseDebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { executeDebugGameCommand } from './debug/DebugCommands'
@@ -128,7 +121,7 @@ export class IntegratedGameServer {
             packets: level.seedPackets.map(seedId => ({ seedId, readyAtTick: 0 })),
         })
         world.resources.set(EventQueueResource, createEventQueue())
-        initializeLevelOne(world, packet.firstAdventure)
+        initializeLevel(world, packet.firstAdventure)
 
         for (const row of level.activeRows) {
             const entity = world.createEntity()
@@ -198,6 +191,8 @@ export class IntegratedGameServer {
             tutorial: {
                 firstAdventure: tutorial.firstAdventure,
                 step: tutorial.step,
+                ...(tutorial.zombieWarningShown === undefined ? {} : { zombieWarningShown: tutorial.zombieWarningShown }),
+                ...(tutorial.sunsFallen === undefined ? {} : { sunsFallen: tutorial.sunsFallen }),
                 ...(tutorial.sunAtTick === undefined ? {} : { sunAtTick: tutorial.sunAtTick }),
                 ...(tutorial.promptAtTick === undefined ? {} : { promptAtTick: tutorial.promptAtTick }),
                 ...(tutorial.cantAffordAdviceShown === undefined
@@ -209,6 +204,8 @@ export class IntegratedGameServer {
             },
             wave: {
                 index: wave.index,
+                ...(wave.rowPicks === undefined ? {} : { rowPicks: wave.rowPicks.map(row => ({ ...row })) }),
+                ...(wave.hugeWaveAnnounced === undefined ? {} : { hugeWaveAnnounced: wave.hugeWaveAnnounced }),
                 ...(wave.nextWaveAtTick === undefined ? {} : { nextWaveAtTick: wave.nextWaveAtTick }),
                 ...(wave.accelerateAtTick === undefined ? {} : { accelerateAtTick: wave.accelerateAtTick }),
                 ...(wave.zombieIds === undefined ? {} : {
@@ -240,6 +237,11 @@ export class IntegratedGameServer {
         const definition = this.levels.levels[save.levelId]
         if (!definition) throw new Error(`Unknown saved level: ${save.levelId}`)
         if (save.wave.index > definition.waves.length) throw new Error('Saved wave index is outside the level')
+        if (definition.activeRows.length > 1 && (!save.wave.rowPicks ||
+            save.wave.rowPicks.length !== definition.activeRows.length ||
+            save.wave.rowPicks.some(row => !definition.activeRows.includes(row.row)))) {
+            throw new Error('Saved wave row history does not match the level')
+        }
         for (const packet of save.seedBank.packets) {
             if (!definition.seedPackets.includes(packet.seedId)) throw new Error(`Unknown saved seed: ${packet.seedId}`)
         }
@@ -365,7 +367,7 @@ export class IntegratedGameServer {
             case 'collectItemAt': return this.collectItem(session, command.itemId)
             case 'clearCursor':
                 if (session.world.resources.get(SeedBankResource).selectedSeedId) {
-                    noteLevelOneSeedCanceled(session.world, session.gameplayTick)
+                    getActiveTutorial(session.world)?.seedCanceled?.(session.world, session.gameplayTick)
                 }
                 session.world.resources.get(SeedBankResource).selectedSeedId = undefined
                 return
@@ -502,10 +504,11 @@ export class IntegratedGameServer {
         const schedule = new Schedule()
         const systems: ScheduledGameplaySystem[] = [
             { phase: 'command', system: { id: 'pvz:commands', run: () => this.processCommandPhase() } },
-            { phase: 'tutorial', system: createLevelOneTutorialSystem(this.definitions) },
-            { phase: 'spawn', system: createLevelOneWaveSystem(this.definitions) },
+            { phase: 'tutorial', system: createLevelProgressSystem(this.definitions) },
+            { phase: 'spawn', system: createWaveSystem(this.definitions) },
             { phase: 'plant', system: createPeashooterSystem(this.definitions) },
-            { phase: 'zombie', system: createLevelOneZombieGroanSystem() },
+            { phase: 'plant', system: createProductionSystem(this.definitions) },
+            { phase: 'zombie', system: createZombieGroanSystem() },
             { phase: 'zombie', system: createZombieSystem(this.definitions) },
             { phase: 'projectile', system: createProjectileSystem(this.definitions) },
             { phase: 'mower', system: createMowerSystem(this.definitions) },
@@ -572,7 +575,7 @@ export class IntegratedGameServer {
                 throw new Error(`Saved plant ${saved.entityId} is invalid for the level`)
             }
             if (saved.plantAttack?.shotsRemaining !== undefined &&
-                saved.plantAttack.shotsRemaining > plant.shooter.shotsPerBurst) {
+                saved.plantAttack.shotsRemaining > (plant.shooter?.shotsPerBurst ?? 0)) {
                 throw new Error(`Saved plant ${saved.entityId} has invalid burst state`)
             }
         }
@@ -623,7 +626,7 @@ export class IntegratedGameServer {
             })
         }
         seedBank.selectedSeedId = seedId
-        noteLevelOneSeedSelected(session.world)
+        getActiveTutorial(session.world)?.seedSelected?.(session.world, seedId)
     }
 
     private placePlant(
@@ -688,7 +691,9 @@ export class IntegratedGameServer {
             eatenFlashCounter: 0,
         })
         world.add(entity, PlantAttackComponent, {
-            readyAtTick: gameplayTick + definition.shooter.initialDelayTicks,
+            readyAtTick: gameplayTick + (definition.shooter?.initialDelayTicks ?? world.resources.get(RandomResource).integer(
+                definition.producer!.initialDelayTicks.min, definition.producer!.initialDelayTicks.max,
+            )),
         })
         const bankSpend = Math.min(economy.sun, sunCost)
         economy.sun -= bankSpend
@@ -697,7 +702,7 @@ export class IntegratedGameServer {
             if (packet) packet.readyAtTick = gameplayTick + (rules.cooldown ? seed.cooldownTicks : 0)
             seedBank.selectedSeedId = undefined
         }
-        noteLevelOnePlantPlaced(world, gameplayTick, occupiedEntity !== undefined)
+        getActiveTutorial(world)?.plantPlaced?.(world, gameplayTick, plantedSeed.plant, occupiedEntity !== undefined)
         emitServerEvent(world.resources.get(EventQueueResource), 'plantPlaced', {
             entityId: entity,
             typeId: plantedSeed.plant,
@@ -745,17 +750,16 @@ export class IntegratedGameServer {
         item.disappearTicks = 0
         item.fadeTicks = 0
         const availableBefore = this.availableSun(world) - item.value
-        const packet = world.resources.get(SeedBankResource).packets.find(candidate =>
-            candidate.seedId === 'pvz:peashooter')
-        const seedCost = this.definitions.seeds['pvz:peashooter']?.sunCost ?? Number.MAX_SAFE_INTEGER
         const availableAfter = availableBefore + item.value
-        const packetReady = !!packet && packet.readyAtTick <= session.gameplayTick
-        if (packetReady && availableBefore < seedCost && availableAfter >= seedCost) {
-            emitServerEvent(world.resources.get(EventQueueResource), 'seedPacketFlashRequested', {
-                seedId: 'pvz:peashooter',
-            })
+        for (const packet of world.resources.get(SeedBankResource).packets) {
+            const seedCost = this.definitions.seeds[packet.seedId].sunCost
+            const ready = packet.readyAtTick <= session.gameplayTick
+            if (ready && availableBefore < seedCost && availableAfter >= seedCost) {
+                emitServerEvent(world.resources.get(EventQueueResource), 'seedPacketFlashRequested', { seedId: packet.seedId })
+                getActiveTutorial(world)?.seedReady?.(world, session.gameplayTick, packet.seedId)
+            }
+            getActiveTutorial(world)?.sunCollected?.(world, session.gameplayTick, packet.seedId, ready && availableAfter >= seedCost)
         }
-        noteLevelOneSunCollected(world, session.gameplayTick, packetReady && availableAfter >= seedCost)
         emitServerEvent(world.resources.get(EventQueueResource), 'itemCollected', {
             entityId: itemId,
             typeId: item.typeId,
@@ -764,13 +768,7 @@ export class IntegratedGameServer {
     }
 
     private availableSun(world: World): number {
-        const economy = world.resources.get(EconomyStateResource)
-        let sun = economy.sun - economy.pendingSunSpend
-        for (const entity of world.query(ItemComponent)) {
-            const item = world.get(entity, ItemComponent)!
-            if (item.state === 'collecting' && this.definitions.items[item.typeId]) sun += item.value
-        }
-        return sun
+        return getAvailableSun(world, this.definitions)
     }
 
     private emitNotEnoughSunFeedback(world: World): void {

@@ -20,7 +20,7 @@ test('every menu page is reachable and all navigation targets exist', () => {
         const actions: MenuAction[] = page.buttons.map(button => button.target)
         if (page.back) actions.push(page.back)
         for (const action of actions) {
-            if (action === 'play' || action === 'restart') pending.push('pause', 'gameOptions', 'award', 'gameOver')
+            if (action === 'play' || action === 'restart' || action === 'nextLevel') pending.push('pause', 'gameOptions', 'award', 'gameOver')
             else if (action !== 'back' && action !== 'resume') {
                 assert.ok(MENU_PAGES[action], `invalid target ${action} from ${id}`)
                 pending.push(action)
@@ -53,7 +53,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         '@/client/screens/DebugCliDialog': { showDebugCliDialog: () => new Promise(resolve => { closeCli = resolve }) },
         '@/client/screens/MenuPages': { MENU_PAGES },
         '@/client/ui/UIDialog': { UIDialog: { handleKey: () => { dialogKeys++; return false } } },
-        '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1 }) } },
+        '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1 }), completeLevel: async () => ({ nextLevelId: 'pvz:adventure-1-2' }) } },
         '@/client/ui/UI': { UI: { load: async () => ({}) } },
         '@/client/screens/ContinueGameDialog': {
             showContinueGameDialog: () => {
@@ -73,11 +73,13 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     let introReady = true
     let saves = 0
     const freshGames: boolean[] = []
+    const startedLevels: Array<string | undefined> = []
     const commits: string[] = []
     app.node = { isValid: true }
     app.controller = {
-        async play(options: { forceNewGame: boolean, onRestore?: () => void }) {
+        async play(options: { forceNewGame: boolean, levelId?: string, onRestore?: () => void }) {
             freshGames.push(options.forceNewGame)
+            startedLevels.push(options.levelId)
             running = true
             if (restoreOnPlay && !options.forceNewGame) { paused = true; options.onRestore?.() }
         },
@@ -197,6 +199,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     await setImmediate()
     assert.equal(running, true)
     assert.deepEqual(freshGames, [false, true])
+    assert.equal(startedLevels.at(-1), 'pvz:adventure-1-2')
     assert.equal(prompts, 0, 'fresh levels and explicit restarts skip the save prompt')
     for (const action of ['continue', 'restart', 'cancel'] as const) {
         await app.navigate('main')

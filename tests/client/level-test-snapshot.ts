@@ -1,7 +1,7 @@
 import type { LevelPresentationSnapshot } from '@/client/level/LevelPresentationSnapshot'
 import type { WorldSnapshot } from '@/shared/protocol/index'
 
-function reanim(id: string) {
+export function reanim(id: string) {
     return {
         id, timeSeconds: 0, playing: true, loop: true, rate: 1, visible: true,
         hideOnFinish: false, extraAdditive: false,

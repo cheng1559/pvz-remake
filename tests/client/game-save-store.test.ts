@@ -83,3 +83,18 @@ test('GameSaveStore recovers the newer valid temporary save after interruption',
     assert.deepEqual(JSON.parse(storage.getItem('save')!), newSave)
     assert.equal(storage.getItem('save:temp'), null)
 })
+
+
+test('GameSaveStore ignores obsolete formats and accepts a fresh current-format save', () => {
+    const storage = new MemoryStorage()
+    const store = new GameSaveStore(storage, 'save')
+    const obsolete = JSON.parse(JSON.stringify(gameSave(200)))
+    obsolete.client.adventure11 = obsolete.client.level
+    delete obsolete.client.level
+    storage.setItem('save', JSON.stringify(obsolete))
+    assert.equal(store.load(), null)
+
+    const fresh = gameSave(300)
+    store.save(fresh)
+    assert.deepEqual(store.load(), fresh)
+})

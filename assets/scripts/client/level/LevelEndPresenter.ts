@@ -1,4 +1,6 @@
 import { Color, Graphics, Node } from 'cc'
+import type { UI } from '@/client/ui/UI'
+import type { UILabel } from '@/client/ui/UILabel'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
@@ -13,6 +15,8 @@ type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 export class LevelEndPresenter {
     private ticks = -1
     private finalWave: ReanimPlayer | null = null
+    private hugeWaveTicks = 0
+    private hugeWave: UILabel | null = null
 
     constructor(
         private readonly content: LoadedContent,
@@ -21,14 +25,17 @@ export class LevelEndPresenter {
         private readonly fade: Node,
         private readonly entityNode: (id: number) => Node | undefined,
         private readonly audio: LevelAudioPresenter,
+        private readonly ui: UI,
     ) {}
 
     snapshot(): LevelEndSnapshot {
-        return { ticks: this.ticks, finalWave: this.finalWave?.snapshot() ?? null }
+        return { ticks: this.ticks, finalWave: this.finalWave?.snapshot() ?? null, ...(this.hugeWaveTicks > 0 ? { hugeWaveTicks: this.hugeWaveTicks } : {}) }
     }
 
     async restore(snapshot: LevelEndSnapshot): Promise<void> {
         this.ticks = snapshot.ticks
+        this.hugeWaveTicks = snapshot.hugeWaveTicks ?? 0
+        this.syncHugeWave()
         this.syncFade()
         if (this.finalWave?.node.isValid) this.finalWave.node.destroy()
         this.finalWave = null
@@ -36,6 +43,10 @@ export class LevelEndPresenter {
     }
 
     update(dt: number): boolean {
+        if (this.hugeWaveTicks > 0) {
+            this.hugeWaveTicks = Math.max(0, this.hugeWaveTicks - dt * 100)
+            this.syncHugeWave()
+        }
         if (this.ticks < 0 || this.ticks >= 600) return false
         const previous = this.ticks
         this.ticks = Math.min(600, this.ticks + dt * 100)
@@ -45,6 +56,8 @@ export class LevelEndPresenter {
     }
 
     cancelWarnings(): void {
+        this.hugeWaveTicks = 0
+        this.syncHugeWave()
         if (this.finalWave?.node.isValid) this.finalWave.node.destroy()
         this.finalWave = null
     }
@@ -54,6 +67,7 @@ export class LevelEndPresenter {
         for (const event of events) {
             if (event.type === 'levelWon') this.start()
             else if (event.type === 'levelAwardCollected') this.playAwardCollected(event)
+            else if (event.type === 'hugeWave') { this.hugeWaveTicks = 750; this.syncHugeWave() }
             else if (event.type === 'finalWave') void this.createFinalWave()
         }
     }
@@ -77,6 +91,26 @@ export class LevelEndPresenter {
         uiNode({ node, opacity: item.alpha })
         this.syncAwardVisual(node, scale, item.state === 'collecting')
         return true
+    }
+
+    private syncHugeWave(): void {
+        if (this.hugeWaveTicks <= 0) {
+            if (this.hugeWave?.node.isValid) this.hugeWave.node.parent!.active = false
+            return
+        }
+        if (!this.hugeWave?.node.isValid) {
+            const node = uiNode({ name: 'HugeWave', parent: this.overlayLayer, position: { x: 0, y: -57.5 } }).node
+            this.hugeWave = this.ui.label(node, {
+                text: this.content.strings.entries.ADVICE_HUGE_WAVE, font: 'pageTitle', color: Color.RED,
+                x: -380, y: -55.5, width: 760, align: 'center',
+            })
+        }
+        const node = this.hugeWave.node.parent!
+        node.active = true
+        const enter = Math.min(1, (750 - this.hugeWaveTicks) / 20)
+        const scale = 2.003 - 1.002 * enter
+        node.setScale(scale, scale, 1)
+        uiNode({ node, opacity: Math.round(255 * Math.min(enter, this.hugeWaveTicks / 40, 1)) })
     }
 
     private start(): void {

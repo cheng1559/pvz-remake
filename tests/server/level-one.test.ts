@@ -6,25 +6,22 @@ import { Schedule, World } from '@/ecs/index'
 import { DeterministicRng } from '@/server/DeterministicRng'
 import { EventQueueResource, createEventQueue } from '@/server/events'
 import {
+    EconomyStateResource,
     LevelStateResource,
     PlantComponent,
     PositionComponent,
     RandomResource,
+    SeedBankResource,
     ZombieComponent,
     createZombieSystem,
     mowZombie,
     spawnZombie,
 } from '@/server/gameplay'
-import {
-    ItemComponent,
-    TutorialResource,
-    WaveResource,
-    createLevelOneTutorialSystem,
-    createLevelOneWaveSystem,
-    createLevelOneZombieGroanSystem,
-    createItemSystem,
-    initializeLevelOne,
-} from '@/server/levelOne'
+import { ItemComponent, TutorialResource, WaveResource } from '@/server/levelState'
+import { initializeLevel, createLevelProgressSystem } from '@/server/level'
+import { createWaveSystem } from '@/server/waves'
+import { createItemSystem } from '@/server/items'
+import { createZombieGroanSystem } from '@/server/zombieGroans'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 
 const source = (name: string): unknown => JSON.parse(
@@ -46,10 +43,12 @@ function setup() {
     })
     world.resources.set(RandomResource, new DeterministicRng(1))
     world.resources.set(EventQueueResource, createEventQueue())
-    initializeLevelOne(world, true)
+    world.resources.set(EconomyStateResource, { sun: definition.startingSun, money: 0, pendingSunSpend: 0 })
+    world.resources.set(SeedBankResource, { packets: definition.seedPackets.map(seedId => ({ seedId, readyAtTick: 0 })) })
+    initializeLevel(world, true)
     const schedule = new Schedule()
-    schedule.add('tutorial', createLevelOneTutorialSystem(definitions))
-    schedule.add('spawn', createLevelOneWaveSystem(definitions))
+    schedule.add('tutorial', createLevelProgressSystem(definitions))
+    schedule.add('spawn', createWaveSystem(definitions))
     return { world, schedule }
 }
 
@@ -84,6 +83,21 @@ test('level one schedules tutorial sun and the first wave from planted Peashoote
     assert.equal([...world.query(ZombieComponent)].length, 0)
     schedule.run(world, 501)
     assert.equal([...world.query(ZombieComponent)].length, 1)
+})
+
+test('1-1 sky-sun intervals grow after each drop and stop growing at the original cap', () => {
+    const { world, schedule } = setup()
+    addPlant(world, 0)
+    schedule.run(world, 1)
+    const state = world.resources.get(TutorialResource)
+    for (const [fallen, minimum, maximum] of [[1, 435, 709], [2, 445, 719], [53, 950, 1224]]) {
+        if (fallen === 53) state.sunsFallen = 52
+        const tick = state.sunAtTick!
+        schedule.run(world, tick)
+        assert.equal(state.sunsFallen, fallen)
+        const delay = state.sunAtTick! - tick
+        assert.ok(delay >= minimum && delay <= maximum)
+    }
 })
 
 test('level one uses the original countdown and early-wave cadence', () => {
@@ -134,7 +148,7 @@ test('level one drops its award from the last effective zombie before its corpse
     const mowered = spawnZombie(world, definitions, 'pvz:normal', 2, 500, 250)
     mowZombie(world.get(mowered, ZombieComponent)!)
     const schedule = new Schedule()
-    schedule.add('spawn', createLevelOneWaveSystem(definitions))
+    schedule.add('spawn', createWaveSystem(definitions))
     schedule.add('zombie', createZombieSystem(definitions))
     schedule.add('cleanup', createItemSystem())
 
@@ -189,7 +203,7 @@ test('level one zombie groans use reference countdown, gating, and award rules',
     const initialCounter = zombie.groanCounter
     assert.ok(initialCounter >= 300 && initialCounter <= 400)
     const schedule = new Schedule()
-    schedule.add('zombie', createLevelOneZombieGroanSystem())
+    schedule.add('zombie', createZombieGroanSystem())
 
     for (let tick = 1; tick <= initialCounter; tick++) schedule.run(world, tick)
 

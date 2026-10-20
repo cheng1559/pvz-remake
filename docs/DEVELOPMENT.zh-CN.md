@@ -24,6 +24,12 @@
 
 `core/GameClock.ts` 提供统一的 `gameClock`。转场、主菜单计时、Reanim、粒子和本地战斗入口共同应用其倍率；`startGameTween()` 复用 Cocos Tween 并同步运行期间的倍率变化，完成或所属节点销毁后取消订阅。只在帧时间入口缩放一次，服务端固定步长仍为 0.01 秒，显式 `advance()`／存档恢复使用传入的游戏时间。Debug 预览可调用 `pvzTime.setSpeed(2)` 设置 2 倍速，`setSpeed(1)` 恢复，`setSpeed(0)` 冻结游戏时间。Options 的战斗暂停独立于全局时钟，菜单和转场仍可正常操作；音频播放速率保持原样。
 
+## 服务端关卡结构
+
+`server/level.ts` 负责通用关卡初始化和进度更新，`levelState.ts` 集中定义运行时组件与状态。天空阳光、掉落物、波次与奖励、僵尸呻吟分别由 `sun.ts`、`items.ts`、`waves.ts`、`zombieGroans.ts` 处理，所有关卡共用。波次和呻吟系统的 Mod ID 分别为 `pvz:waves`、`pvz:zombie-groans`，关卡进度系统为 `pvz:level-progress`。
+
+`server/tutorials/index.ts` 按关卡定义的 `tutorial` ID 选择脚本，统一接收选种、取消、种植、冷却完成和收集阳光回调；`PlantingTutorial.ts` 与 `SunflowerTutorial.ts` 只保留对应的特殊引导。没有教程脚本的关卡直接使用通用流程。普通关卡通过 `tools/content/pvz-base/gameplay/levels.json` 配置行数、初始阳光、种子、波次和奖励，无需新增按关卡编号命名的服务端文件。新增特殊教程时只登记教程脚本，主服务器不增加关卡分支。
+
 ## 关卡展示结构
 
 `client/level/LevelScene` 负责通用的开场 → 战斗 → 领奖／失败流程、全局时钟倍率、输入挂起和表现存档，只依赖 `LevelGame` 客户端接口。`LevelView` 组合 HUD、输入、实体、粒子、音频和结算 presenter；`LevelSeedBank` 按关卡配置创建种子包，分别处理费用、冷却、闪光和按钮输入。棋盘行列、可种行、种子费用和关卡编号均读取现有后端关卡定义。

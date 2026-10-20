@@ -20,6 +20,8 @@ export class MenuApi {
     getChallenges(page: MenuEndpoints['getChallenges']['args']['page']) { return this.request('getChallenges', { page }) }
     getAlmanac() { return this.request('getAlmanac', {}) }
     getAchievements() { return this.request('getAchievements', {}) }
+    getAdventure() { return this.request('getAdventure', {}) }
+    completeLevel() { return this.request('completeLevel', {}) }
     getAward() { return this.request('getAward', {}) }
 }
 

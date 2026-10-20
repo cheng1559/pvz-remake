@@ -17,8 +17,8 @@ test('Gameplay parses the 1-1 definitions, level, and strings headlessly', () =>
 
     assert.equal(definitions.seeds['pvz:peashooter'].plant, 'pvz:peashooter')
     assert.equal(definitions.seeds['pvz:repeater'].sunCost, 200)
-    assert.equal(definitions.plants['pvz:repeater'].shooter.shotsPerBurst, 2)
-    assert.equal(definitions.plants['pvz:repeater'].shooter.burstIntervalTicks, 26)
+    assert.equal(definitions.plants['pvz:repeater'].shooter!.shotsPerBurst, 2)
+    assert.equal(definitions.plants['pvz:repeater'].shooter!.burstIntervalTicks, 26)
     assert.deepEqual(levels.levels['pvz:adventure-1-1'].activeRows, [2])
     assert.match(strings.entries.ADVICE_CLICK_ON_GRASS, /grass/)
 })

@@ -5,7 +5,7 @@ import test from 'node:test'
 import { DeterministicRng } from '@/server/DeterministicRng'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { damageZombie, EconomyStateResource, LawnMowerComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, spawnZombie, ZombieComponent } from '@/server/gameplay'
-import { ItemComponent, TutorialResource } from '@/server/levelOne'
+import { ItemComponent, TutorialResource } from '@/server/levelState'
 import type { World } from '@/ecs/index'
 import {
     parseGameplayDefinitions,
@@ -260,6 +260,31 @@ test('1-1 tutorial collects two suns and starts its first wave 99 ticks after th
     assert.equal(gameplayTick(server), secondPlantTick + 99)
     assert.equal(snapshot.wave.index, 1)
     assert.equal(snapshot.zombies.length, 1)
+})
+
+test('1-1 advances on affordable cooldown completion and preserves the guide deadline after restore', () => {
+    for (const initialSun of [150, 200]) {
+        const server = new IntegratedGameServer(definitions, levels)
+        startGameplay(server)
+        const initial = server.save()
+        initial.economy.sun = initialSun
+        server.start({ ...startPacket, save: initial as unknown as JsonValue })
+        runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
+        runCommand(server, { type: 'placePlant', row: 2, column: 0 })
+        while (gameplayTick(server) < 749) server.tick()
+        assert.equal(server.snapshot().tutorial.step, 'collect-first-sun')
+        server.drainEvents()
+        const restored = new IntegratedGameServer(definitions, levels)
+        restored.start({ ...startPacket, save: server.save() as unknown as JsonValue })
+        assert.deepEqual(restored.tick(), server.tick())
+        assert.equal(server.snapshot().tutorial.step, initialSun === 200 ? 'enough-sun' : 'collect-first-sun')
+        if (initialSun === 150) continue
+        assert.equal(server.save().tutorial.promptAtTick, 1150)
+        while (gameplayTick(server) < 1150) assert.deepEqual(restored.tick(), server.tick())
+        assert.equal(server.snapshot().tutorial.step, 'pick-second-seed', 'readiness is handled once without restarting the 400-tick delay')
+        runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
+        assert.equal(server.snapshot().tutorial.step, 'plant-second-seed')
+    }
 })
 
 test('1-1 reports the first insufficient seed pick and flashes sun on every attempt', () => {

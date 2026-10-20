@@ -47,6 +47,7 @@ export interface LevelIntroSnapshot {
 export interface LevelEndSnapshot {
     ticks: number
     finalWave: ReanimPlaybackSnapshot | null
+    hugeWaveTicks?: number
 }
 
 export interface LevelAdviceSnapshot {
@@ -75,16 +76,16 @@ export type LevelEntitySnapshot =
     | {
         kind: 'plant'
         entityId: number
-        body: ReanimPlaybackSnapshot
-        idleHead: ReanimPlaybackSnapshot
-        shootHead: ReanimPlaybackSnapshot
-        idleRate: number
+        animations: Record<string, ReanimPlaybackSnapshot>
+        idleRate?: number
+        blinkAtTick?: number
     }
     | {
         kind: 'zombie'
         entityId: number
         body: ReanimPlaybackSnapshot | null
         mowerDriver: ReanimPlaybackSnapshot | null
+        flag?: ReanimPlaybackSnapshot
     }
     | {
         kind: 'mower'
@@ -212,10 +213,11 @@ function parseIntro(value: unknown): LevelIntroSnapshot {
 }
 
 function parseEnd(value: unknown): LevelEndSnapshot {
-    const source = exact(value, ['ticks', 'finalWave'], 'Level end')
+    const source = exact(value, ['ticks', 'finalWave'], 'Level end', ['hugeWaveTicks'])
     return {
         ticks: finiteInRange(source.ticks, END_INACTIVE, END_COMPLETE, 'Level end.ticks'),
         finalWave: source.finalWave === null ? null : parseReanimPlaybackSnapshot(source.finalWave),
+        ...(source.hugeWaveTicks === undefined ? {} : { hugeWaveTicks: finiteInRange(source.hugeWaveTicks, 0, 750, 'Level end.hugeWaveTicks') }),
     }
 }
 
@@ -284,26 +286,25 @@ function parseEntity(value: unknown, index: number): LevelEntitySnapshot {
     const entityId = positiveInteger(tagged.entityId, `${name}.entityId`)
     switch (tagged.kind) {
         case 'plant': {
-            const source = exact(value, [
-                'kind', 'entityId', 'body', 'idleHead', 'shootHead', 'idleRate',
-            ], name)
-            const idleRate = positiveFinite(source.idleRate, `${name}.idleRate`)
+            const plant = exact(value, ['kind', 'entityId', 'animations'], name, ['idleRate', 'blinkAtTick'])
+            const animations = plainObject(plant.animations, `${name}.animations`)
+            if (!Object.hasOwn(animations, 'body')) throw new TypeError(`${name}.animations.body is required`)
             return {
                 kind: 'plant', entityId,
-                body: parseReanimPlaybackSnapshot(source.body),
-                idleHead: parseReanimPlaybackSnapshot(source.idleHead),
-                shootHead: parseReanimPlaybackSnapshot(source.shootHead),
-                idleRate,
+                animations: Object.fromEntries(Object.entries(animations).map(([slot, state]) => [slot, parseReanimPlaybackSnapshot(state)])),
+                ...(plant.idleRate === undefined ? {} : { idleRate: positiveFinite(plant.idleRate, `${name}.idleRate`) }),
+                ...(plant.blinkAtTick === undefined ? {} : { blinkAtTick: nonNegativeInteger(plant.blinkAtTick, `${name}.blinkAtTick`) }),
             }
         }
         case 'zombie': {
             const source = exact(value, [
                 'kind', 'entityId', 'body', 'mowerDriver',
-            ], name)
+            ], name, ['flag'])
             return {
                 kind: 'zombie', entityId,
                 body: optionalReanim(source.body),
                 mowerDriver: optionalReanim(source.mowerDriver),
+                ...(source.flag === undefined ? {} : { flag: parseReanimPlaybackSnapshot(source.flag) }),
             }
         }
         case 'mower':
@@ -328,7 +329,7 @@ function parseParticles(
         if (owner.kind === 'intro-preview' && !introSlots.has(owner.slot)) {
             throw new TypeError(`${name}.owner references missing intro preview ${owner.slot}`)
         }
-        if (source.backend === 'particle' || source.backend === 'v2') {
+        if (source.backend === 'particle') {
             return { instanceId, backend: 'particle' as const, owner, playback: parseParticlePlayerSnapshot(source.playback) }
         }
         if (source.backend === 'tod') {
@@ -404,9 +405,9 @@ function taggedObject(value: unknown, name: string): Record<string, unknown> & {
     return source as Record<string, unknown> & { kind: string }
 }
 
-function exact(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {
+function exact(value: unknown, keys: readonly string[], name: string, optional: readonly string[] = []): Record<string, unknown> {
     const source = plainObject(value, name)
-    const allowed = new Set(keys)
+    const allowed = new Set([...keys, ...optional])
     for (const key of Object.keys(source)) if (!allowed.has(key)) throw new TypeError(`${name}.${key} is not supported`)
     for (const key of keys) {
         if (!Object.prototype.hasOwnProperty.call(source, key)) throw new TypeError(`${name}.${key} is required`)

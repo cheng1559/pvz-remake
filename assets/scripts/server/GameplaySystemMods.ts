@@ -20,7 +20,7 @@ import {
     SeedBankResource,
     ZombieComponent,
 } from './gameplay'
-import { ItemComponent, TutorialResource, WaveResource } from './levelOne'
+import { ItemComponent, TutorialResource, WaveResource } from './levelState'
 import { EventQueueResource, emitServerEvent } from './events'
 
 export interface GameplaySystemBindings {

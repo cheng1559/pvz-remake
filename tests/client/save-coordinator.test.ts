@@ -7,7 +7,8 @@ import { createGameSave, isCompatibleBaseContent, parseGameSave } from '@/app/Sa
 import type { ServerSaveSnapshot } from '@/server/save'
 import { GameplaySystemMods } from '@/server/GameplaySystemMods'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
-import { levelPresentation } from './level-test-snapshot'
+import type { JsonValue } from '@/shared/protocol'
+import { levelPresentation, reanim } from './level-test-snapshot'
 
 const source = (name: string): unknown => JSON.parse(
     readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'),
@@ -114,6 +115,41 @@ test('SaveCoordinator strictly composes matching server and client snapshots', (
             transport: { ...saved.client.transport, highestEventId: saved.client.transport.highestEventId + 1 },
         },
     }), /events must continue/)
+})
+
+test('a planted Sunflower survives the complete 1-2 save and restore pipeline', () => {
+    const options = {
+        levelId: 'pvz:adventure-1-2', randomSeed: 1, initialMoney: 0,
+        firstAdventure: true, mods: [],
+    }
+    const game = new LocalIntegratedGame(definitions, levels)
+    game.start(options)
+    game.command({ type: 'completeIntro' })
+    game.update(0)
+    game.command({ type: 'selectSeed', seedId: 'pvz:sunflower' })
+    game.command({ type: 'placePlant', row: 2, column: 0 })
+    const server = game.saveAtBoundary() as unknown as ServerSaveSnapshot
+    const plant = game.render().plants.find(plant => plant.typeId === 'pvz:sunflower')!
+    assert.ok(plant)
+    const presentation = levelPresentation(game.render())
+    presentation.entities.push({
+        kind: 'plant', entityId: plant.entityId,
+        animations: { body: reanim('pvz:sunflower'), blink: reanim('pvz:sunflower_blink') }, blinkAtTick: 500,
+    })
+    const saved = createGameSave({
+        profileId: 1, mode: 'adventure', levelId: options.levelId, createdAt: 100, updatedAt: 200,
+        contentSet: { base: { id: 'pvz:base', version: '2.0.0', contentHash: 'hash' }, mods: [] },
+        server, client: game.snapshotPresentation(presentation),
+    })
+    const parsed = parseGameSave(JSON.parse(JSON.stringify(saved)))
+    const restored = new LocalIntegratedGame(definitions, levels)
+    restored.start({ ...options, save: parsed.server as unknown as JsonValue })
+    assert.deepEqual(restored.restorePresentation(parsed.client), presentation)
+    assert.deepEqual(restored.render(), game.render())
+
+    const missingPlant = JSON.parse(JSON.stringify(parsed.client))
+    missingPlant.transport.current.plants = []
+    assert.throws(() => restored.restorePresentation(missingPlant), /plant .* is not in the current frame/)
 })
 
 test('LocalIntegratedGame returns a server save from the requested boundary', () => {

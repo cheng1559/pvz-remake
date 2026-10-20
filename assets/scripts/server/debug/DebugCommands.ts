@@ -2,7 +2,8 @@ import { Schedule, type World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { debugCondition, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie, EconomyStateResource, LawnMowerComponent, LevelStateResource, PlantComponent, PositionComponent, RandomResource, SeedBankResource, spawnZombie, ZombieComponent } from '../gameplay'
-import { createLevelOneWaveSystem, ItemComponent, TutorialResource, WaveResource } from '../levelOne'
+import { ItemComponent, TutorialResource, WaveResource } from '../levelState'
+import { createWaveSystem } from '../waves'
 import { emitServerEvent, EventQueueResource } from '../events'
 import { DebugRulesResource, getDebugRules } from './DebugRules'
 
@@ -89,7 +90,7 @@ export function executeDebugGameCommand(
             level.paused = false
             try {
                 const schedule = new Schedule()
-                schedule.add('spawn', createLevelOneWaveSystem(definitions))
+                schedule.add('spawn', createWaveSystem(definitions))
                 schedule.run(world, tick)
             } finally { level.paused = paused }
             return debugSuccess('Spawned next zombie wave')

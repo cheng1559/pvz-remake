@@ -32,9 +32,11 @@ function snapshot(): any {
             music: null, ownsMusic: true, gameplayStarted: true, firstWavePlayed: false,
         },
         entities: [{
-            kind: 'plant', entityId: 1, body: reanim('pvz:peashooter'),
-            idleHead: reanim('pvz:peashooter_head_idle'),
-            shootHead: reanim('pvz:peashooter_shoot'), idleRate: 1.25,
+            kind: 'plant', entityId: 1,
+            animations: {
+                body: reanim('pvz:peashooter'), idleHead: reanim('pvz:peashooter_head_idle'),
+                shootHead: reanim('pvz:peashooter_shoot'),
+            }, idleRate: 1.25,
         }, {
             kind: 'zombie', entityId: 2, body: reanim('pvz:zombie_walk'),
             mowerDriver: null,
@@ -68,7 +70,29 @@ test('Adventure 1-1 presentation snapshot round-trips every owned presentation s
     assert.deepEqual(parseLevelPresentationSnapshot(JSON.parse(JSON.stringify(value))), value)
     const previous = JSON.parse(JSON.stringify(value))
     previous.particles[0].backend = 'v2'
-    assert.deepEqual(parseLevelPresentationSnapshot(previous), value)
+    assert.throws(() => parseLevelPresentationSnapshot(previous), /backend is invalid/)
+})
+
+test('1-2 presentation saves Sunflower blinking, flag attachment and huge-wave timing', () => {
+    const value = snapshot()
+    value.end.hugeWaveTicks = 725
+    value.entities.push({
+        kind: 'plant', entityId: 5,
+        animations: {
+            body: reanim('pvz:sunflower'), blink: { ...reanim('pvz:sunflower_blink'), attachmentTrackId: 'anim_idle' },
+        }, blinkAtTick: 1250,
+    })
+    value.entities[1].body.id = 'pvz:flag_walk'
+    value.entities[1].flag = { ...reanim('pvz:zombie_flag'), attachmentTrackId: 'Zombie_flaghand' }
+    assert.deepEqual(parseLevelPresentationSnapshot(JSON.parse(JSON.stringify(value))), value)
+    for (const index of [0, 4]) {
+        const legacy = JSON.parse(JSON.stringify(value))
+        const entity = legacy.entities[index]
+        Object.assign(entity, entity.animations)
+        if (entity.animations.blink) entity.kind = 'sunflower'
+        delete entity.animations
+        assert.throws(() => parseLevelPresentationSnapshot(legacy), /not supported|kind is invalid/)
+    }
 })
 
 test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked state', () => {
@@ -90,6 +114,7 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
     assert.throws(invalid(value => { value.hud.progressMeterWidth = 1.5 }), /progressMeterWidth/)
     assert.throws(invalid(value => { value.advice.lastSyncedTick = -1 }), /lastSyncedTick/)
     assert.throws(invalid(value => { value.entities[0].idleRate = Number.POSITIVE_INFINITY }), /finite numbers/)
+    assert.throws(invalid(value => { delete value.entities[0].animations.body }), /animations.body is required/)
     assert.throws(invalid(value => { value.extensions.bad = {} }), /extension ID is invalid/)
 })
 

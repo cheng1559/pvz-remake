@@ -45,9 +45,10 @@ export class GameApp extends Component {
     private lastDebugTap = 0
     private advice: AdviceWidget | null = null
     private adviceTick = 0
+    private nextLevelId: string | null = null
 
     start(): void {
-        connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null)
+        connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false)
         UIHoverManager.start(this.node)
         this.gameLayer = uiNode({
             name: 'GameLayer', parent: this.node, size: { width: 800, height: 600 }, active: false,
@@ -84,7 +85,19 @@ export class GameApp extends Component {
     private async navigate(action: MenuAction, levelId?: string): Promise<void> {
         const { controller, menu, gameLayer, transitions } = this
         if (this.loading || !controller || !menu || !gameLayer || !transitions) return
-        const target = action === 'back' ? this.history[this.history.length - 1] ?? 'main' : action
+        if (action === 'nextLevel') {
+            if (!this.nextLevelId) {
+                const ui = await UI.load()
+                if (this.node?.isValid) ui.dialog(this.node, {
+                    title: 'Next Level', message: 'The next level is not available yet.',
+                    confirmText: ui.text('AWARD_MAIN_MENU_BUTTON', 'Main Menu'),
+                    onClose: () => { void this.navigate('main') },
+                })
+                return
+            }
+            levelId = this.nextLevelId
+        }
+        const target = action === 'nextLevel' ? 'restart' : action === 'back' ? this.history[this.history.length - 1] ?? 'main' : action
         if (target === this.currentPage) return
         if (target === 'resume' && !controller.isRunning()) return
         const from = this.currentPage
@@ -149,9 +162,15 @@ export class GameApp extends Component {
     }
 
     private async finish(page: 'award' | 'gameOver'): Promise<void> {
-        await this.controller?.deleteSave()
-        await this.navigate(page)
-        if (page === 'award' && this.currentPage === page) this.controller?.hide()
+        try {
+            if (page === 'award') this.nextLevelId = (await menuApi.completeLevel()).nextLevelId
+            await this.controller?.deleteSave()
+            await this.navigate(page)
+            if (page === 'award' && this.currentPage === page) this.controller?.hide()
+        } catch (error) {
+            console.error('[GameApp] Failed to finish level', error)
+            this.showStatus(error instanceof Error ? error.message : String(error))
+        }
     }
 
     private showStatus(message: string): void {

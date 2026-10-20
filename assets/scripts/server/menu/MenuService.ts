@@ -19,6 +19,7 @@ export class MenuService {
         storage: MenuStorage,
         private readonly now = Date.now,
         private readonly getLevel: () => LevelDefinition | null = () => null,
+        private readonly canCompleteLevel: () => boolean = () => false,
     ) {
         this.profiles = createProfileStore(storage)
         this.settings = createGameSettingsStore(storage)
@@ -68,6 +69,21 @@ export class MenuService {
                 const items = ACHIEVEMENT_DEFINITIONS.map(item => ({ ...item, earned: earned[item.id] === true }))
                 return { items, total: items.length, completed: items.filter(item => item.earned).length }
             }
+            case 'getAdventure': {
+                const profile = this.profiles.loadCurrentProfile()
+                if (!profile) throw new Error('Adventure requires a player profile')
+                const index = profile.adventureLevel - 1
+                return { levelId: `pvz:adventure-${Math.floor(index / 10) + 1}-${index % 10 + 1}` }
+            }
+            case 'completeLevel': {
+                if (!this.canCompleteLevel()) throw new Error('Cannot complete a level before winning')
+                const award = this.award()
+                const profile = this.profiles.loadCurrentProfile()
+                if (!profile) throw new Error('Level completion requires a player profile')
+                profile.adventureLevel = Math.max(profile.adventureLevel, this.getLevel()!.adventureIndex + 1)
+                this.profiles.saveProfile(profile)
+                return award
+            }
             case 'getAward': return this.award()
             default: throw new Error('Unknown menu API method')
         }
@@ -79,6 +95,7 @@ export class MenuService {
         const plant = ALMANAC_PLANTS.find(plant => `pvz:${plant.key.replace(/_/g, '').toLowerCase()}` === level.award.id)
         if (!plant) throw new Error(`Unknown plant award: ${level.award.id}`)
         return {
+            nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex > 3,
             seed: plant.id, cost: level.award.packetCost, name: plant.name,
             nameKey: plant.key, descriptionKey: `${plant.key}_TOOLTIP`,
         }

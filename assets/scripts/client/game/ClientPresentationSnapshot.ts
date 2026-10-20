@@ -24,11 +24,6 @@ export interface ClientPresentationSnapshot {
 
 export function parseClientPresentationSnapshot(value: unknown): ClientPresentationSnapshot {
     assertJsonValue(value)
-    // Read existing  saves, but always return the reusable level representation.
-    if (typeof value === 'object' && value !== null && 'adventure11' in value && !('level' in value)) {
-        const { adventure11, ...rest } = value as Record<string, unknown>
-        value = { ...rest, level: adventure11 }
-    }
     const save = exact(value, ['schemaVersion', 'transport', 'level'], 'client presentation')
     if (save.schemaVersion !== 2) throw new TypeError('client presentation.schemaVersion must be 2')
     const source = exact(

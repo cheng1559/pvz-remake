@@ -7,7 +7,7 @@ export type MenuPageId =
     | 'help' | 'options' | 'players' | 'quit'
     | 'pause' | 'gameOptions' | 'award' | 'gameOver'
 
-export type MenuAction = MenuPageId | 'play' | 'resume' | 'restart' | 'back'
+export type MenuAction = MenuPageId | 'play' | 'resume' | 'restart' | 'nextLevel' | 'back'
 
 export interface MenuBackground {
     image: string
@@ -158,7 +158,7 @@ export const MENU_PAGES: Record<MenuPageId, MenuPage> = {
     award: {
         title: 'YOU GOT A NEW PLANT!', backgrounds: [{ image: 'awardscreen_back' }],
         heading: { key: 'NEW_PLANT', font: 'title', y: 58, color: [213, 159, 43] },
-        buttons: [{ label: 'Play again', target: 'restart' }], back: 'main',
+        buttons: [{ label: 'NEXT LEVEL!', target: 'nextLevel' }], back: 'main',
     },
     gameOver: {
         title: 'Game over', backgrounds: [], overlay: true,

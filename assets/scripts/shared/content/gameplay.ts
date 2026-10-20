@@ -40,7 +40,7 @@ export interface SeedDefinition {
 export interface PlantDefinition {
     maxHealth: number
     body: Rect
-    shooter: {
+    shooter?: {
         cadenceTicks: number
         initialDelayTicks: number
         windupTicks: number
@@ -48,6 +48,11 @@ export interface PlantDefinition {
         burstIntervalTicks: number
         projectile: string
         offset: Point
+    }
+    producer?: {
+        item: string
+        cadenceTicks: number
+        initialDelayTicks: { min: number; max: number }
     }
 }
 
@@ -84,7 +89,8 @@ export interface LevelDefinition {
     seedPackets: string[]
     lawnMower: string
     skySun: string
-    waves: Array<{ zombies: string[] }>
+    waves: Array<{ zombies: string[]; flagWave?: boolean }>
+    nextLevel?: string
     tutorial: string
     award: { kind: 'seed'; id: string; packetCost: number }
 }
@@ -115,7 +121,8 @@ export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
         reference(seed.plant, definitions.plants, `seeds.${id}.plant`)
     }
     for (const [id, plant] of Object.entries(definitions.plants)) {
-        reference(plant.shooter.projectile, definitions.projectiles, `plants.${id}.shooter.projectile`)
+        if (plant.shooter) reference(plant.shooter.projectile, definitions.projectiles, `plants.${id}.shooter.projectile`)
+        if (plant.producer) reference(plant.producer.item, definitions.items, `plants.${id}.producer.item`)
     }
     return definitions
 }
@@ -127,6 +134,9 @@ export function parseGameplayLevels(
     const source = exactObject(value, ['schemaVersion', 'levels'], 'gameplay levels')
     if (source.schemaVersion !== 2) throw new Error('gameplay levels.schemaVersion must be 2')
     const levels = mapped(source.levels, 'levels', (entry, name) => parseLevel(entry, name, definitions))
+    for (const [id, level] of Object.entries(levels)) {
+        if (level.nextLevel) reference(level.nextLevel, levels, `levels.${id}.nextLevel`)
+    }
     return { schemaVersion: 2, levels }
 }
 
@@ -172,16 +182,19 @@ function parseSeed(value: unknown, name: string): SeedDefinition {
 }
 
 function parsePlant(value: unknown, name: string): PlantDefinition {
-    const source = exactObject(value, ['maxHealth', 'body', 'shooter'], name)
-    const shooter = exactObject(
-        source.shooter,
-        ['cadenceTicks', 'initialDelayTicks', 'windupTicks', 'shotsPerBurst', 'burstIntervalTicks', 'projectile', 'offset'],
-        `${name}.shooter`,
-    )
-    return {
+    const source = exactObject(value, ['maxHealth', 'body'], name, ['shooter', 'producer'])
+    if (!!source.shooter === !!source.producer) throw new Error(`${name} requires either shooter or producer`)
+    const result: PlantDefinition = {
         maxHealth: positiveInteger(source.maxHealth, `${name}.maxHealth`),
         body: rect(source.body, `${name}.body`),
-        shooter: {
+    }
+    if (source.shooter) {
+        const shooter = exactObject(
+            source.shooter,
+            ['cadenceTicks', 'initialDelayTicks', 'windupTicks', 'shotsPerBurst', 'burstIntervalTicks', 'projectile', 'offset'],
+            `${name}.shooter`,
+        )
+        result.shooter = {
             cadenceTicks: positiveInteger(shooter.cadenceTicks, `${name}.shooter.cadenceTicks`),
             initialDelayTicks: nonNegativeInteger(shooter.initialDelayTicks, `${name}.shooter.initialDelayTicks`),
             windupTicks: positiveInteger(shooter.windupTicks, `${name}.shooter.windupTicks`),
@@ -189,8 +202,20 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
             burstIntervalTicks: nonNegativeInteger(shooter.burstIntervalTicks, `${name}.shooter.burstIntervalTicks`),
             projectile: qualifiedId(shooter.projectile, `${name}.shooter.projectile`),
             offset: point(shooter.offset, `${name}.shooter.offset`),
-        },
+        }
+    } else {
+        const producer = exactObject(source.producer, ['item', 'cadenceTicks', 'initialDelayTicks'], `${name}.producer`)
+        const delay = exactObject(producer.initialDelayTicks, ['min', 'max'], `${name}.producer.initialDelayTicks`)
+        const min = positiveInteger(delay.min, `${name}.producer.initialDelayTicks.min`)
+        const max = positiveInteger(delay.max, `${name}.producer.initialDelayTicks.max`)
+        if (min > max) throw new Error(`${name}.producer.initialDelayTicks.min must not exceed max`)
+        result.producer = {
+            item: qualifiedId(producer.item, `${name}.producer.item`),
+            cadenceTicks: positiveInteger(producer.cadenceTicks, `${name}.producer.cadenceTicks`),
+            initialDelayTicks: { min, max },
+        }
     }
+    return result
 }
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
@@ -242,7 +267,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const source = exactObject(value, [
         'adventureIndex', 'board', 'activeRows', 'startingSun', 'seedPackets',
         'lawnMower', 'skySun', 'waves', 'tutorial', 'award',
-    ], name)
+    ], name, ['nextLevel'])
     const boardId = qualifiedId(source.board, `${name}.board`)
     const board = reference(boardId, definitions.boards, `${name}.board`)
     const activeRows = array(source.activeRows, `${name}.activeRows`).map((row, index) => {
@@ -259,10 +284,11 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     if (wavesSource.length === 0) throw new Error(`${name}.waves must not be empty`)
     const waves = wavesSource.map((wave, waveIndex) => {
         const waveName = `${name}.waves[${waveIndex}]`
-        const record = exactObject(wave, ['zombies'], waveName)
+        const record = exactObject(wave, ['zombies'], waveName, ['flagWave'])
+        if (record.flagWave !== undefined && typeof record.flagWave !== 'boolean') throw new Error(`${waveName}.flagWave must be boolean`)
         const zombies = qualifiedIdArray(record.zombies, `${waveName}.zombies`)
         zombies.forEach((id, index) => reference(id, definitions.zombies, `${waveName}.zombies[${index}]`))
-        return { zombies }
+        return { zombies, ...(record.flagWave === undefined ? {} : { flagWave: record.flagWave as boolean }) }
     })
     const lawnMower = qualifiedId(source.lawnMower, `${name}.lawnMower`)
     reference(lawnMower, definitions.lawnMowers, `${name}.lawnMower`)
@@ -273,6 +299,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
 
     return {
         adventureIndex: positiveInteger(source.adventureIndex, `${name}.adventureIndex`),
+        ...(source.nextLevel === undefined ? {} : { nextLevel: qualifiedId(source.nextLevel, `${name}.nextLevel`) }),
         board: boardId,
         activeRows,
         startingSun: nonNegativeInteger(source.startingSun, `${name}.startingSun`),
@@ -328,9 +355,9 @@ function reference<T>(id: string, entries: Record<string, T>, name: string): T {
     return entry
 }
 
-function exactObject(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {
+function exactObject(value: unknown, keys: readonly string[], name: string, optional: readonly string[] = []): Record<string, unknown> {
     const record = object(value, name)
-    const expected = new Set(keys)
+    const expected = new Set([...keys, ...optional])
     for (const key of Object.keys(record)) if (!expected.has(key)) throw new Error(`${name}.${key} is not supported`)
     for (const key of keys) if (!Object.prototype.hasOwnProperty.call(record, key)) throw new Error(`${name}.${key} is required`)
     return record
