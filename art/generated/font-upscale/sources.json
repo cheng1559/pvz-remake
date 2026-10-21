@@ -1,0 +1,112 @@
+{
+  "briannetod12": {
+    "model": "general",
+    "scale": 4,
+    "sourceSha256": "7d4e7cbddcd7651d5f5084d4d590f33d56148141c3e5481d8a6fe8ec507ba3e7"
+  },
+  "briannetod16": {
+    "model": "general",
+    "scale": 4,
+    "sourceSha256": "312dce205652c07c8e31fb2181b180302e3dcfb0580b3fc698ee2a833b305466"
+  },
+  "briannetod32": {
+    "model": "general",
+    "scale": 4,
+    "sourceSha256": "4747a5c1a74805fcbb13bac6a7c464d6e3b7fbaf67779675963af581bc669749"
+  },
+  "briannetod32black": {
+    "model": "general",
+    "scale": 4,
+    "sourceSha256": "f7d67d0b61fa4802bcd98cf9bc93389a9e0bc9648f5b39425e20179d9af3e83c"
+  },
+  "continuumbold14": {
+    "model": "general",
+    "scale": 4,
+    "sourceSha256": "ee43c793ebe965a38ac2ff12547734e44c383dbfd184e23fe52ac53ed8819125"
+  },
+  "continuumbold14outback": {
+    "model": "general",
+    "scale": 4,
+    "sourceSha256": "864444eb5c1f633395addccd31b6b7af3dfb86980c63c21f62cc31b636a10148"
+  },
+  "dwarventodcraft12": {
+    "model": "waifu2x",
+    "scale": 4,
+    "sourceSha256": "d5409debb5c9d82280969b5535952581d7582b99af8bcee8a51587a363a10224",
+    "rgbaMode": "palette-coverage",
+    "ensemble": 8
+  },
+  "dwarventodcraft15": {
+    "model": "waifu2x",
+    "scale": 4,
+    "sourceSha256": "7935ccdc268142a96b11ff31d94f490feaf37bc06cea9d2394a288913f02d08c",
+    "rgbaMode": "palette-coverage",
+    "ensemble": 8
+  },
+  "dwarventodcraft18": {
+    "model": "waifu2x",
+    "scale": 4,
+    "sourceSha256": "a65fd7333215932da9ef981a4448e569418e60177eae56fb98135efb4a392767",
+    "rgbaMode": "palette-coverage",
+    "ensemble": 8
+  },
+  "dwarventodcraft18brightgreeninset": {
+    "model": "waifu2x",
+    "scale": 4,
+    "sourceSha256": "88aef310746c3eed17b272b5f4ebb2768e1e529c3d09c98ad0071c25ab455d0f",
+    "rgbaMode": "palette-coverage",
+    "ensemble": 8
+  },
+  "dwarventodcraft18greeninset": {
+    "model": "waifu2x",
+    "scale": 4,
+    "sourceSha256": "3897e11542ab3672edc56ad40092d9167960b1e9f3923d94296ea502cea274c9",
+    "rgbaMode": "palette-coverage",
+    "ensemble": 8
+  },
+  "dwarventodcraft18yellow": {
+    "model": "waifu2x",
+    "scale": 4,
+    "sourceSha256": "c08bb583d8f4cd1c55a61dd8bf2b4b8fe8a6c5929dae1ea8d659f11b914d15b0",
+    "rgbaMode": "palette-coverage",
+    "ensemble": 8,
+    "paletteWeights": "alpha-conserving",
+    "coverageMedianSize": 3
+  },
+  "dwarventodcraft24": {
+    "model": "waifu2x",
+    "scale": 4,
+    "sourceSha256": "b1faa5ac604b9b8d7deaf4c85bc0fd2f8f41b302cd52603e71adeb8bba3072ca",
+    "rgbaMode": "palette-coverage",
+    "ensemble": 8
+  },
+  "dwarventodcraft36brightgreeninset": {
+    "model": "waifu2x",
+    "scale": 4,
+    "sourceSha256": "779b6033a9d8dcc2d219b3dc7ec620b0e71f82081ecf59fb9282db90fc9116e3",
+    "rgbaMode": "palette-coverage",
+    "ensemble": 8
+  },
+  "dwarventodcraft36greeninset": {
+    "model": "waifu2x",
+    "scale": 4,
+    "sourceSha256": "6ec06061cf9a096f434eb0a591dcdf716747d948c093ea394a6c811c20adc9e0",
+    "rgbaMode": "palette-coverage",
+    "ensemble": 8
+  },
+  "houseofterror16": {
+    "model": "general",
+    "scale": 4,
+    "sourceSha256": "482eb1d6aa99cef72ecb2f857c1a7e2c59ac729cd4e2c1cd1a21c8d68cb52b70"
+  },
+  "houseofterror20": {
+    "model": "general",
+    "scale": 4,
+    "sourceSha256": "2048b6ad4f0fa435f163fd5dfd397cdc4457844316f37b7823c549769b15860d"
+  },
+  "houseofterror28": {
+    "model": "general",
+    "scale": 4,
+    "sourceSha256": "366ace20d71c91dbd8a1d76b51ddf21659cda9fa550cfec1ca5f437c648ba95b"
+  }
+}

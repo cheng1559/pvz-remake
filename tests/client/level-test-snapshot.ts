@@ -18,7 +18,7 @@ export function levelPresentation(current: WorldSnapshot): LevelPresentationSnap
         intro: {
             ticks: complete ? 855 : 0,
             previews: complete ? [] : Array.from({ length: 5 }, (_, slot) => ({
-                slot, x: 430 + slot * 10, y: 230, z: 100 + slot,
+                slot, x: 430 + slot * 10, y: 230, z: 100 + slot, hasTongue: slot === 0,
                 reanim: reanim('pvz:zombie_idle2'),
             })),
         },

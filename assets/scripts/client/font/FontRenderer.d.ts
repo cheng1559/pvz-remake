@@ -9,6 +9,7 @@ interface CharInfo {
 interface FontLayerConfig {
     name: string
     image: string
+    textureScale?: number // texture pixels per logical pixel; layout metrics stay unchanged
     ascent: number
     ascentPadding: number
     lineSpacingOffset: number

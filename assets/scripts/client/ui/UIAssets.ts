@@ -2,6 +2,7 @@ import { JsonAsset, Texture2D, type SpriteFrame } from 'cc'
 import { AssetLoader } from '@/client/content/LegacyAssetLoader'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import type { FontConfig } from '@/client/font/FontRenderer.d'
+import { upscaledFontLoader } from '@/client/font/UpscaledFonts'
 import { SpriteLoader } from '@/core/SpriteLoader'
 
 const FONT_NAMES = {
@@ -60,7 +61,7 @@ export function loadUIAssets(): Promise<UIAssets> {
                 texture.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST)
                 return texture
             }))
-            return [key, { config, textures }] as const
+            return [key, { config, textures, loadUpscaled: upscaledFontLoader(name) }] as const
         })),
         Promise.all(SPRITE_NAMES.map(async name => {
             const frame = await SpriteLoader.load(name)

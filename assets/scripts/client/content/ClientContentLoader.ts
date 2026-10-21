@@ -1,5 +1,6 @@
 import { Asset, assetManager, AudioClip, JsonAsset, SpriteFrame, Texture2D } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import { upscaledFontLoader } from '@/client/font/UpscaledFonts'
 import { parseFont } from '@/shared/content/font'
 import { parseContentManifest, type ContentManifest } from '@/shared/content/index'
 import { parseMusic, type Music } from '@/shared/content/music'
@@ -104,7 +105,10 @@ export class FontRepository {
                 texture.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
                 texture.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST)
             }
-            return { config, textures }
+            return {
+                config, textures,
+                loadUpscaled: content.bundle === 'pvz-base' ? upscaledFontLoader(id.slice(id.indexOf(':') + 1)) : undefined,
+            }
         }).catch(error => {
             this.cache.delete(id)
             throw error

@@ -93,6 +93,9 @@ assets/resources/images.meta
 assets/resources/audio/*
 assets/resources/audio.meta
 assets/resources/fonts/*
+!assets/resources/fonts/upscaled/
+!assets/resources/fonts/upscaled/**
+!assets/resources/fonts/upscaled.meta
 assets/resources/fonts.meta
 assets/resources/animations/*
 assets/resources/animations.meta

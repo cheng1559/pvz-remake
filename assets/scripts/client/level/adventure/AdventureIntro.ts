@@ -104,6 +104,7 @@ export class AdventureIntro implements LevelIntro {
                 anchor: { x: 0, y: 1 },
             }).node.addComponent(ReanimPlayer)
             await player.load(Math.floor(Math.random() * 4) > 0 ? 'pvz:zombie_idle2' : 'pvz:zombie', content.registry, content.loader)
+            player.setTrackPrefixVisible('anim_tongue', Math.random() < 0.2)
             player.play({ loop: true, rate: (12 + Math.random() * 12) / 12, timeSeconds: Math.random() * 20 })
             introZombies.push(node)
         }))
@@ -150,13 +151,17 @@ export class AdventureIntro implements LevelIntro {
     snapshot(): LevelIntroSnapshot {
         return {
             ticks: this.ticks,
-            previews: this.complete ? [] : this.introZombies.map((node, slot) => ({
-                slot,
-                x: node.position.x,
-                y: node.position.y,
-                z: node.position.z,
-                reanim: node.getChildByName('ZombieAnimation')!.getComponent(ReanimPlayer)!.snapshot(),
-            })),
+            previews: this.complete ? [] : this.introZombies.map((node, slot) => {
+                const player = node.getChildByName('ZombieAnimation')!.getComponent(ReanimPlayer)!
+                return {
+                    slot,
+                    x: node.position.x,
+                    y: node.position.y,
+                    z: node.position.z,
+                    hasTongue: player.getTrackNode('anim_tongue')?.active ?? false,
+                    reanim: player.snapshot(),
+                }
+            }),
         }
     }
 
@@ -185,6 +190,7 @@ export class AdventureIntro implements LevelIntro {
                     await player.load(preview.reanim.id, this.registry, this.loader)
                 }
                 player.restore(preview.reanim)
+                player.setTrackPrefixVisible('anim_tongue', preview.hasTongue)
             }
         }
         this.sync()

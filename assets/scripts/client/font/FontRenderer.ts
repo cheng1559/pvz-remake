@@ -12,6 +12,7 @@ import {
 } from 'cc'
 
 import { uiNode } from '@/client/view/uiNode'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { BitmapFontAssets } from './BitmapFontAssets'
 import { FontMetricsUtil } from './FontMetrics'
 import type { FontConfig, RenderCmd } from './FontRenderer.d'
@@ -120,6 +121,9 @@ export class FontRenderer extends Component {
 
     // Runtime state.
     private _config: FontConfig | null = null
+    private _sourceAssets: BitmapFontAssets | null = null
+    private _hdEnabled: boolean | undefined
+    private _fontRevision = 0
     private _spriteFrameCache: Map<string, SpriteFrame> = new Map()
     private _charNodes: Node[] = []
     private _dirty: boolean = true
@@ -135,9 +139,14 @@ export class FontRenderer extends Component {
     }
 
     onEnable() {
+        this._updateFontVariant()
         if (this._dirty) {
             this._rebuild()
         }
+    }
+
+    update() {
+        if (this._hdEnabled !== GameDebugSettings.hdFontsEnabled) this._updateFontVariant()
     }
 
     // Public API.
@@ -153,11 +162,34 @@ export class FontRenderer extends Component {
     }
 
     setFontAssets(assets: BitmapFontAssets) {
+        this._sourceAssets = assets
+        this._applyFontAssets(assets)
+        this._updateFontVariant()
+    }
+
+    private _applyFontAssets(assets: BitmapFontAssets) {
+        if (this.fontConfigJson === assets.config && this.layerTextures === assets.textures) return
+        this._clearCharNodes()
+        for (const frame of this._spriteFrameCache.values()) frame.destroy()
+        this._spriteFrameCache.clear()
         this.fontConfigJson = assets.config
         this.layerTextures = assets.textures
-        this._loadConfig()
-        this._dirty = true
-        this._scheduleRebuild()
+        this.forceRebuild()
+    }
+
+    private _updateFontVariant() {
+        const enabled = GameDebugSettings.hdFontsEnabled
+        this._hdEnabled = enabled
+        const revision = ++this._fontRevision
+        const source = this._sourceAssets
+        if (!source?.loadUpscaled) return
+        if (!enabled) {
+            this._applyFontAssets(source)
+            return
+        }
+        void source.loadUpscaled().then(assets => {
+            if (this.isValid && revision === this._fontRevision) this._applyFontAssets(assets)
+        }).catch(error => console.error('[FontRenderer] Failed to load upscaled font', error))
     }
 
     /** Force a text mesh rebuild. */
@@ -446,7 +478,8 @@ export class FontRenderer extends Component {
             if (!sf) {
                 sf = new SpriteFrame()
                 sf.texture = texture
-                sf.rect = new Rect(rect[0], rect[1], rect[2], rect[3])
+                const textureScale = layer.textureScale ?? 1
+                sf.rect = new Rect(rect[0] * textureScale, rect[1] * textureScale, rect[2] * textureScale, rect[3] * textureScale)
                 // PvZ and SpriteFrame rects both use a top-left origin here.
                 sf.rotated = false
                 this._spriteFrameCache.set(sfKey, sf)
@@ -559,6 +592,7 @@ export class FontRenderer extends Component {
     }
 
     onDestroy() {
+        ++this._fontRevision
         this._clearCharNodes()
         // Clear SpriteFrame cache.
         for (const [, sf] of this._spriteFrameCache) {

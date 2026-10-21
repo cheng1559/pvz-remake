@@ -1,0 +1,134 @@
+{
+  "ver": "1.0.27",
+  "importer": "image",
+  "imported": true,
+  "uuid": "1a183168-69c3-4fb5-bf64-06f4b19c473a",
+  "files": [
+    ".json",
+    ".png"
+  ],
+  "subMetas": {
+    "6c48a": {
+      "importer": "texture",
+      "uuid": "1a183168-69c3-4fb5-bf64-06f4b19c473a@6c48a",
+      "displayName": "DwarvenTodcraft18BrightGreenInset_atlas",
+      "id": "6c48a",
+      "name": "texture",
+      "userData": {
+        "wrapModeS": "clamp-to-edge",
+        "wrapModeT": "clamp-to-edge",
+        "imageUuidOrDatabaseUri": "1a183168-69c3-4fb5-bf64-06f4b19c473a",
+        "isUuid": true,
+        "visible": false,
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "none",
+        "anisotropy": 0
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "f9941": {
+      "importer": "sprite-frame",
+      "uuid": "1a183168-69c3-4fb5-bf64-06f4b19c473a@f9941",
+      "displayName": "DwarvenTodcraft18BrightGreenInset_atlas",
+      "id": "f9941",
+      "name": "spriteFrame",
+      "userData": {
+        "trimThreshold": 1,
+        "rotated": false,
+        "offsetX": 0,
+        "offsetY": 4,
+        "trimX": 8,
+        "trimY": 8,
+        "width": 4020,
+        "height": 456,
+        "rawWidth": 4036,
+        "rawHeight": 480,
+        "borderTop": 0,
+        "borderBottom": 0,
+        "borderLeft": 0,
+        "borderRight": 0,
+        "packable": true,
+        "pixelsToUnit": 100,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "meshType": 0,
+        "vertices": {
+          "rawPosition": [
+            -2010,
+            -228,
+            0,
+            2010,
+            -228,
+            0,
+            -2010,
+            228,
+            0,
+            2010,
+            228,
+            0
+          ],
+          "indexes": [
+            0,
+            1,
+            2,
+            2,
+            1,
+            3
+          ],
+          "uv": [
+            8,
+            472,
+            4028,
+            472,
+            8,
+            16,
+            4028,
+            16
+          ],
+          "nuv": [
+            0.0019821605550049554,
+            0.03333333333333333,
+            0.998017839444995,
+            0.03333333333333333,
+            0.0019821605550049554,
+            0.9833333333333333,
+            0.998017839444995,
+            0.9833333333333333
+          ],
+          "minPos": [
+            -2010,
+            -228,
+            0
+          ],
+          "maxPos": [
+            2010,
+            228,
+            0
+          ]
+        },
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "1a183168-69c3-4fb5-bf64-06f4b19c473a@6c48a",
+        "atlasUuid": "",
+        "trimType": "auto"
+      },
+      "ver": "1.0.12",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "type": "sprite-frame",
+    "fixAlphaTransparencyArtifacts": false,
+    "hasAlpha": true,
+    "redirect": "1a183168-69c3-4fb5-bf64-06f4b19c473a@6c48a"
+  }
+}

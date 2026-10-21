@@ -50,6 +50,7 @@ export async function executeDebugCliCommand(
         case 'hotkeys': GameDebugSettings.setHotkeysEnabled(args[0].toLowerCase() === 'true'); break
         case 'hitboxes': GameDebugSettings.setHitboxesVisible(args[0].toLowerCase() === 'true'); break
         case 'hdseed': GameDebugSettings.setHDSeedPacketsEnabled(args[0].toLowerCase() === 'true'); break
+        case 'hdfont': GameDebugSettings.setHDFontsEnabled(args[0].toLowerCase() === 'true'); break
         case 'perf': GameDebugSettings.setPerfToggle(args[0].toLowerCase() as DebugPerfToggle, args[1].toLowerCase() === 'true'); break
         case 'background': return debugCondition('Widescreen backgrounds are not implemented in this version')
         default: {

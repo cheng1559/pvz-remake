@@ -36,6 +36,7 @@ export interface LevelIntroPreviewSnapshot {
     x: number
     y: number
     z: number
+    hasTongue: boolean
     reanim: ReanimPlaybackSnapshot
 }
 
@@ -195,12 +196,13 @@ function parseIntro(value: unknown): LevelIntroSnapshot {
     const source = exact(value, ['ticks', 'previews'], 'Level intro')
     const previews = array(source.previews, 'Level intro.previews').map((value, index) => {
         const name = `Level intro.previews[${index}]`
-        const preview = exact(value, ['slot', 'x', 'y', 'z', 'reanim'], name)
+        const preview = exact(value, ['slot', 'x', 'y', 'z', 'hasTongue', 'reanim'], name)
         return {
             slot: nonNegativeInteger(preview.slot, `${name}.slot`),
             x: coordinate(preview.x, `${name}.x`),
             y: coordinate(preview.y, `${name}.y`),
             z: coordinate(preview.z, `${name}.z`),
+            hasTongue: boolean(preview.hasTongue, `${name}.hasTongue`),
             reanim: parseReanimPlaybackSnapshot(preview.reanim),
         }
     })

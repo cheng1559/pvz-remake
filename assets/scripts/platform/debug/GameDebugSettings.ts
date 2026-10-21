@@ -11,6 +11,7 @@ type DebugSettings = {
     collectMode: DebugCollectMode
     hitboxesVisible: boolean
     hdSeedPacketsEnabled: boolean
+    hdFontsEnabled: boolean
     mobileEnabled: boolean
     hotkeysEnabled: boolean
     widescreenBackgroundsVisible: boolean
@@ -27,6 +28,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     collectMode: 'click',
     hitboxesVisible: false,
     hdSeedPacketsEnabled: false,
+    hdFontsEnabled: false,
     mobileEnabled: sys.isMobile,
     hotkeysEnabled: false,
     widescreenBackgroundsVisible: true,
@@ -55,6 +57,7 @@ function loadDebugSettings(): DebugSettings {
             collectMode: normalizeCollectMode(parsed.collectMode),
             hitboxesVisible: parsed.hitboxesVisible ?? DEFAULT_DEBUG_SETTINGS.hitboxesVisible,
             hdSeedPacketsEnabled: parsed.hdSeedPacketsEnabled ?? DEFAULT_DEBUG_SETTINGS.hdSeedPacketsEnabled,
+            hdFontsEnabled: parsed.hdFontsEnabled ?? DEFAULT_DEBUG_SETTINGS.hdFontsEnabled,
             mobileEnabled: DEFAULT_DEBUG_SETTINGS.mobileEnabled,
             hotkeysEnabled: parsed.hotkeysEnabled ?? DEFAULT_DEBUG_SETTINGS.hotkeysEnabled,
             widescreenBackgroundsVisible:
@@ -114,6 +117,12 @@ export const GameDebugSettings = {
         this.hdSeedPacketsEnabled = enabled
         saveDebugSettings(this)
         return this.hdSeedPacketsEnabled
+    },
+
+    setHDFontsEnabled(enabled: boolean) {
+        this.hdFontsEnabled = enabled
+        saveDebugSettings(this)
+        return this.hdFontsEnabled
     },
 
     setMobileEnabled(enabled: boolean) {

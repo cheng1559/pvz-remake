@@ -19,12 +19,14 @@ function setup(debug = true) {
 test('CLI accepts old syntax, completes installed content and rejects malformed arguments', () => {
     assert.deepEqual(parseDebugCliCommand(' /PLANT "Pea Shooter" 3 1 '), { name: 'plant', args: ['Pea Shooter', '3', '1'] })
     assert.deepEqual(parseDebugCliCommand('sun set 100'), { name: 'sun', args: ['set', '100'] })
-    for (const command of ['/unknown', '/win extra', '/cooldown yes', '/item sun 3', '/sun remove 1']) {
+    assert.deepEqual(parseDebugCliCommand('/hdfont true'), { name: 'hdfont', args: ['true'] })
+    assert.deepEqual(getDebugCliCompletions('/hdfont ', undefined, true), ['/hdfont true', '/hdfont false'])
+    for (const command of ['/unknown', '/win extra', '/cooldown yes', '/hdfont yes', '/item sun 3', '/sun remove 1']) {
         assert.equal((parseDebugCliCommand(command) as { failure: string }).failure, 'syntax')
     }
     const game = setup()
     const catalog = game.debugCommand('catalog').catalog!
-    assert.deepEqual(catalog.plants, ['peashooter', 'repeater'])
+    assert.deepEqual(catalog.plants, ['sunflower', 'peashooter', 'repeater'])
     assert.deepEqual(getDebugCliCompletions('/plant re', catalog), ['/plant repeater'])
     assert.deepEqual(getDebugCliCompletions('/collect ', catalog, true), ['/collect auto', '/collect click', '/collect move'])
     assert.equal(getDebugCliSuffix('/plant repeater', catalog), ' {row} {col}')
