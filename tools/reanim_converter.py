@@ -17,6 +17,10 @@ from sprite_texture_preprocessor import (
 QUALIFIED_ID = re.compile(r"^[a-z0-9][a-z0-9_-]*:[a-z0-9][a-z0-9_./-]*$")
 
 
+def content_sprite_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9_.-]+", "_", name.lower())
+
+
 def get_float(xml_elem: ElementTree.Element, tag: str) -> float | None:
     node = xml_elem.find(tag)
     if node is not None and node.text and node.text.strip():
@@ -152,7 +156,7 @@ def build_reanim(
         for frame in frames:
             if not 0 <= frame["alpha"] <= 1:
                 raise ValueError(f"track '{track_id}' alpha must be between 0 and 1")
-            sprite = f"{namespace}:{frame['image']}" if frame["image"] else None
+            sprite = f"{namespace}:{content_sprite_name(frame['image'])}" if frame["image"] else None
             if sprite is not None and sprite not in available_sprites:
                 missing_sprites.add(sprite)
             keyframes.append({
@@ -414,7 +418,7 @@ def build_reanim_clip(
         for frame in frames:
             if previous is not None and frame["frameIndex"] > previous["frameIndex"] + 1:
                 keyframes.append(_legacy_frame(previous, previous["frameIndex"] + 1, start, fps, None))
-            sprite = f"{namespace}:{frame['image']}" if frame["image"] else None
+            sprite = f"{namespace}:{content_sprite_name(frame['image'])}" if frame["image"] else None
             if sprite is not None and sprite not in available_sprites:
                 missing_sprites.add(sprite)
             keyframes.append(_legacy_frame(frame, frame["frameIndex"], start, fps, sprite))

@@ -51,6 +51,24 @@ function game() {
     return { world, run: () => schedule.run(world, ++tick) }
 }
 
+test('tongue variants use one of five spawn outcomes and never reroll during updates', () => {
+    for (const typeId of ['pvz:normal', 'pvz:flag']) for (let roll = 0; roll < 5; roll++) {
+        const { world, run } = game()
+        const random = world.resources.get(RandomResource)
+        const integer = random.integer.bind(random)
+        let variantRolls = 0
+        random.integer = (min, max) => {
+            if (min === 0 && max === 4) { variantRolls++; return roll }
+            return integer(min, max)
+        }
+        const id = spawnZombie(world, definitions, typeId, 2, 700, 280)
+        assert.equal(world.get(id, ZombieComponent)!.hasTongue, roll === 0)
+        for (let tick = 0; tick < 10; tick++) run()
+        assert.equal(world.get(id, ZombieComponent)!.hasTongue, roll === 0)
+        assert.equal(variantRolls, 1)
+    }
+})
+
 test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses at the board edge', () => {
     const walking = game()
     const walker = spawnZombie(walking.world, definitions, 'pvz:normal', 2, 700, 280)

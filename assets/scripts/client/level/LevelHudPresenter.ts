@@ -2,6 +2,7 @@ import { Color, isValid, Node, Sprite } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
 import { uiNode } from '@/client/view/uiNode'
+import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
 import { TodParticleSystem } from '@/core/Particle'
@@ -32,6 +33,7 @@ export interface LevelHudOptions {
     seedPacketSlot: Node
     rootLayer: number
     seeds: SpriteAsset
+    seedPacketLarger: SpriteAsset
     packetPlants: SpriteAsset
     cachedPacketPlants: SpriteAsset
     packetCostFont: FontAsset
@@ -314,10 +316,15 @@ export class LevelHudPresenter {
         const seedId = snapshot.cursor.mode === 'seed' ? snapshot.cursor.seedId : undefined
         const upgrade = occupant && this.content.loadedMods.plantUpgrades.find(candidate =>
             candidate.seedId === seedId && candidate.targetPlantId === occupant.typeId)
-        const preview = this.previews.get(upgrade?.resultSeedId ?? seedId!)
+        const previewSeedId = upgrade?.resultSeedId ?? seedId!
+        const preview = this.previews.get(previewSeedId)
         if (!preview) throw new Error(`Seed preview is not installed: ${seedId}`)
         this.cursorPlant.spriteFrame = preview
         this.gridPlant.spriteFrame = preview
+        const plantId = this.content.definitions.seeds[previewSeedId].plant
+        const renderedPlant = PlantPreview.supports(plantId) ? plantId : undefined
+        this.cursorPreview.getComponent(PlantPreview)?.setPlant(renderedPlant)
+        this.gridPreview.getComponent(PlantPreview)?.setPlant(renderedPlant)
         const valid = inBounds && this.level.activeRows.includes(row) && (!occupant || upgrade !== undefined)
         this.gridPreview.active = valid
         if (valid) this.gridPreview.setPosition(board.origin.x + column * board.cell.width, -(board.origin.y + row * board.cell.height))
@@ -361,6 +368,6 @@ function contentText(strings: Record<string, string>, key: string): string {
 function tutorialFlashColor(tick: number): Color {
     const age = tick % TUTORIAL_FLASH_TICKS
     const midpoint = Math.floor(TUTORIAL_FLASH_TICKS / 2)
-    const gray = Math.max(55, Math.min(255, Math.round(55 + 200 * Math.abs(midpoint - age) / midpoint)))
+    const gray = Math.max(55, Math.min(255, Math.floor(55 + 200 * Math.abs(midpoint - age) / midpoint)))
     return new Color(gray, gray, gray, 255)
 }

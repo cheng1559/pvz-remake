@@ -1,0 +1,1 @@
+{"durationSeconds":0.08333333333333333,"id":"pvz:almanac_plant_16_body","schemaVersion":2,"tracks":[{"id":"anim_idle","keyframes":[{"alpha":1.0,"interpolation":"linear","scaleX":0.8,"scaleY":0.8,"skewX":0.0,"skewY":0.0,"sprite":"pvz:lilypad_body","timeSeconds":0.0,"x":-0.2,"y":5.5}],"zIndex":0}]}

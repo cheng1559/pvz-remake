@@ -1,5 +1,7 @@
 # 开发说明
 
+图鉴首页和详情已接入全部 49 种植物、26 种僵尸的 Reanim 展示动画，包含独立头部、眨眼、旗帜、装备及僵尸博士驾驶员；左侧缩略图沿用原版静态展示。`AlmanacEntityView` 只负责动画播放和裁剪，不创建后端实体，不实现攻击、产出、移动或受伤逻辑。全部动画使用全局时钟。资源配置由 `python tools/build_pvz_base.py --almanac-only --raw-root <raw目录>` 生成，完整构建也会包含这些资源。
+
 主场景挂载 `app/GameApp.ts`，协调菜单页面，并通过 `app/LevelController.ts` 启动 `LocalIntegratedGame`。战斗逻辑在 `server` 中运行，客户端处理协议快照和事件。`server`、`shared`、`ecs` 不应引入引擎依赖。
 
 菜单数据按 `screens → client/api/MenuApi → MenuTransport → server/menu/MenuService` 流转，`shared/menu` 定义请求和响应 DTO。后端负责用户档案与名称校验、商店目录／价格／库存／购买、挑战成绩、图鉴条目、成就条目／解锁状态和设置持久化。页面只渲染 API 返回的数据、提交 ID 和操作，不导入仓库或修改档案；确认购买时由后端重新校验当前用户、价格、库存和余额。请求与响应经过 JSON 往返，前端修改副本不会影响后端状态。
@@ -14,7 +16,7 @@
 
 页面不再显示临时黑色标题条。`MenuPages.heading` 声明原版标题的字体、基线和颜色，文案从 `lawnstrings` 读取；商店使用原版招牌。`ChallengeScreen` 绘制 Mini-games／Puzzle／Survival 的 20／20／11 个缩略图按钮和档案奖杯计数，复用 `UI.button` 的捕获、hover 与按下状态，点击尚未接通的模式显示未开放提示。`MenuPageControls` 提供花园切换／商店入口和成就返回按钮；领奖页使用原版按钮贴图，目前仍提供重玩 1-1。
 
-`AlmanacScreen` 提供植物种子包、僵尸静态缩略图、条目选择、详情卡、费用、冷却说明和彩色位图介绍。`AlmanacText` 保留原文格式标签，在 `UI.scroll` 的内容容器中排版；通用的 `UIScroll` 和 `ScrollGesture` 复用上一版 `pvz-remake` TypeScript 的滚轮、滑块拖动和移动端触摸滚动，惯性使用全局时钟。`StoreScreen` 提供汽车、招牌入场、四页货架、悬停说明、金币和 0.5 秒车门翻页，动画使用全局时钟。`server/menu/StoreCatalog` 根据当前档案的进度和购买槽位计算开放条件、价格、库存和确认购买，金币沿用原版单位（存档的 1 金币显示为 $10）；API 确认时重新读取档案后扣款，在后端保存。植物／僵尸详情动画和戴夫动画暂不创建；购买道具在战斗内的具体效果由对应系统接入。
+`AlmanacScreen` 提供植物种子包、僵尸静态缩略图、条目选择、详情卡、费用、冷却说明和彩色位图介绍。`AlmanacEntityView` 播放 49 种植物和 26 种僵尸的详情动画，不创建战斗实体；部件组装通过 `EntityDisplay` 与种子包静态姿态复用。绘制偏移、缩放和阴影对应原版 `Plant::UpdateReanim`／`Zombie::GetDrawPos`；蹦极绳索使用原贴图随身体挂点移动，计时接全局时钟。资源用 `python tools/build_pvz_base.py --almanac-only --raw-root <raw目录>` 生成。`AlmanacText` 保留原文格式标签，在 `UI.scroll` 的内容容器中排版；通用的 `UIScroll` 和 `ScrollGesture` 复用上一版 `pvz-remake` TypeScript 的滚轮、滑块拖动和移动端触摸滚动，惯性使用全局时钟。`StoreScreen` 提供汽车、招牌入场、四页货架、悬停说明、金币和 0.5 秒车门翻页，动画使用全局时钟。`server/menu/StoreCatalog` 根据当前档案的进度和购买槽位计算开放条件、价格、库存和确认购买，金币沿用原版单位（存档的 1 金币显示为 $10）；API 确认时重新读取档案后扣款，在后端保存。戴夫动画暂不创建；购买道具在战斗内的具体效果由对应系统接入。
 
 `AchievementScreen` 进入时通过 `getAchievements()` 一次读取 21 条定义和当前用户的存档解锁标记，`server/menu/AchievementCatalog` 保留上一版标记／图标的索引顺序。页面沿用两列坐标、70px 图集单元的 0.8 倍图标、绿色标题、位图换行说明，以及已解锁／未解锁图标的 255／32 透明度。复用 `UIScroll` 实现原滚轮每步 435px／0.35 秒、More／Top 每次 230px、触摸惯性和方向键每次 15px，滚动动画接全局时钟。地下平铺背景和返回按钮随内容移动；滚动不请求数据，页面也不授予成就。
 

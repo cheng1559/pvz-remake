@@ -10,6 +10,7 @@ import { UI } from '@/client/ui/UI'
 import type { UIButton } from '@/client/ui/UIButton'
 import { levelPlantVisual } from './LevelPlantVisuals'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
+import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
 import type { ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
@@ -205,6 +206,10 @@ export class LevelView {
             sprite: { frame: previewFrame, sizeMode: Sprite.SizeMode.RAW, trim: false },
         }).sprite!
         gridSprite.color = new Color(255, 255, 255, 100)
+        cursorPreview.addComponent(PlantPreview).initialize(undefined, cursorPlant.node, { x: 0, y: 0, scale: 1 })
+        const gridRender = gridPreview.addComponent(PlantPreview)
+        gridRender.initialize(undefined, gridSprite.node, { x: 0, y: 0, scale: 1 })
+        gridRender.setColor(gridSprite.color)
         cursorPreview.active = false
         gridPreview.active = false
         const awardLayer = uiNode({
@@ -240,7 +245,7 @@ export class LevelView {
         )
         const hudPresenter = LevelHudPresenter.create({
             ui, content, level, presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
-            seeds, packetPlants, cachedPacketPlants, packetCostFont: pico129,
+            seeds, seedPacketLarger, packetPlants, cachedPacketPlants, packetCostFont: pico129,
             adviceNode: slots.advice, adviceParent: hud, adviceFont: houseOfTerror28,
             tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview,
             cursorPlant, gridPlant: gridSprite, previews,

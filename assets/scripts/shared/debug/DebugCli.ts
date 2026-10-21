@@ -20,7 +20,7 @@ const specs: CommandSpec[] = [
     { name: 'level', parameters: ['{level}'], minimum: 1 },
     { name: 'gamespeed', parameters: ['{0-10}'], minimum: 1 },
     ...['music', 'sfx'].map(name => ({ name, parameters: ['{0-100}'], minimum: 1 })),
-    ...['hotkeys', 'cooldown', 'suncost', 'sunspawning', 'hitboxes', 'background', 'mobile', 'fullscreen'].map(name => ({ name, parameters: ['{enabled}'], minimum: 1, values: { 0: bool } })),
+    ...['hotkeys', 'cooldown', 'suncost', 'sunspawning', 'hitboxes', 'background', 'mobile', 'fullscreen', 'hdseed'].map(name => ({ name, parameters: ['{enabled}'], minimum: 1, values: { 0: bool } })),
     { name: 'perf', parameters: ['{plants|zombies|particles|sfx|logic}', '{enabled}'], minimum: 2, values: { 0: ['plants', 'zombies', 'particles', 'sfx', 'logic'], 1: bool } },
     { name: 'lawnmower', parameters: ['{trigger|reset}', '[row]'], minimum: 1, values: { 0: ['trigger', 'reset'] } },
     ...['sun', 'money'].map(name => ({ name, parameters: ['{add|set}', '{number}'], minimum: 2, values: { 0: ['add', 'set'] } })),

@@ -51,7 +51,7 @@ export function createItemSystem(): GameSystem {
                         economy.sun += item.value - spent
                         commands.destroyEntity(entity)
                     } else {
-                        item.scale = Math.min(item.scale, Math.max(0.5, Math.min(1, distance * 0.05)))
+                        item.scale = Math.max(0.5, Math.min(1, distance * 0.05))
                     }
                     continue
                 }

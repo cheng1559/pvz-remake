@@ -315,7 +315,7 @@ function parseZombie(value: unknown, name: string): Zombie {
     const source = exact(value, [
         'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
         'moweredTicksRemaining', 'walkAnimation', 'animation', 'animationTime', 'animationSpeed', 'hasHead', 'hasArm',
-        'hitFlashCounter', 'groanCounter',
+        'hasTongue', 'hitFlashCounter', 'groanCounter',
     ], name)
     if (source.state !== 'walking' && source.state !== 'eating' && source.state !== 'dying' && source.state !== 'mowered') {
         throw new TypeError(`${name}.state is unknown`)
@@ -353,6 +353,7 @@ function parseZombie(value: unknown, name: string): Zombie {
         animationTime: nonNegativeFinite(source.animationTime, `${name}.animationTime`),
         animationSpeed,
         hasHead: boolean(source.hasHead, `${name}.hasHead`),
+        hasTongue: boolean(source.hasTongue, `${name}.hasTongue`),
         hasArm: boolean(source.hasArm, `${name}.hasArm`),
         hitFlashCounter: nonNegativeInteger(source.hitFlashCounter, `${name}.hitFlashCounter`),
         groanCounter: integer(source.groanCounter, `${name}.groanCounter`),

@@ -8,6 +8,7 @@ const { ccclass } = _decorator
 
 export interface UITooltipOptions {
     text: string
+    warning?: string
     font?: UIFont
     maxWidth?: number
     gap?: number
@@ -33,12 +34,21 @@ export class UITooltip extends Component {
     private options!: UITooltipOptions
     private popup: UiNodeParts | null = null
     private visible = false
+    private dirty = false
     private widthLimit = 0
     private heightLimit = 0
 
     initialize(ui: UI, options: UITooltipOptions): void {
         this.ui = ui
         this.options = options
+    }
+
+    get warning(): string { return this.options.warning ?? '' }
+    set warning(value: string) {
+        if (value === this.warning) return
+        this.options.warning = value
+        this.dirty = true
+        if (this.visible) this.refresh()
     }
 
     show(): void { this.visible = true; this.refresh() }
@@ -70,7 +80,7 @@ export class UITooltip extends Component {
         }
         const widthLimit = Math.max(1, Math.min(this.options.maxWidth ?? 300, bounds.right - bounds.left))
         const heightLimit = Math.max(1, bounds.top - bounds.bottom)
-        if (!this.popup?.node.isValid || this.popup.node.parent !== surface.node
+        if (this.dirty || !this.popup?.node.isValid || this.popup.node.parent !== surface.node
             || this.widthLimit !== widthLimit || this.heightLimit !== heightLimit) {
             this.render(surface.node, widthLimit, heightLimit)
         }
@@ -94,14 +104,16 @@ export class UITooltip extends Component {
         if (this.popup?.node.isValid) this.popup.node.destroy()
         this.widthLimit = widthLimit
         this.heightLimit = heightLimit
+        this.dirty = false
         const font = this.options.font ?? 'packetCost' // Pico129, matching the previous garden tooltip.
         const config = this.ui.assets.fonts[font].config
         const metrics = FontMetricsUtil.getMetrics(config)
         const measure = (text: string) => FontMetricsUtil.measureTextWidth(config, text)
-        const width = Math.min(widthLimit, Math.max(...this.options.text.split('\n').map(measure)) + 10)
+        const width = Math.min(widthLimit, Math.max(...[this.options.text, this.warning].flatMap(text => text.split('\n').map(measure))) + 10)
         const textWidth = Math.max(1, width - 10)
         const lines = FontMetricsUtil.measureWordWrapped(config, this.options.text, textWidth).lineWidths.length
-        const height = Math.min(heightLimit, 4 + lines * (metrics.ascent + 2))
+        const warningLines = this.warning ? FontMetricsUtil.measureWordWrapped(config, this.warning, textWidth).lineWidths.length : 0
+        const height = Math.min(heightLimit, 4 + (lines + warningLines) * (metrics.ascent + 2))
         const popup = this.popup = uiNode({
             name: 'Tooltip', parent, active: false, anchor: { x: 0, y: 1 }, size: { width, height }, graphics: true,
         })
@@ -117,8 +129,12 @@ export class UITooltip extends Component {
             name: 'Text', parent: popup.node, anchor: { x: 0, y: 1 }, position: { x: 5, y: -1 },
             size: { width: textWidth, height: Math.max(0, height - 2) }, mask: Mask.Type.GRAPHICS_RECT,
         }).node
-        const label = this.ui.label(text, { text: this.options.text, font, width: textWidth, align: 'center', color: Color.BLACK })
-        label.renderer.lineSpacing = metrics.ascent + 2
-        label.renderer.forceRebuild()
+        const drawLabel = (value: string, y: number, color: Color) => {
+            const label = this.ui.label(text, { text: value, y, font, width: textWidth, align: 'center', color })
+            label.renderer.lineSpacing = metrics.ascent + 2
+            label.renderer.forceRebuild()
+        }
+        if (this.warning) drawLabel(this.warning, 0, new Color(255, 0, 0))
+        drawLabel(this.options.text, warningLines * (metrics.ascent + 2), Color.BLACK)
     }
 }

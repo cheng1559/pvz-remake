@@ -137,10 +137,12 @@ test('board hover shares cursor ownership with UI and never flashes default whil
     const content = { definitions: { seeds: { pea: { sunCost: 100 } } } }
     const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
     const seedBank = Object.create(LevelSeedBank.prototype)
-    seedBank.options = { content }
-    seedBank.packets = [{ seedId: 'pea', view: packet }]
+    const tooltip = { visible: false, warning: '', show() { this.visible = true }, hide() { this.visible = false } }
+    seedBank.options = { content, presentation: {}, ui: { text: (key: string) => key } }
+    seedBank.packets = [{ seedId: 'pea', view: packet, tooltip }]
     const hud = new LevelHudPresenter(content, ui.root, new ui.Node(), ...Array(4), new Map(), seedBank)
     hud.presentation = { seedGuideSteps: [], lawnGuideSteps: [] }
+    hud.level = { seedPackets: ['pea'] }
     hud.tutorialLawnFlash = new ui.Node()
     hud.syncSeedTutorialArrow = () => {}
     let selections = 0
@@ -149,6 +151,7 @@ test('board hover shares cursor ownership with UI and never flashes default whil
         phase: 'gameplay', result: 'playing', paused: false, availableSun: 100, cursor: { mode: 'none' }, tutorial: { step: 'complete' }, extensions: {},
         seedPackets: [{ seedId: 'pea', ready: true }], items: [] as any[],
     }
+    button.canInteract = () => world.cursor.mode !== 'seed'
     hud.lastSnapshot = world
     const sync = () => { hud.syncSeedPacket(world, [], true, false); ui.hover.refreshHoverStates() }
     const move = (x: number) => { ui.dispatch(ui.root, e.MOUSE_MOVE, x); hud.setPointer({ x, y: 20 }) }
@@ -171,6 +174,8 @@ test('board hover shares cursor ownership with UI and never flashes default whil
         sync()
         move(20)
         assert.equal(ui.cursor, 'pointer')
+        assert.equal(tooltip.visible, true)
+        assert.equal(tooltip.warning, '')
         ui.cursorHistory.length = 0
         for (let x = 21; x < 45; x++) move(x)
         assert.ok(ui.cursorHistory.length > 0)
@@ -182,6 +187,13 @@ test('board hover shares cursor ownership with UI and never flashes default whil
             world.paused = unavailable === 'paused'
             sync()
             assert.equal(ui.cursor, 'default', unavailable)
+            assert.equal(tooltip.visible, unavailable === 'cooldown' || unavailable === 'sun', unavailable)
+            assert.equal(tooltip.warning, unavailable === 'cooldown' ? 'WAITING_FOR_SEED' : unavailable === 'sun' ? 'NOT_ENOUGH_SUN' : '')
+            if (unavailable === 'cooldown') {
+                world.availableSun = 0
+                sync()
+                assert.equal(tooltip.warning, 'WAITING_FOR_SEED', 'recharging takes priority over insufficient sun without moving the pointer')
+            }
             if (unavailable === 'sun') {
                 ui.dispatch(packetNode, e.MOUSE_DOWN, 20)
                 ui.dispatch(packetNode, e.MOUSE_UP, 20)
@@ -206,9 +218,12 @@ test('board hover shares cursor ownership with UI and never flashes default whil
         ui.hover.beginModalBlock(modal)
         move(25)
         assert.equal(ui.cursor, 'default')
+        assert.equal(tooltip.visible, false)
         ui.hover.endModalBlock(modal)
         assert.equal(ui.cursor, 'pointer')
+        assert.equal(tooltip.visible, true)
         move(310)
+        assert.equal(tooltip.visible, false)
         hud.resetCursor()
         assert.equal(ui.cursor, 'default')
         move(20)
@@ -290,7 +305,10 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         pea: { plant: 'pvz:peashooter', sunCost: 100 },
         double: { plant: 'pvz:repeater', sunCost: 200 },
     } }
-    const bank = new LevelSeedBank({ content: { definitions }, level: { seedPackets: ['pea', 'double'] }, seedPacketSlot: ui.root })
+    const bank = new LevelSeedBank({
+        content: { definitions }, level: { seedPackets: ['pea', 'double'] }, seedPacketSlot: ui.root, presentation: {},
+        ui: { text: (key: string) => key, tooltip: () => ({ warning: '', show() {}, hide() {} }) },
+    })
     const world = {
         phase: 'gameplay', result: 'playing', paused: false, availableSun: 100, cursor: { mode: 'none' }, extensions: {},
         seedPackets: ['pea', 'double'].map(seedId => ({ seedId, ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 750 })),
@@ -413,6 +431,21 @@ test('left/right drags retain the pressed button, transfer hover only after rele
             ui.dispatch(null, e.MOUSE_MOVE, 500, key)
             ui.dispatch(null, e.MOUSE_UP, 500, key)
             assert.equal(a.clicks, 0); assert.equal(a.button.isPressed, false); assert.equal(ui.cursor, 'default')
+            a.button.pressOnly = b.button.pressOnly = true
+            ui.dispatch(a.node, e.MOUSE_MOVE, 20)
+            const presses = a.presses
+            ui.dispatch(a.node, e.MOUSE_DOWN, 20, key)
+            assert.equal(a.presses, presses + 1)
+            assert.equal(a.button.isPressed, false, 'almanac selection does not capture a drag')
+            ui.dispatch(b.node, e.MOUSE_MOVE, 220, key)
+            assert.equal(b.state, 'hover', 'almanac hover follows the pointer while held')
+            ui.dispatch(b.node, e.MOUSE_UP, 220, key)
+            assert.equal(b.clicks, 1, 'press-only selection does not emit a release click')
+            ui.setMobile()
+            ui.dispatch(a.node, e.TOUCH_START, 20)
+            assert.equal(a.presses, presses + 2)
+            ui.dispatch(a.node, e.TOUCH_END, 20)
+            assert.equal(a.clicks, 0)
         } finally { ui.cleanup() }
     }
 })

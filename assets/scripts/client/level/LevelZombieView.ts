@@ -239,7 +239,7 @@ export class LevelZombieView {
     }
 
     private applyParts(zombie: ZombieSnapshot): void {
-        const signature = `${zombie.hasHead ? 1 : 0}|${zombie.hasArm ? 1 : 0}|${this.holdingFlag ? 1 : 0}`
+        const signature = `${zombie.hasHead ? 1 : 0}|${zombie.hasTongue ? 1 : 0}|${zombie.hasArm ? 1 : 0}|${this.holdingFlag ? 1 : 0}`
         if (!this.player || signature === this.parts) return
         this.parts = signature
         if (this.typeId === 'pvz:flag') {
@@ -250,7 +250,7 @@ export class LevelZombieView {
         }
         this.player.setTrackPrefixVisible('anim_head', zombie.hasHead)
         this.player.setTrackPrefixVisible('anim_hair', zombie.hasHead)
-        this.player.setTrackPrefixVisible('anim_tongue', zombie.hasHead)
+        this.player.setTrackPrefixVisible('anim_tongue', zombie.hasHead && zombie.hasTongue)
         this.player.setTrackPrefixVisible('Zombie_outerarm_lower', zombie.hasArm)
         this.player.setTrackPrefixVisible('Zombie_outerarm_hand', zombie.hasArm)
         this.player.setTrackSpriteOverride('Zombie_outerarm_upper', zombie.hasArm ? null : this.damagedArm)

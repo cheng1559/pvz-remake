@@ -9,7 +9,7 @@ from pathlib import Path
 
 from font_converter import write_font
 from particle_converter import write_particle
-from reanim_converter import build_reanim_clip, load_json_config, write_reanim_clip, write_reanim
+from reanim_converter import build_reanim_clip, content_sprite_name, load_json_config, write_reanim_clip, write_reanim
 from sprite_texture_preprocessor import (
     get_alpha_companion_name,
     select_image_resources,
@@ -96,7 +96,10 @@ def build_sprite_content(
         if anim_info is None:
             raise ValueError(f"missing anim config: {source_path.stem}")
         resources = select_image_resources(source_path.parent)
-        available = {f"{namespace}:{name}" for name in resources}
+        images = {content_sprite_name(name): path for name, path in resources.items()}
+        if len(images) != len(resources):
+            raise ValueError(f"sprite names collide after normalization: {source_path.parent}")
+        available = {f"{namespace}:{name}" for name in images}
         data = build_reanim_clip(
             source_path, anim_info, node_id, clip_id, content_id, available, namespace
         )
@@ -107,7 +110,7 @@ def build_sprite_content(
             if frame["sprite"] is not None
         })
         for name in referenced:
-            src = resources.get(name)
+            src = images.get(name)
             if src is None:
                 raise ValueError(f"missing sprite source: {name}")
             dst = bundle / "sprites" / f"{name}.png"
@@ -115,7 +118,7 @@ def build_sprite_content(
                 src,
                 dst,
                 resource_name=name,
-                alpha_src=resources.get(get_alpha_companion_name(name)),
+                alpha_src=resources.get(get_alpha_companion_name(src.stem.lower())),
                 force_png=True,
             )
             sprites[f"{namespace}:{name}"] = f"sprites/{name}/spriteFrame"

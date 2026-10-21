@@ -53,6 +53,7 @@ export interface Zombie {
     animationTime: number
     animationSpeed: number
     hasHead: boolean
+    hasTongue: boolean
     hasArm: boolean
     hitFlashCounter: number
     groanCounter: number
@@ -368,6 +369,7 @@ export function spawnZombie(
         health: definition.maxHealth,
         maxHealth: definition.maxHealth,
         state: 'walking',
+        hasTongue: (typeId === 'pvz:normal' || typeId === 'pvz:flag') && random.integer(0, 4) === 0,
         groanCounter: random.integer(300, 400),
         speedPerTick: definition.speedPerTick.min +
             random.nextFloat() *

@@ -18,7 +18,7 @@ function snapshot(tick: number): WorldSnapshot {
             x: 10, y: 20, row: 2, health: 270, maxHealth: 270,
             animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
             moweredTicksRemaining: 0,
-            hasHead: true, hasArm: true, hitFlashCounter: 0,
+            hasHead: true, hasTongue: false, hasArm: true, hitFlashCounter: 0,
         }],
         projectiles: [{ entityId: 6, typeId: 'pvz:pea', x: 20, y: 30, row: 2 }],
         items: [{ entityId: 4, typeId: 'pvz:sun', state: 'available', x: 30, y: 40, scale: 1, alpha: 255 }],

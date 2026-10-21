@@ -24,6 +24,28 @@ const start: StartSessionPacket = {
     mods: [{ id: 'phase3:test', version: '1.0.0', contentHash: 'content-a' }],
 }
 
+test('tongue variants survive snapshots and saves, while saves missing the trait are rejected', () => {
+    const server = new IntegratedGameServer(definitions, levels)
+    server.start(start)
+    runCommand(server, { type: 'completeIntro' })
+    const id = (server as unknown as {
+        spawnZombie(typeId: string, row: number, x: number): number
+    }).spawnZombie('pvz:normal', 2, 700)
+    const setup = server.save()
+    setup.entities.find(entity => entity.entityId === id)!.zombie!.hasTongue = true
+    server.start({ ...start, save: setup as unknown as JsonValue })
+    assert.equal(server.snapshot().zombies.find(zombie => zombie.entityId === id)!.hasTongue, true)
+
+    const restored = new IntegratedGameServer(definitions, levels)
+    restored.start({ ...start, save: server.save() as unknown as JsonValue })
+    for (let tick = 0; tick < 10; tick++) assert.deepEqual(restored.tick(), server.tick())
+    assert.equal(restored.save().entities.find(entity => entity.entityId === id)!.zombie!.hasTongue, true)
+
+    const incompatible = JSON.parse(JSON.stringify(setup))
+    delete incompatible.entities.find((entity: { entityId: number }) => entity.entityId === id).zombie.hasTongue
+    assert.throws(() => parseServerSaveSnapshot(incompatible), /hasTongue/)
+})
+
 test('corpse opacity follows the final ten server ticks and resumes from a save', () => {
     const original = new IntegratedGameServer(definitions, levels)
     original.start(start)

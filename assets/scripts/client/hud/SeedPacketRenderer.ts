@@ -1,8 +1,10 @@
-import { Color, Node, Rect, Size, Sprite, SpriteFrame, Vec2 } from 'cc'
+import { _decorator, Color, Component, Node, Rect, Size, Sprite, SpriteFrame, Vec2 } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import type { FontConfig, FontLayerConfig } from '@/client/font/FontRenderer.d'
 import { uiNode } from '@/client/view/uiNode'
+import { PlantPreview, type PreviewPlantId } from './PlantPreview'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 export const SEED_PACKET_WIDTH = 50
 export const SEED_PACKET_HEIGHT = 70
@@ -38,6 +40,9 @@ const PACKET_PLANT_CELS = new Map<number, number>([
 ])
 
 const atlasFrames: WeakMap<SpriteFrame, Map<string, SpriteFrame>> = new WeakMap()
+const RENDERED_PLANTS: Partial<Record<number, PreviewPlantId>> = {
+    0: 'pvz:peashooter', 1: 'pvz:sunflower', 7: 'pvz:repeater',
+}
 
 export type SeedPacketSeedType =
     | number
@@ -119,10 +124,33 @@ export interface SeedPacketRenderArgs {
     upgrade?: boolean
     seeds: SpriteFrame | null
     seedPacketLarger?: SpriteFrame | null
+    seedPacketUpgradeLarger?: SpriteFrame | null
     packetPlants?: SpriteFrame | null
     cachedPacketPlants?: SpriteFrame | null
     plantPreviews?: SpriteFrame | null
     costFont?: BitmapFontAssets | null
+}
+
+@_decorator.ccclass('SeedPacketBackground')
+class SeedPacketBackground extends Component {
+    private sprite!: Sprite
+    private normal!: SpriteFrame
+    private hd!: SpriteFrame
+    private enabledHD?: boolean
+
+    initialize(sprite: Sprite, normal: SpriteFrame, hd: SpriteFrame): void {
+        this.sprite = sprite
+        this.normal = normal
+        this.hd = hd
+        this.update()
+    }
+
+    protected update(): void {
+        const enabled = GameDebugSettings.hdSeedPacketsEnabled
+        if (enabled === this.enabledHD) return
+        this.enabledHD = enabled
+        this.sprite.spriteFrame = enabled ? this.hd : this.normal
+    }
 }
 
 export class SeedPacketRenderer {
@@ -149,23 +177,6 @@ export class SeedPacketRenderer {
     }
 
     private static _drawBackground(root: Node, args: SeedPacketRenderArgs, scale: number) {
-        if (scale > 1) {
-            if (!args.seedPacketLarger) return
-
-            uiNode({
-                name: 'Background',
-                parent: root,
-                layer: args.layer,
-                position: { x: 0, y: 0 },
-                size: { width: SEED_PACKET_WIDTH * scale, height: SEED_PACKET_HEIGHT * scale },
-                anchor: { x: 0, y: 1 },
-                sprite: { frame: args.seedPacketLarger, sizeMode: Sprite.SizeMode.RAW, trim: false },
-            })
-            return
-        }
-
-        if (!args.seeds) return
-
         const backgroundCel =
             args.seedType === 48
                 ? BACKGROUND_IMITATER
@@ -173,25 +184,49 @@ export class SeedPacketRenderer {
                   ? BACKGROUND_UPGRADE
                   : BACKGROUND_NORMAL
 
-        uiNode({
+        const larger = args.upgrade ? args.seedPacketUpgradeLarger : args.seedPacketLarger
+        const normal = args.seeds
+            ? getAtlasFrame(args.seeds, backgroundCel, SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT, SEED_PACKET_ATLAS_COLUMNS)
+            : larger
+        if (!normal) return
+        const hd = args.seedType !== 48 ? larger ?? normal : normal
+        const node = uiNode({
             name: 'Background',
             parent: root,
             layer: args.layer,
             position: { x: 0, y: 0 },
-            size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT },
+            size: { width: SEED_PACKET_WIDTH * Math.max(1, scale), height: SEED_PACKET_HEIGHT * Math.max(1, scale) },
             anchor: { x: 0, y: 1 },
             sprite: {
-                frame: getAtlasFrame(args.seeds, backgroundCel, SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT, SEED_PACKET_ATLAS_COLUMNS),
-                sizeMode: Sprite.SizeMode.RAW,
+                frame: normal,
+                sizeMode: Sprite.SizeMode.CUSTOM,
                 trim: false,
             },
-        })
+        }).node
+        if (hd !== normal) node.addComponent(SeedPacketBackground).initialize(node.getComponent(Sprite)!, normal, hd)
     }
 
     private static _drawPlantIcon(root: Node, args: SeedPacketRenderArgs, scale: number) {
         const seedId = typeof args.seedType === 'string' ? SEED_PACKET_ICON_IDS[args.seedType] : args.seedType
         if (typeof seedId !== 'number') return
 
+        if (seedId < 0 || seedId > 48 || args.seedType === 'explodenut') {
+            this._drawCachedPlantIcon(root, seedId, args, scale)
+            return
+        }
+        const plantId = RENDERED_PLANTS[seedId] ?? seedId
+        const icon = uiNode({ name: 'PacketPlant', parent: root, layer: args.layer }).node
+        const cached = uiNode({ name: 'CachedPlant', parent: icon, layer: args.layer }).node
+        this._drawCachedPlantIcon(cached, seedId, args, scale)
+        const placement = PLANT_PLACEMENTS.get(seedId) ?? DEFAULT_PLANT_PLACEMENT
+        const iconScale = scale > 1 ? scale : 1
+        icon.addComponent(PlantPreview).initialize(plantId, cached, {
+            x: placement.offsetX * iconScale, y: -(placement.offsetY + 1) * iconScale,
+            scale: placement.scale * iconScale,
+        })
+    }
+
+    private static _drawCachedPlantIcon(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number) {
         if (scale > 1) {
             this._drawScaledCachedPlant(root, seedId, args, scale)
             return

@@ -138,6 +138,7 @@ export interface ZombieSnapshot {
     /** Omitted by older snapshots; defaults to fully opaque. */
     alpha?: number
     hasHead: boolean
+    hasTongue: boolean
     hasArm: boolean
     hitFlashCounter: number
 }
@@ -529,6 +530,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
             throw new TypeError(`${name}.animation is inconsistent with state`)
         }
         boolean(zombie.hasHead, `${name}.hasHead`)
+        boolean(zombie.hasTongue, `${name}.hasTongue`)
         boolean(zombie.hasArm, `${name}.hasArm`)
         integer(zombie.hitFlashCounter, `${name}.hitFlashCounter`)
         if ((zombie.hitFlashCounter as number) < 0) throw new TypeError(`${name}.hitFlashCounter must be non-negative`)

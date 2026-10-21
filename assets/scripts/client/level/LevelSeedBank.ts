@@ -3,6 +3,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { startGameTween } from '@/core/GameTween'
 import { SeedPacketView } from '@/client/hud/SeedPacketView'
 import { UIButton } from '@/client/ui/UIButton'
+import type { UITooltip } from '@/client/ui/UITooltip'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import type { ServerEvent, WorldSnapshot } from '@/shared/protocol'
 import type { LevelHudOptions } from './LevelHudPresenter'
@@ -11,6 +12,7 @@ import { levelPlantVisual } from './LevelPlantVisuals'
 interface Packet {
     seedId: string
     view: SeedPacketView
+    tooltip: UITooltip
     button?: UIButton
     previousCooldown?: number
 }
@@ -21,13 +23,18 @@ export class LevelSeedBank {
     constructor(private readonly options: LevelHudOptions) {
         this.packets = options.level.seedPackets.map((seedId, index) => {
             const seed = options.content.definitions.seeds[seedId]
+            const visual = levelPlantVisual(seed.plant)
             const view = new SeedPacketView({
                 name: `SeedPacket-${seedId}`, parent: options.seedPacketSlot, layer: options.rootLayer,
-                x: index * 59, y: 0, seedType: levelPlantVisual(seed.plant).seedType, cost: seed.sunCost,
-                seeds: options.seeds, packetPlants: options.packetPlants, cachedPacketPlants: options.cachedPacketPlants,
+                x: index * 59, y: 0, seedType: visual.seedType, cost: seed.sunCost,
+                seeds: options.seeds, seedPacketLarger: options.seedPacketLarger,
+                packetPlants: options.packetPlants, cachedPacketPlants: options.cachedPacketPlants,
                 costFont: options.packetCostFont,
             })
-            return { seedId, view }
+            const tooltip = options.ui.tooltip(view.node, {
+                text: options.ui.text(String(visual.seedType).toUpperCase()), gap: 0,
+            })
+            return { seedId, view, tooltip }
         })
     }
 
@@ -37,6 +44,7 @@ export class LevelSeedBank {
             button.rightClickTriggers = false
             button.releaseToNormalOnPressOut = true
             button.onPress = () => select(packet.seedId)
+            button.onHoverChange = hovering => hovering ? packet.tooltip.show() : packet.tooltip.hide()
             button.interactable = false
             return button
         })
@@ -57,10 +65,13 @@ export class LevelSeedBank {
             const packet = snapshot.seedPackets.find(value => value.seedId === entry.seedId)
             if (!packet) {
                 if (entry.button) entry.button.interactable = false
+                entry.tooltip.hide()
                 continue
             }
             const canAfford = (snapshot.extensions['pvz:debug'] as { sunCost?: boolean } | undefined)?.sunCost === false
                 || snapshot.availableSun >= this.options.content.definitions.seeds[entry.seedId].sunCost
+            entry.tooltip.warning = !packet.ready ? this.options.ui.text('WAITING_FOR_SEED')
+                : !canAfford ? this.options.ui.text('NOT_ENOUGH_SUN') : ''
             if (entry.button) {
                 entry.button.changeCursor = packet.ready && canAfford && snapshot.cursor.mode !== 'seed'
                 entry.button.interactable = introComplete && snapshot.phase === 'gameplay' && snapshot.result === 'playing' && !snapshot.paused

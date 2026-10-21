@@ -234,6 +234,16 @@ def render_zombie_cache(zombie_id: int, raw_root: Path | None = None) -> Image.I
         return cache
 
     animation_json = load_json(animation_path)
+    if zombie_id == 20:
+        node = get_anim_node(animation_json)
+        start = node["animations"][definition["layer"]]["startFrame"]
+        body = sample_frames(node["tracks"]["Zombie_bungi_body"]["frames"], start)
+        cord = load_texture("bungeecord")
+        y = base_y + body["y"] - cord.height
+        while y > -cord.height:
+            # Same body-local X position as the rendered portrait.
+            paste_transformed(cache, cord, (1, 0, 0, 1, base_x + 38, y), 1.0)
+            y -= cord.height
     draw_reanim(cache, animation_json, definition["layer"], base_x, base_y, definition)
     for extra_layer in definition.get("extraLayers", []):
         offset_x, offset_y = extra_layer.get("offset", (0.0, 0.0))
@@ -249,19 +259,14 @@ def render_zombie_cache(zombie_id: int, raw_root: Path | None = None) -> Image.I
     return cache
 
 
-def render_zombie_preview(zombie_id: int, raw_root: Path | None = None) -> Image.Image:
-    cell = Image.new("RGBA", (CELL_WIDTH, CELL_HEIGHT), (0, 0, 0, 0))
-    definition = ZOMBIE_DEFINITIONS.get(zombie_id)
-    if definition is None and zombie_id != 25:
-        return cell
-    definition = definition or {}
-
+def zombie_preview_matrix(zombie_id: int) -> tuple[float, ...]:
+    definition = ZOMBIE_DEFINITIONS.get(zombie_id, {})
     offset_x, offset_y = definition.get("previewOffset", (0.0, 0.0))
     definition_scale = definition.get("previewScale", 1.0)
     preview_scale = ALMANAC_SCALE * definition_scale
     scale_offset_x = CACHE_WIDTH * ALMANAC_SCALE * (1.0 - definition_scale) * 0.5
     scale_offset_y = CACHE_HEIGHT * ALMANAC_SCALE * (1.0 - definition_scale) * 0.5
-    matrix = (
+    return (
         preview_scale,
         0,
         0,
@@ -269,7 +274,13 @@ def render_zombie_preview(zombie_id: int, raw_root: Path | None = None) -> Image
         ALMANAC_BASE_X + offset_x + scale_offset_x,
         ALMANAC_BASE_Y + offset_y + scale_offset_y,
     )
-    paste_transformed(cell, render_zombie_cache(zombie_id, raw_root), matrix, 1.0)
+
+
+def render_zombie_preview(zombie_id: int, raw_root: Path | None = None) -> Image.Image:
+    cell = Image.new("RGBA", (CELL_WIDTH, CELL_HEIGHT), (0, 0, 0, 0))
+    if zombie_id not in ZOMBIE_DEFINITIONS and zombie_id != 25:
+        return cell
+    paste_transformed(cell, render_zombie_cache(zombie_id, raw_root), zombie_preview_matrix(zombie_id), 1.0)
     return cell
 
 

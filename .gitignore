@@ -84,6 +84,10 @@ assets/resources/textures/*
 !assets/resources/textures/background_left.png.meta
 !assets/resources/textures/background_right.png
 !assets/resources/textures/background_right.png.meta
+!assets/resources/textures/seedpacket_upgrade_larger.png
+!assets/resources/textures/seedpacket_upgrade_larger.png.meta
+!assets/resources/textures/zombie_previews_cached.png
+!assets/resources/textures/zombie_previews_cached.png.meta
 assets/resources/images/*
 assets/resources/images.meta
 assets/resources/audio/*

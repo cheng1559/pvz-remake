@@ -1,0 +1,22 @@
+Method: direct pixel recoloring with Sharp; no generative redrawing or resizing.
+Source: assets/bundles/pvz-base/sprites/seedpacket_larger.png
+Palette reference: assets/bundles/pvz-base/sprites/seeds.png, second cell.
+Output: art/generated/seedpacket_upgrade_larger.png
+Dimensions: 100 x 140 RGBA, identical to the source.
+
+The original atlas purple card uses a 180-degree HSL hue rotation of the
+ordinary green card, with the yellow sun retained. Apply the same rotation
+to the HD source without changing its pixel positions, lightness or alpha:
+
+  sum = max(r, g, b) + min(r, g, b)
+  output RGB = (sum - r, sum - g, sum - b)
+
+Preserve the source RGB of the yellow sun and its warm outline:
+  64 <= x <= 96, 106 <= y <= 137,
+  r >= g - 6, and (r - b > 20 or (r < 220 and r - b > 5)).
+Leave fully transparent pixels unchanged. No text, border, scenery, rays,
+icon or other image detail is redrawn. This replaces the rejected imagegen
+output; the final PNG is derived directly from the ordinary HD asset.
+
+Validation: dimensions 100 x 140; alpha changes 0; HSL lightness changes 0;
+555 sun pixels retain their exact original RGBA values.

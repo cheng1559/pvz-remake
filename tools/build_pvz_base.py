@@ -49,7 +49,7 @@ def same_asset(source: Path, target: Path) -> bool:
         return first.size == second.size and first.convert("RGBA").tobytes() == second.convert("RGBA").tobytes()
 
 
-def build_main_menu(clips: list | None = None, sprite_sources: list | None = None, update_gameplay: bool = False) -> dict:
+def build_main_menu(clips: list | None = None, sprite_sources: list | None = None, update_gameplay: bool = False, anim_config: Path | None = None) -> dict:
     """Convert selected assets and merge them into the existing base Bundle."""
     bundle = ROOT / "assets/bundles/pvz-base"
     manifest_path = bundle / "manifest.json"
@@ -64,12 +64,12 @@ def build_main_menu(clips: list | None = None, sprite_sources: list | None = Non
         source.mkdir()
         output = temporary / "bundle"
         generated = build_sprite_content(
-            source, output, reanim_clips=MAIN_MENU_CLIPS if clips is None else clips, anim_config=ROOT / "tools", sprite_sources=sprite_sources,
+            source, output, reanim_clips=MAIN_MENU_CLIPS if clips is None else clips, anim_config=anim_config or ROOT / "tools", sprite_sources=sprite_sources,
             gameplay_source=ROOT / "tools/content/pvz-base/gameplay",
         )
         for category in ("reanim", "sprites"):
             (bundle / category).mkdir(parents=True, exist_ok=True)
-            for path in (output / category).iterdir():
+            for path in (output / category).glob("*"):
                 target = bundle / category / path.name
                 if not same_asset(path, target):
                     changed = True
@@ -105,6 +105,7 @@ def build_pvz_base() -> dict:
             (ROOT / "tools/raw/images/plantshadow.png", "pvz:plantshadow"),
             (ROOT / "tools/raw/images/seedbank.png", "pvz:seedbank"),
             (ROOT / "tools/raw/images/seedpacket_larger.png", "pvz:seedpacket_larger"),
+            (ROOT / "art/generated/seedpacket_upgrade_larger.png", "pvz:seedpacket_upgrade_larger"),
             (ROOT / "tools/raw/images/seeds.png", "pvz:seeds"),
             (ROOT / "tools/raw/images/packet_plants.png", "pvz:packet_plants"),
             (ROOT / "assets/resources/textures/packet_plants_cached.png", "pvz:packet_plants_cached"),
@@ -175,9 +176,13 @@ if __name__ == "__main__":
     scope.add_argument("--main-menu-only", action="store_true", help="rebuild only menu animation assets in an existing base Bundle")
     scope.add_argument("--startup-only", action="store_true", help="rebuild only loading-bar animation assets in an existing base Bundle")
     scope.add_argument("--adventure-1-2-only", action="store_true", help="install Adventure 1-2 assets and gameplay into the existing Bundle")
+    scope.add_argument("--almanac-only", action="store_true", help="install all plant and zombie almanac animations")
     parser.add_argument("--raw-root", type=Path, default=ROOT / "tools/raw", help="raw asset directory for a scoped menu/startup build")
     args = parser.parse_args()
-    if args.adventure_1_2_only:
+    if args.almanac_only:
+        from almanac_assets import build_almanac
+        build_almanac(args.raw_root)
+    elif args.adventure_1_2_only:
         build_main_menu(
             [(args.raw_root / "reanim" / path.name, node, clip, content_id) for path, node, clip, content_id in ADVENTURE_12_CLIPS],
             [(args.raw_root / "images/sod3row.jpg", "pvz:sod3row")], update_gameplay=True,
@@ -187,3 +192,5 @@ if __name__ == "__main__":
         build_main_menu([(args.raw_root / "reanim" / path.name, node, clip, content_id) for path, node, clip, content_id in clips])
     else:
         build_pvz_base()
+        from almanac_assets import build_almanac
+        build_almanac(args.raw_root)

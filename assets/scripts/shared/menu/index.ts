@@ -47,6 +47,7 @@ export interface ChallengeView {
 }
 export interface AlmanacPlantDefinition {
     id: number, key: string, name: string, cost: number, refreshTime: number, upgrade?: boolean,
+    ground: 'day' | 'night' | 'pool' | 'nightpool' | 'roof',
 }
 export interface AlmanacZombieDefinition { id: number, key: string, iceGround?: boolean }
 export interface AlmanacView { plants: AlmanacPlantDefinition[], zombies: AlmanacZombieDefinition[] }

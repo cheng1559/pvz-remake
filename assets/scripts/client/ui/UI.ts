@@ -34,6 +34,7 @@ export interface UIButtonOptions extends Box {
     rightClickPressesVisual?: boolean
     releaseToNormalOnPressOut?: boolean
     refreshHoverOnEnable?: boolean
+    pressOnly?: boolean
     /** Visual offset on press, in pixels: x right, y down. Hit area stays fixed. */
     pressOffset?: readonly [number, number]
     pressSound?: SoundEffect | null
@@ -175,6 +176,7 @@ export class UI {
         button.rightClickPressesVisual = options.rightClickPressesVisual ?? !footer
         button.releaseToNormalOnPressOut = options.releaseToNormalOnPressOut ?? skin !== 'image'
         button.refreshHoverOnEnable = options.refreshHoverOnEnable ?? true
+        button.pressOnly = options.pressOnly ?? false
         button.onHoverEnter = () => { if (options.hoverSound) void SoundLoader.play(options.hoverSound) }
         if (options.tooltip) {
             const tooltip = this.tooltip(node, options.tooltip)

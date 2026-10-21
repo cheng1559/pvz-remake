@@ -5,6 +5,7 @@ import { TutorialResource, WaveResource } from './levelState'
 import { updateSkySun } from './sun'
 import { getAvailableSun } from './items'
 import { getActiveTutorial, TUTORIALS } from './tutorials'
+import { EventQueueResource, emitServerEvent } from './events'
 
 export function initializeLevel(world: World, firstAdventure: boolean): void {
     const level = world.resources.get(LevelStateResource).definition
@@ -33,13 +34,16 @@ export function createLevelProgressSystem(definitions: GameplayDefinitions): Gam
             // Keep tutorial transitions on the same side of sky-sun spawning as before.
             script?.beforeSun?.(world, tick)
             if (updateSkySun(world, commands, definitions, tick)) script?.sunSpawned?.(world)
-            // Match FlashIfReady: notify only when a usable packet actually finishes cooling down.
-            if (script?.seedReady) {
+            // Match FlashIfReady on the first gameplay update and when a usable packet finishes cooling down.
+            if (tick === 1 || script?.seedReady) {
                 const bank = world.resources.get(SeedBankResource)
                 for (const packet of bank.packets) {
-                    if (packet.readyAtTick === tick && bank.selectedSeedId !== packet.seedId &&
+                    const initialReady = tick === 1 && packet.readyAtTick <= tick
+                    const cooldownFinished = packet.readyAtTick === tick
+                    if ((initialReady || cooldownFinished) && bank.selectedSeedId !== packet.seedId &&
                         getAvailableSun(world, definitions) >= definitions.seeds[packet.seedId].sunCost) {
-                        script.seedReady(world, tick, packet.seedId)
+                        if (initialReady) emitServerEvent(world.resources.get(EventQueueResource), 'seedPacketFlashRequested', { seedId: packet.seedId })
+                        if (cooldownFinished) script?.seedReady?.(world, tick, packet.seedId)
                     }
                 }
             }

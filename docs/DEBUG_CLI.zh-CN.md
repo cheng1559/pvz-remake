@@ -22,9 +22,12 @@ Debug 构建中按 `/` 打开；移动模式下，双击屏幕右下角 100 CSS 
 | 收集 | `/collect {auto|click|move}`，自动／移动收集仅处理普通掉落 |
 | 快捷键 | `/hotkeys {true|false}`；当前 `1` 选择种子包，`D` 切换 0 倍速 |
 | 碰撞框 | `/hitboxes {true|false}` |
+| 高清种子包／头像 | `/hdseed {true|false}`，同时控制高清背景、植物渲染和僵尸头像渲染 |
 | 性能 | `/perf {plants|zombies|particles|sfx|logic} {true|false}` |
 | 平台 | `/mobile {true|false}`、`/fullscreen {true|false}` |
 | 音量 | `/music {0-100}`、`/sfx {0-100}`，通过设置 API 保存 |
+
+`/hdseed true` 同时启用普通和紫卡种子包的 100×140 高清背景、全部 49 种图鉴植物的真实 Reanim 渲染，以及图鉴左侧全部 26 种僵尸的静态 Reanim 头像。也覆盖已实现植物的手持预览和半透明落点预览，保留静态姿态、缩放、透明度和明暗状态。`false` 恢复原图集背景和缓存头像。当前画面立即切换，包括放大的领奖种子包。覆盖种子栏、掉落奖励、领奖页、图鉴和商店；开关偏好保存在本地。模仿者种子包保留原来的专用背景样式。
 
 当前内容包提供 `peashooter`、`repeater`、`normal` 和 1-1；植物、僵尸、物品、关卡补全来自后端已安装内容。`/nextflag`、`/background` 及尚未迁移的实体和关卡会提示不可用。
 

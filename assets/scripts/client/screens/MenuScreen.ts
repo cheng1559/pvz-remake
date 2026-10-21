@@ -13,7 +13,7 @@ import { showChallengeScreen } from './ChallengeScreen'
 import { showMenuPageControls } from './MenuPageControls'
 import { StartupScreen } from './StartupScreen'
 import { showUserDialog } from './UserDialog'
-import { showAlmanacScreen } from './AlmanacScreen'
+import { showAlmanacScreen, type AlmanacSelection } from './AlmanacScreen'
 import { StoreScreen } from './StoreScreen'
 import { AchievementScreen } from './AchievementScreen'
 import { showAwardScreen } from './AwardScreen'
@@ -34,6 +34,7 @@ export class MenuScreen extends Component {
     private retainedPage: PreparedMenuPage | null = null
     private mainMenu: MainMenuScreen | null = null
     private mainPreparation: Promise<PreparedMenuPage> | null = null
+    private almanacSelection: AlmanacSelection = { plant: 0, zombie: 0 }
 
     async prepare(id: MenuPageId): Promise<PreparedMenuPage> {
         if (this.retainedPage?.id === id && this.retainedPage.root.isValid) return this.retainedPage
@@ -150,7 +151,8 @@ export class MenuScreen extends Component {
                 navigateButton('main', { skin: 'seed', text: 'Main Menu', x: 324, y: 520, rightClickTriggers: false })
             } else if (id === 'almanac' || id === 'plants' || id === 'zombies') {
                 try {
-                    await showAlmanacScreen(controls, ui, id, action => { void this.onNavigate(action) })
+                    if (!this.page || !['almanac', 'plants', 'zombies'].includes(this.page.id)) this.almanacSelection = { plant: 0, zombie: 0 }
+                    await showAlmanacScreen(controls, ui, id, action => { void this.onNavigate(action) }, this.almanacSelection)
                 } catch (error) { root.node.destroy(); throw error }
             } else if (id === 'store') {
                 try {

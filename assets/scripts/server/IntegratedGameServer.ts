@@ -432,6 +432,7 @@ export class IntegratedGameServer {
                 moweredTicksRemaining: zombie.moweredTicksRemaining,
                 alpha: zombie.state === 'dying' ? Math.min(255, Math.trunc(255 * zombie.deathTicksRemaining / 10)) : 255,
                 hasHead: zombie.hasHead,
+                hasTongue: zombie.hasTongue,
                 hasArm: zombie.hasArm,
                 hitFlashCounter: zombie.hitFlashCounter,
                 ...position,

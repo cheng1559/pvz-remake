@@ -31,6 +31,8 @@ export class UIButton extends Component {
     rightClickPressesVisual = true
     releaseToNormalOnPressOut = false
     refreshHoverOnEnable = true
+    /** Select immediately without capturing the pointer or emitting a release click. */
+    pressOnly = false
     changeCursor = true
     /** Temporary input gate; keeps the normal appearance when blocked. */
     canInteract: () => boolean = () => true
@@ -182,6 +184,7 @@ export class UIButton extends Component {
         if (!this.rightClickTriggers && event.getButton() !== EventMouse.BUTTON_LEFT) return
         event.propagationStopped = true
         UIHoverManager.rememberMouseEvent(event, false)
+        if (this.pressOnly) { this.onPress(); return }
         this.mouseButton = event.getButton()
         this.beginPress(this.mouseButton === EventMouse.BUTTON_LEFT || this.rightClickPressesVisual)
         if (UIButton.active === this) UIButton.capture(true)
@@ -225,6 +228,7 @@ export class UIButton extends Component {
     private touchStart(event: EventTouch): void {
         if (!GameDebugSettings.isMobileMode() || !this.available() || UIButton.active) return
         event.propagationStopped = true
+        if (this.pressOnly) { this.onPress(); return }
         this.touchId = event.touch!.getID()
         this.beginPress(true)
     }

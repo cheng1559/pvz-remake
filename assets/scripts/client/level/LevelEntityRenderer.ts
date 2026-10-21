@@ -326,12 +326,13 @@ export class LevelEntityRenderer {
             name: 'FinalSeedPacketNormal', parent: node, layer: this.rootLayer, x: 0, y: 0,
             seedType, cost, costFont: this.assets.packetCostFont,
             seeds: this.assets.seeds, packetPlants: this.assets.packetPlants,
+            seedPacketLarger: this.assets.seedPacketLarger,
             cachedPacketPlants: this.assets.cachedPacketPlants,
         })
         const large = SeedPacketRenderer.drawSeedPacket({
             name: 'FinalSeedPacketLarge', parent: node, layer: this.rootLayer, x: 0, y: 0,
             scale: 2, seedType, cost, costFont: this.assets.packetCostFont,
-            seeds: null, seedPacketLarger: this.assets.seedPacketLarger,
+            seeds: this.assets.seeds, seedPacketLarger: this.assets.seedPacketLarger,
             plantPreviews: this.assets.plantPreviews,
         })
         large.active = false

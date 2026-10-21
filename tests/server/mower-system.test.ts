@@ -50,7 +50,7 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
         speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
         moweredTicksRemaining: 0,
         walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
-        hasHead: false, hasArm: true, hitFlashCounter: 0, groanCounter: 300,
+        hasHead: false, hasTongue: false, hasArm: true, hitFlashCounter: 0, groanCounter: 300,
     })
     schedule.run(world, 2)
     assert.equal(world.get(mowerEntity, LawnMowerComponent)!.state, 'ready')
@@ -72,7 +72,7 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
         speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
         moweredTicksRemaining: 0,
         walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
-        hasHead: true, hasArm: true, hitFlashCounter: 0, groanCounter: 300,
+        hasHead: true, hasTongue: false, hasArm: true, hitFlashCounter: 0, groanCounter: 300,
     })
     schedule.run(world, 4)
     assert.equal(world.hasEntity(secondZombie), true)

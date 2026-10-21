@@ -10,6 +10,7 @@ type DebugSettings = {
     sunCostEnabled: boolean
     collectMode: DebugCollectMode
     hitboxesVisible: boolean
+    hdSeedPacketsEnabled: boolean
     mobileEnabled: boolean
     hotkeysEnabled: boolean
     widescreenBackgroundsVisible: boolean
@@ -25,6 +26,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     sunCostEnabled: true,
     collectMode: 'click',
     hitboxesVisible: false,
+    hdSeedPacketsEnabled: false,
     mobileEnabled: sys.isMobile,
     hotkeysEnabled: false,
     widescreenBackgroundsVisible: true,
@@ -52,6 +54,7 @@ function loadDebugSettings(): DebugSettings {
             sunCostEnabled: parsed.sunCostEnabled ?? DEFAULT_DEBUG_SETTINGS.sunCostEnabled,
             collectMode: normalizeCollectMode(parsed.collectMode),
             hitboxesVisible: parsed.hitboxesVisible ?? DEFAULT_DEBUG_SETTINGS.hitboxesVisible,
+            hdSeedPacketsEnabled: parsed.hdSeedPacketsEnabled ?? DEFAULT_DEBUG_SETTINGS.hdSeedPacketsEnabled,
             mobileEnabled: DEFAULT_DEBUG_SETTINGS.mobileEnabled,
             hotkeysEnabled: parsed.hotkeysEnabled ?? DEFAULT_DEBUG_SETTINGS.hotkeysEnabled,
             widescreenBackgroundsVisible:
@@ -105,6 +108,12 @@ export const GameDebugSettings = {
         this.hitboxesVisible = visible
         saveDebugSettings(this)
         return this.hitboxesVisible
+    },
+
+    setHDSeedPacketsEnabled(enabled: boolean) {
+        this.hdSeedPacketsEnabled = enabled
+        saveDebugSettings(this)
+        return this.hdSeedPacketsEnabled
     },
 
     setMobileEnabled(enabled: boolean) {

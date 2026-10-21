@@ -6,14 +6,14 @@ import type { UI } from '@/client/ui/UI'
 import { SpriteLoader } from '@/core/SpriteLoader'
 
 export async function showAwardScreen(parent: Node, ui: UI): Promise<AwardView> {
-    const [award, packet, plants] = await Promise.all([
-        menuApi.getAward(), SpriteLoader.load('seedpacket_larger'), SpriteLoader.load('plant_previews_cached'),
+    const [award, packet, plants, seeds] = await Promise.all([
+        menuApi.getAward(), SpriteLoader.load('seedpacket_larger'), SpriteLoader.load('plant_previews_cached'), SpriteLoader.load('seeds'),
     ])
-    if (!packet || !plants) throw new Error('Missing award seed packet images')
+    if (!packet || !plants || !seeds) throw new Error('Missing award seed packet images')
     if (!parent.isValid) throw new Error('Award screen was destroyed while loading')
     SeedPacketRenderer.drawSeedPacket({
         name: 'AwardSeedPacket', parent, x: 350, y: -129, scale: 2,
-        seedType: award.seed, cost: award.cost, seeds: null, seedPacketLarger: packet,
+        seedType: award.seed, cost: award.cost, seeds, seedPacketLarger: packet,
         plantPreviews: plants, costFont: ui.assets.fonts.packetCost,
     })
     ui.label(parent, {

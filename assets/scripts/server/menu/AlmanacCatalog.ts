@@ -78,7 +78,12 @@ export const ALMANAC_PLANTS: AlmanacPlantDefinition[] = [
     { id: 46, key: 'SPIKEROCK', name: 'Spikerock', cost: 125, refreshTime: 5000, upgrade: true },
     { id: 47, key: 'COB_CANNON', name: 'Cob Cannon', cost: 500, refreshTime: 5000, upgrade: true },
     { id: 48, key: 'IMITATER', name: 'Imitater', cost: 0, refreshTime: 750 },
-]
+].map((plant): AlmanacPlantDefinition => ({
+    ...plant,
+    // AlmanacDialog::DrawPlants and Plant::IsNocturnal; Gold Magnet is diurnal.
+    ground: [16, 19, 43].includes(plant.id) ? 'pool' : plant.id === 24 ? 'nightpool'
+        : plant.id === 33 ? 'roof' : plant.id >= 8 && plant.id <= 15 || [25, 31, 42].includes(plant.id) ? 'night' : 'day',
+}))
 
 export const ALMANAC_ZOMBIES: AlmanacZombieDefinition[] = [
     { id: 0, key: 'ZOMBIE' },

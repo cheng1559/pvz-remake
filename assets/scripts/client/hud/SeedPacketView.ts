@@ -8,6 +8,7 @@ import {
     type SeedPacketSeedType,
 } from '@/client/hud/SeedPacketRenderer'
 import { uiNode } from '@/client/view/uiNode'
+import { PlantPreview } from './PlantPreview'
 
 export interface SeedPacketViewArgs {
     name: string
@@ -20,6 +21,7 @@ export interface SeedPacketViewArgs {
     drawCost?: boolean
     cost: number
     seeds?: SpriteFrame
+    seedPacketLarger?: SpriteFrame
     packetPlants?: SpriteFrame
     cachedPacketPlants?: SpriteFrame
     seedPacketFlash?: SpriteFrame
@@ -46,6 +48,7 @@ export class SeedPacketView {
             cost: args.cost,
             drawCost: args.drawCost,
             seeds: args.seeds ?? null,
+            seedPacketLarger: args.seedPacketLarger,
             packetPlants: args.packetPlants ?? null,
             cachedPacketPlants: args.cachedPacketPlants ?? null,
             costFont: args.costFont,
@@ -172,6 +175,7 @@ export class SeedPacketView {
             cost: this.cost,
             drawCost: false,
             seeds: args.seeds ?? null,
+            seedPacketLarger: args.seedPacketLarger,
             packetPlants: args.packetPlants ?? null,
             cachedPacketPlants: args.cachedPacketPlants ?? null,
             costFont: args.costFont,
@@ -185,6 +189,8 @@ export class SeedPacketView {
     private _applySpriteColorRecursive(node: Node, color: Color, skipName?: string | string[]) {
         if (Array.isArray(skipName) ? skipName.indexOf(node.name) >= 0 : node.name === skipName) return
         if (node.getComponent(FontRenderer)) return
+        const plant = node.getComponent(PlantPreview)
+        if (plant) { plant.setColor(color); return }
 
         const sprite = node.getComponent(Sprite)
         if (sprite) {
