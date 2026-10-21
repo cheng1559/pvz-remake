@@ -48,13 +48,14 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
             KeyCode: { ENTER: 13, SPACE: 32, ESCAPE: 27, KEY_R: 82 },
             game: { restart() { assert.fail('CLI reload must retain loaded assets') } },
         },
-        'cc/env': { DEBUG: true },
+        'cc/env': { DEBUG: false },
         '@/core/GameClock': { gameClock },
         '@/client/screens/DebugCliDialog': { showDebugCliDialog: () => new Promise(resolve => { closeCli = resolve }) },
         '@/client/screens/MenuPages': { MENU_PAGES },
         '@/client/ui/UIDialog': { UIDialog: { handleKey: () => { dialogKeys++; return false } } },
         '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1 }), completeLevel: async () => ({ nextLevelId: 'pvz:adventure-1-2' }) } },
         '@/client/ui/UI': { UI: { load: async () => ({}) } },
+        '@/client/ui/UIInput': { UIInput: { handleKeyUp() {} } },
         '@/client/screens/ContinueGameDialog': {
             showContinueGameDialog: () => {
                 prompts++
@@ -313,12 +314,13 @@ test('modal pages retain their caller, full pages destroy it, and gameplay relea
         require: () => ({
             Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
             UIHoverManager: { beginModalBlock() {}, endModalBlock() {} },
+            isValid: () => false, loadEntityDisplayAssets: async () => ({}),
             MENU_PAGES, MusicSystem: { playTune: async (tune: string) => { music.push(tune) } },
             game: { end() { quits++ } },
             showOptionsDialog: async (_parent: unknown, _ui: unknown, options: unknown) => { gameOptions = options },
             UI: { load: async () => ({
                 text: (key: string) => key,
-                dialog: (_parent: unknown, options: unknown) => { quitOptions = options },
+                dialog: (_parent: unknown, options: unknown) => { quitOptions = options; return { content: {} } },
             }) },
             uiNode: () => ({ node: {
                 isValid: true, active: false, addComponent() {}, destroy() { this.isValid = false },

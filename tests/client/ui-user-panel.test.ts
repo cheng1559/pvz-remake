@@ -8,12 +8,12 @@ import { MenuApi } from '@/client/api/MenuApi'
 import { createLocalMenuTransport } from '@/app/LocalMenuApi'
 import { GAME_SAVE_KEY } from '@/app/GameSaveStore'
 
-function load(path: string, modules: Record<string, unknown>) {
+function load(path: string, modules: Record<string, unknown>, globals: Record<string, unknown> = {}) {
     const module = { exports: {} as Record<string, any> }
     const compiled = transpileModule(readFileSync(`assets/scripts/${path}.ts`, 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
     })
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {}, console })
+    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {}, console, ...globals })
     return module.exports
 }
 
@@ -227,4 +227,58 @@ test('input keeps programmatic values silent, filters pasted text, and releases 
     assert.equal(field.hasFocus, false)
     assert.equal(blurs, 2)
     assert.equal(UIInput.handleKey({ keyCode: 32 }), false, 'the top modal receives keys after the field loses focus')
+})
+
+test('native input keeps its caret and text through completion and repeated submission', () => {
+    let text = '', start = 0, end = 0, focuses = 0, submissions = 0
+    const bridge = {
+        onInputBoxKey: undefined as ((key: string, shift: boolean) => boolean) | undefined,
+        setInputBoxText(value: string, from: number, to: number) { text = value; start = from; end = to },
+        getInputBoxSelection: () => ({ start, end }),
+    }
+    const { UIInput } = load('client/ui/UIInput', {
+        cc: { Component: class {}, Color: class {}, KeyCode: { ENTER: 13 }, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/input/UIHoverManager': { UIHoverManager: { activeModalRoot: null, isInputBlocked: false } },
+    }, { jsb: bridge })
+    const field = new UIInput()
+    field.enabledInHierarchy = true
+    field.node = { activeInHierarchy: true }
+    field.draw = () => {}
+    field.native = {
+        string: '', _impl: {}, blur() {},
+        focus() { focuses++; text = this.string; start = 0; end = text.length },
+    }
+    field.options = { onKey: (key: string) => { if (key !== 'Tab') return false; field.value = '/speed'; return true } }
+    field.onSubmit = () => { submissions++; field.focus() }
+    field.value = '/'
+    field.focus()
+    assert.deepEqual([start, end], [1, 1], 'opening native entry puts the caret after the slash')
+    const type = (value: string) => {
+        text = text.slice(0, start) + value + text.slice(end)
+        start += value.length; end = start
+        field.native.string = text
+        field.changed()
+    }
+    type('sp')
+    assert.equal(field.value, '/sp')
+    assert.equal(bridge.onInputBoxKey?.('Tab', false), true, 'Tab is consumed before native focus traversal')
+    assert.equal(text, '/speed', 'completion updates the native editor as well as the game label')
+    assert.deepEqual([start, end], [6, 6])
+    assert.equal(bridge.onInputBoxKey?.('Enter', false), true)
+    UIInput.handleKey({ keyCode: 13 })
+    assert.equal(submissions, 1, 'native Return and the game key event must not submit twice')
+    UIInput.handleKeyUp({ keyCode: 13 })
+    assert.equal(focuses, 1, 'keeping focus after an error must not reopen and select all text')
+    type(' 2')
+    assert.equal(field.value, '/speed 2')
+    field.update(0.2)
+    assert.equal(field.blink, 0.2, 'caret blinking advances while the gameplay clock is paused')
+    field.selectAll()
+    assert.deepEqual([start, end], [0, 8])
+    field.onSubmit = () => field.blur()
+    assert.equal(bridge.onInputBoxKey?.('Enter', false), true)
+    assert.equal(bridge.onInputBoxKey, undefined, 'closing entry releases the native key handler')
+    assert.equal(UIInput.handleKey({ keyCode: 13 }), true, 'the submitting Return must not confirm a newly opened dialog')
+    UIInput.handleKeyUp({ keyCode: 13 })
+    assert.equal(UIInput.handleKey({ keyCode: 13 }), false, 'a fresh Return can confirm the next dialog')
 })

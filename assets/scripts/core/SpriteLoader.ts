@@ -1,11 +1,14 @@
 import { dynamicAtlasManager, macro, SpriteFrame, Texture2D, warn } from 'cc'
 import { AssetLoader } from '@/client/content/LegacyAssetLoader'
+import { getSpriteDensity } from '@/client/content/SpriteDensity'
+import { resourcePacks } from '@/client/content/ResourcePacks'
 import { SpriteResourceManifest, type SpriteSampling } from './SpriteResourceManifest'
 
 export class SpriteLoader {
     private static _cache: Map<string, SpriteFrame> = new Map()
     private static _pending: Map<string, Promise<SpriteFrame | null>> = new Map()
     private static _dynamicAtlasConfigured = false
+    private static _resourceRevision = -1
 
     // ── Public API ─────────────────────────────────────────────
 
@@ -25,6 +28,11 @@ export class SpriteLoader {
             this._warnInvalidSpriteName('loadWithAlpha', name)
             return null
         }
+        await resourcePacks.ready()
+        if (this._resourceRevision !== resourcePacks.revision) {
+            this.clearCache()
+            this._resourceRevision = resourcePacks.revision
+        }
 
         if (this._cache.has(name)) {
             return this._cache.get(name)!
@@ -41,18 +49,21 @@ export class SpriteLoader {
 
         const promise = this._loadUncached(name)
         this._pending.set(name, promise)
-        const spriteFrame = await promise
-        this._pending.delete(name)
-        return spriteFrame
+        try {
+            return await promise
+        } finally {
+            this._pending.delete(name)
+        }
     }
 
     private static async _loadUncached(name: string): Promise<SpriteFrame | null> {
         this._configureDynamicAtlas()
-        const mainSf = await this._loadRaw(name)
+        const revision = resourcePacks.revision
+        const mainSf = await resourcePacks.sprite(`pvz:${name}`) ?? await this._loadRaw(name)
 
         if (mainSf) {
-            this._applySpriteSampling(mainSf, SpriteResourceManifest.getSampling(name))
-            this._cache.set(name, mainSf)
+            this._applySpriteSampling(mainSf, getSpriteDensity(mainSf) > 1 ? 'linear' : SpriteResourceManifest.getSampling(name))
+            if (revision === resourcePacks.revision) this._cache.set(name, mainSf)
         } else {
             warn(`[SpriteLoader] Failed to load sprite '${name}'`)
         }

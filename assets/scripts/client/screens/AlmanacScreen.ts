@@ -1,5 +1,6 @@
 import { Color, Mask, type Node } from 'cc'
 import { getAtlasFrame, SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
+import { PlantPreview } from '@/client/hud/PlantPreview'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import type { UI } from '@/client/ui/UI'
 import { uiNode } from '@/client/view/uiNode'
@@ -22,8 +23,8 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
     } else {
         const { plants, zombies } = await menuApi.getAlmanac()
         const names = page === 'plants'
-            ? ['seeds', 'seedpacket_larger', 'seedpacket_upgrade_larger', 'packet_plants', 'packet_plants_cached', 'almanac_imitater', 'particles/seedpacketflash', 'almanac_plantcard', 'almanac_groundday', 'almanac_groundnight', 'almanac_groundpool', 'almanac_groundnightpool', 'almanac_groundroof']
-            : ['almanac_zombiewindow', 'almanac_zombiewindow2', 'zombie_previews_cached', 'almanac_zombiecard', 'almanac_groundday', 'almanac_groundice']
+            ? ['almanac_imitater', 'particles/seedpacketflash', 'almanac_plantcard', 'almanac_groundday', 'almanac_groundnight', 'almanac_groundpool', 'almanac_groundnightpool', 'almanac_groundroof']
+            : ['almanac_zombiewindow', 'almanac_zombiewindow2', 'almanac_zombiecard', 'almanac_groundday', 'almanac_groundice']
         const frames = await Promise.all(names.map(async name => {
             const frame = await SpriteLoader.load(name)
             if (!frame) throw new Error(`Missing almanac image: ${name}`)
@@ -70,7 +71,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                 const x = plant.id === 48 ? 20 : plant.id % 8 * 52 + 26
                 const y = plant.id === 48 ? 23 : Math.floor(plant.id / 8) * 78 + 92
                 const button = ui.button(parent, {
-                    images: { normal: plant.id === 48 ? sprites.almanac_imitater : getAtlasFrame(sprites.seeds, plant.upgrade ? 1 : 2, 50, 70, 9), hover: plant.id === 48 ? sprites.almanac_imitater : sprites['particles/seedpacketflash'] },
+                    images: { normal: plant.id === 48 ? sprites.almanac_imitater : sprites['particles/seedpacketflash'] },
                     x, y, width: plant.id === 48 ? 34 : 50, height: plant.id === 48 ? 46 : 70,
                     imageBox: plant.id === 48 ? { width: 34, height: sprites.almanac_imitater.originalSize.height } : undefined,
                     pressSound: null, clickSound: null, pressOnly: true, pressOffset: [0, 0],
@@ -83,7 +84,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     button.onStateChange = state => { update(state); overlay.active = state === 'hover' }
                     button.onStateChange(button.isHovering ? 'hover' : 'normal')
                 } else {
-                    const packet = SeedPacketRenderer.drawSeedPacket({ parent: button.node, x: 0, y: 0, seedType: plant.id, cost: plant.cost, upgrade: plant.upgrade, seeds: sprites.seeds, seedPacketLarger: sprites.seedpacket_larger, seedPacketUpgradeLarger: sprites.seedpacket_upgrade_larger, packetPlants: sprites.packet_plants, cachedPacketPlants: sprites.packet_plants_cached, costFont: ui.assets.fonts.packetCost })
+                    const packet = SeedPacketRenderer.drawSeedPacket({ parent: button.node, x: 0, y: 0, seedType: plant.id, cost: plant.cost, upgrade: plant.upgrade, costFont: ui.assets.fonts.packetCost })
                     packet.setSiblingIndex(0)
                     const visual = button.node.getChildByName('Visual')!
                     const update = button.onStateChange!
@@ -102,8 +103,11 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     name: 'PortraitClip', parent: button.node, position: { x: 2, y: -2 },
                     anchor: { x: 0, y: 1 }, size: { width: 72, height: 72 }, mask: Mask.Type.GRAPHICS_RECT,
                 }).node
-                const cached = ui.image(clip, getAtlasFrame(sprites.zombie_previews_cached, zombie.id, 76, 76, 8), { x: -2, y: -2 }).node
-                clip.addComponent(AlmanacZombiePortrait).initialize(zombie.id, cached)
+                clip.addComponent(AlmanacZombiePortrait).initialize(zombie.id, async root => {
+                    const atlas = await SpriteLoader.load('zombie_previews_cached')
+                    if (!atlas) throw new Error('Missing zombie portrait atlas')
+                    if (root.isValid) ui.image(root, getAtlasFrame(atlas, zombie.id, 76, 76, 8), { x: -2, y: -2 })
+                })
                 ui.image(button.node, sprites.almanac_zombiewindow2)
                 const glow = ui.additiveImage(button.node, sprites.almanac_zombiewindow2, {}, 48)
                 const update = button.onStateChange!
@@ -115,4 +119,9 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
         ui.button(parent, { skin: 'almanacIndex', text: ui.text('ALMANAC_INDEX'), x: 32, y: 567, rightClickPressesVisual: true, onClick: () => navigate('almanac') })
     }
     ui.button(parent, { skin: 'almanacClose', text: ui.text('CLOSE_BUTTON'), x: 676, y: 567, rightClickPressesVisual: true, onClick: () => navigate('main') })
+    await Promise.all([
+        ...parent.getComponentsInChildren(PlantPreview).map(view => view.ready),
+        ...parent.getComponentsInChildren(AlmanacEntityView).map(view => view.ready),
+        ...parent.getComponentsInChildren(AlmanacZombiePortrait).map(view => view.ready),
+    ])
 }

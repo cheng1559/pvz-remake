@@ -291,6 +291,9 @@ function parseEntity(value: unknown, index: number): LevelEntitySnapshot {
             const plant = exact(value, ['kind', 'entityId', 'animations'], name, ['idleRate', 'blinkAtTick'])
             const animations = plainObject(plant.animations, `${name}.animations`)
             if (!Object.hasOwn(animations, 'body')) throw new TypeError(`${name}.animations.body is required`)
+            if (Object.hasOwn(animations, 'idleHead') && (!Object.hasOwn(animations, 'blink') || plant.blinkAtTick === undefined)) {
+                throw new TypeError(`${name} is missing shooter blink state`)
+            }
             return {
                 kind: 'plant', entityId,
                 animations: Object.fromEntries(Object.entries(animations).map(([slot, state]) => [slot, parseReanimPlaybackSnapshot(state)])),

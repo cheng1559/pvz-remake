@@ -8,6 +8,7 @@
     },
     "scripts": {
         "build:content": "python tools/build_pvz_base.py",
+        "build:hd-pack": "python tools/build_hd_pack.py",
         "mod:init": "node tools/mod.mjs init",
         "mod:build": "node tools/mod.mjs build",
         "mod:test": "node tools/mod.mjs test",
@@ -39,5 +40,8 @@
         "@types/node": "^22.20.1",
         "tsx": "^4.23.1",
         "typescript": "^5.9.3"
+    },
+    "dependencies": {
+        "fflate": "0.8.3"
     }
 }

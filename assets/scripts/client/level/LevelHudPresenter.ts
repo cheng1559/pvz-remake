@@ -1,8 +1,9 @@
-import { Color, isValid, Node, Sprite } from 'cc'
+import { Color, isValid, Node } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
-import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
+import { FontRepository } from '@/client/content/ClientContentLoader'
 import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview } from '@/client/hud/PlantPreview'
+import type { SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
 import { TodParticleSystem } from '@/core/Particle'
@@ -23,7 +24,6 @@ const PROGRESS_METER_HEIGHT = 27
 const PROGRESS_FILL_WIDTH = 143
 type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 type FontAsset = Awaited<ReturnType<FontRepository['load']>>
-type SpriteAsset = Awaited<ReturnType<SpriteRepository['load']>>
 
 export interface LevelHudOptions {
     ui: UI
@@ -32,10 +32,7 @@ export interface LevelHudOptions {
     presentation: LevelPresentation
     seedPacketSlot: Node
     rootLayer: number
-    seeds: SpriteAsset
-    seedPacketLarger: SpriteAsset
-    packetPlants: SpriteAsset
-    cachedPacketPlants: SpriteAsset
+    loadPacketSprite: SeedPacketRenderArgs['loadSprite']
     packetCostFont: FontAsset
     adviceNode: Node
     adviceParent: Node
@@ -44,9 +41,8 @@ export interface LevelHudOptions {
     tutorialLawnFlash: Node
     cursorPreview: Node
     gridPreview: Node
-    cursorPlant: Sprite
-    gridPlant: Sprite
-    previews: Map<string, SpriteAsset>
+    cursorPlant: PlantPreview
+    gridPlant: PlantPreview
     sunText: UILabel
     progressMeter: Node
     progressFillClip: Node
@@ -80,7 +76,7 @@ export class LevelHudPresenter {
         const presenter = new LevelHudPresenter(
             options.content, options.tutorialArrowLayer, options.tutorialLawnFlash,
             options.cursorPreview, options.gridPreview, options.cursorPlant, options.gridPlant,
-            options.previews, seedBank, options.sunText,
+            seedBank, options.sunText,
             options.progressMeter, options.progressFillClip, options.progressFill, options.progressHead,
             options.levelText, advice, options.level, options.presentation,
         )
@@ -100,9 +96,8 @@ export class LevelHudPresenter {
         private readonly tutorialLawnFlash: Node,
         private readonly cursorPreview: Node,
         private readonly gridPreview: Node,
-        private readonly cursorPlant: Sprite,
-        private readonly gridPlant: Sprite,
-        private readonly previews: Map<string, SpriteAsset>,
+        private readonly cursorPlant: PlantPreview,
+        private readonly gridPlant: PlantPreview,
         readonly seedBank: LevelSeedBank,
         private readonly sunText: UILabel,
         private readonly progressMeter: Node,
@@ -317,14 +312,9 @@ export class LevelHudPresenter {
         const upgrade = occupant && this.content.loadedMods.plantUpgrades.find(candidate =>
             candidate.seedId === seedId && candidate.targetPlantId === occupant.typeId)
         const previewSeedId = upgrade?.resultSeedId ?? seedId!
-        const preview = this.previews.get(previewSeedId)
-        if (!preview) throw new Error(`Seed preview is not installed: ${seedId}`)
-        this.cursorPlant.spriteFrame = preview
-        this.gridPlant.spriteFrame = preview
         const plantId = this.content.definitions.seeds[previewSeedId].plant
-        const renderedPlant = PlantPreview.supports(plantId) ? plantId : undefined
-        this.cursorPreview.getComponent(PlantPreview)?.setPlant(renderedPlant)
-        this.gridPreview.getComponent(PlantPreview)?.setPlant(renderedPlant)
+        this.cursorPlant.setPlant(plantId)
+        this.gridPlant.setPlant(plantId)
         const valid = inBounds && this.level.activeRows.includes(row) && (!occupant || upgrade !== undefined)
         this.gridPreview.active = valid
         if (valid) this.gridPreview.setPosition(board.origin.x + column * board.cell.width, -(board.origin.y + row * board.cell.height))

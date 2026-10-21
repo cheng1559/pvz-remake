@@ -74,21 +74,16 @@ export class LevelView {
         const sprites = new SpriteRepository(content.registry, content.loader)
         const fonts = new FontRepository(content.registry, content.loader)
         const [
-            background, seedbank, projectileFrame, seeds, packetPlants, cachedPacketPlants,
-            mowerFrame, mowerShadow, damagedZombieArm, plantPreviews, seedPacketLarger, flagMeter, flagMeterParts,
+            background, seedbank, projectileFrame,
+            mowerFrame, mowerShadow, damagedZombieArm, flagMeter, flagMeterParts,
             flagMeterLevelProgress, sunFont, pico129, houseOfTerror16, houseOfTerror28, gameOverFrames, ui,
         ] = await Promise.all([
             sprites.load(presentation.board.background),
             sprites.load('pvz:seedbank'),
             sprites.load('pvz:projectilepea'),
-            sprites.load('pvz:seeds'),
-            sprites.load('pvz:packet_plants'),
-            sprites.load('pvz:packet_plants_cached'),
             sprites.load('pvz:lawnmower_cached'),
             sprites.load('pvz:plantshadow'),
             sprites.load('pvz:zombie_outerarm_upper2'),
-            sprites.load('pvz:plant_previews_cached'),
-            sprites.load('pvz:seedpacket_larger'),
             sprites.load('pvz:flagmeter'),
             sprites.load('pvz:flagmeterparts'),
             sprites.load('pvz:flagmeterlevelprogress'),
@@ -185,31 +180,27 @@ export class LevelView {
             node: slots.houseLabel, text: `${playerName}'s House`, font: houseOfTerror28,
             width: WIDTH, y: 550, align: 'center', baseline: true,
         })
-        const previews = new Map(Object.entries(content.definitions.seeds).map(([seedId, seed]) =>
-            [seedId, getAtlasFrame(plantPreviews, levelPlantVisual(seed.plant).preview, 220, 160, 8)],
-        ))
-        const previewFrame = previews.get(level.seedPackets[0])!
+        const loadPacketSprite = (name: string) => sprites.load(`pvz:${name}`)
+        const initializePreview = (node: Node) => {
+            uiNode({ node, position: { x: 0, y: 0 }, anchor: { x: 0, y: 1 }, sprite: { frame: null } })
+            const preview = node.addComponent(PlantPreview)
+            preview.initialize(undefined, async (parent, plantId) => {
+                const atlas = await loadPacketSprite('plant_previews_cached')
+                if (!parent.isValid) return
+                uiNode({ name: 'CachedPlantPreview', parent, position: { x: -40, y: 40 }, anchor: { x: 0, y: 1 },
+                    sprite: { frame: getAtlasFrame(atlas, levelPlantVisual(String(plantId)).preview, 220, 160, 8), sizeMode: Sprite.SizeMode.RAW, trim: false } })
+            }, { x: 0, y: 0, scale: 1 })
+            return preview
+        }
         const cursorPreview = uiNode({
             node: slots.cursorPreview, size: { width: 220, height: 160 }, anchor: { x: 0, y: 1 },
         }).node
-        const cursorPlant = uiNode({
-            node: slots.cursorPlant, position: { x: -40, y: 40 },
-            anchor: { x: 0, y: 1 },
-            sprite: { frame: previewFrame, sizeMode: Sprite.SizeMode.RAW, trim: false },
-        }).sprite!
+        const cursorPlant = initializePreview(slots.cursorPlant)
         const gridPreview = uiNode({
             node: slots.gridPreview, size: { width: 220, height: 160 }, anchor: { x: 0, y: 1 },
         }).node
-        const gridSprite = uiNode({
-            node: slots.gridPlant, position: { x: -40, y: 40 },
-            anchor: { x: 0, y: 1 },
-            sprite: { frame: previewFrame, sizeMode: Sprite.SizeMode.RAW, trim: false },
-        }).sprite!
-        gridSprite.color = new Color(255, 255, 255, 100)
-        cursorPreview.addComponent(PlantPreview).initialize(undefined, cursorPlant.node, { x: 0, y: 0, scale: 1 })
-        const gridRender = gridPreview.addComponent(PlantPreview)
-        gridRender.initialize(undefined, gridSprite.node, { x: 0, y: 0, scale: 1 })
-        gridRender.setColor(gridSprite.color)
+        const gridPlant = initializePreview(slots.gridPlant)
+        gridPlant.setColor(new Color(255, 255, 255, 100))
         cursorPreview.active = false
         gridPreview.active = false
         const awardLayer = uiNode({
@@ -234,7 +225,7 @@ export class LevelView {
         entityRenderer = new LevelEntityRenderer(
             root.layer, content, animations, {
                 projectileFrame, mowerFrame, mowerShadow, damagedZombieArm,
-                seeds, packetPlants, cachedPacketPlants, seedPacketLarger, plantPreviews,
+                loadPacketSprite,
                 packetCostFont: pico129,
             },
             entityLayer, coinLayer, awardLayer, audio, intro,
@@ -245,10 +236,10 @@ export class LevelView {
         )
         const hudPresenter = LevelHudPresenter.create({
             ui, content, level, presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
-            seeds, seedPacketLarger, packetPlants, cachedPacketPlants, packetCostFont: pico129,
+            loadPacketSprite, packetCostFont: pico129,
             adviceNode: slots.advice, adviceParent: hud, adviceFont: houseOfTerror28,
             tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview,
-            cursorPlant, gridPlant: gridSprite, previews,
+            cursorPlant, gridPlant,
             sunText, progressMeter, progressFillClip, progressFill, progressHead, levelText,
         })
         const particlePresenter = new LevelParticlePresenter(
@@ -298,7 +289,7 @@ export class LevelView {
 
     setPaused(paused: boolean): void {
         paused = paused || this.gameOver.active
-        if (this.presentationPaused === paused) return
+        if (!paused && !this.presentationPaused) return
         this.presentationPaused = paused
         if (paused) {
             for (const component of this.root.getComponentsInChildren(Component)) {

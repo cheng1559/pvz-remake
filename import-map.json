@@ -1,5 +1,6 @@
 {
     "imports": {
-        "@/": "./assets/scripts/"
+        "@/": "./assets/scripts/",
+        "fflate": "./node_modules/fflate/lib/browser.cjs"
     }
 }

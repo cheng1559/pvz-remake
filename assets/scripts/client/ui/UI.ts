@@ -3,6 +3,7 @@ import { FontMetricsUtil } from '@/client/font'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { uiNode } from '@/client/view/uiNode'
+import { applySpriteDensity } from '@/client/content/SpriteDensity'
 import { loadUIAssets, type UIAssets, type UIFont } from './UIAssets'
 import { UIButton, type UIButtonPolygon, type UIButtonState } from './UIButton'
 import { UIDialog } from './UIDialog'
@@ -284,6 +285,7 @@ export class UI {
         const frame = this.assets.sprites.editbox.clone()
         frame.insetLeft = frame.insetRight = Math.floor(frame.originalSize.width / 3)
         frame.insetTop = frame.insetBottom = Math.floor(frame.originalSize.height / 3)
+        applySpriteDensity(frame)
         this.image(node, frame, { width: options.width ?? 260, height: options.height ?? 36 }).type = Sprite.Type.SLICED
         node.once(Node.EventType.NODE_DESTROYED, () => frame.destroy())
         const input = node.addComponent(UIInput)

@@ -96,7 +96,12 @@ export class LevelScene extends Component {
     }
 
     update(dt: number): void {
-        if (this.snapshotting || this.completing || this.gameOverNotified || !this.game || !this.view || !this.audio || this.game.render().paused) return
+        if (this.snapshotting || this.completing || this.gameOverNotified || !this.game || !this.view || !this.audio) return
+        if (this.game.render().paused) {
+            // Debug commands can create animation components after the initial pause.
+            this.view.setPaused(true)
+            return
+        }
         dt = gameClock.delta(dt)
         const introComplete = this.view.updateIntro(dt)
         if (introComplete && !this.introCompletionSent) {

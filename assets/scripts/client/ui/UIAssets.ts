@@ -1,9 +1,9 @@
-import { JsonAsset, Texture2D, type SpriteFrame } from 'cc'
+import { JsonAsset, type SpriteFrame } from 'cc'
 import { AssetLoader } from '@/client/content/LegacyAssetLoader'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
-import type { FontConfig } from '@/client/font/FontRenderer.d'
-import { upscaledFontLoader } from '@/client/font/UpscaledFonts'
+import { loadBitmapFont } from '@/client/font/BitmapFontLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
+import { resourcePacks } from '@/client/content/ResourcePacks'
 
 const FONT_NAMES = {
     label: 'dwarventodcraft18',
@@ -47,22 +47,13 @@ export interface UIAssets {
 }
 
 let pending: Promise<UIAssets> | undefined
+let revision = -1
 
-export function loadUIAssets(): Promise<UIAssets> {
+export async function loadUIAssets(): Promise<UIAssets> {
+    await resourcePacks.ready()
+    if (revision !== resourcePacks.revision) { pending = undefined; revision = resourcePacks.revision }
     return pending ??= Promise.all([
-        Promise.all(Object.entries(FONT_NAMES).map(async ([key, name]) => {
-            const config = await AssetLoader.load<JsonAsset>(`fonts/${name}`, JsonAsset)
-            if (!config) throw new Error(`Missing UI font: ${name}`)
-            const data = config.json as unknown as FontConfig
-            const textures = await Promise.all(data.layers.map(async layer => {
-                const texture = await AssetLoader.load<Texture2D>(`fonts/${layer.image}/texture`, Texture2D)
-                if (!texture) throw new Error(`Missing UI font texture: ${layer.image}`)
-                texture.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
-                texture.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST)
-                return texture
-            }))
-            return [key, { config, textures, loadUpscaled: upscaledFontLoader(name) }] as const
-        })),
+        Promise.all(Object.entries(FONT_NAMES).map(async ([key, name]) => [key, await loadBitmapFont(name)] as const)),
         Promise.all(SPRITE_NAMES.map(async name => {
             const frame = await SpriteLoader.load(name)
             if (!frame) throw new Error(`Missing UI sprite: ${name}`)

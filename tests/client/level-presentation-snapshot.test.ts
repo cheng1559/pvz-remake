@@ -36,7 +36,8 @@ function snapshot(): any {
             animations: {
                 body: reanim('pvz:peashooter'), idleHead: reanim('pvz:peashooter_head_idle'),
                 shootHead: reanim('pvz:peashooter_shoot'),
-            }, idleRate: 1.25,
+                blink: reanim('pvz:peashooter_blink'),
+            }, idleRate: 1.25, blinkAtTick: 500,
         }, {
             kind: 'zombie', entityId: 2, body: reanim('pvz:zombie_walk'),
             mowerDriver: null,
@@ -115,6 +116,8 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
     assert.throws(invalid(value => { value.advice.lastSyncedTick = -1 }), /lastSyncedTick/)
     assert.throws(invalid(value => { value.entities[0].idleRate = Number.POSITIVE_INFINITY }), /finite numbers/)
     assert.throws(invalid(value => { delete value.entities[0].animations.body }), /animations.body is required/)
+    assert.throws(invalid(value => { delete value.entities[0].animations.blink }), /missing shooter blink state/)
+    assert.throws(invalid(value => { delete value.entities[0].blinkAtTick }), /missing shooter blink state/)
     assert.throws(invalid(value => { value.extensions.bad = {} }), /extension ID is invalid/)
 })
 

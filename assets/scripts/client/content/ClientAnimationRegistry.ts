@@ -10,6 +10,7 @@ export interface ShooterAnimationDefinition {
     readonly body: ClientAnimationClip
     readonly idleHead: ClientAnimationClip
     readonly shootHead: ClientAnimationClip
+    readonly blink: ClientAnimationClip
 }
 
 export interface ZombieAnimationDefinition {
@@ -49,11 +50,13 @@ const DEFAULTS: ClientAnimationDefinitions = {
         body: clip('pvz:peashooter'),
         idleHead: clip('pvz:peashooter_head_idle', { attachmentTrackId: 'anim_stem' }),
         shootHead: clip('pvz:peashooter_shoot', { attachmentTrackId: 'anim_stem' }),
+        blink: clip('pvz:peashooter_blink', { attachmentTrackId: 'anim_face' }),
     },
     'pvz:repeater': {
         body: clip('pvz:repeater'),
         idleHead: clip('pvz:repeater_head_idle', { attachmentTrackId: 'anim_stem' }),
         shootHead: clip('pvz:repeater_shoot', { attachmentTrackId: 'anim_stem', rateScale: 45 / 35 }),
+        blink: clip('pvz:peashooter_blink', { attachmentTrackId: 'anim_face' }),
     },
     'pvz:sunflower': { body: clip('pvz:sunflower'), blink: clip('pvz:sunflower_blink', { attachmentTrackId: 'anim_idle' }) },
     'pvz:flag': {

@@ -4,7 +4,9 @@
 
 `Pico129`、`Pix118Bold` 是刻意采用像素风格的字体，始终排除在超分处理之外，继续使用原图和最近邻采样。
 
-字图和字体配置位于 `assets/resources/fonts/upscaled`，本目录保存对照图及来源记录。Debug CLI 输入 `/hdfont true` 使用超分字体，`/hdfont false` 恢复原字体；默认关闭，设置保存在本地。菜单和关卡文字即时切换，原字图保留，像素字体始终使用原图。超分字图按需加载并缓存。
+字图和字体配置位于 `art/resource-packs/hd/fonts`，不参与 Cocos 资源导入；本目录保存对照图及来源记录。重新超分后运行 `npm run build:hd-pack` 生成 `dist/resource-packs/hd.zip`，在 Debug CLI 中执行 `/pack install` 选择 ZIP 安装。`/pack load hd` 仅重新启用已安装包，`/pack unload hd` 恢复原资源；原字图保留，像素字体不包含在 HD 包中。
+
+字体加载入口按资源 ID 查询已启用的包，读取包内对应的字体配置和字图，完成后交给原渲染器。包中没有覆盖的 ID 使用原版资源；已声明的字体加载失败直接报告错误，不使用另一版本兜底。切换资源包时重新创建场景，保持原版度量和排版。
 
 ![原图放大与模型超分对照](comparison.png)
 

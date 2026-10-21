@@ -12,7 +12,9 @@ const POGO_RESTART_COUNTER = 7
 /** Almanac animation instances only; they do not create or update game entities. */
 @ccclass('AlmanacEntityView')
 export class AlmanacEntityView extends Component {
-    private readonly blinks: Array<{ player: ReanimPlayer, next: number, rate: number }> = []
+    ready: Promise<void> = Promise.resolve()
+    private readonly blinks: Array<{ player: ReanimPlayer, rate: number }> = []
+    private blinkCountdown = 4 + Math.random() * 4
     private readonly sockets: Array<{ node: Node, sprite: Sprite }> = []
     private motion?: { node: Node, y: number, kind: 'pogo' | 'bungee' }
     private pogo?: { player: ReanimPlayer, rate: number, counter: number, ticks: number, poseTicks: number | null }
@@ -26,7 +28,8 @@ export class AlmanacEntityView extends Component {
         }).node : parent
         const root = uiNode({ name: `Almanac-${kind}-${id}`, parent: container, position: { x: x - (clip?.x ?? 0), y: -y + (clip?.y ?? 0) } }).node
         const view = root.addComponent(AlmanacEntityView)
-        void view.load(kind, id).catch(error => {
+        view.ready = view.load(kind, id)
+        void view.ready.catch(error => {
             if (isValid(root, true)) console.error('[Almanac] Failed to load entity animation', kind, id, error)
         })
         return root
@@ -69,7 +72,7 @@ export class AlmanacEntityView extends Component {
                 this.sockets.push({ node: player.node, sprite })
             }
             if (part.blink) {
-                this.blinks.push({ player, next: 4 + Math.random() * 4, rate: 15 / part.fps })
+                this.blinks.push({ player, rate: 15 / part.fps })
             } else if (definition.motion === 'pogo' && part.name === 'body') {
                 // ZombieInitialize holds the last pose until the first landing animation.
                 player.pause()
@@ -119,11 +122,10 @@ export class AlmanacEntityView extends Component {
             node.setPosition(node.position.x, y + 40 * (1 - Math.sin(2 * Math.PI * (this.elapsed % 2) / 2)))
         }
         for (const socket of this.sockets) socket.node.active = socket.sprite.enabled
-        for (const blink of this.blinks) {
-            blink.next -= delta
-            if (blink.next > 0) continue
+        if (this.blinks.length && (this.blinkCountdown -= delta) <= 0) {
+            const blink = this.blinks[Math.floor(Math.random() * this.blinks.length)]
             blink.player.play({ loop: false, rate: blink.rate, timeSeconds: 0 })
-            blink.next = 4 + Math.random() * 4
+            this.blinkCountdown = 4 + Math.random() * 4
         }
     }
 

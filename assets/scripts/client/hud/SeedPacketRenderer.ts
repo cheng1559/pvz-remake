@@ -1,10 +1,11 @@
-import { _decorator, Color, Component, Node, Rect, Size, Sprite, SpriteFrame, Vec2 } from 'cc'
+import { _decorator, Color, Component, isValid, Node, Rect, Size, Sprite, SpriteFrame, Vec2 } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import type { FontConfig, FontLayerConfig } from '@/client/font/FontRenderer.d'
 import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview, type PreviewPlantId } from './PlantPreview'
-import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { applySpriteDensity } from '@/client/content/SpriteDensity'
+import { SpriteLoader } from '@/core/SpriteLoader'
 
 export const SEED_PACKET_WIDTH = 50
 export const SEED_PACKET_HEIGHT = 70
@@ -122,34 +123,30 @@ export interface SeedPacketRenderArgs {
     cost?: number
     drawCost?: boolean
     upgrade?: boolean
-    seeds: SpriteFrame | null
-    seedPacketLarger?: SpriteFrame | null
-    seedPacketUpgradeLarger?: SpriteFrame | null
-    packetPlants?: SpriteFrame | null
-    cachedPacketPlants?: SpriteFrame | null
-    plantPreviews?: SpriteFrame | null
+    loadSprite?: (name: string) => Promise<SpriteFrame>
     costFont?: BitmapFontAssets | null
+}
+
+async function loadPacketSprite(name: string): Promise<SpriteFrame> {
+    const frame = await SpriteLoader.load(name)
+    if (!frame) throw new Error(`Missing seed packet sprite: ${name}`)
+    return frame
 }
 
 @_decorator.ccclass('SeedPacketBackground')
 class SeedPacketBackground extends Component {
     private sprite!: Sprite
-    private normal!: SpriteFrame
-    private hd!: SpriteFrame
-    private enabledHD?: boolean
-
-    initialize(sprite: Sprite, normal: SpriteFrame, hd: SpriteFrame): void {
+    initialize(sprite: Sprite, args: SeedPacketRenderArgs): void {
         this.sprite = sprite
-        this.normal = normal
-        this.hd = hd
-        this.update()
-    }
-
-    protected update(): void {
-        const enabled = GameDebugSettings.hdSeedPacketsEnabled
-        if (enabled === this.enabledHD) return
-        this.enabledHD = enabled
-        this.sprite.spriteFrame = enabled ? this.hd : this.normal
+        const { seedType, upgrade, loadSprite = loadPacketSprite } = args
+        void loadSprite('seeds').then(frame => {
+            if (!isValid(this.node, true)) return
+            this.sprite.spriteFrame = getAtlasFrame(frame,
+                seedType === 48 ? BACKGROUND_IMITATER : upgrade ? BACKGROUND_UPGRADE : BACKGROUND_NORMAL,
+                SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT, SEED_PACKET_ATLAS_COLUMNS)
+        }).catch(error => {
+            if (isValid(this.node, true)) console.error('[SeedPacket] Failed to load background', error)
+        })
     }
 }
 
@@ -177,19 +174,6 @@ export class SeedPacketRenderer {
     }
 
     private static _drawBackground(root: Node, args: SeedPacketRenderArgs, scale: number) {
-        const backgroundCel =
-            args.seedType === 48
-                ? BACKGROUND_IMITATER
-                : args.upgrade
-                  ? BACKGROUND_UPGRADE
-                  : BACKGROUND_NORMAL
-
-        const larger = args.upgrade ? args.seedPacketUpgradeLarger : args.seedPacketLarger
-        const normal = args.seeds
-            ? getAtlasFrame(args.seeds, backgroundCel, SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT, SEED_PACKET_ATLAS_COLUMNS)
-            : larger
-        if (!normal) return
-        const hd = args.seedType !== 48 ? larger ?? normal : normal
         const node = uiNode({
             name: 'Background',
             parent: root,
@@ -198,43 +182,36 @@ export class SeedPacketRenderer {
             size: { width: SEED_PACKET_WIDTH * Math.max(1, scale), height: SEED_PACKET_HEIGHT * Math.max(1, scale) },
             anchor: { x: 0, y: 1 },
             sprite: {
-                frame: normal,
                 sizeMode: Sprite.SizeMode.CUSTOM,
                 trim: false,
             },
         }).node
-        if (hd !== normal) node.addComponent(SeedPacketBackground).initialize(node.getComponent(Sprite)!, normal, hd)
+        node.addComponent(SeedPacketBackground).initialize(node.getComponent(Sprite)!, args)
     }
 
     private static _drawPlantIcon(root: Node, args: SeedPacketRenderArgs, scale: number) {
         const seedId = typeof args.seedType === 'string' ? SEED_PACKET_ICON_IDS[args.seedType] : args.seedType
         if (typeof seedId !== 'number') return
 
-        if (seedId < 0 || seedId > 48 || args.seedType === 'explodenut') {
-            this._drawCachedPlantIcon(root, seedId, args, scale)
-            return
-        }
-        const plantId = RENDERED_PLANTS[seedId] ?? seedId
+        const plantId = args.seedType === 'explodenut' ? 'explodenut' : RENDERED_PLANTS[seedId] ?? seedId
         const icon = uiNode({ name: 'PacketPlant', parent: root, layer: args.layer }).node
-        const cached = uiNode({ name: 'CachedPlant', parent: icon, layer: args.layer }).node
-        this._drawCachedPlantIcon(cached, seedId, args, scale)
         const placement = PLANT_PLACEMENTS.get(seedId) ?? DEFAULT_PLANT_PLACEMENT
         const iconScale = scale > 1 ? scale : 1
-        icon.addComponent(PlantPreview).initialize(plantId, cached, {
+        icon.addComponent(PlantPreview).initialize(plantId, parent => this._drawCachedPlantIcon(parent, seedId, args, scale), {
             x: placement.offsetX * iconScale, y: -(placement.offsetY + 1) * iconScale,
             scale: placement.scale * iconScale,
         })
     }
 
-    private static _drawCachedPlantIcon(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number) {
+    private static async _drawCachedPlantIcon(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number): Promise<void> {
         if (scale > 1) {
-            this._drawScaledCachedPlant(root, seedId, args, scale)
+            await this._drawScaledCachedPlant(root, seedId, args, scale)
             return
         }
 
         const packetPlantCel = PACKET_PLANT_CELS.get(seedId)
-        const atlas = packetPlantCel != null ? args.packetPlants : args.cachedPacketPlants
-        if (!atlas) return
+        const atlas = await (args.loadSprite ?? loadPacketSprite)(packetPlantCel != null ? 'packet_plants' : 'packet_plants_cached')
+        if (!isValid(root, true)) return
 
         const icon = uiNode({
             name: 'PacketPlant',
@@ -261,9 +238,9 @@ export class SeedPacketRenderer {
         }
     }
 
-    private static _drawScaledCachedPlant(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number) {
-        const atlas = args.plantPreviews
-        if (!atlas) return
+    private static async _drawScaledCachedPlant(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number): Promise<void> {
+        const atlas = await (args.loadSprite ?? loadPacketSprite)('plant_previews_cached')
+        if (!isValid(root, true)) return
 
         const placement = PLANT_PLACEMENTS.get(seedId) ?? DEFAULT_PLANT_PLACEMENT
         const plantRoot = uiNode({
@@ -477,6 +454,7 @@ export function getAtlasFrame(
         offset: new Vec2(0, 0),
         isRotate: false,
     })
+    applySpriteDensity(frame)
     framesByAtlas.set(cacheKey, frame)
     return frame
 }

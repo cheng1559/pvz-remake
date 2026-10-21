@@ -15,6 +15,7 @@ test('client animations compose enhancements and allow one complete replacement'
         body: { reanimId: 'mod:body', rateScale: 1, x: 0, y: 0 },
         idleHead: { reanimId: 'mod:idle', rateScale: 1, x: 1, y: 2, attachmentTrackId: 'stem' },
         shootHead: { reanimId: 'mod:shoot', rateScale: 2, x: 1, y: 2, attachmentTrackId: 'stem' },
+        blink: { reanimId: 'mod:blink', rateScale: 1, x: 0, y: 0, attachmentTrackId: 'face' },
     }
     animations.register('new-pea', 'pvz:peashooter', 'replace', replacement)
     assert.equal(animations.resolve('pvz:peashooter').shootHead.reanimId, 'mod:shoot')
@@ -64,6 +65,7 @@ test('client animations reject unknown slots and invalid playback values', () =>
         body: { reanimId: 'mod:body', rateScale: 1, x: 0, y: 0 },
         idleHead: { reanimId: 'mod:idle', rateScale: 1, x: 0, y: 0 },
         shootHead: { reanimId: 'mod:shoot', rateScale: 1, x: 0, y: 0 },
+        blink: { reanimId: 'mod:blink', rateScale: 1, x: 0, y: 0 },
     })
 })
 

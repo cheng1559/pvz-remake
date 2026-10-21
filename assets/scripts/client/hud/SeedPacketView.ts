@@ -5,6 +5,7 @@ import {
     SEED_PACKET_HEIGHT,
     SEED_PACKET_WIDTH,
     SeedPacketRenderer,
+    type SeedPacketRenderArgs,
     type SeedPacketSeedType,
 } from '@/client/hud/SeedPacketRenderer'
 import { uiNode } from '@/client/view/uiNode'
@@ -20,10 +21,7 @@ export interface SeedPacketViewArgs {
     costFont: BitmapFontAssets | null
     drawCost?: boolean
     cost: number
-    seeds?: SpriteFrame
-    seedPacketLarger?: SpriteFrame
-    packetPlants?: SpriteFrame
-    cachedPacketPlants?: SpriteFrame
+    loadSprite?: SeedPacketRenderArgs['loadSprite']
     seedPacketFlash?: SpriteFrame
 }
 
@@ -32,27 +30,11 @@ export class SeedPacketView {
     readonly selectedHighlight: Node
     readonly cooldownClip: Node
     readonly seedType: SeedPacketSeedType
-    private readonly cost: number
     private readonly _baseSpriteColors = new WeakMap<Sprite, Color>()
 
     constructor(args: SeedPacketViewArgs) {
         this.seedType = args.seedType
-        this.cost = args.cost
-        this.node = SeedPacketRenderer.drawSeedPacket({
-            name: args.name,
-            x: args.x,
-            y: args.y,
-            parent: args.parent,
-            layer: args.layer,
-            seedType: args.seedType,
-            cost: args.cost,
-            drawCost: args.drawCost,
-            seeds: args.seeds ?? null,
-            seedPacketLarger: args.seedPacketLarger,
-            packetPlants: args.packetPlants ?? null,
-            cachedPacketPlants: args.cachedPacketPlants ?? null,
-            costFont: args.costFont,
-        })
+        this.node = SeedPacketRenderer.drawSeedPacket(args)
         this.selectedHighlight = this._createSelectedHighlight(args)
         this.cooldownClip = this._createCooldownClip(args)
     }
@@ -166,19 +148,13 @@ export class SeedPacketView {
         clip.active = false
 
         const darkPacket = SeedPacketRenderer.drawSeedPacket({
+            ...args,
             name: 'CooldownPacket',
             x: 0,
             y: 0,
             parent: clip,
             layer,
-            seedType: this.seedType,
-            cost: this.cost,
             drawCost: false,
-            seeds: args.seeds ?? null,
-            seedPacketLarger: args.seedPacketLarger,
-            packetPlants: args.packetPlants ?? null,
-            cachedPacketPlants: args.cachedPacketPlants ?? null,
-            costFont: args.costFont,
         })
         this._applySpriteColorRecursive(darkPacket, new Color(64, 64, 64, 255))
         const costNode = this.node.children.find((child) => child.name === 'Cost')

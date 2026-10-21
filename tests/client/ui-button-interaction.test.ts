@@ -140,7 +140,7 @@ test('board hover shares cursor ownership with UI and never flashes default whil
     const tooltip = { visible: false, warning: '', show() { this.visible = true }, hide() { this.visible = false } }
     seedBank.options = { content, presentation: {}, ui: { text: (key: string) => key } }
     seedBank.packets = [{ seedId: 'pea', view: packet, tooltip }]
-    const hud = new LevelHudPresenter(content, ui.root, new ui.Node(), ...Array(4), new Map(), seedBank)
+    const hud = new LevelHudPresenter(content, ui.root, new ui.Node(), ...Array(4), seedBank)
     hud.presentation = { seedGuideSteps: [], lawnGuideSteps: [] }
     hud.level = { seedPackets: ['pea'] }
     hud.tutorialLawnFlash = new ui.Node()

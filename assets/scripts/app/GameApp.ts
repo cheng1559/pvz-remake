@@ -1,4 +1,4 @@
-import { _decorator, Component, EventKeyboard, type EventTouch, game, Game, input, Input, KeyCode, Mask, Node, screen, sys } from 'cc'
+import { _decorator, Component, director, Director, EventKeyboard, type EventTouch, game, Game, input, Input, KeyCode, Mask, Node, screen, sys } from 'cc'
 import { DEBUG } from 'cc/env'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
@@ -27,6 +27,8 @@ import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
+import { resourcePacks } from '@/client/content/ResourcePacks'
+import { selectResourcePackZip } from '@/client/content/ResourcePackArchive'
 
 const { ccclass } = _decorator
 
@@ -48,6 +50,7 @@ export class GameApp extends Component {
     private nextLevelId: string | null = null
 
     start(): void {
+        game.frameRate = Infinity
         connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false)
         UIHoverManager.start(this.node)
         this.gameLayer = uiNode({
@@ -202,7 +205,7 @@ export class GameApp extends Component {
     }
 
     private async showDebugCli(): Promise<void> {
-        if (!DEBUG || this.debugCliOpen || this.loading || this.currentPage === 'splash' || this.currentPage === 'title' || !this.controller) return
+        if (this.debugCliOpen || this.loading || this.currentPage === 'splash' || this.currentPage === 'title' || !this.controller) return
         this.debugCliOpen = true
         const controller = this.controller
         const running = controller.isRunning(), wasPaused = controller.isPaused(), page = this.currentPage
@@ -226,6 +229,17 @@ export class GameApp extends Component {
         if (!this.node?.isValid || !result) return
         if (!result.ok) { this.showAdvice(result.message); return }
         switch (result.action) {
+            case 'installPack': case 'restartForPacks':
+                this.debugCliOpen = true
+                try {
+                    await controller.saveIfRunning()
+                    if (result.action === 'installPack') await this.installResourcePack()
+                    else await this.confirmResourcePackRestart()
+                } finally {
+                    this.debugCliOpen = false
+                    if (this.node?.isValid && running && !wasPaused && controller.isRunning() && this.currentPage === page) controller.resume()
+                }
+                break
             case 'restart': await this.navigate('restart'); break
             case 'level': await this.navigate('restart', result.levelId); break
             case 'home': await this.navigate('main'); break
@@ -249,8 +263,42 @@ export class GameApp extends Component {
         }
     }
 
+    private async installResourcePack(): Promise<void> {
+        const ui = await UI.load()
+        let progress: UIDialog | undefined
+        try {
+            const data = await selectResourcePackZip()
+            if (!data || !this.node?.isValid) return
+            progress = ui.dialog(this.node, {
+                title: 'Installing...', footer: false, clickSound: null,
+            })
+            progress.onConfirm = progress.onCancel = () => {}
+            // Paint the dialog before ZIP validation and native file writes occupy the main thread.
+            await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
+            await resourcePacks.install(data)
+            progress.close()
+            await this.confirmResourcePackRestart()
+        } catch (error) {
+            progress?.close()
+            if (this.node?.isValid) await ui.dialog(this.node, {
+                title: 'Installation Failed', message: error instanceof Error ? error.message : String(error), confirmText: 'OK',
+            }).result
+        }
+    }
+
+    private async confirmResourcePackRestart(): Promise<void> {
+        if (!this.node?.isValid) return
+        const ui = await UI.load()
+        const confirmed = await ui.dialog(this.node, {
+            title: 'Restart Required', message: 'Restart the game to apply resource pack changes.', confirmText: 'OK',
+        }).result
+        if (!confirmed || !this.node?.isValid) return
+        if (sys.isNative) game.restart()
+        else window.location.reload()
+    }
+
     private onDebugTouch(event: EventTouch): void {
-        if (!DEBUG || !GameDebugSettings.isMobileMode() || this.debugCliOpen) return
+        if (!GameDebugSettings.isMobileMode() || this.debugCliOpen) return
         const p = event.getLocation(), corner = 100 * screen.devicePixelRatio
         if (p.x < screen.windowSize.width - corner || p.y > corner) { this.lastDebugTap = 0; return }
         const now = Date.now()
@@ -267,7 +315,7 @@ export class GameApp extends Component {
             this.spacePressed = true
         }
         if (this.loading) return
-        if (DEBUG && event.keyCode === 191 && !UIInput.hasFocusedInput) {
+        if (event.keyCode === 191 && !UIInput.hasFocusedInput) {
             event.propagationStopped = true
             void this.showDebugCli()
             return
@@ -292,6 +340,7 @@ export class GameApp extends Component {
     }
 
     private onKeyUp(event: EventKeyboard): void {
+        UIInput.handleKeyUp(event)
         if (event.keyCode === KeyCode.SPACE) this.spacePressed = false
     }
 

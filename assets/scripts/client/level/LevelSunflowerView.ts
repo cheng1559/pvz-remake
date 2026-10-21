@@ -29,7 +29,7 @@ export class LevelSunflowerView {
 
     sync(flash: number, tick: number): void {
         if (tick >= this.blinkAtTick) {
-            this.blink.play({ loop: false, rate: this.blinkRate })
+            this.blink.play({ loop: false, rate: this.blinkRate, timeSeconds: 0 })
             this.blinkAtTick = tick + 400 + Math.floor(Math.random() * 400)
         }
         const gray = Math.min(255, flash * 3)

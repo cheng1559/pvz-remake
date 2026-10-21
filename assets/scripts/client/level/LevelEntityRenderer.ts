@@ -8,7 +8,7 @@ import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { startGameTween } from '@/core/GameTween'
 import { TodParticleSystem } from '@/core/Particle'
-import { SeedPacketRenderer, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/client/hud/SeedPacketRenderer'
+import { SeedPacketRenderer, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH, type SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
 import type { LawnMowerSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
@@ -29,11 +29,7 @@ export interface LevelEntityAssets {
     mowerFrame: SpriteAsset
     mowerShadow: SpriteAsset
     damagedZombieArm: SpriteAsset
-    seeds: SpriteAsset
-    packetPlants: SpriteAsset
-    cachedPacketPlants: SpriteAsset
-    seedPacketLarger: SpriteAsset
-    plantPreviews: SpriteAsset
+    loadPacketSprite: SeedPacketRenderArgs['loadSprite']
     packetCostFont: FontAsset
 }
 
@@ -44,6 +40,8 @@ interface ShooterPlantView {
     body: ReanimPlayer
     idleHead: ReanimPlayer
     shootHead: ReanimPlayer
+    blink: ReanimPlayer
+    blinkAtTick: number
     idleRate: number
 }
 
@@ -126,8 +124,10 @@ export class LevelEntityRenderer {
                     body: view.body.snapshot(),
                     idleHead: view.idleHead.snapshot(),
                     shootHead: view.shootHead.snapshot(),
+                    blink: view.blink.snapshot(),
                 },
                 idleRate: view.idleRate,
+                blinkAtTick: view.blinkAtTick,
             })
         }
         for (const [entityId, view] of this.sunflowers) result.push(view.snapshot(entityId))
@@ -152,16 +152,19 @@ export class LevelEntityRenderer {
                 if (sunflower) { sunflower.restore(snapshot); continue }
                 const view = this.shooterPlants.get(snapshot.entityId)
                 if (!view) continue
-                const { body, idleHead, shootHead } = snapshot.animations
-                if (!idleHead || !shootHead || snapshot.idleRate === undefined) {
+                const { body, idleHead, shootHead, blink } = snapshot.animations
+                if (!idleHead || !shootHead || !blink || snapshot.idleRate === undefined || snapshot.blinkAtTick === undefined) {
                     throw new Error(`Missing shooter animation state for plant ${snapshot.entityId}`)
                 }
                 view.idleRate = snapshot.idleRate
                 view.body.restore(body)
                 view.idleHead.restore(idleHead)
                 view.shootHead.restore(shootHead)
+                view.blink.restore(blink)
+                view.blinkAtTick = snapshot.blinkAtTick
                 if (idleHead.attachmentTrackId) view.idleHead.reattachAfterRestore(view.body)
                 if (shootHead.attachmentTrackId) view.shootHead.reattachAfterRestore(view.body)
+                if (blink.attachmentTrackId) view.blink.reattachAfterRestore(view.idleHead)
                 if (shootHead.playing) view.shootHead.setOnFinish(() => this.finishShooterPlantShoot(view))
             } else if (snapshot.kind === 'zombie') {
                 const view = this.zombies.get(snapshot.entityId)
@@ -290,7 +293,7 @@ export class LevelEntityRenderer {
                 if (plant.typeId === 'pvz:sunflower') {
                     const view = await LevelSunflowerView.create(node, this.content, this.animations.resolve('pvz:sunflower'), this.assets.mowerShadow, snapshot.gameplayTick)
                     if (node.isValid) this.sunflowers.set(id, view)
-                } else await this.createShooterPlant(id, node, plant.typeId)
+                } else await this.createShooterPlant(id, node, plant.typeId, snapshot.gameplayTick)
             } else if (snapshot.zombies.some(value => value.entityId === id)) {
                 const zombie = snapshot.zombies.find(value => value.entityId === id)!
                 const view = new LevelZombieView(
@@ -325,20 +328,17 @@ export class LevelEntityRenderer {
         SeedPacketRenderer.drawSeedPacket({
             name: 'FinalSeedPacketNormal', parent: node, layer: this.rootLayer, x: 0, y: 0,
             seedType, cost, costFont: this.assets.packetCostFont,
-            seeds: this.assets.seeds, packetPlants: this.assets.packetPlants,
-            seedPacketLarger: this.assets.seedPacketLarger,
-            cachedPacketPlants: this.assets.cachedPacketPlants,
+            loadSprite: this.assets.loadPacketSprite,
         })
         const large = SeedPacketRenderer.drawSeedPacket({
             name: 'FinalSeedPacketLarge', parent: node, layer: this.rootLayer, x: 0, y: 0,
             scale: 2, seedType, cost, costFont: this.assets.packetCostFont,
-            seeds: this.assets.seeds, seedPacketLarger: this.assets.seedPacketLarger,
-            plantPreviews: this.assets.plantPreviews,
+            loadSprite: this.assets.loadPacketSprite,
         })
         large.active = false
     }
 
-    private async createShooterPlant(id: number, node: Node, typeId: string): Promise<void> {
+    private async createShooterPlant(id: number, node: Node, typeId: string, tick: number): Promise<void> {
         if (typeId !== 'pvz:peashooter' && typeId !== 'pvz:repeater') {
             throw new Error(`unsupported shooter plant: ${typeId}`)
         }
@@ -351,24 +351,30 @@ export class LevelEntityRenderer {
         const body = uiNode({ name: 'Body', parent: node, position: animations.body }).node.addComponent(ReanimPlayer)
         const idleHead = uiNode({ name: 'IdleHead', parent: node, position: animations.idleHead }).node.addComponent(ReanimPlayer)
         const shootHead = uiNode({ name: 'ShootHead', parent: node, position: animations.shootHead }).node.addComponent(ReanimPlayer)
+        const blink = uiNode({ name: 'Blink', parent: node, position: animations.blink }).node.addComponent(ReanimPlayer)
         await Promise.all([
             body.load(animations.body.reanimId, this.content.registry, this.content.loader),
             idleHead.load(animations.idleHead.reanimId, this.content.registry, this.content.loader),
             shootHead.load(animations.shootHead.reanimId, this.content.registry, this.content.loader),
+            blink.load(animations.blink.reanimId, this.content.registry, this.content.loader),
         ])
         if (!node.isValid) return
         idleHead.attachToTrack(body, animations.idleHead.attachmentTrackId ?? 'anim_stem')
         shootHead.attachToTrack(body, animations.shootHead.attachmentTrackId ?? 'anim_stem')
+        blink.attachToTrack(idleHead, animations.blink.attachmentTrackId ?? 'anim_face')
         const idleRate = (15 + Math.random() * 5) / 12
         body.play({ loop: true, rate: idleRate * animations.body.rateScale })
         idleHead.play({ loop: true, rate: idleRate * animations.idleHead.rateScale })
         shootHead.hide()
-        this.shooterPlants.set(id, { animationTarget, body, idleHead, shootHead, idleRate })
+        blink.hide()
+        this.shooterPlants.set(id, { animationTarget, body, idleHead, shootHead, blink, idleRate,
+            blinkAtTick: tick + 400 + Math.floor(Math.random() * 400) })
     }
 
     private playShooterPlantShoot(id: number): void {
         const view = this.shooterPlants.get(id)
         if (!view) return
+        view.blink.hide()
         view.shootHead.play({
             loop: false, rate: 35 / 12 * this.animations.resolve(view.animationTarget).shootHead.rateScale,
             timeSeconds: 0, hideOnFinish: false,
@@ -392,9 +398,15 @@ export class LevelEntityRenderer {
         if (!view) return
         const grayness = Math.min(255, eatenFlashCounter * 3)
         const color = new Color(grayness, grayness, grayness, 255)
-        for (const player of [view.body, view.idleHead, view.shootHead]) {
+        for (const player of [view.body, view.idleHead, view.shootHead, view.blink]) {
             player.setColorOverride(upgradeTarget ? upgradeFlashColor(tick) : Color.WHITE)
             player.setExtraAdditiveDraw(eatenFlashCounter > 0, color)
+        }
+        if (tick >= view.blinkAtTick) {
+            view.blinkAtTick = tick + 400 + Math.floor(Math.random() * 400)
+            if (!view.shootHead.snapshot().playing) view.blink.play({
+                loop: false, rate: 15 / 12 * this.animations.resolve(view.animationTarget).blink.rateScale, timeSeconds: 0,
+            })
         }
         if (view.shootHead.snapshot().playing || view.idleHead.snapshot().playing) return
         view.idleHead.play({

@@ -1,6 +1,6 @@
 # Debug CLI
 
-In Debug builds, press `/` or double-tap the bottom-right 100 CSS pixel corner in mobile mode. The CLI is unavailable during startup.
+In Debug and Release builds, press `/` or double-tap the bottom-right 100 CSS pixel corner in mobile mode. The CLI is unavailable during startup.
 
 The previous controls are preserved: Tab cycles completions, Up/Down recalls the last 64 commands, Enter executes, and Escape/Cancel closes. The slash is optional. Names ignore case, spaces, underscores and hyphens. Grid positions are one-based. Explicit positions can use any board row; an omitted zombie row still follows the level's spawn-row selection.
 
@@ -11,7 +11,7 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 ```text
 /gamespeed 2
 /hdseed true
-/hdfont true
+/pack install
 /sun set 999
 /plant repeater 3 1
 /zombie normal 3 9
@@ -20,10 +20,10 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /home
 ```
 
-`/hdseed true` enables the 100×140 backgrounds for normal and upgrade seed packets, actual Reanim portraits for all 49 almanac plants, and static Reanim portraits for all 26 zombies in the almanac list. It also covers held/grid placement previews for implemented plants, preserving static poses, shading, transparency and sizes. `/hdseed false` restores the original atlas backgrounds and cached portraits. Existing packets and zombie portraits switch immediately. The preference is saved locally and applies in levels, awards, the almanac and the shop. Imitater packets retain their original background style.
+`/hdseed true` enables actual Reanim portraits for almanac plants and zombies, plus held/grid placement previews for implemented plants. `false` selects cached portraits. Only the selected representation is created; failures report an error without falling back. This setting is saved locally. Seed background resolution is controlled by resource packs independently.
 
-`/hdfont true` loads 4× upscaled bitmap fonts on demand and updates existing menu and level text. `/hdfont false` restores the originals. The preference defaults to off and is saved locally; size, spacing and baselines stay the same. Pico129, Pix118Bold and Mod fonts keep their original assets.
+`/pack install` takes no arguments and opens a local ZIP picker in Web and macOS builds. Its dialog shows only `Installing...`. Installation, updates and enabled-state changes ask for a restart; confirming immediately restarts the entire game after saving the running level. Current resources remain unchanged until restart. Installed packs persist independently of the original ZIP and can be updated with the same ID. `/pack load hd` enables an installed pack; `/pack unload hd` disables it; `/pack uninstall hd` deletes it and also asks for a restart if it was enabled. Repeated enable/disable commands do not prompt. `/pack list` lists enabled packs. Later packs override matching IDs, including Mod IDs. Missing IDs use original resources; failed pack resources do not fall back. ZIP is the only installation format; HD assets ship separately. `/hdfont` has been removed; Pico129 and Pix118Bold are excluded from the HD pack. See [resource pack format and installation](RESOURCE_PACKS.md).
 
-The current package provides Adventure 1-1, Peashooter, Repeater, normal zombies, sun and the level award. Completions use installed backend content. Flag waves, widescreen backgrounds and unmigrated content report that they are unavailable.
+The current package provides Adventure 1-1 and 1-2, Peashooter, Sunflower, Repeater, normal and flag zombies, sun and level awards. Completions use installed backend content. Wave commands report a condition failure when no matching waves remain; widescreen backgrounds and unmigrated content remain unavailable.
 
 The dialog reuses `UI.dialog` and `UI.input`. Gameplay commands use the existing `debugCommand` channel and receive a `debugResult`; the backend validates and mutates the authoritative world. Audio/fullscreen settings use the menu API. Cooldown, sun-cost and collection preferences are reapplied to new sessions.

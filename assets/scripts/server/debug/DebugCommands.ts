@@ -82,10 +82,20 @@ export function executeDebugGameCommand(
             level.result = name === 'win' ? 'won' : 'lost'
             emitServerEvent(events, name === 'win' ? 'levelWon' : 'levelLost', {})
             return debugSuccess(name === 'win' ? 'Level completed' : 'Level failed')
-        case 'nextwave': {
+        case 'nextwave':
+        case 'nextflag': {
             const wave = world.resources.get(WaveResource)
-            if (wave.index >= level.definition.waves.length) return debugCondition('No remaining zombie waves')
+            const index = name === 'nextflag'
+                ? level.definition.waves.findIndex((entry, index) => index >= wave.index && entry.flagWave)
+                : wave.index
+            if (index < 0 || index >= level.definition.waves.length) return debugCondition(name === 'nextflag' ? 'No remaining flag waves' : 'No remaining zombie waves')
+            wave.index = index
             wave.nextWaveAtTick = tick
+            if (level.definition.waves[index].flagWave) {
+                wave.hugeWaveAnnounced = true
+                emitServerEvent(events, 'hugeWave', {})
+                emitServerEvent(events, 'hugeWaveSound', {})
+            }
             const paused = level.paused
             level.paused = false
             try {
@@ -93,9 +103,8 @@ export function executeDebugGameCommand(
                 schedule.add('spawn', createWaveSystem(definitions))
                 schedule.run(world, tick)
             } finally { level.paused = paused }
-            return debugSuccess('Spawned next zombie wave')
+            return debugSuccess(name === 'nextflag' ? 'Spawned next flag wave' : 'Spawned next zombie wave')
         }
-        case 'nextflag': return debugCondition('This level has no flag waves')
         case 'lawnmower': {
             const row = args[1] === undefined ? undefined : position(args[1])?.row
             if (args[1] !== undefined && row === undefined) return invalidPosition()

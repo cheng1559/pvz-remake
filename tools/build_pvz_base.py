@@ -105,7 +105,6 @@ def build_pvz_base() -> dict:
             (ROOT / "tools/raw/images/plantshadow.png", "pvz:plantshadow"),
             (ROOT / "tools/raw/images/seedbank.png", "pvz:seedbank"),
             (ROOT / "tools/raw/images/seedpacket_larger.png", "pvz:seedpacket_larger"),
-            (ROOT / "art/generated/seedpacket_upgrade_larger.png", "pvz:seedpacket_upgrade_larger"),
             (ROOT / "tools/raw/images/seeds.png", "pvz:seeds"),
             (ROOT / "tools/raw/images/packet_plants.png", "pvz:packet_plants"),
             (ROOT / "assets/resources/textures/packet_plants_cached.png", "pvz:packet_plants_cached"),

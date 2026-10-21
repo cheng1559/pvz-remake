@@ -7,28 +7,31 @@ import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 /** Static Reanim portraits use the same placement as the original cached atlas. */
 @_decorator.ccclass('AlmanacZombiePortrait')
 export class AlmanacZombiePortrait extends Component {
+    ready: Promise<void> = Promise.resolve()
     private zombieId = 0
-    private cached!: Node
+    private loadCached!: (root: Node) => Promise<void>
     private rendered: Node | null = null
-    private ready = false
+    private hd?: boolean
 
-    initialize(zombieId: number, cached: Node): void {
+    initialize(zombieId: number, loadCached: (root: Node) => Promise<void>): void {
         this.zombieId = zombieId
-        this.cached = cached
+        this.loadCached = loadCached
         this.update()
     }
 
     protected update(): void {
         const enabled = GameDebugSettings.hdSeedPacketsEnabled
-        if (enabled && !this.rendered) {
-            const root = uiNode({ name: 'RenderedZombie', parent: this.node, active: false }).node
-            this.rendered = root
-            void this.load(root).catch(error => {
-                if (isValid(root, true)) console.error('[Almanac] Failed to render zombie portrait', this.zombieId, error)
-            })
-        }
-        this.cached.active = !enabled
-        if (this.rendered) this.rendered.active = enabled && this.ready
+        if (this.hd === enabled) return
+        this.hd = enabled
+        if (this.rendered) { this.rendered.active = false; this.rendered.destroy() }
+        const root = uiNode({ name: enabled ? 'RenderedZombie' : 'CachedZombie', parent: this.node, active: false }).node
+        this.rendered = root
+        this.ready = (enabled ? this.load(root) : this.loadCached(root)).then(() => {
+            if (isValid(root, true) && root === this.rendered) root.active = true
+        })
+        void this.ready.catch(error => {
+            if (isValid(root, true) && root === this.rendered) console.error('[Almanac] Failed to load zombie portrait', this.zombieId, error)
+        })
     }
 
     private async load(root: Node): Promise<void> {
@@ -49,8 +52,5 @@ export class AlmanacZombiePortrait extends Component {
             // Compensate for the original body's -18 + 15 X offset: 35 - (-3) = 38.
             drawBungeeCord(root, cord, 38, body.position.y)
         }
-        // Loading leaves every player paused on its first frame.
-        this.ready = true
-        this.update()
     }
 }

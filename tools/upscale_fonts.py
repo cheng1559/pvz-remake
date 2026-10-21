@@ -229,7 +229,7 @@ def main():
                         help="Auto uses waifu2x for beveled Dwarven fonts and Real-ESRGAN for the other fonts")
     parser.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")
     parser.add_argument("--source", type=Path, default=ROOT / "assets/resources/fonts")
-    parser.add_argument("--output", type=Path, default=ROOT / "assets/resources/fonts/upscaled")
+    parser.add_argument("--output", type=Path, default=ROOT / "art/resource-packs/hd/fonts")
     parser.add_argument("--preview-output", type=Path, help="Defaults to art/generated/font-upscale for project assets, otherwise --output")
     args = parser.parse_args()
     if args.source.resolve() == args.output.resolve():

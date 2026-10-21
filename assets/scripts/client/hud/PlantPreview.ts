@@ -1,33 +1,32 @@
 import { _decorator, Color, Component, isValid, Node, Sprite } from 'cc'
-import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { loadDisplayParts, loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 const { ccclass } = _decorator
-export type PreviewPlantId = 'pvz:peashooter' | 'pvz:sunflower' | 'pvz:repeater' | number
-let content: ReturnType<typeof loadIntegratedGameContent> | undefined
+export type PreviewPlantId = string | number
 
 /** Static plant rendering shared by seed packets and placement previews. */
 @ccclass('PlantPreview')
 export class PlantPreview extends Component {
-    private cached!: Node
+    ready: Promise<void> = Promise.resolve()
+    private loadCached!: (root: Node, plantId: PreviewPlantId) => Promise<void>
     private plantId?: PreviewPlantId
     private placement!: { x: number, y: number, scale: number }
     private rendered: Node | null = null
-    private ready = false
     private rendering: boolean | undefined
     private color = Color.WHITE.clone()
     private readonly players: ReanimPlayer[] = []
+    private readonly baseColors = new WeakMap<Sprite, Color>()
 
-    static supports(plantId: string): plantId is Exclude<PreviewPlantId, number> {
+    static supports(plantId: string): plantId is 'pvz:peashooter' | 'pvz:sunflower' | 'pvz:repeater' {
         return plantId === 'pvz:peashooter' || plantId === 'pvz:sunflower' || plantId === 'pvz:repeater'
     }
 
-    initialize(plantId: PreviewPlantId | undefined, cached: Node, placement: { x: number, y: number, scale: number }): void {
+    initialize(plantId: PreviewPlantId | undefined, loadCached: (root: Node, plantId: PreviewPlantId) => Promise<void>, placement: { x: number, y: number, scale: number }): void {
         this.plantId = plantId
-        this.cached = cached
+        this.loadCached = loadCached
         this.placement = placement
         this.refresh()
     }
@@ -35,10 +34,6 @@ export class PlantPreview extends Component {
     setPlant(plantId: PreviewPlantId | undefined): void {
         if (this.plantId === plantId) return
         this.plantId = plantId
-        if (this.rendered) { this.rendered.active = false; this.rendered.destroy() }
-        this.rendered = null
-        this.ready = false
-        this.players.length = 0
         this.rendering = undefined
         this.refresh()
     }
@@ -46,29 +41,31 @@ export class PlantPreview extends Component {
     setColor(color: Color): void {
         if (this.color.equals(color)) return
         this.color = color.clone()
-        for (const sprite of this.cached.getComponentsInChildren(Sprite)) sprite.color = color.clone()
-        for (const player of this.players) player.setColorOverride(color)
+        this.applyColor()
     }
 
     protected update(): void { this.refresh() }
 
     private refresh(): void {
-        const enabled = GameDebugSettings.hdSeedPacketsEnabled && this.plantId !== undefined
+        if (this.plantId === undefined) return
+        const enabled = GameDebugSettings.hdSeedPacketsEnabled && (typeof this.plantId === 'number'
+            ? this.plantId >= 0 && this.plantId <= 48 : PlantPreview.supports(this.plantId))
         if (this.rendering === enabled) return
         this.rendering = enabled
-        this.cached.active = !enabled
-        if (this.rendered) this.rendered.active = enabled && this.ready
-        else if (enabled && this.plantId !== undefined) {
-            const root = uiNode({
-                name: 'RenderedPlant', parent: this.node, active: false,
-                position: { x: this.placement.x, y: this.placement.y },
-            }).node
-            this.rendered = root
-            root.setScale(this.placement.scale, this.placement.scale, 1)
-            void this.load(root, this.plantId).catch(error => {
-                if (isValid(root, true) && root === this.rendered) console.error('[PlantPreview] Failed to render plant', error)
-            })
-        }
+        if (this.rendered) { this.rendered.active = false; this.rendered.destroy() }
+        this.players.length = 0
+        const root = uiNode({ name: enabled ? 'RenderedPlant' : 'CachedPlant', parent: this.node, active: false,
+            position: enabled ? this.placement : undefined }).node
+        this.rendered = root
+        if (enabled) root.setScale(this.placement.scale, this.placement.scale, 1)
+        this.ready = (enabled ? this.load(root, this.plantId) : this.loadCached(root, this.plantId)).then(() => {
+            if (!isValid(root, true) || root !== this.rendered) return
+            this.applyColor()
+            root.active = true
+        })
+        void this.ready.catch(error => {
+            if (isValid(root, true) && root === this.rendered) console.error('[PlantPreview] Failed to load plant preview', error)
+        })
     }
 
     private async load(root: Node, plantId: PreviewPlantId): Promise<void> {
@@ -84,14 +81,12 @@ export class PlantPreview extends Component {
             const parts = definition.parts.filter(part => !part.blink).map(part => ({ ...part, id: part.packetId ?? part.id }))
             const players = await loadDisplayParts(pose, parts, content)
             if (!players || root !== this.rendered) return
-            this.showPose(root, [...players.values()])
+            this.players.push(...players.values())
             return
         }
-        const assets = await (content ??= loadIntegratedGameContent().catch(error => {
-            content = undefined
-            throw error
-        }))
+        const { content: assets } = await loadEntityDisplayAssets()
         if (!isValid(root, true) || root !== this.rendered) return
+        if (!PlantPreview.supports(plantId)) throw new Error(`Plant preview is not installed: ${plantId}`)
         const animation = assets.animations.resolve(plantId)
         const body = uiNode({ name: 'Body', parent: root, position: animation.body }).node.addComponent(ReanimPlayer)
         const head = 'idleHead' in animation
@@ -105,13 +100,17 @@ export class PlantPreview extends Component {
         if (head && 'idleHead' in animation) head.attachToTrack(body, animation.idleHead.attachmentTrackId ?? 'anim_stem')
         // The original Sunflower packet uses the idle pose at 15 percent; shooters use the first frame.
         body.seek(plantId === 'pvz:sunflower' ? body.lastFrameTimeSeconds * 0.15 : 0)
-        this.showPose(root, [body, ...(head ? [head] : [])])
+        this.players.push(body, ...(head ? [head] : []))
     }
 
-    private showPose(root: Node, players: ReanimPlayer[]): void {
-        this.players.push(...players)
+    private applyColor(): void {
         for (const player of this.players) player.setColorOverride(this.color)
-        this.ready = true
-        root.active = GameDebugSettings.hdSeedPacketsEnabled
+        if (this.players.length || !this.rendered) return
+        for (const sprite of this.rendered.getComponentsInChildren(Sprite)) {
+            let base = this.baseColors.get(sprite)
+            if (!base) { base = sprite.color.clone(); this.baseColors.set(sprite, base) }
+            sprite.color = new Color(Math.round(base.r * this.color.r / 255), Math.round(base.g * this.color.g / 255),
+                Math.round(base.b * this.color.b / 255), Math.round(base.a * this.color.a / 255))
+        }
     }
 }

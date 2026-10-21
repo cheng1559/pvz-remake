@@ -5,6 +5,7 @@ import { gameClock } from '@/core/GameClock'
 import { debugCondition, debugInteger, debugSuccess, debugSyntax, parseDebugCliCommand, type DebugCliCatalog, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { SFX_VOLUME_SCALE } from '@/shared/menu'
 import { OptionsSettings } from '@/platform/OptionsSettings'
+import { resourcePacks } from '@/client/content/ResourcePacks'
 import { GameDebugSettings, type DebugPerfToggle } from './GameDebugSettings'
 
 export async function executeDebugCliCommand(
@@ -50,7 +51,19 @@ export async function executeDebugCliCommand(
         case 'hotkeys': GameDebugSettings.setHotkeysEnabled(args[0].toLowerCase() === 'true'); break
         case 'hitboxes': GameDebugSettings.setHitboxesVisible(args[0].toLowerCase() === 'true'); break
         case 'hdseed': GameDebugSettings.setHDSeedPacketsEnabled(args[0].toLowerCase() === 'true'); break
-        case 'hdfont': GameDebugSettings.setHDFontsEnabled(args[0].toLowerCase() === 'true'); break
+        case 'pack': {
+            const operation = args[0].toLowerCase()
+            if (args.length !== (operation === 'install' || operation === 'list' ? 1 : 2)) return debugSyntax('Usage: /pack install | load <installed_id> | unload <id|all> | uninstall <id> | list')
+            try {
+                if (operation === 'list') return debugSuccess(`Resource packs: ${(await resourcePacks.list()).join(', ') || 'none'}`)
+                if (operation === 'install') return { ...debugSuccess('Select a resource pack ZIP'), action: 'installPack' }
+                const changed = operation === 'load' ? await resourcePacks.load(args[1])
+                    : operation === 'unload' ? await resourcePacks.unload(args[1]) : await resourcePacks.uninstall(args[1])
+                return { ...debugSuccess(`Resource pack ${operation}: ${args[1]}`), action: changed ? 'restartForPacks' : undefined }
+            } catch (error) {
+                return debugCondition(error instanceof Error ? error.message : String(error))
+            }
+        }
         case 'perf': GameDebugSettings.setPerfToggle(args[0].toLowerCase() as DebugPerfToggle, args[1].toLowerCase() === 'true'); break
         case 'background': return debugCondition('Widescreen backgrounds are not implemented in this version')
         default: {

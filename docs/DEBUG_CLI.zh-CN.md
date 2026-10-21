@@ -1,6 +1,6 @@
 # Debug CLI
 
-Debug 构建中按 `/` 打开；移动模式下，双击屏幕右下角 100 CSS 像素区域打开。启动加载期间不可打开。
+Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕右下角 100 CSS 像素区域打开。启动加载期间不可打开。
 
 沿用旧版操作：Tab 循环补全命令和已安装内容，↑/↓ 浏览最近 64 条历史，Enter 执行，Esc／Cancel 关闭。命令可省略 `/`；名称忽略大小写，实体名兼容空格、下划线和连字符。行列从 1 开始，调试命令允许使用整个棋盘范围，不受关卡激活行限制；省略僵尸行号时仍按关卡出怪行选择。
 
@@ -22,15 +22,15 @@ Debug 构建中按 `/` 打开；移动模式下，双击屏幕右下角 100 CSS 
 | 收集 | `/collect {auto|click|move}`，自动／移动收集仅处理普通掉落 |
 | 快捷键 | `/hotkeys {true|false}`；当前 `1` 选择种子包，`D` 切换 0 倍速 |
 | 碰撞框 | `/hitboxes {true|false}` |
-| 高清种子包／头像 | `/hdseed {true|false}`，同时控制高清背景、植物渲染和僵尸头像渲染 |
-| 超分字体 | `/hdfont {true|false}`，切换原字体与 4× 超分字体，像素字体保留原图 |
+| 实时植物／僵尸头像 | `/hdseed {true|false}`，控制真实 Reanim 渲染，与背景清晰度独立 |
+| 材质包 | `/pack install`、`/pack load {已安装ID}`、`/pack unload {ID或all}`、`/pack uninstall {ID}`、`/pack list` |
 | 性能 | `/perf {plants|zombies|particles|sfx|logic} {true|false}` |
 | 平台 | `/mobile {true|false}`、`/fullscreen {true|false}` |
 | 音量 | `/music {0-100}`、`/sfx {0-100}`，通过设置 API 保存 |
 
-`/hdseed true` 同时启用普通和紫卡种子包的 100×140 高清背景、全部 49 种图鉴植物的真实 Reanim 渲染，以及图鉴左侧全部 26 种僵尸的静态 Reanim 头像。也覆盖已实现植物的手持预览和半透明落点预览，保留静态姿态、缩放、透明度和明暗状态。`false` 恢复原图集背景和缓存头像。当前画面立即切换，包括放大的领奖种子包。覆盖种子栏、掉落奖励、领奖页、图鉴和商店；开关偏好保存在本地。模仿者种子包保留原来的专用背景样式。
+`/hdseed true` 启用图鉴植物和僵尸头像的真实 Reanim 渲染，以及已实现植物的手持与半透明落点预览。`false` 使用缓存头像。按开关选择后才加载、创建对应图像，失败直接报错，不回退；偏好保存在本地。种子包背景清晰度由材质包独立控制。
 
-`/hdfont true` 按需加载 4× 超分字图，菜单和关卡文字即时切换；`false` 恢复原字体。默认关闭，偏好保存在本地；两种模式共用原字号、字距和基线。`Pico129`、`Pix118Bold` 保持像素风格，不参与切换，Mod 字体也不替换。
+`/pack install` 不带参数，在网页和 macOS 中弹出文件选择窗口，选择本机 ZIP 安装。安装弹窗只显示 `Installing...`；安装、更新或启用状态变化后提示重启，确认后立即重启整个游戏，运行中的关卡先保存。安装结果保存在本机，重启不依赖原 ZIP。`/pack load hd` 启用已安装包；`/pack unload hd` 停用；`/pack uninstall hd` 删除已安装包，删除已启用包也会提示重启；`/pack list` 查看启用列表。重复启用或停用不会弹窗，重启前保留当前资源。资源包只通过 ZIP 安装，游戏不内置 HD 素材。后启用的包优先覆盖同 ID 资源，也可覆盖 Mod ID；包内没有该 ID 时使用原资源，已声明资源加载失败不回退。原 `/hdfont` 已移除；`Pico129`、`Pix118Bold` 不在 HD 包中。包格式与安装方式见[材质包说明](RESOURCE_PACKS.md)。
 
 当前内容包提供 `peashooter`、`repeater`、`normal` 和 1-1；植物、僵尸、物品、关卡补全来自后端已安装内容。`/nextflag`、`/background` 及尚未迁移的实体和关卡会提示不可用。
 

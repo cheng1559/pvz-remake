@@ -3,7 +3,6 @@ import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil } from '@/client/font'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { uiNode } from '@/client/view/uiNode'
-import { gameClock } from '@/core/GameClock'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { UIButton } from './UIButton'
 import { UILabel } from './UILabel'
@@ -11,6 +10,13 @@ import { UILabel } from './UILabel'
 const { ccclass } = _decorator
 type PointerEvent = EventMouse | EventTouch
 type InputElement = HTMLInputElement | HTMLTextAreaElement
+type NativeInputBox = {
+    setInputBoxText?: (text: string, start: number, end: number) => void
+    getInputBoxSelection?: () => { start: number, end: number } | null
+    onInputBoxKey?: (key: string, shift: boolean) => boolean
+    hideInputBoxAccessory?: () => boolean
+}
+const nativeInputBox = () => (globalThis as { jsb?: NativeInputBox }).jsb
 
 export interface UIInputOptions {
     value?: string
@@ -30,6 +36,7 @@ export interface UIInputOptions {
 export class UIInput extends Component {
     private static active: UIInput | null = null
     private static readonly instances = new Set<UIInput>()
+    private static readonly nativeHandledKeys = new Set<number>()
     static get hasFocusedInput(): boolean { return !!this.active?.available() }
     private static readonly hoverClient = {
         cursor: 'text' as const,
@@ -64,18 +71,22 @@ export class UIInput extends Component {
     onCancel: () => void = () => this.blur()
 
     static handleKey(event: EventKeyboard): boolean {
+        // AppKit can submit and close the input before SDL delivers the same key to the next dialog.
+        if (this.nativeHandledKeys.has(event.keyCode)) { event.propagationStopped = true; return true }
         const active = this.active
         if (!active?.available()) return false
         event.propagationStopped = true
         // DOM editing handles these keys before they reach the game. Never treat typing Space as dialog confirmation.
-        if (!active.element) {
+        if (!active.element && nativeInputBox()?.onInputBoxKey !== active.nativeKey) {
             const key = ({ 9: 'Tab', 38: 'ArrowUp', 40: 'ArrowDown' } as Record<number, string>)[event.keyCode]
-            if (key && active.options.onKey?.(key, false)) return true
-            if (event.keyCode === KeyCode.ESCAPE) active.onCancel()
-            else if (event.keyCode === KeyCode.ENTER) active.submit()
+            if (key) active.key(key, false)
+            else if (event.keyCode === KeyCode.ESCAPE) active.key('Escape', false)
+            else if (event.keyCode === KeyCode.ENTER) active.key('Enter', false)
         }
         return true
     }
+
+    static handleKeyUp(event: EventKeyboard): void { this.nativeHandledKeys.delete(event.keyCode) }
 
     initialize(font: BitmapFontAssets, options: UIInputOptions): void {
         this.font = font
@@ -127,6 +138,7 @@ export class UIInput extends Component {
     focus(): void {
         if (!this.node.activeInHierarchy) { this.focusRequested = true; return }
         if (!this.available()) return
+        if (this.focused) { this.blink = 0; return }
         if (!this.native._impl) { this.scheduleOnce(() => this.focus(), 0); return }
         if (UIInput.active !== this) UIInput.active?.blur()
         UIInput.active = this
@@ -144,8 +156,12 @@ export class UIInput extends Component {
             const focus = element.focus
             element.focus = options => focus.call(element, { ...options, preventScroll: true })
             try { this.native.focus() } finally { element.focus = focus }
-        } else this.native.focus()
-        ;(globalThis as { jsb?: { hideInputBoxAccessory?: () => boolean } }).jsb?.hideInputBoxAccessory?.()
+        } else {
+            const box = nativeInputBox()
+            if (box?.setInputBoxText) box.onInputBoxKey = this.nativeKey
+            this.native.focus()
+        }
+        nativeInputBox()?.hideInputBoxAccessory?.()
         this.syncSelection()
         this.draw()
     }
@@ -204,7 +220,9 @@ export class UIInput extends Component {
 
     private changed(): void {
         const raw = this.native.string
-        const from = this.element?.selectionStart ?? raw.length, to = this.element?.selectionEnd ?? raw.length
+        const range = !this.element ? nativeInputBox()?.getInputBoxSelection?.() : null
+        const from = this.element?.selectionStart ?? range?.start ?? raw.length
+        const to = this.element?.selectionEnd ?? range?.end ?? raw.length
         const next = this.sanitize(raw)
         this.anchor = this.sanitize(raw.slice(0, from)).length
         this.caret = this.sanitize(raw.slice(0, to)).length
@@ -222,32 +240,44 @@ export class UIInput extends Component {
 
     private syncSelection(): void {
         this.element?.setSelectionRange(Math.min(this.anchor, this.caret), Math.max(this.anchor, this.caret), this.caret < this.anchor ? 'backward' : 'forward')
+        if (this.focused && !this.element) nativeInputBox()?.setInputBoxText?.(this.content, this.anchor, this.caret)
         this.blink = 0
+    }
+
+    private key(key: string, shift: boolean): boolean {
+        if (!this.available()) return false
+        if (this.options.onKey?.(key, shift)) return true
+        if (key === 'Enter') this.submit()
+        else if (key === 'Escape') this.onCancel()
+        else if (key === 'Tab') {
+            const inputs = [...UIInput.instances].filter(input => input.available())
+            inputs[(inputs.indexOf(this) + (shift ? inputs.length - 1 : 1)) % inputs.length]?.focus()
+        } else return false
+        return true
+    }
+
+    private readonly nativeKey = (key: string, shift: boolean): boolean => {
+        if (!this.focused) return false
+        this.readSelection()
+        const handled = this.key(key, shift)
+        const code = ({ Tab: 9, Enter: KeyCode.ENTER, Escape: KeyCode.ESCAPE, ArrowUp: 38, ArrowDown: 40 } as Record<string, number>)[key]
+        if (handled && code !== undefined) UIInput.nativeHandledKeys.add(code)
+        return handled
     }
 
     private readonly domKey = (event: KeyboardEvent) => {
         event.stopPropagation()
         if (event.isComposing) { if (event.key === 'Enter') event.stopImmediatePropagation(); return }
-        if (this.available() && this.options.onKey?.(event.key, event.shiftKey)) {
+        if (this.key(event.key, event.shiftKey)) {
             event.preventDefault()
             event.stopImmediatePropagation()
-            return
-        }
-        if (event.key === 'Enter' || event.key === 'Escape' || event.key === 'Tab') {
-            event.preventDefault()
-            event.stopImmediatePropagation()
-            if (!this.available()) return
-            if (event.key === 'Enter') this.submit()
-            else if (event.key === 'Escape') this.onCancel()
-            else {
-                const inputs = [...UIInput.instances].filter(input => input.available())
-                inputs[(inputs.indexOf(this) + (event.shiftKey ? inputs.length - 1 : 1)) % inputs.length]?.focus()
-            }
         }
     }
 
     private submit(): void { if (this.focused && this.available()) this.onSubmit(this.value) }
     private ended(): void {
+        const box = nativeInputBox()
+        if (box?.onInputBoxKey === this.nativeKey) delete box.onInputBoxKey
         if (UIInput.active === this) UIInput.active = null
         this.focused = this.dragging = false
         this.touchId = null
@@ -304,16 +334,25 @@ export class UIInput extends Component {
     }
     private measure(end: number): number { return FontMetricsUtil.measureTextWidth(this.font.config, this.content.slice(0, end)) }
 
-    protected update(dt: number): void {
-        if (this.focused && !this.available()) { this.blur(); return }
-        if (!this.focused) return
+    private readSelection(): void {
         if (this.element) {
             const from = this.element.selectionStart ?? this.content.length, to = this.element.selectionEnd ?? from
             const caret = this.element.selectionDirection === 'backward' ? from : to
             const anchor = caret === from ? to : from
             if (caret !== this.caret || anchor !== this.anchor) { this.caret = caret; this.anchor = anchor; this.blink = 0 }
+        } else {
+            const range = nativeInputBox()?.getInputBoxSelection?.()
+            if (range && (range.start !== this.anchor || range.end !== this.caret)) {
+                this.anchor = range.start; this.caret = range.end; this.blink = 0
+            }
         }
-        this.blink += gameClock.delta(dt)
+    }
+
+    protected update(dt: number): void {
+        if (this.focused && !this.available()) { this.blur(); return }
+        if (!this.focused) return
+        this.readSelection()
+        this.blink += dt
         this.draw()
     }
 

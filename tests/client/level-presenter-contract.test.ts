@@ -36,7 +36,6 @@ test('Adventure 1-1 presentation waits for entity creation and redraws restored 
     assert.match(audio, /case 'projectileFired': void SoundLoader\.playFoley\(SoundEffect\.Throw, 10\)/)
     assert.match(showcase, /if \(!this\.lifecycle\.onComplete\) return/)
     assert.match(showcase, /snapshot\.result === 'lost'[\s\S]*?this\.lifecycle\.onGameOver/)
-    assert.match(showcase, /this\.game\.render\(\)\.paused\) return/)
     assert.match(end, /graphics\.fillColor = new Color\(255, 255, 255, alpha\)/)
     assert.match(end, /graphics\.fillRect\(-400, -300, 800, 600\)/)
     assert.doesNotMatch(view, /ProfileStore/)

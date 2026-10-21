@@ -1,4 +1,6 @@
-import { _decorator, BlockInputEvents, Color, Component, game, Node, Sprite } from 'cc'
+import { _decorator, BlockInputEvents, Color, Component, game, isValid, Node, Sprite } from 'cc'
+import { DEBUG } from 'cc/env'
+import { preloadAssets } from '@/client/content/PreloadAssets'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { uiNode } from '@/client/view/uiNode'
 import { UI, type UIButtonOptions } from '@/client/ui/UI'
@@ -17,6 +19,7 @@ import { showAlmanacScreen, type AlmanacSelection } from './AlmanacScreen'
 import { StoreScreen } from './StoreScreen'
 import { AchievementScreen } from './AchievementScreen'
 import { showAwardScreen } from './AwardScreen'
+import { loadDisplayParts, loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
 
 const { ccclass } = _decorator
 
@@ -46,7 +49,10 @@ export class MenuScreen extends Component {
             const startup = root.addComponent(StartupScreen)
             startup.onStart = () => { void this.onNavigate('main') }
             try {
-                await startup.initialize(id === 'splash', progress => this.prepareMain(progress).then(() => {}))
+                await startup.initialize(id === 'splash', async progress => {
+                    if (!DEBUG) await preloadAssets(value => progress(value * 0.95))
+                    await this.prepareMain(value => progress(DEBUG ? value : 0.95 + value * 0.05))
+                })
             } catch (error) {
                 root.destroy()
                 throw error
@@ -105,11 +111,25 @@ export class MenuScreen extends Component {
             })
             mainMenu.canInteract = () => !dialog.isDragging
         } else if (id === 'pause') {
-            ui.dialog(root.node, {
+            const dialog = ui.dialog(root.node, {
                 title: ui.text('GAME_PAUSED'), message: ui.text('CLICK_TO_RESUME'),
                 confirmText: ui.text('RESUME_GAME'), spaceAfterHeader: 155, extraHeight: 10,
                 clickSound: null,
                 onClose: () => { void this.onNavigate('resume') },
+            })
+            // Original widget (72, 42) + reanim (72, 42) + dialog header (0, 45).
+            const zombie = uiNode({
+                name: 'NewspaperZombie', parent: dialog.content, position: { x: 144, y: -129 }, active: false,
+            }).node
+            void loadEntityDisplayAssets().then(async ({ content, catalog }) => {
+                if (!isValid(zombie, true)) return
+                const parts = catalog.zombies[5].parts
+                const players = await loadDisplayParts(zombie, parts, content)
+                if (!players) return
+                for (const part of parts) players.get(part.name)!.play({ loop: true, rate: 12 / part.fps })
+                zombie.active = true
+            }).catch(error => {
+                if (isValid(zombie, true)) console.error('[PauseDialog] Failed to load newspaper zombie', error)
             })
         } else {
             const controls = uiNode({

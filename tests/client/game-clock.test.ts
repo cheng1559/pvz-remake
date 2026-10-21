@@ -42,7 +42,7 @@ test('adventure pause freezes scene animation, particles and tweens without chan
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
     })
     const modules: Record<string, unknown> = {
-        cc: { Component, Tween: { pauseAllByTarget: (node: object) => paused.add(node), resumeAllByTarget: (node: object) => resumed.add(node) } },
+        cc: { Component, _decorator: { ccclass: () => (value: unknown) => value }, Tween: { pauseAllByTarget: (node: object) => paused.add(node), resumeAllByTarget: (node: object) => resumed.add(node) } },
         '@/client/reanim/ReanimPlayer': { ReanimPlayer }, '@/client/particle/ParticlePlayer': { ParticlePlayer },
         '@/core/Particle': { TodParticleSystem },
     }
@@ -55,10 +55,27 @@ test('adventure pause freezes scene animation, particles and tweens without chan
     assert.deepEqual(components.map(component => component.enabled), [false, false, false, false, true])
     assert.deepEqual(paused, new Set([root, child]))
     assert.equal(gameClock.speed, speed)
+    const delayed = [new ReanimPlayer(), new ParticlePlayer(), new TodParticleSystem()]
+    components.push(...delayed)
+    const delayedNode = { children: [] }
+    root.children.push(delayedNode)
+    const sceneModule = { exports: {} as Record<string, any> }
+    const sceneCode = transpileModule(readFileSync('assets/scripts/client/level/LevelScene.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
+    })
+    runInNewContext(sceneCode.outputText, { exports: sceneModule.exports, require: (id: string) => modules[id] ?? {} })
+    const scene = new sceneModule.exports.LevelScene()
+    scene.game = { render: () => ({ paused: true }), update() { assert.fail('paused gameplay must not advance') } }
+    scene.view = view
+    scene.audio = {}
+    scene.update(1)
+    scene.update(1)
+    assert.ok(delayed.every(component => !component.enabled), 'animations and particles loaded after pausing must also freeze')
+    assert.ok(paused.has(delayedNode), 'new tween targets must inherit the pause')
     particle.isValid = false
     view.setPaused(false)
-    assert.deepEqual(components.map(component => component.enabled), [true, false, false, true, true])
-    assert.deepEqual(resumed, new Set([root, child]))
+    assert.deepEqual(components.map(component => component.enabled), [true, false, false, true, true, true, true, true])
+    assert.deepEqual(resumed, new Set([root, child, delayedNode]))
     assert.equal(gameClock.speed, speed)
     view.gameOver.active = true
     view.setPaused(false)

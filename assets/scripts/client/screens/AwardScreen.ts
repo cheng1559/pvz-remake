@@ -3,18 +3,13 @@ import type { AwardView } from '@/shared/menu'
 import { menuApi } from '@/client/api/MenuApi'
 import { SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import type { UI } from '@/client/ui/UI'
-import { SpriteLoader } from '@/core/SpriteLoader'
 
 export async function showAwardScreen(parent: Node, ui: UI): Promise<AwardView> {
-    const [award, packet, plants, seeds] = await Promise.all([
-        menuApi.getAward(), SpriteLoader.load('seedpacket_larger'), SpriteLoader.load('plant_previews_cached'), SpriteLoader.load('seeds'),
-    ])
-    if (!packet || !plants || !seeds) throw new Error('Missing award seed packet images')
+    const award = await menuApi.getAward()
     if (!parent.isValid) throw new Error('Award screen was destroyed while loading')
     SeedPacketRenderer.drawSeedPacket({
         name: 'AwardSeedPacket', parent, x: 350, y: -129, scale: 2,
-        seedType: award.seed, cost: award.cost, seeds, seedPacketLarger: packet,
-        plantPreviews: plants, costFont: ui.assets.fonts.packetCost,
+        seedType: award.seed, cost: award.cost, costFont: ui.assets.fonts.packetCost,
     })
     ui.label(parent, {
         text: ui.text(award.nameKey, award.name), font: 'yellow', x: 400, y: 326,

@@ -1,11 +1,11 @@
 import { Asset, assetManager, AudioClip, JsonAsset, SpriteFrame, Texture2D } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
-import { upscaledFontLoader } from '@/client/font/UpscaledFonts'
 import { parseFont } from '@/shared/content/font'
 import { parseContentManifest, type ContentManifest } from '@/shared/content/index'
 import { parseMusic, type Music } from '@/shared/content/music'
 import { parseParticle, type Particle } from '@/shared/content/particle'
 import { ContentRegistry, type ResolvedContent } from './ContentRegistry'
+import { resourcePacks } from './ResourcePacks'
 
 type AssetBundle = NonNullable<ReturnType<typeof assetManager.getBundle>>
 type AssetType<T extends Asset> = new (...args: any[]) => T
@@ -37,7 +37,7 @@ export class ClientContentLoader {
         const cached = this.assets.get(key) as Promise<T> | undefined
         if (cached) return cached
 
-        const promise = this.loadBundle(content.bundle).then(bundle => new Promise<T>((resolve, reject) => {
+        const promise = this.loadBundle(content.bundle).then(bundle => bundle.get(content.path, type) ?? new Promise<T>((resolve, reject) => {
             bundle.load(content.path, type, (error, asset) => error ? reject(error) : resolve(asset))
         })).catch(error => {
             this.assets.delete(key)
@@ -51,7 +51,7 @@ export class ClientContentLoader {
         const cached = this.manifests.get(location)
         if (cached) return cached
 
-        const promise = this.loadBundle(location).then(bundle => new Promise<JsonAsset>((resolve, reject) => {
+        const promise = this.loadBundle(location).then(bundle => bundle.get('manifest', JsonAsset) ?? new Promise<JsonAsset>((resolve, reject) => {
             bundle.load('manifest', JsonAsset, (error, asset) => error ? reject(error) : resolve(asset))
         })).then(asset => parseContentManifest(asset.json)).catch(error => {
             this.manifests.delete(location)
@@ -68,9 +68,11 @@ export class SpriteRepository {
         private readonly loader = new ClientContentLoader(),
     ) {}
 
-    load(id: string): Promise<SpriteFrame> {
+    async load(id: string, animation?: string): Promise<SpriteFrame> {
+        const replacement = await resourcePacks.sprite(id, animation)
+        if (replacement) return replacement
         const content = this.registry.resolve('sprites', id)
-        if (!content) return Promise.reject(new Error(`unknown sprite: ${id}`))
+        if (!content) throw new Error(`unknown sprite: ${id}`)
         return this.loader.load(content, SpriteFrame)
     }
 }
@@ -83,11 +85,14 @@ export class FontRepository {
         private readonly loader = new ClientContentLoader(),
     ) {}
 
-    load(id: string): Promise<BitmapFontAssets> {
-        const cached = this.cache.get(id)
-        if (cached) return cached
+    async load(id: string): Promise<BitmapFontAssets> {
+        const replacement = await resourcePacks.font(id)
+        if (replacement) return replacement
         const content = this.registry.resolve('fonts', id)
         if (!content) return Promise.reject(new Error(`unknown font: ${id}`))
+        const key = id
+        const cached = this.cache.get(key)
+        if (cached) return cached
 
         const promise = Promise.all([
             this.loader.load(content, JsonAsset),
@@ -105,15 +110,12 @@ export class FontRepository {
                 texture.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
                 texture.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST)
             }
-            return {
-                config, textures,
-                loadUpscaled: content.bundle === 'pvz-base' ? upscaledFontLoader(id.slice(id.indexOf(':') + 1)) : undefined,
-            }
+            return { config, textures }
         }).catch(error => {
-            this.cache.delete(id)
+            this.cache.delete(key)
             throw error
         })
-        this.cache.set(id, promise)
+        this.cache.set(key, promise)
         return promise
     }
 }

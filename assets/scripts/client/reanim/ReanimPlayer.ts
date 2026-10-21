@@ -25,10 +25,17 @@ interface TrackView {
     node: Node
     sprite: Sprite
     skew: UISkew
-    additive: Sprite
+    additive?: Sprite
 }
 
 let additiveSpriteMaterial: Material | null = null
+const parsedReanims = new WeakMap<JsonAsset, Reanim>()
+interface ReanimAssets {
+    data: Reanim
+    frames: ReadonlyArray<readonly [string, SpriteFrame]>
+}
+// Registries define sprite overrides; share prepared assets only within the same content registry.
+const preparedReanims = new WeakMap<ContentRegistry, Map<string, Promise<ReanimAssets>>>()
 
 interface TrackAttachment {
     parent: ReanimPlayer
@@ -37,23 +44,39 @@ interface TrackAttachment {
 }
 
 export class ReanimRepository {
-    private readonly cache = new Map<string, Promise<Reanim>>()
+    private readonly cache: Map<string, Promise<ReanimAssets>>
 
     constructor(
         private readonly registry: ContentRegistry,
         private readonly loader = new ClientContentLoader(),
-    ) {}
+    ) {
+        let cache = preparedReanims.get(registry)
+        if (!cache) preparedReanims.set(registry, cache = new Map())
+        this.cache = cache
+    }
 
-    load(id: string): Promise<Reanim> {
+    load(id: string): Promise<ReanimAssets> {
         const cached = this.cache.get(id)
         if (cached) return cached
         const content = this.registry.resolve('reanim', id)
         if (!content) return Promise.reject(new Error(`unknown reanim: ${id}`))
 
-        const promise = this.loader.load(content, JsonAsset).then(asset => {
-            const data = parseReanim(asset.json)
+        const promise = this.loader.load(content, JsonAsset).then(async asset => {
+            let data = parsedReanims.get(asset)
+            if (!data) {
+                data = parseReanim(asset.json)
+                parsedReanims.set(asset, data)
+            }
             if (data.id !== id) throw new Error(`reanim ID mismatch: expected ${id}, got ${data.id}`)
-            return data
+            const spriteIds = new Set<string>()
+            for (const track of data.tracks) {
+                for (const frame of track.keyframes) if (frame.sprite) spriteIds.add(frame.sprite)
+            }
+            const sprites = new SpriteRepository(this.registry, this.loader)
+            const frames = await Promise.all([...spriteIds].sort().map(async spriteId =>
+                [spriteId, await sprites.load(spriteId, id)] as const,
+            ))
+            return { data, frames }
         }).catch(error => {
             this.cache.delete(id)
             throw error
@@ -95,21 +118,13 @@ export class ReanimPlayer extends Component {
     }
 
     async load(id: string, registry: ContentRegistry, loader = new ClientContentLoader()): Promise<void> {
-        const data = await new ReanimRepository(registry, loader).load(id)
-        const spriteIds = new Set<string>()
-        for (const track of data.tracks) {
-            for (const frame of track.keyframes) if (frame.sprite) spriteIds.add(frame.sprite)
-        }
-        const sprites = new SpriteRepository(registry, loader)
-        const loaded = await Promise.all([...spriteIds].sort().map(async spriteId =>
-            [spriteId, await sprites.load(spriteId)] as const,
-        ))
+        const { data, frames } = await new ReanimRepository(registry, loader).load(id)
         if (!this.node?.isValid) throw new Error('reanim player was destroyed while loading')
 
         this.clearViews()
         this.data = data
         this.frames.clear()
-        for (const [spriteId, frame] of loaded) this.frames.set(spriteId, frame)
+        for (const [spriteId, frame] of frames) this.frames.set(spriteId, frame)
         for (const track of [...data.tracks].sort(compareTracks)) this.createTrackView(track)
         this.timeSeconds = 0
         this.playing = false
@@ -321,35 +336,18 @@ export class ReanimPlayer extends Component {
             sprite: { sizeMode: Sprite.SizeMode.RAW, trim: false },
             skew: { x: 0, y: 0 },
         })
-        const additive = uiNode({
-            name: `${track.id}_extra_additive`, parent: parts.node,
-            anchor: { x: 0, y: 1 },
-            sprite: { sizeMode: Sprite.SizeMode.RAW, trim: false },
-        }).sprite!
-        additive.customMaterial = getAdditiveSpriteMaterial()
-        additive.enabled = false
-        this.views.set(track.id, { node: parts.node, sprite: parts.sprite!, skew: parts.skew!, additive })
+        this.views.set(track.id, { node: parts.node, sprite: parts.sprite!, skew: parts.skew! })
     }
 
     private applyPose(): void {
         if (!this.data) return
         for (const track of this.data.tracks) {
             const view = this.views.get(track.id)!
-            let pose = this.visible ? sampleReanimTrack(track, this.timeSeconds) : null
-            const blendFrom = this.blendFromPoses.get(track.id)
-            if (pose && blendFrom && this.blendDuration > 0) {
-                pose = blendPose(blendFrom, pose, Math.min(1, this.blendElapsed / this.blendDuration))
-            }
-            if (pose && this.attachment) {
-                const parentPose = this.attachment.parent.sampleTrack(this.attachment.trackId)
-                pose = parentPose
-                    ? attachReanimPose(pose, parentPose, this.attachment.basePose)
-                    : null
-            }
+            const pose = this.visible ? this.sampleAttachedTrack(track) : null
             const frame = this.frameOverrides.get(track.id) ?? (pose?.sprite ? this.frames.get(pose.sprite) : undefined)
             if (!pose || !frame) {
                 view.sprite.enabled = false
-                view.additive.enabled = false
+                if (view.additive) view.additive.enabled = false
                 continue
             }
 
@@ -372,14 +370,25 @@ export class ReanimPlayer extends Component {
                 Math.round(pose.alpha * this.colorOverride.a),
             )
             view.sprite.enabled = true
-            view.additive.spriteFrame = frame
-            view.additive.color = new Color(
-                this.extraAdditiveColor.r,
-                this.extraAdditiveColor.g,
-                this.extraAdditiveColor.b,
-                Math.round(this.extraAdditiveColor.a * pose.alpha),
-            )
-            view.additive.enabled = this.extraAdditive
+            if (this.extraAdditive) {
+                if (!view.additive) {
+                    view.additive = uiNode({
+                        name: `${track.id}_extra_additive`, parent: view.node,
+                        anchor: { x: 0, y: 1 },
+                        sprite: { sizeMode: Sprite.SizeMode.RAW, trim: false },
+                    }).sprite!
+                    view.additive.node.setSiblingIndex(0)
+                    view.additive.customMaterial = getAdditiveSpriteMaterial()
+                }
+                view.additive.spriteFrame = frame
+                view.additive.color = new Color(
+                    this.extraAdditiveColor.r,
+                    this.extraAdditiveColor.g,
+                    this.extraAdditiveColor.b,
+                    Math.round(this.extraAdditiveColor.a * pose.alpha),
+                )
+            }
+            if (view.additive) view.additive.enabled = this.extraAdditive
         }
     }
 
@@ -391,6 +400,21 @@ export class ReanimPlayer extends Component {
     sampleTrack(trackId: string, timeSeconds = this.timeSeconds): ReanimKeyframe | null {
         const track = this.requireData().tracks.find(candidate => candidate.id === trackId)
         return track ? sampleReanimTrack(track, timeSeconds) : null
+    }
+
+    private sampleAttachedTrack(track: ReanimTrack): ReanimKeyframe | null {
+        let pose = sampleReanimTrack(track, this.timeSeconds)
+        const blendFrom = this.blendFromPoses.get(track.id)
+        if (pose && blendFrom && this.blendDuration > 0) {
+            pose = blendPose(blendFrom, pose, Math.min(1, this.blendElapsed / this.blendDuration))
+        }
+        if (pose && this.attachment) {
+            const { parent, trackId, basePose } = this.attachment
+            const parentTrack = parent.requireData().tracks.find(candidate => candidate.id === trackId)
+            const parentPose = parentTrack ? parent.sampleAttachedTrack(parentTrack) : null
+            pose = parentPose ? attachReanimPose(pose, parentPose, basePose) : null
+        }
+        return pose
     }
 
     private clearViews(): void {

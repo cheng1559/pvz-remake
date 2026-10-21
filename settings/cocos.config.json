@@ -1,5 +1,14 @@
 {
     "builder": {
+        "platforms": {
+            "mac": {
+                "packages": {
+                    "mac": {
+                        "packageName": "com.pvzremake.game"
+                    }
+                }
+            }
+        },
         "textureCompressConfig": {
             "genMipmaps": false
         }

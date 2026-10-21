@@ -1,5 +1,4 @@
 import { BlockInputEvents, Mask, Node } from 'cc'
-import { DEBUG } from 'cc/env'
 import { LocalIntegratedGame } from './LocalIntegratedGame'
 import { createLocalGameSaveStore } from './CocosGameSaveStore'
 import { GAME_SAVE_KEY } from './GameSaveStore'
@@ -130,7 +129,7 @@ export function createLevelController(
             const profile = await menuApi.getCurrentUser()
             const playerName = profile?.name || 'Player'
             const view = await LevelView.create(root, content, save?.levelId ?? levelId, playerName)
-            const game = new LocalIntegratedGame(content.definitions, content.levels, systemMods, DEBUG)
+            const game = new LocalIntegratedGame(content.definitions, content.levels, systemMods, true)
             scene = root.addComponent(LevelScene)
             scene.configure(game, view, save ? {
                 ...DEFAULT_START_OPTIONS,
@@ -139,11 +138,9 @@ export function createLevelController(
                 save: save.server as unknown as JsonValue,
             } : { ...DEFAULT_START_OPTIONS, firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods }, lifecycle)
             if (save) await scene.restorePresentation(save.client)
-            if (DEBUG) {
-                if (!GameDebugSettings.rechargingEnabled) game.debugCommand('/cooldown false')
-                if (!GameDebugSettings.sunCostEnabled) game.debugCommand('/suncost false')
-                if (GameDebugSettings.collectMode !== 'click') game.debugCommand(`/collect ${GameDebugSettings.collectMode}`)
-            }
+            if (!GameDebugSettings.rechargingEnabled) game.debugCommand('/cooldown false')
+            if (!GameDebugSettings.sunCostEnabled) game.debugCommand('/suncost false')
+            if (GameDebugSettings.collectMode !== 'click') game.debugCommand(`/collect ${GameDebugSettings.collectMode}`)
             return { root, game, view, scene, base, level: content.levels.levels[game.render().levelId], createdAt: save?.createdAt }
         } catch (error) {
             if (scene && rollback && current?.root.isValid) {
@@ -248,7 +245,7 @@ export function createLevelController(
             return current?.root.isValid ? current.level : null
         },
         debugCommand(command) {
-            if (!DEBUG || !current?.root.isValid) return debugCondition('No active debug game')
+            if (!current?.root.isValid) return debugCondition('No active game')
             const result = current.game.debugCommand(command)
             current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())
             return result

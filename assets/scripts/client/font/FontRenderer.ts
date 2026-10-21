@@ -12,7 +12,6 @@ import {
 } from 'cc'
 
 import { uiNode } from '@/client/view/uiNode'
-import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { BitmapFontAssets } from './BitmapFontAssets'
 import { FontMetricsUtil } from './FontMetrics'
 import type { FontConfig, RenderCmd } from './FontRenderer.d'
@@ -121,9 +120,6 @@ export class FontRenderer extends Component {
 
     // Runtime state.
     private _config: FontConfig | null = null
-    private _sourceAssets: BitmapFontAssets | null = null
-    private _hdEnabled: boolean | undefined
-    private _fontRevision = 0
     private _spriteFrameCache: Map<string, SpriteFrame> = new Map()
     private _charNodes: Node[] = []
     private _dirty: boolean = true
@@ -139,14 +135,9 @@ export class FontRenderer extends Component {
     }
 
     onEnable() {
-        this._updateFontVariant()
         if (this._dirty) {
             this._rebuild()
         }
-    }
-
-    update() {
-        if (this._hdEnabled !== GameDebugSettings.hdFontsEnabled) this._updateFontVariant()
     }
 
     // Public API.
@@ -162,12 +153,6 @@ export class FontRenderer extends Component {
     }
 
     setFontAssets(assets: BitmapFontAssets) {
-        this._sourceAssets = assets
-        this._applyFontAssets(assets)
-        this._updateFontVariant()
-    }
-
-    private _applyFontAssets(assets: BitmapFontAssets) {
         if (this.fontConfigJson === assets.config && this.layerTextures === assets.textures) return
         this._clearCharNodes()
         for (const frame of this._spriteFrameCache.values()) frame.destroy()
@@ -175,21 +160,6 @@ export class FontRenderer extends Component {
         this.fontConfigJson = assets.config
         this.layerTextures = assets.textures
         this.forceRebuild()
-    }
-
-    private _updateFontVariant() {
-        const enabled = GameDebugSettings.hdFontsEnabled
-        this._hdEnabled = enabled
-        const revision = ++this._fontRevision
-        const source = this._sourceAssets
-        if (!source?.loadUpscaled) return
-        if (!enabled) {
-            this._applyFontAssets(source)
-            return
-        }
-        void source.loadUpscaled().then(assets => {
-            if (this.isValid && revision === this._fontRevision) this._applyFontAssets(assets)
-        }).catch(error => console.error('[FontRenderer] Failed to load upscaled font', error))
     }
 
     /** Force a text mesh rebuild. */
@@ -228,7 +198,6 @@ export class FontRenderer extends Component {
         this._clearCharNodes()
 
         if (!this._config || !this._string) return
-        if (this.layerTextures.length === 0) return
 
         const config = this._config
         const pointSize = this._fontSize > 0 ? this._fontSize : config.defaultPointSize
@@ -401,7 +370,6 @@ export class FontRenderer extends Component {
 
         for (let layerIdx = 0; layerIdx < config.layers.length; layerIdx++) {
             const layer = config.layers[layerIdx]
-            if (layerIdx >= this.layerTextures.length) continue
 
             const layerScale = scale
             let lineY = 0
@@ -469,10 +437,12 @@ export class FontRenderer extends Component {
         for (const cmd of commands) {
             const layer = config.layers[cmd.layerIdx]
             const texture = this.layerTextures[cmd.layerIdx]
-            if (!texture) continue
 
             // Get or create the SpriteFrame.
             const rect = cmd.charInfo.rect
+            const bottom = cmd.y + rect[3] * scale
+            if (bottom > maxY) maxY = bottom
+            if (!texture) continue
             const sfKey = `${cmd.layerIdx}_${cmd.charCode}`
             let sf = this._spriteFrameCache.get(sfKey)
             if (!sf) {
@@ -510,10 +480,6 @@ export class FontRenderer extends Component {
 
             // Cocos Y points up while PvZ text coordinates point down.
             this._charNodes.push(glyph.node)
-
-            // Record bounds.
-            const bottom = cmd.y + rect[3] * scale
-            if (bottom > maxY) maxY = bottom
         }
 
         this._totalWidth = Math.max(0, ...lines.map((line) => line.width * scale))
@@ -592,7 +558,6 @@ export class FontRenderer extends Component {
     }
 
     onDestroy() {
-        ++this._fontRevision
         this._clearCharNodes()
         // Clear SpriteFrame cache.
         for (const [, sf] of this._spriteFrameCache) {

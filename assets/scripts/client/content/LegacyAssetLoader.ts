@@ -9,6 +9,8 @@ export class AssetLoader {
         type: any,
         label: string | null = path,
     ): Promise<T | null> {
+        const cached = resources.get<T>(path, type)
+        if (cached) return Promise.resolve(cached)
         const key = `${type.name}:${path}`
         const pending = this._pending.get(key) as Promise<T | null> | undefined
         if (pending) return pending

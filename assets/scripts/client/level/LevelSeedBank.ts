@@ -27,8 +27,7 @@ export class LevelSeedBank {
             const view = new SeedPacketView({
                 name: `SeedPacket-${seedId}`, parent: options.seedPacketSlot, layer: options.rootLayer,
                 x: index * 59, y: 0, seedType: visual.seedType, cost: seed.sunCost,
-                seeds: options.seeds, seedPacketLarger: options.seedPacketLarger,
-                packetPlants: options.packetPlants, cachedPacketPlants: options.cachedPacketPlants,
+                loadSprite: options.loadPacketSprite,
                 costFont: options.packetCostFont,
             })
             const tooltip = options.ui.tooltip(view.node, {

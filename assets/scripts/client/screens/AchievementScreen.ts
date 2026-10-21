@@ -34,7 +34,7 @@ export class AchievementScreen extends Component {
         const sprites = Object.fromEntries(frames)
         this.scroll = ui.scroll(this.node, {
             width: 800, height: 600, contentHeight: 600 + 15342,
-            scrollbar: false, wheelStep: 435, wheelDuration: 0.35,
+            scrollbar: false, wheelStep: 80,
         })
         const content = this.scroll.content
         ui.image(content, sprites.selectorscreen_achievements_bg)
