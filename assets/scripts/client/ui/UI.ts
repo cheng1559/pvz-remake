@@ -1,9 +1,10 @@
-import { BlockInputEvents, Button, Canvas, Color, gfx, Material, Node, Sprite, type SpriteFrame } from 'cc'
+import { BlockInputEvents, Button, Canvas, Color, gfx, Material, Node, Sprite, UITransform, type SpriteFrame } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { uiNode } from '@/client/view/uiNode'
 import { applySpriteDensity } from '@/client/content/SpriteDensity'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { loadUIAssets, type UIAssets, type UIFont } from './UIAssets'
 import { UIButton, type UIButtonPolygon, type UIButtonState } from './UIButton'
 import { UIDialog } from './UIDialog'
@@ -171,7 +172,7 @@ export class UI {
         const pressSound = options.pressSound === undefined
             ? seed || footer ? SoundEffect.Tap : stone || back ? SoundEffect.GraveButton : SoundEffect.ButtonClick
             : options.pressSound
-        const clickSound = options.clickSound === undefined ? stone || back ? SoundEffect.ButtonClick : null : options.clickSound
+        const clickSound = options.clickSound ?? null
         button.polygon = options.polygon ?? []
         button.rightClickTriggers = options.rightClickTriggers ?? true
         button.rightClickPressesVisual = options.rightClickPressesVisual ?? !footer
@@ -280,6 +281,12 @@ export class UI {
     }
 
     input(parent: Node, options: Box & UIInputOptions & { font?: UIFont } = {}): UIInput {
+        let ancestor: Node | null = GameDebugSettings.isMobileMode() ? parent : null
+        while (ancestor && !ancestor.getComponent(UIDialog)) ancestor = ancestor.parent
+        const panel = ancestor?.getComponent(UIDialog)?.content
+        if (panel) {
+            panel.setPosition(panel.position.x, Math.min(280, panel.getComponent(UITransform)!.height / 2 + 100), panel.position.z)
+        }
         const node = this.box(parent, 'Input', { ...options, width: options.width ?? 260, height: options.height ?? 36 })
         node.active = false
         const frame = this.assets.sprites.editbox.clone()
@@ -334,7 +341,7 @@ export class UI {
         const dialog = root.addComponent(UIDialog)
         dialog.content = panel
         dialog.onClose = options.onClose
-        dialog.clickSound = options.clickSound === undefined ? SoundEffect.ButtonClick : options.clickSound
+        dialog.clickSound = options.clickSound ?? null
         const textColor = new Color(0xe0, 0xbb, 0x62)
         let textTop = 80 + (options.contentInsetTopExtra ?? 0)
         if (options.title) this.label(panel, {

@@ -10,7 +10,7 @@ export class UIDialog extends Component {
     private static readonly stack: UIDialog[] = []
     content!: Node
     draggable = true
-    clickSound: SoundEffect | null = SoundEffect.ButtonClick
+    clickSound: SoundEffect | null = null
     onConfirm: () => void = () => this.close(true)
     onCancel: () => void = () => this.close(false)
     onClose?: (confirmed: boolean) => void
