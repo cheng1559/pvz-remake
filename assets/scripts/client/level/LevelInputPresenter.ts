@@ -1,4 +1,4 @@
-import { EventMouse, EventTouch, type EventKeyboard, input, Input, KeyCode, Node, Vec3 } from 'cc'
+import { EventMouse, EventTouch, type EventKeyboard, input, Input, KeyCode, Node, UITransform, type Vec2, Vec3 } from 'cc'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { gameClock } from '@/core/GameClock'
 import { uiNode } from '@/client/view/uiNode'
@@ -10,12 +10,24 @@ import type { UIButton } from '@/client/ui/UIButton'
 
 const WIDTH = 800
 const HEIGHT = 600
+const MOBILE_SWIPE_STEP = 24
+
+interface MobilePress {
+    id: number
+    point: { x: number, y: number }
+    location: Vec2
+    windowId: number
+    source?: Node
+    leftSource: boolean
+    cancelInside: boolean
+}
 
 export class LevelInputPresenter {
     private enabled = false
     private started = false
     private previousSpeed = 1
     private readonly buttons: UIButton[] = []
+    private mobilePress?: MobilePress
 
     constructor(
         private readonly node: Node,
@@ -31,8 +43,10 @@ export class LevelInputPresenter {
         }
         this.started = true
         this.enabled = true
-        this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this)
+        this.node.on(Node.EventType.TOUCH_START, this.onTouchStart, this, true)
         this.node.on(Node.EventType.TOUCH_MOVE, this.onPointerMove, this, true)
+        this.node.on(Node.EventType.TOUCH_END, this.onTouchEnd, this, true)
+        this.node.on(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this, true)
         this.node.on(Node.EventType.MOUSE_DOWN, this.onMouseDown, this)
         this.node.on(Node.EventType.MOUSE_MOVE, this.onPointerMove, this)
         this.node.on(Node.EventType.MOUSE_LEAVE, this.onPointerLeave, this)
@@ -53,8 +67,11 @@ export class LevelInputPresenter {
 
     destroy(): void {
         this.enabled = false
-        this.node.off(Node.EventType.TOUCH_START, this.onTouchStart, this)
+        this.mobilePress = undefined
+        this.node.off(Node.EventType.TOUCH_START, this.onTouchStart, this, true)
         this.node.off(Node.EventType.TOUCH_MOVE, this.onPointerMove, this, true)
+        this.node.off(Node.EventType.TOUCH_END, this.onTouchEnd, this, true)
+        this.node.off(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this, true)
         this.node.off(Node.EventType.MOUSE_DOWN, this.onMouseDown, this)
         this.node.off(Node.EventType.MOUSE_MOVE, this.onPointerMove, this)
         this.node.off(Node.EventType.MOUSE_LEAVE, this.onPointerLeave, this)
@@ -65,6 +82,7 @@ export class LevelInputPresenter {
 
     suspend(): void {
         this.enabled = false
+        this.mobilePress = undefined
         for (const button of this.buttons) if (button.isValid) button.enabled = false
         this.view.setPointer()
         this.view.resetCursor()
@@ -94,7 +112,54 @@ export class LevelInputPresenter {
     }
 
     private onTouchStart(event: EventTouch): void {
-        if (this.enabled && GameDebugSettings.isMobileMode()) this.onPointer(event)
+        if (!this.enabled || !GameDebugSettings.isMobileMode() || !this.view.introComplete) return
+        if (this.mobilePress) { event.propagationStopped = true; return }
+        const snapshot = this.game.render()
+        if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+        const location = event.getLocation()
+        const hit = (button: UIButton) => button.node.activeInHierarchy && button.interactable &&
+            button.node.getComponent(UITransform)!.hitTest(location, event.windowId)
+        const index = this.buttons.slice(0, -1).findIndex(hit)
+        const packet = snapshot.seedPackets[index]
+        const held = snapshot.cursor.mode === 'seed'
+        // Let Menu keep its normal button capture when no plant is held.
+        if (!held && index < 0 && hit(this.buttons[this.buttons.length - 1])) return
+        const pickable = packet && !packet.selected && packet.ready &&
+            ((snapshot.extensions['pvz:debug'] as { sunCost?: boolean } | undefined)?.sunCost === false ||
+                snapshot.availableSun >= this.game.definitions.seeds[packet.seedId].sunCost)
+        if (packet && (!held || pickable)) {
+            if (held) this.game.command({ type: 'clearCursor' })
+            this.selectSeedPacket(packet.seedId)
+        }
+        const press = this.mobilePress = {
+            id: event.touch!.getID(), point: this.boardPixel(event), location, windowId: event.windowId,
+            source: packet ? this.buttons[index].node : undefined,
+            leftSource: !packet, cancelInside: held && !pickable,
+        }
+        this.view.setPointer(this.mobilePressReady(press) ? press.point : undefined)
+        if (held || packet) event.propagationStopped = true
+        else this.collectAt(press.point.x, press.point.y)
+    }
+
+    private mobilePressReady(press: MobilePress): boolean {
+        return !press.source || !press.source.getComponent(UITransform)!.hitTest(press.location, press.windowId)
+    }
+
+    private onTouchEnd(event: EventTouch): void {
+        const press = this.mobilePress
+        if (!this.enabled || !GameDebugSettings.isMobileMode() || !press || event.touch!.getID() !== press.id) return
+        this.mobilePress = undefined
+        this.view.setPointer()
+        const snapshot = this.game.render()
+        if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+        this.collectAt(press.point.x, press.point.y, false)
+        if (snapshot.cursor.mode !== 'seed') return
+        event.propagationStopped = true
+        // Native cancellation can have a different end position; resolve at the last tracked point, as before.
+        if (this.mobilePressReady(press)) {
+            this.placePlant(press.point)
+            if (this.game.render().cursor.mode === 'seed') this.game.command({ type: 'clearCursor' })
+        } else if (press.cancelInside || press.leftSource) this.game.command({ type: 'clearCursor' })
     }
 
     private onMouseDown(event: EventMouse): void {
@@ -111,6 +176,29 @@ export class LevelInputPresenter {
             ? GameDebugSettings.isMobileMode()
             : !GameDebugSettings.isMobileMode())) return
         const point = this.boardPixel(event)
+        if (GameDebugSettings.isMobileMode()) {
+            const press = this.mobilePress
+            if (!press || (event as EventTouch).touch!.getID() !== press.id) return
+            const snapshot = this.game.render()
+            if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') {
+                this.mobilePress = undefined
+                this.view.setPointer()
+                return
+            }
+            const previous = press.point
+            press.point = point
+            press.location = event.getLocation()
+            press.windowId = event.windowId
+            const ready = this.mobilePressReady(press)
+            press.leftSource ||= ready
+            this.view.setPointer(ready ? point : undefined)
+            const steps = Math.max(1, Math.ceil(Math.hypot(point.x - previous.x, point.y - previous.y) / MOBILE_SWIPE_STEP))
+            for (let step = 0; step <= steps; step++) {
+                this.collectAt(previous.x + (point.x - previous.x) * step / steps,
+                    previous.y + (point.y - previous.y) * step / steps, false)
+            }
+            return
+        }
         this.view.setPointer(point)
         const snapshot = this.game.render()
         if ((snapshot.extensions['pvz:debug'] as { collect?: string } | undefined)?.collect === 'move'
@@ -118,7 +206,7 @@ export class LevelInputPresenter {
     }
 
     private onPointerLeave(event: EventMouse): void {
-        if (!this.enabled) return
+        if (!this.enabled || GameDebugSettings.isMobileMode()) return
         // Changing the hovered child also emits leave events inside the board.
         const { x, y } = this.boardPixel(event)
         if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) return
@@ -132,17 +220,20 @@ export class LevelInputPresenter {
         const snapshot = this.game.render()
         if (snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
         if (snapshot.cursor.mode === 'seed') {
-            const board = this.view.board
-            const { row, column } = boardCell(board, x, y)
-            if (x < board.origin.x || y < board.origin.y) this.cancelPlanting()
-            else this.game.command({
-                type: 'placePlant',
-                row: Math.max(0, Math.min(board.rows - 1, row)),
-                column: Math.max(0, Math.min(board.columns - 1, column)),
-            })
+            this.placePlant({ x, y })
             return
         }
         this.collectAt(x, y)
+    }
+
+    private placePlant({ x, y }: { x: number, y: number }): void {
+        const board = this.view.board
+        const { row, column } = boardCell(board, x, y)
+        if (x < board.origin.x || y < board.origin.y) this.cancelPlanting()
+        else this.game.command({
+            type: 'placePlant', row: Math.max(0, Math.min(board.rows - 1, row)),
+            column: Math.max(0, Math.min(board.columns - 1, column)),
+        })
     }
 
     private collectAt(x: number, y: number, includeAward = true): void {

@@ -24,6 +24,12 @@ native/engine/common/Classes/*
 !native/engine/mac/
 native/engine/mac/*
 !native/engine/mac/entitlements.plist
+!native/engine/ios/
+native/engine/ios/*
+!native/engine/ios/Info.plist
+!native/engine/ios/Base.lproj/
+native/engine/ios/Base.lproj/*
+!native/engine/ios/Base.lproj/LaunchScreen.storyboard
 !native/engine/android/
 native/engine/android/*
 !native/engine/android/CMakeLists.txt

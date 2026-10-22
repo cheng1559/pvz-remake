@@ -10,7 +10,7 @@ function setup() {
     const storage = new Map<string, string>()
     const requests: string[] = []
     const archives = new Map<string, Uint8Array>()
-    const jsb = { selectFile: undefined as ((extension: string) => string | null) | undefined }
+    const jsb = { selectFile: undefined as ((extension: string, callback: (path: string | null, error?: string | null) => void) => void) | undefined }
     let picker: any
     const db = {
         failWrite: false,
@@ -60,7 +60,7 @@ function setup() {
     const modules: Record<string, any> = {
         fflate: { default: { unzipSync, strFromU8 } },
         cc: { JsonAsset, Texture2D: Texture, SpriteFrame: Frame, Rect: Vector, Size: Vector, Vec2: Vector,
-            sys: { isNative: false, isBrowser: false, localStorage: { getItem: (key: string) => storage.get(key), setItem: (key: string, value: string) => storage.set(key, value) } },
+            sys: { isNative: false, isBrowser: false, OS: { IOS: 'iOS' }, localStorage: { getItem: (key: string) => storage.get(key), setItem: (key: string, value: string) => storage.set(key, value) } },
             assetManager: { loadRemote: (path: string, options: any, callback?: any) => {
                 const complete = callback ?? options
                 try { complete(null, asset(path)) } catch (error) { complete(error) }
@@ -193,6 +193,7 @@ test('Native ZIP installation copies files into writable storage and rolls back 
     const directories = new Set<string>()
     let failCommit = false
     modules.cc.sys.isNative = true
+    modules.cc.sys.os = 'iOS'
     modules.cc.native = { fileUtils: {
         getWritablePath: () => '/app/',
         isFileExist: (path: string) => files.has(path),
@@ -204,6 +205,7 @@ test('Native ZIP installation copies files into writable storage and rolls back 
             return true
         },
         getDataFromFile: (path: string) => files.get(path).slice().buffer,
+        removeFile: (path: string) => files.delete(path),
         writeDataToFile(buffer: ArrayBuffer, path: string) { files.set(path, new Uint8Array(buffer)); return true },
         renameFile(from: string, to: string) {
             if (failCommit && from.endsWith('.installing')) return false
@@ -214,11 +216,22 @@ test('Native ZIP installation copies files into writable storage and rolls back 
     } }
     const data = zipSync(zipFiles())
     files.set('/Downloads/custom.zip', data)
-    jsb.selectFile = extension => { assert.equal(extension, 'zip'); return '/Downloads/custom.zip' }
-    await manager.install(await archive.selectResourcePackZip())
-    jsb.selectFile = () => null
+    let select!: (path: string | null, error?: string | null) => void
+    jsb.selectFile = (extension, callback) => { assert.equal(extension, 'zip'); select = callback }
+    const selected = archive.selectResourcePackZip()
+    assert.equal(files.has('/Downloads/custom.zip'), true, 'wait for the system picker before reading')
+    select('/Downloads/custom.zip')
+    await manager.install(await selected)
+    assert.equal(files.has('/Downloads/custom.zip'), false, 'remove the temporary iOS import')
+    jsb.selectFile = (_, callback) => callback(null)
     assert.equal(await archive.selectResourcePackZip(), null)
-    files.delete('/Downloads/custom.zip')
+    jsb.selectFile = (_, callback) => callback(null, 'Could not read the selected file')
+    await assert.rejects(archive.selectResourcePackZip(), /Could not read/)
+    modules.cc.sys.os = 'OS X'
+    files.set('/Downloads/custom.zip', data)
+    jsb.selectFile = (_, callback) => callback('/Downloads/custom.zip')
+    assert.deepEqual(await archive.selectResourcePackZip(), data)
+    assert.equal(files.has('/Downloads/custom.zip'), true, 'preserve the original macOS file')
     assert.deepEqual(files.get('/app/resource-packs/custom/.archive.zip'), data)
     assert.deepEqual(files.get('/app/resource-packs/custom/button.png'), zipFiles()['button.png'])
     assert.deepEqual(Array.from(await new ResourcePackManager().list()), ['custom'])

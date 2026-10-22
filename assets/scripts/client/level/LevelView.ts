@@ -116,6 +116,11 @@ export class LevelView {
             size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
         }).node
         bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
+        const mobileGridGuide = uiNode({
+            name: 'MobilePlantGridGuide', parent: board, position: { x: -WIDTH / 2, y: HEIGHT / 2 },
+            size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 }, graphics: true, active: false,
+        }).node
+        mobileGridGuide.setSiblingIndex(bankLayer.getSiblingIndex())
         const bank = uiNode({
             node: slots.bank, parent: bankLayer, position: { x: 10, y: 0 }, anchor: { x: 0, y: 1 },
             sprite: { frame: seedbank, sizeMode: Sprite.SizeMode.RAW, trim: false },
@@ -238,7 +243,7 @@ export class LevelView {
             ui, content, level, presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
             loadPacketSprite, packetCostFont: pico129,
             adviceNode: slots.advice, adviceParent: hud, adviceFont: houseOfTerror28,
-            tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview,
+            tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
             cursorPlant, gridPlant,
             sunText, progressMeter, progressFillClip, progressFill, progressHead, levelText,
         })

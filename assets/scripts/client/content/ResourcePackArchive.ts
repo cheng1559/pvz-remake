@@ -93,10 +93,19 @@ export async function removeInstalledArchive(id: string): Promise<void> {
 
 export async function selectResourcePackZip(): Promise<Uint8Array | null> {
     if (sys.isNative) {
-        const selectFile = (globalThis as { jsb?: { selectFile?: (extension: string) => string | null } }).jsb?.selectFile
+        const selectFile = (globalThis as { jsb?: { selectFile?: (extension: string, callback: (path: string | null, error?: string | null) => void) => void } }).jsb?.selectFile
         if (!selectFile) throw new Error('File selection is unavailable on this platform')
-        const path = selectFile('zip')
-        return path ? new Uint8Array(native.fileUtils.getDataFromFile(path)) : null
+        const path = await new Promise<string | null>((resolve, reject) => {
+            selectFile('zip', (path, error) => error ? reject(new Error(error)) : resolve(path))
+        })
+        if (!path) return null
+        try {
+            const data = native.fileUtils.getDataFromFile(path)
+            if (!data) throw new Error('Could not read the selected ZIP')
+            return new Uint8Array(data)
+        } finally {
+            if (sys.os === sys.OS.IOS) native.fileUtils.removeFile(path)
+        }
     }
     if (!sys.isBrowser) throw new Error('File selection is unavailable on this platform')
     const file = await new Promise<File | null>((resolve, reject) => {

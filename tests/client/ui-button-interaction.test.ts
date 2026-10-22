@@ -12,6 +12,11 @@ function setup() {
         clone() { return new Vec(this.x, this.y, this.z) }
         set(x: number, y: number, z = 0) { this.x = x; this.y = y; this.z = z; return this }
     }
+    class MouseEvent { static BUTTON_LEFT = 0; static BUTTON_RIGHT = 2 }
+    class TouchEvent {}
+    class Color {
+        constructor(public r: number, public g: number, public b: number, public a = 255) {}
+    }
     const events = Object.fromEntries(['MOUSE_DOWN', 'MOUSE_MOVE', 'MOUSE_UP', 'MOUSE_ENTER', 'MOUSE_LEAVE',
         'TOUCH_START', 'TOUCH_MOVE', 'TOUCH_END', 'TOUCH_CANCEL', 'NODE_DESTROYED'].map(name => [name, name.toLowerCase().replace('_', '-')]))
     class Transform {
@@ -64,7 +69,7 @@ function setup() {
     const modules: Record<string, any> = {
         cc: {
             Component: class { enabledInHierarchy = true }, _decorator: { ccclass: () => (value: unknown) => value },
-            Button: { EventType: { CLICK: 'click' } }, EventMouse: { BUTTON_LEFT: 0, BUTTON_RIGHT: 2 },
+            Button: { EventType: { CLICK: 'click' } }, EventMouse: MouseEvent, EventTouch: TouchEvent, Color,
             Node: FakeNode, Vec3: Vec, UITransform: Transform, Input: { EventType: events }, input: new FakeNode(),
         },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => mobile } },
@@ -108,11 +113,11 @@ function setup() {
         return { button, node, get presses() { return presses }, get clicks() { return clicks },
             get enters() { return enters }, get state() { return state } }
     }
-    const dispatch = (target: FakeNode | null, type: string, x: number, key = 0, touchId = 1) => {
-        const event = {
-            type, windowId: 0, propagationStopped: false, getLocation: () => new Vec(x, 20), getButton: () => key,
-            touch: { getID: () => touchId, getLocation: () => new Vec(x, 20) },
-        }
+    const dispatch = (target: FakeNode | null, type: string, x: number, key = 0, touchId = 1, y = 20) => {
+        const event = Object.assign(type.startsWith('mouse') ? new MouseEvent() : new TouchEvent(), {
+            type, windowId: 0, propagationStopped: false, getLocation: () => new Vec(x, y), getUILocation: () => new Vec(x, y), getButton: () => key,
+            touch: { getID: () => touchId, getLocation: () => new Vec(x, y) },
+        })
         if (!target) { modules.cc.input.emit(type, event); return }
         const path: FakeNode[] = []
         for (let node: FakeNode | null = target; node; node = node.parent) path.unshift(node)
@@ -327,6 +332,10 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         bank.sync(world, [], true, null, false)
         assert.equal(bank.packets[0].view.options.canAfford, true)
         assert.equal(bank.packets[1].view.options.canAfford, false)
+        ui.setMobile()
+        bank.sync(world, [], true, null, false)
+        assert.equal(bank.packets[0].view.options.mobile, true)
+        ui.setMobile(false)
         bank.packets[1].button.onPress()
         assert.equal(commands.at(-1).seedId, 'double')
         const flashes: unknown[] = []
@@ -342,6 +351,145 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         presenter.onPointer({})
         assert.deepEqual({ ...commands.at(-1) }, { type: 'placePlant', row: 2, column: 2 })
     } finally { presenter.destroy(); ui.cleanup() }
+})
+
+test('mobile planting keeps tap selection, aims while held, and resolves only the owning finger on release', () => {
+    const ui = setup(), e = ui.events
+    ui.setMobile()
+    const pea = ui.makeButton(0), sunflower = ui.makeButton(120), menu = ui.makeButton(680)
+    const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
+    const world = {
+        phase: 'gameplay', result: 'playing', paused: false, availableSun: 100, extensions: {},
+        cursor: { mode: 'none', seedId: '' },
+        seedPackets: ['pea', 'sunflower'].map(seedId => ({ seedId, ready: true, selected: false, cooldownRemaining: 0 })),
+        items: [] as any[],
+    }
+    const commands: any[] = []
+    let pointer: any, menus = 0, blocked = false
+    const presenter = new LevelInputPresenter(ui.root, {
+        definitions: { seeds: { pea: { sunCost: 100 }, sunflower: { sunCost: 50 } }, items: { sun: { width: 40, height: 40 } } },
+        render: () => world,
+        command(command: any) {
+            commands.push(command)
+            if (command.type === 'selectSeed') world.cursor = { mode: 'seed', seedId: command.seedId }
+            if (command.type === 'clearCursor' || command.type === 'placePlant' && !blocked) world.cursor = { mode: 'none', seedId: '' }
+            for (const packet of world.seedPackets) packet.selected = packet.seedId === world.cursor.seedId
+            if (command.type === 'collectItemAt') world.items.find(item => item.entityId === command.itemId).state = 'collecting'
+        },
+    }, {
+        introComplete: true, board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
+        audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer(value?: any) { pointer = value },
+        bindSeedPackets(select: (id: string) => void) {
+            pea.button.onPress = () => select('pea')
+            sunflower.button.onPress = () => select('sunflower')
+            return [pea.button, sunflower.button]
+        },
+        bindMenu(open: () => void) { menu.node.on('click', open); return menu.button },
+    }, () => { menus++ })
+    presenter.boardPixel = (event: any) => event.getUILocation()
+    const touch = (type: string, x: number, y = 20, id = 1) => ui.dispatch(ui.root, type, x, 0, id, y)
+    const places = () => commands.filter(command => command.type === 'placePlant')
+    const tap = (x: number, y = 20) => { touch(e.TOUCH_START, x, y); touch(e.TOUCH_END, x, y) }
+    try {
+        presenter.start()
+        tap(20)
+        assert.equal(world.cursor.seedId, 'pea')
+        assert.equal(pointer, undefined, 'tapping a packet keeps the selection without a floating plant')
+        assert.equal(places().length, 0)
+        touch(e.TOUCH_START, 200, 250)
+        assert.deepEqual([pointer.x, pointer.y], [200, 250])
+        assert.equal(places().length, 0, 'touch-down must only aim')
+        touch(e.TOUCH_MOVE, 280, 350)
+        touch(e.TOUCH_START, 140, 20, 2)
+        touch(e.TOUCH_END, 140, 20, 2)
+        assert.equal(world.cursor.seedId, 'pea', 'another finger must not switch or place the held plant')
+        touch(e.TOUCH_END, 0, 0)
+        assert.deepEqual({ ...places().at(-1) }, { type: 'placePlant', row: 2, column: 3 }, 'release uses the last tracked position')
+        assert.equal(pointer, undefined)
+
+        tap(20)
+        touch(e.TOUCH_START, 20)
+        assert.equal(world.cursor.seedId, 'pea', 'pressing the selected packet waits for release before cancelling')
+        touch(e.TOUCH_END, 20)
+        assert.equal(world.cursor.mode, 'none')
+        touch(e.TOUCH_START, 20)
+        touch(e.TOUCH_MOVE, 200, 250)
+        touch(e.TOUCH_MOVE, 20)
+        touch(e.TOUCH_END, 20)
+        assert.equal(world.cursor.mode, 'none', 'dragging back into the source packet cancels')
+
+        tap(20)
+        tap(140)
+        assert.equal(world.cursor.seedId, 'sunflower', 'a ready packet replaces the selected plant')
+        world.seedPackets[0].ready = false
+        touch(e.TOUCH_START, 20)
+        assert.equal(world.cursor.seedId, 'sunflower')
+        touch(e.TOUCH_END, 20)
+        assert.equal(world.cursor.mode, 'none', 'releasing on an unavailable packet cancels the held plant')
+        world.seedPackets[0].ready = true
+
+        blocked = true
+        touch(e.TOUCH_START, 20)
+        touch(e.TOUCH_MOVE, 200, 250)
+        touch(e.TOUCH_CANCEL, 0, 0)
+        assert.equal(world.cursor.mode, 'none', 'cancelled native touches resolve at their last point and clear rejected placement')
+        assert.deepEqual({ ...places().at(-1) }, { type: 'placePlant', row: 1, column: 2 })
+        blocked = false
+        touch(e.TOUCH_START, 20)
+        touch(e.TOUCH_MOVE, 200, 250)
+        const beforePause = places().length
+        presenter.suspend()
+        touch(e.TOUCH_END, 200, 250)
+        presenter.resume()
+        touch(e.TOUCH_END, 200, 250)
+        assert.equal(places().length, beforePause, 'pause discards the active gesture')
+
+        world.cursor = { mode: 'none', seedId: '' }
+        world.items = [{ entityId: 1, typeId: 'sun', state: 'falling', x: 200, y: 250 }]
+        touch(e.TOUCH_START, 100, 270)
+        touch(e.TOUCH_MOVE, 340, 270)
+        touch(e.TOUCH_END, 340, 270)
+        assert.equal(commands.filter(command => command.type === 'collectItemAt').length, 1, 'swiping collects items between sparse touch samples')
+        ui.dispatch(menu.node, e.TOUCH_START, 700)
+        ui.dispatch(menu.node, e.TOUCH_END, 700)
+        assert.equal(menus, 1, 'Menu retains normal button interaction')
+    } finally { presenter.destroy(); ui.cleanup() }
+})
+
+test('mobile planting previews use the original row/column guide', () => {
+    const ui = setup()
+    const { LevelHudPresenter } = ui.load('assets/scripts/client/level/LevelHudPresenter.ts')
+    const hud = Object.create(LevelHudPresenter.prototype)
+    const board = { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 }
+    hud.content = { definitions: { boards: { day: board }, seeds: { pea: { plant: 'pvz:peashooter' } } }, loadedMods: { plantUpgrades: [] } }
+    hud.level = { board: 'day', activeRows: [2] }
+    hud.cursorPreview = { active: false, setPosition() {} }
+    hud.gridPreview = { active: false, setPosition() {} }
+    hud.cursorPlant = hud.gridPlant = { setPlant() {} }
+    const rects: number[][] = []
+    const graphics = { fillColor: undefined as any, clear() { rects.length = 0 }, fillRect(...values: number[]) { rects.push(values) } }
+    hud.mobileGridGuide = { active: false, getComponent: () => graphics }
+    const world = { result: 'playing', cursor: { mode: 'seed', seedId: 'pea' }, plants: [] }
+    try {
+        ui.setMobile()
+        hud.syncPreviews(world)
+        assert.equal(hud.cursorPreview.active, false)
+        hud.setPointer({ x: 140, y: 320 })
+        hud.syncPreviews(world)
+        assert.equal(hud.cursorPreview.active, true)
+        assert.equal(hud.gridPreview.active, false)
+        assert.equal(hud.mobileGridGuide.active, true)
+        assert.equal(graphics.fillColor.a, 72)
+        assert.deepEqual(rects, [[40, -380, 720, 100], [120, -580, 80, 500]])
+        hud.setPointer({ x: 140, y: 220 })
+        hud.syncPreviews(world)
+        assert.equal(hud.mobileGridGuide.active, false, 'inactive rows do not get a guide')
+        ui.setMobile(false)
+        hud.setPointer({ x: 140, y: 320 })
+        hud.syncPreviews(world)
+        assert.equal(hud.gridPreview.active, true)
+        assert.equal(hud.mobileGridGuide.active, false)
+    } finally { ui.cleanup() }
 })
 
 test('HUD input gates suppress held plants and finished levels without changing button visuals', () => {

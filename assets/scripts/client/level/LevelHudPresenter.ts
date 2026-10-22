@@ -1,4 +1,4 @@
-import { Color, isValid, Node } from 'cc'
+import { Color, Graphics, isValid, Node } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { FontRepository } from '@/client/content/ClientContentLoader'
 import { uiNode } from '@/client/view/uiNode'
@@ -41,6 +41,7 @@ export interface LevelHudOptions {
     tutorialLawnFlash: Node
     cursorPreview: Node
     gridPreview: Node
+    mobileGridGuide: Node
     cursorPlant: PlantPreview
     gridPlant: PlantPreview
     sunText: UILabel
@@ -63,6 +64,8 @@ export class LevelHudPresenter {
     private lastSnapshot?: WorldSnapshot
     private lastIntroComplete = false
     private menuButton!: UIButton
+    private mobileGridGuide!: Node
+    private mobileGuideCell = -1
     private readonly hoverClient = {
         clearHover: () => {},
         refreshHover: (pointer: UIHoverPointer, modalRoot: Node | null) => pointer.canHover && !modalRoot &&
@@ -85,6 +88,7 @@ export class LevelHudPresenter {
             rightClickTriggers: false, enabled: false, clickSound: null,
         })
         presenter.menuButton.node.name = 'MenuButton'
+        presenter.mobileGridGuide = options.mobileGridGuide
         presenter.menuButton.node.active = false
         presenter.menuButton.node.setSiblingIndex(options.cursorPreview.getSiblingIndex())
         return presenter
@@ -298,6 +302,8 @@ export class LevelHudPresenter {
 
     private syncPreviews(snapshot: WorldSnapshot): void {
         const pointer = this.pointer
+        const mobile = GameDebugSettings.isMobileMode()
+        this.mobileGridGuide.active = false
         const selected = snapshot.result === 'playing' && snapshot.cursor.mode === 'seed' && pointer !== undefined
         this.cursorPreview.active = selected
         if (!selected) {
@@ -316,8 +322,20 @@ export class LevelHudPresenter {
         this.cursorPlant.setPlant(plantId)
         this.gridPlant.setPlant(plantId)
         const valid = inBounds && this.level.activeRows.includes(row) && (!occupant || upgrade !== undefined)
-        this.gridPreview.active = valid
-        if (valid) this.gridPreview.setPosition(board.origin.x + column * board.cell.width, -(board.origin.y + row * board.cell.height))
+        this.gridPreview.active = valid && !mobile
+        if (valid && !mobile) this.gridPreview.setPosition(board.origin.x + column * board.cell.width, -(board.origin.y + row * board.cell.height))
+        if (valid && mobile) {
+            this.mobileGridGuide.active = true
+            const cell = row * board.columns + column
+            if (cell !== this.mobileGuideCell) {
+                this.mobileGuideCell = cell
+                const graphics = this.mobileGridGuide.getComponent(Graphics)!
+                graphics.clear()
+                graphics.fillColor = new Color(255, 255, 255, 72)
+                graphics.fillRect(board.origin.x, -(board.origin.y + (row + 1) * board.cell.height), board.columns * board.cell.width, board.cell.height)
+                graphics.fillRect(board.origin.x + column * board.cell.width, -(board.origin.y + board.rows * board.cell.height), board.cell.width, board.rows * board.cell.height)
+            }
+        }
     }
 
     private isPointerOverItem(snapshot: WorldSnapshot): boolean {

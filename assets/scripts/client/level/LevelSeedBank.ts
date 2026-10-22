@@ -8,6 +8,7 @@ import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import type { ServerEvent, WorldSnapshot } from '@/shared/protocol'
 import type { LevelHudOptions } from './LevelHudPresenter'
 import { levelPlantVisual } from './LevelPlantVisuals'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 interface Packet {
     seedId: string
@@ -78,7 +79,8 @@ export class LevelSeedBank {
             entry.view.sync({
                 gameStarted: introComplete, active: packet.ready, selected: packet.selected,
                 cooldownRemaining: packet.cooldownRemaining, cooldownTotal: packet.cooldownTotal, canAfford,
-                tutorialColor: packet.ready && canAfford && (!this.options.presentation.guideSeed || this.options.presentation.guideSeed === entry.seedId) ? tutorialColor : null, mobile: false,
+                tutorialColor: packet.ready && canAfford && (!this.options.presentation.guideSeed || this.options.presentation.guideSeed === entry.seedId) ? tutorialColor : null,
+                mobile: GameDebugSettings.isMobileMode(),
             })
             const cooldownFinished = entry.previousCooldown !== undefined && entry.previousCooldown > 0 && packet.cooldownRemaining === 0 && canAfford
             const flashRequested = events.some(event => event.type === 'seedPacketFlashRequested' && event.data.seedId === entry.seedId)
