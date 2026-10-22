@@ -38,6 +38,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     let chooseContinue!: (action: 'continue' | 'restart' | 'cancel') => void
     let closeCli!: (result: DebugCliResult | null) => void
     const sounds: string[] = []
+    const musicFrames: Array<{ ticks: number; zombies: number }> = []
     const module = { exports: {} as Record<string, any> }
     const compiled = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
@@ -50,6 +51,9 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         },
         'cc/env': { DEBUG: false },
         '@/core/GameClock': { gameClock },
+        '@/client/music/MusicSystem': { MusicSystem: { update(ticks: number, context: { zombiesOnScreen: number }) {
+            musicFrames.push({ ticks, zombies: context.zombiesOnScreen })
+        } } },
         '@/client/screens/DebugCliDialog': { showDebugCliDialog: () => new Promise(resolve => { closeCli = resolve }) },
         '@/client/screens/MenuPages': { MENU_PAGES },
         '@/client/ui/UIDialog': { UIDialog: { handleKey: () => { dialogKeys++; return false } } },
@@ -87,6 +91,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         resume() { paused = false },
         pause() { if (running) paused = true },
         isRunning: () => running,
+        countZombiesOnScreenForMusic: () => running ? 10 : 0,
         isPaused: () => paused,
         canPause: () => running && introReady && !paused,
         debugCommand: () => ({ ok: true, catalog: { plants: [], zombies: [], items: [], levels: ['1-1'] } }),
@@ -106,6 +111,11 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         async run(prepare: () => Promise<() => Promise<void>>) { await (await prepare())() },
     }
     app.gameLayer = { active: false }
+    try {
+        gameClock.setSpeed(2)
+        app.update(0.01)
+        assert.deepEqual(musicFrames.pop(), { ticks: 2, zombies: 0 }, 'menu music uses the shared clock')
+    } finally { gameClock.setSpeed(1) }
 
     for (const action of ['splash', 'title', 'main', 'garden', 'mushroom', 'store', 'back']) {
         await app.navigate(action)
@@ -149,6 +159,8 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     await app.navigate('play')
     assert.equal(app.currentPage, null)
     assert.equal(app.menu.node.active, false)
+    app.update(0.01)
+    assert.deepEqual(musicFrames.pop(), { ticks: 1, zombies: 10 }, 'gameplay feeds the current zombie count once per frame')
     const cli = app.showDebugCli()
     await setImmediate()
     assert.equal(paused, true)

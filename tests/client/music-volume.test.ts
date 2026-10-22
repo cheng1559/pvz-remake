@@ -27,13 +27,15 @@ function fixture(native: boolean) {
         }
         destroy() { this.isValid = false }
     }
-    const nativeSources = new Map<number, { url: string, volume: number }>()
+    const nativeSources = new Map<number, { url: string, volume: number, currentTime: number }>()
     let nextId = 0
     const engine = {
-        play2d(url: string, _loop: boolean, volume: number) { nativeSources.set(++nextId, { url, volume }); return nextId },
+        play2d(url: string, _loop: boolean, volume: number) { nativeSources.set(++nextId, { url, volume, currentTime: 12 }); return nextId },
         setVolume(id: number, volume: number) { nativeSources.get(id)!.volume = volume; return true },
         stop(id: number) { nativeSources.delete(id) },
-        pause() {}, resume() {}, setCurrentTime() { return true }, getCurrentTime() { return 12 },
+        pause() {}, resume() {},
+        setCurrentTime(id: number, time: number) { nativeSources.get(id)!.currentTime = time; return true },
+        getCurrentTime(id: number) { return nativeSources.get(id)!.currentTime },
     }
     const cc = {
         Node, AudioSource: class {}, Component: class {}, sys: { isNative: native },
@@ -47,8 +49,12 @@ function fixture(native: boolean) {
     })
     const MusicSystem = load('client/music/MusicSystem', {
         cc, '@/client/sound/LegacySoundSystem': { SoundLoader },
+        './MusicPlaybackSnapshot': load('client/music/MusicPlaybackSnapshot', {}),
         '@/client/content/LegacyAssetLoader': { AssetLoader: { load: async (path: string) =>
-            path.endsWith('music_manifest') ? { json: { tunes: { title_theme: tune('main'), choose_seeds: tune('overlay') } } } : { nativeUrl: path },
+            path.endsWith('music_manifest') ? { json: { tunes: {
+                title_theme: tune('main'), choose_seeds: tune('overlay'),
+                day_grasswalk: { ...tune('main'), burstScheme: 'day', burstBoundariesSec: [14, 16, 18] },
+            } } } : { nativeUrl: path },
         } },
     }, { jsb: { AudioEngine: engine } }).MusicSystem
     const source = (kind: 'main' | 'overlay', stem = 'main') => native
@@ -58,6 +64,61 @@ function fixture(native: boolean) {
 }
 
 for (const native of [false, true]) {
+    test(`${native ? 'native' : 'web'} drums follow zombie thresholds, musical boundaries, pause and restored burst state`, async () => {
+        const { SoundLoader, MusicSystem, source } = fixture(native)
+        SoundLoader.setMusicVolume(1)
+        await MusicSystem.playTune('day_grasswalk')
+        const snapshot = () => MusicSystem.capturePlaybackSnapshot()
+        const update = (ticks: number, zombiesOnScreen = 10) => MusicSystem.update(ticks, { zombiesOnScreen })
+        update(1, 9)
+        assert.equal(snapshot().burstState, 'off')
+        update(1)
+        update(200)
+        assert.equal(source('main', 'hihats').volume, 0.5)
+        MusicSystem.startBurst()
+        assert.equal(snapshot().burstCounter, 200, 'flag-wave requests cannot restart an active burst')
+        MusicSystem.pause()
+        update(1000, 0)
+        assert.equal(snapshot().burstCounter, 200)
+        MusicSystem.resume()
+        update(100)
+        assert.equal(snapshot().drumsState, 'on-queued')
+        assert.equal(source('main', 'drums').volume, 0)
+        source('main').currentTime = 14
+        update(1)
+        assert.equal(source('main', 'drums').volume, 1, 'drums enter on the next musical boundary')
+        update(99)
+        assert.equal(snapshot().burstState, 'on')
+        MusicSystem.startBurst()
+        assert.equal(snapshot().burstState, 'on')
+        update(799, 3)
+        assert.equal(snapshot().burstState, 'on', 'the burst stays on for at least 800 ticks')
+        update(1, 4)
+        assert.equal(snapshot().burstState, 'on', 'four zombies keep the burst active')
+        update(1, 3)
+        assert.equal(snapshot().drumsState, 'off-queued')
+        source('main').currentTime = 16
+        update(1, 3)
+        assert.equal(snapshot().drumsState, 'fading')
+        update(25, 3)
+        SoundLoader.setMusicVolume(0.4)
+        assert.equal(source('main', 'drums').volume, 0.2)
+        MusicSystem.pause()
+        const saved = snapshot()
+        await MusicSystem.restorePlaybackSnapshot(saved)
+        update(1000, 0)
+        assert.equal(snapshot().drumsCounter, 25, 'restoring a paused game preserves the drum fade')
+        MusicSystem.resume()
+        update(25, 3)
+        assert.equal(source('main', 'drums').volume, 0)
+        update(800, 3)
+        assert.equal(snapshot().burstState, 'off')
+        assert.equal(source('main', 'hihats').volume, 0)
+        MusicSystem.startBurst()
+        assert.equal(snapshot().burstState, 'starting', 'flag waves start a burst even below the zombie threshold')
+        MusicSystem.stop()
+    })
+
     test(`${native ? 'native' : 'web'} music volume changes immediately without ticks, including paused music and overlays`, async () => {
         const { SoundLoader, MusicSystem, source } = fixture(native)
         await MusicSystem.playTune('title_theme')

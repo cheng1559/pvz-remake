@@ -38,7 +38,7 @@ export class IntegratedGameHost {
         try {
             this.processPackets()
             if (!this.started || this.stopped) return
-            const boundaryChanged = this.server.processBoundaryCommands()
+            const boundaryChanged = this.server.processBoundaryCommands(dtSeconds === 0)
             this.flushCommandResults()
             if (boundaryChanged && !this.server.hasPendingCommands()) this.sendFrame(this.server.snapshot())
             if (!this.server.hasPendingCommands()) this.flushSaveRequest()

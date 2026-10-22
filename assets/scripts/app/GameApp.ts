@@ -2,6 +2,7 @@ import { _decorator, Component, director, Director, EventKeyboard, type EventTou
 import { DEBUG } from 'cc/env'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
+import { MusicSystem } from '@/client/music/MusicSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { installContentShowcaseProbe } from '@/client/showcase/ContentShowcase'
 import { MenuScreen } from '@/client/screens/MenuScreen'
@@ -199,6 +200,7 @@ export class GameApp extends Component {
 
     update(dt: number): void {
         const ticks = gameClock.delta(dt) * 100
+        MusicSystem.update(ticks, { zombiesOnScreen: this.controller?.countZombiesOnScreenForMusic() ?? 0 })
         this.adviceTick += ticks
         this.advice?.update(ticks, this.adviceTick)
         if (this.advice?.node.active) this.advice.node.parent!.setSiblingIndex(this.node.children.length - 1)

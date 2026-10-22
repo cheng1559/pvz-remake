@@ -31,6 +31,7 @@ export interface LevelController {
     canPause(): boolean
     getLevelDefinition(): LevelDefinition | null
     isWon(): boolean
+    countZombiesOnScreenForMusic(): number
     debugCommand(command: string): DebugCliResult
     pause(): void
     resume(): void
@@ -240,6 +241,13 @@ export function createLevelController(
         },
         isWon() {
             return current?.root.isValid === true && current.game.render().result === 'won'
+        },
+        countZombiesOnScreenForMusic() {
+            const snapshot = current?.root.isValid ? current.game.render() : null
+            if (snapshot?.phase !== 'gameplay') return 0
+            return snapshot.zombies.reduce((count, zombie) => count + (
+                zombie.hasHead && (zombie.state === 'walking' || zombie.state === 'eating') ? 1 : 0
+            ), 0)
         },
         getLevelDefinition() {
             return current?.root.isValid ? current.level : null

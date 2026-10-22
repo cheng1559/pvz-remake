@@ -313,20 +313,24 @@ export class IntegratedGameServer {
         return this.requireSession().commandResults.splice(0)
     }
 
-    processBoundaryCommands(): boolean {
+    processBoundaryCommands(processInput = false): boolean {
         const session = this.requireSession()
         let changed = false
         while (session.commands.length > 0) {
             const command = session.commands[0].command
             const level = session.world.resources.get(LevelStateResource)
-            if (!isSessionCommand(command) && level.phase === 'gameplay' && !level.paused && level.result === 'playing') {
+            const playing = level.phase === 'gameplay' && !level.paused && level.result === 'playing'
+            const inputCommand = processInput && playing && (
+                command.type === 'selectSeed' || command.type === 'clearCursor' || command.type === 'placePlant'
+            )
+            if (!isSessionCommand(command) && !inputCommand && playing) {
                 break
             }
             const previousPhase = level.phase
             const previousPaused = level.paused
             const rejection = this.processNextCommand(session)
-            if (rejection === undefined && isSessionCommand(command)
-                && (command.type === 'debug' || level.phase !== previousPhase || level.paused !== previousPaused)) {
+            if (inputCommand || (rejection === undefined && isSessionCommand(command)
+                && (command.type === 'debug' || level.phase !== previousPhase || level.paused !== previousPaused))) {
                 session.tick++
                 changed = true
             }

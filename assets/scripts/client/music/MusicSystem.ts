@@ -575,6 +575,7 @@ export class MusicSystem {
     }
 
     private static _startBurst() {
+        if (this._burstState !== 'off') return
         this._burstState = 'starting'
         this._burstCounter = BURST_START_TICKS
     }
