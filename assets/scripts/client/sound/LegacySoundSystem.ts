@@ -219,13 +219,12 @@ export class SoundLoader {
             AudioClip,
             `sound: ${effect}`,
         ).then((clip) => {
-            this._loading.delete(effect)
             if (clip) {
                 this._clips.set(effect, clip)
                 this._preloadNativeSfx(clip)
             }
             return clip
-        })
+        }).finally(() => this._loading.delete(effect))
 
         this._loading.set(effect, promise)
         return promise

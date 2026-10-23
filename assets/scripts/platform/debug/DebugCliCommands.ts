@@ -6,6 +6,7 @@ import { debugCondition, debugInteger, debugSuccess, debugSyntax, parseDebugCliC
 import { SFX_VOLUME_SCALE } from '@/shared/menu'
 import { OptionsSettings } from '@/platform/OptionsSettings'
 import { resourcePacks } from '@/client/content/ResourcePacks'
+import { modManager } from '@/client/content/ModManager'
 import { GameDebugSettings, type DebugPerfToggle } from './GameDebugSettings'
 
 export async function executeDebugCliCommand(
@@ -51,15 +52,17 @@ export async function executeDebugCliCommand(
         case 'hotkeys': GameDebugSettings.setHotkeysEnabled(args[0].toLowerCase() === 'true'); break
         case 'hitboxes': GameDebugSettings.setHitboxesVisible(args[0].toLowerCase() === 'true'); break
         case 'hdseed': GameDebugSettings.setHDSeedPacketsEnabled(args[0].toLowerCase() === 'true'); break
-        case 'pack': {
+        case 'pack': case 'mod': {
             const operation = args[0].toLowerCase()
-            if (args.length !== (operation === 'install' || operation === 'list' ? 1 : 2)) return debugSyntax('Usage: /pack install | load <installed_id> | unload <id|all> | uninstall <id> | list')
+            if (args.length !== (operation === 'install' || operation === 'list' ? 1 : 2)) return debugSyntax(`Usage: /${name} install | load <installed_id> | unload <id|all> | uninstall <id> | list`)
+            const manager = name === 'pack' ? resourcePacks : modManager
+            const label = name === 'pack' ? 'Resource pack' : 'Mod'
             try {
-                if (operation === 'list') return debugSuccess(`Resource packs: ${(await resourcePacks.list()).join(', ') || 'none'}`)
-                if (operation === 'install') return { ...debugSuccess('Select a resource pack ZIP'), action: 'installPack' }
-                const changed = operation === 'load' ? await resourcePacks.load(args[1])
-                    : operation === 'unload' ? await resourcePacks.unload(args[1]) : await resourcePacks.uninstall(args[1])
-                return { ...debugSuccess(`Resource pack ${operation}: ${args[1]}`), action: changed ? 'restartForPacks' : undefined }
+                if (operation === 'list') return debugSuccess(`${label}s: ${(await manager.list()).join(', ') || 'none'}`)
+                if (operation === 'install') return { ...debugSuccess(`Select a ${label.toLowerCase()} ZIP`), action: name === 'pack' ? 'installPack' : 'installMod' }
+                const changed = operation === 'load' ? await manager.load(args[1])
+                    : operation === 'unload' ? await manager.unload(args[1]) : await manager.uninstall(args[1])
+                return { ...debugSuccess(`${label} ${operation}: ${args[1]}`), action: changed ? name === 'pack' ? 'restartForPacks' : 'restartForMods' : undefined }
             } catch (error) {
                 return debugCondition(error instanceof Error ? error.message : String(error))
             }

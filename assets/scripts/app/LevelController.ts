@@ -80,7 +80,7 @@ export function createLevelController(
     const load = async (save?: GameSave, levelId = DEFAULT_START_OPTIONS.levelId): Promise<RunningLevel> => {
         const rollback = current?.root.isValid ? await current.scene.snapshotPresentation() : undefined
         const root = uiNode({
-            name: 'Level', parent, size: { width: 800, height: 600 },
+            name: 'Level', parent, viewport: true,
             mask: Mask.Type.GRAPHICS_RECT,
         }).node
         root.active = save === undefined

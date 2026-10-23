@@ -94,7 +94,7 @@ class Upscaler:
         height, width = pixels.shape[:2]
         output = np.empty((height * SCALE, width * SCALE, 3), dtype=np.uint8)
         # Overlap provides context at tile boundaries; only copy each tile's centre.
-        tile, overlap = 192, 24
+        tile, overlap = getattr(self, 'tile_size', 192), 24
         for y in range(0, height, tile):
             for x in range(0, width, tile):
                 x1, y1 = max(0, x - overlap), max(0, y - overlap)

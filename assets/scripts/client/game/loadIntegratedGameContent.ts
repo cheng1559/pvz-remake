@@ -3,6 +3,7 @@ import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { loadInstalledMods } from '@/client/content/ModLoader'
+import { resourcePacks } from '@/client/content/ResourcePacks'
 import { CONTENT_CATEGORIES, type ContentCategory } from '@/shared/content'
 import {
     parseGameplayDefinitions,
@@ -31,7 +32,8 @@ export async function loadIntegratedGameContent(location = 'pvz-base') {
     const [definitionsAsset, levelsAsset, stringsAsset, levelPrefab] = await Promise.all([
         loadJson(manifest.gameplay.definitions),
         loadJson(manifest.gameplay.levels),
-        loadJson(manifest.gameplay.strings),
+        resourcePacks.asset(`${manifest.id.split(':')[0]}:${manifest.gameplay.strings.replace(/\.json$/i, '')}`, JsonAsset)
+            .then(asset => asset ?? loadJson(manifest.gameplay.strings)),
         loadPrefab(),
     ])
     const definitions = parseGameplayDefinitions(definitionsAsset.json)

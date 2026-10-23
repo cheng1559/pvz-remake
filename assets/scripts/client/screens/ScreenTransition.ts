@@ -14,7 +14,7 @@ export class ScreenTransition {
 
     constructor(parent: Node) {
         const cover = uiNode({
-            name: 'ScreenTransition', parent, size: { width: 800, height: 600 },
+            name: 'ScreenTransition', parent, viewport: true,
             active: false,
         })
         cover.node.addComponent(BlockInputEvents)

@@ -12,6 +12,7 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /gamespeed 2
 /hdseed true
 /pack install
+/mod install
 /sun set 999
 /plant repeater 3 1
 /zombie normal 3 9
@@ -24,6 +25,8 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 
 `/pack install` takes no arguments and opens a local ZIP picker in Web and macOS builds. Its dialog shows only `Installing...`. Installation, updates and enabled-state changes ask for a restart; confirming immediately restarts the entire game after saving the running level. Current resources remain unchanged until restart. Installed packs persist independently of the original ZIP and can be updated with the same ID. `/pack load hd` enables an installed pack; `/pack unload hd` disables it; `/pack uninstall hd` deletes it and also asks for a restart if it was enabled. Repeated enable/disable commands do not prompt. `/pack list` lists enabled packs. Later packs override matching IDs, including Mod IDs. Missing IDs use original resources; failed pack resources do not fall back. ZIP is the only installation format; HD assets ship separately. `/hdfont` has been removed; Pico129 and Pix118Bold are excluded from the HD pack. See [resource pack format and installation](RESOURCE_PACKS.md).
 
-The current package provides Adventure 1-1 and 1-2, Peashooter, Sunflower, Repeater, normal and flag zombies, sun and level awards. Completions use installed backend content. Wave commands report a condition failure when no matching waves remain; widescreen backgrounds and unmigrated content remain unavailable.
+`/mod` uses the same `install`, `load`, `unload`, `uninstall`, and `list` operations and restart dialogs. `/mod install` selects a Mod ZIP without arguments; use qualified IDs such as `local:widescreen` for other operations. Installed Mods persist locally, validate their dependencies, and execute only after restart. See [Mod installation](MODS.md).
+
+The current package provides Adventure 1-1 and 1-2, Peashooter, Sunflower, Repeater, normal and flag zombies, sun and level awards. Completions use installed backend content. Wave commands report a condition failure when no matching waves remain; `/background` and unmigrated content remain unavailable. Main-menu widescreen support is an optional Mod.
 
 The dialog reuses `UI.dialog` and `UI.input`. Gameplay commands use the existing `debugCommand` channel and receive a `debugResult`; the backend validates and mutates the authoritative world. Audio/fullscreen settings use the menu API. Cooldown, sun-cost and collection preferences are reapplied to new sessions.

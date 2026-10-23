@@ -27,13 +27,17 @@ function fixture(native: boolean) {
         }
         destroy() { this.isValid = false }
     }
-    const nativeSources = new Map<number, { url: string, volume: number, currentTime: number }>()
+    const nativeSources = new Map<number, { url: string, volume: number, currentTime: number, paused: boolean }>()
     let nextId = 0
     const engine = {
-        play2d(url: string, _loop: boolean, volume: number) { nativeSources.set(++nextId, { url, volume, currentTime: 12 }); return nextId },
+        play2d(url: string, _loop: boolean, volume: number) { nativeSources.set(++nextId, { url, volume, currentTime: 12, paused: false }); return nextId },
         setVolume(id: number, volume: number) { nativeSources.get(id)!.volume = volume; return true },
-        stop(id: number) { nativeSources.delete(id) },
-        pause() {}, resume() {},
+        stop(id: number) {
+            assert.equal(nativeSources.get(id)!.paused, true, 'pause streaming audio before disposal so iOS cannot drain it on the game thread')
+            nativeSources.delete(id)
+        },
+        pause(id: number) { nativeSources.get(id)!.paused = true },
+        resume(id: number) { nativeSources.get(id)!.paused = false },
         setCurrentTime(id: number, time: number) { nativeSources.get(id)!.currentTime = time; return true },
         getCurrentTime(id: number) { return nativeSources.get(id)!.currentTime },
     }

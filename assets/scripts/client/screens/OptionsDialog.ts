@@ -15,16 +15,18 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
     const dialog = ui.dialog(parent, {
         width: 423, height: 498, background: ui.assets.sprites.options_menuback, footer: false,
     })
-    const showMessage = (message: UIDialogOptions) => ui.dialog(parent, { ...message, clickSound: null })
+    const showMessage = (message: UIDialogOptions) => ui.dialog(parent, {
+        confirmText: ui.text('DIALOG_BUTTON_OK'), ...message, clickSound: null,
+    })
     const content = dialog.content
     const offset = options.inGame ? 0 : 1
     const label = (text: string, x: number, y: number) => ui.label(content, {
         text, x, y, baseline: true, align: 'right', color: new Color(107, 109, 145),
     })
-    label('Music', 186, 140 + 5 * offset)
-    label('Sound FX', 186, 167 + 10 * offset)
-    label('3D Acceleration', 274, 197 + 15 * offset)
-    label('Full Screen', 274, 229 + 20 * offset)
+    label(ui.text('OPTIONS_MUSIC_LABEL'), 186, 140 + 5 * offset)
+    label(ui.text('OPTIONS_SOUNDFX'), 186, 167 + 10 * offset)
+    label(ui.text('OPTIONS_3D_ACCELERATION'), 274, 197 + 15 * offset)
+    label(ui.text('OPTIONS_FULL_SCREEN'), 274, 229 + 20 * offset)
     ui.slider(content, {
         x: 199, y: 116 + 5 * offset, value: settings.musicVolume,
         onChange: musicVolume => { void menuApi.updateSettings({ musicVolume }).then(value => SoundLoader.setMusicVolume(value.musicVolume)).catch(error => console.error('[Options]', error)) },
@@ -36,19 +38,19 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
     ui.checkbox(content, {
         x: 284, y: 175 + 15 * offset, value: true,
         locked: () => showMessage({
-            title: '3D Acceleration Required', message: '3D acceleration is required for this version.',
+            title: ui.text('OPTIONS_3D_REQUIRED_HEADER'), message: ui.text('OPTIONS_3D_REQUIRED_BODY'),
         }),
     })
     const fullscreen = ui.checkbox(content, {
         x: 284, y: 206 + 20 * offset, value: OptionsSettings.fullScreenForced || settings.fullScreen,
         locked: OptionsSettings.fullScreenForced ? () => showMessage({
-            title: 'Full Screen Required', message: 'Windowed mode is not available on mobile devices.',
+            title: ui.text('OPTIONS_FULLSCREEN_REQUIRED_HEADER'), message: ui.text('OPTIONS_FULLSCREEN_REQUIRED_BODY'),
         }) : undefined,
         onChange: value => {
             if (value && !screen.supportsFullScreen) {
                 fullscreen.value = false
                 showMessage({
-                    title: 'Full Screen Unavailable', message: 'This browser does not support full screen mode.',
+                    title: ui.text('OPTIONS_FULLSCREEN_UNAVAILABLE_HEADER'), message: ui.text('OPTIONS_FULLSCREEN_UNAVAILABLE_BODY'),
                 })
             }
         },
@@ -64,7 +66,7 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
             action()
         }).catch(async error => {
             fullscreen.value = OptionsSettings.fullScreenForced || (await menuApi.getSettings()).fullScreen
-            showMessage({ title: 'Full Screen Unavailable', message: String(error) })
+            showMessage({ title: ui.text('OPTIONS_FULLSCREEN_UNAVAILABLE_HEADER'), message: String(error) })
         }).finally(() => { closing = false })
     }
     const confirmAction = (message: UIDialogOptions, action: () => void) => {
@@ -78,20 +80,21 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
     dialog.onConfirm = dialog.onCancel = () => close(options.onClose)
     if (options.inGame) {
         ui.button(content, {
-            text: 'Restart Level', x: 107, y: 284, width: 209, clickSound: null,
+            text: ui.text('RESTART_LEVEL_BUTTON'), x: 107, y: 284, width: 209, clickSound: null,
             onClick: () => confirmAction({
-                title: 'Restart Level?', message: 'Do you want to try this level\nagain from the beginning?', cancelText: 'CANCEL',
+                title: ui.text('RESTART_LEVEL_HEADER'), message: ui.text('RESTART_LEVEL_BODY'),
+                cancelText: ui.text('DIALOG_BUTTON_CANCEL'),
             }, options.onRestart),
         })
         ui.button(content, {
-            text: 'Main Menu', x: 107, y: 327, width: 209, clickSound: null,
+            text: ui.text('MAIN_MENU_BUTTON'), x: 107, y: 327, width: 209, clickSound: null,
             onClick: () => confirmAction({
-                title: 'Leave Game?', message: 'Do you want to return\nto the main menu?\n\nYour game will be saved.',
-                confirmText: 'LEAVE', cancelText: 'CANCEL', height: 350,
+                title: ui.text('LEAVE_GAME_HEADER'), message: ui.text('LEAVE_GAME'),
+                confirmText: ui.text('LEAVE_BUTTON'), cancelText: ui.text('DIALOG_BUTTON_CANCEL'), height: 350,
             }, options.onMainMenu),
         })
     } else ui.button(content, {
-        text: 'GitHub', x: 107, y: 327, width: 209, clickSound: null,
+        text: ui.text('OPTIONS_GITHUB_BUTTON'), x: 107, y: 327, width: 209, clickSound: null,
         onClick: () => sys.openURL('https://github.com/cheng1559/pvz-remake'),
     })
     ui.button(content, {

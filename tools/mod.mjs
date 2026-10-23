@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process'
-import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { zipSync } from 'fflate'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const tsc = join(projectRoot, 'node_modules', 'typescript', 'bin', 'tsc')
@@ -10,7 +11,6 @@ const [command, input, ...options] = process.argv.slice(2)
 
 try {
     if (command === 'init') await init(input, option(options, '--out'))
-    else if (command === 'build') await build(requireInput(input))
     else if (command === 'test') await test(requireInput(input))
     else if (command === 'pack') await pack(requireInput(input), option(options, '--out'))
     else usage(command === undefined ? 0 : 1)
@@ -24,8 +24,7 @@ async function init(name, output) {
     if (!/^[a-z0-9][a-z0-9_-]*$/.test(name)) throw new Error('Mod name must use lowercase letters, numbers, _ or -')
     const root = output ? resolve(output) : join(projectRoot, 'mods', name)
     if (await exists(root)) throw new Error(`${relative(projectRoot, root)} already exists`)
-    await mkdir(join(root, 'gameplay', 'source'), { recursive: true })
-    await mkdir(join(root, 'gameplay', 'node'), { recursive: true })
+    await mkdir(join(root, 'src', 'server'), { recursive: true })
     await writeJson(join(root, 'mod.json'), {
         schemaVersion: 1,
         id: `local:${name}`,
@@ -38,8 +37,7 @@ async function init(name, output) {
             cocosModule: 'gameplay/cocos/index.js',
         },
     })
-    await writeFile(join(root, 'gameplay', 'node', 'package.json'), '{\n  "type": "module"\n}\n')
-    await writeFile(join(root, 'gameplay', 'source', 'index.ts'), `export interface GameplayApi {
+    await writeFile(join(root, 'src', 'server', 'index.ts'), `export interface GameplayApi {
     registerDefinition(value: { id: string; kind: string }): void
 }
 
@@ -50,33 +48,58 @@ export function register(api: GameplayApi) {
     console.info(`[mod] Created ${relative(projectRoot, root)}`)
 }
 
-async function build(input) {
+async function pack(input, output) {
     const root = await modRoot(input)
     const manifest = await manifestAt(root)
+    const destination = output ? resolve(output) : join(projectRoot, 'dist', 'mods', basename(root))
+    if (root === destination || root.startsWith(`${destination}${sep}`)) throw new Error('Output must not contain the Mod source directory')
+    await rm(destination, { recursive: true, force: true })
+    await mkdir(destination, { recursive: true })
+    await cp(join(root, 'mod.json'), join(destination, 'mod.json'))
+    const assets = join(root, 'assets')
+    if (await exists(assets)) await cp(assets, join(destination, 'assets'), { recursive: true })
     if (manifest.gameplay) {
-        const source = join(root, 'gameplay', 'source', 'index.ts')
+        const sourceRoot = join(root, 'src', 'server')
+        const source = join(sourceRoot, 'index.ts')
         await requireFile(source)
-        const nodeEntry = inside(root, manifest.gameplay.nodeModule)
-        const cocosEntry = inside(root, manifest.gameplay.cocosModule)
-        runTsc(source, dirname(nodeEntry), 'ES2022', join(root, 'gameplay', 'source'))
-        runTsc(source, dirname(cocosEntry), 'System', join(root, 'gameplay', 'source'))
+        const nodeEntry = inside(destination, manifest.gameplay.nodeModule)
+        const cocosEntry = inside(destination, manifest.gameplay.cocosModule)
+        runTsc(source, dirname(nodeEntry), 'ES2022', sourceRoot)
+        runTsc(source, dirname(cocosEntry), 'System', sourceRoot)
         await writeFile(join(dirname(nodeEntry), 'package.json'), '{\n  "type": "module"\n}\n')
         await requireFile(nodeEntry)
         await requireFile(cocosEntry)
     }
     if (manifest.client) {
-        const source = join(root, 'client', 'source', 'index.ts')
-        const moduleEntry = inside(root, manifest.client.module)
-        if (await exists(source)) runTsc(source, dirname(moduleEntry), 'System', join(root, 'client', 'source'))
+        const sourceRoot = join(root, 'src', 'client')
+        const source = join(sourceRoot, 'index.ts')
+        const moduleEntry = inside(destination, manifest.client.module)
+        await requireFile(source)
+        runTsc(source, dirname(moduleEntry), 'System', sourceRoot)
         await requireFile(moduleEntry)
-        await requireDirectory(inside(root, manifest.client.bundle))
+        if (manifest.client.bundle) await requireDirectory(inside(destination, manifest.client.bundle))
     }
-    console.info(`[mod] Built ${manifest.id}`)
-    return { root, manifest }
+    const files = {}
+    async function collect(directory) {
+        for (const entry of await readdir(directory, { withFileTypes: true })) {
+            const file = join(directory, entry.name)
+            if (entry.isDirectory()) await collect(file)
+            else files[`${basename(destination)}/${relative(destination, file).split(sep).join('/')}`] = await readFile(file)
+        }
+    }
+    await collect(destination)
+    await writeFile(`${destination}.zip`, zipSync(files))
+    console.info(`[mod] Packed ${manifest.id} -> ${destination}.zip`)
 }
 
 async function test(input) {
-    const { root, manifest } = await build(input)
+    const root = await modRoot(input)
+    const manifest = await manifestAt(root)
+    for (const path of runtimePaths(manifest)) {
+        const file = inside(root, path)
+        if (path === manifest.client?.bundle) await requireDirectory(file)
+        else await requireFile(file)
+    }
     let registrations = 0
     if (manifest.gameplay) {
         const entry = inside(root, manifest.gameplay.nodeModule)
@@ -91,26 +114,6 @@ async function test(input) {
         })
     }
     console.info(`[mod] Tested ${manifest.id} (${registrations} registrations)`)
-}
-
-async function pack(input, output) {
-    const { root, manifest } = await build(input)
-    const destination = output
-        ? resolve(output)
-        : join(projectRoot, 'dist', 'mods', root.split(sep).at(-1))
-    await rm(destination, { recursive: true, force: true })
-    await mkdir(destination, { recursive: true })
-    await cp(join(root, 'mod.json'), join(destination, 'mod.json'))
-    const copied = new Set()
-    for (const path of runtimePaths(manifest)) {
-        const source = inside(root, path)
-        const sourceDirectory = (await stat(source)).isDirectory() ? source : dirname(source)
-        const relativeDirectory = relative(root, sourceDirectory)
-        if (copied.has(relativeDirectory)) continue
-        copied.add(relativeDirectory)
-        await cp(sourceDirectory, join(destination, relativeDirectory), { recursive: true })
-    }
-    console.info(`[mod] Packed ${manifest.id} -> ${destination}`)
 }
 
 function runTsc(source, outDir, module, rootDir) {
@@ -198,8 +201,7 @@ function writeJson(path, value) {
 function usage(exitCode) {
     console.info(`Usage:
   npm run mod:init -- <name> [--out <directory>]
-  npm run mod:build -- <name-or-directory>
-  npm run mod:test -- <name-or-directory>
+  npm run mod:test -- <packed-directory>
   npm run mod:pack -- <name-or-directory> [--out <directory>]`)
     process.exitCode = exitCode
 }

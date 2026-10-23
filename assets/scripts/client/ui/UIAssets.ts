@@ -59,10 +59,11 @@ export async function loadUIAssets(): Promise<UIAssets> {
             if (!frame) throw new Error(`Missing UI sprite: ${name}`)
             return [name, frame] as const
         })),
-        AssetLoader.load<JsonAsset>('properties/lawnstrings', JsonAsset).then(asset => {
-            if (!asset) throw new Error('Missing UI strings')
+        Promise.all(['ui/strings', 'properties/lawnstrings'].map(async path => {
+            const asset = await AssetLoader.load<JsonAsset>(path, JsonAsset)
+            if (!asset) throw new Error(`Missing UI strings: ${path}`)
             return asset.json as Record<string, string>
-        }),
+        })).then(tables => Object.assign({}, ...tables)),
     ]).then(([fonts, sprites, strings]) => ({
         fonts: Object.fromEntries(fonts) as UIAssets['fonts'],
         sprites: Object.fromEntries(sprites) as UIAssets['sprites'],

@@ -1,4 +1,4 @@
-import { _decorator, BlockInputEvents, Color, Component, game, isValid, Node, Sprite } from 'cc'
+import { _decorator, BlockInputEvents, Color, Component, director, Director, game, isValid, Node, Sprite } from 'cc'
 import { DEBUG } from 'cc/env'
 import { preloadAssets } from '@/client/content/PreloadAssets'
 import { SpriteLoader } from '@/core/SpriteLoader'
@@ -37,21 +37,36 @@ export class MenuScreen extends Component {
     private retainedPage: PreparedMenuPage | null = null
     private mainMenu: MainMenuScreen | null = null
     private mainPreparation: Promise<PreparedMenuPage> | null = null
+    private achievementPreparation: Promise<PreparedMenuPage> | null = null
     private almanacSelection: AlmanacSelection = { plant: 0, zombie: 0 }
 
     async prepare(id: MenuPageId): Promise<PreparedMenuPage> {
+        if (id === 'achievements') {
+            const page = await this.prepareAchievements()
+            await page.root.getComponentInChildren(AchievementScreen)!.refresh()
+            page.root.setPosition(0, 0)
+            page.root.setSiblingIndex(this.node.children.length - 1)
+            return page
+        }
         if (this.retainedPage?.id === id && this.retainedPage.root.isValid) return this.retainedPage
         if (id === 'main') {
             return this.prepareMain()
         }
         if (id === 'splash' || id === 'title') {
-            const root = uiNode({ name: 'Startup', parent: this.node, size: { width: 800, height: 600 }, active: false }).node
+            const root = uiNode({ name: 'Startup', parent: this.node, viewport: true, active: false }).node
             const startup = root.addComponent(StartupScreen)
             startup.onStart = () => { void this.onNavigate('main') }
             try {
                 await startup.initialize(id === 'splash', async progress => {
                     if (!DEBUG) await preloadAssets(value => progress(value * 0.95))
-                    await this.prepareMain(value => progress(DEBUG ? value : 0.95 + value * 0.05))
+                    await this.prepareMain(value => progress(DEBUG ? value * 0.9 : 0.95 + value * 0.04))
+                    const achievements = await this.prepareAchievements()
+                    // Initialize components and render data behind the loading screen once.
+                    achievements.root.setSiblingIndex(0)
+                    achievements.root.active = true
+                    await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, resolve))
+                    achievements.root.active = false
+                    progress(1)
                 })
             } catch (error) {
                 root.destroy()
@@ -59,6 +74,10 @@ export class MenuScreen extends Component {
             }
             return { id, root, enter: () => startup.show() }
         }
+        return this.createPage(id)
+    }
+
+    private async createPage(id: MenuPageId): Promise<PreparedMenuPage> {
         const page = MENU_PAGES[id]
         const optionsPage = id === 'options' || id === 'gameOptions'
         const overMain = !!this.mainMenu?.node.isValid && (id === 'options' || id === 'players' || id === 'quit')
@@ -73,13 +92,19 @@ export class MenuScreen extends Component {
         }))])
         if (!this.node?.isValid) throw new Error('Menu was destroyed while loading')
         const root = uiNode({
-            name: id, parent: this.node, size: { width: 800, height: 600 }, active: false,
+            name: id, parent: this.node, viewport: true, active: false,
             graphics: !optionsPage && id !== 'pause' && id !== 'gameOver' && !overMain,
         })
         if (page.retainPrevious) root.node.addComponent(BlockInputEvents)
         if (root.graphics) {
-            root.graphics.fillColor = new Color(0, 0, 0, page.overlay ? 160 : 255)
-            root.graphics.fillRect(-400, -300, 800, 600)
+            const draw = () => {
+                const { width, height } = root.transform.contentSize
+                root.graphics!.clear()
+                root.graphics!.fillColor = new Color(0, 0, 0, page.overlay ? 160 : 255)
+                root.graphics!.fillRect(-width / 2, -height / 2, width, height)
+            }
+            root.node.on(Node.EventType.SIZE_CHANGED, draw)
+            draw()
         }
         backgrounds.forEach((background, index) => {
             const frame = frames[index]
@@ -259,7 +284,14 @@ export class MenuScreen extends Component {
             this.mainPreparation = null
         }
         page.root.active = false
-        page.root.destroy()
+        if (page.id !== 'achievements') page.root.destroy()
+    }
+
+    private prepareAchievements(): Promise<PreparedMenuPage> {
+        return this.achievementPreparation ??= this.createPage('achievements').catch(error => {
+            this.achievementPreparation = null
+            throw error
+        })
     }
 
     private prepareMain(onProgress: (progress: number) => void = () => {}): Promise<PreparedMenuPage> {
@@ -274,7 +306,7 @@ export class MenuScreen extends Component {
     }
 
     private async createMain(onProgress: (progress: number) => void): Promise<PreparedMenuPage> {
-        const root = uiNode({ name: 'MainMenu', parent: this.node, size: { width: 800, height: 600 }, active: false }).node
+        const root = uiNode({ name: 'MainMenu', parent: this.node, viewport: true, active: false }).node
         const menu = root.addComponent(MainMenuScreen)
         this.mainMenu = menu
         menu.onNavigate = action => this.onNavigate(action)

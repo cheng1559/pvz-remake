@@ -117,6 +117,31 @@ export class ReanimPlayer extends Component {
         return this.views.get(trackId)?.node ?? null
     }
 
+    getAnimation(): Reanim {
+        return parseReanim(this.requireData())
+    }
+
+    getSpriteFrame(spriteId: string): SpriteFrame | undefined {
+        return this.frames.get(spriteId)
+    }
+
+    /** Replace poses/timing while keeping track nodes, attached UI and playback state. */
+    replaceAnimation(value: unknown): void {
+        const data = parseReanim(value)
+        if (data.id !== this.requireData().id || data.tracks.length !== this.views.size ||
+            data.tracks.some(track => !this.views.has(track.id))) {
+            throw new Error('replacement reanim must retain its ID and tracks')
+        }
+        for (const track of data.tracks) for (const frame of track.keyframes) {
+            if (frame.sprite && !this.frames.has(frame.sprite)) {
+                throw new Error(`replacement reanim uses an unloaded sprite: ${frame.sprite}`)
+            }
+        }
+        this.data = data
+        this.timeSeconds = Math.min(this.timeSeconds, data.durationSeconds)
+        this.applyPose()
+    }
+
     async load(id: string, registry: ContentRegistry, loader = new ClientContentLoader()): Promise<void> {
         const { data, frames } = await new ReanimRepository(registry, loader).load(id)
         if (!this.node?.isValid) throw new Error('reanim player was destroyed while loading')
@@ -206,7 +231,7 @@ export class ReanimPlayer extends Component {
     setTrackSpriteOverride(trackId: string, frame: SpriteFrame | null): void {
         if (frame) this.frameOverrides.set(trackId, frame)
         else this.frameOverrides.delete(trackId)
-        this.applyPose()
+        this.applyPose(trackId)
     }
 
     setExtraAdditiveDraw(enabled: boolean, color: Color = Color.BLACK): void {
@@ -339,9 +364,10 @@ export class ReanimPlayer extends Component {
         this.views.set(track.id, { node: parts.node, sprite: parts.sprite!, skew: parts.skew! })
     }
 
-    private applyPose(): void {
+    private applyPose(trackId?: string): void {
         if (!this.data) return
         for (const track of this.data.tracks) {
+            if (trackId !== undefined && track.id !== trackId) continue
             const view = this.views.get(track.id)!
             const pose = this.visible ? this.sampleAttachedTrack(track) : null
             const frame = this.frameOverrides.get(track.id) ?? (pose?.sprite ? this.frames.get(pose.sprite) : undefined)

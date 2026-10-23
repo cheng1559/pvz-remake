@@ -25,6 +25,30 @@ ADVENTURE_12_CLIPS = [
     for name in ("walk", "walk2", "eat", "death", "death2")
 ] + [(ROOT / "tools/raw/reanim/zombie_flagpole.reanim", "flag", "Zombie_flag", "pvz:zombie_flag")]
 
+LEVEL_CLIPS = [
+    (ROOT / "tools/raw/reanim/sunflower.reanim", "body", "anim_idle", "pvz:sunflower"),
+    (ROOT / "tools/raw/reanim/sunflower.reanim", "face", "anim_blink", "pvz:sunflower_blink"),
+    (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_idle", "pvz:zombie"),
+    (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_idle2", "pvz:zombie_idle2"),
+    (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_walk", "pvz:zombie_walk"),
+    (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_walk2", "pvz:zombie_walk2"),
+    (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_eat", "pvz:zombie_eat"),
+    (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_death", "pvz:zombie_death"),
+    (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_death2", "pvz:zombie_death2"),
+    (ROOT / "tools/raw/reanim/peashootersingle.reanim", "body", "anim_idle", "pvz:peashooter"),
+    (ROOT / "tools/raw/reanim/peashootersingle.reanim", "head", "anim_head_idle", "pvz:peashooter_head_idle"),
+    (ROOT / "tools/raw/reanim/peashootersingle.reanim", "head", "anim_shooting", "pvz:peashooter_shoot"),
+    (ROOT / "tools/raw/reanim/peashootersingle.reanim", "face", "anim_blink", "pvz:peashooter_blink"),
+    (ROOT / "tools/raw/reanim/peashooter.reanim", "body", "anim_idle", "pvz:repeater"),
+    (ROOT / "tools/raw/reanim/peashooter.reanim", "head", "anim_head_idle", "pvz:repeater_head_idle"),
+    (ROOT / "tools/raw/reanim/peashooter.reanim", "head", "anim_shooting", "pvz:repeater_shoot"),
+    (ROOT / "tools/raw/reanim/lawnmower.reanim", "default", "anim_normal", "pvz:lawnmower"),
+    (ROOT / "tools/raw/reanim/lawnmoweredzombie.reanim", "default", "default", "pvz:lawnmowered_zombie"),
+    (ROOT / "tools/raw/reanim/sun.reanim", "default", "default", "pvz:sun"),
+    (ROOT / "tools/raw/reanim/sodroll.reanim", "default", "default", "pvz:sodroll"),
+    (ROOT / "tools/raw/reanim/finalwave.reanim", "default", "default", "pvz:finalwave"),
+]
+
 
 def content_hash(bundle: Path, manifest: dict) -> str:
     payload = {**manifest, "contentHash": ""}
@@ -118,27 +142,7 @@ def build_pvz_base() -> dict:
         ],
         reanim_sources=[ROOT / "tools/fixtures/reanim/phase2.reanim"],
         reanim_clips=[
-            (ROOT / "tools/raw/reanim/sunflower.reanim", "body", "anim_idle", "pvz:sunflower"),
-            (ROOT / "tools/raw/reanim/sunflower.reanim", "face", "anim_blink", "pvz:sunflower_blink"),
-            (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_idle", "pvz:zombie"),
-            (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_idle2", "pvz:zombie_idle2"),
-            (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_walk", "pvz:zombie_walk"),
-            (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_walk2", "pvz:zombie_walk2"),
-            (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_eat", "pvz:zombie_eat"),
-            (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_death", "pvz:zombie_death"),
-            (ROOT / "tools/raw/reanim/zombie.reanim", "body", "anim_death2", "pvz:zombie_death2"),
-            (ROOT / "tools/raw/reanim/peashootersingle.reanim", "body", "anim_idle", "pvz:peashooter"),
-            (ROOT / "tools/raw/reanim/peashootersingle.reanim", "head", "anim_head_idle", "pvz:peashooter_head_idle"),
-            (ROOT / "tools/raw/reanim/peashootersingle.reanim", "head", "anim_shooting", "pvz:peashooter_shoot"),
-            (ROOT / "tools/raw/reanim/peashootersingle.reanim", "face", "anim_blink", "pvz:peashooter_blink"),
-            (ROOT / "tools/raw/reanim/peashooter.reanim", "body", "anim_idle", "pvz:repeater"),
-            (ROOT / "tools/raw/reanim/peashooter.reanim", "head", "anim_head_idle", "pvz:repeater_head_idle"),
-            (ROOT / "tools/raw/reanim/peashooter.reanim", "head", "anim_shooting", "pvz:repeater_shoot"),
-            (ROOT / "tools/raw/reanim/lawnmower.reanim", "default", "anim_normal", "pvz:lawnmower"),
-            (ROOT / "tools/raw/reanim/lawnmoweredzombie.reanim", "default", "default", "pvz:lawnmowered_zombie"),
-            (ROOT / "tools/raw/reanim/sun.reanim", "default", "default", "pvz:sun"),
-            (ROOT / "tools/raw/reanim/sodroll.reanim", "default", "default", "pvz:sodroll"),
-            (ROOT / "tools/raw/reanim/finalwave.reanim", "default", "default", "pvz:finalwave"),
+            *LEVEL_CLIPS,
             *ADVENTURE_12_CLIPS,
             *MAIN_MENU_CLIPS,
             *STARTUP_CLIPS,

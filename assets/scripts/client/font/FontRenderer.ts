@@ -131,7 +131,7 @@ export class FontRenderer extends Component {
 
     onLoad() {
         this._loadConfig()
-        this._rebuild()
+        if (this._dirty) this._rebuild()
     }
 
     onEnable() {

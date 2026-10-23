@@ -17,7 +17,7 @@ export class ParticleDefinitionLoader {
 
     static async preloadAll(): Promise<void> {
         if (this._preloadPromise) return this._preloadPromise
-        this._preloadPromise = this._preloadAll()
+        this._preloadPromise = this._preloadAll().catch(error => { this._preloadPromise = null; throw error })
         return this._preloadPromise
     }
 

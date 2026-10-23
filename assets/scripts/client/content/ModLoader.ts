@@ -1,13 +1,14 @@
-import { assetManager, JsonAsset, native, resources, sys } from 'cc'
-import { PREVIEW } from 'cc/env'
+import { assetManager, type SpriteFrame } from 'cc'
 import {
     isQualifiedId,
-    parseModManifest,
     Registry,
-    sortModManifests,
     type ModManifest,
 } from '@/shared/mod'
 import { CONTENT_CATEGORIES, type ContentCategory } from '@/shared/content'
+import type { ClientScreenEnhancer } from './ClientScreenMods'
+import { expandViewport } from '@/client/view/ClientViewport'
+import { modManager } from './ModManager'
+import { clearModRuntimeCache, importModModule, loadModSprite, modFileUrl, mountMod } from './ModRuntime'
 
 interface Registration {
     id: string
@@ -51,18 +52,16 @@ interface GameplayModApi {
 }
 
 interface ClientModApi {
+    expandViewport: typeof expandViewport
+    loadSprite(path: string): Promise<SpriteFrame>
     registerContent(value: Registration): void
     enhanceAnimation(targetId: string, patch: unknown): void
     replaceAnimation(targetId: string, definition: unknown): void
+    enhanceScreen(targetId: string, apply: ClientScreenEnhancer): void
 }
 
 interface ModModule {
     register(api: GameplayModApi | ClientModApi): void | Promise<void>
-}
-
-interface LocatedMod {
-    manifest: ModManifest
-    root: string
 }
 
 export interface LoadedMods {
@@ -72,6 +71,7 @@ export interface LoadedMods {
     gameplaySystems: readonly LoadedGameplaySystemMod[]
     plantUpgrades: readonly LoadedPlantUpgrade[]
     clientAnimations: readonly LoadedClientAnimationMod[]
+    clientScreens: readonly { ownerId: string, targetId: string, apply: ClientScreenEnhancer }[]
 }
 
 let installedMods: Promise<LoadedMods> | undefined
@@ -81,20 +81,22 @@ export function loadInstalledMods(): Promise<LoadedMods> {
 }
 
 async function loadMods(): Promise<LoadedMods> {
-    const locations = await findManifestLocations()
-    const located = await Promise.all(locations.map(loadManifest))
-    const byId = new Map(located.map(mod => [mod.manifest.id, mod]))
-    const manifests = sortModManifests(located.map(mod => mod.manifest))
+    const installed = await modManager.ready()
+    clearModRuntimeCache()
+    const manifests = installed.map(mod => mod.manifest)
     const gameplayDefinitions = new Registry<Registration>()
     const clientContent = new Registry<LoadedClientContent>()
     const gameplaySystems: LoadedGameplaySystemMod[] = []
     const plantUpgrades: LoadedPlantUpgrade[] = []
     const clientAnimations: LoadedClientAnimationMod[] = []
+    const clientScreens: Array<{ ownerId: string, targetId: string, apply: ClientScreenEnhancer }> = []
 
-    for (const manifest of manifests) {
-        const mod = byId.get(manifest.id)!
+    for (const mod of installed) {
+        const { manifest } = mod
+        console.info(`[Mods] Loading ${manifest.id}@${manifest.version}`)
+        await mountMod(mod)
         if (manifest.gameplay) {
-            const gameplay = await loadModule(resolvePath(mod.root, manifest.gameplay.cocosModule))
+            const gameplay = await importModModule(manifest.id, manifest.gameplay.cocosModule) as ModModule
             await gameplay.register({
                 registerDefinition: value => registerOwned(gameplayDefinitions, manifest, value),
                 enhanceSystem: (targetId, apply) => gameplaySystems.push(
@@ -107,16 +109,32 @@ async function loadMods(): Promise<LoadedMods> {
             })
         }
         if (manifest.client) {
-            const bundle = await loadBundle(resolvePath(mod.root, manifest.client.bundle))
-            const client = await loadModule(resolvePath(mod.root, manifest.client.module))
+            const bundle = manifest.client.bundle ? await loadBundle(modFileUrl(manifest.id, manifest.client.bundle)) : null
+            const client = await importModModule(manifest.id, manifest.client.module) as ModModule
             await client.register({
-                registerContent: value => registerClientContent(clientContent, manifest, bundle, value),
+                expandViewport,
+                loadSprite: async path => {
+                    if (typeof path !== 'string' || !path || !isRelativeContentPath(path)) {
+                        throw new Error(`${manifest.id} sprite path must stay inside its ZIP`)
+                    }
+                    return loadModSprite(manifest.id, path)
+                },
+                registerContent: value => {
+                    if (bundle === null) throw new Error(`${manifest.id} must define client.bundle to register content`)
+                    registerClientContent(clientContent, manifest, bundle, value)
+                },
                 enhanceAnimation: (targetId, value) => clientAnimations.push(
                     clientAnimationRegistration(manifest, targetId, 'enhance', value),
                 ),
                 replaceAnimation: (targetId, value) => clientAnimations.push(
                     clientAnimationRegistration(manifest, targetId, 'replace', value),
                 ),
+                enhanceScreen: (targetId, apply) => {
+                    if (!isQualifiedId(targetId) || typeof apply !== 'function') {
+                        throw new Error(`${manifest.id} registered an invalid screen enhancement`)
+                    }
+                    clientScreens.push(Object.freeze({ ownerId: manifest.id, targetId, apply }))
+                },
             })
         }
     }
@@ -126,72 +144,15 @@ async function loadMods(): Promise<LoadedMods> {
     Object.freeze(gameplaySystems)
     Object.freeze(plantUpgrades)
     Object.freeze(clientAnimations)
+    Object.freeze(clientScreens)
     if (manifests.length > 0) console.info(`[Mods] Loaded ${manifests.map(mod => mod.id).join(', ')}`)
-    return { manifests, gameplayDefinitions, clientContent, gameplaySystems, plantUpgrades, clientAnimations }
-}
-
-async function findManifestLocations(): Promise<string[]> {
-    if (sys.isNative) {
-        const root = `${native.fileUtils.getWritablePath().replace(/\\/g, '/').replace(/\/*$/, '')}/mods/`
-        if (!native.fileUtils.isDirectoryExist(root)) return []
-        return native.fileUtils.listFiles(root)
-            .map(path => path.replace(/\\/g, '/').replace(/\/*$/, ''))
-            .filter(path => !path.endsWith('/.') && !path.endsWith('/..'))
-            .filter(path => native.fileUtils.isFileExist(`${path}/mod.json`))
-            .map(path => `${path}/mod.json`)
-            .sort()
-    }
-
-    const indexUrl = new URL('mods.json', location.href).href
-    let value: unknown
-    if (PREVIEW) {
-        // CLI previews serve imported assets rather than project-root files.
-        value = await new Promise<unknown>((resolve, reject) => {
-            resources.load('mods', JsonAsset, (error, asset) => error ? reject(error) : resolve(asset.json))
-        })
-    } else {
-        const response = await fetch(indexUrl)
-        if (response.status === 404) return []
-        if (!response.ok) throw new Error(`Failed to load ${indexUrl}: HTTP ${response.status}`)
-        value = await response.json()
-    }
-    if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string')) {
-        throw new Error('mods.json must be an array of manifest URLs')
-    }
-    return value.map(entry => new URL(entry, indexUrl).href)
-}
-
-async function loadManifest(location: string): Promise<LocatedMod> {
-    const value: unknown = sys.isNative && isAbsolutePath(location)
-        ? JSON.parse(native.fileUtils.getStringFromFile(location))
-        : await fetch(location).then(async response => {
-            if (!response.ok) throw new Error(`Failed to load ${location}: HTTP ${response.status}`)
-            return response.json() as Promise<unknown>
-        })
-    return { manifest: parseModManifest(value), root: location.slice(0, location.lastIndexOf('/') + 1) }
-}
-
-async function loadModule(location: string): Promise<ModModule> {
-    const moduleId = sys.isNative && isAbsolutePath(location)
-        ? `no-schema:/${location.replace(/\\/g, '/')}`
-        : location
-    const loaded = await import(moduleId) as ModModule
-    if (typeof loaded.register !== 'function') throw new Error(`${location} must export register(api)`)
-    return loaded
+    return { manifests, gameplayDefinitions, clientContent, gameplaySystems, plantUpgrades, clientAnimations, clientScreens }
 }
 
 function loadBundle(location: string): Promise<string> {
     return new Promise((resolve, reject) => {
         assetManager.loadBundle(location, (error, bundle) => error ? reject(error) : resolve(bundle.name))
     })
-}
-
-function resolvePath(root: string, relative: string): string {
-    return /^https?:/i.test(root) ? new URL(relative, root).href : `${root}${relative}`
-}
-
-function isAbsolutePath(path: string): boolean {
-    return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('/')
 }
 
 function registerOwned(registry: Registry<Registration>, manifest: ModManifest, value: Registration): void {

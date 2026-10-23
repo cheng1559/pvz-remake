@@ -390,11 +390,14 @@ def build_reanim_clip(
     content_id: str,
     available_sprites: set[str],
     namespace: str = "pvz",
+    *,
+    nodes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not QUALIFIED_ID.fullmatch(content_id):
         raise ValueError(f"invalid reanim id: {content_id}")
-    root = ElementTree.fromstring(f"<root>{source.read_text(encoding='utf-8')}</root>")
-    nodes = get_anim_nodes(source.stem, anim_info, root)
+    if nodes is None:
+        root = ElementTree.fromstring(f"<root>{source.read_text(encoding='utf-8')}</root>")
+        nodes = get_anim_nodes(source.stem, anim_info, root)
     node = nodes.get(node_id)
     if node is None:
         raise ValueError(f"unknown reanim node: {node_id}")

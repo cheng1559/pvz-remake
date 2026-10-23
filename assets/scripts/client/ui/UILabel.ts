@@ -10,6 +10,7 @@ export interface UILabelOptions {
     y?: number
     width?: number
     fontSize?: number
+    lineSpacing?: number
     color?: Color
     align?: 'left' | 'center' | 'right'
     baseline?: boolean
@@ -28,6 +29,7 @@ export class UILabel {
         this.renderer.fontColor = options.color ?? Color.WHITE
         this.renderer.maxWidth = options.width ?? 0
         this.renderer.textAlign = options.align === 'center' ? 2 : options.align === 'right' ? 1 : 0
+        if (options.lineSpacing !== undefined) this.renderer.lineSpacing = options.lineSpacing
         this.text = options.text
     }
 

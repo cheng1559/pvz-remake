@@ -32,14 +32,22 @@ export class ClientContentLoader {
         return promise
     }
 
-    load<T extends Asset>(content: ResolvedContent, type: AssetType<T>): Promise<T> {
-        const key = `${content.contentHash}:${content.category}:${content.id}:${type.name}`
+    load<T extends Asset>(content: ResolvedContent, type: AssetType<T>, animation?: string): Promise<T> {
+        const key = `${content.contentHash}:${content.category}:${content.id}:${content.path}:${type.name}:${animation ?? ''}`
         const cached = this.assets.get(key) as Promise<T> | undefined
         if (cached) return cached
 
-        const promise = this.loadBundle(content.bundle).then(bundle => bundle.get(content.path, type) ?? new Promise<T>((resolve, reject) => {
-            bundle.load(content.path, type, (error, asset) => error ? reject(error) : resolve(asset))
-        })).catch(error => {
+        const promise = (async () => {
+            const assetType: AssetType<Asset> = type
+            const id = content.category === 'music' && assetType === AudioClip
+                ? `${content.id.split(':')[0]}:${content.path.slice(content.path.lastIndexOf('/') + 1)}` : content.id
+            const replacement = await resourcePacks.asset(id, type, animation)
+            if (replacement !== undefined) return replacement
+            const bundle = await this.loadBundle(content.bundle)
+            return bundle.get(content.path, type) ?? new Promise<T>((resolve, reject) => {
+                bundle.load(content.path, type, (error, asset) => error ? reject(error) : resolve(asset))
+            })
+        })().catch(error => {
             this.assets.delete(key)
             throw error
         })
@@ -69,11 +77,11 @@ export class SpriteRepository {
     ) {}
 
     async load(id: string, animation?: string): Promise<SpriteFrame> {
-        const replacement = await resourcePacks.sprite(id, animation)
+        const replacement = await resourcePacks.asset(id, SpriteFrame, animation)
         if (replacement) return replacement
         const content = this.registry.resolve('sprites', id)
         if (!content) throw new Error(`unknown sprite: ${id}`)
-        return this.loader.load(content, SpriteFrame)
+        return this.loader.load(content, SpriteFrame, animation)
     }
 }
 

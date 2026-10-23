@@ -27,6 +27,7 @@ native/engine/mac/*
 !native/engine/ios/
 native/engine/ios/*
 !native/engine/ios/Info.plist
+!native/engine/ios/ViewController.mm
 !native/engine/ios/Base.lproj/
 native/engine/ios/Base.lproj/*
 !native/engine/ios/Base.lproj/LaunchScreen.storyboard
@@ -87,6 +88,7 @@ AGENTS.md
 ai-docs/
 
 tools/raw/
+/art/
 tools/main.pak
 assets/resources/textures/*
 !assets/resources/textures/background_left.png

@@ -328,7 +328,7 @@ export class UI {
         const { width, height } = options.background
             ? { width: options.width ?? options.background.originalSize.width, height: options.height ?? options.background.originalSize.height }
             : this.dialogSize(options)
-        const root = uiNode({ name: 'Dialog', parent, active: false, size: { width: 800, height: 600 } }).node
+        const root = uiNode({ name: 'Dialog', parent, active: false, viewport: true }).node
         let canvas = parent
         while (canvas.parent && !canvas.getComponent(Canvas)) canvas = canvas.parent
         root.setWorldPosition(canvas.worldPosition)

@@ -19,6 +19,11 @@ function manifest(id: string, version: string, dependencies: { id: string; versi
 }
 
 test('manifests validate, sort deterministically, and register once before freeze', () => {
+    const screenMod = parseModManifest({
+        schemaVersion: 1, id: 'local:widescreen', version: '0.1.0', apiVersion: 1,
+        contentHash: 'widescreen-0.1.0', dependencies: [], client: { module: 'client/cocos/index.js' },
+    })
+    assert.deepEqual(screenMod.client, { module: 'client/cocos/index.js' })
     const base = manifest('pvz:base', '2.1.0')
     const independent = manifest('zzz:independent', '1.0.0')
     const addon = manifest('author:addon', '1.0.0', [{ id: 'pvz:base', version: '>=2.0.0' }])

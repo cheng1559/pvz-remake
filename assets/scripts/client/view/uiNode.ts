@@ -1,4 +1,5 @@
 import { Graphics, Layers, Mask, Node, Sprite, SpriteFrame, UIOpacity, UISkew, UITransform } from 'cc'
+import { fitViewport } from './ClientViewport'
 
 export interface UiNodeOptions {
     node?: Node
@@ -8,6 +9,7 @@ export interface UiNodeOptions {
     active?: boolean
     position?: { x?: number, y?: number, z?: number }
     size?: { width: number, height: number }
+    viewport?: boolean
     anchor?: { x: number, y: number }
     sprite?: {
         frame?: SpriteFrame | null
@@ -76,6 +78,7 @@ export function uiNode(options: UiNodeOptions = {}): UiNodeParts {
         )
     }
     if (options.parent != null && node.parent !== options.parent) options.parent.addChild(node)
+    if (options.viewport) fitViewport(node)
 
     return parts
 }

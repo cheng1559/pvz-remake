@@ -1,6 +1,7 @@
 import { _decorator, Component, director, Director, EventKeyboard, type EventTouch, game, Game, input, Input, KeyCode, Mask, Node, screen, sys } from 'cc'
 import { DEBUG } from 'cc/env'
 import { uiNode } from '@/client/view/uiNode'
+import { constrainNativeWindow, resetViewport } from '@/client/view/ClientViewport'
 import { gameClock } from '@/core/GameClock'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
@@ -14,7 +15,6 @@ import { UIInput } from '@/client/ui/UIInput'
 import type { UILabel } from '@/client/ui/UILabel'
 import { OptionsSettings } from '@/platform/OptionsSettings'
 import { MENU_PAGES, type MenuAction, type MenuPageId } from '@/client/screens/MenuPages'
-import { installPhase0PlatformProbe } from '@/platform/phase0/PlatformProbe'
 import {
     createLevelController,
     installLevelProbe,
@@ -29,7 +29,8 @@ import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { resourcePacks } from '@/client/content/ResourcePacks'
-import { selectResourcePackZip } from '@/client/content/ResourcePackArchive'
+import { modManager } from '@/client/content/ModManager'
+import { selectZip } from '@/client/content/InstalledArchives'
 
 const { ccclass } = _decorator
 
@@ -52,13 +53,15 @@ export class GameApp extends Component {
 
     start(): void {
         game.frameRate = Infinity
+        constrainNativeWindow(4 / 3, 4 / 3)
+        uiNode({ node: this.node, viewport: true })
         connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false)
         UIHoverManager.start(this.node)
         this.gameLayer = uiNode({
-            name: 'GameLayer', parent: this.node, size: { width: 800, height: 600 }, active: false,
+            name: 'GameLayer', parent: this.node, viewport: true, active: false,
         }).node
         this.menu = uiNode({
-            name: 'MenuLayer', parent: this.node, size: { width: 800, height: 600 },
+            name: 'MenuLayer', parent: this.node, viewport: true,
             mask: Mask.Type.GRAPHICS_RECT,
         }).node.addComponent(MenuScreen)
         this.menu.onNavigate = action => this.navigate(action)
@@ -69,13 +72,13 @@ export class GameApp extends Component {
         })
         if (DEBUG) {
             ;(globalThis as typeof globalThis & { pvzTime?: typeof gameClock }).pvzTime = gameClock
-            installPhase0PlatformProbe()
             installContentShowcaseProbe(this.node)
             installLevelProbe(this.controller)
         }
         game.on(Game.EVENT_HIDE, this.save, this)
         input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this)
         input.on(Input.EventType.KEY_UP, this.onKeyUp, this)
+        this.node.on(Input.EventType.TOUCH_START, this.onDebugTouch, this, true)
         input.on(Input.EventType.TOUCH_START, this.onDebugTouch, this)
         void OptionsSettings.start().catch(error => console.error('[Options]', error))
         this.transitions = new ScreenTransition(this.node)
@@ -189,7 +192,7 @@ export class GameApp extends Component {
             if (!this.advice?.node.isValid) {
                 const layer = uiNode({
                     name: 'GlobalAdviceLayer', parent: this.node, size: { width: 800, height: 600 },
-                    position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 }, mask: Mask.Type.GRAPHICS_RECT,
+                    position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 },
                 }).node
                 this.advice = new AdviceWidget({ ui, parent: layer, font: ui.assets.fonts.pageTitle })
             }
@@ -207,7 +210,7 @@ export class GameApp extends Component {
     }
 
     private async showDebugCli(): Promise<void> {
-        if (this.debugCliOpen || this.loading || this.currentPage === 'splash' || this.currentPage === 'title' || !this.controller) return
+        if (this.debugCliOpen || this.loading || !this.controller) return
         this.debugCliOpen = true
         const controller = this.controller
         const running = controller.isRunning(), wasPaused = controller.isPaused(), page = this.currentPage
@@ -231,12 +234,13 @@ export class GameApp extends Component {
         if (!this.node?.isValid || !result) return
         if (!result.ok) { this.showAdvice(result.message); return }
         switch (result.action) {
-            case 'installPack': case 'restartForPacks':
+            case 'installPack': case 'restartForPacks': case 'installMod': case 'restartForMods':
                 this.debugCliOpen = true
                 try {
                     await controller.saveIfRunning()
-                    if (result.action === 'installPack') await this.installResourcePack()
-                    else await this.confirmResourcePackRestart()
+                    const kind = result.action === 'installMod' || result.action === 'restartForMods' ? 'mod' : 'pack'
+                    if (result.action === 'installPack' || result.action === 'installMod') await this.installPackage(kind)
+                    else await this.confirmPackageRestart(kind)
                 } finally {
                     this.debugCliOpen = false
                     if (this.node?.isValid && running && !wasPaused && controller.isRunning() && this.currentPage === page) controller.resume()
@@ -265,11 +269,11 @@ export class GameApp extends Component {
         }
     }
 
-    private async installResourcePack(): Promise<void> {
+    private async installPackage(kind: 'pack' | 'mod'): Promise<void> {
         const ui = await UI.load()
         let progress: UIDialog | undefined
         try {
-            const data = await selectResourcePackZip()
+            const data = await selectZip()
             if (!data || !this.node?.isValid) return
             progress = ui.dialog(this.node, {
                 title: 'Installing...', footer: false, clickSound: null,
@@ -277,9 +281,9 @@ export class GameApp extends Component {
             progress.onConfirm = progress.onCancel = () => {}
             // Paint the dialog before ZIP validation and native file writes occupy the main thread.
             await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
-            await resourcePacks.install(data)
+            await (kind === 'pack' ? resourcePacks : modManager).install(data)
             progress.close()
-            await this.confirmResourcePackRestart()
+            await this.confirmPackageRestart(kind)
         } catch (error) {
             progress?.close()
             if (this.node?.isValid) await ui.dialog(this.node, {
@@ -288,19 +292,19 @@ export class GameApp extends Component {
         }
     }
 
-    private async confirmResourcePackRestart(): Promise<void> {
+    private async confirmPackageRestart(kind: 'pack' | 'mod'): Promise<void> {
         if (!this.node?.isValid) return
         const ui = await UI.load()
         const confirmed = await ui.dialog(this.node, {
-            title: 'Restart Required', message: 'Restart the game to apply resource pack changes.', confirmText: 'OK',
+            title: 'Restart Required', message: `Restart the game to apply ${kind === 'pack' ? 'resource pack' : 'Mod'} changes.`, confirmText: 'OK',
         }).result
         if (!confirmed || !this.node?.isValid) return
-        if (sys.isNative) game.restart()
+        if (sys.isNative) sys.restartVM()
         else window.location.reload()
     }
 
     private onDebugTouch(event: EventTouch): void {
-        if (!GameDebugSettings.isMobileMode() || this.debugCliOpen) return
+        if ((!sys.isMobile && !GameDebugSettings.isMobileMode()) || this.debugCliOpen) return
         const p = event.getLocation(), corner = 100 * screen.devicePixelRatio
         if (p.x < screen.windowSize.width - corner || p.y > corner) { this.lastDebugTap = 0; return }
         const now = Date.now()
@@ -354,12 +358,14 @@ export class GameApp extends Component {
     }
 
     onDestroy(): void {
+        resetViewport()
         UIHoverManager.stop()
         this.transitions?.dispose()
         this.save()
         game.off(Game.EVENT_HIDE, this.save, this)
         input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this)
         input.off(Input.EventType.KEY_UP, this.onKeyUp, this)
+        this.node.off(Input.EventType.TOUCH_START, this.onDebugTouch, this, true)
         input.off(Input.EventType.TOUCH_START, this.onDebugTouch, this)
         OptionsSettings.stop()
     }

@@ -119,6 +119,13 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
 
     for (const action of ['splash', 'title', 'main', 'garden', 'mushroom', 'store', 'back']) {
         await app.navigate(action)
+        if (action === 'splash' || action === 'title') {
+            const recovery = app.showDebugCli()
+            await setImmediate()
+            assert.equal(app.debugCliOpen, true, 'startup must allow CLI access to update or disable a broken Mod')
+            closeCli(null)
+            await recovery
+        }
     }
     assert.equal(app.currentPage, 'mushroom')
     assert.equal(shown, 'mushroom')
@@ -171,6 +178,19 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(paused, false)
     assert.equal(gameClock.delta(1), 2, 'closing the CLI keeps the newly selected speed')
     gameClock.setSpeed(1)
+    const packages: string[] = []
+    app.installPackage = async (kind: string) => { assert.equal(paused, true); packages.push(`install:${kind}`) }
+    app.confirmPackageRestart = async (kind: string) => { assert.equal(paused, true); packages.push(`restart:${kind}`) }
+    for (const action of ['installPack', 'restartForPacks', 'installMod', 'restartForMods'] as const) {
+        const before = saves
+        const pending = app.showDebugCli()
+        await setImmediate()
+        closeCli({ ok: true, message: '', action })
+        await pending
+        assert.equal(saves, before + 1, 'package changes save the current level before showing their dialogs')
+        assert.equal(paused, false, 'cancelling an install/restart restores the previous pause state')
+    }
+    assert.deepEqual(packages, ['install:pack', 'restart:pack', 'install:mod', 'restart:mod'])
     introReady = false
     app.onKeyDown({ keyCode: 32 })
     await setImmediate()
@@ -265,6 +285,99 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(freshGames.at(-1), true)
 })
 
+test('pack and Mod installation share the Installing title, paint boundary and immediate restart confirmation', async () => {
+    const source = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
+    }).outputText
+    for (const isNative of [false, true]) for (const kind of ['pack', 'mod']) {
+        const steps: string[] = []
+        const module = { exports: {} as Record<string, any> }
+        const ui = {
+            dialog(_parent: unknown, options: any) {
+                steps.push(options.title)
+                if (options.title === 'Installing...') {
+                    assert.equal(options.message, undefined)
+                    assert.equal(options.footer, false)
+                }
+                return { close() { steps.push('close') }, result: Promise.resolve(true) }
+            },
+        }
+        const modules: Record<string, unknown> = {
+            cc: {
+                Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
+                sys: { isNative, restartVM: () => steps.push('native-restart') },
+                game: { restart() { assert.fail('package changes must discard the previous VM and its Mod caches') } },
+                Director: { EVENT_AFTER_DRAW: 'draw' }, director: { once(_event: string, callback: () => void) { steps.push('paint'); callback() } },
+            },
+            '@/client/ui/UI': { UI: { load: async () => ui } },
+            '@/client/content/InstalledArchives': { selectZip: async () => { steps.push('pick'); return new Uint8Array([1]) } },
+            '@/client/content/ResourcePacks': { resourcePacks: { install: async () => { steps.push('install:pack') } } },
+            '@/client/content/ModManager': { modManager: { install: async () => { steps.push('install:mod') } } },
+        }
+        runInNewContext(source, { exports: module.exports, require: (id: string) => modules[id] ?? {}, setTimeout,
+            window: { location: { reload: () => steps.push('web-restart') } } })
+        const app = new module.exports.GameApp()
+        app.node = { isValid: true }
+        await app.installPackage(kind)
+        assert.deepEqual(steps, ['pick', 'Installing...', 'paint', `install:${kind}`, 'close', 'Restart Required', isNative ? 'native-restart' : 'web-restart'])
+    }
+})
+
+test('mobile CLI receives corner taps in root capture before UI can swallow them', () => {
+    let capture!: (event: any) => void
+    let globalTouch!: (event: any) => void
+    let now = 1000, opened = 0
+    const sys = { isMobile: true, localStorage: {} }
+    const screen = { devicePixelRatio: 3, windowSize: { width: 2556, height: 1179 } }
+    const node = { isValid: true, on(_event: string, callback: Function, owner: any, useCapture: boolean) {
+        assert.equal(useCapture, true)
+        capture = event => callback.call(owner, event)
+    } }
+    const modules: Record<string, any> = {
+        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value }, sys, screen,
+            Mask: { Type: { GRAPHICS_RECT: 0 } },
+            game: { on() {} }, Game: { EVENT_HIDE: 'hide' }, Input: { EventType: { TOUCH_START: 'touch-start' } },
+            input: { on(event: string, callback: Function, owner: any) {
+                if (event === 'touch-start') globalTouch = value => callback.call(owner, value)
+            } } },
+        'cc/env': { DEBUG: false },
+        '@/client/view/uiNode': { uiNode: (options: any) => ({ node: options.node ?? { addComponent: () => ({}) } }) },
+        '@/client/view/ClientViewport': { constrainNativeWindow() {} },
+        './LocalMenuApi': { connectLocalMenuApi() {} },
+        './LevelController': { createLevelController: () => ({}) },
+        '@/client/input/UIHoverManager': { UIHoverManager: { start() {} } },
+        '@/platform/OptionsSettings': { OptionsSettings: { start: async () => {} } },
+        '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => false } },
+        '@/client/screens/ScreenTransition': { ScreenTransition: class {} },
+        '@/client/ui/UI': { UI: { load: async () => ({ label: () => ({}) }) } },
+    }
+    const module = { exports: {} as Record<string, any> }
+    const compiled = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
+    })
+    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {},
+        Date: { now: () => now } })
+    const app = new module.exports.GameApp()
+    app.node = node
+    app.navigate = async () => {}
+    app.showDebugCli = async () => { opened++ }
+    app.start()
+    assert.equal(typeof globalTouch, 'function', 'letterbox taps still have a global fallback')
+    const tap = () => ({ getLocation: () => ({ x: 2500, y: 50 }), propagationStopped: false })
+    capture(tap())
+    now += 200
+    const second = tap()
+    capture(second)
+    assert.equal(opened, 1, 'native mobile access remains available when /mobile is off')
+    assert.equal(second.propagationStopped, true)
+    sys.isMobile = false
+    now += 200
+    capture(tap())
+    now += 200
+    capture(tap())
+    assert.equal(opened, 1, 'desktop clicks do not open the mobile CLI')
+})
+
 test('saved-game prompt offers continue/restart/cancel and confirms a restart before closing', async () => {
     const module = { exports: {} as Record<string, any> }
     const compiled = transpileModule(readFileSync('assets/scripts/client/screens/ContinueGameDialog.ts', 'utf8'), {
@@ -311,12 +424,15 @@ test('saved-game prompt offers continue/restart/cancel and confirms a restart be
     }
 })
 
-test('modal pages retain their caller, full pages destroy it, and gameplay releases menu nodes', async () => {
+test('modal pages retain their caller, full pages destroy it, and achievements stay cached through gameplay', async () => {
     const music: string[] = []
     const navigation: string[] = []
     let quitOptions: any
     let gameOptions: any
     let quits = 0
+    let achievementInitializations = 0, achievementRefreshes = 0, warmDraws = 0
+    let achievementRoot: any, achievementView: any
+    let preload!: (progress: (value: number) => void) => Promise<void>
     const module = { exports: {} as Record<string, any> }
     const compiled = transpileModule(readFileSync('assets/scripts/client/screens/MenuScreen.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
@@ -325,6 +441,12 @@ test('modal pages retain their caller, full pages destroy it, and gameplay relea
         exports: module.exports,
         require: () => ({
             Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
+            DEBUG: false, preloadAssets: async (progress: (value: number) => void) => progress(1),
+            Director: { EVENT_AFTER_DRAW: 'draw' }, director: { once(_event: string, callback: () => void) {
+                assert.equal(achievementRoot.active, true, 'the loading screen warms the cached components before opening them')
+                warmDraws++
+                callback()
+            } },
             UIHoverManager: { beginModalBlock() {}, endModalBlock() {} },
             isValid: () => false, loadEntityDisplayAssets: async () => ({}),
             MENU_PAGES, MusicSystem: { playTune: async (tune: string) => { music.push(tune) } },
@@ -334,13 +456,30 @@ test('modal pages retain their caller, full pages destroy it, and gameplay relea
                 text: (key: string) => key,
                 dialog: (_parent: unknown, options: unknown) => { quitOptions = options; return { content: {} } },
             }) },
-            uiNode: () => ({ node: {
-                isValid: true, active: false, addComponent() {}, destroy() { this.isValid = false },
-            } }),
+            uiNode: (options: any) => {
+                const node = {
+                    name: options.name, isValid: true, active: options.active ?? true, children: [] as any[],
+                    addComponent() {
+                        const component = { node: this, show() {}, refresh: async () => { achievementRefreshes++ },
+                            initialize: async (_ui: unknown, callback: any) => {
+                                if (this.name === 'Startup') preload = callback
+                                if (this.name === 'Controls') { achievementInitializations++; achievementView = component }
+                            } }
+                        return component
+                    },
+                    getComponentInChildren: () => achievementView,
+                    setPosition(x: number, y: number) { (this as any).position = { x, y } },
+                    setSiblingIndex(index: number) { (this as any).siblingIndex = index },
+                    destroy() { this.isValid = false },
+                }
+                options.parent?.children?.push(node)
+                if (options.name === 'achievements') achievementRoot = node
+                return { node }
+            },
         }),
     })
     const screen = new module.exports.MenuScreen()
-    screen.node = { isValid: true, active: true }
+    screen.node = { isValid: true, active: true, children: [] }
     const page = (id: MenuPageId) => ({
         id, retainPrevious: MENU_PAGES[id].retainPrevious,
         root: { isValid: true, active: false, destroy() { this.isValid = false } },
@@ -381,7 +520,8 @@ test('modal pages retain their caller, full pages destroy it, and gameplay relea
         assert.equal(main.root.active, true)
         assert.equal((await screen.prepare('main')).root, main.root)
         await screen.show(main)
-        assert.equal(modal.root.isValid, false)
+        assert.equal(modal.root.isValid, id === 'achievements', 'only achievements keep their prepared page')
+        assert.equal(modal.root.active, false)
     }
     for (const id of ['help', 'minigames', 'puzzle', 'survival', 'garden', 'mushroom', 'aquarium', 'tree', 'title'] as const) {
         const full = page(id)
@@ -400,6 +540,78 @@ test('modal pages retain their caller, full pages destroy it, and gameplay relea
     assert.equal(store.root.isValid, false)
     assert.equal(main.root.isValid, false)
     assert.equal(screen.mainMenu, null)
+    const prepared = await screen.prepare('main')
+    assert.equal(prepared.root.active, false, 'preparing the main menu keeps it hidden')
+    await screen.show(prepared)
+    assert.equal(prepared.root.active, true, 'show activates the prepared page')
+    await screen.show(await screen.prepare('splash'))
+    let progress = 0
+    await preload(value => { progress = value })
+    assert.equal(progress, 1)
+    assert.equal(warmDraws, 1)
+    assert.equal(achievementInitializations, 1)
+    assert.equal(achievementRoot.active, false, 'prewarmed achievements stay hidden on the loading screen')
+    const cached = await screen.prepare('achievements')
+    assert.equal(cached.root, achievementRoot)
+    assert.equal(achievementRefreshes, 1, 'entering refreshes user data after preloading')
+    const menu = await screen.prepare('main')
+    await screen.show(menu)
+    await screen.show(cached)
+    await screen.show(menu)
+    assert.equal(cached.root.active, false)
+    assert.equal(cached.root.isValid, true)
+    cached.root.setPosition(0, -599)
+    assert.equal(await screen.prepare('achievements'), cached)
+    assert.deepEqual(cached.root.position, { x: 0, y: 0 }, 'cached slides start from the original page position')
+    assert.equal(achievementRefreshes, 2)
+    await screen.show(cached)
+    screen.hide()
+    assert.equal(cached.root.isValid, true, 'gameplay keeps the reusable achievement page')
+    assert.equal(cached.root.active, false)
+    assert.equal(await screen.prepare('achievements'), cached)
+    assert.equal(achievementInitializations, 1, 'returning from gameplay cannot rebuild static content')
+})
+
+test('main menu entrance starts after the first draw and excludes the loading frame', () => {
+    const pending = new Map<string, () => void>()
+    const plays: any[] = []
+    const director = {
+        once(event: string, callback: () => void, owner: unknown) { pending.set(event, () => callback.call(owner)) },
+        off(event: string) { pending.delete(event) },
+    }
+    const emit = (event: string) => { const callback = pending.get(event); pending.delete(event); callback?.() }
+    const module = { exports: {} as Record<string, any> }
+    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/MainMenuScreen.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
+    })
+    runInNewContext(compiled.outputText, {
+        exports: module.exports,
+        require: (id: string) => ({
+            cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
+                director, Director: { EVENT_AFTER_DRAW: 'draw', EVENT_AFTER_UPDATE: 'update' } },
+            '@/client/music/MusicSystem': { MusicSystem: { playTune() {} } },
+            '@/client/sound/LegacySoundSystem': { SoundEffect: {}, SoundLoader: { play() {} } },
+        })[id] ?? {},
+    })
+    const menu = new module.exports.MainMenuScreen()
+    menu.node = { isValid: true, activeInHierarchy: true }
+    menu.ready = true
+    menu.refreshButtons = () => assert.fail('show must reuse the controls prepared before activating the page')
+    menu.open = { play: (options: unknown) => plays.push(options) }
+    menu.show()
+    menu.lateUpdate(0.5)
+    assert.equal(plays.length, 0, 'loading time must not advance menu animations')
+    emit('draw')
+    assert.equal(plays.length, 0)
+    emit('update')
+    assert.equal(plays.length, 1)
+    assert.equal(plays[0].timeSeconds, 0)
+    assert.equal(plays[0].rate, 30 / 20, 'the original animation rate is unchanged')
+    menu.show()
+    emit('draw')
+    menu.onDestroy()
+    emit('update')
+    assert.equal(plays.length, 1, 'a disposed page cannot start its queued entrance')
 })
 
 test('page fades use 180 game ticks, preserve their color, and do not block navigation', () => {
@@ -417,8 +629,8 @@ test('page fades use 180 game ticks, preserve their color, and do not block navi
         for (const [color, speed] of [[0, 1], [255, 2]] as const) {
             const fade = new module.exports.PageFade()
             fade.color = { r: color, g: color, b: color, a: 255 }
-            fade.node = { isValid: true, destroy() { this.isValid = false } }
-            fade.graphics = { clear() {}, fillRect() {} }
+            fade.node = { isValid: true, getComponent: () => ({ contentSize: { width: 1200, height: 600 } }), destroy() { this.isValid = false } }
+            fade.graphics = { clear() {}, fillRect(...bounds: number[]) { assert.deepEqual(bounds, [-600, -300, 1200, 600]) } }
             gameClock.setSpeed(speed)
             fade.update(0.9 / speed)
             assert.equal(fade.color.a, 128)
@@ -437,6 +649,7 @@ test('startup uses the game clock and accepts start only after resource preparat
     const compiled = transpileModule(readFileSync('assets/scripts/client/screens/StartupScreen.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
     })
+    const hover = { isModalBlocked: false }
     const modules: Record<string, unknown> = {
         cc: {
             Component: class {}, Color: class {},
@@ -445,6 +658,7 @@ test('startup uses the game clock and accepts start only after resource preparat
         '@/core/GameClock': { gameClock },
         '@/client/music/MusicSystem': { MusicSystem: { playTune: async () => {} } },
         '@/client/sound/LegacySoundSystem': { SoundEffect: {}, SoundLoader: { play: async () => {} } },
+        '@/client/input/UIHoverManager': { UIHoverManager: hover },
     }
     runInNewContext(compiled.outputText, {
         exports: module.exports,
@@ -490,7 +704,13 @@ test('startup uses the game clock and accepts start only after resource preparat
         await setImmediate()
         assert.equal(startup.progress, 1)
         assert.equal(startup.startButton.interactable, true)
-        startup.tryStart()
+        startup.keyDown({ propagationStopped: true })
+        assert.equal(starts, 0, 'opening the CLI cannot also start the menu')
+        hover.isModalBlocked = true
+        startup.keyDown({ propagationStopped: false })
+        assert.equal(starts, 0, 'typing in a dialog cannot start the menu')
+        hover.isModalBlocked = false
+        startup.keyDown({ propagationStopped: false })
         startup.tryStart()
         assert.equal(starts, 1, 'repeated key/pointer events start the menu once')
     } finally { gameClock.setSpeed(1) }

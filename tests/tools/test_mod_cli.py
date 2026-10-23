@@ -2,6 +2,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 
@@ -10,22 +11,60 @@ TOOL = ROOT / "tools" / "mod.mjs"
 
 
 class ModCliTests(unittest.TestCase):
-    def test_init_build_test_and_pack_gameplay_mod(self):
+    def test_pack_compiles_server_without_writing_to_source(self):
         with tempfile.TemporaryDirectory() as directory:
             temp = Path(directory)
             mod = temp / "sample"
             packed = temp / "packed"
 
             self.run_cli("init", "sample", "--out", str(mod))
-            self.run_cli("build", str(mod))
-            self.run_cli("test", str(mod))
+            self.assertTrue((mod / "src" / "server" / "index.ts").is_file())
             self.run_cli("pack", str(mod), "--out", str(packed))
 
+            self.assertFalse((mod / "gameplay" / "node").exists())
+            self.assertFalse((mod / "gameplay" / "cocos").exists())
             manifest = json.loads((packed / "mod.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["id"], "local:sample")
             self.assertTrue((packed / "gameplay" / "node" / "index.js").is_file())
             self.assertTrue((packed / "gameplay" / "cocos" / "index.js").is_file())
-            self.assertFalse((packed / "gameplay" / "source").exists())
+            self.assertFalse((packed / "src").exists())
+            with zipfile.ZipFile(packed.with_suffix(".zip")) as archive:
+                self.assertEqual(json.loads(archive.read("packed/mod.json"))["id"], "local:sample")
+                self.assertIn("packed/gameplay/cocos/index.js", archive.namelist())
+                self.assertFalse(any(name.endswith(".ts") for name in archive.namelist()))
+
+            self.run_cli("test", str(packed))
+            self.assertFalse(list(mod.rglob("*.js")))
+
+    def test_pack_compiles_client_dependencies_and_copies_assets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            mod, packed = temp / "client-mod", temp / "packed"
+            source = mod / "src" / "client"
+            images = mod / "assets" / "images"
+            bundle = mod / "assets" / "bundles" / "demo"
+            for path in [source, images, bundle]:
+                path.mkdir(parents=True)
+            (mod / "mod.json").write_text(json.dumps({
+                "schemaVersion": 1, "apiVersion": 1, "id": "local:client-mod",
+                "client": {"module": "client/index.js", "bundle": "assets/bundles/demo"},
+            }))
+            (source / "index.ts").write_text("export { value } from './appearance.js'\n")
+            (source / "appearance.ts").write_text("export const value = 'current-source'\n")
+            (images / "background.png").write_bytes(b"image-content")
+            (bundle / "config.json").write_text("{}")
+
+            self.run_cli("pack", str(mod), "--out", str(packed))
+
+            self.assertFalse(list(mod.rglob("*.js")))
+            with zipfile.ZipFile(packed.with_suffix(".zip")) as archive:
+                entry = archive.read("packed/client/index.js").decode()
+                self.assertIn("System.register", entry)
+                self.assertIn("./appearance.js", entry)
+                self.assertIn(b"current-source", archive.read("packed/client/appearance.js"))
+                self.assertEqual(archive.read("packed/assets/images/background.png"), b"image-content")
+                self.assertEqual(archive.read("packed/assets/bundles/demo/config.json"), b"{}")
+                self.assertFalse(any(name.endswith(".ts") for name in archive.namelist()))
 
     def run_cli(self, *arguments, cwd=ROOT):
         subprocess.run(

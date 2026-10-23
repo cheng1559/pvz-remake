@@ -1,0 +1,9 @@
+{
+  "OPTIONS_3D_REQUIRED_HEADER": "3D Acceleration Required",
+  "OPTIONS_3D_REQUIRED_BODY": "3D acceleration is required for this version.",
+  "OPTIONS_FULLSCREEN_REQUIRED_HEADER": "Full Screen Required",
+  "OPTIONS_FULLSCREEN_REQUIRED_BODY": "Windowed mode is not available on mobile devices.",
+  "OPTIONS_FULLSCREEN_UNAVAILABLE_HEADER": "Full Screen Unavailable",
+  "OPTIONS_FULLSCREEN_UNAVAILABLE_BODY": "This browser does not support full screen mode.",
+  "OPTIONS_GITHUB_BUTTON": "GitHub"
+}

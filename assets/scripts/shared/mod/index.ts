@@ -16,7 +16,7 @@ export interface ModManifest {
     }
     client?: {
         module: string
-        bundle: string
+        bundle?: string
     }
 }
 
@@ -154,7 +154,7 @@ function parseClient(value: unknown): ModManifest['client'] {
     const client = object(value, 'manifest.client')
     return {
         module: relativePath(client.module, 'manifest.client.module'),
-        bundle: relativePath(client.bundle, 'manifest.client.bundle'),
+        ...(client.bundle === undefined ? {} : { bundle: relativePath(client.bundle, 'manifest.client.bundle') }),
     }
 }
 

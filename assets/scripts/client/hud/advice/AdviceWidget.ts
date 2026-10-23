@@ -1,5 +1,6 @@
 import { Color, Graphics, Node } from 'cc'
 import { uiNode } from '@/client/view/uiNode'
+import { fitViewport } from '@/client/view/ClientViewport'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil } from '@/client/font'
 import type { UI } from '@/client/ui/UI'
@@ -35,6 +36,7 @@ export class AdviceWidget {
     private _durationTicks = 0
     private _style: AdviceWidgetStyle = 'hint'
     private _pulseTick = 0
+    private _width = ADVICE_WIDTH
 
     constructor(args: {
         ui: UI
@@ -62,6 +64,11 @@ export class AdviceWidget {
             text: '', font: this._font, fontSize: ADVICE_TEXT_SIZE, width: ADVICE_WIDTH - 40, align: 'center',
         })
         this._label.node.name = 'AdviceLabel'
+        fitViewport(this.node, size => {
+            this._width = size.width
+            this._applyLayout()
+            this._drawBackdrop()
+        })
         this.node.active = false
     }
 
@@ -135,12 +142,13 @@ export class AdviceWidget {
 
     private _applyLayout() {
         const layout = this._layout()
-        const labelWidth = ADVICE_WIDTH - 40
+        const labelWidth = this._width - 40
         this._label.color = layout.textColor
         this._label.renderer.fontSize = layout.fontSize
         this._label.renderer.lineSpacing = layout.lineHeight
+        this._label.renderer.maxWidth = labelWidth
         this._label.renderer.forceRebuild()
-        uiNode({ node: this.node, size: { width: ADVICE_WIDTH, height: layout.height } })
+        uiNode({ node: this.node, size: { width: this._width, height: layout.height } })
         this.node.setPosition(ADVICE_WIDTH / 2, -(layout.y + layout.height / 2), 0)
         uiNode({ node: this._label.node, size: { width: labelWidth, height: layout.height }, anchor: { x: 0, y: 1 } })
         this._label.node.setPosition(-labelWidth / 2, this._getTextLocalTopY(layout, labelWidth), 0)
@@ -153,7 +161,7 @@ export class AdviceWidget {
         if (layout.backdropAlpha <= 0) return
 
         this._backdrop.fillColor = new Color(0, 0, 0, layout.backdropAlpha)
-        this._backdrop.fillRect(-ADVICE_WIDTH / 2, -layout.height / 2, ADVICE_WIDTH, layout.height)
+        this._backdrop.fillRect(-this._width / 2, -layout.height / 2, this._width, layout.height)
     }
 
     private _syncTransform() {

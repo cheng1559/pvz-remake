@@ -31,9 +31,12 @@ test('preloaded assets bypass bundle callbacks across content loader instances',
     const modules = {
         cc: { assetManager: { getBundle: () => bundle }, JsonAsset: class {} },
         '@/shared/content/index': { parseContentManifest: (value: unknown) => value },
+        './ResourcePacks': { resourcePacks: { asset: async () => undefined } },
     }
     const { ClientContentLoader } = loadClientModule('content/ClientContentLoader', modules)
-    const { AssetLoader } = loadClientModule('content/LegacyAssetLoader', { cc: { resources: bundle } })
+    const { AssetLoader } = loadClientModule('content/LegacyAssetLoader', {
+        cc: { resources: bundle }, './ResourcePacks': modules['./ResourcePacks'],
+    })
     const content = { bundle: 'base', contentHash: 'hash', category: 'sprites', id: 'pvz:ready', path: 'ready' }
     class Asset {}
     const loader = new ClientContentLoader()
@@ -107,7 +110,7 @@ test('blink attachments follow both the moving head and its parent stem', () => 
     const { ReanimPlayer } = load('assets/scripts/client/reanim/ReanimPlayer.ts')
     const player = (trackId: string, from: number[], to = from) => {
         const result = new ReanimPlayer()
-        result.data = { id: 'pvz:test', durationSeconds: 2, tracks: [{ id: trackId, zIndex: 0,
+        result.data = { schemaVersion: 2, id: 'pvz:test', durationSeconds: 2, tracks: [{ id: trackId, zIndex: 0,
             keyframes: [from, to].map(([x, y], timeSeconds) => ({
                 timeSeconds, x, y, scaleX: 1, scaleY: 1, skewX: 0, skewY: 0,
                 alpha: 1, sprite: 'pvz:test', interpolation: 'linear',
@@ -130,6 +133,24 @@ test('blink attachments follow both the moving head and its parent stem', () => 
     body.seek(1)
     blink.seek(0)
     assert.deepEqual(Object.values(position()), [40, -70], 'the eyelid must inherit later movement of the stem too')
+    const trackNode = head.getTrackNode('face'), replacement = head.getAnimation()
+    replacement.tracks[0].keyframes[1].x += 5
+    head.replaceAnimation(replacement)
+    assert.equal(head.getTrackNode('face'), trackNode, 'animation replacement must preserve attached UI nodes')
+    assert.equal(head.timeSeconds, 0.5)
+    assert.equal(head.playing, false, 'replacement cannot resume a paused animation')
+    const other = player('other', [0, 0])
+    head.data.tracks.push(other.data.tracks[0])
+    head.views.set('other', other.views.get('other'))
+    other.views.get('other').node.setPosition = () => assert.fail('a sprite override must not rebuild unrelated tracks')
+    const frame = {}
+    head.setTrackSpriteOverride('face', frame)
+    assert.equal(head.views.get('face').sprite.spriteFrame, frame)
+    head.setTrackSpriteOverride('face', null)
+    assert.equal(head.views.get('face').sprite.spriteFrame, head.frames.get('pvz:test'))
+    head.data.tracks.pop()
+    assert.throws(() => head.replaceAnimation({ ...replacement, tracks: [] }))
+    assert.equal(head.getTrackNode('face'), trackNode, 'invalid replacements leave the original intact')
     head.data.tracks.length = 0
     blink.seek(0)
     assert.equal(blink.views.get('eyelid').sprite.enabled, false, 'a removed parent track must hide its attachment')

@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, type Graphics, type Node } from 'cc'
+import { _decorator, Color, Component, UITransform, type Graphics, type Node } from 'cc'
 import { gameClock } from '@/core/GameClock'
 import { uiNode } from '@/client/view/uiNode'
 
@@ -14,7 +14,7 @@ export class PageFade extends Component {
     private remainingTicks = FADE_TICKS
 
     static create(parent: Node, color: Color): void {
-        const { node, graphics } = uiNode({ name: 'PageFade', parent, graphics: true, size: { width: 800, height: 600 } })
+        const { node, graphics } = uiNode({ name: 'PageFade', parent, graphics: true, viewport: true })
         const fade = node.addComponent(PageFade)
         fade.graphics = graphics!
         fade.color = color.clone()
@@ -32,6 +32,7 @@ export class PageFade extends Component {
         this.graphics.clear()
         if (this.color.a === 0) return
         this.graphics.fillColor = this.color
-        this.graphics.fillRect(-400, -300, 800, 600)
+        const { width, height } = this.node.getComponent(UITransform)!.contentSize
+        this.graphics.fillRect(-width / 2, -height / 2, width, height)
     }
 }

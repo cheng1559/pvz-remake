@@ -16,6 +16,8 @@
 
 Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览复用 `EntityDisplay` 的内容注册表；`ReanimRepository` 按注册表共享动画数据与贴图，失败后可重试。资源已在引擎缓存时直接读取，图鉴页面等待头像与详情的首帧就绪后再显示。动画节点仍随页面创建和销毁，不常驻整套图鉴。
 
+音效和音乐统一使用 MP3，沿用现有 `copy_sounds.py`／`convert_music.py` 转换流程，兼容 Web、iOS、macOS、Windows 和 Android 的音频加载器。旧工作区可执行 `python3 tools/compress_audio.py` 将导入的 WAV 转为 MP3，保留 UUID、原声道和资源路径；PCM 原件备份到不参与打包的 `tools/raw/audio-pcm`。音乐使用 LAME VBR q2，音效使用 q4，采样率统一为 44.1kHz；动态鼓点各轨不裁剪静音、不单独归一化，循环与节拍数据保持不变。压缩减少下载和包体大小，解码后的 PCM 内存不会按同样比例减少。
+
 关卡触摸种植沿用旧版 `pvz-remake`：轻点种子包保留选中，拖出后显示植物预览和行列辅助线，松手提交种植；拖回原种子包或落点无效则取消，也可直接点选另一张可用卡。`LevelInputPresenter` 捕获同一根手指的完整操作，暂停时清理；滑动收集按每 24px 采样，选卡高亮复用 `SeedPacketView` 的移动模式，仍调用现有后端指令。
 
 页面不再显示临时黑色标题条。`MenuPages.heading` 声明原版标题的字体、基线和颜色，文案从 `lawnstrings` 读取；商店使用原版招牌。`ChallengeScreen` 绘制 Mini-games／Puzzle／Survival 的 20／20／11 个缩略图按钮和档案奖杯计数，复用 `UI.button` 的捕获、hover 与按下状态，点击尚未接通的模式显示未开放提示。`MenuPageControls` 提供花园切换／商店入口和成就返回按钮；领奖页使用原版按钮贴图，目前仍提供重玩 1-1。
@@ -135,4 +137,4 @@ npm run build:web:debug
 
 对改动涉及的关键逻辑优先复用已有测试。除非需要验证实际画面或交互，避免使用浏览器自动化。Windows 和 Android 构建命令仍然保留；Web 验证不代表已通过原生编译或真机检查。
 
-Debug 构建保留 `pvzPhase0`、`pvzPhase2`、`pvzPhase4` 调试入口；Mod 示例见 [Phase 0 说明](../spikes/phase0/README.md)。
+Debug 构建保留 `pvzPhase2`、`pvzPhase4` 调试入口；Mod 开发和安装见 [Mod 说明](MODS.md)。

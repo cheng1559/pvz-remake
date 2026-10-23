@@ -1,8 +1,8 @@
-import { _decorator, Button, Color, Component, Mask, Node, Sprite, type SpriteFrame } from 'cc'
+import { _decorator, Button, Color, Component, director, Director, Mask, Node, Sprite, type SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { UserView } from '@/shared/menu'
-import { ClientContentLoader } from '@/client/content/ClientContentLoader'
-import { ContentRegistry } from '@/client/content/ContentRegistry'
+import { applyClientScreenMods } from '@/client/content/ClientScreenMods'
+import { loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -47,6 +47,7 @@ export class MainMenuScreen extends Component {
     private user: UserView | null = null
     private ready = false
     private opened = false
+    private entrancePending = true
     private startAdventure = true
     private grassDelay = 0.5
     private startingSeconds: number | null = null
@@ -54,10 +55,7 @@ export class MainMenuScreen extends Component {
 
     async initialize(ui: UI, onProgress: (progress: number) => void = () => {}): Promise<void> {
         this.ui = ui
-        const loader = new ClientContentLoader()
-        const registry = new ContentRegistry()
-        registry.register(await loader.loadManifest('pvz-base'))
-        registry.freeze()
+        const { content: { registry, loader } } = await loadEntityDisplayAssets()
         const imageNames = new Set([
             ...MAIN_MENU_BUTTONS.flatMap(button => [button.image, button.highlight]), ...MAIN_MENU_EXTRA_IMAGES,
         ])
@@ -72,7 +70,7 @@ export class MainMenuScreen extends Component {
         }))
         if (!this.node.isValid) return
         const content = uiNode({ name: 'Selector', parent: this.node, anchor: { x: 0, y: 1 }, position: { x: -400, y: 300 } }).node
-        ui.image(content, this.frames.get('selectorscreen_bg')!, { width: 800, height: 600 })
+        const background = ui.image(content, this.frames.get('selectorscreen_bg')!, { width: 800, height: 600 })
         const pending: Promise<void>[] = []
         const player = (name: string, parent = content): ReanimPlayer => {
             const animation = uiNode({ name, parent, anchor: { x: 0, y: 1 } }).node.addComponent(ReanimPlayer)
@@ -126,6 +124,11 @@ export class MainMenuScreen extends Component {
         layers.forEach((layer, index) => layer.setSiblingIndex(index + 1))
         this.user = await menuApi.getCurrentUser()
         if (!this.node.isValid) return
+        await applyClientScreenMods('pvz:main-menu', {
+            node: this.node, backdropParent: this.node.parent!.parent!, background,
+        })
+        if (!this.node.isValid) return
+        this.refreshButtons()
         this.ready = true
     }
 
@@ -133,9 +136,26 @@ export class MainMenuScreen extends Component {
         if (!this.ready) return
         this.startingSeconds = null
         for (const hand of this.hand) hand.hide()
-        this.refreshButtons()
         void MusicSystem.playTune('title_theme')
-        if (this.opened) return
+        if (this.opened) {
+            this.setButtonsEnabled(true)
+            this.setAdventureShade(255)
+            this.syncPositions()
+            return
+        }
+        // Let activation, old-page disposal and first-draw setup finish before starting the clock.
+        director.off(Director.EVENT_AFTER_DRAW, this.queueEntrance, this)
+        director.off(Director.EVENT_AFTER_UPDATE, this.playEntrance, this)
+        director.once(Director.EVENT_AFTER_DRAW, this.queueEntrance, this)
+    }
+
+    private queueEntrance(): void {
+        director.once(Director.EVENT_AFTER_UPDATE, this.playEntrance, this)
+    }
+
+    private playEntrance(): void {
+        if (!this.node?.isValid || !this.node.activeInHierarchy) return
+        this.entrancePending = false
         void SoundLoader.play(SoundEffect.RollIn)
         for (const cloud of this.clouds) {
             const delay = random(-60, 20)
@@ -279,8 +299,15 @@ export class MainMenuScreen extends Component {
         cloud.player.play({ loop: false, rate: 0.5 / 20, timeSeconds, hideOnFinish: false, onFinish: () => { cloud.delay = random(20, 40) } })
     }
 
+    private setAdventureShade(shade: number): void {
+        const adventure = this.buttons.find(view => view.config.name === 'adventure')
+        for (const node of [adventure?.button.node, this.numbersRoot]) {
+            for (const sprite of node?.getComponentsInChildren(Sprite) ?? []) sprite.color = new Color(shade, shade, shade)
+        }
+    }
+
     protected lateUpdate(dt: number): void {
-        if (!this.ready) return
+        if (!this.ready || this.entrancePending) return
         dt = gameClock.delta(dt)
         this.syncPositions()
         for (const cloud of this.clouds) {
@@ -296,9 +323,7 @@ export class MainMenuScreen extends Component {
         if (this.startingSeconds === null) return
         this.startingSeconds += dt
         const shade = Math.floor(this.startingSeconds / 0.1) % 2 === 0 ? 80 : 255
-        const adventure = this.buttons.find(view => view.config.name === 'adventure')!
-        for (const sprite of adventure.button.node.getComponentsInChildren(Sprite)) sprite.color = new Color(shade, shade, shade)
-        for (const sprite of this.numbersRoot.getComponentsInChildren(Sprite)) sprite.color = new Color(shade, shade, shade)
+        this.setAdventureShade(shade)
         if (!this.laughPlayed && this.startingSeconds >= 1.25) {
             this.laughPlayed = true
             void SoundLoader.play(SoundEffect.EvilLaugh)
@@ -312,5 +337,10 @@ export class MainMenuScreen extends Component {
     private async enterAdventure(): Promise<void> {
         await this.onNavigate('play')
         if (this.node?.isValid && this.node.activeInHierarchy) this.show()
+    }
+
+    protected onDestroy(): void {
+        director.off(Director.EVENT_AFTER_DRAW, this.queueEntrance, this)
+        director.off(Director.EVENT_AFTER_UPDATE, this.playEntrance, this)
     }
 }

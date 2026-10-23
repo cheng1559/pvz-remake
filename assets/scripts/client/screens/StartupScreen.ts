@@ -1,4 +1,4 @@
-import { _decorator, Button, Color, Component, input, Input, Mask, Node, Sprite, UITransform, type EventMouse, type EventTouch, type UIOpacity } from 'cc'
+import { _decorator, Button, Color, Component, input, Input, Mask, Node, Sprite, UITransform, type EventKeyboard, type EventMouse, type EventTouch, type UIOpacity } from 'cc'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { FontMetricsUtil } from '@/client/font'
@@ -12,6 +12,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { UIHoverManager } from '@/client/input/UIHoverManager'
 
 const { ccclass } = _decorator
 const BAR_WIDTH = 314
@@ -239,7 +240,9 @@ export class StartupScreen extends Component {
         if (!GameDebugSettings.isMobileMode()) this.backgroundPress(event)
     }
 
-    private keyDown(): void { this.tryStart() }
+    private keyDown(event: EventKeyboard): void {
+        if (!event.propagationStopped && !UIHoverManager.isModalBlocked) this.tryStart()
+    }
 
     private touchStart(event: EventTouch): void {
         if (GameDebugSettings.isMobileMode()) this.backgroundPress(event)

@@ -12,8 +12,8 @@ Steps:
   7. Copy images to textures
   8. Copy particle images to texture resources
   9. Convert particle definitions
- 10. Convert sounds to WAV audio resources
- 11. Convert MO3 music to WAV audio stems
+ 10. Convert sounds to MP3 audio resources
+ 11. Convert MO3 music to MP3 audio stems
  12. Generate cached packet plant atlas
  13. Generate cached plant preview atlas
  14. Generate cached zombie preview atlas
@@ -202,7 +202,7 @@ def main():
     # ── Step 10: Convert sounds ────────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 10: Convert sounds to WAV audio resources")
+    print("[pipeline] Step 10: Convert sounds to MP3 audio resources")
     print("=" * 60)
 
     sounds_dir = raw_dir / "sounds"
@@ -213,7 +213,7 @@ def main():
     # ── Step 11: Convert music ────────────────────────────────────
     print()
     print("=" * 60)
-    print("[pipeline] Step 11: Convert MO3 music to WAV stems")
+    print("[pipeline] Step 11: Convert MO3 music to MP3 stems")
     print("=" * 60)
 
     music_dir = Path("./assets/resources/audio/music")

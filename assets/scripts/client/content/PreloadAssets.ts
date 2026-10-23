@@ -2,6 +2,7 @@ import { loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
 import { ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import { SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { CONTENT_CATEGORIES } from '@/shared/content'
+import { ParticleDefinitionLoader } from '@/core/Particle/ParticleDefinitionLoader'
 import { resourcePacks } from './ResourcePacks'
 
 /** Fill the existing Cocos, animation and resource pack caches during Release startup. */
@@ -29,6 +30,7 @@ export async function preloadAssets(onProgress: (progress: number) => void): Pro
     await Promise.all([
         resourcePacks.preload(value => onProgress(0.85 + value * 0.1)),
         SoundLoader.preloadAll(),
+        ParticleDefinitionLoader.preloadAll(),
     ])
     onProgress(1)
 }

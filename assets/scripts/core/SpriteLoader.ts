@@ -59,7 +59,7 @@ export class SpriteLoader {
     private static async _loadUncached(name: string): Promise<SpriteFrame | null> {
         this._configureDynamicAtlas()
         const revision = resourcePacks.revision
-        const mainSf = await resourcePacks.sprite(`pvz:${name}`) ?? await this._loadRaw(name)
+        const mainSf = await resourcePacks.asset(`pvz:${name}`, SpriteFrame) ?? await this._loadRaw(name)
 
         if (mainSf) {
             this._applySpriteSampling(mainSf, getSpriteDensity(mainSf) > 1 ? 'linear' : SpriteResourceManifest.getSampling(name))

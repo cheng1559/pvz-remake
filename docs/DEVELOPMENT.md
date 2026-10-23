@@ -2,6 +2,8 @@
 
 The main scene mounts `app/GameApp.ts`, which coordinates the menu shell and starts `LocalIntegratedGame` through `app/LevelController.ts`. Gameplay runs in `server`; the client consumes protocol snapshots and events. Keep engine imports out of `server`, `shared`, and `ecs`.
 
+Music and sound effects use MP3 through the existing `convert_music.py` and `copy_sounds.py` pipeline. To compress an older WAV workspace, run `python3 tools/compress_audio.py`: it preserves resource UUIDs, channels and extensionless paths, backing up PCM originals outside the asset directory in `tools/raw/audio-pcm`. Music uses LAME VBR q2 and effects q4 at 44.1kHz. Dynamic music stems retain their leading silence, gain and loop/beat metadata. This reduces download/package size; decoded PCM memory does not shrink by the same ratio.
+
 ## Server level structure
 
 `server/level.ts` initializes shared level state and advances level progress; `levelState.ts` defines the runtime components and resources. `sun.ts`, `items.ts`, `waves.ts`, and `zombieGroans.ts` provide shared sky-sun, item, wave/award, and zombie-groan logic. The corresponding progress, wave, and groan Mod system IDs are `pvz:level-progress`, `pvz:waves`, and `pvz:zombie-groans`.
@@ -133,4 +135,4 @@ npm run build:web:debug
 
 Prefer existing focused tests for changed critical logic. Avoid browser automation unless visual or interaction validation is required. Windows and Android build commands remain available; native compilation and device checks are separate from Web validation.
 
-The `pvzPhase0`, `pvzPhase2`, and `pvzPhase4` probes remain available in debug builds. Mod examples are documented in [the Phase 0 guide](../spikes/phase0/README.md).
+The `pvzPhase2` and `pvzPhase4` probes remain available in debug builds. See [the Mod guide](MODS.md) for Mod development and installation.

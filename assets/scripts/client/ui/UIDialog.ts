@@ -92,9 +92,13 @@ export class UIDialog extends Component {
         if (!this.dragOffset) return
         const point = this.localPoint(event).subtract(this.dragOffset)
         const size = this.content.getComponent(UITransform)!.contentSize
+        const bounds = this.node.getComponent(UITransform)!.contentSize
+        const halfWidth = bounds.width / 2 + 8, halfHeight = bounds.height / 2 + 8
+        const clamp = (value: number, a: number, b: number) =>
+            Math.max(Math.min(a, b), Math.min(Math.max(a, b), value))
         this.content.setPosition(
-            Math.max(-408, Math.min(408 - size.width, point.x)),
-            Math.max(size.height - 308, Math.min(308, point.y)),
+            clamp(point.x, -halfWidth, halfWidth - size.width),
+            clamp(point.y, size.height - halfHeight, halfHeight),
         )
         event.propagationStopped = true
     }

@@ -1,0 +1,11 @@
+{
+    "schemaVersion": 1,
+    "id": "local:widescreen",
+    "version": "0.2.6",
+    "apiVersion": 1,
+    "contentHash": "widescreen-0.2.6",
+    "dependencies": [],
+    "client": {
+        "module": "client/index.js"
+    }
+}

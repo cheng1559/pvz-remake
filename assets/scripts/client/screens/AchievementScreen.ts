@@ -4,6 +4,7 @@ import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import type { UI } from '@/client/ui/UI'
+import type { UIButton } from '@/client/ui/UIButton'
 import type { UIScroll } from '@/client/ui/UIScroll'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { showMenuPageControls } from './MenuPageControls'
@@ -20,6 +21,9 @@ const SPRITES = [
 @ccclass('PvZAchievementScreen')
 export class AchievementScreen extends Component {
     private scroll!: UIScroll
+    private more!: UIButton
+    private showingTop = false
+    private readonly icons = new Map<number, Sprite>()
 
     async initialize(ui: UI, onBack: () => void): Promise<void> {
         const [data, frames] = await Promise.all([
@@ -53,39 +57,49 @@ export class AchievementScreen extends Component {
             })
             icon.node.name = `Achievement-${item.id}`
             icon.color = new Color(255, 255, 255, item.earned ? 255 : 32)
+            this.icons.set(item.id, icon)
             ui.label(content, {
                 text: ui.text(item.titleKey), font: 'body', color: new Color(21, 175, 0),
                 x, y: y + 16, baseline: true,
             })
-            const description = ui.label(content, {
+            ui.label(content, {
                 text: ui.text(item.descriptionKey), font: 'achievement', color: Color.WHITE,
-                x, y: y + 31, width: 215, baseline: true,
+                x, y: y + 31, width: 215, baseline: true, lineSpacing: 12,
             })
-            description.renderer.lineSpacing = 12
-            description.renderer.forceRebuild()
         }
 
         await showMenuPageControls(content, ui, 'achievements', onBack)
         ui.image(content, sprites.acheesements_more_rock, { x: 700, y: 450 })
-        let showingTop = false
-        const more = ui.button(content, {
+        const more = this.more = ui.button(content, {
             images: { normal: sprites.acheesements_more_button, hover: sprites.acheesements_more_button_highlight },
             x: 700, y: 450, releaseToNormalOnPressOut: true, pressSound: null,
             onClick: () => {
-                showingTop = !showingTop
+                this.showingTop = !this.showingTop
                 more.onStateChange?.(more.isHovering ? 'hover' : 'normal')
-                this.scroll.scrollTo(this.scroll.offset + (showingTop ? 230 : -230), 0.25)
+                this.scroll.scrollTo(this.scroll.offset + (this.showingTop ? 230 : -230), 0.25)
             },
         })
         more.changeCursor = false
-        more.onPress = () => { if (!showingTop) void SoundLoader.play(SoundEffect.GraveButton) }
+        more.onPress = () => { if (!this.showingTop) void SoundLoader.play(SoundEffect.GraveButton) }
         const update = more.onStateChange!
         const image = more.node.getChildByName('Visual')!.getChildByName('Image')!.getComponent(Sprite)!
         more.onStateChange = state => {
             update(state)
-            const name = showingTop ? 'top' : 'more'
+            const name = this.showingTop ? 'top' : 'more'
             image.spriteFrame = sprites[`acheesements_${name}_button${state === 'hover' || state === 'pressed' ? '_highlight' : ''}`]
         }
+    }
+
+    async refresh(): Promise<void> {
+        const data = await menuApi.getAchievements()
+        if (!this.node.isValid) throw new Error('Achievement screen was destroyed while loading')
+        for (const item of data.items) {
+            const icon = this.icons.get(item.id)
+            if (icon) icon.color = new Color(255, 255, 255, item.earned ? 255 : 32)
+        }
+        this.scroll.offset = 0
+        this.showingTop = false
+        this.more.onStateChange?.('normal')
     }
 
     onEnable(): void { input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this) }

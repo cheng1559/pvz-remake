@@ -158,7 +158,7 @@ export class UIInput extends Component {
             try { this.native.focus() } finally { element.focus = focus }
         } else {
             const box = nativeInputBox()
-            if (box?.setInputBoxText) box.onInputBoxKey = this.nativeKey
+            if (box && 'onInputBoxKey' in box) box.onInputBoxKey = this.nativeKey
             this.native.focus()
         }
         nativeInputBox()?.hideInputBoxAccessory?.()
@@ -277,7 +277,7 @@ export class UIInput extends Component {
     private submit(): void { if (this.focused && this.available()) this.onSubmit(this.value) }
     private ended(): void {
         const box = nativeInputBox()
-        if (box?.onInputBoxKey === this.nativeKey) delete box.onInputBoxKey
+        if (box?.onInputBoxKey === this.nativeKey) box.onInputBoxKey = undefined
         if (UIInput.active === this) UIInput.active = null
         this.focused = this.dragging = false
         this.touchId = null

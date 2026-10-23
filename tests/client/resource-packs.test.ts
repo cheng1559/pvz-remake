@@ -10,12 +10,16 @@ function setup() {
     const storage = new Map<string, string>()
     const requests: string[] = []
     const archives = new Map<string, Uint8Array>()
+    const modArchives = new Map<string, Uint8Array>()
     const jsb = { selectFile: undefined as ((extension: string, callback: (path: string | null, error?: string | null) => void) => void) | undefined }
     let picker: any
     const db = {
         failWrite: false,
+        archives,
         createObjectStore() {},
         transaction() {
+            const database = this
+            const archives = this.archives
             const transaction: any = { objectStore: () => ({
                 get(id: string) {
                     const request: any = {}
@@ -24,14 +28,14 @@ function setup() {
                 },
                 put(data: Uint8Array, id: string) {
                     queueMicrotask(() => {
-                        if (db.failWrite) { transaction.error = new Error('Storage full'); transaction.onabort(); return }
+                        if (database.failWrite) { transaction.error = new Error('Storage full'); transaction.onabort(); return }
                         archives.set(id, data.slice())
                         transaction.oncomplete()
                     })
                 },
                 delete(id: string) {
                     queueMicrotask(() => {
-                        if (db.failWrite) { transaction.error = new Error('Storage full'); transaction.onabort(); return }
+                        if (database.failWrite) { transaction.error = new Error('Storage full'); transaction.onabort(); return }
                         archives.delete(id)
                         transaction.oncomplete()
                     })
@@ -40,7 +44,11 @@ function setup() {
             return transaction
         },
     }
-    class JsonAsset { json: any }
+    const modDb = { ...db, archives: modArchives }
+    class Asset { name = '' }
+    class JsonAsset extends Asset { json: any }
+    class TextAsset extends Asset { text = '' }
+    class AudioClip extends Asset { nativeUrl = '' }
     class Texture {
         static WrapMode = { CLAMP_TO_EDGE: 0 }
         static Filter = { LINEAR: 1, NEAREST: 0 }
@@ -59,19 +67,24 @@ function setup() {
     }
     const modules: Record<string, any> = {
         fflate: { default: { unzipSync, strFromU8 } },
-        cc: { JsonAsset, Texture2D: Texture, SpriteFrame: Frame, Rect: Vector, Size: Vector, Vec2: Vector,
+        cc: { Asset, JsonAsset, TextAsset, AudioClip, Texture2D: Texture, SpriteFrame: Frame, Rect: Vector, Size: Vector, Vec2: Vector,
             sys: { isNative: false, isBrowser: false, OS: { IOS: 'iOS' }, localStorage: { getItem: (key: string) => storage.get(key), setItem: (key: string, value: string) => storage.set(key, value) } },
             assetManager: { loadRemote: (path: string, options: any, callback?: any) => {
                 const complete = callback ?? options
-                try { complete(null, asset(path)) } catch (error) { complete(error) }
+                try {
+                    const value = asset(path)
+                    complete(null, /\.(mp3|wav)$/.test(options.ext ?? '') ? Object.assign(new AudioClip(), { nativeUrl: path }) : value)
+                } catch (error) { complete(error) }
             } } },
         './LegacyAssetLoader': { AssetLoader: { async load(path: string) { return asset(path) } } },
         './SpriteDensity': { setSpriteDensity() {}, applySpriteDensity(frame: any) { frame.normalized = true } },
     }
+    const blobs = new Map<string, Blob>()
     class TestURL extends URL {
-        static createObjectURL() {
+        static createObjectURL(blob: Blob) {
             const path = `blob:pack-${files.size}`
             files.set(path, { width: 100, height: 140 })
+            blobs.set(path, blob)
             return path
         }
     }
@@ -80,8 +93,8 @@ function setup() {
         const code = transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } })
         runInNewContext(code.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {},
             URL: TestURL, Blob, Uint8Array, DataView, jsb, location: { href: 'https://game.example/' },
-            indexedDB: { open: () => {
-                const request: any = { result: db }
+            indexedDB: { open: (name: string) => {
+                const request: any = { result: name === 'pvz-remake-mods' ? modDb : db }
                 queueMicrotask(() => { request.onupgradeneeded(); request.onsuccess() })
                 return request
             } },
@@ -89,8 +102,12 @@ function setup() {
         })
         return module.exports
     }
-    const archive = load('assets/scripts/client/content/ResourcePackArchive.ts')
-    modules['./ResourcePackArchive'] = modules['@/client/content/ResourcePackArchive'] = archive
+    const archive = load('assets/scripts/client/content/InstalledArchives.ts')
+    modules['./InstalledArchives'] = modules['@/client/content/InstalledArchives'] = archive
+    modules['@/shared/mod'] = modules['@/shared/mod/index'] = load('assets/scripts/shared/mod/index.ts')
+    const { ModManager } = load('assets/scripts/client/content/ModManager.ts')
+    const modManager = new ModManager()
+    modules['@/client/content/ModManager'] = { modManager }
     const { ResourcePackManager } = load('assets/scripts/client/content/ResourcePacks.ts')
     const manager = new ResourcePackManager()
     modules['./ResourcePacks'] = modules['@/client/content/ResourcePacks'] = { resourcePacks: manager }
@@ -106,7 +123,7 @@ function setup() {
         archives.set(name, zipSync(data))
     }
     const sprite = { file: 'button.png', width: 50, height: 70, scale: 2 }
-    return { manager, ResourcePackManager, files, storage, requests, modules, load, manifest, sprite, Texture, archives, archive, db, jsb, picker: () => picker }
+    return { manager, ResourcePackManager, files, storage, requests, modules, load, manifest, sprite, Texture, archives, archive, db, jsb, blobs, picker: () => picker, modManager, ModManager, modArchives, modDb }
 }
 
 function zipFiles(id = 'custom') {
@@ -118,6 +135,187 @@ function zipFiles(id = 'custom') {
         'fonts/atlas.png': image,
     }
 }
+
+test('music stems, SFX, animation JSON and text share pack priority before warm built-in caches', async () => {
+    const { manager, archives, storage, modules, load, files, blobs, ResourcePackManager } = setup()
+    const json = (value: unknown) => strToU8(JSON.stringify(value))
+    const animation = (durationSeconds: number) => ({
+        schemaVersion: 2, id: 'pvz:demo', durationSeconds,
+        tracks: [{ id: 'root', zIndex: 0, keyframes: [{ timeSeconds: 0, x: 0, y: 0,
+            scaleX: 1, scaleY: 1, skewX: 0, skewY: 0, alpha: 1, sprite: null, interpolation: 'linear' }] }],
+    })
+    archives.set('first', zipSync({
+        'pack.json': json({ id: 'first', audio: {
+            'pvz:day_grasswalk_main': 'main.mp3', 'pvz:day_grasswalk_drums': 'drums.mp3',
+            'pvz:day_grasswalk_hihats': 'hihats.mp3', 'pvz:chomp': 'chomp.mp3', 'author:custom_main': 'main.mp3',
+        }, json: {
+            'pvz:demo': 'animation.json', 'pvz:audio/music/music_manifest': 'music.json',
+            'pvz:properties/lawnstrings': 'strings.json', 'pvz:particles/demo': 'particle.json',
+        }, text: { 'pvz:properties/credits': 'credits.txt' } }),
+        'main.mp3': strToU8('ID3-first-main'), 'drums.mp3': strToU8('ID3-drums'),
+        'hihats.mp3': strToU8('ID3-hihats'), 'chomp.mp3': strToU8('ID3-first-chomp'),
+        'animation.json': json(animation(1)), 'strings.json': json({ MUSIC: 'First' }),
+        'particle.json': json({ emitters: [], replacement: true }), 'credits.txt': strToU8('Credits from ZIP'),
+        'music.json': json({ tunes: { day_grasswalk: { durationSec: 10, loopStartSec: 0, loopEndSec: 10,
+            stems: { main: 'audio/music/day_grasswalk_main', drums: 'audio/music/day_grasswalk_drums', hihats: 'audio/music/day_grasswalk_hihats' } } } }),
+    }))
+    archives.set('last', zipSync({
+        'pack.json': json({ id: 'last', audio: { 'pvz:day_grasswalk_main': 'main.mp3', 'pvz:chomp': 'chomp.mp3' },
+            json: { 'pvz:demo': 'animation.json', 'pvz:properties/lawnstrings': 'strings.json' } }),
+        'main.mp3': strToU8('ID3-last-main'), 'chomp.mp3': strToU8('ID3-last-chomp'),
+        'animation.json': json(animation(2)), 'strings.json': json({ MUSIC: 'Last' }),
+    }))
+    storage.set('pvz-remake:active-resource-packs', '["first","last"]')
+    const { AudioClip, JsonAsset, TextAsset } = modules.cc
+    let originalReads = 0
+    files.set('properties/lawnstrings', { json: { MUSIC: 'Original' } })
+    files.set('particles/demo', { name: 'demo', json: { replacement: false } })
+    modules.cc.resources = {
+        get(path: string) { originalReads++; return files.get(path) },
+        load() { assert.fail('an overridden resource must not load the original') },
+        getDirWithPath() { return [{ path: 'particles/demo' }] },
+    }
+    const { AssetLoader } = load('assets/scripts/client/content/LegacyAssetLoader.ts')
+    modules['@/client/content/LegacyAssetLoader'] = { AssetLoader }
+    assert.equal((await AssetLoader.load('properties/lawnstrings', JsonAsset)).json.MUSIC, 'Last')
+    assert.equal((await AssetLoader.load('properties/credits', TextAsset)).text, 'Credits from ZIP')
+    assert.equal((await AssetLoader.loadDir('particles', JsonAsset))[0].json.replacement, true)
+
+    const { SoundLoader } = load('assets/scripts/client/sound/LegacySoundSystem.ts')
+    modules['@/client/sound/LegacySoundSystem'] = { SoundLoader }
+    const { MusicSystem } = load('assets/scripts/client/music/MusicSystem.ts')
+    await MusicSystem.preloadAllTunes()
+    for (const [stem, expected] of [['main', 'ID3-last-main'], ['drums', 'ID3-drums'], ['hihats', 'ID3-hihats']]) {
+        const clip = await MusicSystem._loadClip(`audio/music/day_grasswalk_${stem}`)
+        assert.equal(await blobs.get(clip.nativeUrl)!.text(), expected)
+        assert.equal(blobs.get(clip.nativeUrl)!.type, 'audio/mpeg')
+    }
+    assert.equal(await blobs.get((await SoundLoader.load('chomp')).nativeUrl)!.text(), 'ID3-last-chomp')
+
+    modules.cc.Component = class {}
+    modules.cc._decorator = { ccclass: () => (value: unknown) => value }
+    modules['@/shared/content/reanim'] = load('assets/scripts/shared/content/reanim.ts')
+    const contentLoader = load('assets/scripts/client/content/ClientContentLoader.ts')
+    const loader = new contentLoader.ClientContentLoader()
+    const customClip = await loader.load({ id: 'author:custom_music', category: 'music', path: 'music/custom_main', bundle: 'base' }, AudioClip)
+    assert.equal(await blobs.get(customClip.nativeUrl)!.text(), 'ID3-first-main', 'derived music clips retain their Mod namespace')
+    modules['@/client/content/ClientContentLoader'] = contentLoader
+    const { ReanimRepository } = load('assets/scripts/client/reanim/ReanimPlayer.ts')
+    const registry = { resolve: () => ({ id: 'pvz:demo', category: 'reanim', path: 'reanim/demo', bundle: 'base', contentHash: 'base' }) }
+    const prepared = await new ReanimRepository(registry, loader).load('pvz:demo')
+    assert.equal(prepared.data.durationSeconds, 2)
+    assert.equal(originalReads, 0)
+
+    const loadRemote = modules.cc.assetManager.loadRemote
+    modules.cc.assetManager.loadRemote = (_path: string, _options: unknown, done: Function) => done(new Error('Audio decoding failed'))
+    modules['./ResourcePacks'].resourcePacks = new ResourcePackManager()
+    const { AssetLoader: retryLoader } = load('assets/scripts/client/content/LegacyAssetLoader.ts')
+    await assert.rejects(retryLoader.load('audio/sfx/chomp', AudioClip), /Audio decoding failed/)
+    assert.equal(originalReads, 0, 'decode failures cannot fall back to cached original audio')
+    modules.cc.assetManager.loadRemote = loadRemote
+    assert.ok(await retryLoader.load('audio/sfx/chomp', AudioClip), 'failed audio loads can retry')
+    await manager.preload(() => {})
+})
+
+function modFiles(id = 'local:screen', version = '1.0.0', dependencies: { id: string, version: string }[] = []) {
+    return {
+        'mod.json': strToU8(JSON.stringify({
+            schemaVersion: 1, id, version, apiVersion: 1, contentHash: `${id}-${version}`, dependencies,
+            client: { module: 'client/cocos/index.js' },
+        })),
+        'client/cocos/index.js': strToU8('System.register([], function (_export) { return { execute: function () { _export("register", function () {}); } }; });'),
+    }
+}
+
+test('Mod ZIP updates and uninstall preserve running code until restart and persist independently of packs', async () => {
+    const { modManager, ModManager, archives, modArchives, modDb } = setup()
+    const original = zipSync(modFiles())
+    assert.equal(await modManager.install(original), 'local:screen')
+    assert.equal((await modManager.ready()).length, 0, 'installation cannot activate code in the current session')
+    assert.equal(archives.size, 0, 'Mod ZIPs must use their own database')
+    const running = new ModManager()
+    assert.equal((await running.ready())[0].manifest.version, '1.0.0')
+    await running.install(zipSync(modFiles('local:screen', '1.1.0')))
+    assert.equal((await running.ready())[0].manifest.version, '1.0.0')
+    assert.equal((await new ModManager().ready())[0].manifest.version, '1.1.0')
+    const saved = modArchives.get('local:screen')
+    modDb.failWrite = true
+    await assert.rejects(running.install(original), /Storage full/)
+    assert.equal(modArchives.get('local:screen'), saved)
+    modDb.failWrite = false
+    assert.equal(await running.uninstall('local:screen'), true)
+    assert.equal((await running.ready())[0].manifest.version, '1.0.0')
+    assert.equal((await new ModManager().ready()).length, 0)
+    assert.equal(modArchives.has('local:screen'), false)
+    await assert.rejects(running.load('local:screen'), /not installed/)
+})
+
+test('Mod startup removes missing records and allows reinstall while preserving archive and dependency validation', async () => {
+    const { modManager, ModManager, storage, modArchives } = setup()
+    const key = 'pvz-remake:active-mods'
+    storage.set(key, '["local:widescreen"]')
+    assert.equal((await modManager.ready()).length, 0)
+    assert.equal(storage.get(key), '[]', 'missing installation records are removed persistently')
+    await assert.rejects(modManager.load('local:widescreen'), /not installed/)
+    await modManager.install(zipSync(modFiles('local:widescreen')))
+    assert.equal((await new ModManager().ready())[0].manifest.id, 'local:widescreen')
+
+    modArchives.set('local:base', zipSync(modFiles('local:base')))
+    modArchives.set('local:addon', zipSync(modFiles('local:addon', '1.0.0', [{ id: 'local:base', version: '1.0.0' }])))
+    storage.set(key, '["local:addon","local:gone","local:base"]')
+    const running = new ModManager()
+    assert.deepEqual(Array.from(await running.ready(), (mod: any) => mod.manifest.id), ['local:base', 'local:addon'])
+    assert.deepEqual(Array.from(await running.list()), ['local:addon', 'local:base'], 'saved priority order is preserved')
+    modArchives.delete('local:base')
+    await assert.rejects(new ModManager().ready(), /missing mod/, 'remaining installed Mods must still satisfy their dependencies')
+
+    modArchives.set('local:broken', new Uint8Array([1, 2, 3]))
+    storage.set(key, '["local:broken"]')
+    await assert.rejects(new ModManager().ready(), /zip/i)
+    assert.equal(storage.get(key), '["local:broken"]', 'corrupt installed Mods are not silently disabled')
+})
+
+test('Mod validation prevents missing modules and dependencies, incompatible updates, and disabling a required Mod', async () => {
+    const { modManager, ModManager, modArchives } = setup()
+    const addon = zipSync(modFiles('local:addon', '1.0.0', [{ id: 'local:base', version: '1.0.0' }]))
+    await assert.rejects(modManager.install(addon), /missing mod/)
+    assert.equal(modArchives.size, 0)
+    const base = zipSync(modFiles('local:base'))
+    await modManager.install(base)
+    await modManager.install(addon)
+    assert.deepEqual(Array.from(await modManager.list()), ['local:base', 'local:addon'])
+    const updated = new ModManager()
+    assert.deepEqual(Array.from(await updated.ready(), (mod: any) => mod.manifest.id), ['local:base', 'local:addon'])
+    await assert.rejects(modManager.unload('local:base'), /missing mod/)
+    await assert.rejects(modManager.uninstall('local:base'), /missing mod/)
+    await assert.rejects(modManager.install(zipSync(modFiles('local:base', '2.0.0'))), /requires local:base/)
+    assert.deepEqual(modArchives.get('local:base'), base)
+    await assert.rejects(modManager.install(zipSync({ 'mod.json': modFiles()['mod.json'] })), /Missing Mod module/)
+    await assert.rejects(modManager.install(zipSync(zipFiles())), /mod.json/)
+    await assert.rejects(modManager.install(zipSync({ ...modFiles(), '../outside.js': strToU8('') })), /Invalid ZIP path/)
+    assert.equal(await modManager.unload('all'), true)
+    assert.equal(await modManager.unload('all'), false)
+})
+
+test('Mod CLI mirrors pack installation, state-change restarts, list and uninstall behavior', async () => {
+    const { modules, load, modManager, modArchives } = setup()
+    modules['@/shared/debug/DebugCli'] = load('assets/scripts/shared/debug/DebugCli.ts')
+    const { executeDebugCliCommand } = load('assets/scripts/platform/debug/DebugCliCommands.ts')
+    const execute = (command: string) => executeDebugCliCommand(command, false, () => assert.fail('must not request gameplay'))
+    assert.equal((await execute('/mod install')).action, 'installMod')
+    assert.equal((await execute('/mod install custom.zip')).failure, 'syntax')
+    assert.equal((await execute('/mod load')).failure, 'syntax')
+    await modManager.install(zipSync(modFiles()))
+    assert.equal((await execute('/mod load local:screen')).action, undefined)
+    assert.match((await execute('/mod list')).message, /local:screen/)
+    assert.equal((await execute('/mod unload local:screen')).action, 'restartForMods')
+    assert.equal((await execute('/mod unload local:screen')).action, undefined)
+    assert.equal((await execute('/mod load local:screen')).action, 'restartForMods')
+    assert.equal((await execute('/mod uninstall local:screen')).action, 'restartForMods')
+    assert.equal(modArchives.size, 0)
+    assert.match((await execute('/mod list')).message, /none/)
+    assert.equal((await execute('/mod load local:screen')).failure, 'condition')
+})
 
 test('ZIP installation and replacement take effect on restart and leave current resources unchanged', async () => {
     const { manager, ResourcePackManager, storage, archives, db } = setup()
@@ -147,18 +345,44 @@ test('ZIP installation and replacement take effect on restart and leave current 
     assert.equal((await restored.font('pvz:demo')).config.json.layers[0].textureScale, 4)
 })
 
+test('startup removes missing pack records, allows reinstall, and still rejects corrupt installed packs', async () => {
+    const { manager, ResourcePackManager, storage, archives, manifest, sprite } = setup()
+    const key = 'pvz-remake:active-resource-packs'
+    storage.set(key, '["missing"]')
+    await manager.ready()
+    assert.deepEqual(Array.from(await manager.list()), [])
+    assert.equal(storage.get(key), '[]', 'repair is persisted for the next startup')
+    await assert.rejects(manager.load('missing'), /not installed/)
+    await manager.install(zipSync(zipFiles('missing')))
+    assert.ok(await new ResourcePackManager().sprite('pvz:button'), 'ZIP installation works after startup repair')
+
+    manifest('first', { 'pvz:button': sprite })
+    manifest('last', { 'pvz:button': sprite })
+    storage.set(key, '["first","gone","last"]')
+    assert.deepEqual(Array.from(await new ResourcePackManager().list()), ['first', 'last'], 'installed packs keep their priority order')
+
+    archives.set('broken', new Uint8Array([1, 2, 3]))
+    storage.set(key, '["first","broken"]')
+    await assert.rejects(new ResourcePackManager().ready(), /zip/i)
+    assert.equal(storage.get(key), '["first","broken"]', 'corrupt installed packs are not silently disabled')
+})
+
 test('invalid ZIP paths, missing dependencies and mismatched images leave the active pack untouched', async () => {
     const { manager, archive, manifest, sprite, archives } = setup()
     manifest('first', { 'pvz:button': sprite })
     await manager.load('first')
     const valid = zipFiles()
-    assert.throws(() => archive.unpackResourcePack(zipSync({ ...valid, '../outside.png': valid['button.png'] })), /Invalid ZIP path/)
-    assert.throws(() => archive.unpackResourcePack(zipSync({ ...valid, 'nested/pack.json': valid['pack.json'] })), /exactly one/)
-    assert.throws(() => archive.unpackResourcePack(new Uint8Array([1, 2, 3])), /zip/i)
+    assert.throws(() => archive.unpackArchive(zipSync({ ...valid, '../outside.png': valid['button.png'] }), 'pack.json'), /Invalid ZIP path/)
+    assert.throws(() => archive.unpackArchive(zipSync({ ...valid, 'nested/pack.json': valid['pack.json'] }), 'pack.json'), /exactly one/)
+    assert.throws(() => archive.unpackArchive(new Uint8Array([1, 2, 3]), 'pack.json'), /zip/i)
     for (const changed of [
         { ...valid, 'button.png': new Uint8Array([1, 2]) },
         { ...valid, 'fonts/demo.json': strToU8('{"layers":[{"image":"missing"}]}') },
         { ...valid, 'pack.json': strToU8('{"id":"custom","sprites":{"pvz:button":{"file":"button.png","width":1,"height":1}},"fonts":{}}') },
+        { 'pack.json': strToU8('{"id":"custom","audio":{"pvz:chomp":"missing.mp3"}}') },
+        { 'pack.json': strToU8('{"id":"custom","audio":{"pvz:chomp":"sound.ogg"}}'), 'sound.ogg': strToU8('OggS') },
+        { 'pack.json': strToU8('{"id":"custom","json":{"pvz:demo":"broken.json"}}'), 'broken.json': strToU8('{broken') },
+        { 'pack.json': strToU8('{"id":"custom","unknown":{}}') },
     ]) {
         const data = zipSync(changed)
         await assert.rejects(manager.install(data))
@@ -174,12 +398,12 @@ test('pack install delegates to its dialog and ZIP picker cancellation leaves pa
     const { executeDebugCliCommand } = load('assets/scripts/platform/debug/DebugCliCommands.ts')
     const execute = (command: string) => executeDebugCliCommand(command, false, () => assert.fail('must not request gameplay'))
     assert.equal((await execute('/pack install')).action, 'installPack')
-    const importing = archive.selectResourcePackZip()
+    const importing = archive.selectZip()
     const data = zipSync(zipFiles())
     picker().files = [{ arrayBuffer: async () => data.buffer }]
     picker().onchange()
     await manager.install(await importing)
-    const cancelled = archive.selectResourcePackZip()
+    const cancelled = archive.selectZip()
     picker().cancel()
     assert.equal(await cancelled, null)
     assert.deepEqual(Array.from(await manager.list()), ['custom'])
@@ -200,6 +424,7 @@ test('Native ZIP installation copies files into writable storage and rolls back 
         isDirectoryExist: (path: string) => directories.has(path),
         createDirectory: (path: string) => directories.add(path),
         removeDirectory(path: string) {
+            path = path.replace(/\/$/, '')
             for (const name of [...directories]) if (name === path || name.startsWith(path + '/')) directories.delete(name)
             for (const name of files.keys()) if (name.startsWith(path + '/')) files.delete(name)
             return true
@@ -214,35 +439,52 @@ test('Native ZIP installation copies files into writable storage and rolls back 
             return true
         },
     } }
-    const data = zipSync(zipFiles())
+    const packFiles = { ...zipFiles(), 'audio/chomp.mp3': strToU8('ID3-original'), 'audio/later.mp3': strToU8('ID3-later') }
+    const packManifest = JSON.parse(strFromU8(packFiles['pack.json']))
+    packManifest.audio = { 'pvz:chomp': 'audio/chomp.mp3', 'pvz:later': 'audio/later.mp3' }
+    packFiles['pack.json'] = strToU8(JSON.stringify(packManifest))
+    const data = zipSync(packFiles)
     files.set('/Downloads/custom.zip', data)
     let select!: (path: string | null, error?: string | null) => void
     jsb.selectFile = (extension, callback) => { assert.equal(extension, 'zip'); select = callback }
-    const selected = archive.selectResourcePackZip()
+    const selected = archive.selectZip()
     assert.equal(files.has('/Downloads/custom.zip'), true, 'wait for the system picker before reading')
     select('/Downloads/custom.zip')
     await manager.install(await selected)
     assert.equal(files.has('/Downloads/custom.zip'), false, 'remove the temporary iOS import')
     jsb.selectFile = (_, callback) => callback(null)
-    assert.equal(await archive.selectResourcePackZip(), null)
+    assert.equal(await archive.selectZip(), null)
     jsb.selectFile = (_, callback) => callback(null, 'Could not read the selected file')
-    await assert.rejects(archive.selectResourcePackZip(), /Could not read/)
+    await assert.rejects(archive.selectZip(), /Could not read/)
     modules.cc.sys.os = 'OS X'
     files.set('/Downloads/custom.zip', data)
     jsb.selectFile = (_, callback) => callback('/Downloads/custom.zip')
-    assert.deepEqual(await archive.selectResourcePackZip(), data)
+    assert.deepEqual(await archive.selectZip(), data)
     assert.equal(files.has('/Downloads/custom.zip'), true, 'preserve the original macOS file')
     assert.deepEqual(files.get('/app/resource-packs/custom/.archive.zip'), data)
     assert.deepEqual(files.get('/app/resource-packs/custom/button.png'), zipFiles()['button.png'])
     assert.deepEqual(Array.from(await new ResourcePackManager().list()), ['custom'])
+    const running = new ResourcePackManager()
+    const clip = await running.asset('pvz:chomp', modules.cc.AudioClip)
+    assert.match(clip.nativeUrl, /resource-pack-runtime/)
+    assert.deepEqual(files.get(clip.nativeUrl), packFiles['audio/chomp.mp3'])
     failCommit = true
     await assert.rejects(manager.install(data), /finish installing/)
     assert.deepEqual(files.get('/app/resource-packs/custom/.archive.zip'), data)
     assert.ok(!directories.has('/app/resource-packs/custom.installing'))
     assert.ok(!directories.has('/app/resource-packs/custom.previous'))
-    assert.equal(await manager.uninstall('custom'), true)
+    failCommit = false
+    await manager.install(zipSync({ ...packFiles, 'audio/chomp.mp3': strToU8('ID3-updated') }))
+    assert.deepEqual(files.get(clip.nativeUrl), packFiles['audio/chomp.mp3'], 'updates preserve the playing runtime snapshot')
+    const updated = await new ResourcePackManager().asset('pvz:chomp', modules.cc.AudioClip)
+    assert.notEqual(updated.nativeUrl, clip.nativeUrl)
+    assert.equal(strFromU8(files.get(updated.nativeUrl)), 'ID3-updated')
+    assert.equal(await running.uninstall('custom'), true)
     assert.equal(files.has('/app/resource-packs/custom/.archive.zip'), false)
     assert.deepEqual(Array.from(await new ResourcePackManager().list()), [])
+    assert.deepEqual(files.get(clip.nativeUrl), packFiles['audio/chomp.mp3'], 'uninstall keeps audio available until restart')
+    const later = await running.asset('pvz:later', modules.cc.AudioClip)
+    assert.equal(strFromU8(files.get(later.nativeUrl)), 'ID3-later', 'unloaded assets can still load from the running pack after uninstall')
     await assert.rejects(manager.load('custom'), /not installed/)
 })
 

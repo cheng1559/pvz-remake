@@ -2,8 +2,9 @@ import { native, sys } from 'cc'
 import fflate from 'fflate'
 
 export type ArchiveFiles = Record<string, Uint8Array>
+export type ArchiveKind = 'resource-packs' | 'resource-pack-runtime' | 'mods' | 'mod-runtime'
 
-export function unpackResourcePack(data: Uint8Array): ArchiveFiles {
+export function unpackArchive(data: Uint8Array, manifest: 'pack.json' | 'mod.json'): ArchiveFiles {
     const files: ArchiveFiles = Object.create(null)
     const entries = fflate.unzipSync(data, { filter: entry => !entry.name.endsWith('/') })
     for (const [path, bytes] of Object.entries(entries)) {
@@ -14,32 +15,36 @@ export function unpackResourcePack(data: Uint8Array): ArchiveFiles {
         if (files[normalized]) throw new Error(`Duplicate ZIP path: ${normalized}`)
         files[normalized] = bytes
     }
-    const manifests = Object.keys(files).filter(name => name === 'pack.json' || name.endsWith('/pack.json'))
-    if (manifests.length !== 1) throw new Error('ZIP must contain exactly one pack.json')
-    const prefix = manifests[0].slice(0, -'pack.json'.length)
+    const manifests = Object.keys(files).filter(name => name === manifest || name.endsWith(`/${manifest}`))
+    if (manifests.length !== 1) throw new Error(`ZIP must contain exactly one ${manifest}`)
+    const prefix = manifests[0].slice(0, -manifest.length)
     return Object.fromEntries(Object.entries(files).filter(([name]) => name.startsWith(prefix)).map(([name, bytes]) => [name.slice(prefix.length), bytes]))
 }
 
-export function installedPackRoot(id: string): string {
-    return `${native.fileUtils.getWritablePath().replace(/\\/g, '/').replace(/\/$/, '')}/resource-packs/${encodeURIComponent(id)}`
+export function installedArchiveRoot(kind: ArchiveKind, id: string): string {
+    return `${native.fileUtils.getWritablePath().replace(/\\/g, '/').replace(/\/$/, '')}/${kind}/${encodeURIComponent(id)}`
 }
 
-let database: Promise<IDBDatabase> | undefined
-function openDatabase(): Promise<IDBDatabase> {
-    return database ??= new Promise((resolve, reject) => {
-        const request = indexedDB.open('pvz-remake-resource-packs', 1)
+const databases = new Map<ArchiveKind, Promise<IDBDatabase>>()
+function openDatabase(kind: ArchiveKind): Promise<IDBDatabase> {
+    const cached = databases.get(kind)
+    if (cached) return cached
+    const pending = new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(`pvz-remake-${kind}`, 1)
         request.onupgradeneeded = () => { request.result.createObjectStore('archives') }
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => reject(request.error)
     })
+    databases.set(kind, pending)
+    return pending
 }
 
-export async function readInstalledArchive(id: string): Promise<Uint8Array | undefined> {
+export async function readInstalledArchive(kind: ArchiveKind, id: string): Promise<Uint8Array | undefined> {
     if (sys.isNative) {
-        const path = `${installedPackRoot(id)}/.archive.zip`
+        const path = `${installedArchiveRoot(kind, id)}/.archive.zip`
         return native.fileUtils.isFileExist(path) ? new Uint8Array(native.fileUtils.getDataFromFile(path)) : undefined
     }
-    const db = await openDatabase()
+    const db = await openDatabase(kind)
     return new Promise((resolve, reject) => {
         const request = db.transaction('archives').objectStore('archives').get(id)
         request.onsuccess = () => resolve(request.result)
@@ -47,51 +52,51 @@ export async function readInstalledArchive(id: string): Promise<Uint8Array | und
     })
 }
 
-export async function saveInstalledArchive(id: string, data: Uint8Array, files: ArchiveFiles): Promise<void> {
+export async function saveInstalledArchive(kind: ArchiveKind, id: string, data: Uint8Array, files: ArchiveFiles): Promise<void> {
     if (sys.isNative) {
-        const fs = native.fileUtils, root = installedPackRoot(id), staging = `${root}.installing`, backup = `${root}.previous`
+        const fs = native.fileUtils, root = installedArchiveRoot(kind, id), staging = `${root}.installing`, backup = `${root}.previous`
         fs.removeDirectory(staging)
         fs.createDirectory(staging)
         try {
             for (const [name, bytes] of Object.entries({ ...files, '.archive.zip': data })) {
                 const path = `${staging}/${name}`
                 fs.createDirectory(path.slice(0, path.lastIndexOf('/')))
-                if (!fs.writeDataToFile(bytes.slice().buffer, path)) throw new Error(`Failed to install pack file: ${name}`)
+                if (!fs.writeDataToFile(bytes.slice().buffer, path)) throw new Error(`Failed to install archive file: ${name}`)
             }
             fs.removeDirectory(backup)
-            if (fs.isDirectoryExist(root) && !fs.renameFile(root, backup)) throw new Error('Failed to replace installed pack')
+            if (fs.isDirectoryExist(root) && !fs.renameFile(root, backup)) throw new Error('Failed to replace installed archive')
             if (!fs.renameFile(staging, root)) {
                 if (fs.isDirectoryExist(backup)) fs.renameFile(backup, root)
-                throw new Error('Failed to finish installing pack')
+                throw new Error('Failed to finish installing archive')
             }
             fs.removeDirectory(backup)
         } finally { fs.removeDirectory(staging) }
         return
     }
-    const db = await openDatabase()
+    const db = await openDatabase(kind)
     await new Promise<void>((resolve, reject) => {
         const transaction = db.transaction('archives', 'readwrite')
         transaction.oncomplete = () => resolve()
-        transaction.onerror = transaction.onabort = () => reject(transaction.error ?? new Error('Failed to save resource pack'))
+        transaction.onerror = transaction.onabort = () => reject(transaction.error ?? new Error('Failed to save archive'))
         transaction.objectStore('archives').put(data, id)
     })
 }
 
-export async function removeInstalledArchive(id: string): Promise<void> {
+export async function removeInstalledArchive(kind: ArchiveKind, id: string): Promise<void> {
     if (sys.isNative) {
-        if (!native.fileUtils.removeDirectory(installedPackRoot(id))) throw new Error(`Failed to uninstall resource pack: ${id}`)
+        if (!native.fileUtils.removeDirectory(installedArchiveRoot(kind, id))) throw new Error(`Failed to uninstall archive: ${id}`)
         return
     }
-    const db = await openDatabase()
+    const db = await openDatabase(kind)
     await new Promise<void>((resolve, reject) => {
         const transaction = db.transaction('archives', 'readwrite')
         transaction.oncomplete = () => resolve()
-        transaction.onerror = transaction.onabort = () => reject(transaction.error ?? new Error('Failed to uninstall resource pack'))
+        transaction.onerror = transaction.onabort = () => reject(transaction.error ?? new Error('Failed to uninstall archive'))
         transaction.objectStore('archives').delete(id)
     })
 }
 
-export async function selectResourcePackZip(): Promise<Uint8Array | null> {
+export async function selectZip(): Promise<Uint8Array | null> {
     if (sys.isNative) {
         const selectFile = (globalThis as { jsb?: { selectFile?: (extension: string, callback: (path: string | null, error?: string | null) => void) => void } }).jsb?.selectFile
         if (!selectFile) throw new Error('File selection is unavailable on this platform')

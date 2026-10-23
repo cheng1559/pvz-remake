@@ -401,10 +401,9 @@ export class MusicSystem {
 
         this._manifestLoading = AssetLoader.load<JsonAsset>(MANIFEST_PATH, JsonAsset, 'music manifest')
             .then((asset) => {
-                this._manifestLoading = null
                 this._manifest = (asset?.json as MusicManifest | undefined) ?? null
                 return this._manifest
-            })
+            }).finally(() => { this._manifestLoading = null })
         return this._manifestLoading
     }
 
@@ -413,6 +412,7 @@ export class MusicSystem {
         if (cached) return cached
 
         const loading = AssetLoader.load<AudioClip>(path, AudioClip, `music: ${path}`)
+            .catch(error => { this._clipLoading.delete(path); throw error })
         this._clipLoading.set(path, loading)
         return loading
     }
@@ -760,7 +760,10 @@ export class MusicSystem {
     private static _stopNativeStems() {
         const player = this._nativePlayer()
         for (const audioId of Object.values(this._nativeAudioIds)) {
-            if (audioId !== undefined) player?.stop(audioId)
+            if (audioId === undefined) continue
+            // iOS otherwise waits on the game thread for queued audio to finish playing.
+            player?.pause(audioId)
+            player?.stop(audioId)
         }
         this._nativeAudioIds = {}
     }
@@ -768,7 +771,9 @@ export class MusicSystem {
     private static _stopNativeOverlayStems() {
         const player = this._nativePlayer()
         for (const audioId of Object.values(this._overlayNativeAudioIds)) {
-            if (audioId !== undefined) player?.stop(audioId)
+            if (audioId === undefined) continue
+            player?.pause(audioId)
+            player?.stop(audioId)
         }
         this._overlayNativeAudioIds = {}
     }

@@ -26,6 +26,11 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     assert.equal(getDebugCliSuffix('/pack ins'), 'tall')
     assert.equal(getDebugCliSuffix('/pack install'), '')
     assert.equal(getDebugCliSuffix('/pack load'), ' [installed_id]')
+    assert.deepEqual(parseDebugCliCommand('/mod load local:widescreen'), { name: 'mod', args: ['load', 'local:widescreen'] })
+    assert.deepEqual(getDebugCliCompletions('/mod ', undefined, true), ['/mod install', '/mod load', '/mod unload', '/mod uninstall', '/mod list'])
+    assert.equal(getDebugCliSuffix('/mod is'), '')
+    assert.equal(getDebugCliSuffix('/mod ins'), 'tall')
+    assert.equal(getDebugCliSuffix('/mod install'), '')
     for (const command of ['/unknown', '/win extra', '/cooldown yes', '/pack invalid', '/item sun 3', '/sun remove 1']) {
         assert.equal((parseDebugCliCommand(command) as { failure: string }).failure, 'syntax')
     }
