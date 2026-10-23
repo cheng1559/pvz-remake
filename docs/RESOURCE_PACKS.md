@@ -22,7 +22,7 @@
 
 Native 的 `resource-pack-runtime/` 保存当前运行中的文件快照；更新或卸载不会提前破坏正在播放或之后还会使用的音频，下一次启动时清理。Web 音频的 Blob URL 同样保留到页面重启，支持循环、跳转和音效变调。Release 的全资源预加载包含启用包中的所有资源类型。
 
-HD 包的制作素材位于 `art/resource-packs/hd/`，包含 UI 超分图、非像素字体和高清普通／紫卡背景，不参与 Cocos 资源导入和游戏打包。原 `/hdfont` 开关已移除；`/hdseed` 只控制种子包、图鉴头像和落点预览的实时 Reanim 渲染。
+HD 包的制作素材位于 `art/resource-packs/hd/`，包含 UI 超分图、非像素字体和高清普通／紫卡背景，不参与 Cocos 资源导入和游戏打包。原 `/hdfont` 开关已移除；`/hdseed` 控制种子包、图鉴头像和落点预览的实时 Reanim 渲染，种子包也可用 `/seedstyle standard|rendered|tilted` 单独选择风格。
 
 执行 `npm run build:hd-pack` 更新 HD 包清单，并生成 `dist/resource-packs/hd.zip`，通过 `/pack install` 安装。当前英文 HD 使用 Real HAT sharper 重制，贴图 2×、字体 4×；模型来源与重新生成步骤见 [HD 包说明](../art/resource-packs/hd/README.md)。资源包无需 Cocos 构建、Bundle 或 `.meta` 文件。
 

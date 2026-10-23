@@ -67,7 +67,9 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             void SoundLoader.play(SoundEffect.Tap)
         }
         if (page === 'plants') {
-            for (const plant of plants) {
+            // Draw rows top to bottom, right to left: plants may overflow upwards and rightwards.
+            const drawOrder = [...plants].sort((a, b) => Math.floor(a.id / 8) - Math.floor(b.id / 8) || b.id - a.id)
+            for (const plant of drawOrder) {
                 const x = plant.id === 48 ? 20 : plant.id % 8 * 52 + 26
                 const y = plant.id === 48 ? 23 : Math.floor(plant.id / 8) * 78 + 92
                 const button = ui.button(parent, {

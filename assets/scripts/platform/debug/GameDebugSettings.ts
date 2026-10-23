@@ -4,6 +4,7 @@ const DEBUG_SETTINGS_KEY = 'pvz-remake:debug:settings'
 
 export type DebugCollectMode = 'auto' | 'click' | 'move'
 export type DebugPerfToggle = 'plants' | 'zombies' | 'particles' | 'sfx' | 'logic'
+export type SeedPacketStyle = 'standard' | 'rendered' | 'tilted'
 
 type DebugSettings = {
     rechargingEnabled: boolean
@@ -11,6 +12,7 @@ type DebugSettings = {
     collectMode: DebugCollectMode
     hitboxesVisible: boolean
     hdSeedPacketsEnabled: boolean
+    seedPacketStyle: SeedPacketStyle
     mobileEnabled: boolean
     hotkeysEnabled: boolean
     widescreenBackgroundsVisible: boolean
@@ -27,6 +29,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     collectMode: 'click',
     hitboxesVisible: false,
     hdSeedPacketsEnabled: false,
+    seedPacketStyle: 'standard',
     mobileEnabled: sys.isMobile,
     hotkeysEnabled: false,
     widescreenBackgroundsVisible: true,
@@ -55,6 +58,8 @@ function loadDebugSettings(): DebugSettings {
             collectMode: normalizeCollectMode(parsed.collectMode),
             hitboxesVisible: parsed.hitboxesVisible ?? DEFAULT_DEBUG_SETTINGS.hitboxesVisible,
             hdSeedPacketsEnabled: parsed.hdSeedPacketsEnabled ?? DEFAULT_DEBUG_SETTINGS.hdSeedPacketsEnabled,
+            seedPacketStyle: parsed.seedPacketStyle === 'standard' || parsed.seedPacketStyle === 'rendered' || parsed.seedPacketStyle === 'tilted'
+                ? parsed.seedPacketStyle : parsed.hdSeedPacketsEnabled ? 'rendered' : DEFAULT_DEBUG_SETTINGS.seedPacketStyle,
             mobileEnabled: DEFAULT_DEBUG_SETTINGS.mobileEnabled,
             hotkeysEnabled: parsed.hotkeysEnabled ?? DEFAULT_DEBUG_SETTINGS.hotkeysEnabled,
             widescreenBackgroundsVisible:
@@ -112,8 +117,15 @@ export const GameDebugSettings = {
 
     setHDSeedPacketsEnabled(enabled: boolean) {
         this.hdSeedPacketsEnabled = enabled
+        this.seedPacketStyle = enabled ? 'rendered' : 'standard'
         saveDebugSettings(this)
         return this.hdSeedPacketsEnabled
+    },
+
+    setSeedPacketStyle(style: SeedPacketStyle) {
+        this.seedPacketStyle = style
+        saveDebugSettings(this)
+        return this.seedPacketStyle
     },
 
     setMobileEnabled(enabled: boolean) {

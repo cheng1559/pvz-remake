@@ -11,13 +11,24 @@ class Color {
     equals(other: Color) { return this.r === other.r && this.g === other.g && this.b === other.b && this.a === other.a }
 }
 class Sprite { color = Color.WHITE.clone() }
+class Mask {
+    static Type = { GRAPHICS_STENCIL: 2 }
+    enabled = true
+    type = 0
+    subComp = { bounds: [] as number[], clear() {}, fill() {}, rect(...bounds: number[]) { this.bounds = bounds } }
+}
 class Node {
     isValid = true
     active = false
     children: Node[] = []
     sprite?: Sprite
+    angle = 0
+    position = { x: 0, y: 0 }
+    scale = { x: 1, y: 1 }
     constructor(public parent?: Node) { parent?.children.push(this) }
-    setScale() {}
+    setPosition(x: number, y: number) { this.position = { x, y } }
+    setScale(x: number, y: number) { this.scale = { x, y } }
+    addComponent(type: typeof Mask) { return new type() }
     destroy() {
         this.isValid = false
         for (const child of [...this.children]) child.destroy()
@@ -27,13 +38,13 @@ class Node {
 }
 
 function setup() {
-    const settings = { hdSeedPacketsEnabled: true }
+    const settings = { hdSeedPacketsEnabled: true, seedPacketStyle: 'rendered' }
     const classes: Record<string, any> = {}
     const errors: unknown[][] = []
     class Frame { reset(info: unknown) { Object.assign(this, info) } }
     class Rect { constructor(public x: number, public y: number, public width: number, public height: number) {} }
     const modules: Record<string, any> = {
-        cc: { Component: class {}, Color, Sprite, SpriteFrame: Frame, Rect, Size: Rect, Vec2: Rect,
+        cc: { Component: class {}, Color, Mask, Sprite, SpriteFrame: Frame, Rect, Size: Rect, Vec2: Rect,
             isValid: (node: Node) => node.isValid, _decorator: { ccclass: (name: string) => (value: unknown) => { classes[name] = value; return value } } },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: settings },
         '@/client/content/SpriteDensity': { applySpriteDensity() {} },
@@ -133,4 +144,43 @@ test('plant previews create one selected representation and preserve tint across
     assert.equal(preview.rendered.active, false)
     assert.equal(preview.node.children.length, 1)
     assert.equal(errors.length, 1)
+})
+
+test('packet style switches reuse rendered plants and leave placement previews independent', async () => {
+    const { settings, classes, errors } = setup()
+    const packet = new classes.PlantPreview()
+    packet.node = new Node()
+    const calls: string[] = []
+    packet.load = async () => { calls.push('rendered') }
+    packet.initialize(0, async () => { calls.push('standard') }, { x: 5, y: -9, scale: 0.5 }, 1)
+    await packet.ready
+    const root = packet.rendered
+    settings.seedPacketStyle = 'tilted'
+    packet.update()
+    assert.equal(packet.rendered, root)
+    assert.ok(root.angle < 0)
+    assert.ok(root.scale.x > 0.5 && root.scale.x === root.scale.y)
+    assert.deepEqual(Array.from(packet.packetClip.subComp.bounds), [3.5, -52, 220.5, 220])
+    assert.deepEqual(calls, ['rendered'], 'changing the layout must not reload Reanim assets')
+
+    const held = new classes.PlantPreview()
+    held.node = new Node()
+    held.load = async () => {}
+    held.initialize(0, async () => assert.fail('held preview should still use Reanim'), { x: 0, y: 0, scale: 1 })
+    await held.ready
+    assert.equal(held.rendered.angle, 0)
+    assert.deepEqual(held.rendered.scale, { x: 1, y: 1 })
+
+    settings.seedPacketStyle = 'rendered'
+    packet.update()
+    assert.equal(packet.rendered, root)
+    assert.equal(packet.packetClip.enabled, false)
+    assert.equal(root.angle, 0)
+    assert.deepEqual(root.position, { x: 5, y: -9 })
+    settings.seedPacketStyle = 'standard'
+    packet.update()
+    await packet.ready
+    assert.equal(root.isValid, false)
+    assert.deepEqual(calls, ['rendered', 'standard'])
+    assert.equal(errors.length, 0)
 })

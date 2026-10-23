@@ -7,7 +7,7 @@ import { SFX_VOLUME_SCALE } from '@/shared/menu'
 import { OptionsSettings } from '@/platform/OptionsSettings'
 import { resourcePacks } from '@/client/content/ResourcePacks'
 import { modManager } from '@/client/content/ModManager'
-import { GameDebugSettings, type DebugPerfToggle } from './GameDebugSettings'
+import { GameDebugSettings, type DebugPerfToggle, type SeedPacketStyle } from './GameDebugSettings'
 
 export async function executeDebugCliCommand(
     command: string,
@@ -52,6 +52,7 @@ export async function executeDebugCliCommand(
         case 'hotkeys': GameDebugSettings.setHotkeysEnabled(args[0].toLowerCase() === 'true'); break
         case 'hitboxes': GameDebugSettings.setHitboxesVisible(args[0].toLowerCase() === 'true'); break
         case 'hdseed': GameDebugSettings.setHDSeedPacketsEnabled(args[0].toLowerCase() === 'true'); break
+        case 'seedstyle': GameDebugSettings.setSeedPacketStyle(args[0].toLowerCase() as SeedPacketStyle); break
         case 'pack': case 'mod': {
             if (!args.length) return { ...debugSuccess(`Opening ${name} manager`), action: name === 'pack' ? 'managePacks' : 'manageMods' }
             const operation = args[0].toLowerCase()

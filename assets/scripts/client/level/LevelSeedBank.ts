@@ -31,6 +31,8 @@ export class LevelSeedBank {
                 loadSprite: options.loadPacketSprite,
                 costFont: options.packetCostFont,
             })
+            // Left packets draw last so their plants can overlap the packets to their right.
+            view.node.setSiblingIndex(0)
             const tooltip = options.ui.tooltip(view.node, {
                 text: options.ui.text(String(visual.seedType).toUpperCase()), gap: 0,
             })

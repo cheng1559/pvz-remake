@@ -11,6 +11,7 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 ```text
 /gamespeed 2
 /hdseed true
+/seedstyle tilted
 /pack
 /pack install
 /mod install
@@ -22,7 +23,9 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /home
 ```
 
-`/hdseed true` enables actual Reanim portraits for almanac plants and zombies, plus held/grid placement previews for implemented plants. `false` selects cached portraits. Only the selected representation is created; failures report an error without falling back. This setting is saved locally. Seed background resolution is controlled by resource packs independently.
+`/hdseed true` enables actual Reanim portraits for almanac plants and zombies, plus held/grid placement previews for implemented plants, and sets seed packets to `rendered`. `false` selects cached portraits and `standard` packets. Only the selected representation is created; failures report an error without falling back. This setting is saved locally. Seed background resolution is controlled by resource packs independently.
+
+`/seedstyle standard|rendered|tilted` independently selects the seed packet style and saves it locally. `standard` uses cached plant art; `rendered` uses the original Reanim pose; `tilted` enlarges that pose and rotates it clockwise. Plants are clipped only at the image area's inner left and bottom borders; the top and right sides may overflow. Backgrounds, costs and hit areas keep their original size. Switching between `rendered` and `tilted` reuses the loaded plant. Almanac portraits and held/grid previews are unaffected.
 
 `/pack install` takes no arguments and opens a local ZIP picker in Web and macOS builds. Its dialog shows only `Installing...`. Installation, updates and enabled-state changes ask for a restart; confirming immediately restarts the entire game after saving the running level. Current resources remain unchanged until restart. Installed packs persist independently of the original ZIP and can be updated with the same ID. `/pack load hd` enables an installed pack; `/pack unload hd` disables it; `/pack uninstall hd` deletes it and also asks for a restart if it was enabled. Repeated enable/disable commands do not prompt. `/pack list` lists enabled packs. Later packs override matching IDs, including Mod IDs. Missing IDs use original resources; failed pack resources do not fall back. ZIP is the only installation format; HD assets ship separately. `/hdfont` has been removed; Pico129 and Pix118Bold are excluded from the HD pack. See [resource pack format and installation](RESOURCE_PACKS.md).
 

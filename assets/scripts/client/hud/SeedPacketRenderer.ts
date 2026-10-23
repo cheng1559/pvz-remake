@@ -200,7 +200,7 @@ export class SeedPacketRenderer {
         icon.addComponent(PlantPreview).initialize(plantId, parent => this._drawCachedPlantIcon(parent, seedId, args, scale), {
             x: placement.offsetX * iconScale, y: -(placement.offsetY + 1) * iconScale,
             scale: placement.scale * iconScale,
-        })
+        }, iconScale)
     }
 
     private static async _drawCachedPlantIcon(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number): Promise<void> {

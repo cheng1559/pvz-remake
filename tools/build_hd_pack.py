@@ -29,20 +29,26 @@ def build(pack=PACK, pack_id='hd'):
             sprite['animations'] = entry['animations']
         sprites[f'pvz:{name}'] = sprite
 
-    # The UI-only pack supplies two HD backgrounds; a full pack already has an SR atlas.
-    if 'seeds' not in metadata['images']:
+    # Keep the existing HD lettering; SR cannot recover text from 50x70 cells.
+    full_atlas = 'seeds' in metadata['images']
+    atlas = pack / 'sprites/seeds.png' if full_atlas else BASE / 'sprites/seeds.png'
+    backgrounds = PACK if full_atlas else pack
+    with Image.open(atlas) as source:
+        seeds = source.convert('RGBA').resize((900, 140), Image.Resampling.NEAREST)
+    if full_atlas:
         with Image.open(BASE / 'sprites/seeds.png') as source:
-            seeds = source.convert('RGBA').resize((900, 140), Image.Resampling.NEAREST)
-        for name, column in [('seedpacket_larger', 2), ('seedpacket_upgrade_larger', 1)]:
-            path = pack / f'sprites/{name}.png'
-            with Image.open(path) as source:
-                image = source.convert('RGBA')
-                if image.size != (100, 140):
-                    raise ValueError(f'{name} must be 100x140')
-                seeds.paste(image, (column * 100, 0))
+            header = source.convert('RGBA').crop((0, 0, 450, 8)).resize((900, 16), Image.Resampling.NEAREST)
+            seeds.paste(header, (0, 0))
+    for name, column in [('seedpacket_larger', 2), ('seedpacket_upgrade_larger', 1)]:
+        with Image.open(backgrounds / f'sprites/{name}.png') as source:
+            image = source.convert('RGBA')
+            if image.size != (100, 140):
+                raise ValueError(f'{name} must be 100x140')
+            seeds.paste(image, (column * 100, 0))
+        if not full_atlas:
             sprites[f'pvz:{name}'] = {'file': f'sprites/{name}.png', 'width': 100, 'height': 140}
-        seeds.save(pack / 'sprites/seeds.png')
-        sprites['pvz:seeds'] = {'file': 'sprites/seeds.png', 'width': 450, 'height': 70, 'scale': 2}
+    seeds.save(pack / 'sprites/seeds.png')
+    sprites['pvz:seeds'] = {'file': 'sprites/seeds.png', 'width': 450, 'height': 70, 'scale': 2}
 
     fonts = {f'pvz:{path.stem}': f'fonts/{path.name}' for path in sorted((pack / 'fonts').glob('*.json'))}
     if any(name in fonts for name in ('pvz:pico129', 'pvz:pix118bold')):

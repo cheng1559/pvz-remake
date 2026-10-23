@@ -23,13 +23,16 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 快捷键 | `/hotkeys {true|false}`；当前 `1` 选择种子包，`D` 切换 0 倍速 |
 | 碰撞框 | `/hitboxes {true|false}` |
 | 实时植物／僵尸头像 | `/hdseed {true|false}`，控制真实 Reanim 渲染，与背景清晰度独立 |
+| 种子包风格 | `/seedstyle {standard|rendered|tilted}`，标准／实际渲染／放大右倾 |
 | 材质包 | `/pack`（管理窗口）、`/pack install`、`/pack load {已安装ID}`、`/pack unload {ID或all}`、`/pack uninstall {ID}`、`/pack list` |
 | Mod | `/mod`（管理窗口）、`/mod install`、`/mod load {已安装ID}`、`/mod unload {ID或all}`、`/mod uninstall {ID}`、`/mod list` |
 | 性能 | `/perf {plants|zombies|particles|sfx|logic} {true|false}` |
 | 平台 | `/mobile {true|false}`、`/fullscreen {true|false}` |
 | 音量 | `/music {0-100}`、`/sfx {0-100}`，通过设置 API 保存 |
 
-`/hdseed true` 启用图鉴植物和僵尸头像的真实 Reanim 渲染，以及已实现植物的手持与半透明落点预览。`false` 使用缓存头像。按开关选择后才加载、创建对应图像，失败直接报错，不回退；偏好保存在本地。种子包背景清晰度由材质包独立控制。
+`/hdseed true` 启用图鉴植物和僵尸头像的真实 Reanim 渲染，以及已实现植物的手持与半透明落点预览，同时将种子包设为 `rendered`。`false` 使用缓存头像并将种子包设为 `standard`。按开关选择后才加载、创建对应图像，失败直接报错，不回退；偏好保存在本地。种子包背景清晰度由材质包独立控制。
+
+`/seedstyle standard|rendered|tilted` 单独切换种子包风格并保存到本地：`standard` 为标准缓存图，`rendered` 为原比例实际渲染，`tilted` 在实际渲染基础上放大并顺时针旋转。植物仅按内部图片区的左侧和底部内边框裁剪，上方与右侧允许溢出。背景、费用和点击区域保持原尺寸；实际渲染与右倾风格之间切换时复用已加载的植物。此命令不影响图鉴僵尸头像和手持／落点预览。
 
 `/pack install` 不带参数，在网页和 macOS 中弹出文件选择窗口，选择本机 ZIP 安装。安装弹窗只显示 `Installing...`；安装、更新或启用状态变化后提示重启，确认后立即重启整个游戏，运行中的关卡先保存。安装结果保存在本机，重启不依赖原 ZIP。`/pack load hd` 启用已安装包；`/pack unload hd` 停用；`/pack uninstall hd` 删除已安装包，删除已启用包也会提示重启；`/pack list` 查看启用列表。重复启用或停用不会弹窗，重启前保留当前资源。资源包只通过 ZIP 安装，游戏不内置 HD 素材。后启用的包优先覆盖同 ID 资源，也可覆盖 Mod ID；包内没有该 ID 时使用原资源，已声明资源加载失败不回退。原 `/hdfont` 已移除；`Pico129`、`Pix118Bold` 不在 HD 包中。包格式与安装方式见[材质包说明](RESOURCE_PACKS.md)。
 

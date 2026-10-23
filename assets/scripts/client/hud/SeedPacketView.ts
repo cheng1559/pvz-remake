@@ -10,6 +10,7 @@ import {
 } from '@/client/hud/SeedPacketRenderer'
 import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview } from './PlantPreview'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 export interface SeedPacketViewArgs {
     name: string
@@ -87,7 +88,7 @@ export class SeedPacketView {
         const height = Math.min(SEED_PACKET_HEIGHT, Math.round(68 * percentDark) + 2)
         uiNode({
             node: this.cooldownClip,
-            size: { width: SEED_PACKET_WIDTH, height },
+            size: { width: SEED_PACKET_WIDTH + (GameDebugSettings.seedPacketStyle === 'tilted' ? 25 : 0), height },
             anchor: { x: 0, y: 1 },
         })
         this.cooldownClip.active = true

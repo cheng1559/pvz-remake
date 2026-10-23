@@ -1,8 +1,8 @@
-import { _decorator, Color, Component, isValid, Node, Sprite } from 'cc'
+import { _decorator, Color, Component, Graphics, isValid, Mask, Node, Sprite } from 'cc'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { loadDisplayParts, loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
 import { uiNode } from '@/client/view/uiNode'
-import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { GameDebugSettings, type SeedPacketStyle } from '@/platform/debug/GameDebugSettings'
 
 const { ccclass } = _decorator
 export type PreviewPlantId = string | number
@@ -14,6 +14,9 @@ export class PlantPreview extends Component {
     private loadCached!: (root: Node, plantId: PreviewPlantId) => Promise<void>
     private plantId?: PreviewPlantId
     private placement!: { x: number, y: number, scale: number }
+    private packetScale?: number
+    private style?: SeedPacketStyle
+    private packetClip?: Mask
     private rendered: Node | null = null
     private rendering: boolean | undefined
     private color = Color.WHITE.clone()
@@ -24,10 +27,11 @@ export class PlantPreview extends Component {
         return plantId === 'pvz:peashooter' || plantId === 'pvz:sunflower' || plantId === 'pvz:repeater'
     }
 
-    initialize(plantId: PreviewPlantId | undefined, loadCached: (root: Node, plantId: PreviewPlantId) => Promise<void>, placement: { x: number, y: number, scale: number }): void {
+    initialize(plantId: PreviewPlantId | undefined, loadCached: (root: Node, plantId: PreviewPlantId) => Promise<void>, placement: { x: number, y: number, scale: number }, packetScale?: number): void {
         this.plantId = plantId
         this.loadCached = loadCached
         this.placement = placement
+        this.packetScale = packetScale
         this.refresh()
     }
 
@@ -35,6 +39,7 @@ export class PlantPreview extends Component {
         if (this.plantId === plantId) return
         this.plantId = plantId
         this.rendering = undefined
+        this.style = undefined
         this.refresh()
     }
 
@@ -48,16 +53,23 @@ export class PlantPreview extends Component {
 
     private refresh(): void {
         if (this.plantId === undefined) return
-        const enabled = GameDebugSettings.hdSeedPacketsEnabled && (typeof this.plantId === 'number'
+        const style = this.packetScale !== undefined ? GameDebugSettings.seedPacketStyle
+            : GameDebugSettings.hdSeedPacketsEnabled ? 'rendered' : 'standard'
+        if (this.style === style && this.rendering !== undefined) return
+        this.style = style
+        this.updatePacketClip(style)
+        const enabled = style !== 'standard' && (typeof this.plantId === 'number'
             ? this.plantId >= 0 && this.plantId <= 48 : PlantPreview.supports(this.plantId))
-        if (this.rendering === enabled) return
+        if (this.rendering === enabled) {
+            if (enabled) this.applyPlacement(style)
+            return
+        }
         this.rendering = enabled
         if (this.rendered) { this.rendered.active = false; this.rendered.destroy() }
         this.players.length = 0
-        const root = uiNode({ name: enabled ? 'RenderedPlant' : 'CachedPlant', parent: this.node, active: false,
-            position: enabled ? this.placement : undefined }).node
+        const root = uiNode({ name: enabled ? 'RenderedPlant' : 'CachedPlant', parent: this.node, active: false }).node
         this.rendered = root
-        if (enabled) root.setScale(this.placement.scale, this.placement.scale, 1)
+        if (enabled) this.applyPlacement(style)
         this.ready = (enabled ? this.load(root, this.plantId) : this.loadCached(root, this.plantId)).then(() => {
             if (!isValid(root, true) || root !== this.rendered) return
             this.applyColor()
@@ -66,6 +78,38 @@ export class PlantPreview extends Component {
         void this.ready.catch(error => {
             if (isValid(root, true) && root === this.rendered) console.error('[PlantPreview] Failed to load plant preview', error)
         })
+    }
+
+    private updatePacketClip(style: SeedPacketStyle): void {
+        if (this.packetScale === undefined || (!this.packetClip && style !== 'tilted')) return
+        const mask = this.packetClip ??= this.node.addComponent(Mask)
+        mask.type = Mask.Type.GRAPHICS_STENCIL
+        mask.enabled = style === 'tilted'
+        if (!mask.enabled) return
+        const scale = this.packetScale
+        const graphics = mask.subComp as Graphics
+        graphics.clear()
+        // Inner image border: left x=3.5, bottom y=52. Leave the top and right open.
+        graphics.rect(3.5 * scale, -52 * scale, 220.5 * scale, 220 * scale)
+        graphics.fill()
+    }
+
+    private applyPlacement(style: SeedPacketStyle): void {
+        const root = this.rendered!
+        const { x, y, scale } = this.placement
+        const enlarged = style === 'tilted'
+        const factor = enlarged ? 1.5 : 1
+        root.angle = enlarged ? -12 : 0
+        root.setScale(scale * factor, scale * factor, 1)
+        if (!enlarged) { root.setPosition(x, y); return }
+
+        // Rotate around the lower centre of the packet so the plant leans to the right.
+        const pivotX = 23 * this.packetScale!
+        const pivotY = -25 * this.packetScale!
+        const radians = root.angle * Math.PI / 180
+        const cos = Math.cos(radians), sin = Math.sin(radians)
+        root.setPosition(pivotX + ((x - pivotX) * cos - (y - pivotY) * sin) * factor,
+            pivotY + ((x - pivotX) * sin + (y - pivotY) * cos) * factor)
     }
 
     private async load(root: Node, plantId: PreviewPlantId): Promise<void> {

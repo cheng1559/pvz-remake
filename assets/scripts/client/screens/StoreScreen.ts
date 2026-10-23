@@ -99,7 +99,9 @@ export class StoreScreen extends Component {
         this.money.text = formatMoney(this.data.coins)
         this.pageLabel.text = this.ui.text('STORE_PAGE').replace('{PAGE}', String(this.page + 1)).replace('{NUM_PAGES}', String(this.data.pages.length))
         this.pageLabel.node.active = this.data.pages.length > 1 && this.hatchTimer <= 0
-        for (const [index, item] of this.data.pages[this.page].items.entries()) this.renderItem(item, index)
+        const drawOrder = [...this.data.pages[this.page].items.entries()]
+            .sort(([a], [b]) => Math.floor(a / 4) - Math.floor(b / 4) || b - a)
+        for (const [index, item] of drawOrder) this.renderItem(item, index)
         this.refreshEnabled()
     }
 
