@@ -5,5 +5,15 @@
   "OPTIONS_FULLSCREEN_REQUIRED_BODY": "Windowed mode is not available on mobile devices.",
   "OPTIONS_FULLSCREEN_UNAVAILABLE_HEADER": "Full Screen Unavailable",
   "OPTIONS_FULLSCREEN_UNAVAILABLE_BODY": "This browser does not support full screen mode.",
-  "OPTIONS_GITHUB_BUTTON": "GitHub"
+  "OPTIONS_GITHUB_BUTTON": "GitHub",
+  "PACKAGE_PACKS_TITLE": "Resource Packs",
+  "PACKAGE_MODS_TITLE": "Mods",
+  "PACKAGE_IMPORT": "Import",
+  "PACKAGE_APPLY": "Apply",
+  "PACKAGE_UNINSTALL": "Uninstall",
+  "PACKAGE_UNINSTALL_WARNING": "Uninstall %s?",
+  "PACKAGE_NO_PACKS": "No resource packs installed",
+  "PACKAGE_NO_MODS": "No Mods installed",
+  "PACKAGE_RESTART_HEADER": "Restart Game?",
+  "PACKAGE_RESTART_BODY": "Restart now to apply the changes? The current level will be saved."
 }

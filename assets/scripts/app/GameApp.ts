@@ -24,6 +24,7 @@ import { menuApi } from '@/client/api/MenuApi'
 import { connectLocalMenuApi } from './LocalMenuApi'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { showDebugCliDialog } from '@/client/screens/DebugCliDialog'
+import { showPackageDialog } from '@/client/screens/PackageDialog'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
@@ -246,6 +247,24 @@ export class GameApp extends Component {
                     if (this.node?.isValid && running && !wasPaused && controller.isRunning() && this.currentPage === page) controller.resume()
                 }
                 break
+            case 'managePacks': case 'manageMods':
+                this.debugCliOpen = true
+                try {
+                    const kind = result.action === 'manageMods' ? 'mod' : 'pack'
+                    const ui = await UI.load()
+                    if (!this.node?.isValid) return
+                    await (await showPackageDialog(this.node, ui, kind, {
+                        install: () => this.installPackage(kind, false),
+                        restart: async () => { await controller.saveIfRunning(); this.restartGame() },
+                    })).result
+                } catch (error) {
+                    console.error('[Packages]', error)
+                    this.showAdvice(String(error))
+                } finally {
+                    this.debugCliOpen = false
+                    if (this.node?.isValid && running && !wasPaused && controller.isRunning() && this.currentPage === page) controller.resume()
+                }
+                break
             case 'restart': await this.navigate('restart'); break
             case 'level': await this.navigate('restart', result.levelId); break
             case 'home': await this.navigate('main'); break
@@ -269,26 +288,29 @@ export class GameApp extends Component {
         }
     }
 
-    private async installPackage(kind: 'pack' | 'mod'): Promise<void> {
+    /** Installs a picked ZIP; `enable` also enables it and offers the restart, as `/pack install` does. */
+    private async installPackage(kind: 'pack' | 'mod', enable = true): Promise<string | null> {
         const ui = await UI.load()
         let progress: UIDialog | undefined
         try {
             const data = await selectZip()
-            if (!data || !this.node?.isValid) return
+            if (!data || !this.node?.isValid) return null
             progress = ui.dialog(this.node, {
                 title: 'Installing...', footer: false, clickSound: null,
             })
             progress.onConfirm = progress.onCancel = () => {}
             // Paint the dialog before ZIP validation and native file writes occupy the main thread.
             await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
-            await (kind === 'pack' ? resourcePacks : modManager).install(data)
+            const id = await (kind === 'pack' ? resourcePacks : modManager).install(data, enable)
             progress.close()
-            await this.confirmPackageRestart(kind)
+            if (enable) await this.confirmPackageRestart(kind)
+            return id
         } catch (error) {
             progress?.close()
             if (this.node?.isValid) await ui.dialog(this.node, {
                 title: 'Installation Failed', message: error instanceof Error ? error.message : String(error), confirmText: 'OK',
             }).result
+            return null
         }
     }
 
@@ -299,6 +321,10 @@ export class GameApp extends Component {
             title: 'Restart Required', message: `Restart the game to apply ${kind === 'pack' ? 'resource pack' : 'Mod'} changes.`, confirmText: 'OK',
         }).result
         if (!confirmed || !this.node?.isValid) return
+        this.restartGame()
+    }
+
+    private restartGame(): void {
         if (sys.isNative) sys.restartVM()
         else window.location.reload()
     }

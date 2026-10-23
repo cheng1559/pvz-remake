@@ -3,7 +3,7 @@ import fflate from 'fflate'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import type { FontConfig } from '@/client/font/FontRenderer.d'
 import { applySpriteDensity, setSpriteDensity } from './SpriteDensity'
-import { installedArchiveRoot, readInstalledArchive, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveFiles } from './InstalledArchives'
+import { installedArchiveRoot, listInstalledArchives, readInstalledArchive, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveFiles } from './InstalledArchives'
 
 interface PackSprite {
     file: string
@@ -23,6 +23,7 @@ interface PackManifest {
     json: Record<string, string>
     text: Record<string, string>
 }
+export interface PackEntry { id: string, enabled: boolean }
 interface LoadedPack {
     files: ArchiveFiles
     manifest: PackManifest
@@ -34,7 +35,8 @@ interface LoadedPack {
     runtimeRoot?: string
 }
 
-const storageKey = 'pvz-remake:active-resource-packs'
+/** Every installed pack the player has placed, highest priority first. */
+const storageKey = 'pvz-remake:resource-packs'
 const fileKinds = ['fonts', 'audio', 'json', 'text'] as const
 type AssetType<T extends Asset> = new (...args: any[]) => T
 let nativeRuntimeReady = false
@@ -184,39 +186,68 @@ export class ResourcePackManager {
                 native.fileUtils.removeDirectory(installedArchiveRoot('resource-pack-runtime', ''))
                 nativeRuntimeReady = true
             }
-            const saved = sys.localStorage.getItem(storageKey)
-            if (!saved) return
-            const ids: unknown = JSON.parse(saved)
-            if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new Error('Invalid saved resource packs')
+            const entries = this.saved()
             const packs: LoadedPack[] = []
-            for (const id of ids) {
+            const missing = new Set<string>()
+            for (const { id } of entries.filter(entry => entry.enabled).reverse()) {
                 const pack = await this.read(id, true)
                 if (pack) packs.push(pack)
-                else console.warn(`[ResourcePacks] Removed missing pack from enabled list: ${id}. Reinstall with /pack install`)
+                else {
+                    missing.add(id)
+                    console.warn(`[ResourcePacks] Removed missing pack from enabled list: ${id}. Reinstall with /pack install`)
+                }
             }
             this.active = packs
-            if (packs.length !== ids.length) this.saveEnabled(packs.map(pack => pack.manifest.id))
+            if (missing.size) this.saveEntries(entries.filter(entry => !missing.has(entry.id)))
         })()
     }
 
+    /** Enables an installed pack at the highest priority. */
     async load(id: string): Promise<boolean> {
         await this.ready()
         await this.read(id)
-        const ids = await this.list()
-        if (ids.includes(id)) return false
-        this.saveEnabled([...ids, id])
+        const entries = this.saved()
+        if (entries.some(entry => entry.id === id && entry.enabled)) return false
+        this.saveEntries([{ id, enabled: true }, ...entries.filter(entry => entry.id !== id)])
         return true
     }
 
-    async install(data: Uint8Array): Promise<string> {
+    /** Saves the ZIP; `enable` also enables it at the highest priority. */
+    async install(data: Uint8Array, enable = true): Promise<string> {
         await this.ready()
         const files = unpackArchive(data, 'pack.json')
         const pack = createPack(files)
-        await saveInstalledArchive('resource-packs', pack.manifest.id, data, files)
-        const ids = await this.list()
-        this.saveEnabled([...ids.filter(id => id !== pack.manifest.id), pack.manifest.id])
-        this.loaded.delete(pack.manifest.id)
-        return pack.manifest.id
+        const id = pack.manifest.id
+        await saveInstalledArchive('resource-packs', id, data, files)
+        if (enable) this.saveEntries([{ id, enabled: true }, ...this.saved().filter(entry => entry.id !== id)])
+        this.loaded.delete(id)
+        return id
+    }
+
+    async installed(): Promise<string[]> {
+        return listInstalledArchives('resource-packs')
+    }
+
+    /** All installed packs, highest priority first; packs never placed are listed last as disabled. */
+    async entries(): Promise<PackEntry[]> {
+        await this.ready()
+        const installed = await this.installed()
+        const entries = this.saved().filter(entry => installed.includes(entry.id))
+        return [...entries, ...installed.filter(id => !entries.some(entry => entry.id === id)).map(id => ({ id, enabled: false }))]
+    }
+
+    /** Replaces the saved order and enabled state, highest priority first. */
+    async setEntries(entries: readonly PackEntry[]): Promise<void> {
+        await this.ready()
+        if (new Set(entries.map(entry => entry.id)).size !== entries.length) throw new Error('Duplicate resource pack ID')
+        for (const entry of entries) if (entry.enabled) await this.read(entry.id)
+        this.saveEntries(entries.map(({ id, enabled }) => ({ id, enabled })))
+    }
+
+    /** Packs used by this session, lowest priority first. */
+    async running(): Promise<string[]> {
+        await this.ready()
+        return this.active.map(pack => pack.manifest.id)
     }
 
     async preload(onProgress: (progress: number) => void): Promise<void> {
@@ -234,29 +265,30 @@ export class ResourcePackManager {
         onProgress(1)
     }
 
+    /** Disables a pack, or `all`, keeping its place in the order. */
     async unload(id: string): Promise<boolean> {
         await this.ready()
         if (id !== 'all') await this.read(id)
-        const ids = await this.list()
-        const next = id === 'all' ? [] : ids.filter(candidate => candidate !== id)
-        if (next.length === ids.length) return false
-        this.saveEnabled(next)
+        const entries = this.saved()
+        if (!entries.some(entry => entry.enabled && (id === 'all' || entry.id === id))) return false
+        this.saveEntries(entries.map(entry => id === 'all' || entry.id === id ? { ...entry, enabled: false } : entry))
         return true
     }
 
     async uninstall(id: string): Promise<boolean> {
         await this.ready()
         await this.read(id)
-        const ids = await this.list()
+        const entries = this.saved()
         await removeInstalledArchive('resource-packs', id)
-        this.saveEnabled(ids.filter(candidate => candidate !== id))
+        this.saveEntries(entries.filter(entry => entry.id !== id))
         this.loaded.delete(id)
-        return ids.includes(id)
+        return entries.some(entry => entry.id === id && entry.enabled)
     }
 
+    /** Enabled packs in load order, lowest priority first. */
     async list(): Promise<string[]> {
         await this.ready()
-        return JSON.parse(sys.localStorage.getItem(storageKey) ?? '[]') as string[]
+        return this.saved().filter(entry => entry.enabled).map(entry => entry.id).reverse()
     }
 
     /** Resolve presentation assets before either the resources bundle or the content registry. */
@@ -375,8 +407,16 @@ export class ResourcePackManager {
         return pack
     }
 
-    private saveEnabled(ids: string[]): void {
-        sys.localStorage.setItem(storageKey, JSON.stringify(ids))
+    private saved(): PackEntry[] {
+        const entries: unknown = JSON.parse(sys.localStorage.getItem(storageKey) ?? '[]')
+        if (!Array.isArray(entries) || entries.some(entry => typeof entry?.id !== 'string' || typeof entry.enabled !== 'boolean')) {
+            throw new Error('Invalid saved resource packs')
+        }
+        return entries
+    }
+
+    private saveEntries(entries: PackEntry[]): void {
+        sys.localStorage.setItem(storageKey, JSON.stringify(entries))
     }
 }
 

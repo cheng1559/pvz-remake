@@ -52,6 +52,26 @@ export async function readInstalledArchive(kind: ArchiveKind, id: string): Promi
     })
 }
 
+/** Installed archive IDs, sorted, without reading their contents. */
+export async function listInstalledArchives(kind: ArchiveKind): Promise<string[]> {
+    if (sys.isNative) {
+        const fs = native.fileUtils, root = installedArchiveRoot(kind, '').replace(/\/$/, '')
+        if (!fs.isDirectoryExist(root)) return []
+        return fs.listFiles(root)
+            .map(path => path.replace(/\\/g, '/').replace(/\/$/, ''))
+            // Skip staging and backup folders left by an interrupted install.
+            .filter(path => !/\.(?:installing|previous)$/.test(path) && fs.isFileExist(`${path}/.archive.zip`))
+            .map(path => decodeURIComponent(path.slice(path.lastIndexOf('/') + 1)))
+            .sort()
+    }
+    const db = await openDatabase(kind)
+    return new Promise((resolve, reject) => {
+        const request = db.transaction('archives').objectStore('archives').getAllKeys()
+        request.onsuccess = () => resolve((request.result as string[]).slice().sort())
+        request.onerror = () => reject(request.error)
+    })
+}
+
 export async function saveInstalledArchive(kind: ArchiveKind, id: string, data: Uint8Array, files: ArchiveFiles): Promise<void> {
     if (sys.isNative) {
         const fs = native.fileUtils, root = installedArchiveRoot(kind, id), staging = `${root}.installing`, backup = `${root}.previous`

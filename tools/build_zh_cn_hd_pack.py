@@ -13,7 +13,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 
-from upscale_fonts import PIXEL_FONTS, Upscaler, pack_glyphs
+from upscale_fonts import Upscaler, pack_glyphs
 from upscale_ui import SHEETS, upscale, upscale_sheet
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,18 +23,25 @@ PACK = ROOT / 'art/resource-packs/zh-cn-hd'
 CACHE = ROOT / 'temp/zh-cn-hd'
 
 
+def model_signature(name: str):
+    path = Path(name)
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else name
+
+
 class CachedUpscaler(Upscaler):
     def __init__(self, name, device):
         super().__init__(name, device)
         # CJK glyph batches benefit from fewer GPU dispatches. The 24px
         # overlap still covers waifu2x's receptive field; averaging is unchanged.
         self.tile_size = 512 if name == 'waifu2x' else 192
+        self.signature = model_signature(name)
 
     def rgb(self, image):
         # Font styles often share identical outline/face masks. Reuse their exact
-        # predictions without changing the model or its eight-way averaging.
+        # predictions without changing the model's output.
         digest = hashlib.sha256(image.tobytes() + str((image.mode, image.size)).encode()
-                                + (ROOT / 'tools/upscale_fonts.py').read_bytes()).hexdigest()
+                                + (ROOT / 'tools/upscale_fonts.py').read_bytes()
+                                + self.signature.encode()).hexdigest()
         target = CACHE / f'rgb-chunks/{self.name}/{digest}.png'
         if target.exists():
             return Image.open(target).convert('RGB')
@@ -53,7 +60,7 @@ def write_json(path: Path, value: dict):
     temporary.replace(path)
 
 
-def build_images(device: str, hd: dict, zh: dict):
+def build_images(device: str, hd: dict, zh: dict, model_name: str):
     entries = copy.deepcopy(hd['sprites'])
     for id, entry in entries.items():
         if id not in zh['sprites']:
@@ -63,7 +70,8 @@ def build_images(device: str, hd: dict, zh: dict):
     report_path = CACHE / 'images.json'
     report = json.loads(report_path.read_text()) if report_path.exists() else {}
     signature = hashlib.sha256((ROOT / 'tools/upscale_ui.py').read_bytes()
-                               + (ROOT / 'tools/upscale_fonts.py').read_bytes()).hexdigest()
+                               + (ROOT / 'tools/upscale_fonts.py').read_bytes()
+                               + model_signature(model_name).encode()).hexdigest()
     model = None
     start = time.monotonic()
     for index, (id, entry) in enumerate(zh['sprites'].items(), 1):
@@ -73,7 +81,7 @@ def build_images(device: str, hd: dict, zh: dict):
         digest = hashlib.sha256(source.read_bytes()).hexdigest()
         if not target.exists() or report.get(id) != [digest, signature]:
             if model is None:
-                model = Upscaler('general', device)
+                model = Upscaler(model_name, device)
             with Image.open(source) as image:
                 image = image.convert('RGBA')
                 name = id.split(':', 1)[1]
@@ -142,7 +150,8 @@ def build_font(name: str, config: dict, model: Upscaler, device: str):
             packed = pack_glyphs(packing, image_name, source)
             # Cache complete chunks so interrupted large CJK batches can resume.
             digest = hashlib.sha256(packed.tobytes() + str(packed.size).encode()
-                                    + (ROOT / 'tools/upscale_fonts.py').read_bytes()).hexdigest()
+                                    + (ROOT / 'tools/upscale_fonts.py').read_bytes()
+                                    + model.signature.encode()).hexdigest()
             cached = CACHE / f'font-chunks/{model.name}/{digest}.png'
             if cached.exists():
                 result = Image.open(cached).convert('RGBA')
@@ -173,29 +182,24 @@ def build_font(name: str, config: dict, model: Upscaler, device: str):
     write_json(PACK / f'fonts/{name}.json', config)
 
 
-def build_fonts(device: str, zh: dict):
+def build_fonts(device: str, zh: dict, model_name: str):
     (PACK / 'fonts').mkdir(parents=True, exist_ok=True)
     report_path = CACHE / 'fonts.json'
     report = json.loads(report_path.read_text()) if report_path.exists() else {}
     models = {}
     signature = hashlib.sha256((ROOT / 'tools/upscale_fonts.py').read_bytes()
-                               + Path(__file__).read_bytes()).hexdigest()
+                               + Path(__file__).read_bytes()
+                               + model_signature(model_name).encode()).hexdigest()
     for id, file in zh['fonts'].items():
         source = ZH / file
         config = json.loads(source.read_text())
-        if source.stem in PIXEL_FONTS:
-            shutil.copyfile(source, PACK / file)
-            for layer in config['layers']:
-                name = f'fonts/{layer["image"]}.png'
-                shutil.copyfile(ZH / name, PACK / name)
-            continue
         digest = hashlib.sha256(source.read_bytes() + signature.encode())
         for name in dict.fromkeys(layer['image'] for layer in config['layers']):
             digest.update((ZH / f'fonts/{name}.png').read_bytes())
         if report.get(id) == digest.hexdigest() and (PACK / file).exists():
             print(f'Fonts cached {id}', flush=True)
             continue
-        model = 'waifu2x' if source.stem.startswith('dwarventodcraft') else 'general'
+        model = ('waifu2x' if source.stem.startswith('dwarventodcraft') else 'general') if model_name == 'auto' else model_name
         if model not in models:
             models[model] = CachedUpscaler(model, device)
         build_font(source.stem, config, models[model], device)
@@ -225,14 +229,16 @@ def package(sprites: dict, fonts: dict, zh: dict):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device', default='mps' if torch.backends.mps.is_available() else 'cpu')
+    parser.add_argument('--model', default='auto', help='auto, general, waifu2x, or a 4x RGB model path')
     parser.add_argument('--images-only', action='store_true')
     parser.add_argument('--fonts-only', action='store_true')
     args = parser.parse_args()
     hd = json.loads((HD / 'pack.json').read_text())
     zh = json.loads((ZH / 'pack.json').read_text())
-    sprites = json.loads((CACHE / 'sprites.json').read_text()) if args.fonts_only else build_images(args.device, hd, zh)
+    sprites = json.loads((CACHE / 'sprites.json').read_text()) if args.fonts_only else build_images(
+        args.device, hd, zh, 'general' if args.model == 'auto' else args.model)
     if not args.images_only:
-        fonts = build_fonts(args.device, zh)
+        fonts = build_fonts(args.device, zh, args.model)
         package(sprites, fonts, zh)
 
 

@@ -1,7 +1,7 @@
 import { sys } from 'cc'
 import fflate from 'fflate'
 import { isQualifiedId, parseModManifest, sortModManifests, type ModManifest } from '@/shared/mod'
-import { readInstalledArchive, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveFiles } from './InstalledArchives'
+import { listInstalledArchives, readInstalledArchive, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveFiles } from './InstalledArchives'
 
 export interface InstalledMod {
     manifest: ModManifest
@@ -50,15 +50,39 @@ export class ModManager {
         return this.enabledIds()
     }
 
-    async install(archive: Uint8Array): Promise<string> {
+    /** Saves the ZIP; without `enable`, dependencies are checked only when it replaces an enabled Mod. */
+    async install(archive: Uint8Array, enable = true): Promise<string> {
         await this.ready()
         const mod = parseArchive(archive)
-        const ids = [...this.enabledIds().filter(id => id !== mod.manifest.id), mod.manifest.id]
-        await this.resolve(ids, mod)
+        const enabled = this.enabledIds()
+        const ids = enable ? [...enabled.filter(id => id !== mod.manifest.id), mod.manifest.id] : enabled
+        if (ids.includes(mod.manifest.id)) await this.resolve(ids, mod)
         await saveInstalledArchive('mods', mod.manifest.id, archive, mod.files)
-        this.saveEnabled(ids)
+        if (enable) this.saveEnabled(ids)
         this.loaded.delete(mod.manifest.id)
         return mod.manifest.id
+    }
+
+    /** Installed Mods; a damaged archive is still listed so it can be uninstalled. */
+    async installed(): Promise<{ id: string, version?: string }[]> {
+        const ids = await listInstalledArchives('mods')
+        return Promise.all(ids.map(async id => ({ id, version: await this.read(id).then(mod => mod.manifest.version, () => undefined) })))
+    }
+
+    /** Mods used by this session, in load order. */
+    async running(): Promise<string[]> {
+        return (await this.ready()).map(mod => mod.manifest.id)
+    }
+
+    /** Replaces the saved enabled list after checking dependencies; returns whether it changed. */
+    async setEnabled(ids: readonly string[]): Promise<boolean> {
+        await this.ready()
+        if (new Set(ids).size !== ids.length) throw new Error('Duplicate Mod ID')
+        await this.resolve([...ids])
+        const current = this.enabledIds()
+        if (current.length === ids.length && current.every(id => ids.includes(id))) return false
+        this.saveEnabled([...ids])
+        return true
     }
 
     async load(id: string): Promise<boolean> {

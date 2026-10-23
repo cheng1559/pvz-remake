@@ -26,6 +26,11 @@ function setup() {
                     queueMicrotask(() => { request.result = archives.get(id)?.slice(); request.onsuccess() })
                     return request
                 },
+                getAllKeys() {
+                    const request: any = {}
+                    queueMicrotask(() => { request.result = [...archives.keys()]; request.onsuccess() })
+                    return request
+                },
                 put(data: Uint8Array, id: string) {
                     queueMicrotask(() => {
                         if (database.failWrite) { transaction.error = new Error('Storage full'); transaction.onabort(); return }
@@ -126,6 +131,10 @@ function setup() {
     return { manager, ResourcePackManager, files, storage, requests, modules, load, manifest, sprite, Texture, archives, archive, db, jsb, blobs, picker: () => picker, modManager, ModManager, modArchives, modDb }
 }
 
+const packKey = 'pvz-remake:resource-packs'
+/** Saved pack state with every listed pack enabled, given lowest priority first like `list()`. */
+const enabledPacks = (...ids: string[]) => JSON.stringify(ids.reverse().map(id => ({ id, enabled: true })))
+
 function zipFiles(id = 'custom') {
     const image = new Uint8Array(readFileSync('assets/bundles/pvz-base/sprites/seedpacket_larger.png'))
     return {
@@ -165,7 +174,7 @@ test('music stems, SFX, animation JSON and text share pack priority before warm 
         'main.mp3': strToU8('ID3-last-main'), 'chomp.mp3': strToU8('ID3-last-chomp'),
         'animation.json': json(animation(2)), 'strings.json': json({ MUSIC: 'Last' }),
     }))
-    storage.set('pvz-remake:active-resource-packs', '["first","last"]')
+    storage.set(packKey, enabledPacks('first', 'last'))
     const { AudioClip, JsonAsset, TextAsset } = modules.cc
     let originalReads = 0
     files.set('properties/lawnstrings', { json: { MUSIC: 'Original' } })
@@ -322,7 +331,7 @@ test('ZIP installation and replacement take effect on restart and leave current 
     const entries = zipFiles()
     let bytes = zipSync(Object.fromEntries(Object.entries(entries).map(([name, value]) => [`custom/${name}`, value])))
     assert.equal(await manager.install(bytes), 'custom')
-    assert.deepEqual(JSON.parse(storage.get('pvz-remake:active-resource-packs')!), ['custom'])
+    assert.deepEqual(JSON.parse(storage.get(packKey)!), [{ id: 'custom', enabled: true }])
     assert.equal(await manager.sprite('pvz:button'), undefined)
     assert.equal(manager.revision, 0, 'installation must not invalidate current UI assets')
     const restored = new ResourcePackManager()
@@ -347,8 +356,8 @@ test('ZIP installation and replacement take effect on restart and leave current 
 
 test('startup removes missing pack records, allows reinstall, and still rejects corrupt installed packs', async () => {
     const { manager, ResourcePackManager, storage, archives, manifest, sprite } = setup()
-    const key = 'pvz-remake:active-resource-packs'
-    storage.set(key, '["missing"]')
+    const key = packKey
+    storage.set(key, enabledPacks('missing'))
     await manager.ready()
     assert.deepEqual(Array.from(await manager.list()), [])
     assert.equal(storage.get(key), '[]', 'repair is persisted for the next startup')
@@ -358,13 +367,13 @@ test('startup removes missing pack records, allows reinstall, and still rejects 
 
     manifest('first', { 'pvz:button': sprite })
     manifest('last', { 'pvz:button': sprite })
-    storage.set(key, '["first","gone","last"]')
+    storage.set(key, enabledPacks('first', 'gone', 'last'))
     assert.deepEqual(Array.from(await new ResourcePackManager().list()), ['first', 'last'], 'installed packs keep their priority order')
 
     archives.set('broken', new Uint8Array([1, 2, 3]))
-    storage.set(key, '["first","broken"]')
+    storage.set(key, enabledPacks('first', 'broken'))
     await assert.rejects(new ResourcePackManager().ready(), /zip/i)
-    assert.equal(storage.get(key), '["first","broken"]', 'corrupt installed packs are not silently disabled')
+    assert.equal(storage.get(key), enabledPacks('first', 'broken'), 'corrupt installed packs are not silently disabled')
 })
 
 test('invalid ZIP paths, missing dependencies and mismatched images leave the active pack untouched', async () => {
@@ -430,6 +439,7 @@ test('Native ZIP installation copies files into writable storage and rolls back 
             return true
         },
         getDataFromFile: (path: string) => files.get(path).slice().buffer,
+        listFiles: (path: string) => ['.', '..', ...directories].filter(name => name.slice(0, name.lastIndexOf('/')) === path).map(name => `${name}/`),
         removeFile: (path: string) => files.delete(path),
         writeDataToFile(buffer: ArrayBuffer, path: string) { files.set(path, new Uint8Array(buffer)); return true },
         renameFile(from: string, to: string) {
@@ -464,6 +474,9 @@ test('Native ZIP installation copies files into writable storage and rolls back 
     assert.deepEqual(files.get('/app/resource-packs/custom/.archive.zip'), data)
     assert.deepEqual(files.get('/app/resource-packs/custom/button.png'), zipFiles()['button.png'])
     assert.deepEqual(Array.from(await new ResourcePackManager().list()), ['custom'])
+    directories.add('/app/resource-packs').add('/app/resource-packs/custom.installing')
+    assert.deepEqual(Array.from(await manager.installed()), ['custom'], 'list installed folders, skipping interrupted staging')
+    directories.delete('/app/resource-packs/custom.installing')
     const running = new ResourcePackManager()
     const clip = await running.asset('pvz:chomp', modules.cc.AudioClip)
     assert.match(clip.nativeUrl, /resource-pack-runtime/)
@@ -518,6 +531,48 @@ test('pack priority, scoped animation parts, persistence and unloading resolve b
         await assert.rejects(manager.load(source), /installed|install ZIPs/)
     }
     assert.deepEqual(Array.from(await manager.list()), [])
+})
+
+test('package manager lists installed archives and saves a draft enabled list with priority and dependency checks', async () => {
+    const { manager, ResourcePackManager, manifest, sprite, modManager, ModManager, modules, load } = setup()
+    manifest('hd', { 'pvz:button': sprite })
+    manifest('zh-cn', { 'pvz:button': sprite })
+    assert.deepEqual(Array.from(await manager.installed()), ['hd', 'zh-cn'])
+    const ids = async () => Array.from(await manager.entries(), (entry: any) => `${entry.id}${entry.enabled ? '+' : ''}`)
+    assert.deepEqual(await ids(), ['hd', 'zh-cn'], 'packs never placed are listed as disabled')
+    await manager.setEntries([{ id: 'zh-cn', enabled: true }, { id: 'hd', enabled: false }])
+    assert.deepEqual(await ids(), ['zh-cn+', 'hd'], 'disabled packs keep their place')
+    await manager.setEntries([{ id: 'hd', enabled: true }, { id: 'zh-cn', enabled: true }])
+    assert.deepEqual(Array.from(await manager.list()), ['zh-cn', 'hd'], 'list() keeps load order, lowest priority first')
+    assert.deepEqual(Array.from(await manager.running()), [], 'saving waits for restart')
+    assert.deepEqual(Array.from(await new ResourcePackManager().running()), ['zh-cn', 'hd'])
+    await assert.rejects(manager.setEntries([{ id: 'missing', enabled: true }]), /not installed/)
+    await assert.rejects(manager.setEntries([{ id: 'hd', enabled: true }, { id: 'hd', enabled: false }]), /Duplicate/)
+    assert.deepEqual(await ids(), ['hd+', 'zh-cn+'], 'a rejected draft leaves the saved list unchanged')
+    assert.equal(await manager.install(zipSync(zipFiles('extra')), false), 'extra')
+    assert.deepEqual(await ids(), ['hd+', 'zh-cn+', 'extra'], 'installing without enabling lists the pack last')
+    await manager.unload('hd')
+    assert.deepEqual(await ids(), ['hd', 'zh-cn+', 'extra'], 'the CLI disables a pack in place')
+    await manager.load('extra')
+    assert.deepEqual(await ids(), ['extra+', 'hd', 'zh-cn+'], 'the CLI enables a pack at the highest priority')
+    await manager.uninstall('hd')
+    assert.deepEqual(await ids(), ['extra+', 'zh-cn+'])
+
+    const addon = zipSync(modFiles('local:addon', '1.0.0', [{ id: 'local:base', version: '1.0.0' }]))
+    assert.equal(await modManager.install(addon, false), 'local:addon', 'dependencies are checked when the Mod is enabled')
+    await modManager.install(zipSync(modFiles('local:base', '1.0.0')), false)
+    assert.deepEqual(Array.from(await modManager.installed(), (mod: any) => `${mod.id}@${mod.version}`), ['local:addon@1.0.0', 'local:base@1.0.0'])
+    assert.deepEqual(Array.from(await modManager.list()), [])
+    await assert.rejects(modManager.setEnabled(['local:addon']), /missing mod/)
+    assert.equal(await modManager.setEnabled(['local:addon', 'local:base']), true)
+    assert.equal(await modManager.setEnabled(['local:base', 'local:addon']), false, 'Mod load order comes from dependencies')
+    assert.deepEqual(Array.from(await new ModManager().running()), ['local:base', 'local:addon'])
+
+    modules['@/shared/debug/DebugCli'] = load('assets/scripts/shared/debug/DebugCli.ts')
+    const { executeDebugCliCommand } = load('assets/scripts/platform/debug/DebugCliCommands.ts')
+    const execute = (command: string) => executeDebugCliCommand(command, false, () => assert.fail('must not request gameplay'))
+    assert.equal((await execute('/pack')).action, 'managePacks')
+    assert.equal((await execute('/mod')).action, 'manageMods')
 })
 
 test('pack CLI requests restart only for enabled-state changes and uninstalls saved archives', async () => {

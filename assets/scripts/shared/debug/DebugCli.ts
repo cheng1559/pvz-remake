@@ -3,7 +3,7 @@ export interface DebugCliResult {
     ok: boolean
     message: string
     failure?: 'syntax' | 'condition'
-    action?: 'restart' | 'reload' | 'restartForPacks' | 'installPack' | 'restartForMods' | 'installMod' | 'home' | 'quit' | 'help' | 'menu' | 'shop' | 'almanac' | 'zengarden' | 'level'
+    action?: 'restart' | 'reload' | 'restartForPacks' | 'installPack' | 'managePacks' | 'restartForMods' | 'installMod' | 'manageMods' | 'home' | 'quit' | 'help' | 'menu' | 'shop' | 'almanac' | 'zengarden' | 'level'
     levelId?: string
     catalog?: DebugCliCatalog
 }
@@ -21,7 +21,7 @@ const specs: CommandSpec[] = [
     { name: 'gamespeed', parameters: ['{0-10}'], minimum: 1 },
     ...['music', 'sfx'].map(name => ({ name, parameters: ['{0-100}'], minimum: 1 })),
     ...['hotkeys', 'cooldown', 'suncost', 'sunspawning', 'hitboxes', 'background', 'mobile', 'fullscreen', 'hdseed'].map(name => ({ name, parameters: ['{enabled}'], minimum: 1, values: { 0: bool } })),
-    ...['pack', 'mod'].map(name => ({ name, parameters: ['{install|load|unload|uninstall|list}', '[installed_id]'], minimum: 1, values: { 0: ['install', 'load', 'unload', 'uninstall', 'list'] } })),
+    ...['pack', 'mod'].map(name => ({ name, parameters: ['[install|load|unload|uninstall|list]', '[installed_id]'], minimum: 0, values: { 0: ['install', 'load', 'unload', 'uninstall', 'list'] } })),
     { name: 'perf', parameters: ['{plants|zombies|particles|sfx|logic}', '{enabled}'], minimum: 2, values: { 0: ['plants', 'zombies', 'particles', 'sfx', 'logic'], 1: bool } },
     { name: 'lawnmower', parameters: ['{trigger|reset}', '[row]'], minimum: 1, values: { 0: ['trigger', 'reset'] } },
     ...['sun', 'money'].map(name => ({ name, parameters: ['{add|set}', '{number}'], minimum: 2, values: { 0: ['add', 'set'] } })),

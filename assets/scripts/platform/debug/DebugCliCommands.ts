@@ -53,8 +53,9 @@ export async function executeDebugCliCommand(
         case 'hitboxes': GameDebugSettings.setHitboxesVisible(args[0].toLowerCase() === 'true'); break
         case 'hdseed': GameDebugSettings.setHDSeedPacketsEnabled(args[0].toLowerCase() === 'true'); break
         case 'pack': case 'mod': {
+            if (!args.length) return { ...debugSuccess(`Opening ${name} manager`), action: name === 'pack' ? 'managePacks' : 'manageMods' }
             const operation = args[0].toLowerCase()
-            if (args.length !== (operation === 'install' || operation === 'list' ? 1 : 2)) return debugSyntax(`Usage: /${name} install | load <installed_id> | unload <id|all> | uninstall <id> | list`)
+            if (args.length !== (operation === 'install' || operation === 'list' ? 1 : 2)) return debugSyntax(`Usage: /${name} [install | load <installed_id> | unload <id|all> | uninstall <id> | list]`)
             const manager = name === 'pack' ? resourcePacks : modManager
             const label = name === 'pack' ? 'Resource pack' : 'Mod'
             try {

@@ -23,8 +23,8 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 快捷键 | `/hotkeys {true|false}`；当前 `1` 选择种子包，`D` 切换 0 倍速 |
 | 碰撞框 | `/hitboxes {true|false}` |
 | 实时植物／僵尸头像 | `/hdseed {true|false}`，控制真实 Reanim 渲染，与背景清晰度独立 |
-| 材质包 | `/pack install`、`/pack load {已安装ID}`、`/pack unload {ID或all}`、`/pack uninstall {ID}`、`/pack list` |
-| Mod | `/mod install`、`/mod load {已安装ID}`、`/mod unload {ID或all}`、`/mod uninstall {ID}`、`/mod list` |
+| 材质包 | `/pack`（管理窗口）、`/pack install`、`/pack load {已安装ID}`、`/pack unload {ID或all}`、`/pack uninstall {ID}`、`/pack list` |
+| Mod | `/mod`（管理窗口）、`/mod install`、`/mod load {已安装ID}`、`/mod unload {ID或all}`、`/mod uninstall {ID}`、`/mod list` |
 | 性能 | `/perf {plants|zombies|particles|sfx|logic} {true|false}` |
 | 平台 | `/mobile {true|false}`、`/fullscreen {true|false}` |
 | 音量 | `/music {0-100}`、`/sfx {0-100}`，通过设置 API 保存 |
@@ -33,7 +33,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 
 `/pack install` 不带参数，在网页和 macOS 中弹出文件选择窗口，选择本机 ZIP 安装。安装弹窗只显示 `Installing...`；安装、更新或启用状态变化后提示重启，确认后立即重启整个游戏，运行中的关卡先保存。安装结果保存在本机，重启不依赖原 ZIP。`/pack load hd` 启用已安装包；`/pack unload hd` 停用；`/pack uninstall hd` 删除已安装包，删除已启用包也会提示重启；`/pack list` 查看启用列表。重复启用或停用不会弹窗，重启前保留当前资源。资源包只通过 ZIP 安装，游戏不内置 HD 素材。后启用的包优先覆盖同 ID 资源，也可覆盖 Mod ID；包内没有该 ID 时使用原资源，已声明资源加载失败不回退。原 `/hdfont` 已移除；`Pico129`、`Pix118Bold` 不在 HD 包中。包格式与安装方式见[材质包说明](RESOURCE_PACKS.md)。
 
-`/mod` 与 `/pack` 共用 ZIP 选择、`Installing...` 和确认重启流程。`/mod install` 不带参数，其他操作使用 `local:widescreen` 等带命名空间的 Mod ID。安装结果保存在本地，检查依赖后在重启时执行；主界面宽屏可通过独立 Mod 启用。见 [Mod 安装与管理](MODS.md)。
+`/pack`、`/mod` 不带参数时分别打开资源包或 Mod 管理窗口，见 [材质包说明](RESOURCE_PACKS.md#管理窗口)。`/mod` 与 `/pack` 共用 ZIP 选择、`Installing...` 和确认重启流程。`/mod install` 不带参数，其他操作使用 `local:widescreen` 等带命名空间的 Mod ID。安装结果保存在本地，检查依赖后在重启时执行；主界面宽屏可通过独立 Mod 启用。见 [Mod 安装与管理](MODS.md)。
 
 当前内容包提供 1-1、1-2，豌豆射手、向日葵、双发射手和普通／旗帜僵尸；植物、僵尸、物品、关卡补全来自后端已安装内容。`/background` 及尚未迁移的实体和关卡会提示不可用。
 

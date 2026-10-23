@@ -3,6 +3,7 @@
 Mod 统一通过游戏内 `/mod` 命令管理：
 
 ```text
+/mod
 /mod install
 /mod list
 /mod load local:widescreen
@@ -10,6 +11,8 @@ Mod 统一通过游戏内 `/mod` 命令管理：
 /mod unload all
 /mod uninstall local:widescreen
 ```
+
+`/mod` 不带参数时打开 Mod 管理窗口，与[资源包管理窗口](RESOURCE_PACKS.md#管理窗口)的操作相同：列出全部已安装 Mod 及版本，支持导入、每行卸载、勾选启用和 Apply 后确认重启。Mod 的加载顺序由依赖关系和 ID 决定，因此没有优先级按钮；Apply 时会检查依赖，不满足时提示原因并保留草稿。
 
 `/mod install` 不接受路径参数，打开与 `/pack install` 相同的 ZIP 文件选择器。安装时只显示标题 `Installing...`；安装完成后提示重启，确认后立即重启整个游戏，运行中的关卡先保存。安装会启用 Mod，同 ID 安装会更新它。重新启用或停用同一个状态不会提示重启；卸载停用的 Mod 不需要重启。`/mod list` 显示当前保存的启用列表，变更在重启后执行。
 
