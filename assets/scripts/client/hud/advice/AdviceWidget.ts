@@ -37,6 +37,7 @@ export class AdviceWidget {
     private _style: AdviceWidgetStyle = 'hint'
     private _pulseTick = 0
     private _width = ADVICE_WIDTH
+    private _height = ADVICE_HINT_HEIGHT
 
     constructor(args: {
         ui: UI
@@ -148,10 +149,14 @@ export class AdviceWidget {
         this._label.renderer.lineSpacing = layout.lineHeight
         this._label.renderer.maxWidth = labelWidth
         this._label.renderer.forceRebuild()
-        uiNode({ node: this.node, size: { width: this._width, height: layout.height } })
-        this.node.setPosition(ADVICE_WIDTH / 2, -(layout.y + layout.height / 2), 0)
-        uiNode({ node: this._label.node, size: { width: labelWidth, height: layout.height }, anchor: { x: 0, y: 1 } })
-        this._label.node.setPosition(-labelWidth / 2, this._getTextLocalTopY(layout, labelWidth), 0)
+        const text = this._measureText(layout.fontSize, labelWidth)
+        // Grow upward beyond one hint line or two tutorial lines, preserving the bottom edge and padding.
+        this._height = layout.height + Math.max(0, text.height - text.defaultHeight)
+        uiNode({ node: this.node, size: { width: this._width, height: this._height } })
+        this.node.setPosition(ADVICE_WIDTH / 2, -(layout.y + layout.height - this._height / 2), 0)
+        uiNode({ node: this._label.node, size: { width: labelWidth, height: this._height }, anchor: { x: 0, y: 1 } })
+        const textTop = layout.textOffsetY + Math.trunc((this._height - text.height) / 2) - text.ascentPadding
+        this._label.node.setPosition(-labelWidth / 2, this._height / 2 - textTop, 0)
         this._syncTransform()
     }
 
@@ -161,7 +166,7 @@ export class AdviceWidget {
         if (layout.backdropAlpha <= 0) return
 
         this._backdrop.fillColor = new Color(0, 0, 0, layout.backdropAlpha)
-        this._backdrop.fillRect(-this._width / 2, -layout.height / 2, this._width, layout.height)
+        this._backdrop.fillRect(-this._width / 2, -this._height / 2, this._width, this._height)
     }
 
     private _syncTransform() {
@@ -210,19 +215,17 @@ export class AdviceWidget {
         }
     }
 
-    private _getTextLocalTopY(layout: {
-        y: number
-        height: number
-        textOffsetY: number
-        fontSize: number
-    }, labelWidth: number) {
+    private _measureText(fontSize: number, labelWidth: number) {
         const fontConfig = this._font?.config ?? null
         const metrics = FontMetricsUtil.getMetrics(fontConfig)
-        if (metrics.height <= 0) return this._label.renderer.contentHeight / 2 + layout.textOffsetY
+        if (metrics.height <= 0) {
+            const height = this._label.renderer.contentHeight
+            return { height, defaultHeight: height, ascentPadding: 0 }
+        }
 
         const rawConfig = fontConfig?.json as { defaultPointSize?: number } | undefined
-        const defaultPointSize = rawConfig?.defaultPointSize ?? layout.fontSize
-        const pointSize = layout.fontSize > 0 ? layout.fontSize : defaultPointSize
+        const defaultPointSize = rawConfig?.defaultPointSize ?? fontSize
+        const pointSize = fontSize > 0 ? fontSize : defaultPointSize
         const scale = defaultPointSize > 0 ? pointSize / defaultPointSize : 1
         const wrapped = FontMetricsUtil.measureWordWrapped(
             fontConfig,
@@ -233,9 +236,12 @@ export class AdviceWidget {
         const wrappedHeight = (
             metrics.height - metrics.ascentPadding + Math.max(0, lineCount - 1) * metrics.lineSpacing
         ) * scale
-        const centeredRectY = layout.y + layout.textOffsetY + Math.trunc((layout.height - wrappedHeight) / 2)
-        const textTopY = centeredRectY - metrics.ascentPadding * scale
-        return layout.y + layout.height / 2 - textTopY
+        const defaultLines = this._style === 'hint' || this._style === 'hint-stay' ? 1 : 2
+        return {
+            height: wrappedHeight,
+            defaultHeight: (metrics.height - metrics.ascentPadding + (defaultLines - 1) * metrics.lineSpacing) * scale,
+            ascentPadding: metrics.ascentPadding * scale,
+        }
     }
 
     private _durationForStyle(style: AdviceWidgetStyle) {

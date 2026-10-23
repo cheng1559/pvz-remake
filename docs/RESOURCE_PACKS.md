@@ -19,9 +19,11 @@ Native 的 `resource-pack-runtime/` 保存当前运行中的文件快照；更�
 
 HD 包的制作素材位于 `art/resource-packs/hd/`，包含 UI 超分图、非像素字体和高清普通／紫卡背景，不参与 Cocos 资源导入和游戏打包。原 `/hdfont` 开关已移除；`/hdseed` 只控制种子包、图鉴头像和落点预览的实时 Reanim 渲染。
 
-执行 `npm run build:hd-pack` 更新 HD 包清单，并生成 `dist/resource-packs/hd.zip`，通过 `/pack install` 安装。资源包无需 Cocos 构建、Bundle 或 `.meta` 文件。
+执行 `npm run build:hd-pack` 更新 HD 包清单，并生成 `dist/resource-packs/hd.zip`，通过 `/pack install` 安装。当前英文 HD 使用 Real HAT sharper 重制，贴图 2×、字体 4×；模型来源与重新生成步骤见 [HD 包说明](../art/resource-packs/hd/README.md)。资源包无需 Cocos 构建、Bundle 或 `.meta` 文件。
 
 简体中文包位于 `dist/resource-packs/zh-cn.zip`，ID 为 `zh-cn`，包含原版汉化文本、位图字体和变化贴图，不含音频。来源与重新生成方式见 [中文包说明](../art/resource-packs/zh-cn/README.md)；`npm run build:zh-cn-pack` 重新生成。与 HD 包共用时，先启用 HD，再启用中文包，使中文字体和贴图优先。
+
+全图片测试包位于 `dist/resource-packs/hd-2.zip`，ID 为 `hd-2`，覆盖本体全部图片（含植物僵尸动画、粒子及关卡缩略图）2×，沿用英文 HD 的 18 套 4× 字体，像素字体保持原样。可独立安装，不影响原 `hd` 包文件；生成与打包方式见 [全图片测试包说明](../art/resource-packs/hd-2/README.md)。
 
 中文 HD 完整包位于 `dist/resource-packs/zh-cn-hd.zip`，ID 为 `zh-cn-hd`，合并通用 HD 资源及中文 2× 贴图、4× 非像素字体，不含音频。可独立安装，无需叠加前两个包。完整中文字图解码约占 1.3 GiB 内存；大字库分图集存储，每张不超过 4096×4096。生成命令为 `npm run build:zh-cn-hd-pack`，详见 [中文 HD 说明](../art/resource-packs/zh-cn-hd/README.md)。
 

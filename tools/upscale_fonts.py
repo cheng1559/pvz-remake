@@ -45,6 +45,20 @@ class SRVGGNet(nn.Module):
 
 class Upscaler:
     def __init__(self, name, device):
+        self.device = torch.device(device)
+        self.name = name
+        if name not in MODELS:
+            # Load larger restoration models without copying their network code.
+            # Spandrel is optional; the existing built-in models need no new dependency.
+            from spandrel import ImageModelDescriptor, ModelLoader
+
+            path = Path(name)
+            model = ModelLoader().load_from_file(path)
+            if not isinstance(model, ImageModelDescriptor) or (model.scale, model.input_channels, model.output_channels) != (SCALE, 3, 3):
+                raise ValueError('The model must support 4x RGB super-resolution')
+            self.name = path.stem
+            self.model = model.eval().to(self.device)
+            return
         version, filename = MODELS[name]
         path = ROOT / "temp/font-upscale" / filename
         if not path.exists():
@@ -52,8 +66,6 @@ class Upscaler:
             url = ("https://raw.githubusercontent.com/nagadomi/waifu2x/master/models/upconv_7/art/scale2.0x_model.json"
                    if name == "waifu2x" else f"https://github.com/xinntao/Real-ESRGAN/releases/download/{version}/{filename}")
             urllib.request.urlretrieve(url, path)
-        self.device = torch.device(device)
-        self.name = name
         if name == "waifu2x":
             layers = []
             for spec in json.loads(path.read_text()):
@@ -225,8 +237,8 @@ def render_text(config, directory, text):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fonts", nargs="*", help="Font names; pixel fonts are always excluded")
-    parser.add_argument("--model", choices=["auto", *MODELS], default="auto",
-                        help="Auto uses waifu2x for beveled Dwarven fonts and Real-ESRGAN for the other fonts")
+    parser.add_argument("--model", default="auto",
+                        help="auto, general, waifu2x, or a 4x RGB model file (requires spandrel)")
     parser.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")
     parser.add_argument("--source", type=Path, default=ROOT / "assets/resources/fonts")
     parser.add_argument("--output", type=Path, default=ROOT / "art/resource-packs/hd/fonts")
@@ -275,10 +287,12 @@ def main():
         draw = ImageDraw.Draw(comparison)
         draw.text((8, 4), f"{path.stem}: original bitmap at 4x", fill="black")
         comparison.paste(before, (0, 24))
-        draw.text((8, 28 + before.height), f"{model}: 4x super-resolution", fill="black")
+        draw.text((8, 28 + before.height), f"{upscaler.name}: 4x super-resolution", fill="black")
         comparison.paste(after, (0, 48 + before.height))
         comparison.save(preview_output / f"{path.stem}-comparison.png")
-        report[path.stem] = {"model": model, "scale": SCALE, "sourceSha256": source_hash.hexdigest()}
+        report[path.stem] = {"model": upscaler.name, "scale": SCALE, "sourceSha256": source_hash.hexdigest()}
+        if Path(model).is_file():
+            report[path.stem]["weightsSha256"] = hashlib.sha256(Path(model).read_bytes()).hexdigest()
         if path.stem.startswith("dwarventodcraft"):
             report[path.stem]["rgbaMode"] = "palette-coverage"
             report[path.stem]["ensemble"] = 8 if model == "waifu2x" else 1

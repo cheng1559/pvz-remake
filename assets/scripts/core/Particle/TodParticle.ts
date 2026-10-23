@@ -9,10 +9,10 @@ import {
     Size,
     Sprite,
     SpriteFrame,
-    Texture2D,
     Vec2,
 } from 'cc'
 import { uiNode } from '@/client/view/uiNode'
+import { applySpriteDensity } from '@/client/content/SpriteDensity'
 import { gameClock } from '../GameClock'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { SpriteLoader } from '../SpriteLoader'
@@ -619,11 +619,8 @@ class TodParticleEmitter {
         if (frameCount === 1 && columnCount === 1 && rowCount === 1) return atlas
 
         const frameIndex = Math.floor(this._rng.nextFloat() * frameCount)
-        const texture = atlas.texture as Texture2D
-        const textureWidth = texture.width || atlas.originalSize.width
-        const textureHeight = texture.height || atlas.originalSize.height
-        const width = textureWidth / columnCount
-        const height = textureHeight / rowCount
+        const width = atlas.originalSize.width / columnCount
+        const height = atlas.originalSize.height / rowCount
         const column = Math.min(columnCount - 1, Math.max(0, this.definition.imageCol + frameIndex))
         const row = Math.min(rowCount - 1, Math.max(0, this.definition.imageRow))
         const frame = new SpriteFrame()
@@ -635,6 +632,7 @@ class TodParticleEmitter {
             offset: new Vec2(0, 0),
             isRotate: false,
         })
+        applySpriteDensity(frame)
         frame.packable = false
         return frame
     }

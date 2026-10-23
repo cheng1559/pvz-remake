@@ -5,6 +5,7 @@ import {
     SpriteRepository,
 } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
+import { applySpriteDensity } from '@/client/content/SpriteDensity'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
@@ -184,8 +185,8 @@ export class ParticlePlayer extends Component {
 
 function sliceFrame(atlas: SpriteFrame, columns: number, rows: number, index: number): SpriteFrame {
     const texture = atlas.texture as Texture2D
-    const width = (texture.width || atlas.originalSize.width) / columns
-    const height = (texture.height || atlas.originalSize.height) / rows
+    const width = atlas.originalSize.width / columns
+    const height = atlas.originalSize.height / rows
     const frame = new SpriteFrame()
     frame.packable = false
     frame.reset({
@@ -195,6 +196,7 @@ function sliceFrame(atlas: SpriteFrame, columns: number, rows: number, index: nu
         offset: new Vec2(),
         isRotate: false,
     })
+    applySpriteDensity(frame)
     frame.packable = false
     return frame
 }
