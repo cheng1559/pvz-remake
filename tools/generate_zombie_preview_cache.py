@@ -29,7 +29,7 @@ ALMANAC_BASE_Y = -6.0
 ALMANAC_SCALE = 0.5
 
 ROOT = Path(__file__).resolve().parents[1]
-TEXTURE_DIR = ROOT / "assets/resources/textures"
+TEXTURE_DIR = ROOT / "tools/generated/resources/textures"
 OUTPUT_PATH = TEXTURE_DIR / "zombie_previews_cached.png"
 
 HIDDEN_BY_DEFAULT = {

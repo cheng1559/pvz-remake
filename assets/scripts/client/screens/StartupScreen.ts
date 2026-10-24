@@ -113,7 +113,7 @@ export class StartupScreen extends Component {
                 const frame = await SpriteLoader.load(name)
                 if (!frame) throw new Error(`Missing startup image: ${name}`)
                 return frame
-            })), loader.loadManifest('pvz-base'),
+            })), loader.loadManifest(),
             MusicSystem.preloadTune('title_theme'),
             SoundLoader.load(SoundEffect.LoadingBarFlower), SoundLoader.load(SoundEffect.LoadingBarZombie),
         ])

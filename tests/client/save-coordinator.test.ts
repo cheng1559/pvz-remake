@@ -186,7 +186,7 @@ test('LocalIntegratedGame finishes a queued gameplay command before saving', () 
     const save = game.saveAtBoundary() as unknown as ServerSaveSnapshot
 
     assert.equal(save.tick, beforeTick + 1)
-    assert.equal(save.seedBank.selectedSeedId, 'pvz:peashooter')
+    assert.deepEqual(save.seedBank.selection, { mode: 'seed', seedId: 'pvz:peashooter' })
 })
 
 test('LocalIntegratedGame saves before a command queued after the request', () => {
@@ -204,7 +204,7 @@ test('LocalIntegratedGame saves before a command queued after the request', () =
 
     const save = game.lastSave as unknown as ServerSaveSnapshot
     assert.equal(game.lastSaveSequence, saveSequence)
-    assert.equal(save.seedBank.selectedSeedId, undefined)
+    assert.deepEqual(save.seedBank.selection, { mode: 'none' })
     game.update(definitions.tickSeconds)
     assert.equal(game.render().cursor.mode, 'seed')
 })
@@ -222,6 +222,6 @@ test('LocalIntegratedGame advances every gameplay and session boundary before sa
 
     const save = game.saveAtBoundary() as unknown as ServerSaveSnapshot
 
-    assert.equal(save.seedBank.selectedSeedId, 'pvz:peashooter')
+    assert.deepEqual(save.seedBank.selection, { mode: 'seed', seedId: 'pvz:peashooter' })
     assert.equal(save.level.paused, true)
 })

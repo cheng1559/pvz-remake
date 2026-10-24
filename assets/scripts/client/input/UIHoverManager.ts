@@ -2,7 +2,7 @@ import { input, Input, Node, type EventMouse, type EventTouch, type Vec2 } from 
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { CursorManager } from './CursorManager'
 
-export interface UIHoverPointer { location: Vec2, windowId: number, canHover: boolean }
+export interface UIHoverPointer { location: Vec2, uiLocation: Vec2, windowId: number, canHover: boolean }
 export interface UIHoverClient {
     cursor?: 'pointer' | 'text' | 'grabbing'
     clearHover(): void
@@ -70,13 +70,13 @@ export class UIHoverManager {
 
     static rememberMouseEvent(event: EventMouse, refresh = true): void {
         if (GameDebugSettings.isMobileMode()) return
-        this.pointer = { location: event.getLocation().clone(), windowId: event.windowId, canHover: true }
+        this.pointer = { location: event.getLocation().clone(), uiLocation: event.getUILocation().clone(), windowId: event.windowId, canHover: true }
         if (refresh) this.refreshHoverStates()
     }
 
     static rememberTouchEvent(event: EventTouch): void {
         if (!GameDebugSettings.isMobileMode()) return
-        this.pointer = { location: event.touch!.getLocation().clone(), windowId: event.windowId, canHover: false }
+        this.pointer = { location: event.touch!.getLocation().clone(), uiLocation: event.getUILocation().clone(), windowId: event.windowId, canHover: false }
         // A touch move must not cancel the button which owns that touch.
         this.refreshHoverStates()
     }

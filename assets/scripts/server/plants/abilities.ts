@@ -1,4 +1,4 @@
-import { DAY_BOARD_RIGHT, rectOverlap } from '../collision'
+import { getBoardBounds, rectOverlap } from '../collision'
 import { EventQueueResource, emitServerEvent } from '../events'
 import type { ExplosionDefinition, GameplayDefinitions, PlantDefinition, PlantTargeting } from '@/shared/content/gameplay'
 import type { GameSystem, World } from '@/ecs/index'
@@ -117,7 +117,7 @@ function findAbilityTarget(
         if (targeting.excludeHeldPole && zombie.hasPole) continue
         const definition = definitions.zombies[zombie.typeId]
         const left = position.x + definition.body.x
-        if (left > DAY_BOARD_RIGHT) continue
+        if (left > getBoardBounds(world).right) continue
         const inset = targeting.insetKey ? definition.targetingInsets?.[targeting.insetKey] ?? 0 : 0
         const reach = zombie.state === 'eating' || plant.ability?.state === 'biting'
             ? targeting.eatingExtraRange

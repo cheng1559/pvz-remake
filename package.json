@@ -8,6 +8,7 @@
     },
     "scripts": {
         "build:content": "python tools/build_pvz_base.py",
+        "build:base-pack": "python tools/build_base_pack.py",
         "build:hd-pack": "python tools/build_hd_pack.py",
         "build:zh-cn-pack": "python tools/build_zh_cn_pack.py",
         "build:zh-cn-hd-pack": "python tools/build_zh_cn_hd_pack.py",

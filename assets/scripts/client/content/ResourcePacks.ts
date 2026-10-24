@@ -1,4 +1,4 @@
-import { Asset, assetManager, AudioClip, ImageAsset, JsonAsset, native, Rect, Size, SpriteFrame, sys, TextAsset, Texture2D, Vec2 } from 'cc'
+import { Asset, assetManager, AudioClip, ImageAsset, JsonAsset, native, Rect, resources, Size, SpriteFrame, sys, TextAsset, Texture2D, Vec2 } from 'cc'
 import fflate from 'fflate'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import type { FontConfig } from '@/client/font/FontRenderer.d'
@@ -198,10 +198,13 @@ async function texture(pack: LoadedPack, file: string, scale = 1): Promise<Textu
 }
 
 export class ResourcePackManager {
+    private base?: LoadedPack
     private readonly loaded = new Map<string, LoadedPack>()
     private active: LoadedPack[] = []
     private initialization?: Promise<void>
     revision = 0
+
+    constructor(private readonly loadBase?: () => Promise<Uint8Array>) {}
 
     ready(): Promise<void> {
         return this.initialization ??= (async () => {
@@ -209,6 +212,7 @@ export class ResourcePackManager {
                 native.fileUtils.removeDirectory(installedArchiveRoot('resource-pack-runtime', ''))
                 nativeRuntimeReady = true
             }
+            if (this.loadBase) this.base = createPack(unpackArchive(await this.loadBase(), 'pack.json'))
             const entries = this.saved()
             const packs: LoadedPack[] = []
             const missing = new Set<string>()
@@ -275,7 +279,7 @@ export class ResourcePackManager {
 
     async preload(onProgress: (progress: number) => void): Promise<void> {
         await this.ready()
-        const tasks = this.active.flatMap(pack => [
+        const tasks = [...(this.base ? [this.base] : []), ...this.active].flatMap(pack => [
             ...Object.entries(pack.manifest.sprites).flatMap(([id, entry]) =>
                 (entry.animations ?? [undefined]).map(animation => () => this.sprite(id, animation))),
             ...Object.keys(pack.manifest.fonts).map(id => () => this.font(id)),
@@ -317,6 +321,25 @@ export class ResourcePackManager {
     /** Resolve presentation assets before either the resources bundle or the content registry. */
     async asset<T extends Asset>(id: string, type: AssetType<T>, animation?: string): Promise<T | undefined> {
         await this.ready()
+        return this.resolveAsset(id, type, animation)
+    }
+
+    /** Authoritative configuration bypasses presentation overrides. */
+    async baseJson<T = unknown>(id: string): Promise<T> {
+        await this.ready()
+        const asset = await this.resolveAsset(id, JsonAsset, undefined, true)
+        if (!asset) throw new Error(`Missing base JSON: ${id}`)
+        return asset.json as T
+    }
+
+    async ids(type: AssetType<Asset>, prefix = ''): Promise<string[]> {
+        await this.ready()
+        const kind = type === JsonAsset ? 'json' : type === AudioClip ? 'audio' : type === TextAsset ? 'text' : 'sprites'
+        return [...new Set([...(this.base ? [this.base] : []), ...this.active]
+            .flatMap(pack => Object.keys(pack.manifest[kind])))].filter(id => id.startsWith(prefix))
+    }
+
+    private async resolveAsset<T extends Asset>(id: string, type: AssetType<T>, animation?: string, baseOnly = false): Promise<T | undefined> {
         const assetType: AssetType<Asset> = type
         if (!id.includes(':')) {
             if (assetType === AudioClip || assetType === SpriteFrame || assetType === Texture2D) {
@@ -326,11 +349,12 @@ export class ResourcePackManager {
             id = `pvz:${id}`
         }
         if (assetType === SpriteFrame) {
-            const asset: Asset | undefined = await this.sprite(id, animation)
+            const pack = this.find('sprites', id, animation, baseOnly)
+            const asset: Asset | undefined = pack && await this.spriteFrom(pack, id)
             return asset as T | undefined
         }
         if (assetType === Texture2D) {
-            const pack = this.find('sprites', id, animation)
+            const pack = this.find('sprites', id, animation, baseOnly)
             if (!pack) return undefined
             const entry = pack.manifest.sprites[id]
             const asset: Asset = await texture(pack, entry.file, entry.scale ?? 1)
@@ -338,7 +362,7 @@ export class ResourcePackManager {
         }
         const kind = assetType === AudioClip ? 'audio' : assetType === JsonAsset ? 'json' : assetType === TextAsset ? 'text' : undefined
         if (!kind) return undefined
-        const pack = this.find(kind, id)
+        const pack = this.find(kind, id, animation, baseOnly)
         if (!pack) return undefined
         const key = `${kind}:${id}`
         const cached = pack.assets.get(key)
@@ -359,8 +383,8 @@ export class ResourcePackManager {
         return pending as Promise<T>
     }
 
-    private find(kind: 'sprites' | typeof fileKinds[number], id: string, animation?: string): LoadedPack | undefined {
-        return [...this.active].reverse().find(pack => {
+    private find(kind: 'sprites' | typeof fileKinds[number], id: string, animation?: string, baseOnly = false): LoadedPack | undefined {
+        return [...(baseOnly ? [] : this.active)].reverse().concat(this.base ? [this.base] : []).find(pack => {
             const entry = pack.manifest[kind][id]
             if (!entry) return false
             if (kind !== 'sprites') return true
@@ -373,6 +397,10 @@ export class ResourcePackManager {
         await this.ready()
         const pack = this.find('sprites', id, animation)
         if (!pack) return undefined
+        return this.spriteFrom(pack, id)
+    }
+
+    private spriteFrom(pack: LoadedPack, id: string): Promise<SpriteFrame> {
         const cached = pack.sprites.get(id)
         if (cached) return cached
         const entry = pack.manifest.sprites[id]
@@ -409,6 +437,7 @@ export class ResourcePackManager {
                 relativeFile(layer.image)
                 return texture(pack, `${directory}${layer.image}.png`)
             }))
+            if (pack === this.base) for (const atlas of textures) atlas.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST)
             return { config, textures }
         })().catch(error => { pack.fonts.delete(id); throw error })
         pack.fonts.set(id, pending)
@@ -443,4 +472,21 @@ export class ResourcePackManager {
     }
 }
 
-export const resourcePacks = new ResourcePackManager()
+async function loadBaseArchive(): Promise<Uint8Array> {
+    assetManager.downloader.register('.zip', (url, options, done) => {
+        if (sys.isNative) {
+            const bytes = native.fileUtils.getDataFromFile(url)
+            done(bytes ? null : new Error(`Missing base archive: ${url}`), bytes)
+        } else assetManager.downloader.downloadFile(url, { ...options, xhrResponseType: 'arraybuffer' }, options.onFileProgress, done)
+    })
+    assetManager.parser.register('.zip', (data, _options, done) => done(null, data))
+    const asset = await new Promise<Asset>((resolve, reject) => {
+        resources.load('base', Asset, (error, asset) => error ? reject(error) : resolve(asset))
+    })
+    const data = asset.nativeAsset as ArrayBuffer | Uint8Array
+    const bytes = (data instanceof Uint8Array ? data : new Uint8Array(data)).slice()
+    assetManager.releaseAsset(asset)
+    return bytes
+}
+
+export const resourcePacks = new ResourcePackManager(loadBaseArchive)

@@ -69,7 +69,7 @@ export function executeDebugGameCommand(
             const duplicate = bank.packets.findIndex((packet, index) => index !== slot - 1 && packet.seedId === seedId)
             if (duplicate >= 0) return debugCondition(`Seed is already in slot ${duplicate + 1}`)
             const packet = bank.packets[slot - 1]
-            if (bank.selectedSeedId === packet.seedId) bank.selectedSeedId = undefined
+            if (bank.selection.mode === 'seed' && bank.selection.seedId === packet.seedId) bank.selection = { mode: 'none' }
             packet.seedId = seedId
             packet.readyAtTick = tick
             return debugSuccess(`Seed slot ${slot}: ${seedId}`)

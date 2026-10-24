@@ -240,7 +240,7 @@ def main():
     parser.add_argument("--model", default="auto",
                         help="auto, general, waifu2x, or a 4x RGB model file (requires spandrel)")
     parser.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")
-    parser.add_argument("--source", type=Path, default=ROOT / "assets/resources/fonts")
+    parser.add_argument("--source", type=Path, default=ROOT / "tools/generated/resources/fonts")
     parser.add_argument("--output", type=Path, default=ROOT / "art/resource-packs/hd/fonts")
     parser.add_argument("--preview-output", type=Path, help="Defaults to art/generated/font-upscale for project assets, otherwise --output")
     args = parser.parse_args()

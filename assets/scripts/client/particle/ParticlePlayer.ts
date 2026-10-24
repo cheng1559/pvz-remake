@@ -30,6 +30,7 @@ export class ParticlePlayer extends Component {
     private data: Particle | null = null
     private simulation: ParticleSimulation | null = null
     private accumulatorSeconds = 0
+    private remainingSeconds: number | undefined
     private readiness: Promise<void> | null = null
     private readonly frames = new Map<string, SpriteFrame>()
     private readonly views: Sprite[] = []
@@ -67,9 +68,11 @@ export class ParticlePlayer extends Component {
         this.applyPose()
     }
 
-    play(seed = 0): void {
+    play(seed = 0, duration?: number): void {
+        if (duration !== undefined && (!Number.isFinite(duration) || duration <= 0)) throw new Error('particle duration must be positive')
         this.simulation = new ParticleSimulation(this.requireData(), uint32(seed, 'particle seed'))
         this.accumulatorSeconds = 0
+        this.remainingSeconds = duration
         this.applyPose()
     }
 
@@ -85,6 +88,10 @@ export class ParticlePlayer extends Component {
             throw new Error('particle deltaSeconds must be finite and non-negative')
         }
         const simulation = this.requireSimulation()
+        if (this.remainingSeconds !== undefined) {
+            this.remainingSeconds = Math.max(0, this.remainingSeconds - deltaSeconds)
+            if (this.remainingSeconds === 0) { this.node.destroy(); return }
+        }
         if (!simulation.playing) return
         this.accumulatorSeconds += deltaSeconds
         const ticks = Math.floor(this.accumulatorSeconds / PARTICLE_STEP_SECONDS)
@@ -98,6 +105,7 @@ export class ParticlePlayer extends Component {
         return {
             ...this.requireSimulation().snapshot(),
             accumulatorSeconds: this.accumulatorSeconds,
+            ...(this.remainingSeconds === undefined ? {} : { remainingSeconds: this.remainingSeconds }),
         }
     }
 
@@ -113,6 +121,7 @@ export class ParticlePlayer extends Component {
         }
         simulation.restore(snapshot)
         this.accumulatorSeconds = snapshot.accumulatorSeconds
+        this.remainingSeconds = snapshot.remainingSeconds
         this.applyPose()
     }
 
@@ -168,6 +177,7 @@ export class ParticlePlayer extends Component {
     }
 
     private clear(): void {
+        this.remainingSeconds = undefined
         for (const sprite of this.views) {
             if (sprite.isValid) sprite.spriteFrame = null
             const node = sprite.isValid ? sprite.node : null

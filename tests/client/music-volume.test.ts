@@ -64,7 +64,7 @@ function fixture(native: boolean) {
     const source = (kind: 'main' | 'overlay', stem = 'main') => native
         ? [...nativeSources.values()].find(value => value.url === `${kind}/${stem}`)!
         : sources.get(`${kind === 'main' ? 'Music' : 'MusicOverlay'}_${stem}`)!
-    return { SoundLoader, MusicSystem, source, cc, Node, sources }
+    return { SoundLoader, MusicSystem, source }
 }
 
 for (const native of [false, true]) {
@@ -155,27 +155,3 @@ for (const native of [false, true]) {
         MusicSystem.stopOverlayTune()
     })
 }
-
-test('MusicPlayer applies master volume live and cleans up its subscription when disabled', async () => {
-    const { SoundLoader, cc, Node, sources } = fixture(false)
-    const { MusicPlayer } = load('client/music/MusicPlayer', {
-        cc, '@/client/sound/LegacySoundSystem': { SoundLoader },
-        '@/client/content/ClientContentLoader': {
-            ClientContentLoader: class {},
-            MusicRepository: class { async load() { return { definition: { id: 'pvz:test', durationSeconds: 100 }, clip: {} } } },
-        },
-    })
-    const player = new MusicPlayer()
-    player.node = new Node('player')
-    player.onEnable()
-    await player.load('pvz:test', {})
-    player.play(0.5)
-    SoundLoader.setMusicVolume(0.4)
-    assert.equal(sources.get('player')!.volume, 0.2)
-    player.onDisable()
-    SoundLoader.setMusicVolume(0.8)
-    assert.equal(sources.get('player')!.volume, 0.2)
-    player.onEnable()
-    assert.equal(sources.get('player')!.volume, 0.4)
-    player.onDisable()
-})

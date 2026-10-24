@@ -4,6 +4,9 @@
 
     /* Add your custom configuration here. */
     "compilerOptions": {
+        "module": "ESNext",
+        "lib": ["ES2022", "DOM"],
+        "skipLibCheck": true,
         "strict": false,
         "allowSyntheticDefaultImports": true,
         "baseUrl": "./",

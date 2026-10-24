@@ -201,7 +201,7 @@ function findPlantTarget(
         const position = world.get(entity, PositionComponent)!
         if (position.row !== zombiePosition.row) continue
         const plant = world.get(entity, PlantComponent)!
-        if (plant.health <= 0) continue
+        if (plant.health <= 0 || definitions.plants[plant.typeId].occupiesCell === false) continue
         const body = definitions.plants[plant.typeId].body
         const overlap = rectOverlap(
             { x: zombiePosition.x + attack.x, width: attack.width },

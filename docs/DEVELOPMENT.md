@@ -1,5 +1,7 @@
 # Development
 
+Levels with `seedBankSlots` treat `seedPackets` as the available chooser pool; other levels retain their fixed bank. `server/seedChooser.ts` validates choices and confirmation and saves their order and initial cooldowns. `LevelSeedChooser` reads the initial snapshot, submits `chooseSeed` / `confirmSeeds`, and handles only presentation using the shared clock. Use `/level pvz:seed-chooser-test` to test without changing campaign selection rules.
+
 The main scene mounts `app/GameApp.ts`, which coordinates the menu shell and starts `LocalIntegratedGame` through `app/LevelController.ts`. Gameplay runs in `server`; the client consumes protocol snapshots and events. Keep engine imports out of `server`, `shared`, and `ecs`.
 
 Music and sound effects use MP3 through the existing `convert_music.py` and `copy_sounds.py` pipeline. To compress an older WAV workspace, run `python3 tools/compress_audio.py`: it preserves resource UUIDs, channels and extensionless paths, backing up PCM originals outside the asset directory in `tools/raw/audio-pcm`. Music uses LAME VBR q2 and effects q4 at 44.1kHz. Dynamic music stems retain their leading silence, gain and loop/beat metadata. This reduces download/package size; decoded PCM memory does not shrink by the same ratio.
@@ -16,7 +18,7 @@ Music and sound effects use MP3 through the existing `convert_music.py` and `cop
 
 `LevelPresentation` selects the intro and tutorial text/guide configuration using the backend tutorial ID. The accepted 1-1 grass-roll sequence, preview zombies and guide steps live in `level/adventure/Adventure11*`; the shared scene contains no 1-1 timings. `level/boards/DayBoard` owns the day background, music and doorway geometry. `tools/content/pvz-base/presentation/definitions.json` owns plant/zombie animations, packet atlas positions, view selection, part tracks, shadows and dropped images, and builds to `presentation/definitions.json` in the content bundle. `shared/content/presentation.ts` owns the types and parser, alongside `shared/content/gameplay.ts`. Later levels add backend content and a presentation entry (or reuse an existing one); new environments implement their board presentation. They do not copy the scene, input, HUD or save controller. Only 1-1 content is currently installed.
 
-Client saves now write `level`; the decoder accepts the previous `adventure11` field. Intro-specific validation belongs to that intro implementation. The installed `pvz:adventure11` prefab ID and script UUIDs remain stable so existing content packs and saves keep resolving their assets. `client/showcase` only contains the standalone content preview probe.
+Client saves now write `level`; the decoder accepts the previous `adventure11` field. Intro-specific validation belongs to that intro implementation. The shared level layout is `assets/resources/ui/level.prefab`, registered as `pvz:level`; its Prefab and script UUIDs remain unchanged. `client/showcase` only contains the standalone content preview probe.
 
 Menu data follows `screens → client/api/MenuApi → MenuTransport → server/menu/MenuService`. `shared/menu` defines request and response DTOs. The backend owns profile storage/name validation, store catalog/prices/availability/purchases, challenge progress, almanac definitions, achievement entries/unlocks, and persisted options. Views render API responses and submit IDs/actions; they never import repositories or write profiles. Price, current-user identity, stock and balance are rechecked by the backend at purchase confirmation. JSON round trips isolate client copies from backend state.
 
@@ -26,7 +28,7 @@ Store responses specify `highlight` (`none`, `seedPacket`, or `additive` with op
 
 Only Adventure 1-1 is connected. The debug CLI is available in Debug and Release builds: press `/`, or double-tap the bottom-right corner in mobile mode. See [Debug CLI](DEBUG_CLI.md). Adventure 1-2 onward remains unimplemented. The main menu uses original image buttons and its Reanim entrance; Options has working settings and in-game actions. Almanac and Store have their own content and interactions; other game modes remain unimplemented. Refer to the workspace's `pvz-remake` when porting their behavior.
 
-`StartupScreen` automatically plays the 200-tick PopCap fade/hold/fade, followed by the falling title, rolling grass bar, and flower/zombie-head effects at the five reference thresholds. Timing uses 100Hz ticks from the global clock; effects use the current `ReanimPlayer`. Progress tracks actual main-menu image/animation preparation. The prepared menu stays hidden and is reused when input starts its entrance. Once resources are ready, the bar follows button mouse rules; background presses, touches, or any key can also start. Returning to the title skips PopCap. Generate the new clips with `python tools/build_pvz_base.py --startup-only --raw-root <raw-directory>`; the scoped build retains save compatibility with previous Bundle hashes.
+`StartupScreen` automatically plays the 200-tick PopCap fade/hold/fade, followed by the falling title, rolling grass bar, and flower/zombie-head effects at the five reference thresholds. Timing uses 100Hz ticks from the global clock; effects use the current `ReanimPlayer`. Progress tracks actual main-menu image/animation preparation. The prepared menu stays hidden and is reused when input starts its entrance. Once resources are ready, the bar follows button mouse rules; background presses, touches, or any key can also start. Returning to the title skips PopCap. Generate the new clips with `python tools/build_pvz_base.py --startup-only --raw-root <raw-directory>`; the scoped build updates the existing conversion outputs and repackages the builtin ZIP.
 
 Temporary black title bars are removed. `MenuPages.heading` declares original title fonts, baselines, and colors, with text from `lawnstrings`; Store uses its original sign. `ChallengeScreen` draws the 20/20/11 Mini-games/Puzzle/Survival thumbnail buttons and profile trophy counts, reusing `UI.button` capture and visual states. Selecting an unimplemented mode shows an unavailable dialog. `MenuPageControls` supplies garden cycling/Store entry and the achievement return button. Awards use original button images while retaining Adventure 1-1 replay.
 
@@ -111,7 +113,7 @@ Options preserves immediate volume updates, the 0.65 sound-effect scale, fullscr
 
 ## Resources
 
-The base Bundle is in `assets/bundles/pvz-base`. Menus and presenters also use backgrounds, widget textures, bitmap fonts, audio, particle definitions, and particle textures under `assets/resources`; keep these available.
+Conversion inputs for packaging live under `tools/generated/pvz-base` and `tools/generated/resources`. Runtime content comes from `assets/resources/base.zip`, using the same `pack.json`, decoding and caches as installed resource packs. Only the bootstrap scene, layout prefab and compiled shader remain Cocos resources.
 
 Place your game's `main.pak` at `tools/main.pak`, then run from the project root:
 
@@ -119,11 +121,11 @@ Place your game's `main.pak` at `tools/main.pak`, then run from the project root
 python3 tools/process_pak.py
 ```
 
-The existing pipeline prepares shared resources and builds the Bundle. It requires Python 3.10+, Pillow, ffmpeg, and the music converter's libopenmpt backend. If the raw files and shared resources are already available, rebuild only the Bundle with `npm run build:content`.
+The pipeline converts shared resources under `tools/generated` and produces `assets/resources/base.zip`. It requires Python 3.10+, Pillow, ffmpeg, and the music converter's libopenmpt backend. `npm run build:content` runs conversion and ZIP packaging; `npm run build:base-pack` repackages existing conversion outputs and the current authored JSON without converting animations again.
 
-For menu animation changes, run `python tools/build_pvz_base.py --main-menu-only`. This reuses the existing converter to update the 13 menu clips and their images while preserving other Bundle assets.
+For menu animation changes, run `python tools/build_pvz_base.py --main-menu-only`. This reuses the existing converter to update the 13 menu clips and their images while preserving other conversion outputs, then rebuilds the builtin ZIP.
 
-Save loading still checks the base content ID, version, and gameplay Mods. `manifest.saveCompatibleHashes` declares previous package hashes with compatible presentation-only changes in the same version; the next save writes the current hash. Menu-only builds verify the existing Bundle first and preserve compatibility when output changes. Full rebuilds do not inherit these declarations by default.
+Save loading still checks the base content ID, version, hash and gameplay Mods. The builtin ZIP stores its content index as the ordinary JSON resource `pvz:content`; its hash covers the default files and resource mappings. Presentation overrides do not modify authoritative gameplay JSON.
 
 ## Checks and builds
 
@@ -135,7 +137,7 @@ npm run build:web:debug
 
 Prefer existing focused tests for changed critical logic. Avoid browser automation unless visual or interaction validation is required. Windows and Android build commands remain available; native compilation and device checks are separate from Web validation.
 
-The `pvzPhase2` and `pvzPhase4` probes remain available in debug builds. See [the Mod guide](MODS.md) for Mod development and installation.
+The `pvzPhase4` level probe remains available in debug builds. See [the Mod guide](MODS.md) for Mod development and installation.
 
 Gameplay and presentation configuration use `GameplayDefinitions` and `PresentationDefinitions`. Both are loaded, validated, returned as objects, and injected into consumers. `loadIntegratedGameContent` returns `definitions` and `presentation`; UI owns its definitions through `UIAssets.presentation`. Animation registries, entity views and seed packets receive their definitions explicitly rather than consulting global configuration state.
 
@@ -144,5 +146,7 @@ Gameplay and presentation configuration use `GameplayDefinitions` and `Presentat
 Zombie `gait` references the gameplay `zombieGaits` table; `tongueChance` and `walk2Chance` explicitly select variants independently of the gait. Plant ability `targeting` configures reach, held-pole filtering and an interaction inset key resolved through zombie `targetingInsets`. Post-vault attacks use `vault.landedAttack`. The mine's client distance calculation reads the gameplay attack and body rectangles.
 
 Presentation `projectiles`, zombie `helm` and `drops` define sprites, tracks, effects, offsets and sounds; sound `pitchRange` controls pitch randomization. `seedPackets` owns atlas cells and placements; `almanac` owns cords and motion parameters. Add definitions for new content rather than branching on concrete IDs in shared renderers. View factories, dedicated ability state machines and unit conversion constants remain code.
+
+Gameplay `boards.*.bounds` defines horizontal limits and zombie `dropsFlag` enables flag drops. Presentation `boards` defines backgrounds, music and game-over geometry. Particle snapshots retain optional remaining lifetimes; packet flashes use `seedPackets.flash`, with no effect-ID branches on restore. `tools/content/pvz-base/gameplay/store.json` owns shop tiers, requirements, inventory rules and purchase effects. The application loads that JSON and injects a catalog into the backend.
 
 Mods use `register({ host, assets })`: `host.get()` returns host modules and registries; `host.around()` / `host.replace()` patch actual methods. Separate system, screen and animation enhancement facades have been removed. JSON ECS components registered in `GameplayRegistry.components` participate in world snapshots and saves. See [the kernel-pult Mod](../mods/corn/README.md) and [Mod documentation](MODS.md).

@@ -1,10 +1,8 @@
-import { Node, tween, Vec3 } from 'cc'
+import { Node, Vec3 } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { uiNode } from '@/client/view/uiNode'
-import { startGameTween } from '@/core/GameTween'
 import { TodParticleSystem } from '@/core/Particle'
-import { PARTICLE_STEP_SECONDS } from '@/shared/content/particle'
 import type { LevelParticleOwnerSnapshot, LevelParticleSnapshot } from './LevelPresentationSnapshot'
 import { LevelEntityRenderer } from './LevelEntityRenderer'
 import type { LevelIntro } from './LevelIntro'
@@ -57,27 +55,13 @@ export class LevelParticlePresenter {
                 continue
             }
             const node = uiNode({
-                name: snapshot.playback.id === 'pvz:seedpacketflash'
-                    ? 'ParticleSystem_seedpacketflash'
-                    : `Particle-${snapshot.instanceId}`,
+                name: 'ParticleSystem',
                 parent,
                 position: { x: snapshot.owner.x, y: snapshot.owner.y, z: snapshot.owner.z },
             }).node
             const player = node.addComponent(ParticlePlayer)
             await player.load(snapshot.playback.id, this.content.registry, this.content.loader)
             player.restore(snapshot.playback)
-            if (snapshot.playback.id === 'pvz:peasplat') {
-                const elapsed = snapshot.playback.ageTicks * PARTICLE_STEP_SECONDS + snapshot.playback.accumulatorSeconds
-                startGameTween(node, tween(node).delay(Math.max(0, 0.21 - elapsed)).call(() => {
-                    if (node.isValid) node.destroy()
-                }))
-            }
-            if (snapshot.playback.id === 'pvz:seedpacketflash') {
-                const elapsed = snapshot.playback.ageTicks * PARTICLE_STEP_SECONDS + snapshot.playback.accumulatorSeconds
-                startGameTween(node, tween(node).delay(Math.max(0, 0.26 - elapsed)).call(() => {
-                    if (node.isValid) node.destroy()
-                }))
-            }
         }
     }
 

@@ -45,7 +45,7 @@ function setup() {
     world.resources.set(RandomResource, new DeterministicRng(1))
     world.resources.set(EventQueueResource, createEventQueue())
     world.resources.set(EconomyStateResource, { sun: definition.startingSun, money: 0, pendingSunSpend: 0 })
-    world.resources.set(SeedBankResource, { packets: definition.seedPackets.map(seedId => ({ seedId, readyAtTick: 0 })) })
+    world.resources.set(SeedBankResource, { selection: { mode: 'none' }, packets: definition.seedPackets.map(seedId => ({ seedId, readyAtTick: 0 })) })
     initializeLevel(world, true)
     const schedule = new Schedule()
     schedule.add('tutorial', createLevelProgressSystem(definitions))

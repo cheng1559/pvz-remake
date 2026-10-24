@@ -4,10 +4,11 @@ import { gameClock } from '@/core/GameClock'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { Haptics } from '@/platform/Haptics'
-import { boardCell } from './LevelGeometry'
+import { boardCell, levelAwardSize } from './LevelGeometry'
 import type { LevelGame } from './LevelGame'
 import { LevelView } from './LevelView'
 import type { UIButton } from '@/client/ui/UIButton'
+import type { WorldSnapshot } from '@/shared/protocol'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -28,6 +29,8 @@ export class LevelInputPresenter {
     private started = false
     private previousSpeed = 1
     private readonly buttons: UIButton[] = []
+    private seedButtons: UIButton[] = []
+    private toolButtons: Array<{ toolId: string; button: UIButton }> = []
     private mobilePress?: MobilePress
 
     constructor(
@@ -52,16 +55,18 @@ export class LevelInputPresenter {
         this.node.on(Node.EventType.MOUSE_MOVE, this.onPointerMove, this)
         this.node.on(Node.EventType.MOUSE_LEAVE, this.onPointerLeave, this)
         input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this)
-        this.buttons.push(...this.view.bindSeedPackets(seedId => this.selectSeedPacket(seedId)), this.view.bindMenu(() => {
-            if (!this.enabled || !this.view.introComplete) return
-            if (this.game.render().cursor.mode === 'seed') this.cancelPlanting()
+        this.seedButtons = this.view.bindSeedPackets(index => this.selectSeedPacket(index))
+        this.toolButtons = this.view.bindTools(id => this.selectTool(id))
+        this.buttons.push(...this.seedButtons, ...this.toolButtons.map(entry => entry.button), this.view.bindMenu(() => {
+            if (!this.enabled || !this.view.canOpenMenu) return
+            if (this.game.render().cursor.mode !== 'none') this.cancelPlanting()
             else this.onMenu()
         }))
         for (const button of this.buttons) {
             button.canInteract = () => {
                 if (!this.enabled) return false
                 const snapshot = this.game.render()
-                return snapshot.result === 'playing' && snapshot.cursor.mode !== 'seed'
+                return snapshot.result === 'playing' && snapshot.cursor.mode === 'none'
             }
         }
     }
@@ -96,51 +101,53 @@ export class LevelInputPresenter {
         }
     }
 
-    private selectSeedPacket(seedId: string): void {
+    private selectSeedPacket(index: number): void {
         if (!this.enabled || !this.view.introComplete) return
         const snapshot = this.game.render()
-        if (snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+        if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+        const packet = this.view.seedPacketAt(snapshot, index)
+        if (!packet) return
         Haptics.play()
-        if (snapshot.cursor.mode === 'seed') {
+        if (snapshot.cursor.mode !== 'none') {
             this.cancelPlanting()
             return
         }
-        const packet = snapshot.seedPackets.find(value => value.seedId === seedId)
-        this.view.audio.seedPacketSelected(
-            packet?.cooldownRemaining ?? 0,
-            !!packet && ((snapshot.extensions['pvz:debug'] as { sunCost?: boolean } | undefined)?.sunCost === false || snapshot.availableSun >= this.game.definitions.seeds[packet.seedId].sunCost),
-        )
-        this.game.command({ type: 'selectSeed', seedId })
+        this.view.audio.seedPacketSelected(packet.availability)
+        this.game.command(packet.command)
     }
 
     private onTouchStart(event: EventTouch): void {
-        if (!this.enabled || !GameDebugSettings.isMobileMode() || !this.view.introComplete) return
+        if (!this.enabled || !GameDebugSettings.isMobileMode()) return
         if (this.mobilePress) { event.propagationStopped = true; return }
+        if (this.view.dialogReady) {
+            this.game.command({ type: 'advanceDialog' }); event.propagationStopped = true; return
+        }
         const snapshot = this.game.render()
-        if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+        if (snapshot.paused || snapshot.result !== 'playing') return
         const location = event.getLocation()
         const hit = (button: UIButton) => button.node.activeInHierarchy && button.interactable &&
             button.node.getComponent(UITransform)!.hitTest(location, event.windowId)
-        const index = this.buttons.slice(0, -1).findIndex(hit)
-        const packet = snapshot.seedPackets[index]
-        const held = snapshot.cursor.mode === 'seed'
+        const index = this.seedButtons.findIndex(hit)
+        const tool = this.toolButtons.find(entry => hit(entry.button))
+        if (!tool && !this.canUseCursor(snapshot)) return
+        const packet = this.view.seedPacketAt(snapshot, index)
+        const held = snapshot.cursor.mode !== 'none'
         // Let Menu keep its normal button capture when no plant is held.
-        if (!held && index < 0 && hit(this.buttons[this.buttons.length - 1])) return
-        const pickable = packet && !packet.selected && packet.ready &&
-            ((snapshot.extensions['pvz:debug'] as { sunCost?: boolean } | undefined)?.sunCost === false ||
-                snapshot.availableSun >= this.game.definitions.seeds[packet.seedId].sunCost)
+        if (!held && !tool && index < 0 && hit(this.buttons[this.buttons.length - 1])) return
+        const pickable = packet && !packet.selected && packet.ready && !packet.availability.reason
         if (packet && held && !pickable) Haptics.play()
         if (packet && (!held || pickable)) {
             if (held) this.game.command({ type: 'clearCursor' })
-            this.selectSeedPacket(packet.seedId)
+            this.selectSeedPacket(index)
         }
+        if (tool && !held) this.selectTool(tool.toolId)
         const press = this.mobilePress = {
             id: event.touch!.getID(), point: this.boardPixel(event), location, windowId: event.windowId,
-            source: packet ? this.buttons[index].node : undefined,
-            leftSource: !packet, cancelInside: held && !pickable,
+            source: packet ? this.seedButtons[index].node : tool?.button.node,
+            leftSource: !packet && !tool, cancelInside: held && !pickable,
         }
         this.view.setPointer(this.mobilePressReady(press) ? press.point : undefined)
-        if (held || packet) event.propagationStopped = true
+        if (held || packet || tool) event.propagationStopped = true
         else this.collectAt(press.point.x, press.point.y)
     }
 
@@ -154,19 +161,20 @@ export class LevelInputPresenter {
         this.mobilePress = undefined
         this.view.setPointer()
         const snapshot = this.game.render()
-        if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+        if (!this.canUseCursor(snapshot)) return
         this.collectAt(press.point.x, press.point.y, false)
-        if (snapshot.cursor.mode !== 'seed') return
+        if (snapshot.cursor.mode === 'none') return
         event.propagationStopped = true
         // Native cancellation can have a different end position; resolve at the last tracked point, as before.
         if (this.mobilePressReady(press)) {
-            this.placePlant(press.point)
-            if (this.game.render().cursor.mode === 'seed') this.game.command({ type: 'clearCursor' })
+            this.useCursor(press.point)
+            if (this.game.render().cursor.mode !== 'none') this.game.command({ type: 'clearCursor' })
         } else if (press.cancelInside || press.leftSource) this.game.command({ type: 'clearCursor' })
     }
 
     private onMouseDown(event: EventMouse): void {
         if (!this.enabled || GameDebugSettings.isMobileMode()) return
+        if (this.view.dialogReady) { this.game.command({ type: 'advanceDialog' }); return }
         if (event.getButton() === 2) {
             this.cancelPlanting()
             return
@@ -183,7 +191,7 @@ export class LevelInputPresenter {
             const press = this.mobilePress
             if (!press || (event as EventTouch).touch!.getID() !== press.id) return
             const snapshot = this.game.render()
-            if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') {
+            if (!this.canUseCursor(snapshot)) {
                 this.mobilePress = undefined
                 this.view.setPointer()
                 return
@@ -217,16 +225,32 @@ export class LevelInputPresenter {
     }
 
     private onPointer(event: EventTouch | EventMouse): void {
-        if (!this.view.introComplete) return
         const { x, y } = this.boardPixel(event)
         this.view.setPointer({ x, y })
         const snapshot = this.game.render()
-        if (snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
-        if (snapshot.cursor.mode === 'seed') {
-            this.placePlant({ x, y })
-            return
-        }
-        this.collectAt(x, y)
+        if (!this.canUseCursor(snapshot)) return
+        if (snapshot.cursor.mode !== 'none') this.useCursor({ x, y })
+        else this.collectAt(x, y)
+    }
+
+    private selectTool(toolId: string): void {
+        if (!this.enabled) return
+        if (this.game.render().cursor.mode !== 'none') { this.cancelPlanting(); return }
+        Haptics.play()
+        this.game.command({ type: 'selectTool', toolId })
+    }
+
+    private canUseCursor(snapshot: WorldSnapshot): boolean {
+        return !snapshot.paused && snapshot.result === 'playing' &&
+            (snapshot.phase === 'gameplay' && this.view.introComplete || snapshot.cursor.mode === 'tool')
+    }
+
+    private useCursor(point: { x: number; y: number }): void {
+        if (this.game.render().cursor.mode === 'tool') {
+            const { row, column, inBounds } = boardCell(this.view.board, point.x, point.y)
+            if (inBounds) this.game.command({ type: 'useToolAt', row, column })
+            else this.cancelPlanting()
+        } else this.placePlant(point)
     }
 
     private placePlant({ x, y }: { x: number, y: number }): void {
@@ -246,8 +270,9 @@ export class LevelInputPresenter {
             const definition = this.game.definitions.items[item.typeId]
             if (!includeAward && !definition) continue
             const extra = definition ? 15 : 0
-            const width = definition?.width ?? 50
-            const height = definition?.height ?? 70
+            const award = levelAwardSize(this.view.level.award)
+            const width = definition?.width ?? award.width
+            const height = definition?.height ?? award.height
             if (item.state !== 'collecting' && x >= item.x - extra && x < item.x + width + extra &&
                 y >= item.y - extra && y < item.y + height + extra) {
                 this.game.command({ type: 'collectItemAt', itemId: item.entityId })
@@ -257,11 +282,24 @@ export class LevelInputPresenter {
     }
 
     private onKeyDown(event: EventKeyboard): void {
-        if (!this.enabled || !GameDebugSettings.hotkeysEnabled || UIHoverManager.isModalBlocked || !this.view.introComplete) return
-        const packetIndex = event.keyCode - KeyCode.DIGIT_1
-        if (packetIndex >= 0 && packetIndex < 9) {
-            const packet = this.game.render().seedPackets[packetIndex]
-            if (packet) this.selectSeedPacket(packet.seedId)
+        const modal = UIHoverManager.activeModalRoot
+        if (!this.enabled || UIHoverManager.isInputBlocked || modal && modal !== this.node && !this.node.isChildOf(modal)) return
+        if (this.view.dialogReady && (event.keyCode === KeyCode.SPACE || event.keyCode === KeyCode.ENTER)) {
+            this.game.command({ type: 'advanceDialog' })
+            return
+        }
+        if (!GameDebugSettings.hotkeysEnabled) return
+        if (event.keyCode === KeyCode.KEY_F) {
+            const shovel = this.toolButtons.find(entry => entry.toolId === 'pvz:shovel')
+            if (shovel?.button.node.activeInHierarchy && shovel.button.interactable) this.selectTool(shovel.toolId)
+            return
+        }
+        if (!this.view.introComplete) return
+        const packetIndex = event.keyCode === KeyCode.DIGIT_0 ? 9 : event.keyCode - KeyCode.DIGIT_1
+        if (packetIndex >= 0 && packetIndex < 10) {
+            const snapshot = this.game.render()
+            if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+            this.selectSeedPacket(packetIndex)
         }
         else if (event.keyCode === KeyCode.KEY_D) {
             if (gameClock.speed > 0) { this.previousSpeed = gameClock.speed; gameClock.setSpeed(0) }
@@ -270,7 +308,7 @@ export class LevelInputPresenter {
     }
 
     private cancelPlanting(): void {
-        if (this.game.render().cursor.mode !== 'seed') return
+        if (this.game.render().cursor.mode === 'none') return
         this.game.command({ type: 'clearCursor' })
         this.view.audio.plantingCancelled()
     }

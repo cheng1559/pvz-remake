@@ -19,8 +19,8 @@ from PIL import Image, ImageDraw
 from upscale_fonts import Upscaler
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "assets/resources/textures"
-BASE_BUNDLE = ROOT / "assets/bundles/pvz-base"
+SOURCE = ROOT / "tools/generated/resources/textures"
+BASE_BUNDLE = ROOT / "tools/generated/pvz-base"
 OUTPUT = ROOT / "art/resource-packs/hd/sprites"
 SCALE = 2
 PREFIXES = (
@@ -91,7 +91,7 @@ def all_sheet_sizes(inputs):
     for image in resources.findall('.//Image'):
         name = Path(image.get('path', '').replace('\\', '/')).stem.lower()
         add(name, int(image.get('cols', 1)), int(image.get('rows', 1)))
-    for path in sorted((ROOT / 'assets/resources/particles').glob('*.json')):
+    for path in sorted((ROOT / 'tools/generated/resources/particles').glob('*.json')):
         for emitter in json.loads(path.read_text())['emitters']:
             name = emitter.get('image', '').split('/')[-1]
             add(name, int(emitter.get('imageColumns', emitter.get('imageFrames', 1))), int(emitter.get('imageRows', 1)))

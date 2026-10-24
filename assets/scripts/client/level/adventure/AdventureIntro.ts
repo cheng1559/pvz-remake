@@ -1,4 +1,5 @@
 import type { BoardDefinition } from '@/shared/content/gameplay'
+import type { AdventureIntroLayout, PresentationDefinitions } from '@/shared/content/presentation'
 import { Mask, Node, Sprite, Vec3 } from 'cc'
 import { TodParticleSystem } from '@/core/Particle'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -19,25 +20,32 @@ import { randomAnimationRate, type ClientAnimationRegistry } from '@/client/cont
 
 const WIDTH = 800
 const HEIGHT = 600
-const INTRO_END = 855
+const INTRO_BASE_END = 655
+const READY_SET_PLANT_TICKS = 183
 const PAN_RIGHT_START = 150
 const PAN_RIGHT_END = 350
 const PAN_LEFT_START = 450
 const PAN_LEFT_END = 600
 const ROLL_SOD_START = 600
 const ROLL_SOD_END = 800
-const LAWN_MOWER_START = 820
-const LAWN_MOWER_END = 845
-const SEED_BANK_START = 800
-const SEED_BANK_END = 825
+const LAWN_MOWER_START = 620
+const LAWN_MOWER_DURATION = 25
+const SEED_BANK_START = 600
+const SEED_BANK_DURATION = 25
 const HOUSE_NAME_DURATION = 250
 
-export interface AdventureIntroLayout {
-    sod: string
-    x: number
-    y: number
-    existingMiddleRow?: boolean
-    rolls: readonly number[]
+/** CutScene::PlaceStreetZombies apportions ten slots from this game's actual wave roster. */
+export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, definitions: PresentationDefinitions): string[] {
+    const entries = Object.entries(counts).filter(([id, count]) => count > 0 && !definitions.zombies[id]?.flag)
+    const total = entries.reduce((sum, [, count]) => sum + count, 0)
+    return entries.flatMap(([id, count]) => Array.from({ length: Math.max(1, Math.min(count, Math.floor(count * 10 / total))) }, () => id))
+}
+
+function applyPreviewParts(player: ReanimPlayer, typeId: string, definitions: PresentationDefinitions, hasTongue: boolean): void {
+    const definition = definitions.zombies[typeId]
+    for (const track of definition.helmTracks) player.setTrackPrefixVisible(track, definition.helm?.track === track)
+    player.setTrackPrefixVisible('anim_hair', !definition.helm)
+    player.setTrackPrefixVisible('anim_tongue', hasTongue)
 }
 
 export class AdventureIntro implements LevelIntro {
@@ -45,28 +53,30 @@ export class AdventureIntro implements LevelIntro {
     private destroyed = false
 
     static async create(context: LevelIntroContext, layout: AdventureIntroLayout): Promise<AdventureIntro> {
-        const { content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow, entityNodes } = context
+        const { content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow, entityNodes, previewZombies } = context
         const sprites = new SpriteRepository(content.registry, content.loader)
-        const [sod] = await Promise.all([sprites.load(layout.sod), ParticleDefinitionLoader.load('sodroll')])
+        const [sod] = await Promise.all([sprites.load(layout.sod), ...(layout.rolls.length ? [ParticleDefinitionLoader.load('sodroll')] : [])])
         const sodClip = uiNode({
             node: slots.sodClip, position: { x: layout.x - 400, y: 300 - layout.y }, anchor: { x: 0, y: 1 },
-            size: { width: 0, height: sod.originalSize.height }, mask: Mask.Type.GRAPHICS_RECT,
+            size: { width: layout.rolls.length ? 0 : layout.width, height: sod.originalSize.height }, mask: Mask.Type.GRAPHICS_RECT,
         }).node
-        uiNode({ node: slots.sodRow, anchor: { x: 0, y: 1 }, sprite: { frame: sod, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+        uiNode({ node: slots.sodRow, position: { x: -(layout.sourceX ?? 0) }, anchor: { x: 0, y: 1 }, sprite: { frame: sod, sizeMode: Sprite.SizeMode.RAW, trim: false } })
         uiNode({ node: slots.tutorialLawnFlash, position: { x: layout.x - 400, y: 300 - layout.y }, anchor: { x: 0, y: 1 },
             sprite: { frame: sod, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node.active = false
-        if (layout.existingMiddleRow) {
-            const middle = await sprites.load('pvz:sod1row')
+        if (layout.existingSod) {
+            const existing = layout.existingSod
+            const middle = await sprites.load(existing.sprite)
             const node = uiNode({
-                name: 'ExistingSod', parent: board, position: { x: -381, y: 35 }, anchor: { x: 0, y: 1 },
+                name: 'ExistingSod', parent: board, position: { x: existing.x - WIDTH / 2, y: HEIGHT / 2 - existing.y }, anchor: { x: 0, y: 1 },
                 sprite: { frame: middle, sizeMode: Sprite.SizeMode.RAW, trim: false },
             }).node
             node.setSiblingIndex(sodClip.getSiblingIndex())
         }
-        const sodRolls = await Promise.all(layout.rolls.map(async (offset, index) => {
+        slots.sodRoll.active = false
+        const sodRolls = await Promise.all(layout.rolls.map(async (roll, index) => {
             const node = uiNode({
                 ...(index === 0 ? { node: slots.sodRoll } : { name: 'SodRoll', parent: board }),
-                position: { x: -WIDTH / 2, y: HEIGHT / 2 - offset },
+                position: { x: roll.x - WIDTH / 2, y: HEIGHT / 2 - roll.y },
                 size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
             }).node
             node.setSiblingIndex(slots.sodRoll.getSiblingIndex() + index)
@@ -78,12 +88,22 @@ export class AdventureIntro implements LevelIntro {
             return player
         }))
 
+        let ready: ReanimPlayer | null = null
+        if (layout.readySetPlant) {
+            const node = uiNode({ name: 'ReadySetPlant', parent: board, position: { x: 0, y: -24 }, active: false }).node
+            ready = node.addComponent(ReanimPlayer)
+            await ready.load('pvz:readysetplant', content.registry, content.loader)
+            ready.play({ loop: false, rate: 1, hideOnFinish: false })
+            ready.pause()
+        }
         const introZombies: Node[] = []
+        const previewTypes = new Map<Node, string>()
+        const types = layout.stationary ? [] : adventurePreviewTypes(previewZombies, content.presentation)
         const introPositions: Array<{ x: number, y: number, z: number }> = []
         const introSpots = Array.from({ length: 5 }, (_, gridX) =>
             Array.from({ length: 5 }, (_, gridY) => ({ gridX, gridY })),
         ).flat().filter(({ gridX, gridY }) => gridX !== 4 || gridY !== 0)
-        while (introPositions.length < 5) {
+        while (introPositions.length < types.length) {
             const [{ gridX, gridY }] = introSpots.splice(Math.floor(Math.random() * introSpots.length), 1)
             introPositions.push({
                 x: 430 + gridX * 56 + Math.floor(Math.random() * 15),
@@ -91,9 +111,12 @@ export class AdventureIntro implements LevelIntro {
                 z: 100 + gridY * 4 + (gridX % 2) * 2,
             })
         }
-        const animations = content.animations.resolve('pvz:normal')
         await Promise.all(introPositions.map(async (position, index) => {
-            const clip = Math.random() < content.animations.zombieIdle2Chance ? animations.idle2 : animations.idle
+            const typeId = types[index]
+            const definition = content.presentation.zombies[typeId]
+            const animations = content.animations.resolve(definition.animationTarget)
+            const idle2 = !!animations.idle2 && Math.random() < content.animations.zombieIdle2Chance
+            const clip = idle2 ? animations.idle2 : animations.idle
             const node = uiNode({
                 name: `IntroZombie-${index}`, parent: entityLayer, position,
                 size: { width: 120, height: 120 }, anchor: { x: 0, y: 1 },
@@ -107,13 +130,14 @@ export class AdventureIntro implements LevelIntro {
                 anchor: { x: 0, y: 1 },
             }).node.addComponent(ReanimPlayer)
             await player.load(clip.reanimId, content.registry, content.loader)
-            player.setTrackPrefixVisible('anim_tongue', Math.random() < 0.2)
-            player.play({ loop: true, rate: randomAnimationRate(content.animations.rates.zombieIdle2) / (clip.fps ?? 12) * clip.rateScale, timeSeconds: Math.random() * 20 })
+            applyPreviewParts(player, typeId, content.presentation, Math.random() < content.definitions.zombies[typeId].tongueChance)
+            player.play({ loop: true, rate: randomAnimationRate(content.animations.rates[idle2 ? 'zombieIdle2' : 'zombieIdle']) / (clip.fps ?? 12) * clip.rateScale, timeSeconds: Math.random() * 20 })
             introZombies.push(node)
+            previewTypes.set(node, typeId)
         }))
         introZombies.sort((left, right) => left.position.z - right.position.z)
             .forEach((node, index) => node.setSiblingIndex(index))
-        return new AdventureIntro(board, sodClip, sodRolls, layout.rolls, introZombies, bank, houseName,
+        return new AdventureIntro(board, sodClip, sodRolls, layout, ready, introZombies, previewTypes, content.presentation, bank, houseName,
             content.definitions.boards[level.board],
             entityNodes, audio, content.registry, content.loader, content.animations)
     }
@@ -122,8 +146,11 @@ export class AdventureIntro implements LevelIntro {
         private readonly board: Node,
         private readonly sodClip: Node,
         private readonly sodRolls: ReanimPlayer[],
-        private readonly rollOffsets: readonly number[],
+        private readonly layout: AdventureIntroLayout,
+        private readonly ready: ReanimPlayer | null,
         private readonly introZombies: Node[],
+        private readonly previewTypes: Map<Node, string>,
+        private readonly definitions: PresentationDefinitions,
         private readonly bank: Node,
         private readonly houseName: Node,
         private readonly geometry: BoardDefinition,
@@ -132,11 +159,17 @@ export class AdventureIntro implements LevelIntro {
         private readonly registry: ContentRegistry,
         private readonly loader: ClientContentLoader,
         private readonly animations: ClientAnimationRegistry,
-    ) {}
+    ) { if (layout.stationary) this.ticks = SEED_BANK_START }
 
     get complete(): boolean {
-        return this.ticks >= INTRO_END
+        return this.ticks >= this.endTick
     }
+
+    private get sodTicks(): number { return this.layout.rolls.length ? ROLL_SOD_END - ROLL_SOD_START : 0 }
+    private get readyStart(): number { return INTRO_BASE_END + this.sodTicks }
+    private get endTick(): number { return this.readyStart + (this.layout.readySetPlant ? READY_SET_PLANT_TICKS : 0) }
+
+    get elapsedTicks(): number { return this.ticks }
 
     particleOwner(node: Node): Extract<LevelParticleOwnerSnapshot, { kind: 'intro-preview' }> | null {
         for (let slot = 0; slot < this.introZombies.length; slot++) {
@@ -159,6 +192,7 @@ export class AdventureIntro implements LevelIntro {
                 const player = node.getChildByName('ZombieAnimation')!.getComponent(ReanimPlayer)!
                 return {
                     slot,
+                    typeId: this.previewTypes.get(node)!,
                     x: node.position.x,
                     y: node.position.y,
                     z: node.position.z,
@@ -170,7 +204,7 @@ export class AdventureIntro implements LevelIntro {
     }
 
     async restore(snapshot: LevelIntroSnapshot): Promise<void> {
-        if (snapshot.ticks > INTRO_END || snapshot.previews.length !== (snapshot.ticks < INTRO_END ? 5 : 0)) {
+        if (snapshot.ticks > this.endTick || snapshot.previews.length !== (snapshot.ticks < this.endTick ? this.introZombies.length : 0)) {
             throw new Error('Invalid adventure intro state')
         }
         this.ticks = snapshot.ticks
@@ -182,7 +216,10 @@ export class AdventureIntro implements LevelIntro {
                 const node = this.introZombies[preview.slot]
                 if (!node?.isValid) throw new Error(`intro preview ${preview.slot} is unavailable`)
                 node.setPosition(preview.x, preview.y, preview.z)
-                const clip = Object.values(this.animations.resolve('pvz:normal')).find(clip => clip.reanimId === preview.reanim.id)
+                const definition = this.definitions.zombies[preview.typeId]
+                if (!definition) throw new Error(`Intro zombie is not installed: ${preview.typeId}`)
+                this.previewTypes.set(node, preview.typeId)
+                const clip = Object.values(this.animations.resolve(definition.animationTarget)).find(clip => clip.reanimId === preview.reanim.id)
                 if (!clip) throw new Error(`Intro animation is not installed: ${preview.reanim.id}`)
                 let animationNode = node.getChildByName('ZombieAnimation')
                 let player = animationNode?.getComponent(ReanimPlayer) ?? null
@@ -196,17 +233,18 @@ export class AdventureIntro implements LevelIntro {
                     await player.load(preview.reanim.id, this.registry, this.loader)
                 }
                 player.restore(preview.reanim)
-                player.setTrackPrefixVisible('anim_tongue', preview.hasTongue)
+                applyPreviewParts(player, preview.typeId, this.definitions, preview.hasTongue)
             }
         }
         this.sync()
     }
 
-    update(dt: number): boolean {
+    update(dt: number, stopAtTick = this.endTick): boolean {
         if (this.complete) return true
         const previous = this.ticks
-        this.ticks = Math.min(INTRO_END, this.ticks + dt * 100)
-        if (previous < ROLL_SOD_START && this.ticks >= ROLL_SOD_START) this.startSodRoll()
+        this.ticks = Math.min(stopAtTick, this.endTick, this.ticks + dt * 100)
+        if (this.layout.rolls.length && previous < ROLL_SOD_START && this.ticks >= ROLL_SOD_START) this.startSodRoll()
+        if (this.ready && previous < this.readyStart && this.ticks >= this.readyStart) this.audio.readySetPlant()
         this.sync()
         if (!this.complete) return false
         if (!this.destroyed) {
@@ -218,7 +256,7 @@ export class AdventureIntro implements LevelIntro {
 
     sync(): void {
         const tick = this.ticks
-        const boardX = tick <= PAN_RIGHT_START
+        const boardX = this.layout.stationary ? 0 : tick <= PAN_RIGHT_START
             ? 220
             : tick <= PAN_RIGHT_END
                 ? easeInOut(PAN_RIGHT_START, PAN_RIGHT_END, tick, 220, -380)
@@ -229,34 +267,39 @@ export class AdventureIntro implements LevelIntro {
                         : 0
         this.board.setPosition(boardX, 0)
 
-        const sodProgress = linearFloat(ROLL_SOD_START, ROLL_SOD_END, tick, 0, 1)
+        const sodProgress = this.sodTicks ? linearFloat(ROLL_SOD_START, ROLL_SOD_END, tick, 0, 1) : 1
         const sodTransform = uiNode({ node: this.sodClip }).transform
-        sodTransform.setContentSize(771 * sodProgress, sodTransform.height)
+        sodTransform.setContentSize(this.layout.width * sodProgress, sodTransform.height)
         const rollProgress = linearFloat(ROLL_SOD_START, ROLL_SOD_END, tick + 1, 0, 1)
         for (const roll of this.sodRolls) {
             roll.node.active = tick >= ROLL_SOD_START && rollProgress < 1
             if (roll.node.active) roll.seek(roll.lastFrameTimeSeconds * rollProgress)
         }
+        if (this.ready?.node.isValid) {
+            this.ready.node.active = tick >= this.readyStart && !this.complete
+            if (this.ready.node.active) this.ready.seek((tick - this.readyStart) / 100)
+        }
 
         const houseNameTicks = Math.max(0, HOUSE_NAME_DURATION - tick)
-        this.houseName.active = houseNameTicks > 0
+        this.houseName.active = !this.layout.stationary && houseNameTicks > 0
         uiNode({ node: this.houseName, opacity: Math.min(255, houseNameTicks * 15) })
 
         const bankHeight = uiNode({ node: this.bank }).transform.height || 87
-        this.bank.active = tick > SEED_BANK_START
+        const bankStart = SEED_BANK_START + this.sodTicks
+        this.bank.active = tick > bankStart
         this.bank.setPosition(
             easeInOut(475, PAN_LEFT_END, tick, 0, 10),
-            easeInOut(SEED_BANK_START, SEED_BANK_END, tick, bankHeight, 0),
+            easeInOut(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0),
         )
 
         for (const node of this.entityNodes()) {
             if (!node.getChildByName('CachedMower')) continue
             const row = Math.round((HEIGHT / 2 - node.position.y - this.geometry.origin.y - 23) / this.geometry.cell.height)
-            const start = LAWN_MOWER_START + (2 - row) * 5
+            const start = LAWN_MOWER_START + this.sodTicks + (2 - row) * 5
             node.active = tick > start || this.complete
             if (node.active && !this.complete) {
                 node.setPosition(
-                    easeInOut(start, start + LAWN_MOWER_END - LAWN_MOWER_START, tick, -480, -421),
+                    easeInOut(start, start + LAWN_MOWER_DURATION, tick, -480, -421),
                     node.position.y,
                 )
             }
@@ -264,11 +307,11 @@ export class AdventureIntro implements LevelIntro {
     }
 
     private startSodRoll(): void {
-        for (const offset of this.rollOffsets) TodParticleSystem.spawn({
+        for (const roll of this.layout.rolls) TodParticleSystem.spawn({
             parent: this.board,
             effect: 'sodroll',
-            x: 35 - WIDTH / 2,
-            y: HEIGHT / 2 - 348 - offset,
+            x: 35 + roll.x - WIDTH / 2,
+            y: HEIGHT / 2 - roll.particleY,
             useGameTime: false,
         })
         this.audio.sodRollStarted()

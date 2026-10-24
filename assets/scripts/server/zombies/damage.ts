@@ -68,7 +68,7 @@ export function damageZombie(
         emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'arm' })
     }
     if (zombie.hasHead && zombie.health < zombie.maxHealth / 3) {
-        dropZombieFlag(world, entity)
+        dropZombieFlag(world, definitions, entity)
         zombie.hasHead = false
         emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'head' })
     }
@@ -100,7 +100,7 @@ function chillZombie(world: World, entity: number, zombie: Zombie, ticks: number
 
 export function startZombieDeath(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie): void {
     if (zombie.state === 'dying') return
-    dropZombieFlag(world, entity)
+    dropZombieFlag(world, definitions, entity)
     const random = world.resources.get(RandomResource)
     const deaths = zombieGait(definitions.zombies[zombie.typeId], definitions).deaths
     const death = random.integer(0, 99) >= 51 && deaths[1] ? deaths[1] : deaths[0]

@@ -38,6 +38,8 @@ export interface EnabledMod {
 export type GameCommand =
     | { type: 'mod'; id: string; data: JsonObject }
     | { type: 'selectSeed'; seedId: string }
+    | { type: 'chooseSeed'; seedId: string }
+    | { type: 'confirmSeeds' }
     | { type: 'selectConveyorPacket'; packetId: EntityId }
     | { type: 'selectTool'; toolId: string }
     | { type: 'placePlant'; row: number; column: number }
@@ -109,7 +111,8 @@ export interface WorldSnapshot {
     wave: WaveSnapshot
     cursor: CursorSnapshot
     seedPackets: SeedPacketSnapshot[]
-    conveyorPackets: JsonObject[]
+    seedChooser?: { availableSeeds: string[], slots: number, choosing: boolean, warning?: string }
+    conveyorPackets: Array<{ id: number; seedId: string; x: number; selected: boolean; availability: SeedAvailability }>
     plants: PlantSnapshot[]
     zombies: ZombieSnapshot[]
     projectiles: ProjectileSnapshot[]
@@ -121,7 +124,13 @@ export interface WorldSnapshot {
 
 export type CursorSnapshot =
     | { mode: 'none' }
+    | { mode: 'tool', toolId: string }
     | { mode: 'seed', seedId: string }
+
+export interface SeedAvailability {
+    reason?: 'seed-not-available' | 'seed-not-ready' | 'not-enough-sun'
+    warningKey?: string
+}
 
 export interface SeedPacketSnapshot {
     seedId: string
@@ -129,6 +138,7 @@ export interface SeedPacketSnapshot {
     selected: boolean
     cooldownRemaining: number
     cooldownTotal: number
+    availability: SeedAvailability
 }
 
 export interface PlantSnapshot extends EntityBehaviorState {
@@ -205,6 +215,7 @@ export interface WaveSnapshot {
     index: number
     total: number
     countdown: number
+    previewZombies?: Record<string, number>
 }
 
 export interface TutorialSnapshot {
@@ -443,7 +454,7 @@ const validateGameCommand = (value: unknown): void => {
             record(command.data, 'mod.data')
             assertJsonValue(command.data)
             return
-        case 'selectSeed': nonEmptyString(command.seedId, 'selectSeed.seedId'); return
+        case 'selectSeed': case 'chooseSeed': nonEmptyString(command.seedId, `${command.type}.seedId`); return
         case 'selectConveyorPacket': integer(command.packetId, 'selectConveyorPacket.packetId'); return
         case 'selectTool': nonEmptyString(command.toolId, 'selectTool.toolId'); return
         case 'placePlant':
@@ -460,6 +471,7 @@ const validateGameCommand = (value: unknown): void => {
         case 'resume':
         case 'advanceDialog':
         case 'completeIntro':
+        case 'confirmSeeds':
             return
         default:
             throw new TypeError('command.command.type is unknown')
@@ -491,6 +503,9 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
     integer(wave.index, 'snapshot.wave.index')
     integer(wave.total, 'snapshot.wave.total')
     integer(wave.countdown, 'snapshot.wave.countdown')
+    if (wave.previewZombies !== undefined) for (const count of Object.values(record(wave.previewZombies, 'snapshot.wave.previewZombies'))) {
+        integer(count, 'snapshot.wave.previewZombies count')
+    }
     if ((wave.index as number) > (wave.total as number)) {
         throw new TypeError('snapshot.wave.index must not exceed total')
     }
@@ -500,6 +515,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
     record(snapshot.extensions, 'snapshot.extensions')
     const cursor = record(snapshot.cursor, 'snapshot.cursor')
     if (cursor.mode === 'seed') nonEmptyString(cursor.seedId, 'snapshot.cursor.seedId')
+    else if (cursor.mode === 'tool') nonEmptyString(cursor.toolId, 'snapshot.cursor.toolId')
     else if (cursor.mode !== 'none') throw new TypeError('snapshot.cursor.mode is unknown')
     const seedPackets = array(snapshot.seedPackets, 'snapshot.seedPackets').map((entry, index) => {
         const name = `snapshot.seedPackets[${index}]`
@@ -507,6 +523,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         nonEmptyString(packet.seedId, `${name}.seedId`)
         boolean(packet.ready, `${name}.ready`)
         boolean(packet.selected, `${name}.selected`)
+        validateSeedAvailability(packet.availability, name)
         integer(packet.cooldownRemaining, `${name}.cooldownRemaining`)
         integer(packet.cooldownTotal, `${name}.cooldownTotal`)
         if ((packet.cooldownRemaining as number) > (packet.cooldownTotal as number)) {
@@ -516,13 +533,25 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         if (packet.ready !== shouldBeReady) throw new TypeError(`${name}.ready is inconsistent`)
         return packet
     })
-    const selectedPackets = seedPackets.filter(packet => packet.selected === true)
+    const conveyorPackets = array(snapshot.conveyorPackets, 'snapshot.conveyorPackets').map(value => record(value, 'conveyor packet'))
+    const selectedPackets = [...seedPackets, ...conveyorPackets].filter(packet => packet.selected === true)
     if (selectedPackets.length > 1) throw new TypeError('snapshot.seedPackets has multiple selected packets')
     if (cursor.mode === 'seed' && selectedPackets[0]?.seedId !== cursor.seedId) {
         throw new TypeError('snapshot.cursor does not match the selected seed packet')
     }
-    if (cursor.mode === 'none' && selectedPackets.length !== 0) {
+    if (cursor.mode !== 'seed' && selectedPackets.length !== 0) {
         throw new TypeError('snapshot.cursor does not match the selected seed packet')
+    }
+    if (snapshot.seedChooser !== undefined) {
+        const chooser = record(snapshot.seedChooser, 'snapshot.seedChooser')
+        const available = array(chooser.availableSeeds, 'snapshot.seedChooser.availableSeeds')
+        available.forEach((id, index) => nonEmptyString(id, `snapshot.seedChooser.availableSeeds[${index}]`))
+        integer(chooser.slots, 'snapshot.seedChooser.slots')
+        const slots = chooser.slots as number
+        boolean(chooser.choosing, 'snapshot.seedChooser.choosing')
+        if (slots < 1 || slots > 10 || slots > available.length || new Set(available).size !== available.length ||
+            seedPackets.length > slots || chooser.choosing && seedPackets.some(packet => !available.includes(packet.seedId))) throw new TypeError('Invalid seed chooser bank')
+        if (chooser.warning !== undefined) nonEmptyString(chooser.warning, 'snapshot.seedChooser.warning')
     }
     array(snapshot.plants, 'snapshot.plants').forEach((entry, index) => {
         const name = `snapshot.plants[${index}]`
@@ -594,9 +623,12 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         finite(projectile.y, `${name}.y`)
         integer(projectile.row, `${name}.row`)
     })
-    array(snapshot.conveyorPackets, 'snapshot.conveyorPackets').forEach(
-        (entry, index) => record(entry, `snapshot.conveyorPackets[${index}]`),
-    )
+    array(snapshot.conveyorPackets, 'snapshot.conveyorPackets').forEach((entry, index) => {
+        const name = `snapshot.conveyorPackets[${index}]`, packet = record(entry, name)
+        integer(packet.id, `${name}.id`); nonEmptyString(packet.seedId, `${name}.seedId`)
+        finite(packet.x, `${name}.x`); boolean(packet.selected, `${name}.selected`)
+        validateSeedAvailability(packet.availability, name)
+    })
     array(snapshot.items, 'snapshot.items').forEach((entry, index) => {
         const name = `snapshot.items[${index}]`
         const item = record(entry, name)
@@ -663,6 +695,12 @@ const array = (value: unknown, name: string): JsonValue[] => {
 
 const protocolVersion = (value: unknown): void => {
     if (value !== 1) throw new TypeError('protocolVersion must be 1')
+}
+
+function validateSeedAvailability(value: unknown, name: string): void {
+    const state = record(value, name + '.availability')
+    if (state.reason !== undefined && !['seed-not-available', 'seed-not-ready', 'not-enough-sun'].includes(String(state.reason))) throw new TypeError(name + '.availability.reason is invalid')
+    if (state.warningKey !== undefined) nonEmptyString(state.warningKey, name + '.availability.warningKey')
 }
 
 const integer = (value: unknown, name: string): void => {

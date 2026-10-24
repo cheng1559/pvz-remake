@@ -3,17 +3,27 @@ import type { AwardView } from '@/shared/menu'
 import { menuApi } from '@/client/api/MenuApi'
 import { SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import type { UI } from '@/client/ui/UI'
+import { SpriteLoader } from '@/core/SpriteLoader'
 
 export async function showAwardScreen(parent: Node, ui: UI): Promise<AwardView> {
     const award = await menuApi.getAward()
     if (!parent.isValid) throw new Error('Award screen was destroyed while loading')
-    SeedPacketRenderer.drawSeedPacket({
-        definitions: ui.assets.presentation,
-        name: 'AwardSeedPacket', parent, x: 350, y: -129, scale: 2,
+    ui.label(parent, { text: ui.text(award.titleKey), font: 'title', x: 400, y: 58,
+        color: new Color(213, 159, 43), baseline: true, align: 'center' })
+    if (award.kind === 'seed') SeedPacketRenderer.drawSeedPacket({
+        definitions: ui.assets.presentation, name: 'AwardSeedPacket', parent, x: 350, y: -129, scale: 2,
         seedType: award.seed, cost: award.cost, costFont: ui.assets.fonts.packetCost,
     })
+    else {
+        const visual = ui.assets.presentation.awards?.[award.id]
+        if (!visual) throw new Error(`Award presentation is not installed: ${award.id}`)
+        const frame = await SpriteLoader.load(visual.sprite.replace(/^pvz:/, ''))
+        if (!parent.isValid) throw new Error('Award screen was destroyed while loading')
+        if (!frame) throw new Error(`Award sprite is not installed: ${visual.sprite}`)
+        ui.image(parent, frame, { x: 400 - frame.originalSize.width / 2, y: visual.pageY })
+    }
     ui.label(parent, {
-        text: ui.text(award.nameKey, award.name), font: 'yellow', x: 400, y: 326,
+        text: ui.text(award.nameKey, award.kind === 'seed' ? award.name : undefined), font: 'yellow', x: 400, y: 326,
         baseline: true, align: 'center',
     })
     const description = ui.label(parent, {

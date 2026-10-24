@@ -12,6 +12,7 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /gamespeed 2
 /hdseed true
 /seedstyle tilted
+/level pvz:seed-chooser-test
 /haptics false
 /seed 1 snowpea
 /pack

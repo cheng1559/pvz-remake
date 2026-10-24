@@ -111,7 +111,7 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
         cursor: { mode: 'seed', seedId: 'pvz:peashooter' },
         seedPackets: [{
             seedId: 'pvz:peashooter', ready: false, selected: true,
-            cooldownRemaining: 0, cooldownTotal: 0,
+            cooldownRemaining: 0, cooldownTotal: 0, availability: {},
         }],
         conveyorPackets: [],
         plants: [{
@@ -136,6 +136,12 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
     }
     const packet = { protocolVersion: 1, type: 'sessionStarted', acknowledgedSequence: 1, snapshot }
     assert.doesNotThrow(() => parseServerPacket(packet))
+    assert.throws(() => parseServerPacket({ ...packet, snapshot: { ...snapshot,
+        cursor: { mode: 'tool', toolId: 'pvz:shovel' },
+    } }), /does not match/)
+    assert.throws(() => parseServerPacket({ ...packet, snapshot: { ...snapshot,
+        conveyorPackets: [{ id: 1, seedId: 'pvz:peashooter', x: 0, selected: true, availability: {} }],
+    } }), /multiple selected/)
     snapshot.plants[0].eatenFlashCounter = -1
     assert.throws(() => parseServerPacket(packet), /eatenFlashCounter/)
     snapshot.plants[0].eatenFlashCounter = 0

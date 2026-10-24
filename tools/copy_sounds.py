@@ -103,7 +103,7 @@ def main():
     parser.add_argument(
         "--dst",
         type=Path,
-        default=Path("./assets/resources/audio/sfx"),
+        default=Path("./tools/generated/resources/audio/sfx"),
         help="Destination under the Cocos resources directory.",
     )
     parser.add_argument("--overwrite", action="store_true", help="Replace existing copied files.")

@@ -56,15 +56,17 @@ export interface AchievementView {
     total: number
     items: { id: number, icon: number, titleKey: string, descriptionKey: string, earned: boolean }[]
 }
-export interface AwardView {
+interface AwardDetails {
     nextLevelId: string | null
     showMainMenu: boolean
-    seed: number
-    cost: number
-    name: string
+    titleKey: string
     nameKey: string
     descriptionKey: string
 }
+export type AwardView = AwardDetails & (
+    { kind: 'seed'; seed: number; cost: number; name: string }
+    | { kind: 'tool'; id: string; seed?: never; cost?: never; name?: never }
+)
 
 export interface MenuEndpoints {
     getCurrentUser: { args: Record<string, never>, result: UserView | null }

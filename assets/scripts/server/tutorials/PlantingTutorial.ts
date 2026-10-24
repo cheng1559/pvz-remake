@@ -1,6 +1,7 @@
 import type { World } from '@/ecs/index'
 import { LevelStateResource, PlantComponent } from '../components'
 import { ItemComponent, TutorialResource, WaveResource } from '../levelState'
+import { emitServerEvent, EventQueueResource } from '../events'
 import type { TutorialScript } from './index'
 
 const FIRST_SUN_DELAY_TICKS = 400
@@ -77,7 +78,20 @@ export const plantingTutorial: TutorialScript = {
     },
     sunSpawned(world) {
         const tutorial = world.resources.get(TutorialResource)
+        const displayed = tutorial.displayedAdvice ??= []
+        if (!displayed.includes('ADVICE_CLICK_ON_SUN')) displayed.push('ADVICE_CLICK_ON_SUN')
         if (tutorial.step === 'first-plant-done') tutorial.step = 'collect-first-sun'
+    },
+    seedRejected(world, reason) {
+        const tutorial = world.resources.get(TutorialResource)
+        if (!tutorial.displayedAdvice?.includes('ADVICE_CLICK_ON_SUN')) return
+        const flag = reason === 'seed-not-ready' ? 'seedRefreshAdviceShown' : 'cantAffordAdviceShown'
+        if (tutorial[flag]) return
+        tutorial[flag] = true
+        emitServerEvent(world.resources.get(EventQueueResource), 'advice', {
+            key: reason === 'seed-not-ready' ? 'ADVICE_SEED_REFRESH' : 'ADVICE_CANT_AFFORD_PLANT',
+            style: 'tutorial-level1',
+        })
     },
     update(world, tick) {
         if (!canUpdate(world)) return

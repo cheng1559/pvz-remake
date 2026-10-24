@@ -107,7 +107,7 @@ def main():
     parser.add_argument(
         '--output',
         type=Path,
-        default=Path('./assets/resources/properties/lawnstrings.json'),
+        default=Path('./tools/generated/resources/properties/lawnstrings.json'),
         help='Destination JSON resource path.',
     )
     parser.add_argument(

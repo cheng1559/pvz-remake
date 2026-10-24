@@ -1,4 +1,8 @@
-import type { BoardDefinition } from '@/shared/content/gameplay'
+import type { BoardDefinition, LevelDefinition } from '@/shared/content/gameplay'
+
+export function levelAwardSize(award: LevelDefinition['award']): { width: number; height: number } {
+    return award.kind === 'tool' ? award : { width: 50, height: 70 }
+}
 
 export function boardCell(board: BoardDefinition, x: number, y: number) {
     const column = Math.floor((x - board.origin.x) / board.cell.width)

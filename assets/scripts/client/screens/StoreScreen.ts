@@ -2,7 +2,7 @@ import { _decorator, Color, Component, Node, type Sprite, type SpriteFrame } fro
 import { menuApi } from '@/client/api/MenuApi'
 import type { StoreView, StoreItemView } from '@/shared/menu'
 import { FontMetricsUtil } from '@/client/font'
-import { getAtlasFrame, SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
+import { SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import type { UI } from '@/client/ui/UI'

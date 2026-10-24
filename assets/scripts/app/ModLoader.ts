@@ -1,5 +1,5 @@
 import { DefinitionSources, buildGameplayContent, buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
-import { JsonAsset } from 'cc'
+import { resourcePacks } from '@/client/content/ResourcePacks'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { loadPresentationDefinitions } from '@/client/content/loadPresentationDefinitions'
@@ -11,7 +11,6 @@ import { createServerModHost } from '@/server/createModHost'
 import { PlantViewRegistry } from '@/client/plants/PlantViewRegistry'
 import { ZombieViewRegistry } from '@/client/zombies/ZombieViewRegistry'
 import { ArchiveContentRegistry } from '@/client/content/ArchiveContentRegistry'
-import { ClientModAssets, createClientModHost } from '@/client/content/createModHost'
 import { modManager } from '@/client/content/ModManager'
 import { clearModRuntimeCache, importModModule, mountMod } from '@/client/content/ModRuntime'
 
@@ -63,6 +62,8 @@ async function loadMods() {
             if (manifest.client) {
                 stage = manifest.client.module
                 const module = await importModModule(manifest.id, stage) as ModModule
+                // The host exposes game/UI modules that also consume this loader.
+                const { ClientModAssets, createClientModHost } = await import('@/client/content/createModHost')
                 const host = createClientModHost(manifest.id, presentationDefinitions, clientContent, plantViews, zombieViews)
                 hosts.push(host)
                 await module.register({ host, assets: new ClientModAssets(manifest, mod.files) })
@@ -100,19 +101,13 @@ async function loadMods() {
 }
 
 async function loadBaseDefinitions() {
-    const loader = new ClientContentLoader(), manifest = await loader.loadManifest('pvz-base')
-    const bundle = await loader.loadBundle(manifest.client.bundle)
-    const load = (path: string): Promise<JsonAsset> => {
-        path = path.replace(/\.json$/i, '')
-        return Promise.resolve(bundle.get(path, JsonAsset) ?? new Promise<JsonAsset>((resolve, reject) => {
-            bundle.load(path, JsonAsset, (error, asset) => error ? reject(error) : resolve(asset))
-        }))
-    }
+    const loader = new ClientContentLoader(), manifest = await loader.loadManifest()
+    const load = (path: string) => resourcePacks.baseJson(`pvz:${path.replace(/\.json$/i, '')}`)
     const [definitions, levels, strings, presentation] = await Promise.all([
         load(manifest.gameplay.definitions), load(manifest.gameplay.levels), load(manifest.gameplay.strings),
-        loadPresentationDefinitions(manifest, loader, []),
+        loadPresentationDefinitions(manifest, []),
     ])
-    buildGameplayContent(definitions.json, levels.json, strings.json)
+    buildGameplayContent(definitions, levels, strings)
     new ClientAnimationRegistry(presentation)
-    return { definitions: definitions.json, levels: levels.json, strings: strings.json, presentation }
+    return { definitions, levels, strings, presentation }
 }

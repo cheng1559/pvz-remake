@@ -23,6 +23,7 @@ export interface UIButtonImages {
     disabled?: SpriteFrame
 }
 export interface UIButtonOptions extends Box {
+    disabledColor?: Color
     text?: string
     skin?: UIButtonSkin
     images?: UIButtonImages
@@ -203,6 +204,7 @@ export class UI {
             if (glow) glow.node.active = highlighted
             visual.setPosition(pressed ? pressOffset[0] : 0, pressed ? -pressOffset[1] : 0)
             labels.forEach((label, index) => {
+                if (options.disabledColor) label.color = state === 'disabled' ? options.disabledColor : color ?? Color.WHITE
                 label.node.active = index === (highlighted ? labels.length - 1 : 0)
                 label.node.setPosition(
                     labelPositions[index].x + (pressed && (stone || skin === 'seedSmall') ? 1 : 0),

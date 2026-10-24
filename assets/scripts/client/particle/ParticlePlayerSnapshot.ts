@@ -7,6 +7,7 @@ import { isQualifiedId } from '@/shared/mod/index'
 
 export interface ParticlePlayerSnapshot extends ParticlePlaybackSnapshot {
     accumulatorSeconds: number
+    remainingSeconds?: number
 }
 
 export function parseParticlePlayerSnapshot(value: unknown): ParticlePlayerSnapshot {
@@ -14,6 +15,7 @@ export function parseParticlePlayerSnapshot(value: unknown): ParticlePlayerSnaps
         value,
         ['id', 'seed', 'ageTicks', 'playing', 'visible', 'accumulatorSeconds'],
         'particle player snapshot',
+        ['remainingSeconds'],
     )
     if (!isQualifiedId(source.id)) throw new Error('particle player snapshot.id must be a qualified ID')
     const seed = uint32(source.seed, 'particle player snapshot.seed')
@@ -29,6 +31,7 @@ export function parseParticlePlayerSnapshot(value: unknown): ParticlePlayerSnaps
         playing: boolean(source.playing, 'particle player snapshot.playing'),
         visible: boolean(source.visible, 'particle player snapshot.visible'),
         accumulatorSeconds,
+        ...(source.remainingSeconds === undefined ? {} : { remainingSeconds: nonNegativeSeconds(source.remainingSeconds) }),
     }
 }
 
@@ -46,18 +49,24 @@ export function validateParticlePlayerSnapshotContent(
     return snapshot
 }
 
-function exactObject(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {
+function exactObject(value: unknown, keys: readonly string[], name: string, optional: readonly string[] = []): Record<string, unknown> {
     if (typeof value !== 'object' || value === null || Array.isArray(value)
         || (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)) {
         throw new Error(`${name} must be a plain object`)
     }
     const source = value as Record<string, unknown>
-    const allowed = new Set(keys)
+    const allowed = new Set([...keys, ...optional])
     for (const key of Object.keys(source)) if (!allowed.has(key)) throw new Error(`${name}.${key} is not supported`)
     for (const key of keys) {
         if (!Object.prototype.hasOwnProperty.call(source, key)) throw new Error(`${name}.${key} is required`)
     }
     return source
+}
+
+function nonNegativeSeconds(value: unknown): number {
+    const seconds = finite(value, 'particle player snapshot.remainingSeconds')
+    if (seconds < 0) throw new Error('particle player snapshot.remainingSeconds must be non-negative')
+    return seconds
 }
 
 function finite(value: unknown, name: string): number {

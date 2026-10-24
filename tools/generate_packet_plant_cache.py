@@ -14,8 +14,8 @@ ATLAS_COLUMNS = 8
 SEED_COUNT = 49
 
 ROOT = Path(__file__).resolve().parents[1]
-ANIMATION_DIR = ROOT / "assets/resources/animations"
-TEXTURE_DIR = ROOT / "assets/resources/textures"
+ANIMATION_DIR = ROOT / "tools/generated/resources/animations"
+TEXTURE_DIR = ROOT / "tools/generated/resources/textures"
 OUTPUT_PATH = TEXTURE_DIR / "packet_plants_cached.png"
 
 ANIMATION_NAMES: dict[int, str] = {

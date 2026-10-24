@@ -324,10 +324,6 @@ export function createProfileStore(storage: MenuStorage) {
     }
 
     class ProfileStore {
-        static loadRegistry() {
-            return readRegistry()
-        }
-
         static loadProfiles(): PlayerProfileSummary[] {
             return [...readRegistry().summaries]
         }
@@ -338,12 +334,6 @@ export function createProfileStore(storage: MenuStorage) {
             if (!summary) return null
             const profile = readProfile(id)
             return profile ? touchProfile(profile) : null
-        }
-
-        static loadProfileByName(name: string): PlayerProfile | null {
-            const registry = readRegistry()
-            const summary = registry.summaries.find((entry) => entry.name.toLowerCase() === name.toLowerCase())
-            return summary ? this.loadProfileById(summary.id) : null
         }
 
         static getCurrentProfile(): PlayerProfile | null {
@@ -398,12 +388,6 @@ export function createProfileStore(storage: MenuStorage) {
             return cloneProfile(normalized)
         }
 
-        static setCurrentProfile(profileId: number) {
-            const registry = readRegistry()
-            registry.currentProfileId = profileId
-            writeRegistry(registry)
-        }
-
         static renameProfile(oldName: string, newName: string) {
             const registry = readRegistry()
             const summary = registry.summaries.find((entry) => entry.name.toLowerCase() === oldName.toLowerCase())
@@ -435,42 +419,6 @@ export function createProfileStore(storage: MenuStorage) {
             }
             writeRegistry(registry)
             return true
-        }
-
-        static getAnyProfile() {
-            const registry = readRegistry()
-            const profile = registry.summaries[0] ? readProfile(registry.summaries[0].id) : null
-            return profile ? touchProfile(profile) : null
-        }
-
-        static advanceAdventureProgress(profile: PlayerProfile, completedLevel: number) {
-            const normalized = cloneProfile(profile)
-            if (completedLevel >= 50) {
-                normalized.adventureLevel = 1
-                normalized.finishedAdventure += 1
-                normalized.earnedAchievements[0] = true
-                if (normalized.finishedAdventure === 1) {
-                    normalized.needsMessageOnGameSelector = true
-                }
-            } else {
-                normalized.adventureLevel = completedLevel + 1
-            }
-            return this.saveProfile(normalized)
-        }
-
-        static resetAdventureProgress(profile: PlayerProfile) {
-            const normalized = cloneProfile(profile)
-            normalized.adventureLevel = 1
-            return this.saveProfile(normalized)
-        }
-
-        static clearAll() {
-            const registry = readRegistry()
-            for (const summary of registry.summaries) {
-                getStorage().removeItem(makeProfileKey(summary.id))
-                deleteProfileSaves(summary.id)
-            }
-            getStorage().removeItem(PROFILE_REGISTRY_KEY)
         }
     }
 

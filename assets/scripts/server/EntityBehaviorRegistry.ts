@@ -16,6 +16,7 @@ export type EntityBehaviorContext<Key extends string, Data, Definition, State ex
 } & Readonly<Record<Key, Data>>
 
 export interface EntityBehavior<Key extends string, Data, Definition, State extends JsonObject = JsonObject> {
+    readonly tickAfterWin?: boolean
     createState(definition: Readonly<Definition>): State
     tick(context: EntityBehaviorContext<Key, Data, Definition, State>): void
     /** Throw on an incompatible state; no save migration is performed. */
@@ -26,6 +27,7 @@ export interface EntityBehavior<Key extends string, Data, Definition, State exte
 export class EntityBehaviorRegistry<Key extends string, Data extends BehaviorEntity, Definition extends BehaviorDefinition> {
     private readonly entries = new Map<string, { ownerId: string, behavior: EntityBehavior<Key, Data, Definition> }>()
     private frozen = false
+    has(typeId: string): boolean { return this.entries.has(typeId) }
 
     constructor(
         private readonly kind: Key,
@@ -90,11 +92,11 @@ export class EntityBehaviorRegistry<Key extends string, Data extends BehaviorEnt
             run: context => {
                 const { world } = context
                 const level = world.resources.get(LevelStateResource)
-                if (this.entries.size === 0 || level.phase !== 'gameplay' || level.paused || level.result !== 'playing') return
+                if (this.entries.size === 0 || level.phase !== 'gameplay' || level.paused || level.result === 'lost') return
                 for (const entity of world.query(this.component, PositionComponent)) {
                     const data = world.get(entity, this.component)!
                     const behavior = this.entries.get(data.typeId)?.behavior
-                    if (!behavior || !this.active(data)) continue
+                    if (!behavior || !this.active(data) || level.result === 'won' && !behavior.tickAfterWin) continue
                     behavior.tick({
                         ...context, entity, definitions, [this.kind]: data,
                         position: world.get(entity, PositionComponent)!,

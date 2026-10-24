@@ -51,6 +51,21 @@ function game(content = definitions) {
     return { world, run: () => schedule.run(world, ++tick) }
 }
 
+test('flag drops follow gameplay capability for custom IDs and occur only once', () => {
+    const content = structuredClone(definitions)
+    content.zombies['test:flag'] = { ...content.zombies['pvz:normal'], dropsFlag: true }
+    content.zombies['test:plain'] = { ...content.zombies['pvz:flag'], dropsFlag: false }
+    const { world } = game(content)
+    for (const typeId of ['test:flag', 'test:plain']) {
+        const id = spawnZombie(world, content, typeId, 2, 700, 280)
+        damageZombie(world, content, id, 200)
+        damageZombie(world, content, id, 100)
+        const flags = world.resources.get(EventQueueResource).events.filter(event =>
+            event.type === 'zombiePartDropped' && event.data.entityId === id && event.data.part === 'flag')
+        assert.equal(flags.length, typeId === 'test:flag' ? 1 : 0)
+    }
+})
+
 test('tongue variants use one of five spawn outcomes and never reroll during updates', () => {
     for (const typeId of ['pvz:normal', 'pvz:flag']) for (let roll = 0; roll < 5; roll++) {
         const { world, run } = game()

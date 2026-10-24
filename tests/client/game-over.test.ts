@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
-import { getBoardPresentation } from '@/client/level/boards/DayBoard'
+import { getBoardPresentation } from '@/client/level/boards/definitions'
 import { easeInOut, lerp } from '@/client/view/GameScreenMath'
 import { sampleReanimTrack } from '@/shared/content/reanim'
 
@@ -52,7 +52,7 @@ test('failure pans the live board, plays each sound once, and waits eleven game 
     let walkTicks = 0, visible = false, stops = 0
     const gameOver = new LevelGameOverPresenter(board, bank, entities, overlay, {
         syncGameOverWinner(_zombie: unknown, _parent: unknown, show: boolean, ticks: number) { walkTicks = ticks; visible = show },
-    }, { stop() { stops++ } }, [{}, {}, {}], getBoardPresentation('pvz:day').gameOver)
+    }, { stop() { stops++ } }, [{}, {}, {}], getBoardPresentation(presentationFixture, 'pvz:day').gameOver)
     gameOver.sync({ zombies: [{ entityId: 1, x: -100 }] }, [{ type: 'levelLost', data: { zombieId: 1 } }])
     const title = overlay.children.find(node => node.name === 'ZombiesWonTitle')!
     assert.equal(bank.active, false)
@@ -84,7 +84,7 @@ test('failure pans the live board, plays each sound once, and waits eleven game 
     view.hud = { sync() {} }
     view.audio = { play() {} }
     view.intro = { complete: true }
-    view.setPaused = view.syncHitboxes = () => {}
+    view.setPaused = view.syncHitboxes = view.syncSeedChooserIntro = () => {}
     view.gameOver = gameOver
     view.sync({ result: 'lost', paused: true, items: [] }, { added: [], removed: [] }, [])
     assert.equal(board.x, 220, 'opening the dialog preserves the final camera position')
@@ -96,7 +96,7 @@ test('failure pans the live board, plays each sound once, and waits eleven game 
 })
 
 test('the winning zombie walks with the original ground track while the authoritative world stays frozen', () => {
-    const data = JSON.parse(readFileSync('assets/bundles/pvz-base/reanim/zombie_walk.json', 'utf8'))
+    const data = JSON.parse(readFileSync('tools/generated/pvz-base/reanim/zombie_walk.json', 'utf8'))
     const ground = data.tracks.find((track: any) => track.id === '_ground')
     const duration = ground.keyframes.at(-1).timeSeconds
     const { ZombieView } = load('../zombies/ZombieView', {})

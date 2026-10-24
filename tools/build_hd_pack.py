@@ -8,15 +8,15 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 PACK = ROOT / 'art/resource-packs/hd'
-BASE = ROOT / 'assets/bundles/pvz-base'
+BASE = ROOT / 'tools/generated/pvz-base'
 
 
 def build(pack=PACK, pack_id='hd'):
     sprites = {}
     metadata = json.loads((pack / 'sprites/manifest.json').read_text())
     for name, entry in metadata['images'].items():
-        candidates = [ROOT / 'assets/resources/textures' / f'{name}{extension}.meta' for extension in ('.png', '.jpg', '.jpeg')]
-        candidates.append(ROOT / 'assets/resources/textures/particles' / f'{name}.png.meta')
+        candidates = [ROOT / 'tools/generated/resources/textures' / f'{name}{extension}.meta' for extension in ('.png', '.jpg', '.jpeg')]
+        candidates.append(ROOT / 'tools/generated/resources/textures/particles' / f'{name}.png.meta')
         candidates.append(BASE / 'sprites' / f'{name}.png.meta')
         meta_path = next((path for path in candidates if path.exists()), None)
         meta = json.loads(meta_path.read_text()) if meta_path else {}

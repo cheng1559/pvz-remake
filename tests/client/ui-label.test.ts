@@ -13,6 +13,43 @@ function load(path: string, modules: Record<string, any>) {
     return module.exports
 }
 
+test('tooltips preserve original word breaks, warning width and title padding without a second renderer wrap', () => {
+    const labels: any[] = [], nodes: any[] = []
+    const modules: Record<string, any> = {
+        cc: { Component: class {}, Color: class { static BLACK = {}; constructor(..._args: number[]) {} },
+            Mask: { Type: { GRAPHICS_RECT: 0 } }, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/view/uiNode': { uiNode: (options: any) => {
+            nodes.push(options)
+            return { node: { isValid: true, destroy() {} }, graphics: { fillRect() {} } }
+        } },
+    }
+    const { FontMetricsUtil } = load('client/font/FontMetrics', modules)
+    modules['@/client/font'] = { FontMetricsUtil }
+    const { UITooltip } = load('client/ui/UITooltip', modules)
+    const fonts = {
+        packetCost: { config: { json: JSON.parse(readFileSync('tools/generated/pvz-base/fonts/pico129.json', 'utf8')) } },
+        tooltipTitle: { config: { json: JSON.parse(readFileSync('tools/generated/resources/fonts/pix118bold.json', 'utf8')) } },
+    }
+    const tooltip = new UITooltip()
+    const render = (options: any) => {
+        labels.length = nodes.length = 0
+        tooltip.initialize({ assets: { fonts }, label: (_parent: unknown, value: any) => labels.push(value) }, options)
+        tooltip.render({}, 796, 596)
+        assert.ok(labels.every(label => label.width === undefined), 'pre-split lines and warnings must never be wrapped again')
+        return { ...nodes.find(node => node.name === 'Tooltip').size }
+    }
+    assert.deepEqual(render({ title: 'Peashooter', text: 'Shoots peas at the enemy' }), { width: 121, height: 39 })
+    assert.deepEqual(labels.map(label => label.text), ['Peashooter', 'Shoots peas at the', 'enemy'])
+    assert.deepEqual(labels.map(label => label.y), [0, 11, 23])
+    assert.deepEqual(render({ title: 'Sunflower', text: 'Gives you additional sun' }), { width: 125, height: 39 })
+    assert.deepEqual(labels.map(label => label.text), ['Sunflower', 'Gives you additional', 'sun'])
+    const warning = 'This warning must remain on one line'
+    const size = render({ text: 'Peashooter', warning })
+    assert.equal(size.width, FontMetricsUtil.measureTextWidth(fonts.packetCost.config, warning) + 10)
+    assert.equal(size.height, 27)
+    assert.deepEqual(labels.map(label => label.text), [warning, 'Peashooter'])
+})
+
 test('UI labels reuse prefab nodes and content fonts while preserving HUD baselines and pixel alignment', () => {
     const modules: Record<string, any> = { cc: { Color: { WHITE: {} } } }
     class Renderer {
@@ -85,7 +122,7 @@ test('activating prepared bitmap text preserves glyph nodes and still renders la
     const renderer = new FontRenderer()
     renderer.node = root
     renderer.setFontAssets({
-        config: { json: JSON.parse(readFileSync('assets/resources/fonts/dwarventodcraft12.json', 'utf8')) },
+        config: { json: JSON.parse(readFileSync('tools/generated/resources/fonts/dwarventodcraft12.json', 'utf8')) },
         textures: [{}],
     })
     renderer.string = 'AB'

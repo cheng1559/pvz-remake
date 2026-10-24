@@ -282,7 +282,7 @@ def main() -> None:
     parser.add_argument(
         "--dst",
         type=Path,
-        default=Path("./assets/resources/audio/music"),
+        default=Path("./tools/generated/resources/audio/music"),
         help="Destination under the Cocos resources directory.",
     )
     parser.add_argument("--overwrite", action="store_true", help="Replace existing music stems.")

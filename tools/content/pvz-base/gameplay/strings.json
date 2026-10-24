@@ -2,6 +2,10 @@
   "schemaVersion": 2,
   "locale": "en-US",
   "entries": {
+    "ADVICE_NOT_PASSED_LINE": "Place your wall-nut to the left of the bowling line",
+    "ADVICE_CLICK_SHOVEL": "Click on the shovel to pick it up!",
+    "ADVICE_CLICK_PLANT": "Click on a plant to remove it!",
+    "ADVICE_KEEP_DIGGING": "Keep digging until your lawn is clear of plants!",
     "ADVICE_CANT_AFFORD_PLANT": "You need more sun to do that!",
     "ADVICE_CLICKED_ON_SUN": "Keep on collecting sun!\nYou'll need it to grow more plants!",
     "ADVICE_CLICK_ON_GRASS": "Click on the grass to plant your seed!",
@@ -17,6 +21,8 @@
     "ADVICE_PLANT_SUNFLOWER2": "Try to plant at least 3 of them!",
     "ADVICE_PLANT_SUNFLOWER3": "Planting at least 3 sunflowers improves your\nchances of surviving a zombie attack!",
     "ADVICE_MORE_SUNFLOWERS": "The more sunflowers you have,\nthe faster you can grow plants!",
-    "ADVICE_HUGE_WAVE": "A HUGE WAVE OF ZOMBIES IS APPROACHING!"
+    "ADVICE_HUGE_WAVE": "A HUGE WAVE OF ZOMBIES IS APPROACHING!",
+    "ADVICE_PLANT_SUNFLOWER4": "Try to plant at least 3 sunflowers!",
+    "ADVICE_PLANT_SUNFLOWER5": "Planting sunflowers will improve your chances \nof surviving the zombie attack!"
   }
 }

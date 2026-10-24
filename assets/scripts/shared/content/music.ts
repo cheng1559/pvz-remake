@@ -1,5 +1,7 @@
 import { isQualifiedId } from '@/shared/mod/index'
 
+export type MusicTuneId = 'day_grasswalk' | 'choose_seeds' | 'title_theme' | 'zen_garden' | 'puzzle' | 'minigame' | 'conveyer' | 'final_boss'
+
 export interface Music {
     schemaVersion: 2
     id: string

@@ -1,5 +1,4 @@
 import { dynamicAtlasManager, macro, SpriteFrame, Texture2D, warn } from 'cc'
-import { AssetLoader } from '@/client/content/LegacyAssetLoader'
 import { getSpriteDensity } from '@/client/content/SpriteDensity'
 import { resourcePacks } from '@/client/content/ResourcePacks'
 import { SpriteResourceManifest, type SpriteSampling } from './SpriteResourceManifest'
@@ -59,7 +58,7 @@ export class SpriteLoader {
     private static async _loadUncached(name: string): Promise<SpriteFrame | null> {
         this._configureDynamicAtlas()
         const revision = resourcePacks.revision
-        const mainSf = await resourcePacks.asset(`pvz:${name}`, SpriteFrame) ?? await this._loadRaw(name)
+        const mainSf = await resourcePacks.asset(name, SpriteFrame) ?? null
 
         if (mainSf) {
             this._applySpriteSampling(mainSf, getSpriteDensity(mainSf) > 1 ? 'linear' : SpriteResourceManifest.getSampling(name))
@@ -110,13 +109,6 @@ export class SpriteLoader {
     }
 
     // ── Raw Loading ────────────────────────────────────────────
-
-    private static _loadRaw(name: string): Promise<SpriteFrame | null> {
-        return AssetLoader.load<SpriteFrame>(`textures/${name}/spriteFrame`, SpriteFrame, null).then((sf) => {
-            if (sf) return sf
-            return AssetLoader.load<SpriteFrame>(`textures/${name}`, SpriteFrame, null)
-        })
-    }
 
     private static _configureDynamicAtlas() {
         if (this._dynamicAtlasConfigured) return

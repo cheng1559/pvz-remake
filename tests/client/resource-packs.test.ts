@@ -136,8 +136,72 @@ const packKey = 'pvz-remake:resource-packs'
 /** Saved pack state with every listed pack enabled, given lowest priority first like `list()`. */
 const enabledPacks = (...ids: string[]) => JSON.stringify(ids.reverse().map(id => ({ id, enabled: true })))
 
+test('builtin ZIPs share the installed-pack format, cache and priority while base configuration stays authoritative', async () => {
+    const { ResourcePackManager, archives, storage, modules } = setup()
+    const base = zipFiles('base')
+    const manifest = JSON.parse(strFromU8(base['pack.json']))
+    manifest.json = { 'pvz:gameplay/definitions': 'gameplay.json' }
+    const bytes = zipSync({ ...base, 'pack.json': strToU8(JSON.stringify(manifest)), 'gameplay.json': strToU8('{"sunCost":50}') })
+    const overlay = { ...manifest, id: 'overlay' }
+    archives.set('overlay', zipSync({ ...base, 'pack.json': strToU8(JSON.stringify(overlay)), 'gameplay.json': strToU8('{"sunCost":0}') }))
+    storage.set(packKey, enabledPacks('overlay'))
+    let reads = 0
+    const manager = new ResourcePackManager(async () => { reads++; return bytes })
+    const frame = await manager.sprite('pvz:button')
+    assert.equal(await manager.asset('pvz:button', modules.cc.SpriteFrame), frame)
+    assert.equal((await manager.baseJson('pvz:gameplay/definitions')).sunCost, 50)
+    assert.deepEqual(Array.from(await manager.running()), ['overlay'])
+    assert.equal(reads, 1)
+    assert.deepEqual(Array.from(await manager.ids(modules.cc.JsonAsset, 'pvz:gameplay/')), ['pvz:gameplay/definitions'])
+})
+
+test('the generated base ZIP loads through the regular pack validator and exposes required runtime resources', async () => {
+    const { ResourcePackManager, modules } = setup()
+    const manager = new ResourcePackManager(async () => new Uint8Array(readFileSync('assets/resources/base.zip')))
+    const content = await manager.baseJson('pvz:content')
+    assert.equal(content.id, 'pvz:base')
+    const gameplay = await manager.baseJson('pvz:gameplay/definitions')
+    assert.equal(gameplay.zombies['pvz:flag'].dropsFlag, true)
+    const store = await manager.baseJson('pvz:gameplay/store')
+    assert.ok(store.pages.length > 0)
+    const font = await manager.font('pvz:dwarventodcraft18')
+    assert.ok(font.config.json.layers.length > 0)
+    assert.ok(await manager.asset('pvz:seedpacket_larger', modules.cc.SpriteFrame))
+    assert.ok((await manager.asset('pvz:audio/music/music_manifest', modules.cc.JsonAsset)).json.tunes.title_theme)
+})
+
+for (const native of [false, true]) test(`${native ? 'native' : 'web'} builtin ZIP transport decodes binary data and releases the Cocos wrapper`, async () => {
+    const { modules, load } = setup()
+    const files = zipFiles('base')
+    const manifest = JSON.parse(strFromU8(files['pack.json']))
+    manifest.json = { 'pvz:config': 'config.json' }
+    const bytes = zipSync({ ...files, 'pack.json': strToU8(JSON.stringify(manifest)), 'config.json': strToU8('{"loaded":true}') })
+    let download: Function, parse: Function, released = 0
+    modules.cc.sys.isNative = native
+    modules.cc.native = { fileUtils: {
+        getWritablePath: () => '/writable/', removeDirectory() {}, getDataFromFile: () => bytes,
+    } }
+    modules.cc.assetManager.downloader = {
+        register(extension: string, handler: Function) { assert.equal(extension, '.zip'); download = handler },
+        downloadFile(_url: string, options: any, _progress: unknown, done: Function) {
+            assert.equal(options.xhrResponseType, 'arraybuffer'); done(null, bytes.buffer)
+        },
+    }
+    modules.cc.assetManager.parser = { register(_extension: string, handler: Function) { parse = handler } }
+    modules.cc.assetManager.releaseAsset = () => { released++ }
+    modules.cc.resources = { load(_name: string, _type: unknown, done: Function) {
+        download('base.zip', {}, (error: Error | null, data: unknown) => {
+            assert.equal(error, null)
+            parse(data, {}, (_error: unknown, nativeAsset: unknown) => done(null, { nativeAsset }))
+        })
+    } }
+    const { resourcePacks } = load('assets/scripts/client/content/ResourcePacks.ts')
+    assert.equal((await resourcePacks.baseJson('pvz:config')).loaded, true)
+    assert.equal(released, 1)
+})
+
 function zipFiles(id = 'custom') {
-    const image = new Uint8Array(readFileSync('assets/bundles/pvz-base/sprites/seedpacket_larger.png'))
+    const image = new Uint8Array(readFileSync('tools/generated/pvz-base/sprites/seedpacket_larger.png'))
     return {
         'pack.json': strToU8(JSON.stringify({ id, sprites: { 'pvz:button': { file: 'button.png', width: 50, height: 70, scale: 2 } }, fonts: { 'pvz:demo': 'fonts/demo.json' } })),
         'button.png': image,
@@ -248,7 +312,7 @@ test('package dialog keeps uninstall drafts on disk until Apply and restart conf
             [kind === 'mod' ? 'modManager' : 'resourcePacks']: manager,
         }
         const archives = kind === 'mod' ? env.modArchives : env.archives
-        const buttons: any[] = [], errors: string[] = []
+        const buttons: any[] = [], errors: string[] = [], labels: string[] = [], checkboxes: any[] = []
         let acceptRestart = false, acceptDiscard = false, discardPrompts = 0, restarts = 0
         const node = (name = '', parent?: any): any => {
             const value: any = { name, parent, children: [], position: { x: 0, y: 0 }, isValid: true,
@@ -286,14 +350,27 @@ test('package dialog keeps uninstall drafts on disk until Apply and restart conf
                 return { node: node(), content: node(), close() { this.node.activeInHierarchy = false } }
             },
             scroll: () => ({ content: node(), contentWidth: 338, offset: 0, setContentHeight() {} }),
-            button() {}, label: () => ({ renderer: {} }), checkbox: () => ({ node: node(), value: true }),
+            button() {},
+            label: (_parent: any, args: any) => { labels.push(args.text); return { renderer: {} } },
+            checkbox: (_parent: any, args: any) => {
+                const checkbox = { node: node(), value: args.value, button: { interactable: true } }
+                checkboxes.push(checkbox)
+                return checkbox
+            },
         }
         const { showPackageDialog } = env.load('assets/scripts/client/screens/PackageDialog.ts')
         const open = async () => {
             buttons.length = 0
+            labels.length = checkboxes.length = 0
             return showPackageDialog(node(), ui, kind, { restart: async () => { restarts++ } })
         }
         let dialog = await open()
+        if (kind === 'pack') {
+            assert.equal(labels.at(-1), 'base', 'the builtin pack is always the last row')
+            assert.equal(checkboxes.at(-1).value, true)
+            assert.equal(checkboxes.at(-1).button.interactable, false)
+            assert.equal(buttons.at(-1).interactable, false, 'the last external pack cannot move below base')
+        } else assert.ok(!labels.includes('base'), 'the builtin pack does not appear among Mods')
         dialog.onCancel()
         await setImmediate()
         assert.equal(discardPrompts, 0, 'an unchanged draft closes without a warning')
@@ -714,6 +791,12 @@ test('package manager lists installed archives and saves a draft enabled list wi
     assert.deepEqual(Array.from(await session.running()), ['local:base'])
     assert.deepEqual(Array.from(await session.list()), ['local:addon', 'local:base'], 'a runtime failure must not change saved enable states')
     assert.equal((await session.installed()).find((mod: any) => mod.id === 'local:addon').error, 'client/index.js: initialization failed')
+    await assert.rejects(session.install(zipSync({ 'mod.json': strToU8('{}') }), false))
+    assert.equal((await session.installed()).find((mod: any) => mod.id === 'local:addon').error, 'client/index.js: initialization failed', 'a rejected import preserves the failure')
+    await session.install(addon, false)
+    assert.equal((await session.installed()).find((mod: any) => mod.id === 'local:addon').error, undefined, 'a successful reimport clears the old installed Error, even with the same version')
+    assert.deepEqual(Array.from(await session.running()), ['local:base'], 'reimport must not mark the failed session as running')
+    assert.deepEqual(Array.from(await new ModManager().running()), ['local:base', 'local:addon'])
 
     modules['@/shared/debug/DebugCli'] = load('assets/scripts/shared/debug/DebugCli.ts')
     const { executeDebugCliCommand } = load('assets/scripts/platform/debug/DebugCliCommands.ts')
@@ -755,18 +838,26 @@ test('pack CLI requests restart only for enabled-state changes and uninstalls sa
 })
 
 test('sprite and font entry points select pack assets before loading originals, and failures never fall back', async () => {
-    const { manager, ResourcePackManager, files, requests, modules, load, manifest, sprite, Texture } = setup()
-    manifest('hd', { 'pvz:button': sprite, 'mod:button': sprite }, { 'pvz:demo': 'fonts/demo.json' })
-    files.set('fonts/demo', { json: { layers: [{ image: 'atlas' }] } })
-    files.set('fonts/atlas/texture', new Texture())
+    const { manager, ResourcePackManager, requests, modules, load, manifest, sprite } = setup()
+    manifest('hd', { 'pvz:button': sprite, 'mod:button': sprite, 'pvz:seedpacketflash': sprite }, { 'pvz:demo': 'fonts/demo.json' })
+    const base = zipSync({ ...zipFiles('base'), 'fonts/demo.json': strToU8(JSON.stringify({ layers: [{ image: 'atlas', textureScale: 1 }] })) })
+    const restart = () => { modules['./ResourcePacks'].resourcePacks = new ResourcePackManager(async () => base) }
+    restart()
     const { loadBitmapFont } = load('assets/scripts/client/font/BitmapFontLoader.ts')
     const original = await loadBitmapFont('demo')
     await manager.load('hd')
-    modules['./ResourcePacks'].resourcePacks = new ResourcePackManager()
+    restart()
     requests.length = 0
     const font = await loadBitmapFont('demo')
     assert.equal(font.config.json.layers[0].textureScale, 4)
     assert.ok(requests.length > 0 && requests.every(path => path.startsWith('blob:')))
+    Object.assign(modules.cc, { dynamicAtlasManager: {}, macro: {}, warn() {} })
+    modules['@/client/content/SpriteDensity'] = { getSpriteDensity: () => 2 }
+    modules['./SpriteResourceManifest'] = load('assets/scripts/core/SpriteResourceManifest.ts')
+    const { SpriteLoader } = load('assets/scripts/core/SpriteLoader.ts')
+    const flash = await modules['./ResourcePacks'].resourcePacks.asset('pvz:seedpacketflash', modules.cc.SpriteFrame)
+    assert.equal(await SpriteLoader.load('particles/seedpacketflash'), flash, 'legacy image paths resolve to the same pack asset ID')
+    assert.equal(await SpriteLoader.load('pvz:seedpacketflash'), flash)
     const { SpriteRepository, FontRepository } = load('assets/scripts/client/content/ClientContentLoader.ts')
     const registry = { resolve: () => { throw new Error('original registry must not be consulted') } }
     const loader = { load: () => { throw new Error('original asset must not be loaded') } }
@@ -774,13 +865,15 @@ test('sprite and font entry points select pack assets before loading originals, 
     assert.equal(await new FontRepository(registry, loader).load('pvz:demo'), font)
     manifest('broken', { 'pvz:button': sprite }, { 'pvz:demo': 'fonts/demo.json' })
     await manager.load('broken')
-    modules['./ResourcePacks'].resourcePacks = new ResourcePackManager()
+    restart()
+    const remote = modules.cc.assetManager.loadRemote
     modules.cc.assetManager.loadRemote = (_path: string, _options: unknown, callback: (error: Error) => void) => callback(new Error('ZIP image failed'))
     await assert.rejects(new SpriteRepository(registry, loader).load('pvz:button'), /ZIP image failed/)
     await assert.rejects(loadBitmapFont('demo'), /ZIP image failed/)
+    modules.cc.assetManager.loadRemote = remote
     await manager.unload('all')
-    modules['./ResourcePacks'].resourcePacks = new ResourcePackManager()
-    assert.equal((await loadBitmapFont('demo')).config, original.config)
+    restart()
+    assert.deepEqual((await loadBitmapFont('demo')).config.json, original.config.json)
     manifest('invalid', { 'pvz:button': { ...sprite, file: '../outside.png' } })
     await assert.rejects(manager.load('invalid'), /Invalid/)
     assert.deepEqual(Array.from(await manager.list()), [])

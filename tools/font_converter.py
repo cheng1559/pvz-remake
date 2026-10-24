@@ -695,7 +695,7 @@ def write_font(input_path: Path, output_dir: Path, content_id: str) -> list[Path
 
 def main():
     input_dir = Path("./tools/raw/data")
-    output_dir = Path("./assets/resources/fonts")
+    output_dir = Path("./tools/generated/resources/fonts")
 
     for input_path in input_dir.glob("*.txt"):
         print(f"[font] Processing: {input_path.name}")

@@ -8,7 +8,6 @@ import { EventQueueResource, emitServerEvent } from './events'
 
 const READY_X = -21
 const ROW_Y_OFFSET = 23
-const BOARD_RIGHT = 800
 const CHOMP_READY_TICKS = 25
 const CHOMP_ACTIVE_TICKS = 50
 
@@ -52,7 +51,7 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
                         mower.chompCounter = CHOMP_ACTIVE_TICKS
                     }
                     mower.state = 'active'
-                    dropZombieFlag(world, zombieEntity)
+                    dropZombieFlag(world, definitions, zombieEntity)
                     mowZombie(zombie)
                     emitServerEvent(world.resources.get(EventQueueResource), 'zombieMowered', {
                         mowerId: entity,
@@ -69,7 +68,7 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
                     )
                 }
                 position.x += speed
-                if (position.x > BOARD_RIGHT) mower.state = 'spent'
+                if (position.x > level.board.bounds.right) mower.state = 'spent'
             }
         },
     }

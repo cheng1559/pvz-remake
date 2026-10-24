@@ -85,7 +85,7 @@ export function createLevelController(
             const content = await loadIntegratedGameContent()
             if (!content.levels.levels[save?.levelId ?? levelId]) throw new Error(`Level is not installed: ${save?.levelId ?? levelId}`)
             const resolvedBase = content.registry.resolve('prefabs', LEVEL_PREFAB_ID)
-            if (!resolvedBase) throw new Error('Loaded content does not contain pvz:adventure11')
+            if (!resolvedBase) throw new Error(`Loaded content does not contain ${LEVEL_PREFAB_ID}`)
             const base = {
                 id: resolvedBase.contentId,
                 version: resolvedBase.contentVersion,
@@ -104,15 +104,17 @@ export function createLevelController(
             const gameplay = content.loadedMods.gameplay
             const profile = await menuApi.getCurrentUser()
             const playerName = profile?.name || 'Player'
-            const view = await LevelView.create(root, content, save?.levelId ?? levelId, playerName)
             const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true)
-            scene = root.addComponent(LevelScene)
-            scene.configure(game, view, save ? {
+            const startOptions = save ? {
                 ...DEFAULT_START_OPTIONS,
                 levelId: save.levelId,
                 mods: save.contentSet.mods,
                 save: save.server as unknown as JsonValue,
-            } : { ...DEFAULT_START_OPTIONS, firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods }, lifecycle)
+            } : { ...DEFAULT_START_OPTIONS, firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods }
+            game.start(startOptions)
+            const view = await LevelView.create(root, content, save?.levelId ?? levelId, playerName, game.render())
+            scene = root.addComponent(LevelScene)
+            scene.configure(game, view, startOptions, lifecycle)
             if (save) await scene.restorePresentation(save.client)
             if (!GameDebugSettings.rechargingEnabled) game.debugCommand('/cooldown false')
             if (!GameDebugSettings.sunCostEnabled) game.debugCommand('/suncost false')
@@ -237,7 +239,7 @@ export function createLevelController(
             return current?.root.isValid === true && current.scene.isPaused()
         },
         canPause() {
-            return current?.root.isValid === true && current.view.introComplete &&
+            return current?.root.isValid === true && current.view.canOpenMenu &&
                 !current.scene.isPaused() && current.game.render().result === 'playing'
         },
         pause() {

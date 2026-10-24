@@ -1,4 +1,4 @@
-import { DAY_BOARD_RIGHT, circleRectOverlap } from './collision'
+import { getBoardBounds, circleRectOverlap } from './collision'
 import {
     type EntityRemover,
     type Position,
@@ -39,7 +39,7 @@ export function explode(
         if (!explosion.burn && !isTargetableZombie(zombie)) continue
         const body = definitions.zombies[zombie.typeId].body
         const rect = { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height }
-        if (rect.x > DAY_BOARD_RIGHT || !circleRectOverlap(x, y, explosion.radius, rect)) continue
+        if (rect.x > getBoardBounds(world).right || !circleRectOverlap(x, y, explosion.radius, rect)) continue
         if (explosion.burn && zombie.health < explosion.damage) burnZombie(world, definitions, entity, zombie, position, remover)
         else damageZombie(world, definitions, entity, explosion.damage, { leaveBody: false }, remover)
     }

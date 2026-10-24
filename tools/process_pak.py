@@ -166,7 +166,7 @@ def main():
 
     lawnstrings_src = raw_dir / "properties/lawnstrings.txt"
     default_xml_src = raw_dir / "properties/default.xml"
-    lawnstrings_dst = Path("./assets/resources/properties/lawnstrings.json")
+    lawnstrings_dst = Path("./tools/generated/resources/properties/lawnstrings.json")
     string_count = convert_lawnstrings(lawnstrings_src, lawnstrings_dst, default_xml_src)
     print(f"[pipeline] Converted {string_count} strings -> {lawnstrings_dst}")
 
@@ -177,7 +177,7 @@ def main():
     print("=" * 60)
 
     images_dir = raw_dir / "images"
-    texture_dir = Path("./assets/resources/textures")
+    texture_dir = Path("./tools/generated/resources/textures")
     img_count = copy_images(images_dir, texture_dir)
     print(f"[pipeline] Copied {img_count} new images -> {texture_dir}")
 
@@ -188,7 +188,7 @@ def main():
     print("=" * 60)
 
     particles_dir = raw_dir / "particles"
-    particle_texture_dir = Path("./assets/resources/textures/particles")
+    particle_texture_dir = Path("./tools/generated/resources/textures/particles")
     particle_count = copy_particles(particles_dir, particle_texture_dir)
     print(f"[pipeline] Copied {particle_count} new particle images -> {particle_texture_dir}")
 
@@ -197,7 +197,7 @@ def main():
     print("=" * 60)
     print("[pipeline] Step 9: Convert particle definitions")
     print("=" * 60)
-    convert_particle_directory(particles_dir, Path("./assets/resources/particles"))
+    convert_particle_directory(particles_dir, Path("./tools/generated/resources/particles"))
 
     # ── Step 10: Convert sounds ────────────────────────────────────
     print()
@@ -206,7 +206,7 @@ def main():
     print("=" * 60)
 
     sounds_dir = raw_dir / "sounds"
-    audio_dir = Path("./assets/resources/audio/sfx")
+    audio_dir = Path("./tools/generated/resources/audio/sfx")
     sound_count = copy_sounds(sounds_dir, audio_dir, overwrite=True)
     print(f"[pipeline] Converted {sound_count} sounds -> {audio_dir}")
 
@@ -216,7 +216,7 @@ def main():
     print("[pipeline] Step 11: Convert MO3 music to MP3 stems")
     print("=" * 60)
 
-    music_dir = Path("./assets/resources/audio/music")
+    music_dir = Path("./tools/generated/resources/audio/music")
     music_count = convert_music(sounds_dir, music_dir, overwrite=True)
     print(f"[pipeline] Converted {music_count} music stems -> {music_dir}")
 

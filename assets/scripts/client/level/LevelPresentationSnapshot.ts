@@ -33,6 +33,7 @@ export interface LevelFlowSnapshot {
 
 export interface LevelIntroPreviewSnapshot {
     slot: number
+    typeId: string
     x: number
     y: number
     z: number
@@ -196,9 +197,11 @@ function parseIntro(value: unknown): LevelIntroSnapshot {
     const source = exact(value, ['ticks', 'previews'], 'Level intro')
     const previews = array(source.previews, 'Level intro.previews').map((value, index) => {
         const name = `Level intro.previews[${index}]`
-        const preview = exact(value, ['slot', 'x', 'y', 'z', 'hasTongue', 'reanim'], name)
+        const preview = exact(value, ['slot', 'typeId', 'x', 'y', 'z', 'hasTongue', 'reanim'], name)
+        if (!isQualifiedId(preview.typeId)) throw new TypeError(`${name}.typeId is invalid`)
         return {
             slot: nonNegativeInteger(preview.slot, `${name}.slot`),
+            typeId: preview.typeId,
             x: coordinate(preview.x, `${name}.x`),
             y: coordinate(preview.y, `${name}.y`),
             z: coordinate(preview.z, `${name}.z`),

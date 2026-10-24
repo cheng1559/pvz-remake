@@ -359,7 +359,7 @@ def normalize_image(raw: str | None, src_dir: Path) -> str | None:
     value = value.lower()
 
     source_particle_image = src_dir / f"{value}.png"
-    resource_particle_image = Path("assets/resources/textures/particles") / f"{value}.png"
+    resource_particle_image = Path("tools/generated/resources/textures/particles") / f"{value}.png"
     if source_particle_image.exists() or resource_particle_image.exists():
         return f"particles/{value}"
     return value
@@ -485,7 +485,7 @@ def convert_directory(
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--src", type=Path, default=Path("./tools/raw/particles"))
-    parser.add_argument("--dst", type=Path, default=Path("./assets/resources/particles"))
+    parser.add_argument("--dst", type=Path, default=Path("./tools/generated/resources/particles"))
     parser.add_argument("--resources", type=Path, default=Path("./tools/raw/properties/resources.xml"))
     args = parser.parse_args()
 

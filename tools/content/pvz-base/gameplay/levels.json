@@ -19,8 +19,26 @@
       "tutorial": "pvz:adventure-1-1",
       "award": { "kind": "seed", "id": "pvz:sunflower", "packetCost": 50 }
     },
+    "pvz:seed-chooser-test": {
+      "adventureIndex": 6,
+      "board": "pvz:day",
+      "activeRows": [0, 1, 2, 3, 4],
+      "startingSun": 50,
+      "seedBankSlots": 6,
+      "seedPackets": ["pvz:peashooter", "pvz:sunflower", "pvz:cherrybomb", "pvz:wallnut", "pvz:potatomine", "pvz:snowpea", "pvz:chomper", "pvz:repeater"],
+      "lawnMower": "pvz:standard",
+      "skySun": "pvz:sun",
+      "waves": [
+        { "zombies": ["pvz:normal"] },
+        { "zombies": ["pvz:normal", "pvz:conehead"] },
+        { "zombies": ["pvz:normal", "pvz:flag", "pvz:normal"], "flagWave": true }
+      ],
+      "tutorial": "pvz:standard",
+      "award": { "kind": "seed", "id": "pvz:repeater", "packetCost": 200 }
+    },
     "pvz:adventure-1-2": {
       "adventureIndex": 2,
+      "nextLevel": "pvz:adventure-1-3",
       "board": "pvz:day",
       "activeRows": [1, 2, 3],
       "startingSun": 50,
@@ -37,6 +55,100 @@
       ],
       "tutorial": "pvz:adventure-1-2",
       "award": { "kind": "seed", "id": "pvz:cherrybomb", "packetCost": 150 }
+    },
+    "pvz:adventure-1-3": {
+      "adventureIndex": 3,
+      "nextLevel": "pvz:adventure-1-4",
+      "board": "pvz:day",
+      "activeRows": [1, 2, 3],
+      "startingSun": 50,
+      "seedPackets": ["pvz:peashooter", "pvz:sunflower", "pvz:cherrybomb"],
+      "lawnMower": "pvz:standard",
+      "skySun": "pvz:sun",
+      "firstWaveTicks": 1800,
+      "zombiePool": [
+        { "id": "pvz:normal", "points": 1, "weight": 4000 },
+        { "id": "pvz:conehead", "points": 2, "weight": 4000 },
+        { "id": "pvz:flag", "points": 1, "weight": 0 }
+      ],
+      "waves": [
+        { "zombies": [], "points": 1 },
+        { "zombies": [], "points": 1 },
+        { "zombies": [], "points": 1 },
+        { "zombies": [], "points": 2 },
+        { "zombies": ["pvz:conehead"], "points": 2 },
+        { "zombies": [], "points": 2 },
+        { "zombies": [], "points": 3 },
+        { "zombies": ["pvz:normal", "pvz:normal", "pvz:normal", "pvz:flag", "pvz:conehead"], "points": 7, "flagWave": true }
+      ],
+      "tutorial": "pvz:more-sun",
+      "award": { "kind": "seed", "id": "pvz:wallnut", "packetCost": 50 }
+    },
+    "pvz:adventure-1-4": {
+      "adventureIndex": 4,
+      "nextLevel": "pvz:adventure-1-5",
+      "board": "pvz:day",
+      "activeRows": [0, 1, 2, 3, 4],
+      "startingSun": 50,
+      "seedPackets": ["pvz:peashooter", "pvz:sunflower", "pvz:cherrybomb", "pvz:wallnut"],
+      "lawnMower": "pvz:standard",
+      "skySun": "pvz:sun",
+      "firstWaveTicks": 1800,
+      "zombiePool": [
+        { "id": "pvz:normal", "points": 1, "weight": 4000 },
+        { "id": "pvz:conehead", "points": 2, "weight": 4000 },
+        { "id": "pvz:flag", "points": 1, "weight": 0 }
+      ],
+      "waves": [
+        { "zombies": [], "points": 1 },
+        { "zombies": [], "points": 1 },
+        { "zombies": [], "points": 1 },
+        { "zombies": [], "points": 2 },
+        { "zombies": [], "points": 2 },
+        { "zombies": [], "points": 2 },
+        { "zombies": [], "points": 3 },
+        { "zombies": [], "points": 3 },
+        { "zombies": [], "points": 3 },
+        { "zombies": ["pvz:normal", "pvz:normal", "pvz:normal", "pvz:normal", "pvz:flag", "pvz:conehead"], "points": 10, "flagWave": true }
+      ],
+      "tutorial": "pvz:more-sun",
+      "award": { "kind": "tool", "id": "pvz:shovel", "titleKey": "GOT_SHOVEL", "nameKey": "SHOVEL", "descriptionKey": "SHOVEL_DESCRIPTION", "width": 80, "height": 80 }
+    },
+    "pvz:adventure-1-5": {
+      "adventureIndex": 5,
+      "board": "pvz:day",
+      "activeRows": [0, 1, 2, 3, 4],
+      "startingSun": 0,
+      "seedPackets": ["pvz:bowling-wallnut", "pvz:bowling-explodenut"],
+      "lawnMower": "pvz:standard",
+      "skySun": "pvz:sun",
+      "firstWaveTicks": 200,
+      "tools": ["pvz:shovel"],
+      "bowling": {"lineColumn": 2},
+      "conveyor": {
+        "capacity": 10, "spacing": 50, "entryX": 515, "moveTicks": 4, "insertionGap": 40, "removalGap": 1,
+        "spawnDelay": [{"minPackets": 0, "ticks": 400}, {"minPackets": 5, "ticks": 425}, {"minPackets": 7, "ticks": 500}, {"minPackets": 9, "ticks": 1000}],
+        "seeds": [{"id": "pvz:bowling-wallnut", "weight": 85}, {"id": "pvz:bowling-explodenut", "weight": 15}]
+      },
+      "shovelTutorial": {
+        "opening": [2400, 2401, 2402, 2403, 2404, 2405, 2406],
+        "repeat": [2411, 2412, 2413, 2414, 2415],
+        "afterDig": [2410, 2411, 2412, 2413, 2414, 2415],
+        "introPlants": [{"seedId": "pvz:peashooter", "row": 1, "column": 5}, {"seedId": "pvz:peashooter", "row": 2, "column": 7}, {"seedId": "pvz:peashooter", "row": 3, "column": 6}]
+      },
+      "zombiePool": [
+        {"id": "pvz:normal", "points": 1, "weight": 4000},
+        {"id": "pvz:conehead", "points": 2, "weight": 4000},
+        {"id": "pvz:flag", "points": 1, "weight": 0}
+      ],
+      "waves": [
+        {"zombies": [], "points": 4}, {"zombies": [], "points": 4}, {"zombies": [], "points": 4},
+        {"zombies": [], "points": 8}, {"zombies": [], "points": 8}, {"zombies": [], "points": 8},
+        {"zombies": [], "points": 12},
+        {"zombies": ["pvz:normal", "pvz:normal", "pvz:normal", "pvz:flag", "pvz:conehead"], "points": 16, "flagWave": true}
+      ],
+      "tutorial": "pvz:shovel",
+      "award": {"kind": "seed", "id": "pvz:potatomine", "packetCost": 25}
     }
   }
 }

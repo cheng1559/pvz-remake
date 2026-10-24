@@ -5,7 +5,7 @@ import { ACHIEVEMENT_DEFINITIONS } from './AchievementCatalog'
 import { CHALLENGES } from './ChallengeCatalog'
 import { createGameSettingsStore } from './GameSettingsStore'
 import { createProfileStore, type PlayerProfile } from './ProfileStore'
-import { itemCost, itemState, purchaseItem, STORE_PAGES, storePages } from './StoreCatalog'
+import type { StoreCatalog } from './StoreCatalog'
 
 function userView(profile: PlayerProfile | null): UserView | null {
     return profile && { id: profile.id, name: profile.name, adventureLevel: profile.adventureLevel, finishedAdventure: profile.finishedAdventure }
@@ -20,6 +20,7 @@ export class MenuService {
         private readonly now = Date.now,
         private readonly getLevel: () => LevelDefinition | null = () => null,
         private readonly canCompleteLevel: () => boolean = () => false,
+        private readonly catalog?: StoreCatalog,
     ) {
         this.profiles = createProfileStore(storage)
         this.settings = createGameSettingsStore(storage)
@@ -92,9 +93,14 @@ export class MenuService {
     private award(): AwardView {
         const level = this.getLevel()
         if (!level) throw new Error('Award requires a loaded level')
+        if (level.award.kind === 'tool') return {
+            kind: 'tool', id: level.award.id, nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex > 3,
+            titleKey: level.award.titleKey, nameKey: level.award.nameKey, descriptionKey: level.award.descriptionKey,
+        }
         const plant = ALMANAC_PLANTS.find(plant => `pvz:${plant.key.replace(/_/g, '').toLowerCase()}` === level.award.id)
         if (!plant) throw new Error(`Unknown plant award: ${level.award.id}`)
         return {
+            kind: 'seed', titleKey: 'NEW_PLANT',
             nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex > 3,
             seed: plant.id, cost: level.award.packetCost, name: plant.name,
             nameKey: plant.key, descriptionKey: `${plant.key}_TOOLTIP`,
@@ -117,6 +123,7 @@ export class MenuService {
     }
 
     private store(): StoreView {
+        const { STORE_PAGES, storePages, itemCost, itemState, itemDetails } = this.storeCatalog
         const profile = this.profiles.getCurrentProfile()
         if (!profile) throw new Error('Store requires a player profile')
         return {
@@ -129,14 +136,13 @@ export class MenuService {
                 highlight: item.highlight ?? (item.seed !== undefined ? { type: 'seedPacket' }
                     : item.sprite ? { type: 'additive', opacity: 96 } : { type: 'none' }),
                 cost: itemCost(item, profile), affordable: profile.coins >= itemCost(item, profile), state: itemState(item, profile, this.now()),
-                message: item.id === 21 ? 2011 + Math.min(3, profile.purchases[21]) : item.message,
-                ...(item.id === 21 && { seedSlots: 7 + Math.min(3, profile.purchases[21]) }),
-                ...((item.id === 14 || item.id === 15) && { quantity: 5 }),
+                ...itemDetails(item, profile),
             })) })),
         }
     }
 
     private purchase(args: { userId: number, itemId: number, expectedCost: number }) {
+        const { STORE_PAGES, storePages, itemState, itemCost, purchaseItem, purchaseEffect } = this.storeCatalog
         const profile = this.profiles.getCurrentProfile()
         if (!profile || profile.id !== args.userId) return { ok: false as const, code: 'profileChanged' as const }
         const item = STORE_PAGES.flat().find(item => item.id === args.itemId)
@@ -147,8 +153,12 @@ export class MenuService {
         this.profiles.saveProfile(profile)
         return {
             ok: true as const, store: this.store(),
-            ...(item.id === 21 && { effect: 'seedSlots' as const, seedSlots: 6 + profile.purchases[21] }),
-            ...(item.id === 27 && { effect: 'tree' as const }),
+            ...purchaseEffect(item, profile),
         }
+    }
+
+    private get storeCatalog(): StoreCatalog {
+        if (!this.catalog) throw new Error('Store catalog is not loaded')
+        return this.catalog
     }
 }

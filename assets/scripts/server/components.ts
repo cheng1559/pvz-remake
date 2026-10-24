@@ -79,9 +79,14 @@ export interface Projectile {
     sourcePlantId?: number
 }
 
+export type SeedSelection = { mode: 'none' } | { mode: 'seed'; seedId: string }
+    | { mode: 'conveyor'; packetId: number } | { mode: 'tool'; toolId: string }
+
 export interface SeedBankState {
-    selectedSeedId?: string
-    packets: Array<{ seedId: string, readyAtTick: number }>
+    selection: SeedSelection
+    conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; packets: Array<{ id: number; seedId: string; x: number }> }
+    choosing?: boolean
+    packets: Array<{ seedId: string, readyAtTick: number, cooldownTotal?: number }>
 }
 
 export interface EconomyState {

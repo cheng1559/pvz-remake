@@ -122,6 +122,7 @@ test('selecting and placing Peashooter changes authority state atomically', () =
         selected: false,
         cooldownRemaining: 0,
         cooldownTotal: 0,
+        availability: {},
     }])
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 0 }), 'no-seed-selected')
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), undefined)
@@ -141,6 +142,7 @@ test('selecting and placing Peashooter changes authority state atomically', () =
         selected: false,
         cooldownRemaining: 750,
         cooldownTotal: 750,
+        availability: { reason: 'seed-not-ready', warningKey: 'WAITING_FOR_SEED' },
     }])
     assert.deepEqual(planted.plants, [{
         entityId: 2,

@@ -13,7 +13,7 @@ test('almanac shares level clips, attachments and mod overrides while retaining 
     const { resolveEntityDisplay } = load('client/reanim/EntityDisplay', {
         '@/client/content/ClientAnimationRegistry': animationDefinitions,
     })
-    const catalog = JSON.parse(readFileSync('assets/resources/almanac-animations.json', 'utf8'))
+    const catalog = JSON.parse(readFileSync('tools/generated/resources/almanac-animations.json', 'utf8'))
     const animations = new animationDefinitions.ClientAnimationRegistry(presentationFixture)
     const display = (kind: string, id: number) => resolveEntityDisplay(kind, id, catalog[kind][id], animations)
     const nut = display('plants', 3)
@@ -27,12 +27,12 @@ test('almanac shares level clips, attachments and mod overrides while retaining 
     assert.equal(display('plants', 23), catalog.plants[23], 'display-only plants retain their existing definition')
 
     // Validate actual shared resources and sockets for animated details and static portraits.
-    const manifest = JSON.parse(readFileSync('assets/bundles/pvz-base/manifest.json', 'utf8'))
+    const manifest = JSON.parse(readFileSync('tools/generated/pvz-base/manifest.json', 'utf8'))
     for (const kind of ['plants', 'zombies']) for (let id = 0; id < catalog[kind].length; id++) {
         const entry = display(kind, id)
         for (const parts of [entry.parts, entry.portrait?.parts ?? []]) {
             const clips = new Map(parts.map((part: any) => [part.name,
-                JSON.parse(readFileSync(`assets/bundles/pvz-base/${manifest.client.reanim[part.id]}.json`, 'utf8'))]))
+                JSON.parse(readFileSync(`tools/generated/pvz-base/${manifest.client.reanim[part.id]}.json`, 'utf8'))]))
             for (const part of parts) if (part.parent) {
                 const parent = clips.get(part.parent) as any
                 assert.ok(parent?.tracks.some((track: any) => track.id === part.track), `${kind} ${id}: missing ${part.track}`)
@@ -76,8 +76,9 @@ function fixture() {
         get length() { return data.size },
     }
     const ProfileStore = load('server/menu/ProfileStore').createProfileStore(storage)
-    const store = { ...load('server/menu/StoreCatalog'), ...load('client/ui/formatMoney') }
-    const menuApi = new MenuApi(createLocalMenuTransport(storage))
+    const catalog = load('server/menu/StoreCatalog').createStoreCatalog(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/store.json', 'utf8')))
+    const store = { ...catalog, ...load('client/ui/formatMoney') }
+    const menuApi = new MenuApi(createLocalMenuTransport(storage, undefined, undefined, catalog))
     const item = (id: number) => store.STORE_PAGES.flat().find((item: { id: number }) => item.id === id)
     return { store, ProfileStore, item, menuApi, profile: ProfileStore.createProfile('Alice') }
 }
@@ -114,7 +115,7 @@ test('store respects progress, escalating slot prices, balance and one-time purc
 })
 
 test('garden stock uses the original count offset, daily plant limits and unique garden positions', () => {
-    const { profile, item, store: { itemState, purchaseItem, PURCHASE_COUNT_OFFSET } } = fixture()
+    const { profile, item, store: { itemState, purchaseItem } } = fixture()
     const now = Date.UTC(2026, 9, 20)
     profile.finishedAdventure = 1
     profile.coins = 100000
@@ -122,7 +123,7 @@ test('garden stock uses the original count offset, daily plant limits and unique
     assert.equal(purchaseItem(item(18), profile), true)
     assert.equal(itemState(item(19), profile), 'available')
     for (let count = 0; count < 4; count++) assert.equal(purchaseItem(item(14), profile), true)
-    assert.equal(profile.purchases[14], PURCHASE_COUNT_OFFSET + 20)
+    assert.equal(profile.purchases[14], item(14).purchase.minimum + 20)
     assert.equal(itemState(item(14), profile), 'soldOut')
     assert.equal(purchaseItem(item(14), profile), false)
     assert.equal(purchaseItem(item(10), profile, now), true)
@@ -182,8 +183,8 @@ test('all localized almanac descriptions retain bitmap text while consuming colo
     const { FontMetricsUtil } = load('client/font/FontMetrics')
     const { almanacLines } = load('client/screens/AlmanacText', { cc: { Color } })
     const { ALMANAC_PLANTS, ALMANAC_ZOMBIES } = load('server/menu/AlmanacCatalog')
-    const strings = JSON.parse(readFileSync('assets/resources/properties/lawnstrings.json', 'utf8'))
-    const font = { json: JSON.parse(readFileSync('assets/resources/fonts/briannetod12.json', 'utf8')) }
+    const strings = JSON.parse(readFileSync('tools/generated/resources/properties/lawnstrings.json', 'utf8'))
+    const font = { json: JSON.parse(readFileSync('tools/generated/resources/fonts/briannetod12.json', 'utf8')) }
     const measure = (value: string) => FontMetricsUtil.measureTextWidth(font, value)
     for (const { key } of [...ALMANAC_PLANTS, ...ALMANAC_ZOMBIES]) {
         for (const suffix of ['DESCRIPTION_HEADER', 'DESCRIPTION']) {

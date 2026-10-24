@@ -1,3 +1,5 @@
+import type { MusicTuneId } from './music'
+
 export interface ClientAnimationClip {
     readonly reanimId: string
     readonly rateScale: number
@@ -100,6 +102,7 @@ export interface PlantVisual {
 }
 
 export interface PlantPresentationDefinition {
+    readonly rowOrder?: number
     readonly shadow: { readonly x: number; readonly y: number }
     readonly scale: number
     readonly visual: PlantVisual
@@ -163,11 +166,40 @@ export interface ZombiePresentationDefinition {
     readonly vault?: boolean
     readonly drops: Readonly<Partial<Record<'head' | 'arm' | 'flag', ZombieDrop>>>
     readonly helmTracks: readonly string[]
-    readonly helm?: { readonly track: string; readonly damagedSprites: readonly [string, string]; readonly effect: string; readonly offset: readonly [number, number]; readonly impactSounds: readonly PresentationSound[] }
+    readonly helm?: { readonly track: string; readonly damagedSprites: readonly [string, string]; readonly effect: string; readonly offset: readonly [number, number]; readonly impactSounds: readonly PresentationSound[]; readonly bowlingImpactSounds?: readonly PresentationSound[] }
 }
 
 export type NutBlinkSlot = 'blinkTwitch' | 'blinkTwice' | 'blinkThrice'
+export interface AdventureIntroLayout {
+    readonly stationary?: boolean
+    readonly sod: string
+    readonly x: number
+    readonly y: number
+    readonly width: number
+    readonly sourceX?: number
+    readonly existingSod?: { readonly sprite: string; readonly x: number; readonly y: number }
+    readonly rolls: readonly { readonly x: number; readonly y: number; readonly particleY: number }[]
+    readonly readySetPlant: boolean
+}
+export interface LevelPresentationDefinition {
+    readonly music?: BoardPresentation['music']
+    readonly intro: AdventureIntroLayout
+    readonly advice: Readonly<Record<string, string>>
+    readonly adviceDuringIntro?: boolean
+    readonly adviceStyle?: 'hint-stay' | 'tutorial-level1-stay'
+    readonly guideSeed?: string
+    readonly seedGuideSteps: readonly string[]
+    readonly lawnGuideSteps: readonly string[]
+}
+export interface AwardPresentationDefinition {
+    readonly sprite: string
+    readonly scale: number
+    readonly x: number
+    readonly y: number
+    readonly pageY: number
+}
 const VIEW_SLOTS: Readonly<Record<string, readonly string[]>> = {
+    bowling: ['body', 'blinkTwitch', 'blinkTwice', 'blinkThrice'],
     shooter: ['body', 'idleHead', 'shootHead', 'blink'],
     sunflower: ['body', 'blink'],
     cherrybomb: ['idle', 'explode'],
@@ -176,6 +208,25 @@ const VIEW_SLOTS: Readonly<Record<string, readonly string[]>> = {
     chomper: ['idle', 'bite', 'chew', 'swallow'],
 }
 export interface PresentationDefinitions {
+    readonly conveyor: {
+        readonly x: number; readonly backdropX: number; readonly clipX: number; readonly width: number; readonly height: number
+        readonly packetX: number; readonly packetY: number; readonly beltY: number; readonly beltWidth: number; readonly beltHeight: number
+        readonly frames: number; readonly frameTicks: number; readonly introStart: number; readonly introDuration: number
+        readonly stripeOffset: readonly [number, number]; readonly stripeDialogs: readonly number[]
+    }
+    readonly shovel: { readonly x: number; readonly imageOffset: readonly [number, number]; readonly cursorOffset: readonly [number, number]; readonly arrowOffset: readonly [number, number] }
+    readonly dave: {
+        readonly clips: Readonly<Record<string, string>>
+        readonly sourceFps: number; readonly transitionFps: number; readonly talkFps: number; readonly blinkFps: number
+        readonly idleBlend: number; readonly talkBlend: number; readonly delay: number
+        readonly blinkSeconds: readonly [number, number]; readonly talkLengths: readonly [number, number]
+        readonly bubble: { readonly sprite: string; readonly x: number; readonly y: number; readonly textX: number; readonly textY: number; readonly textWidth: number; readonly textHeight: number; readonly continueX: number; readonly continueY: number; readonly shake: number }
+        readonly hand: { readonly reanim: string; readonly x: number; readonly y: number; readonly scale: number; readonly track: string }
+        readonly mouths: Readonly<Record<string, string>>
+    }
+    readonly boards?: Readonly<Record<string, BoardPresentation>>
+    readonly levels?: Readonly<Record<string, LevelPresentationDefinition>>
+    readonly awards?: Readonly<Record<string, AwardPresentationDefinition>>
     readonly animation: {
         readonly rates: Readonly<Record<'plantIdle' | 'shooterIdle' | 'zombieIdle' | 'zombieIdle2', readonly [number, number]>>
         readonly zombieIdle2Chance: number
@@ -187,6 +238,7 @@ export interface PresentationDefinitions {
     readonly zombies: Readonly<Record<string, ZombiePresentationDefinition>>
     readonly projectiles: Readonly<Record<string, ProjectilePresentationDefinition>>
     readonly seedPackets: {
+        readonly flash: { readonly id: string; readonly duration: number }
         readonly defaultPlacement: SeedPacketPlacement
         readonly placements: Readonly<Record<string, SeedPacketPlacement>>
         readonly plantCels: Readonly<Record<string, number>>
@@ -201,6 +253,58 @@ export interface PresentationDefinitions {
 
 export function parsePresentationDefinitions(value: unknown): PresentationDefinitions {
     const data = object(value, 'presentation definitions')
+    const conveyor = object(data.conveyor, 'conveyor')
+    for (const key of ['x', 'backdropX', 'clipX', 'packetX', 'packetY', 'beltY', 'introStart']) finite(conveyor[key], 'conveyor.' + key)
+    for (const key of ['width', 'height', 'beltWidth', 'beltHeight', 'frames', 'frameTicks', 'introDuration']) positive(conveyor[key], 'conveyor.' + key)
+    pair(conveyor.stripeOffset, 'conveyor.stripeOffset')
+    if (!Array.isArray(conveyor.stripeDialogs) || conveyor.stripeDialogs.some(id => !Number.isInteger(id))) throw new TypeError('Invalid conveyor.stripeDialogs')
+    const shovel = object(data.shovel, 'shovel')
+    finite(shovel.x, 'shovel.x')
+    for (const key of ['imageOffset', 'cursorOffset', 'arrowOffset']) pair(shovel[key], 'shovel.' + key)
+    const dave = object(data.dave, 'dave'), clips = object(dave.clips, 'dave.clips')
+    for (const key of ['enter', 'leave', 'idle', 'smalltalk', 'mediumtalk', 'blahblah', 'crazy', 'idle_handing', 'talk_handing', 'blink']) text(clips[key], 'dave.clips.' + key)
+    for (const key of ['sourceFps', 'transitionFps', 'talkFps', 'blinkFps', 'idleBlend', 'talkBlend', 'delay']) positive(dave[key], 'dave.' + key)
+    pair(dave.blinkSeconds, 'dave.blinkSeconds'); pair(dave.talkLengths, 'dave.talkLengths')
+    const bubble = object(dave.bubble, 'dave.bubble'), hand = object(dave.hand, 'dave.hand')
+    text(bubble.sprite, 'dave.bubble.sprite')
+    for (const key of ['x', 'y', 'textX', 'textY', 'continueX', 'continueY', 'shake']) finite(bubble[key], 'dave.bubble.' + key)
+    positive(bubble.textWidth, 'dave.bubble.textWidth'); positive(bubble.textHeight, 'dave.bubble.textHeight')
+    text(hand.reanim, 'dave.hand.reanim'); text(hand.track, 'dave.hand.track'); positive(hand.scale, 'dave.hand.scale')
+    finite(hand.x, 'dave.hand.x'); finite(hand.y, 'dave.hand.y')
+    for (const [key, value] of Object.entries(object(dave.mouths, 'dave.mouths'))) text(value, 'dave.mouths.' + key)
+    for (const [id, entry] of Object.entries(object(data.boards ?? {}, 'presentation boards'))) {
+        const board = object(entry, id), music = object(board.music, id + '.music'), over = object(board.gameOver, id + '.gameOver')
+        text(board.background, id + '.background'); finite(board.backgroundX, id + '.backgroundX')
+        text(music.choosing, id + '.music.choosing'); text(music.gameplay, id + '.music.gameplay')
+        texts(over.images, id + '.gameOver.images')
+        if ((over.images as unknown[]).length !== 3) throw new TypeError(id + '.gameOver.images must contain three images')
+        point(over.interior, id + '.gameOver.interior'); point(over.doorway, id + '.gameOver.doorway')
+        for (const field of ['clipX', 'winnerY', 'panX']) finite(over[field], id + '.gameOver.' + field)
+    }
+    for (const [id, entry] of Object.entries(object(data.levels ?? {}, 'presentation levels'))) {
+        const level = object(entry, id), intro = object(level.intro, id + '.intro')
+        text(intro.sod, id + '.intro.sod')
+        finite(intro.x, id + '.intro.x'); finite(intro.y, id + '.intro.y'); positive(intro.width, id + '.intro.width')
+        if (intro.sourceX !== undefined) finite(intro.sourceX, id + '.intro.sourceX')
+        if (typeof intro.readySetPlant !== 'boolean' || !Array.isArray(intro.rolls)) throw new TypeError(id + ' has invalid intro settings')
+        for (const value of intro.rolls) {
+            const roll = object(value, id + '.intro.rolls')
+            for (const field of ['x', 'y', 'particleY']) finite(roll[field], id + '.intro.rolls.' + field)
+        }
+        if (intro.existingSod !== undefined) {
+            const sod = object(intro.existingSod, id + '.intro.existingSod')
+            text(sod.sprite, id + '.intro.existingSod.sprite'); point(sod, id + '.intro.existingSod')
+        }
+        object(level.advice, id + '.advice')
+        if (level.adviceDuringIntro !== undefined && typeof level.adviceDuringIntro !== 'boolean') throw new TypeError(id + '.adviceDuringIntro must be boolean')
+        if (level.adviceStyle !== undefined && level.adviceStyle !== 'hint-stay' && level.adviceStyle !== 'tutorial-level1-stay') throw new TypeError(id + '.adviceStyle is invalid')
+        texts(level.seedGuideSteps, id + '.seedGuideSteps'); texts(level.lawnGuideSteps, id + '.lawnGuideSteps')
+    }
+    for (const [id, entry] of Object.entries(object(data.awards ?? {}, 'presentation awards'))) {
+        const award = object(entry, id)
+        text(award.sprite, id + '.sprite'); positive(award.scale, id + '.scale')
+        for (const field of ['x', 'y', 'pageY']) finite(award[field], id + '.' + field)
+    }
     const animation = object(data.animation, 'presentation definitions.animation')
     const rates = object(animation.rates, 'animation.rates')
     for (const name of ['plantIdle', 'shooterIdle', 'zombieIdle', 'zombieIdle2']) range(rates[name], name, true)
@@ -218,6 +322,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (visual.preview !== undefined && (!Number.isInteger(visual.preview) || (visual.preview as number) < 0)) throw new TypeError(id + '.preview is invalid')
         point(plant.shadow, id + '.shadow')
         positive(plant.scale, id + '.scale')
+        if (plant.rowOrder !== undefined) finite(plant.rowOrder, id + '.rowOrder')
         if (plant.packetVisibleTracks !== undefined) texts(plant.packetVisibleTracks, id + '.packetVisibleTracks')
         if (visual.nameKey !== undefined) text(visual.nameKey, id + '.visual.nameKey')
         if (plant.view !== undefined) text(plant.view, id + '.view')
@@ -261,6 +366,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             if (!(zombie.helmTracks as string[]).includes(helm.track as string)) throw new TypeError(id + '.helm.track is missing from helmTracks')
             pair(helm.offset, id + '.helm.offset')
             sounds(helm.impactSounds, id + '.helm.impactSounds', true)
+            sounds(helm.bowlingImpactSounds, id + '.helm.bowlingImpactSounds')
         }
     }
     if (!zombies['pvz:normal']) throw new TypeError('Missing normal zombie presentation')
@@ -299,6 +405,8 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         sounds(projectile.impactSounds, id + '.impactSounds', true)
     }
     const packets = object(data.seedPackets, 'seedPackets')
+    const flash = object(packets.flash, 'seedPackets.flash')
+    text(flash.id, 'seedPackets.flash.id'); positive(flash.duration, 'seedPackets.flash.duration')
     placement(packets.defaultPlacement, 'seedPackets.defaultPlacement')
     for (const [id, value] of Object.entries(object(packets.placements, 'seedPackets.placements'))) placement(value, 'seedPackets.placements.' + id)
     for (const [id, value] of Object.entries(object(packets.plantCels, 'seedPackets.plantCels'))) {
@@ -384,4 +492,18 @@ function range(value: unknown, name: string, fractional = false): void {
 function point(value: unknown, name: string): void {
     const point = object(value, name)
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new TypeError(name + ' must be a finite point')
+}
+
+export interface BoardPresentation {
+    readonly background: string
+    readonly backgroundX: number
+    readonly music: { readonly choosing: MusicTuneId; readonly gameplay: MusicTuneId }
+    readonly gameOver: {
+        readonly images: readonly [string, string, string]
+        readonly interior: { readonly x: number; readonly y: number }
+        readonly doorway: { readonly x: number; readonly y: number }
+        readonly clipX: number
+        readonly winnerY: number
+        readonly panX: number
+    }
 }

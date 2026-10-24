@@ -5,7 +5,6 @@ import { initializeViewport, resetViewport } from '@/client/view/ClientViewport'
 import { gameClock } from '@/core/GameClock'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
-import { installContentShowcaseProbe } from '@/client/showcase/ContentShowcase'
 import { MenuScreen } from '@/client/screens/MenuScreen'
 import { ScreenTransition } from '@/client/screens/ScreenTransition'
 import { showContinueGameDialog } from '@/client/screens/ContinueGameDialog'
@@ -22,6 +21,7 @@ import {
 } from './LevelController'
 import { menuApi } from '@/client/api/MenuApi'
 import { connectLocalMenuApi } from './LocalMenuApi'
+import { createStoreCatalog } from '@/server/menu/StoreCatalog'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { showDebugCliDialog } from '@/client/screens/DebugCliDialog'
 import { showPackageDialog } from '@/client/screens/PackageDialog'
@@ -55,7 +55,8 @@ export class GameApp extends Component {
     start(): void {
         game.frameRate = Infinity
         uiNode({ node: this.node, viewport: true })
-        connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false)
+        connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false,
+            resourcePacks.baseJson('pvz:gameplay/store').then(createStoreCatalog))
         UIHoverManager.start(this.node)
         this.gameLayer = uiNode({
             name: 'GameLayer', parent: this.node, viewport: true, active: false,
@@ -72,7 +73,6 @@ export class GameApp extends Component {
         })
         if (DEBUG) {
             ;(globalThis as typeof globalThis & { pvzTime?: typeof gameClock }).pvzTime = gameClock
-            installContentShowcaseProbe(this.node)
             installLevelProbe(this.controller)
         }
         game.on(Game.EVENT_HIDE, this.save, this)

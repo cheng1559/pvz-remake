@@ -1,12 +1,5 @@
-export type MusicTuneId =
-    | 'day_grasswalk'
-    | 'choose_seeds'
-    | 'title_theme'
-    | 'zen_garden'
-    | 'puzzle'
-    | 'minigame'
-    | 'conveyer'
-    | 'final_boss'
+import type { MusicTuneId } from '@/shared/content/music'
+export type { MusicTuneId } from '@/shared/content/music'
 
 export type MusicBurstState = 'off' | 'starting' | 'on' | 'finishing'
 export type MusicDrumsState = 'off' | 'on-queued' | 'on' | 'off-queued' | 'fading'

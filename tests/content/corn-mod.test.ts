@@ -13,6 +13,7 @@ import { GameplayRegistry } from '@/server/GameplayRegistry'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { createServerModHost } from '@/server/createModHost'
 import { runCommand } from '../server/run-command'
+import * as levelGeometry from '@/client/level/LevelGeometry'
 
 const json = (path: string) => JSON.parse(readFileSync(path, 'utf8'))
 function loadHostModule(path: string, modules: Record<string, any> = {}): any {
@@ -88,6 +89,18 @@ test('cob explosion and blast mark stay visible until the reference fade window'
         simulation.advance(ticks)
         assert.equal(simulation.pose().length, 0)
     }
+})
+
+test('the cannon footprint patch preserves non-occupying bowling plants in other levels', () => {
+    const { server, host, command } = setup('pvz:adventure-1-5')
+    try {
+        while (server.snapshot().extensions['pvz:dialog']) runCommand(server, { type: 'advanceDialog' })
+        assert.equal(runCommand(server, { type: 'completeIntro' }), undefined)
+        command('/plant bowling-wallnut 3 1')
+        assert.equal(runCommand(server, { type: 'selectConveyorPacket', packetId: 1 }), undefined)
+        assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 0 }), undefined)
+        assert.equal(server.snapshot().plants.length, 2)
+    } finally { host.dispose() }
 })
 
 test('corn owns its lob and butter behavior; flight, stun, pause, death and save restoration use simulation state', () => {
@@ -306,6 +319,7 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
     const fallback: string[] = []
     let mobile = false
     const BaseInput = loadHostModule('level/LevelInputPresenter', {
+        './LevelGeometry': levelGeometry,
         cc: { UITransform: Transform, EventMouse: class {} },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => mobile } },
         '@/platform/Haptics': { Haptics: { play() {} } },
@@ -381,7 +395,7 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
             buttons: [{ canInteract: () => true, interactable: true, node: { activeInHierarchy: true, getComponent: () => new Transform() } }],
             boardPixel: (event: any) => event.point,
             onMenu: () => fallback.push('menu'),
-            view: { introComplete: true, setPointer(value?: any) { pointer = value }, resetCursor() {} },
+            view: { introComplete: true, level: { award: { id: 'test:award' } }, seedPacketAt() {}, setPointer(value?: any) { pointer = value }, resetCursor() {} },
             game: { render: () => snapshot, definitions: { ...json('mods/corn/assets/gameplay.json'), items: { sun: { width: 60, height: 60 } } }, command: (command: any) => commands.push(command) },
         })
         const event = (x: number, y: number, button = 0, id = 1) => ({ point: { x, y }, getLocation: () => ({ x, y }),
@@ -496,11 +510,11 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
 
         const bank: any = Object.create(LevelSeedBank.prototype), states: any[] = [], warnings: string[] = []
         const tooltip = { set warning(value: string) { warnings.push(value) } }
-        bank.packets = [{ seedId: 'corn:cob_cannon', tooltip, view: { sync: (state: any) => states.push(state) }, button: {} }]
+        bank.packets = [{ seedId: 'corn:cob_cannon', tooltip, view: { node: {}, sync: (state: any) => states.push(state) }, button: {} }]
         const strings = json('mods/corn/assets/presentation.json').strings
-        bank.options = { ui: { text: (key: string) => strings[key] ?? key }, content: { definitions: json('mods/corn/assets/gameplay.json') }, presentation: {} }
+        bank.options = { level: {}, ui: { text: (key: string) => strings[key] ?? key }, content: { definitions: json('mods/corn/assets/gameplay.json') }, presentation: {} }
         const packets = { extensions: {}, availableSun: 2000, phase: 'gameplay', result: 'playing', cursor: { mode: 'none' },
-            seedPackets: [{ seedId: 'corn:cob_cannon', ready: true, cooldownRemaining: 0 }] }
+            seedPackets: [{ seedId: 'corn:cob_cannon', ready: true, cooldownRemaining: 0, availability: { reason: 'seed-not-available', warningKey: 'corn:requires_kernel_pults' } as any }] }
         bank.sync(packets, [], true, null)
         assert.equal(states.pop().active, false, 'a missing base pair dims the upgrade packet')
         assert.deepEqual(warnings.splice(0), ['requires 2 kernel-pults'], 'tooltip must receive its final warning exactly once per sync')
@@ -521,27 +535,30 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         Object.assign(snapshot, { paused: false, seedPackets: packets.seedPackets, availableSun: 2000 })
         const sounds: string[] = []
         const { LevelAudioPresenter } = loadHostModule('level/LevelAudioPresenter', {
-            '@/client/sound/LegacySoundSystem': { SoundLoader: { play: (id: string) => sounds.push(id) } },
+            '@/client/sound/LegacySoundSystem': { SoundEffect: { Buzzer: 'buzzer', SeedLift: 'seedlift', Drop: 'drop' }, SoundLoader: { play: (id: string) => sounds.push(id) } },
         })
         input.view.audio = new LevelAudioPresenter({}, {})
-        input.selectSeedPacket('corn:cob_cannon')
-        assert.equal(sounds.length, 0, 'selection waits for the authoritative rejection rather than playing seed pickup')
+        input.view.seedPacketAt = (world: any, index: number) => bank.packetAt(world, index)
+        BaseInput.prototype.selectSeedPacket.call(input, 0)
+        assert.deepEqual(sounds.splice(0), ['buzzer'], 'the shared selection path uses the authoritative requirement result')
         assert.deepEqual(commands.pop(), { type: 'selectSeed', seedId: 'corn:cob_cannon' })
         const renderer: any = new Renderer(); renderer.audio = input.view.audio
         renderer.playEvents(snapshot, [rejection])
         assert.deepEqual(sounds, [], 'invalid planting advice is silent')
-        renderer.playEvents(snapshot, [{ type: 'corn:sound', data: { id: 'buzzer' } }])
-        assert.deepEqual(sounds.splice(0), ['buzzer'], 'the real audio presenter must play exactly one rejection sound')
-        packets.availableSun = 499; bank.sync(packets, [], true, null)
+        packets.availableSun = 499
+        packets.seedPackets[0].availability = { reason: 'not-enough-sun', warningKey: 'NOT_ENOUGH_SUN' }; bank.sync(packets, [], true, null)
         assert.deepEqual(warnings.splice(0), ['NOT_ENOUGH_SUN'])
-        packets.seedPackets[0].ready = false; bank.sync(packets, [], true, null)
+        packets.seedPackets[0].ready = false
+        packets.seedPackets[0].availability = { reason: 'seed-not-ready', warningKey: 'WAITING_FOR_SEED' }; bank.sync(packets, [], true, null)
         assert.deepEqual(warnings.splice(0), ['WAITING_FOR_SEED'])
         packets.seedPackets[0].ready = true
+        packets.seedPackets[0].availability = {}
         snapshot.extensions['corn:cob_upgrade'] = { targets: [3, 4] }
         bank.sync(snapshot, [], true, null)
         assert.equal(states.pop().active, true)
-        input.selectSeedPacket('corn:cob_cannon')
-        assert.equal(fallback.pop(), 'select', 'a valid pair keeps normal seed selection')
+        BaseInput.prototype.selectSeedPacket.call(input, 0)
+        assert.equal(commands.pop().type, 'selectSeed', 'a valid pair keeps normal seed selection')
+        assert.deepEqual(sounds.splice(0), ['seedlift'])
 
         mobile = false
         Object.assign(hud, { pointer: { x: 173, y: 330 }, hoverClient: {},
@@ -636,7 +653,9 @@ test('cannon upgrades either half of a horizontal pair, spends once, reserves bo
         runCommand(server, { type: 'selectSeed', seedId: 'corn:cob_cannon' })
         const repeated = server.drainEvents()
         assert.equal(repeated.filter(event => event.type === 'corn:advice').length, 0, 'advice remains shown after restoring')
-        assert.equal(repeated.filter(event => event.type === 'corn:sound' && event.data.id === 'buzzer').length, 1, 'each disabled packet click still plays buzzer')
+        assert.equal(repeated.filter(event => event.type === 'corn:sound').length, 0, 'selection sound has one owner in the shared client input')
+        assert.deepEqual(server.snapshot().seedPackets.find(packet => packet.seedId === 'corn:cob_cannon')!.availability,
+            { reason: 'seed-not-available', warningKey: 'corn:requires_kernel_pults' })
         assert.equal(server.snapshot().cursor.mode, 'none')
         assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 0 }), 'no-seed-selected')
         assert.equal(server.snapshot().sun, 2000)

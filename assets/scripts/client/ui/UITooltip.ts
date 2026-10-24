@@ -7,6 +7,7 @@ import type { UIFont } from './UIAssets'
 const { ccclass } = _decorator
 
 export interface UITooltipOptions {
+    title?: string
     text: string
     warning?: string
     font?: UIFont
@@ -14,6 +15,8 @@ export interface UITooltipOptions {
     gap?: number
     /** Pixel adjustment after anchoring: x right, y down. */
     offset?: readonly [number, number]
+    /** Optional popup surface outside a clipped control, while retaining the control as its anchor. */
+    surface?: Node
 }
 
 interface Bounds { left: number, right: number, top: number, bottom: number }
@@ -66,6 +69,7 @@ export class UITooltip extends Component {
     lateUpdate(): void { if (this.visible) this.refresh() }
 
     private surface(): UITransform | null {
+        if (this.options.surface) return this.options.surface.getComponent(UITransform)
         let fallback: UITransform | null = null
         for (let node = this.node.parent; node; node = node.parent) {
             const transform = node.getComponent(UITransform)
@@ -77,7 +81,7 @@ export class UITooltip extends Component {
     }
 
     private refresh(): void {
-        if (!this.node.activeInHierarchy || !this.options.text) { this.hide(); return }
+        if (!this.node.activeInHierarchy || !(this.options.text || this.options.title || this.warning)) { this.hide(); return }
         const surface = this.surface()
         if (!surface) return
         const bounds: Bounds = {
@@ -86,7 +90,7 @@ export class UITooltip extends Component {
             bottom: -surface.anchorY * surface.height + 2,
             top: (1 - surface.anchorY) * surface.height - 2,
         }
-        const widthLimit = Math.max(1, Math.min(this.options.maxWidth ?? 300, bounds.right - bounds.left))
+        const widthLimit = Math.max(1, Math.min(this.options.maxWidth ?? Infinity, bounds.right - bounds.left))
         const heightLimit = Math.max(1, bounds.top - bounds.bottom)
         if (this.dirty || !this.popup?.node.isValid || this.popup.node.parent !== surface.node
             || this.widthLimit !== widthLimit || this.heightLimit !== heightLimit) {
@@ -113,15 +117,20 @@ export class UITooltip extends Component {
         this.widthLimit = widthLimit
         this.heightLimit = heightLimit
         this.dirty = false
-        const font = this.options.font ?? 'packetCost' // Pico129, matching the previous garden tooltip.
+        const font = this.options.font ?? 'packetCost'
         const config = this.ui.assets.fonts[font].config
         const metrics = FontMetricsUtil.getMetrics(config)
+        const titleFont = this.ui.assets.fonts.tooltipTitle.config
+        const titleAscent = FontMetricsUtil.getMetrics(titleFont).ascent
         const measure = (text: string) => FontMetricsUtil.measureTextWidth(config, text)
-        const width = Math.min(widthLimit, Math.max(...[this.options.text, this.warning].flatMap(text => text.split('\n').map(measure))) + 10)
+        const titleWidth = this.options.title ? FontMetricsUtil.measureTextWidth(titleFont, this.options.title) : 0
+        const warningWidth = measure(this.warning)
+        const lineWidth = Math.max(1, Math.min(widthLimit - 10, Math.max(Math.max(titleWidth, warningWidth) - 30, 100)))
+        const lines = wrapTooltipText(this.options.text, measure, lineWidth)
+        const width = Math.min(widthLimit, Math.max(titleWidth, warningWidth, ...lines.map(measure)) + 10)
         const textWidth = Math.max(1, width - 10)
-        const lines = FontMetricsUtil.measureWordWrapped(config, this.options.text, textWidth).lineWidths.length
-        const warningLines = this.warning ? FontMetricsUtil.measureWordWrapped(config, this.warning, textWidth).lineWidths.length : 0
-        const height = Math.min(heightLimit, 4 + (lines + warningLines) * (metrics.ascent + 2))
+        const height = Math.min(heightLimit, (this.options.title ? titleAscent + 8 : 6)
+            + (this.warning ? titleAscent + 2 : 0) + lines.length * (metrics.ascent + 2) - 2)
         const popup = this.popup = uiNode({
             name: 'Tooltip', parent, active: false, anchor: { x: 0, y: 1 }, size: { width, height }, graphics: true,
         })
@@ -137,12 +146,56 @@ export class UITooltip extends Component {
             name: 'Text', parent: popup.node, anchor: { x: 0, y: 1 }, position: { x: 5, y: -1 },
             size: { width: textWidth, height: Math.max(0, height - 2) }, mask: Mask.Type.GRAPHICS_RECT,
         }).node
-        const drawLabel = (value: string, y: number, color: Color) => {
-            const label = this.ui.label(text, { text: value, y, font, width: textWidth, align: 'center', color })
-            label.renderer.lineSpacing = metrics.ascent + 2
-            label.renderer.forceRebuild()
+        const drawLabel = (value: string, y: number, color: Color, labelFont: UIFont = font) => {
+            const lineWidth = FontMetricsUtil.measureTextWidth(this.ui.assets.fonts[labelFont].config, value)
+            // Lines are already split by ToolTipWidget's rules; do not wrap them again in FontRenderer.
+            this.ui.label(text, { text: value, x: Math.trunc((width - lineWidth) / 2) - 5, y, font: labelFont, color })
         }
-        if (this.warning) drawLabel(this.warning, 0, new Color(255, 0, 0))
-        drawLabel(this.options.text, warningLines * (metrics.ascent + 2), Color.BLACK)
+        let y = 0
+        if (this.options.title) {
+            drawLabel(this.options.title, y, Color.BLACK, 'tooltipTitle')
+            y += titleAscent + 2
+        }
+        if (this.warning) {
+            drawLabel(this.warning, y, new Color(255, 0, 0))
+            y += metrics.ascent + 2
+        }
+        for (const line of lines) {
+            drawLabel(line, y, Color.BLACK)
+            y += metrics.ascent + 2
+        }
     }
+}
+
+/** Original tooltip wrapping breaks at the first separator at/after the target width. */
+function wrapTooltipText(text: string, measure: (text: string) => number, maxWidth: number): string[] {
+    const chars = Array.from(text.replace(/\r/g, ''))
+    const lines: string[] = []
+    let start = 0, width = 0
+    for (let i = 0; i < chars.length; i++) {
+        const char = chars[i]
+        if (char === '\n') {
+            lines.push(chars.slice(start, i).join(''))
+            start = i + 1
+            width = 0
+            continue
+        }
+        width += measure(char)
+        const space = char === ' '
+        const canBreak = space || (isAutoBreakChar(char) && i > start
+            && !'〉》」』】〕〗〙〛）］｝’”、。，．！？：；'.includes(char)
+            && !'〈《「『【〔〖〘〚（［｛‘‚‛“'.includes(chars[i - 1]))
+        if (width < maxWidth || !canBreak) continue
+        lines.push(chars.slice(start, i).join(''))
+        start = space ? i + 1 : i
+        while (chars[start] === ' ') start++
+        i = start - 1
+        width = 0
+    }
+    if (start < chars.length) lines.push(chars.slice(start).join(''))
+    return lines
+}
+
+function isAutoBreakChar(char: string): boolean {
+    return /[\u2018-\u201d\u2600-\u27bf\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\ufe30-\ufe4f\uff01-\uff60\u{1f300}-\u{1faff}\u{20000}-\u{2fa1f}]/u.test(char)
 }

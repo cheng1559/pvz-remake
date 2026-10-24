@@ -1,5 +1,6 @@
 import type { GameSystem, World } from '@/ecs/index'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import type { GameplayDefinitions, LevelDefinition } from '@/shared/content/gameplay'
+import type { DeterministicRng } from './DeterministicRng'
 import { LevelStateResource, RandomResource, ZombieComponent } from './components'
 import { pickZombieSpawnX, spawnZombie } from './zombies/spawn'
 import { WaveResource, type WaveState } from './levelState'
@@ -10,6 +11,24 @@ const NEXT_WAVE_DELAY_TICKS = 2500
 const NEXT_WAVE_DELAY_RANGE_TICKS = 600
 const EARLY_WAVE_CHECK_TICKS = 400
 const EARLY_WAVE_DELAY_TICKS = 200
+
+/** Board::PickZombieWaves: reserve fixed spawns, then spend remaining points by weight. */
+export function planWaves(level: LevelDefinition, random: DeterministicRng): string[][] {
+    return level.waves.map(wave => {
+        const zombies = [...wave.zombies]
+        if (wave.points === undefined) return zombies
+        const pool = level.zombiePool!
+        let remaining = wave.points - zombies.reduce((sum, id) => sum + pool.find(entry => entry.id === id)!.points, 0)
+        while (remaining > 0) {
+            const choices = pool.filter(entry => entry.weight > 0 && entry.points <= remaining)
+            let roll = random.integer(0, choices.reduce((sum, entry) => sum + entry.weight, 0) - 1)
+            const picked = choices.find(entry => (roll -= entry.weight) < 0)!
+            zombies.push(picked.id)
+            remaining -= picked.points
+        }
+        return zombies
+    })
+}
 
 export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
     return {
@@ -52,7 +71,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
             if (tick < waves.nextWaveAtTick) return
 
             const wave = level.definition.waves[waves.index]
-            const zombieIds = wave.zombies.map(typeId => {
+            const zombieIds = (waves.zombiesByWave?.[waves.index] ?? wave.zombies).map(typeId => {
                 const random = world.resources.get(RandomResource)
                 const rows = level.definition.activeRows
                 const row = rows.length === 1 ? rows[0] : pickWaveRow(world, waves)

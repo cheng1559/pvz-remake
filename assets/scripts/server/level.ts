@@ -6,6 +6,8 @@ import { updateSkySun } from './sun'
 import { getAvailableSun } from './items'
 import { getActiveTutorial, TUTORIALS } from './tutorials'
 import { EventQueueResource, emitServerEvent } from './events'
+import { planWaves } from './waves'
+import { selectedSeedId } from './seedBank'
 
 export function initializeLevel(world: World, firstAdventure: boolean): void {
     const level = world.resources.get(LevelStateResource).definition
@@ -18,7 +20,8 @@ export function initializeLevel(world: World, firstAdventure: boolean): void {
     })
     world.resources.set(WaveResource, {
         index: 0,
-        nextWaveAtTick: blocked ? undefined : 1,
+        nextWaveAtTick: blocked ? undefined : level.firstWaveTicks ?? 1,
+        ...(level.zombiePool ? { zombiesByWave: planWaves(level, world.resources.get(RandomResource)) } : {}),
         ...(level.activeRows.length > 1 ? {
             rowPicks: level.activeRows.map(row => ({ row, lastPicked: 0, secondLastPicked: 0 })),
         } : {}),
@@ -40,7 +43,7 @@ export function createLevelProgressSystem(definitions: GameplayDefinitions): Gam
                 for (const packet of bank.packets) {
                     const initialReady = tick === 1 && packet.readyAtTick <= tick
                     const cooldownFinished = packet.readyAtTick === tick
-                    if ((initialReady || cooldownFinished) && bank.selectedSeedId !== packet.seedId &&
+                    if ((initialReady || cooldownFinished) && selectedSeedId(bank) !== packet.seedId &&
                         getAvailableSun(world, definitions) >= definitions.seeds[packet.seedId].sunCost) {
                         if (initialReady) emitServerEvent(world.resources.get(EventQueueResource), 'seedPacketFlashRequested', { seedId: packet.seedId })
                         if (cooldownFinished) script?.seedReady?.(world, tick, packet.seedId)

@@ -31,6 +31,7 @@ export class ModManager {
     /** Failures in this session; installed archives and saved enable states stay intact. */
     readonly failures = new Map<string, string>()
     private readonly loaded = new Map<string, InstalledMod>()
+    private readonly reinstalled = new Set<string>()
     private initialization?: Promise<InstalledMod[]>
 
     ready(): Promise<InstalledMod[]> {
@@ -62,13 +63,15 @@ export class ModManager {
         await saveInstalledArchive('mods', mod.manifest.id, archive, mod.files)
         if (enable) this.saveEnabled(ids)
         this.loaded.delete(mod.manifest.id)
+        this.reinstalled.add(mod.manifest.id)
         return mod.manifest.id
     }
 
     /** Installed Mods; a damaged archive is still listed so it can be uninstalled. */
     async installed(): Promise<{ id: string, version?: string, error?: string }[]> {
         const ids = await listInstalledArchives('mods')
-        return Promise.all(ids.map(async id => ({ id, ...(this.failures.has(id) ? { error: this.failures.get(id) } : {}),
+        // Session failures describe the old running code, not a ZIP imported for the next restart.
+        return Promise.all(ids.map(async id => ({ id, ...(this.failures.has(id) && !this.reinstalled.has(id) ? { error: this.failures.get(id) } : {}),
             version: await this.read(id).then(mod => mod.manifest.version, () => undefined) })))
     }
 

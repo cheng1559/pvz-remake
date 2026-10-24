@@ -3,8 +3,8 @@ import { Node, tween } from 'cc'
 import { startGameTween } from '@/core/GameTween'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
-import type { ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
-import type { BoardPresentation } from './boards/DayBoard'
+import type { SeedAvailability, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
+import type { BoardPresentation } from '@/shared/content/presentation'
 import type { LevelAudioSnapshot } from './LevelPresentationSnapshot'
 
 export class LevelAudioPresenter {
@@ -63,9 +63,9 @@ export class LevelAudioPresenter {
         this.ownsMusic = false
     }
 
-    seedPacketSelected(cooldownRemaining: number, canAfford: boolean): void {
-        if (cooldownRemaining > 0) void SoundLoader.play(SoundEffect.Buzzer)
-        else if (canAfford) void SoundLoader.play(SoundEffect.SeedLift)
+    seedPacketSelected(availability: SeedAvailability): void {
+        if (!availability.reason) void SoundLoader.play(SoundEffect.SeedLift)
+        else if (availability.reason !== 'not-enough-sun') void SoundLoader.play(SoundEffect.Buzzer)
     }
 
     plantingCancelled(): void {
@@ -74,6 +74,11 @@ export class LevelAudioPresenter {
 
     sodRollStarted(): void {
         void SoundLoader.play(SoundEffect.DiggerZombie)
+    }
+
+    readySetPlant(): void {
+        void SoundLoader.play(SoundEffect.ReadySetPlant)
+        MusicSystem.fadeOut(150)
     }
 
     lightFill(): void {
@@ -97,8 +102,16 @@ export class LevelAudioPresenter {
 
     play(event: ServerEvent): void {
         switch (event.type) {
+            case 'toolSelected': void SoundLoader.playFoley(SoundEffect.Shovel); break
+            case 'plantShoveled': void SoundLoader.play(SoundEffect.Plant2); break
+            case 'toolMissed': void SoundLoader.play(SoundEffect.Drop); break
+            case 'bowlingImpact':
+                void SoundLoader.playFoley(SoundEffect.BowlingImpact, -3)
+                if (event.data.helm) this.sounds(this.definitions.zombies[String(event.data.typeId)]?.helm?.bowlingImpactSounds)
+                break
             case 'plantPlaced':
                 void SoundLoader.playFoley(SoundEffect.Plant)
+                if (event.data.bowling) void SoundLoader.play(SoundEffect.Bowling)
                 this.sounds(this.definitions.plants[String(event.data.typeId)]?.plantedSounds)
                 break
             case 'musicBurst': MusicSystem.startBurst(); break

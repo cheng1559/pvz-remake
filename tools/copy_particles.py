@@ -61,7 +61,7 @@ def main():
     parser.add_argument(
         "--dst",
         type=Path,
-        default=Path("./assets/resources/textures/particles"),
+        default=Path("./tools/generated/resources/textures/particles"),
         help="Destination under the Cocos resources texture directory.",
     )
     parser.add_argument("--overwrite", action="store_true", help="Replace existing copied files.")

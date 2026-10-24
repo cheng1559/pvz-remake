@@ -1,4 +1,18 @@
 {
+  "conveyor": {
+    "x": 10, "backdropX": 83, "clipX": 90, "width": 501, "height": 87,
+    "packetX": 1, "packetY": 8, "beltY": 63, "beltWidth": 502, "beltHeight": 16, "frames": 6, "frameTicks": 4,
+    "introStart": 600, "introDuration": 25, "stripeOffset": [-12, -3], "stripeDialogs": []
+  },
+  "shovel": {"x": 609, "imageOffset": [-7, -3], "cursorOffset": [-15, 65], "arrowOffset": [-25, 65]},
+  "dave": {
+    "clips": {"enter": "pvz:dave_enter", "leave": "pvz:dave_leave", "idle": "pvz:dave_idle", "smalltalk": "pvz:dave_smalltalk", "mediumtalk": "pvz:dave_mediumtalk", "blahblah": "pvz:dave_blahblah", "crazy": "pvz:dave_crazy", "idle_handing": "pvz:dave_idle_handing", "talk_handing": "pvz:dave_talk_handing", "blink": "pvz:dave_blink"},
+    "sourceFps": 24, "transitionFps": 24, "talkFps": 12, "blinkFps": 15,
+    "idleBlend": 0.2, "talkBlend": 0.5, "delay": 2, "blinkSeconds": [4, 8], "talkLengths": [23, 52],
+    "bubble": {"sprite": "pvz:store_speechbubble2", "x": 285, "y": 20, "textX": 25, "textY": 6, "textWidth": 233, "textHeight": 144, "continueX": 139, "continueY": 140, "shake": 2},
+    "hand": {"reanim": "pvz:wallnut", "x": 100, "y": -393, "scale": 1.2, "track": "Dave_handinghand"},
+    "mouths": {"MOUTH_BIG_SMILE": "pvz:crazydave_mouth1", "MOUTH_SMALL_SMILE": "pvz:crazydave_mouth5", "MOUTH_SMALL_OH": "pvz:crazydave_mouth6"}
+  },
   "animation": {
     "rates": {
       "plantIdle": [
@@ -109,6 +123,7 @@
   },
   "projectiles": {},
   "seedPackets": {
+    "flash": {"id": "pvz:seedpacketflash", "duration": 0.26},
     "defaultPlacement": {
       "scale": 0.5,
       "offsetX": 5,

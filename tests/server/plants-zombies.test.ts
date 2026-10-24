@@ -66,6 +66,20 @@ function game(config = definitions) {
     return { world, run, plant, zombie, events }
 }
 
+test('projectile cleanup follows the current board bounds instead of a fixed screen width', () => {
+    const { world, run } = game()
+    const level = world.resources.get(LevelStateResource)
+    level.board = { ...level.board, bounds: { left: 0, right: 1000 } }
+    const id = world.createEntity()
+    world.add(id, PositionComponent, { x: 900, y: 280, row: 2 })
+    world.add(id, ProjectileComponent, { typeId: 'pvz:pea', sourcePlantId: 0 })
+    run()
+    assert.equal(world.hasEntity(id), true)
+    level.board = { ...level.board, bounds: { left: 0, right: 850 } }
+    run()
+    assert.equal(world.hasEntity(id), false)
+})
+
 test('a cherry bomb burns every zombie in its 3x3 area after the fuse, ignoring helms, while zombies cannot hurt it', () => {
     const { world, run, plant, zombie, events } = game()
     const bomb = plant('pvz:cherrybomb', 2, 4)

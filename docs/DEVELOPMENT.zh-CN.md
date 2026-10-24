@@ -1,5 +1,11 @@
 # 开发说明
 
+冒险 1-5 使用 `ShovelTutorial` 保存戴夫两段对话和三株豌豆射手的铲除进度，客户端 `CrazyDaveView` 只播放动画、显示原版文案并发出交互指令。教程结束后进入 8 波坚果保龄球，传送带按 85:15 提供普通／爆炸保龄球，通关奖励为土豆雷。
+
+`pvz:bowling-wallnut`、`pvz:bowling-explodenut` 是独立植物和种子定义，配置放在 gameplay／presentation JSON。服务端通过现有 `PlantBehaviorRegistry` 注册 `bowling` 行为，状态存入 `behaviorState`；客户端通过 `PlantViewRegistry` 注册 `BowlingNutView`。只复用坚果的美术资源，普通坚果不参与保龄球判断。`occupiesCell: false` 声明移动植物不占格、不作为啃食目标；`rowOrder` 控制行内表现顺序。
+
+关卡设置 `seedBankSlots` 时，`seedPackets` 表示可选种子池；未设置则保持固定种子栏。`server/seedChooser.ts` 校验选择、移除和确认，顺序与初始冷却随服务端存档保存。`LevelSeedChooser` 读取初始快照并提交 `chooseSeed`／`confirmSeeds` 命令，只负责卡片飞行、补位、面板和提示；演出与全局时钟一致。测试入口为 `/level pvz:seed-chooser-test`，不改变正式关卡的选卡规则。
+
 图鉴首页和详情已接入全部 49 种植物、26 种僵尸的 Reanim 展示动画，包含独立头部、眨眼、旗帜、装备及僵尸博士驾驶员；左侧缩略图沿用原版静态展示。`AlmanacEntityView` 只负责动画播放和裁剪，不创建后端实体，不实现攻击、产出、移动或受伤逻辑。全部动画使用全局时钟。资源配置由 `python tools/build_pvz_base.py --almanac-only --raw-root <raw目录>` 生成，完整构建也会包含这些资源。
 
 主场景挂载 `app/GameApp.ts`，协调菜单页面，并通过 `app/LevelController.ts` 启动 `LocalIntegratedGame`。战斗逻辑在 `server` 中运行，客户端处理协议快照和事件。`server`、`shared`、`ecs` 不应引入引擎依赖。
@@ -12,7 +18,7 @@
 
 当前仅接通冒险 1-1。Debug 和 Release 构建均可按 `/` 打开调试 CLI；移动模式双击右下角打开，命令见 [Debug CLI](DEBUG_CLI.zh-CN.md)。主菜单已使用原版图片按钮和 Reanim 入场动画，Options 已接通设置与游戏内操作，图鉴和商店已接入内容与交互；后续关卡及其他模式玩法尚未实现。迁移行为时可参考工作区的 `pvz-remake` 仓库。
 
-`StartupScreen` 自动播放 PopCap Logo 的 200 tick 淡入停留淡出，再进入标题／加载页：标题下落、草皮卷展开，在原版五个进度点播放新版 `ReanimPlayer` 小花／僵尸头动画和音效。计时使用全局时钟的 100Hz 游戏 tick。进度来自主菜单图片和动画的实际准备，预加载的主菜单保持隐藏，点击进入时复用并开始入场。资源全部就绪后，加载条内按按钮规则响应左右键，背景按下、触摸或任意键也可进入；返回标题页不重播 PopCap Logo。新增动画可用 `python tools/build_pvz_base.py --startup-only --raw-root <raw目录>` 单独生成，沿用原 Bundle 的存档兼容哈希。
+`StartupScreen` 自动播放 PopCap Logo 的 200 tick 淡入停留淡出，再进入标题／加载页：标题下落、草皮卷展开，在原版五个进度点播放新版 `ReanimPlayer` 小花／僵尸头动画和音效。计时使用全局时钟的 100Hz 游戏 tick。进度来自主菜单图片和动画的实际准备，预加载的主菜单保持隐藏，点击进入时复用并开始入场。资源全部就绪后，加载条内按按钮规则响应左右键，背景按下、触摸或任意键也可进入；返回标题页不重播 PopCap Logo。新增动画可用 `python tools/build_pvz_base.py --startup-only --raw-root <raw目录>` 单独生成，再重新打包内置 ZIP。
 
 Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览复用 `EntityDisplay` 的内容注册表；`ReanimRepository` 按注册表共享动画数据与贴图，失败后可重试。资源已在引擎缓存时直接读取，图鉴页面等待头像与详情的首帧就绪后再显示。动画节点仍随页面创建和销毁，不常驻整套图鉴。
 
@@ -36,7 +42,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 植物和僵尸的数值都在 `tools/content/pvz-base/gameplay/definitions.json`，与 PvZ-Portable 和上一版一致。植物最多带一种能力：`shooter`（射手）、`producer`（向日葵）、`fuse`（樱桃炸弹，100 tick 后 3x3 烧焦）、`mine`（土豆雷，1500 tick 出土、106 tick 升起，炸 1800 且不留尸体）、`chomper`（大嘴花，70 tick 咬合、吞下后消化 4000 tick），没有能力的植物只阻挡（坚果墙）；`deathExplosion` 让爆炸坚果被吃掉时爆炸。`server/plants/abilities.ts` 的 `pvz:plant-abilities` 系统按 `Plant.ability` 状态推进，客户端 `client/plants` 下的视图按该状态切换动画，并负责眨眼、裂纹和土豆雷红灯。
 
-僵尸的 `helm` 先吸收伤害（路障 370、铁桶 1100），耗尽时发出 `zombieHelmDropped`；`gait` 引用共用步态表，提供走路地面轨迹、啃食与死亡帧数；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `python3 tools/build_pvz_base.py --plants-zombies-only --raw-root <raw目录>` 合并进现有 Bundle，并同步玩法数据。
+僵尸的 `helm` 先吸收伤害（路障 370、铁桶 1100），耗尽时发出 `zombieHelmDropped`；`gait` 引用共用步态表，提供走路地面轨迹、啃食与死亡帧数；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `python3 tools/build_pvz_base.py --plants-zombies-only --raw-root <raw目录>` 合并进现有转换输出，同步玩法数据并重新打包内置 ZIP。
 
 ## 服务端关卡结构
 
@@ -52,7 +58,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 `LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`tools/content/pvz-base/presentation/definitions.json` 集中维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，打包生成内容包内的 `presentation/definitions.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前仍只安装了 1-1 内容。
 
-客户端存档统一写入 `level` 字段，读取时兼容原 `adventure11` 字段；开场专属的状态校验放在各自的实现中。保留已有 `pvz:adventure11` 预制体资源 ID 和脚本 UUID，避免影响已有内容包和存档的资源解析。`client/showcase` 仅保留独立资源预览探针。
+客户端存档统一写入 `level` 字段，读取时兼容原 `adventure11` 字段；开场专属的状态校验放在各自的实现中。共用关卡布局为 `assets/resources/ui/level.prefab`，资源 ID 为 `pvz:level`，保留原 Prefab 和脚本 UUID。`client/showcase` 仅保留独立资源预览探针。
 
 ## UI 组件
 
@@ -121,7 +127,7 @@ Options 保留旧版位置和操作：音量实时保存（音效上限为 0.65�
 
 ## 资源
 
-新版资源 Bundle 位于 `assets/bundles/pvz-base`。菜单和展示层还复用 `assets/resources` 中的背景、控件、位图字体、音频、粒子定义和粒子图片，运行时需要保留这些资源。
+转换中间产物位于 `tools/generated/pvz-base` 和 `tools/generated/resources`，运行时只加载生成的 `assets/resources/base.zip`。基础包与外部资源包使用相同的 `pack.json` 和资源解码缓存；仅引导场景、布局 Prefab 和编译 shader 保留在 Cocos 资源中。
 
 将自己游戏副本的 `main.pak` 放到 `tools/main.pak`，在项目根目录执行：
 
@@ -129,11 +135,11 @@ Options 保留旧版位置和操作：音量实时保存（音效上限为 0.65�
 python3 tools/process_pak.py
 ```
 
-现有管线会准备共用资源并构建 Bundle，需要 Python 3.10+、Pillow、ffmpeg 和音乐转换器使用的 libopenmpt 后端。若原始文件和共用资源已经准备好，仅重建 Bundle 可执行 `npm run build:content`。
+现有管线会准备共用资源并生成基础 ZIP，需要 Python 3.10+、Pillow、ffmpeg 和音乐转换器使用的 libopenmpt 后端。`npm run build:content` 运行转换并打包；`npm run build:base-pack` 直接使用已有转换产物和当前配置源文件重新打包，不重复转换动画。
 
-只调整主菜单动画时，可执行 `python tools/build_pvz_base.py --main-menu-only`，复用现有转换器更新 13 个菜单片段和引用贴图，保留 Bundle 中其他资源。
+只调整主菜单动画时，可执行 `python tools/build_pvz_base.py --main-menu-only`，复用现有转换器更新 13 个菜单片段和引用贴图，保留其他转换输出，再重新打包内置 ZIP。
 
-存档继续检查基础内容 ID、版本和玩法 Mod。`manifest.saveCompatibleHashes` 可声明同版本、仅展示资源变化的旧包哈希；读取成功后，下次保存会写入当前哈希。菜单单独构建会先校验原 Bundle 完整性，并在实际发生变化时保留旧哈希的兼容声明；完整重建默认不继承这些声明。
+存档继续检查基础内容 ID、版本、哈希和玩法 Mod。ZIP 中的普通 JSON 条目 `pvz:content` 提供内容索引，哈希覆盖默认文件和资源映射；外部表现覆盖不会修改服务端玩法 JSON。
 
 ## 检查与构建
 
@@ -145,7 +151,7 @@ npm run build:web:debug
 
 对改动涉及的关键逻辑优先复用已有测试。除非需要验证实际画面或交互，避免使用浏览器自动化。Windows 和 Android 构建命令仍然保留；Web 验证不代表已通过原生编译或真机检查。
 
-Debug 构建保留 `pvzPhase2`、`pvzPhase4` 调试入口；Mod 开发和安装见 [Mod 说明](MODS.md)。
+Debug 构建保留 `pvzPhase4` 关卡调试入口；Mod 开发和安装见 [Mod 说明](MODS.md)。
 
 ### 植物与僵尸的客户端表现
 
@@ -161,5 +167,15 @@ Debug 构建保留 `pvzPhase2`、`pvzPhase4` 调试入口；Mod 开发和安装�
 僵尸通过 `gait` 引用玩法定义中的 `zombieGaits`，`tongueChance` 和 `walk2Chance` 独立声明动画变体；不能从是否配置步态推断其他能力。植物能力的 `targeting` 声明范围、持杆目标过滤和交互修正键，僵尸的 `targetingInsets` 提供对应修正；撑杆落地后的攻击框使用 `vault.landedAttack`。客户端土豆雷的距离计算直接读取玩法攻击框和僵尸身体框。
 
 表现定义中的 `projectiles`、僵尸 `helm`/`drops` 声明图片、轨道、特效、偏移和音效；音效的 `pitchRange` 是音高随机范围。`seedPackets` 保存图集格子和布局，`almanac` 保存绳索和浮动动画参数。新增同类内容应补定义，通用渲染器不按具体 ID 或数字编号分支。工厂按视图类型分派、专属技能状态机和单位换算常量仍保留在代码中。
+
+普通与传送带种子包共用 `LevelSeedBank` 的视图、按钮、tooltip，以及 `LevelInputPresenter` 的鼠标、触摸和快捷键流程。选卡以当前槽位索引读取状态：普通卡发送 `selectSeed`，传送带卡发送 `selectConveyorPacket`，后者保留每张卡的独立 ID。`LevelBoardHud` 负责可选工具、戴夫和传送带布局，不另做种子包命中检测。
+
+种子包快照的 `availability` 由服务端 `seedAvailability` 计算，携带拒绝原因与 `warningKey`，普通卡与传送带选卡命令会调用同一方法重新验证。客户端直接读取结果显示置灰、tooltip、cursor 和选卡音效；Mod 扩展这一个计算方法即可，额外拒绝提示通过 `rejectSeed` 发出，状态查询不产生音效或 advice。Corn 不再挂钩客户端选卡和置灰逻辑。
+
+铲子也使用 `UIButton` 和同一触摸流程：按下拿起，拖动瞄准，松手执行，拖回来源按钮取消。教程阶段允许此流程；暂停会结束手势。服务端 `SeedBankState.selection` 只有未选择、普通卡、传送带卡、工具四种互斥状态；传送带只保存卡片 ID，通过 `server/seedBank.selectedSeedId` 查询其种子。存档使用同一结构，旧并列字段格式直接判为不兼容。
+
+关卡玩法配置中，`tools` 声明可用工具；`conveyor` 声明容量、间距、移动周期、供卡权重和分档生成间隔；`bowling` 只声明种植线；`shovelTutorial` 声明初始植物与首次、重玩、铲除后的对话序列。教程的 `blocksIntro` 阻止入场结束，`blocksStart` 阻止出怪，二者独立。表现配置 `conveyor`、`shovel`、`dave` 保存布局、动画资源、速率和对话表现参数。
+
+玩法 `boards.*.bounds` 决定场地水平边界，僵尸 `dropsFlag` 决定掉旗能力；表现 `boards` 保存背景、音乐和失败场景坐标。粒子的可选剩余时长随快照保存，种子闪光读取 `seedPackets.flash`，恢复不再按特效 ID 分支。商店数据位于 `tools/content/pvz-base/gameplay/store.json`，价格档位、购买条件、库存规则和购买结果均由服务端目录实例执行；应用只负责加载 JSON 并注入后端。
 
 Mod 入口统一为 `register({ host, assets })`，通过 `host.get()` 访问真实宿主模块与注册表，`host.around()`／`host.replace()` 包装实际方法。不再提供系统、页面、动画的专用增强接口。额外 ECS 组件经 `GameplayRegistry.components` 登记后参与世界快照和存档。示例见 [玉米投手 Mod](../mods/corn/README.md) 和 [Mod 文档](MODS.md)。

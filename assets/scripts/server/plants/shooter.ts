@@ -1,4 +1,4 @@
-import { DAY_BOARD_RIGHT } from '../collision'
+import { getBoardBounds } from '../collision'
 import { EventQueueResource, emitServerEvent } from '../events'
 import type { GameSystem, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
@@ -29,7 +29,6 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
 
                 if (attack.fireAtTick !== undefined) {
                     if (tick < attack.fireAtTick) continue
-                    const projectileDefinition = definitions.projectiles[shooter.projectile]
                     const projectile = commands.createEntity()
                     commands.add(projectile, PositionComponent, {
                         x: position.x + shooter.offset.x,
@@ -85,7 +84,7 @@ function hasTargetAhead(
         const zombie = world.get(entity, ZombieComponent)!
         if (!isTargetableZombie(zombie) || position.row !== plantPosition.row) continue
         const body = definitions.zombies[zombie.typeId].body
-        if (position.x + body.x >= DAY_BOARD_RIGHT) continue
+        if (position.x + body.x >= getBoardBounds(world).right) continue
         if (position.x + body.x + body.width >= attackX) return true
     }
     return false

@@ -4,6 +4,7 @@ import test from 'node:test'
 import { MenuApi } from '@/client/api/MenuApi'
 import { createLocalMenuTransport } from '@/app/LocalMenuApi'
 import { createProfileStore } from '@/server/menu/ProfileStore'
+import { createStoreCatalog } from '@/server/menu/StoreCatalog'
 import { SFX_VOLUME_SCALE, type MenuStorage } from '@/shared/menu'
 import type { GameplayLevels, LevelDefinition } from '@/shared/content/gameplay'
 
@@ -17,9 +18,35 @@ function fixture(getLevel?: () => LevelDefinition | null, canCompleteLevel?: () 
         get length() { return data.size },
     }
     const profiles = createProfileStore(storage)
-    const api = new MenuApi(createLocalMenuTransport(storage, getLevel, canCompleteLevel))
+    const catalog = createStoreCatalog(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/store.json', 'utf8')))
+    const api = new MenuApi(createLocalMenuTransport(storage, getLevel, canCompleteLevel, catalog))
     return { data, storage, profiles, api }
 }
+
+test('shop rules, tiers and purchase effects follow JSON after changing the item ID', async () => {
+    const definition = JSON.parse(readFileSync('tools/content/pvz-base/gameplay/store.json', 'utf8'))
+    const upgrade = definition.pages[0].items[0]
+    upgrade.id = 39
+    upgrade.prices[0] = 123
+    upgrade.messages[0] = 9000
+    upgrade.seedSlots[0] = 8
+    const { storage, profiles } = fixture()
+    const profile = profiles.createProfile('Alice')!
+    profile.coins = 10000
+    profiles.saveProfile(profile)
+    const api = new MenuApi(createLocalMenuTransport(storage, undefined, undefined, createStoreCatalog(definition)))
+    const item = (await api.getStore()).pages[0].items.find(item => item.id === 39)!
+    assert.equal(item.cost, 123)
+    assert.equal(item.message, 9000)
+    assert.equal(item.seedSlots, 8)
+    const result = await api.purchase(profile.id, 39, 123)
+    assert.equal(result.ok, true)
+    if (!result.ok) return
+    assert.equal(result.effect, 'seedSlots')
+    assert.equal(result.seedSlots, 8)
+    assert.equal(profiles.getCurrentProfile()!.purchases[39], 1)
+    assert.equal(result.store.coins, 9877)
+})
 
 test('user APIs validate names on the backend, preserve IDs and old saves, and isolate deletion', async () => {
     const { api, data, storage } = fixture()
@@ -130,7 +157,7 @@ test('achievement entries preserve saved flag/icon order and expose only the act
     assert.equal(view.items[1].titleKey, 'ACHIEVEMENT_NOBEL_PEAS_PRIZE_TITLE')
     assert.equal(view.items[4].titleKey, 'ACHIEVEMENT_SPUDOW_TITLE')
     assert.deepEqual(view.items.filter(item => item.earned).map(item => item.id), [0, 4])
-    const strings = JSON.parse(readFileSync('assets/resources/properties/lawnstrings.json', 'utf8'))
+    const strings = JSON.parse(readFileSync('tools/generated/resources/properties/lawnstrings.json', 'utf8'))
     for (const [index, item] of view.items.entries()) {
         assert.equal(item.icon, index)
         assert.ok(strings[item.titleKey])
@@ -148,6 +175,7 @@ test('award API resolves the loaded level reward and packet cost instead of choo
     const { api } = fixture(() => level)
     const award = await api.getAward()
     assert.deepEqual(award, {
+        kind: 'seed', titleKey: 'NEW_PLANT',
         nextLevelId: 'pvz:adventure-1-2', showMainMenu: false,
         seed: 1, cost: 50, name: 'Sunflower', nameKey: 'SUNFLOWER', descriptionKey: 'SUNFLOWER_TOOLTIP',
     })
@@ -155,6 +183,7 @@ test('award API resolves the loaded level reward and packet cost instead of choo
     assert.equal((await api.getAward()).seed, 1, 'the returned view cannot change the reward')
     level = { ...level, award: { kind: 'seed', id: 'pvz:torchwood', packetCost: 175 } }
     assert.deepEqual(await api.getAward(), {
+        kind: 'seed', titleKey: 'NEW_PLANT',
         nextLevelId: 'pvz:adventure-1-2', showMainMenu: false,
         seed: 22, cost: 175, name: 'Torchwood', nameKey: 'TORCHWOOD', descriptionKey: 'TORCHWOOD_TOOLTIP',
     })
@@ -180,8 +209,18 @@ test('winning advances the current profile once and exposes the next installed l
     const award = await api.completeLevel()
     assert.equal(award.seed, 2)
     assert.equal(award.nameKey, 'CHERRY_BOMB')
-    assert.equal(award.nextLevelId, null, 'unimplemented levels cannot be started by the award button')
+    assert.equal(award.nextLevelId, 'pvz:adventure-1-3')
     assert.equal((await api.getCurrentUser())!.adventureLevel, 3)
+    level = levels.levels['pvz:adventure-1-3']
+    const nut = await api.completeLevel()
+    assert.equal(nut.kind, 'seed')
+    assert.equal(nut.seed, 3)
+    assert.equal(nut.nextLevelId, 'pvz:adventure-1-4')
+    level = levels.levels['pvz:adventure-1-4']
+    const shovel = await api.completeLevel()
+    assert.deepEqual(shovel, { kind: 'tool', id: 'pvz:shovel', titleKey: 'GOT_SHOVEL', nameKey: 'SHOVEL',
+        descriptionKey: 'SHOVEL_DESCRIPTION', nextLevelId: null, showMainMenu: true })
+    assert.equal((await api.getCurrentUser())!.adventureLevel, 5)
 })
 
 test('menu data and business rules stay behind the API without Cocos or frontend imports', () => {

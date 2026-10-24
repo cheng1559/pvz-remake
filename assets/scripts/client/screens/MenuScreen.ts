@@ -160,7 +160,7 @@ export class MenuScreen extends Component {
             const controls = uiNode({
                 name: 'Controls', parent: root.node, position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 },
             }).node
-            if (page.heading) {
+            if (page.heading && id !== 'award') {
                 const { key, font, y, color } = page.heading
                 ui.label(controls, {
                     text: ui.text(key, page.title), font, x: 400, y, color: new Color(...color),

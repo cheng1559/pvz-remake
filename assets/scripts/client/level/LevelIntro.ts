@@ -3,7 +3,8 @@ import type { LevelIntroSnapshot, LevelParticleOwnerSnapshot } from './LevelPres
 
 export interface LevelIntro {
     readonly complete: boolean
-    update(dt: number): boolean
+    readonly elapsedTicks: number
+    update(dt: number, stopAtTick?: number): boolean
     sync(): void
     snapshot(): LevelIntroSnapshot
     restore(snapshot: LevelIntroSnapshot): Promise<void>

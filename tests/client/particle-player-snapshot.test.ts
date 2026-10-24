@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
+import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import * as particle from '@/shared/content/particle'
+import * as snapshotParser from '@/client/particle/ParticlePlayerSnapshot'
 
 import {
     parseParticlePlayerSnapshot,
@@ -16,6 +20,7 @@ function snapshot(): any {
         playing: true,
         visible: true,
         accumulatorSeconds: 0.005,
+        remainingSeconds: 0.135,
     }
 }
 
@@ -23,6 +28,37 @@ test('Particle player snapshot round-trips strict playback state', () => {
     const value = snapshot()
     const parsed = parseParticlePlayerSnapshot(JSON.parse(JSON.stringify(value)))
     assert.deepEqual(validateParticlePlayerSnapshotContent(parsed, data), value)
+})
+
+test('a custom particle preserves its configured remaining lifetime through restore and zero speed', () => {
+    const exports: any = {}
+    const code = transpileModule(readFileSync('assets/scripts/client/particle/ParticlePlayer.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
+    })
+    const modules: Record<string, unknown> = {
+        cc: { Component: class {}, _decorator: { ccclass: () => (type: unknown) => type } },
+        '@/shared/content/particle': particle,
+        './ParticlePlayerSnapshot': snapshotParser,
+    }
+    new Function('exports', 'require', code.outputText)(exports, (id: string) => modules[id] ?? {})
+    let destroyed = 0
+    const player = () => {
+        const result = new exports.ParticlePlayer()
+        result.node = { destroy() { destroyed++ } }
+        result.data = { id: 'test:custom', durationSeconds: 2, emitters: [] }
+        result.play(7, 0.3)
+        return result
+    }
+    const original = player()
+    original.advance(0.12)
+    const restored = player()
+    restored.restore(JSON.parse(JSON.stringify(original.snapshot())))
+    restored.advance(0)
+    assert.equal(restored.snapshot().remainingSeconds, 0.18)
+    restored.advance(0.17)
+    assert.equal(destroyed, 0)
+    restored.advance(0.02)
+    assert.equal(destroyed, 1)
 })
 
 test('Particle player snapshot rejects malformed state', () => {
@@ -44,6 +80,8 @@ test('Particle player snapshot rejects malformed state', () => {
     assert.throws(invalid(value => { value.playing = 1 }), /must be boolean/)
     assert.throws(invalid(value => { value.visible = null }), /must be boolean/)
     assert.throws(invalid(value => { value.accumulatorSeconds = 0.01 }), /within one tick/)
+    assert.throws(invalid(value => { value.remainingSeconds = -1 }), /must be non-negative/)
+    assert.throws(invalid(value => { value.remainingSeconds = Infinity }), /must be finite/)
     assert.throws(invalidContent(value => { value.id = 'pvz:other' }), /ID mismatch/)
     assert.throws(invalidContent(value => { value.ageTicks = 21 }), /exceeds effect duration/)
 })

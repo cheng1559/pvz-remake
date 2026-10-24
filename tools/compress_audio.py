@@ -49,7 +49,7 @@ def compress_audio(root: Path, backup: Path, ffmpeg: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--src", type=Path, default=Path("assets/resources/audio"))
+    parser.add_argument("--src", type=Path, default=Path("tools/generated/resources/audio"))
     parser.add_argument("--backup", type=Path, default=Path("tools/raw/audio-pcm"))
     parser.add_argument("--ffmpeg", default="ffmpeg")
     args = parser.parse_args()

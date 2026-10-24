@@ -147,6 +147,6 @@ def build_almanac(raw_root: Path) -> None:
         config_dir = Path(directory)
         (config_dir / "anim_defs.json").write_text(json.dumps(configs))
         build_main_menu(clips, sprite_sources=[(raw_root / "images/bungeecord.png", "pvz:bungeecord")], anim_config=config_dir)
-    destination = ROOT / "assets/resources/almanac-animations.json"
+    destination = ROOT / "tools/generated/resources/almanac-animations.json"
     destination.write_text(json.dumps(catalog, ensure_ascii=False, indent=2) + "\n")
     print(f"Almanac: {len(catalog['plants'])} plants, {len(catalog['zombies'])} zombies, {len(clips)} clips")

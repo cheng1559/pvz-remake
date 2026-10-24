@@ -18,7 +18,6 @@ export function registerCobCannon({ host, assets }: Context): void {
     const { Haptics } = host.get('platform/Haptics')
     const { LevelInputPresenter } = host.get('client/level/LevelInputPresenter')
     const { LevelHudPresenter } = host.get('client/level/LevelHudPresenter')
-    const { LevelSeedBank } = host.get('client/level/LevelSeedBank')
     const { LevelView } = host.get('client/level/LevelView')
     const { LevelEntityRenderer } = host.get('client/level/LevelEntityRenderer')
     let contentReady: Promise<any> | undefined, targetReady: Promise<any> | undefined, targetFrame: any
@@ -122,23 +121,6 @@ export function registerCobCannon({ host, assets }: Context): void {
     })
 
     const aimed = (snapshot: any) => Object.keys(snapshot.extensions['corn:cob_aim'] ?? {}).length > 0
-    const canUpgrade = (snapshot: any) => (snapshot.extensions['corn:cob_upgrade']?.targets.length ?? 0) > 0
-    host.around(LevelSeedBank.prototype, 'packetState', function (next, snapshot, packet) {
-        const state = next(snapshot, packet)
-        return packet.seedId === CANNON && !canUpgrade(snapshot)
-            ? { ...state, ready: false, warning: state.warning || this.options.ui.text('corn:requires_kernel_pults') }
-            : state
-    })
-    host.around(LevelInputPresenter.prototype, 'selectSeedPacket', function (next, seedId) {
-        const snapshot = this.game.render()
-        if (seedId !== CANNON || canUpgrade(snapshot) || snapshot.cursor.mode === 'seed') return next(seedId)
-        const packet = snapshot.seedPackets.find((packet: any) => packet.seedId === seedId)
-        const canAfford = snapshot.extensions['pvz:debug']?.sunCost === false || snapshot.availableSun >= this.game.definitions.seeds[seedId].sunCost
-        if (!packet?.ready || !canAfford) return next(seedId)
-        if (!this.enabled || !this.view.introComplete || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
-        Haptics.play()
-        this.game.command({ type: 'selectSeed', seedId })
-    })
     host.around(LevelHudPresenter.prototype, 'syncAdvice', function (next, snapshot, events, ...args) {
         next(snapshot, events, ...args)
         for (const event of events) if (event.type === 'corn:advice') {

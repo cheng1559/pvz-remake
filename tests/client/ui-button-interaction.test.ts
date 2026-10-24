@@ -36,6 +36,7 @@ function setup() {
         transform: Transform | null = new Transform(this)
         renderScene = { cameras: [{ visibility: 1, systemWindowId: 0, screenToWorld() {} }] }
         constructor(public x = 0) {}
+        setPosition(x: number, _y: number) { this.x = x }
         get activeInHierarchy(): boolean { return this.active && (!this.parent || this.parent.activeInHierarchy) }
         get scene(): FakeNode { return this.parent?.scene ?? this }
         addChild(node: FakeNode) { this.children.push(node); node.parent = this }
@@ -183,11 +184,11 @@ test('board hover shares cursor ownership with UI and never flashes default whil
     let packetStarted = false
     const packet = { node: packetNode, rect: () => ({ x: 0, y: 0, width: 50, height: 70 }),
         sync(options: { gameStarted: boolean }) { packetStarted = options.gameStarted } }
-    const content = { definitions: { seeds: { pea: { sunCost: 100 } } }, presentation: presentationFixture }
+    const content = { definitions: { seeds: { pea: { sunCost: 100 } }, items: { sun: { width: 60, height: 60 } } }, presentation: presentationFixture }
     const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
     const seedBank = Object.create(LevelSeedBank.prototype)
     const tooltip = { visible: false, warning: '', show() { this.visible = true }, hide() { this.visible = false } }
-    seedBank.options = { content, presentation: {}, ui: { text: (key: string) => key } }
+    seedBank.options = { content, level: {}, presentation: {}, ui: { text: (key: string) => key } }
     seedBank.packets = [{ seedId: 'pea', view: packet, tooltip }]
     const hud = new LevelHudPresenter(content, ui.root, new ui.Node(), ...Array(4), seedBank)
     hud.presentation = { seedGuideSteps: [], lawnGuideSteps: [] }
@@ -198,7 +199,7 @@ test('board hover shares cursor ownership with UI and never flashes default whil
     const [button] = hud.bindSeedPackets(() => { selections++ })
     const world = {
         phase: 'gameplay', result: 'playing', paused: false, availableSun: 100, cursor: { mode: 'none' }, tutorial: { step: 'complete' }, extensions: {},
-        seedPackets: [{ seedId: 'pea', ready: true }], items: [] as any[],
+        seedPackets: [{ seedId: 'pea', ready: true, availability: {} as any }], items: [] as any[],
     }
     button.canInteract = () => world.cursor.mode !== 'seed'
     hud.lastSnapshot = world
@@ -232,6 +233,7 @@ test('board hover shares cursor ownership with UI and never flashes default whil
         for (const unavailable of ['cooldown', 'sun', 'selected', 'paused']) {
             world.seedPackets[0].ready = unavailable !== 'cooldown'
             world.availableSun = unavailable === 'sun' ? 0 : 100
+            world.seedPackets[0].availability = unavailable === 'cooldown' ? { reason: 'seed-not-ready', warningKey: 'WAITING_FOR_SEED' } : unavailable === 'sun' ? { reason: 'not-enough-sun', warningKey: 'NOT_ENOUGH_SUN' } : {}
             world.cursor.mode = unavailable === 'selected' ? 'seed' : 'none'
             world.paused = unavailable === 'paused'
             sync()
@@ -254,7 +256,7 @@ test('board hover shares cursor ownership with UI and never flashes default whil
         ui.dispatch(packetNode, e.MOUSE_DOWN, 20, 2)
         ui.dispatch(packetNode, e.MOUSE_UP, 20, 2)
         assert.equal(selections, 1, 'right clicks remain available for cancelling planting')
-        world.items = [{ x: 300, y: 0, state: 'idle' }]
+        world.items = [{ typeId: 'sun', x: 300, y: 0, state: 'idle' }]
         move(310)
         assert.equal(ui.cursor, 'pointer', 'collectible items share the same cursor owner')
         ui.dispatch(menu.node, e.MOUSE_DOWN, 220)
@@ -308,11 +310,12 @@ test('seed input disables its UI button while suspended and cannot submit after 
     const input = new LevelInputPresenter(ui.root, {
         definitions: { seeds: { 'pvz:peashooter': { sunCost: 100 } } },
         render: () => ({ phase: 'gameplay', result: 'playing', cursor: { mode: cursor }, availableSun: 100, extensions: {},
-            seedPackets: [{ seedId: 'pvz:peashooter', cooldownRemaining: 0 }] }),
+            seedPackets: [{ seedId: 'pvz:peashooter', cooldownRemaining: 0, availability: {} }] }),
         command: (value: { type: string }) => { commands.push(value.type) },
     }, {
-        introComplete: true, board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 }, audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer() {},
-        bindSeedPackets(callback: (id: string) => void) { press = () => callback('pvz:peashooter'); return [button] },
+        introComplete: true, canOpenMenu: true, bindTools() { return [] }, board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 }, audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer() {},
+        seedPacketAt: (snapshot: any, index: number) => ({ ...snapshot.seedPackets[index], canAfford: true, command: { type: 'selectSeed', seedId: snapshot.seedPackets[index].seedId } }),
+        bindSeedPackets(callback: (index: number) => void) { press = () => callback(0); return [button] },
         bindMenu(callback: () => void) { openMenu = callback; return menuButton },
     }, () => { menus++ })
     try {
@@ -361,19 +364,21 @@ test('level seeds keep independent affordability and cooldowns, and placement us
     })
     const world = {
         phase: 'gameplay', result: 'playing', paused: false, availableSun: 100, cursor: { mode: 'none' }, extensions: {},
-        seedPackets: ['pea', 'double'].map(seedId => ({ seedId, ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 750 })),
+        seedPackets: ['pea', 'double'].map(seedId => ({ seedId, ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 750, availability: {} as any })),
     }
     const commands: any[] = []
     const presenter = new LevelInputPresenter(ui.root, {
         definitions, render: () => world, command: (command: unknown) => commands.push(command),
     }, {
-        introComplete: true, board: { origin: { x: 12, y: 40 }, cell: { width: 20, height: 30 }, rows: 3, columns: 4 },
+        introComplete: true, bindTools() { return [] }, board: { origin: { x: 12, y: 40 }, cell: { width: 20, height: 30 }, rows: 3, columns: 4 },
         audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer() {},
-        bindSeedPackets: (select: (id: string) => void) => bank.bind(select),
+        seedPacketAt: (snapshot: any, index: number) => bank.packetAt(snapshot, index),
+        bindSeedPackets: (select: (index: number) => void) => bank.bind(select),
         bindMenu: () => ({ isValid: true }),
     })
     try {
         presenter.start()
+        world.seedPackets[1].availability = { reason: 'not-enough-sun', warningKey: 'NOT_ENOUGH_SUN' }
         bank.sync(world, [], true, null, false)
         assert.equal(bank.packets[0].view.options.canAfford, true)
         assert.equal(bank.packets[1].view.options.canAfford, false)
@@ -389,6 +394,7 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         bank.sync(world, [], true, null)
         world.seedPackets[1].cooldownRemaining = 0
         world.availableSun = 300
+        world.seedPackets[1].availability = {}
         bank.sync(world, [], true, null)
         assert.deepEqual(flashes, [bank.packets[1].view.node])
         const slot = bank.packets[0], node = slot.view.node, button = slot.button
@@ -397,7 +403,7 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         assert.equal(slot.view.node, node)
         assert.equal(slot.button, button, 'replacement preserves the input presenter’s button reference')
         assert.deepEqual({ ...slot.view.replacement }, { seedType: 'snowpea', cost: 175 })
-        assert.equal(slot.tooltip.text, 'SNOWPEA')
+        assert.equal(slot.tooltip.text, 'SNOW_PEA')
         slot.button.onPress()
         assert.equal(commands.at(-1).seedId, 'ice')
         world.cursor.mode = 'seed'
@@ -405,6 +411,111 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         presenter.onPointer({})
         assert.deepEqual({ ...commands.at(-1) }, { type: 'placePlant', row: 2, column: 2 })
     } finally { presenter.destroy(); ui.cleanup() }
+})
+
+test('ordinary and conveyor packets share mobile drag, tap, switch and cancel interaction', () => {
+    for (const conveyor of [false, true]) {
+        const ui = setup(), e = ui.events
+        ui.setMobile()
+        const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
+        const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
+        const definitions = { seeds: { pea: { plant: 'pvz:peashooter', sunCost: 100 } }, items: {} }
+        const bank = new LevelSeedBank({
+            level: { seedPackets: ['pea'], ...(conveyor ? { conveyor: { capacity: 2, seeds: [{ id: 'pea' }] } } : {}) },
+            content: { definitions, presentation: presentationFixture }, seedPacketSlot: ui.root, presentation: {},
+            ui: { text: (key: string) => key, tooltip: () => ({ show() {}, hide() {} }) },
+        })
+        const snapshot: any = { phase: 'gameplay', result: 'playing', paused: false, availableSun: conveyor ? 0 : 100,
+            cursor: { mode: 'none' }, extensions: {}, items: [],
+            seedPackets: conveyor ? [] : [{ seedId: 'pea', ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 0, availability: {} }],
+            conveyorPackets: conveyor ? [{ id: 17, seedId: 'pea', selected: false, x: 0, availability: {} }, { id: 29, seedId: 'pea', selected: false, x: 120, availability: {} }] : [],
+        }
+        const commands: any[] = [], menu = ui.makeButton(680)
+        let pointer: any
+        const input = new LevelInputPresenter(ui.root, { definitions, render: () => snapshot, command(command: any) {
+            commands.push(command)
+            if (command.type === 'selectSeed' || command.type === 'selectConveyorPacket') snapshot.cursor = { mode: 'seed', seedId: 'pea' }
+            else if (command.type === 'clearCursor' || command.type === 'placePlant') snapshot.cursor = { mode: 'none' }
+            for (const packet of snapshot.seedPackets) packet.selected = snapshot.cursor.mode === 'seed'
+            for (const packet of snapshot.conveyorPackets) packet.selected = command.type === 'selectConveyorPacket' && packet.id === command.packetId
+        } }, {
+            introComplete: true, bindTools() { return [] }, level: { award: { kind: 'seed' } },
+            board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
+            audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer(value: any) { pointer = value },
+            seedPacketAt: (world: any, index: number) => bank.packetAt(world, index),
+            bindSeedPackets: (select: (index: number) => void) => bank.bind(select), bindMenu: () => menu.button,
+        })
+        input.boardPixel = (event: any) => event.getUILocation()
+        const touch = (type: string, x: number, y = 20, id = 1) => ui.dispatch(ui.root, type, x, 0, id, y)
+        try {
+            input.start()
+            bank.sync(snapshot, [], true, null, false)
+            touch(e.TOUCH_START, 20)
+            assert.equal(commands.at(-1).type, conveyor ? 'selectConveyorPacket' : 'selectSeed')
+            if (conveyor) assert.equal(commands.at(-1).packetId, 17)
+            touch(e.TOUCH_MOVE, 200, 250)
+            assert.deepEqual([pointer.x, pointer.y], [200, 250])
+            touch(e.TOUCH_START, 140, 20, 2); touch(e.TOUCH_END, 140, 20, 2)
+            assert.equal(commands.length, 1, 'a second finger cannot replace the held packet')
+            touch(e.TOUCH_END, 200, 250)
+            assert.deepEqual({ ...commands.at(-1) }, { type: 'placePlant', row: 1, column: 2 })
+            touch(e.TOUCH_START, 20); touch(e.TOUCH_END, 20)
+            assert.equal(snapshot.cursor.mode, 'seed', 'tap selects without planting')
+            if (conveyor) {
+                touch(e.TOUCH_START, 140); touch(e.TOUCH_END, 140)
+                assert.equal(commands.at(-1).packetId, 29, 'duplicate seed types still select distinct conveyor packets')
+            }
+            const x = conveyor ? 140 : 20
+            touch(e.TOUCH_START, x); touch(e.TOUCH_MOVE, 200, 250); touch(e.TOUCH_MOVE, x); touch(e.TOUCH_END, x)
+            assert.equal(snapshot.cursor.mode, 'none', 'dragging back to the packet cancels')
+        } finally { input.destroy(); ui.cleanup() }
+    }
+})
+
+test('mobile shovel shares drag, tap, finger ownership and drag-back cancellation during the tutorial', () => {
+    const ui = setup(), e = ui.events
+    ui.setMobile()
+    const shovel = ui.makeButton(609), menu = ui.makeButton(700)
+    const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
+    const world: any = { phase: 'intro', result: 'playing', paused: false, cursor: { mode: 'none' }, items: [], extensions: {} }
+    const commands: any[] = []
+    let pointer: any
+    const input = new LevelInputPresenter(ui.root, { definitions: { items: {} }, render: () => world, command(command: any) {
+        commands.push(command)
+        world.cursor = command.type === 'selectTool' ? { mode: 'tool', toolId: command.toolId } : { mode: 'none' }
+    } }, {
+        introComplete: false, dialogReady: false, level: { award: { kind: 'seed' } },
+        board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
+        audio: { plantingCancelled() {} }, resetCursor() {}, setPointer(value?: any) { pointer = value }, seedPacketAt() {},
+        bindSeedPackets: () => [], bindTools(select: (id: string) => void) {
+            shovel.button.onPress = () => select('pvz:shovel')
+            return [{ toolId: 'pvz:shovel', button: shovel.button }]
+        }, bindMenu: () => menu.button,
+    })
+    input.boardPixel = (event: any) => event.getUILocation()
+    const touch = (type: string, x: number, y = 20, id = 1) => ui.dispatch(ui.root, type, x, 0, id, y)
+    try {
+        input.start()
+        touch(e.TOUCH_START, 625)
+        assert.equal(commands.at(-1).type, 'selectTool')
+        assert.equal(pointer, undefined)
+        touch(e.TOUCH_MOVE, 280, 350)
+        assert.deepEqual([(pointer as any).x, (pointer as any).y], [280, 350])
+        touch(e.TOUCH_START, 200, 250, 2); touch(e.TOUCH_END, 200, 250, 2)
+        assert.equal(commands.length, 1)
+        touch(e.TOUCH_END, 0, 0)
+        assert.deepEqual({ ...commands.at(-1) }, { type: 'useToolAt', row: 2, column: 3 })
+        touch(e.TOUCH_START, 625); touch(e.TOUCH_END, 625)
+        assert.equal(world.cursor.mode, 'tool', 'tap keeps the shovel selected')
+        touch(e.TOUCH_START, 200, 250)
+        assert.equal(commands.at(-1).type, 'selectTool', 'touch-down only aims')
+        touch(e.TOUCH_END, 200, 250)
+        assert.equal(commands.at(-1).type, 'useToolAt')
+        touch(e.TOUCH_START, 625); touch(e.TOUCH_MOVE, 200, 250); touch(e.TOUCH_MOVE, 625); touch(e.TOUCH_END, 625)
+        assert.equal(commands.at(-1).type, 'clearCursor')
+        touch(e.TOUCH_START, 625); world.paused = true; touch(e.TOUCH_MOVE, 280, 350); touch(e.TOUCH_END, 280, 350)
+        assert.equal(commands.at(-1).type, 'selectTool', 'pausing cancels the gesture without digging')
+    } finally { input.destroy(); ui.cleanup() }
 })
 
 test('mobile planting keeps tap selection, aims while held, and resolves only the owning finger on release', () => {
@@ -415,7 +526,7 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
     const world = {
         phase: 'gameplay', result: 'playing', paused: false, availableSun: 100, extensions: {},
         cursor: { mode: 'none', seedId: '' },
-        seedPackets: ['pea', 'sunflower'].map(seedId => ({ seedId, ready: true, selected: false, cooldownRemaining: 0 })),
+        seedPackets: ['pea', 'sunflower'].map(seedId => ({ seedId, ready: true, selected: false, cooldownRemaining: 0, availability: {} })),
         items: [] as any[],
     }
     const commands: any[] = []
@@ -431,11 +542,15 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
             if (command.type === 'collectItemAt') world.items.find(item => item.entityId === command.itemId).state = 'collecting'
         },
     }, {
-        introComplete: true, board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
+        introComplete: true, canOpenMenu: true, bindTools() { return [] }, level: { award: { kind: 'seed' } }, board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
         audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer(value?: any) { pointer = value },
-        bindSeedPackets(select: (id: string) => void) {
-            pea.button.onPress = () => select('pea')
-            sunflower.button.onPress = () => select('sunflower')
+        seedPacketAt: (snapshot: any, index: number) => {
+            const packet = snapshot.seedPackets[index]
+            return packet && { ...packet, availability: !packet.ready ? { reason: 'seed-not-ready' } : snapshot.availableSun >= (index === 0 ? 100 : 50) ? {} : { reason: 'not-enough-sun' }, command: { type: 'selectSeed', seedId: packet.seedId } }
+        },
+        bindSeedPackets(select: (index: number) => void) {
+            pea.button.onPress = () => select(0)
+            sunflower.button.onPress = () => select(1)
             return [pea.button, sunflower.button]
         },
         bindMenu(open: () => void) { menu.node.on('click', open); return menu.button },
@@ -451,7 +566,7 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
         assert.equal(pointer, undefined, 'tapping a packet keeps the selection without a floating plant')
         assert.equal(places().length, 0)
         touch(e.TOUCH_START, 200, 250)
-        assert.deepEqual([pointer.x, pointer.y], [200, 250])
+        assert.deepEqual([(pointer as any).x, (pointer as any).y], [200, 250])
         assert.equal(places().length, 0, 'touch-down must only aim')
         touch(e.TOUCH_MOVE, 280, 350)
         touch(e.TOUCH_START, 140, 20, 2)
@@ -556,16 +671,17 @@ test('HUD input gates suppress held plants and finished levels without changing 
     const presenter = new LevelInputPresenter(ui.root, {
         definitions: { seeds: { 'pvz:peashooter': { sunCost: 100 } } },
         render: () => ({ phase: 'gameplay', result, cursor: { mode: cursor }, availableSun: 100, extensions: {},
-            seedPackets: [{ seedId: 'pvz:peashooter', cooldownRemaining: 0 }] }),
+            seedPackets: [{ seedId: 'pvz:peashooter', cooldownRemaining: 0, availability: {} }] }),
         command: (command: { type: string }) => {
             commands.push(command.type)
             if (command.type === 'selectSeed') cursor = 'seed'
             if (command.type === 'clearCursor') cursor = 'none'
         },
     }, {
-        introComplete: true, board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 }, audio: { seedPacketSelected() {}, plantingCancelled() { cancels++ } },
+        introComplete: true, canOpenMenu: true, bindTools() { return [] }, board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 }, audio: { seedPacketSelected() {}, plantingCancelled() { cancels++ } },
         resetCursor() {}, setPointer(value?: unknown) { pointerUpdates.push(value) },
-        bindSeedPackets(callback: (id: string) => void) { seed.button.onPress = () => callback('pvz:peashooter'); return [seed.button] },
+        seedPacketAt: (snapshot: any, index: number) => ({ ...snapshot.seedPackets[index], canAfford: true, command: { type: 'selectSeed', seedId: snapshot.seedPackets[index].seedId } }),
+        bindSeedPackets(callback: (index: number) => void) { seed.button.onPress = () => callback(0); return [seed.button] },
         bindMenu(callback: () => void) { menu.node.on('click', callback); return menu.button },
     }, () => { menus++ })
     presenter.boardPixel = () => point

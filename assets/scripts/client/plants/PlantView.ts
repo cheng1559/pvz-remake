@@ -21,5 +21,6 @@ export interface PlantView {
     snapshot(entityId: number): PlantViewSnapshot
     restore(snapshot: PlantViewSnapshot): void | Promise<void>
     fire?(): void
+    renderRow?(plant: PlantSnapshot): number
     destroy?(): void
 }

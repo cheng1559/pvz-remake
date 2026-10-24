@@ -16,10 +16,12 @@ export interface Item {
 }
 
 export interface TutorialState {
+    dialogIndex?: number
     firstAdventure: boolean
     step: 'pick-first-seed' | 'plant-first-seed' | 'first-plant-done' | 'collect-first-sun'
         | 'collect-more-sun' | 'enough-sun' | 'pick-second-seed' | 'plant-second-seed' | 'complete'
-        | 'pick-sunflower' | 'plant-sunflower' | 'refresh-sunflower'
+        | 'pick-sunflower' | 'plant-sunflower' | 'refresh-sunflower' | 'waiting-for-sunflowers'
+        | 'dave-opening' | 'shovel-pickup' | 'shovel-dig' | 'shovel-keep-digging' | 'dave-bowling'
     sunAtTick?: number
     promptAtTick?: number
     cantAffordAdviceShown?: boolean
@@ -31,6 +33,7 @@ export interface TutorialState {
 
 export interface WaveState {
     index: number
+    zombiesByWave?: string[][]
     nextWaveAtTick?: number
     accelerateAtTick?: number
     zombieIds?: number[]

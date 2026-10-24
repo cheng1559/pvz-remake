@@ -10,7 +10,7 @@ import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import * as animationDefinitions from '@/client/content/ClientAnimationRegistry'
 
 const json = (path: string) => JSON.parse(readFileSync(path, 'utf8'))
-const bundle = 'assets/bundles/pvz-base'
+const bundle = 'tools/generated/pvz-base'
 const manifest = parseContentManifest(json(`${bundle}/manifest.json`))
 interface Part { name: string, id: string, parent?: string, track?: string, blink?: boolean, packetId?: string }
 const displayModule = { exports: {} as Record<string, any> }
@@ -19,7 +19,7 @@ const displayCode = transpileModule(readFileSync('assets/scripts/client/reanim/E
 })
 runInNewContext(displayCode.outputText, { exports: displayModule.exports,
     require: (id: string) => id === '@/client/content/ClientAnimationRegistry' ? animationDefinitions : {} })
-const layouts = json('assets/resources/almanac-animations.json')
+const layouts = json('tools/generated/resources/almanac-animations.json')
 const registry = new animationDefinitions.ClientAnimationRegistry(presentationFixture)
 const catalog = Object.fromEntries(['plants', 'zombies'].map(kind => [kind,
     layouts[kind].map((entry: any, id: number) => displayModule.exports.resolveEntityDisplay(kind, id, entry, registry)),

@@ -11,7 +11,6 @@ import { ItemComponent, type Item } from './levelState'
 
 const SUN_BANK_X = 15
 const SUN_BANK_Y = 0
-const BOARD_WIDTH = 800
 
 export function getAvailableSun(world: World, definitions: GameplayDefinitions): number {
     const economy = world.resources.get(EconomyStateResource)
@@ -86,12 +85,13 @@ export function createItemSystem(): GameSystem {
 
 function moveItemWithinHorizontalBounds(world: World, position: Position, item: Item): void {
     position.x += item.velocityX
-    const maxX = BOARD_WIDTH - (item.width ?? 60)
+    const bounds = world.resources.get(LevelStateResource).board.bounds
+    const maxX = bounds.right - (item.width ?? 60)
     if (position.x > maxX) {
         position.x = maxX
         item.velocityX = -0.4 - world.resources.get(RandomResource).nextFloat() * 0.4
-    } else if (position.x < 0) {
-        position.x = 0
+    } else if (position.x < bounds.left) {
+        position.x = bounds.left
         item.velocityX = 0.4 + world.resources.get(RandomResource).nextFloat() * 0.4
     }
 }

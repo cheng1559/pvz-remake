@@ -13,7 +13,7 @@ import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManag
 import { UIButton } from '@/client/ui/UIButton'
 import type { ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
 import { LevelSeedBank } from './LevelSeedBank'
-import { adventureLevelName, boardCell } from './LevelGeometry'
+import { adventureLevelName, boardCell, levelAwardSize } from './LevelGeometry'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { LevelPresentation } from './LevelPresentation'
 import type { LevelAdviceSnapshot, LevelHudSnapshot } from './LevelPresentationSnapshot'
@@ -36,6 +36,7 @@ export interface LevelHudOptions {
     packetCostFont: FontAsset
     adviceNode: Node
     adviceParent: Node
+    controlsParent: Node
     adviceFont: FontAsset
     tutorialArrowLayer: Node
     tutorialLawnFlash: Node
@@ -83,14 +84,13 @@ export class LevelHudPresenter {
             options.progressMeter, options.progressFillClip, options.progressFill, options.progressHead,
             options.levelText, advice, options.level, options.presentation,
         )
-        presenter.menuButton = options.ui.button(options.adviceParent, {
+        presenter.menuButton = options.ui.button(options.controlsParent, {
             text: options.ui.text('MENU_BUTTON'), x: 681, y: -10, width: 117, height: 46,
             rightClickTriggers: false, enabled: false, clickSound: null,
         })
         presenter.menuButton.node.name = 'MenuButton'
         presenter.mobileGridGuide = options.mobileGridGuide
         presenter.menuButton.node.active = false
-        presenter.menuButton.node.setSiblingIndex(options.cursorPreview.getSiblingIndex())
         return presenter
     }
 
@@ -176,7 +176,7 @@ export class LevelHudPresenter {
         this.setPointer()
     }
 
-    bindSeedPackets(select: (seedId: string) => void): UIButton[] {
+    bindSeedPackets(select: (index: number) => void): UIButton[] {
         return this.seedBank.bind(select)
     }
 
@@ -185,10 +185,10 @@ export class LevelHudPresenter {
         return this.menuButton
     }
 
-    sync(snapshot: WorldSnapshot, events: ServerEvent[], introComplete: boolean): void {
+    sync(snapshot: WorldSnapshot, events: ServerEvent[], introComplete: boolean, canOpenMenu = introComplete): void {
         this.lastSnapshot = snapshot
         this.lastIntroComplete = introComplete
-        this.syncMenu(snapshot, introComplete)
+        this.syncMenu(snapshot, canOpenMenu)
         const elapsedTicks = Math.max(0, snapshot.gameplayTick - this.adviceTick)
         this.sunFlashTicks = Math.max(0, this.sunFlashTicks - elapsedTicks)
         if (events.some(event => event.type === 'sunFlash')) this.sunFlashTicks = 70
@@ -215,9 +215,7 @@ export class LevelHudPresenter {
         const showSeedGuide = introComplete && snapshot.result === 'playing' && this.presentation.seedGuideSteps.includes(snapshot.tutorial.step)
         this.seedBank.sync(snapshot, events, introComplete, showSeedGuide ? tutorialFlashColor(snapshot.gameplayTick) : null, allowTransientEffects)
         const packet = snapshot.seedPackets.find(packet => packet.seedId === (this.presentation.guideSeed ?? this.level.seedPackets[0]))
-        const canAfford = packet && ((snapshot.extensions['pvz:debug'] as { sunCost?: boolean } | undefined)?.sunCost === false
-            || snapshot.availableSun >= this.content.definitions.seeds[packet.seedId].sunCost)
-        this.syncSeedTutorialArrow(!!(showSeedGuide && packet?.ready && canAfford))
+        this.syncSeedTutorialArrow(!!(showSeedGuide && packet?.ready && !packet.availability.reason))
         const showLawnGuide = introComplete && snapshot.result === 'playing' && snapshot.cursor.mode === 'seed' &&
             this.presentation.lawnGuideSteps.includes(snapshot.tutorial.step)
         this.tutorialLawnFlash.active = showLawnGuide
@@ -227,11 +225,11 @@ export class LevelHudPresenter {
     private syncAdvice(snapshot: WorldSnapshot, events: ServerEvent[], elapsedTicks: number, introComplete: boolean): void {
         if (snapshot.result === 'lost') { this.advice.clear(); return }
         if (snapshot.result === 'won') this.advice.clear()
-        if (introComplete) {
+        if (introComplete || this.presentation.adviceDuringIntro) {
             const message = contentText(this.content.strings.entries, this.presentation.advice[snapshot.tutorial.step] ?? '')
             if (message !== this.adviceMessage) {
                 this.adviceMessage = message
-                if (message) this.advice.show(message, snapshot.tutorial.step === 'complete' ? 'tutorial-level1' : 'tutorial-level1-stay')
+                if (message) this.advice.show(message, this.presentation.adviceStyle ?? (snapshot.tutorial.step === 'complete' ? 'tutorial-level1' : 'tutorial-level1-stay'))
                 else this.advice.clear()
             }
         }
@@ -239,7 +237,9 @@ export class LevelHudPresenter {
             if (event.type === 'levelWon') this.advice.clear()
             else if (event.type === 'advice') {
                 const key = event.data.key
-                if (typeof key === 'string') this.advice.show(contentText(this.content.strings.entries, key), event.data.style === 'tutorial-level2' ? 'tutorial-level2' : 'tutorial-level1')
+                const style = event.data.style
+                if (typeof key === 'string') this.advice.show(contentText(this.content.strings.entries, key),
+                    style === 'tutorial-level2' || style === 'tutorial-later' || style === 'tutorial-later-stay' ? style : 'tutorial-level1')
             } else if (event.type === 'adviceCleared') {
                 const key = event.data.key
                 if (typeof key === 'string' && this.advice.snapshot()?.message === contentText(this.content.strings.entries, key)) this.advice.clear()
@@ -313,13 +313,13 @@ export class LevelHudPresenter {
         this.cursorPreview.setPosition(pointer.x - 35, -pointer.y + 60)
         const board = this.content.definitions.boards[this.level.board]
         const { row, column, inBounds } = boardCell(board, pointer.x, pointer.y)
-        const occupant = snapshot.plants.find(plant => plant.row === row && plant.column === column)
+        const occupant = snapshot.plants.find(plant => this.content.definitions.plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column)
         const seedId = snapshot.cursor.mode === 'seed' ? snapshot.cursor.seedId : undefined
         const previewSeedId = seedId!
         const plantId = this.content.definitions.seeds[previewSeedId].plant
         this.cursorPlant.setPlant(plantId)
         this.gridPlant.setPlant(plantId)
-        const valid = inBounds && this.level.activeRows.includes(row) && !occupant
+        const valid = inBounds && this.level.activeRows.includes(row) && !occupant && (!this.level.bowling || column <= this.level.bowling.lineColumn)
         this.gridPreview.active = valid && !mobile
         if (valid && !mobile) this.gridPreview.setPosition(board.origin.x + column * board.cell.width, -(board.origin.y + row * board.cell.height))
         if (valid && mobile) {
@@ -337,11 +337,15 @@ export class LevelHudPresenter {
     }
 
     private isPointerOverItem(snapshot: WorldSnapshot): boolean {
-        if (snapshot.paused || snapshot.result !== 'playing' || GameDebugSettings.isMobileMode() || !this.pointer || snapshot.cursor.mode === 'seed') return false
+        if (snapshot.paused || snapshot.result !== 'playing' || GameDebugSettings.isMobileMode() || !this.pointer || snapshot.cursor.mode !== 'none') return false
         const { x, y } = this.pointer
-        const overItem = snapshot.items.some(item => item.state !== 'collecting' &&
-            x >= item.x - 15 && x < item.x + 75 && y >= item.y - 15 && y < item.y + 75)
-        return overItem
+        return snapshot.items.some(item => {
+            const definition = this.content.definitions.items[item.typeId]
+            const size = definition ?? levelAwardSize(this.level.award)
+            const extra = definition ? 15 : 0
+            return item.state !== 'collecting' && x >= item.x - extra && x < item.x + size.width + extra &&
+                y >= item.y - extra && y < item.y + size.height + extra
+        })
     }
 
     private syncSeedTutorialArrow(visible: boolean): void {

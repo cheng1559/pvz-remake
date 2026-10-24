@@ -150,40 +150,26 @@ test('projectile impact and audio use configured effects for custom IDs and equi
     assert.deepEqual(calls.slice(2), [['foley', 'splat', 10], ['foley', 'shieldhit', undefined]])
 })
 
-test('presentation definitions load from manifest paths and resource pack overrides without global state', async () => {
-    let reads = 0, loads = 0
-    let override: unknown
-    let missing = false
+test('presentation definitions use the common ZIP resolver without mutating base data', async () => {
     const asset = { json: presentationFixture }
-    const manifest = { id: 'pvz:base', client: { bundle: 'pvz-base' },
-        presentation: { definitions: 'presentation/definitions.json' } }
-    const loader = { async loadBundle(name: string) {
-        assert.equal(name, 'pvz-base')
-        loads++
-        return {
-            get(path: string) { assert.equal(path, 'presentation/definitions'); reads++; return missing ? null : asset },
-            load(_path: string, _type: unknown, callback: Function) { callback(new Error('missing presentation')) },
-        }
-    } }
+    let current: unknown = asset
+    const manifest = { id: 'pvz:base', presentation: { definitions: 'presentation/definitions.json' } }
     const { loadPresentationDefinitions } = loadClientModule('content/loadPresentationDefinitions', {
         cc: { JsonAsset: class {} },
         './ResourcePacks': { resourcePacks: { async asset(id: string) {
             assert.equal(id, 'pvz:presentation/definitions')
-            return override
+            return current
         } } },
         '@/app/ModLoader': { loadInstalledMods: async () => ({ presentationDefinitions: [] }) },
         '@/shared/content/DefinitionRegistry': { buildPresentationDefinitions },
     })
-    assert.deepEqual(await loadPresentationDefinitions(manifest, loader), presentationFixture)
-    assert.equal(reads, 1)
+    assert.deepEqual(await loadPresentationDefinitions(manifest), presentationFixture)
     const alternate = structuredClone(presentationFixture)
-    override = { json: alternate }
-    assert.deepEqual(await loadPresentationDefinitions(manifest, loader), alternate)
-    assert.equal(loads, 1, 'pack overrides bypass the base bundle')
-    assert.equal(asset.json, presentationFixture, 'an override cannot replace the original definitions')
-    override = undefined
-    missing = true
-    await assert.rejects(loadPresentationDefinitions(manifest, loader), /missing presentation/)
+    current = { json: alternate }
+    assert.deepEqual(await loadPresentationDefinitions(manifest), alternate)
+    assert.equal(asset.json, presentationFixture)
+    current = undefined
+    await assert.rejects(loadPresentationDefinitions(manifest), /Missing presentation/)
 })
 
 test('UI assets include registered Mod presentations and names before opening a level', async () => {
@@ -207,42 +193,42 @@ test('UI assets include registered Mod presentations and names before opening a 
     assert.equal(await loadUIAssets(), assets)
 })
 
-test('preloaded assets bypass bundle callbacks across content loader instances', async () => {
-    const assets = new Map<string, unknown>([['ready', {}], ['manifest', { json: {} }]])
+test('ZIP caches are shared across content loaders and failed requests can retry', async () => {
+    const assets = new Map<string, unknown>([['pvz:ready', {}]])
+    const manifest = {}
     let loads = 0
-    const bundle = {
-        get: (path: string) => assets.get(path),
-        load(path: string, _type: unknown, done: (error: Error | null, asset?: unknown) => void) {
-            loads++
-            if (loads === 1) { done(new Error('temporary read failure')); return }
+    const packs = {
+        async baseJson() { return manifest },
+        async asset(id: string) {
+            if (assets.has(id)) return assets.get(id)
+            if (++loads === 1) throw new Error('temporary read failure')
             const asset = {}
-            assets.set(path, asset)
-            done(null, asset)
+            assets.set(id, asset)
+            return asset
         },
     }
-    const modules = {
-        cc: { assetManager: { getBundle: () => bundle }, JsonAsset: class {} },
+    const { ClientContentLoader } = loadClientModule('content/ClientContentLoader', {
+        cc: { JsonAsset: class {} },
         '@/shared/content/index': { parseContentManifest: (value: unknown) => value },
-        './ResourcePacks': { resourcePacks: { asset: async () => undefined } },
-    }
-    const { ClientContentLoader } = loadClientModule('content/ClientContentLoader', modules)
+        './ResourcePacks': { resourcePacks: packs },
+    })
     const { AssetLoader } = loadClientModule('content/LegacyAssetLoader', {
-        cc: { resources: bundle }, './ResourcePacks': modules['./ResourcePacks'],
+        cc: { EffectAsset: class {} }, './ResourcePacks': { resourcePacks: packs },
     })
     const content = { bundle: 'base', contentHash: 'hash', category: 'sprites', id: 'pvz:ready', path: 'ready' }
     class Asset {}
     const loader = new ClientContentLoader()
-    assert.equal(await loader.load(content, Asset), assets.get('ready'))
-    assert.equal(await new ClientContentLoader().load(content, Asset), assets.get('ready'))
-    assert.equal(await loader.loadManifest('base'), (assets.get('manifest') as any).json)
-    assert.equal(await AssetLoader.load('ready', Asset), assets.get('ready'))
-    assert.equal(loads, 0, 'cache hits must not schedule another engine load callback')
+    assert.equal(await loader.load(content, Asset), assets.get('pvz:ready'))
+    assert.equal(await new ClientContentLoader().load(content, Asset), assets.get('pvz:ready'))
+    assert.equal(await loader.loadManifest(), manifest)
+    assert.equal(await AssetLoader.load('pvz:ready', Asset), assets.get('pvz:ready'))
+    assert.equal(loads, 0)
     const missing = { ...content, id: 'pvz:missing', path: 'missing' }
     await assert.rejects(loader.load(missing, Asset), /temporary read failure/)
     const first = loader.load(missing, Asset)
-    assert.equal(loader.load(missing, Asset), first, 'pending requests remain shared')
+    assert.equal(loader.load(missing, Asset), first)
     await first
-    assert.equal(loads, 2, 'a failed load can retry')
+    assert.equal(loads, 2)
 })
 
 test('preloaded animation frames are shared by registry and failed preparation can retry', async () => {
@@ -543,7 +529,7 @@ test('repeated entity additions keep restore waiting for the original animation 
 })
 
 function zombieViewFixture() {
-    const manifest = JSON.parse(readFileSync('assets/bundles/pvz-base/manifest.json', 'utf8'))
+    const manifest = JSON.parse(readFileSync('tools/generated/pvz-base/manifest.json', 'utf8'))
     const errors: unknown[] = []
     let loadGate: Promise<void> | null = null
     class Color {
@@ -588,7 +574,7 @@ function zombieViewFixture() {
             const path = manifest.client.reanim[id]
             assert.ok(path, `missing installed animation ${id}`)
             this.id = id
-            const data = JSON.parse(readFileSync(`assets/bundles/pvz-base/${path}.json`, 'utf8'))
+            const data = JSON.parse(readFileSync(`tools/generated/pvz-base/${path}.json`, 'utf8'))
             this.tracks = data.tracks.map((track: any) => track.id)
             this.lastFrameTimeSeconds = Math.max(...data.tracks.flatMap((track: any) => track.keyframes.map((frame: any) => frame.timeSeconds)))
             for (const track of this.tracks) new Node(track).setParent(this.node)

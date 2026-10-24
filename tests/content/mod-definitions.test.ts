@@ -105,7 +105,7 @@ test('Release preloading loads Corn archive assets without requesting a Cocos bu
     })
     runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
     await exports.preloadAssets((value: number) => progress.push(value))
-    assert.deepEqual(bundles, ['resources', 'pvz-base'])
+    assert.deepEqual(bundles, [], 'ZIP preload never requests Cocos bundles')
     assert.deepEqual([...loaded].sort(), Object.entries(table).flatMap(([kind, entries]) =>
         Object.keys(entries as object).map(id => `${kind}/${id}`)).sort())
     assert.equal(progress.at(-1), 1)
@@ -131,10 +131,10 @@ function modLoader(installed: any[], ready = async () => installed) {
         cc: { JsonAsset: class {} },
         '@/client/content/ClientContentLoader': { ClientContentLoader: class {
             async loadManifest() { return { client: { bundle: 'base' }, gameplay: { definitions: 'definitions', levels: 'levels', strings: 'strings' } } }
-            async loadBundle() { return { get: (path: string) => ({ json: ({ definitions, levels, strings } as any)[path] }) } }
         } },
         '@/client/content/ClientAnimationRegistry': { ClientAnimationRegistry },
-        '@/client/content/loadPresentationDefinitions': { loadPresentationDefinitions: async (_manifest: unknown, _loader: unknown, sources: unknown[]) => {
+        '@/client/content/ResourcePacks': { resourcePacks: { baseJson: async (id: string) => ({ definitions, levels, strings } as any)[id.replace('pvz:', '')] } },
+        '@/client/content/loadPresentationDefinitions': { loadPresentationDefinitions: async (_manifest: unknown, sources: unknown[]) => {
             assert.equal(sources.length, 0, 'base validation must not recursively load Mods')
             return presentation
         } },

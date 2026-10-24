@@ -21,7 +21,7 @@ class ContentConverterTest(unittest.TestCase):
         fixtures = Path(__file__).parents[2] / "tools" / "fixtures"
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            bundle = root / "assets/bundles/pvz-base"
+            bundle = root / "tools/generated/pvz-base"
             original = build_sprite_content(fixtures / "content", bundle)
             raw = root / "tools/raw/reanim"
             raw.mkdir(parents=True)

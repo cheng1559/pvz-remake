@@ -31,6 +31,10 @@ def _clips(name: str, node: str, clips: dict[str, str]) -> list:
 
 # Battle animations for the plants and zombies of Adventure 1-3 to 1-10.
 PLANT_ZOMBIE_CLIPS = [
+    *_clips("crazydave", "body", {f"anim_{name}": f"pvz:dave_{name}" for name in ("enter", "leave", "idle", "smalltalk", "mediumtalk", "blahblah", "crazy", "idle_handing", "talk_handing")}),
+    *_clips("crazydave", "blink", {"anim_blink": "pvz:dave_blink"}),
+    *_clips("wallnut", "body", {"_ground": "pvz:wallnut_roll"}),
+    *_clips("startreadysetplant", "default", {"default": "pvz:readysetplant"}),
     *_clips("cherrybomb", "body", {"anim_explode": "pvz:cherrybomb_explode"}),
     *_clips("wallnut", "body", {"anim_idle": "pvz:wallnut"}),
     *_clips("wallnut", "face", {
@@ -59,8 +63,9 @@ PLANT_ZOMBIE_SPRITES = [
     for name in (
         "wallnut_cracked1", "wallnut_cracked2", "zombie_cone2", "zombie_cone3", "zombie_bucket2", "zombie_bucket3",
         "zombie_polevaulter_outerarm_upper2",
+        "crazydave_mouth1", "crazydave_mouth5", "crazydave_mouth6",
     )
-] + [(ROOT / "tools/raw/images/projectilesnowpea.png", "pvz:projectilesnowpea")]
+] + [(ROOT / f"tools/raw/images/{name}.png", f"pvz:{name}") for name in ("projectilesnowpea", "shovel_hi_res", "shovel", "shovelbank", "wallnut_bowlingstripe", "conveyorbelt", "conveyorbelt_backdrop", "store_speechbubble2")]
 
 LEVEL_CLIPS = [
     (ROOT / "tools/raw/reanim/sunflower.reanim", "body", "anim_idle", "pvz:sunflower"),
@@ -112,7 +117,7 @@ def same_asset(source: Path, target: Path) -> bool:
 
 def build_main_menu(clips: list | None = None, sprite_sources: list | None = None, update_gameplay: bool = False, anim_config: Path | None = None) -> dict:
     """Convert selected assets and merge them into the existing base Bundle."""
-    bundle = ROOT / "assets/bundles/pvz-base"
+    bundle = ROOT / "tools/generated/pvz-base"
     manifest_path = bundle / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     previous_hash = manifest["contentHash"]
@@ -150,7 +155,7 @@ def build_main_menu(clips: list | None = None, sprite_sources: list | None = Non
         if update_gameplay:
             for path in (output / "gameplay").iterdir():
                 target = bundle / "gameplay" / path.name
-                if target.read_bytes() != path.read_bytes():
+                if not target.is_file() or target.read_bytes() != path.read_bytes():
                     changed = True
                     shutil.copyfile(path, target)
 
@@ -164,7 +169,7 @@ def build_main_menu(clips: list | None = None, sprite_sources: list | None = Non
 def build_pvz_base() -> dict:
     return build_sprite_content(
         ROOT / "tools/fixtures/content",
-        ROOT / "assets/bundles/pvz-base",
+        ROOT / "tools/generated/pvz-base",
         sprite_sources=[
             (ROOT / "tools/raw/images/background1.jpg", "pvz:background1"),
             (ROOT / "tools/raw/images/background1unsodded.jpg", "pvz:background1unsodded"),
@@ -177,13 +182,13 @@ def build_pvz_base() -> dict:
             (ROOT / "tools/raw/images/seedpacket_larger.png", "pvz:seedpacket_larger"),
             (ROOT / "tools/raw/images/seeds.png", "pvz:seeds"),
             (ROOT / "tools/raw/images/packet_plants.png", "pvz:packet_plants"),
-            (ROOT / "assets/resources/textures/packet_plants_cached.png", "pvz:packet_plants_cached"),
-            (ROOT / "assets/resources/textures/plant_previews_cached.png", "pvz:plant_previews_cached"),
+            (ROOT / "tools/generated/resources/textures/packet_plants_cached.png", "pvz:packet_plants_cached"),
+            (ROOT / "tools/generated/resources/textures/plant_previews_cached.png", "pvz:plant_previews_cached"),
             (ROOT / "tools/raw/images/sunbank.png", "pvz:sunbank"),
-            (ROOT / "assets/resources/textures/flagmeter.png", "pvz:flagmeter"),
-            (ROOT / "assets/resources/textures/flagmeterparts.png", "pvz:flagmeterparts"),
-            (ROOT / "assets/resources/textures/flagmeterlevelprogress.png", "pvz:flagmeterlevelprogress"),
-            (ROOT / "assets/resources/textures/lawnmower_cached.png", "pvz:lawnmower_cached"),
+            (ROOT / "tools/generated/resources/textures/flagmeter.png", "pvz:flagmeter"),
+            (ROOT / "tools/generated/resources/textures/flagmeterparts.png", "pvz:flagmeterparts"),
+            (ROOT / "tools/generated/resources/textures/flagmeterlevelprogress.png", "pvz:flagmeterlevelprogress"),
+            (ROOT / "tools/generated/resources/textures/lawnmower_cached.png", "pvz:lawnmower_cached"),
             (ROOT / "tools/raw/reanim/zombie_outerarm_upper2.png", "pvz:zombie_outerarm_upper2"),
             *PLANT_ZOMBIE_SPRITES,
         ],
@@ -207,16 +212,16 @@ def build_pvz_base() -> dict:
             (ROOT / "tools/raw/particles/peasplat.xml", "pvz:peasplat"),
             (ROOT / "tools/raw/particles/seedpacketflash.xml", "pvz:seedpacketflash"),
         ],
-        sounds=[(ROOT / "assets/resources/audio/sfx/splat.mp3", "pvz:splat")],
+        sounds=[(ROOT / "tools/generated/resources/audio/sfx/splat.mp3", "pvz:splat")],
         music=[(
-            ROOT / "assets/resources/audio/music/music_manifest.json",
+            ROOT / "tools/generated/resources/audio/music/music_manifest.json",
             "title_theme",
             "pvz:title_theme",
         )],
         gameplay_source=ROOT / "tools/content/pvz-base/gameplay",
         prefabs=[(
-            ROOT / "assets/bundles/pvz-base/ui/adventure11.prefab",
-            "pvz:adventure11",
+            ROOT / "assets/resources/ui/level.prefab",
+            "pvz:level",
         )],
     )
 
@@ -252,3 +257,5 @@ if __name__ == "__main__":
         build_pvz_base()
         from almanac_assets import build_almanac
         build_almanac(args.raw_root)
+    from build_base_pack import build as build_base_pack
+    build_base_pack()

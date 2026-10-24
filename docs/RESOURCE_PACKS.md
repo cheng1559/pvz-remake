@@ -12,6 +12,12 @@
 
 图片、字体、音频、展示 JSON 和文本共用资源包解析入口。包按加载顺序叠加，同类型、同 ID 后加载者优先；未声明的 ID 继续查前面的包，最后读取内置资源。已声明但文件缺失、JSON 无法解析或音频解码失败会直接报错，不回退到原资源。顺序和启用状态保存在本地（`pvz-remake:resource-packs`，不读取旧版启用列表），启动时清除安装文件已不存在的启用记录；已安装包损坏仍会报错。安装、更新或启用状态变化后提示重启，确认后立即重启整个游戏，运行中的关卡先保存，重新进入时可继续。重复启用或停用不会弹窗。
 
+## 内置基础包
+
+`assets/resources/base.zip` 与外部 ZIP 使用完全相同的 `pack.json`、校验器、解码器和缓存，启动时自动挂载为最低优先级。Packs 列表的最后一行固定显示 `base`，始终启用，不能调整顺序、禁用或卸载；外部包继续按启用顺序覆盖同 ID 的表现资源。服务端玩法配置通过 `baseJson` 读取基础包，材质覆盖不会改变商品价格或战斗规则。
+
+`npm run build:base-pack` 将 `tools/content/pvz-base` 的 JSON 与 `tools/generated` 中的转换资源打包。`npm run build:content` 完成转换后也会生成 ZIP。输出采用原子替换，避免 Cocos 的文件监听导入尚未写完的 ZIP。散文件不再放在 Cocos 的 `assets` 目录中；引导场景、关卡布局 Prefab 和需要引擎编译的 shader 保留为 Cocos 资源。
+
 ## 管理窗口
 
 `/pack` 不带参数时打开资源包管理窗口，布局沿用用户选择框。列表显示全部已安装的包，顺序即优先级，越靠上越优先。点击复选框或名称切换启用状态，不移动条目；右侧上下箭头调整顺序，两者都只修改窗口内的草稿。Apply 把全部包的顺序和启用状态保存为同一份列表，未启用的包也保留位置。CLI 操作同一份列表：`/pack load` 和 `/pack install` 把包启用并移到最上方，`/pack unload` 只取消启用、位置不变，`/pack uninstall` 从列表中删除。Import 打开 ZIP 选择器，安装后自动勾选并放到最上方；每行右侧的 Uninstall 确认后立即删除。Apply 保存草稿，启用列表或运行中的包有变化时弹出重启确认，确认后先保存关卡再重启；取消重启时设置已经保存，下次启动生效。Cancel／Escape 放弃未应用的勾选和排序。
@@ -64,12 +70,12 @@ HD 包的制作素材位于 `art/resource-packs/hd/`，包含 UI 超分图、非
 | --- | --- | --- |
 | 图片、字体 | `sprites`、`fonts` | 原有稳定 ID，例如 `pvz:button_left` |
 | 音乐音轨、音效 | `audio` | 内置文件名，不含扩展名，例如 `pvz:day_grasswalk_main`、`pvz:chomp`；Mod 使用自己的命名空间 |
-| 注册的 Reanim、粒子、音乐定义 | `json` | 内容清单中的对应 ID，见 `assets/bundles/pvz-base/manifest.json` |
+| 注册的 Reanim、粒子、音乐定义 | `json` | 内容清单中的对应 ID，见 `tools/generated/pvz-base/manifest.json` |
 | 内置 JSON、文本 | `json`、`text` | `pvz:` 加载入路径，不含扩展名，例如 `pvz:properties/lawnstrings`、`pvz:particles/seedpacketflash` |
 
 JSON 按整个资源替换，沿用被替换文件的结构，不按字段合并。Reanim 的 ID 要与清单条目匹配，现有 UI、挂件使用的轨道名也需保留；其引用的新贴图可在 `sprites` 中提供。两种粒子格式分别沿用内容清单中的 ID 和内置 `particles/` 路径，JSON 结构也分别保持原格式。`gameplay/strings` 只覆盖客户端显示的文案；关卡定义、植物数值和存档等服务端数据不由资源包替换。
 
-Menu 的原版文案读取 `pvz:properties/lawnstrings`；本项目新增的平台提示和 GitHub 按钮文案位于 `assets/resources/ui/strings.json`，通过 `json` 字段的 `pvz:ui/strings` 覆盖。UI 加载这两张文本表，同名键以 LawnStrings 为准，因此也可在汉化包的 LawnStrings 中补充新增键。
+Menu 的原版文案读取 `pvz:properties/lawnstrings`；本项目新增的平台提示和 GitHub 按钮文案位于 `tools/generated/resources/ui/strings.json`，通过 `json` 字段的 `pvz:ui/strings` 覆盖。UI 加载这两张文本表，同名键以 LawnStrings 为准，因此也可在汉化包的 LawnStrings 中补充新增键。
 
 音频使用各端通用的 MP3 或 WAV。动态音乐可分别替换 `main`、`drums`、`hihats`，各轨需保持相同时间轴、时长和前导静音；改变节拍或循环位置时同时提供 `pvz:audio/music/music_manifest`。播放、音量与动态鼓点仍使用现有 `MusicSystem`。普通文本使用 UTF-8；界面及关卡文案使用上例中的 JSON 文本表。
 

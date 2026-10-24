@@ -193,11 +193,18 @@ def build_sprite_content(
         output.write_bytes(_json_bytes(data) + b"\n")
         outputs.append(output)
 
+    store_source = gameplay_source / "store.json"
+    if store_source.is_file():
+        store_output = bundle / "gameplay/store.json"
+        store_output.write_bytes(_json_bytes(json.loads(store_source.read_text(encoding="utf-8"))) + b"\n")
+        outputs.append(store_output)
+
     presentation_path = presentation_source / "definitions.json"
     if not presentation_path.is_file():
         raise ValueError(f"missing presentation source: {presentation_path}")
     presentation = json.loads(presentation_path.read_text(encoding="utf-8"))
-    if not isinstance(presentation, dict) or set(presentation) != {"animation", "plants", "zombies", "projectiles", "seedPackets", "almanac"}:
+    required = {"animation", "plants", "zombies", "projectiles", "seedPackets", "almanac", "conveyor", "shovel", "dave"}
+    if not isinstance(presentation, dict) or not required <= set(presentation) or set(presentation) - required - {"levels", "awards", "boards"}:
         raise ValueError("invalid presentation definitions fields")
     presentation_entries = {"definitions": "presentation/definitions.json"}
     presentation_output = bundle / presentation_entries["definitions"]

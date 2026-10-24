@@ -70,7 +70,7 @@ def convert_font(source: Path, original: dict) -> dict:
 
 
 def convert_images(raw: Path) -> dict:
-    originals = {path.stem: path for directory in (ROOT / 'assets/resources/textures', ROOT / 'assets/bundles/pvz-base/sprites')
+    originals = {path.stem: path for directory in (ROOT / 'tools/generated/resources/textures', ROOT / 'tools/generated/pvz-base/sprites')
                  for path in directory.iterdir() if path.suffix.lower() in ('.png', '.jpg', '.jpeg')}
     alpha_grids = load_alphagrid_resources(raw / 'properties/resources.xml')
     sprites = {}
@@ -138,16 +138,16 @@ def build(source: Path):
                 if path.suffix in ('.png', '.json'):
                     path.unlink()
         fonts = {}
-        for original in sorted((ROOT / 'assets/resources/fonts').glob('*.json')):
+        for original in sorted((ROOT / 'tools/generated/resources/fonts').glob('*.json')):
             convert_font(raw / f'data/{original.stem}.txt', json.loads(original.read_text()))
             fonts[f'pvz:{original.stem}'] = f'fonts/{original.name}'
         sprites = convert_images(raw)
-        strings = json.loads((ROOT / 'assets/resources/properties/lawnstrings.json').read_text())
+        strings = json.loads((ROOT / 'tools/generated/resources/properties/lawnstrings.json').read_text())
         strings.update(parse_default_xml_strings(read_text(raw / 'properties/default.xml')))
         strings.update(parse_lawnstrings(read_text(raw / 'properties/lawnstrings.txt')))
         strings.update(ADVICE_HUGE_WAVE='一大波僵尸即将来袭！', ADVICE_ZOMBIES_ATE_BRAINS='僵尸吃掉了你的脑子！')
         write_json(PACK / 'text/lawnstrings.json', strings)
-        gameplay = json.loads((ROOT / 'assets/bundles/pvz-base/gameplay/strings.json').read_text())
+        gameplay = json.loads((ROOT / 'tools/generated/pvz-base/gameplay/strings.json').read_text())
         gameplay['locale'] = 'zh-CN'
         gameplay['entries'] = {key: strings[key] for key in gameplay['entries']}
         write_json(PACK / 'text/level_strings.json', gameplay)

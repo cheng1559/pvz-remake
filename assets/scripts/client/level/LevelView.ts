@@ -5,6 +5,7 @@ import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
+import { easeInOut } from '@/client/view/GameScreenMath'
 import { LevelSlots } from './LevelSlots'
 import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
@@ -14,7 +15,7 @@ import { plantDefinition } from '@/client/plants/definitions'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
-import type { ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
+import type { GameCommand, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
 import { getLevelPresentation } from './LevelPresentation'
@@ -32,22 +33,28 @@ import { LevelParticlePresenter } from './LevelParticlePresenter'
 import { LevelGameOverPresenter } from './LevelGameOverPresenter'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { TodParticleSystem } from '@/core/Particle'
+import { LevelSeedChooser } from './LevelSeedChooser'
+import { LevelBoardHud } from './LevelBoardHud'
 
 const WIDTH = 800
 const HEIGHT = 600
 const PROGRESS_METER_WIDTH = 158
 const PROGRESS_METER_HEIGHT = 27
-const PROGRESS_FILL_WIDTH = 143
 
 export type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 
 export class LevelView {
+    private boardHud?: LevelBoardHud
+    private hideConveyorBank = () => {}
+    private seedChooser?: LevelSeedChooser
+    private syncSeedChooserIntro = () => {}
     private readonly pausedComponents: Component[] = []
     private presentationPaused = false
     private hitboxes: Graphics | null = null
     get introComplete(): boolean {
         return this.intro.complete
     }
+    get canOpenMenu(): boolean { return this.introComplete || !!this.seedChooser?.active && this.seedChooser.choosing && this.intro.elapsedTicks >= 425 }
 
     private constructor(
         private readonly root: Node,
@@ -63,11 +70,11 @@ export class LevelView {
         readonly board: BoardDefinition,
     ) {}
 
-    static async create(root: Node, content: LoadedContent, levelId: string, playerName: string): Promise<LevelView> {
+    static async create(root: Node, content: LoadedContent, levelId: string, playerName: string, initial: WorldSnapshot): Promise<LevelView> {
         const level = content.levels.levels[levelId]
         if (!level) throw new Error(`Level is not installed: ${levelId}`)
         const boardDefinition = content.definitions.boards[level.board]
-        const presentation = getLevelPresentation(level)
+        const presentation = getLevelPresentation(level, content.presentation, levelId)
         const animations = content.animations
         animations.freeze()
         const sprites = new SpriteRepository(content.registry, content.loader)
@@ -228,11 +235,15 @@ export class LevelView {
         const levelCompleteFade = fadeParts.node
         levelCompleteFade.active = false
         const audio = new LevelAudioPresenter(presentation.board.music, content.presentation)
+        const seedChooser = initial.seedChooser === undefined ? undefined
+            : await LevelSeedChooser.create(ui, content, hud, initial.seedChooser.availableSeeds, initial.seedChooser.slots, root)
+        seedChooser?.placeBefore(cursorPreview)
         let view!: LevelView
         let entityRenderer!: LevelEntityRenderer
         const intro = await presentation.createIntro({
             content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow,
             entityNodes: () => entityRenderer.nodes(),
+            previewZombies: initial.wave.previewZombies ?? {},
         })
         entityRenderer = new LevelEntityRenderer(
             root.layer, content, animations, {
@@ -255,7 +266,7 @@ export class LevelView {
         const hudPresenter = LevelHudPresenter.create({
             ui, content, level, presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
             loadPacketSprite, packetCostFont: pico129,
-            adviceNode: slots.advice, adviceParent: hud, adviceFont: houseOfTerror28,
+            adviceNode: slots.advice, adviceParent: hud, controlsParent: bankLayer, adviceFont: houseOfTerror28,
             tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
             cursorPlant, gridPlant,
             sunText, progressMeter, progressFillClip, progressFill, progressHead, levelText,
@@ -273,18 +284,50 @@ export class LevelView {
         )
         const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, gameOverFrames, presentation.board.gameOver)
         view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition)
+        view.seedChooser = seedChooser
+        if (level.tools?.length || level.conveyor || level.shovelTutorial || level.bowling) {
+            view.boardHud = await LevelBoardHud.create(hud, bankLayer, slots.sodClip, content, ui, initial, cursorPreview, hudPresenter.seedBank)
+            if (level.conveyor) view.hideConveyorBank = () => { bank.active = false }
+        }
+        if (seedChooser) view.syncSeedChooserIntro = () => {
+            const tick = intro.elapsedTicks
+            seedChooser.syncIntro(tick)
+            // Restoring a completed intro skips the camera pan; clear its temporary UI offset too.
+            const offset = intro.complete ? 0 : board.position.x
+            hud.setPosition(-WIDTH / 2 - offset, HEIGHT / 2)
+            bankLayer.setPosition(-WIDTH / 2 - offset, HEIGHT / 2)
+            if (intro.complete) return
+            bank.active = tick > 400
+            bank.setPosition(bank.position.x, easeInOut(400, 425, tick, 87, 0))
+        }
         view.shakeTarget = { node: board, x: board.position.x, y: board.position.y }
         intro.sync()
+        view.hideConveyorBank()
         return view
     }
 
     updateIntro(dt: number): boolean {
-        return this.intro.update(dt)
+        if (this.boardHud) {
+            this.boardHud.update(dt, this.intro.elapsedTicks)
+            if (this.boardHud.blocksIntro) return false
+        }
+        const complete = this.intro.update(dt, this.seedChooser?.choosing ? 425 : undefined)
+        this.hideConveyorBank()
+        this.seedChooser?.update(dt)
+        this.syncSeedChooserIntro()
+        return complete
     }
 
+    bindSeedChooser(send: (command: GameCommand) => void): void { this.seedChooser?.bind(send) }
+
     setPointer(pointer?: { x: number, y: number }): void {
+        this.boardHud?.setPointer(pointer)
+        this.entityRenderer.setPointer(pointer)
         this.hud.setPointer(pointer)
     }
+
+    bindTools(select: (toolId: string) => void) { return this.boardHud?.bindTools(select) ?? [] }
+    get dialogReady(): boolean { return this.boardHud?.dialogReady ?? false }
 
     resetCursor(): void {
         this.hud.resetCursor()
@@ -298,7 +341,9 @@ export class LevelView {
         return this.gameOver.update(dt)
     }
 
-    bindSeedPackets(select: (seedId: string) => void): UIButton[] {
+    seedPacketAt(snapshot: WorldSnapshot, index: number) { return this.hud.seedBank.packetAt(snapshot, index) }
+
+    bindSeedPackets(select: (index: number) => void): UIButton[] {
         return this.hud.bindSeedPackets(select)
     }
 
@@ -330,11 +375,15 @@ export class LevelView {
     }
 
     sync(snapshot: WorldSnapshot, changes: ClientWorldChanges, events: ServerEvent[]): void {
+        this.boardHud?.sync(snapshot)
+        this.seedChooser?.sync(snapshot)
         this.entityRenderer.sync(snapshot, changes, events)
+        this.hideConveyorBank()
+        this.syncSeedChooserIntro()
         this.syncShake(snapshot.gameplayTick, events)
         this.end.sync(snapshot, events)
         for (const item of snapshot.items) this.end.syncAward(item, snapshot.levelId)
-        this.hud.sync(snapshot, events, this.introComplete)
+        this.hud.sync(snapshot, events, this.introComplete, this.canOpenMenu)
         for (const event of events) this.audio.play(event)
         this.playHaptics(events)
         this.syncHitboxes(snapshot)
@@ -385,6 +434,7 @@ export class LevelView {
     private syncShake(tick: number, events: ServerEvent[]): void {
         const target = this.shakeTarget
         if (events.some(event => event.type === 'plantExploded')) this.shake = { endTick: tick + 12, x: 3, y: -4, tick: -1 }
+        else if (events.some(event => event.type === 'bowlingImpact')) this.shake = { endTick: tick + 12, x: 1, y: -2, tick: -1 }
         if (!target?.node.isValid || tick === this.shake.tick) return
         this.shake.tick = tick
         const remaining = this.shake.endTick - tick
@@ -416,6 +466,8 @@ export class LevelView {
 
     async restore(snapshot: LevelPresentationSnapshot): Promise<void> {
         await this.intro.restore(snapshot.intro)
+        this.hideConveyorBank()
+        this.syncSeedChooserIntro()
         this.hud.restore(snapshot.hud, snapshot.advice, this.introComplete)
         await this.entityRenderer.restore(snapshot.entities)
         await Promise.all([this.end.restore(snapshot.end), this.audio.restore(snapshot.audio)])

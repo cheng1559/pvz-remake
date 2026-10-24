@@ -45,7 +45,7 @@ test('a level scene runs an injected intro and level through clock scaling, paus
         update(dt: number) { deltas.push(dt) }, drainEvents: () => [], drainChanges: () => ({}),
         snapshotPresentation: (snapshot: unknown) => snapshot,
     }, {
-        audio, sync() {}, setPaused(value: boolean) { presentationPaused = value },
+        audio, sync() {}, bindSeedChooser() {}, setPaused(value: boolean) { presentationPaused = value },
         updateIntro(dt: number) { introTicks += dt; return introTicks >= 1 },
         updateLevelComplete: () => world.result === 'won',
         snapshot: async (flow: unknown) => ({ flow }),

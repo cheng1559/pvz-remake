@@ -11,6 +11,7 @@ import * as events from './events'
 import * as explosions from './explosions'
 import * as debugRules from './debug/DebugRules'
 import * as gameplay from './GameplayRegistry'
+import * as seedBank from './seedBank'
 import type { DefinitionSources } from '@/shared/content/DefinitionRegistry'
 
 export function createServerModHost(ownerId: string, registry: gameplay.GameplayRegistry, definitions: DefinitionSources): ModHost {
@@ -20,6 +21,7 @@ export function createServerModHost(ownerId: string, registry: gameplay.Gameplay
         'server/GameplayRegistry': { ...gameplay, registry },
         'server/IntegratedGameServer': session,
         'server/components': components,
+        'server/seedBank': seedBank,
         'server/levelState': levelState,
         'server/projectiles': projectiles,
         'server/zombies/system': zombies,

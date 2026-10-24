@@ -24,6 +24,7 @@ const FONT_NAMES = {
     yellow: 'dwarventodcraft18yellow',
     profile: 'briannetod16',
     packetCost: 'pico129',
+    tooltipTitle: 'pix118bold',
     money: 'continuumbold14',
     storeItem: 'houseofterror16',
     achievement: 'dwarventodcraft12',
@@ -61,7 +62,7 @@ export async function loadUIAssets(): Promise<UIAssets> {
     if (pending) return pending
     const loader = new ClientContentLoader()
     return pending = Promise.all([
-        loader.loadManifest('pvz-base').then(manifest => loadPresentationDefinitions(manifest, loader)),
+        loader.loadManifest().then(manifest => loadPresentationDefinitions(manifest)),
         Promise.all(Object.entries(FONT_NAMES).map(async ([key, name]) => [key, await loadBitmapFont(name)] as const)),
         Promise.all(SPRITE_NAMES.map(async name => {
             const frame = await SpriteLoader.load(name)

@@ -12,7 +12,7 @@ export function register({ host, assets }: Context): void {
     const { ProjectileSystem } = host.get('server/projectiles')
     const { ZombieSystem } = host.get('server/zombies/system')
     const { damageZombie, isTargetableZombie } = host.get('server/zombies/damage')
-    const { rectOverlap, DAY_BOARD_RIGHT } = host.get('server/collision')
+    const { rectOverlap, getBoardBounds } = host.get('server/collision')
     const { EventQueueResource, emitServerEvent } = host.get('server/events')
     const Lob = defineComponent('corn:lob'), Butter = defineComponent('corn:buttered')
     const config = gameplay.plants['corn:kernel_pult'].behavior, physics = config.lob
@@ -35,7 +35,7 @@ export function register({ host, assets }: Context): void {
             const zombie = world.get(id, Zombie), p = world.get(id, Position), body = definitions.zombies[zombie.typeId].body
             const rect = { x: Math.trunc(p.x) + body.x, width: body.width }
             if (!canHit(zombie) || p.row !== position.row) continue
-            if (zombie.state !== 'vaulting' && rect.x > DAY_BOARD_RIGHT || attack && rectOverlap(attack, rect) < 0) continue
+            if (zombie.state !== 'vaulting' && rect.x > getBoardBounds(world).right || attack && rectOverlap(attack, rect) < 0) continue
             if (rect.x < nearest) { nearest = rect.x; target = id }
         }
         return target

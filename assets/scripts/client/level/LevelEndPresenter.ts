@@ -9,6 +9,7 @@ import { SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/client/hud/SeedPacketRe
 import type { ItemSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelEndSnapshot } from './LevelPresentationSnapshot'
+import { levelAwardSize } from './LevelGeometry'
 
 type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 
@@ -76,18 +77,19 @@ export class LevelEndPresenter {
         if (item.typeId !== this.content.levels.levels[levelId].award.id) return false
         const node = this.entityNode(item.entityId)
         if (!node) return true
+        const size = levelAwardSize(this.content.levels.levels[levelId].award)
         let { x, y, scale } = item
         if (item.state === 'collecting' && this.ticks >= 0) {
             const moveTime = Math.min(1, this.ticks / 350)
             const moveEaseOut = 2 * moveTime - moveTime * moveTime
-            x += (375 - x) * moveEaseOut
-            y += (165 - y) * moveEaseOut
+            x += (400 - size.width / 2 - x) * moveEaseOut
+            y += (200 - size.height / 2 - y) * moveEaseOut
             const scaleTime = Math.min(1, this.ticks / 400)
             const smoothStep = 3 * scaleTime * scaleTime - 2 * scaleTime * scaleTime * scaleTime
             const scaleEase = 3 * smoothStep * smoothStep - 2 * smoothStep * smoothStep * smoothStep
             scale = 1.01 + 0.99 * scaleEase
         }
-        node.setPosition(x + SEED_PACKET_WIDTH / 2, -(y + SEED_PACKET_HEIGHT / 2))
+        node.setPosition(x + size.width / 2, -(y + size.height / 2))
         uiNode({ node, opacity: item.alpha })
         this.syncAwardVisual(node, scale, item.state === 'collecting')
         return true
@@ -149,6 +151,7 @@ export class LevelEndPresenter {
         const visualScale = Math.max(0.001, scale)
         const normal = node.getChildByName('FinalSeedPacketNormal')
         const large = node.getChildByName('FinalSeedPacketLarge')
+        node.getChildByName('AwardImage')?.setScale(visualScale, visualScale, 1)
         const x = -SEED_PACKET_WIDTH * visualScale / 2
         const y = SEED_PACKET_HEIGHT * visualScale / 2
         if (normal) {

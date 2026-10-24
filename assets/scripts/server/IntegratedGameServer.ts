@@ -7,7 +7,7 @@ import type {
     GameplayLevels,
 } from '@/shared/content/gameplay'
 import type { EnabledMod, ServerEvent, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
-import type { GameCommand } from '@/shared/protocol/index'
+import type { GameCommand, SeedAvailability } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
 import { DeterministicRng } from './DeterministicRng'
 import { GameplayRegistry } from './GameplayRegistry'
@@ -27,7 +27,6 @@ import { createPeashooterSystem } from './plants/shooter'
 import { createPlantAbilitySystem, initialPlantAbility } from './plants/abilities'
 import { createProjectileSystem } from './projectiles'
 import { createZombieSystem } from './zombies/system'
-import { spawnZombie } from './zombies/spawn'
 import { ZombieBehaviorsResource } from './zombies/behaviors'
 import {
     EventQueueResource,
@@ -46,6 +45,9 @@ import { createMowerSystem } from './mower'
 import { debugSuccess, parseDebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { executeDebugGameCommand } from './debug/DebugCommands'
 import { DebugRulesResource, getDebugRules } from './debug/DebugRules'
+import { applySeedChoice, seedChooserSnapshot } from './seedChooser'
+import { selectedSeedId } from './seedBank'
+import { canPlantConveyorAt, createConveyorSystem, startConveyor } from './conveyor'
 import {
     parseServerSaveSnapshot,
     type SavedEntity,
@@ -53,7 +55,6 @@ import {
 } from './save'
 
 const CANT_AFFORD_ADVICE = 'ADVICE_CANT_AFFORD_PLANT'
-const SEED_REFRESH_ADVICE = 'ADVICE_SEED_REFRESH'
 
 export type CommandRejectionCode =
     | 'game-not-playing'
@@ -69,6 +70,9 @@ export type CommandRejectionCode =
     | 'intro-not-complete'
     | 'intro-already-complete'
     | 'unsupported-command'
+    | 'not-choosing-seeds'
+    | 'seed-bank-full'
+    | 'seed-choice-incomplete'
 
 type QueuedCommand = GameCommand | { type: 'debug'; command: string }
 interface CommandResult { sequence: number, rejection?: CommandRejectionCode, debug?: DebugCliResult }
@@ -118,7 +122,11 @@ export class IntegratedGameServer {
         })
         world.resources.set(RandomResource, new DeterministicRng(packet.randomSeed))
         world.resources.set(SeedBankResource, {
-            packets: level.seedPackets.map(seedId => ({ seedId, readyAtTick: 0 })),
+            selection: { mode: 'none' },
+            packets: level.seedBankSlots === undefined ? level.seedPackets.map(seedId => ({ seedId,
+                readyAtTick: this.definitions.seeds[seedId].initialCooldownTicks ?? 0,
+                cooldownTotal: this.definitions.seeds[seedId].initialCooldownTicks ?? 0 })) : [],
+            ...(level.seedBankSlots === undefined ? {} : { choosing: true }),
         })
         world.resources.set(EventQueueResource, createEventQueue())
         initializeLevel(world, packet.firstAdventure)
@@ -142,6 +150,12 @@ export class IntegratedGameServer {
             commands: [],
             commandResults: [],
         }
+        if (level.conveyor) {
+            world.resources.get(SeedBankResource).packets = []
+            world.resources.get(SeedBankResource).conveyor = { nextId: 1, spawnAtTick: level.conveyor.spawnDelay[0].ticks, moveTicks: 0, packets: [] }
+            world.resources.get(TutorialResource).sunAtTick = undefined
+        }
+        if (packet.firstAdventure) for (const plant of level.shovelTutorial?.introPlants ?? []) this.createPlant(this.session, plant.seedId, plant.row, plant.column)
         return this.snapshot()
     }
 
@@ -192,10 +206,13 @@ export class IntegratedGameServer {
             level: { phase: level.phase, result: level.result, paused: level.paused },
             economy: { ...world.resources.get(EconomyStateResource) },
             seedBank: {
-                ...(seedBank.selectedSeedId === undefined ? {} : { selectedSeedId: seedBank.selectedSeedId }),
+                selection: { ...seedBank.selection },
+                ...(seedBank.conveyor === undefined ? {} : { conveyor: jsonRoundTrip(seedBank.conveyor) }),
+                ...(seedBank.choosing === undefined ? {} : { choosing: seedBank.choosing }),
                 packets: seedBank.packets.map(packet => ({ ...packet })),
             },
             tutorial: {
+                ...(tutorial.dialogIndex === undefined ? {} : { dialogIndex: tutorial.dialogIndex }),
                 firstAdventure: tutorial.firstAdventure,
                 step: tutorial.step,
                 ...(tutorial.zombieWarningShown === undefined ? {} : { zombieWarningShown: tutorial.zombieWarningShown }),
@@ -212,6 +229,7 @@ export class IntegratedGameServer {
             },
             wave: {
                 index: wave.index,
+                ...(wave.zombiesByWave === undefined ? {} : { zombiesByWave: wave.zombiesByWave.map(zombies => [...zombies]) }),
                 ...(wave.rowPicks === undefined ? {} : { rowPicks: wave.rowPicks.map(row => ({ ...row })) }),
                 ...(wave.hugeWaveAnnounced === undefined ? {} : { hugeWaveAnnounced: wave.hugeWaveAnnounced }),
                 ...(wave.nextWaveAtTick === undefined ? {} : { nextWaveAtTick: wave.nextWaveAtTick }),
@@ -245,17 +263,32 @@ export class IntegratedGameServer {
         const definition = this.levels.levels[save.levelId]
         if (!definition) throw new Error(`Unknown saved level: ${save.levelId}`)
         if (save.wave.index > definition.waves.length) throw new Error('Saved wave index is outside the level')
+        if (definition.zombiePool && (!save.wave.zombiesByWave || save.wave.zombiesByWave.length !== definition.waves.length ||
+            save.wave.zombiesByWave.some(wave => wave.some(id => !this.definitions.zombies[id])))) {
+            throw new Error('Saved zombie waves do not match the level')
+        }
         if (definition.activeRows.length > 1 && (!save.wave.rowPicks ||
             save.wave.rowPicks.length !== definition.activeRows.length ||
             save.wave.rowPicks.some(row => !definition.activeRows.includes(row.row)))) {
             throw new Error('Saved wave row history does not match the level')
         }
-        if (save.seedBank.packets.length !== definition.seedPackets.length) throw new Error('Saved seed bank size does not match the level')
+        const slots = definition.conveyor ? 0 : definition.seedBankSlots ?? definition.seedPackets.length
+        if (!!save.seedBank.conveyor !== !!definition.conveyor || save.seedBank.conveyor?.packets.some(packet => !definition.conveyor!.seeds.some(seed => seed.id === packet.seedId))) {
+            throw new Error('Saved conveyor does not match the level')
+        }
+        if (save.seedBank.conveyor && save.seedBank.conveyor.packets.length > definition.conveyor!.capacity) throw new Error('Saved conveyor exceeds capacity')
+        if (save.seedBank.selection.mode === 'tool' && !definition.tools?.includes(save.seedBank.selection.toolId)) throw new Error('Saved tool is unavailable in this level')
+        if (save.seedBank.choosing ? !definition.seedBankSlots || save.level.phase !== 'intro' || save.seedBank.packets.length > slots
+            : save.seedBank.packets.length !== slots) throw new Error('Saved seed bank size does not match the level')
+        if (definition.seedBankSlots && (save.seedBank.choosing === undefined || save.seedBank.choosing && save.seedBank.packets.some(packet => !definition.seedPackets.includes(packet.seedId)))) {
+            throw new Error('Saved seed choice does not match the level')
+        }
         for (const packet of save.seedBank.packets) {
             if (!this.definitions.seeds[packet.seedId]) throw new Error(`Unknown saved seed: ${packet.seedId}`)
         }
-        if (save.seedBank.selectedSeedId !== undefined &&
-            !save.seedBank.packets.some(packet => packet.seedId === save.seedBank.selectedSeedId)) {
+        const selection = save.seedBank.selection
+        if (selection.mode === 'seed' && !save.seedBank.packets.some(packet => packet.seedId === selection.seedId) ||
+            selection.mode === 'conveyor' && !save.seedBank.conveyor?.packets.some(packet => packet.id === selection.packetId)) {
             throw new Error('Saved selected seed is not in the seed bank')
         }
 
@@ -269,7 +302,9 @@ export class IntegratedGameServer {
         world.resources.set(EconomyStateResource, { ...save.economy })
         world.resources.set(RandomResource, DeterministicRng.restore(save.random))
         world.resources.set(SeedBankResource, {
-            ...(save.seedBank.selectedSeedId === undefined ? {} : { selectedSeedId: save.seedBank.selectedSeedId }),
+            selection: { ...save.seedBank.selection },
+            ...(save.seedBank.conveyor === undefined ? {} : { conveyor: jsonRoundTrip(save.seedBank.conveyor) }),
+            ...(save.seedBank.choosing === undefined ? {} : { choosing: save.seedBank.choosing }),
             packets: save.seedBank.packets.map(packet => ({ ...packet })),
         })
         world.resources.set(TutorialResource, { ...save.tutorial })
@@ -331,6 +366,7 @@ export class IntegratedGameServer {
             const playing = level.phase === 'gameplay' && !level.paused && level.result === 'playing'
             const inputCommand = processInput && playing && (
                 command.type === 'selectSeed' || command.type === 'clearCursor' || command.type === 'placePlant' || command.type === 'mod'
+                || command.type === 'selectConveyorPacket' || command.type === 'selectTool' || command.type === 'useToolAt'
             )
             if (!isSessionCommand(command) && !inputCommand && playing) {
                 break
@@ -338,8 +374,9 @@ export class IntegratedGameServer {
             const previousPhase = level.phase
             const previousPaused = level.paused
             const rejection = this.processNextCommand(session)
-            if (inputCommand || (rejection === undefined && isSessionCommand(command)
-                && (command.type === 'debug' || level.phase !== previousPhase || level.paused !== previousPaused))) {
+            const introInput = previousPhase === 'intro' && (command.type === 'advanceDialog' || command.type === 'selectTool' || command.type === 'useToolAt' || command.type === 'clearCursor')
+            if (inputCommand || (rejection === undefined && (introInput || isSessionCommand(command)
+                && (command.type === 'debug' || command.type === 'chooseSeed' || command.type === 'confirmSeeds' || level.phase !== previousPhase || level.paused !== previousPaused)))) {
                 session.tick++
                 changed = true
             }
@@ -360,7 +397,10 @@ export class IntegratedGameServer {
         if (level.result !== 'playing' && command.type !== 'pause' && command.type !== 'resume') return 'game-not-playing'
         if (command.type === 'completeIntro') {
             if (level.phase !== 'intro') return 'intro-already-complete'
+            if (session.world.resources.get(SeedBankResource).choosing) return 'seed-choice-incomplete'
+            if (getActiveTutorial(session.world)?.blocksIntro && session.world.resources.get(TutorialResource).step !== 'complete') return 'intro-not-complete'
             level.phase = 'gameplay'
+            startConveyor(session.world)
             return
         }
         if (command.type === 'pause') {
@@ -371,19 +411,39 @@ export class IntegratedGameServer {
             level.paused = false
             return
         }
+        if (command.type === 'chooseSeed' || command.type === 'confirmSeeds') {
+            return applySeedChoice(session.world, this.definitions, command)
+        }
+        if (level.paused) return 'game-paused'
+        if (command.type === 'advanceDialog') {
+            if (level.phase !== 'intro') return 'unsupported-command'
+            getActiveTutorial(session.world)?.advanceDialog?.(session.world)
+            return
+        }
+        if (command.type === 'selectTool') return this.selectTool(session, command.toolId)
+        if (command.type === 'useToolAt') return this.useTool(session, command.row, command.column)
+        if (command.type === 'clearCursor') {
+            const bank = session.world.resources.get(SeedBankResource)
+            if (bank.selection.mode !== 'none') getActiveTutorial(session.world)?.seedCanceled?.(session.world, session.gameplayTick)
+            bank.selection = { mode: 'none' }
+            return
+        }
         if (level.phase !== 'gameplay') return 'intro-not-complete'
         if (level.paused) return 'game-paused'
 
         switch (command.type) {
+            case 'selectConveyorPacket': {
+                const bank = session.world.resources.get(SeedBankResource)
+                const packet = bank.conveyor?.packets.find(packet => packet.id === command.packetId)
+                if (!packet) return 'seed-not-available'
+                const availability = this.seedAvailability(session, packet.seedId, packet.id)
+                if (availability.reason) return this.rejectSeed(session, packet.seedId, availability)
+                bank.selection = { mode: 'conveyor', packetId: packet.id }
+                return
+            }
             case 'selectSeed': return this.selectSeed(session, command.seedId)
             case 'placePlant': return this.placePlant(session, command.row, command.column)
             case 'collectItemAt': return this.collectItem(session, command.itemId)
-            case 'clearCursor':
-                if (session.world.resources.get(SeedBankResource).selectedSeedId) {
-                    getActiveTutorial(session.world)?.seedCanceled?.(session.world, session.gameplayTick)
-                }
-                session.world.resources.get(SeedBankResource).selectedSeedId = undefined
-                return
             default: return 'unsupported-command'
         }
     }
@@ -406,7 +466,8 @@ export class IntegratedGameServer {
     }
 
     snapshot(): WorldSnapshot {
-        const { world, tick, gameplayTick } = this.requireSession()
+        const session = this.requireSession()
+        const { world, tick, gameplayTick } = session
         const level = world.resources.get(LevelStateResource)
         const economy = world.resources.get(EconomyStateResource)
         const seedBank = world.resources.get(SeedBankResource)
@@ -414,15 +475,16 @@ export class IntegratedGameServer {
         const tutorial = world.resources.get(TutorialResource)
         const seedPackets = seedBank.packets.map(packet => {
             const cooldownRemaining = Math.max(0, packet.readyAtTick - gameplayTick)
-            const selected = seedBank.selectedSeedId === packet.seedId
+            const selected = seedBank.selection.mode === 'seed' && seedBank.selection.seedId === packet.seedId
             return {
                 seedId: packet.seedId,
                 ready: cooldownRemaining === 0 && !selected,
                 selected,
                 cooldownRemaining,
+                availability: this.seedAvailability(session, packet.seedId),
                 cooldownTotal: cooldownRemaining === 0
                     ? 0
-                    : this.definitions.seeds[packet.seedId].cooldownTicks,
+                    : packet.cooldownTotal ?? this.definitions.seeds[packet.seedId].cooldownTicks,
             }
         })
         const plants = [...world.query(PositionComponent, PlantComponent)].map(entity => {
@@ -497,19 +559,26 @@ export class IntegratedGameServer {
                 index: waves.index,
                 total: level.definition.waves.length,
                 countdown: Math.max(0, (waves.nextWaveAtTick ?? gameplayTick) - gameplayTick),
+                ...(level.phase === 'intro' ? { previewZombies: (waves.zombiesByWave ?? level.definition.waves.map(wave => wave.zombies))
+                    .flat().reduce<Record<string, number>>((counts, id) => { counts[id] = (counts[id] ?? 0) + 1; return counts }, {}) } : {}),
             },
-            cursor: seedBank.selectedSeedId
-                ? { mode: 'seed', seedId: seedBank.selectedSeedId }
-                : { mode: 'none' },
+            cursor: seedBank.selection.mode === 'tool' ? { ...seedBank.selection } : selectedSeedId(seedBank)
+                ? { mode: 'seed', seedId: selectedSeedId(seedBank)! } : { mode: 'none' },
             seedPackets,
-            conveyorPackets: [],
+            ...(level.definition.seedBankSlots === undefined ? {} : { seedChooser: seedChooserSnapshot(world, this.definitions) }),
+            conveyorPackets: seedBank.conveyor?.packets.map(packet => ({ ...packet, selected: seedBank.selection.mode === 'conveyor' && packet.id === seedBank.selection.packetId,
+                availability: this.seedAvailability(session, packet.seedId, packet.id) })) ?? [],
             plants,
             zombies,
             projectiles,
             items,
             lawnMowers,
             tutorial: { id: level.definition.tutorial, step: tutorial.step },
-            extensions: { ...this.gameplay.components.snapshot(world), ...(world.resources.has(DebugRulesResource) ? { 'pvz:debug': { ...getDebugRules(world) } } : {}) },
+            extensions: { ...this.gameplay.components.snapshot(world),
+                ...(level.definition.tools ? { 'pvz:tools': { available: level.definition.tools.filter(id => this.toolAvailable(session, id)) } } : {}),
+                ...(seedBank.conveyor ? { 'pvz:conveyor': { ticks: seedBank.conveyor.moveTicks } } : {}),
+                ...(tutorial.dialogIndex === undefined ? {} : { 'pvz:dialog': { index: tutorial.dialogIndex } }),
+                ...(world.resources.has(DebugRulesResource) ? { 'pvz:debug': { ...getDebugRules(world) } } : {}) },
         }
     }
 
@@ -531,6 +600,7 @@ export class IntegratedGameServer {
             { phase: 'plant', system: createPeashooterSystem(this.definitions) },
             { phase: 'plant', system: createProductionSystem(this.definitions) },
             { phase: 'plant', system: createPlantAbilitySystem(this.definitions) },
+            { phase: 'plant', system: createConveyorSystem() },
             { phase: 'plant', system: this.gameplay.plantBehaviors.system(this.definitions) },
             { phase: 'zombie', system: createZombieGroanSystem() },
             { phase: 'zombie', system: createZombieSystem(this.definitions) },
@@ -641,25 +711,39 @@ export class IntegratedGameServer {
         if (saved.item) world.add(saved.entityId, ItemComponent, { ...saved.item })
     }
 
-    private selectSeed(session: Session, seedId: string): CommandRejectionCode | undefined {
+    private seedAvailability(session: Session, seedId: string, packetId?: number): SeedAvailability {
         const seedBank = session.world.resources.get(SeedBankResource)
+        if (packetId !== undefined) return seedBank.conveyor?.packets.some(packet => packet.id === packetId && packet.seedId === seedId)
+            ? {} : { reason: 'seed-not-available' }
         const packet = seedBank.packets.find(packet => packet.seedId === seedId)
-        if (!packet) return 'seed-not-available'
+        if (!packet) return { reason: 'seed-not-available' }
         if (getDebugRules(session.world).cooldown && packet.readyAtTick > session.gameplayTick) {
-            this.emitSeedRefreshFeedback(session.world)
-            return 'seed-not-ready'
+            return { reason: 'seed-not-ready', warningKey: 'WAITING_FOR_SEED' }
         }
-
         if (getDebugRules(session.world).sunCost && this.availableSun(session.world) < this.definitions.seeds[seedId].sunCost) {
-            this.emitNotEnoughSunFeedback(session.world)
-            return 'not-enough-sun'
+            return { reason: 'not-enough-sun', warningKey: 'NOT_ENOUGH_SUN' }
         }
+        return {}
+    }
+
+    private rejectSeed(session: Session, _seedId: string, availability: SeedAvailability): CommandRejectionCode | undefined {
+        if (availability.reason === 'seed-not-ready') getActiveTutorial(session.world)?.seedRejected?.(session.world, availability.reason)
+        else if (availability.reason === 'not-enough-sun') {
+            this.emitNotEnoughSunFeedback(session.world)
+        }
+        return availability.reason
+    }
+
+    private selectSeed(session: Session, seedId: string): CommandRejectionCode | undefined {
+        const availability = this.seedAvailability(session, seedId)
+        if (availability.reason) return this.rejectSeed(session, seedId, availability)
+        const seedBank = session.world.resources.get(SeedBankResource)
         if (session.world.resources.get(TutorialResource).cantAffordAdviceShown) {
             emitServerEvent(session.world.resources.get(EventQueueResource), 'adviceCleared', {
                 key: CANT_AFFORD_ADVICE,
             })
         }
-        seedBank.selectedSeedId = seedId
+        seedBank.selection = { mode: 'seed', seedId }
         getActiveTutorial(session.world)?.seedSelected?.(session.world, seedId)
     }
 
@@ -671,13 +755,13 @@ export class IntegratedGameServer {
         const { world, gameplayTick } = session
         const level = world.resources.get(LevelStateResource)
         const seedBank = world.resources.get(SeedBankResource)
-        const seedId = seedBank.selectedSeedId
+        const seedId = selectedSeedId(seedBank)
         if (!seedId) return 'no-seed-selected'
 
         const packet = seedBank.packets.find(packet => packet.seedId === seedId)
         const seed = this.definitions.seeds[seedId]
         const rules = getDebugRules(world)
-        const sunCost = rules.sunCost ? seed.sunCost : 0
+        const sunCost = !seedBank.conveyor && rules.sunCost ? seed.sunCost : 0
         const economy = world.resources.get(EconomyStateResource)
         if (rules.cooldown && packet && packet.readyAtTick > gameplayTick) return 'seed-not-ready'
         if (this.availableSun(world) < sunCost) {
@@ -689,21 +773,35 @@ export class IntegratedGameServer {
         if (!Number.isInteger(column) || column < 0 || column >= level.board.columns) {
             return 'column-out-of-range'
         }
+        const bowling = level.definition.bowling
+        if (!canPlantConveyorAt(world, column)) return 'column-out-of-range'
         const occupiedEntity = this.findPlantAt(world, row, column)
         if (occupiedEntity !== undefined) return 'cell-occupied'
 
         const entity = this.createPlant(session, seedId, row, column)
+        if (seedBank.conveyor) {
+            const conveyor = seedBank.conveyor!
+            const packetId = seedBank.selection.mode === 'conveyor' ? seedBank.selection.packetId : undefined
+            const removedIndex = conveyor.packets.findIndex(packet => packet.id === packetId)
+            conveyor.packets = conveyor.packets.filter(packet => packet.id !== packetId)
+            for (let index = removedIndex; index >= 0 && index < conveyor.packets.length; index++) conveyor.packets[index].x += level.definition.conveyor!.removalGap
+            emitServerEvent(world.resources.get(EventQueueResource), 'adviceCleared', { key: 'ADVICE_NOT_PASSED_LINE' })
+        }
         const bankSpend = Math.min(economy.sun, sunCost)
         economy.sun -= bankSpend
         economy.pendingSunSpend += sunCost - bankSpend
-        if (packet) packet.readyAtTick = gameplayTick + (rules.cooldown ? seed.cooldownTicks : 0)
-        seedBank.selectedSeedId = undefined
+        if (packet) {
+            packet.cooldownTotal = rules.cooldown ? seed.cooldownTicks : 0
+            packet.readyAtTick = gameplayTick + packet.cooldownTotal
+        }
+        seedBank.selection = { mode: 'none' }
         getActiveTutorial(world)?.plantPlaced?.(world, gameplayTick, seed.plant, occupiedEntity !== undefined)
         emitServerEvent(world.resources.get(EventQueueResource), 'plantPlaced', {
             entityId: entity,
             typeId: seed.plant,
             row,
             column,
+            ...(bowling ? { bowling: true } : {}),
         })
     }
 
@@ -741,7 +839,38 @@ export class IntegratedGameServer {
 
     private findPlantAt(world: World, row: number, column: number): number | undefined {
         return [...world.query(PositionComponent, PlantComponent)].find(entity =>
-            world.get(entity, PositionComponent)!.row === row && world.get(entity, PlantComponent)!.column === column)
+            this.definitions.plants[world.get(entity, PlantComponent)!.typeId].occupiesCell !== false && world.get(entity, PositionComponent)!.row === row && world.get(entity, PlantComponent)!.column === column)
+    }
+
+    private toolAvailable(session: Session, toolId: string): boolean {
+        const level = session.world.resources.get(LevelStateResource)
+        return toolId === 'pvz:shovel' && level.definition.tools?.includes(toolId) === true && !level.paused && level.result === 'playing' &&
+            (level.phase === 'gameplay' || getActiveTutorial(session.world)?.canSelectTool?.(session.world, toolId) === true)
+    }
+
+    private selectTool(session: Session, toolId: string): CommandRejectionCode | undefined {
+        const { world } = session
+        if (!this.toolAvailable(session, toolId)) return 'unsupported-command'
+        const bank = world.resources.get(SeedBankResource)
+        bank.selection = { mode: 'tool', toolId }
+        getActiveTutorial(world)?.toolSelected?.(world)
+        emitServerEvent(world.resources.get(EventQueueResource), 'toolSelected', { toolId })
+    }
+
+    private useTool(session: Session, row: number, column: number): CommandRejectionCode | undefined {
+        const { world } = session
+        const bank = world.resources.get(SeedBankResource)
+        if (bank.selection.mode !== 'tool' || bank.selection.toolId !== 'pvz:shovel') return 'unsupported-command'
+        const entity = this.findPlantAt(world, row, column)
+        bank.selection = { mode: 'none' }
+        if (entity !== undefined) {
+            world.destroyEntity(entity)
+            getActiveTutorial(world)?.plantRemoved?.(world)
+            emitServerEvent(world.resources.get(EventQueueResource), 'plantShoveled', { entityId: entity })
+        } else {
+            getActiveTutorial(world)?.seedCanceled?.(world, session.gameplayTick)
+            emitServerEvent(world.resources.get(EventQueueResource), 'toolMissed', {})
+        }
     }
 
     private collectItem(session: Session, itemId: number): CommandRejectionCode | undefined {
@@ -773,7 +902,8 @@ export class IntegratedGameServer {
                     value: sun.value,
                 })
             }
-            world.resources.get(SeedBankResource).selectedSeedId = undefined
+            const bank = world.resources.get(SeedBankResource)
+            bank.selection = { mode: 'none' }
             level.result = 'won'
             emitServerEvent(events, 'levelWon', {})
             return
@@ -785,7 +915,7 @@ export class IntegratedGameServer {
         const availableBefore = this.availableSun(world) - item.value
         const availableAfter = availableBefore + item.value
         for (const packet of world.resources.get(SeedBankResource).packets) {
-            const seedCost = this.definitions.seeds[packet.seedId].sunCost
+            const seedCost = getDebugRules(world).sunCost ? this.definitions.seeds[packet.seedId].sunCost : 0
             const ready = packet.readyAtTick <= session.gameplayTick
             if (ready && availableBefore < seedCost && availableAfter >= seedCost) {
                 emitServerEvent(world.resources.get(EventQueueResource), 'seedPacketFlashRequested', { seedId: packet.seedId })
@@ -805,40 +935,8 @@ export class IntegratedGameServer {
     }
 
     private emitNotEnoughSunFeedback(world: World): void {
-        const events = world.resources.get(EventQueueResource)
-        emitServerEvent(events, 'sunFlash', {})
-        const tutorial = world.resources.get(TutorialResource)
-        if (!tutorial.firstAdventure || tutorial.cantAffordAdviceShown) return
-        tutorial.cantAffordAdviceShown = true
-        emitServerEvent(events, 'advice', {
-            key: CANT_AFFORD_ADVICE,
-            style: 'tutorial-level1',
-        })
-    }
-
-    private emitSeedRefreshFeedback(world: World): void {
-        const tutorial = world.resources.get(TutorialResource)
-        if (!tutorial.firstAdventure || tutorial.seedRefreshAdviceShown ||
-            tutorial.step === 'pick-first-seed' || tutorial.step === 'plant-first-seed' ||
-            tutorial.step === 'first-plant-done') return
-        tutorial.seedRefreshAdviceShown = true
-        emitServerEvent(world.resources.get(EventQueueResource), 'advice', {
-            key: SEED_REFRESH_ADVICE,
-            style: 'tutorial-level1',
-        })
-    }
-
-    private spawnZombie(typeId: string, row: number, x: number): number {
-        const { world } = this.requireSession()
-        const level = world.resources.get(LevelStateResource)
-        return spawnZombie(
-            world,
-            this.definitions,
-            typeId,
-            row,
-            x,
-            level.board.origin.y + row * level.board.cell.height - 30,
-        )
+        emitServerEvent(world.resources.get(EventQueueResource), 'sunFlash', {})
+        getActiveTutorial(world)?.seedRejected?.(world, 'not-enough-sun')
     }
 
     private createWorld(): World {
@@ -858,6 +956,8 @@ function abilityMatches(definition: GameplayDefinitions['plants'][string], state
 function isSessionCommand(command: QueuedCommand): boolean {
     if (command.type === 'debug') return true
     return command.type === 'pause' || command.type === 'resume' || command.type === 'completeIntro'
+        || command.type === 'advanceDialog'
+        || command.type === 'chooseSeed' || command.type === 'confirmSeeds'
 }
 
 function sameMods(saved: readonly EnabledMod[], expected: readonly EnabledMod[]): boolean {

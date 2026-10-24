@@ -557,8 +557,8 @@ def copy_textures(xml_dir: Path, texture_dir: Path):
 def main():
     config_dir = Path("./tools")
     xml_dir = Path("./tools/raw/reanim")
-    output_dir = Path("./assets/resources/animations")
-    texture_dir = Path("./assets/resources/textures")
+    output_dir = Path("./tools/generated/resources/animations")
+    texture_dir = Path("./tools/generated/resources/textures")
 
     anim_defs = load_json_config(config_dir)
 

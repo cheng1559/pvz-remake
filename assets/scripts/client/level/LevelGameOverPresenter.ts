@@ -1,4 +1,4 @@
-import type { BoardPresentation } from './boards/DayBoard'
+import type { BoardPresentation } from '@/shared/content/presentation'
 import { Color, Graphics, Mask, Node, Sprite, type SpriteFrame } from 'cc'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'

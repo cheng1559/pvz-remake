@@ -114,15 +114,15 @@ test('viewport expands up to 32:9, then letterboxes without cropping height or e
 })
 
 test('clouds leave the new viewport and right-hand flowers fly farther before fading', () => {
-    const manifest = JSON.parse(readFileSync('assets/bundles/pvz-base/manifest.json', 'utf8'))
+    const manifest = JSON.parse(readFileSync('tools/generated/pvz-base/manifest.json', 'utf8'))
     const spriteSize = (id: string) => {
         const path = manifest.client.sprites[id].replace(/\/spriteFrame$/, '.png')
-        const png = readFileSync('assets/bundles/pvz-base/' + path)
+        const png = readFileSync('tools/generated/pvz-base/' + path)
         return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) }
     }
     for (const [width, height] of [[800, 600], [1066, 600], [1600, 600], [6400 / 3, 600], [800, 1400]]) {
         for (const name of ['cloud1', 'cloud2', 'cloud4', 'cloud5', 'cloud6', 'cloud7']) {
-            const source = parseReanim(JSON.parse(readFileSync('assets/bundles/pvz-base/reanim/selector_' + name + '.json', 'utf8')))
+            const source = parseReanim(JSON.parse(readFileSync('tools/generated/pvz-base/reanim/selector_' + name + '.json', 'utf8')))
             const animation = parseReanim(extendCloud(source, width, height, spriteSize))
             for (const track of animation.tracks) {
                 const frames = track.keyframes.filter(frame => frame.sprite)
@@ -146,7 +146,7 @@ test('clouds leave the new viewport and right-hand flowers fly farther before fa
         }
     }
     for (const name of ['flower1', 'flower3']) {
-        const source = parseReanim(JSON.parse(readFileSync('assets/bundles/pvz-base/reanim/selector_' + name + '.json', 'utf8')))
+        const source = parseReanim(JSON.parse(readFileSync('tools/generated/pvz-base/reanim/selector_' + name + '.json', 'utf8')))
         const animation = parseReanim(extendFlower(source))
         for (const track of animation.tracks.filter(track => track.keyframes[0].sprite)) {
             const original = source.tracks.find(candidate => candidate.id === track.id)!.keyframes

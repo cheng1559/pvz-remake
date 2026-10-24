@@ -1,4 +1,4 @@
-import { Asset, resources } from 'cc'
+import { Asset, EffectAsset, resources } from 'cc'
 import { resourcePacks } from './ResourcePacks'
 
 export class AssetLoader {
@@ -17,8 +17,10 @@ export class AssetLoader {
         const promise = (async () => {
             const replacement = await resourcePacks.asset<T>(path, type)
             if (replacement !== undefined) return replacement
-            const cached = resources.get<T>(path, type)
-            if (cached) return cached
+            if (type !== EffectAsset) {
+                if (label) console.warn(`[AssetLoader] Missing archive asset: ${label}`)
+                return null
+            }
             return new Promise<T | null>((resolve) => {
                 resources.load<T>(path, type, (err, asset) => {
                     if (err || !asset) {
@@ -43,16 +45,10 @@ export class AssetLoader {
         const pending = this._pendingDirs.get(key) as Promise<T[]> | undefined
         if (pending) return pending
 
-        const promise = Promise.all(resources.getDirWithPath(path, type)
-            .map(info => this.load<T>(info.path, type, label)))
+        const promise = resourcePacks.ids(type, `pvz:${path}/`).then(ids => Promise.all(ids.map(id => this.load<T>(id, type, label))))
             .then(assets => assets.filter(asset => asset !== null) as T[])
             .finally(() => this._pendingDirs.delete(key))
         this._pendingDirs.set(key, promise as Promise<Asset[]>)
         return promise
-    }
-
-    static clearPending() {
-        this._pending.clear()
-        this._pendingDirs.clear()
     }
 }

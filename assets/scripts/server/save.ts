@@ -133,29 +133,59 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
 }
 
 function parseSeedBank(value: unknown): SeedBankState {
-    const source = optionalExact(value, ['packets'], ['selectedSeedId'], 'server save.seedBank')
-    const selectedSeedId = source.selectedSeedId === undefined
-        ? undefined
-        : nonEmptyString(source.selectedSeedId, 'server save.seedBank.selectedSeedId')
+    const source = optionalExact(value, ['packets', 'selection'], ['choosing', 'conveyor'], 'server save.seedBank')
+    const selected = record(source.selection, 'seedBank.selection')
+    let selection: SeedBankState['selection']
+    switch (selected.mode) {
+        case 'none': exact(selected, ['mode'], 'selection'); selection = { mode: 'none' }; break
+        case 'seed':
+            exact(selected, ['mode', 'seedId'], 'selection')
+            selection = { mode: 'seed', seedId: nonEmptyString(selected.seedId, 'selection.seedId') }; break
+        case 'conveyor':
+            exact(selected, ['mode', 'packetId'], 'selection')
+            selection = { mode: 'conveyor', packetId: positiveInteger(selected.packetId, 'selection.packetId') }; break
+        case 'tool':
+            exact(selected, ['mode', 'toolId'], 'selection')
+            selection = { mode: 'tool', toolId: nonEmptyString(selected.toolId, 'selection.toolId') }; break
+        default: throw new Error('Invalid saved selection')
+    }
     const packets = array(source.packets, 'server save.seedBank.packets').map((value, index) => {
         const name = `server save.seedBank.packets[${index}]`
-        const packet = exact(value, ['seedId', 'readyAtTick'], name)
+        const packet = optionalExact(value, ['seedId', 'readyAtTick'], ['cooldownTotal'], name)
         return {
             seedId: nonEmptyString(packet.seedId, `${name}.seedId`),
             readyAtTick: nonNegativeInteger(packet.readyAtTick, `${name}.readyAtTick`),
+            ...(packet.cooldownTotal === undefined ? {} : { cooldownTotal: nonNegativeInteger(packet.cooldownTotal, `${name}.cooldownTotal`) }),
         }
     })
     if (new Set(packets.map(packet => packet.seedId)).size !== packets.length) {
         throw new TypeError('server save.seedBank.packets has duplicate seed IDs')
     }
-    return selectedSeedId === undefined ? { packets } : { selectedSeedId, packets }
+    let conveyor: SeedBankState['conveyor']
+    if (source.conveyor !== undefined) {
+        const data = exact(source.conveyor, ['nextId', 'spawnAtTick', 'moveTicks', 'packets'], 'seedBank.conveyor')
+        conveyor = {
+            nextId: positiveInteger(data.nextId, 'conveyor.nextId'), spawnAtTick: nonNegativeInteger(data.spawnAtTick, 'conveyor.spawnAtTick'),
+            moveTicks: nonNegativeInteger(data.moveTicks, 'conveyor.moveTicks'),
+            packets: array(data.packets, 'conveyor.packets').map(value => {
+                const packet = exact(value, ['id', 'seedId', 'x'], 'conveyor packet')
+                return { id: positiveInteger(packet.id, 'packet.id'), seedId: nonEmptyString(packet.seedId, 'packet.seedId'), x: finite(packet.x, 'packet.x') }
+            }),
+        }
+        if (new Set(conveyor.packets.map(packet => packet.id)).size !== conveyor.packets.length ||
+            conveyor.packets.some(packet => packet.id >= conveyor!.nextId)) throw new Error('Invalid saved conveyor packets')
+    }
+    if (selection.mode === 'conveyor' && !conveyor?.packets.some(packet => packet.id === selection.packetId)) throw new Error('Saved cursor has an invalid conveyor packet')
+    return { packets, selection,
+        ...(conveyor === undefined ? {} : { conveyor }),
+        ...(source.choosing === undefined ? {} : { choosing: boolean(source.choosing, 'server save.seedBank.choosing') }) }
 }
 
 function parseTutorial(value: unknown): TutorialState {
     const source = optionalExact(
         value,
         ['firstAdventure', 'step'],
-        ['sunAtTick', 'promptAtTick', 'cantAffordAdviceShown', 'seedRefreshAdviceShown', 'zombieWarningShown', 'sunsFallen', 'displayedAdvice'],
+        ['sunAtTick', 'promptAtTick', 'cantAffordAdviceShown', 'seedRefreshAdviceShown', 'zombieWarningShown', 'sunsFallen', 'displayedAdvice', 'dialogIndex'],
         'server save.tutorial',
     )
     if (source.step !== 'pick-first-seed' && source.step !== 'plant-first-seed' &&
@@ -163,12 +193,14 @@ function parseTutorial(value: unknown): TutorialState {
         source.step !== 'collect-more-sun' && source.step !== 'enough-sun' &&
         source.step !== 'pick-second-seed' && source.step !== 'plant-second-seed' &&
         source.step !== 'pick-sunflower' && source.step !== 'plant-sunflower' &&
-        source.step !== 'refresh-sunflower' && source.step !== 'complete') {
+        source.step !== 'refresh-sunflower' && source.step !== 'waiting-for-sunflowers' && source.step !== 'complete' &&
+        !['dave-opening', 'dave-bowling', 'shovel-pickup', 'shovel-dig', 'shovel-keep-digging'].includes(String(source.step))) {
         throw new TypeError('server save.tutorial.step is unknown')
     }
     const result: TutorialState = {
         firstAdventure: boolean(source.firstAdventure, 'server save.tutorial.firstAdventure'),
-        step: source.step,
+        step: source.step as TutorialState['step'],
+        ...(source.dialogIndex === undefined ? {} : { dialogIndex: nonNegativeInteger(source.dialogIndex, 'tutorial.dialogIndex') }),
     }
     if (source.zombieWarningShown !== undefined) result.zombieWarningShown = boolean(source.zombieWarningShown, 'server save.tutorial.zombieWarningShown')
     if (source.sunsFallen !== undefined) result.sunsFallen = nonNegativeInteger(source.sunsFallen, 'server save.tutorial.sunsFallen')
@@ -199,10 +231,12 @@ function parseWave(value: unknown): WaveState {
     const source = optionalExact(
         value,
         ['index'],
-        ['nextWaveAtTick', 'accelerateAtTick', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced', 'rowPicks'],
+        ['nextWaveAtTick', 'accelerateAtTick', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced', 'rowPicks', 'zombiesByWave'],
         'server save.wave',
     )
     const result: WaveState = { index: nonNegativeInteger(source.index, 'server save.wave.index') }
+    if (source.zombiesByWave !== undefined) result.zombiesByWave = array(source.zombiesByWave, 'server save.wave.zombiesByWave')
+        .map((wave, index) => array(wave, `server save.wave.zombiesByWave[${index}]`).map(id => nonEmptyString(id, 'wave zombie ID')))
     if (source.nextWaveAtTick !== undefined) {
         result.nextWaveAtTick = nonNegativeInteger(source.nextWaveAtTick, 'server save.wave.nextWaveAtTick')
     }

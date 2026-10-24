@@ -1,5 +1,5 @@
 import type { ProjectilePresentationDefinition } from '@/shared/content/presentation'
-import { Color, Node, Sprite, tween, Vec3 } from 'cc'
+import { Color, Node, Sprite, Vec3 } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
 import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
@@ -7,9 +7,8 @@ import type { ClientAnimationRegistry } from '@/client/content/ClientAnimationRe
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
-import { startGameTween } from '@/core/GameTween'
 import { TodParticleSystem } from '@/core/Particle'
-import { SeedPacketRenderer, SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH, type SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
+import { SeedPacketRenderer, type SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
 import type { LawnMowerSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
@@ -19,6 +18,7 @@ import { zombieDefinition } from '@/client/zombies/definitions'
 import type { PlantView } from '@/client/plants/PlantView'
 import type { LevelEntitySnapshot, LevelParticleOwnerSnapshot } from './LevelPresentationSnapshot'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { boardCell, levelAwardSize } from './LevelGeometry'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -48,6 +48,9 @@ export class LevelEntityRenderer {
     private readonly charred = new Map<Node, { order: number, entityId: number }>()
     private readonly mowerPlayersReady = new Set<number>()
     private readonly mowerStates = new Map<number, LawnMowerSnapshot['state']>()
+    private pointer?: { x: number; y: number }
+    private lastSnapshot?: WorldSnapshot
+    private highlightedPlant?: number
 
     constructor(
         private readonly rootLayer: number,
@@ -67,6 +70,28 @@ export class LevelEntityRenderer {
 
     nodes(): Iterable<Node> {
         return this.entities.values()
+    }
+
+    setPointer(pointer?: { x: number; y: number }): void {
+        this.pointer = pointer
+        if (this.lastSnapshot) this.syncPlantHighlight(this.lastSnapshot)
+    }
+
+    private syncPlantHighlight(snapshot: WorldSnapshot): void {
+        if (!this.pointer && this.highlightedPlant === undefined) return
+        const level = this.content.levels.levels[snapshot.levelId]
+        const cell = this.pointer && !snapshot.paused && snapshot.cursor.mode === 'tool'
+            ? boardCell(this.content.definitions.boards[level.board], this.pointer.x, this.pointer.y) : undefined
+        const highlighted = cell?.inBounds ? snapshot.plants.find(plant => plant.row === cell.row && plant.column === cell.column &&
+            this.content.definitions.plants[plant.typeId].occupiesCell !== false)?.entityId : undefined
+        for (const id of new Set([this.highlightedPlant, highlighted])) {
+            if (id === undefined) continue
+            const flash = snapshot.plants.find(plant => plant.entityId === id)?.eatenFlashCounter ?? 0
+            const gray = Math.min(255, flash * 3)
+            const color = id === highlighted ? new Color(255, 255, 255, 196) : new Color(gray, gray, gray)
+            for (const player of this.entities.get(id)?.getComponentsInChildren(ReanimPlayer) ?? []) player.setExtraAdditiveDraw(id === highlighted || flash > 0, color)
+        }
+        this.highlightedPlant = highlighted
     }
 
     syncGameOverWinner(zombie: ZombieSnapshot, parent: Node, visible: boolean, ticks: number, y: number): void {
@@ -144,6 +169,7 @@ export class LevelEntityRenderer {
     }
 
     sync(snapshot: WorldSnapshot, changes: ClientWorldChanges, events: ServerEvent[]): void {
+        this.lastSnapshot = snapshot
         for (const event of events) {
             if (event.type === 'zombieHelmDropped' && typeof event.data.entityId === 'number' && event.data.silent !== true) {
                 this.spawnHelm(event.data.entityId, snapshot)
@@ -176,21 +202,22 @@ export class LevelEntityRenderer {
             const node = this.entities.get(item.entityId)
             if (!node) continue
             const award = item.typeId === this.content.levels.levels[snapshot.levelId].award.id
+            const size = levelAwardSize(this.content.levels.levels[snapshot.levelId].award)
             node.setPosition(
-                award ? item.x + SEED_PACKET_WIDTH / 2 : item.x + 30,
-                award ? -(item.y + SEED_PACKET_HEIGHT / 2) : -(item.y + 30),
+                award ? item.x + size.width / 2 : item.x + 30,
+                award ? -(item.y + size.height / 2) : -(item.y + 30),
             )
             if (!award) node.setScale(item.scale, item.scale, 1)
             uiNode({ node, opacity: item.alpha })
         }
         for (const mower of snapshot.lawnMowers) this.syncMower(mower)
-        const selectedSeedId = snapshot.cursor.mode === 'seed' ? snapshot.cursor.seedId : undefined
         const particle = (effect: string, x: number, y: number, tint?: Color) => TodParticleSystem.spawn({
             parent: this.entityLayer, effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder: 10000, useGameTime: false, tint,
         })
         for (const plant of snapshot.plants) {
             this.plantViews.get(plant.entityId)?.sync(plant, snapshot, particle, false)
         }
+        this.syncPlantHighlight(snapshot)
         for (const zombie of snapshot.zombies) this.zombies.get(zombie.entityId)?.sync(zombie, snapshot)
         for (const plant of snapshot.plants) {
             const node = this.entities.get(plant.entityId)
@@ -346,7 +373,7 @@ export class LevelEntityRenderer {
                     view.sync(zombie, snapshot)
                 } else view.destroy()
             } else if (isAward) {
-                this.createAward(node, snapshot)
+                await this.createAward(node, snapshot)
             } else {
                 const player = node.addComponent(ReanimPlayer)
                 await player.load('pvz:sun', this.content.registry, this.content.loader)
@@ -361,11 +388,24 @@ export class LevelEntityRenderer {
         }
     }
 
-    private createAward(node: Node, snapshot: WorldSnapshot): void {
-        uiNode({ node, size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT }, anchor: { x: 0.5, y: 0.5 } })
+    private async createAward(node: Node, snapshot: WorldSnapshot): Promise<void> {
+        const award = this.content.levels.levels[snapshot.levelId].award
+        const size = levelAwardSize(award)
+        uiNode({ node, size, anchor: { x: 0.5, y: 0.5 } })
         const backEffects = uiNode({ name: 'AwardBackEffects', parent: node }).node
         TodParticleSystem.spawn({ parent: backEffects, effect: 'seedpacket', x: 0, y: 60, z: -1 })
-        const award = this.content.levels.levels[snapshot.levelId].award
+        if (award.kind === 'tool') {
+            const visual = this.content.presentation.awards?.[award.id]
+            if (!visual) throw new Error(`Award presentation is not installed: ${award.id}`)
+            const frame = await new SpriteRepository(this.content.registry, this.content.loader).load(visual.sprite)
+            if (!node.isValid) return
+            const image = uiNode({ name: 'AwardImage', parent: node,
+                position: { x: visual.x + frame.originalSize.width / 2 - size.width / 2,
+                    y: -(visual.y + frame.originalSize.height / 2 - size.height / 2) } }).node
+            uiNode({ parent: image, anchor: { x: 0.5, y: 0.5 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+                .node.setScale(visual.scale, visual.scale, 1)
+            return
+        }
         const cost = award.packetCost
         const seedType = plantDefinition(this.content.presentation, award.id).visual.seedType
         SeedPacketRenderer.drawSeedPacket({
@@ -436,8 +476,7 @@ export class LevelEntityRenderer {
         const player = node.addComponent(ParticlePlayer)
         void player.load(impact.id, this.content.registry, this.content.loader).then(() => {
             if (!node.isValid) return
-            player.play(event.eventId >>> 0)
-            startGameTween(node, tween(node).delay(impact.duration!).call(() => { if (node.isValid) node.destroy() }))
+            player.play(event.eventId >>> 0, impact.duration!)
         }).catch(error => {
             if (node.isValid) node.destroy()
             console.error('[Level] Failed to play projectile impact', error)
@@ -451,7 +490,7 @@ export class LevelEntityRenderer {
             const node = this.entities.get(entityId)
             if (node?.isValid) entries.push({ node, order, entityId })
         }
-        for (const entity of snapshot.plants) add(entity.entityId, entity.row * 10)
+        for (const entity of snapshot.plants) add(entity.entityId, (this.plantViews.get(entity.entityId)?.renderRow?.(entity) ?? entity.row) * 10 + (this.content.presentation.plants[entity.typeId]?.rowOrder ?? 0))
         for (const entity of snapshot.zombies) {
             add(entity.entityId, entity.row * 10 + 1)
             const shadow = this.zombies.get(entity.entityId)?.shadowNode

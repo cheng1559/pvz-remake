@@ -1,19 +1,30 @@
 {
   "schemaVersion": 2,
   "tickSeconds": 0.01,
-  "boards": {"pvz:day": {"rows": 5, "columns": 9, "origin": {"x": 40, "y": 80}, "cell": {"width": 80, "height": 100}}},
+  "boards": {"pvz:day": {"bounds": {"left": 0, "right": 800}, "rows": 5, "columns": 9, "origin": {"x": 40, "y": 80}, "cell": {"width": 80, "height": 100}}},
   "seeds": {
+    "pvz:bowling-wallnut": {"plant": "pvz:bowling-wallnut", "sunCost": 0, "cooldownTicks": 0, "placement": "ground"},
+    "pvz:bowling-explodenut": {"plant": "pvz:bowling-explodenut", "sunCost": 0, "cooldownTicks": 0, "placement": "ground"},
     "pvz:sunflower": {"plant": "pvz:sunflower", "sunCost": 50, "cooldownTicks": 750, "placement": "ground"},
     "pvz:peashooter": {"plant": "pvz:peashooter", "sunCost": 100, "cooldownTicks": 750, "placement": "ground"},
     "pvz:repeater": {"plant": "pvz:repeater", "sunCost": 200, "cooldownTicks": 750, "placement": "ground"},
-    "pvz:cherrybomb": {"plant": "pvz:cherrybomb", "sunCost": 150, "cooldownTicks": 5000, "placement": "ground"},
-    "pvz:wallnut": {"plant": "pvz:wallnut", "sunCost": 50, "cooldownTicks": 3000, "placement": "ground"},
+    "pvz:cherrybomb": {"plant": "pvz:cherrybomb", "sunCost": 150, "cooldownTicks": 5000, "initialCooldownTicks": 3500, "placement": "ground"},
+    "pvz:wallnut": {"plant": "pvz:wallnut", "sunCost": 50, "cooldownTicks": 3000, "initialCooldownTicks": 2000, "placement": "ground"},
     "pvz:potatomine": {"plant": "pvz:potatomine", "sunCost": 25, "cooldownTicks": 3000, "placement": "ground"},
     "pvz:snowpea": {"plant": "pvz:snowpea", "sunCost": 175, "cooldownTicks": 750, "placement": "ground"},
     "pvz:chomper": {"plant": "pvz:chomper", "sunCost": 150, "cooldownTicks": 750, "placement": "ground"},
     "pvz:explodenut": {"plant": "pvz:explodenut", "sunCost": 150, "cooldownTicks": 3000, "placement": "ground"}
   },
   "plants": {
+    "pvz:bowling-wallnut": {
+      "maxHealth": 4000, "body": {"x": 0, "y": 0, "width": 60, "height": 80}, "occupiesCell": false,
+      "behavior": {"kind": "bowling", "rateMin": 12, "rateMax": 18, "groundDeltas": [17.2, 18.7, 20.2, 20.2, 18.7, 17.2, 17.2, 18.8, 20.2, 20.2, 18.7, 17.3], "bounceSpeed": 2, "damage": 1800, "helmDamage": 900}
+    },
+    "pvz:bowling-explodenut": {
+      "maxHealth": 4000, "body": {"x": 0, "y": 0, "width": 60, "height": 80}, "occupiesCell": false,
+      "behavior": {"kind": "bowling", "rateMin": 12, "rateMax": 18, "groundDeltas": [17.2, 18.7, 20.2, 20.2, 18.7, 17.2, 17.2, 18.8, 20.2, 20.2, 18.7, 17.3], "bounceSpeed": 2, "damage": 1800, "helmDamage": 900},
+      "deathExplosion": {"offset": {"x": 40, "y": 40}, "radius": 90, "rowRange": 1, "damage": 1800, "burn": true}
+    },
     "pvz:sunflower": {
       "maxHealth": 300,
       "body": {"x": 10, "y": 0, "width": 60, "height": 80},
@@ -95,6 +106,7 @@
   },
   "zombies": {
     "pvz:flag": {
+      "dropsFlag": true,
       "maxHealth": 270,
       "boardEdgeX": -100,
       "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},

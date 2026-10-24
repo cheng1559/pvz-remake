@@ -87,7 +87,7 @@ export class SeedPacketView {
             'CooldownClip',
             'SelectedHighlight',
             'ParticleSystem_seedpacketpick',
-            'ParticleSystem_seedpacketflash',
+            'ParticleSystem',
         ])
     }
 

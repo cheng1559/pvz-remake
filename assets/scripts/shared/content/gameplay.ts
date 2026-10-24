@@ -26,6 +26,7 @@ export interface GameplayStrings {
 }
 
 export interface BoardDefinition {
+    bounds: { left: number; right: number }
     rows: number
     columns: number
     origin: Point
@@ -36,6 +37,7 @@ export interface SeedDefinition {
     plant: string
     sunCost: number
     cooldownTicks: number
+    initialCooldownTicks?: number
     placement: 'ground'
 }
 
@@ -56,6 +58,7 @@ export interface PlantTargeting {
 
 /** At most one ability; a plant without one only blocks, like the wall-nut. */
 export interface PlantDefinition {
+    occupiesCell?: boolean
     maxHealth: number
     body: Rect
     /** JSON configuration consumed by a registered plant behavior. */
@@ -85,6 +88,7 @@ export interface PlantDefinition {
 }
 
 export interface ZombieDefinition {
+    dropsFlag?: boolean
     maxHealth: number
     /** JSON configuration consumed by a registered entity behavior. */
     behavior?: JsonObject
@@ -146,12 +150,35 @@ export interface LevelDefinition {
     activeRows: number[]
     startingSun: number
     seedPackets: string[]
+    /** When present, seedPackets is the chooser's available pool. Otherwise it is the fixed bank. */
+    seedBankSlots?: number
     lawnMower: string
     skySun: string
-    waves: Array<{ zombies: string[]; flagWave?: boolean }>
+    waves: Array<{ zombies: string[]; flagWave?: boolean; points?: number }>
+    zombiePool?: Array<{ id: string; points: number; weight: number }>
+    firstWaveTicks?: number
+    tools?: string[]
+    conveyor?: {
+        seeds: Array<{ id: string; weight: number }>
+        capacity: number
+        spacing: number
+        entryX: number
+        moveTicks: number
+        spawnDelay: Array<{ minPackets: number; ticks: number }>
+        insertionGap: number
+        removalGap: number
+    }
+    bowling?: { lineColumn: number }
+    shovelTutorial?: {
+        opening: number[]
+        repeat: number[]
+        afterDig: number[]
+        introPlants: Array<{ seedId: string; row: number; column: number }>
+    }
     nextLevel?: string
     tutorial: string
     award: { kind: 'seed'; id: string; packetCost: number }
+        | { kind: 'tool'; id: string; titleKey: string; nameKey: string; descriptionKey: string; width: number; height: number }
 }
 
 interface Point { x: number; y: number }
@@ -220,9 +247,13 @@ export function parseGameplayStrings(value: unknown): GameplayStrings {
 }
 
 function parseBoard(value: unknown, name: string): BoardDefinition {
-    const source = exactObject(value, ['rows', 'columns', 'origin', 'cell'], name)
+    const source = exactObject(value, ['rows', 'columns', 'origin', 'cell', 'bounds'], name)
+    const bounds = exactObject(source.bounds, ['left', 'right'], `${name}.bounds`)
+    const left = finite(bounds.left, `${name}.bounds.left`), right = finite(bounds.right, `${name}.bounds.right`)
+    if (left >= right) throw new Error(`${name}.bounds must be ordered`)
     const cell = exactObject(source.cell, ['width', 'height'], `${name}.cell`)
     return {
+        bounds: { left, right },
         rows: positiveInteger(source.rows, `${name}.rows`),
         columns: positiveInteger(source.columns, `${name}.columns`),
         origin: point(source.origin, `${name}.origin`),
@@ -234,25 +265,30 @@ function parseBoard(value: unknown, name: string): BoardDefinition {
 }
 
 function parseSeed(value: unknown, name: string): SeedDefinition {
-    const source = exactObject(value, ['plant', 'sunCost', 'cooldownTicks', 'placement'], name)
+    const source = exactObject(value, ['plant', 'sunCost', 'cooldownTicks', 'placement'], name, ['initialCooldownTicks'])
     if (source.placement !== 'ground') throw new Error(`${name}.placement must be ground`)
     return {
         plant: qualifiedId(source.plant, `${name}.plant`),
         sunCost: nonNegativeInteger(source.sunCost, `${name}.sunCost`),
         cooldownTicks: nonNegativeInteger(source.cooldownTicks, `${name}.cooldownTicks`),
+        ...(source.initialCooldownTicks === undefined ? {} : { initialCooldownTicks: nonNegativeInteger(source.initialCooldownTicks, `${name}.initialCooldownTicks`) }),
         placement: 'ground',
     }
 }
 
 function parsePlant(value: unknown, name: string): PlantDefinition {
     const abilities = ['shooter', 'producer', 'fuse', 'mine', 'chomper'] as const
-    const source = exactObject(value, ['maxHealth', 'body'], name, [...abilities, 'deathExplosion', 'behavior'])
+    const source = exactObject(value, ['maxHealth', 'body'], name, [...abilities, 'deathExplosion', 'behavior', 'occupiesCell'])
     if (abilities.filter(key => source[key] !== undefined).length > 1) {
         throw new Error(`${name} allows at most one of ${abilities.join(', ')}`)
     }
     const result: PlantDefinition = {
         maxHealth: positiveInteger(source.maxHealth, `${name}.maxHealth`),
         body: rect(source.body, `${name}.body`),
+    }
+    if (source.occupiesCell !== undefined) {
+        if (typeof source.occupiesCell !== 'boolean') throw new Error(`${name}.occupiesCell must be boolean`)
+        result.occupiesCell = source.occupiesCell
     }
     if (source.behavior !== undefined) result.behavior = jsonRoundTrip(object(source.behavior, `${name}.behavior`)) as JsonObject
     if (source.shooter) {
@@ -332,7 +368,7 @@ function explosion(value: unknown, name: string): ExplosionDefinition {
 }
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'vault', 'targetingInsets', 'behavior'])
+    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'vault', 'targetingInsets', 'behavior', 'dropsFlag'])
     const spawn = exactObject(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -354,6 +390,10 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
             damage: positiveInteger(bite.damage, `${name}.bite.damage`),
             cadenceTicks: positiveInteger(bite.cadenceTicks, `${name}.bite.cadenceTicks`),
         },
+    }
+    if (source.dropsFlag !== undefined) {
+        if (typeof source.dropsFlag !== 'boolean') throw new Error(`${name}.dropsFlag must be boolean`)
+        result.dropsFlag = source.dropsFlag
     }
     if (source.behavior !== undefined) result.behavior = jsonRoundTrip(object(source.behavior, `${name}.behavior`)) as JsonObject
     if (source.targetingInsets !== undefined) {
@@ -480,7 +520,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const source = exactObject(value, [
         'adventureIndex', 'board', 'activeRows', 'startingSun', 'seedPackets',
         'lawnMower', 'skySun', 'waves', 'tutorial', 'award',
-    ], name, ['nextLevel'])
+    ], name, ['nextLevel', 'seedBankSlots', 'firstWaveTicks', 'zombiePool', 'bowling', 'conveyor', 'tools', 'shovelTutorial'])
     const boardId = qualifiedId(source.board, `${name}.board`)
     const board = reference(boardId, definitions.boards, `${name}.board`)
     const activeRows = array(source.activeRows, `${name}.activeRows`).map((row, index) => {
@@ -493,22 +533,108 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
 
     const seedPackets = qualifiedIdArray(source.seedPackets, `${name}.seedPackets`)
     seedPackets.forEach((id, index) => reference(id, definitions.seeds, `${name}.seedPackets[${index}]`))
+    let bowling: LevelDefinition['bowling']
+    if (source.bowling !== undefined) {
+        const data = exactObject(source.bowling, ['lineColumn'], `${name}.bowling`)
+        bowling = { lineColumn: nonNegativeInteger(data.lineColumn, `${name}.bowling.lineColumn`) }
+        if (bowling.lineColumn >= board.columns) throw new Error(`${name}.bowling is invalid`)
+    }
+    let conveyor: LevelDefinition['conveyor']
+    if (source.conveyor !== undefined) {
+        const data = exactObject(source.conveyor, ['seeds', 'capacity', 'spacing', 'entryX', 'moveTicks', 'spawnDelay', 'insertionGap', 'removalGap'], `${name}.conveyor`)
+        conveyor = {
+            capacity: positiveInteger(data.capacity, `${name}.conveyor.capacity`),
+            spacing: positiveFinite(data.spacing, `${name}.conveyor.spacing`),
+            entryX: nonNegativeInteger(data.entryX, `${name}.conveyor.entryX`),
+            moveTicks: positiveInteger(data.moveTicks, `${name}.conveyor.moveTicks`),
+            insertionGap: positiveFinite(data.insertionGap, `${name}.conveyor.insertionGap`),
+            removalGap: positiveFinite(data.removalGap, `${name}.conveyor.removalGap`),
+            spawnDelay: array(data.spawnDelay, `${name}.conveyor.spawnDelay`).map(value => {
+                const entry = exactObject(value, ['minPackets', 'ticks'], `${name}.conveyor.spawnDelay`)
+                return { minPackets: nonNegativeInteger(entry.minPackets, `${name}.conveyor.minPackets`), ticks: positiveInteger(entry.ticks, `${name}.conveyor.ticks`) }
+            }),
+            seeds: array(data.seeds, `${name}.conveyor.seeds`).map((value, index) => {
+                const entry = exactObject(value, ['id', 'weight'], `${name}.conveyor.seeds[${index}]`)
+                const id = qualifiedId(entry.id, `${name}.conveyor.seeds.id`)
+                reference(id, definitions.seeds, `${name}.conveyor.seeds.id`)
+                return { id, weight: positiveInteger(entry.weight, `${name}.conveyor.seeds.weight`) }
+            }),
+        }
+        if (!conveyor.seeds.length || conveyor.spawnDelay[0]?.minPackets !== 0 ||
+            conveyor.spawnDelay.some((entry, index, entries) => index > 0 && entry.minPackets <= entries[index - 1].minPackets)) throw new Error(`${name}.conveyor has invalid supply rules`)
+    }
+    let shovelTutorial: LevelDefinition['shovelTutorial']
+    if (source.shovelTutorial !== undefined) {
+        const data = exactObject(source.shovelTutorial, ['opening', 'repeat', 'afterDig', 'introPlants'], `${name}.shovelTutorial`)
+        const dialogue = (key: string) => {
+            const result = array(data[key], `${name}.shovelTutorial.${key}`).map(value => nonNegativeInteger(value, `${name}.shovelTutorial.${key}`))
+            if (!result.length || new Set(result).size !== result.length) throw new Error(`${name}.shovelTutorial.${key} must contain unique dialogue IDs`)
+            return result
+        }
+        shovelTutorial = {
+            opening: dialogue('opening'), repeat: dialogue('repeat'), afterDig: dialogue('afterDig'),
+            introPlants: array(data.introPlants, `${name}.shovelTutorial.introPlants`).map((value, index) => {
+                const entry = exactObject(value, ['seedId', 'row', 'column'], `${name}.shovelTutorial.introPlants[${index}]`)
+                const seedId = qualifiedId(entry.seedId, `${name}.shovelTutorial.introPlants.seedId`)
+                reference(seedId, definitions.seeds, `${name}.shovelTutorial.introPlants.seedId`)
+                const row = nonNegativeInteger(entry.row, `${name}.shovelTutorial.introPlants.row`)
+                const column = nonNegativeInteger(entry.column, `${name}.shovelTutorial.introPlants.column`)
+                if (!activeRows.includes(row) || column >= board.columns) throw new Error(`${name}.shovelTutorial.introPlants is outside the lawn`)
+                return { seedId, row, column }
+            }),
+        }
+    }
+    const tools = source.tools === undefined ? undefined : qualifiedIdArray(source.tools, `${name}.tools`)
+    if (source.tutorial === 'pvz:shovel' && (!shovelTutorial || !tools?.includes('pvz:shovel'))) throw new Error(`${name} shovel tutorial requires dialogue and shovel`)
+    const seedBankSlots = source.seedBankSlots === undefined ? undefined : positiveInteger(source.seedBankSlots, `${name}.seedBankSlots`)
+    if (seedBankSlots !== undefined && (seedBankSlots > 10 || seedBankSlots > seedPackets.length)) throw new Error(`${name}.seedBankSlots exceeds the available packets or bank capacity`)
     const wavesSource = array(source.waves, `${name}.waves`)
     if (wavesSource.length === 0) throw new Error(`${name}.waves must not be empty`)
     const waves = wavesSource.map((wave, waveIndex) => {
         const waveName = `${name}.waves[${waveIndex}]`
-        const record = exactObject(wave, ['zombies'], waveName, ['flagWave'])
+        const record = exactObject(wave, ['zombies'], waveName, ['flagWave', 'points'])
         if (record.flagWave !== undefined && typeof record.flagWave !== 'boolean') throw new Error(`${waveName}.flagWave must be boolean`)
         const zombies = qualifiedIdArray(record.zombies, `${waveName}.zombies`)
         zombies.forEach((id, index) => reference(id, definitions.zombies, `${waveName}.zombies[${index}]`))
-        return { zombies, ...(record.flagWave === undefined ? {} : { flagWave: record.flagWave as boolean }) }
+        return { zombies, ...(record.flagWave === undefined ? {} : { flagWave: record.flagWave as boolean }),
+            ...(record.points === undefined ? {} : { points: positiveInteger(record.points, `${waveName}.points`) }) }
     })
+    const zombiePool = source.zombiePool === undefined ? undefined : array(source.zombiePool, `${name}.zombiePool`).map((value, index) => {
+        const entryName = `${name}.zombiePool[${index}]`
+        const entry = exactObject(value, ['id', 'points', 'weight'], entryName)
+        const id = qualifiedId(entry.id, `${entryName}.id`)
+        reference(id, definitions.zombies, `${entryName}.id`)
+        return { id, points: positiveInteger(entry.points, `${entryName}.points`), weight: nonNegativeInteger(entry.weight, `${entryName}.weight`) }
+    })
+    if (waves.some(wave => wave.points !== undefined) && !zombiePool?.some(entry => entry.weight > 0 && entry.points === 1)) {
+        throw new Error(`${name}.zombiePool must include a weighted one-point zombie`)
+    }
+    if (zombiePool && new Set(zombiePool.map(entry => entry.id)).size !== zombiePool.length) throw new Error(`${name}.zombiePool contains duplicate IDs`)
+    for (const wave of waves) if (wave.points !== undefined) {
+        let spent = 0
+        for (const id of wave.zombies) {
+            const entry = zombiePool!.find(entry => entry.id === id)
+            if (!entry) throw new Error(`${name}.zombiePool is missing ${id}`)
+            spent += entry.points
+        }
+        if (spent > wave.points) throw new Error(`${name}.waves spends more than its points`)
+    }
     const lawnMower = qualifiedId(source.lawnMower, `${name}.lawnMower`)
     reference(lawnMower, definitions.lawnMowers, `${name}.lawnMower`)
     const skySun = qualifiedId(source.skySun, `${name}.skySun`)
     reference(skySun, definitions.items, `${name}.skySun`)
-    const award = exactObject(source.award, ['kind', 'id', 'packetCost'], `${name}.award`)
-    if (award.kind !== 'seed') throw new Error(`${name}.award.kind must be seed`)
+    const award = object(source.award, `${name}.award`)
+    let parsedAward: LevelDefinition['award']
+    if (award.kind === 'seed') {
+        exactObject(award, ['kind', 'id', 'packetCost'], `${name}.award`)
+        parsedAward = { kind: 'seed', id: qualifiedId(award.id, `${name}.award.id`), packetCost: nonNegativeInteger(award.packetCost, `${name}.award.packetCost`) }
+    } else if (award.kind === 'tool') {
+        exactObject(award, ['kind', 'id', 'titleKey', 'nameKey', 'descriptionKey', 'width', 'height'], `${name}.award`)
+        parsedAward = { kind: 'tool', id: qualifiedId(award.id, `${name}.award.id`),
+            titleKey: string(award.titleKey, `${name}.award.titleKey`), nameKey: string(award.nameKey, `${name}.award.nameKey`),
+            descriptionKey: string(award.descriptionKey, `${name}.award.descriptionKey`),
+            width: positiveInteger(award.width, `${name}.award.width`), height: positiveInteger(award.height, `${name}.award.height`) }
+    } else throw new Error(`${name}.award.kind must be seed or tool`)
 
     return {
         adventureIndex: positiveInteger(source.adventureIndex, `${name}.adventureIndex`),
@@ -517,15 +643,18 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         activeRows,
         startingSun: nonNegativeInteger(source.startingSun, `${name}.startingSun`),
         seedPackets,
+        ...(seedBankSlots === undefined ? {} : { seedBankSlots }),
+        ...(bowling === undefined ? {} : { bowling }),
+        ...(conveyor === undefined ? {} : { conveyor }),
+        ...(tools === undefined ? {} : { tools }),
+        ...(shovelTutorial === undefined ? {} : { shovelTutorial }),
         lawnMower,
         skySun,
         waves,
+        ...(zombiePool === undefined ? {} : { zombiePool }),
+        ...(source.firstWaveTicks === undefined ? {} : { firstWaveTicks: positiveInteger(source.firstWaveTicks, `${name}.firstWaveTicks`) }),
         tutorial: qualifiedId(source.tutorial, `${name}.tutorial`),
-        award: {
-            kind: 'seed',
-            id: qualifiedId(award.id, `${name}.award.id`),
-            packetCost: nonNegativeInteger(award.packetCost, `${name}.award.packetCost`),
-        },
+        award: parsedAward,
     }
 }
 

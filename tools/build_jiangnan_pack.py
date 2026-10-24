@@ -56,7 +56,7 @@ def extract(source: Path, raw: Path):
 
 
 def convert_images(raw: Path) -> tuple[dict, list]:
-    originals = {path.stem: path for directory in (ROOT / 'assets/resources/textures', ROOT / 'assets/bundles/pvz-base/sprites')
+    originals = {path.stem: path for directory in (ROOT / 'tools/generated/resources/textures', ROOT / 'tools/generated/pvz-base/sprites')
                  for path in directory.iterdir() if path.suffix.lower() in ('.png', '.jpg', '.jpeg')}
     grids = load_alphagrid_resources(raw / 'properties/resources.xml')
     sprites = {}
@@ -101,7 +101,7 @@ def convert_images(raw: Path) -> tuple[dict, list]:
 
 def convert_fonts(raw: Path) -> dict:
     fonts = {}
-    for original in sorted((ROOT / 'assets/resources/fonts').glob('*.json')):
+    for original in sorted((ROOT / 'tools/generated/resources/fonts').glob('*.json')):
         source = raw / f'data/{original.stem}.txt'
         parser = PvZFontParser(source)
         for layer in parser.layers:
@@ -156,7 +156,7 @@ def convert_animations(raw: Path, sprites: dict, legacy: Path) -> tuple[dict, di
                 prepared[name][node_id]['tracks'] = {}
         write_json(legacy / f'{name}.json', prepared[name])
 
-    manifest = json.loads((ROOT / 'assets/bundles/pvz-base/manifest.json').read_text())
+    manifest = json.loads((ROOT / 'tools/generated/pvz-base/manifest.json').read_text())
     available = set(sprites) | set(manifest['client']['sprites'])
     entries = {}
     for source, node, clip, id in clips:
@@ -229,10 +229,10 @@ def build(source: Path):
         convert_particles(raw / 'particles', PACK / 'particles', raw / 'properties/resources.xml')
         for path in (PACK / 'particles').glob('*.json'):
             entries[f'pvz:particles/{path.stem}'] = f'particles/{path.name}'
-        strings = json.loads((ROOT / 'assets/resources/properties/lawnstrings.json').read_text())
+        strings = json.loads((ROOT / 'tools/generated/resources/properties/lawnstrings.json').read_text())
         strings.update(parse_lawnstrings(read_text(raw / 'properties/lawnstrings.txt')))
         write_json(PACK / 'text/lawnstrings.json', strings)
-        gameplay = json.loads((ROOT / 'assets/bundles/pvz-base/gameplay/strings.json').read_text())
+        gameplay = json.loads((ROOT / 'tools/generated/pvz-base/gameplay/strings.json').read_text())
         gameplay['entries'] = {key: strings.get(key, value) for key, value in gameplay['entries'].items()}
         write_json(PACK / 'text/level_strings.json', gameplay)
         entries.update({'pvz:properties/lawnstrings': 'text/lawnstrings.json', 'pvz:gameplay/strings': 'text/level_strings.json'})

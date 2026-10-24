@@ -106,7 +106,7 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
     assert.throws(invalid(value => {
         value.intro.ticks = 854
         value.intro.previews = Array.from({ length: 5 }, (_, slot) => ({
-            slot, x: 430 + slot, y: 230, z: 100 + slot, hasTongue: slot === 0, reanim: reanim('pvz:zombie_idle2'),
+            slot, typeId: 'pvz:normal', x: 430 + slot, y: 230, z: 100 + slot, hasTongue: slot === 0, reanim: reanim('pvz:zombie_idle2'),
         }))
     }), /before the intro ends/)
     assert.throws(invalid(value => { value.entities[1].entityId = 1 }), /entity ID must be unique/)
@@ -136,7 +136,7 @@ test('Adventure 1-1 presentation snapshot preserves intro-preview particle owner
     value.intro = {
         ticks: 100,
         previews: Array.from({ length: 5 }, (_, slot) => ({
-            slot, x: 430 + slot, y: 230, z: 100 + slot, hasTongue: slot === 0, reanim: reanim('pvz:zombie_idle2'),
+            slot, typeId: 'pvz:normal', x: 430 + slot, y: 230, z: 100 + slot, hasTongue: slot === 0, reanim: reanim('pvz:zombie_idle2'),
         })),
     }
     value.particles.push({

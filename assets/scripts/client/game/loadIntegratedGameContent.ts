@@ -1,6 +1,6 @@
 import { buildGameplayContent } from '@/shared/content/DefinitionRegistry'
 import { loadPresentationDefinitions } from '@/client/content/loadPresentationDefinitions'
-import { JsonAsset, Prefab } from 'cc'
+import { JsonAsset, Prefab, resources } from 'cc'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
@@ -9,33 +9,30 @@ import { resourcePacks } from '@/client/content/ResourcePacks'
 import { CONTENT_CATEGORIES, type ContentCategory } from '@/shared/content'
 
 // Preserve the installed asset ID and prefab UUID for existing content packs and saves.
-export const LEVEL_PREFAB_ID = 'pvz:adventure11'
+export const LEVEL_PREFAB_ID = 'pvz:level'
 
-export async function loadIntegratedGameContent(location = 'pvz-base') {
+export async function loadIntegratedGameContent() {
     const loader = new ClientContentLoader()
     const [manifest, loadedMods] = await Promise.all([
-        loader.loadManifest(location),
+        loader.loadManifest(),
         loadInstalledMods(),
     ])
-    const bundle = await loader.loadBundle(manifest.client.bundle)
-    const loadJson = (path: string) => new Promise<JsonAsset>((resolve, reject) => {
-        bundle.load(path.replace(/\.json$/i, ''), JsonAsset, (error, asset) => error ? reject(error) : resolve(asset))
-    })
+    const loadJson = (path: string) => resourcePacks.baseJson(`pvz:${path.replace(/\.json$/i, '')}`)
     const prefabPath = manifest.client.prefabs[LEVEL_PREFAB_ID]
-    if (!prefabPath) throw new Error('Bundle pvz-base does not define prefab pvz:adventure11')
+    if (!prefabPath) throw new Error(`Base content does not define prefab ${LEVEL_PREFAB_ID}`)
     const loadPrefab = () => new Promise<Prefab>((resolve, reject) => {
-        bundle.load(prefabPath.replace(/\.prefab$/i, ''), Prefab, (error, asset) => error ? reject(error) : resolve(asset))
+        resources.load(prefabPath.replace(/\.prefab$/i, ''), Prefab, (error, asset) => error ? reject(error) : resolve(asset))
     })
     const [definitionsAsset, levelsAsset, stringsAsset, levelPrefab, presentation] = await Promise.all([
         loadJson(manifest.gameplay.definitions),
         loadJson(manifest.gameplay.levels),
         resourcePacks.asset(`${manifest.id.split(':')[0]}:${manifest.gameplay.strings.replace(/\.json$/i, '')}`, JsonAsset)
-            .then(asset => asset ?? loadJson(manifest.gameplay.strings)),
+            .then(asset => asset ? asset.json : loadJson(manifest.gameplay.strings)),
         loadPrefab(),
-        loadPresentationDefinitions(manifest, loader),
+        loadPresentationDefinitions(manifest),
     ])
     const { definitions, levels, strings } = buildGameplayContent(
-        definitionsAsset.json, levelsAsset.json, stringsAsset.json, loadedMods.gameplayDefinitions,
+        definitionsAsset, levelsAsset, stringsAsset, loadedMods.gameplayDefinitions,
     )
     const registry = new ContentRegistry()
     registry.register(manifest)

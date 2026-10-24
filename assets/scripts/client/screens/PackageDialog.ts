@@ -28,7 +28,7 @@ export interface PackageDialogOptions {
     restart: () => Promise<void>
 }
 
-interface Entry { id: string, version?: string, error?: string }
+interface Entry { id: string, version?: string, error?: string, builtin?: boolean }
 
 /**
  * Enabled states and uninstalls stay in the draft until Apply; Cancel discards them.
@@ -99,6 +99,7 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
         order = ordered ? [...order, ...ids].filter((id, index, all) => all.indexOf(id) === index && ids.includes(id)) : ids
         for (const id of checked) if (!order.includes(id)) checked.delete(id)
         entries = order.map(id => installed.find(entry => entry.id === id)!)
+        if (ordered) entries.push({ id: 'base', builtin: true })
         render()
     }
 
@@ -124,13 +125,18 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
         }).node
         const toggle = (value: boolean) => { if (value) checked.add(entry.id); else checked.delete(entry.id) }
         const checkbox = ui.checkbox(row, {
-            x: 6, y: Math.ceil(ROW_HEIGHT / 2 - CHECKBOX_CENTER_Y * CHECKBOX_SCALE), value: checked.has(entry.id), onChange: toggle,
+            x: 6, y: Math.ceil(ROW_HEIGHT / 2 - CHECKBOX_CENTER_Y * CHECKBOX_SCALE), value: entry.builtin || checked.has(entry.id), onChange: toggle,
         })
         checkbox.node.setScale(CHECKBOX_SCALE, CHECKBOX_SCALE)
         const name = `${entry.id}${entry.version ? `  ${entry.version}` : ''}${entry.error ? ' [Error]' : ''}`
         const nameColor = entry.error ? LINK_COLOR : TEXT_COLOR
         const nameLabel = ui.label(row, { text: name, font: 'profile', color: nameColor, x: 46, y: textY })
         if (entry.error) ui.tooltip(row, { text: entry.error })
+        if (entry.builtin) {
+            checkbox.button.interactable = false
+            row.active = true
+            return
+        }
 
         const text = ui.text('PACKAGE_UNINSTALL', 'Uninstall')
         const textWidth = FontMetricsUtil.measureTextWidth(font, text)
@@ -146,7 +152,7 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
         }, color => { nameLabel.renderer.fontColor = color })
         if (ordered) {
             arrowButton(row, uninstallX - 2 * ARROW_WIDTH - 10, true, index > 0, () => move(index, -1))
-            arrowButton(row, uninstallX - ARROW_WIDTH - 6, false, index < entries.length - 1, () => move(index, 1))
+            arrowButton(row, uninstallX - ARROW_WIDTH - 6, false, index < order.length - 1, () => move(index, 1))
         }
         row.active = true
     }

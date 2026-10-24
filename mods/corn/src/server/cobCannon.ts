@@ -13,7 +13,7 @@ export function registerCobCannon({ host, assets }: Context): void {
     const { ProjectileSystem } = host.get('server/projectiles')
     const { explode } = host.get('server/explosions')
     const { rectOverlap } = host.get('server/collision')
-    const { getDebugRules } = host.get('server/debug/DebugRules')
+    const { selectedSeedId } = host.get('server/seedBank')
     const { EventQueueResource, emitServerEvent } = host.get('server/events')
     const Aim = defineComponent('corn:cob_aim'), Flight = defineComponent('corn:cob_flight')
     const upgrading = new WeakMap<object, Set<number>>()
@@ -51,18 +51,14 @@ export function registerCobCannon({ host, assets }: Context): void {
         snapshot.extensions['corn:cob_upgrade'] = { targets: upgradeTargets(this.requireSession().world) }
         return snapshot
     })
-    host.around(IntegratedGameServer.prototype, 'selectSeed', function (next, session, seedId) {
-        if (seedId === CANNON) {
-            const world = session.world, packet = world.resources.get(SeedBank).packets.find((value: any) => value.seedId === seedId)
-            const rules = getDebugRules(world)
-            if (packet && (!rules.cooldown || packet.readyAtTick <= session.gameplayTick) &&
-                (!rules.sunCost || this.availableSun(world) >= this.definitions.seeds[seedId].sunCost) && !upgradeTargets(world).length) {
-                emit(world, 'corn:sound', { id: 'buzzer' })
-                advice(world, 'corn:needs_kernel_pults', 'hint-long')
-                return 'seed-not-available'
-            }
-        }
-        return next(session, seedId)
+    host.around(IntegratedGameServer.prototype, 'seedAvailability', function (next, session, seedId, packetId) {
+        const availability = next(session, seedId, packetId)
+        return !availability.reason && seedId === CANNON && !upgradeTargets(session.world).length
+            ? { reason: 'seed-not-available', warningKey: 'corn:requires_kernel_pults' } : availability
+    })
+    host.around(IntegratedGameServer.prototype, 'rejectSeed', function (next, session, seedId, availability) {
+        if (seedId === CANNON && availability.warningKey === 'corn:requires_kernel_pults') advice(session.world, 'corn:needs_kernel_pults', 'hint-long')
+        return next(session, seedId, availability)
     })
     registry.components.register(Aim, (state: any) => {
         if (!Number.isInteger(state.startedAtTick) || state.startedAtTick < 0 || !Number.isFinite(state.x) || !Number.isFinite(state.y)) throw new Error('Invalid cannon aim')
@@ -73,12 +69,18 @@ export function registerCobCannon({ host, assets }: Context): void {
     })
 
     host.around(IntegratedGameServer.prototype, 'findPlantAt', function (next, world, row, column) {
-        const entity = next(world, row, column) ?? at(world, row, column)
+        // Only extend the cannon's second cell; preserve the host's non-occupying plant rules.
+        const cannon = [...world.query(Position, Plant)].find(id => {
+            const plant = world.get(id, Plant)
+            return plant.typeId === CANNON && world.get(id, Position).row === row &&
+                column >= plant.column && column < plant.column + config.width
+        })
+        const entity = next(world, row, column) ?? cannon
         return entity !== undefined && upgrading.get(this)?.has(entity) ? undefined : entity
     })
     // Keep the bases intact until spending, cooldown and placement validation have all succeeded.
     host.around(IntegratedGameServer.prototype, 'placePlant', function (next, session, row, column, debugSeedId) {
-        const world = session.world, seedId = debugSeedId ?? world.resources.get(SeedBank).selectedSeedId
+        const world = session.world, seedId = debugSeedId ?? selectedSeedId(world.resources.get(SeedBank))
         if (seedId !== CANNON) return next(session, row, column, debugSeedId)
         const board = world.resources.get(Level).board
         if (!Number.isInteger(row) || row < 0 || row >= board.rows) return 'row-not-active'
@@ -116,7 +118,7 @@ export function registerCobCannon({ host, assets }: Context): void {
         if (command.id === 'corn:aim_cannon') {
             const plant = world.get(entityId, Plant), p = world.get(entityId, Position)
             if (plant?.typeId !== CANNON || plant.health <= 0 || plant.behaviorState.phase !== 'ready' || !p) return 'unsupported-command'
-            if (world.resources.get(SeedBank).selectedSeedId || x < p.x || x >= p.x + this.definitions.plants[CANNON].body.width || y < p.y || y >= p.y + this.definitions.plants[CANNON].body.height) return 'unsupported-command'
+            if (world.resources.get(SeedBank).selection.mode !== 'none' || x < p.x || x >= p.x + this.definitions.plants[CANNON].body.width || y < p.y || y >= p.y + this.definitions.plants[CANNON].body.height) return 'unsupported-command'
             clearAim(world)
             world.add(entityId, Aim, { startedAtTick: session.gameplayTick, x, y })
             return

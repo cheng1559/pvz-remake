@@ -1,10 +1,11 @@
 import type { World } from '@/ecs/index'
 import { EventQueueResource, emitServerEvent } from '../events'
-import { EconomyStateResource, LevelStateResource, PlantComponent, SeedBankResource } from '../components'
+import { EconomyStateResource, PlantComponent, SeedBankResource } from '../components'
 import { ItemComponent, TutorialResource, WaveResource } from '../levelState'
 import type { TutorialScript } from './index'
+import { selectedSeedId } from '../seedBank'
 
-function sunflowerReady(world: World, tick: number): boolean {
+export function sunflowerReady(world: World, tick: number): boolean {
     const packet = world.resources.get(SeedBankResource).packets.find(packet => packet.seedId === 'pvz:sunflower')
     const economy = world.resources.get(EconomyStateResource)
     const pending = [...world.query(ItemComponent)].reduce((sum, entity) => {
@@ -43,7 +44,7 @@ function noteSeedCanceled(world: World, tick: number): void {
 function noteSeedReady(world: World, tick: number): void {
     const tutorial = world.resources.get(TutorialResource)
     if (tutorial.step === 'refresh-sunflower' &&
-        world.resources.get(SeedBankResource).selectedSeedId !== 'pvz:sunflower' && sunflowerReady(world, tick)) {
+        selectedSeedId(world.resources.get(SeedBankResource)) !== 'pvz:sunflower' && sunflowerReady(world, tick)) {
         tutorial.step = 'pick-sunflower'
     }
 }

@@ -43,7 +43,7 @@ export class LevelScene extends Component {
         this.input = new LevelInputPresenter(this.node, game, view, () => { void this.lifecycle.onMenu?.() })
         this.lifecycle = lifecycle
         this.input.start()
-        game.start(startOptions)
+        view.bindSeedChooser(command => { game.command(command); game.update(0); view.sync(game.render(), game.drainChanges(), game.drainEvents()) })
         if (startOptions.save === undefined) this.audio.startChoosing()
         view.sync(game.render(), game.drainChanges(), game.drainEvents())
     }

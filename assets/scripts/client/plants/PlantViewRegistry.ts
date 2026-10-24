@@ -6,6 +6,7 @@ import { CherryBombView } from './CherryBombView'
 import { ChomperView } from './ChomperView'
 import { PotatoMineView } from './PotatoMineView'
 import { WallNutView } from './WallNutView'
+import { BowlingNutView } from './BowlingNutView'
 import { plantDefinition } from './definitions'
 
 export type PlantViewFactory = (context: PlantViewContext) => PlantView | Promise<PlantView>
@@ -18,7 +19,7 @@ export class PlantViewRegistry extends EntityViewRegistry<PlantViewContext, Plan
         }))
         this.register('shooter', context => ShooterView.create(context))
         this.register('sunflower', context => SunflowerView.create(context))
-        for (const [kind, View] of Object.entries({ cherrybomb: CherryBombView, chomper: ChomperView, potatomine: PotatoMineView, wallnut: WallNutView })) {
+        for (const [kind, View] of Object.entries({ cherrybomb: CherryBombView, chomper: ChomperView, potatomine: PotatoMineView, wallnut: WallNutView, bowling: BowlingNutView })) {
             this.register(kind, async context => {
                 const view = new View(context)
                 await view.initialize()

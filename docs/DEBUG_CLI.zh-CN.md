@@ -12,6 +12,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | --- | --- |
 | 页面跳转 | `/home`、`/help`、`/menu`、`/shop`、`/almanac`、`/zengarden` |
 | 关卡入口 | `/level 1-1`、`/restart`；跳过旧存档提示 |
+| 选卡测试 | `/level pvz:seed-chooser-test`，从已实现的 8 种植物中选择 6 张，确认后进入测试关卡 |
 | 应用 | `/reload`、`/quit` |
 | 倍速 | `/gamespeed {0-10}`，作用于统一游戏时钟 |
 | 胜负／波次 | `/win`、`/lose`、`/nextwave` |
@@ -23,7 +24,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 小推车 | `/lawnmower {trigger|reset} [row]` |
 | 规则 | `/cooldown {true|false}`、`/suncost {true|false}`、`/sunspawning {true|false}` |
 | 收集 | `/collect {auto|click|move}`，自动／移动收集仅处理普通掉落 |
-| 快捷键 | `/hotkeys {true|false}`；当前 `1` 选择种子包，`D` 切换 0 倍速 |
+| 快捷键 | `/hotkeys {true|false}`；`1`–`9`、`0` 选择普通种子栏或传送带对应槽位，`F` 拿起／取消铲子（手持植物时先取消选择），`D` 切换 0 倍速 |
 | 震动 | `/haptics {true|false}`，默认开启，立即生效并保存到本地 |
 | 碰撞框 | `/hitboxes {true|false}` |
 | 实时植物／僵尸头像 | `/hdseed {true|false}`，控制真实 Reanim 渲染，与背景清晰度独立 |

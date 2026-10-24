@@ -1,7 +1,9 @@
+import type { World } from '@/ecs/index'
+import { LevelStateResource } from './components'
 
-
-// ponytail: 1-1 screen edge; move this into BoardDefinition when another board needs it.
-export const DAY_BOARD_RIGHT = 800
+export function getBoardBounds(world: World) {
+    return world.resources.get(LevelStateResource).board.bounds
+}
 
 export function circleRectOverlap(x: number, y: number, radius: number, rect: { x: number, y: number, width: number, height: number }): boolean {
     const dx = x - Math.max(rect.x, Math.min(x, rect.x + rect.width))

@@ -20,7 +20,7 @@ COMMON_OFFSET_X = -40
 COMMON_OFFSET_Y = -40
 
 ROOT = Path(__file__).resolve().parents[1]
-TEXTURE_DIR = ROOT / "assets/resources/textures"
+TEXTURE_DIR = ROOT / "tools/generated/resources/textures"
 OUTPUT_PATH = TEXTURE_DIR / "plant_previews_cached.png"
 
 

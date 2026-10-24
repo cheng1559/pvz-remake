@@ -6,7 +6,7 @@ let sequence = 0
 export function runCommand(server: IntegratedGameServer, command: GameCommand): CommandRejectionCode | undefined {
     const expectedSequence = ++sequence
     server.enqueueCommand(expectedSequence, command)
-    if (command.type === 'pause' || command.type === 'resume' || command.type === 'completeIntro') {
+    if (command.type === 'pause' || command.type === 'resume' || command.type === 'completeIntro' || command.type === 'advanceDialog' || server.snapshot().phase === 'intro') {
         server.processBoundaryCommands()
     } else {
         server.processCommandPhase()

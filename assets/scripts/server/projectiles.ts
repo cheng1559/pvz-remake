@@ -1,4 +1,4 @@
-import { DAY_BOARD_RIGHT, rectOverlap } from './collision'
+import { getBoardBounds, rectOverlap } from './collision'
 import { EventQueueResource, emitServerEvent } from './events'
 import type { GameSystem, SystemContext, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
@@ -29,7 +29,7 @@ export class ProjectileSystem implements GameSystem {
         const definition = definitions.projectiles[projectile.typeId]
         position.x += definition.speedPerTick.x
         position.y += definition.speedPerTick.y
-        if (position.x > DAY_BOARD_RIGHT) {
+        if (position.x > getBoardBounds(world).right) {
             commands.destroyEntity(entity)
             return
         }

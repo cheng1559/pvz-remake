@@ -409,6 +409,8 @@ test('mobile CLI receives corner taps in root capture before UI can swallow them
         '@/client/view/uiNode': { uiNode: (options: any) => ({ node: options.node ?? { addComponent: () => ({}) } }) },
         '@/client/view/ClientViewport': { initializeViewport() { viewportInitialized++ } },
         './LocalMenuApi': { connectLocalMenuApi() {} },
+        '@/client/content/ResourcePacks': { resourcePacks: { baseJson: async () => ({}) } },
+        '@/server/menu/StoreCatalog': { createStoreCatalog: () => ({}) },
         './LevelController': { createLevelController: () => ({}) },
         '@/client/input/UIHoverManager': { UIHoverManager: { start() {} } },
         '@/platform/OptionsSettings': { OptionsSettings: { start: async () => {} } },

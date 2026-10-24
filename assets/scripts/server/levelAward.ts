@@ -28,7 +28,8 @@ export function tryDropLevelAward(world: World, definitions: GameplayDefinitions
     world.add(entity, ItemComponent, {
         typeId: level.definition.award.id, value: 1, state: 'available',
         velocityX: -0.5 + random.nextFloat(), velocityY: -3 - random.nextFloat() * 2,
-        width: 50, groundY: Math.max(80, Math.min(521, y + 45 + random.integer(0, 19))),
+        width: level.definition.award.kind === 'tool' ? level.definition.award.width : 50,
+        groundY: Math.max(80, Math.min(521, y + 45 + random.integer(0, 19))),
         disappearTicks: 0, fadeTicks: 0, scale: 1, alpha: 255,
     })
     emitServerEvent(world.resources.get(EventQueueResource), 'levelAwardDropped', { entityId: entity, typeId: level.definition.award.id })

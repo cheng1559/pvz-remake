@@ -270,10 +270,6 @@ export class ParticleSimulation {
     }
 }
 
-export function sampleParticleTrack(track: ParticleTrack, timeRatio: number, interpolation: number): number {
-    return sampleTrack(track, timeRatio, interpolation)
-}
-
 export function parseParticle(value: unknown): Particle {
     const source = exactObject(value, ['schemaVersion', 'id', 'durationSeconds', 'emitters'], 'particle')
     if (source.schemaVersion !== 2) throw new Error('particle.schemaVersion must be 2')
