@@ -15,6 +15,7 @@ export function registerCobCannon({ host, assets }: Context): void {
     const { ReanimPlayer } = host.get('client/reanim/ReanimPlayer')
     const { loadIntegratedGameContent } = host.get('client/game/loadIntegratedGameContent')
     const { GameDebugSettings } = host.get('platform/debug/GameDebugSettings')
+    const { Haptics } = host.get('platform/Haptics')
     const { LevelInputPresenter } = host.get('client/level/LevelInputPresenter')
     const { LevelHudPresenter } = host.get('client/level/LevelHudPresenter')
     const { LevelSeedBank } = host.get('client/level/LevelSeedBank')
@@ -135,6 +136,7 @@ export function registerCobCannon({ host, assets }: Context): void {
         const canAfford = snapshot.extensions['pvz:debug']?.sunCost === false || snapshot.availableSun >= this.game.definitions.seeds[seedId].sunCost
         if (!packet?.ready || !canAfford) return next(seedId)
         if (!this.enabled || !this.view.introComplete || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+        Haptics.play()
         this.game.command({ type: 'selectSeed', seedId })
     })
     host.around(LevelHudPresenter.prototype, 'syncAdvice', function (next, snapshot, events, ...args) {
@@ -148,11 +150,13 @@ export function registerCobCannon({ host, assets }: Context): void {
         return item.state !== 'collecting' && point.x >= item.x - extra && point.x < item.x + (definition?.width ?? 50) + extra &&
             point.y >= item.y - extra && point.y < item.y + (definition?.height ?? 70) + extra
     })
-    const hitCannon = (snapshot: any, definitions: any, point: any) => snapshot.plants.find((plant: any) => {
+    const insidePlant = (plant: any, definitions: any, point: any) => {
         const body = definitions.plants[plant.typeId].body
-        return plant.typeId === CANNON && plant.behaviorState?.phase === 'ready' && point.x >= plant.x + body.x &&
+        return point.x >= plant.x + body.x &&
             point.x < plant.x + body.x + body.width && point.y >= plant.y + body.y && point.y < plant.y + body.y + body.height
-    })
+    }
+    const hitCannon = (snapshot: any, definitions: any, point: any) => snapshot.plants.find((plant: any) =>
+        plant.typeId === CANNON && plant.behaviorState?.phase === 'ready' && insidePlant(plant, definitions, point))
     const canTarget = (point: any) => point && point.x >= 0 && point.x < 800 && point.y >= behavior.minTargetY && point.y < 600
     const aimPointer = (presenter: any, event: any, right = false) => {
         const snapshot = presenter.game.render()
@@ -166,11 +170,13 @@ export function registerCobCannon({ host, assets }: Context): void {
                 return false
             }
             presenter.game.command(right ? { type: 'clearCursor' } : { type: 'mod', id: 'corn:fire_cannon', data: point })
+            if (!right && !aimed(presenter.game.render())) Haptics.play('medium')
         } else {
             if (right || snapshot.cursor.mode !== 'none') return false
             const cannon = hitCannon(snapshot, presenter.game.definitions, point)
             if (!cannon) return false
             presenter.game.command({ type: 'mod', id: 'corn:aim_cannon', data: { ...point, entityId: cannon.entityId } })
+            Haptics.play()
         }
         presenter.view.setPointer(point)
         event.propagationStopped = true
@@ -180,9 +186,50 @@ export function registerCobCannon({ host, assets }: Context): void {
         if (!GameDebugSettings.isMobileMode() && (event.getButton() === 0 || event.getButton() === 2) && aimPointer(this, event, event.getButton() === 2)) return
         return next(event)
     })
+    // Keep the host's finger ownership, drag tracking and last-point release handling.
+    const mobileAims = new WeakMap<object, any>()
+    host.around(LevelInputPresenter.prototype, 'mobilePressReady', function (next, press) {
+        const source = mobileAims.get(press)
+        return source ? !insidePlant(source, this.game.definitions, press.point) : next(press)
+    })
     host.around(LevelInputPresenter.prototype, 'onTouchStart', function (next, event) {
-        if (GameDebugSettings.isMobileMode() && aimPointer(this, event)) return
-        return next(event)
+        if (!GameDebugSettings.isMobileMode() || this.mobilePress || !this.enabled || !this.view.introComplete) return next(event)
+        const snapshot = this.game.render(), point = this.boardPixel(event), aiming = aimed(snapshot)
+        if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing' || snapshot.cursor.mode !== 'none' ||
+            overItem(snapshot, this.game.definitions, point)) return next(event)
+        if (aiming && point.y < behavior.minTargetY) {
+            this.game.command({ type: 'clearCursor' })
+            return next(event)
+        }
+        const cannon = hitCannon(snapshot, this.game.definitions, point)
+        next(event)
+        const press = this.mobilePress
+        if (!press || (!aiming && !cannon)) return
+        mobileAims.set(press, cannon)
+        if (cannon) {
+            Haptics.play()
+            press.cancelInside = !!snapshot.extensions['corn:cob_aim']?.[cannon.entityId]
+            press.leftSource = false
+            if (!press.cancelInside) this.game.command({ type: 'mod', id: 'corn:aim_cannon', data: { ...point, entityId: cannon.entityId } })
+        }
+        this.view.setPointer(this.mobilePressReady(press) ? press.point : undefined)
+        event.propagationStopped = true
+    })
+    host.around(LevelInputPresenter.prototype, 'onTouchEnd', function (next, event) {
+        const press = this.mobilePress
+        if (!GameDebugSettings.isMobileMode() || !press || !mobileAims.has(press) || event.touch!.getID() !== press.id) return next(event)
+        const ready = this.mobilePressReady(press)
+        next(event)
+        const snapshot = this.game.render()
+        if (!this.enabled || snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing' || !aimed(snapshot)) return
+        event.propagationStopped = true
+        if (ready) {
+            if (canTarget(press.point)) {
+                this.game.command({ type: 'mod', id: 'corn:fire_cannon', data: press.point })
+                if (!aimed(this.game.render())) Haptics.play('medium')
+            }
+            if (aimed(this.game.render())) this.game.command({ type: 'clearCursor' })
+        } else if (press.cancelInside || press.leftSource) this.game.command({ type: 'clearCursor' })
     })
     host.around(LevelInputPresenter.prototype, 'start', function (next) {
         const started = this.started
@@ -196,7 +243,19 @@ export function registerCobCannon({ host, assets }: Context): void {
         }
     })
 
-    const reticles = new WeakMap<object, any>(), mobileGuides = new WeakMap<object, number>()
+    const reticles = new WeakMap<object, any>(), mobileGuides = new WeakMap<object, string>()
+    const showMobileGuide = (hud: any, board: any, row: number, column: number, width: number) => {
+        hud.mobileGridGuide.active = true
+        const key = `${row}:${column}:${width}`
+        if (mobileGuides.get(hud) === key && hud.mobileGuideCell === -1) return
+        mobileGuides.set(hud, key)
+        // This Graphics node is shared with planting; invalidate its cached cell after our drawing.
+        hud.mobileGuideCell = -1
+        const graphics = hud.mobileGridGuide.getComponent(Graphics)
+        graphics.clear(); graphics.fillColor = new Color(255, 255, 255, 72)
+        graphics.fillRect(board.origin.x, -(board.origin.y + (row + 1) * board.cell.height), board.columns * board.cell.width, board.cell.height)
+        graphics.fillRect(board.origin.x + column * board.cell.width, -(board.origin.y + board.rows * board.cell.height), width * board.cell.width, board.rows * board.cell.height)
+    }
     host.around(LevelHudPresenter.prototype, 'syncPreviews', function (next, snapshot) {
         next(snapshot)
         const pointer = this.pointer, aim = aimed(snapshot), board = this.content.definitions.boards[this.level.board]
@@ -212,6 +271,16 @@ export function registerCobCannon({ host, assets }: Context): void {
             }
             reticle.setPosition(pointer.x + visual.target.x, -pointer.y + visual.target.y)
             reticle.setSiblingIndex(reticle.parent.children.length - 1); reticle.active = true
+        }
+        if (aim) {
+            this.mobileGridGuide.active = false
+            if (show && GameDebugSettings.isMobileMode()) {
+                const column = Math.floor((pointer.x - board.origin.x) / board.cell.width), row = Math.floor((pointer.y - board.origin.y) / board.cell.height)
+                if (column >= 0 && column < board.columns && row >= 0 && row < board.rows && this.level.activeRows.includes(row)) {
+                    showMobileGuide(this, board, row, column, 1)
+                }
+            }
+            return
         }
         if (!pointer || snapshot.cursor.mode !== 'seed') return
         const column = Math.floor((pointer.x - board.origin.x) / board.cell.width), row = Math.floor((pointer.y - board.origin.y) / board.cell.height)
@@ -231,15 +300,7 @@ export function registerCobCannon({ host, assets }: Context): void {
         if (valid) {
             this.gridPreview.setPosition(board.origin.x + start * board.cell.width, -(board.origin.y + row * board.cell.height))
             if (GameDebugSettings.isMobileMode()) {
-                this.mobileGridGuide.active = true
-                const cell = row * board.columns + start
-                if (mobileGuides.get(this) !== cell) {
-                    mobileGuides.set(this, cell)
-                    const graphics = this.mobileGridGuide.getComponent(Graphics)
-                    graphics.clear(); graphics.fillColor = new Color(255, 255, 255, 72)
-                    graphics.fillRect(board.origin.x, -(board.origin.y + (row + 1) * board.cell.height), board.columns * board.cell.width, board.cell.height)
-                    graphics.fillRect(board.origin.x + start * board.cell.width, -(board.origin.y + board.rows * board.cell.height), behavior.width * board.cell.width, board.rows * board.cell.height)
-                }
+                showMobileGuide(this, board, row, start, behavior.width)
             }
         }
     })
@@ -252,6 +313,7 @@ export function registerCobCannon({ host, assets }: Context): void {
         for (const event of events) {
             if (event.type === 'corn:sound' && visual.sounds[event.data.id]) this.audio.sounds([visual.sounds[event.data.id]])
             if (event.type === 'projectileImpact' && event.data.typeId === 'corn:cob') {
+                Haptics.play('explosion')
                 const mark = this.spawnProjectileImpact(snapshot, event, visual.blastMark)
                 if (mark) { mark.name = 'CornBlastMark'; mark.setSiblingIndex(0) }
             }

@@ -1,7 +1,7 @@
 import { _decorator, Component, director, Director, EventKeyboard, type EventTouch, game, Game, input, Input, KeyCode, Mask, Node, screen, sys } from 'cc'
 import { DEBUG } from 'cc/env'
 import { uiNode } from '@/client/view/uiNode'
-import { constrainNativeWindow, resetViewport } from '@/client/view/ClientViewport'
+import { initializeViewport, resetViewport } from '@/client/view/ClientViewport'
 import { gameClock } from '@/core/GameClock'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
@@ -31,7 +31,7 @@ import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { resourcePacks } from '@/client/content/ResourcePacks'
 import { modManager } from '@/client/content/ModManager'
-import { selectZip } from '@/client/content/InstalledArchives'
+import { selectZips, type SelectedZip } from '@/client/content/InstalledArchives'
 
 const { ccclass } = _decorator
 
@@ -54,7 +54,6 @@ export class GameApp extends Component {
 
     start(): void {
         game.frameRate = Infinity
-        constrainNativeWindow(4 / 3, 4 / 3)
         uiNode({ node: this.node, viewport: true })
         connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false)
         UIHoverManager.start(this.node)
@@ -86,6 +85,7 @@ export class GameApp extends Component {
         void this.navigate('splash')
         void UI.load().then(ui => {
             if (!this.node?.isValid) return
+            initializeViewport()
             this.status = ui.label(this.node, { text: '', x: -380, y: 0, width: 760, align: 'center' })
         }).catch(error => console.error('[GameApp] Failed to initialize UI', error))
     }
@@ -288,30 +288,49 @@ export class GameApp extends Component {
         }
     }
 
-    /** Installs a picked ZIP; `enable` also enables it and offers the restart, as `/pack install` does. */
-    private async installPackage(kind: 'pack' | 'mod', enable = true): Promise<string | null> {
+    /** Install sequentially, then offer one restart for the whole selection. */
+    private async installPackage(kind: 'pack' | 'mod', enable = true): Promise<string[]> {
         const ui = await UI.load()
         let progress: UIDialog | undefined
+        let files: SelectedZip[] = []
+        let needsRestart = false
+        const installed: string[] = [], errors: string[] = []
+        const message = (error: unknown) => error instanceof Error ? error.message : String(error)
         try {
-            const data = await selectZip()
-            if (!data || !this.node?.isValid) return null
+            files = await selectZips()
+            if (!files.length || !this.node?.isValid) return []
             progress = ui.dialog(this.node, {
                 title: 'Installing...', footer: false, clickSound: null,
             })
             progress.onConfirm = progress.onCancel = () => {}
             // Paint the dialog before ZIP validation and native file writes occupy the main thread.
             await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
-            const id = await (kind === 'pack' ? resourcePacks : modManager).install(data, enable)
-            progress.close()
-            if (enable) await this.confirmPackageRestart(kind)
-            return id
+            // Save new Mods before enabling the group, so dependencies may be picked in any order.
+            const deferEnable = kind === 'mod' && enable && files.length > 1
+            const previouslyEnabled = deferEnable ? await modManager.list() : []
+            for (const file of files) {
+                if (!this.node?.isValid) break
+                try {
+                    const id = await (kind === 'pack' ? resourcePacks : modManager).install(await file.read(), enable && !deferEnable)
+                    if (!installed.includes(id)) installed.push(id)
+                    needsRestart ||= enable && (!deferEnable || previouslyEnabled.includes(id))
+                } catch (error) { errors.push(`${file.name}: ${message(error)}`) }
+            }
+            if (deferEnable && installed.length) {
+                await modManager.setEnabled([...new Set([...await modManager.list(), ...installed])])
+                needsRestart = true
+            }
         } catch (error) {
+            errors.push(message(error))
+        } finally {
             progress?.close()
-            if (this.node?.isValid) await ui.dialog(this.node, {
-                title: 'Installation Failed', message: error instanceof Error ? error.message : String(error), confirmText: 'OK',
-            }).result
-            return null
+            for (const file of files) file.dispose?.()
         }
+        if (errors.length && this.node?.isValid) await ui.dialog(this.node, {
+            title: 'Installation Failed', message: errors.join('\n'), confirmText: 'OK',
+        }).result
+        if (needsRestart) await this.confirmPackageRestart(kind)
+        return installed
     }
 
     private async confirmPackageRestart(kind: 'pack' | 'mod'): Promise<void> {

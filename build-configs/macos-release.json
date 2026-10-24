@@ -1,0 +1,10 @@
+{
+    "debug": false,
+    "sourceMaps": false,
+    "useSplashScreen": false,
+    "packages": {
+        "mac": {
+            "skipUpdateXcodeProject": false
+        }
+    }
+}

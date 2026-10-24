@@ -6,6 +6,8 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 
 打开时暂停关卡及全局演出时间，关闭后恢复先前的暂停状态。`/gamespeed` 设置会保留，0 倍速也能输入、执行和关闭 CLI。语法错误闪红并保留窗口；条件不满足关闭窗口并显示原因。
 
+`/plant {plant_name} {row} {col}` 直接创建已安装的植物，支持 Mod 植物，例如 `/plant corn:cob_cannon 3 1`。不受占格、升级前置、种子栏、阳光、冷却、教程和关卡阶段／结算状态限制；保留当前手持种子，并正常初始化植物注册的行为状态。仅要求 ID 已安装、行列在棋盘范围内，重叠植物也可正常存档。鼠标／触屏种植仍按正常规则校验。
+
 | 用途 | 命令 |
 | --- | --- |
 | 页面跳转 | `/home`、`/help`、`/menu`、`/shop`、`/almanac`、`/zengarden` |
@@ -22,6 +24,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 规则 | `/cooldown {true|false}`、`/suncost {true|false}`、`/sunspawning {true|false}` |
 | 收集 | `/collect {auto|click|move}`，自动／移动收集仅处理普通掉落 |
 | 快捷键 | `/hotkeys {true|false}`；当前 `1` 选择种子包，`D` 切换 0 倍速 |
+| 震动 | `/haptics {true|false}`，默认开启，立即生效并保存到本地 |
 | 碰撞框 | `/hitboxes {true|false}` |
 | 实时植物／僵尸头像 | `/hdseed {true|false}`，控制真实 Reanim 渲染，与背景清晰度独立 |
 | 种子包风格 | `/seedstyle {standard|rendered|tilted}`，标准／实际渲染／放大右倾 |

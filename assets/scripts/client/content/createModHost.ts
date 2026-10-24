@@ -24,6 +24,7 @@ import * as levelHud from '@/client/level/LevelHudPresenter'
 import * as seedBank from '@/client/level/LevelSeedBank'
 import * as levelView from '@/client/level/LevelView'
 import * as debugSettings from '@/platform/debug/GameDebugSettings'
+import * as haptics from '@/platform/Haptics'
 
 export class ClientModAssets extends ModAssets {
     sprite(path: string) { this.url(path); return loadModSprite(this.id, path) }
@@ -53,5 +54,6 @@ export function createClientModHost(ownerId: string, definitions: DefinitionSour
         'client/level/LevelSeedBank': seedBank,
         'client/level/LevelView': levelView,
         'platform/debug/GameDebugSettings': debugSettings,
+        'platform/Haptics': haptics,
     })
 }

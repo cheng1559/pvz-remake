@@ -116,33 +116,42 @@ export async function removeInstalledArchive(kind: ArchiveKind, id: string): Pro
     })
 }
 
-export async function selectZip(): Promise<Uint8Array | null> {
+export interface SelectedZip {
+    name: string
+    read(): Promise<Uint8Array>
+    dispose?(): void
+}
+
+/** Keep selections as file handles so large ZIPs can be read and installed one at a time. */
+export async function selectZips(): Promise<SelectedZip[]> {
     if (sys.isNative) {
-        const selectFile = (globalThis as { jsb?: { selectFile?: (extension: string, callback: (path: string | null, error?: string | null) => void) => void } }).jsb?.selectFile
-        if (!selectFile) throw new Error('File selection is unavailable on this platform')
-        const path = await new Promise<string | null>((resolve, reject) => {
-            selectFile('zip', (path, error) => error ? reject(new Error(error)) : resolve(path))
+        const selectFiles = (globalThis as { jsb?: { selectFiles?: (extension: string, callback: (paths: string[], error?: string | null) => void) => void } }).jsb?.selectFiles
+        if (!selectFiles) throw new Error('File selection is unavailable on this platform')
+        const paths = await new Promise<string[]>((resolve, reject) => {
+            selectFiles('zip', (paths, error) => error ? reject(new Error(error)) : resolve(paths))
         })
-        if (!path) return null
-        try {
-            const data = native.fileUtils.getDataFromFile(path)
-            if (!data) throw new Error('Could not read the selected ZIP')
-            return new Uint8Array(data)
-        } finally {
-            if (sys.os === sys.OS.IOS) native.fileUtils.removeFile(path)
-        }
+        return paths.map(path => ({
+            name: path.replace(/\\/g, '/').split('/').pop()!,
+            read: async () => {
+                const data = native.fileUtils.getDataFromFile(path)
+                if (!data) throw new Error('Could not read the selected ZIP')
+                return new Uint8Array(data)
+            },
+            dispose: () => { if (sys.os === sys.OS.IOS) native.fileUtils.removeFile(path) },
+        }))
     }
     if (!sys.isBrowser) throw new Error('File selection is unavailable on this platform')
-    const file = await new Promise<File | null>((resolve, reject) => {
+    const files = await new Promise<File[]>((resolve, reject) => {
         const input = document.createElement('input')
         input.type = 'file'
         input.accept = '.zip,application/zip'
+        input.multiple = true
         input.hidden = true
-        const finish = (file: File | null) => { input.remove(); resolve(file) }
-        input.onchange = () => finish(input.files?.[0] ?? null)
-        input.addEventListener('cancel', () => finish(null), { once: true })
+        const finish = (files: File[]) => { input.remove(); resolve(files) }
+        input.onchange = () => finish(Array.from(input.files ?? []))
+        input.addEventListener('cancel', () => finish([]), { once: true })
         document.body.appendChild(input)
         try { input.click() } catch (error) { input.remove(); reject(error) }
     })
-    return file ? new Uint8Array(await file.arrayBuffer()) : null
+    return files.map(file => ({ name: file.name, read: async () => new Uint8Array(await file.arrayBuffer()) }))
 }

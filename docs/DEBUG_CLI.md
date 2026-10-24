@@ -12,6 +12,7 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /gamespeed 2
 /hdseed true
 /seedstyle tilted
+/haptics false
 /seed 1 snowpea
 /pack
 /pack install
@@ -23,6 +24,10 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /win
 /home
 ```
+
+`/haptics true|false` toggles all haptic feedback immediately and saves the preference locally. Enabled by default.
+
+`/plant {plant_name} {row} {col}` directly creates an installed plant, including Mod plants such as `/plant corn:cob_cannon 3 1`. It bypasses occupancy, upgrade prerequisites, seed-bank availability, sun cost, cooldown, tutorials and level phase/result restrictions. It preserves the held seed and initializes the plant's registered behavior normally. Only installed IDs and valid board coordinates are required; overlapping plants are saved normally. Mouse/touch planting keeps its usual rules.
 
 `/seed {slot} {seed_name}` replaces a seed-bank slot, numbered from 1 on the left, with an installed seed. The new packet is immediately ready and uses its own cost and cooldown. Replacing a held packet clears the cursor; duplicates in other slots are rejected. Changes work while paused or at zero speed and persist in the level save.
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "corn:plants",
-  "version": "0.2.3",
+  "version": "0.2.6",
   "apiVersion": 1,
   "contentHash": "generated-on-pack",
   "dependencies": [],

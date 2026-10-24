@@ -44,8 +44,8 @@ export class LevelEntityRenderer {
     private readonly plantViews = new Map<number, PlantView>()
     private readonly zombies = new Map<number, ZombieViewInstance>()
     private readonly zombieTypes = new Map<number, string>()
-    /** Charred remains outlive their zombie entity; kept here for row ordering. */
-    private readonly charred = new Map<Node, number>()
+    /** Charred remains keep their zombie's layer and ordering identity after removal. */
+    private readonly charred = new Map<Node, { order: number, entityId: number }>()
     private readonly mowerPlayersReady = new Set<number>()
     private readonly mowerStates = new Map<number, LawnMowerSnapshot['state']>()
 
@@ -200,8 +200,8 @@ export class LevelEntityRenderer {
             const node = this.entities.get(zombie.entityId)
             if (node) node.active = GameDebugSettings.perfZombiesVisible
         }
-        this.syncLayerOrder(snapshot)
         this.playEvents(snapshot, events)
+        this.syncLayerOrder(snapshot)
         if (!this.intro.complete) this.intro.sync()
     }
 
@@ -271,10 +271,10 @@ export class LevelEntityRenderer {
 
     /** Zombie::ApplyBurn leaves a charred zombie that crumbles at its own pace. */
     private spawnCharred(event: ServerEvent): void {
-        const { x, y, row, rate } = event.data
-        if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof rate !== 'number') return
+        const { x, y, row, rate, entityId } = event.data
+        if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof rate !== 'number' || typeof entityId !== 'number') return
         const node = uiNode({ name: 'CharredZombie', parent: this.entityLayer, position: { x: x - WIDTH / 2, y: HEIGHT / 2 - y }, anchor: { x: 0, y: 1 } }).node
-        this.charred.set(node, row * 10 + 1)
+        this.charred.set(node, { order: row * 10 + 1, entityId })
         const player = node.addComponent(ReanimPlayer)
         void player.load('pvz:zombie_charred', this.content.registry, this.content.loader).then(() => {
             if (!node.isValid) return
@@ -446,10 +446,10 @@ export class LevelEntityRenderer {
     }
 
     private syncLayerOrder(snapshot: WorldSnapshot): void {
-        const entries: { node: Node, order: number }[] = []
+        const entries: { node: Node, order: number, entityId?: number }[] = []
         const add = (entityId: number, order: number) => {
             const node = this.entities.get(entityId)
-            if (node?.isValid) entries.push({ node, order })
+            if (node?.isValid) entries.push({ node, order, entityId })
         }
         for (const entity of snapshot.plants) add(entity.entityId, entity.row * 10)
         for (const entity of snapshot.zombies) {
@@ -458,13 +458,13 @@ export class LevelEntityRenderer {
             if (shadow?.isValid) entries.push({ node: shadow, order: entity.row * 10 - 0.1 })
         }
         for (const entity of snapshot.projectiles) add(entity.entityId, entity.row * 10 + 2)
-        for (const [node, order] of this.charred) if (node.isValid) entries.push({ node, order })
+        for (const [node, entry] of this.charred) if (node.isValid) entries.push({ node, ...entry })
         for (const entity of snapshot.lawnMowers) add(entity.entityId, entity.row * 10 + 3)
         for (const child of this.entityLayer.children) {
             const particle = child.getComponent(TodParticleSystem)
             if (particle) entries.push({ node: child, order: particle.renderOrder })
         }
-        entries.sort((left, right) => left.order - right.order)
+        entries.sort((left, right) => left.order - right.order || (left.entityId ?? 0) - (right.entityId ?? 0))
         entries.forEach((entry, index) => entry.node.setSiblingIndex(index))
     }
 

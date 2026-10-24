@@ -1,5 +1,6 @@
 import { Color, Component, Graphics, instantiate, Mask, Node, Sprite, Tween } from 'cc'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { Haptics, type HapticStyle } from '@/platform/Haptics'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -335,12 +336,27 @@ export class LevelView {
         for (const item of snapshot.items) this.end.syncAward(item, snapshot.levelId)
         this.hud.sync(snapshot, events, this.introComplete)
         for (const event of events) this.audio.play(event)
+        this.playHaptics(events)
         this.syncHitboxes(snapshot)
         if (snapshot.result === 'lost') {
             this.setPaused(true)
             this.end.cancelWarnings()
             this.gameOver.sync(snapshot, events)
         }
+    }
+
+    private playHaptics(events: ServerEvent[]): void {
+        let style: HapticStyle | undefined
+        for (const event of events) {
+            switch (event.type) {
+                case 'plantExploded':
+                    Haptics.play('explosion')
+                    return
+                case 'mowerActivated': case 'levelWon': case 'levelLost': style = 'heavy'; break
+                case 'plantPlaced': case 'levelAwardCollected': style ??= 'medium'; break
+            }
+        }
+        if (style) Haptics.play(style)
     }
 
     private syncHitboxes(snapshot: WorldSnapshot): void {

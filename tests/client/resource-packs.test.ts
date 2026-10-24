@@ -12,7 +12,7 @@ function setup() {
     const requests: string[] = []
     const archives = new Map<string, Uint8Array>()
     const modArchives = new Map<string, Uint8Array>()
-    const jsb = { selectFile: undefined as ((extension: string, callback: (path: string | null, error?: string | null) => void) => void) | undefined }
+    const jsb = { selectFiles: undefined as ((extension: string, callback: (paths: string[], error?: string | null) => void) => void) | undefined }
     let picker: any
     const db = {
         failWrite: false,
@@ -498,14 +498,20 @@ test('pack install delegates to its dialog and ZIP picker cancellation leaves pa
     const { executeDebugCliCommand } = load('assets/scripts/platform/debug/DebugCliCommands.ts')
     const execute = (command: string) => executeDebugCliCommand(command, false, () => assert.fail('must not request gameplay'))
     assert.equal((await execute('/pack install')).action, 'installPack')
-    const importing = archive.selectZip()
+    const importing = archive.selectZips()
     const data = zipSync(zipFiles())
-    picker().files = [{ arrayBuffer: async () => data.buffer }]
+    let reads = 0
+    picker().files = [1, 2].map(id => ({ name: `${id}.zip`, arrayBuffer: async () => { reads++; return data.buffer } }))
+    assert.equal(picker().multiple, true)
     picker().onchange()
-    await manager.install(await importing)
-    const cancelled = archive.selectZip()
+    const selected = await importing
+    assert.equal(selected.length, 2)
+    assert.equal(reads, 0, 'selection keeps file handles without loading all archives')
+    await manager.install(await selected[0].read())
+    assert.equal(reads, 1)
+    const cancelled = archive.selectZips()
     picker().cancel()
-    assert.equal(await cancelled, null)
+    assert.equal((await cancelled).length, 0)
     assert.deepEqual(Array.from(await manager.list()), ['custom'])
     assert.deepEqual(Array.from(await new ResourcePackManager().list()), ['custom'])
     assert.equal((await execute('/pack install custom.zip')).failure, 'syntax')
@@ -551,21 +557,29 @@ test('Native ZIP installation copies files into writable storage and rolls back 
     packFiles['pack.json'] = strToU8(JSON.stringify(packManifest))
     const data = zipSync(packFiles)
     files.set('/Downloads/custom.zip', data)
-    let select!: (path: string | null, error?: string | null) => void
-    jsb.selectFile = (extension, callback) => { assert.equal(extension, 'zip'); select = callback }
-    const selected = archive.selectZip()
+    let select!: (paths: string[], error?: string | null) => void
+    jsb.selectFiles = (extension, callback) => { assert.equal(extension, 'zip'); select = callback }
+    const selected = archive.selectZips()
     assert.equal(files.has('/Downloads/custom.zip'), true, 'wait for the system picker before reading')
-    select('/Downloads/custom.zip')
-    await manager.install(await selected)
+    files.set('/Downloads/second.zip', data)
+    select(['/Downloads/custom.zip', '/Downloads/second.zip'])
+    const picked = await selected
+    assert.equal(picked.length, 2)
+    assert.equal(files.has('/Downloads/custom.zip'), true, 'selected files stay on disk until processed')
+    await manager.install(await picked[0].read())
+    for (const file of picked) file.dispose()
     assert.equal(files.has('/Downloads/custom.zip'), false, 'remove the temporary iOS import')
-    jsb.selectFile = (_, callback) => callback(null)
-    assert.equal(await archive.selectZip(), null)
-    jsb.selectFile = (_, callback) => callback(null, 'Could not read the selected file')
-    await assert.rejects(archive.selectZip(), /Could not read/)
+    assert.equal(files.has('/Downloads/second.zip'), false, 'also clean up an unread iOS import')
+    jsb.selectFiles = (_, callback) => callback([])
+    assert.equal((await archive.selectZips()).length, 0)
+    jsb.selectFiles = (_, callback) => callback([], 'Could not read the selected file')
+    await assert.rejects(archive.selectZips(), /Could not read/)
     modules.cc.sys.os = 'OS X'
     files.set('/Downloads/custom.zip', data)
-    jsb.selectFile = (_, callback) => callback('/Downloads/custom.zip')
-    assert.deepEqual(await archive.selectZip(), data)
+    jsb.selectFiles = (_, callback) => callback(['/Downloads/custom.zip'])
+    const macFile = (await archive.selectZips())[0]
+    assert.deepEqual(await macFile.read(), data)
+    macFile.dispose()
     assert.equal(files.has('/Downloads/custom.zip'), true, 'preserve the original macOS file')
     assert.deepEqual(files.get('/app/resource-packs/custom/.archive.zip'), data)
     assert.deepEqual(files.get('/app/resource-packs/custom/button.png'), zipFiles()['button.png'])

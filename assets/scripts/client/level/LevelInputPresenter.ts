@@ -3,6 +3,7 @@ import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { gameClock } from '@/core/GameClock'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { Haptics } from '@/platform/Haptics'
 import { boardCell } from './LevelGeometry'
 import type { LevelGame } from './LevelGame'
 import { LevelView } from './LevelView'
@@ -99,6 +100,7 @@ export class LevelInputPresenter {
         if (!this.enabled || !this.view.introComplete) return
         const snapshot = this.game.render()
         if (snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
+        Haptics.play()
         if (snapshot.cursor.mode === 'seed') {
             this.cancelPlanting()
             return
@@ -127,6 +129,7 @@ export class LevelInputPresenter {
         const pickable = packet && !packet.selected && packet.ready &&
             ((snapshot.extensions['pvz:debug'] as { sunCost?: boolean } | undefined)?.sunCost === false ||
                 snapshot.availableSun >= this.game.definitions.seeds[packet.seedId].sunCost)
+        if (packet && held && !pickable) Haptics.play()
         if (packet && (!held || pickable)) {
             if (held) this.game.command({ type: 'clearCursor' })
             this.selectSeedPacket(packet.seedId)

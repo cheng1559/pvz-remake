@@ -251,6 +251,7 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         anchor: number[] = []
         convertToNodeSpaceAR(point: any) { return point }
         setAnchorPoint(...value: number[]) { this.anchor = value }
+        hitTest() { return false }
     }
     class Sprite { static SizeMode = { RAW: 0 }; spriteFrame = { originalSize: { width: 49, height: 50 } } }
     class Node {
@@ -303,15 +304,20 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
     class Renderer { sync() {}; playEvents() {}; syncLayerOrder() {} }
     class Preview { load() {}; initialize() {} }
     const fallback: string[] = []
-    class LevelInput {
+    let mobile = false
+    const BaseInput = loadHostModule('level/LevelInputPresenter', {
+        cc: { UITransform: Transform, EventMouse: class {} },
+        '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => mobile } },
+        '@/platform/Haptics': { Haptics: { play() {} } },
+    }).LevelInputPresenter
+    class LevelInput extends BaseInput {
         onMouseDown() { fallback.push('mouse') }
-        onTouchStart() { fallback.push('touch') }
-        start() {}
+        onTouchStart(event: any) { fallback.push('touch'); super.onTouchStart(event) }
+        start() { this.started = true }
         selectSeedPacket() { fallback.push('select') }
     }
-    class LevelHud { syncPreviews() {}; isPointerOverItem() {}; syncAdvice() {} }
+    class LevelHud { syncPreviews(this: any) { if (this.mobileGridGuide) this.mobileGridGuide.active = false }; isPointerOverItem() {}; syncAdvice() {} }
     class LevelView { syncShake() {} }
-    let mobile = false
     const { LevelSeedBank } = loadHostModule('level/LevelSeedBank', {
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => mobile } },
     })
@@ -342,6 +348,7 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         'client/level/LevelSeedBank': { LevelSeedBank },
         'client/level/LevelView': { LevelView },
         'platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => mobile } },
+        'platform/Haptics': { Haptics: { play() {} } },
     }
     const host = new ModHost('corn:plants', modules)
     try {
@@ -366,15 +373,19 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         assert.equal(view.player.time, 1, 'dying bodies must advance normally')
 
         const cannon = { entityId: 2, typeId: 'corn:cob_cannon', x: 80, y: 280, behaviorState: { phase: 'ready' } }
-        const snapshot: any = { phase: 'gameplay', result: 'playing', paused: false, plants: [cannon], items: [], cursor: { mode: 'none' }, extensions: {} }
+        const snapshot: any = { phase: 'gameplay', result: 'playing', paused: false, plants: [cannon], items: [], seedPackets: [], cursor: { mode: 'none' }, extensions: {} }
         const commands: any[] = [], input: any = new LevelInput()
+        let pointer: any
         Object.assign(input, {
-            enabled: true, buttons: [{ canInteract: () => true }], boardPixel: (event: any) => event.point,
+            node: { isValid: true }, enabled: true,
+            buttons: [{ canInteract: () => true, interactable: true, node: { activeInHierarchy: true, getComponent: () => new Transform() } }],
+            boardPixel: (event: any) => event.point,
             onMenu: () => fallback.push('menu'),
-            view: { introComplete: true, setPointer() {} },
+            view: { introComplete: true, setPointer(value?: any) { pointer = value }, resetCursor() {} },
             game: { render: () => snapshot, definitions: { ...json('mods/corn/assets/gameplay.json'), items: { sun: { width: 60, height: 60 } } }, command: (command: any) => commands.push(command) },
         })
-        const event = (x: number, y: number, button = 0) => ({ point: { x, y }, getButton: () => button, propagationStopped: false })
+        const event = (x: number, y: number, button = 0, id = 1) => ({ point: { x, y }, getLocation: () => ({ x, y }),
+            touch: { getID: () => id }, windowId: 0, getButton: () => button, propagationStopped: false })
         input.onMouseDown(event(120, 320))
         assert.deepEqual(commands.pop(), { type: 'mod', id: 'corn:aim_cannon', data: { x: 120, y: 320, entityId: 2 } })
         snapshot.extensions['corn:cob_aim'] = { 2: { startedAtTick: 0, x: 120, y: 320 } }
@@ -395,18 +406,68 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         assert.deepEqual(fallback, ['mouse'], 'sun collection keeps priority while aiming')
         assert.equal(commands.length, 0)
         mobile = true
+        input.game.command = (command: any) => {
+            commands.push(command)
+            if (command.type === 'clearCursor' || command.id === 'corn:fire_cannon') snapshot.extensions['corn:cob_aim'] = {}
+            if (command.id === 'corn:aim_cannon') snapshot.extensions['corn:cob_aim'] = { [command.data.entityId]: {} }
+            if (command.type === 'collectItemAt') snapshot.items[0].state = 'collecting'
+        }
         input.onTouchStart(event(600, 420))
         assert.deepEqual(fallback, ['mouse', 'touch'])
+        assert.equal(commands.pop().type, 'collectItemAt', 'mobile collecting still takes priority over aiming')
+        input.onTouchEnd(event(600, 420))
         snapshot.items = []
         input.onTouchStart(event(600, 420))
-        assert.equal(commands.pop().id, 'corn:fire_cannon')
-        snapshot.extensions['corn:cob_aim'] = {}
+        assert.equal(commands.length, 0, 'touch down only positions the target')
+        input.onPointerMove(event(500, 400))
+        input.onTouchStart(event(120, 320, 0, 2))
+        input.onTouchEnd(event(120, 320, 0, 2))
+        assert.equal(commands.length, 0, 'another finger cannot select or fire')
+        input.onTouchEnd(event(0, 0))
+        assert.deepEqual(commands.pop(), { type: 'mod', id: 'corn:fire_cannon', data: { x: 500, y: 400 } }, 'release uses the last tracked aim point')
+        assert.equal(pointer, undefined)
+
+        const pick = () => {
+            input.onTouchStart(event(120, 320))
+            assert.equal(commands.pop().id, 'corn:aim_cannon')
+            assert.equal(pointer, undefined, 'the source cannon hides the target like a source seed packet')
+        }
+        pick()
+        input.onTouchEnd(event(120, 320))
+        assert.ok(snapshot.extensions['corn:cob_aim'][2], 'tapping the source keeps it selected')
         input.onTouchStart(event(120, 320))
-        assert.equal(commands.pop().id, 'corn:aim_cannon')
+        input.onTouchEnd(event(120, 320))
+        assert.deepEqual(commands.pop(), { type: 'clearCursor' }, 'tapping the selected source again cancels')
+
+        pick()
+        input.onPointerMove(event(600, 420))
+        assert.deepEqual(pointer, { x: 600, y: 420 })
+        assert.equal(commands.length, 0, 'dragging previews the target without firing')
+        input.onTouchEnd(event(0, 0))
+        assert.equal(commands.pop().id, 'corn:fire_cannon', 'dragging directly from the source fires on release')
+
+        pick()
+        input.onPointerMove(event(600, 420))
+        input.onPointerMove(event(120, 320))
+        input.onTouchEnd(event(120, 320))
+        assert.deepEqual(commands.pop(), { type: 'clearCursor' }, 'dragging back to the source cancels')
+        pick()
+        input.onPointerMove(event(900, 420))
+        input.onTouchEnd(event(0, 0))
+        assert.deepEqual(commands.pop(), { type: 'clearCursor' }, 'releasing outside the targeting area cancels')
+
+        pick()
+        input.onPointerMove(event(600, 420))
+        input.suspend()
+        input.onTouchEnd(event(600, 420))
+        input.resume()
+        input.onTouchEnd(event(600, 420))
+        assert.equal(commands.length, 0, 'suspending discards the active gesture')
         assert.equal(input.buttons[0].canInteract(), true)
         snapshot.paused = true
         input.onTouchStart(event(120, 320))
         assert.equal(commands.length, 0, 'paused input cannot aim or fire')
+        snapshot.extensions['corn:cob_aim'] = {}
 
         const plant: any = { ...cannon, eatenFlashCounter: 0, behaviorState: { phase: 'ready', startedAtTick: 625 } }
         const cannonView = await factories.get('corn:cob_cannon')({ node: new Node(), plant, content, tick: 625,
@@ -486,7 +547,7 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         Object.assign(hud, { pointer: { x: 173, y: 330 }, hoverClient: {},
             cursorPreview: { parent: { children: [] }, position: { x: 138, y: -270 }, setPosition(x: number, y: number) { this.position = { x, y } } },
             gridPreview: { position: { x: 0, y: 0 }, setPosition(x: number, y: number) { this.position = { x, y } } }, mobileGridGuide: {},
-            content: { definitions: { boards: { day: { origin: { x: 80, y: 80 }, cell: { width: 80, height: 100 }, columns: 9 } } } },
+            content: { definitions: { boards: { day: { origin: { x: 80, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 } } } },
             level: { board: 'day', activeRows: [2] } })
         hud.syncPreviews({ ...snapshot, cursor: { mode: 'seed', seedId: 'corn:cob_cannon' },
             plants: [{ entityId: 3, row: 2, column: 0 }, { entityId: 4, row: 2, column: 1 }] })
@@ -500,6 +561,34 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
             assert.equal(hud.hoverClient.cursor, valid ? 'none' : undefined)
         }
 
+        mobile = true
+        const guideRects: number[][] = []
+        const graphics = { fillColor: undefined as any, clear() { guideRects.length = 0 }, fillRect(...rect: number[]) { guideRects.push(rect) } }
+        hud.mobileGridGuide = { active: false, getComponent: () => graphics }
+        hud.pointer = { x: 173, y: 330 }
+        hud.syncPreviews({ ...snapshot, cursor: { mode: 'seed', seedId: 'corn:cob_cannon' },
+            plants: [{ entityId: 3, row: 2, column: 0 }, { entityId: 4, row: 2, column: 1 }] })
+        assert.deepEqual(guideRects, [[80, -380, 720, 100], [80, -580, 160, 500]], 'upgrade planting highlights both columns')
+        hud.pointer = { x: 90, y: 300 }
+        hud.syncPreviews(aiming)
+        assert.equal(hud.mobileGridGuide.active, true)
+        assert.equal(graphics.fillColor.a, 72)
+        assert.deepEqual(guideRects, [[80, -380, 720, 100], [80, -580, 80, 500]], 'aiming uses the planting guide with a single target column')
+        hud.pointer = { x: 280, y: 300 }
+        hud.syncPreviews(aiming)
+        assert.deepEqual(guideRects[1], [240, -580, 80, 500], 'the cross follows the dragged target cell')
+        for (const point of [undefined, { x: 40, y: 300 }, { x: 200, y: 200 }, { x: 800, y: 300 }]) {
+            hud.pointer = point
+            hud.syncPreviews(aiming)
+            assert.equal(hud.mobileGridGuide.active, false, 'no cross without a finger or on an invalid cell')
+        }
+        hud.pointer = { x: 280, y: 300 }
+        hud.syncPreviews({ ...aiming, paused: true })
+        assert.equal(hud.mobileGridGuide.active, false)
+        hud.syncPreviews({ ...aiming, extensions: {} })
+        assert.equal(hud.mobileGridGuide.active, false, 'firing or cancelling removes the cross')
+        mobile = false
+
         const kernel = { entityId: 3, typeId: 'corn:kernel_pult', eatenFlashCounter: 0, behaviorState: { phase: 'idle', released: false } }
         const kernelView = await factories.get('corn:kernel_pult')({ node: new Node(), plant: kernel, content, tick: 0, assets: { shadow: {} },
             animations: { nextPlantBlinkTicks: () => 1000 } })
@@ -508,6 +597,31 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         assert.equal(kernelView.players.body.color.r, 55, 'both eligible bases flash at the original 90 tick period')
         world.cursor.mode = 'none'; kernelView.sync(kernel, world)
         assert.equal(kernelView.players.body.color.r, 255, 'cancelling the upgrade restores the normal plant tint')
+    } finally { host.dispose() }
+})
+
+test('CLI creates initialized cannons without bases and allows overlaps without consuming existing plants', () => {
+    const { server, host, mods, command } = setup('corn:cannon_testing')
+    try {
+        runCommand(server, { type: 'pause' })
+        command('/sun set 0')
+        const before = server.snapshot()
+        command('/plant corn:cob_cannon 1 9')
+        command('/plant corn:kernel_pult 3 1')
+        command('/plant corn:kernel_pult 3 2')
+        const bases = server.snapshot().plants.filter(plant => plant.typeId === 'corn:kernel_pult').map(plant => plant.entityId)
+        command('/plant corn:cob_cannon 3 1')
+        command('/plant corn:cob_cannon 3 1')
+        const after = server.snapshot()
+        assert.equal(after.plants.length, 5)
+        assert.deepEqual(after.plants.filter(plant => plant.typeId === 'corn:kernel_pult').map(plant => plant.entityId), bases)
+        assert.ok(after.plants.filter(plant => plant.typeId === 'corn:cob_cannon').every(plant => plant.behaviorState!.phase === 'arming'))
+        assert.equal(after.sun, 0)
+        assert.equal(after.gameplayTick, before.gameplayTick)
+        assert.deepEqual(after.seedPackets, before.seedPackets)
+        assert.equal(server.drainEvents().some(event => event.type === 'corn:advice' || event.type === 'corn:sound'), false)
+        server.restore(server.save(), 'corn:cannon_testing', mods)
+        assert.deepEqual(server.snapshot(), after)
     } finally { host.dispose() }
 })
 

@@ -55,3 +55,7 @@ list(APPEND CC_COMMON_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/Classes/Game.h
     ${CMAKE_CURRENT_LIST_DIR}/Classes/Game.cpp
 )
+
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    add_link_options("SHELL:-weak_framework CoreHaptics")
+endif()

@@ -7,6 +7,8 @@ import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import { register } from '../../mods/widescreen/src/client/index'
 import { extendCloud, extendFlower } from '../../mods/widescreen/src/client/animations'
+import { installLoadingBackground } from '../../mods/widescreen/src/client/startup'
+import { installGardenBackgrounds } from '../../mods/widescreen/src/client/garden'
 import { parseReanim } from '@/shared/content/reanim'
 
 test('failed widescreen assets do not alter the viewport during Mod initialization', async () => {
@@ -61,11 +63,12 @@ test('viewport expands up to 32:9, then letterboxes without cropping height or e
     assert.deepEqual(constraints, [[4 / 3, 32 / 9], [4 / 3, 32 / 9]], 'only native desktop windows are constrained')
     sys.os = sys.OS.OSX
     constraints.length = 0
-    exports.constrainNativeWindow(4 / 3, 4 / 3)
+    exports.initializeViewport()
     const menu = new Node(), level = new Node(), dialog = new Node()
     for (const node of [menu, level, dialog]) exports.fitViewport(node)
     exports.expandViewport({ minAspect: 4 / 3, maxAspect: 32 / 9 })
     exports.expandViewport()
+    exports.initializeViewport()
     assert.deepEqual(constraints, [[4 / 3, 4 / 3], [4 / 3, 32 / 9]], 'the Mod opens the default fixed window aspect range')
     assert.equal(view.listenerCount('canvas-resize'), 1)
     for (const node of [menu, level, dialog]) assert.ok(Math.abs(node.width - 600 * 1600 / 900) < 1e-8)
@@ -96,10 +99,16 @@ test('viewport expands up to 32:9, then letterboxes without cropping height or e
         if (expectedPolicy === letterbox) assert.ok((width - contentWidth) / 2 > 0, 'extra width becomes equal side bars')
     }
     exports.resetViewport()
-    assert.deepEqual(constraints.at(-1), [4 / 3, 4 / 3], 'removing the viewport expansion restores the fixed window ratio')
+    assert.equal(constraints.length, 2, 'teardown must not constrain the native window back to 4:3')
     assert.equal(policy, originalPolicy)
     assert.equal(level.width, 800)
     assert.equal(level.height, 600)
+    exports.expandViewport({ minAspect: 4 / 3, maxAspect: 32 / 9 })
+    exports.initializeViewport()
+    assert.deepEqual(constraints.slice(2), [[4 / 3, 32 / 9]], 'restart with the Mod never applies a fixed 4:3 constraint')
+    exports.resetViewport()
+    exports.initializeViewport()
+    assert.deepEqual(constraints.at(-1), [4 / 3, 4 / 3], 'startup without the Mod restores the fixed window ratio')
     for (const node of [level, dialog]) node.emit('destroyed')
     assert.deepEqual(view.eventNames(), [])
 })
@@ -198,8 +207,11 @@ test('menu artwork preserves track origins and follows its parent without owning
         background = { node: sky }
         async initialize() { initialized = true }
     }
+    class StartupScreen { render() {} }
+    class MenuScreen { async prepare() {} }
     const host = new ModHost('local:widescreen', {
-        'cc': { view, Sprite, UITransform, Node: { EventType: { NODE_DESTROYED: 'destroyed' } } },
+        'cc': { view, Sprite, UITransform, Node: { EventType: { NODE_DESTROYED: 'destroyed' } },
+            js: { getClassByName: (name: string) => name === 'StartupScreen' ? StartupScreen : MenuScreen } },
         'client/screens/MainMenuScreen': { MainMenuScreen },
         'client/view/ClientViewport': { expandViewport(options: any) {
             assert.deepEqual(options, { minAspect: 4 / 3, maxAspect: 32 / 9 }); expanded = true
@@ -232,4 +244,72 @@ test('menu artwork preserves track origins and follows its parent without owning
     }
     assert.deepEqual([transform.width, transform.height, sky.position.x, sky.position.y], [800, 600, 0, 0])
     assert.deepEqual(view.eventNames(), [])
+})
+
+test('loading and garden backgrounds preserve scene height across viewport widths and in-flight initialization', async () => {
+    class Sprite {}
+    class UITransform {}
+    const frame = { originalSize: { width: 2800, height: 1200 } }
+    const sprite = { spriteFrame: null }
+    const transform = { width: 800, height: 600, setContentSize(width: number, height: number) { Object.assign(this, { width, height }) } }
+    const background = Object.assign(new EventEmitter(), { position: { x: 0, y: 0, z: 0 },
+        getComponent: (type: any) => type === Sprite ? sprite : transform,
+        setPosition(x: number, y: number, z: number) { this.position = { x, y, z } },
+    })
+    const logo = {}, bar = {}
+    const title = Object.assign(new EventEmitter(), { children: [background, logo, bar] })
+    let visible = { width: 1400, height: 600 }, draws = 0
+    const view = Object.assign(new EventEmitter(), { getVisibleSize: () => visible })
+    class StartupScreen {
+        title?: typeof title
+        render() {
+            if (!this.title) return
+            assert.equal(sprite.spriteFrame, frame, 'replacement is installed before the first title draw')
+            draws++
+        }
+    }
+    const startup = new StartupScreen()
+    startup.render() // Original startup exists before Mod registration finishes.
+    const host = new ModHost('local:widescreen', { cc: { Sprite, UITransform, view,
+        Node: { EventType: { NODE_DESTROYED: 'destroyed' } },
+        js: { getClassByName(name: string) { assert.equal(name, 'StartupScreen'); return StartupScreen } },
+    } })
+    await installLoadingBackground({ host, assets: { async sprite() { return frame } } })
+    startup.render()
+    startup.title = title // Its original loadTitle completes after registration.
+    startup.render()
+    startup.render()
+    assert.equal(draws, 2)
+    assert.equal(view.listenerCount('design-resolution-changed'), 0)
+    for (const width of [800, 1066, 1400, 6400 / 3]) {
+        visible = { width, height: 600 }
+        view.emit('design-resolution-changed')
+        assert.equal(transform.height, 600, 'wide viewports must not enlarge or crop the scene vertically')
+        assert.equal(transform.width, 1400, 'artwork width stays proportional; wider viewports show black side bars')
+        assert.equal(background.position.x + transform.width / 2, 400)
+        assert.equal(background.position.y - transform.height / 2, -300)
+        assert.deepEqual(title.children.slice(1), [logo, bar], 'existing foreground and interaction nodes stay in place')
+    }
+    background.emit('destroyed')
+    assert.equal(view.listenerCount('design-resolution-changed'), 0)
+    host.dispose()
+
+    const page = { root: { isValid: true, getChildByName: () => background } }
+    class MenuScreen { async prepare(_id: string) { await Promise.resolve(); return page } }
+    const gardenHost = new ModHost('local:widescreen', { cc: { Sprite, UITransform, view,
+        Node: { EventType: { NODE_DESTROYED: 'destroyed' } }, js: { getClassByName: () => MenuScreen },
+    } })
+    await installGardenBackgrounds({ host: gardenHost, assets: { async sprite() { return frame } } })
+    const menu = new MenuScreen()
+    await menu.prepare('main')
+    assert.equal(view.listenerCount('design-resolution-changed'), 0, 'other pages are unchanged')
+    assert.equal(await menu.prepare('garden'), page)
+    assert.equal(background.position.x + transform.width / 2, 0, 'garden background uses the centered page origin')
+    assert.equal(background.position.y - transform.height / 2, 0)
+    assert.equal(transform.height, 600, 'garden shares the fixed scene height')
+    await menu.prepare('garden')
+    assert.equal(view.listenerCount('design-resolution-changed'), 0, 'fixed artwork placement needs no resize listener')
+    background.emit('destroyed')
+    assert.equal(view.listenerCount('design-resolution-changed'), 0)
+    gardenHost.dispose()
 })

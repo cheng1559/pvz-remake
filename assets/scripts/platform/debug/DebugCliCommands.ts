@@ -50,6 +50,7 @@ export async function executeDebugCliCommand(
         }
         case 'mobile': GameDebugSettings.setMobileEnabled(args[0].toLowerCase() === 'true'); break
         case 'hotkeys': GameDebugSettings.setHotkeysEnabled(args[0].toLowerCase() === 'true'); break
+        case 'haptics': GameDebugSettings.setHapticsEnabled(args[0].toLowerCase() === 'true'); break
         case 'hitboxes': GameDebugSettings.setHitboxesVisible(args[0].toLowerCase() === 'true'); break
         case 'hdseed': GameDebugSettings.setHDSeedPacketsEnabled(args[0].toLowerCase() === 'true'); break
         case 'seedstyle': GameDebugSettings.setSeedPacketStyle(args[0].toLowerCase() as SeedPacketStyle); break

@@ -118,6 +118,50 @@ test('CLI game mutations go through the channel while paused and preserve valid 
     assert.equal(game.render().plants.length, 0)
 })
 
+test('CLI planting bypasses occupancy, seed availability and cooldown without spending or changing the cursor', () => {
+    const game = setup(true, 'pvz:adventure-1-2')
+    game.debugCommand('/sun set 500')
+    game.command({ type: 'resume' })
+    game.command({ type: 'selectSeed', seedId: 'pvz:peashooter' })
+    game.command({ type: 'placePlant', row: 2, column: 0 })
+    game.command({ type: 'selectSeed', seedId: 'pvz:sunflower' })
+    game.command({ type: 'pause' })
+    game.update(0)
+    game.debugCommand('/sun set 0')
+    const before = game.render()
+    assert.equal(before.plants.length, 1)
+    assert.equal(before.cursor.mode, 'seed')
+    assert.ok(before.seedPackets[0].cooldownRemaining > 0)
+    for (const text of ['/plant peashooter 3 1', '/plant peashooter 3 1', '/plant repeater 1 9']) {
+        assert.equal(game.debugCommand(text).ok, true)
+    }
+    const after = game.render()
+    assert.equal(after.plants.length, 4)
+    assert.equal(after.sun, 0)
+    assert.deepEqual(after.seedPackets, before.seedPackets)
+    assert.deepEqual(after.cursor, before.cursor)
+    assert.equal(after.gameplayTick, before.gameplayTick)
+    const restored = new LocalIntegratedGame(definitions, levels)
+    restored.start({ levelId: 'pvz:adventure-1-2', randomSeed: 1, initialMoney: 0, firstAdventure: false,
+        mods: [], save: game.saveAtBoundary() })
+    assert.deepEqual(restored.render(), after, 'overlapping debug plants remain valid saved entities')
+})
+
+test('CLI can create plants during the intro and after either level result', () => {
+    const intro = new LocalIntegratedGame(definitions, levels, undefined, true)
+    intro.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
+    assert.equal(intro.debugCommand('/plant repeater 1 9').ok, true)
+    assert.equal(intro.render().phase, 'intro')
+    for (const result of ['win', 'lose']) {
+        const game = setup()
+        assert.equal(game.debugCommand(`/${result}`).ok, true)
+        const before = game.render()
+        assert.equal(game.debugCommand('/plant repeater 1 9').ok, true)
+        assert.equal(game.render().result, before.result)
+        assert.equal(game.render().gameplayTick, before.gameplayTick)
+    }
+})
+
 test('CLI summons and waves use configured spawn positions, while explicit columns override them', () => {
     for (const [type, min, max] of [['normal', 780, 819], ['pole_vaulter', 870, 879]] as const) {
         const game = setup()

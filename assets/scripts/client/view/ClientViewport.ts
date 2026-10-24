@@ -2,6 +2,13 @@ import { Node, ResolutionPolicy, screen, sys, UITransform, view, type Size } fro
 
 let restore: (() => void) | undefined
 
+/** Apply the default window constraint after Mods have had a chance to expand the viewport. */
+export function initializeViewport(): void {
+    if (restore) return
+    const { width, height } = view.getDesignResolutionSize()
+    constrainNativeWindow(width / height, width / height)
+}
+
 /** Constrain the OS window's content area on native desktop platforms. */
 export function constrainNativeWindow(minimum: number, maximum: number): void {
     if (!sys.isNative || (sys.os !== sys.OS.OSX && sys.os !== sys.OS.WINDOWS)) return
@@ -27,7 +34,6 @@ export function expandViewport(options: { minAspect?: number, maxAspect?: number
     restore = () => {
         view.off('canvas-resize', resize)
         view.setDesignResolutionSize(design.width, design.height, policy)
-        constrainNativeWindow(design.width / design.height, design.width / design.height)
     }
     constrainNativeWindow(minAspect, maxAspect)
     view.on('canvas-resize', resize)
@@ -35,6 +41,7 @@ export function expandViewport(options: { minAspect?: number, maxAspect?: number
 }
 
 export function resetViewport(): void {
+    // VM teardown must not resize the native window; the next startup chooses its constraint.
     restore?.()
     restore = undefined
 }

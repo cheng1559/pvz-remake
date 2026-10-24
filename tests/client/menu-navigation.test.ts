@@ -326,11 +326,11 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(freshGames.at(-1), true)
 })
 
-test('pack and Mod installation share the Installing title, paint boundary and immediate restart confirmation', async () => {
+test('pack and Mod imports read sequentially, continue after failure, clean all files and offer one restart', async () => {
     const source = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
     }).outputText
-    for (const isNative of [false, true]) for (const kind of ['pack', 'mod']) {
+    for (const isNative of [false, true]) for (const kind of ['pack', 'mod']) for (const names of [[], ['a'], ['bad'], ['a', 'bad', 'b']]) {
         const steps: string[] = []
         const module = { exports: {} as Record<string, any> }
         const ui = {
@@ -340,6 +340,7 @@ test('pack and Mod installation share the Installing title, paint boundary and i
                     assert.equal(options.message, undefined)
                     assert.equal(options.footer, false)
                 }
+                if (options.title === 'Installation Failed') assert.match(options.message, /bad.zip/)
                 return { close() { steps.push('close') }, result: Promise.resolve(true) }
             },
         }
@@ -351,23 +352,46 @@ test('pack and Mod installation share the Installing title, paint boundary and i
                 Director: { EVENT_AFTER_DRAW: 'draw' }, director: { once(_event: string, callback: () => void) { steps.push('paint'); callback() } },
             },
             '@/client/ui/UI': { UI: { load: async () => ui } },
-            '@/client/content/InstalledArchives': { selectZip: async () => { steps.push('pick'); return new Uint8Array([1]) } },
-            '@/client/content/ResourcePacks': { resourcePacks: { install: async () => { steps.push('install:pack') } } },
-            '@/client/content/ModManager': { modManager: { install: async () => { steps.push('install:mod') } } },
+            '@/client/content/InstalledArchives': { selectZips: async () => {
+                steps.push('pick')
+                return names.map(name => ({ name: `${name}.zip`,
+                    read: async () => { steps.push(`read:${name}`); if (name === 'bad') throw new Error('Invalid ZIP'); return name },
+                    dispose: () => steps.push(`dispose:${name}`),
+                }))
+            } },
+            '@/client/content/ResourcePacks': { resourcePacks: { install: async (name: string) => { steps.push(`install:${name}`); return name } } },
+            '@/client/content/ModManager': { modManager: {
+                install: async (name: string, enable: boolean) => {
+                    assert.equal(enable, names.length === 1)
+                    steps.push(`install:${name}`); return name
+                },
+                list: async () => [],
+                setEnabled: async (ids: string[]) => { assert.deepEqual(Array.from(ids), ['a', 'b']); steps.push('enable:mods') },
+            } },
         }
         runInNewContext(source, { exports: module.exports, require: (id: string) => modules[id] ?? {}, setTimeout,
             window: { location: { reload: () => steps.push('web-restart') } } })
         const app = new module.exports.GameApp()
         app.node = { isValid: true }
-        await app.installPackage(kind)
-        assert.deepEqual(steps, ['pick', 'Installing...', 'paint', `install:${kind}`, 'close', 'Restart Required', isNative ? 'native-restart' : 'web-restart'])
+        const installed = await app.installPackage(kind)
+        assert.deepEqual(Array.from(installed), names.filter(name => name !== 'bad'))
+        const expected = ['pick']
+        if (names.length) {
+            expected.push('Installing...', 'paint')
+            for (const name of names) { expected.push(`read:${name}`); if (name !== 'bad') expected.push(`install:${name}`) }
+            if (kind === 'mod' && names.length > 1) expected.push('enable:mods')
+            expected.push('close', ...names.map(name => `dispose:${name}`))
+            if (names.includes('bad')) expected.push('Installation Failed')
+            if (installed.length) expected.push('Restart Required', isNative ? 'native-restart' : 'web-restart')
+        }
+        assert.deepEqual(steps, expected)
     }
 })
 
-test('mobile CLI receives corner taps in root capture before UI can swallow them', () => {
+test('mobile CLI receives corner taps in root capture before UI can swallow them', async () => {
     let capture!: (event: any) => void
     let globalTouch!: (event: any) => void
-    let now = 1000, opened = 0
+    let now = 1000, opened = 0, viewportInitialized = 0
     const sys = { isMobile: true, localStorage: {} }
     const screen = { devicePixelRatio: 3, windowSize: { width: 2556, height: 1179 } }
     const node = { isValid: true, on(_event: string, callback: Function, owner: any, useCapture: boolean) {
@@ -383,7 +407,7 @@ test('mobile CLI receives corner taps in root capture before UI can swallow them
             } } },
         'cc/env': { DEBUG: false },
         '@/client/view/uiNode': { uiNode: (options: any) => ({ node: options.node ?? { addComponent: () => ({}) } }) },
-        '@/client/view/ClientViewport': { constrainNativeWindow() {} },
+        '@/client/view/ClientViewport': { initializeViewport() { viewportInitialized++ } },
         './LocalMenuApi': { connectLocalMenuApi() {} },
         './LevelController': { createLevelController: () => ({}) },
         '@/client/input/UIHoverManager': { UIHoverManager: { start() {} } },
@@ -403,6 +427,9 @@ test('mobile CLI receives corner taps in root capture before UI can swallow them
     app.navigate = async () => {}
     app.showDebugCli = async () => { opened++ }
     app.start()
+    assert.equal(viewportInitialized, 0, 'startup waits for UI and Mod loading before applying the window constraint')
+    await setImmediate()
+    assert.equal(viewportInitialized, 1)
     assert.equal(typeof globalTouch, 'function', 'letterbox taps still have a global fallback')
     const tap = () => ({ getLocation: () => ({ x: 2500, y: 50 }), propagationStopped: false })
     capture(tap())
@@ -611,6 +638,44 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
     assert.equal(cached.root.active, false)
     assert.equal(await screen.prepare('achievements'), cached)
     assert.equal(achievementInitializations, 1, 'returning from gameplay cannot rebuild static content')
+})
+
+test('main menu flowers play once on press and stay unavailable after animation and profile refresh', () => {
+    const plays: any[] = [], sounds: unknown[] = []
+    class Button {}
+    const module = { exports: {} as any }
+    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/MainMenuScreen.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
+    })
+    const modules: Record<string, unknown> = {
+        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/ui/UIButton': { UIButton: Button },
+        '@/client/view/uiNode': { uiNode: () => ({ node: {
+            active: false, addComponent: () => ({ node: { destroy() {} } }),
+        } }) },
+        '@/client/sound/LegacySoundSystem': { SoundEffect: { LimbsPop: 'pop' }, SoundLoader: { playFoley: (id: unknown) => sounds.push(id) } },
+        './MainMenuConfig': { MAIN_MENU_BUTTONS: [], MAIN_MENU_FLOWERS: [{ x: 765, y: 483 }] },
+    }
+    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {} })
+    const menu = new module.exports.MainMenuScreen()
+    const animation = { setTrackPrefixVisible() {} }
+    menu.open = menu.sign = menu.grass = animation
+    menu.flowers = [{ ...animation, play: (options: unknown) => plays.push(options) }]
+    menu.user = { name: 'test', adventureLevel: 1 }
+    menu.profileLabel = {}
+    menu.numbersRoot = { children: [] }
+    menu.setButtonsEnabled = menu.syncPositions = () => {}
+    menu.refreshButtons()
+    const button = menu.flowerButtons[0]
+    assert.equal(button.canInteract(), true)
+    button.onPress()
+    assert.equal(button.canInteract(), false)
+    plays[0].onFinish?.()
+    assert.equal(button.canInteract(), false, 'the completed flight cannot be replayed from its old hitbox')
+    menu.refreshButtons()
+    assert.equal(menu.flowerButtons[0].canInteract(), false, 'recreating profile controls preserves the played flower')
+    assert.equal(plays.length, 1)
+    assert.deepEqual(sounds, ['pop'])
 })
 
 test('main menu entrance starts after the first draw and excludes the loading frame', () => {

@@ -28,10 +28,53 @@
 #import "ViewController.h"
 #import "AppDelegate.h"
 #import "platform/ios/AppDelegateBridge.h"
+#import <CoreHaptics/CoreHaptics.h>
 //#include "cocos/platform/Device.h"
 
 namespace {
 //    cc::Device::Orientation _lastOrientation;
+
+void playExplosionFeedback() {
+    if (@available(iOS 13.0, *)) {
+        if (![CHHapticEngine capabilitiesForHardware].supportsHaptics) return;
+        static CHHapticEngine *engine;
+        static CHHapticPattern *pattern;
+        static id<CHHapticPatternPlayer> player;
+        NSError *error = nil;
+        if (!engine) {
+            engine = [[CHHapticEngine alloc] initAndReturnError:&error];
+            engine.playsHapticsOnly = YES;
+            engine.autoShutdownEnabled = YES;
+        }
+        if (!engine || ![engine startAndReturnError:&error]) {
+            NSLog(@"[Haptics] Failed to start: %@", error);
+            return;
+        }
+        if (!pattern) {
+            const NSTimeInterval duration = 0.28;
+            CHHapticEventParameter *intensity = [[[CHHapticEventParameter alloc]
+                initWithParameterID:CHHapticEventParameterIDHapticIntensity value:1.0] autorelease];
+            CHHapticEventParameter *sharpness = [[[CHHapticEventParameter alloc]
+                initWithParameterID:CHHapticEventParameterIDHapticSharpness value:0.3] autorelease];
+            CHHapticEvent *event = [[[CHHapticEvent alloc] initWithEventType:CHHapticEventTypeHapticContinuous
+                parameters:@[intensity, sharpness] relativeTime:0 duration:duration] autorelease];
+            CHHapticParameterCurveControlPoint *start = [[[CHHapticParameterCurveControlPoint alloc]
+                initWithRelativeTime:0 value:1.0] autorelease];
+            CHHapticParameterCurveControlPoint *end = [[[CHHapticParameterCurveControlPoint alloc]
+                initWithRelativeTime:duration value:0.0] autorelease];
+            CHHapticParameterCurve *fade = [[[CHHapticParameterCurve alloc]
+                initWithParameterID:CHHapticDynamicParameterIDHapticIntensityControl
+                controlPoints:@[start, end] relativeTime:0] autorelease];
+            pattern = [[CHHapticPattern alloc] initWithEvents:@[event] parameterCurves:@[fade] error:&error];
+        }
+        if (player) [player stopAtTime:CHHapticTimeImmediate error:nil];
+        [player release];
+        player = pattern ? [[engine createPlayerWithPattern:pattern error:&error] retain] : nil;
+        if (!player || ![player startAtTime:CHHapticTimeImmediate error:&error]) {
+            NSLog(@"[Haptics] Failed to play explosion: %@", error);
+        }
+    }
+}
 }
 
 @interface ViewController ()
@@ -39,6 +82,32 @@ namespace {
 @end
 
 @implementation ViewController
+
++ (void)playHapticFeedback:(NSString *)style {
+    void (^feedback)(void) = ^{
+        if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) return;
+        if ([style isEqualToString:@"explosion"]) { playExplosionFeedback(); return; }
+        // Keep generators alive so repeated interactions do not recreate the haptic engine.
+        static UIImpactFeedbackGenerator *light;
+        static UIImpactFeedbackGenerator *medium;
+        static UIImpactFeedbackGenerator *heavy;
+        UIImpactFeedbackGenerator *generator;
+        if ([style isEqualToString:@"light"]) {
+            if (!light) light = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+            generator = light;
+        } else if ([style isEqualToString:@"medium"]) {
+            if (!medium) medium = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
+            generator = medium;
+        } else if ([style isEqualToString:@"heavy"]) {
+            if (!heavy) heavy = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
+            generator = heavy;
+        } else return;
+        [generator impactOccurred];
+        [generator prepare];
+    };
+    if ([NSThread isMainThread]) feedback();
+    else dispatch_async(dispatch_get_main_queue(), feedback);
+}
 
 
 - (BOOL) shouldAutorotate {

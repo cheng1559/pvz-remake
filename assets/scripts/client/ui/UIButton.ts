@@ -2,6 +2,7 @@ import { _decorator, Button, Component, EventMouse, input, Input, Node, UITransf
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { Haptics } from '@/platform/Haptics'
 
 const { ccclass } = _decorator
 export type UIButtonState = 'normal' | 'hover' | 'pressed' | 'disabled'
@@ -135,6 +136,7 @@ export class UIButton extends Component {
         this.hovering = inside
         if (!this.pressed) this.applyState(!this.interactable ? 'disabled' : inside ? 'hover' : 'normal')
         if (changed) this.onHoverChange?.(inside)
+        if (entered) Haptics.play()
         if (entered && emit) this.onHoverEnter?.()
     }
 
@@ -160,7 +162,7 @@ export class UIButton extends Component {
             : this.pressVisual && !this.releaseToNormalOnPressOut ? 'hover' : 'normal')
     }
 
-    private cancelPress(): void {
+    private cancelPress(clearHover = true): void {
         if (UIButton.active === this) {
             UIButton.active = null
             UIButton.capture(false)
@@ -168,11 +170,11 @@ export class UIButton extends Component {
         this.pressed = false
         this.pressVisual = false
         this.mouseButton = this.touchId = null
-        this.setHover(false, false)
+        if (clearHover) this.setHover(false, false)
     }
 
     private finishPress(inside: boolean, event: EventMouse | EventTouch, canHover: boolean): void {
-        this.cancelPress()
+        this.cancelPress(false)
         this.setHover(canHover && inside, false)
         event.propagationStopped = true
         if (inside && this.available()) this.node.emit(Button.EventType.CLICK, this, event)
@@ -184,7 +186,7 @@ export class UIButton extends Component {
         if (!this.rightClickTriggers && event.getButton() !== EventMouse.BUTTON_LEFT) return
         event.propagationStopped = true
         UIHoverManager.rememberMouseEvent(event, false)
-        if (this.pressOnly) { this.onPress(); return }
+        if (this.pressOnly) { this.setHover(true, false); this.onPress(); return }
         this.mouseButton = event.getButton()
         this.beginPress(this.mouseButton === EventMouse.BUTTON_LEFT || this.rightClickPressesVisual)
         if (UIButton.active === this) UIButton.capture(true)
@@ -228,7 +230,12 @@ export class UIButton extends Component {
     private touchStart(event: EventTouch): void {
         if (!GameDebugSettings.isMobileMode() || !this.available() || UIButton.active) return
         event.propagationStopped = true
-        if (this.pressOnly) { this.onPress(); return }
+        if (this.pressOnly) {
+            this.setHover(true, false)
+            this.onPress()
+            this.setHover(false, false)
+            return
+        }
         this.touchId = event.touch!.getID()
         this.beginPress(true)
     }

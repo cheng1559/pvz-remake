@@ -20,12 +20,12 @@ import { DebugRulesResource, getDebugRules } from './DebugRules'
 
 export function executeDebugGameCommand(
     world: World, definitions: GameplayDefinitions, tick: number, command: DebugCliCommand,
-    placePlant: (seedId: string, row: number, column: number) => string | undefined,
+    createPlant: (seedId: string, row: number, column: number) => number,
 ): DebugCliResult {
     const { name, args } = command
     const level = world.resources.get(LevelStateResource)
     const preference = ['cooldown', 'suncost', 'sunspawning', 'collect'].includes(name)
-    if (!preference && (level.phase !== 'gameplay' || level.result !== 'playing')) return debugCondition(`/${name} requires an active level`)
+    if (!preference && name !== 'plant' && (level.phase !== 'gameplay' || level.result !== 'playing')) return debugCondition(`/${name} requires an active level`)
     const economy = world.resources.get(EconomyStateResource)
     const events = world.resources.get(EventQueueResource)
     const findType = (entries: Record<string, unknown>, value: string) => Object.keys(entries).find(id => normalizeDebugName(id) === normalizeDebugName(value))
@@ -53,8 +53,10 @@ export function executeDebugGameCommand(
             if (!seedId) return debugCondition(`Plant is not installed: ${args[0]}`)
             const grid = position(args[1], args[2])
             if (!grid) return invalidPosition()
-            const rejection = placePlant(seedId, grid.row, grid.column!)
-            return rejection ? debugCondition(rejection) : debugSuccess(`Planted ${args[0]}`)
+            const entityId = createPlant(seedId, grid.row, grid.column!)
+            emitServerEvent(events, 'plantPlaced', { entityId, typeId: definitions.seeds[seedId].plant,
+                row: grid.row, column: grid.column! })
+            return debugSuccess(`Planted ${args[0]}`)
         }
         case 'seed': {
             const bank = world.resources.get(SeedBankResource)

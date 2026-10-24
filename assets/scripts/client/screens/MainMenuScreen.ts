@@ -1,4 +1,4 @@
-import { _decorator, Button, Color, Component, director, Director, Mask, Node, Sprite, type SpriteFrame } from 'cc'
+import { _decorator, Color, Component, director, Director, Mask, Node, Sprite, type SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { UserView } from '@/shared/menu'
 import { loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
@@ -42,7 +42,7 @@ export class MainMenuScreen extends Component {
     private profileLabel!: UILabel
     private buttons: TrackedButton[] = []
     private flowerButtons: UIButton[] = []
-    private activeFlowers = new Set<ReanimPlayer>()
+    private playedFlowers = new Set<ReanimPlayer>()
     private user: UserView | null = null
     private ready = false
     private background!: Sprite
@@ -230,18 +230,17 @@ export class MainMenuScreen extends Component {
             const button = node.addComponent(UIButton)
             button.refreshHoverOnEnable = false
             button.changeCursor = false
-            button.onPress = () => {}
+            const flower = this.flowers[index]
+            button.canInteract = () => !this.playedFlowers.has(flower)
             button.polygon = Array.from({ length: 12 }, (_, point) => {
                 const angle = point * Math.PI / 6
                 return [20 + Math.cos(angle) * 20, 20 + Math.sin(angle) * 20] as const
             })
-            node.on(Button.EventType.CLICK, () => {
-                const flower = this.flowers[index]
-                if (this.activeFlowers.has(flower)) return
-                this.activeFlowers.add(flower)
+            button.onPress = () => {
+                this.playedFlowers.add(flower)
                 void SoundLoader.playFoley(SoundEffect.LimbsPop, 10)
-                flower.play({ loop: false, rate: 24 / 20, timeSeconds: 0, hideOnFinish: false, onFinish: () => this.activeFlowers.delete(flower) })
-            })
+                flower.play({ loop: false, rate: 24 / 20, timeSeconds: 0, hideOnFinish: false })
+            }
             this.flowerButtons.push(button)
             node.active = profile !== null
         })

@@ -73,7 +73,7 @@ function setup() {
         }
     }
     let mobile = false, cursor = 'default'
-    const cursorHistory: string[] = []
+    const cursorHistory: string[] = [], haptics: string[] = []
     const modules: Record<string, any> = {
         cc: {
             Component: class { enabledInHierarchy = true }, _decorator: { ccclass: () => (value: unknown) => value },
@@ -81,6 +81,7 @@ function setup() {
             Node: FakeNode, Vec3: Vec, UITransform: Transform, Input: { EventType: events }, input: new FakeNode(),
         },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => mobile } },
+        '@/platform/Haptics': { Haptics: { play: (style = 'light') => haptics.push(style) } },
         './CursorManager': { CursorManager: { set: (value: string) => { cursor = value; cursorHistory.push(value) } } },
     }
     const load = (file: string) => {
@@ -137,9 +138,42 @@ function setup() {
         }
         target.emit(type, event)
     }
-    return { root, hover, makeButton, dispatch, events, load, Node: FakeNode, cursorHistory, get cursor() { return cursor }, setMobile(value = true) { mobile = value },
+    return { root, hover, makeButton, dispatch, events, load, Node: FakeNode, cursorHistory, haptics, get cursor() { return cursor }, setMobile(value = true) { mobile = value },
         cleanup() { for (const button of buttons) { button.enabledInHierarchy = false; button.onDisable() } hover.stop() } }
 }
+
+test('button haptics follow hover entry, including touch drag re-entry, without repeating on press or release', () => {
+    const ui = setup(), e = ui.events, { node, button } = ui.makeButton(0)
+    try {
+        ui.dispatch(node, e.MOUSE_MOVE, 20)
+        assert.deepEqual(ui.haptics, ['light'])
+        ui.dispatch(node, e.MOUSE_DOWN, 20)
+        ui.dispatch(node, e.MOUSE_UP, 20)
+        ui.dispatch(node, e.MOUSE_MOVE, 30)
+        assert.equal(ui.haptics.length, 1, 'pressing and releasing inside keeps the same hover')
+        ui.dispatch(node, e.MOUSE_MOVE, 150)
+        ui.dispatch(node, e.MOUSE_MOVE, 20)
+        assert.equal(ui.haptics.length, 2)
+        ui.setMobile()
+        ui.hover.clearHoverStates()
+        ui.haptics.length = 0
+        ui.dispatch(node, e.TOUCH_START, 20)
+        ui.dispatch(node, e.TOUCH_MOVE, 30)
+        ui.dispatch(node, e.TOUCH_MOVE, 150)
+        ui.dispatch(node, e.TOUCH_MOVE, 30)
+        ui.dispatch(node, e.TOUCH_END, 30)
+        assert.deepEqual(ui.haptics, ['light', 'light'])
+        button.pressOnly = true
+        ui.dispatch(node, e.TOUCH_START, 20)
+        ui.dispatch(node, e.TOUCH_END, 20)
+        assert.equal(ui.haptics.length, 3)
+        button.interactable = false
+        ui.dispatch(node, e.TOUCH_START, 20)
+        ui.dispatch(node, e.TOUCH_END, 20)
+        ui.dispatch(node, e.MOUSE_MOVE, 20)
+        assert.equal(ui.haptics.length, 3)
+    } finally { ui.cleanup() }
+})
 
 test('board hover shares cursor ownership with UI and never flashes default while moving over a ready seed packet', () => {
     const ui = setup(), e = ui.events

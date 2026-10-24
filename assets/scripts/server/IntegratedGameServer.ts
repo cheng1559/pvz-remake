@@ -557,7 +557,7 @@ export class IntegratedGameServer {
                     levels: Object.keys(this.levels.levels).map(id => id.replace(/^pvz:adventure-/, '')),
                 },
             } : 'name' in parsed ? executeDebugGameCommand(session.world, this.definitions, session.gameplayTick, parsed,
-                (seedId, row, column) => this.placePlant(session, row, column, seedId)) : parsed
+                (seedId, row, column) => this.createPlant(session, seedId, row, column)) : parsed
             session.commandResults.push({ sequence: queued.sequence, debug })
             return
         }
@@ -667,32 +667,49 @@ export class IntegratedGameServer {
         session: Session,
         row: number,
         column: number,
-        debugSeedId?: string,
     ): CommandRejectionCode | undefined {
         const { world, gameplayTick } = session
         const level = world.resources.get(LevelStateResource)
         const seedBank = world.resources.get(SeedBankResource)
-        const seedId = debugSeedId ?? seedBank.selectedSeedId
+        const seedId = seedBank.selectedSeedId
         if (!seedId) return 'no-seed-selected'
 
         const packet = seedBank.packets.find(packet => packet.seedId === seedId)
         const seed = this.definitions.seeds[seedId]
         const rules = getDebugRules(world)
-        const sunCost = !debugSeedId && rules.sunCost ? seed.sunCost : 0
+        const sunCost = rules.sunCost ? seed.sunCost : 0
         const economy = world.resources.get(EconomyStateResource)
-        if (!debugSeedId && rules.cooldown && packet && packet.readyAtTick > gameplayTick) return 'seed-not-ready'
+        if (rules.cooldown && packet && packet.readyAtTick > gameplayTick) return 'seed-not-ready'
         if (this.availableSun(world) < sunCost) {
             this.emitNotEnoughSunFeedback(world)
             return 'not-enough-sun'
         }
         if (!Number.isInteger(row) || row < 0 || row >= level.board.rows ||
-            !debugSeedId && !level.definition.activeRows.includes(row)) return 'row-not-active'
+            !level.definition.activeRows.includes(row)) return 'row-not-active'
         if (!Number.isInteger(column) || column < 0 || column >= level.board.columns) {
             return 'column-out-of-range'
         }
         const occupiedEntity = this.findPlantAt(world, row, column)
         if (occupiedEntity !== undefined) return 'cell-occupied'
 
+        const entity = this.createPlant(session, seedId, row, column)
+        const bankSpend = Math.min(economy.sun, sunCost)
+        economy.sun -= bankSpend
+        economy.pendingSunSpend += sunCost - bankSpend
+        if (packet) packet.readyAtTick = gameplayTick + (rules.cooldown ? seed.cooldownTicks : 0)
+        seedBank.selectedSeedId = undefined
+        getActiveTutorial(world)?.plantPlaced?.(world, gameplayTick, seed.plant, occupiedEntity !== undefined)
+        emitServerEvent(world.resources.get(EventQueueResource), 'plantPlaced', {
+            entityId: entity,
+            typeId: seed.plant,
+            row,
+            column,
+        })
+    }
+
+    private createPlant(session: Session, seedId: string, row: number, column: number): number {
+        const { world, gameplayTick } = session
+        const level = world.resources.get(LevelStateResource)
         const plantedSeed = this.definitions.seeds[seedId]
         const definition = this.definitions.plants[plantedSeed.plant]
         const behaviorState = this.gameplay.plantBehaviors.createState(plantedSeed.plant, definition)
@@ -719,20 +736,7 @@ export class IntegratedGameServer {
                 definition.producer!.initialDelayTicks.min, definition.producer!.initialDelayTicks.max,
             )),
         })
-        const bankSpend = Math.min(economy.sun, sunCost)
-        economy.sun -= bankSpend
-        economy.pendingSunSpend += sunCost - bankSpend
-        if (!debugSeedId) {
-            if (packet) packet.readyAtTick = gameplayTick + (rules.cooldown ? seed.cooldownTicks : 0)
-            seedBank.selectedSeedId = undefined
-        }
-        getActiveTutorial(world)?.plantPlaced?.(world, gameplayTick, plantedSeed.plant, occupiedEntity !== undefined)
-        emitServerEvent(world.resources.get(EventQueueResource), 'plantPlaced', {
-            entityId: entity,
-            typeId: plantedSeed.plant,
-            row,
-            column,
-        })
+        return entity
     }
 
     private findPlantAt(world: World, row: number, column: number): number | undefined {

@@ -22,8 +22,8 @@ const ARROW_WIDTH = 20
 export type PackageKind = 'pack' | 'mod'
 
 export interface PackageDialogOptions {
-    /** Picks and installs a ZIP without enabling it; null when cancelled or failed. */
-    install: () => Promise<string | null>
+    /** Picks and installs ZIPs without enabling them; empty when cancelled or all failed. */
+    install: () => Promise<string[]>
     /** Saves the running level and restarts the game. */
     restart: () => Promise<void>
 }
@@ -202,12 +202,14 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
     }
 
     async function importArchive(): Promise<void> {
-        const id = await options.install()
-        if (!id || !dialog.node.isValid) return
-        pendingUninstalls.delete(id)
-        if (running.includes(id) || initial.includes(id)) touchedRunning = true
-        if (ordered && !order.includes(id)) order.unshift(id)
-        checked.add(id)
+        const ids = await options.install()
+        if (!ids.length || !dialog.node.isValid) return
+        for (const id of ids) {
+            pendingUninstalls.delete(id)
+            if (running.includes(id) || initial.includes(id)) touchedRunning = true
+            if (ordered && !order.includes(id)) order.unshift(id)
+            checked.add(id)
+        }
         await refresh()
     }
 

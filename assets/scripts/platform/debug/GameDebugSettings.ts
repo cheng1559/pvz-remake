@@ -15,6 +15,7 @@ type DebugSettings = {
     seedPacketStyle: SeedPacketStyle
     mobileEnabled: boolean
     hotkeysEnabled: boolean
+    hapticsEnabled: boolean
     widescreenBackgroundsVisible: boolean
     perfPlantsVisible: boolean
     perfZombiesVisible: boolean
@@ -32,6 +33,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     seedPacketStyle: 'standard',
     mobileEnabled: sys.isMobile,
     hotkeysEnabled: false,
+    hapticsEnabled: true,
     widescreenBackgroundsVisible: true,
     perfPlantsVisible: true,
     perfZombiesVisible: true,
@@ -62,6 +64,7 @@ function loadDebugSettings(): DebugSettings {
                 ? parsed.seedPacketStyle : parsed.hdSeedPacketsEnabled ? 'rendered' : DEFAULT_DEBUG_SETTINGS.seedPacketStyle,
             mobileEnabled: DEFAULT_DEBUG_SETTINGS.mobileEnabled,
             hotkeysEnabled: parsed.hotkeysEnabled ?? DEFAULT_DEBUG_SETTINGS.hotkeysEnabled,
+            hapticsEnabled: parsed.hapticsEnabled ?? DEFAULT_DEBUG_SETTINGS.hapticsEnabled,
             widescreenBackgroundsVisible:
                 parsed.widescreenBackgroundsVisible ?? DEFAULT_DEBUG_SETTINGS.widescreenBackgroundsVisible,
             perfPlantsVisible: DEFAULT_DEBUG_SETTINGS.perfPlantsVisible,
@@ -137,6 +140,12 @@ export const GameDebugSettings = {
         this.hotkeysEnabled = enabled
         saveDebugSettings(this)
         return this.hotkeysEnabled
+    },
+
+    setHapticsEnabled(enabled: boolean) {
+        this.hapticsEnabled = enabled
+        saveDebugSettings(this)
+        return this.hapticsEnabled
     },
 
     setWidescreenBackgroundsVisible(visible: boolean) {
