@@ -1011,6 +1011,26 @@
                 "anim_waterdeath"
             ]
         },
+        "helmbody": {
+            "slots": [
+                "Zombie_flaghand"
+            ],
+            "hiddenTrackPrefixes": [
+                "anim_screendoor",
+                "Zombie_flaghand",
+                "Zombie_duckytube",
+                "Zombie_mustache",
+                "Zombie_innerarm_screendoor",
+                "Zombie_outerarm_screendoor"
+            ],
+            "animations": [
+                "anim_walk",
+                "anim_walk2",
+                "anim_eat",
+                "anim_death",
+                "anim_death2"
+            ]
+        },
         "flagbody": {
             "slots": [
                 "Zombie_flaghand"

@@ -126,6 +126,14 @@ export class Registry<T> {
         return this.values.entries()
     }
 
+    checkpoint(): () => void {
+        const keys = new Set(this.values.keys()), frozen = this.isFrozen
+        return () => {
+            for (const key of this.values.keys()) if (!keys.has(key)) this.values.delete(key)
+            this.isFrozen = frozen
+        }
+    }
+
     freeze(): void {
         this.isFrozen = true
         for (const value of this.values.values()) deepFreeze(value)
@@ -182,7 +190,7 @@ function semanticVersion(value: unknown, name: string): string {
     return version
 }
 
-function deepFreeze(value: unknown, seen = new WeakSet<object>()): void {
+export function deepFreeze(value: unknown, seen = new WeakSet<object>()): void {
     if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return
     const target = value as object
     if (seen.has(target)) return

@@ -28,6 +28,8 @@ function parseArchive(archive: Uint8Array): InstalledMod {
 }
 
 export class ModManager {
+    /** Failures in this session; installed archives and saved enable states stay intact. */
+    readonly failures = new Map<string, string>()
     private readonly loaded = new Map<string, InstalledMod>()
     private initialization?: Promise<InstalledMod[]>
 
@@ -64,14 +66,15 @@ export class ModManager {
     }
 
     /** Installed Mods; a damaged archive is still listed so it can be uninstalled. */
-    async installed(): Promise<{ id: string, version?: string }[]> {
+    async installed(): Promise<{ id: string, version?: string, error?: string }[]> {
         const ids = await listInstalledArchives('mods')
-        return Promise.all(ids.map(async id => ({ id, version: await this.read(id).then(mod => mod.manifest.version, () => undefined) })))
+        return Promise.all(ids.map(async id => ({ id, ...(this.failures.has(id) ? { error: this.failures.get(id) } : {}),
+            version: await this.read(id).then(mod => mod.manifest.version, () => undefined) })))
     }
 
     /** Mods used by this session, in load order. */
     async running(): Promise<string[]> {
-        return (await this.ready()).map(mod => mod.manifest.id)
+        return (await this.ready()).map(mod => mod.manifest.id).filter(id => !this.failures.has(id))
     }
 
     /** Replaces the saved enabled list after checking dependencies; returns whether it changed. */

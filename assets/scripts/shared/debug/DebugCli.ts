@@ -13,6 +13,7 @@ const bool = ['true', 'false']
 const specs: CommandSpec[] = [
     ...['win', 'lose', 'nextflag', 'nextwave', 'kill', 'restart', 'reload', 'home', 'quit', 'help', 'menu', 'shop', 'almanac', 'zengarden'].map(name => ({ name, parameters: [], minimum: 0 })),
     { name: 'plant', parameters: ['{plant_name}', '{row}', '{col}'], minimum: 3 },
+    { name: 'seed', parameters: ['{slot}', '{seed_name}'], minimum: 2 },
     { name: 'removeplant', parameters: ['{row}', '{col}'], minimum: 2 },
     { name: 'zombie', parameters: ['{zombie_name}', '[row]', '[col]'], minimum: 1 },
     { name: 'item', parameters: ['{item_name}', '[row]', '[col]'], minimum: 1 },
@@ -66,7 +67,7 @@ export function getDebugCliCompletions(value: string, catalog?: DebugCliCatalog,
     }
     if (!token && !allowEmpty) return []
     const spec = specs.find(spec => spec.name === name)
-    const dynamic = index !== 1 ? undefined : name === 'plant' ? catalog?.plants : name === 'zombie' ? catalog?.zombies
+    const dynamic = name === 'seed' && index === 2 ? catalog?.plants : index !== 1 ? undefined : name === 'plant' ? catalog?.plants : name === 'zombie' ? catalog?.zombies
         : name === 'item' ? catalog?.items : name === 'level' ? catalog?.levels : undefined
     const values = dynamic ?? spec?.values?.[index - 1] ?? []
     return values.filter(option => option.toLowerCase().startsWith(token.toLowerCase()))

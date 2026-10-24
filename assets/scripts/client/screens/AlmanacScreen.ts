@@ -86,7 +86,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     button.onStateChange = state => { update(state); overlay.active = state === 'hover' }
                     button.onStateChange(button.isHovering ? 'hover' : 'normal')
                 } else {
-                    const packet = SeedPacketRenderer.drawSeedPacket({ parent: button.node, x: 0, y: 0, seedType: plant.id, cost: plant.cost, upgrade: plant.upgrade, costFont: ui.assets.fonts.packetCost })
+                    const packet = SeedPacketRenderer.drawSeedPacket({ definitions: ui.assets.presentation, parent: button.node, x: 0, y: 0, seedType: plant.id, cost: plant.cost, upgrade: plant.upgrade, costFont: ui.assets.fonts.packetCost })
                     packet.setSiblingIndex(0)
                     const visual = button.node.getChildByName('Visual')!
                     const update = button.onStateChange!

@@ -1,5 +1,5 @@
 import type { World } from '@/ecs/index'
-import { LevelStateResource, PlantComponent } from '../gameplay'
+import { LevelStateResource, PlantComponent } from '../components'
 import { ItemComponent, TutorialResource, WaveResource } from '../levelState'
 import type { TutorialScript } from './index'
 

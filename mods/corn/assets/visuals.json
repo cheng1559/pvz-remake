@@ -1,0 +1,25 @@
+{
+  "blendSeconds": 0.2,
+  "cannon": {
+    "phaseClips": { "arming": "body", "loading": "charge", "ready": "ready", "firing": "shoot" },
+    "flashPeriod": 75, "upgradeFlashPeriod": 90, "cobTrack": "CobCannon_cob",
+    "shake": { "ticks": 12, "x": 3, "y": -4 },
+    "sounds": {
+      "buzzer": { "id": "buzzer", "foley": false },
+      "corn:shoop": { "id": "corn:shoop", "foley": true, "pitchRange": -5 },
+      "corn:coblaunch": { "id": "corn:coblaunch", "foley": true, "pitchRange": 10 }
+    },
+    "target": { "sprite": "corn:cobcannon_target", "x": -36, "y": 28 },
+    "preview": { "scale": 0.28, "x": 6, "y": -23 },
+    "blastMark": { "kind": "particle", "id": "corn:blastmark", "offset": [80, 40], "yRange": [0, 600], "duration": 1.01 }
+  },
+  "butter": {
+    "sprite": "corn:cornpult_butter_splat", "track": "anim_head1",
+    "offset": { "x": -29.5, "y": 36.5 }, "scale": 1
+  },
+  "projectiles": {
+    "corn:cob": { "scale": 0.9 },
+    "corn:kernel": { "scale": 0.95 },
+    "corn:butter": { "scale": 0.8 }
+  }
+}

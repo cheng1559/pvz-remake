@@ -1,10 +1,11 @@
 import type { GameSystem, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { LevelStateResource, PositionComponent, RandomResource, ZombieComponent, spawnZombie } from './gameplay'
-import { ItemComponent, WaveResource, type WaveState } from './levelState'
+import { LevelStateResource, RandomResource, ZombieComponent } from './components'
+import { pickZombieSpawnX, spawnZombie } from './zombies/spawn'
+import { WaveResource, type WaveState } from './levelState'
 import { EventQueueResource, emitServerEvent } from './events'
+import { tryDropLevelAward } from './levelAward'
 
-const ZOMBIE_SPAWN_X = 780
 const NEXT_WAVE_DELAY_TICKS = 2500
 const NEXT_WAVE_DELAY_RANGE_TICKS = 600
 const EARLY_WAVE_CHECK_TICKS = 400
@@ -19,51 +20,15 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
 
             const waves = world.resources.get(WaveResource)
             if (waves.index >= level.definition.waves.length) {
-                if ([...world.query(ItemComponent)].some(entity =>
-                    world.get(entity, ItemComponent)!.typeId === level.definition.award.id)) return
-                const zombies = [...world.query(PositionComponent, ZombieComponent)]
-                if (zombies.some(entity => {
-                    const zombie = world.get(entity, ZombieComponent)!
-                    return zombie.hasHead && zombie.state !== 'dying' && zombie.state !== 'mowered'
-                })) return
-                const source = zombies.sort((left, right) =>
-                    world.get(right, PositionComponent)!.x - world.get(left, PositionComponent)!.x)[0]
-                const random = world.resources.get(RandomResource)
-                const sourcePosition = source === undefined ? undefined : world.get(source, PositionComponent)!
-                const sourceZombie = source === undefined ? undefined : world.get(source, ZombieComponent)!
-                const body = sourceZombie ? definitions.zombies[sourceZombie.typeId].body : undefined
-                const x = sourcePosition && body ? sourcePosition.x + body.x + body.width / 2 : 400
-                const y = sourcePosition && body ? sourcePosition.y + body.y + body.height / 2 : 280
-                const entity = world.createEntity()
-                world.add(entity, PositionComponent, { x, y, row: -1 })
-                world.add(entity, ItemComponent, {
-                    typeId: level.definition.award.id,
-                    value: 1,
-                    state: 'available',
-                    velocityX: -0.5 + random.nextFloat(),
-                    velocityY: -3 - random.nextFloat() * 2,
-                    width: 50,
-                    groundY: Math.max(80, Math.min(521, y + 45 + random.integer(0, 19))),
-                    disappearTicks: 0,
-                    fadeTicks: 0,
-                    scale: 1,
-                    alpha: 255,
-                })
-                emitServerEvent(world.resources.get(EventQueueResource), 'levelAwardDropped', {
-                    entityId: entity,
-                    typeId: level.definition.award.id,
-                })
-                for (const zombieEntity of zombies) {
-                    const zombie = world.get(zombieEntity, ZombieComponent)!
-                    if (zombie.state !== 'dying' && zombie.state !== 'mowered') commands.destroyEntity(zombieEntity)
-                }
+                tryDropLevelAward(world, definitions, commands)
                 return
             }
             if (waves.nextWaveAtTick === undefined) return
             const nextIsFlag = level.definition.waves[waves.index].flagWave === true
             const waveHealth = (waves.zombieIds ?? []).reduce((total, entity) => {
                 const zombie = world.get(entity, ZombieComponent)
-                return total + (zombie?.state === 'walking' || zombie?.state === 'eating' ? zombie.health : 0)
+                return total + (zombie?.state === 'walking' || zombie?.state === 'eating' || zombie?.state === 'vaulting'
+                    ? zombie.health + zombie.helmHealth : 0)
             }, 0)
             if (waves.accelerateAtTick !== undefined && tick >= waves.accelerateAtTick &&
                 (!nextIsFlag && waveHealth <= (waves.healthToNextWave ?? 0) || waveHealth <= 0)) {
@@ -96,7 +61,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
                     definitions,
                     typeId,
                     row,
-                    ZOMBIE_SPAWN_X + random.integer(0, 39) + (wave.flagWave ? 40 : 0),
+                    pickZombieSpawnX(definitions.zombies[typeId], random, wave.flagWave),
                     level.board.origin.y + row * level.board.cell.height - 30,
                 )
                 emitServerEvent(world.resources.get(EventQueueResource), 'zombieSpawned', {
@@ -110,7 +75,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
             waves.index++
             waves.zombieIds = zombieIds
             const waveHealthStart = zombieIds.reduce(
-                (total, entity) => total + world.get(entity, ZombieComponent)!.health,
+                (total, entity) => total + world.get(entity, ZombieComponent)!.health + world.get(entity, ZombieComponent)!.helmHealth,
                 0,
             )
             waves.healthToNextWave = (0.5 + world.resources.get(RandomResource).nextFloat() * 0.15) * waveHealthStart

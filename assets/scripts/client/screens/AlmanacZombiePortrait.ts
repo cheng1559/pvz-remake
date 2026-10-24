@@ -45,12 +45,15 @@ export class AlmanacZombiePortrait extends Component {
         root.setScale(portrait.scale, portrait.scale, 1)
         const players = await loadDisplayParts(root, portrait.parts ?? definition.parts, content)
         if (!players) return
-        if (definition.motion === 'bungee') {
-            const cord = await new SpriteRepository(content.registry, content.loader).load('pvz:bungeecord')
+        const cordDefinition = content.presentation.almanac.cords[this.zombieId]
+        if (cordDefinition) {
+            const cord = await new SpriteRepository(content.registry, content.loader).load(cordDefinition.sprite)
             if (!isValid(root, true)) return
-            const body = players.get('body')!.getTrackNode('Zombie_bungi_body')!
-            // Compensate for the original body's -18 + 15 X offset: 35 - (-3) = 38.
-            drawBungeeCord(root, cord, 38, body.position.y)
+            const body = players.get('body')!.getTrackNode(cordDefinition.track)!
+            const scale = definition.scale ?? 1
+            const origin = content.presentation.almanac.zombieOrigin
+            const drawX = (definition.drawOffset?.[0] ?? 0) + origin.offset[0] + origin.scaleOffset[0] * (1 - scale)
+            drawBungeeCord(root, cord, cordDefinition.x - drawX, body.position.y, cordDefinition.height)
         }
     }
 }

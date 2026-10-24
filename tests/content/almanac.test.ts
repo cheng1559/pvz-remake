@@ -1,15 +1,29 @@
+import { presentationFixture } from '../client/presentationFixture'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { ALMANAC_PLANTS, ALMANAC_ZOMBIES } from '@/server/menu/AlmanacCatalog'
 import { parseContentManifest } from '@/shared/content'
 import { parseReanim, sampleReanimTrack } from '@/shared/content/reanim'
+import { runInNewContext } from 'node:vm'
+import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import * as animationDefinitions from '@/client/content/ClientAnimationRegistry'
 
 const json = (path: string) => JSON.parse(readFileSync(path, 'utf8'))
 const bundle = 'assets/bundles/pvz-base'
 const manifest = parseContentManifest(json(`${bundle}/manifest.json`))
 interface Part { name: string, id: string, parent?: string, track?: string, blink?: boolean, packetId?: string }
-const catalog: Record<'plants' | 'zombies', Array<{ parts: Part[] }>> = json('assets/resources/almanac-animations.json')
+const displayModule = { exports: {} as Record<string, any> }
+const displayCode = transpileModule(readFileSync('assets/scripts/client/reanim/EntityDisplay.ts', 'utf8'), {
+    compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+})
+runInNewContext(displayCode.outputText, { exports: displayModule.exports,
+    require: (id: string) => id === '@/client/content/ClientAnimationRegistry' ? animationDefinitions : {} })
+const layouts = json('assets/resources/almanac-animations.json')
+const registry = new animationDefinitions.ClientAnimationRegistry(presentationFixture)
+const catalog = Object.fromEntries(['plants', 'zombies'].map(kind => [kind,
+    layouts[kind].map((entry: any, id: number) => displayModule.exports.resolveEntityDisplay(kind, id, entry, registry)),
+])) as Record<'plants' | 'zombies', Array<{ parts: Part[] }>>
 const animation = (part: Part) => parseReanim(json(`${bundle}/${manifest.client.reanim[part.id]}.json`))
 
 test('every almanac entry has renderable animation clips, valid attachments and installed sprites', () => {

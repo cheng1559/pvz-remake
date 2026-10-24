@@ -20,6 +20,9 @@ test('protocol values survive JSON and reject unsafe values', () => {
     }
 
     assert.deepEqual(jsonRoundTrip(packet), packet)
+    const modPacket: ClientPacket = { ...packet, command: { type: 'mod', id: 'example:interact', data: { entityId: 2, target: { x: 600, y: 420 } } } }
+    assert.deepEqual(parseClientPacket(jsonRoundTrip(modPacket)), modPacket)
+    assert.throws(() => parseClientPacket({ ...modPacket, command: { type: 'mod', id: 'example:interact', data: [] } }), /mod.data/)
     assert.equal(isJsonValue({ value: Number.NaN }), false)
     assert.equal(isJsonValue({ value: undefined }), false)
     assert.equal(isJsonValue(new Map()), false)

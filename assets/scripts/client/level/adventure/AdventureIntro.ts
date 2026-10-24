@@ -15,6 +15,7 @@ import { ParticleDefinitionLoader } from '@/core/Particle'
 import type { LevelIntro } from '../LevelIntro'
 import type { LevelIntroContext } from '../LevelPresentation'
 import type { ClientContentLoader } from '@/client/content/ClientContentLoader'
+import { randomAnimationRate, type ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -90,7 +91,9 @@ export class AdventureIntro implements LevelIntro {
                 z: 100 + gridY * 4 + (gridX % 2) * 2,
             })
         }
+        const animations = content.animations.resolve('pvz:normal')
         await Promise.all(introPositions.map(async (position, index) => {
+            const clip = Math.random() < content.animations.zombieIdle2Chance ? animations.idle2 : animations.idle
             const node = uiNode({
                 name: `IntroZombie-${index}`, parent: entityLayer, position,
                 size: { width: 120, height: 120 }, anchor: { x: 0, y: 1 },
@@ -100,19 +103,19 @@ export class AdventureIntro implements LevelIntro {
                 sprite: { frame: mowerShadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
             })
             const player = uiNode({
-                name: 'ZombieAnimation', parent: node, position: { x: 15, y: 8 },
+                name: 'ZombieAnimation', parent: node, position: { x: 15 + clip.x, y: 8 + clip.y },
                 anchor: { x: 0, y: 1 },
             }).node.addComponent(ReanimPlayer)
-            await player.load(Math.floor(Math.random() * 4) > 0 ? 'pvz:zombie_idle2' : 'pvz:zombie', content.registry, content.loader)
+            await player.load(clip.reanimId, content.registry, content.loader)
             player.setTrackPrefixVisible('anim_tongue', Math.random() < 0.2)
-            player.play({ loop: true, rate: (12 + Math.random() * 12) / 12, timeSeconds: Math.random() * 20 })
+            player.play({ loop: true, rate: randomAnimationRate(content.animations.rates.zombieIdle2) / (clip.fps ?? 12) * clip.rateScale, timeSeconds: Math.random() * 20 })
             introZombies.push(node)
         }))
         introZombies.sort((left, right) => left.position.z - right.position.z)
             .forEach((node, index) => node.setSiblingIndex(index))
         return new AdventureIntro(board, sodClip, sodRolls, layout.rolls, introZombies, bank, houseName,
             content.definitions.boards[level.board],
-            entityNodes, audio, content.registry, content.loader)
+            entityNodes, audio, content.registry, content.loader, content.animations)
     }
 
     constructor(
@@ -128,6 +131,7 @@ export class AdventureIntro implements LevelIntro {
         private readonly audio: LevelAudioPresenter,
         private readonly registry: ContentRegistry,
         private readonly loader: ClientContentLoader,
+        private readonly animations: ClientAnimationRegistry,
     ) {}
 
     get complete(): boolean {
@@ -178,12 +182,14 @@ export class AdventureIntro implements LevelIntro {
                 const node = this.introZombies[preview.slot]
                 if (!node?.isValid) throw new Error(`intro preview ${preview.slot} is unavailable`)
                 node.setPosition(preview.x, preview.y, preview.z)
+                const clip = Object.values(this.animations.resolve('pvz:normal')).find(clip => clip.reanimId === preview.reanim.id)
+                if (!clip) throw new Error(`Intro animation is not installed: ${preview.reanim.id}`)
                 let animationNode = node.getChildByName('ZombieAnimation')
                 let player = animationNode?.getComponent(ReanimPlayer) ?? null
                 if (!player || player.snapshot().id !== preview.reanim.id) {
                     if (animationNode?.isValid) animationNode.destroy()
                     animationNode = uiNode({
-                        name: 'ZombieAnimation', parent: node, position: { x: 15, y: 8 },
+                        name: 'ZombieAnimation', parent: node, position: { x: 15 + clip.x, y: 8 + clip.y },
                         anchor: { x: 0, y: 1 },
                     }).node
                     player = animationNode.addComponent(ReanimPlayer)

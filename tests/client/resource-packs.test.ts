@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
+import { setImmediate } from 'node:timers/promises'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 
@@ -236,6 +237,96 @@ function modFiles(id = 'local:screen', version = '1.0.0', dependencies: { id: st
     }
 }
 
+test('package dialog keeps uninstall drafts on disk until Apply and restart confirmation', async () => {
+    for (const kind of ['mod', 'pack']) {
+        const env = setup()
+        const id = kind === 'mod' ? 'local:screen' : 'custom'
+        const initial = kind === 'mod' ? env.modManager : env.manager
+        await initial.install(zipSync(kind === 'mod' ? modFiles(id) : zipFiles(id)))
+        const manager = kind === 'mod' ? new env.ModManager() : new env.ResourcePackManager()
+        env.modules[kind === 'mod' ? '@/client/content/ModManager' : '@/client/content/ResourcePacks'] = {
+            [kind === 'mod' ? 'modManager' : 'resourcePacks']: manager,
+        }
+        const archives = kind === 'mod' ? env.modArchives : env.archives
+        const buttons: any[] = [], errors: string[] = []
+        let acceptRestart = false, acceptDiscard = false, discardPrompts = 0, restarts = 0
+        const node = (name = '', parent?: any): any => {
+            const value: any = { name, parent, children: [], position: { x: 0, y: 0 }, isValid: true,
+                active: true, activeInHierarchy: true, on() {}, setScale() {},
+                addComponent() { const button = {}; buttons.push(button); return button },
+                getComponent: () => ({ width: 480 }),
+                getComponentsInChildren: () => [{ node: node() }, { node: node() }],
+                destroy() { this.isValid = false; this.children.forEach((child: any) => child.destroy()) },
+            }
+            parent?.children.push(value)
+            return value
+        }
+        env.modules.cc = { ...env.modules.cc, Color: class { static BLACK = {}; static WHITE = {} },
+            Button: { EventType: { CLICK: 'click' } }, KeyCode: {}, UITransform: class {} }
+        env.modules['@/client/font'] = { FontMetricsUtil: {
+            getMetrics: () => ({ height: 14, ascentPadding: 0 }), measureTextWidth: () => 50,
+        } }
+        env.modules['@/client/ui/UIButton'] = { UIButton: class {} }
+        env.modules['@/client/view/uiNode'] = { uiNode: (args: any) => ({
+            node: node(args.name, args.parent), graphics: {
+                fillRect() {}, rect() {}, stroke() {}, clear() {}, moveTo() {}, lineTo() {}, close() {}, fill() {},
+            },
+        }) }
+        const ui = {
+            assets: { fonts: { profile: { config: {} } } }, text: (key: string, fallback?: string) => fallback ?? key,
+            dialog(_parent: any, args: any): any {
+                if (!args.width) {
+                    if (args.title === 'Error') errors.push(args.message)
+                    if (args.message?.startsWith('Unapplied changes')) {
+                        discardPrompts++
+                        return { result: Promise.resolve(acceptDiscard) }
+                    }
+                    return { result: Promise.resolve(args.title === 'Restart Game?' ? acceptRestart : true) }
+                }
+                return { node: node(), content: node(), close() { this.node.activeInHierarchy = false } }
+            },
+            scroll: () => ({ content: node(), contentWidth: 338, offset: 0, setContentHeight() {} }),
+            button() {}, label: () => ({ renderer: {} }), checkbox: () => ({ node: node(), value: true }),
+        }
+        const { showPackageDialog } = env.load('assets/scripts/client/screens/PackageDialog.ts')
+        const open = async () => {
+            buttons.length = 0
+            return showPackageDialog(node(), ui, kind, { restart: async () => { restarts++ } })
+        }
+        let dialog = await open()
+        dialog.onCancel()
+        await setImmediate()
+        assert.equal(discardPrompts, 0, 'an unchanged draft closes without a warning')
+        assert.equal(dialog.node.activeInHierarchy, false)
+        dialog = await open()
+        buttons[0].onClick()
+        await setImmediate()
+        assert.equal(archives.has(id), true, 'Uninstall only edits the draft')
+        dialog.onCancel()
+        await setImmediate()
+        assert.equal(discardPrompts, 1)
+        assert.equal(dialog.node.activeInHierarchy, true, 'declining discard keeps the manager open')
+        acceptDiscard = true
+        dialog.onCancel()
+        await setImmediate()
+        assert.equal(dialog.node.activeInHierarchy, false)
+        dialog = await open()
+        assert.equal(buttons.length, kind === 'mod' ? 2 : 4, 'the installed row returns after Cancel')
+        buttons[0].onClick()
+        await setImmediate()
+        dialog.onConfirm()
+        await setImmediate()
+        assert.equal(archives.has(id), true, 'cancelling restart cannot delete the ZIP')
+        assert.deepEqual(Array.from(await manager.list()), [id], 'cancelling restart cannot disable it')
+        acceptRestart = true
+        dialog.onConfirm()
+        await setImmediate()
+        assert.equal(archives.has(id), false)
+        assert.equal(restarts, 1)
+        assert.deepEqual(errors, [])
+    }
+})
+
 test('Mod ZIP updates and uninstall preserve running code until restart and persist independently of packs', async () => {
     const { modManager, ModManager, archives, modArchives, modDb } = setup()
     const original = zipSync(modFiles())
@@ -422,7 +513,7 @@ test('pack install delegates to its dialog and ZIP picker cancellation leaves pa
 })
 
 test('Native ZIP installation copies files into writable storage and rolls back a failed replacement', async () => {
-    const { manager, ResourcePackManager, modules, files, jsb, archive } = setup()
+    const { manager, ResourcePackManager, modules, files, jsb, archive, Texture } = setup()
     const directories = new Set<string>()
     let failCommit = false
     modules.cc.sys.isNative = true
@@ -449,9 +540,14 @@ test('Native ZIP installation copies files into writable storage and rolls back 
             return true
         },
     } }
-    const packFiles = { ...zipFiles(), 'audio/chomp.mp3': strToU8('ID3-original'), 'audio/later.mp3': strToU8('ID3-later') }
+    const packFiles: Record<string, Uint8Array> = { ...zipFiles(), 'audio/chomp.mp3': strToU8('ID3-original'), 'audio/later.mp3': strToU8('ID3-later') }
     const packManifest = JSON.parse(strFromU8(packFiles['pack.json']))
     packManifest.audio = { 'pvz:chomp': 'audio/chomp.mp3', 'pvz:later': 'audio/later.mp3' }
+    for (let index = 0; index < 8; index++) {
+        const file = `icons/${index}.png`
+        packFiles[file] = packFiles['button.png']
+        packManifest.sprites[`pvz:icon${index}`] = { ...packManifest.sprites['pvz:button'], file }
+    }
     packFiles['pack.json'] = strToU8(JSON.stringify(packManifest))
     const data = zipSync(packFiles)
     files.set('/Downloads/custom.zip', data)
@@ -481,6 +577,38 @@ test('Native ZIP installation copies files into writable storage and rolls back 
     const clip = await running.asset('pvz:chomp', modules.cc.AudioClip)
     assert.match(clip.nativeUrl, /resource-pack-runtime/)
     assert.deepEqual(files.get(clip.nativeUrl), packFiles['audio/chomp.mp3'])
+
+    // Startup must bound decoder memory even when fonts, animations and sprites load together.
+    const loadRemote = modules.cc.assetManager.loadRemote
+    modules.cc.assetManager.loadRemote = (_path: string, _options: unknown, done: Function) => done(new Error('PNG decode failed'))
+    await assert.rejects(running.sprite('pvz:button'), /PNG decode failed/)
+    const uploaded = new Set<object>(), released = new Set<object>(), pending: Function[] = []
+    let peak = 0
+    modules.cc.Texture2D = class extends Texture {
+        set image(value: any) { super.image = value; uploaded.add(value) }
+    }
+    modules.cc.assetManager.releaseAsset = (image: object) => {
+        assert.ok(uploaded.has(image), 'release CPU pixels only after the texture upload')
+        released.add(image)
+    }
+    modules.cc.assetManager.loadRemote = (path: string, options: any, done: Function) => {
+        if (options.ext !== '.png') return loadRemote(path, options, done)
+        assert.ok(files.has(path))
+        pending.push(() => done(null, { width: 100, height: 140 }))
+        peak = Math.max(peak, pending.length)
+    }
+    const preload = running.preload(() => {})
+    await setImmediate()
+    while (pending.length) {
+        for (const finish of pending.splice(0)) finish()
+        await setImmediate()
+    }
+    await preload
+    assert.equal(peak, 4, 'failed decodes must return their slot; large packs use at most four simultaneous decoders')
+    assert.equal(released.size, 10, 'each sprite and font image is released after upload')
+    assert.equal(uploaded.size, released.size)
+    modules.cc.assetManager.loadRemote = loadRemote
+
     failCommit = true
     await assert.rejects(manager.install(data), /finish installing/)
     assert.deepEqual(files.get('/app/resource-packs/custom/.archive.zip'), data)
@@ -566,7 +694,12 @@ test('package manager lists installed archives and saves a draft enabled list wi
     await assert.rejects(modManager.setEnabled(['local:addon']), /missing mod/)
     assert.equal(await modManager.setEnabled(['local:addon', 'local:base']), true)
     assert.equal(await modManager.setEnabled(['local:base', 'local:addon']), false, 'Mod load order comes from dependencies')
-    assert.deepEqual(Array.from(await new ModManager().running()), ['local:base', 'local:addon'])
+    const session = new ModManager()
+    assert.deepEqual(Array.from(await session.running()), ['local:base', 'local:addon'])
+    session.failures.set('local:addon', 'client/index.js: initialization failed')
+    assert.deepEqual(Array.from(await session.running()), ['local:base'])
+    assert.deepEqual(Array.from(await session.list()), ['local:addon', 'local:base'], 'a runtime failure must not change saved enable states')
+    assert.equal((await session.installed()).find((mod: any) => mod.id === 'local:addon').error, 'client/index.js: initialization failed')
 
     modules['@/shared/debug/DebugCli'] = load('assets/scripts/shared/debug/DebugCli.ts')
     const { executeDebugCliCommand } = load('assets/scripts/platform/debug/DebugCliCommands.ts')

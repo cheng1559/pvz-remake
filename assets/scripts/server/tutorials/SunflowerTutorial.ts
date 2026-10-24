@@ -1,6 +1,6 @@
 import type { World } from '@/ecs/index'
 import { EventQueueResource, emitServerEvent } from '../events'
-import { EconomyStateResource, LevelStateResource, PlantComponent, SeedBankResource } from '../gameplay'
+import { EconomyStateResource, LevelStateResource, PlantComponent, SeedBankResource } from '../components'
 import { ItemComponent, TutorialResource, WaveResource } from '../levelState'
 import type { TutorialScript } from './index'
 

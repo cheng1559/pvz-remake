@@ -8,6 +8,7 @@ export async function showAwardScreen(parent: Node, ui: UI): Promise<AwardView> 
     const award = await menuApi.getAward()
     if (!parent.isValid) throw new Error('Award screen was destroyed while loading')
     SeedPacketRenderer.drawSeedPacket({
+        definitions: ui.assets.presentation,
         name: 'AwardSeedPacket', parent, x: 350, y: -129, scale: 2,
         seedType: award.seed, cost: award.cost, costFont: ui.assets.fonts.packetCost,
     })

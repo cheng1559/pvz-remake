@@ -41,6 +41,9 @@ const fileKinds = ['fonts', 'audio', 'json', 'text'] as const
 type AssetType<T extends Asset> = new (...args: any[]) => T
 let nativeRuntimeReady = false
 let nativeRuntimeId = 0
+const MAX_NATIVE_TEXTURE_LOADS = 4
+let nativeTextureLoads = 0
+const nativeTextureWaiters: (() => void)[] = []
 
 function relativeFile(value: unknown): asserts value is string {
     if (typeof value !== 'string' || !value || /^(?:[\\/]|[a-z][a-z0-9+.-]*:)/i.test(value)
@@ -151,24 +154,44 @@ async function texture(pack: LoadedPack, file: string, scale = 1): Promise<Textu
     const cached = pack.textures.get(file)
     if (cached) return cached
     const pending = (async () => {
-        const image = await remote<ImageAsset>(pack, file, '.png', 'image/png')
-        const result = new Texture2D()
-        result.image = image
-        // Preserve the decoded RGBA upload used by the existing HD images and fonts.
-        const pixels = result.image?.data
-        if (sys.isBrowser && pixels && !ArrayBuffer.isView(pixels)) {
-            const canvas = document.createElement('canvas')
-            canvas.width = result.width
-            canvas.height = result.height
-            const context = canvas.getContext('2d')!
-            context.drawImage(pixels, 0, 0)
-            const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data
-            result.uploadData(new Uint8Array(rgba.buffer, rgba.byteOffset, rgba.byteLength))
+        const isNative = sys.isNative
+        if (isNative) {
+            if (nativeTextureLoads >= MAX_NATIVE_TEXTURE_LOADS) await new Promise<void>(resolve => nativeTextureWaiters.push(resolve))
+            else nativeTextureLoads++
         }
-        result.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
-        result.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.LINEAR)
-        setSpriteDensity(result, scale)
-        return result
+        let image: ImageAsset | undefined
+        try {
+            image = await remote<ImageAsset>(pack, file, '.png', 'image/png')
+            const result = new Texture2D()
+            result.image = image
+            // Preserve the decoded RGBA upload used by the existing HD images and fonts.
+            const pixels = result.image?.data
+            if (sys.isBrowser && pixels && !ArrayBuffer.isView(pixels)) {
+                const canvas = document.createElement('canvas')
+                canvas.width = result.width
+                canvas.height = result.height
+                const context = canvas.getContext('2d')!
+                context.drawImage(pixels, 0, 0)
+                const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data
+                result.uploadData(new Uint8Array(rgba.buffer, rgba.byteOffset, rgba.byteLength))
+            }
+            result.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
+            result.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.LINEAR)
+            setSpriteDensity(result, scale)
+            return result
+        } finally {
+            if (isNative) {
+                // Remote images have no Cocos dependency edge, so automatic image cleanup misses them.
+                if (image) {
+                    assetManager.releaseAsset(image)
+                    // The running snapshot already owns the file on disk, including after uninstall.
+                    delete pack.files[file]
+                }
+                const next = nativeTextureWaiters.shift()
+                if (next) next()
+                else nativeTextureLoads--
+            }
+        }
     })().catch(error => { pack.textures.delete(file); throw error })
     pack.textures.set(file, pending)
     return pending

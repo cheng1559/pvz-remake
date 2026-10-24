@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-import { Schedule, World } from '@/ecs/index'
+import { CommandBuffer, Schedule, World } from '@/ecs/index'
 import { DeterministicRng } from '@/server/DeterministicRng'
 import { EventQueueResource, createEventQueue } from '@/server/events'
 import {
@@ -13,13 +13,14 @@ import {
     RandomResource,
     SeedBankResource,
     ZombieComponent,
-    createZombieSystem,
-    mowZombie,
-    spawnZombie,
-} from '@/server/gameplay'
+} from '@/server/components'
+import { createZombieSystem } from '@/server/zombies/system'
+import { mowZombie } from '@/server/zombies/damage'
+import { spawnZombie } from '@/server/zombies/spawn'
 import { ItemComponent, TutorialResource, WaveResource } from '@/server/levelState'
 import { initializeLevel, createLevelProgressSystem } from '@/server/level'
 import { createWaveSystem } from '@/server/waves'
+import { explode } from '@/server/explosions'
 import { createItemSystem } from '@/server/items'
 import { createZombieGroanSystem } from '@/server/zombieGroans'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
@@ -61,7 +62,7 @@ function addPlant(world: World, column: number) {
         column,
         health: 300,
         maxHealth: 300,
-        eatenFlashCounter: 0,
+        eatenFlashCounter: 0, recentlyEatenCounter: 0,
     })
 }
 
@@ -169,6 +170,37 @@ test('level one drops its award from the last effective zombie before its corpse
     assert.ok(award.velocityY >= -4.85 && award.velocityY < -2.85)
     assert.ok(award.groundY >= 352.5 && award.groundY <= 371.5)
     assert.equal(world.resources.get(LevelStateResource).result, 'playing')
+})
+
+test('instant explosions drop the award from the final victim, even when no live body remains', () => {
+    for (const burn of [true, false]) for (const deferred of [true, false]) {
+        const { world } = setup()
+        world.resources.get(WaveResource).index = levels.levels['pvz:adventure-1-1'].waves.length
+        const first = spawnZombie(world, definitions, 'pvz:normal', 2, 150, 320)
+        const second = spawnZombie(world, definitions, 'pvz:normal', 2, 600, 320)
+        const last = spawnZombie(world, definitions, 'pvz:normal', 2, 610, 320)
+        const corpse = spawnZombie(world, definitions, 'pvz:normal', 2, 740, 320)
+        Object.assign(world.get(corpse, ZombieComponent)!, { health: 0, state: 'dying' })
+        const remover = deferred ? new CommandBuffer(world) : world
+        const blast = { ...definitions.plants['pvz:cherrybomb'].fuse!.explosion, burn }
+        explode(world, definitions, { x: 150, y: 320, row: 2 }, blast, remover)
+        assert.equal(world.get(first, ZombieComponent), undefined)
+        assert.equal([...world.query(ItemComponent)].length, 0, 'surviving enemies prevent an award')
+        explode(world, definitions, { x: 600, y: 320, row: 2 }, blast, remover)
+        assert.equal(world.get(second, ZombieComponent), undefined)
+        assert.equal(world.get(last, ZombieComponent), undefined)
+        const awards = [...world.query(ItemComponent)]
+        assert.equal(awards.length, 1)
+        const body = definitions.zombies['pvz:normal'].body
+        assert.deepEqual(world.get(awards[0], PositionComponent), {
+            x: 610 + body.x + body.width / 2, y: 320 + body.y + body.height / 2, row: -1,
+        }, `burn=${burn}, deferred=${deferred}: use the final victim, not the screen centre or an older corpse`)
+        if (remover instanceof CommandBuffer) remover.flush()
+        const schedule = new Schedule()
+        schedule.add('spawn', createWaveSystem(definitions))
+        schedule.run(world, 1)
+        assert.equal([...world.query(ItemComponent)].length, 1, 'the next wave update must not duplicate the award')
+    }
 })
 
 test('falling sun and money stay fully inside the board and bounce at both edges', () => {

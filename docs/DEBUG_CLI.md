@@ -12,6 +12,7 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /gamespeed 2
 /hdseed true
 /seedstyle tilted
+/seed 1 snowpea
 /pack
 /pack install
 /mod install
@@ -23,6 +24,8 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /home
 ```
 
+`/seed {slot} {seed_name}` replaces a seed-bank slot, numbered from 1 on the left, with an installed seed. The new packet is immediately ready and uses its own cost and cooldown. Replacing a held packet clears the cursor; duplicates in other slots are rejected. Changes work while paused or at zero speed and persist in the level save.
+
 `/hdseed true` enables actual Reanim portraits for almanac plants and zombies, plus held/grid placement previews for implemented plants, and sets seed packets to `rendered`. `false` selects cached portraits and `standard` packets. Only the selected representation is created; failures report an error without falling back. This setting is saved locally. Seed background resolution is controlled by resource packs independently.
 
 `/seedstyle standard|rendered|tilted` independently selects the seed packet style and saves it locally. `standard` uses cached plant art; `rendered` uses the original Reanim pose; `tilted` enlarges that pose and rotates it clockwise. Plants are clipped only at the image area's inner left and bottom borders; the top and right sides may overflow. Backgrounds, costs and hit areas keep their original size. Switching between `rendered` and `tilted` reuses the loaded plant. Almanac portraits and held/grid previews are unaffected.
@@ -31,6 +34,6 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 
 Without arguments, `/pack` and `/mod` open the resource pack or Mod manager window: import ZIPs, uninstall from each row, toggle enabled state, reorder pack priority, and Apply to save and confirm a restart. `/mod` uses the same `install`, `load`, `unload`, `uninstall`, and `list` operations and restart dialogs. `/mod install` selects a Mod ZIP without arguments; use qualified IDs such as `local:widescreen` for other operations. Installed Mods persist locally, validate their dependencies, and execute only after restart. See [Mod installation](MODS.md).
 
-The current package provides Adventure 1-1 and 1-2, Peashooter, Sunflower, Repeater, normal and flag zombies, sun and level awards. Completions use installed backend content. Wave commands report a condition failure when no matching waves remain; `/background` and unmigrated content remain unavailable. Main-menu widescreen support is an optional Mod.
+The current package provides Adventure 1-1 and 1-2; plants Peashooter, Sunflower, Repeater, Cherry Bomb, Wall-nut, Potato Mine, Snow Pea, Chomper and Explode-o-nut (`explodenut`, debug only); zombies normal, flag, Conehead (`conehead`), Buckethead (`buckethead`) and Pole Vaulting (`pole_vaulter`); sun and level awards. Completions use installed backend content. Wave commands report a condition failure when no matching waves remain; `/background` and unmigrated content remain unavailable. Main-menu widescreen support is an optional Mod.
 
 The dialog reuses `UI.dialog` and `UI.input`. Gameplay commands use the existing `debugCommand` channel and receive a `debugResult`; the backend validates and mutates the authoritative world. Audio/fullscreen settings use the menu API. Cooldown, sun-cost and collection preferences are reapplied to new sessions.

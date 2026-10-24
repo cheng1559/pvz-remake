@@ -1,40 +1,46 @@
+import { presentationFixture } from './presentationFixture'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import { resolve } from 'node:path'
+import { plantDefinition } from '@/client/plants/definitions'
+import { zombieDefinition } from '@/client/zombies/definitions'
 import { ClientAnimationRegistry } from '../../assets/scripts/client/content/ClientAnimationRegistry'
+import { parsePresentationDefinitions } from '@/shared/content/presentation'
 
-test('client animations compose enhancements and allow one complete replacement', () => {
-    const animations = new ClientAnimationRegistry()
-    animations.register('solar-pea', 'pvz:peashooter', 'enhance', {
-        shootHead: { rateScale: 1.5 },
-    })
-    assert.equal(animations.resolve('pvz:peashooter').shootHead.rateScale, 1.5)
-
-    const replacement = {
-        body: { reanimId: 'mod:body', rateScale: 1, x: 0, y: 0 },
-        idleHead: { reanimId: 'mod:idle', rateScale: 1, x: 1, y: 2, attachmentTrackId: 'stem' },
-        shootHead: { reanimId: 'mod:shoot', rateScale: 2, x: 1, y: 2, attachmentTrackId: 'stem' },
-        blink: { reanimId: 'mod:blink', rateScale: 1, x: 0, y: 0, attachmentTrackId: 'face' },
+test('presentation definitions validate independently and never share global configuration state', () => {
+    const current = new ClientAnimationRegistry(presentationFixture)
+    const custom: any = structuredClone(presentationFixture)
+    custom.animation.rates.plantIdle = [20, 30]
+    const other = new ClientAnimationRegistry(parsePresentationDefinitions(custom))
+    assert.deepEqual(current.rates.plantIdle, [10, 15])
+    assert.deepEqual(other.rates.plantIdle, [20, 30])
+    for (const change of [
+        (data: any) => { data.animation.plantBlinkTicks = [800, 400] },
+        (data: any) => { data.plants['pvz:explodenut'].animationTarget = 'pvz:missing' },
+        (data: any) => { delete data.zombies['pvz:normal'] },
+        (data: any) => { data.projectiles['pvz:pea'].impact.duration = -1 },
+        (data: any) => { data.almanac.cords[20].height = 0 },
+        (data: any) => { data.plants['pvz:potatomine'].mine.glow.distance = [50, 50] },
+        (data: any) => { data.zombies['pvz:conehead'].helm.damagedSprites = ['pvz:zombie_cone2'] },
+    ]) {
+        const invalid = structuredClone(presentationFixture)
+        change(invalid)
+        assert.throws(() => parsePresentationDefinitions(invalid), TypeError)
+        assert.equal(current.definitions, presentationFixture)
     }
-    animations.register('new-pea', 'pvz:peashooter', 'replace', replacement)
-    assert.equal(animations.resolve('pvz:peashooter').shootHead.reanimId, 'mod:shoot')
-    assert.throws(
-        () => animations.register('other', 'pvz:peashooter', 'replace', replacement),
-        /already replaced by new-pea/,
-    )
+})
 
-    animations.register('final-tuning', 'pvz:peashooter', 'enhance', { shootHead: { x: 8 } })
-    assert.equal(animations.resolve('pvz:peashooter').shootHead.x, 8)
-    animations.freeze()
-    assert.throws(
-        () => animations.register('late', 'pvz:peashooter', 'enhance', { body: { x: 1 } }),
-        /frozen/,
-    )
+test('client animation definitions are copied and freeze independently of source data', () => {
+    const source: any = structuredClone(presentationFixture)
+    const registry = new ClientAnimationRegistry(source)
+    source.plants['pvz:peashooter'].animations!.body.x = 12
+    assert.equal(registry.resolve('pvz:peashooter').body.x, 0)
+    registry.freeze()
+    assert.ok(Object.isFrozen(registry.resolve('pvz:peashooter').body))
+    assert.throws(() => registry.resolve('mod:missing'), /unknown client animation target/)
 })
 
 test('repeater uses its own clips and reference shooting rate', () => {
-    const animations = new ClientAnimationRegistry()
+    const animations = new ClientAnimationRegistry(presentationFixture)
     const repeater = animations.resolve('pvz:repeater')
 
     assert.equal(repeater.body.reanimId, 'pvz:repeater')
@@ -43,40 +49,18 @@ test('repeater uses its own clips and reference shooting rate', () => {
     assert.equal(repeater.shootHead.rateScale, 45 / 35)
 })
 
-test('client animations reject unknown slots and invalid playback values', () => {
-    const animations = new ClientAnimationRegistry()
-    assert.throws(
-        () => animations.registerLoaded('bad', 'mod:missing', 'enhance', {}),
-        /unknown client animation target/,
-    )
-    assert.throws(
-        () => animations.register('bad', 'pvz:normal', 'enhance', { walk: { rateScale: 0 } }),
-        /positive/,
-    )
-    assert.throws(
-        () => animations.register('bad', 'pvz:normal', 'enhance', { unknown: {} } as never),
-        /unknown pvz:normal animation slot/,
-    )
-    assert.throws(
-        () => animations.registerLoaded('broken', 'pvz:peashooter', 'replace', {}),
-        /replacement must define/,
-    )
-    animations.register('valid-after-error', 'pvz:peashooter', 'replace', {
-        body: { reanimId: 'mod:body', rateScale: 1, x: 0, y: 0 },
-        idleHead: { reanimId: 'mod:idle', rateScale: 1, x: 0, y: 0 },
-        shootHead: { reanimId: 'mod:shoot', rateScale: 1, x: 0, y: 0 },
-        blink: { reanimId: 'mod:blink', rateScale: 1, x: 0, y: 0 },
-    })
-})
-
-test('Adventure 1-1 presenters resolve plant and zombie animations through the registry', () => {
-    const source = (file: string) => readFileSync(resolve(process.cwd(), file), 'utf8')
-    const view = source('assets/scripts/client/level/LevelView.ts')
-    const entities = source('assets/scripts/client/level/LevelEntityRenderer.ts')
-    const zombies = source('assets/scripts/client/level/LevelZombieView.ts')
-
-    assert.match(view, /const animations = content\.animations \?\? new ClientAnimationRegistry\(\)/)
-    assert.match(entities, /this\.animations\.resolve\(animationTarget\)/)
-    assert.match(entities, /this\.animations\.resolve\(view\.animationTarget\)/)
-    assert.match(zombies, /this\.animations\.resolve\(this\.typeId === 'pvz:flag' \? 'pvz:flag' : 'pvz:normal'\)/)
+test('plant and zombie presentations use registered animations, including shared bodies', () => {
+    const animations = new ClientAnimationRegistry(presentationFixture)
+    for (const definition of Object.values(presentationFixture.plants)) {
+        if (definition.view) assert.ok(animations.resolve(definition.animationTarget!))
+    }
+    for (const definition of Object.values(presentationFixture.zombies)) {
+        assert.deepEqual(animations.resolve(definition.animationTarget), definition.animations)
+    }
+    assert.equal(plantDefinition(presentationFixture, 'pvz:explodenut').animationTarget, 'pvz:wallnut')
+    assert.deepEqual(plantDefinition(presentationFixture, 'pvz:explodenut').visual.tint, [255, 64, 64])
+    const custom = { ...presentationFixture, zombies: { ...presentationFixture.zombies, 'mod:plain': presentationFixture.zombies['pvz:normal'] } }
+    assert.equal(zombieDefinition(custom, 'mod:plain').animationTarget, 'pvz:normal')
+    assert.throws(() => zombieDefinition(presentationFixture, 'mod:missing'), /not installed/)
+    assert.equal(zombieDefinition(presentationFixture, 'pvz:pole_vaulter').shadowX, 18)
 })

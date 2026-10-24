@@ -1,5 +1,6 @@
 export type AdviceWidgetStyle =
     | 'hint'
+    | 'hint-long'
     | 'hint-stay'
     | 'tutorial-level1'
     | 'tutorial-level1-stay'
@@ -16,6 +17,7 @@ export interface AdviceWidgetSnapshot {
 
 const STYLES = new Set<AdviceWidgetStyle>([
     'hint',
+    'hint-long',
     'hint-stay',
     'tutorial-level1',
     'tutorial-level1-stay',

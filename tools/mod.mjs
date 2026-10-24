@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process'
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { zipSync } from 'fflate'
+import { createHash } from 'node:crypto'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const tsc = join(projectRoot, 'node_modules', 'typescript', 'bin', 'tsc')
@@ -25,6 +26,8 @@ async function init(name, output) {
     const root = output ? resolve(output) : join(projectRoot, 'mods', name)
     if (await exists(root)) throw new Error(`${relative(projectRoot, root)} already exists`)
     await mkdir(join(root, 'src', 'server'), { recursive: true })
+    await mkdir(join(root, 'assets'), { recursive: true })
+    await writeJson(join(root, 'assets', 'gameplay.json'), { plants: {}, seeds: {} })
     await writeJson(join(root, 'mod.json'), {
         schemaVersion: 1,
         id: `local:${name}`,
@@ -37,12 +40,13 @@ async function init(name, output) {
             cocosModule: 'gameplay/cocos/index.js',
         },
     })
-    await writeFile(join(root, 'src', 'server', 'index.ts'), `export interface GameplayApi {
-    registerDefinition(value: { id: string; kind: string }): void
+    await writeFile(join(root, 'src', 'server', 'index.ts'), `interface Context {
+    host: { get(id: string): any }
+    assets: { id: string; json(path: string): any }
 }
 
-export function register(api: GameplayApi) {
-    api.registerDefinition({ id: 'local:${name}', kind: 'mod' })
+export function register({ host, assets }: Context) {
+    host.get('content/definitions').register(assets.id, assets.json('assets/gameplay.json'))
 }
 `)
     console.info(`[mod] Created ${relative(projectRoot, root)}`)
@@ -88,6 +92,17 @@ async function pack(input, output) {
         }
     }
     await collect(destination)
+    const hash = createHash('sha256')
+    const { contentHash: _contentHash, ...metadata } = manifest
+    hash.update(JSON.stringify(metadata))
+    const manifestKey = `${basename(destination)}/mod.json`
+    for (const path of Object.keys(files).filter(path => path !== manifestKey).sort()) {
+        hash.update(path.slice(basename(destination).length + 1))
+        hash.update(files[path])
+    }
+    manifest.contentHash = hash.digest('hex')
+    await writeJson(join(destination, 'mod.json'), manifest)
+    files[manifestKey] = await readFile(join(destination, 'mod.json'))
     await writeFile(`${destination}.zip`, zipSync(files))
     console.info(`[mod] Packed ${manifest.id} -> ${destination}.zip`)
 }
@@ -100,20 +115,12 @@ async function test(input) {
         if (path === manifest.client?.bundle) await requireDirectory(file)
         else await requireFile(file)
     }
-    let registrations = 0
-    if (manifest.gameplay) {
-        const entry = inside(root, manifest.gameplay.nodeModule)
-        const loaded = await import(`${pathToFileURL(entry).href}?mod-test=${Date.now()}`)
-        if (typeof loaded.register !== 'function') throw new Error(`${manifest.gameplay.nodeModule} must export register(api)`)
-        const register = () => { registrations++ }
-        await loaded.register({
-            registerDefinition: register,
-            enhanceSystem: register,
-            replaceSystem: register,
-            registerPlantUpgrade: register,
-        })
-    }
-    console.info(`[mod] Tested ${manifest.id} (${registrations} registrations)`)
+    const result = spawnSync(process.execPath, [
+        join(projectRoot, 'node_modules/tsx/dist/cli.mjs'), '--tsconfig', join(projectRoot, 'tsconfig.server.json'),
+        join(projectRoot, 'tools/test_mod.ts'), root,
+    ], { cwd: projectRoot, stdio: 'inherit' })
+    if (result.error) throw result.error
+    if (result.status !== 0) throw new Error(`Mod validation failed: ${manifest.id}`)
 }
 
 function runTsc(source, outDir, module, rootDir) {

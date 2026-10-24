@@ -26,6 +26,7 @@ export interface TutorialState {
     seedRefreshAdviceShown?: boolean
     zombieWarningShown?: boolean
     sunsFallen?: number
+    displayedAdvice?: string[]
 }
 
 export interface WaveState {

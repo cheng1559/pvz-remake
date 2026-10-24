@@ -15,6 +15,7 @@ function manifest(id = 'pvz:base') {
             levels: 'gameplay/levels.json',
             strings: 'gameplay/strings.json',
         },
+        presentation: { definitions: 'presentation/definitions.json' },
         client: {
             bundle: id.replace(':', '-'),
             sprites: { [`${id.slice(0, id.indexOf(':'))}:sunflower`]: 'sprites/sunflower/spriteFrame' },
@@ -31,6 +32,7 @@ function manifest(id = 'pvz:base') {
 test('ContentManifest validates its complete shape and trust boundaries', () => {
     const base = manifest()
     assert.equal(base.client.sprites['pvz:sunflower'], 'sprites/sunflower/spriteFrame')
+    assert.equal(base.presentation.definitions, 'presentation/definitions.json')
 
     const invalid = (change: (value: any) => void) => {
         const value: any = structuredClone(base)
@@ -40,6 +42,8 @@ test('ContentManifest validates its complete shape and trust boundaries', () => 
     assert.throws(invalid(value => { value.schemaVersion = 1 }), /schemaVersion must be 2/)
     assert.throws(invalid(value => { value.extra = true }), /not supported/)
     assert.throws(invalid(value => { value.gameplay.levels = '%2e%2e/levels.json' }), /relative path/)
+    assert.throws(invalid(value => { value.presentation.definitions = '../definitions.json' }), /relative path/)
+    assert.throws(invalid(value => { delete value.presentation }), /required/)
     assert.throws(invalid(value => { value.client.sounds['other:hit'] = 'audio/hit' }), /outside pvz:/)
     assert.throws(invalid(value => { delete value.client.music }), /music is required/)
 })

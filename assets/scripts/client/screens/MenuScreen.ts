@@ -311,7 +311,9 @@ export class MenuScreen extends Component {
         this.mainMenu = menu
         menu.onNavigate = action => this.onNavigate(action)
         try {
-            await menu.initialize(await UI.load(), onProgress)
+            // UI loading installs Mod wrappers; resolve initialize only after that finishes.
+            const ui = await UI.load()
+            await menu.initialize(ui, onProgress)
             if (!this.node?.isValid || !root.isValid) throw new Error('Menu was destroyed while loading')
         } catch (error) {
             if (this.mainMenu === menu) this.mainMenu = null

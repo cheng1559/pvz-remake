@@ -66,6 +66,22 @@ class ModCliTests(unittest.TestCase):
                 self.assertEqual(archive.read("packed/assets/bundles/demo/config.json"), b"{}")
                 self.assertFalse(any(name.endswith(".ts") for name in archive.namelist()))
 
+    def test_pack_hash_tracks_data_and_ignores_destination_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            mod, first, second = temp / "sample", temp / "first", temp / "second"
+            self.run_cli("init", "sample", "--out", str(mod))
+            source_manifest = (mod / "mod.json").read_bytes()
+            self.run_cli("pack", str(mod), "--out", str(first))
+            self.run_cli("pack", str(mod), "--out", str(second))
+            before = json.loads((first / "mod.json").read_text())["contentHash"]
+            self.assertEqual(before, json.loads((second / "mod.json").read_text())["contentHash"])
+            self.assertEqual(len(before), 64)
+            (mod / "assets" / "gameplay.json").write_text('{"plants":{},"seeds":{},"items":{}}')
+            self.run_cli("pack", str(mod), "--out", str(first))
+            self.assertNotEqual(before, json.loads((first / "mod.json").read_text())["contentHash"])
+            self.assertEqual(source_manifest, (mod / "mod.json").read_bytes())
+
     def run_cli(self, *arguments, cwd=ROOT):
         subprocess.run(
             ["node", str(TOOL), *arguments],

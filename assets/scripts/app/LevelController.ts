@@ -16,11 +16,6 @@ import type { ServerSaveSnapshot } from '@/server/save'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import { debugCondition, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import {
-    GameplaySystemMods,
-    type GameplaySystemEnhancer,
-    type GameplaySystemRunner,
-} from '@/server/GameplaySystemMods'
 
 export interface LevelController {
     show(): Promise<Node>
@@ -106,31 +101,11 @@ export function createLevelController(
                 }
             }
             if (!root.isValid) throw new Error('Level scene was closed while loading')
-            const systemMods = new GameplaySystemMods()
-            for (const operation of content.loadedMods.gameplaySystems) {
-                if (operation.mode === 'enhance') {
-                    systemMods.register(
-                        operation.ownerId,
-                        operation.targetId,
-                        operation.mode,
-                        operation.apply as GameplaySystemEnhancer,
-                    )
-                } else {
-                    systemMods.register(
-                        operation.ownerId,
-                        operation.targetId,
-                        operation.mode,
-                        operation.apply as GameplaySystemRunner,
-                    )
-                }
-            }
-            for (const upgrade of content.loadedMods.plantUpgrades) {
-                systemMods.registerPlantUpgrade(upgrade.ownerId, upgrade)
-            }
+            const gameplay = content.loadedMods.gameplay
             const profile = await menuApi.getCurrentUser()
             const playerName = profile?.name || 'Player'
             const view = await LevelView.create(root, content, save?.levelId ?? levelId, playerName)
-            const game = new LocalIntegratedGame(content.definitions, content.levels, systemMods, true)
+            const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true)
             scene = root.addComponent(LevelScene)
             scene.configure(game, view, save ? {
                 ...DEFAULT_START_OPTIONS,

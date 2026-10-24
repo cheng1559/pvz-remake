@@ -73,3 +73,29 @@ test('ClientWorld diffs entities and renders current state at interpolated posit
     assert.equal(world.current?.sun, 50)
     assert.throws(() => new ClientWorld().render(0.5), /no snapshot/)
 })
+
+test('ClientWorld switches the pole vaulter landing origin together with its animation', () => {
+    const world = new ClientWorld()
+    const jumping = snapshot(1)
+    Object.assign(jumping.zombies[0], {
+        typeId: 'pvz:pole_vaulter', state: 'vaulting', animation: 'anim_jump', animationTime: 41.9, x: 400,
+    })
+    world.accept(jumping)
+
+    const landed = snapshot(2)
+    Object.assign(landed.zombies[0], {
+        typeId: 'pvz:pole_vaulter', animation: 'anim_walk', x: 249.9,
+    })
+    world.accept(landed)
+    for (const alpha of [0, 0.25, 0.5, 0.999, 1]) {
+        const zombie = world.render(alpha).zombies[0]
+        assert.equal(zombie.animation, 'anim_walk')
+        assert.equal(zombie.x, 249.9, 'the walk pose must not use the pre-landing origin')
+    }
+
+    const walking = snapshot(3)
+    Object.assign(walking.zombies[0], { typeId: 'pvz:pole_vaulter', x: 249.7 })
+    world.accept(walking)
+    assert.equal(world.render(0).zombies[0].x, 249.9)
+    assert.equal(world.render(0.5).zombies[0].x, 249.8, 'normal walking still interpolates')
+})

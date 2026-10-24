@@ -1,5 +1,5 @@
 import type { World } from '@/ecs/index'
-import { LevelStateResource } from '../gameplay'
+import { LevelStateResource } from '../components'
 import { TutorialResource } from '../levelState'
 import { plantingTutorial } from './PlantingTutorial'
 import { sunflowerTutorial } from './SunflowerTutorial'

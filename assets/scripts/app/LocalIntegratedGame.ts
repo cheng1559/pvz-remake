@@ -1,7 +1,7 @@
 import { IntegratedGameClient } from '@/client/game/IntegratedGameClient'
 import { IntegratedGameHost } from '@/server/IntegratedGameHost'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { GameplaySystemMods } from '@/server/GameplaySystemMods'
+import { GameplayRegistry } from '@/server/GameplayRegistry'
 import { LocalGameChannel } from '@/shared/channel/index'
 import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
 import type { GameCommand, JsonValue, StartSessionPacket } from '@/shared/protocol/index'
@@ -16,10 +16,10 @@ export class LocalIntegratedGame {
     constructor(
         readonly definitions: GameplayDefinitions,
         levels: GameplayLevels,
-        systemMods = new GameplaySystemMods(),
+        gameplay = new GameplayRegistry(),
         debugEnabled = false,
     ) {
-        this.host = new IntegratedGameHost(new IntegratedGameServer(definitions, levels, systemMods), this.channel, debugEnabled)
+        this.host = new IntegratedGameHost(new IntegratedGameServer(definitions, levels, gameplay), this.channel, debugEnabled)
     }
 
     start(options: Omit<StartSessionPacket, 'protocolVersion' | 'sequence' | 'type'>): void {

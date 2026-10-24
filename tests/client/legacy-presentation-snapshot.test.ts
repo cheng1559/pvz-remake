@@ -12,6 +12,8 @@ test('legacy advice snapshot rejects malformed presentation state', () => {
         pulseTick: 12.25,
     }
     assert.deepEqual(parseAdviceWidgetSnapshot(snapshot), snapshot)
+    const longHint = { ...snapshot, style: 'hint-long', durationTicks: 1500 }
+    assert.deepEqual(parseAdviceWidgetSnapshot(longHint), longHint)
     assert.equal(parseAdviceWidgetSnapshot(null), null)
     assert.throws(() => parseAdviceWidgetSnapshot({ ...snapshot, extra: true }), /extra is not supported/)
     assert.throws(() => parseAdviceWidgetSnapshot({ ...snapshot, message: '' }), /non-empty string/)

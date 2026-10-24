@@ -2,6 +2,27 @@ import type { DebugCliResult } from '@/shared/debug/DebugCli'
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | JsonObject
 export type JsonObject = { [key: string]: JsonValue }
+export interface EntityBehaviorState { behaviorState?: JsonObject }
+
+const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
+    'fuse', 'arming', 'rising', 'armed', 'ready', 'biting', 'got-one', 'missed', 'digesting', 'swallowing',
+]
+const ZOMBIE_STATES: readonly ZombieState[] = ['walking', 'eating', 'vaulting', 'dying', 'burned', 'mowered']
+const ZOMBIE_ANIMATIONS: readonly ZombieAnimationName[] = [
+    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_death', 'anim_death2', 'mowered',
+]
+
+/** A burned zombie keeps the frame it was standing in. */
+export function zombieAnimationMatchesState(state: ZombieState, animation: ZombieAnimationName): boolean {
+    switch (state) {
+        case 'walking': return animation === 'anim_walk' || animation === 'anim_walk2' || animation === 'anim_run'
+        case 'eating': return animation === 'anim_eat'
+        case 'vaulting': return animation === 'anim_jump'
+        case 'dying': return animation === 'anim_death' || animation === 'anim_death2'
+        case 'burned': return animation !== 'mowered' && animation !== 'anim_death' && animation !== 'anim_death2'
+        case 'mowered': return animation === 'mowered'
+    }
+}
 
 export type EntityId = number
 export type ClientSequence = number
@@ -15,6 +36,7 @@ export interface EnabledMod {
 }
 
 export type GameCommand =
+    | { type: 'mod'; id: string; data: JsonObject }
     | { type: 'selectSeed'; seedId: string }
     | { type: 'selectConveyorPacket'; packetId: EntityId }
     | { type: 'selectTool'; toolId: string }
@@ -109,7 +131,7 @@ export interface SeedPacketSnapshot {
     cooldownTotal: number
 }
 
-export interface PlantSnapshot {
+export interface PlantSnapshot extends EntityBehaviorState {
     entityId: EntityId
     typeId: string
     seedId: string
@@ -120,18 +142,31 @@ export interface PlantSnapshot {
     health: number
     maxHealth: number
     eatenFlashCounter: number
+    /** Omitted by older snapshots; wall-nuts freeze while it is positive. */
+    recentlyEatenCounter?: number
+    /** Fuse, mine or chomper progress; drives the plant animation. */
+    ability?: { state: PlantAbilityState, ticks: number }
 }
 
-export interface ZombieSnapshot {
+export type PlantAbilityState =
+    | 'fuse'
+    | 'arming' | 'rising' | 'armed'
+    | 'ready' | 'biting' | 'got-one' | 'missed' | 'digesting' | 'swallowing'
+
+export type ZombieState = 'walking' | 'eating' | 'vaulting' | 'dying' | 'burned' | 'mowered'
+export type ZombieAnimationName =
+    | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_death' | 'anim_death2' | 'mowered'
+
+export interface ZombieSnapshot extends EntityBehaviorState {
     entityId: EntityId
     typeId: string
-    state: 'walking' | 'eating' | 'dying' | 'mowered'
+    state: ZombieState
     x: number
     y: number
     row: number
     health: number
     maxHealth: number
-    animation: 'anim_walk' | 'anim_walk2' | 'anim_eat' | 'anim_death' | 'anim_death2' | 'mowered'
+    animation: ZombieAnimationName
     animationTime: number
     animationSpeed: number
     moweredTicksRemaining: number
@@ -141,6 +176,11 @@ export interface ZombieSnapshot {
     hasTongue: boolean
     hasArm: boolean
     hitFlashCounter: number
+    /** Remaining helm health; 0 once the helm drops. Omitted by older snapshots. */
+    helmHealth?: number
+    chilled?: boolean
+    /** A pole vaulter still carrying the pole. */
+    hasPole?: boolean
 }
 
 export interface ProjectileSnapshot {
@@ -398,6 +438,11 @@ const validateEnabledMod = (value: unknown, index: number): void => {
 const validateGameCommand = (value: unknown): void => {
     const command = record(value, 'command.command')
     switch (command.type) {
+        case 'mod':
+            nonEmptyString(command.id, 'mod.id')
+            record(command.data, 'mod.data')
+            assertJsonValue(command.data)
+            return
         case 'selectSeed': nonEmptyString(command.seedId, 'selectSeed.seedId'); return
         case 'selectConveyorPacket': integer(command.packetId, 'selectConveyorPacket.packetId'); return
         case 'selectTool': nonEmptyString(command.toolId, 'selectTool.toolId'); return
@@ -496,18 +541,20 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
             throw new TypeError(`${name}.health must not exceed a positive maxHealth`)
         }
         if ((plant.eatenFlashCounter as number) < 0) throw new TypeError(`${name}.eatenFlashCounter must be non-negative`)
+        if (plant.recentlyEatenCounter !== undefined) integer(plant.recentlyEatenCounter, `${name}.recentlyEatenCounter`)
+        if (plant.behaviorState !== undefined) record(plant.behaviorState, `${name}.behaviorState`)
+        if (plant.ability !== undefined) {
+            const ability = record(plant.ability, `${name}.ability`)
+            if (!PLANT_ABILITY_STATES.includes(ability.state as PlantAbilityState)) throw new TypeError(`${name}.ability.state is unknown`)
+            integer(ability.ticks, `${name}.ability.ticks`)
+        }
     })
     array(snapshot.zombies, 'snapshot.zombies').forEach((entry, index) => {
         const name = `snapshot.zombies[${index}]`
         const zombie = validateLivingEntity(entry, name)
-        if (zombie.state !== 'walking' && zombie.state !== 'eating' && zombie.state !== 'dying' && zombie.state !== 'mowered') {
-            throw new TypeError(`${name}.state is unknown`)
-        }
-        if (zombie.animation !== 'anim_walk' && zombie.animation !== 'anim_walk2' &&
-            zombie.animation !== 'anim_eat' && zombie.animation !== 'anim_death' &&
-            zombie.animation !== 'anim_death2' && zombie.animation !== 'mowered') {
-            throw new TypeError(`${name}.animation is unknown`)
-        }
+        if (zombie.behaviorState !== undefined) record(zombie.behaviorState, `${name}.behaviorState`)
+        if (!ZOMBIE_STATES.includes(zombie.state as ZombieState)) throw new TypeError(`${name}.state is unknown`)
+        if (!ZOMBIE_ANIMATIONS.includes(zombie.animation as ZombieAnimationName)) throw new TypeError(`${name}.animation is unknown`)
         finite(zombie.animationTime, `${name}.animationTime`)
         finite(zombie.animationSpeed, `${name}.animationSpeed`)
         integer(zombie.moweredTicksRemaining, `${name}.moweredTicksRemaining`)
@@ -523,10 +570,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         if ((zombie.moweredTicksRemaining as number) < 0) {
             throw new TypeError(`${name}.moweredTicksRemaining must be non-negative`)
         }
-        if (zombie.state === 'walking' && zombie.animation !== 'anim_walk' && zombie.animation !== 'anim_walk2' ||
-            zombie.state === 'eating' && zombie.animation !== 'anim_eat' ||
-            zombie.state === 'dying' && zombie.animation !== 'anim_death' && zombie.animation !== 'anim_death2' ||
-            zombie.state === 'mowered' && zombie.animation !== 'mowered') {
+        if (!zombieAnimationMatchesState(zombie.state as ZombieState, zombie.animation as ZombieAnimationName)) {
             throw new TypeError(`${name}.animation is inconsistent with state`)
         }
         boolean(zombie.hasHead, `${name}.hasHead`)
@@ -534,6 +578,12 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         boolean(zombie.hasArm, `${name}.hasArm`)
         integer(zombie.hitFlashCounter, `${name}.hitFlashCounter`)
         if ((zombie.hitFlashCounter as number) < 0) throw new TypeError(`${name}.hitFlashCounter must be non-negative`)
+        if (zombie.helmHealth !== undefined) {
+            integer(zombie.helmHealth, `${name}.helmHealth`)
+            if ((zombie.helmHealth as number) < 0) throw new TypeError(`${name}.helmHealth must be non-negative`)
+        }
+        if (zombie.chilled !== undefined) boolean(zombie.chilled, `${name}.chilled`)
+        if (zombie.hasPole !== undefined) boolean(zombie.hasPole, `${name}.hasPole`)
     })
     array(snapshot.projectiles, 'snapshot.projectiles').forEach((entry, index) => {
         const name = `snapshot.projectiles[${index}]`

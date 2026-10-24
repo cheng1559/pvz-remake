@@ -32,6 +32,7 @@ class ContentConverterTest(unittest.TestCase):
                 "phase2": {"body": {"animations": ["back"], "slots": []}},
             }))
             shutil.copytree(fixtures / "content/gameplay", root / "tools/content/pvz-base/gameplay")
+            shutil.copytree(fixtures / "content/presentation", root / "tools/content/pvz-base/presentation")
             clips = [(source, "body", "back", "pvz:selector_test")]
             with patch("build_pvz_base.ROOT", root), patch("build_pvz_base.MAIN_MENU_CLIPS", clips):
                 first = build_main_menu()
@@ -108,7 +109,7 @@ class ContentConverterTest(unittest.TestCase):
             )
             self.assertEqual(first["client"]["reanim"]["pvz:phase2"], "reanim/phase2")
             self.assertTrue((bundle / "reanim" / "phase2.json").is_file())
-            for path in first["gameplay"].values():
+            for path in [*first["gameplay"].values(), *first["presentation"].values()]:
                 self.assertTrue((bundle / path).is_file())
             self.assertFalse(stale.exists())
             self.assertFalse(Path(f"{stale}.meta").exists())

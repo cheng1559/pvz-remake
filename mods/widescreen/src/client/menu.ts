@@ -6,9 +6,14 @@ export async function installMenuAnimation(api: ClientApi): Promise<void> {
         { track: 'SelectorScreen_BG_Left', file: 'left', x: 452, y: 396, width: 928, height: 1076 },
         { track: 'SelectorScreen_BG_Center', file: 'center', x: 0, y: 0, width: 814, height: 350 },
         { track: 'SelectorScreen_BG_Right', file: 'right', x: 0, y: 0, width: 1530, height: 560 },
-    ].map(async entry => ({ ...entry, frame: await api.loadSprite(`assets/images/${entry.file}.png`) })))
+    ].map(async entry => ({ ...entry, frame: await api.assets.sprite(`assets/images/${entry.file}.png`) })))
 
-    api.enhanceScreen('pvz:main-menu', ({ node, background, engine }) => {
+    const engine = api.host.get('cc')
+    const { MainMenuScreen } = api.host.get('client/screens/MainMenuScreen')
+    api.host.around(MainMenuScreen.prototype, 'initialize', async function (next, ...args) {
+        await next(...args)
+        if (!this.node.isValid) return
+        const node = this.node, background = this.background
         const { Sprite, UITransform, view } = engine
         const selector = node.getChildByName('Selector')
         const restores: Array<() => void> = []
@@ -56,7 +61,7 @@ export async function installMenuAnimation(api: ClientApi): Promise<void> {
         }
         view.on('design-resolution-changed', layout)
         layout()
-        return () => {
+        node.once(engine.Node.EventType.NODE_DESTROYED, () => {
             view.off('design-resolution-changed', layout)
             for (const restore of restores) restore()
             for (const { player, source } of clouds) if (player.isValid) player.replaceAnimation(source)
@@ -64,6 +69,6 @@ export async function installMenuAnimation(api: ClientApi): Promise<void> {
                 sky.setPosition(position)
                 transform.setContentSize(size)
             }
-        }
+        })
     })
 }

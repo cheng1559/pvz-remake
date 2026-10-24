@@ -5,9 +5,9 @@ import { SeedPacketView } from '@/client/hud/SeedPacketView'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import type { ServerEvent, WorldSnapshot } from '@/shared/protocol'
+import type { SeedPacketSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol'
 import type { LevelHudOptions } from './LevelHudPresenter'
-import { levelPlantVisual } from './LevelPlantVisuals'
+import { plantDefinition } from '@/client/plants/definitions'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 interface Packet {
@@ -24,9 +24,9 @@ export class LevelSeedBank {
     constructor(private readonly options: LevelHudOptions) {
         this.packets = options.level.seedPackets.map((seedId, index) => {
             const seed = options.content.definitions.seeds[seedId]
-            const visual = levelPlantVisual(seed.plant)
+            const visual = plantDefinition(options.content.presentation, seed.plant).visual
             const view = new SeedPacketView({
-                name: `SeedPacket-${seedId}`, parent: options.seedPacketSlot, layer: options.rootLayer,
+                definitions: options.content.presentation, name: `SeedPacket-${seedId}`, parent: options.seedPacketSlot, layer: options.rootLayer,
                 x: index * 59, y: 0, seedType: visual.seedType, cost: seed.sunCost,
                 loadSprite: options.loadPacketSprite,
                 costFont: options.packetCostFont,
@@ -34,7 +34,7 @@ export class LevelSeedBank {
             // Left packets draw last so their plants can overlap the packets to their right.
             view.node.setSiblingIndex(0)
             const tooltip = options.ui.tooltip(view.node, {
-                text: options.ui.text(String(visual.seedType).toUpperCase()), gap: 0,
+                text: options.ui.text(visual.nameKey ?? String(visual.seedType).toUpperCase()), gap: 0,
             })
             return { seedId, view, tooltip }
         })
@@ -63,31 +63,48 @@ export class LevelSeedBank {
     }
 
     sync(snapshot: WorldSnapshot, events: ServerEvent[], introComplete: boolean, tutorialColor: Color | null, effects = true): void {
-        for (const entry of this.packets) {
-            const packet = snapshot.seedPackets.find(value => value.seedId === entry.seedId)
+        for (const [index, entry] of this.packets.entries()) {
+            const packet = snapshot.seedPackets[index]
             if (!packet) {
                 if (entry.button) entry.button.interactable = false
                 entry.tooltip.hide()
                 continue
             }
-            const canAfford = (snapshot.extensions['pvz:debug'] as { sunCost?: boolean } | undefined)?.sunCost === false
-                || snapshot.availableSun >= this.options.content.definitions.seeds[entry.seedId].sunCost
-            entry.tooltip.warning = !packet.ready ? this.options.ui.text('WAITING_FOR_SEED')
-                : !canAfford ? this.options.ui.text('NOT_ENOUGH_SUN') : ''
+            if (entry.seedId !== packet.seedId) {
+                const seed = this.options.content.definitions.seeds[packet.seedId]
+                const visual = plantDefinition(this.options.content.presentation, seed.plant).visual
+                entry.seedId = packet.seedId
+                entry.view.replace(visual.seedType, seed.sunCost)
+                entry.tooltip.hide()
+                entry.tooltip.text = this.options.ui.text(visual.nameKey ?? String(visual.seedType).toUpperCase())
+                entry.previousCooldown = undefined
+            }
+            const state = this.packetState(snapshot, packet)
+            entry.tooltip.warning = state.warning
             if (entry.button) {
-                entry.button.changeCursor = packet.ready && canAfford && snapshot.cursor.mode !== 'seed'
+                entry.button.changeCursor = state.ready && state.canAfford && snapshot.cursor.mode !== 'seed'
                 entry.button.interactable = introComplete && snapshot.phase === 'gameplay' && snapshot.result === 'playing' && !snapshot.paused
             }
             entry.view.sync({
-                gameStarted: introComplete, active: packet.ready, selected: packet.selected,
-                cooldownRemaining: packet.cooldownRemaining, cooldownTotal: packet.cooldownTotal, canAfford,
-                tutorialColor: packet.ready && canAfford && (!this.options.presentation.guideSeed || this.options.presentation.guideSeed === entry.seedId) ? tutorialColor : null,
+                gameStarted: introComplete, active: state.ready, selected: packet.selected,
+                cooldownRemaining: packet.cooldownRemaining, cooldownTotal: packet.cooldownTotal, canAfford: state.canAfford,
+                tutorialColor: state.ready && state.canAfford && (!this.options.presentation.guideSeed || this.options.presentation.guideSeed === entry.seedId) ? tutorialColor : null,
                 mobile: GameDebugSettings.isMobileMode(),
             })
-            const cooldownFinished = entry.previousCooldown !== undefined && entry.previousCooldown > 0 && packet.cooldownRemaining === 0 && canAfford
+            const cooldownFinished = entry.previousCooldown !== undefined && entry.previousCooldown > 0 && packet.cooldownRemaining === 0 && state.canAfford
             const flashRequested = events.some(event => event.type === 'seedPacketFlashRequested' && event.data.seedId === entry.seedId)
-            if (effects && (cooldownFinished || flashRequested)) this.flash(entry.view.node)
+            if (effects && state.ready && (cooldownFinished || flashRequested)) this.flash(entry.view.node)
             entry.previousCooldown = packet.cooldownRemaining
+        }
+    }
+
+    private packetState(snapshot: WorldSnapshot, packet: SeedPacketSnapshot) {
+        const canAfford = (snapshot.extensions['pvz:debug'] as { sunCost?: boolean } | undefined)?.sunCost === false
+            || snapshot.availableSun >= this.options.content.definitions.seeds[packet.seedId].sunCost
+        return {
+            ready: packet.ready,
+            canAfford,
+            warning: !packet.ready ? this.options.ui.text('WAITING_FOR_SEED') : !canAfford ? this.options.ui.text('NOT_ENOUGH_SUN') : '',
         }
     }
 

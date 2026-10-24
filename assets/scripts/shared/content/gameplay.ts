@@ -1,4 +1,5 @@
 import { isQualifiedId } from '@/shared/mod/index'
+import { jsonRoundTrip, type JsonObject } from '@/shared/protocol'
 
 export interface GameplayDefinitions {
     schemaVersion: 2
@@ -7,6 +8,7 @@ export interface GameplayDefinitions {
     seeds: Record<string, SeedDefinition>
     plants: Record<string, PlantDefinition>
     zombies: Record<string, ZombieDefinition>
+    zombieGaits: Record<string, ZombieGait>
     projectiles: Record<string, ProjectileDefinition>
     items: Record<string, ItemDefinition>
     lawnMowers: Record<string, LawnMowerDefinition>
@@ -37,9 +39,27 @@ export interface SeedDefinition {
     placement: 'ground'
 }
 
+/** Damages zombies whose body overlaps the circle; `burn` chars them like the original ApplyBurn. */
+export interface ExplosionDefinition {
+    offset: Point
+    radius: number
+    rowRange: number
+    damage: number
+    burn: boolean
+}
+
+export interface PlantTargeting {
+    eatingExtraRange: number
+    excludeHeldPole: boolean
+    insetKey?: string
+}
+
+/** At most one ability; a plant without one only blocks, like the wall-nut. */
 export interface PlantDefinition {
     maxHealth: number
     body: Rect
+    /** JSON configuration consumed by a registered plant behavior. */
+    behavior?: JsonObject
     shooter?: {
         cadenceTicks: number
         initialDelayTicks: number
@@ -54,20 +74,59 @@ export interface PlantDefinition {
         cadenceTicks: number
         initialDelayTicks: { min: number; max: number }
     }
+    /** Explodes after the fuse; zombies cannot damage it meanwhile. */
+    fuse?: { ticks: number; explosion: ExplosionDefinition }
+    /** Arms underground, rises, then explodes when a zombie enters the attack rect. */
+    mine?: { armingTicks: number; riseTicks: number; attack: Rect; targeting: PlantTargeting; explosion: ExplosionDefinition }
+    /** Swallows the first zombie in reach, then digests before it can bite again. */
+    chomper?: { attack: Rect; targeting: PlantTargeting; biteDelayTicks: number; biteTicks: number; digestTicks: number; swallowTicks: number }
+    /** Explodes when eaten or otherwise destroyed by zombies. */
+    deathExplosion?: ExplosionDefinition
 }
 
 export interface ZombieDefinition {
     maxHealth: number
+    /** JSON configuration consumed by a registered entity behavior. */
+    behavior?: JsonObject
+    /** X at which a headed zombie reaches the house. */
+    boardEdgeX: number
+    spawn: { minX: number; maxX: number; flagWaveOffset: number }
     speedPerTick: { min: number; max: number }
     body: Rect
     attack: Rect
     bite: { damage: number; cadenceTicks: number }
+    /** Absorbs damage before the body; drops when depleted. */
+    helm?: { type: 'cone' | 'bucket'; health: number }
+    /** Explicit animation profile and variants; equipment does not imply animation support. */
+    gait: string
+    tongueChance: number
+    walk2Chance: number
+    targetingInsets?: Record<string, number>
+    /** Runs at the first plant and vaults over it once. */
+    vault?: {
+        runSpeedPerTick: { min: number; max: number }
+        runGround: number[]
+        attack: Rect
+        landedAttack: Rect
+        jumpFrames: number
+        jumpRate: number
+        landingOffset: number
+    }
+}
+
+/** `ground` samples the `_ground` track per frame; it sets walking speed like the original reanim. */
+export interface ZombieGait {
+    walkGround: number[]
+    eat: { frames: number; rate: number; chewTimes: [number, number] }
+    deaths: Array<{ animation: 'anim_death' | 'anim_death2'; frames: number; fallTime: number }>
 }
 
 export interface ProjectileDefinition {
     damage: number
     speedPerTick: Point
     hitbox: Rect
+    /** Slows the target for this many ticks, renewed by each hit. */
+    chillTicks?: number
 }
 
 export interface ItemDefinition {
@@ -101,7 +160,7 @@ interface Rect extends Point { width: number; height: number }
 export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
     const source = exactObject(value, [
         'schemaVersion', 'tickSeconds', 'boards', 'seeds', 'plants', 'zombies',
-        'projectiles', 'items', 'lawnMowers',
+        'projectiles', 'items', 'lawnMowers', 'zombieGaits',
     ], 'gameplay definitions')
     if (source.schemaVersion !== 2) throw new Error('gameplay definitions.schemaVersion must be 2')
 
@@ -112,6 +171,7 @@ export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
         seeds: mapped(source.seeds, 'seeds', parseSeed),
         plants: mapped(source.plants, 'plants', parsePlant),
         zombies: mapped(source.zombies, 'zombies', parseZombie),
+        zombieGaits: mapped(source.zombieGaits, 'zombieGaits', parseZombieGait),
         projectiles: mapped(source.projectiles, 'projectiles', parseProjectile),
         items: mapped(source.items, 'items', parseItem),
         lawnMowers: mapped(source.lawnMowers, 'lawnMowers', parseLawnMower),
@@ -123,6 +183,9 @@ export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
     for (const [id, plant] of Object.entries(definitions.plants)) {
         if (plant.shooter) reference(plant.shooter.projectile, definitions.projectiles, `plants.${id}.shooter.projectile`)
         if (plant.producer) reference(plant.producer.item, definitions.items, `plants.${id}.producer.item`)
+    }
+    for (const [id, zombie] of Object.entries(definitions.zombies)) {
+        reference(zombie.gait, definitions.zombieGaits, `zombies.${id}.gait`)
     }
     return definitions
 }
@@ -182,12 +245,16 @@ function parseSeed(value: unknown, name: string): SeedDefinition {
 }
 
 function parsePlant(value: unknown, name: string): PlantDefinition {
-    const source = exactObject(value, ['maxHealth', 'body'], name, ['shooter', 'producer'])
-    if (!!source.shooter === !!source.producer) throw new Error(`${name} requires either shooter or producer`)
+    const abilities = ['shooter', 'producer', 'fuse', 'mine', 'chomper'] as const
+    const source = exactObject(value, ['maxHealth', 'body'], name, [...abilities, 'deathExplosion', 'behavior'])
+    if (abilities.filter(key => source[key] !== undefined).length > 1) {
+        throw new Error(`${name} allows at most one of ${abilities.join(', ')}`)
+    }
     const result: PlantDefinition = {
         maxHealth: positiveInteger(source.maxHealth, `${name}.maxHealth`),
         body: rect(source.body, `${name}.body`),
     }
+    if (source.behavior !== undefined) result.behavior = jsonRoundTrip(object(source.behavior, `${name}.behavior`)) as JsonObject
     if (source.shooter) {
         const shooter = exactObject(
             source.shooter,
@@ -203,7 +270,8 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
             projectile: qualifiedId(shooter.projectile, `${name}.shooter.projectile`),
             offset: point(shooter.offset, `${name}.shooter.offset`),
         }
-    } else {
+    }
+    if (source.producer) {
         const producer = exactObject(source.producer, ['item', 'cadenceTicks', 'initialDelayTicks'], `${name}.producer`)
         const delay = exactObject(producer.initialDelayTicks, ['min', 'max'], `${name}.producer.initialDelayTicks`)
         const min = positiveInteger(delay.min, `${name}.producer.initialDelayTicks.min`)
@@ -215,34 +283,179 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
             initialDelayTicks: { min, max },
         }
     }
+    if (source.fuse) {
+        const fuse = exactObject(source.fuse, ['ticks', 'explosion'], `${name}.fuse`)
+        result.fuse = {
+            ticks: positiveInteger(fuse.ticks, `${name}.fuse.ticks`),
+            explosion: explosion(fuse.explosion, `${name}.fuse.explosion`),
+        }
+    }
+    if (source.mine) {
+        const mine = exactObject(source.mine, ['armingTicks', 'riseTicks', 'attack', 'targeting', 'explosion'], `${name}.mine`)
+        result.mine = {
+            armingTicks: positiveInteger(mine.armingTicks, `${name}.mine.armingTicks`),
+            riseTicks: positiveInteger(mine.riseTicks, `${name}.mine.riseTicks`),
+            attack: rect(mine.attack, `${name}.mine.attack`),
+            targeting: parsePlantTargeting(mine.targeting, `${name}.mine.targeting`),
+            explosion: explosion(mine.explosion, `${name}.mine.explosion`),
+        }
+    }
+    if (source.chomper) {
+        const chomper = exactObject(source.chomper,
+            ['attack', 'targeting', 'biteDelayTicks', 'biteTicks', 'digestTicks', 'swallowTicks'], `${name}.chomper`)
+        result.chomper = {
+            attack: rect(chomper.attack, `${name}.chomper.attack`),
+            targeting: parsePlantTargeting(chomper.targeting, `${name}.chomper.targeting`),
+            biteDelayTicks: positiveInteger(chomper.biteDelayTicks, `${name}.chomper.biteDelayTicks`),
+            biteTicks: positiveInteger(chomper.biteTicks, `${name}.chomper.biteTicks`),
+            digestTicks: positiveInteger(chomper.digestTicks, `${name}.chomper.digestTicks`),
+            swallowTicks: positiveInteger(chomper.swallowTicks, `${name}.chomper.swallowTicks`),
+        }
+        if (result.chomper.biteDelayTicks > result.chomper.biteTicks) {
+            throw new Error(`${name}.chomper.biteDelayTicks must not exceed biteTicks`)
+        }
+    }
+    if (source.deathExplosion) result.deathExplosion = explosion(source.deathExplosion, `${name}.deathExplosion`)
     return result
 }
 
-function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exactObject(value, ['maxHealth', 'speedPerTick', 'body', 'attack', 'bite'], name)
-    const speed = exactObject(source.speedPerTick, ['min', 'max'], `${name}.speedPerTick`)
-    const min = nonNegativeFinite(speed.min, `${name}.speedPerTick.min`)
-    const max = nonNegativeFinite(speed.max, `${name}.speedPerTick.max`)
-    if (min > max) throw new Error(`${name}.speedPerTick.min must not exceed max`)
-    const bite = exactObject(source.bite, ['damage', 'cadenceTicks'], `${name}.bite`)
+function explosion(value: unknown, name: string): ExplosionDefinition {
+    const source = exactObject(value, ['offset', 'radius', 'rowRange', 'damage', 'burn'], name)
+    if (typeof source.burn !== 'boolean') throw new Error(`${name}.burn must be boolean`)
     return {
+        offset: point(source.offset, `${name}.offset`),
+        radius: positiveFinite(source.radius, `${name}.radius`),
+        rowRange: nonNegativeInteger(source.rowRange, `${name}.rowRange`),
+        damage: positiveInteger(source.damage, `${name}.damage`),
+        burn: source.burn,
+    }
+}
+
+function parseZombie(value: unknown, name: string): ZombieDefinition {
+    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'vault', 'targetingInsets', 'behavior'])
+    const spawn = exactObject(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
+    const minX = finite(spawn.minX, `${name}.spawn.minX`)
+    const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
+    if (!Number.isSafeInteger(minX) || !Number.isSafeInteger(maxX) || minX > maxX || maxX - minX + 1 > 0x100000000) {
+        throw new Error(`${name}.spawn must have ordered safe integer bounds spanning at most 2^32 positions`)
+    }
+    const bite = exactObject(source.bite, ['damage', 'cadenceTicks'], `${name}.bite`)
+    const result: ZombieDefinition = {
         maxHealth: positiveInteger(source.maxHealth, `${name}.maxHealth`),
-        speedPerTick: { min, max },
+        boardEdgeX: finite(source.boardEdgeX, `${name}.boardEdgeX`),
+        spawn: { minX, maxX, flagWaveOffset: finite(spawn.flagWaveOffset, `${name}.spawn.flagWaveOffset`) },
+        speedPerTick: speedRange(source.speedPerTick, `${name}.speedPerTick`),
         body: rect(source.body, `${name}.body`),
         attack: rect(source.attack, `${name}.attack`),
+        gait: qualifiedId(source.gait, `${name}.gait`),
+        tongueChance: fraction(source.tongueChance, `${name}.tongueChance`),
+        walk2Chance: fraction(source.walk2Chance, `${name}.walk2Chance`),
         bite: {
             damage: positiveInteger(bite.damage, `${name}.bite.damage`),
             cadenceTicks: positiveInteger(bite.cadenceTicks, `${name}.bite.cadenceTicks`),
         },
     }
+    if (source.behavior !== undefined) result.behavior = jsonRoundTrip(object(source.behavior, `${name}.behavior`)) as JsonObject
+    if (source.targetingInsets !== undefined) {
+        result.targetingInsets = mapped(source.targetingInsets, `${name}.targetingInsets`, nonNegativeFinite)
+    }
+    if (source.helm !== undefined) {
+        const helm = exactObject(source.helm, ['type', 'health'], `${name}.helm`)
+        if (helm.type !== 'cone' && helm.type !== 'bucket') throw new Error(`${name}.helm.type must be cone or bucket`)
+        result.helm = { type: helm.type, health: positiveInteger(helm.health, `${name}.helm.health`) }
+    }
+    if (source.vault !== undefined) {
+        const vault = exactObject(source.vault,
+            ['runSpeedPerTick', 'runGround', 'attack', 'landedAttack', 'jumpFrames', 'jumpRate', 'landingOffset'], `${name}.vault`)
+        result.vault = {
+            runSpeedPerTick: speedRange(vault.runSpeedPerTick, `${name}.vault.runSpeedPerTick`),
+            runGround: groundTrack(vault.runGround, `${name}.vault.runGround`),
+            attack: rect(vault.attack, `${name}.vault.attack`),
+            landedAttack: rect(vault.landedAttack, `${name}.vault.landedAttack`),
+            jumpFrames: frameCount(vault.jumpFrames, `${name}.vault.jumpFrames`),
+            jumpRate: positiveFinite(vault.jumpRate, `${name}.vault.jumpRate`),
+            landingOffset: finite(vault.landingOffset, `${name}.vault.landingOffset`),
+        }
+    }
+    return result
+}
+
+function parsePlantTargeting(value: unknown, name: string): PlantTargeting {
+    const source = exactObject(value, ['eatingExtraRange', 'excludeHeldPole'], name, ['insetKey'])
+    if (typeof source.excludeHeldPole !== 'boolean') throw new Error(`${name}.excludeHeldPole must be boolean`)
+    return {
+        eatingExtraRange: nonNegativeFinite(source.eatingExtraRange, `${name}.eatingExtraRange`),
+        excludeHeldPole: source.excludeHeldPole,
+        ...(source.insetKey === undefined ? {} : { insetKey: qualifiedId(source.insetKey, `${name}.insetKey`) }),
+    }
+}
+
+function parseZombieGait(value: unknown, name: string): ZombieGait {
+    const gait = exactObject(value, ['walkGround', 'eat', 'deaths'], name)
+    const eat = exactObject(gait.eat, ['frames', 'rate', 'chewTimes'], `${name}.eat`)
+    const chewTimes = array(eat.chewTimes, `${name}.eat.chewTimes`).map((time, index) =>
+        fraction(time, `${name}.eat.chewTimes[${index}]`))
+    if (chewTimes.length !== 2) throw new Error(`${name}.eat.chewTimes must have two entries`)
+    const deaths = array(gait.deaths, `${name}.deaths`).map((entry, index) => {
+        const death = exactObject(entry, ['animation', 'frames', 'fallTime'], `${name}.deaths[${index}]`)
+        if (death.animation !== 'anim_death' && death.animation !== 'anim_death2') {
+            throw new Error(`${name}.deaths[${index}].animation must be anim_death or anim_death2`)
+        }
+        return {
+            animation: death.animation as 'anim_death' | 'anim_death2',
+            frames: frameCount(death.frames, `${name}.deaths[${index}].frames`),
+            fallTime: fraction(death.fallTime, `${name}.deaths[${index}].fallTime`),
+        }
+    })
+    if (deaths.length === 0 || deaths[0].animation !== 'anim_death') {
+        throw new Error(`${name}.deaths must start with anim_death`)
+    }
+    return {
+        walkGround: groundTrack(gait.walkGround, `${name}.walkGround`),
+        eat: {
+            frames: frameCount(eat.frames, `${name}.eat.frames`),
+            rate: positiveFinite(eat.rate, `${name}.eat.rate`),
+            chewTimes: [chewTimes[0], chewTimes[1]],
+        },
+        deaths,
+    }
+}
+
+function speedRange(value: unknown, name: string): { min: number; max: number } {
+    const speed = exactObject(value, ['min', 'max'], name)
+    const min = nonNegativeFinite(speed.min, `${name}.min`)
+    const max = nonNegativeFinite(speed.max, `${name}.max`)
+    if (min > max) throw new Error(`${name}.min must not exceed max`)
+    return { min, max }
+}
+
+function groundTrack(value: unknown, name: string): number[] {
+    const ground = array(value, name).map((x, index) => finite(x, `${name}[${index}]`))
+    if (ground.length < 2 || ground[ground.length - 1] <= ground[0]) {
+        throw new Error(`${name} must move forward over at least two frames`)
+    }
+    return ground
+}
+
+function frameCount(value: unknown, name: string): number {
+    const frames = positiveInteger(value, name)
+    if (frames < 2) throw new Error(`${name} must be at least 2`)
+    return frames
+}
+
+function fraction(value: unknown, name: string): number {
+    const result = finite(value, name)
+    if (result < 0 || result > 1) throw new Error(`${name} must be between 0 and 1`)
+    return result
 }
 
 function parseProjectile(value: unknown, name: string): ProjectileDefinition {
-    const source = exactObject(value, ['damage', 'speedPerTick', 'hitbox'], name)
+    const source = exactObject(value, ['damage', 'speedPerTick', 'hitbox'], name, ['chillTicks'])
     return {
         damage: positiveInteger(source.damage, `${name}.damage`),
         speedPerTick: point(source.speedPerTick, `${name}.speedPerTick`),
         hitbox: rect(source.hitbox, `${name}.hitbox`),
+        ...(source.chillTicks === undefined ? {} : { chillTicks: positiveInteger(source.chillTicks, `${name}.chillTicks`) }),
     }
 }
 

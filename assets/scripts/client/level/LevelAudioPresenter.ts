@@ -1,3 +1,4 @@
+import type { PresentationDefinitions, PresentationSound } from '@/shared/content/presentation'
 import { Node, tween } from 'cc'
 import { startGameTween } from '@/core/GameTween'
 import { MusicSystem } from '@/client/music/MusicSystem'
@@ -11,7 +12,7 @@ export class LevelAudioPresenter {
     private gameplayStarted = false
     private firstWavePlayed = false
 
-    constructor(private readonly music: BoardPresentation['music']) {}
+    constructor(private readonly music: BoardPresentation['music'], private readonly definitions: PresentationDefinitions) {}
 
     snapshot(): LevelAudioSnapshot {
         return {
@@ -79,12 +80,15 @@ export class LevelAudioPresenter {
         void SoundLoader.play(SoundEffect.LightFill)
     }
 
-    projectileImpact(): void {
-        void SoundLoader.playFoley(SoundEffect.Splat, 10)
+    sounds(sounds: readonly PresentationSound[] | undefined): void {
+        for (const sound of sounds ?? []) {
+            if (sound.foley) void SoundLoader.playFoley(sound.id as SoundEffect, sound.pitchRange)
+            else void SoundLoader.play(sound.id as SoundEffect)
+        }
     }
 
-    zombiePartDropped(): void {
-        void SoundLoader.playFoley(SoundEffect.LimbsPop, 10)
+    chew(soft: boolean): void {
+        void SoundLoader.playFoley(soft ? SoundEffect.ChompSoft : SoundEffect.Chomp)
     }
 
     finalWave(node: Node): void {
@@ -93,16 +97,29 @@ export class LevelAudioPresenter {
 
     play(event: ServerEvent): void {
         switch (event.type) {
-            case 'plantPlaced': void SoundLoader.playFoley(SoundEffect.Plant); break
+            case 'plantPlaced':
+                void SoundLoader.playFoley(SoundEffect.Plant)
+                this.sounds(this.definitions.plants[String(event.data.typeId)]?.plantedSounds)
+                break
             case 'musicBurst': MusicSystem.startBurst(); break
             case 'sunProduced': void SoundLoader.playFoley(SoundEffect.Throw, 10); break
             case 'hugeWaveSound': void SoundLoader.play(SoundEffect.HugeWave); break
-            case 'projectileFired': void SoundLoader.playFoley(SoundEffect.Throw, 10); break
+            case 'projectileFired':
+                this.sounds(this.definitions.projectiles[String(event.data.typeId)]?.fireSounds)
+                break
+            case 'plantExploded':
+                this.sounds(this.definitions.plants[String(event.data.typeId)]?.explosionSounds)
+                break
+            case 'mineRising': void SoundLoader.playFoley(SoundEffect.DirtRise); break
+            case 'chomperBit': void SoundLoader.playFoley(SoundEffect.BigChomp); break
+            case 'zombieChilled': void SoundLoader.playFoley(SoundEffect.Frozen); break
+            case 'zombieVaultSound':
+                void SoundLoader.playFoley(event.data.sound === 'polevault' ? SoundEffect.PoleVault : SoundEffect.Grassstep)
+                break
             case 'itemCollected': void SoundLoader.playFoley(SoundEffect.Points, 10); break
             case 'sunFlash': void SoundLoader.play(SoundEffect.Buzzer); break
             case 'mowerActivated': void SoundLoader.playFoley(SoundEffect.Lawnmower); break
             case 'zombieMowered': void SoundLoader.playFoley(SoundEffect.Splat); break
-            case 'zombieChewedPlant': void SoundLoader.playFoley(SoundEffect.Chomp); break
             case 'plantEaten': void SoundLoader.play(SoundEffect.Gulp); break
             case 'zombieDying': void SoundLoader.playFoley(SoundEffect.ZombieFalling1, 10); break
             case 'zombieGroaned': void SoundLoader.playFoley(SoundEffect.Groan); break

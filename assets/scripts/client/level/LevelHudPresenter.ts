@@ -315,13 +315,11 @@ export class LevelHudPresenter {
         const { row, column, inBounds } = boardCell(board, pointer.x, pointer.y)
         const occupant = snapshot.plants.find(plant => plant.row === row && plant.column === column)
         const seedId = snapshot.cursor.mode === 'seed' ? snapshot.cursor.seedId : undefined
-        const upgrade = occupant && this.content.loadedMods.plantUpgrades.find(candidate =>
-            candidate.seedId === seedId && candidate.targetPlantId === occupant.typeId)
-        const previewSeedId = upgrade?.resultSeedId ?? seedId!
+        const previewSeedId = seedId!
         const plantId = this.content.definitions.seeds[previewSeedId].plant
         this.cursorPlant.setPlant(plantId)
         this.gridPlant.setPlant(plantId)
-        const valid = inBounds && this.level.activeRows.includes(row) && (!occupant || upgrade !== undefined)
+        const valid = inBounds && this.level.activeRows.includes(row) && !occupant
         this.gridPreview.active = valid && !mobile
         if (valid && !mobile) this.gridPreview.setPosition(board.origin.x + column * board.cell.width, -(board.origin.y + row * board.cell.height))
         if (valid && mobile) {

@@ -22,8 +22,45 @@ STARTUP_CLIPS = [
 
 ADVENTURE_12_CLIPS = [
     (ROOT / "tools/raw/reanim/zombie.reanim", "flagbody", f"anim_{name}", f"pvz:flag_{name}")
-    for name in ("walk", "walk2", "eat", "death", "death2")
+    for name in ("walk", "walk2", "eat")
 ] + [(ROOT / "tools/raw/reanim/zombie_flagpole.reanim", "flag", "Zombie_flag", "pvz:zombie_flag")]
+
+def _clips(name: str, node: str, clips: dict[str, str]) -> list:
+    return [(ROOT / f"tools/raw/reanim/{name}.reanim", node, clip, content_id) for clip, content_id in clips.items()]
+
+
+# Battle animations for the plants and zombies of Adventure 1-3 to 1-10.
+PLANT_ZOMBIE_CLIPS = [
+    *_clips("cherrybomb", "body", {"anim_explode": "pvz:cherrybomb_explode"}),
+    *_clips("wallnut", "body", {"anim_idle": "pvz:wallnut"}),
+    *_clips("wallnut", "face", {
+        "anim_blink_twitch": "pvz:wallnut_blink_twitch",
+        "anim_blink_twice": "pvz:wallnut_blink_twice",
+        "anim_blink_thrice": "pvz:wallnut_blink_thrice",
+    }),
+    *_clips("potatomine", "body", {
+        "anim_idle": "pvz:potatomine_buried", "anim_rise": "pvz:potatomine_rise", "anim_armed": "pvz:potatomine_armed",
+    }),
+    *_clips("potatomine", "face", {"anim_blink": "pvz:potatomine_blink"}),
+    *_clips("potatomine", "glow", {"anim_glow": "pvz:potatomine_glow"}),
+    *_clips("snowpea", "body", {"anim_idle": "pvz:snowpea"}),
+    *_clips("snowpea", "head", {"anim_head_idle": "pvz:snowpea_head_idle", "anim_shooting": "pvz:snowpea_shoot"}),
+    *_clips("snowpea", "face", {"anim_blink": "pvz:snowpea_blink"}),
+    *_clips("chomper", "body", {
+        "anim_idle": "pvz:chomper", "anim_bite": "pvz:chomper_bite",
+        "anim_chew": "pvz:chomper_chew", "anim_swallow": "pvz:chomper_swallow",
+    }),
+    *_clips("zombie", "helmbody", {f"anim_{name}": f"pvz:helm_zombie_{name}" for name in ("walk", "walk2", "eat")}),
+    *_clips("zombie_polevaulter", "body", {f"anim_{name}": f"pvz:pole_vaulter_{name}" for name in ("run", "jump", "walk", "eat", "death")}),
+    *_clips("zombie_charred", "default", {"anim_crumble": "pvz:zombie_charred"}),
+]
+PLANT_ZOMBIE_SPRITES = [
+    (ROOT / f"tools/raw/reanim/{name}.png", f"pvz:{name}")
+    for name in (
+        "wallnut_cracked1", "wallnut_cracked2", "zombie_cone2", "zombie_cone3", "zombie_bucket2", "zombie_bucket3",
+        "zombie_polevaulter_outerarm_upper2",
+    )
+] + [(ROOT / "tools/raw/images/projectilesnowpea.png", "pvz:projectilesnowpea")]
 
 LEVEL_CLIPS = [
     (ROOT / "tools/raw/reanim/sunflower.reanim", "body", "anim_idle", "pvz:sunflower"),
@@ -101,6 +138,15 @@ def build_main_menu(clips: list | None = None, sprite_sources: list | None = Non
             if any(manifest["client"][category].get(key) != value for key, value in generated["client"][category].items()):
                 changed = True
             manifest["client"][category].update(generated["client"][category])
+        if manifest.get("presentation") != generated["presentation"]:
+            changed = True
+        manifest["presentation"] = generated["presentation"]
+        (bundle / "presentation").mkdir(exist_ok=True)
+        for path in (output / "presentation").iterdir():
+            target = bundle / "presentation" / path.name
+            if not target.is_file() or target.read_bytes() != path.read_bytes():
+                changed = True
+                shutil.copyfile(path, target)
         if update_gameplay:
             for path in (output / "gameplay").iterdir():
                 target = bundle / "gameplay" / path.name
@@ -139,11 +185,13 @@ def build_pvz_base() -> dict:
             (ROOT / "assets/resources/textures/flagmeterlevelprogress.png", "pvz:flagmeterlevelprogress"),
             (ROOT / "assets/resources/textures/lawnmower_cached.png", "pvz:lawnmower_cached"),
             (ROOT / "tools/raw/reanim/zombie_outerarm_upper2.png", "pvz:zombie_outerarm_upper2"),
+            *PLANT_ZOMBIE_SPRITES,
         ],
         reanim_sources=[ROOT / "tools/fixtures/reanim/phase2.reanim"],
         reanim_clips=[
             *LEVEL_CLIPS,
             *ADVENTURE_12_CLIPS,
+            *PLANT_ZOMBIE_CLIPS,
             *MAIN_MENU_CLIPS,
             *STARTUP_CLIPS,
         ],
@@ -180,6 +228,7 @@ if __name__ == "__main__":
     scope.add_argument("--startup-only", action="store_true", help="rebuild only loading-bar animation assets in an existing base Bundle")
     scope.add_argument("--adventure-1-2-only", action="store_true", help="install Adventure 1-2 assets and gameplay into the existing Bundle")
     scope.add_argument("--almanac-only", action="store_true", help="install all plant and zombie almanac animations")
+    scope.add_argument("--plants-zombies-only", action="store_true", help="install battle assets and gameplay for Adventure 1-3 to 1-10 plants and zombies")
     parser.add_argument("--raw-root", type=Path, default=ROOT / "tools/raw", help="raw asset directory for a scoped menu/startup build")
     args = parser.parse_args()
     if args.almanac_only:
@@ -189,6 +238,12 @@ if __name__ == "__main__":
         build_main_menu(
             [(args.raw_root / "reanim" / path.name, node, clip, content_id) for path, node, clip, content_id in ADVENTURE_12_CLIPS],
             [(args.raw_root / "images/sod3row.jpg", "pvz:sod3row")], update_gameplay=True,
+        )
+    elif args.plants_zombies_only:
+        build_main_menu(
+            [(args.raw_root / path.relative_to(ROOT / "tools/raw"), node, clip, content_id) for path, node, clip, content_id in PLANT_ZOMBIE_CLIPS],
+            [(args.raw_root / path.relative_to(ROOT / "tools/raw"), content_id) for path, content_id in PLANT_ZOMBIE_SPRITES],
+            update_gameplay=True,
         )
     elif args.main_menu_only or args.startup_only:
         clips = STARTUP_CLIPS if args.startup_only else MAIN_MENU_CLIPS

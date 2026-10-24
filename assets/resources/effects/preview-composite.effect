@@ -1,0 +1,45 @@
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: preview-vs:vert
+      frag: preview-fs:frag
+      depthStencilState: { depthTest: false, depthWrite: false }
+      rasterizerState: { cullMode: none }
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: one
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: one
+          blendDstAlpha: one_minus_src_alpha
+}%
+
+CCProgram preview-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #include <common/common-define>
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+  out vec2 uv;
+  out vec4 color;
+  vec4 vert () {
+    uv = a_texCoord;
+    CC_HANDLE_RT_SAMPLE_FLIP(uv);
+    color = a_color;
+    return cc_matViewProj * vec4(a_position, 1.0);
+  }
+}%
+
+CCProgram preview-fs %{
+  precision highp float;
+  #pragma builtin(local)
+  layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
+  in vec2 uv;
+  in vec4 color;
+  vec4 frag () {
+    // A transparent render target already contains premultiplied RGB.
+    vec4 pixel = texture(cc_spriteTexture, uv);
+    return pixel * vec4(color.rgb * color.a, color.a);
+  }
+}%

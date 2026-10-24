@@ -1,15 +1,11 @@
 import { installMenuAnimation } from './menu.js'
 
 export interface ClientApi {
-    expandViewport(options?: { minAspect?: number, maxAspect?: number }): void
-    loadSprite(path: string): Promise<any>
-    enhanceScreen(targetId: string, apply: (context: {
-        node: any, backdropParent: any, background: any, engine: any,
-    }) => () => void): void
+    host: { get(id: string): any; around(target: any, key: string, handler: (this: any, next: (...args: any[]) => any, ...args: any[]) => any): void }
+    assets: { sprite(path: string): Promise<any> }
 }
 
-export async function register(api: ClientApi): Promise<void> {
-    // Global viewport/input adaptation is independent of the menu's artwork.
-    api.expandViewport({ minAspect: 4 / 3, maxAspect: 32 / 9 })
-    await installMenuAnimation(api)
+export async function register(context: ClientApi): Promise<void> {
+    await installMenuAnimation(context)
+    context.host.get('client/view/ClientViewport').expandViewport({ minAspect: 4 / 3, maxAspect: 32 / 9 })
 }

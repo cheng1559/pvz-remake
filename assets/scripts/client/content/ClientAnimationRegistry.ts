@@ -1,140 +1,43 @@
-export interface ClientAnimationClip {
-    readonly reanimId: string
-    readonly rateScale: number
-    readonly x: number
-    readonly y: number
-    readonly attachmentTrackId?: string
-}
+import type { ClientAnimationClip, ClientAnimationDefinitions, ClientAnimationTarget, NutBlinkSlot, PresentationDefinitions } from '@/shared/content/presentation'
+export type { ClientAnimationClip, ShooterAnimationDefinition, ZombieAnimationDefinition, NormalZombieAnimationDefinition, SunflowerAnimationDefinition, FlagZombieAnimationDefinition, PoleVaulterAnimationDefinition, CherryBombAnimationDefinition, WallNutAnimationDefinition, PotatoMineAnimationDefinition, ChomperAnimationDefinition, ClientAnimationDefinitions, ClientAnimationTarget } from '@/shared/content/presentation'
 
-export interface ShooterAnimationDefinition {
-    readonly body: ClientAnimationClip
-    readonly idleHead: ClientAnimationClip
-    readonly shootHead: ClientAnimationClip
-    readonly blink: ClientAnimationClip
-}
+export const randomAnimationRate = ([min, max]: readonly [number, number]): number => min + Math.random() * (max - min)
 
-export interface ZombieAnimationDefinition {
-    readonly walk: ClientAnimationClip
-    readonly walk2: ClientAnimationClip
-    readonly eat: ClientAnimationClip
-    readonly death: ClientAnimationClip
-    readonly death2: ClientAnimationClip
-    readonly mowered: ClientAnimationClip
-}
-
-export interface SunflowerAnimationDefinition {
-    readonly body: ClientAnimationClip
-    readonly blink: ClientAnimationClip
-}
-
-export interface FlagZombieAnimationDefinition extends ZombieAnimationDefinition {
-    readonly flag: ClientAnimationClip
-}
-
-export interface ClientAnimationDefinitions {
-    readonly 'pvz:peashooter': ShooterAnimationDefinition
-    readonly 'pvz:repeater': ShooterAnimationDefinition
-    readonly 'pvz:normal': ZombieAnimationDefinition
-    readonly 'pvz:flag': FlagZombieAnimationDefinition
-    readonly 'pvz:sunflower': SunflowerAnimationDefinition
-}
-
-export type ClientAnimationTarget = keyof ClientAnimationDefinitions
-export type ClientAnimationMode = 'enhance' | 'replace'
-export type ClientAnimationPatch<K extends ClientAnimationTarget> = {
-    readonly [P in keyof ClientAnimationDefinitions[K]]?: Partial<ClientAnimationDefinitions[K][P]>
-}
-
-const DEFAULTS: ClientAnimationDefinitions = {
-    'pvz:peashooter': {
-        body: clip('pvz:peashooter'),
-        idleHead: clip('pvz:peashooter_head_idle', { attachmentTrackId: 'anim_stem' }),
-        shootHead: clip('pvz:peashooter_shoot', { attachmentTrackId: 'anim_stem' }),
-        blink: clip('pvz:peashooter_blink', { attachmentTrackId: 'anim_face' }),
-    },
-    'pvz:repeater': {
-        body: clip('pvz:repeater'),
-        idleHead: clip('pvz:repeater_head_idle', { attachmentTrackId: 'anim_stem' }),
-        shootHead: clip('pvz:repeater_shoot', { attachmentTrackId: 'anim_stem', rateScale: 45 / 35 }),
-        blink: clip('pvz:peashooter_blink', { attachmentTrackId: 'anim_face' }),
-    },
-    'pvz:sunflower': { body: clip('pvz:sunflower'), blink: clip('pvz:sunflower_blink', { attachmentTrackId: 'anim_idle' }) },
-    'pvz:flag': {
-        walk: clip('pvz:flag_walk', { x: 15, y: 8 }),
-        walk2: clip('pvz:flag_walk2', { x: 15, y: 8 }),
-        eat: clip('pvz:flag_eat', { x: 15, y: 8 }),
-        death: clip('pvz:flag_death', { x: 15, y: 8 }),
-        death2: clip('pvz:flag_death2', { x: 15, y: 8 }),
-        mowered: clip('pvz:lawnmowered_zombie', { attachmentTrackId: 'locator' }),
-        flag: clip('pvz:zombie_flag', { x: 15, y: 8, attachmentTrackId: 'Zombie_flaghand' }),
-    },
-    'pvz:normal': {
-        walk: clip('pvz:zombie_walk', { x: 15, y: 8 }),
-        walk2: clip('pvz:zombie_walk2', { x: 15, y: 8 }),
-        eat: clip('pvz:zombie_eat', { x: 15, y: 8 }),
-        death: clip('pvz:zombie_death', { x: 15, y: 8 }),
-        death2: clip('pvz:zombie_death2', { x: 15, y: 8 }),
-        mowered: clip('pvz:lawnmowered_zombie', { attachmentTrackId: 'locator' }),
-    },
-}
+type AnyAnimationDefinition = Record<string, ClientAnimationClip>
 
 export class ClientAnimationRegistry {
-    private readonly values = new Map<ClientAnimationTarget, ShooterAnimationDefinition | ZombieAnimationDefinition | SunflowerAnimationDefinition>(
-        Object.entries(DEFAULTS).map(([target, value]) => [target as ClientAnimationTarget, cloneDefinition(value)]),
-    )
-    private readonly replacements = new Map<ClientAnimationTarget, string>()
+    private readonly values = new Map<ClientAnimationTarget, AnyAnimationDefinition>()
     private frozen = false
 
-    registerLoaded(owner: string, target: string, mode: ClientAnimationMode, value: unknown): void {
-        if (!Object.prototype.hasOwnProperty.call(DEFAULTS, target)) {
-            throw new Error(`unknown client animation target: ${target}`)
-        }
-        const knownTarget = target as ClientAnimationTarget
-        if (mode === 'enhance') {
-            this.register(owner, knownTarget, mode, value as ClientAnimationPatch<ClientAnimationTarget>)
-        } else if (mode === 'replace') {
-            this.register(owner, knownTarget, mode, value as ClientAnimationDefinitions[ClientAnimationTarget])
-        } else {
-            throw new TypeError(`unknown client animation mode: ${mode}`)
+    constructor(readonly definitions: PresentationDefinitions) {
+        const { plants, zombies } = definitions
+        const defaults = Object.fromEntries(Object.entries({ ...plants, ...zombies })
+            .filter(([, definition]) => definition.animations).map(([id, definition]) => [id, definition.animations])) as unknown as ClientAnimationDefinitions
+        for (const [target, value] of Object.entries(defaults)) {
+            const copy = cloneDefinition(value)
+            for (const [slot, clip] of Object.entries(copy)) validateClip(target, slot, clip)
+            this.values.set(target, copy)
         }
     }
 
-    register<K extends ClientAnimationTarget>(
-        owner: string,
-        target: K,
-        mode: 'enhance',
-        value: ClientAnimationPatch<K>,
-    ): void
-    register<K extends ClientAnimationTarget>(
-        owner: string,
-        target: K,
-        mode: 'replace',
-        value: ClientAnimationDefinitions[K],
-    ): void
-    register<K extends ClientAnimationTarget>(
-        owner: string,
-        target: K,
-        mode: ClientAnimationMode,
-        value: ClientAnimationDefinitions[K] | ClientAnimationPatch<K>,
-    ): void {
-        if (this.frozen) throw new Error('client animation registry is frozen')
-        if (!owner) throw new TypeError('client animation owner must be a non-empty string')
-        const current = this.require(target)
-        if (mode === 'replace') {
-            const previous = this.replacements.get(target)
-            if (previous) throw new Error(`${target} animations are already replaced by ${previous}`)
-            this.write(target, value as ClientAnimationDefinitions[K])
-            this.replacements.set(target, owner)
-            return
+    get rates() { return this.definitions.animation.rates }
+    get zombieIdle2Chance() { return this.definitions.animation.zombieIdle2Chance }
+    get nutBlinkWeights() { return this.definitions.animation.nutBlinkWeights }
+
+    nextPlantBlinkTicks(nut = false): number {
+        const [min, max] = nut ? this.definitions.animation.nutBlinkTicks : this.definitions.animation.plantBlinkTicks
+        return min + Math.floor(Math.random() * (max - min + 1))
+    }
+
+    pickNutBlinkSlot(): NutBlinkSlot {
+        const weights = this.definitions.animation.nutBlinkWeights
+        const slots = Object.keys(weights) as NutBlinkSlot[]
+        let hit = Math.random() * Object.values(weights).reduce((total, weight) => total + weight, 0)
+        for (const slot of slots) {
+            hit -= weights[slot]
+            if (hit < 0) return slot
         }
-        if (mode !== 'enhance') throw new TypeError(`unknown client animation mode: ${mode}`)
-        const enhanced = cloneDefinition(current) as unknown as Record<string, ClientAnimationClip>
-        for (const [slot, patch] of Object.entries(value)) {
-            if (!(slot in enhanced)) throw new Error(`unknown ${target} animation slot: ${slot}`)
-            if (!patch || typeof patch !== 'object') throw new TypeError(`${target}.${slot} patch must be an object`)
-            enhanced[slot] = { ...enhanced[slot], ...patch }
-        }
-        this.write(target, enhanced as unknown as ClientAnimationDefinitions[K])
+        return slots[slots.length - 1]
     }
 
     resolve<K extends ClientAnimationTarget>(target: K): ClientAnimationDefinitions[K] {
@@ -153,32 +56,17 @@ export class ClientAnimationRegistry {
     private require<K extends ClientAnimationTarget>(target: K): ClientAnimationDefinitions[K] {
         const value = this.values.get(target)
         if (!value) throw new Error(`unknown client animation target: ${target}`)
-        return value as ClientAnimationDefinitions[K]
-    }
-
-    private write<K extends ClientAnimationTarget>(target: K, value: ClientAnimationDefinitions[K]): void {
-        if (!value || typeof value !== 'object') throw new TypeError(`${target} animations must be an object`)
-        const slots = Object.keys(DEFAULTS[target])
-        if (Object.keys(value).length !== slots.length || slots.some(slot => !(slot in value))) {
-            throw new TypeError(`${target} replacement must define: ${slots.join(', ')}`)
-        }
-        const copy = cloneDefinition(value)
-        for (const [slot, animation] of Object.entries(copy)) validateClip(target, slot, animation)
-        this.values.set(target, copy)
+        return value as unknown as ClientAnimationDefinitions[K]
     }
 }
 
-function clip(reanimId: string, options: Partial<Omit<ClientAnimationClip, 'reanimId'>> = {}): ClientAnimationClip {
-    return { reanimId, rateScale: 1, x: 0, y: 0, ...options }
-}
-
-function cloneDefinition<T extends ShooterAnimationDefinition | ZombieAnimationDefinition | SunflowerAnimationDefinition>(value: T): T {
+function cloneDefinition<T extends object>(value: T): T {
     return Object.fromEntries(Object.entries(value).map(([slot, animation]) => [slot, { ...animation }])) as T
 }
 
 function validateClip(target: string, slot: string, value: ClientAnimationClip): void {
     if (!value || typeof value !== 'object') throw new TypeError(`${target}.${slot} must be an object`)
-    const fields = new Set(['reanimId', 'rateScale', 'x', 'y', 'attachmentTrackId'])
+    const fields = new Set(['reanimId', 'rateScale', 'x', 'y', 'attachmentTrackId', 'fps'])
     const unknown = Object.keys(value).find(key => !fields.has(key))
     if (unknown) throw new TypeError(`unknown ${target}.${slot} field: ${unknown}`)
     if (typeof value.reanimId !== 'string' || value.reanimId.length === 0) {
@@ -188,6 +76,7 @@ function validateClip(target: string, slot: string, value: ClientAnimationClip):
         if (!Number.isFinite(value[key])) throw new TypeError(`${target}.${slot}.${key} must be finite`)
     }
     if (value.rateScale <= 0) throw new TypeError(`${target}.${slot}.rateScale must be positive`)
+    if (value.fps !== undefined && (!Number.isFinite(value.fps) || value.fps <= 0)) throw new TypeError(`${target}.${slot}.fps must be positive`)
     if (value.attachmentTrackId !== undefined &&
         (typeof value.attachmentTrackId !== 'string' || value.attachmentTrackId.length === 0)) {
         throw new TypeError(`${target}.${slot}.attachmentTrackId must be a non-empty string`)

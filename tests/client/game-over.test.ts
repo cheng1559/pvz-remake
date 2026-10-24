@@ -1,3 +1,4 @@
+import { presentationFixture } from './presentationFixture'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -98,11 +99,12 @@ test('the winning zombie walks with the original ground track while the authorit
     const data = JSON.parse(readFileSync('assets/bundles/pvz-base/reanim/zombie_walk.json', 'utf8'))
     const ground = data.tracks.find((track: any) => track.id === '_ground')
     const duration = ground.keyframes.at(-1).timeSeconds
-    const { LevelZombieView } = load('LevelZombieView', {})
-    const view = Object.create(LevelZombieView.prototype)
+    const { ZombieView } = load('../zombies/ZombieView', {})
+    const view = Object.create(ZombieView.prototype)
     let x = 0, y = 0, time = 0
     view.node = { setPosition(nextX: number, nextY: number) { x = nextX; y = nextY; this.position = { x, y } } }
     view.shadowNode = { setPosition() {} }
+    view.presentation = presentationFixture.zombies['pvz:normal']
     view.animations = { resolve: () => ({ walk: { rateScale: 1 } }) }
     view.player = { lastFrameTimeSeconds: duration, sampleTrack: (_id: string, t: number) => sampleReanimTrack(ground, t), seek(t: number) { time = t } }
     const zombie = { x: -100, animation: 'anim_walk', animationTime: 0, animationSpeed: 1 }

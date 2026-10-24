@@ -382,6 +382,49 @@ def get_anim_nodes(
     return anim_nodes
 
 
+def plant_display_nodes(seed_id: int, nodes: dict) -> list[dict]:
+    """The same pose selection and attachments drive live displays and offline packet caches."""
+    parts = []
+    for node, config in nodes.items():
+        if node == 'glow':
+            continue
+        animations = list(config['animations'])
+        if not animations:
+            continue
+        if node == 'body':
+            clip = {4: 'anim_armed', 9: 'anim_bigidle', 44: 'anim_idle'}.get(seed_id, 'anim_idle')
+            if clip not in animations:
+                clip = animations[0]
+            body = {'name': node, 'animation': clip}
+            packet_clip = {9: 'anim_idle', 19: 'anim_idle_aquarium'}.get(seed_id)
+            if packet_clip in animations and packet_clip != clip:
+                body['packetAnimation'] = packet_clip
+            parts.append(body)
+            continue
+        clip = next((name for name in animations if 'idle' in name or 'blink' in name.lower()), animations[0])
+        if node.startswith('head'):
+            parent = 'body'
+            track = 'anim_stem' if 'anim_stem' in nodes[parent]['slots'] else f'anim_{node}'
+            if track not in nodes[parent]['slots']:
+                track = 'anim_idle'
+        elif node in ('backHead', 'backFace'):
+            parent, track = 'body', 'anim_idle'
+        elif node.startswith('face'):
+            suffix = node.removeprefix('face')
+            parent = f'head{suffix}' if f'head{suffix}' in nodes else 'body'
+            track = f'anim_face{suffix}'
+            if track not in nodes[parent]['slots']:
+                track = next(iter(nodes[parent]['slots']), 'anim_idle')
+        else:
+            continue
+        parts.append({'name': node, 'animation': clip, 'parent': parent, 'track': track, 'blink': 'blink' in clip.lower()})
+    if seed_id == 18:
+        order = ['body', 'head1', 'face1', 'head3', 'face3', 'head2', 'face2']
+        parts.sort(key=lambda item: order.index(item['name']))
+    return parts
+
+
+
 def build_reanim_clip(
     source: Path,
     anim_info: dict[str, Any],

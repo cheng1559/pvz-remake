@@ -1,6 +1,8 @@
 import type { EntityAllocatorSnapshot, EntityId } from '@/ecs/index'
 import {
     assertJsonValue,
+    jsonRoundTrip,
+    zombieAnimationMatchesState,
     type JsonObject,
     type EnabledMod,
     type ServerEvent,
@@ -10,15 +12,21 @@ import type { EventQueue } from './events'
 import type {
     LawnMower,
     Plant,
+    PlantAbility,
+    PlantAbilityState,
     PlantAttack,
     Position,
     Projectile,
     SeedBankState,
     Zombie,
-} from './gameplay'
+    ZombieAnimation,
+} from './components'
 import type { Item, TutorialState, WaveState } from './levelState'
+import type { SavedComponents } from './JsonComponents'
+import { isQualifiedId } from '@/shared/mod'
 
 export interface SavedEntity {
+    extensions?: SavedComponents
     entityId: EntityId
     position?: Position
     lawnMower?: LawnMower
@@ -147,7 +155,7 @@ function parseTutorial(value: unknown): TutorialState {
     const source = optionalExact(
         value,
         ['firstAdventure', 'step'],
-        ['sunAtTick', 'promptAtTick', 'cantAffordAdviceShown', 'seedRefreshAdviceShown', 'zombieWarningShown', 'sunsFallen'],
+        ['sunAtTick', 'promptAtTick', 'cantAffordAdviceShown', 'seedRefreshAdviceShown', 'zombieWarningShown', 'sunsFallen', 'displayedAdvice'],
         'server save.tutorial',
     )
     if (source.step !== 'pick-first-seed' && source.step !== 'plant-first-seed' &&
@@ -164,6 +172,8 @@ function parseTutorial(value: unknown): TutorialState {
     }
     if (source.zombieWarningShown !== undefined) result.zombieWarningShown = boolean(source.zombieWarningShown, 'server save.tutorial.zombieWarningShown')
     if (source.sunsFallen !== undefined) result.sunsFallen = nonNegativeInteger(source.sunsFallen, 'server save.tutorial.sunsFallen')
+    if (source.displayedAdvice !== undefined) result.displayedAdvice = array(source.displayedAdvice, 'server save.tutorial.displayedAdvice')
+        .map(value => nonEmptyString(value, 'server save.tutorial.displayedAdvice[]'))
     if (source.sunAtTick !== undefined) {
         result.sunAtTick = nonNegativeInteger(source.sunAtTick, 'server save.tutorial.sunAtTick')
     }
@@ -251,7 +261,7 @@ function parseEventQueue(value: unknown): EventQueue {
 function parseEntity(value: unknown, index: number, nextEntity: number): SavedEntity {
     const name = `server save.entities[${index}]`
     const source = optionalExact(value, ['entityId', 'position'], [
-        'lawnMower', 'plant', 'plantAttack', 'zombie', 'projectile', 'item',
+        'lawnMower', 'plant', 'plantAttack', 'zombie', 'projectile', 'item', 'extensions',
     ], name)
     const entityId = positiveInteger(source.entityId, `${name}.entityId`)
     if (entityId >= nextEntity) throw new TypeError(`${name}.entityId must be below allocator.nextEntity`)
@@ -265,6 +275,13 @@ function parseEntity(value: unknown, index: number, nextEntity: number): SavedEn
     if (source.zombie !== undefined) entity.zombie = parseZombie(source.zombie, `${name}.zombie`)
     if (source.projectile !== undefined) entity.projectile = parseProjectile(source.projectile, `${name}.projectile`)
     if (source.item !== undefined) entity.item = parseItem(source.item, `${name}.item`)
+    if (source.extensions !== undefined) {
+        const extensions = record(source.extensions, `${name}.extensions`)
+        entity.extensions = Object.fromEntries(Object.entries(extensions).map(([id, data]) => {
+            if (!isQualifiedId(id)) throw new TypeError(`Invalid component ID: ${id}`)
+            return [id, jsonRoundTrip(record(data, `${name}.extensions.${id}`)) as JsonObject]
+        }))
+    }
     if (Object.keys(entity).length === 1) throw new TypeError(`${name} must contain a component`)
     return entity
 }
@@ -286,8 +303,12 @@ function parseMower(value: unknown, name: string): LawnMower {
     }
 }
 
+const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
+    'fuse', 'arming', 'rising', 'armed', 'ready', 'biting', 'got-one', 'missed', 'digesting', 'swallowing',
+]
+
 function parsePlant(value: unknown, name: string): Plant {
-    const source = exact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'eatenFlashCounter'], name)
+    const source = optionalExact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'eatenFlashCounter', 'recentlyEatenCounter'], ['ability', 'behaviorState'], name)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
     if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
@@ -298,7 +319,16 @@ function parsePlant(value: unknown, name: string): Plant {
         health,
         maxHealth,
         eatenFlashCounter: nonNegativeInteger(source.eatenFlashCounter, `${name}.eatenFlashCounter`),
+        recentlyEatenCounter: nonNegativeInteger(source.recentlyEatenCounter, `${name}.recentlyEatenCounter`),
+        ...(source.ability === undefined ? {} : { ability: parsePlantAbility(source.ability, `${name}.ability`) }),
+        ...parseBehaviorState(source, name),
     }
+}
+
+function parsePlantAbility(value: unknown, name: string): PlantAbility {
+    const source = exact(value, ['state', 'ticks'], name)
+    if (!PLANT_ABILITY_STATES.includes(source.state as PlantAbilityState)) throw new TypeError(`${name}.state is unknown`)
+    return { state: source.state as PlantAbilityState, ticks: nonNegativeInteger(source.ticks, `${name}.ticks`) }
 }
 
 function parsePlantAttack(value: unknown, name: string): PlantAttack {
@@ -311,45 +341,41 @@ function parsePlantAttack(value: unknown, name: string): PlantAttack {
     return attack
 }
 
+const ZOMBIE_STATES: readonly Zombie['state'][] = ['walking', 'eating', 'vaulting', 'dying', 'burned', 'mowered']
+const ZOMBIE_ANIMATIONS: readonly ZombieAnimation[] = [
+    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_death', 'anim_death2', 'mowered',
+]
+
 function parseZombie(value: unknown, name: string): Zombie {
-    const source = exact(value, [
+    const source = optionalExact(value, [
         'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
         'moweredTicksRemaining', 'walkAnimation', 'animation', 'animationTime', 'animationSpeed', 'hasHead', 'hasArm',
-        'hasTongue', 'hitFlashCounter', 'groanCounter',
-    ], name)
-    if (source.state !== 'walking' && source.state !== 'eating' && source.state !== 'dying' && source.state !== 'mowered') {
-        throw new TypeError(`${name}.state is unknown`)
-    }
+        'hasTongue', 'hitFlashCounter', 'groanCounter', 'helmHealth', 'chilledTicks', 'hasPole',
+    ], ['behaviorState'], name)
+    if (!ZOMBIE_STATES.includes(source.state as Zombie['state'])) throw new TypeError(`${name}.state is unknown`)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
     if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
     if (source.walkAnimation !== 'anim_walk' && source.walkAnimation !== 'anim_walk2') {
         throw new TypeError(`${name}.walkAnimation is unknown`)
     }
-    if (source.animation !== 'anim_walk' && source.animation !== 'anim_walk2' &&
-        source.animation !== 'anim_eat' && source.animation !== 'anim_death' &&
-        source.animation !== 'anim_death2' && source.animation !== 'mowered') {
-        throw new TypeError(`${name}.animation is unknown`)
-    }
-    if (source.state === 'walking' && source.animation !== 'anim_walk' && source.animation !== 'anim_walk2' ||
-        source.state === 'eating' && source.animation !== 'anim_eat' ||
-        source.state === 'dying' && source.animation !== 'anim_death' && source.animation !== 'anim_death2' ||
-        source.state === 'mowered' && source.animation !== 'mowered') {
-        throw new TypeError(`${name}.animation is inconsistent with state`)
-    }
+    if (!ZOMBIE_ANIMATIONS.includes(source.animation as ZombieAnimation)) throw new TypeError(`${name}.animation is unknown`)
+    const state = source.state as Zombie['state']
+    const animation = source.animation as ZombieAnimation
+    if (!zombieAnimationMatchesState(state, animation)) throw new TypeError(`${name}.animation is inconsistent with state`)
     const animationSpeed = nonNegativeFinite(source.animationSpeed, `${name}.animationSpeed`)
     if (animationSpeed === 0) throw new TypeError(`${name}.animationSpeed must be positive`)
     return {
         typeId: nonEmptyString(source.typeId, `${name}.typeId`),
         health,
         maxHealth,
-        state: source.state,
-        speedPerTick: nonNegativeFinite(source.speedPerTick, `${name}.speedPerTick`),
+        state,
+        speedPerTick: finite(source.speedPerTick, `${name}.speedPerTick`),
         biteTicks: nonNegativeInteger(source.biteTicks, `${name}.biteTicks`),
         deathTicksRemaining: nonNegativeInteger(source.deathTicksRemaining, `${name}.deathTicksRemaining`),
         moweredTicksRemaining: nonNegativeInteger(source.moweredTicksRemaining, `${name}.moweredTicksRemaining`),
         walkAnimation: source.walkAnimation,
-        animation: source.animation,
+        animation,
         animationTime: nonNegativeFinite(source.animationTime, `${name}.animationTime`),
         animationSpeed,
         hasHead: boolean(source.hasHead, `${name}.hasHead`),
@@ -357,6 +383,10 @@ function parseZombie(value: unknown, name: string): Zombie {
         hasArm: boolean(source.hasArm, `${name}.hasArm`),
         hitFlashCounter: nonNegativeInteger(source.hitFlashCounter, `${name}.hitFlashCounter`),
         groanCounter: integer(source.groanCounter, `${name}.groanCounter`),
+        helmHealth: nonNegativeInteger(source.helmHealth, `${name}.helmHealth`),
+        chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
+        hasPole: boolean(source.hasPole, `${name}.hasPole`),
+        ...parseBehaviorState(source, name),
     }
 }
 
@@ -410,6 +440,12 @@ function optionalExact(
     for (const key of Object.keys(source)) if (!allowed.has(key)) throw new TypeError(`${name}.${key} is not supported`)
     for (const key of required) if (!(key in source)) throw new TypeError(`${name}.${key} is required`)
     return source
+}
+
+function parseBehaviorState(source: Record<string, unknown>, name: string) {
+    return source.behaviorState === undefined ? {} : {
+        behaviorState: jsonRoundTrip(record(source.behaviorState, `${name}.behaviorState`)) as JsonObject,
+    }
 }
 
 function exact(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {

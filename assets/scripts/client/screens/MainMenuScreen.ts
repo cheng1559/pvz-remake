@@ -1,7 +1,6 @@
 import { _decorator, Button, Color, Component, director, Director, Mask, Node, Sprite, type SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { UserView } from '@/shared/menu'
-import { applyClientScreenMods } from '@/client/content/ClientScreenMods'
 import { loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { MusicSystem } from '@/client/music/MusicSystem'
@@ -46,6 +45,7 @@ export class MainMenuScreen extends Component {
     private activeFlowers = new Set<ReanimPlayer>()
     private user: UserView | null = null
     private ready = false
+    private background!: Sprite
     private opened = false
     private entrancePending = true
     private startAdventure = true
@@ -70,7 +70,7 @@ export class MainMenuScreen extends Component {
         }))
         if (!this.node.isValid) return
         const content = uiNode({ name: 'Selector', parent: this.node, anchor: { x: 0, y: 1 }, position: { x: -400, y: 300 } }).node
-        const background = ui.image(content, this.frames.get('selectorscreen_bg')!, { width: 800, height: 600 })
+        this.background = ui.image(content, this.frames.get('selectorscreen_bg')!, { width: 800, height: 600 })
         const pending: Promise<void>[] = []
         const player = (name: string, parent = content): ReanimPlayer => {
             const animation = uiNode({ name, parent, anchor: { x: 0, y: 1 } }).node.addComponent(ReanimPlayer)
@@ -124,9 +124,6 @@ export class MainMenuScreen extends Component {
         layers.forEach((layer, index) => layer.setSiblingIndex(index + 1))
         this.user = await menuApi.getCurrentUser()
         if (!this.node.isValid) return
-        await applyClientScreenMods('pvz:main-menu', {
-            node: this.node, backdropParent: this.node.parent!.parent!, background,
-        })
         if (!this.node.isValid) return
         this.refreshButtons()
         this.ready = true

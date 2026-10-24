@@ -1,15 +1,12 @@
+import { buildGameplayContent } from '@/shared/content/DefinitionRegistry'
+import { loadPresentationDefinitions } from '@/client/content/loadPresentationDefinitions'
 import { JsonAsset, Prefab } from 'cc'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
-import { loadInstalledMods } from '@/client/content/ModLoader'
+import { loadInstalledMods } from '@/app/ModLoader'
 import { resourcePacks } from '@/client/content/ResourcePacks'
 import { CONTENT_CATEGORIES, type ContentCategory } from '@/shared/content'
-import {
-    parseGameplayDefinitions,
-    parseGameplayLevels,
-    parseGameplayStrings,
-} from '@/shared/content/gameplay'
 
 // Preserve the installed asset ID and prefab UUID for existing content packs and saves.
 export const LEVEL_PREFAB_ID = 'pvz:adventure11'
@@ -29,16 +26,17 @@ export async function loadIntegratedGameContent(location = 'pvz-base') {
     const loadPrefab = () => new Promise<Prefab>((resolve, reject) => {
         bundle.load(prefabPath.replace(/\.prefab$/i, ''), Prefab, (error, asset) => error ? reject(error) : resolve(asset))
     })
-    const [definitionsAsset, levelsAsset, stringsAsset, levelPrefab] = await Promise.all([
+    const [definitionsAsset, levelsAsset, stringsAsset, levelPrefab, presentation] = await Promise.all([
         loadJson(manifest.gameplay.definitions),
         loadJson(manifest.gameplay.levels),
         resourcePacks.asset(`${manifest.id.split(':')[0]}:${manifest.gameplay.strings.replace(/\.json$/i, '')}`, JsonAsset)
             .then(asset => asset ?? loadJson(manifest.gameplay.strings)),
         loadPrefab(),
+        loadPresentationDefinitions(manifest, loader),
     ])
-    const definitions = parseGameplayDefinitions(definitionsAsset.json)
-    const levels = parseGameplayLevels(levelsAsset.json, definitions)
-    const strings = parseGameplayStrings(stringsAsset.json)
+    const { definitions, levels, strings } = buildGameplayContent(
+        definitionsAsset.json, levelsAsset.json, stringsAsset.json, loadedMods.gameplayDefinitions,
+    )
     const registry = new ContentRegistry()
     registry.register(manifest)
     for (const [, content] of loadedMods.clientContent.entries()) {
@@ -55,17 +53,29 @@ export async function loadIntegratedGameContent(location = 'pvz-base') {
         })
     }
     registry.freeze()
-    const animations = new ClientAnimationRegistry()
-    for (const operation of loadedMods.clientAnimations) {
-        animations.registerLoaded(operation.ownerId, operation.targetId, operation.mode, operation.value)
-    }
+    const animations = new ClientAnimationRegistry(presentation)
     animations.freeze()
+    const plantViews = loadedMods.plantViews
+    plantViews.freeze()
+    const zombieViews = loadedMods.zombieViews
+    zombieViews.freeze()
+    for (const id of Object.keys(definitions.plants)) {
+        const definition = presentation.plants[id]
+        if (!definition?.view || !plantViews.has(definition.view)) throw new Error(`Plant presentation is not installed: ${id}`)
+    }
+    for (const id of Object.keys(definitions.projectiles)) {
+        if (!presentation.projectiles[id]) throw new Error(`Projectile presentation is not installed: ${id}`)
+    }
+    for (const id of Object.keys(definitions.zombies)) {
+        const definition = presentation.zombies[id]
+        if (!definition || !zombieViews.has(definition.view ?? 'zombie')) throw new Error(`Zombie presentation is not installed: ${id}`)
+    }
     const enabledMods = loadedMods.manifests
         .filter(mod => mod.gameplay !== undefined)
         .map(mod => ({ id: mod.id, version: mod.version, contentHash: mod.contentHash }))
     return {
-        definitions, levels, strings, levelPrefab, registry, loader,
-        contentHash: manifest.contentHash, loadedMods, enabledMods, animations,
+        definitions, presentation, levels, strings, levelPrefab, registry, loader,
+        contentHash: manifest.contentHash, loadedMods, enabledMods, animations, plantViews, zombieViews,
         saveCompatibleHashes: manifest.saveCompatibleHashes ?? [],
     }
 }

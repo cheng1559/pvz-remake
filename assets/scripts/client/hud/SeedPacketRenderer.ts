@@ -1,11 +1,14 @@
+import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { _decorator, Color, Component, isValid, Node, Rect, Size, Sprite, SpriteFrame, Vec2 } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import type { FontConfig, FontLayerConfig } from '@/client/font/FontRenderer.d'
 import { uiNode } from '@/client/view/uiNode'
-import { PlantPreview, type PreviewPlantId } from './PlantPreview'
+import { PlantPreview } from './PlantPreview'
 import { applySpriteDensity } from '@/client/content/SpriteDensity'
 import { SpriteLoader } from '@/core/SpriteLoader'
+import { plantVisual, type SeedPacketSeedType } from '@/client/plants/definitions'
+export type { SeedPacketSeedType } from '@/client/plants/definitions'
 
 export const SEED_PACKET_WIDTH = 50
 export const SEED_PACKET_HEIGHT = 70
@@ -24,95 +27,11 @@ const BACKGROUND_NORMAL = 2
 const COST_BASELINE_X = 32
 const COST_BASELINE_Y = 64
 
-const PACKET_PLANT_CELS = new Map<number, number>([
-    [4, 0],
-    [6, 1],
-    [12, 2],
-    [23, 3],
-    [27, 4],
-    [30, 5],
-    [41, 6],
-    [47, 7],
-    [32, 8],
-    [34, 9],
-    [39, 10],
-    [44, 11],
-    [46, 12],
-])
-
 const atlasFrames: WeakMap<SpriteFrame, Map<string, SpriteFrame>> = new WeakMap()
-const RENDERED_PLANTS: Partial<Record<number, PreviewPlantId>> = {
-    0: 'pvz:peashooter', 1: 'pvz:sunflower', 7: 'pvz:repeater',
-}
-
-export type SeedPacketSeedType =
-    | number
-    | 'peashooter'
-    | 'sunflower'
-    | 'cherrybomb'
-    | 'wallnut'
-    | 'explodenut'
-    | 'potatomine'
-    | 'snowpea'
-    | 'chomper'
-    | 'repeater'
-    | 'puffshroom'
-
-const SEED_PACKET_ICON_IDS: Record<string, number> = {
-    peashooter: 0,
-    sunflower: 1,
-    cherrybomb: 2,
-    wallnut: 3,
-    explodenut: 3,
-    potatomine: 4,
-    snowpea: 5,
-    chomper: 6,
-    repeater: 7,
-    puffshroom: 8,
-}
-
-interface SeedPacketPlantPlacement {
-    scale: number
-    offsetX: number
-    offsetY: number
-}
-
-const DEFAULT_PLANT_PLACEMENT: SeedPacketPlantPlacement = { scale: 0.5, offsetX: 5, offsetY: 8 }
-const PLANT_PLACEMENTS = new Map<number, SeedPacketPlantPlacement>([
-    [4, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [6, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [10, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [11, { scale: 0.4, offsetX: 10, offsetY: 15 }],
-    [12, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [15, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [17, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [18, { scale: 0.5, offsetX: 5, offsetY: 10 }],
-    [19, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [21, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [22, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [23, { scale: 0.3, offsetX: 12, offsetY: 22 }],
-    [25, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [26, { scale: 0.5, offsetX: 9, offsetY: 13 }],
-    [27, { scale: 0.4, offsetX: 8, offsetY: 17 }],
-    [28, { scale: 0.45, offsetX: 12, offsetY: 12 }],
-    [29, { scale: 0.5, offsetX: 6, offsetY: 8 }],
-    [30, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [31, { scale: 0.5, offsetX: 5, offsetY: 12 }],
-    [32, { scale: 0.4, offsetX: 15, offsetY: 14 }],
-    [34, { scale: 0.4, offsetX: 13, offsetY: 14 }],
-    [35, { scale: 0.55, offsetX: 0, offsetY: 9 }],
-    [37, { scale: 0.5, offsetX: 5, offsetY: 10 }],
-    [39, { scale: 0.35, offsetX: 18, offsetY: 19 }],
-    [40, { scale: 0.5, offsetX: 2, offsetY: 8 }],
-    [41, { scale: 0.45, offsetX: 7, offsetY: 14 }],
-    [42, { scale: 0.45, offsetX: 7, offsetY: 14 }],
-    [43, { scale: 0.45, offsetX: 8, offsetY: 13 }],
-    [44, { scale: 0.35, offsetX: 18, offsetY: 19 }],
-    [46, { scale: 0.4, offsetX: 8, offsetY: 12 }],
-    [47, { scale: 0.26, offsetX: 6, offsetY: 22 }],
-])
 
 export interface SeedPacketRenderArgs {
+    definitions: PresentationDefinitions
+    node?: Node
     name?: string
     parent: Node
     layer?: number
@@ -155,6 +74,7 @@ export class SeedPacketRenderer {
         const scale = args.scale ?? 1
         const rootScale = scale > 1 ? 1 : scale
         const root = uiNode({
+            node: args.node,
             name: args.name ?? 'SeedPacket',
             parent: args.parent,
             layer: args.layer,
@@ -190,14 +110,14 @@ export class SeedPacketRenderer {
     }
 
     private static _drawPlantIcon(root: Node, args: SeedPacketRenderArgs, scale: number) {
-        const seedId = typeof args.seedType === 'string' ? SEED_PACKET_ICON_IDS[args.seedType] : args.seedType
+        const plantId = typeof args.seedType === 'string' && !args.seedType.includes(':') ? `pvz:${args.seedType}` : args.seedType
+        const seedId = typeof plantId === 'string' ? plantVisual(args.definitions, plantId)?.preview : plantId
         if (typeof seedId !== 'number') return
 
-        const plantId = args.seedType === 'explodenut' ? 'explodenut' : RENDERED_PLANTS[seedId] ?? seedId
         const icon = uiNode({ name: 'PacketPlant', parent: root, layer: args.layer }).node
-        const placement = PLANT_PLACEMENTS.get(seedId) ?? DEFAULT_PLANT_PLACEMENT
+        const placement = args.definitions.seedPackets.placements[seedId] ?? args.definitions.seedPackets.defaultPlacement
         const iconScale = scale > 1 ? scale : 1
-        icon.addComponent(PlantPreview).initialize(plantId, parent => this._drawCachedPlantIcon(parent, seedId, args, scale), {
+        icon.addComponent(PlantPreview).initialize(args.definitions, plantId, parent => this._drawCachedPlantIcon(parent, seedId, args, scale), {
             x: placement.offsetX * iconScale, y: -(placement.offsetY + 1) * iconScale,
             scale: placement.scale * iconScale,
         }, iconScale)
@@ -209,11 +129,11 @@ export class SeedPacketRenderer {
             return
         }
 
-        const packetPlantCel = PACKET_PLANT_CELS.get(seedId)
+        const packetPlantCel = args.definitions.seedPackets.plantCels[seedId]
         const atlas = await (args.loadSprite ?? loadPacketSprite)(packetPlantCel != null ? 'packet_plants' : 'packet_plants_cached')
         if (!isValid(root, true)) return
 
-        const icon = uiNode({
+        uiNode({
             name: 'PacketPlant',
             parent: root,
             layer: args.layer,
@@ -231,18 +151,14 @@ export class SeedPacketRenderer {
                 sizeMode: Sprite.SizeMode.RAW,
                 trim: false,
             },
-        }).node
-        if (args.seedType === 'explodenut') {
-            const sprite = icon.getComponent(Sprite)
-            if (sprite) sprite.color = new Color(255, 64, 64)
-        }
+        })
     }
 
     private static async _drawScaledCachedPlant(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number): Promise<void> {
         const atlas = await (args.loadSprite ?? loadPacketSprite)('plant_previews_cached')
         if (!isValid(root, true)) return
 
-        const placement = PLANT_PLACEMENTS.get(seedId) ?? DEFAULT_PLANT_PLACEMENT
+        const placement = args.definitions.seedPackets.placements[seedId] ?? args.definitions.seedPackets.defaultPlacement
         const plantRoot = uiNode({
             name: 'PacketPlant',
             parent: root,
@@ -253,7 +169,7 @@ export class SeedPacketRenderer {
         }).node
         plantRoot.setScale(placement.scale * scale, placement.scale * scale, 1)
 
-        const icon = uiNode({
+        uiNode({
             name: 'CachedPlantPreview',
             parent: plantRoot,
             layer: args.layer,
@@ -271,11 +187,7 @@ export class SeedPacketRenderer {
                 sizeMode: Sprite.SizeMode.RAW,
                 trim: false,
             },
-        }).node
-        if (args.seedType === 'explodenut') {
-            const sprite = icon.getComponent(Sprite)
-            if (sprite) sprite.color = new Color(255, 64, 64)
-        }
+        })
     }
 
     private static _drawCost(

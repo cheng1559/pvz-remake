@@ -21,6 +21,7 @@ const ADVICE_TUTORIAL_LEVEL2_Y = 476
 const ADVICE_TUTORIAL_LEVEL2_HEIGHT = 100
 const ADVICE_WIDTH = 800
 const ADVICE_DURATION_FAST = 500
+const ADVICE_DURATION_LONG = 1500
 const ADVICE_DURATION_STAY = 10000
 const PVZ_NATIVE_FONT_SIZE = 0
 const ADVICE_TEXT_SIZE = PVZ_NATIVE_FONT_SIZE
@@ -201,6 +202,7 @@ export class AdviceWidget {
                     backdropAlpha: 128,
                 }
             case 'hint-stay':
+            case 'hint-long':
             case 'hint':
             default:
                 return {
@@ -236,7 +238,7 @@ export class AdviceWidget {
         const wrappedHeight = (
             metrics.height - metrics.ascentPadding + Math.max(0, lineCount - 1) * metrics.lineSpacing
         ) * scale
-        const defaultLines = this._style === 'hint' || this._style === 'hint-stay' ? 1 : 2
+        const defaultLines = this._style.startsWith('hint') ? 1 : 2
         return {
             height: wrappedHeight,
             defaultHeight: (metrics.height - metrics.ascentPadding + (defaultLines - 1) * metrics.lineSpacing) * scale,
@@ -246,6 +248,8 @@ export class AdviceWidget {
 
     private _durationForStyle(style: AdviceWidgetStyle) {
         switch (style) {
+            case 'hint-long':
+                return ADVICE_DURATION_LONG
             case 'hint-stay':
             case 'tutorial-level1-stay':
             case 'tutorial-later-stay':

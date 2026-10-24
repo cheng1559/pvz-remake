@@ -5,11 +5,11 @@ import tempfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-from generate_packet_plant_cache import ANIMATION_NAMES
+from generate_packet_plant_cache import ANIMATION_NAMES, style_for
+from reanim_converter import plant_display_nodes
 from generate_zombie_preview_cache import CACHE_BASE_X, CACHE_BASE_Y, HIDDEN_BY_DEFAULT, ZOMBIE_DEFINITIONS, zombie_preview_matrix
 
 ROOT = Path(__file__).resolve().parents[1]
-PLANT_IDLE = {4: "anim_armed", 9: "anim_bigidle", 44: "anim_idle"}
 PLANT_OFFSET = {11: [0, 55], 23: [0, 18], 33: [0, -20], 35: [0, 20], 47: [-40, 0]}
 # PlantDrawHeightOffset and Plant::UpdateReanim, in the original Y-down coordinates.
 PLANT_HEIGHT = {8: 5, 11: -40, 13: -14, 16: 25, 19: 24, 21: 15, 24: 28, 29: 10, 30: 15, 33: 26, 35: -20, 46: 21}
@@ -22,6 +22,11 @@ ZOMBIE_SHADOW = {3: [30, 92], 5: [29, 96], 7: [41, 92], 8: [19, 92], 9: [19, 92]
 
 
 def almanac_definitions(raw_root: Path) -> tuple[dict, dict, list]:
+    from build_pvz_base import ADVENTURE_12_CLIPS, LEVEL_CLIPS, PLANT_ZOMBIE_CLIPS
+
+    shared_clips = {(source.stem, node, clip): content_id
+                    for source, node, clip, content_id in [*LEVEL_CLIPS, *ADVENTURE_12_CLIPS, *PLANT_ZOMBIE_CLIPS]}
+    shared_clips[('peashooter', 'face', 'anim_blink')] = shared_clips[('peashootersingle', 'face', 'anim_blink')]
     configs = json.loads((ROOT / "tools/anim_defs.json").read_text())
     catalog = {"plants": [], "zombies": []}
     clips = []
@@ -31,8 +36,12 @@ def almanac_definitions(raw_root: Path) -> tuple[dict, dict, list]:
         if source not in fps_cache:
             root = ElementTree.fromstring("<root>" + (raw_root / "reanim" / f"{source}.reanim").read_text() + "</root>")
             fps_cache[source] = float(root.findtext("fps", "12"))
-        content_id = f"pvz:almanac_{kind}_{entry_id}_{content_name or node.lower()}"
-        clips.append((raw_root / "reanim" / f"{source}.reanim", node, clip, content_id))
+        shared = shared_clips.get((source, node, clip))
+        if kind == 'zombie' and entry_id == 0:
+            shared = shared_clips[(source, 'body', clip)]
+        content_id = shared or f"pvz:almanac_{kind}_{entry_id}_{content_name or node.lower()}"
+        if not shared:
+            clips.append((raw_root / "reanim" / f"{source}.reanim", node, clip, content_id))
         return {"name": node, "id": content_id, "fps": fps_cache[source], **extra}
 
     for seed_id, source in ANIMATION_NAMES.items():
@@ -41,47 +50,13 @@ def almanac_definitions(raw_root: Path) -> tuple[dict, dict, list]:
             # Both the original idle plant and cached packet pose hide the butter.
             nodes["body"]["hiddenTrackPrefixes"] = ["Cornpult_butter"]
         parts = []
-        for node, config in nodes.items():
-            if node == "glow":
-                continue
-            animations = config["animations"]
-            if node == "body":
-                clip = PLANT_IDLE.get(seed_id, "anim_idle")
-                if clip not in animations:
-                    clip = animations[0]
-                body = part("plant", seed_id, source, node, clip)
-                packet_clip = {9: "anim_idle", 19: "anim_idle_aquarium"}.get(seed_id)
-                if packet_clip and packet_clip != clip:
-                    body["packetId"] = part("plant", seed_id, source, node, packet_clip, content_name="packet_body")["id"]
-                parts.append(body)
-                continue
-            clip = next((name for name in animations if "idle" in name or "blink" in name.lower()), animations[0])
-            attach = None
-            if node.startswith("head"):
-                track = "anim_stem" if "anim_stem" in nodes["body"]["slots"] else f"anim_{node}"
-                if track not in nodes["body"]["slots"]:
-                    track = "anim_idle"
-                attach = {"parent": "body", "track": track}
-            elif node == "backHead":
-                attach = {"parent": "body", "track": "anim_idle"}
-            elif node.startswith("face"):
-                suffix = node.removeprefix("face")
-                head = f"head{suffix}"
-                parent = head if head in nodes else "body"
-                track = f"anim_face{suffix}"
-                if track not in nodes[parent]["slots"]:
-                    track = nodes[parent]["slots"][0] if nodes[parent]["slots"] else "anim_idle"
-                attach = {"parent": parent, "track": track}
-            elif node == "backFace":
-                # This blink lives in the same coordinate space as the rear head.
-                attach = {"parent": "body", "track": "anim_idle"}
-            else:
-                continue
-            parts.append(part("plant", seed_id, source, node, clip, **attach, blink="blink" in clip.lower()))
-        if source == "threepeater":
-            # Original attachment tracks and cached portraits draw heads 1, 3, then 2.
-            order = ["body", "head1", "face1", "head3", "face3", "head2", "face2"]
-            parts.sort(key=lambda item: order.index(item["name"]))
+        for definition in plant_display_nodes(seed_id, nodes):
+            node, clip = definition.pop('name'), definition.pop('animation')
+            packet_clip = definition.pop('packetAnimation', None)
+            value = part('plant', seed_id, source, node, clip, **definition)
+            if packet_clip:
+                value['packetId'] = part('plant', seed_id, source, node, packet_clip, content_name='packet_body')['id']
+            parts.append(value)
         rate = [15, 20] if seed_id in (0, 5, 7, 18, 28, 40) else [10, 15]
         if seed_id == 4:
             rate = [12, 12]
@@ -148,6 +123,20 @@ def almanac_definitions(raw_root: Path) -> tuple[dict, dict, list]:
         catalog["zombies"].append({"parts": parts, "offset": ZOMBIE_OFFSET.get(zombie_id, [0, 0]), "drawOffset": ZOMBIE_DRAW.get(zombie_id, [0, 0]), "rate": rates.get(zombie_id, [12, 18]), "scale": scale,
             "shadow": zombie_id not in (12, 20, 22, 25), "shadowOffset": ZOMBIE_SHADOW.get(zombie_id, [23, 92]), "shadowScale": scale * (1.5 if zombie_id == 23 else 0.6 if zombie_id == 24 else 1),
             "portrait": portrait, **({"motion": "pogo"} if zombie_id == 18 else {"motion": "bungee"} if zombie_id == 20 else {})})
+    # Registered entities keep only UI layout here; resources/attachments/rates come from the registry.
+    for kind, targets in [('plants', ['peashooter', 'sunflower', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'repeater']),
+                          ('zombies', ['normal', 'flag', 'conehead', 'pole_vaulter', 'buckethead'])]:
+        for entry_id, target in enumerate(targets):
+            entry = catalog[kind][entry_id]
+            entry['animationTarget'] = f'pvz:{target}'
+            entry.pop('parts')
+            entry.pop('rate')
+            if kind == 'zombies' and entry.get('portrait', {}).get('parts'):
+                entry['portrait']['parts'] = [{'name': 'flag'}, {'name': 'body'}]
+    for seed_id, entry in enumerate(catalog['plants']):
+        ratio = style_for(seed_id)['timeRatio']
+        if ratio:
+            entry['packetTimeRatio'] = ratio
     return catalog, configs, clips
 
 

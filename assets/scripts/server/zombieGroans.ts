@@ -1,5 +1,5 @@
 import type { GameSystem } from '@/ecs/index'
-import { LevelStateResource, RandomResource, ZombieComponent } from './gameplay'
+import { LevelStateResource, RandomResource, ZombieComponent } from './components'
 import { ItemComponent } from './levelState'
 import { EventQueueResource, emitServerEvent } from './events'
 

@@ -1,6 +1,12 @@
 import type { GameSystem, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { EconomyStateResource, LevelStateResource, PositionComponent, RandomResource, type Position } from './gameplay'
+import {
+    EconomyStateResource,
+    LevelStateResource,
+    PositionComponent,
+    RandomResource,
+    type Position,
+} from './components'
 import { ItemComponent, type Item } from './levelState'
 
 const SUN_BANK_X = 15

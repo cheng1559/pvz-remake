@@ -1,3 +1,4 @@
+import { presentationFixture } from './presentationFixture'
 import assert from 'node:assert/strict'
 import { MenuApi } from '@/client/api/MenuApi'
 import { createLocalMenuTransport } from '@/app/LocalMenuApi'
@@ -5,6 +6,56 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { ModHost } from '@/shared/mod/ModHost'
+import * as animationDefinitions from '@/client/content/ClientAnimationRegistry'
+
+test('almanac shares level clips, attachments and mod overrides while retaining UI poses', () => {
+    const { resolveEntityDisplay } = load('client/reanim/EntityDisplay', {
+        '@/client/content/ClientAnimationRegistry': animationDefinitions,
+    })
+    const catalog = JSON.parse(readFileSync('assets/resources/almanac-animations.json', 'utf8'))
+    const animations = new animationDefinitions.ClientAnimationRegistry(presentationFixture)
+    const display = (kind: string, id: number) => resolveEntityDisplay(kind, id, catalog[kind][id], animations)
+    const nut = display('plants', 3)
+    assert.equal(nut.parts[0].id, animations.resolve('pvz:wallnut').body.reanimId)
+    assert.equal(nut.nutBlink, true)
+    assert.equal(nut.parts.filter((part: any) => part.blink).length, 3)
+    assert.deepEqual(nut.drawOffset, catalog.plants[3].drawOffset)
+    assert.equal(display('plants', 2).parts[0].id, animations.resolve('pvz:cherrybomb').idle.reanimId)
+    assert.equal(display('zombies', 0).parts[0].id, animations.resolve('pvz:normal').idle.reanimId)
+    assert.equal(display('zombies', 0).parts[0].idle2Id, animations.resolve('pvz:normal').idle2.reanimId)
+    assert.equal(display('plants', 23), catalog.plants[23], 'display-only plants retain their existing definition')
+
+    // Validate actual shared resources and sockets for animated details and static portraits.
+    const manifest = JSON.parse(readFileSync('assets/bundles/pvz-base/manifest.json', 'utf8'))
+    for (const kind of ['plants', 'zombies']) for (let id = 0; id < catalog[kind].length; id++) {
+        const entry = display(kind, id)
+        for (const parts of [entry.parts, entry.portrait?.parts ?? []]) {
+            const clips = new Map(parts.map((part: any) => [part.name,
+                JSON.parse(readFileSync(`assets/bundles/pvz-base/${manifest.client.reanim[part.id]}.json`, 'utf8'))]))
+            for (const part of parts) if (part.parent) {
+                const parent = clips.get(part.parent) as any
+                assert.ok(parent?.tracks.some((track: any) => track.id === part.track), `${kind} ${id}: missing ${part.track}`)
+            }
+        }
+    }
+
+    const host = new ModHost('test:animations', {})
+    host.around(animations, 'resolve', function (next, target) {
+        const clips = next(target)
+        if (target === 'pvz:peashooter') return { ...clips, idleHead: { ...clips.idleHead,
+            reanimId: 'test:head', attachmentTrackId: 'test_stem', rateScale: 2 } }
+        if (target === 'pvz:flag') return { ...clips, flag: { ...clips.flag, reanimId: 'test:flag' } }
+        return clips
+    })
+    try {
+        const pea = display('plants', 0)
+        assert.equal(pea.parts[1].id, 'test:head')
+        assert.equal(pea.parts[1].track, 'test_stem')
+        assert.equal(pea.parts[1].rateScale, 2)
+        assert.equal(display('zombies', 1).portrait.parts[0].id, 'test:flag')
+    } finally { host.dispose() }
+})
 
 function load(path: string, modules: Record<string, unknown> = {}) {
     const module = { exports: {} as Record<string, any> }

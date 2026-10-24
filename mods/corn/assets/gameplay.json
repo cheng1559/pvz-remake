@@ -1,0 +1,61 @@
+{
+  "plants": {
+    "corn:cob_cannon": {
+      "maxHealth": 300,
+      "body": { "x": 0, "y": 0, "width": 140, "height": 80 },
+      "behavior": {
+        "basePlant": "corn:kernel_pult", "width": 2,
+        "initialArmingTicks": 500, "rechargeTicks": 3000, "chargeTicks": 125, "chargeSoundTicks": 63,
+        "shootTicks": 350, "releaseTicks": 205, "launchSoundTicks": 168,
+        "clickDelayTicks": 30, "clickGuardRadius": 100, "minTargetY": 80,
+        "origin": { "x": -44, "y": -184 }, "projectile": "corn:cob",
+        "flight": { "speed": 8, "turnZ": -700, "collisionZ": -60, "groundZ": -40, "targetOffsetX": 87, "velocityX": 0.001 },
+        "explosion": { "offset": { "x": 80, "y": 40 }, "radius": 115, "rowRange": 1, "damage": 1800, "burn": true }
+      }
+    },
+    "corn:kernel_pult": {
+      "maxHealth": 300,
+      "body": { "x": 10, "y": 0, "width": 60, "height": 80 },
+      "behavior": {
+        "cadenceTicks": 300, "cadenceJitter": 15,
+        "releaseTicks": 29, "shootTicks": 98, "butterChance": 0.25,
+        "stunTicks": 400, "attack": { "x": 60, "width": 800 },
+        "lob": {
+          "leadTicks": 50, "targetOffsetX": 30, "fallbackX": 700, "minRangeX": 40,
+          "rangeDivisor": 120, "launchSpeedZ": 7, "gravity": 0.115,
+          "collisionDelayTicks": 20, "kernelCollisionZ": -30, "butterCollisionZ": -32, "groundZ": 80,
+          "kernelRotation": { "initial": 0, "speed": [-0.2, -0.08] },
+          "butterRotation": { "initial": -0.8796459430051421, "speed": [-0.08, -0.02] },
+          "impactOffset": { "x": -20, "y": 63, "targetX": 52 }
+        },
+        "kernel": "corn:kernel", "butter": "corn:butter",
+        "kernelOrigin": { "x": 19, "y": -37 }, "butterOrigin": { "x": 12, "y": -56 }
+      }
+    }
+  },
+  "seeds": {
+    "corn:kernel_pult": { "plant": "corn:kernel_pult", "sunCost": 100, "cooldownTicks": 750, "placement": "ground" },
+    "corn:cob_cannon": { "plant": "corn:cob_cannon", "sunCost": 500, "cooldownTicks": 5000, "placement": "ground" }
+  },
+  "projectiles": {
+    "corn:cob": { "damage": 300, "speedPerTick": { "x": 0, "y": 0 }, "hitbox": { "x": -34, "y": -76, "width": 230, "height": 230 } },
+    "corn:kernel": { "damage": 20, "speedPerTick": { "x": 0, "y": 0 }, "hitbox": { "x": 0, "y": 0, "width": 40, "height": 40 } },
+    "corn:butter": { "damage": 40, "speedPerTick": { "x": 0, "y": 0 }, "hitbox": { "x": 0, "y": 0, "width": 40, "height": 40 } }
+  },
+  "levels": {
+    "corn:cannon_testing": {
+      "adventureIndex": 1, "board": "pvz:day", "activeRows": [0, 1, 2, 3, 4], "startingSun": 2000,
+      "seedPackets": ["corn:kernel_pult", "corn:cob_cannon", "pvz:sunflower", "pvz:peashooter"],
+      "lawnMower": "pvz:standard", "skySun": "pvz:sun", "tutorial": "pvz:adventure-1-1",
+      "waves": [{"zombies": ["pvz:normal", "pvz:conehead"]}, {"zombies": ["pvz:buckethead", "pvz:normal"]}],
+      "award": {"kind": "seed", "id": "pvz:sunflower", "packetCost": 50}
+    },
+    "corn:testing": {
+      "adventureIndex": 1, "board": "pvz:day", "activeRows": [2], "startingSun": 500,
+      "seedPackets": ["pvz:peashooter", "pvz:sunflower", "corn:kernel_pult"],
+      "lawnMower": "pvz:standard", "skySun": "pvz:sun", "tutorial": "pvz:adventure-1-1",
+      "waves": [{ "zombies": ["pvz:normal", "pvz:normal"] }, { "zombies": ["pvz:conehead", "pvz:normal"] }],
+      "award": { "kind": "seed", "id": "pvz:sunflower", "packetCost": 50 }
+    }
+  }
+}

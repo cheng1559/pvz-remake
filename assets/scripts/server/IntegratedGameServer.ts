@@ -8,12 +8,9 @@ import type {
 } from '@/shared/content/gameplay'
 import type { EnabledMod, ServerEvent, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import type { GameCommand } from '@/shared/protocol/index'
+import { jsonRoundTrip } from '@/shared/protocol/index'
 import { DeterministicRng } from './DeterministicRng'
-import {
-    GameplaySystemMods,
-    createGameplaySystemBindings,
-    type ScheduledGameplaySystem,
-} from './GameplaySystemMods'
+import { GameplayRegistry } from './GameplayRegistry'
 import {
     EconomyStateResource,
     LawnMowerComponent,
@@ -25,11 +22,13 @@ import {
     RandomResource,
     SeedBankResource,
     ZombieComponent,
-    createPeashooterSystem,
-    createProjectileSystem,
-    createZombieSystem,
-    spawnZombie,
-} from './gameplay'
+} from './components'
+import { createPeashooterSystem } from './plants/shooter'
+import { createPlantAbilitySystem, initialPlantAbility } from './plants/abilities'
+import { createProjectileSystem } from './projectiles'
+import { createZombieSystem } from './zombies/system'
+import { spawnZombie } from './zombies/spawn'
+import { ZombieBehaviorsResource } from './zombies/behaviors'
 import {
     EventQueueResource,
     createEventQueue,
@@ -42,7 +41,7 @@ import { createItemSystem, getAvailableSun } from './items'
 import { createWaveSystem } from './waves'
 import { createZombieGroanSystem } from './zombieGroans'
 import { getActiveTutorial } from './tutorials'
-import { createProductionSystem } from './production'
+import { createProductionSystem } from './plants/production'
 import { createMowerSystem } from './mower'
 import { debugSuccess, parseDebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { executeDebugGameCommand } from './debug/DebugCommands'
@@ -89,11 +88,12 @@ export class IntegratedGameServer {
     constructor(
         private readonly definitions: GameplayDefinitions,
         private readonly levels: GameplayLevels,
-        private readonly systemMods = new GameplaySystemMods(),
+        private readonly gameplay = new GameplayRegistry(),
     ) {
         if (definitions.tickSeconds !== 0.01) {
             throw new Error('IntegratedGameServer requires a 0.01 second fixed tick')
         }
+        this.gameplay.freeze(definitions)
     }
 
     start(packet: StartSessionPacket): WorldSnapshot {
@@ -102,7 +102,7 @@ export class IntegratedGameServer {
         if (!level) throw new Error(`Unknown level: ${packet.levelId}`)
 
         const board = this.definitions.boards[level.board]
-        const world = new World()
+        const world = this.createWorld()
         world.resources.set(LevelStateResource, {
             id: packet.levelId,
             definition: level,
@@ -149,7 +149,8 @@ export class IntegratedGameServer {
         const { world, tick, gameplayTick, mods } = this.requireSession()
         const level = world.resources.get(LevelStateResource)
         const entities = world.queryableEntities().map(entityId => {
-            const entity: SavedEntity = { entityId }
+            const extensions = this.gameplay.components.capture(world, entityId)
+            const entity: SavedEntity = { entityId, ...(Object.keys(extensions).length ? { extensions } : {}) }
             const position = world.get(entityId, PositionComponent)
             const lawnMower = world.get(entityId, LawnMowerComponent)
             const plant = world.get(entityId, PlantComponent)
@@ -159,13 +160,19 @@ export class IntegratedGameServer {
             const item = world.get(entityId, ItemComponent)
             if (position) entity.position = { ...position }
             if (lawnMower) entity.lawnMower = { ...lawnMower }
-            if (plant) entity.plant = { ...plant }
+            if (plant) {
+                this.gameplay.plantBehaviors.validateState(plant, this.definitions.plants[plant.typeId])
+                entity.plant = { ...plant, ...(plant.ability ? { ability: { ...plant.ability } } : {}) }
+            }
             if (plantAttack) entity.plantAttack = {
                 readyAtTick: plantAttack.readyAtTick,
                 ...(plantAttack.fireAtTick === undefined ? {} : { fireAtTick: plantAttack.fireAtTick }),
                 ...(plantAttack.shotsRemaining === undefined ? {} : { shotsRemaining: plantAttack.shotsRemaining }),
             }
-            if (zombie) entity.zombie = { ...zombie }
+            if (zombie) {
+                this.gameplay.zombieBehaviors.validateState(zombie, this.definitions.zombies[zombie.typeId])
+                entity.zombie = { ...zombie }
+            }
             if (projectile) entity.projectile = { ...projectile }
             if (item) entity.item = { ...item }
             return entity
@@ -201,6 +208,7 @@ export class IntegratedGameServer {
                 ...(tutorial.seedRefreshAdviceShown === undefined
                     ? {}
                     : { seedRefreshAdviceShown: tutorial.seedRefreshAdviceShown }),
+                ...(tutorial.displayedAdvice === undefined ? {} : { displayedAdvice: [...tutorial.displayedAdvice] }),
             },
             wave: {
                 index: wave.index,
@@ -242,15 +250,16 @@ export class IntegratedGameServer {
             save.wave.rowPicks.some(row => !definition.activeRows.includes(row.row)))) {
             throw new Error('Saved wave row history does not match the level')
         }
+        if (save.seedBank.packets.length !== definition.seedPackets.length) throw new Error('Saved seed bank size does not match the level')
         for (const packet of save.seedBank.packets) {
-            if (!definition.seedPackets.includes(packet.seedId)) throw new Error(`Unknown saved seed: ${packet.seedId}`)
+            if (!this.definitions.seeds[packet.seedId]) throw new Error(`Unknown saved seed: ${packet.seedId}`)
         }
         if (save.seedBank.selectedSeedId !== undefined &&
             !save.seedBank.packets.some(packet => packet.seedId === save.seedBank.selectedSeedId)) {
             throw new Error('Saved selected seed is not in the seed bank')
         }
 
-        const world = new World()
+        const world = this.createWorld()
         world.resources.set(LevelStateResource, {
             id: save.levelId,
             definition,
@@ -321,7 +330,7 @@ export class IntegratedGameServer {
             const level = session.world.resources.get(LevelStateResource)
             const playing = level.phase === 'gameplay' && !level.paused && level.result === 'playing'
             const inputCommand = processInput && playing && (
-                command.type === 'selectSeed' || command.type === 'clearCursor' || command.type === 'placePlant'
+                command.type === 'selectSeed' || command.type === 'clearCursor' || command.type === 'placePlant' || command.type === 'mod'
             )
             if (!isSessionCommand(command) && !inputCommand && playing) {
                 break
@@ -419,7 +428,11 @@ export class IntegratedGameServer {
         const plants = [...world.query(PositionComponent, PlantComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
             const plant = world.get(entity, PlantComponent)!
-            return { entityId: entity, ...plant, ...position }
+            return {
+                entityId: entity, ...plant, ...position,
+                ...(plant.ability ? { ability: { ...plant.ability } } : {}),
+                ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
+            }
         })
         const zombies = [...world.query(PositionComponent, ZombieComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
@@ -439,6 +452,10 @@ export class IntegratedGameServer {
                 hasTongue: zombie.hasTongue,
                 hasArm: zombie.hasArm,
                 hitFlashCounter: zombie.hitFlashCounter,
+                helmHealth: zombie.helmHealth,
+                chilled: zombie.chilledTicks > 0,
+                hasPole: zombie.hasPole,
+                ...(zombie.behaviorState ? { behaviorState: jsonRoundTrip(zombie.behaviorState) } : {}),
                 ...position,
             }
         })
@@ -492,7 +509,7 @@ export class IntegratedGameServer {
             items,
             lawnMowers,
             tutorial: { id: level.definition.tutorial, step: tutorial.step },
-            extensions: world.resources.has(DebugRulesResource) ? { 'pvz:debug': { ...getDebugRules(world) } } : {},
+            extensions: { ...this.gameplay.components.snapshot(world), ...(world.resources.has(DebugRulesResource) ? { 'pvz:debug': { ...getDebugRules(world) } } : {}) },
         }
     }
 
@@ -507,22 +524,22 @@ export class IntegratedGameServer {
 
     private createSchedule(): Schedule {
         const schedule = new Schedule()
-        const systems: ScheduledGameplaySystem[] = [
+        const systems = [
             { phase: 'command', system: { id: 'pvz:commands', run: () => this.processCommandPhase() } },
             { phase: 'tutorial', system: createLevelProgressSystem(this.definitions) },
             { phase: 'spawn', system: createWaveSystem(this.definitions) },
             { phase: 'plant', system: createPeashooterSystem(this.definitions) },
             { phase: 'plant', system: createProductionSystem(this.definitions) },
+            { phase: 'plant', system: createPlantAbilitySystem(this.definitions) },
+            { phase: 'plant', system: this.gameplay.plantBehaviors.system(this.definitions) },
             { phase: 'zombie', system: createZombieGroanSystem() },
             { phase: 'zombie', system: createZombieSystem(this.definitions) },
+            { phase: 'zombie', system: this.gameplay.zombieBehaviors.system(this.definitions) },
             { phase: 'projectile', system: createProjectileSystem(this.definitions) },
             { phase: 'mower', system: createMowerSystem(this.definitions) },
             { phase: 'cleanup', system: createItemSystem() },
         ]
-        for (const { phase, system } of this.systemMods.apply(
-            systems,
-            createGameplaySystemBindings(this.definitions),
-        )) schedule.add(phase, system)
+        for (const { phase, system } of systems) schedule.add(phase as Parameters<Schedule['add']>[0], system)
         return schedule
     }
 
@@ -556,8 +573,11 @@ export class IntegratedGameServer {
         if (!saved.position) throw new Error(`Saved entity ${saved.entityId} has no position`)
         const kinds = [saved.lawnMower, saved.plant, saved.zombie, saved.projectile, saved.item]
             .filter(value => value !== undefined).length
-        if (kinds !== 1) throw new Error(`Saved entity ${saved.entityId} must have exactly one domain component`)
-        if ((saved.plantAttack !== undefined) !== (saved.plant !== undefined)) {
+        if (kinds !== 1 && !(kinds === 0 && saved.extensions && Object.keys(saved.extensions).length)) throw new Error(`Saved entity ${saved.entityId} must have exactly one domain component`)
+        const savedPlantDefinition = saved.plant ? this.definitions.plants[saved.plant.typeId] : undefined
+        const hasAttack = !!(savedPlantDefinition?.shooter || savedPlantDefinition?.producer)
+        if (saved.plantAttack !== undefined && !hasAttack ||
+            saved.plant !== undefined && savedPlantDefinition !== undefined && hasAttack !== (saved.plantAttack !== undefined)) {
             throw new Error(`Saved entity ${saved.entityId} has an invalid plant attack component`)
         }
         const level = world.resources.get(LevelStateResource)
@@ -575,6 +595,7 @@ export class IntegratedGameServer {
             if (!plant || !seed || seed.plant !== saved.plant.typeId) {
                 throw new Error(`Unknown saved plant: ${saved.plant.typeId}`)
             }
+            this.gameplay.plantBehaviors.validateState(saved.plant, plant)
             if (!boardRow || saved.plant.column >= level.board.columns ||
                 saved.plant.maxHealth !== plant.maxHealth) {
                 throw new Error(`Saved plant ${saved.entityId} is invalid for the level`)
@@ -583,11 +604,18 @@ export class IntegratedGameServer {
                 saved.plantAttack.shotsRemaining > (plant.shooter?.shotsPerBurst ?? 0)) {
                 throw new Error(`Saved plant ${saved.entityId} has invalid burst state`)
             }
+            if ((saved.plant.ability === undefined) !== (initialPlantAbility(plant) === undefined) ||
+                saved.plant.ability && !abilityMatches(plant, saved.plant.ability.state)) {
+                throw new Error(`Saved plant ${saved.entityId} has an invalid ability state`)
+            }
         }
         if (saved.zombie) {
             const zombie = this.definitions.zombies[saved.zombie.typeId]
             if (!zombie) throw new Error(`Unknown saved zombie: ${saved.zombie.typeId}`)
-            if (!boardRow || saved.zombie.maxHealth !== zombie.maxHealth) {
+            this.gameplay.zombieBehaviors.validateState(saved.zombie, zombie)
+            if (!boardRow || saved.zombie.maxHealth !== zombie.maxHealth ||
+                saved.zombie.helmHealth > (zombie.helm?.health ?? 0) || saved.zombie.hasPole && !zombie.vault ||
+                (saved.zombie.animation === 'anim_run' || saved.zombie.state === 'vaulting') && !zombie.vault) {
                 throw new Error(`Saved zombie ${saved.entityId} is invalid for the level`)
             }
         }
@@ -603,6 +631,7 @@ export class IntegratedGameServer {
         }
 
         world.activateEntity(saved.entityId)
+        this.gameplay.components.restore(world, saved.entityId, saved.extensions ?? {})
         world.add(saved.entityId, PositionComponent, { ...saved.position })
         if (saved.lawnMower) world.add(saved.entityId, LawnMowerComponent, { ...saved.lawnMower })
         if (saved.plant) world.add(saved.entityId, PlantComponent, { ...saved.plant })
@@ -661,26 +690,12 @@ export class IntegratedGameServer {
         if (!Number.isInteger(column) || column < 0 || column >= level.board.columns) {
             return 'column-out-of-range'
         }
-        let occupiedEntity: number | undefined
-        let occupiedPlantType: string | undefined
-        let plantedSeedId = seedId
-        for (const entity of world.query(PositionComponent, PlantComponent)) {
-            const position = world.get(entity, PositionComponent)!
-            const plant = world.get(entity, PlantComponent)!
-            if (position.row === row && plant.column === column) {
-                occupiedEntity = entity
-                occupiedPlantType = plant.typeId
-            }
-        }
-        const upgradeSeedId = occupiedPlantType === undefined
-            ? undefined
-            : this.systemMods.resolvePlantUpgrade(seedId, occupiedPlantType)
-        if (occupiedEntity !== undefined && !upgradeSeedId) return 'cell-occupied'
-        if (upgradeSeedId) plantedSeedId = upgradeSeedId
+        const occupiedEntity = this.findPlantAt(world, row, column)
+        if (occupiedEntity !== undefined) return 'cell-occupied'
 
-        const plantedSeed = this.definitions.seeds[plantedSeedId]
+        const plantedSeed = this.definitions.seeds[seedId]
         const definition = this.definitions.plants[plantedSeed.plant]
-        if (occupiedEntity !== undefined) world.destroyEntity(occupiedEntity)
+        const behaviorState = this.gameplay.plantBehaviors.createState(plantedSeed.plant, definition)
         const entity = world.createEntity()
         world.add(entity, PositionComponent, {
             x: level.board.origin.x + column * level.board.cell.width,
@@ -689,13 +704,17 @@ export class IntegratedGameServer {
         })
         world.add(entity, PlantComponent, {
             typeId: plantedSeed.plant,
-            seedId: plantedSeedId,
+            seedId: seedId,
             column,
             health: definition.maxHealth,
             maxHealth: definition.maxHealth,
             eatenFlashCounter: 0,
+            recentlyEatenCounter: 0,
+            ...(behaviorState === undefined ? {} : { behaviorState }),
         })
-        world.add(entity, PlantAttackComponent, {
+        const ability = initialPlantAbility(definition)
+        if (ability) world.get(entity, PlantComponent)!.ability = ability
+        if (definition.shooter || definition.producer) world.add(entity, PlantAttackComponent, {
             readyAtTick: gameplayTick + (definition.shooter?.initialDelayTicks ?? world.resources.get(RandomResource).integer(
                 definition.producer!.initialDelayTicks.min, definition.producer!.initialDelayTicks.max,
             )),
@@ -714,6 +733,11 @@ export class IntegratedGameServer {
             row,
             column,
         })
+    }
+
+    private findPlantAt(world: World, row: number, column: number): number | undefined {
+        return [...world.query(PositionComponent, PlantComponent)].find(entity =>
+            world.get(entity, PositionComponent)!.row === row && world.get(entity, PlantComponent)!.column === column)
     }
 
     private collectItem(session: Session, itemId: number): CommandRejectionCode | undefined {
@@ -812,6 +836,19 @@ export class IntegratedGameServer {
             level.board.origin.y + row * level.board.cell.height - 30,
         )
     }
+
+    private createWorld(): World {
+        const world = new World()
+        world.resources.set(ZombieBehaviorsResource, this.gameplay.zombieBehaviors)
+        return world
+    }
+}
+
+function abilityMatches(definition: GameplayDefinitions['plants'][string], state: string): boolean {
+    if (definition.fuse) return state === 'fuse'
+    if (definition.mine) return state === 'arming' || state === 'rising' || state === 'armed'
+    return state === 'ready' || state === 'biting' || state === 'got-one' || state === 'missed' ||
+        state === 'digesting' || state === 'swallowing'
 }
 
 function isSessionCommand(command: QueuedCommand): boolean {

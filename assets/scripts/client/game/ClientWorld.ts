@@ -61,7 +61,9 @@ export class ClientWorld {
         return {
             ...current,
             plants: interpolate(current.plants, previous?.plants, t),
-            zombies: interpolate(current.zombies, previous?.zombies, t),
+            // Landing changes the animation's origin; its pose and position must switch together.
+            zombies: interpolate(current.zombies, previous?.zombies, t,
+                (before, after) => before.state !== 'vaulting' || after.state === 'vaulting'),
             projectiles: interpolate(current.projectiles, previous?.projectiles, t),
             items: interpolateItems(current.items, previous?.items, t),
             lawnMowers: interpolate(current.lawnMowers, previous?.lawnMowers, t),
@@ -96,11 +98,12 @@ function interpolate<T extends Positioned>(
     current: T[],
     previous: T[] | undefined,
     alpha: number,
+    canInterpolate?: (before: T, after: T) => boolean,
 ): T[] {
     const previousById = new Map(previous?.map(entity => [entity.entityId, entity]))
     return current.map(entity => {
         const before = previousById.get(entity.entityId)
-        return before ? {
+        return before && (!canInterpolate || canInterpolate(before, entity)) ? {
             ...entity,
             x: before.x + (entity.x - before.x) * alpha,
             y: before.y + (entity.y - before.y) * alpha,

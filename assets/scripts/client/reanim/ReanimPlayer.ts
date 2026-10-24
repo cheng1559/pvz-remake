@@ -102,6 +102,7 @@ export class ReanimPlayer extends Component {
     private blendDuration = 0
     private blendElapsed = 0
     private readonly frameOverrides = new Map<string, SpriteFrame>()
+    private readonly trackColors = new Map<string, Color>()
     private attachment: TrackAttachment | null = null
     private restoredAttachmentTrackId: string | null = null
     private extraAdditive = false
@@ -109,6 +110,8 @@ export class ReanimPlayer extends Component {
     private colorOverride = Color.WHITE.clone()
 
     get durationSeconds(): number { return this.requireData().durationSeconds }
+    /** The loaded clip, or null before the first load. */
+    get loadedId(): string | null { return this.data?.id ?? null }
     get lastFrameTimeSeconds(): number {
         return Math.max(0, ...this.requireData().tracks.map(track => track.keyframes[track.keyframes.length - 1].timeSeconds))
     }
@@ -181,11 +184,12 @@ export class ReanimPlayer extends Component {
     blendFrom(previous: ReanimPlayer, durationSeconds: number): void {
         this.requireData()
         positiveFinite(durationSeconds, 'reanim blend duration')
+        // Capture before clearing: a repeated shot may blend from this player itself.
+        const poses = previous.requireData().tracks.map(track =>
+            [track.id, previous.sampleBlendedTrack(track)] as const)
         this.blendFromPoses.clear()
-        for (const track of this.requireData().tracks) {
-            const pose = previous.sampleTrack(track.id)
-            if (pose) this.blendFromPoses.set(track.id, pose)
-        }
+        const tracks = new Set(this.requireData().tracks.map(track => track.id))
+        for (const [id, pose] of poses) if (tracks.has(id) && pose?.sprite) this.blendFromPoses.set(id, pose)
         this.blendDuration = durationSeconds
         this.blendElapsed = 0
         this.applyPose()
@@ -231,6 +235,13 @@ export class ReanimPlayer extends Component {
     setTrackSpriteOverride(trackId: string, frame: SpriteFrame | null): void {
         if (frame) this.frameOverrides.set(trackId, frame)
         else this.frameOverrides.delete(trackId)
+        this.applyPose(trackId)
+    }
+
+    setTrackColorOverride(trackId: string, color: Color | null): void {
+        if (!this.views.has(trackId)) throw new Error(`unknown reanim track: ${trackId}`)
+        if (color) this.trackColors.set(trackId, color.clone())
+        else this.trackColors.delete(trackId)
         this.applyPose(trackId)
     }
 
@@ -389,11 +400,12 @@ export class ReanimPlayer extends Component {
             view.skew.setSkew(-appliedSkew, 0)
             view.node.setScale(pose.scaleX, scaleY, 1)
             view.sprite.spriteFrame = frame
+            const trackColor = this.trackColors.get(track.id) ?? Color.WHITE
             view.sprite.color = new Color(
-                this.colorOverride.r,
-                this.colorOverride.g,
-                this.colorOverride.b,
-                Math.round(pose.alpha * this.colorOverride.a),
+                Math.round(this.colorOverride.r * trackColor.r / 255),
+                Math.round(this.colorOverride.g * trackColor.g / 255),
+                Math.round(this.colorOverride.b * trackColor.b / 255),
+                Math.round(pose.alpha * this.colorOverride.a * trackColor.a / 255),
             )
             view.sprite.enabled = true
             if (this.extraAdditive) {
@@ -428,12 +440,17 @@ export class ReanimPlayer extends Component {
         return track ? sampleReanimTrack(track, timeSeconds) : null
     }
 
-    private sampleAttachedTrack(track: ReanimTrack): ReanimKeyframe | null {
+    private sampleBlendedTrack(track: ReanimTrack): ReanimKeyframe | null {
         let pose = sampleReanimTrack(track, this.timeSeconds)
         const blendFrom = this.blendFromPoses.get(track.id)
         if (pose && blendFrom && this.blendDuration > 0) {
             pose = blendPose(blendFrom, pose, Math.min(1, this.blendElapsed / this.blendDuration))
         }
+        return pose
+    }
+
+    private sampleAttachedTrack(track: ReanimTrack): ReanimKeyframe | null {
+        let pose = this.sampleBlendedTrack(track)
         if (pose && this.attachment) {
             const { parent, trackId, basePose } = this.attachment
             const parentTrack = parent.requireData().tracks.find(candidate => candidate.id === trackId)
@@ -444,6 +461,7 @@ export class ReanimPlayer extends Component {
     }
 
     private clearViews(): void {
+        this.trackColors.clear()
         for (const view of this.views.values()) if (view.node.isValid) view.node.destroy()
         this.views.clear()
     }

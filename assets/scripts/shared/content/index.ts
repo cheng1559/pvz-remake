@@ -25,6 +25,7 @@ export interface ContentManifest {
         levels: string
         strings: string
     }
+    presentation: { definitions: string }
     client: {
         bundle: string
         sprites: ContentEntries
@@ -42,7 +43,7 @@ const VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/
 export function parseContentManifest(value: unknown): ContentManifest {
     const manifest = exactObject(
         value,
-        ['schemaVersion', 'id', 'version', 'contentHash', 'gameplay', 'client'],
+        ['schemaVersion', 'id', 'version', 'contentHash', 'gameplay', 'presentation', 'client'],
         'content manifest',
         ['saveCompatibleHashes'],
     )
@@ -66,6 +67,7 @@ export function parseContentManifest(value: unknown): ContentManifest {
         ['definitions', 'levels', 'strings'],
         'content manifest.gameplay',
     )
+    const presentation = exactObject(manifest.presentation, ['definitions'], 'content manifest.presentation')
     const client = exactObject(
         manifest.client,
         ['bundle', ...CONTENT_CATEGORIES],
@@ -84,6 +86,7 @@ export function parseContentManifest(value: unknown): ContentManifest {
             levels: relativePath(gameplay.levels, 'content manifest.gameplay.levels'),
             strings: relativePath(gameplay.strings, 'content manifest.gameplay.strings'),
         },
+        presentation: { definitions: relativePath(presentation.definitions, 'content manifest.presentation.definitions') },
         client: {
             bundle: nonEmptyString(client.bundle, 'content manifest.client.bundle'),
             sprites: contentEntries(client.sprites, namespace, 'sprites'),

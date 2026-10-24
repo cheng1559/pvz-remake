@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image
+from reanim_converter import plant_display_nodes
 
 
 PACKET_WIDTH = 50
@@ -96,29 +97,6 @@ STYLES: dict[int, dict[str, float]] = {
     43: {"x": 8.0, "y": -14.0, "scale": 0.45},
 }
 
-NODE_CONFIGS: dict[int, dict[str, Any]] = {
-    0: {"nodes": ["body", "head"], "attachments": [("head", "body", "anim_stem")]},
-    5: {"nodes": ["body", "head"], "attachments": [("head", "body", "anim_stem")]},
-    7: {"nodes": ["body", "head"], "attachments": [("head", "body", "anim_stem")]},
-    18: {
-        "nodes": ["body", "head1", "head2", "head3"],
-        "attachments": [
-            ("head1", "body", "anim_head1"),
-            ("head2", "body", "anim_head2"),
-            ("head3", "body", "anim_head3"),
-        ],
-    },
-    28: {
-        "nodes": ["body", "head", "backHead"],
-        "attachments": [
-            ("head", "body", "anim_idle"),
-            ("backHead", "body", "anim_idle"),
-        ],
-    },
-    40: {"nodes": ["body", "head"], "attachments": [("head", "body", "anim_idle")]},
-}
-
-
 def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -127,31 +105,6 @@ def style_for(seed_id: int) -> dict[str, float]:
     style = DEFAULT_STYLE.copy()
     style.update(STYLES.get(seed_id, {}))
     return style
-
-
-def get_animation_name(node_data: dict[str, Any]) -> str | None:
-    names = list(node_data.get("animations", {}).keys())
-    for candidate in names:
-        if candidate == "anim_idle":
-            return candidate
-    for candidate in names:
-        if "head_idle" in candidate:
-            return candidate
-    for candidate in names:
-        if "idle" in candidate:
-            return candidate
-    for candidate in names:
-        if "blink" not in candidate.lower():
-            return candidate
-    return names[0] if names else None
-
-
-def get_animation_name_for_seed(seed_id: int, node_data: dict[str, Any]) -> str | None:
-    if seed_id == 4 and "anim_armed" in node_data.get("animations", {}):
-        return "anim_armed"
-    if seed_id == 19 and "anim_idle_aquarium" in node_data.get("animations", {}):
-        return "anim_idle_aquarium"
-    return get_animation_name(node_data)
 
 
 def sample_frames(frames: list[dict[str, Any]], target_frame: float) -> dict[str, Any] | None:
@@ -339,21 +292,25 @@ def render_frame_to_matrix(frame: dict[str, Any]) -> tuple[float, float, float, 
 
 
 def sample_tracks(animation_json: dict[str, Any], seed_id: int, style: dict[str, float]) -> list[dict[str, Any]]:
-    config = NODE_CONFIGS.get(seed_id, {"nodes": ["body"], "attachments": []})
+    parts = [part for part in plant_display_nodes(seed_id, animation_json) if not part.get('blink')]
     node_states: dict[str, dict[str, Any]] = {}
 
-    for node_name in config["nodes"]:
+    for part in parts:
+        node_name = part['name']
         node_data = animation_json.get(node_name)
         if not node_data:
             continue
-        anim_name = get_animation_name_for_seed(seed_id, node_data)
+        anim_name = part.get('packetAnimation', part['animation'])
         if not anim_name:
             continue
         anim_data = node_data["animations"][anim_name]
         time = max(0, anim_data["duration"] - 1) * style["timeRatio"]
         node_states[node_name] = {"data": node_data, "anim": anim_data, "time": time}
 
-    for child, parent, slot in config.get("attachments", []):
+    for part in parts:
+        if 'parent' not in part:
+            continue
+        child, parent, slot = part['name'], part['parent'], part['track']
         if child in node_states and parent in node_states:
             node_states[child]["parent"] = (parent, slot)
 

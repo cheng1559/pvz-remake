@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import type { World } from '@/ecs/index'
-import { damageZombie, spawnZombie } from '@/server/gameplay'
+import { damageZombie } from '@/server/zombies/damage'
+import { spawnZombie } from '@/server/zombies/spawn'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
@@ -160,14 +161,14 @@ test('a Flag Zombie drops its flag once when losing its head, dying or being mow
         const server = game()
         const world = (server as unknown as { session: { world: World } }).session.world
         const entity = spawnZombie(world, definitions, 'pvz:flag', 2, damage ? 600 : -40, 250)
-        if (damage) damageZombie(world, entity, damage)
+        if (damage) damageZombie(world, definitions, entity, damage)
         else server.tick()
         const dropped = server.drainEvents().filter(event => event.type === 'zombiePartDropped' && event.data.part === 'flag')
         assert.equal(dropped.length, 1)
         assert.equal(dropped[0].data.entityId, entity)
         const saved = server.save()
         server.start({ ...start, save: saved as unknown as JsonValue })
-        if (damage === 190) damageZombie((server as unknown as { session: { world: World } }).session.world, entity, 80)
+        if (damage === 190) damageZombie((server as unknown as { session: { world: World } }).session.world, definitions, entity, 80)
         for (let tick = 0; tick < 60; tick++) server.tick()
         assert.equal(server.drainEvents().filter(event => event.type === 'zombiePartDropped' && event.data.part === 'flag').length, 0)
     }

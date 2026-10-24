@@ -1,3 +1,4 @@
+import { ModHost } from '@/shared/mod/ModHost'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
@@ -8,38 +9,11 @@ import { register } from '../../mods/widescreen/src/client/index'
 import { extendCloud, extendFlower } from '../../mods/widescreen/src/client/animations'
 import { parseReanim } from '@/shared/content/reanim'
 
-test('screen Mod context supplies the Sprite component used by installed extensions', async () => {
-    class Sprite {}
-    class Node extends EventEmitter {
-        static EventType = { NODE_DESTROYED: 'destroyed' }
-        isValid = true
-        addComponent(type: any) {
-            if (!type) throw new TypeError('getComponent: Type must be non-nil')
-            return new type()
-        }
-    }
-    const node = new Node()
-    let applied = false, disposed = false
-    const modules: Record<string, any> = {
-        cc: { Node, Sprite },
-        './ModLoader': { loadInstalledMods: async () => ({ clientScreens: [{
-            targetId: 'pvz:main-menu',
-            apply(context: any) {
-                assert.ok(context.node.addComponent(context.engine.Sprite) instanceof Sprite)
-                applied = true
-                return () => { disposed = true }
-            },
-        }] }) },
-    }
-    const exports: any = {}
-    const code = transpileModule(readFileSync('assets/scripts/client/content/ClientScreenMods.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] })
-    await exports.applyClientScreenMods('pvz:main-menu', { node })
-    assert.equal(applied, true)
-    node.emit('destroyed')
-    assert.equal(disposed, true)
+test('failed widescreen assets do not alter the viewport during Mod initialization', async () => {
+    let expanded = false
+    const host = new ModHost('local:widescreen', { 'client/view/ClientViewport': { expandViewport() { expanded = true } } })
+    await assert.rejects(register({ host, assets: { async sprite() { throw new Error('Missing artwork') } } }), /Missing artwork/)
+    assert.equal(expanded, false)
 })
 
 test('viewport expands up to 32:9, then letterboxes without cropping height or extending input into the bars', () => {
@@ -214,19 +188,29 @@ test('menu artwork preserves track origins and follows its parent without owning
         getComponent: () => transform,
         setPosition(x: any, y?: number, z = 0) { this.position = typeof x === 'number' ? point(x, y, z) : x },
     }
-    let visible = { width: 1066, height: 600 }, apply!: (context: any) => () => void
+    let visible = { width: 1066, height: 600 }
     const view = Object.assign(new EventEmitter(), { getVisibleSize: () => visible })
     let expanded = false
-    await register({
-        expandViewport(options) {
-            assert.deepEqual(options, { minAspect: 4 / 3, maxAspect: 32 / 9 })
-            expanded = true
-        },
-        async loadSprite(path) { return { originalSize: path.includes('left') ? { width: 1173, height: 1360 } : { width: 3060, height: 1120 } } },
-        enhanceScreen(target, callback) { assert.equal(target, 'pvz:main-menu'); apply = callback },
+    const node = Object.assign(new EventEmitter(), { isValid: true, getChildByName: () => selector })
+    let initialized = false
+    class MainMenuScreen {
+        node = node
+        background = { node: sky }
+        async initialize() { initialized = true }
+    }
+    const host = new ModHost('local:widescreen', {
+        'cc': { view, Sprite, UITransform, Node: { EventType: { NODE_DESTROYED: 'destroyed' } } },
+        'client/screens/MainMenuScreen': { MainMenuScreen },
+        'client/view/ClientViewport': { expandViewport(options: any) {
+            assert.deepEqual(options, { minAspect: 4 / 3, maxAspect: 32 / 9 }); expanded = true
+        } },
     })
+    await register({ host, assets: {
+        async sprite(path: string) { return { originalSize: path.includes('left') ? { width: 1173, height: 1360 } : { width: 3060, height: 1120 } } },
+    } })
     assert.equal(expanded, true)
-    const dispose = apply({ node: { getChildByName: () => selector }, background: { node: sky }, engine: { view, Sprite, UITransform } })
+    await new MainMenuScreen().initialize()
+    assert.equal(initialized, true, 'artwork must be installed after the real screen initialization')
     assert.equal(sky.parent, selector, 'sky remains attached during achievement slides and page visibility changes')
     assert.deepEqual([transform.width, transform.height, sky.position.x, sky.position.y], [1066, 600, -133, 0])
     for (const animation of animations) {
@@ -240,7 +224,8 @@ test('menu artwork preserves track origins and follows its parent without owning
     visible = { width: 6400 / 3, height: 600 }
     view.emit('design-resolution-changed')
     assert.deepEqual([transform.width, transform.height, sky.position.x, sky.position.y], [6400 / 3, 600, 400 - 3200 / 3, 0])
-    dispose()
+    node.emit('destroyed')
+    host.dispose()
     for (const animation of animations) {
         for (const sprite of animation.sprites.values()) assert.equal(sprite.sizeMode, Sprite.SizeMode.RAW)
         for (const target of animation.transforms.values()) assert.deepEqual([target.width, target.height], [800, 600])

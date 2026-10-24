@@ -1,0 +1,50 @@
+{
+  "plants": {
+    "corn:cob_cannon": {
+      "visual": { "seedType": "corn:cob_cannon", "nameKey": "corn:cob_cannon" },
+      "view": "corn:cob_cannon", "animationTarget": "corn:cob_cannon",
+      "animations": {
+        "body": { "reanimId": "corn:cob_unarmed", "rateScale": 1, "fps": 12, "x": 0, "y": 0 },
+        "charge": { "reanimId": "corn:cob_charge", "rateScale": 1, "fps": 12, "x": 0, "y": 0 },
+        "ready": { "reanimId": "corn:cob_idle", "rateScale": 1, "fps": 12, "x": 0, "y": 0 },
+        "shoot": { "reanimId": "corn:cob_shoot", "rateScale": 1, "fps": 12, "x": 0, "y": 0 },
+        "blink": { "reanimId": "corn:cob_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face" }
+      },
+      "shadow": { "x": 0, "y": 0 }, "scale": 1
+    },
+    "corn:kernel_pult": {
+      "visual": { "seedType": "corn:kernel_pult", "nameKey": "corn:kernel_pult" },
+      "view": "corn:kernel_pult", "animationTarget": "corn:kernel_pult",
+      "animations": {
+        "body": { "reanimId": "corn:idle", "rateScale": 1, "fps": 12, "x": 0, "y": 0 },
+        "shoot": { "reanimId": "corn:shoot", "rateScale": 1, "fps": 12, "x": 0, "y": 0 },
+        "blink": { "reanimId": "corn:blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face" }
+      },
+      "shadow": { "x": -3, "y": -51 }, "scale": 1
+    }
+  },
+  "projectiles": {
+    "corn:cob": {
+      "sprite": "corn:cobcannon_cob",
+      "impact": { "kind": "particle", "id": "corn:popcornsplash", "offset": [80, 40], "yRange": [0, 600], "duration": 0.51 },
+      "fireSounds": [], "impactSounds": [{ "id": "corn:doomshroom", "foley": false }]
+    },
+    "corn:kernel": {
+      "sprite": "corn:cornpult_kernal",
+      "fireSounds": [{ "id": "throw", "foley": true, "pitchRange": 10 }],
+      "impactSounds": [{ "id": "corn:kernelpult", "foley": true, "pitchRange": 10 }]
+    },
+    "corn:butter": {
+      "sprite": "corn:cornpult_butter",
+      "impact": { "kind": "particle", "id": "corn:buttersplat", "offset": [0, 0], "yRange": [20, 100], "duration": 0.31 },
+      "fireSounds": [{ "id": "throw", "foley": true, "pitchRange": 10 }],
+      "impactSounds": [{ "id": "corn:butter", "foley": true, "pitchRange": 2 }]
+    }
+  },
+  "strings": {
+    "corn:kernel_pult": "Kernel-pult", "corn:cob_cannon": "Cob Cannon",
+    "corn:requires_kernel_pults": "requires 2 kernel-pults",
+    "corn:needs_kernel_pults": "Plant a pair of kernel-pults first!",
+    "corn:only_on_kernel_pults": "Can only be planted on a pair of kernel-pults"
+  }
+}

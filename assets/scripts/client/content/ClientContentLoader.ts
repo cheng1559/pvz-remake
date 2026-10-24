@@ -6,6 +6,7 @@ import { parseMusic, type Music } from '@/shared/content/music'
 import { parseParticle, type Particle } from '@/shared/content/particle'
 import { ContentRegistry, type ResolvedContent } from './ContentRegistry'
 import { resourcePacks } from './ResourcePacks'
+import { loadArchiveAsset } from './ModRuntime'
 
 type AssetBundle = NonNullable<ReturnType<typeof assetManager.getBundle>>
 type AssetType<T extends Asset> = new (...args: any[]) => T
@@ -43,6 +44,7 @@ export class ClientContentLoader {
                 ? `${content.id.split(':')[0]}:${content.path.slice(content.path.lastIndexOf('/') + 1)}` : content.id
             const replacement = await resourcePacks.asset(id, type, animation)
             if (replacement !== undefined) return replacement
+            if (content.bundle.startsWith('pvzmod:///')) return loadArchiveAsset(content.bundle + content.path, type)
             const bundle = await this.loadBundle(content.bundle)
             return bundle.get(content.path, type) ?? new Promise<T>((resolve, reject) => {
                 bundle.load(content.path, type, (error, asset) => error ? reject(error) : resolve(asset))

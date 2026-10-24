@@ -1,6 +1,6 @@
 import type { GameSystem, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { LevelStateResource, RandomResource, SeedBankResource } from './gameplay'
+import { LevelStateResource, RandomResource, SeedBankResource } from './components'
 import { TutorialResource, WaveResource } from './levelState'
 import { updateSkySun } from './sun'
 import { getAvailableSun } from './items'

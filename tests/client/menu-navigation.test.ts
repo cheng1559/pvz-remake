@@ -7,6 +7,47 @@ import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import { MENU_PAGES, type MenuAction, type MenuPageId } from '@/client/screens/MenuPages'
 import { gameClock } from '@/core/GameClock'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
+import { ModHost } from '@/shared/mod/ModHost'
+
+test('the first main menu uses Mod wrappers installed while UI assets are still loading', async () => {
+    const calls: string[] = [], ui = {}
+    class MainMenuScreen {
+        async initialize(assets: unknown) { assert.equal(assets, ui); calls.push('initialize') }
+        show() { calls.push('show') }
+    }
+    const host = new ModHost('test:menu', {})
+    const module = { exports: {} as any }
+    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/MenuScreen.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
+    })
+    const modules: Record<string, unknown> = {
+        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
+        './MainMenuScreen': { MainMenuScreen },
+        '@/client/ui/UI': { UI: { async load() {
+            await Promise.resolve()
+            host.around(MainMenuScreen.prototype, 'initialize', async function (next, ...args) {
+                await next(...args)
+                calls.push('widescreen-backgrounds')
+            })
+            return ui
+        } } },
+        '@/client/view/uiNode': { uiNode: () => {
+            const node: any = { isValid: true, active: false, destroy() { this.isValid = false },
+                addComponent: (View: any) => Object.assign(new View(), { node }) }
+            return { node }
+        } },
+    }
+    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {} })
+    try {
+        const screen = new module.exports.MenuScreen()
+        screen.node = { isValid: true }
+        const first = await screen.prepare('main')
+        assert.deepEqual(calls, ['initialize', 'widescreen-backgrounds'])
+        assert.equal(await screen.prepare('main'), first, 'the already prepared menu must not initialize twice')
+        first.enter()
+        assert.deepEqual(calls, ['initialize', 'widescreen-backgrounds', 'show'])
+    } finally { host.dispose() }
+})
 
 test('every menu page is reachable and all navigation targets exist', () => {
     const reached = new Set<MenuPageId>()

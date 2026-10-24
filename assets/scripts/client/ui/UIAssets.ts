@@ -1,3 +1,8 @@
+import { buildModStrings } from '@/shared/content/DefinitionRegistry'
+import { loadInstalledMods } from '@/app/ModLoader'
+import { loadPresentationDefinitions } from '@/client/content/loadPresentationDefinitions'
+import { ClientContentLoader } from '@/client/content/ClientContentLoader'
+import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { JsonAsset, type SpriteFrame } from 'cc'
 import { AssetLoader } from '@/client/content/LegacyAssetLoader'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
@@ -41,6 +46,7 @@ const SPRITE_NAMES = [
 
 export type UIFont = keyof typeof FONT_NAMES
 export interface UIAssets {
+    presentation: PresentationDefinitions
     fonts: Record<UIFont, BitmapFontAssets>
     sprites: Record<typeof SPRITE_NAMES[number], SpriteFrame>
     strings: Readonly<Record<string, string>>
@@ -52,7 +58,10 @@ let revision = -1
 export async function loadUIAssets(): Promise<UIAssets> {
     await resourcePacks.ready()
     if (revision !== resourcePacks.revision) { pending = undefined; revision = resourcePacks.revision }
-    return pending ??= Promise.all([
+    if (pending) return pending
+    const loader = new ClientContentLoader()
+    return pending = Promise.all([
+        loader.loadManifest('pvz-base').then(manifest => loadPresentationDefinitions(manifest, loader)),
         Promise.all(Object.entries(FONT_NAMES).map(async ([key, name]) => [key, await loadBitmapFont(name)] as const)),
         Promise.all(SPRITE_NAMES.map(async name => {
             const frame = await SpriteLoader.load(name)
@@ -64,9 +73,11 @@ export async function loadUIAssets(): Promise<UIAssets> {
             if (!asset) throw new Error(`Missing UI strings: ${path}`)
             return asset.json as Record<string, string>
         })).then(tables => Object.assign({}, ...tables)),
-    ]).then(([fonts, sprites, strings]) => ({
+        loadInstalledMods().then(mods => buildModStrings(mods.presentationDefinitions)),
+    ]).then(([presentation, fonts, sprites, strings, modStrings]) => ({
+        presentation,
         fonts: Object.fromEntries(fonts) as UIAssets['fonts'],
         sprites: Object.fromEntries(sprites) as UIAssets['sprites'],
-        strings,
+        strings: { ...strings, ...modStrings },
     })).catch(error => { pending = undefined; throw error })
 }

@@ -10,8 +10,8 @@ import {
     PositionComponent,
     RandomResource,
     ZombieComponent,
-    createZombieSystem,
-} from '@/server/gameplay'
+} from '@/server/components'
+import { createZombieSystem } from '@/server/zombies/system'
 import { createMowerSystem } from '@/server/mower'
 import { EventQueueResource, createEventQueue } from '@/server/events'
 import { DeterministicRng } from '@/server/DeterministicRng'
@@ -51,6 +51,7 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
         moweredTicksRemaining: 0,
         walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
         hasHead: false, hasTongue: false, hasArm: true, hitFlashCounter: 0, groanCounter: 300,
+        helmHealth: 0, chilledTicks: 0, hasPole: false,
     })
     schedule.run(world, 2)
     assert.equal(world.get(mowerEntity, LawnMowerComponent)!.state, 'ready')
@@ -73,6 +74,7 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
         moweredTicksRemaining: 0,
         walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
         hasHead: true, hasTongue: false, hasArm: true, hitFlashCounter: 0, groanCounter: 300,
+        helmHealth: 0, chilledTicks: 0, hasPole: false,
     })
     schedule.run(world, 4)
     assert.equal(world.hasEntity(secondZombie), true)
@@ -95,8 +97,8 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
     assert.deepEqual(
         world.resources.get(EventQueueResource).events
             .filter(event => event.type === 'zombiePartDropped' && event.data.entityId === zombie)
-            .map(event => [event.data.part, event.data.mowered]),
-        [['head', true], ['arm', true]],
+            .map(event => [event.data.part, event.data.mowered, event.data.row]),
+        [['head', true, 2], ['arm', true, 2]],
     )
 
     world.resources.get(LevelStateResource).result = 'won'

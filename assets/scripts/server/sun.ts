@@ -1,6 +1,6 @@
 import type { CommandBuffer, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { LevelStateResource, PositionComponent, RandomResource } from './gameplay'
+import { LevelStateResource, PositionComponent, RandomResource } from './components'
 import { ItemComponent, TutorialResource } from './levelState'
 import { EventQueueResource, emitServerEvent } from './events'
 import { getDebugRules } from './debug/DebugRules'

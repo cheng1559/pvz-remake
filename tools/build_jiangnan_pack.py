@@ -15,7 +15,7 @@ from xml.etree import ElementTree
 from PIL import Image
 
 from almanac_assets import almanac_definitions
-from build_pvz_base import ADVENTURE_12_CLIPS, LEVEL_CLIPS, MAIN_MENU_CLIPS, STARTUP_CLIPS
+from build_pvz_base import ADVENTURE_12_CLIPS, LEVEL_CLIPS, MAIN_MENU_CLIPS, PLANT_ZOMBIE_CLIPS, STARTUP_CLIPS
 from build_zh_cn_pack import read_text, write_json
 from decompile_particle_compiled import convert_directory as decompile_particles
 from decompile_reanim_compiled import convert_file as decompile_reanim
@@ -126,7 +126,7 @@ def marker_track(name: str, duration: int) -> ElementTree.Element:
 def convert_animations(raw: Path, sprites: dict, legacy: Path) -> tuple[dict, dict]:
     catalog, configs, almanac_clips = almanac_definitions(raw)
     clips = [(raw / 'reanim' / source.name, node, clip, id)
-             for source, node, clip, id in [*LEVEL_CLIPS, *ADVENTURE_12_CLIPS, *MAIN_MENU_CLIPS, *STARTUP_CLIPS]]
+             for source, node, clip, id in [*LEVEL_CLIPS, *ADVENTURE_12_CLIPS, *PLANT_ZOMBIE_CLIPS, *MAIN_MENU_CLIPS, *STARTUP_CLIPS]]
     clips.extend(almanac_clips)
     defaults = {(source.stem, node) for source, node, clip, _ in clips if clip == 'default'}
     roots = {name: ElementTree.fromstring('<root>' + (raw / f'reanim/{name}.reanim').read_text() + '</root>') for name in configs}

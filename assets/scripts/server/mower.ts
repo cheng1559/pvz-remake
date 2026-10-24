@@ -1,13 +1,8 @@
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { GameSystem } from '@/ecs/index'
-import {
-    LawnMowerComponent,
-    LevelStateResource,
-    PositionComponent,
-    ZombieComponent,
-    mowZombie,
-    dropZombieFlag,
-} from './gameplay'
+import { LawnMowerComponent, LevelStateResource, PositionComponent, ZombieComponent } from './components'
+import { mowZombie } from './zombies/damage'
+import { dropZombieFlag } from './zombies/flag'
 import { WaveResource } from './levelState'
 import { EventQueueResource, emitServerEvent } from './events'
 

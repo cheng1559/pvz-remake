@@ -1,0 +1,379 @@
+{
+  "animation": {
+    "rates": {"plantIdle": [10, 15], "shooterIdle": [15, 20], "zombieIdle": [12, 18], "zombieIdle2": [12, 24]},
+    "zombieIdle2Chance": 0.75,
+    "nutBlinkWeights": {"blinkTwitch": 1, "blinkTwice": 6, "blinkThrice": 3},
+    "plantBlinkTicks": [400, 799],
+    "nutBlinkTicks": [1000, 1999]
+  },
+  "plants": {
+    "pvz:peashooter": {
+      "visual": {"seedType": "peashooter", "preview": 0},
+      "view": "shooter",
+      "animationTarget": "pvz:peashooter",
+      "animations": {
+        "body": {"reanimId": "pvz:peashooter", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "idleHead": {"reanimId": "pvz:peashooter_head_idle", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+        "shootHead": {"reanimId": "pvz:peashooter_shoot", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+        "blink": {"reanimId": "pvz:peashooter_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face"}
+      },
+      "shadow": {"x": -3, "y": -51},
+      "scale": 1
+    },
+    "pvz:repeater": {
+      "visual": {"seedType": "repeater", "preview": 7},
+      "view": "shooter",
+      "animationTarget": "pvz:repeater",
+      "animations": {
+        "body": {"reanimId": "pvz:repeater", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "idleHead": {"reanimId": "pvz:repeater_head_idle", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+        "shootHead": {"reanimId": "pvz:repeater_shoot", "rateScale": 1.2857142857142858, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+        "blink": {"reanimId": "pvz:peashooter_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face"}
+      },
+      "shadow": {"x": -3, "y": -51},
+      "scale": 1
+    },
+    "pvz:snowpea": {
+      "visual": {"seedType": "snowpea", "preview": 5},
+      "view": "shooter",
+      "animationTarget": "pvz:snowpea",
+      "animations": {
+        "body": {"reanimId": "pvz:snowpea", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "idleHead": {"reanimId": "pvz:snowpea_head_idle", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+        "shootHead": {"reanimId": "pvz:snowpea_shoot", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+        "blink": {"reanimId": "pvz:snowpea_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face"}
+      },
+      "shadow": {"x": -3, "y": -51},
+      "scale": 1
+    },
+    "pvz:sunflower": {
+      "visual": {"seedType": "sunflower", "preview": 1},
+      "view": "sunflower",
+      "animationTarget": "pvz:sunflower",
+      "animations": {
+        "body": {"reanimId": "pvz:sunflower", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "blink": {"reanimId": "pvz:sunflower_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_idle"}
+      },
+      "shadow": {"x": -3, "y": -51},
+      "scale": 1
+    },
+    "pvz:cherrybomb": {
+      "visual": {"seedType": "cherrybomb", "preview": 2},
+      "view": "cherrybomb",
+      "animationTarget": "pvz:cherrybomb",
+      "animations": {
+        "idle": {"reanimId": "pvz:almanac_plant_2_body", "rateScale": 1, "fps": 30, "x": 0, "y": 0},
+        "explode": {"reanimId": "pvz:cherrybomb_explode", "rateScale": 1, "fps": 30, "x": 0, "y": 0}
+      },
+      "shadow": {"x": -3, "y": -51},
+      "scale": 1,
+      "plantedSounds": [{"id": "reverse_explosion", "foley": true}],
+      "explosionSounds": [{"id": "cherrybomb", "foley": true}, {"id": "juicy", "foley": true}]
+    },
+    "pvz:wallnut": {
+      "visual": {"seedType": "wallnut", "preview": 3},
+      "view": "wallnut",
+      "animationTarget": "pvz:wallnut",
+      "chewParticle": "wallnuteatsmall",
+      "animations": {
+        "body": {"reanimId": "pvz:wallnut", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "blinkTwitch": {"reanimId": "pvz:wallnut_blink_twitch", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face"},
+        "blinkTwice": {"reanimId": "pvz:wallnut_blink_twice", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face"},
+        "blinkThrice": {"reanimId": "pvz:wallnut_blink_thrice", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face"}
+      },
+      "shadow": {"x": -3, "y": -51},
+      "scale": 1
+    },
+    "pvz:potatomine": {
+      "visual": {"seedType": "potatomine", "preview": 4},
+      "view": "potatomine",
+      "animationTarget": "pvz:potatomine",
+      "explosion": {"effect": "potatomine", "x": 20, "rowOrder": true},
+      "animations": {
+        "buried": {"reanimId": "pvz:potatomine_buried", "rateScale": 1, "fps": 12, "x": 12, "y": -12},
+        "rise": {"reanimId": "pvz:potatomine_rise", "rateScale": 1, "fps": 12, "x": 12, "y": -12},
+        "armed": {"reanimId": "pvz:potatomine_armed", "rateScale": 1, "fps": 12, "x": 12, "y": -12},
+        "blink": {"reanimId": "pvz:potatomine_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face"},
+        "glow": {"reanimId": "pvz:potatomine_glow", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_light"}
+      },
+      "shadow": {"x": -3, "y": -51},
+      "scale": 0.8,
+      "explosionSounds": [{"id": "potato_mine", "foley": false}],
+      "mine": {
+        "blinkTicks": [400, 4399],
+        "riseRate": 18,
+        "armedRate": [12, 15],
+        "blendSeconds": 0.2,
+        "glow": {"distance": [50, 200], "frames": [3, 10], "rateOffset": 2}
+      },
+      "packetVisibleTracks": ["anim_glow"]
+    },
+    "pvz:chomper": {
+      "visual": {"seedType": "chomper", "preview": 6},
+      "view": "chomper",
+      "animationTarget": "pvz:chomper",
+      "animations": {
+        "idle": {"reanimId": "pvz:chomper", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "bite": {"reanimId": "pvz:chomper_bite", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "chew": {"reanimId": "pvz:chomper_chew", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "swallow": {"reanimId": "pvz:chomper_swallow", "rateScale": 1, "fps": 12, "x": 0, "y": 0}
+      },
+      "shadow": {"x": -21, "y": -57},
+      "scale": 1
+    },
+    "pvz:explodenut": {
+      "visual": {"seedType": "explodenut", "preview": 3, "tint": [255, 64, 64], "nameKey": "EXPLODE_O_NUT"},
+      "view": "wallnut",
+      "animationTarget": "pvz:wallnut",
+      "chewParticle": "wallnuteatsmall",
+      "shadow": {"x": -3, "y": -51},
+      "scale": 1,
+      "explosionSounds": [{"id": "cherrybomb", "foley": true}]
+    },
+    "pvz:puffshroom": {"visual": {"seedType": "puffshroom", "preview": 8}, "shadow": {"x": -3, "y": -51}, "scale": 1}
+  },
+  "zombies": {
+    "pvz:normal": {
+      "animationTarget": "pvz:normal",
+      "shadowX": 23,
+      "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
+      "damagedArm": "damagedArm",
+      "animations": {
+        "idle": {"reanimId": "pvz:zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "idle2": {"reanimId": "pvz:zombie_idle2", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "walk": {"reanimId": "pvz:zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "walk2": {"reanimId": "pvz:zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "eat": {"reanimId": "pvz:zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
+      },
+      "drops": {
+        "head": {
+          "track": "anim_head1",
+          "effect": "zombiehead",
+          "offset": [58, -30],
+          "moweredEffect": "moweredzombiehead",
+          "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+        },
+        "arm": {
+          "track": "Zombie_outerarm_lower",
+          "effect": "zombiearm",
+          "offset": [25, -55],
+          "moweredEffect": "moweredzombiearm",
+          "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+        }
+      },
+      "helmTracks": ["anim_cone", "anim_bucket"]
+    },
+    "pvz:flag": {
+      "animationTarget": "pvz:flag",
+      "shadowX": 23,
+      "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
+      "damagedArm": "damagedArm",
+      "flag": true,
+      "animations": {
+        "idle": {"reanimId": "pvz:almanac_zombie_1_almanac1", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "walk": {"reanimId": "pvz:flag_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "walk2": {"reanimId": "pvz:flag_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "eat": {"reanimId": "pvz:flag_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"},
+        "flag": {"reanimId": "pvz:zombie_flag", "rateScale": 1, "fps": 12, "x": 15, "y": 8, "attachmentTrackId": "Zombie_flaghand"}
+      },
+      "drops": {
+        "head": {
+          "track": "anim_head1",
+          "effect": "zombiehead",
+          "offset": [58, -30],
+          "moweredEffect": "moweredzombiehead",
+          "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+        },
+        "arm": {
+          "track": "Zombie_outerarm_lower",
+          "effect": "zombiearm",
+          "offset": [25, -55],
+          "moweredEffect": "moweredzombiearm",
+          "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+        },
+        "flag": {"track": "Zombie_flag", "effect": "zombieflag", "offset": [18, -42]}
+      },
+      "helmTracks": ["anim_cone", "anim_bucket"]
+    },
+    "pvz:conehead": {
+      "animationTarget": "pvz:conehead",
+      "shadowX": 23,
+      "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
+      "damagedArm": "damagedArm",
+      "animations": {
+        "idle": {"reanimId": "pvz:almanac_zombie_2_almanac2", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "walk": {"reanimId": "pvz:helm_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "walk2": {"reanimId": "pvz:helm_zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "eat": {"reanimId": "pvz:helm_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
+      },
+      "drops": {
+        "head": {
+          "track": "anim_head1",
+          "effect": "zombiehead",
+          "offset": [58, -30],
+          "moweredEffect": "moweredzombiehead",
+          "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+        },
+        "arm": {
+          "track": "Zombie_outerarm_lower",
+          "effect": "zombiearm",
+          "offset": [25, -55],
+          "moweredEffect": "moweredzombiearm",
+          "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+        }
+      },
+      "helm": {
+        "track": "anim_cone",
+        "effect": "zombietrafficcone",
+        "offset": [61, -20],
+        "impactSounds": [{"id": "plastichit", "foley": true}, {"id": "splat", "foley": true, "pitchRange": 10}],
+        "damagedSprites": ["pvz:zombie_cone2", "pvz:zombie_cone3"]
+      },
+      "helmTracks": ["anim_cone", "anim_bucket"]
+    },
+    "pvz:buckethead": {
+      "animationTarget": "pvz:buckethead",
+      "shadowX": 23,
+      "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
+      "damagedArm": "damagedArm",
+      "animations": {
+        "idle": {"reanimId": "pvz:almanac_zombie_4_almanac4", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "walk": {"reanimId": "pvz:helm_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "walk2": {"reanimId": "pvz:helm_zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "eat": {"reanimId": "pvz:helm_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+        "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
+      },
+      "drops": {
+        "head": {
+          "track": "anim_head1",
+          "effect": "zombiehead",
+          "offset": [58, -30],
+          "moweredEffect": "moweredzombiehead",
+          "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+        },
+        "arm": {
+          "track": "Zombie_outerarm_lower",
+          "effect": "zombiearm",
+          "offset": [25, -55],
+          "moweredEffect": "moweredzombiearm",
+          "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+        }
+      },
+      "helm": {
+        "track": "anim_bucket",
+        "effect": "zombiepail",
+        "offset": [61, -20],
+        "impactSounds": [{"id": "shieldhit", "foley": true}],
+        "damagedSprites": ["pvz:zombie_bucket2", "pvz:zombie_bucket3"]
+      },
+      "helmTracks": ["anim_cone", "anim_bucket"]
+    },
+    "pvz:pole_vaulter": {
+      "animationTarget": "pvz:pole_vaulter",
+      "shadowX": 18,
+      "arm": {"lower": "Zombie_polevaulter_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_polevaulter_outerarm_upper"},
+      "damagedArm": "poleVaulterDamagedArm",
+      "vault": true,
+      "heldTracks": ["Zombie_polevaulter_innerarm", "Zombie_polevaulter_innerhand", "Zombie_polevaulter_pole"],
+      "animations": {
+        "idle": {"reanimId": "pvz:almanac_zombie_3_body", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+        "walk": {"reanimId": "pvz:pole_vaulter_walk", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
+        "walk2": {"reanimId": "pvz:pole_vaulter_walk", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
+        "eat": {"reanimId": "pvz:pole_vaulter_eat", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
+        "death": {"reanimId": "pvz:pole_vaulter_death", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
+        "death2": {"reanimId": "pvz:pole_vaulter_death", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
+        "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"},
+        "run": {"reanimId": "pvz:pole_vaulter_run", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
+        "jump": {"reanimId": "pvz:pole_vaulter_jump", "rateScale": 1, "fps": 12, "x": 9, "y": 19}
+      },
+      "drops": {
+        "head": {
+          "track": "anim_head1",
+          "effect": "zombiehead",
+          "offset": [58, -30],
+          "moweredEffect": "moweredzombiehead",
+          "image": "particles/zombiepolevaulterhead",
+          "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+        },
+        "arm": {
+          "track": "Zombie_polevaulter_outerarm_lower",
+          "effect": "zombiearm",
+          "offset": [25, -55],
+          "moweredEffect": "moweredzombiearm",
+          "image": "zombie_outerarm_hand",
+          "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+        }
+      },
+      "helmTracks": ["anim_cone", "anim_bucket"]
+    }
+  },
+  "seedPackets": {
+    "defaultPlacement": {"scale": 0.5, "offsetX": 5, "offsetY": 8},
+    "placements": {
+      "4": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "6": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "10": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "11": {"scale": 0.4, "offsetX": 10.0, "offsetY": 15.0},
+      "12": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "15": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "17": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "18": {"scale": 0.5, "offsetX": 5.0, "offsetY": 10.0},
+      "19": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "21": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "22": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "23": {"scale": 0.3, "offsetX": 12.0, "offsetY": 22.0},
+      "25": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "26": {"scale": 0.5, "offsetX": 9.0, "offsetY": 13.0},
+      "27": {"scale": 0.4, "offsetX": 8.0, "offsetY": 17.0},
+      "28": {"scale": 0.45, "offsetX": 12.0, "offsetY": 12.0},
+      "29": {"scale": 0.5, "offsetX": 6.0, "offsetY": 8.0},
+      "30": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "31": {"scale": 0.5, "offsetX": 5.0, "offsetY": 12.0},
+      "32": {"scale": 0.4, "offsetX": 15.0, "offsetY": 14.0},
+      "34": {"scale": 0.4, "offsetX": 13.0, "offsetY": 14.0},
+      "35": {"scale": 0.55, "offsetX": 0.0, "offsetY": 9.0},
+      "37": {"scale": 0.5, "offsetX": 5.0, "offsetY": 10.0},
+      "39": {"scale": 0.35, "offsetX": 18.0, "offsetY": 19.0},
+      "40": {"scale": 0.5, "offsetX": 2.0, "offsetY": 8.0},
+      "41": {"scale": 0.45, "offsetX": 7.0, "offsetY": 14.0},
+      "42": {"scale": 0.45, "offsetX": 7.0, "offsetY": 14.0},
+      "43": {"scale": 0.45, "offsetX": 8.0, "offsetY": 13.0},
+      "44": {"scale": 0.35, "offsetX": 18.0, "offsetY": 19.0},
+      "46": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
+      "47": {"scale": 0.26, "offsetX": 6.0, "offsetY": 22.0}
+    },
+    "plantCels": {"4": 0, "6": 1, "12": 2, "23": 3, "27": 4, "30": 5, "41": 6, "47": 7, "32": 8, "34": 9, "39": 10, "44": 11, "46": 12}
+  },
+  "almanac": {
+    "zombieOrigin": {"offset": [15, 8], "scaleOffset": [30, -120]},
+    "cords": {"20": {"sprite": "pvz:bungeecord", "track": "Zombie_bungi_body", "x": 35, "height": 600}},
+    "pogo": {"bounceTicks": 80, "restartCounter": 7, "rate": 40, "offset": 9, "height": 40},
+    "bungee": {"height": 40, "periodSeconds": 2}
+  },
+  "projectiles": {
+    "pvz:pea": {
+      "impact": {"kind": "particle", "id": "pvz:peasplat", "offset": [49, 12], "yRange": [20, 100], "duration": 0.21},
+      "fireSounds": [{"id": "throw", "foley": true, "pitchRange": 10}],
+      "impactSounds": [{"id": "splat", "foley": true, "pitchRange": 10}],
+      "sprite": "pvz:projectilepea"
+    },
+    "pvz:snow_pea": {
+      "trail": {"effect": "snowpeatrail", "x": 8, "y": -13},
+      "impact": {"kind": "tod", "id": "snowpeasplat", "offset": [49, 12], "yRange": [20, 100]},
+      "fireSounds": [{"id": "throw", "foley": true, "pitchRange": 10}, {"id": "snow_pea_sparkles", "foley": true}],
+      "impactSounds": [{"id": "splat", "foley": true, "pitchRange": 10}],
+      "sprite": "pvz:projectilesnowpea"
+    }
+  }
+}

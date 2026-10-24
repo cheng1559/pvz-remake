@@ -12,17 +12,17 @@ import {
     PositionComponent,
     RandomResource,
     ZombieComponent,
-    createZombieSystem,
-    damageZombie,
-    spawnZombie,
-} from '@/server/gameplay'
+} from '@/server/components'
+import { createZombieSystem } from '@/server/zombies/system'
+import { damageZombie } from '@/server/zombies/damage'
+import { spawnZombie } from '@/server/zombies/spawn'
 
 const definitions = parseGameplayDefinitions(JSON.parse(
     readFileSync('tools/content/pvz-base/gameplay/definitions.json', 'utf8'),
 ))
 const board = definitions.boards['pvz:day']
 
-function game() {
+function game(content = definitions) {
     const world = new World()
     world.resources.set(RandomResource, new DeterministicRng(1))
     world.resources.set(EventQueueResource, createEventQueue())
@@ -46,7 +46,7 @@ function game() {
         paused: false,
     })
     const schedule = new Schedule()
-    schedule.add('zombie', createZombieSystem(definitions))
+    schedule.add('zombie', createZombieSystem(content))
     let tick = 0
     return { world, run: () => schedule.run(world, ++tick) }
 }
@@ -55,18 +55,29 @@ test('tongue variants use one of five spawn outcomes and never reroll during upd
     for (const typeId of ['pvz:normal', 'pvz:flag']) for (let roll = 0; roll < 5; roll++) {
         const { world, run } = game()
         const random = world.resources.get(RandomResource)
-        const integer = random.integer.bind(random)
-        let variantRolls = 0
-        random.integer = (min, max) => {
-            if (min === 0 && max === 4) { variantRolls++; return roll }
-            return integer(min, max)
-        }
+        const nextFloat = random.nextFloat.bind(random)
+        let rolls = 0
+        random.nextFloat = () => rolls++ === 0 ? roll / 5 : nextFloat()
         const id = spawnZombie(world, definitions, typeId, 2, 700, 280)
         assert.equal(world.get(id, ZombieComponent)!.hasTongue, roll === 0)
+        const spawnRolls = rolls
         for (let tick = 0; tick < 10; tick++) run()
         assert.equal(world.get(id, ZombieComponent)!.hasTongue, roll === 0)
-        assert.equal(variantRolls, 1)
+        assert.equal(rolls, spawnRolls)
     }
+})
+
+test('zombies sharing a gait can configure tongue and walking variants independently', () => {
+    const content = structuredClone(definitions)
+    content.zombies['test:walker'] = { ...content.zombies['pvz:normal'], tongueChance: 1, walk2Chance: 1 }
+    content.zombies['test:plain'] = { ...content.zombies['pvz:normal'], tongueChance: 0, walk2Chance: 0 }
+    const { world } = game(content)
+    const variant = spawnZombie(world, content, 'test:walker', 2, 700, 280)
+    const plain = spawnZombie(world, content, 'test:plain', 2, 700, 280)
+    assert.equal(world.get(variant, ZombieComponent)!.hasTongue, true)
+    assert.equal(world.get(variant, ZombieComponent)!.walkAnimation, 'anim_walk2')
+    assert.equal(world.get(plain, ZombieComponent)!.hasTongue, false)
+    assert.equal(world.get(plain, ZombieComponent)!.walkAnimation, 'anim_walk')
 })
 
 test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses at the board edge', () => {
@@ -88,7 +99,7 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     eating.world.add(plant, PositionComponent, { x: 40, y: 280, row: 2 })
     eating.world.add(plant, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
-        eatenFlashCounter: 0,
+        eatenFlashCounter: 0, recentlyEatenCounter: 0,
     })
     const eater = spawnZombie(eating.world, definitions, 'pvz:normal', 2, 40, 280)
     for (let tick = 0; tick < 3; tick++) eating.run()
@@ -125,35 +136,35 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     headless.world.add(ignoredPlant, PositionComponent, { x: 40, y: 280, row: 2 })
     headless.world.add(ignoredPlant, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
-        eatenFlashCounter: 0,
+        eatenFlashCounter: 0, recentlyEatenCounter: 0,
     })
     const headlessWalker = spawnZombie(headless.world, definitions, 'pvz:normal', 2, 40, 280)
     headless.run()
     assert.equal(headless.world.get(headlessWalker, ZombieComponent)!.state, 'eating')
-    damageZombie(headless.world, headlessWalker, 200)
+    damageZombie(headless.world, definitions, headlessWalker, 200)
     headless.run()
     assert.equal(headless.world.get(headlessWalker, ZombieComponent)!.state, 'eating')
     assert.equal(headless.world.get(ignoredPlant, PlantComponent)!.health, 300)
 
     const neverStartedEating = spawnZombie(headless.world, definitions, 'pvz:normal', 2, 40, 280)
-    damageZombie(headless.world, neverStartedEating, 200)
+    damageZombie(headless.world, definitions, neverStartedEating, 200)
     headless.run()
     assert.equal(headless.world.get(neverStartedEating, ZombieComponent)!.state, 'walking')
 
     const dying = game()
     const corpse = spawnZombie(dying.world, definitions, 'pvz:normal', 2, 700, 280)
-    damageZombie(dying.world, corpse, 100)
+    damageZombie(dying.world, definitions, corpse, 100)
     assert.equal(dying.world.get(corpse, ZombieComponent)!.hitFlashCounter, 25)
     dying.run()
     assert.equal(dying.world.get(corpse, ZombieComponent)!.hitFlashCounter, 24)
     assert.equal(dying.world.get(corpse, ZombieComponent)!.hasArm, false)
-    damageZombie(dying.world, corpse, 100)
+    damageZombie(dying.world, definitions, corpse, 100)
     assert.equal(dying.world.get(corpse, ZombieComponent)!.hasHead, false)
     assert.deepEqual(
         dying.world.resources.get(EventQueueResource).events.map(event => event.data.part).filter(Boolean),
         ['arm', 'head'],
     )
-    damageZombie(dying.world, corpse, 70)
+    damageZombie(dying.world, definitions, corpse, 70)
     const deathTicks = dying.world.get(corpse, ZombieComponent)!.deathTicksRemaining
     const dyingZombie = dying.world.get(corpse, ZombieComponent)!
     const deathFrames = dyingZombie.animation === 'anim_death2' ? 32 : 38
@@ -184,13 +195,43 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     assert.equal(lost.world.resources.get(LevelStateResource).result, 'lost')
 })
 
+test('only headed zombies lose at their board edge, while headless zombies die 70px earlier without flashing', () => {
+    for (const [typeId, edge] of [['pvz:normal', -100], ['pvz:pole_vaulter', -150], ['pvz:normal', -220]] as const) {
+        const content = { ...definitions, zombies: { ...definitions.zombies,
+            [typeId]: { ...definitions.zombies[typeId], boardEdgeX: edge } } }
+        const headed = game(content)
+        const attacker = spawnZombie(headed.world, content, typeId, 2, edge + 10, 280)
+        headed.run()
+        assert.equal(headed.world.resources.get(LevelStateResource).result, 'playing')
+        headed.world.get(attacker, PositionComponent)!.x = edge
+        headed.run()
+        assert.equal(headed.world.resources.get(LevelStateResource).result, 'lost')
+
+        const headless = game(content)
+        const walker = spawnZombie(headless.world, content, typeId, 2, edge + 71, 280)
+        damageZombie(headless.world, content, walker, content.zombies[typeId].maxHealth * 0.8)
+        const zombie = headless.world.get(walker, ZombieComponent)!
+        assert.equal(zombie.hasHead, false)
+        zombie.hitFlashCounter = 0
+        headless.run()
+        assert.equal(zombie.state, 'walking')
+        headless.world.get(walker, PositionComponent)!.x = edge + 70
+        headless.run()
+        assert.equal(zombie.health, 0)
+        assert.equal(zombie.state, 'dying')
+        assert.equal(zombie.hitFlashCounter, 0)
+        assert.equal(headless.world.resources.get(LevelStateResource).result, 'playing')
+        assert.equal(headless.world.resources.get(EventQueueResource).events.some(event => event.type === 'levelLost'), false)
+    }
+})
+
 test('normal zombie starts eating at the legacy 20-pixel attack overlap boundary', () => {
     const outside = game()
     const outsidePlant = outside.world.createEntity()
     outside.world.add(outsidePlant, PositionComponent, { x: 40, y: 280, row: 2 })
     outside.world.add(outsidePlant, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
-        eatenFlashCounter: 0,
+        eatenFlashCounter: 0, recentlyEatenCounter: 0,
     })
     const outsideZombie = spawnZombie(outside.world, definitions, 'pvz:normal', 2, 70.01, 280)
     outside.run()
@@ -201,7 +242,7 @@ test('normal zombie starts eating at the legacy 20-pixel attack overlap boundary
     boundary.world.add(boundaryPlant, PositionComponent, { x: 40, y: 280, row: 2 })
     boundary.world.add(boundaryPlant, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
-        eatenFlashCounter: 0,
+        eatenFlashCounter: 0, recentlyEatenCounter: 0,
     })
     const boundaryZombie = spawnZombie(boundary.world, definitions, 'pvz:normal', 2, 70, 280)
     boundary.run()

@@ -14,6 +14,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 倍速 | `/gamespeed {0-10}`，作用于统一游戏时钟 |
 | 胜负／波次 | `/win`、`/lose`、`/nextwave` |
 | 植物 | `/plant {plant_name} {row} {col}`、`/removeplant {row} {col}` |
+| 替换种子包 | `/seed {槽位} {种子名}`，如 `/seed 1 snowpea` |
 | 僵尸 | `/zombie {zombie_name} [row] [col]`、`/damage {damage}`、`/kill` |
 | 掉落 | `/item {item_name} [row col]`，当前支持 `sun`、`award` |
 | 数值 | `/sun {add|set} {number}`、`/money {add|set} {number}` |
@@ -30,6 +31,8 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 平台 | `/mobile {true|false}`、`/fullscreen {true|false}` |
 | 音量 | `/music {0-100}`、`/sfx {0-100}`，通过设置 API 保存 |
 
+`/seed` 的槽位从左侧的 1 开始，替换为已安装的种子包，立即可用，并使用新种子的费用和冷却。替换正在拿取的种子包会清空光标；不允许与其他槽位重复。暂停和 0 倍速时也可执行，替换结果随关卡存档保存。
+
 `/hdseed true` 启用图鉴植物和僵尸头像的真实 Reanim 渲染，以及已实现植物的手持与半透明落点预览，同时将种子包设为 `rendered`。`false` 使用缓存头像并将种子包设为 `standard`。按开关选择后才加载、创建对应图像，失败直接报错，不回退；偏好保存在本地。种子包背景清晰度由材质包独立控制。
 
 `/seedstyle standard|rendered|tilted` 单独切换种子包风格并保存到本地：`standard` 为标准缓存图，`rendered` 为原比例实际渲染，`tilted` 在实际渲染基础上放大并顺时针旋转。植物仅按内部图片区的左侧和底部内边框裁剪，上方与右侧允许溢出。背景、费用和点击区域保持原尺寸；实际渲染与右倾风格之间切换时复用已加载的植物。此命令不影响图鉴僵尸头像和手持／落点预览。
@@ -38,6 +41,6 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 
 `/pack`、`/mod` 不带参数时分别打开资源包或 Mod 管理窗口，见 [材质包说明](RESOURCE_PACKS.md#管理窗口)。`/mod` 与 `/pack` 共用 ZIP 选择、`Installing...` 和确认重启流程。`/mod install` 不带参数，其他操作使用 `local:widescreen` 等带命名空间的 Mod ID。安装结果保存在本地，检查依赖后在重启时执行；主界面宽屏可通过独立 Mod 启用。见 [Mod 安装与管理](MODS.md)。
 
-当前内容包提供 1-1、1-2，豌豆射手、向日葵、双发射手和普通／旗帜僵尸；植物、僵尸、物品、关卡补全来自后端已安装内容。`/background` 及尚未迁移的实体和关卡会提示不可用。
+当前内容包提供 1-1、1-2，植物有豌豆射手、向日葵、双发射手、樱桃炸弹、坚果墙、土豆雷、寒冰射手、大嘴花和爆炸坚果（`explodenut`，仅调试种植），僵尸有普通、旗帜、路障（`conehead`）、铁桶（`buckethead`）和撑杆（`pole_vaulter`）僵尸；植物、僵尸、物品、关卡补全来自后端已安装内容。`/background` 及尚未迁移的实体和关卡会提示不可用。
 
 窗口复用 `UI.dialog`、`UI.input`；关卡修改通过 `debugCommand`／`debugResult` 通道执行，由后端验证并返回结果，不直接修改前端快照。规则开关作用于后端会话；冷却、阳光消耗、收集方式同时保存调试偏好，在新会话中重新应用。

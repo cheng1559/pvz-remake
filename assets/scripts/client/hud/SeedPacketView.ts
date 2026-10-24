@@ -1,3 +1,4 @@
+import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { Color, Mask, Node, Sprite, SpriteFrame } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontRenderer } from '@/client/font'
@@ -13,6 +14,7 @@ import { PlantPreview } from './PlantPreview'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 export interface SeedPacketViewArgs {
+    definitions: PresentationDefinitions
     name: string
     parent: Node
     layer: number
@@ -28,16 +30,26 @@ export interface SeedPacketViewArgs {
 
 export class SeedPacketView {
     readonly node: Node
-    readonly selectedHighlight: Node
-    readonly cooldownClip: Node
-    readonly seedType: SeedPacketSeedType
+    selectedHighlight: Node
+    cooldownClip: Node
+    seedType: SeedPacketSeedType
     private readonly _baseSpriteColors = new WeakMap<Sprite, Color>()
 
-    constructor(args: SeedPacketViewArgs) {
+    constructor(private args: SeedPacketViewArgs) {
         this.seedType = args.seedType
         this.node = SeedPacketRenderer.drawSeedPacket(args)
         this.selectedHighlight = this._createSelectedHighlight(args)
         this.cooldownClip = this._createCooldownClip(args)
+    }
+
+    replace(seedType: SeedPacketSeedType, cost: number): void {
+        this.args = { ...this.args, seedType, cost }
+        this.seedType = seedType
+        for (const child of [...this.node.children]) { child.active = false; child.removeFromParent(); child.destroy() }
+        // Keep the slot node and its button so input capture and mobile bindings stay valid.
+        SeedPacketRenderer.drawSeedPacket({ ...this.args, node: this.node })
+        this.selectedHighlight = this._createSelectedHighlight(this.args)
+        this.cooldownClip = this._createCooldownClip(this.args)
     }
 
     sync(options: {

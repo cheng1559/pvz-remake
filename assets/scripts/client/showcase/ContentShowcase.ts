@@ -1,6 +1,5 @@
 import { Color, Node } from 'cc'
-import { ClientContentLoader } from '@/client/content/ClientContentLoader'
-import { ContentRegistry } from '@/client/content/ContentRegistry'
+import { loadEntityDisplayAssets, loadDisplayParts } from '@/client/reanim/EntityDisplay'
 import { BitmapTextRenderer, type BitmapTextSnapshot } from '@/client/font/BitmapTextRenderer'
 import { MusicPlayer, type MusicPlayerSnapshot } from '@/client/music/MusicPlayer'
 import { ParticlePlayer, type ParticlePlayerSnapshot } from '@/client/particle/ParticlePlayer'
@@ -8,17 +7,24 @@ import { ReanimPlayer, type ReanimPlaybackSnapshot } from '@/client/reanim/Reani
 import { SoundPlayer } from '@/client/sound/SoundPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { MusicSystem } from '@/client/music/MusicSystem'
+import { randomAnimationRate } from '@/client/content/ClientAnimationRegistry'
 
 export async function showContentShowcase(parent: Node): Promise<Node> {
-    const loader = new ClientContentLoader()
-    const registry = new ContentRegistry()
-    registry.register(await loader.loadManifest('pvz-base'))
-    registry.freeze()
+    const { content, catalog } = await loadEntityDisplayAssets()
+    const { registry, loader } = content
     const animationRoot = uiNode({ name: 'Reanim' }).node
-    const body = uiNode({ name: 'SunflowerBody', parent: animationRoot }).node.addComponent(ReanimPlayer)
-    const face = uiNode({ name: 'SunflowerFace', parent: animationRoot }).node.addComponent(ReanimPlayer)
     const zombieNode = uiNode({ name: 'ZombieIdle' }).node
-    const zombie = zombieNode.addComponent(ReanimPlayer)
+    const [plantPlayers, zombiePlayers] = await Promise.all([
+        loadDisplayParts(animationRoot, catalog.plants[1].parts, content),
+        loadDisplayParts(zombieNode, catalog.zombies[0].parts, content),
+    ]).catch(error => { animationRoot.destroy(); zombieNode.destroy(); throw error })
+    if (!plantPlayers || !zombiePlayers) throw new Error('content showcase was destroyed while loading')
+    const body = plantPlayers.get('body')!, face = plantPlayers.get('face')!, zombie = zombiePlayers.get('body')!
+    const blink = catalog.plants[1].parts.find(part => part.blink)!
+    face.play({ loop: false, rate: 15 / blink.fps * (blink.rateScale ?? 1) })
+    face.hide()
+    body.node.name = 'SunflowerBody'
+    face.node.name = 'SunflowerFace'
     const textNode = uiNode({ name: 'BitmapFont', anchor: { x: 0, y: 1 } }).node
     const text = textNode.addComponent(BitmapTextRenderer)
     const particleNode = uiNode({ name: 'Particle' }).node
@@ -29,16 +35,11 @@ export async function showContentShowcase(parent: Node): Promise<Node> {
     const music = musicNode.addComponent(MusicPlayer)
     try {
         await Promise.all([
-            body.load('pvz:sunflower', registry, loader),
-            face.load('pvz:sunflower_blink', registry, loader),
-            zombie.load('pvz:zombie', registry, loader),
             text.load('pvz:dwarventodcraft18', registry, loader),
             particle.load('pvz:peasplat', registry, loader),
             sound.load('pvz:splat', registry, loader),
             music.load('pvz:title_theme', registry, loader),
         ])
-        face.attachToTrack(body, 'anim_idle')
-        face.hide()
         text.setText('PLANTS VS. ZOMBIES\nAVATAR WAVES', {
             fontSize: 30,
             maxWidth: 440,
@@ -86,8 +87,9 @@ export async function showContentShowcase(parent: Node): Promise<Node> {
     root.node.addChild(particleNode)
     root.node.addChild(soundNode)
     root.node.addChild(musicNode)
-    body.play({ loop: true })
-    zombie.play({ loop: true })
+    const plantBody = catalog.plants[1].parts[0], zombieBody = catalog.zombies[0].parts[0]
+    body.play({ loop: true, rate: randomAnimationRate(catalog.plants[1].rate) / plantBody.fps * (plantBody.rateScale ?? 1) })
+    zombie.play({ loop: true, rate: randomAnimationRate(catalog.zombies[0].rate) / zombieBody.fps * (zombieBody.rateScale ?? 1) })
     particle.play(0x50565a32)
     return root.node
 }
@@ -144,7 +146,7 @@ export function installContentShowcaseProbe(parent: Node): void {
             releaseMusic()
         },
         blink() {
-            requireContent(showcase).face.play({ loop: false, rate: 1.25, timeSeconds: 0 })
+            requireContent(showcase).face.play({ loop: false, timeSeconds: 0 })
         },
         splat() {
             requireContent(showcase).particle.play(0x50565a32)
@@ -192,6 +194,7 @@ export function installContentShowcaseProbe(parent: Node): void {
             const content = requireContent(showcase)
             content.body.restore(snapshot.body)
             content.face.restore(snapshot.face)
+            if (snapshot.face.attachmentTrackId) content.face.reattachAfterRestore(content.body)
             content.zombie.restore(snapshot.zombie)
             content.text.restore(snapshot.text)
             content.particle.restore(snapshot.particle)
@@ -214,7 +217,7 @@ function requireContent(showcase: Node | null): {
     const root = showcase?.getChildByName('Reanim')
     const body = root?.getChildByName('SunflowerBody')?.getComponent(ReanimPlayer)
     const face = root?.getChildByName('SunflowerFace')?.getComponent(ReanimPlayer)
-    const zombie = showcase?.getChildByName('ZombieIdle')?.getComponent(ReanimPlayer)
+    const zombie = showcase?.getChildByName('ZombieIdle')?.getChildByName('body')?.getComponent(ReanimPlayer)
     const text = showcase?.getChildByName('BitmapFont')?.getComponent(BitmapTextRenderer)
     const particle = showcase?.getChildByName('Particle')?.getComponent(ParticlePlayer)
     const sound = showcase?.getChildByName('Sound')?.getComponent(SoundPlayer)

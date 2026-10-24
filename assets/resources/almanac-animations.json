@@ -1,33 +1,6 @@
 {
   "plants": [
     {
-      "parts": [
-        {
-          "name": "body",
-          "id": "pvz:almanac_plant_0_body",
-          "fps": 12.0
-        },
-        {
-          "name": "head",
-          "id": "pvz:almanac_plant_0_head",
-          "fps": 12.0,
-          "parent": "body",
-          "track": "anim_stem",
-          "blink": false
-        },
-        {
-          "name": "face",
-          "id": "pvz:almanac_plant_0_face",
-          "fps": 12.0,
-          "parent": "head",
-          "track": "anim_face",
-          "blink": true
-        }
-      ],
-      "rate": [
-        15,
-        20
-      ],
       "offset": [
         0,
         0
@@ -42,28 +15,10 @@
         -3,
         51
       ],
-      "shadowScale": 1
+      "shadowScale": 1,
+      "animationTarget": "pvz:peashooter"
     },
     {
-      "parts": [
-        {
-          "name": "body",
-          "id": "pvz:almanac_plant_1_body",
-          "fps": 12.0
-        },
-        {
-          "name": "face",
-          "id": "pvz:almanac_plant_1_face",
-          "fps": 12.0,
-          "parent": "body",
-          "track": "anim_idle",
-          "blink": true
-        }
-      ],
-      "rate": [
-        10,
-        15
-      ],
       "offset": [
         0,
         0
@@ -78,20 +33,11 @@
         -3,
         51
       ],
-      "shadowScale": 1
+      "shadowScale": 1,
+      "animationTarget": "pvz:sunflower",
+      "packetTimeRatio": 0.15
     },
     {
-      "parts": [
-        {
-          "name": "body",
-          "id": "pvz:almanac_plant_2_body",
-          "fps": 30.0
-        }
-      ],
-      "rate": [
-        10,
-        15
-      ],
       "offset": [
         0,
         0
@@ -106,28 +52,10 @@
         -3,
         51
       ],
-      "shadowScale": 1
+      "shadowScale": 1,
+      "animationTarget": "pvz:cherrybomb"
     },
     {
-      "parts": [
-        {
-          "name": "body",
-          "id": "pvz:almanac_plant_3_body",
-          "fps": 12.0
-        },
-        {
-          "name": "face",
-          "id": "pvz:almanac_plant_3_face",
-          "fps": 12.0,
-          "parent": "body",
-          "track": "anim_face",
-          "blink": true
-        }
-      ],
-      "rate": [
-        10,
-        15
-      ],
       "offset": [
         0,
         0
@@ -142,28 +70,10 @@
         -3,
         51
       ],
-      "shadowScale": 1
+      "shadowScale": 1,
+      "animationTarget": "pvz:wallnut"
     },
     {
-      "parts": [
-        {
-          "name": "body",
-          "id": "pvz:almanac_plant_4_body",
-          "fps": 12.0
-        },
-        {
-          "name": "face",
-          "id": "pvz:almanac_plant_4_face",
-          "fps": 12.0,
-          "parent": "body",
-          "track": "anim_face",
-          "blink": true
-        }
-      ],
-      "rate": [
-        12,
-        12
-      ],
       "offset": [
         0,
         0
@@ -183,36 +93,10 @@
         12,
         12
       ],
-      "packetScale": 0.85
+      "packetScale": 0.85,
+      "animationTarget": "pvz:potatomine"
     },
     {
-      "parts": [
-        {
-          "name": "body",
-          "id": "pvz:almanac_plant_5_body",
-          "fps": 12.0
-        },
-        {
-          "name": "head",
-          "id": "pvz:almanac_plant_5_head",
-          "fps": 12.0,
-          "parent": "body",
-          "track": "anim_stem",
-          "blink": false
-        },
-        {
-          "name": "face",
-          "id": "pvz:almanac_plant_5_face",
-          "fps": 12.0,
-          "parent": "head",
-          "track": "anim_face",
-          "blink": true
-        }
-      ],
-      "rate": [
-        15,
-        20
-      ],
       "offset": [
         0,
         0
@@ -227,20 +111,10 @@
         -3,
         51
       ],
-      "shadowScale": 1
+      "shadowScale": 1,
+      "animationTarget": "pvz:snowpea"
     },
     {
-      "parts": [
-        {
-          "name": "body",
-          "id": "pvz:almanac_plant_6_body",
-          "fps": 12.0
-        }
-      ],
-      "rate": [
-        10,
-        15
-      ],
       "offset": [
         0,
         0
@@ -255,36 +129,10 @@
         -21,
         57
       ],
-      "shadowScale": 1
+      "shadowScale": 1,
+      "animationTarget": "pvz:chomper"
     },
     {
-      "parts": [
-        {
-          "name": "body",
-          "id": "pvz:almanac_plant_7_body",
-          "fps": 12.0
-        },
-        {
-          "name": "head",
-          "id": "pvz:almanac_plant_7_head",
-          "fps": 12.0,
-          "parent": "body",
-          "track": "anim_stem",
-          "blink": false
-        },
-        {
-          "name": "face",
-          "id": "pvz:almanac_plant_7_face",
-          "fps": 12.0,
-          "parent": "head",
-          "track": "anim_face",
-          "blink": true
-        }
-      ],
-      "rate": [
-        15,
-        20
-      ],
       "offset": [
         0,
         0
@@ -299,7 +147,8 @@
         -3,
         51
       ],
-      "shadowScale": 1
+      "shadowScale": 1,
+      "animationTarget": "pvz:repeater"
     },
     {
       "parts": [
@@ -1811,14 +1660,6 @@
   ],
   "zombies": [
     {
-      "parts": [
-        {
-          "name": "almanac0",
-          "id": "pvz:almanac_zombie_0_almanac0",
-          "fps": 12.0,
-          "idle2Id": "pvz:almanac_zombie_0_idle2"
-        }
-      ],
       "offset": [
         0,
         0
@@ -1826,10 +1667,6 @@
       "drawOffset": [
         0,
         0
-      ],
-      "rate": [
-        12,
-        18
       ],
       "scale": 1,
       "shadow": true,
@@ -1844,24 +1681,10 @@
           14.0
         ],
         "scale": 0.5
-      }
+      },
+      "animationTarget": "pvz:normal"
     },
     {
-      "parts": [
-        {
-          "name": "almanac1",
-          "id": "pvz:almanac_zombie_1_almanac1",
-          "fps": 12.0
-        },
-        {
-          "name": "flag",
-          "id": "pvz:almanac_zombie_1_flag",
-          "fps": 12.0,
-          "parent": "almanac1",
-          "track": "Zombie_flaghand",
-          "behind": "Zombie_innerarm_screendoor"
-        }
-      ],
       "offset": [
         0,
         0
@@ -1869,10 +1692,6 @@
       "drawOffset": [
         0,
         0
-      ],
-      "rate": [
-        12,
-        18
       ],
       "scale": 1,
       "shadow": true,
@@ -1889,26 +1708,16 @@
         "scale": 0.5,
         "parts": [
           {
-            "name": "flag",
-            "id": "pvz:almanac_zombie_1_flag",
-            "fps": 12.0
+            "name": "flag"
           },
           {
-            "name": "almanac1",
-            "id": "pvz:almanac_zombie_1_almanac1",
-            "fps": 12.0
+            "name": "body"
           }
         ]
-      }
+      },
+      "animationTarget": "pvz:flag"
     },
     {
-      "parts": [
-        {
-          "name": "almanac2",
-          "id": "pvz:almanac_zombie_2_almanac2",
-          "fps": 12.0
-        }
-      ],
       "offset": [
         0,
         0
@@ -1916,10 +1725,6 @@
       "drawOffset": [
         0,
         0
-      ],
-      "rate": [
-        12,
-        18
       ],
       "scale": 1,
       "shadow": true,
@@ -1934,16 +1739,10 @@
           26.0
         ],
         "scale": 0.5
-      }
+      },
+      "animationTarget": "pvz:conehead"
     },
     {
-      "parts": [
-        {
-          "name": "body",
-          "id": "pvz:almanac_zombie_3_body",
-          "fps": 12.0
-        }
-      ],
       "offset": [
         0,
         0
@@ -1951,10 +1750,6 @@
       "drawOffset": [
         -6,
         -11
-      ],
-      "rate": [
-        12,
-        18
       ],
       "scale": 1,
       "shadow": true,
@@ -1969,16 +1764,10 @@
           11.0
         ],
         "scale": 0.5
-      }
+      },
+      "animationTarget": "pvz:pole_vaulter"
     },
     {
-      "parts": [
-        {
-          "name": "almanac4",
-          "id": "pvz:almanac_zombie_4_almanac4",
-          "fps": 12.0
-        }
-      ],
       "offset": [
         0,
         0
@@ -1986,10 +1775,6 @@
       "drawOffset": [
         0,
         0
-      ],
-      "rate": [
-        12,
-        18
       ],
       "scale": 1,
       "shadow": true,
@@ -2004,7 +1789,8 @@
           23.0
         ],
         "scale": 0.5
-      }
+      },
+      "animationTarget": "pvz:buckethead"
     },
     {
       "parts": [

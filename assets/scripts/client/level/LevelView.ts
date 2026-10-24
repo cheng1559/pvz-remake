@@ -6,9 +6,10 @@ import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { LevelSlots } from './LevelSlots'
 import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
+import { SpriteLoader } from '@/core/SpriteLoader'
 import { UI } from '@/client/ui/UI'
 import type { UIButton } from '@/client/ui/UIButton'
-import { levelPlantVisual } from './LevelPlantVisuals'
+import { plantDefinition } from '@/client/plants/definitions'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
@@ -28,7 +29,6 @@ import {
 } from './LevelPresentationSnapshot'
 import { LevelParticlePresenter } from './LevelParticlePresenter'
 import { LevelGameOverPresenter } from './LevelGameOverPresenter'
-import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { TodParticleSystem } from '@/core/Particle'
 
@@ -38,9 +38,7 @@ const PROGRESS_METER_WIDTH = 158
 const PROGRESS_METER_HEIGHT = 27
 const PROGRESS_FILL_WIDTH = 143
 
-export type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>> & {
-    readonly animations?: ClientAnimationRegistry
-}
+export type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 
 export class LevelView {
     private readonly pausedComponents: Component[] = []
@@ -69,18 +67,21 @@ export class LevelView {
         if (!level) throw new Error(`Level is not installed: ${levelId}`)
         const boardDefinition = content.definitions.boards[level.board]
         const presentation = getLevelPresentation(level)
-        const animations = content.animations ?? new ClientAnimationRegistry()
+        const animations = content.animations
         animations.freeze()
         const sprites = new SpriteRepository(content.registry, content.loader)
         const fonts = new FontRepository(content.registry, content.loader)
+        const helmSpriteIds = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => zombie.helm?.damagedSprites ?? []))]
+        const dropImages = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => Object.values(zombie.drops).flatMap(drop => drop?.image ? [drop.image] : [])))]
         const [
-            background, seedbank, projectileFrame,
+            background, seedbank, projectileEntries,
             mowerFrame, mowerShadow, damagedZombieArm, flagMeter, flagMeterParts,
             flagMeterLevelProgress, sunFont, pico129, houseOfTerror16, houseOfTerror28, gameOverFrames, ui,
+            [poleVaulterArm, wallnutCracked1, wallnutCracked2], helmEntries,
         ] = await Promise.all([
             sprites.load(presentation.board.background),
             sprites.load('pvz:seedbank'),
-            sprites.load('pvz:projectilepea'),
+            Promise.all(Object.entries(content.presentation.projectiles).map(async ([id, definition]) => [id, await sprites.load(definition.sprite)] as const)),
             sprites.load('pvz:lawnmower_cached'),
             sprites.load('pvz:plantshadow'),
             sprites.load('pvz:zombie_outerarm_upper2'),
@@ -93,6 +94,11 @@ export class LevelView {
             fonts.load('pvz:houseofterror28'),
             LevelGameOverPresenter.loadAssets(presentation.board.gameOver),
             UI.load(),
+            Promise.all([
+                'pvz:zombie_polevaulter_outerarm_upper2', 'pvz:wallnut_cracked1', 'pvz:wallnut_cracked2',
+            ].map(id => sprites.load(id))),
+            Promise.all(helmSpriteIds.map(async id => [id, await sprites.load(id)] as const)),
+            Promise.all(dropImages.map(id => SpriteLoader.load(id))),
         ])
         const layout = instantiate(content.levelPrefab)
         root.addChild(layout)
@@ -189,11 +195,11 @@ export class LevelView {
         const initializePreview = (node: Node) => {
             uiNode({ node, position: { x: 0, y: 0 }, anchor: { x: 0, y: 1 }, sprite: { frame: null } })
             const preview = node.addComponent(PlantPreview)
-            preview.initialize(undefined, async (parent, plantId) => {
+            preview.initialize(content.presentation, undefined, async (parent, plantId) => {
                 const atlas = await loadPacketSprite('plant_previews_cached')
                 if (!parent.isValid) return
                 uiNode({ name: 'CachedPlantPreview', parent, position: { x: -40, y: 40 }, anchor: { x: 0, y: 1 },
-                    sprite: { frame: getAtlasFrame(atlas, levelPlantVisual(String(plantId)).preview, 220, 160, 8), sizeMode: Sprite.SizeMode.RAW, trim: false } })
+                    sprite: { frame: getAtlasFrame(atlas, plantDefinition(content.presentation, String(plantId)).visual.preview, 220, 160, 8), sizeMode: Sprite.SizeMode.RAW, trim: false } })
             }, { x: 0, y: 0, scale: 1 })
             return preview
         }
@@ -220,7 +226,7 @@ export class LevelView {
         })
         const levelCompleteFade = fadeParts.node
         levelCompleteFade.active = false
-        const audio = new LevelAudioPresenter(presentation.board.music)
+        const audio = new LevelAudioPresenter(presentation.board.music, content.presentation)
         let view!: LevelView
         let entityRenderer!: LevelEntityRenderer
         const intro = await presentation.createIntro({
@@ -229,7 +235,13 @@ export class LevelView {
         })
         entityRenderer = new LevelEntityRenderer(
             root.layer, content, animations, {
-                projectileFrame, mowerFrame, mowerShadow, damagedZombieArm,
+                projectileFrames: Object.fromEntries(projectileEntries),
+                mowerFrame, mowerShadow,
+                zombieSprites: {
+                    damagedArm: damagedZombieArm, poleVaulterDamagedArm: poleVaulterArm,
+                    helms: Object.fromEntries(helmEntries),
+                },
+                wallnutCracked: [wallnutCracked1, wallnutCracked2],
                 loadPacketSprite,
                 packetCostFont: pico129,
             },
@@ -260,6 +272,7 @@ export class LevelView {
         )
         const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, gameOverFrames, presentation.board.gameOver)
         view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition)
+        view.shakeTarget = { node: board, x: board.position.x, y: board.position.y }
         intro.sync()
         return view
     }
@@ -317,6 +330,7 @@ export class LevelView {
 
     sync(snapshot: WorldSnapshot, changes: ClientWorldChanges, events: ServerEvent[]): void {
         this.entityRenderer.sync(snapshot, changes, events)
+        this.syncShake(snapshot.gameplayTick, events)
         this.end.sync(snapshot, events)
         for (const item of snapshot.items) this.end.syncAward(item, snapshot.levelId)
         this.hud.sync(snapshot, events, this.introComplete)
@@ -346,6 +360,22 @@ export class LevelView {
         }
         for (const projectile of snapshot.projectiles) draw(projectile, this.definitions.projectiles[projectile.typeId].hitbox, Color.CYAN)
         for (const mower of snapshot.lawnMowers) draw(mower, this.definitions.lawnMowers[mower.typeId].attack, Color.YELLOW)
+    }
+
+    private shake = { endTick: 0, x: 0, y: 0, tick: 0 }
+    private shakeTarget: { node: Node, x: number, y: number } | null = null
+
+    /** Board::ShakeBoard: explosions bounce the board for 12 ticks, flipping sideways at random. */
+    private syncShake(tick: number, events: ServerEvent[]): void {
+        const target = this.shakeTarget
+        if (events.some(event => event.type === 'plantExploded')) this.shake = { endTick: tick + 12, x: 3, y: -4, tick: -1 }
+        if (!target?.node.isValid || tick === this.shake.tick) return
+        this.shake.tick = tick
+        const remaining = this.shake.endTick - tick
+        if (remaining <= 0) { target.node.setPosition(target.x, target.y); return }
+        if (Math.random() < 1 / 3) this.shake.x = -this.shake.x
+        const bounce = 1 - Math.abs(2 * (12 - remaining) / 12 - 1)
+        target.node.setPosition(target.x + Math.round(this.shake.x * bounce), target.y - Math.round(this.shake.y * bounce))
     }
 
     async snapshot(flow: LevelFlowSnapshot): Promise<LevelPresentationSnapshot> {

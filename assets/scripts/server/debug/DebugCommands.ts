@@ -1,7 +1,18 @@
 import { Schedule, type World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { debugCondition, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
-import { damageZombie, EconomyStateResource, LawnMowerComponent, LevelStateResource, PlantComponent, PositionComponent, RandomResource, SeedBankResource, spawnZombie, ZombieComponent } from '../gameplay'
+import { damageZombie } from '../zombies/damage'
+import {
+    EconomyStateResource,
+    LawnMowerComponent,
+    LevelStateResource,
+    PlantComponent,
+    PositionComponent,
+    RandomResource,
+    SeedBankResource,
+    ZombieComponent,
+} from '../components'
+import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { ItemComponent, TutorialResource, WaveResource } from '../levelState'
 import { createWaveSystem } from '../waves'
 import { emitServerEvent, EventQueueResource } from '../events'
@@ -45,6 +56,22 @@ export function executeDebugGameCommand(
             const rejection = placePlant(seedId, grid.row, grid.column!)
             return rejection ? debugCondition(rejection) : debugSuccess(`Planted ${args[0]}`)
         }
+        case 'seed': {
+            const bank = world.resources.get(SeedBankResource)
+            const slot = debugInteger(args[0])
+            if (slot === null || slot < 1 || slot > bank.packets.length) {
+                return debugSyntax(`Use slot 1-${bank.packets.length}`)
+            }
+            const seedId = findType(definitions.seeds, args[1])
+            if (!seedId) return debugCondition(`Seed is not installed: ${args[1]}`)
+            const duplicate = bank.packets.findIndex((packet, index) => index !== slot - 1 && packet.seedId === seedId)
+            if (duplicate >= 0) return debugCondition(`Seed is already in slot ${duplicate + 1}`)
+            const packet = bank.packets[slot - 1]
+            if (bank.selectedSeedId === packet.seedId) bank.selectedSeedId = undefined
+            packet.seedId = seedId
+            packet.readyAtTick = tick
+            return debugSuccess(`Seed slot ${slot}: ${seedId}`)
+        }
         case 'removeplant': {
             const grid = position(args[0], args[1])
             if (!grid) return invalidPosition()
@@ -60,7 +87,8 @@ export function executeDebugGameCommand(
             const grid = position(args[1], args[2])
             if (!grid) return invalidPosition()
             const entityId = spawnZombie(world, definitions, typeId, grid.row,
-                grid.column === undefined ? 780 : level.board.origin.x + grid.column * level.board.cell.width,
+                grid.column === undefined ? pickZombieSpawnX(definitions.zombies[typeId], world.resources.get(RandomResource))
+                    : level.board.origin.x + grid.column * level.board.cell.width,
                 level.board.origin.y + grid.row * level.board.cell.height - 30)
             emitServerEvent(events, 'zombieSpawned', { entityId, typeId, row: grid.row })
             return debugSuccess(`Summoned ${args[0]}`)
@@ -72,7 +100,7 @@ export function executeDebugGameCommand(
             const zombies = [...world.query(ZombieComponent)]
             for (const entity of zombies) {
                 if (name === 'kill') world.destroyEntity(entity)
-                else damageZombie(world, entity, damage)
+                else damageZombie(world, definitions, entity, damage)
             }
             return debugSuccess(`${name}: ${zombies.length} zombie(s)`)
         }

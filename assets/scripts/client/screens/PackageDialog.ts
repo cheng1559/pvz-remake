@@ -28,11 +28,11 @@ export interface PackageDialogOptions {
     restart: () => Promise<void>
 }
 
-interface Entry { id: string, version?: string }
+interface Entry { id: string, version?: string, error?: string }
 
 /**
- * Edits the enabled list as a draft; Apply saves it and offers a restart.
- * Import and uninstall change installed files immediately, like the CLI.
+ * Enabled states and uninstalls stay in the draft until Apply; Cancel discards them.
+ * Import saves the ZIP immediately, without enabling it.
  * The pack list order is its priority, highest first, and checking a row never moves it.
  * Mods load in dependency order, so they have no priority.
  */
@@ -40,19 +40,21 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
     const manager = kind === 'pack' ? resourcePacks : modManager
     const ordered = kind === 'pack'
     const running = await manager.running()
+    const initial = ordered ? running : await modManager.list()
     const packEntries = ordered ? await resourcePacks.entries() : []
-    const checked = new Set(ordered ? packEntries.filter(entry => entry.enabled).map(entry => entry.id) : await modManager.list())
+    const checked = new Set(ordered ? packEntries.filter(entry => entry.enabled).map(entry => entry.id) : initial)
+    const pendingUninstalls = new Set<string>()
     /** Display order; for packs, the first row has the highest priority. */
     let entries: Entry[] = []
     let order = packEntries.map(entry => entry.id)
-    /** An install or uninstall replaced files used by this session. */
+    /** An import replaced files used by this session. */
     let touchedRunning = false
     let busy = false
     if (!parent.isValid) throw new Error('Package dialog was closed while loading')
 
     const dialog = ui.dialog(parent, {
         title: ui.text(kind === 'pack' ? 'PACKAGE_PACKS_TITLE' : 'PACKAGE_MODS_TITLE', kind === 'pack' ? 'Resource Packs' : 'Mods'),
-        width: 480, extraHeight: 270, tall: true,
+        width: 640, extraHeight: 270, tall: true,
         confirmText: ui.text('PACKAGE_APPLY', 'Apply'), cancelText: ui.text('BUTTON_CANCEL'),
     })
     const fail = (error: unknown) => {
@@ -93,7 +95,7 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
     async function refresh(): Promise<void> {
         const installed: Entry[] = kind === 'pack' ? (await resourcePacks.installed()).map(id => ({ id })) : await modManager.installed()
         if (!dialog.node.isValid) return
-        const ids = installed.map(entry => entry.id)
+        const ids = installed.filter(entry => !pendingUninstalls.has(entry.id)).map(entry => entry.id)
         order = ordered ? [...order, ...ids].filter((id, index, all) => all.indexOf(id) === index && ids.includes(id)) : ids
         for (const id of checked) if (!order.includes(id)) checked.delete(id)
         entries = order.map(id => installed.find(entry => entry.id === id)!)
@@ -125,8 +127,10 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
             x: 6, y: Math.ceil(ROW_HEIGHT / 2 - CHECKBOX_CENTER_Y * CHECKBOX_SCALE), value: checked.has(entry.id), onChange: toggle,
         })
         checkbox.node.setScale(CHECKBOX_SCALE, CHECKBOX_SCALE)
-        const name = `${entry.id}${entry.version ? `  ${entry.version}` : ''}`
-        const nameLabel = ui.label(row, { text: name, font: 'profile', color: TEXT_COLOR, x: 46, y: textY })
+        const name = `${entry.id}${entry.version ? `  ${entry.version}` : ''}${entry.error ? ' [Error]' : ''}`
+        const nameColor = entry.error ? LINK_COLOR : TEXT_COLOR
+        const nameLabel = ui.label(row, { text: name, font: 'profile', color: nameColor, x: 46, y: textY })
+        if (entry.error) ui.tooltip(row, { text: entry.error })
 
         const text = ui.text('PACKAGE_UNINSTALL', 'Uninstall')
         const textWidth = FontMetricsUtil.measureTextWidth(font, text)
@@ -136,7 +140,7 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
             color => { label.renderer.fontColor = color })
         // Clicking the name toggles the checkbox, as clicking the box does.
         const nameRight = ordered ? uninstallX - 2 * ARROW_WIDTH - 14 : uninstallX - 4
-        rowButton(row, 46, Math.max(0, nameRight - 46), TEXT_COLOR, true, () => {
+        rowButton(row, 46, Math.max(0, nameRight - 46), nameColor, true, () => {
             checkbox.value = !checkbox.value
             toggle(checkbox.value)
         }, color => { nameLabel.renderer.fontColor = color })
@@ -200,7 +204,8 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
     async function importArchive(): Promise<void> {
         const id = await options.install()
         if (!id || !dialog.node.isValid) return
-        if (running.includes(id)) touchedRunning = true
+        pendingUninstalls.delete(id)
+        if (running.includes(id) || initial.includes(id)) touchedRunning = true
         if (ordered && !order.includes(id)) order.unshift(id)
         checked.add(id)
         await refresh()
@@ -212,29 +217,49 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
             confirmText: ui.text('BUTTON_YES'), cancelText: ui.text('BUTTON_NO'),
         }).result
         if (!confirmed || !dialog.node.isValid) return
-        await manager.uninstall(id)
-        if (running.includes(id)) touchedRunning = true
+        pendingUninstalls.add(id)
         checked.delete(id)
         await refresh()
     }
 
     async function apply(): Promise<void> {
         const enabled = enabledDraft()
+        const same = enabled.length === initial.length
+            && enabled.every((id, index) => ordered ? initial[index] === id : initial.includes(id))
+        const restart = !same || touchedRunning
+        if (restart) {
+            const confirmed = await ui.dialog(dialog.node, {
+                title: ui.text('PACKAGE_RESTART_HEADER', 'Restart Game?'),
+                message: ui.text('PACKAGE_RESTART_BODY', 'Restart now to apply the changes? The current level will be saved.'),
+                confirmText: ui.text('BUTTON_OK'), cancelText: ui.text('BUTTON_CANCEL'),
+            }).result
+            if (!confirmed || !dialog.node.isValid) return
+        }
         if (ordered) await resourcePacks.setEntries(order.map(id => ({ id, enabled: checked.has(id) })))
         else await modManager.setEnabled(enabled)
-        const same = enabled.length === running.length
-            && enabled.every((id, index) => ordered ? running[index] === id : running.includes(id))
-        if (same && !touchedRunning) { dialog.close(true); return }
-        const restart = await ui.dialog(dialog.node, {
-            title: ui.text('PACKAGE_RESTART_HEADER', 'Restart Game?'),
-            message: ui.text('PACKAGE_RESTART_BODY', 'Restart now to apply the changes? The current level will be saved.'),
-            confirmText: ui.text('BUTTON_OK'), cancelText: ui.text('BUTTON_CANCEL'),
-        }).result
-        if (restart && dialog.node.isValid) await options.restart()
+        for (const id of pendingUninstalls) {
+            await manager.uninstall(id)
+            pendingUninstalls.delete(id)
+        }
+        if (restart) await options.restart()
+        else dialog.close(true)
     }
 
     dialog.onConfirm = () => { void run(apply) }
     dialog.onKeyDown = event => event.keyCode === KeyCode.SPACE
     await refresh()
+    const draft = () => JSON.stringify([ordered ? order : [], [...checked].sort()])
+    const initialDraft = draft()
+    dialog.onCancel = () => { void run(async () => {
+        if (pendingUninstalls.size || draft() !== initialDraft) {
+            const discard = await ui.dialog(dialog.node, {
+                title: ui.text('ARE_YOU_SURE'),
+                message: ui.text('PACKAGE_DISCARD_WARNING', 'Unapplied changes will not be saved. Discard them?'),
+                confirmText: ui.text('BUTTON_YES'), cancelText: ui.text('BUTTON_NO'),
+            }).result
+            if (!discard || !dialog.node.isValid) return
+        }
+        dialog.close(false)
+    }) }
     return dialog
 }

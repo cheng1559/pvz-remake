@@ -1,7 +1,9 @@
+import { presentationFixture } from './presentationFixture'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
+import * as plantDefinitions from '@/client/plants/definitions'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 
 // Exercise the real button/hover code with ordered capture/target events, without rendering Cocos.
@@ -39,6 +41,12 @@ function setup() {
         addChild(node: FakeNode) { this.children.push(node); node.parent = this }
         isChildOf(node: FakeNode): boolean { return this.parent === node || !!this.parent?.isChildOf(node) }
         getSiblingIndex() { return this.parent?.children.indexOf(this) ?? 0 }
+        setSiblingIndex(index: number) {
+            if (!this.parent) return
+            const siblings = this.parent.children
+            siblings.splice(siblings.indexOf(this), 1)
+            siblings.splice(index, 0, this)
+        }
         getComponent() { return this.transform }
         addComponent(Type: any) {
             const component = new Type()
@@ -88,10 +96,12 @@ function setup() {
     const Button = load('assets/scripts/client/ui/UIButton.ts').UIButton
     modules['@/client/ui/UIButton'] = { UIButton: Button }
     modules['./LevelGeometry'] = load('assets/scripts/client/level/LevelGeometry.ts')
-    modules['./LevelPlantVisuals'] = load('assets/scripts/client/level/LevelPlantVisuals.ts')
+    modules['@/client/plants/definitions'] = plantDefinitions
     modules['@/client/hud/SeedPacketView'] = { SeedPacketView: class {
         node: FakeNode; options: unknown
+        replacement?: { seedType: string, cost: number }
         constructor(options: any) { this.node = new FakeNode(options.x); options.parent.addChild(this.node) }
+        replace(seedType: string, cost: number) { this.replacement = { seedType, cost } }
         sync(options: unknown) { this.options = options }
     } }
     modules['./LevelSeedBank'] = load('assets/scripts/client/level/LevelSeedBank.ts')
@@ -139,7 +149,7 @@ test('board hover shares cursor ownership with UI and never flashes default whil
     let packetStarted = false
     const packet = { node: packetNode, rect: () => ({ x: 0, y: 0, width: 50, height: 70 }),
         sync(options: { gameStarted: boolean }) { packetStarted = options.gameStarted } }
-    const content = { definitions: { seeds: { pea: { sunCost: 100 } } } }
+    const content = { definitions: { seeds: { pea: { sunCost: 100 } } }, presentation: presentationFixture }
     const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
     const seedBank = Object.create(LevelSeedBank.prototype)
     const tooltip = { visible: false, warning: '', show() { this.visible = true }, hide() { this.visible = false } }
@@ -309,9 +319,10 @@ test('level seeds keep independent affordability and cooldowns, and placement us
     const definitions = { seeds: {
         pea: { plant: 'pvz:peashooter', sunCost: 100 },
         double: { plant: 'pvz:repeater', sunCost: 200 },
+        ice: { plant: 'pvz:snowpea', sunCost: 175 },
     } }
     const bank = new LevelSeedBank({
-        content: { definitions }, level: { seedPackets: ['pea', 'double'] }, seedPacketSlot: ui.root, presentation: {},
+        content: { definitions, presentation: presentationFixture }, level: { seedPackets: ['pea', 'double'] }, seedPacketSlot: ui.root, presentation: {},
         ui: { text: (key: string) => key, tooltip: () => ({ warning: '', show() {}, hide() {} }) },
     })
     const world = {
@@ -346,6 +357,15 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         world.availableSun = 300
         bank.sync(world, [], true, null)
         assert.deepEqual(flashes, [bank.packets[1].view.node])
+        const slot = bank.packets[0], node = slot.view.node, button = slot.button
+        world.seedPackets[0].seedId = 'ice'
+        bank.sync(world, [], true, null, false)
+        assert.equal(slot.view.node, node)
+        assert.equal(slot.button, button, 'replacement preserves the input presenter’s button reference')
+        assert.deepEqual({ ...slot.view.replacement }, { seedType: 'snowpea', cost: 175 })
+        assert.equal(slot.tooltip.text, 'SNOWPEA')
+        slot.button.onPress()
+        assert.equal(commands.at(-1).seedId, 'ice')
         world.cursor.mode = 'seed'
         presenter.boardPixel = () => ({ x: 52, y: 115 })
         presenter.onPointer({})
@@ -461,7 +481,7 @@ test('mobile planting previews use the original row/column guide', () => {
     const { LevelHudPresenter } = ui.load('assets/scripts/client/level/LevelHudPresenter.ts')
     const hud = Object.create(LevelHudPresenter.prototype)
     const board = { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 }
-    hud.content = { definitions: { boards: { day: board }, seeds: { pea: { plant: 'pvz:peashooter' } } }, loadedMods: { plantUpgrades: [] } }
+    hud.content = { definitions: { boards: { day: board }, seeds: { pea: { plant: 'pvz:peashooter' } } }, loadedMods: {} }
     hud.level = { board: 'day', activeRows: [2] }
     hud.cursorPreview = { active: false, setPosition() {} }
     hud.gridPreview = { active: false, setPosition() {} }

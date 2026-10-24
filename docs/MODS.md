@@ -18,12 +18,94 @@ Mod 统一通过游戏内 `/mod` 命令管理：
 
 加载页也可以按 `/` 打开 CLI；Mod 导致启动失败时，可用 `/mod install` 更新 ZIP，或用 `/mod unload <id>` 停用后重启。更新工作区中的 ZIP 不会自动替换已经安装的副本。启动日志会显示实际加载的 Mod ID 和版本。
 
+模块导入、`register()`（含异步注册）或注册后配置校验失败时，只跳过该 Mod 及依赖它的 Mod，本体和其他 Mod 继续启动。两端新增的定义、行为、视图、资源和 JSON 组件登记会一起回滚，`host.around()`／`replace()` 安装的方法包装也会撤销；失败 Mod 不加入本轮运行内容与存档身份集合。管理窗口显示 `[Error]`，悬停查看原因，控制台保留 Mod ID、出错阶段和完整异常。安装文件和保存的启用状态不自动删除或改写，更新 ZIP 或停用后重启生效。该边界覆盖初始化阶段，不是任意运行时代码的沙箱。
+
 ZIP 内必须恰好有一份 `mod.json`，可以位于根目录或外包一层文件夹，并包含清单声明的 Cocos SystemJS 模块与可选 Asset Bundle。安装前检查文件、依赖版本和依赖环；不能停用或卸载其他启用 Mod 仍然依赖的 Mod。`/mod unload all` 可以一起停用。
 
 Web 与 CLI 预览使用当前站点的 IndexedDB；Native 使用应用可写目录的 `mods/`，由安装器管理，无需手动复制目录。启动时清除安装文件已不存在的启用记录；已安装 Mod 的内容损坏或依赖不满足仍会报错。删除原 ZIP 不影响安装结果。旧目录扫描与 `mods.json` 配置入口已移除。
 
-运行时从已安装 ZIP 的快照加载模块和资源。停用、更新或卸载后，当前执行的代码及资源保持到重启；Native 的 `mod-runtime/` 是运行中客户端资源的临时快照，下次启动时清理。模块可以使用相对 JS 依赖，无需额外 HTTP 服务。纯代码 Mod 可以省略 `client.bundle`；客户端也可通过 `await api.loadSprite('assets/images/example.png')` 直接加载 ZIP 中的 PNG，路径相对于 `mod.json`，返回 `SpriteFrame`。
+运行时从已安装 ZIP 快照加载模块和资源，变更在重启后生效。模块支持相对 JS 依赖，纯代码或原始资源 Mod 不需要 Cocos Asset Bundle。Native 的 `mod-runtime/` 是运行中的资源临时快照，下次启动清理。
 
-开发目录统一使用 `src/client/`、`src/server/` 和 `assets/`，见 [Mod 项目结构](../mods/README.md)。制作示例：[主界面宽屏](../mods/widescreen/README.md)。直接执行 `npm run mod:pack -- mods/widescreen`，工具会在 `dist/mods/widescreen/` 编译代码、复制资源，再生成 `dist/mods/widescreen.zip`。只在打包时编译，不向源码目录写入 JS；ZIP 不包含开发源码。`mod:test` 接收已打包的目录，如 `npm run mod:test -- dist/mods/widescreen`，不会重新编译。
+## 开发与打包
 
-客户端 Mod 可调用 `api.expandViewport({ minAspect, maxAspect })` 启用全局视口并指定比例范围，原有内容居中；低于最小比例时居中裁剪左右，超过最大比例时保持完整高度、左右补黑边。全部页面和关卡的全屏输入/遮罩区域使用实际可见内容范围，排除黑边。宽屏示例的范围是 4:3～32:9；原生桌面窗口也使用该范围，关闭 Mod 后恢复 4:3。`api.enhanceScreen(targetId, context => dispose)` 负责单个页面的资源与动画扩展；页面销毁时调用返回的清理函数。两者相互独立，关闭页面不会撤销全局视口。宽屏示例把主界面贴图替换、云轨迹延长和花的淡出放在 Mod 中，宿主没有该示例专用的显示逻辑。
+源码使用 `src/server/`、`src/client/`，配置和原始资源放在 `assets/`。只有 `mod:pack` 编译，输出到 `dist/mods/`，源码目录不写入 JS。ZIP 不含 TypeScript 源码。
+
+```sh
+npm run mod:pack -- mods/corn
+npm run mod:test -- dist/mods/corn
+```
+
+`mod:test` 验证已打包目录的文件与服务端注册，使用真实服务端宿主，不重新编译，也不代替客户端画面验收。`contentHash` 根据编译产物、资源与清单自动计算；改动后需要重新打包、安装并重启。
+
+## 宿主访问
+
+所有入口统一为 `register({ host, assets })`。服务端和客户端分别取得自己的宿主，不向服务端暴露 Cocos 对象。
+
+```ts
+export function register({ host, assets }) {
+    host.get('content/definitions').register(assets.id, assets.json('assets/gameplay.json'))
+    const { ProjectileSystem } = host.get('server/projectiles')
+    host.around(ProjectileSystem.prototype, 'update', function (next, context, entity) {
+        // 在这里筛选自己的组件，处理自己的弹道；其他实例继续原来的方法。
+        return next(context, entity)
+    })
+}
+```
+
+- `host.get(moduleId)` 返回真实导出对象或注册表；可用模块见 [服务端表](../assets/scripts/server/createModHost.ts) 和 [客户端表](../assets/scripts/client/content/createModHost.ts)。未暴露的模块会报错，不按文件路径任意导入。TypeScript 类型在运行时不存在。
+- `host.around(target, method, handler)` 包装真实方法，保留 `this`。`next()` 传入当前参数，`next(...args)` 替换参数；可返回 Promise。后安装的包装在外层，可决定是否执行原方法。
+- `host.replace(target, method, implementation)` 完整替换方法。两种操作均返回撤销函数；加载失败时宿主撤销本次安装的包装。正常启停仍通过重启生效。
+- `assets.id`／`manifest` 为安装清单，`json(path)`／`bytes(path)`／`url(path)` 读取自己的 ZIP 文件；客户端另有 `await assets.sprite(path)`。路径相对 `mod.json`，不能越出安装包。
+
+已经移除原有的定义、植物/僵尸行为、植物/僵尸视图、系统、页面、动画专用 Mod API，以及升级规则转发层。现在直接使用真实注册表或包装方法；旧入口不保留兼容层。已有宽屏和示例植物已迁移，需要安装本轮重新打包的 ZIP。
+
+## 新增植物与内容注册
+
+服务端注册 `assets/gameplay.json`，客户端注册 `assets/presentation.json`，均使用 `host.get('content/definitions').register(assets.id, data)`。
+
+| 入口 | JSON 顶层表 |
+| --- | --- |
+| 服务端 | `boards`、`seeds`、`plants`、`zombies`、`zombieGaits`、`projectiles`、`items`、`lawnMowers`、`levels`、`levelPatches` |
+| 客户端 | `plants`、`zombies`、`projectiles`、`strings` |
+
+基础内容和 Mod 共用注册与引用校验。新增 ID 使用自己的命名空间，重复 ID、缺失引用会报错，合并后冻结。`levelPatches` 按已有关卡的顶层字段整体替换；同字段重复补丁报冲突。新增完整关卡登记到 `levels`，已有 `/level`、`/plant`、`/zombie` 命令识别新 ID。
+
+客户端的 `visual.nameKey` 引用 `strings`；复用原版卡图时可以提供 `visual.preview`，独立资源不必填写它。植物与僵尸 JSON 的 `view` 选择表现工厂，`animationTarget` 选择动画定义。实际注册表位于 `host.get('client/views').plants` 和 `.zombies`，均通过 `register(kind, factory)` 登记。
+
+工厂返回对应 [PlantView](../assets/scripts/client/plants/PlantView.ts) 或 [ZombieViewInstance](../assets/scripts/client/zombies/ZombieView.ts)，负责同步、表现存档恢复与清理。Mod 可复用已有视图，也可包装其原型；不要把客户端表现定义当作服务端碰撞依据。
+
+## 自定义玩法和状态
+
+```ts
+const { registry } = host.get('server/GameplayRegistry')
+registry.plantBehaviors.register(assets.id, 'example:rapid_pea', behavior)
+registry.zombieBehaviors.register(assets.id, 'example:regenerating_zombie', behavior)
+```
+
+两类行为共用 [EntityBehaviorRegistry](../assets/scripts/server/EntityBehaviorRegistry.ts)：`createState(definition)` 创建独立 JSON 状态，`tick(context)` 推进逻辑，`validateState(state, definition)` 校验创建与存档。JSON 的 `behavior` 保存配置，实例的 `behaviorState` 自动同步、保存与恢复。读档不重新创建状态；暂停、零倍速和结算不运行这些行为。现有移动、伤害、碰撞等系统可复用或通过 `host.around()` 包装。
+
+跨实体效果或自定义投射物状态使用普通 ECS 组件：
+
+```ts
+const { defineComponent } = host.get('ecs')
+const Flight = defineComponent('my:flight')
+registry.components.register(Flight, state => { /* 校验 JSON 状态，错误则抛出 */ })
+```
+
+登记后组件自动跟随实体保存、恢复，并同步为 `world.extensions['my:flight']['实体ID']`。客户端只读该快照；实体删除后组件一并删除。可变状态必须留在行为状态或已登记的组件中，不放在模块全局变量。未安装组件或格式不兼容时拒绝存档，不做旧格式转换。
+
+自定义交互发送 `{ type: 'mod', id: 'my:action', data: { ... } }`，`data` 必须是 JSON 对象。服务端可包装 `IntegratedGameServer.executeCommand`，处理自己的指令并校验阶段、暂停和参数，其他指令继续原方法。与种植指令一样，零倍速仍会处理交互，模拟计时不推进；本体不认识的 Mod 指令会拒绝。
+
+## 独立资源
+
+```ts
+host.get('content/resources').register(assets, assets.json('assets/content.json'))
+```
+
+资源表是 `{ "reanim": { "my:idle": "assets/reanim/idle.json" }, "sprites": { ... }, "particles": { ... }, "sounds": { ... } }`。资源使用自己的命名空间，经现有 ContentRegistry 与仓库加载，支持同 ID 资源包覆盖。原始 Reanim/粒子 JSON 和 PNG 可直接放进 ZIP；AudioClip 使用引擎支持的音频格式。序列化的 Cocos Prefab 等复杂资源仍应使用可选 Asset Bundle。
+
+## 可运行示例
+
+- [corn](../mods/corn/README.md)：玉米投手与玉米加农炮，包含抛投/黄油、双格升级、瞄准与范围爆炸，使用自己的资源和测试关卡。
+- [example-plant](../mods/example-plant/README.md)：复用原版资源，植物与僵尸共享回血行为工厂。
+- [widescreen](../mods/widescreen/README.md)：直接调用真实视口模块，包装主界面初始化和节点销毁，保留原有宽屏与动画扩展。

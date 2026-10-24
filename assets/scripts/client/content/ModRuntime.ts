@@ -1,4 +1,4 @@
-import { assetManager, ImageAsset, native, SpriteFrame, sys, Texture2D } from 'cc'
+import { Asset, assetManager, ImageAsset, JsonAsset, native, SpriteFrame, sys, Texture2D } from 'cc'
 import fflate from 'fflate'
 import { installedArchiveRoot, saveInstalledArchive } from './InstalledArchives'
 import type { InstalledMod } from './ModManager'
@@ -131,6 +131,23 @@ export async function loadModSprite(id: string, file: string): Promise<SpriteFra
 
 export async function importModModule(id: string, file: string): Promise<any> {
     const loaded = await system().import(modFileUrl(id, file))
-    if (typeof loaded.register !== 'function') throw new Error(`${id}/${file} must export register(api)`)
+    if (typeof loaded.register !== 'function') throw new Error(`${id}/${file} must export register({ host, assets })`)
     return loaded
+}
+
+export async function loadArchiveAsset<T extends Asset>(url: string, type: new (...args: any[]) => T): Promise<T> {
+    const entry = resolve(url)
+    if (!entry) throw new Error(`Mod archive is unavailable: ${url}`)
+    const assetType: new (...args: any[]) => Asset = type
+    if (assetType === JsonAsset) {
+        const asset = new JsonAsset()
+        asset.json = JSON.parse(fflate.strFromU8(bytes(entry.mod, entry.file)))
+        return asset as unknown as T
+    }
+    if (assetType === SpriteFrame || assetType === Texture2D) {
+        const frame = await loadModSprite(entry.mod.manifest.id, entry.file)
+        return (assetType === SpriteFrame ? frame : frame.texture) as unknown as T
+    }
+    return new Promise<T>((resolve, reject) => assetManager.loadRemote<T>(url,
+        { ext: entry.file.slice(entry.file.lastIndexOf('.')) }, (error, asset) => error ? reject(error) : resolve(asset)))
 }

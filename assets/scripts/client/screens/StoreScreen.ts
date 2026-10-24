@@ -118,7 +118,7 @@ export class StoreScreen extends Component {
         const visual = button.node.getChildByName('Visual')!
         // The button factory supplies the shared hit/capture behavior; item graphics sit below its highlight.
         if (item.seed !== undefined) {
-            SeedPacketRenderer.drawSeedPacket({ parent: button.node, x: 0, y: 0, seedType: item.seed, drawCost: false, upgrade: true }).setSiblingIndex(0)
+            SeedPacketRenderer.drawSeedPacket({ definitions: this.ui.assets.presentation, parent: button.node, x: 0, y: 0, seedType: item.seed, drawCost: false, upgrade: true }).setSiblingIndex(0)
         } else if (item.sprite) {
             const icon = this.ui.image(button.node, this.sprites[item.sprite], { x: item.offset?.[0] ?? 0, y: item.offset?.[1] ?? 0 })
             icon.node.setSiblingIndex(0)

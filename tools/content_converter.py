@@ -16,7 +16,7 @@ from sprite_texture_preprocessor import (
     write_preprocessed_resource,
 )
 
-MANAGED_DIRECTORIES = ("audio", "fonts", "music", "particles", "reanim", "sprites")
+MANAGED_DIRECTORIES = ("presentation", "audio", "fonts", "music", "particles", "reanim", "sprites")
 NAMESPACE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 QUALIFIED_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9/._-]*$")
 
@@ -33,6 +33,7 @@ def build_sprite_content(
     sounds: list[tuple[Path, str]] | None = None,
     music: list[tuple[Path, str, str]] | None = None,
     gameplay_source: Path | None = None,
+    presentation_source: Path | None = None,
     sprite_sources: list[tuple[Path, str]] | None = None,
     prefabs: list[tuple[Path, str]] | None = None,
 ) -> dict:
@@ -46,6 +47,7 @@ def build_sprite_content(
     music_ids = _validated_local_ids(music or [], 2, namespace, "music")
     prefab_ids = _validated_local_ids(prefabs or [], 1, namespace, "prefab")
     gameplay_source = gameplay_source or source / "gameplay"
+    presentation_source = presentation_source or gameplay_source.parent / "presentation"
     inputs = sorted(path for path in source.iterdir() if path.is_file())
     sprites: dict[str, str] = {}
     outputs: list[Path] = []
@@ -173,7 +175,7 @@ def build_sprite_content(
         "strings": "gameplay/strings.json",
     }
     expected_gameplay_fields = {
-        "definitions": {"schemaVersion", "tickSeconds", "boards", "seeds", "plants", "zombies", "projectiles", "items", "lawnMowers"},
+        "definitions": {"schemaVersion", "tickSeconds", "boards", "seeds", "plants", "zombies", "zombieGaits", "projectiles", "items", "lawnMowers"},
         "levels": {"schemaVersion", "levels"},
         "strings": {"schemaVersion", "locale", "entries"},
     }
@@ -190,6 +192,18 @@ def build_sprite_content(
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(_json_bytes(data) + b"\n")
         outputs.append(output)
+
+    presentation_path = presentation_source / "definitions.json"
+    if not presentation_path.is_file():
+        raise ValueError(f"missing presentation source: {presentation_path}")
+    presentation = json.loads(presentation_path.read_text(encoding="utf-8"))
+    if not isinstance(presentation, dict) or set(presentation) != {"animation", "plants", "zombies", "projectiles", "seedPackets", "almanac"}:
+        raise ValueError("invalid presentation definitions fields")
+    presentation_entries = {"definitions": "presentation/definitions.json"}
+    presentation_output = bundle / presentation_entries["definitions"]
+    presentation_output.parent.mkdir(parents=True, exist_ok=True)
+    presentation_output.write_bytes(_json_bytes(presentation) + b"\n")
+    outputs.append(presentation_output)
 
     sound_entries: dict[str, str] = {}
     for source_path, content_id in sounds or []:
@@ -258,6 +272,7 @@ def build_sprite_content(
         "version": "2.0.0",
         "contentHash": "",
         "gameplay": gameplay_entries,
+        "presentation": presentation_entries,
         "client": {
             "bundle": f"{namespace}-base",
             "sprites": sprites,

@@ -5,7 +5,9 @@ import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { createGameSave, isCompatibleBaseContent, parseGameSave } from '@/app/SaveCoordinator'
 import type { ServerSaveSnapshot } from '@/server/save'
-import { GameplaySystemMods } from '@/server/GameplaySystemMods'
+import { GameplayRegistry } from '@/server/GameplayRegistry'
+import { ModHost } from '@/shared/mod/ModHost'
+import { Schedule } from '@/ecs'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue } from '@/shared/protocol'
 import { levelPresentation, reanim } from './level-test-snapshot'
@@ -27,24 +29,29 @@ test('base save compatibility accepts declared UI-only updates while keeping ide
     assert.equal(isCompatibleBaseContent({ ...saved, contentHash: 'different-gameplay' }, installed, ['before-menu']), false)
 })
 
-test('LocalIntegratedGame applies gameplay system Mod enhancements', () => {
+test('LocalIntegratedGame uses real systems wrapped through the host', () => {
     let runs = 0
-    const mods = new GameplaySystemMods()
-    mods.forMod('test:solar-pea').enhanceSystem('pvz:peashooter', (_context, next, bindings) => {
-        assert.equal(bindings.components.plant.name, 'pvz:plant')
-        next()
-        runs++
+    const mods = new GameplayRegistry()
+    const host = new ModHost('test:solar-pea', {})
+    host.around(Schedule.prototype, 'add', function (next, phase, system) {
+        if (system.id === 'pvz:peashooter') {
+            const run = system.run.bind(system)
+            system.run = (context: any) => { run(context); runs++ }
+        }
+        return next(phase, system)
     })
-    const game = new LocalIntegratedGame(definitions, levels, mods)
-    game.start({
-        levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0,
-        firstAdventure: false, mods: [{ id: 'test:solar-pea', version: '1.0.0', contentHash: 'test' }],
-    })
-    game.command({ type: 'completeIntro' })
-    game.update(0)
-    game.update(definitions.tickSeconds)
+    try {
+        const game = new LocalIntegratedGame(definitions, levels, mods)
+        game.start({
+            levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0,
+            firstAdventure: false, mods: [{ id: 'test:solar-pea', version: '1.0.0', contentHash: 'test' }],
+        })
+        game.command({ type: 'completeIntro' })
+        game.update(0)
+        game.update(definitions.tickSeconds)
 
-    assert.equal(runs, 1)
+        assert.equal(runs, 1)
+    } finally { host.dispose() }
 })
 
 test('SaveCoordinator strictly composes matching server and client snapshots', () => {
