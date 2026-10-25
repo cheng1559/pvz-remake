@@ -21,10 +21,11 @@ function loadLevelModule(name: string, modules: Record<string, unknown>) {
 
 test('conveyor keyboard selection uses packet identity and respects page and dialog scopes', () => {
     const page = {}, modal: any = { activeModalRoot: page, isInputBlocked: false }
+    const settings = { hotkeysEnabled: true }
     const { LevelInputPresenter } = loadLevelModule('LevelInputPresenter', {
-        cc: { KeyCode: { DIGIT_0: 48, DIGIT_1: 49, KEY_D: 68, KEY_F: 70 } },
+        cc: { KeyCode: { SPACE: 32, ENTER: 13, DIGIT_0: 48, DIGIT_1: 49, KEY_D: 68, KEY_F: 70 } },
         '@/client/input/UIHoverManager': { UIHoverManager: modal },
-        '@/platform/debug/GameDebugSettings': { GameDebugSettings: { hotkeysEnabled: true } },
+        '@/platform/debug/GameDebugSettings': { GameDebugSettings: settings },
         '@/platform/Haptics': { Haptics: { play() {} } },
     })
     const commands: any[] = []
@@ -55,6 +56,23 @@ test('conveyor keyboard selection uses packet identity and respects page and dia
     modal.activeModalRoot = {}
     input.onKeyDown({ keyCode: 49 })
     assert.equal(commands.length, 0, 'a dialog blocks board shortcuts, while the page itself does not')
+
+    modal.activeModalRoot = page
+    input.view.dialogReady = true
+    settings.hotkeysEnabled = false
+    input.onKeyDown({ keyCode: 32 })
+    for (const keyCode of [32, 32, 13]) input.onKeyPressing({ keyCode })
+    assert.deepEqual(commands.map(command => command.type), Array(4).fill('advanceDialog'),
+        'holding Space or Enter advances Dave dialogue independently of the hotkeys switch')
+    commands.length = 0
+    modal.activeModalRoot = {}
+    input.onKeyPressing({ keyCode: 32 })
+    assert.equal(commands.length, 0, 'modal input still blocks repeated dialogue keys')
+    modal.activeModalRoot = page
+    input.view.dialogReady = false
+    settings.hotkeysEnabled = true
+    for (const keyCode of [32, 13, 49, 68, 70]) input.onKeyPressing({ keyCode })
+    assert.equal(commands.length, 0, 'holding a key after dialogue must not repeat board shortcuts')
 })
 
 function introFixture(index: number) {

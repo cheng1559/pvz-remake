@@ -54,6 +54,7 @@ export class LevelInputPresenter {
         this.node.on(Node.EventType.MOUSE_MOVE, this.onPointerMove, this)
         this.node.on(Node.EventType.MOUSE_LEAVE, this.onPointerLeave, this)
         input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this)
+        input.on(Input.EventType.KEY_PRESSING, this.onKeyPressing, this)
         this.seedButtons = this.view.bindSeedPackets(index => this.selectSeedPacket(index))
         this.toolButtons = this.view.bindTools(id => this.selectTool(id))
         for (const button of [...this.seedButtons, ...this.toolButtons.map(entry => entry.button)]) button.hapticsEnabled = false
@@ -82,6 +83,7 @@ export class LevelInputPresenter {
         this.node.off(Node.EventType.MOUSE_MOVE, this.onPointerMove, this)
         this.node.off(Node.EventType.MOUSE_LEAVE, this.onPointerLeave, this)
         input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this)
+        input.off(Input.EventType.KEY_PRESSING, this.onKeyPressing, this)
         for (const button of this.buttons) if (button.isValid) button.enabled = false
         this.view.resetCursor()
     }
@@ -278,6 +280,11 @@ export class LevelInputPresenter {
                 return
             }
         }
+    }
+
+    private onKeyPressing(event: EventKeyboard): void {
+        // Only dialogue consumes system key repeats; board shortcuts remain single-press actions.
+        if (this.view.dialogReady && (event.keyCode === KeyCode.SPACE || event.keyCode === KeyCode.ENTER)) this.onKeyDown(event)
     }
 
     private onKeyDown(event: EventKeyboard): void {

@@ -1,4 +1,4 @@
-import { Mask, Node, Sprite } from 'cc'
+import { Color, Mask, Node, Sprite } from 'cc'
 import type { WorldSnapshot } from '@/shared/protocol'
 import { SpriteRepository } from '@/client/content/ClientContentLoader'
 import { uiNode } from '@/client/view/uiNode'
@@ -11,6 +11,8 @@ import { TodParticleSystem } from '@/core/Particle'
 import type { LoadedContent } from './LevelView'
 import type { LevelSeedBank } from './LevelSeedBank'
 import type { UITooltip } from '@/client/ui/UITooltip'
+import type { UILabel } from '@/client/ui/UILabel'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 /** Optional board tools, opening dialogue and conveyor layout. Packet input belongs to LevelSeedBank. */
 export class LevelBoardHud {
@@ -29,6 +31,7 @@ export class LevelBoardHud {
     private dave?: CrazyDaveView
     private tooltip?: UITooltip
     private shovelButton?: UIButton
+    private shovelHotkey?: UILabel
 
     static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, plantCursor: Node, seedBank: LevelSeedBank): Promise<LevelBoardHud> {
         const root = uiNode({ name: 'BoardHud', parent, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
@@ -40,6 +43,10 @@ export class LevelBoardHud {
             const layout = content.presentation.shovel
             result.shovelBank = ui.image(bankLayer, bankFrame, { x: layout.x, y: 0 }).node
             result.shovel = ui.image(result.shovelBank, shovelFrame, { x: layout.imageOffset[0], y: layout.imageOffset[1] }).node
+            result.shovelHotkey = ui.label(result.shovelBank, {
+                text: 'F', font: 'storeItem', fontSize: 16, color: new Color(213, 159, 43),
+                x: bankFrame.originalSize.width - 4, y: -4, align: 'right',
+            })
             result.cursor = ui.image(root, shovelFrame).node
             result.cursor.active = false
             result.tooltip = ui.tooltip(result.shovelBank, { text: ui.text('SHOVEL_TOOLTIP'), gap: 0, surface: parent })
@@ -92,6 +99,7 @@ export class LevelBoardHud {
         if (this.shovelBank) {
             const layout = this.content.presentation.shovel
             this.shovelBank.active = snapshot.result !== 'lost'
+            this.shovelHotkey!.node.active = GameDebugSettings.hotkeysEnabled
             this.shovelButton!.interactable = (snapshot.extensions['pvz:tools'] as { available: string[] } | undefined)?.available.includes('pvz:shovel') === true
             if (snapshot.tutorial.step === 'shovel-pickup') {
                 const size = uiNode({ node: this.shovelBank }).transform
