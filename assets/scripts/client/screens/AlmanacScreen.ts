@@ -12,6 +12,7 @@ import type { MenuAction } from './MenuPages'
 import { AlmanacEntityView } from './AlmanacEntityView'
 import { AlmanacZombiePortrait } from './AlmanacZombiePortrait'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { Haptics } from '@/platform/Haptics'
 
 export interface AlmanacSelection { plant: number, zombie: number }
 
@@ -72,6 +73,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             if (selection[key] === entry.id) return
             selection[key] = entry.id
             select(entry)
+            Haptics.play()
             void SoundLoader.play(SoundEffect.Tap)
         }
         if (page === 'plants') {
@@ -86,6 +88,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     pressSound: null, clickSound: null, pressOnly: true, pressOffset: [0, 0],
                     onPress: () => choose(plant),
                 })
+                button.hapticsEnabled = false
                 button.node.name = plant.key
                 if (plant.id === 48) {
                     const overlay = ui.image(button.node, sprites.almanac_imitater).node
@@ -107,6 +110,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             for (const zombie of zombies) {
                 const index = zombie.id === 25 ? 27 : zombie.id
                 const button = ui.button(parent, { images: { normal: sprites.almanac_zombiewindow }, x: index % 5 * 85 + 22, y: Math.floor(index / 5) * 80 + 86, width: 76, height: 76, pressOffset: [0, 0], pressSound: null, clickSound: null, pressOnly: true, onPress: () => choose(zombie) })
+                button.hapticsEnabled = false
                 button.node.name = zombie.key
                 const underlay = ui.additiveImage(button.node, sprites.almanac_zombiewindow, {}, 48)
                 const clip = uiNode({
