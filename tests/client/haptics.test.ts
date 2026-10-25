@@ -70,6 +70,44 @@ test('haptics uses the iOS bridge only and coalesces requests by real time', () 
     assert.equal(calls.length, 5)
 })
 
+test('slider haptics follow distance travelled rather than touch event frequency', () => {
+    let now = 0
+    const pulses: number[] = []
+    const { Haptics } = load('platform/Haptics', {
+        cc: { sys: { isNative: true, os: 'ios', OS: { IOS: 'ios' } },
+            native: { reflection: { callStaticMethod: () => pulses.push(now) } } },
+        './debug/GameDebugSettings': { GameDebugSettings: { hapticsEnabled: true } },
+    }, { performance: { now: () => now } })
+    const { UISlider } = load('client/ui/UISlider', {
+        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/platform/Haptics': { Haptics },
+    })
+    const slider = new UISlider()
+    slider.knob = { setPosition() {} }
+    const sweep = (start: number, duration: number, samples: number) => {
+        slider.value = 0
+        pulses.length = 0
+        for (let i = 1; i <= samples; i++) {
+            now = start + duration * i / samples
+            slider.change(0.2 * i / samples)
+        }
+        assert.equal(slider.value, 0.2, 'feedback does not quantize the actual slider value')
+        assert.equal(pulses.length, 4, 'twenty percent of the track crosses four haptic steps')
+        return [...pulses]
+    }
+    const slow = sweep(0, 1600, 100)
+    const fast = sweep(2000, 400, 100)
+    sweep(3000, 400, 25)
+    assert.ok(fast[1] - fast[0] < slow[1] - slow[0], 'moving faster makes the pulses closer together')
+    now = 4000
+    slider.change(slider.value)
+    slider.value = 0.43
+    slider.change(0.431)
+    slider.value = 1
+    slider.change(1.2)
+    assert.equal(pulses.length, 4, 'stationary touches, sub-step movements, initialization and clamped endpoints are silent')
+})
+
 test('level feedback vibrates only for explosions and bowling impacts', () => {
     const calls: string[] = []
     const shakes: number[][] = []

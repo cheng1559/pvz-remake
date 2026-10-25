@@ -225,24 +225,13 @@ export class GameApp extends Component {
         if (!this.node?.isValid || !result) return
         if (!result.ok) { this.showAdvice(result.message); return }
         switch (result.action) {
-            case 'installMod': case 'restartForMods':
-                this.debugCliOpen = true
-                try {
-                    await controller.saveIfRunning()
-                    if (result.action === 'installMod') await this.installPackage()
-                    else await this.confirmPackageRestart()
-                } finally {
-                    this.debugCliOpen = false
-                    if (this.node?.isValid && running && !wasPaused && controller.isRunning() && this.currentPage === page) controller.resume()
-                }
-                break
             case 'manageMods':
                 this.debugCliOpen = true
                 try {
                     const ui = await UI.load()
                     if (!this.node?.isValid) return
                     await (await showPackageDialog(this.node, ui, {
-                        install: () => this.installPackage(false),
+                        install: () => this.installPackage(),
                         restart: async () => { await controller.saveIfRunning(); this.restartGame() },
                     })).result
                 } catch (error) {
@@ -276,12 +265,11 @@ export class GameApp extends Component {
         }
     }
 
-    /** Install sequentially, then offer one restart for the whole selection. */
-    private async installPackage(enable = true): Promise<string[]> {
+    /** Save selected ZIPs sequentially; the manager applies enabled states and restart. */
+    private async installPackage(): Promise<string[]> {
         const ui = await UI.load()
         let progress: UIDialog | undefined
         let files: SelectedZip[] = []
-        let needsRestart = false
         const installed: string[] = [], errors: string[] = []
         const message = (error: unknown) => error instanceof Error ? error.message : String(error)
         try {
@@ -293,20 +281,12 @@ export class GameApp extends Component {
             progress.onConfirm = progress.onCancel = () => {}
             // Paint the dialog before ZIP validation and native file writes occupy the main thread.
             await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
-            // Save new Mods before enabling the group, so dependencies may be picked in any order.
-            const deferEnable = enable && files.length > 1
-            const previouslyEnabled = deferEnable ? await modManager.list() : []
             for (const file of files) {
                 if (!this.node?.isValid) break
                 try {
-                    const id = await modManager.install(await file.read(), enable && !deferEnable)
+                    const id = await modManager.install(await file.read(), false)
                     if (!installed.includes(id)) installed.push(id)
-                    needsRestart ||= enable && (!deferEnable || previouslyEnabled.includes(id))
                 } catch (error) { errors.push(`${file.name}: ${message(error)}`) }
-            }
-            if (deferEnable && installed.length) {
-                await modManager.setEnabled([...new Set([...await modManager.list(), ...installed])])
-                needsRestart = true
             }
         } catch (error) {
             errors.push(message(error))
@@ -317,18 +297,7 @@ export class GameApp extends Component {
         if (errors.length && this.node?.isValid) await ui.dialog(this.node, {
             title: 'Installation Failed', message: errors.join('\n'), confirmText: 'OK',
         }).result
-        if (needsRestart) await this.confirmPackageRestart()
         return installed
-    }
-
-    private async confirmPackageRestart(): Promise<void> {
-        if (!this.node?.isValid) return
-        const ui = await UI.load()
-        const confirmed = await ui.dialog(this.node, {
-            title: 'Restart Required', message: 'Restart the game to apply Mod changes.', confirmText: 'OK',
-        }).result
-        if (!confirmed || !this.node?.isValid) return
-        this.restartGame()
     }
 
     private restartGame(): void {

@@ -249,6 +249,7 @@ export class UI {
             sprite.spriteFrame = this.assets.sprites[next ? 'options_checkbox1' : 'options_checkbox0']
         }
         const button = node.addComponent(UIButton)
+        button.touchSlide = false
         button.onPress = () => {
             void SoundLoader.play(SoundEffect.ButtonClick)
             if (options.locked) options.locked()

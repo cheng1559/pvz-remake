@@ -15,6 +15,24 @@ interface Animation {
     tracks: Array<{ id: string, keyframes: Frame[] }>
 }
 
+/** Cover the added left margin within Dave's original transition timing. */
+export function extendDave<T extends Animation>(source: T, width: number, entering: boolean): T {
+    const data: T = JSON.parse(JSON.stringify(source))
+    const distance = Math.max(0, (width - 800) / 2)
+    if (!distance) return data
+    // The lower body carries the entrance/exit motion; the head adds its own follow-through.
+    const frames = source.tracks.find(track => track.id === 'Dave_innerpants')!.keyframes
+    const start = frames[0].x
+    const travel = frames[frames.length - 1].x - start
+    for (const track of data.tracks) {
+        for (const [index, frame] of track.keyframes.entries()) {
+            const progress = (frames[index].x - start) / travel
+            frame.x -= distance * (entering ? 1 - progress : progress)
+        }
+    }
+    return data
+}
+
 /** Extend each cloud at its original speed until its entire image leaves the viewport. */
 export function extendCloud<T extends Animation>(source: T, width: number, height: number,
     spriteSize: (id: string) => { width: number, height: number }): T {

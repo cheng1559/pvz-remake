@@ -15,7 +15,10 @@ function setup() {
         set(x: number, y: number, z = 0) { this.x = x; this.y = y; this.z = z; return this }
     }
     class MouseEvent { static BUTTON_LEFT = 0; static BUTTON_RIGHT = 2 }
-    class TouchEvent {}
+    class TouchEvent {
+        constructor(private eventCode: string) {}
+        getEventCode() { return this.eventCode }
+    }
     class Color {
         constructor(public r: number, public g: number, public b: number, public a = 255) {}
     }
@@ -125,9 +128,9 @@ function setup() {
         return { button, node, get presses() { return presses }, get clicks() { return clicks },
             get enters() { return enters }, get state() { return state } }
     }
-    const dispatch = (target: FakeNode | null, type: string, x: number, key = 0, touchId = 1, y = 20) => {
-        const event = Object.assign(type.startsWith('mouse') ? new MouseEvent() : new TouchEvent(), {
-            type, windowId: 0, propagationStopped: false, getLocation: () => new Vec(x, y), getUILocation: () => new Vec(x, y), getButton: () => key,
+    const dispatch = (target: FakeNode | null, type: string, x: number, key = 0, touchId = 1, y = 20, originalType = type) => {
+        const event = Object.assign(type.startsWith('mouse') ? new MouseEvent() : new TouchEvent(originalType), {
+            type, target, windowId: 0, propagationStopped: false, getLocation: () => new Vec(x, y), getUILocation: () => new Vec(x, y), getButton: () => key,
             touch: { getID: () => touchId, getLocation: () => new Vec(x, y) },
         })
         if (!target) { modules.cc.input.emit(type, event); return }
@@ -138,6 +141,11 @@ function setup() {
             if (event.propagationStopped) return
         }
         target.emit(type, event)
+        if (!type.startsWith('touch')) return
+        for (const node of path.slice(0, -1).reverse()) {
+            if (event.propagationStopped) break
+            node.emit(type, event)
+        }
     }
     return { root, hover, makeButton, dispatch, events, load, Node: FakeNode, cursorHistory, haptics, get cursor() { return cursor }, setMobile(value = true) { mobile = value },
         cleanup() { for (const button of buttons) { button.enabledInHierarchy = false; button.onDisable() } hover.stop() } }
@@ -920,5 +928,110 @@ test('touch dragging cancels outside, clicks only its captured touch, and leaves
         assert.equal(a.button.isPressed, true)
         ui.dispatch(a.node, e.TOUCH_END, 20)
         assert.equal(a.clicks, 1); assert.equal(a.state, 'normal'); assert.equal(ui.cursor, 'default')
+    } finally { ui.cleanup() }
+})
+
+test('mobile navigation follows the finger from background or another button and activates only the release target', () => {
+    const ui = setup(), a = ui.makeButton(0), b = ui.makeButton(200), e = ui.events
+    ui.setMobile()
+    try {
+        ui.dispatch(ui.root, e.TOUCH_START, 500)
+        ui.dispatch(ui.root, e.TOUCH_MOVE, 20)
+        assert.equal(a.state, 'pressed')
+        assert.equal(a.presses, 0, 'sliding in never repeats the press sound or press action')
+        assert.equal(a.enters, 1)
+        assert.equal(a.clicks, 0)
+        ui.dispatch(ui.root, e.TOUCH_MOVE, 30)
+        ui.dispatch(ui.root, e.TOUCH_MOVE, 220)
+        assert.equal(a.state, 'normal')
+        assert.equal(b.state, 'pressed')
+        assert.equal(b.presses, 0)
+        assert.equal(b.enters, 1, 'sliding in emits the configured hover feedback once')
+        assert.equal(b.clicks, 0)
+        assert.deepEqual(ui.haptics, ['light', 'light'])
+        ui.dispatch(ui.root, e.TOUCH_END, 220)
+        assert.equal(a.clicks, 0)
+        assert.equal(b.presses, 0)
+        assert.equal(b.enters, 1, 'release does not replay hover feedback')
+        assert.equal(b.clicks, 1)
+        assert.deepEqual(ui.haptics, ['light', 'light'], 'release does not repeat hover feedback')
+        assert.equal(b.state, 'normal')
+        assert.equal(ui.cursor, 'default')
+
+        ui.dispatch(a.node, e.TOUCH_START, 20)
+        assert.equal(a.presses, 1, 'a direct touch still emits the original press feedback')
+        // Cocos retains the original target and turns a release outside it into TOUCH_CANCEL.
+        ui.dispatch(a.node, e.TOUCH_CANCEL, 220, 0, 1, 20, e.TOUCH_END)
+        assert.equal(b.clicks, 2, 'hit testing uses the release location, even without a final move')
+        assert.equal(a.presses, 1)
+        ui.dispatch(a.node, e.TOUCH_START, 20)
+        ui.dispatch(a.node, e.TOUCH_MOVE, 220)
+        ui.dispatch(a.node, e.TOUCH_CANCEL, 220)
+        assert.equal(b.clicks, 2, 'a real system cancellation never activates a button')
+        assert.equal(b.state, 'normal')
+
+        ui.dispatch(a.node, e.TOUCH_START, 20)
+        ui.dispatch(a.node, e.TOUCH_MOVE, 500)
+        ui.dispatch(a.node, e.TOUCH_CANCEL, 500, 0, 1, 20, e.TOUCH_END)
+        assert.equal(a.clicks, 0)
+        assert.equal(b.clicks, 2)
+        assert.equal(a.state, 'normal')
+    } finally { ui.cleanup() }
+})
+
+test('mobile sliding respects touch ownership, disabled and overlapping buttons, modal changes and other drag controls', () => {
+    const ui = setup(), a = ui.makeButton(0), b = ui.makeButton(200), e = ui.events
+    ui.setMobile()
+    try {
+        ui.dispatch(a.node, e.TOUCH_START, 20)
+        ui.dispatch(b.node, e.TOUCH_START, 220, 0, 2)
+        ui.dispatch(b.node, e.TOUCH_MOVE, 230, 0, 2)
+        ui.dispatch(b.node, e.TOUCH_END, 230, 0, 2)
+        assert.equal(a.state, 'pressed')
+        assert.equal(b.clicks, 0)
+        ui.dispatch(a.node, e.TOUCH_END, 20)
+        assert.equal(a.clicks, 1)
+
+        const covering = ui.makeButton(200)
+        covering.button.interactable = false
+        ui.dispatch(a.node, e.TOUCH_START, 20)
+        ui.dispatch(a.node, e.TOUCH_CANCEL, 220, 0, 1, 20, e.TOUCH_END)
+        assert.equal(b.clicks, 0, 'a disabled foreground button blocks the one behind it')
+        covering.node.active = false
+        b.button.polygon = [[0, 0], [100, 0], [0, 50]]
+        ui.dispatch(ui.root, e.TOUCH_START, 500)
+        ui.dispatch(ui.root, e.TOUCH_END, 280)
+        assert.equal(b.clicks, 0, 'empty polygon corners remain non-interactive')
+
+        ui.dispatch(a.node, e.TOUCH_START, 20)
+        const modal = new ui.Node()
+        ui.root.addChild(modal)
+        ui.hover.beginModalBlock(modal)
+        ui.dispatch(a.node, e.TOUCH_END, 20)
+        assert.equal(a.clicks, 1, 'changing pages or opening a dialog cancels the gesture')
+        ui.hover.endModalBlock(modal)
+
+        const drag = new ui.Node(400)
+        ui.root.addChild(drag)
+        for (const event of [e.TOUCH_START, e.TOUCH_MOVE, e.TOUCH_END]) {
+            drag.on(event, (event: { propagationStopped: boolean }) => { event.propagationStopped = true })
+        }
+        ui.dispatch(drag, e.TOUCH_START, 420)
+        ui.dispatch(drag, e.TOUCH_MOVE, 20)
+        ui.dispatch(drag, e.TOUCH_END, 20)
+        assert.equal(a.clicks, 1, 'slider, scrolling, and dialog drags do not become navigation gestures')
+
+        a.button.touchSlide = false
+        const before = a.presses
+        ui.dispatch(ui.root, e.TOUCH_START, 500)
+        ui.dispatch(ui.root, e.TOUCH_MOVE, 20)
+        ui.dispatch(ui.root, e.TOUCH_END, 20)
+        assert.equal(a.presses, before, 'sliding onto a direct-press control never activates it, even on release')
+        assert.equal(a.clicks, 1)
+        ui.dispatch(a.node, e.TOUCH_START, 20)
+        assert.equal(a.presses, before + 1, 'independent controls retain immediate press behavior')
+        ui.dispatch(a.node, e.TOUCH_MOVE, 220)
+        ui.dispatch(a.node, e.TOUCH_CANCEL, 220)
+        assert.equal(b.clicks, 0)
     } finally { ui.cleanup() }
 })

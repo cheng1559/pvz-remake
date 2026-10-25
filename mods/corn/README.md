@@ -11,7 +11,7 @@ npm run mod:pack -- mods/corn
 npm run mod:test -- dist/mods/corn
 ```
 
-安装 `dist/mods/corn.zip`：游戏中 `/mod install` 选择 ZIP，确认重启。在 Debug 构建执行 `/level corn:testing`，可以通过种子包种植；也可在现有关卡 `/plant corn:kernel_pult 3 1`。测试关卡初始有 500 阳光。
+安装 `dist/mods/corn.zip`：游戏中 `/mod` 打开管理窗口，点 Import 选择 ZIP，Apply 后确认重启。在 Debug 构建执行 `/level corn:testing`，可以通过种子包种植；也可在现有关卡 `/plant corn:kernel_pult 3 1`。测试关卡初始有 500 阳光。
 
 加农炮测试关卡为 `/level corn:cannon_testing`，初始 2000 阳光，包含两种玉米种子包。在同一行相邻两格种玉米投手，再用加农炮种子包点击任意一株升级。炮弹装好后点击炮身进入瞄准，再点击草坪发射；右键取消，也可直接操作顶部种子包和 Menu。
 

@@ -29,8 +29,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 碰撞框 | `/hitboxes {true|false}` |
 | 实时植物／僵尸头像 | `/hdseed {true|false}`，控制真实 Reanim 渲染，与背景清晰度独立 |
 | 种子包风格 | `/seedstyle {standard|rendered|tilted}`，标准／实际渲染／放大右倾 |
-| 材质包 | `/mod`（管理窗口）、`/mod install`、`/mod load {已安装ID}`、`/mod unload {ID或all}`、`/mod uninstall {ID}`、`/mod list` |
-| Mod | `/mod`（管理窗口）、`/mod install`、`/mod load {已安装ID}`、`/mod unload {ID或all}`、`/mod uninstall {ID}`、`/mod list` |
+| Mod（含材质包） | `/mod`（管理窗口，无参数） |
 | 性能 | `/perf {plants|zombies|particles|sfx|logic} {true|false}` |
 | 平台 | `/mobile {true|false}`、`/fullscreen {true|false}` |
 | 音量 | `/music {0-100}`、`/sfx {0-100}`，通过设置 API 保存 |
@@ -41,9 +40,9 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 
 `/seedstyle standard|rendered|tilted` 单独切换种子包风格并保存到本地：`standard` 为标准缓存图，`rendered` 为原比例实际渲染，`tilted` 在实际渲染基础上放大并顺时针旋转。植物仅按内部图片区的左侧和底部内边框裁剪，上方与右侧允许溢出。背景、费用和点击区域保持原尺寸；实际渲染与右倾风格之间切换时复用已加载的植物。此命令不影响图鉴僵尸头像和手持／落点预览。
 
-`/mod install` 不带参数，在网页和 macOS 中弹出文件选择窗口，选择本机 ZIP 安装。安装弹窗只显示 `Installing...`；安装、更新或启用状态变化后提示重启，确认后立即重启整个游戏，运行中的关卡先保存。安装结果保存在本机，重启不依赖原 ZIP。`/mod load hd` 启用已安装包；`/mod unload hd` 停用；`/mod uninstall hd` 删除已安装包，删除已启用包也会提示重启；`/mod list` 查看启用列表。重复启用或停用不会弹窗，重启前保留当前资源。资源包只通过 ZIP 安装，游戏不内置 HD 素材。后启用的包优先覆盖同 ID 资源，也可覆盖 Mod ID；包内没有该 ID 时使用原资源，已声明资源加载失败不回退。原 `/hdfont` 已移除；`Pico129`、`Pix118Bold` 不在 HD 包中。包格式与安装方式见[材质包说明](RESOURCE_PACKS.md)。
+`/mod` 是唯一管理入口，不接受子命令。窗口中点 Import 选择本机 ZIP，安装弹窗标题为 `Installing...`。勾选启用、调整优先级或卸载后，Apply 保存；Cancel 丢弃未应用的改动。启用状态或正在使用的资源改变时提示重启，确认后先保存关卡，再重启游戏；运行中的代码和资源保留到重启。安装结果保存在本机，不依赖原 ZIP。资源包只通过 ZIP 安装，游戏不内置 HD 素材；同 ID 资源由高优先级包覆盖，包内没有该 ID 时使用原资源，已声明资源加载失败不回退。原 `/hdfont` 已移除；`Pico129`、`Pix118Bold` 不在 HD 包中。包格式与安装方式见[材质包说明](RESOURCE_PACKS.md)。
 
-`/mod` 不带参数时打开统一的 Mod 管理窗口，见 [材质包说明](MODS.md#安装与管理)。资源和脚本 Mod 共用 ZIP 选择、`Installing...` 和确认重启流程。`/mod install` 不带参数，其他操作使用 `local:widescreen` 等带命名空间的 Mod ID。安装结果保存在本地，检查依赖后在重启时执行；主界面宽屏可通过独立 Mod 启用。见 [Mod 安装与管理](MODS.md)。
+窗口先显示 `Loading...`，读取完成后显示列表。主界面宽屏可通过独立 Mod 启用，见 [Mod 安装与管理](MODS.md)。
 
 当前内容包提供 1-1、1-2，植物有豌豆射手、向日葵、双发射手、樱桃炸弹、坚果墙、土豆雷、寒冰射手、大嘴花和爆炸坚果（`explodenut`，仅调试种植），僵尸有普通、旗帜、路障（`conehead`）、铁桶（`buckethead`）和撑杆（`pole_vaulter`）僵尸；植物、僵尸、物品、关卡补全来自后端已安装内容。`/background` 及尚未迁移的实体和关卡会提示不可用。
 

@@ -77,7 +77,9 @@ function fixture() {
         get length() { return data.size },
     }
     const ProfileStore = load('server/menu/ProfileStore').createProfileStore(storage)
-    const catalog = load('server/menu/StoreCatalog').createStoreCatalog(readGameplaySource('store'))
+    const sourceCatalog = load('server/menu/StoreCatalog').createStoreCatalog(readGameplaySource('store'))
+    // VM-created objects cross into the host-realm transport used by this fixture.
+    const catalog = { ...sourceCatalog, speech: (profile: unknown) => JSON.parse(JSON.stringify(sourceCatalog.speech(profile))) }
     const store = { ...catalog, ...load('client/ui/formatMoney') }
     const menuApi = new MenuApi(createLocalMenuTransport(storage, undefined, undefined, catalog))
     const item = (id: number) => store.STORE_PAGES.flat().find((item: { id: number }) => item.id === id)
@@ -149,7 +151,9 @@ test('store confirmation cancels without changes, persists a confirmed purchase,
     const screen = new StoreScreen()
     screen.node = { isValid: true }
     screen.age = 2
-    screen.bubble = { active: true }
+    screen.data = await catalog.menuApi.getStore()
+    let stopped = 0
+    screen.dave = { stopTalking() { stopped++ } }
     screen.refreshEnabled = screen.renderItems = () => {}
     let accepted = false
     const dialogs: string[] = []
@@ -162,6 +166,7 @@ test('store confirmation cancels without changes, persists a confirmed purchase,
         },
     }
     await screen.buy(item(0))
+    assert.equal(stopped, 1, 'opening purchase confirmation hides the shared Dave bubble')
     assert.equal(ProfileStore.getCurrentProfile().coins, 1000)
     assert.equal(ProfileStore.getCurrentProfile().purchases[0], 0)
     accepted = true
@@ -177,6 +182,122 @@ test('store confirmation cancels without changes, persists a confirmed purchase,
     assert.equal(dialogs.at(-1), 'NOT_ENOUGH_MONEY')
     assert.equal(ProfileStore.getCurrentProfile().purchases[1], 0)
     assert.equal(screen.waiting, false)
+})
+
+test('store reuses Dave for entry, descriptions, waiting-dialog animation, timeout and page changes', async () => {
+    const calls: string[] = [], messages: string[] = []
+    const catalog = fixture(), speech = catalog.store.speech(catalog.profile)
+    const data = { coins: 100, playerName: 'Alice', pages: [{ items: [] }, { items: [] }], speech }
+    const dave = { ready: true, isSpeaking: false, enter() { calls.push('enter') }, say(message: string) { messages.push(message) },
+        stopTalking() { calls.push('stop') }, update(dt: number) { calls.push(`update:${dt}`) } }
+    const node = () => ({ isValid: true, active: true, position: { x: 0, y: 0, clone() { return { x: 0, y: 0 } } }, setPosition() {} })
+    const presentation = { dave: presentationFixture.dave }
+    const ui = {
+        assets: { presentation, fonts: { pageTitleSmall: { config: {} } } },
+        text: (key: string) => key === 'CRAZY_DAVE_2000' ? '{NO_SOUND}{NO_CLICK}Cost {UPGRADE_COST}; {MONEY}; {PLAYER_NAME}' : key,
+        image: () => ({ node: node() }),
+        label: () => ({ node: node(), renderer: {} }),
+        button: () => ({ node: node(), onStateChange() {} }),
+    }
+    const { StoreScreen } = load('client/screens/StoreScreen', {
+        cc: { Component: class {}, Color: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/api/MenuApi': { menuApi: { getStore: async () => data } },
+        '@/core/SpriteLoader': { SpriteLoader: { load: async () => ({ originalSize: { width: 100, height: 50 } }) } },
+        '@/client/font': { FontMetricsUtil: { getMetrics: () => ({ ascent: 20 }) } },
+        '@/client/content/loadClientContent': { loadClientContent: async () => ({ registry: 'registry', loader: 'loader' }) },
+        '@/client/characters/CrazyDaveView': { CrazyDaveView: { create: async (_parent: unknown, content: any, assets: unknown, options: any) => {
+            assert.equal(assets, ui)
+            assert.equal(content.registry, 'registry')
+            assert.equal(content.presentation, presentation)
+            assert.equal(options.position.x + options.bubble.x, 63)
+            assert.equal(options.position.y - options.bubble.y, -10, 'the store bubble retains its original position')
+            assert.equal(options.clickToContinue, false)
+            return dave
+        } } },
+        '@/core/GameClock': { gameClock: { delta: (dt: number) => dt } },
+        '@/client/sound/LegacySoundSystem': { SoundEffect: {}, SoundLoader: { play() {} } },
+        '@/client/input/UIHoverManager': { UIHoverManager: { refreshHoverStates() {} } },
+        '@/client/ui/formatMoney': load('client/ui/formatMoney'),
+    })
+    const screen = new StoreScreen()
+    screen.node = node()
+    screen.renderItems = () => {}
+    await screen.initialize(ui, () => {})
+    assert.deepEqual(calls, ['enter'])
+    screen.showDescription({ message: 2000, cost: 50 })
+    assert.equal(messages[0], '{NO_SOUND}{NO_CLICK}Cost $500; $1,000; Alice', 'control tokens survive variable substitution')
+    screen.waiting = true
+    screen.update(0.1)
+    assert.equal(calls.at(-1), 'update:0.1', 'Dave keeps idling and blinking behind a purchase dialog')
+    assert.equal(screen.age, 0)
+    screen.waiting = false
+    screen.age = 2
+    screen.update(1.1)
+    assert.equal(calls.at(-1), 'stop', 'description timeout hides the bubble without removing Dave')
+    screen.items = { active: true, getComponentsInChildren: () => [] }
+    screen.turnPage(1)
+    assert.equal(screen.page, 1)
+    assert.equal(calls.at(-1), 'stop')
+    screen.onDisable()
+    assert.equal(calls.filter(call => call === 'stop').length, 3)
+})
+
+test('store chatter follows adventure completion without changing coins or inventory', async () => {
+    const { profile, ProfileStore, menuApi } = fixture()
+    profile.adventureLevel = 45
+    ProfileStore.saveProfile(profile)
+    const data = await menuApi.getStore()
+    assert.equal(ProfileStore.getCurrentProfile().purchases[14], 0)
+    assert.equal(ProfileStore.getCurrentProfile().coins, profile.coins)
+    assert.equal(data.speech.ambient.messages.find(entry => entry.message === 2018)?.weight, 0)
+    const complete = ProfileStore.getCurrentProfile()
+    complete.finishedAdventure = 1
+    ProfileStore.saveProfile(complete)
+    assert.equal((await menuApi.getStore()).speech.ambient.messages.find(entry => entry.message === 2018)?.weight, 20)
+})
+
+test('store ambient speech respects hover, voice completion, dialogs and weighted non-repetition', async () => {
+    const { menuApi } = fixture()
+    const spoken: string[] = []
+    let stops = 0
+    const { StoreScreen } = load('client/screens/StoreScreen', {
+        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/input/UIHoverManager': { UIHoverManager: { activeModalRoot: null, isInputBlocked: false } },
+        '@/client/ui/formatMoney': load('client/ui/formatMoney'),
+    })
+    const screen = new StoreScreen()
+    screen.node = { isValid: true }
+    screen.data = await menuApi.getStore()
+    screen.age = screen.data.speech.readyDelay
+    screen.ambientTimer = screen.data.speech.ambient.initialDelay
+    screen.ui = { text: (key: string) => key }
+    screen.dave = { ready: true, isSpeaking: false, say: (text: string) => spoken.push(text), stopTalking() { stops++ } }
+    screen.updateSpeech(1)
+    assert.equal(spoken.length, 0)
+    screen.waiting = true
+    screen.updateSpeech(10)
+    assert.equal(screen.ambientTimer, 1)
+    screen.waiting = false
+    screen.hoveredItem = {}
+    screen.bubbleTimer = 1
+    screen.updateSpeech(10)
+    assert.equal(spoken.length, 0, 'hovering an item suppresses idle chatter')
+    screen.hoveredItem = null
+    screen.dave.isSpeaking = true
+    screen.updateSpeech(2)
+    assert.equal(stops, 0, 'speech must not be cut off when the bubble timer expires')
+    screen.dave.isSpeaking = false
+    screen.updateSpeech(2)
+    assert.equal(stops, 1)
+    screen.updateSpeech(1)
+    assert.equal(spoken.length, 1)
+    for (let i = 0; i < 8; i++) {
+        assert.ok(screen.ambientTimer >= 5 && screen.ambientTimer <= 10)
+        screen.updateSpeech(8)
+        screen.updateSpeech(10)
+    }
+    assert.ok(spoken.every(text => ['CRAZY_DAVE_2015', 'CRAZY_DAVE_2016', 'CRAZY_DAVE_2017'].includes(text)))
+    assert.ok(spoken.every((text, index) => !index || text !== spoken[index - 1]))
 })
 
 test('all localized almanac descriptions retain bitmap text while consuming color and spacing tags', () => {

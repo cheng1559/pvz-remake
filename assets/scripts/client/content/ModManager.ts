@@ -45,7 +45,7 @@ export class ModManager {
                 try {
                     const mod = await this.read(id, true)
                     if (mod) installed.push(mod)
-                    else console.warn(`[Mods] Removed missing Mod from enabled list: ${id}. Reinstall with /mod install`)
+                    else console.warn(`[Mods] Removed missing Mod from enabled list: ${id}. Reinstall from /mod`)
                 } catch (error) {
                     this.failures.set(id, error instanceof Error ? error.message : String(error))
                     console.error(`[Mods] Disabled invalid archive ${id}`, error)
@@ -175,13 +175,13 @@ export class ModManager {
     private read(id: string): Promise<InstalledMod>
     private read(id: string, allowMissing: true): Promise<InstalledMod | undefined>
     private async read(id: string, allowMissing = false): Promise<InstalledMod | undefined> {
-        if (!isQualifiedId(id)) throw new Error('Use an installed Mod ID; install ZIPs with /mod install')
+        if (!isQualifiedId(id)) throw new Error('Use an installed Mod ID; install ZIPs from /mod')
         const cached = this.loaded.get(id)
         if (cached) return cached
         const archive = await readInstalledArchive('mods', id)
         if (!archive) {
             if (allowMissing) return undefined
-            throw new Error(`Mod is not installed: ${id}. Use /mod install`)
+            throw new Error(`Mod is not installed: ${id}. Open /mod to install it`)
         }
         const mod = parseArchive(archive)
         if (mod.manifest.id !== id) throw new Error(`Installed Mod ID does not match: ${id}`)

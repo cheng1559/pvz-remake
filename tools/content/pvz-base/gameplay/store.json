@@ -1,4 +1,11 @@
 {
+  "dialogue": {
+    "readyDelay": 1.2, "descriptionDuration": 1,
+    "ambient": {
+      "initialDelay": 2, "interval": [5, 10], "duration": 8,
+      "messages": [{"message": 2015, "weight": 100}, {"message": 2016, "weight": 100}, {"message": 2017, "weight": 100}, {"message": 2018, "weight": 20, "completed": true}]
+    }
+  },
   "pages": [
     {"items": [
       {"id": 21, "cost": 75, "sprite": "store_packetupgrade", "offset": [-7, 7], "highlight": {"type": "additive", "opacity": 32}, "message": 2011, "purchase": {"kind": "count", "amount": 1, "limit": 4}, "prices": [75, 500, 2000, 8000], "messages": [2011, 2012, 2013, 2014], "seedSlots": [7, 8, 9, 10], "effect": "seedSlots"},

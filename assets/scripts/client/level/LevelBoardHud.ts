@@ -5,8 +5,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
-import { SoundLoader } from '@/client/sound/LegacySoundSystem'
-import { CrazyDaveView } from './CrazyDaveView'
+import { CrazyDaveView } from '@/client/characters/CrazyDaveView'
 import { TodParticleSystem } from '@/core/Particle'
 import type { LoadedContent } from './LevelView'
 import type { LevelSeedBank } from './LevelSeedBank'
@@ -29,13 +28,14 @@ export class LevelBoardHud {
     private belt?: Sprite
     private beltFrames: import('cc').SpriteFrame[] = []
     private dave?: CrazyDaveView
+    private daveDialog?: number
     private tooltip?: UITooltip
     private shovelButton?: UIButton
     private shovelHotkey?: UILabel
 
     static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, plantCursor: Node, seedBank: LevelSeedBank): Promise<LevelBoardHud> {
         const root = uiNode({ name: 'BoardHud', parent, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
-        const result = new LevelBoardHud(root, content)
+        const result = new LevelBoardHud(root, content, ui)
         const sprites = new SpriteRepository(content.registry, content.loader)
         const level = content.levels.levels[initial.levelId], board = content.definitions.boards[level.board]
         if (level.tools?.includes('pvz:shovel')) {
@@ -52,6 +52,7 @@ export class LevelBoardHud {
             result.tooltip = ui.tooltip(result.shovelBank, { text: ui.text('SHOVEL_TOOLTIP'), gap: 0, surface: parent })
             result.shovelButton = result.shovelBank.addComponent(UIButton)
             result.shovelButton.rightClickTriggers = false
+            result.shovelButton.touchSlide = false
             result.shovelButton.releaseToNormalOnPressOut = true
             result.shovelButton.onHoverChange = hovering => hovering ? result.tooltip!.show() : result.tooltip!.hide()
         }
@@ -75,12 +76,11 @@ export class LevelBoardHud {
         if (level.shovelTutorial) result.dave = await CrazyDaveView.create(root, content, ui)
         root.setSiblingIndex(plantCursor.getSiblingIndex())
         if (initial.tick > 0 || initial.phase === 'gameplay') result.delay = content.presentation.dave.delay
-        root.once(Node.EventType.NODE_DESTROYED, () => SoundLoader.stopExclusive('crazyDave'))
         result.sync(initial)
         return result
     }
 
-    private constructor(private root: Node, private content: LoadedContent) {}
+    private constructor(private root: Node, private content: LoadedContent, private ui: UI) {}
 
     get blocksIntro(): boolean { return !!this.dave && this.snapshot?.phase !== 'gameplay' && (this.snapshot?.tutorial.step !== 'complete' || this.dave.busy || this.delay < this.content.presentation.dave.delay) }
     get dialogReady(): boolean { return this.dave?.canAdvance ?? false }
@@ -95,7 +95,11 @@ export class LevelBoardHud {
     sync(snapshot: WorldSnapshot): void {
         this.snapshot = snapshot
         const dialog = snapshot.extensions['pvz:dialog'] as { index: number } | undefined
-        if (this.delay >= this.content.presentation.dave.delay) this.dave?.sync(dialog?.index)
+        if (this.dave && this.delay >= this.content.presentation.dave.delay && dialog?.index !== this.daveDialog) {
+            this.daveDialog = dialog?.index
+            if (dialog) this.dave.say(this.ui.text(`CRAZY_DAVE_${dialog.index}`))
+            else this.dave.leave()
+        }
         if (this.shovelBank) {
             const layout = this.content.presentation.shovel
             this.shovelBank.active = snapshot.result !== 'lost'

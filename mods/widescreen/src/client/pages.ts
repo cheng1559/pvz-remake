@@ -1,9 +1,10 @@
 import type { ClientApi } from './index.js'
 import { coverBackground } from './background.js'
 
-export async function installGardenBackgrounds(api: ClientApi): Promise<void> {
+export async function installPageBackgrounds(api: ClientApi): Promise<void> {
     const names: Record<string, string> = {
         garden: 'background_greenhouse', mushroom: 'background_mushroomgarden', aquarium: 'aquarium1', tree: 'tree_bg',
+        store: 'store_background',
     }
     const frames = new Map(await Promise.all(Object.values(names)
         .map(async name => [name, await api.assets.sprite(`assets/images/${name}.png`)] as const)))

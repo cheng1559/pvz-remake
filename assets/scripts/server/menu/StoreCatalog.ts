@@ -1,4 +1,4 @@
-import type { StoreItemHighlight } from '@/shared/menu'
+import type { StoreItemHighlight, StoreSpeech } from '@/shared/menu'
 import type { PersistedPottedPlant, PlayerProfile } from './ProfileStore'
 
 type Purchase = { kind: 'set'; value: number } | { kind: 'count'; amount: number; limit: number }
@@ -25,6 +25,9 @@ export interface StoreItem {
 }
 
 interface StoreDefinition {
+    dialogue: Omit<StoreSpeech, 'ambient'> & {
+        ambient: Omit<StoreSpeech['ambient'], 'messages'> & { messages: { message: number, weight: number, completed?: boolean }[] }
+    }
     pages: { level?: number; completed?: boolean; items: StoreItem[] }[]
     garden: { columns: number; capacity: number; template: Omit<PersistedPottedPlant, 'x' | 'y'> }
 }
@@ -38,6 +41,13 @@ export function createStoreCatalog(value: unknown) {
     const STORE_PAGES = data.pages.map(page => page.items)
     const tier = (item: StoreItem, profile: PlayerProfile) => profile.purchases[item.id] ?? 0
     const atTier = (values: number[], index: number) => values[Math.max(0, Math.min(values.length - 1, index))]
+
+    function speech(profile: PlayerProfile): StoreSpeech {
+        const { ambient, ...timing } = data.dialogue
+        return { ...timing, ambient: { ...ambient, messages: ambient.messages.map(({ message, weight, completed }) => ({
+            message, weight: completed && !profile.finishedAdventure ? 0 : weight,
+        })) } }
+    }
 
     function storePages(profile: PlayerProfile): number[] {
         return data.pages.flatMap((page, id) => profile.finishedAdventure > 0 ||
@@ -102,7 +112,7 @@ export function createStoreCatalog(value: unknown) {
         } : {}
     }
 
-    return { STORE_PAGES, storePages, itemCost, itemState, purchaseItem, itemDetails, purchaseEffect }
+    return { STORE_PAGES, storePages, itemCost, itemState, purchaseItem, itemDetails, purchaseEffect, speech }
 }
 
 export type StoreCatalog = ReturnType<typeof createStoreCatalog>
@@ -111,6 +121,13 @@ function validateStore(value: unknown): asserts value is StoreDefinition {
     const data = value as StoreDefinition
     if (!data || !Array.isArray(data.pages) || !data.garden || !Number.isInteger(data.garden.columns) || data.garden.columns <= 0 ||
         !Number.isInteger(data.garden.capacity) || data.garden.capacity <= 0 || !data.garden.template?.whichZenGarden) throw new Error('Invalid store definition')
+    const dialogue = data.dialogue
+    if (!dialogue || !dialogue.ambient ||
+        !Array.isArray(dialogue.ambient.interval) || !Array.isArray(dialogue.ambient.messages) ||
+        [dialogue.readyDelay, dialogue.descriptionDuration,
+            dialogue.ambient.initialDelay, dialogue.ambient.duration, ...dialogue.ambient.interval].some(value => !Number.isFinite(value) || value <= 0) ||
+        dialogue.ambient.interval.length !== 2 || dialogue.ambient.interval[0] > dialogue.ambient.interval[1] ||
+        !dialogue.ambient.messages.length || dialogue.ambient.messages.some(entry => !Number.isInteger(entry.message) || entry.weight < 0 || !Number.isFinite(entry.weight))) throw new Error('Invalid store dialogue')
     const ids = new Set<number>()
     for (const page of data.pages) {
         if (!Array.isArray(page.items)) throw new Error('Invalid store page')

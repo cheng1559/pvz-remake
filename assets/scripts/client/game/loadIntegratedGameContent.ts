@@ -1,22 +1,15 @@
 import { buildGameplayContent } from '@/shared/content/DefinitionRegistry'
 import { loadPresentationDefinitions } from '@/client/content/loadPresentationDefinitions'
 import { JsonAsset, Prefab, resources } from 'cc'
-import { ClientContentLoader } from '@/client/content/ClientContentLoader'
-import { ContentRegistry } from '@/client/content/ContentRegistry'
+import { loadClientContent } from '@/client/content/loadClientContent'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
-import { loadInstalledMods } from '@/app/ModLoader'
 import { modResources } from '@/client/content/ModResources'
-import { CONTENT_CATEGORIES, type ContentCategory } from '@/shared/content'
 
 // Preserve the installed asset ID and prefab UUID for existing content packs and saves.
 export const LEVEL_PREFAB_ID = 'pvz:level'
 
 export async function loadIntegratedGameContent() {
-    const loader = new ClientContentLoader()
-    const [manifest, loadedMods] = await Promise.all([
-        loader.loadManifest(),
-        loadInstalledMods(),
-    ])
+    const { manifest, loadedMods, registry, loader } = await loadClientContent()
     const loadJson = (path: string) => modResources.baseJson(`pvz:${path.replace(/\.json$/i, '')}`)
     const prefabPath = manifest.client.prefabs[LEVEL_PREFAB_ID]
     if (!prefabPath) throw new Error(`Base content does not define prefab ${LEVEL_PREFAB_ID}`)
@@ -35,22 +28,6 @@ export async function loadIntegratedGameContent() {
     const { definitions, levels, strings } = buildGameplayContent(
         definitionsAsset, levelsAsset, stringsAsset, seedCatalog, loadedMods.gameplayDefinitions,
     )
-    const registry = new ContentRegistry()
-    registry.register(manifest)
-    for (const [, content] of loadedMods.clientContent.entries()) {
-        if (CONTENT_CATEGORIES.indexOf(content.kind as ContentCategory) < 0 || content.path === undefined) continue
-        registry.registerEntry({
-            category: content.kind as ContentCategory,
-            id: content.id,
-            contentId: content.ownerId,
-            contentVersion: content.ownerVersion,
-            contentHash: content.contentHash,
-            bundle: content.bundle,
-            path: content.path,
-            schemaVersion: 2,
-        })
-    }
-    registry.freeze()
     const animations = new ClientAnimationRegistry(presentation)
     animations.freeze()
     const plantViews = loadedMods.plantViews

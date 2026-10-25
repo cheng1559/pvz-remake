@@ -1,32 +1,43 @@
 import { Color, Node } from 'cc'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
-import { SpriteRepository } from '@/client/content/ClientContentLoader'
+import { SpriteRepository, type ClientContentLoader } from '@/client/content/ClientContentLoader'
+import type { ContentRegistry } from '@/client/content/ContentRegistry'
 import { uiNode } from '@/client/view/uiNode'
 import { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
-import type { LoadedContent } from './LevelView'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 
 /** Dave's original talk/idle/enter clips, token-controlled mouth, hand item and speech bubble. */
 export class CrazyDaveView {
     private current?: ReanimPlayer
-    private index?: number
-    private pending?: number
+    private message?: string
+    private pending?: string
+    private visible = false
     private entering = false
     private leaving = false
     private blinkSeconds: number
     private shaking = false
     private textY = 0
+    private voicePending = false
+    private voiceSequence = 0
 
-    static async create(parent: Node, content: LoadedContent, ui: UI): Promise<CrazyDaveView> {
-        const root = uiNode({ name: 'CrazyDave', parent, anchor: { x: 0, y: 1 } }).node
-        const config = content.presentation.dave
+    static async create(parent: Node, content: {
+        registry: ContentRegistry, loader: ClientContentLoader, presentation: Pick<PresentationDefinitions, 'dave'>,
+    }, ui: UI, options: {
+        position?: { x: number, y: number }, bubble?: Partial<PresentationDefinitions['dave']['bubble']>, clickToContinue?: boolean,
+    } = {}): Promise<CrazyDaveView> {
+        const root = uiNode({ name: 'CrazyDave', parent, position: options.position, anchor: { x: 0, y: 1 }, active: false }).node
+        root.once(Node.EventType.NODE_DESTROYED, () => SoundLoader.stopExclusive('crazyDave'))
+        const config = { ...content.presentation.dave, bubble: { ...content.presentation.dave.bubble, ...options.bubble } }
         const layout = config.bubble
         const sprites = new SpriteRepository(content.registry, content.loader)
         const bubble = ui.image(root, await sprites.load(layout.sprite), layout).node
         const label = ui.label(bubble, { text: '', font: 'profile', width: layout.textWidth, x: layout.textX, y: layout.textY, align: 'center', color: Color.BLACK })
-        ui.label(bubble, { text: ui.text('CLICK_TO_CONTINUE'), font: 'packetCost', x: layout.continueX, y: layout.continueY, align: 'center', baseline: true, color: Color.BLACK })
+        const hint = options.clickToContinue === false ? undefined : ui.label(bubble, {
+            text: ui.text('CLICK_TO_CONTINUE'), font: 'packetCost', x: layout.continueX, y: layout.continueY,
+            align: 'center', baseline: true, color: Color.BLACK,
+        }).node
         bubble.active = false
         const entries = await Promise.all(Object.entries(config.clips).map(async ([name, id]) => {
             const node = uiNode({ name: name, parent: root, active: false }).node
@@ -46,48 +57,65 @@ export class CrazyDaveView {
         hand.play({ loop: true })
         const mouths = await Promise.all(Object.entries(config.mouths).map(async ([token, id]) => [token, await sprites.load(id)] as const))
         root.active = false
-        return new CrazyDaveView(root, bubble, label, players, hand, new Map(mouths), ui, config)
+        return new CrazyDaveView(root, bubble, label, players, hand, new Map(mouths), config, hint)
     }
 
     private constructor(readonly node: Node, private bubble: Node, private label: UILabel,
         private players: Map<string, ReanimPlayer>, private hand: ReanimPlayer,
-        private mouths: Map<string, import('cc').SpriteFrame>, private ui: UI, private config: PresentationDefinitions['dave']) {
+        private mouths: Map<string, import('cc').SpriteFrame>, private config: PresentationDefinitions['dave'], private hint?: Node) {
         this.blinkSeconds = config.blinkSeconds[0]
     }
 
     get busy(): boolean { return this.node.active }
     get canAdvance(): boolean { return this.node.active && this.bubble.active && !this.entering && !this.leaving }
+    get ready(): boolean { return this.node.active && !this.entering && !this.leaving }
+    get isSpeaking(): boolean { return this.voicePending || SoundLoader.isExclusivePlaying('crazyDave') }
 
-    sync(index?: number): void {
-        if (index === this.index && !this.entering && (index !== undefined || !this.node.active || this.leaving)) return
-        this.pending = index
-        if (this.entering || this.leaving) return
-        if (index === undefined) {
-            if (this.node.active && !this.leaving) {
-                this.index = undefined
-                this.bubble.active = false
-                this.hand.node.active = false
-                this.leaving = true
-                SoundLoader.stopExclusive('crazyDave')
-                this.play('leave', false, this.config.transitionFps, () => {
-                    this.node.active = false
-                    this.leaving = false
-                    if (this.pending !== undefined) this.sync(this.pending)
-                })
-            }
-            return
-        }
-        if (!this.node.active) {
-            this.node.active = true
-            this.entering = true
-            this.play('enter', false, this.config.transitionFps, () => { this.entering = false; this.show(this.pending) })
-        } else this.show(index)
+    enter(): void {
+        this.visible = true
+        if (this.node.active) return
+        this.node.active = true
+        this.entering = true
+        this.play('enter', false, this.config.transitionFps, () => {
+            this.entering = false
+            if (!this.visible) this.leave()
+            else if (this.pending !== undefined) this.show(this.pending)
+            else this.play('idle', true, this.config.talkFps)
+        })
     }
 
-    private show(index?: number): void {
-        if (index === undefined) { this.sync(); return }
-        this.index = index
-        const raw = this.ui.text(`CRAZY_DAVE_${index}`)
+    say(message: string): void {
+        if (message === this.message && this.node.active && !this.leaving) return
+        this.pending = message
+        this.enter()
+        if (!this.entering && !this.leaving) this.show(message)
+    }
+
+    stopTalking(): void {
+        this.voiceSequence++
+        this.voicePending = false
+        this.message = this.pending = undefined
+        this.shaking = false
+        this.bubble.active = this.hand.node.active = false
+        SoundLoader.stopExclusive('crazyDave')
+        if (this.node.active && !this.entering && !this.leaving) this.play('idle', true, this.config.talkFps)
+    }
+
+    leave(): void {
+        this.visible = false
+        const leaving = this.node.active && !this.entering && !this.leaving
+        if (leaving) this.leaving = true
+        this.stopTalking()
+        if (!leaving) return
+        this.play('leave', false, this.config.transitionFps, () => {
+            this.node.active = false
+            this.leaving = false
+            if (this.visible) this.enter()
+        })
+    }
+
+    private show(raw: string): void {
+        this.message = raw
         const text = raw.replace(/\{[^}]*\}/g, '').trim()
         this.label.text = text
         const layout = this.config.bubble
@@ -95,19 +123,25 @@ export class CrazyDaveView {
         this.label.setPosition(layout.textX, this.textY)
         this.shaking = raw.includes('{SHAKE}')
         this.bubble.active = true
+        if (this.hint) this.hint.active = !raw.includes('{NO_CLICK}')
         const handing = raw.includes('{SHOW_WALLNUT}')
         this.hand.node.active = handing
         const animation = handing ? 'talk_handing' : raw.includes('{SHAKE}') ? 'crazy'
-            : raw.includes('{SCREAM}') || text.length < this.config.talkLengths[0] ? 'smalltalk' : text.length < this.config.talkLengths[1] ? 'mediumtalk' : 'blahblah'
+            : raw.includes('{SCREAM2}') ? 'mediumtalk' : raw.includes('{SCREAM}') || text.length < this.config.talkLengths[0] ? 'smalltalk' : text.length < this.config.talkLengths[1] ? 'mediumtalk' : 'blahblah'
         this.play(animation, false, this.config.talkFps, () => {
             this.play(handing ? 'idle_handing' : 'idle', true, this.config.talkFps)
             const mouth = [...this.mouths.keys()].find(token => raw.includes(`{${token}}`))
             this.current?.setTrackSpriteOverride('Dave_mouths', mouth ? this.mouths.get(mouth)! : null)
         })
-        const effect = raw.includes('{SHAKE}') ? SoundEffect.CrazyDaveCrazy : handing ? SoundEffect.CrazyDaveScream2
+        const effect = raw.includes('{SHAKE}') ? SoundEffect.CrazyDaveCrazy : handing || raw.includes('{SCREAM2}') ? SoundEffect.CrazyDaveScream2
             : raw.includes('{SCREAM}') ? SoundEffect.CrazyDaveScream : text.length < this.config.talkLengths[0] ? SoundEffect.CrazyDaveShort1
                 : text.length < this.config.talkLengths[1] ? SoundEffect.CrazyDaveLong1 : SoundEffect.CrazyDaveExtraLong1
-        void SoundLoader.playFoleyExclusive(effect, 'crazyDave', 0)
+        if (!raw.includes('{NO_SOUND}')) {
+            const sequence = ++this.voiceSequence
+            this.voicePending = true
+            void SoundLoader.playFoleyExclusive(effect, 'crazyDave', 0).catch(error => console.error('[CrazyDave]', error))
+                .finally(() => { if (sequence === this.voiceSequence) this.voicePending = false })
+        }
     }
 
     private play(name: string, loop: boolean, fps: number, onFinish?: () => void): void {
@@ -121,7 +155,7 @@ export class CrazyDaveView {
         next.setTrackSpriteOverride('Dave_mouths', null)
         next.setTrackPrefixVisible('Dave_blink', false)
         const blink = this.players.get('blink')!
-        next.setTrackPrefixVisible('Dave_eye', !blink.node.active)
+        next.getTrackNode('Dave_eye')!.active = !blink.node.active
         next.play({ loop, rate: fps / this.config.sourceFps, timeSeconds: 0, hideOnFinish: false, onFinish })
         if (blink.node.active) blink.attachToTrack(next, 'Dave_head')
         if (this.hand.node.active) this.hand.node.setParent(next.getTrackNode(this.config.hand.track)!)
@@ -139,10 +173,10 @@ export class CrazyDaveView {
             this.blinkSeconds = min + Math.random() * (max - min)
             blink.attachToTrack(this.current, 'Dave_head')
             blink.node.active = true
-            this.current.setTrackPrefixVisible('Dave_eye', false)
+            this.current.getTrackNode('Dave_eye')!.active = false
             blink.play({ loop: false, rate: this.config.blinkFps / this.config.sourceFps, timeSeconds: 0, onFinish: () => {
                 blink.node.active = false
-                this.current?.setTrackPrefixVisible('Dave_eye', true)
+                if (this.current) this.current.getTrackNode('Dave_eye')!.active = true
             } })
         }
         if (blink.node.active) blink.advance(dt)

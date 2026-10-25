@@ -230,6 +230,7 @@ export class MainMenuScreen extends Component {
             const button = node.addComponent(UIButton)
             button.refreshHoverOnEnable = false
             button.changeCursor = false
+            button.touchSlide = false
             const flower = this.flowers[index]
             button.canInteract = () => !this.playedFlowers.has(flower)
             button.polygon = Array.from({ length: 12 }, (_, point) => {

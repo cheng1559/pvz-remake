@@ -14,6 +14,8 @@ import { SpriteLoader } from '@/core/SpriteLoader'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { MenuAction } from './MenuPages'
 import { formatMoney } from '@/client/ui/formatMoney'
+import { CrazyDaveView } from '@/client/characters/CrazyDaveView'
+import { loadClientContent } from '@/client/content/loadClientContent'
 
 const { ccclass } = _decorator
 const SPRITES = [
@@ -21,7 +23,7 @@ const SPRITES = [
     'store_nextbutton', 'store_nextbuttonhighlight', 'store_nextbuttondisabled',
     'store_prevbutton', 'store_prevbuttonhighlight', 'store_prevbuttondisabled',
     'store_mainmenubutton', 'store_mainmenubuttonhighlight', 'store_mainmenubuttondown',
-    'particles/seedpacketflash', 'coinbank', 'store_speechbubble',
+    'particles/seedpacketflash', 'coinbank',
 ]
 
 @ccclass('PvZStoreScreen')
@@ -41,9 +43,10 @@ export class StoreScreen extends Component {
     private back!: UIButton
     private money!: UILabel
     private pageLabel!: UILabel
-    private bubble!: Node
-    private bubbleLabel!: UILabel
+    private dave?: CrazyDaveView
     private bubbleTimer = 0
+    private ambientTimer = 0
+    private previousAmbient?: number
     private hoveredItem: StoreItemView | null = null
     private navigate: (action: MenuAction) => void = () => {}
 
@@ -51,17 +54,26 @@ export class StoreScreen extends Component {
         this.ui = ui
         this.navigate = navigate
         this.data = await menuApi.getStore()
+        this.ambientTimer = this.data.speech.ambient.initialDelay
         const itemSprites = this.data.pages.flatMap(page => page.items.flatMap(item => item.sprite ? [item.sprite] : []))
-        const frames = await Promise.all([...new Set([...SPRITES, ...itemSprites])].map(async name => {
-            const frame = await SpriteLoader.load(name)
-            if (!frame) throw new Error(`Missing store image: ${name}`)
-            return [name, frame] as const
-        }))
+        const [content, frames] = await Promise.all([
+            loadClientContent(),
+            Promise.all([...new Set([...SPRITES, ...itemSprites])].map(async name => {
+                const frame = await SpriteLoader.load(name)
+                if (!frame) throw new Error(`Missing store image: ${name}`)
+                return [name, frame] as const
+            })),
+        ])
         if (!this.node.isValid) throw new Error('Store was destroyed while loading')
         this.sprites = Object.fromEntries(frames)
         this.car = ui.image(this.node, this.sprites.store_car, { x: 196, y: 138 })
         this.hatch = ui.image(this.node, this.sprites.store_hatchbackopen, { x: 299 }).node
         this.sign = ui.image(this.node, this.sprites.store_sign, { x: 285, y: -150 }).node
+        // Original StoreScreen draws Dave at (-42, +68), including the bubble at (105, -58).
+        this.dave = await CrazyDaveView.create(this.node, { ...content, presentation: ui.assets.presentation }, ui, {
+            position: { x: -42, y: -68 }, bubble: { sprite: 'pvz:store_speechbubble', x: 105, y: -58 }, clickToContinue: false,
+        })
+        this.dave.enter()
         ui.image(this.node, this.sprites.coinbank, { x: 650, y: 559 })
         this.money = ui.label(this.node, { text: '', font: 'money', color: new Color(180, 255, 90), x: 763, y: 583, baseline: true, align: 'right' })
         this.pageLabel = ui.label(this.node, { text: '', font: 'small', color: new Color(80, 80, 80), x: 470, y: 500, baseline: true, align: 'center' })
@@ -86,9 +98,6 @@ export class StoreScreen extends Component {
             label.renderer.fontColor = state === 'hover' || state === 'pressed' ? new Color(167, 192, 235) : new Color(98, 153, 235)
             label.node.setPosition(origin.x + (state === 'pressed' ? 2 : 0), origin.y - (state === 'pressed' ? 1 : 0))
         }
-        this.bubble = ui.image(this.node, this.sprites.store_speechbubble, { x: 63, y: 10 }).node
-        this.bubbleLabel = ui.label(this.bubble, { text: '', font: 'profile', width: 233, x: 25, y: 6, align: 'center', color: Color.BLACK })
-        this.bubble.active = false
         this.renderItems()
     }
 
@@ -153,19 +162,23 @@ export class StoreScreen extends Component {
 
     private showDescription(item: StoreItemView): void {
         const message = item.message
-        this.bubbleLabel.text = this.ui.text(`CRAZY_DAVE_${message}`, '').replace(/\{MONEY\}/g, formatMoney(this.data.coins))
-            .replace(/\{UPGRADE_COST\}/g, formatMoney(item.cost)).replace(/\{PLAYER_NAME\}/g, this.data.playerName).replace(/\{[^}]*\}/g, '')
-        const height = FontMetricsUtil.measureWordWrappedHeight(this.ui.assets.fonts.profile.config, this.bubbleLabel.text, 233)
-        this.bubbleLabel.node.setPosition(25, -(6 + Math.trunc((144 - Math.max(1, height)) / 2)))
-        this.bubble.active = true
-        this.bubbleTimer = 1
+        this.dave!.say(this.ui.text(`CRAZY_DAVE_${message}`, '').replace(/\{MONEY\}/g, formatMoney(this.data.coins))
+            .replace(/\{UPGRADE_COST\}/g, formatMoney(item.cost)).replace(/\{PLAYER_NAME\}/g, this.data.playerName))
+        this.bubbleTimer = this.data.speech.descriptionDuration
+    }
+
+    private showSpeech(message: number, duration: number): void {
+        this.dave!.say(this.ui.text(`CRAZY_DAVE_${message}`).replace(/\{PLAYER_NAME\}/g, this.data.playerName)
+            .replace(/\{MONEY\}/g, formatMoney(this.data.coins)))
+        this.bubbleTimer = duration
     }
 
     private async buy(item: StoreItemView): Promise<void> {
-        if (this.waiting || this.hatchTimer > 0 || this.age < 1.2) return
+        if (this.waiting || this.hatchTimer > 0 || this.age < this.data.speech.readyDelay) return
         this.waiting = true
         this.hoveredItem = null
-        this.bubble.active = false
+        this.dave?.stopTalking()
+        this.bubbleTimer = 0
         this.refreshEnabled()
         try {
             const offer = await menuApi.getStore()
@@ -210,7 +223,10 @@ export class StoreScreen extends Component {
         if (this.waiting || this.hatchTimer > 0 || this.data.pages.length <= 1) return
         this.page = (this.page + this.data.pages.length + delta) % this.data.pages.length
         this.hatchTimer = 0.5
-        this.items.active = this.hatch.active = this.bubble.active = this.pageLabel.node.active = false
+        this.items.active = this.hatch.active = this.pageLabel.node.active = false
+        this.hoveredItem = null
+        this.bubbleTimer = 0
+        this.dave?.stopTalking()
         this.car.spriteFrame = this.sprites.store_carclosed
         this.refreshEnabled()
     }
@@ -219,21 +235,54 @@ export class StoreScreen extends Component {
         const enabled = this.hatchTimer <= 0 && !this.waiting
         for (const arrow of this.arrows) { arrow.enabled = enabled; arrow.interactable = this.data.pages.length > 1 }
         this.back.enabled = enabled
-        for (const button of this.items.getComponentsInChildren(UIButton)) button.enabled = enabled && this.age >= 1.2
+        for (const button of this.items.getComponentsInChildren(UIButton)) button.enabled = enabled && this.age >= this.data.speech.readyDelay
         UIHoverManager.refreshHoverStates()
     }
 
+    protected onDisable(): void { this.dave?.stopTalking() }
+
+    private acceptsInput(): boolean {
+        const modal = UIHoverManager.activeModalRoot
+        return !UIHoverManager.isInputBlocked && (!modal || modal === this.node || this.node.isChildOf(modal))
+    }
+
+    private updateSpeech(dt: number): void {
+        if (this.waiting || !this.acceptsInput()) return
+        const { speech } = this.data
+        if (this.bubbleTimer > 0) {
+            if (!this.hoveredItem) {
+                const remaining = this.bubbleTimer - dt
+                if (remaining > 0) this.bubbleTimer = remaining
+                else if (!this.dave?.isSpeaking) { this.bubbleTimer = 0; this.dave?.stopTalking() }
+            }
+            return
+        }
+        if (this.age < speech.readyDelay || !this.dave?.ready) return
+        this.ambientTimer -= dt
+        if (this.ambientTimer > 0) return
+        const choices = speech.ambient.messages.filter(entry => entry.message !== this.previousAmbient && entry.weight > 0)
+        let pick = Math.random() * choices.reduce((sum, entry) => sum + entry.weight, 0)
+        const chosen = choices.find(entry => (pick -= entry.weight) < 0)
+        if (chosen) {
+            this.previousAmbient = chosen.message
+            this.showSpeech(chosen.message, speech.ambient.duration)
+        }
+        const [min, max] = speech.ambient.interval
+        this.ambientTimer = min + Math.random() * (max - min)
+    }
+
     protected update(dt: number): void {
-        if (!this.car || this.waiting) return
+        if (!this.car) return
         dt = gameClock.delta(dt)
-        const wasReady = this.age >= 1.2
+        this.dave?.update(dt)
+        if (this.waiting) return
+        const wasReady = this.age >= this.data.speech.readyDelay
         this.age += dt
         let t = Math.max(0, Math.min(1, (this.age - 0.5) / 0.6))
         t = t * t * (3 - 2 * t); t = t * t * (3 - 2 * t)
         this.sign.setPosition(285, 150 * (1 - t))
-        if (!wasReady && this.age >= 1.2) this.refreshEnabled()
-        if (this.bubbleTimer > 0 && !this.hoveredItem) { this.bubbleTimer -= dt; if (this.bubbleTimer <= 0) this.bubble.active = false }
-        if (this.hatchTimer <= 0) return
+        if (!wasReady && this.age >= this.data.speech.readyDelay) this.refreshEnabled()
+        if (this.hatchTimer <= 0) { this.updateSpeech(dt); return }
         this.hatchTimer -= dt
         const shake = this.hatchTimer > 0.35 ? 1 + Math.floor(Math.random() * 3) : 0
         this.car.node.setPosition(196, -138 - shake)

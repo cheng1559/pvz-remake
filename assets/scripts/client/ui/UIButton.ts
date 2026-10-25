@@ -14,12 +14,15 @@ export class UIButton extends Component {
     private static readonly instances = new Set<UIButton>()
     private static active: UIButton | null = null
     private static captureRoot: Node | null = null
+    private static mobileSlide: { id: number, windowId: number, pointer: UIHoverPointer, modal: Node | null } | null = null
     private static readonly hoverClient = {
         clearHover: () => {
+            UIButton.mobileSlide = null
             UIButton.active?.cancelPress()
             for (const button of UIButton.instances) button.setHover(false)
         },
         refreshHover: (pointer: UIHoverPointer, modal: Node | null) => UIButton.refreshHover(pointer, modal),
+        handleTouch: (event: EventTouch) => UIButton.handleTouch(event),
     }
 
     onClick: () => void = () => {}
@@ -34,6 +37,8 @@ export class UIButton extends Component {
     refreshHoverOnEnable = true
     /** Select immediately without capturing the pointer or emitting a release click. */
     pressOnly = false
+    /** Follow the finger and activate on release; disable for controls with their own drag gesture. */
+    touchSlide = true
     changeCursor = true
     hapticsEnabled = true
     /** Temporary input gate; keeps the normal appearance when blocked. */
@@ -58,7 +63,7 @@ export class UIButton extends Component {
     }
     get isPressed(): boolean { return this.pressed }
     get isHovering(): boolean { return this.hovering }
-    static get hasActivePress(): boolean { return this.active !== null }
+    static get hasActivePress(): boolean { return this.active !== null || this.mobileSlide !== null }
 
     onEnable(): void {
         this.installHitTest()
@@ -71,6 +76,7 @@ export class UIButton extends Component {
 
     onDisable(): void {
         UIButton.instances.delete(this)
+        if (this.hovering) UIButton.mobileSlide = null
         this.cancelPress()
         this.setHover(false)
         this.listen(false)
@@ -91,7 +97,16 @@ export class UIButton extends Component {
         ] as const) this.node[method](event, handler, this)
     }
 
-    private static refreshHover(pointer: UIHoverPointer, modal: Node | null): boolean {
+    private static refreshHover(pointer: UIHoverPointer, modal: Node | null, initialTouch = false): boolean {
+        if (this.mobileSlide) {
+            const top = this.topButton(this.mobileSlide.pointer, modal)
+            const target = top?.interactable && top.touchSlide && !top.pressOnly ? top : null
+            if (this.active !== target) {
+                this.active?.cancelPress()
+                target?.beginPress(true, !initialTouch)
+            }
+            return false
+        }
         const active = this.active
         if (active) {
             if (!active.available(modal)) active.cancelPress()
@@ -101,12 +116,45 @@ export class UIButton extends Component {
                 return pointer.canHover && active.hovering && active.changeCursor
             }
         }
-        let top: UIButton | null = null
-        if (pointer.canHover) for (const button of this.instances) {
-            if (button.available(modal, false) && button.hit(pointer) && (!top || this.above(button.node, top.node))) top = button
-        }
+        const top = pointer.canHover ? this.topButton(pointer, modal) : null
         for (const button of this.instances) button.setHover(button === top && button.interactable)
         return !!top?.interactable && top.changeCursor
+    }
+
+    private static topButton(pointer: UIHoverPointer, modal: Node | null): UIButton | null {
+        let top: UIButton | null = null
+        for (const button of this.instances) {
+            if (button.available(modal, false) && button.hit(pointer) && (!top || this.above(button.node, top.node))) top = button
+        }
+        return top
+    }
+
+    private static handleTouch(event: EventTouch): void {
+        if (!GameDebugSettings.isMobileMode() || UIHoverManager.isInputBlocked) return
+        const id = event.touch!.getID(), modal = UIHoverManager.activeModalRoot
+        const pointer: UIHoverPointer = { location: event.touch!.getLocation(), uiLocation: event.getUILocation(), windowId: event.windowId, canHover: false }
+        if (event.type === Node.EventType.TOUCH_START) {
+            if (this.active || this.mobileSlide) return
+            this.mobileSlide = { id, windowId: event.windowId, pointer, modal }
+            this.refreshHover(pointer, modal, true)
+            UIHoverManager.refreshHoverStates()
+            return
+        }
+        const slide = this.mobileSlide
+        if (!slide || slide.id !== id || slide.windowId !== event.windowId) return
+        event.propagationStopped = true
+        slide.pointer = pointer
+        if (slide.modal !== modal) { this.mobileSlide = null; UIHoverManager.refreshHoverStates(); return }
+        this.refreshHover(pointer, modal)
+        if (event.type === Node.EventType.TOUCH_MOVE) return
+        // Cocos changes END to CANCEL outside the original node; the event code keeps the actual system event.
+        const released = event.type === Node.EventType.TOUCH_END || event.getEventCode() === Node.EventType.TOUCH_END
+        const button = this.topButton(pointer, modal)
+        this.mobileSlide = null
+        if (released && button?.available() && button.touchSlide && !button.pressOnly) {
+            if (this.active === button) button.finishPress(true, event, false)
+        } else this.active?.cancelPress()
+        UIHoverManager.refreshHoverStates()
     }
 
     private static above(a: Node, b: Node): boolean {
@@ -147,13 +195,13 @@ export class UIButton extends Component {
         this.onStateChange?.(state)
     }
 
-    private beginPress(visual: boolean): void {
+    private beginPress(visual: boolean, sliding = false): void {
         this.pressed = true
         this.pressVisual = visual
         UIButton.active = this
-        this.setHover(true, false)
+        this.setHover(true, sliding)
         this.applyState(visual ? 'pressed' : 'hover')
-        this.onPress()
+        if (!sliding) this.onPress()
         UIHoverManager.refreshHoverStates()
     }
 
@@ -229,7 +277,7 @@ export class UIButton extends Component {
     private static captureUp(event: EventMouse): void { this.active?.mouseUp(event) }
 
     private touchStart(event: EventTouch): void {
-        if (!GameDebugSettings.isMobileMode() || !this.available() || UIButton.active) return
+        if (!GameDebugSettings.isMobileMode() || !this.available() || UIButton.hasActivePress) return
         event.propagationStopped = true
         if (this.pressOnly) {
             this.setHover(true, false)
@@ -237,6 +285,7 @@ export class UIButton extends Component {
             this.setHover(false, false)
             return
         }
+        if (this.touchSlide) { UIButton.handleTouch(event); return }
         this.touchId = event.touch!.getID()
         this.beginPress(true)
     }

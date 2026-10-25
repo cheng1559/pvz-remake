@@ -147,8 +147,8 @@ export class LevelInputPresenter {
             leftSource: !packet && !tool, cancelInside: held && !pickable,
         }
         this.view.setPointer(this.mobilePressReady(press) ? press.point : undefined)
-        if (held || packet || tool) event.propagationStopped = true
-        else this.collectAt(press.point.x, press.point.y)
+        if (!held && !packet && !tool) this.collectAt(press.point.x, press.point.y)
+        event.propagationStopped = true
     }
 
     private mobilePressReady(press: MobilePress): boolean {

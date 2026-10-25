@@ -1,4 +1,4 @@
-import { Button, Color, KeyCode, Node, UITransform } from 'cc'
+import { Button, Color, director, Director, KeyCode, Node, UITransform } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
 import { modManager } from '@/client/content/ModManager'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
@@ -34,10 +34,53 @@ interface Entry { id: string, version?: string, error?: string, builtin?: boolea
  * Dependencies load first; later Mods override earlier resources.
  */
 export async function showPackageDialog(parent: Node, ui: UI, options: PackageDialogOptions): Promise<UIDialog> {
+    const dialog = ui.dialog(parent, {
+        title: ui.text('PACKAGE_MODS_TITLE', 'Mods'),
+        width: 640, extraHeight: 270, tall: true,
+        confirmText: ui.text('PACKAGE_APPLY', 'Apply'), cancelText: ui.text('BUTTON_CANCEL'),
+    })
+    dialog.onConfirm = () => {}
+    dialog.onKeyDown = event => event.keyCode === KeyCode.SPACE
+    const panel = dialog.content
+    const footer = panel.getComponentsInChildren(UIButton)
+    const left = footer[0].node, right = footer[1].node
+    const importButton = ui.button(panel, {
+        text: ui.text('PACKAGE_IMPORT', 'Import'), x: left.position.x, y: -left.position.y - 46,
+        width: right.position.x + right.getComponent(UITransform)!.width - left.position.x,
+    })
+    const width = panel.getComponent(UITransform)!.width - 142
+    const list = uiNode({
+        name: 'PackageList', parent: panel, position: { x: 66, y: -138 }, anchor: { x: 0, y: 1 },
+        size: { width, height: LIST_HEIGHT }, graphics: true,
+    })
+    const background = list.graphics!
+    background.fillColor = LIST_COLOR
+    background.fillRect(0, -LIST_HEIGHT, width, LIST_HEIGHT)
+    background.strokeColor = Color.BLACK
+    background.lineWidth = 1
+    background.rect(0, -LIST_HEIGHT, width, LIST_HEIGHT)
+    background.stroke()
+    const font = ui.assets.fonts.profile.config
+    const metrics = FontMetricsUtil.getMetrics(font)
+    const loading = ui.label(list.node, {
+        text: 'Loading...', font: 'profile', color: TEXT_COLOR, width, align: 'center',
+        y: Math.floor((LIST_HEIGHT - metrics.height) / 2) - metrics.ascentPadding,
+    })
+    // Paint Loading before reading and unpacking installed Mods.
+    await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
+    if (!dialog.node.isValid || !dialog.node.activeInHierarchy) return dialog
     const manager = modManager
-    const running = await manager.running()
-    const initial = await manager.list()
-    const installedEntries = await manager.installed()
+    let running: string[], initial: string[], installedEntries: Entry[]
+    try {
+        running = await manager.running()
+        initial = await manager.list()
+        installedEntries = await manager.installed()
+    } catch (error) {
+        dialog.close(false)
+        throw error
+    }
+    if (!dialog.node.isValid || !dialog.node.activeInHierarchy) return dialog
+    loading.node.destroy()
     const checked = new Set(initial)
     const pendingUninstalls = new Set<string>()
     /** Display order; the first row has the highest priority. */
@@ -46,39 +89,11 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     /** An import replaced files used by this session. */
     let touchedRunning = false
     let busy = false
-    if (!parent.isValid) throw new Error('Package dialog was closed while loading')
 
-    const dialog = ui.dialog(parent, {
-        title: ui.text('PACKAGE_MODS_TITLE', 'Mods'),
-        width: 640, extraHeight: 270, tall: true,
-        confirmText: ui.text('PACKAGE_APPLY', 'Apply'), cancelText: ui.text('BUTTON_CANCEL'),
-    })
     const fail = (error: unknown) => {
         if (dialog.node.isValid) ui.dialog(dialog.node, { title: 'Error', message: error instanceof Error ? error.message : String(error) })
     }
-    const panel = dialog.content
-    const width = panel.getComponent(UITransform)!.width - 142
-    const background = uiNode({
-        name: 'PackageList', parent: panel, position: { x: 66, y: -138 }, anchor: { x: 0, y: 1 },
-        size: { width, height: LIST_HEIGHT }, graphics: true,
-    }).graphics!
-    background.fillColor = LIST_COLOR
-    background.fillRect(0, -LIST_HEIGHT, width, LIST_HEIGHT)
-    background.strokeColor = Color.BLACK
-    background.lineWidth = 1
-    background.rect(0, -LIST_HEIGHT, width, LIST_HEIGHT)
-    background.stroke()
     const scroll = ui.scroll(panel, { x: 66, y: 138, width, height: LIST_HEIGHT, contentHeight: 0, wheelStep: ROW_HEIGHT })
-    const footer = panel.getComponentsInChildren(UIButton)
-    const left = footer[0].node, right = footer[1].node
-    ui.button(panel, {
-        text: ui.text('PACKAGE_IMPORT', 'Import'), x: left.position.x, y: -left.position.y - 46,
-        width: right.position.x + right.getComponent(UITransform)!.width - left.position.x,
-        onClick: () => { void run(importArchive) },
-    })
-
-    const font = ui.assets.fonts.profile.config
-    const metrics = FontMetricsUtil.getMetrics(font)
     const textY = Math.floor((ROW_HEIGHT - metrics.height) / 2) - metrics.ascentPadding
 
     /** Runs one operation at a time, reporting failures without closing the manager. */
@@ -88,8 +103,8 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         try { await operation() } catch (error) { fail(error) } finally { busy = false }
     }
 
-    async function refresh(): Promise<void> {
-        const installed: Entry[] = await manager.installed()
+    async function refresh(installed?: Entry[]): Promise<void> {
+        installed ??= await manager.installed()
         if (!dialog.node.isValid) return
         const ids = installed.filter(entry => !pendingUninstalls.has(entry.id)).map(entry => entry.id)
         order = [...order, ...ids].filter((id, index, all) => all.indexOf(id) === index && ids.includes(id))
@@ -124,7 +139,18 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
             x: 6, y: Math.ceil(ROW_HEIGHT / 2 - CHECKBOX_CENTER_Y * CHECKBOX_SCALE), value: entry.builtin || checked.has(entry.id), onChange: toggle,
         })
         checkbox.node.setScale(CHECKBOX_SCALE, CHECKBOX_SCALE)
-        const name = `${entry.id}${entry.version ? `  ${entry.version}` : ''}${entry.error ? ' [Error]' : ''}`
+        const text = ui.text('PACKAGE_UNINSTALL', 'Uninstall')
+        const textWidth = FontMetricsUtil.measureTextWidth(font, text)
+        const uninstallX = rowWidth - textWidth - 8
+        const nameRight = entry.builtin ? rowWidth - 8 : uninstallX - 2 * ARROW_WIDTH - 14
+        const nameWidth = Math.max(0, nameRight - 46)
+        const suffix = `${entry.version ? `  ${entry.version}` : ''}${entry.error ? ' [Error]' : ''}`
+        let id = entry.id
+        if (FontMetricsUtil.measureTextWidth(font, id + suffix) > nameWidth) {
+            while (id.length && FontMetricsUtil.measureTextWidth(font, id + '...' + suffix) > nameWidth) id = id.slice(0, -1)
+            id += '...'
+        }
+        const name = id + suffix
         const nameColor = entry.error ? LINK_COLOR : TEXT_COLOR
         const nameLabel = ui.label(row, { text: name, font: 'profile', color: nameColor, x: 46, y: textY })
         if (entry.error) ui.tooltip(row, { text: entry.error })
@@ -134,15 +160,11 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
             return
         }
 
-        const text = ui.text('PACKAGE_UNINSTALL', 'Uninstall')
-        const textWidth = FontMetricsUtil.measureTextWidth(font, text)
-        const uninstallX = rowWidth - textWidth - 8
         const label = ui.label(row, { text, font: 'profile', color: LINK_COLOR, x: uninstallX, y: textY })
         rowButton(row, uninstallX, textWidth, LINK_COLOR, true, () => { void run(() => uninstallEntry(entry.id)) },
             color => { label.renderer.fontColor = color })
         // Clicking the name toggles the checkbox, as clicking the box does.
-        const nameRight = uninstallX - 2 * ARROW_WIDTH - 14
-        rowButton(row, 46, Math.max(0, nameRight - 46), nameColor, true, () => {
+        rowButton(row, 46, nameWidth, nameColor, true, () => {
             checkbox.value = !checkbox.value
             toggle(checkbox.value)
         }, color => { nameLabel.renderer.fontColor = color })
@@ -250,7 +272,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
 
     dialog.onConfirm = () => { void run(apply) }
     dialog.onKeyDown = event => event.keyCode === KeyCode.SPACE
-    await refresh()
+    await refresh(installedEntries)
     const draft = () => JSON.stringify([order, [...checked].sort()])
     const initialDraft = draft()
     dialog.onCancel = () => { void run(async () => {
@@ -264,5 +286,6 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         }
         dialog.close(false)
     }) }
+    importButton.onClick = () => { void run(importArchive) }
     return dialog
 }

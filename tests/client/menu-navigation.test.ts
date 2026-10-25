@@ -76,6 +76,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     let dialogKeys = 0
     let restoreOnPlay = false
     let prompts = 0
+    let packageDialogs = 0
     let chooseContinue!: (action: 'continue' | 'restart' | 'cancel') => void
     let closeCli!: (result: DebugCliResult | null) => void
     const sounds: string[] = []
@@ -96,6 +97,11 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
             musicFrames.push({ ticks, zombies: context.zombiesOnScreen })
         } } },
         '@/client/screens/DebugCliDialog': { showDebugCliDialog: () => new Promise(resolve => { closeCli = resolve }) },
+        '@/client/screens/PackageDialog': { showPackageDialog: async () => {
+            assert.equal(paused, true)
+            packageDialogs++
+            return { result: Promise.resolve() }
+        } },
         '@/client/screens/MenuPages': { MENU_PAGES },
         '@/client/ui/UIDialog': { UIDialog: { handleKey: () => { dialogKeys++; return false } } },
         '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1 }), completeLevel: async () => ({ nextLevelId: 'pvz:adventure-1-2' }) } },
@@ -223,19 +229,14 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(paused, false)
     assert.equal(gameClock.delta(1), 2, 'closing the CLI keeps the newly selected speed')
     gameClock.setSpeed(1)
-    const packages: string[] = []
-    app.installPackage = async (kind: string) => { assert.equal(paused, true); packages.push(`install:${kind}`) }
-    app.confirmPackageRestart = async (kind: string) => { assert.equal(paused, true); packages.push(`restart:${kind}`) }
-    for (const action of ['installPack', 'restartForPacks', 'installMod', 'restartForMods'] as const) {
-        const before = saves
-        const pending = app.showDebugCli()
-        await setImmediate()
-        closeCli({ ok: true, message: '', action })
-        await pending
-        assert.equal(saves, before + 1, 'package changes save the current level before showing their dialogs')
-        assert.equal(paused, false, 'cancelling an install/restart restores the previous pause state')
-    }
-    assert.deepEqual(packages, ['install:pack', 'restart:pack', 'install:mod', 'restart:mod'])
+    const savesBeforeManager = saves
+    const manager = app.showDebugCli()
+    await setImmediate()
+    closeCli({ ok: true, message: '', action: 'manageMods' })
+    await manager
+    assert.equal(packageDialogs, 1)
+    assert.equal(saves, savesBeforeManager, 'opening the manager does not write an unchanged level save')
+    assert.equal(paused, false, 'closing the manager restores the previous pause state')
     introReady = false
     app.onKeyDown({ keyCode: 32 })
     await setImmediate()
@@ -330,11 +331,11 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(freshGames.at(-1), true)
 })
 
-test('pack and Mod imports read sequentially, continue after failure, clean all files and offer one restart', async () => {
+test('manager imports read sequentially, continue after failure and leave enabling to Apply', async () => {
     const source = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
     }).outputText
-    for (const isNative of [false, true]) for (const kind of ['pack', 'mod']) for (const names of [[], ['a'], ['bad'], ['a', 'bad', 'b']]) {
+    for (const isNative of [false, true]) for (const names of [[], ['a'], ['bad'], ['a', 'bad', 'b']]) {
         const steps: string[] = []
         const module = { exports: {} as Record<string, any> }
         const ui = {
@@ -363,10 +364,9 @@ test('pack and Mod imports read sequentially, continue after failure, clean all 
                     dispose: () => steps.push(`dispose:${name}`),
                 }))
             } },
-            '@/client/content/ModResources': { modResources: { install: async (name: string) => { steps.push(`install:${name}`); return name } } },
             '@/client/content/ModManager': { modManager: {
                 install: async (name: string, enable: boolean) => {
-                    assert.equal(enable, names.length === 1)
+                    assert.equal(enable, false)
                     steps.push(`install:${name}`); return name
                 },
                 list: async () => [],
@@ -377,16 +377,14 @@ test('pack and Mod imports read sequentially, continue after failure, clean all 
             window: { location: { reload: () => steps.push('web-restart') } } })
         const app = new module.exports.GameApp()
         app.node = { isValid: true }
-        const installed = await app.installPackage(kind)
+        const installed = await app.installPackage()
         assert.deepEqual(Array.from(installed), names.filter(name => name !== 'bad'))
         const expected = ['pick']
         if (names.length) {
             expected.push('Installing...', 'paint')
             for (const name of names) { expected.push(`read:${name}`); if (name !== 'bad') expected.push(`install:${name}`) }
-            if (kind === 'mod' && names.length > 1) expected.push('enable:mods')
             expected.push('close', ...names.map(name => `dispose:${name}`))
             if (names.includes('bad')) expected.push('Installation Failed')
-            if (installed.length) expected.push('Restart Required', isNative ? 'native-restart' : 'web-restart')
         }
         assert.deepEqual(steps, expected)
     }
@@ -673,6 +671,7 @@ test('main menu flowers play once on press and stay unavailable after animation 
     menu.setButtonsEnabled = menu.syncPositions = () => {}
     menu.refreshButtons()
     const button = menu.flowerButtons[0]
+    assert.equal(button.touchSlide, false, 'flowers require a direct press instead of sliding in from another control')
     assert.equal(button.canInteract(), true)
     button.onPress()
     assert.equal(button.canInteract(), false)

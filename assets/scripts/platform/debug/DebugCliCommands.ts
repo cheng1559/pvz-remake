@@ -5,7 +5,6 @@ import { gameClock } from '@/core/GameClock'
 import { debugCondition, debugInteger, debugSuccess, debugSyntax, parseDebugCliCommand, type DebugCliCatalog, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { SFX_VOLUME_SCALE } from '@/shared/menu'
 import { OptionsSettings } from '@/platform/OptionsSettings'
-import { modManager } from '@/client/content/ModManager'
 import { GameDebugSettings, type DebugPerfToggle, type SeedPacketStyle } from './GameDebugSettings'
 
 export async function executeDebugCliCommand(
@@ -53,22 +52,7 @@ export async function executeDebugCliCommand(
         case 'hitboxes': GameDebugSettings.setHitboxesVisible(args[0].toLowerCase() === 'true'); break
         case 'hdseed': GameDebugSettings.setHDSeedPacketsEnabled(args[0].toLowerCase() === 'true'); break
         case 'seedstyle': GameDebugSettings.setSeedPacketStyle(args[0].toLowerCase() as SeedPacketStyle); break
-        case 'mod': {
-            if (!args.length) return { ...debugSuccess(`Opening ${name} manager`), action: 'manageMods' }
-            const operation = args[0].toLowerCase()
-            if (args.length !== (operation === 'install' || operation === 'list' ? 1 : 2)) return debugSyntax(`Usage: /${name} [install | load <installed_id> | unload <id|all> | uninstall <id> | list]`)
-            const manager = modManager
-            const label = 'Mod'
-            try {
-                if (operation === 'list') return debugSuccess(`${label}s: ${(await manager.list()).join(', ') || 'none'}`)
-                if (operation === 'install') return { ...debugSuccess(`Select a ${label.toLowerCase()} ZIP`), action: 'installMod' }
-                const changed = operation === 'load' ? await manager.load(args[1])
-                    : operation === 'unload' ? await manager.unload(args[1]) : await manager.uninstall(args[1])
-                return { ...debugSuccess(`${label} ${operation}: ${args[1]}`), action: changed ? 'restartForMods' : undefined }
-            } catch (error) {
-                return debugCondition(error instanceof Error ? error.message : String(error))
-            }
-        }
+        case 'mod': return { ...debugSuccess('Opening Mod manager'), action: 'manageMods' }
         case 'perf': GameDebugSettings.setPerfToggle(args[0].toLowerCase() as DebugPerfToggle, args[1].toLowerCase() === 'true'); break
         case 'background': return debugCondition('Widescreen backgrounds are not implemented in this version')
         default: {

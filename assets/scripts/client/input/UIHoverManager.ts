@@ -7,6 +7,7 @@ export interface UIHoverClient {
     cursor?: 'pointer' | 'text' | 'grabbing'
     clearHover(): void
     refreshHover(pointer: UIHoverPointer, modalRoot: Node | null): boolean
+    handleTouch?(event: EventTouch): void
 }
 
 /** Shared hover/cursor ownership, following the reference UIHoverManager. */
@@ -43,6 +44,8 @@ export class UIHoverManager {
             root.on(event, this.rememberTouchEvent, this, true)
             input.on(event, this.rememberTouchEvent, this)
         }
+        root.on(Input.EventType.TOUCH_START, this.beginTouch, this)
+        input.on(Input.EventType.TOUCH_START, this.beginTouch, this)
     }
 
     static stop(): void {
@@ -54,6 +57,8 @@ export class UIHoverManager {
             this.root?.off(event, this.rememberTouchEvent, this, true)
             input.off(event, this.rememberTouchEvent, this)
         }
+        this.root?.off(Input.EventType.TOUCH_START, this.beginTouch, this)
+        input.off(Input.EventType.TOUCH_START, this.beginTouch, this)
         this.root = null
         this.pointer = null
         this.blocks = 0
@@ -77,7 +82,16 @@ export class UIHoverManager {
     static rememberTouchEvent(event: EventTouch): void {
         if (!GameDebugSettings.isMobileMode()) return
         this.pointer = { location: event.touch!.getLocation().clone(), uiLocation: event.getUILocation().clone(), windowId: event.windowId, canHover: false }
-        // A touch move must not cancel the button which owns that touch.
+        if (event.type !== Input.EventType.TOUCH_START) {
+            for (const client of this.clients) client.handleTouch?.(event)
+        }
+        this.refreshHoverStates()
+    }
+
+    private static beginTouch(event: EventTouch): void {
+        if (!GameDebugSettings.isMobileMode() || this.isInputBlocked) return
+        // Only unclaimed background touches reach here; controls keep their own drag gestures.
+        for (const client of this.clients) client.handleTouch?.(event)
         this.refreshHoverStates()
     }
 

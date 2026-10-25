@@ -9,7 +9,7 @@ npm run mod:pack -- mods/example-plant
 npm run mod:test -- dist/mods/example-plant
 ```
 
-安装 `dist/mods/example-plant.zip`：游戏内执行 `/mod install`，选择 ZIP 并确认重启。进入 1-1 可以看到新增种子包；Debug 构建也可以执行 `/level example:testing` 进入测试关卡，或在关卡内执行 `/plant example:rapid_pea 3 1`。
+安装 `dist/mods/example-plant.zip`：游戏内执行 `/mod`，在管理窗口点 Import 选择 ZIP，Apply 后确认重启。进入 1-1 可以看到新增种子包；Debug 构建也可以执行 `/level example:testing` 进入测试关卡，或在关卡内执行 `/plant example:rapid_pea 3 1`。
 
 - 加载器自动注册玩法与表现配置；`src/server/index.ts` 直接通过 `GameplayRegistry.plantBehaviors.register` 和 `zombieBehaviors.register` 绑定植物、僵尸的行为；两者复用同一个回血工厂，每 100 tick 恢复 10 点生命。间隔和数值来自 JSON 的 `behavior`，每个实体的计时独立保存、恢复。
 - `assets/presentation/` 保存植物、僵尸动画、视图、子弹表现和名称文本；本示例无需客户端脚本。

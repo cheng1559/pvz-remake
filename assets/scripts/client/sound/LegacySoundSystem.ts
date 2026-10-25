@@ -6,6 +6,7 @@ type NativeAudioEngine = {
     play2d?: (url: string, loop: boolean, volume: number) => number
     setPitch?: (audioId: number, pitch: number) => boolean
     setFinishCallback?: (audioId: number, callback: () => void) => void
+    getState?: (audioId: number) => number
     preload?: (url: string, callback: (success: boolean) => void) => void
     stop?: (audioId: number) => void
 }
@@ -309,6 +310,12 @@ export class SoundLoader {
         if (resolvedPitchRange === 0) return this.playExclusive(selectedEffect, channel, volume)
 
         return this.playWithPitch(selectedEffect, Math.random() * resolvedPitchRange, volume)
+    }
+
+    public static isExclusivePlaying(channel: string): boolean {
+        const id = this._exclusiveNativeAudioIds.get(channel)
+        return id === undefined ? this._exclusiveSources.get(channel)?.playing === true
+            : (globalThis as NativeBindings).jsb?.AudioEngine?.getState?.(id) === 1
     }
 
     public static stopExclusive(channel: string) {

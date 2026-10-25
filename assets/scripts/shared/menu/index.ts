@@ -28,11 +28,17 @@ export interface StoreItemView {
     seedSlots?: number
     quantity?: number
 }
+export interface StoreSpeech {
+    readyDelay: number
+    descriptionDuration: number
+    ambient: { initialDelay: number, interval: readonly [number, number], duration: number, messages: { message: number, weight: number }[] }
+}
 export interface StoreView {
     userId: number
     playerName: string
     coins: number
     pages: { id: number, items: StoreItemView[] }[]
+    speech: StoreSpeech
 }
 export type PurchaseResult = {
     ok: true, store: StoreView, effect?: 'seedSlots' | 'tree', seedSlots?: number,

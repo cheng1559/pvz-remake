@@ -128,6 +128,7 @@ export class MenuService {
         if (!profile) throw new Error('Store requires a player profile')
         return {
             userId: profile.id, playerName: profile.name, coins: profile.coins,
+            speech: this.storeCatalog.speech(profile),
             pages: storePages(profile).map(id => ({ id, items: STORE_PAGES[id].map((item): StoreItemView => ({
                 id: item.id,
                 ...(item.sprite !== undefined && { sprite: item.sprite }),

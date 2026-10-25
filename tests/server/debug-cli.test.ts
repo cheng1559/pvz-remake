@@ -20,18 +20,13 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     assert.deepEqual(parseDebugCliCommand(' /PLANT "Pea Shooter" 3 1 '), { name: 'plant', args: ['Pea Shooter', '3', '1'] })
     assert.deepEqual(parseDebugCliCommand('sun set 100'), { name: 'sun', args: ['set', '100'] })
     assert.deepEqual(parseDebugCliCommand('/seed 1 snowpea'), { name: 'seed', args: ['1', 'snowpea'] })
-    assert.deepEqual(parseDebugCliCommand('/mod load hd'), { name: 'mod', args: ['load', 'hd'] })
-    assert.deepEqual(getDebugCliCompletions('/mod ', undefined, true), ['/mod install', '/mod load', '/mod unload', '/mod uninstall', '/mod list'])
-    assert.equal(getDebugCliSuffix('/mod is'), '')
-    assert.equal(getDebugCliSuffix('/mod is '), '')
-    assert.equal(getDebugCliSuffix('/mod ins'), 'tall')
-    assert.equal(getDebugCliSuffix('/mod install'), '')
-    assert.equal(getDebugCliSuffix('/mod load'), ' [installed_id]')
-    assert.deepEqual(parseDebugCliCommand('/mod load local:widescreen'), { name: 'mod', args: ['load', 'local:widescreen'] })
-    assert.deepEqual(getDebugCliCompletions('/mod ', undefined, true), ['/mod install', '/mod load', '/mod unload', '/mod uninstall', '/mod list'])
-    assert.equal(getDebugCliSuffix('/mod is'), '')
-    assert.equal(getDebugCliSuffix('/mod ins'), 'tall')
-    assert.equal(getDebugCliSuffix('/mod install'), '')
+    assert.deepEqual(parseDebugCliCommand('/mod'), { name: 'mod', args: [] })
+    assert.deepEqual(getDebugCliCompletions('/mod ', undefined, true), [])
+    assert.equal(getDebugCliSuffix('/mod'), '')
+    assert.equal(getDebugCliSuffix('/mod ins'), '')
+    for (const args of ['install', 'load local:widescreen', 'unload all', 'uninstall local:hd', 'list']) {
+        assert.equal((parseDebugCliCommand('/mod ' + args) as { failure: string }).failure, 'syntax')
+    }
     for (const command of ['/unknown', '/win extra', '/cooldown yes', '/mod invalid', '/item sun 3', '/sun remove 1']) {
         assert.equal((parseDebugCliCommand(command) as { failure: string }).failure, 'syntax')
     }

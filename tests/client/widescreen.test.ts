@@ -6,10 +6,12 @@ import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import { register } from '../../mods/widescreen/src/client/index'
-import { extendCloud, extendFlower } from '../../mods/widescreen/src/client/animations'
+import { extendCloud, extendFlower, extendDave } from '../../mods/widescreen/src/client/animations'
+import { installDaveAnimation } from '../../mods/widescreen/src/client/dave'
 import { installLoadingBackground } from '../../mods/widescreen/src/client/startup'
-import { installGardenBackgrounds } from '../../mods/widescreen/src/client/garden'
-import { parseReanim } from '@/shared/content/reanim'
+import { installPageBackgrounds } from '../../mods/widescreen/src/client/pages'
+import { installStoreCar } from '../../mods/widescreen/src/client/store'
+import { parseReanim, sampleReanimTrack } from '@/shared/content/reanim'
 
 test('failed widescreen assets do not alter the viewport during Mod initialization', async () => {
     let expanded = false
@@ -166,6 +168,71 @@ test('clouds leave the new viewport and right-hand flowers fly farther before fa
     }
 })
 
+test('Dave transitions cover the added margin without changing timing, deforming poses or accumulating on replay', () => {
+    const sources = Object.fromEntries(['enter', 'leave'].map(name => [name,
+        parseReanim(JSON.parse(readFileSync(`tools/generated/pvz-base/reanim/dave_${name}.json`, 'utf8'))),
+    ]))
+    for (const width of [800, 1066, 1400, 6400 / 3]) for (const name of ['enter', 'leave']) {
+        const source = sources[name], original = structuredClone(source)
+        const extended = parseReanim(extendDave(source, width, name === 'enter'))
+        const body = source.tracks.find(track => track.id === 'Dave_innerpants')!
+        const shiftedBody = extended.tracks.find(track => track.id === 'Dave_innerpants')!
+        const originalTravel = body.keyframes.at(-1)!.x - body.keyframes[0].x
+        const newTravel = shiftedBody.keyframes.at(-1)!.x - shiftedBody.keyframes[0].x
+        const speedScale = newTravel / originalTravel
+        for (let index = 1; index < body.keyframes.length; index++) {
+            const originalStep = body.keyframes[index].x - body.keyframes[index - 1].x
+            const newStep = shiftedBody.keyframes[index].x - shiftedBody.keyframes[index - 1].x
+            assert.ok(Math.abs(newStep - originalStep * speedScale) < 1e-6, 'the original movement curve scales uniformly, including its stationary frames')
+        }
+        assert.equal(extended.durationSeconds, source.durationSeconds, 'widescreen must not delay either transition')
+        assert.deepEqual(source, original, 'cached source data must not change')
+        if (width === 800) assert.deepEqual(extended, source)
+        for (const [index, track] of source.tracks.entries()) {
+            const target = extended.tracks[index]
+            assert.equal(target.keyframes.length, track.keyframes.length)
+            for (const [frameIndex, frame] of track.keyframes.entries()) {
+                const pose = target.keyframes[frameIndex]
+                assert.deepEqual({ ...pose, x: frame.x }, frame, 'only horizontal translation changes')
+                const reference = source.tracks[0].keyframes[frameIndex]
+                const translated = extended.tracks[0].keyframes[frameIndex]
+                assert.ok(Math.abs((pose.x - frame.x) - (translated.x - reference.x)) < 1e-6, 'all body parts move together')
+            }
+            const time = name === 'enter' ? 0 : extended.durationSeconds
+            const endpoint = sampleReanimTrack(target, time)!
+            const originalEnd = name === 'enter' ? track.keyframes[0] : track.keyframes.at(-1)!
+            assert.ok(Math.abs(endpoint.x - originalEnd.x + (width - 800) / 2) < 1e-6)
+            const stationaryFrame = name === 'enter' ? track.keyframes.length - 1 : 0
+            assert.deepEqual(target.keyframes[stationaryFrame], track.keyframes[stationaryFrame], 'the idle-side pose stays in place')
+        }
+    }
+
+    let width = 1400, played = 0
+    class ReanimPlayer {
+        loadedId = 'pvz:dave_enter'
+        data = structuredClone(sources.enter)
+        getAnimation() { return structuredClone(this.data) }
+        replaceAnimation(data: typeof this.data) { this.data = data }
+        play() { played++ }
+    }
+    const host = new ModHost('local:widescreen', {
+        cc: { view: { getVisibleSize: () => ({ width, height: 600 }) } },
+        'client/reanim/ReanimPlayer': { ReanimPlayer },
+    })
+    installDaveAnimation({ host, assets: {} as any })
+    try {
+        const player = new ReanimPlayer()
+        player.play()
+        const first = structuredClone(player.data)
+        player.play()
+        assert.deepEqual(player.data, first)
+        width = 800
+        player.play()
+        assert.deepEqual(player.data, sources.enter, 'a later 4:3 entry restores the original clip')
+        assert.equal(played, 3)
+    } finally { host.dispose() }
+})
+
 test('menu artwork preserves track origins and follows its parent without owning the viewport policy', async () => {
     const point = (x = 0, y = 0, z = 0): any => ({ x, y, z, clone: () => point(x, y, z) })
     class Sprite { static SizeMode = { RAW: 0, CUSTOM: 1 } }
@@ -212,10 +279,12 @@ test('menu artwork preserves track origins and follows its parent without owning
     }
     class StartupScreen { render() {} }
     class MenuScreen { async prepare() {} }
+    class StoreScreen { async initialize() {} }
     const host = new ModHost('local:widescreen', {
         'cc': { view, Sprite, UITransform, Node: { EventType: { NODE_DESTROYED: 'destroyed' } },
-            js: { getClassByName: (name: string) => name === 'StartupScreen' ? StartupScreen : MenuScreen } },
+            js: { getClassByName: (name: string) => name === 'StartupScreen' ? StartupScreen : name === 'PvZStoreScreen' ? StoreScreen : MenuScreen } },
         'client/screens/MainMenuScreen': { MainMenuScreen },
+        'client/reanim/ReanimPlayer': { ReanimPlayer: class { play() {} } },
         'client/view/ClientViewport': { expandViewport(options: any) {
             assert.deepEqual(options, { minAspect: 4 / 3, maxAspect: 32 / 9 }); expanded = true
         } },
@@ -249,7 +318,49 @@ test('menu artwork preserves track origins and follows its parent without owning
     assert.deepEqual(view.eventNames(), [])
 })
 
-test('loading and garden backgrounds preserve scene height across viewport widths and in-flight initialization', async () => {
+test('the complete store car is used for both hatch states without changing controls or the shake origin', async () => {
+    const open = {}, closed = {}, hatch = {}, originalOpen = {}, originalClosed = {}
+    class UITransform {}
+    class Sprite {}
+    const transform = {
+        width: 604, height: 462, anchorX: 0, anchorY: 1,
+        setContentSize(width: number, height: number) { Object.assign(this, { width, height }) },
+        setAnchorPoint(anchorX: number, anchorY: number) { Object.assign(this, { anchorX, anchorY }) },
+    }
+    const node = { position: { x: 196, y: -138 }, getComponent: () => transform }
+    class StoreScreen {
+        node = { isValid: true }
+        sprites = { store_car: originalOpen, store_carclosed: originalClosed }
+        car = { node, spriteFrame: originalOpen }
+        hatchSprite = { spriteFrame: null }
+        hatch = { getComponent: () => this.hatchSprite }
+        controls = {}
+        async initialize(shut: boolean) { this.car.spriteFrame = shut ? originalClosed : originalOpen }
+        turnPage(shut: boolean) { this.car.spriteFrame = this.sprites[shut ? 'store_carclosed' : 'store_car'] }
+    }
+    const host = new ModHost('local:widescreen', { cc: { Sprite, UITransform, js: { getClassByName(name: string) {
+        assert.equal(name, 'PvZStoreScreen')
+        return StoreScreen
+    } } } })
+    await installStoreCar({ host, assets: { async sprite(path: string) { return path.endsWith('store_car.png') ? open : path.endsWith('store_carclosed.png') ? closed : hatch } } })
+    try {
+        for (const shut of [false, true]) {
+            const store = new StoreScreen(), controls = store.controls
+            await store.initialize(shut)
+            assert.equal(store.car.spriteFrame, shut ? closed : open)
+            assert.equal(store.hatchSprite.spriteFrame, hatch, 'the raised hatch uses the matching Ultimate artwork')
+            store.turnPage(!shut)
+            assert.equal(store.car.spriteFrame, shut ? open : closed, 'later state changes retain the complete car')
+            assert.deepEqual([transform.width, transform.height], [781, 494], 'HD pixels do not enlarge the car')
+            assert.deepEqual(node.position, { x: 196, y: -138 }, 'the original shake position stays intact')
+            assert.equal(node.position.x - transform.anchorX * transform.width, 198)
+            assert.ok(Math.abs(node.position.y + (1 - transform.anchorY) * transform.height + 136) < 1e-6)
+            assert.equal(store.controls, controls)
+        }
+    } finally { host.dispose() }
+})
+
+test('loading, garden and store backgrounds preserve scene height across viewport widths and in-flight initialization', async () => {
     class Sprite {}
     class UITransform {}
     const frame = { originalSize: { width: 2800, height: 1200 } }
@@ -298,11 +409,15 @@ test('loading and garden backgrounds preserve scene height across viewport width
     host.dispose()
 
     const page = { root: { isValid: true, getChildByName: () => background } }
-    class MenuScreen { async prepare(_id: string) { await Promise.resolve(); return page } }
+    const storePage = { root: { isValid: true, getChildByName(name: string) {
+        assert.equal(name, 'store_background')
+        return background
+    } } }
+    class MenuScreen { async prepare(id: string) { await Promise.resolve(); return id === 'store' ? storePage : page } }
     const gardenHost = new ModHost('local:widescreen', { cc: { Sprite, UITransform, view,
         Node: { EventType: { NODE_DESTROYED: 'destroyed' } }, js: { getClassByName: () => MenuScreen },
     } })
-    await installGardenBackgrounds({ host: gardenHost, assets: { async sprite() { return frame } } })
+    await installPageBackgrounds({ host: gardenHost, assets: { async sprite() { return frame } } })
     const menu = new MenuScreen()
     await menu.prepare('main')
     assert.equal(view.listenerCount('design-resolution-changed'), 0, 'other pages are unchanged')
@@ -311,6 +426,9 @@ test('loading and garden backgrounds preserve scene height across viewport width
     assert.equal(background.position.y - transform.height / 2, 0)
     assert.equal(transform.height, 600, 'garden shares the fixed scene height')
     await menu.prepare('garden')
+    assert.equal(await menu.prepare('store'), storePage)
+    assert.equal(background.position.x + transform.width / 2, 0, 'the store shares the centered page origin')
+    assert.deepEqual([transform.width, transform.height], [1400, 600], 'the store background keeps its aspect and logical height')
     assert.equal(view.listenerCount('design-resolution-changed'), 0, 'fixed artwork placement needs no resize listener')
     background.emit('destroyed')
     assert.equal(view.listenerCount('design-resolution-changed'), 0)

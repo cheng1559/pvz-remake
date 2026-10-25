@@ -111,7 +111,7 @@ function setup() {
         const module = { exports: {} as Record<string, any> }
         const code = transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } })
         runInNewContext(code.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {},
-            URL: TestURL, Blob, Uint8Array, DataView, TextDecoder, TextEncoder, jsb, location: { href: 'https://game.example/' },
+            setTimeout, URL: TestURL, Blob, Uint8Array, DataView, TextDecoder, TextEncoder, jsb, location: { href: 'https://game.example/' },
             indexedDB: { open: (name: string) => {
                 const request: any = { result: name === 'pvz-remake-mods' ? modDb : db }
                 queueMicrotask(() => { request.onupgradeneeded(); request.onsuccess() })
@@ -262,18 +262,15 @@ test('startup repairs missing and corrupt records while leaving a usable manager
 })
 
 test('/mod is the only package command and uses the common manager', async () => {
-    const { modules, load, manager } = setup()
+    const { modules, load } = setup()
     modules['@/shared/debug/DebugCli'] = load('assets/scripts/shared/debug/DebugCli.ts')
     const { executeDebugCliCommand } = load('assets/scripts/platform/debug/DebugCliCommands.ts')
     const execute = (command: string) => executeDebugCliCommand(command, false, () => assert.fail('gameplay command'))
     assert.equal((await execute('/mod')).action, 'manageMods')
-    assert.equal((await execute('/mod install')).action, 'installMod')
     assert.equal((await execute('/pack')).ok, false)
-    await manager.install(zipSync(zipFiles()))
-    assert.equal((await execute('/mod unload local:hd')).action, 'restartForMods')
-    assert.equal((await execute('/mod unload local:hd')).action, undefined)
-    assert.equal((await execute('/mod load local:hd')).action, 'restartForMods')
-    assert.equal((await execute('/mod uninstall local:hd')).action, 'restartForMods')
+    for (const args of ['install', 'load local:hd', 'unload all', 'uninstall local:hd', 'list']) {
+        assert.equal((await execute('/mod ' + args)).failure, 'syntax')
+    }
 })
 
 test('package dialog keeps uninstall drafts on disk until Apply and restart confirmation', async () => {
@@ -286,6 +283,7 @@ test('package dialog keeps uninstall drafts on disk until Apply and restart conf
         env.modules['@/client/content/ModManager'] = { modManager: manager }
         const archives = env.archives
         const buttons: any[] = [], errors: string[] = [], labels: string[] = [], checkboxes: any[] = []
+        let importButton: any
         let acceptRestart = false, acceptDiscard = false, discardPrompts = 0, restarts = 0
         const node = (name = '', parent?: any): any => {
             const value: any = { name, parent, children: [], position: { x: 0, y: 0 }, isValid: true,
@@ -299,9 +297,14 @@ test('package dialog keeps uninstall drafts on disk until Apply and restart conf
             return value
         }
         env.modules.cc = { ...env.modules.cc, Color: class { static BLACK = {}; static WHITE = {} },
-            Button: { EventType: { CLICK: 'click' } }, KeyCode: {}, UITransform: class {} }
+            Button: { EventType: { CLICK: 'click' } }, KeyCode: {}, UITransform: class {},
+            director: { once(_event: string, callback: () => void) {
+                assert.equal(labels.at(-1), 'Loading...', 'paint the loading message before reading Mods')
+                assert.equal(importButton.interactable, true, 'Import keeps its normal appearance while loading')
+                callback()
+            } }, Director: { EVENT_AFTER_DRAW: 'after-draw' } }
         env.modules['@/client/font'] = { FontMetricsUtil: {
-            getMetrics: () => ({ height: 14, ascentPadding: 0 }), measureTextWidth: () => 50,
+            getMetrics: () => ({ height: 14, ascentPadding: 0 }), measureTextWidth: (_font: any, text: string) => text.length * 6,
         } }
         env.modules['@/client/ui/UIButton'] = { UIButton: class {} }
         env.modules['@/client/view/uiNode'] = { uiNode: (args: any) => ({
@@ -323,8 +326,12 @@ test('package dialog keeps uninstall drafts on disk until Apply and restart conf
                 return { node: node(), content: node(), close() { this.node.activeInHierarchy = false } }
             },
             scroll: () => ({ content: node(), contentWidth: 338, offset: 0, setContentHeight() {} }),
-            button() {},
-            label: (_parent: any, args: any) => { labels.push(args.text); return { renderer: {} } },
+            button(_parent: any, args: any) { return importButton = { interactable: args.enabled ?? true } },
+            label: (parent: any, args: any) => {
+                if (args.text === 'Loading...') assert.equal(parent.name, 'PackageList', 'Loading belongs inside the Mod list box')
+                labels.push(args.text)
+                return { node: node('', parent), renderer: {} }
+            },
             checkbox: (_parent: any, args: any) => {
                 const checkbox = { node: node(), value: args.value, button: { interactable: true } }
                 checkboxes.push(checkbox)
@@ -386,6 +393,13 @@ test('package dialog keeps uninstall drafts on disk until Apply and restart conf
         dialog.onCancel()
         await setImmediate()
         assert.deepEqual(Array.from(await new env.ModManager().installed(), (entry: any) => entry.id), savedOrder, 'Cancel discards order changes')
+        const longId = 'local:' + 'long-mod-name-'.repeat(8)
+        await manager.install(zipSync(modFiles(longId)), false)
+        await open()
+        const shortened = labels.find(text => text.startsWith('local:long-mod-name'))!
+        assert.ok(shortened.endsWith('...  1.0.0'), 'only the ID is shortened; its version stays visible')
+        assert.ok(shortened.length * 6 <= 176, 'the name stays clear of the sorting and uninstall controls')
+        assert.ok(labels.includes('local:off-a  1.0.0'), 'short IDs are unchanged')
     }
 })
 

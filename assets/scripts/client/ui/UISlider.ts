@@ -1,7 +1,9 @@
 import { _decorator, Component, EventTouch, Node, UITransform, Vec3 } from 'cc'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { Haptics } from '@/platform/Haptics'
 
 const { ccclass } = _decorator
+const HAPTIC_STEPS = 20
 
 @ccclass('PvZUISlider')
 export class UISlider extends Component {
@@ -40,7 +42,9 @@ export class UISlider extends Component {
     }
 
     private change(value: number): void {
+        const previous = this.value
         this.value = value
+        if (Math.round(this.value * HAPTIC_STEPS) !== Math.round(previous * HAPTIC_STEPS)) Haptics.play()
         this.onChange(this.value)
     }
 

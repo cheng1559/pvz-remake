@@ -71,6 +71,7 @@ export class LevelSeedBank {
         return this.packets.map((packet, index) => {
             const button = (packet.button ??= packet.view.node.addComponent(UIButton))
             button.rightClickTriggers = false
+            button.touchSlide = false
             button.releaseToNormalOnPressOut = true
             button.onPress = () => select(index)
             button.onHoverChange = (hovering) =>

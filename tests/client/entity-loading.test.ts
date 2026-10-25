@@ -278,13 +278,64 @@ test('preloaded animation frames are shared by registry and failed preparation c
         'registries with different sprite overrides must not share prepared frames')
 })
 
-test('Dave keeps an active blink attached through talk, idle and leave transitions', () => {
-    const { CrazyDaveView } = loadClientModule('level/CrazyDaveView', {})
+test('store and level presentation resources share a warmed registry including installed Mod clips', async () => {
+    const categories = ['sprites', 'reanim']
+    const { ContentRegistry } = loadClientModule('content/ContentRegistry', {
+        '@/shared/content/index': { CONTENT_CATEGORIES: categories },
+    })
+    let reads = 0
+    const manifest = { id: 'pvz:base', version: '1', contentHash: 'base', client: {
+        bundle: 'base', sprites: {}, reanim: { 'pvz:dave_idle': 'reanim/dave_idle' },
+    } }
+    const { loadClientContent } = loadClientModule('content/loadClientContent', {
+        '@/shared/content': { CONTENT_CATEGORIES: categories },
+        './ContentRegistry': { ContentRegistry },
+        './ClientContentLoader': { ClientContentLoader: class { async loadManifest() { reads++; return manifest } } },
+        '@/app/ModLoader': { loadInstalledMods: async () => ({ clientContent: { entries: () => [['demo:talk/reanim', {
+            id: 'demo:talk', kind: 'reanim', ownerId: 'demo:character', ownerVersion: '1', contentHash: 'mod',
+            bundle: 'pvzmod:///demo:character/', path: 'talk.json',
+        }]] } }) },
+    })
+    const menu = loadClientContent(), level = loadClientContent()
+    assert.equal(menu, level, 'concurrent callers prepare the resource context once')
+    const content = await menu
+    assert.equal(content, await loadClientContent())
+    assert.equal(reads, 1)
+    assert.equal(content.registry.resolve('reanim', 'pvz:dave_idle').path, 'reanim/dave_idle')
+    assert.equal(content.registry.resolve('reanim', 'demo:talk').contentId, 'demo:character')
+})
+
+test('level Dave dialogue keeps its tutorial delay and sends resolved text to the shared character', () => {
+    const { LevelBoardHud } = loadClientModule('level/LevelBoardHud', {})
+    const calls: string[] = []
+    const hud = new LevelBoardHud({}, { presentation: presentationFixture }, { text: (key: string) => `text:${key}` })
+    hud.dave = { say: (message: string) => calls.push(message), leave: () => calls.push('leave') }
+    const snapshot = { extensions: { 'pvz:dialog': { index: 42 } } }
+    hud.delay = presentationFixture.dave.delay - 0.01
+    hud.sync(snapshot)
+    assert.deepEqual(calls, [])
+    hud.delay = presentationFixture.dave.delay
+    hud.sync(snapshot)
+    hud.sync(snapshot)
+    assert.deepEqual(calls, ['text:CRAZY_DAVE_42'], 'frame sync must not restart the same line')
+    hud.sync({ extensions: { 'pvz:dialog': { index: 43 } } })
+    hud.sync({ extensions: {} })
+    hud.sync({ extensions: {} })
+    assert.deepEqual(calls, ['text:CRAZY_DAVE_42', 'text:CRAZY_DAVE_43', 'leave'])
+})
+
+test('Dave keeps eyebrows visible and an active blink attached through talk, idle and leave transitions', () => {
+    const { CrazyDaveView } = loadClientModule('characters/CrazyDaveView', {})
     const player = (duration: number) => ({
         node: { active: false }, time: 0, playing: false, loop: false, parent: undefined as unknown,
-        eyes: true, onFinish: undefined as (() => void) | undefined,
+        tracks: { Dave_eye: { active: true }, Dave_eyebrow: { active: true } },
+        get eyes() { return this.tracks.Dave_eye.active },
+        onFinish: undefined as (() => void) | undefined,
         blendFrom() {}, setTrackSpriteOverride() {},
-        setTrackPrefixVisible(prefix: string, visible: boolean) { if (prefix === 'Dave_eye') this.eyes = visible },
+        getTrackNode(id: 'Dave_eye' | 'Dave_eyebrow') { return this.tracks[id] },
+        setTrackPrefixVisible(prefix: string, visible: boolean) {
+            for (const [id, node] of Object.entries(this.tracks)) if (id.startsWith(prefix)) node.active = visible
+        },
         attachToTrack(parent: unknown, track: string) { assert.equal(track, 'Dave_head'); this.parent = parent },
         play(options: any) { this.time = options.timeSeconds; this.loop = options.loop; this.playing = true; this.onFinish = options.onFinish },
         advance(dt: number) {
@@ -296,27 +347,79 @@ test('Dave keeps an active blink attached through talk, idle and leave transitio
     const talk = player(0.2), idle = player(1), leave = player(1), blink = player(0.4)
     const players = new Map([['smalltalk', talk], ['idle', idle], ['leave', leave], ['blink', blink]])
     const view = new CrazyDaveView({ active: true }, { active: false }, {}, players,
-        { node: { active: false } }, new Map(), {}, presentationFixture.dave)
+        { node: { active: false } }, new Map(), presentationFixture.dave)
     view.play('smalltalk', false, 12, () => view.play('idle', true, 12))
     view.blinkSeconds = 0
     view.update(0.1)
     assert.equal(blink.node.active, true)
     assert.equal(blink.parent, talk)
     assert.equal(talk.eyes, false)
+    assert.equal(talk.tracks.Dave_eyebrow.active, true, 'blinking hides the eye track without matching the eyebrow prefix')
 
     view.update(0.15)
     assert.equal(view.current, idle)
     assert.equal(blink.parent, idle, 'the blink must follow the new head after the talk finishes')
     assert.equal(idle.eyes, false, 'the new body must not show open eyes over the active blink')
+    assert.equal(idle.tracks.Dave_eyebrow.active, true)
     assert.equal(blink.time, 0.25, 'switching bodies must preserve blink progress')
 
     view.play('leave', false, 24)
     assert.equal(blink.parent, leave)
     assert.equal(leave.eyes, false)
+    assert.equal(leave.tracks.Dave_eyebrow.active, true)
     assert.equal(blink.time, 0.25)
     view.update(0.2)
     assert.equal(blink.node.active, false)
     assert.equal(leave.eyes, true, 'blink completion restores the current body eyes')
+    assert.equal(leave.tracks.Dave_eyebrow.active, true)
+})
+
+test('Dave shares queued speech, silent shop descriptions, idle and re-entry without a level dependency', () => {
+    const sounds: string[] = []
+    const { CrazyDaveView } = loadClientModule('characters/CrazyDaveView', {
+        '@/client/sound/LegacySoundSystem': { SoundEffect: {}, SoundLoader: {
+            async playFoleyExclusive() { sounds.push('talk') }, stopExclusive() { sounds.push('stop') },
+        } },
+    })
+    const player = () => ({
+        node: { active: false }, onFinish: undefined as (() => void) | undefined,
+        blendFrom() {}, setTrackSpriteOverride() {}, setTrackPrefixVisible() {},
+        getTrackNode() { return { active: true } },
+        play(options: any) { this.onFinish = options.onFinish },
+    })
+    const enter = player(), idle = player(), talk = player(), leave = player(), blink = player()
+    const label = { text: '', renderer: { contentHeight: 20 }, setPosition() {} }
+    const root = { active: false }, bubble = { active: false }, hint = { active: true }
+    const view = new CrazyDaveView(root, bubble, label,
+        new Map([['enter', enter], ['idle', idle], ['smalltalk', talk], ['leave', leave], ['blink', blink]]),
+        { node: { active: false } }, new Map(), presentationFixture.dave, hint)
+    view.enter()
+    view.say('{NO_SOUND}{NO_CLICK}First')
+    view.say('{NO_SOUND}{NO_CLICK}Latest')
+    assert.equal(view.current, enter)
+    enter.onFinish!()
+    assert.equal(label.text, 'Latest', 'speech waits for the entrance and keeps the latest requested message')
+    assert.equal(view.current, talk)
+    assert.equal(hint.active, false)
+    assert.deepEqual(sounds, [], 'silent store descriptions do not trigger Dave voice sounds')
+    talk.onFinish!()
+    assert.equal(view.current, idle)
+    view.stopTalking()
+    assert.equal(bubble.active, false)
+    assert.equal(root.active, true, 'hiding a shop description keeps Dave visible')
+    view.say('Hello')
+    assert.equal(sounds.at(-1), 'talk')
+    assert.equal(hint.active, true)
+    view.leave()
+    assert.equal(view.current, leave)
+    view.say('{NO_SOUND}Again')
+    leave.onFinish!()
+    assert.equal(view.current, enter, 'a new message during departure starts another entrance')
+    enter.onFinish!()
+    assert.equal(label.text, 'Again')
+    view.leave()
+    leave.onFinish!()
+    assert.equal(root.active, false)
 })
 
 test('blink attachments follow both the moving head and its parent stem', () => {
