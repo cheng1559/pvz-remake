@@ -290,7 +290,8 @@ export class ModResources {
                 relativeFile(layer.image)
                 return texture(pack, `${directory}${layer.image}.png`)
             }))
-            if (pack === this.base) for (const atlas of textures) atlas.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST)
+            // Linear minification preserves one-pixel strokes when the window shrinks.
+            if (pack === this.base) for (const atlas of textures) atlas.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.NEAREST)
             return { config, textures }
         })().catch(error => { pack.fonts.delete(id); throw error })
         pack.fonts.set(id, pending)
@@ -310,10 +311,11 @@ async function loadBaseArchive(): Promise<Uint8Array> {
     const asset = await new Promise<Asset>((resolve, reject) => {
         resources.load('base', Asset, (error, asset) => error ? reject(error) : resolve(asset))
     })
-    const data = asset.nativeAsset as ArrayBuffer | Uint8Array
-    const bytes = (data instanceof Uint8Array ? data : new Uint8Array(data)).slice()
-    assetManager.releaseAsset(asset)
-    return bytes
+    try {
+        const data = (sys.isNative ? native.fileUtils.getDataFromFile(asset.nativeUrl) : asset.nativeAsset) as ArrayBuffer | Uint8Array
+        if (!data) throw new Error(`Missing base archive: ${asset.nativeUrl}`)
+        return (data instanceof Uint8Array ? data : new Uint8Array(data)).slice()
+    } finally { assetManager.releaseAsset(asset) }
 }
 
 export const modResources = new ModResources(loadBaseArchive)

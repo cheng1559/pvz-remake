@@ -68,7 +68,7 @@ test('Mod JSON decodes UTF-8 without package imports and uses the native single-
 test('Release preloading loads Corn archive assets without requesting a Cocos bundle config', async () => {
     const registry = new ContentRegistry(), raw = readModContent('mods/corn/content.json').resources
     const { audio, ...other } = raw
-    const table = { ...other, sounds: audio }
+    const table: Record<string, Record<string, unknown>> = { ...other, sounds: audio }
     const types = { sprites: class SpriteFrame {}, reanim: class JsonAsset {}, particles: class JsonAsset {},
         fonts: class JsonAsset {}, sounds: class AudioClip {}, music: class JsonAsset {}, prefabs: class Prefab {} }
     const loaded = new Set<string>(), bundles: string[] = [], progress: number[] = []

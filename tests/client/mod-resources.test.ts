@@ -61,7 +61,8 @@ function setup() {
         width = 100; height = 140
         set image(image: any) { this.width = image.width; this.height = image.height }
         setWrapMode() {}
-        setFilters() {}
+        filters: number[] = []
+        setFilters(min: number, mag: number) { this.filters = [min, mag] }
     }
     class Vector {
         width: number; height: number; x: number; y: number
@@ -164,6 +165,9 @@ test('the builtin archive and resource-only Mods share validation and decoding',
     const base = fresh(async () => bytes)
     const definitions = await base.baseJson('pvz:gameplay/definitions')
     assert.equal(definitions.seeds['pvz:peashooter'].sunCost, 100)
+    const font = await base.font('pvz:briannetod12')
+    assert.ok(font.textures.length > 0)
+    for (const texture of font.textures) assert.deepEqual(texture.filters, [1, 0], 'base fonts blend thin strokes when shrinking and retain nearest magnification')
     assert.ok((await base.ids(modules.cc.JsonAsset)).includes('pvz:selector_open'))
     await manager.install(zipSync(zipFiles()))
     const resources = fresh()
@@ -171,7 +175,9 @@ test('the builtin archive and resource-only Mods share validation and decoding',
     assert.equal(frame.originalSize.width, 50)
     assert.equal(frame.originalSize.height, 70)
     assert.equal(await resources.sprite('pvz:button'), frame)
-    assert.equal((await resources.font('pvz:demo')).config.json.layers[0].textureScale, 4)
+    const modFont = await resources.font('pvz:demo')
+    assert.equal(modFont.config.json.layers[0].textureScale, 4)
+    for (const texture of modFont.textures) assert.deepEqual(texture.filters, [1, 1], 'Mod fonts keep their existing linear sampling')
     assert.equal((await resources.asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'first')
     assert.equal((await resources.asset('pvz:note', modules.cc.TextAsset)).text, 'first')
     assert.ok(await resources.asset('pvz:chomp', modules.cc.AudioClip))
@@ -404,6 +410,29 @@ test('package dialog keeps uninstall drafts on disk until Apply and restart conf
 })
 
 
+test('Native builtin ZIP loading reads nativeUrl when the Asset has no nativeAsset', async () => {
+    const { modules, load } = setup()
+    const path = 'assets/resources/native/base.zip'
+    const data = zipSync(zipFiles('pvz:base', 'native-base'))
+    const reads: string[] = []
+    modules.cc.sys.isNative = true
+    modules.cc.native = { fileUtils: {
+        getWritablePath: () => '/app/',
+        removeDirectory() {},
+        getDataFromFile(file: string) { reads.push(file); assert.equal(file, path); return data.slice().buffer },
+    } }
+    modules.cc.resources = { load(name: string, _type: unknown, done: Function) {
+        assert.equal(name, 'base')
+        done(null, { nativeUrl: path })
+    } }
+    modules.cc.assetManager.downloader = { register() {} }
+    modules.cc.assetManager.parser = { register() {} }
+    modules['./ModManager'] = { modManager: { ready: async () => [] } }
+    const { modResources } = load('assets/scripts/client/content/ModResources.ts')
+    assert.equal((await modResources.baseJson('pvz:config')).tag, 'native-base')
+    assert.deepEqual(reads, [path])
+})
+
 test('raw Mod paths use the shared image and JSON decoders', async () => {
     const { manager, fresh, modules } = setup()
     await manager.install(zipSync(zipFiles()))
@@ -412,6 +441,28 @@ test('raw Mod paths use the shared image and JSON decoders', async () => {
     assert.equal(frame.originalSize.width, 100)
     assert.equal(await resources.file('local:hd', 'button.png', modules.cc.SpriteFrame), frame)
     assert.equal((await resources.file('local:hd', 'config.json', modules.cc.JsonAsset)).json.tag, 'first')
+})
+
+test('Windows ZIP selection preserves Unicode paths, multiple files, cancellation and picker errors', async () => {
+    const { modules, archive, jsb } = setup()
+    modules.cc.sys.isNative = true
+    modules.cc.sys.os = 'Windows'
+    const paths = ['C:\\Mods\\选择 测试.zip', 'C:\\Mods\\second.zip']
+    modules.cc.native = { fileUtils: { getDataFromFile(path: string) {
+        assert.ok(paths.includes(path))
+        return strToU8(path).buffer
+    }, removeFile() { assert.fail('Windows selections must not delete the original file') } } }
+    jsb.selectFiles = (extension, callback) => { assert.equal(extension, 'zip'); callback(paths) }
+    const selected = await archive.selectZips()
+    assert.deepEqual(Array.from(selected, (file: any) => file.name), ['选择 测试.zip', 'second.zip'])
+    for (let i = 0; i < selected.length; i++) {
+        assert.equal(strFromU8(await selected[i].read()), paths[i])
+        selected[i].dispose()
+    }
+    jsb.selectFiles = (_extension, callback) => callback([])
+    assert.equal((await archive.selectZips()).length, 0)
+    jsb.selectFiles = (_extension, callback) => callback([], 'Picker failed')
+    await assert.rejects(archive.selectZips(), /Picker failed/)
 })
 
 test('Native installation, picker cleanup and runtime snapshots share the Mod store', async () => {
