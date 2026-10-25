@@ -39,6 +39,6 @@ Tooltip 使用原版短提示 `requires 2 kernel-pults`，优先显示冷却、�
 
 玉米炮的选卡条件挂钩服务端 `seedAvailability`，快照与普通／传送带选卡命令使用同一判断。客户端直接使用快照中的可用状态、警告文本键和公共选卡音效，无需再挂钩置灰或点击方法。额外 advice 由服务端 `rejectSeed` 挂钩发送。读取选中种子使用 `host.get('server/seedBank').selectedSeedId(bank)`；服务端选择状态保存在互斥的 `bank.selection` 中。
 
-玉米炮的震屏和振动由客户端代码触发：挂钩 `LevelView.playFeedback`，命中时调用 `this.shakeBoard(3, -4)` 和 `Haptics.play('explosion')`。`shakeBoard(x, y, ticks = 12)` 与本体共用，受游戏 tick、暂停和倍速控制；iOS 振动使用真实时间，爆炸反馈保留 80ms 延迟。JSON 不保存这两类参数。
+玉米炮的震屏和振动由客户端代码触发：挂钩 `LevelView.playFeedback`，命中时调用 `this.shakeBoard(3, -4)` 和 `Haptics.play('explosion')`。`shakeBoard(x, y, ticks = 12)` 与本体共用，受游戏 tick、暂停和倍速控制；iOS 振动使用真实时间，爆炸反馈的延迟统一由 `Haptics` 控制。JSON 不保存这两类参数。
 
 选中玉米炮、瞄准和发射操作不触发振动，炮弹命中时保留爆炸振动。

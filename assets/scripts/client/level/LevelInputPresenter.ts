@@ -101,13 +101,13 @@ export class LevelInputPresenter {
         }
     }
 
-    private selectSeedPacket(index: number): void {
+    private selectSeedPacket(index: number, replace = false): void {
         if (!this.enabled || !this.view.introComplete) return
         const snapshot = this.game.render()
         if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
         const packet = this.view.seedPacketAt(snapshot, index)
         if (!packet) return
-        if (snapshot.cursor.mode !== 'none') {
+        if (snapshot.cursor.mode !== 'none' && !replace) {
             this.cancelPlanting()
             return
         }
@@ -135,8 +135,8 @@ export class LevelInputPresenter {
         if (!held && !tool && index < 0 && hit(this.buttons[this.buttons.length - 1])) return
         const pickable = packet && !packet.selected && packet.ready && !packet.availability.reason
         if (packet && (!held || pickable)) {
-            if (held) this.game.command({ type: 'clearCursor' })
-            this.selectSeedPacket(index)
+            // Selection replaces the server's held packet atomically; a queued clear is not visible here yet.
+            this.selectSeedPacket(index, true)
         }
         if (tool && !held) this.selectTool(tool.toolId)
         const press = this.mobilePress = {

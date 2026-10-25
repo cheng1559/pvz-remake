@@ -278,6 +278,47 @@ test('preloaded animation frames are shared by registry and failed preparation c
         'registries with different sprite overrides must not share prepared frames')
 })
 
+test('Dave keeps an active blink attached through talk, idle and leave transitions', () => {
+    const { CrazyDaveView } = loadClientModule('level/CrazyDaveView', {})
+    const player = (duration: number) => ({
+        node: { active: false }, time: 0, playing: false, loop: false, parent: undefined as unknown,
+        eyes: true, onFinish: undefined as (() => void) | undefined,
+        blendFrom() {}, setTrackSpriteOverride() {},
+        setTrackPrefixVisible(prefix: string, visible: boolean) { if (prefix === 'Dave_eye') this.eyes = visible },
+        attachToTrack(parent: unknown, track: string) { assert.equal(track, 'Dave_head'); this.parent = parent },
+        play(options: any) { this.time = options.timeSeconds; this.loop = options.loop; this.playing = true; this.onFinish = options.onFinish },
+        advance(dt: number) {
+            if (!this.playing) return
+            this.time += dt
+            if (!this.loop && this.time >= duration) { this.playing = false; this.onFinish?.() }
+        },
+    })
+    const talk = player(0.2), idle = player(1), leave = player(1), blink = player(0.4)
+    const players = new Map([['smalltalk', talk], ['idle', idle], ['leave', leave], ['blink', blink]])
+    const view = new CrazyDaveView({ active: true }, { active: false }, {}, players,
+        { node: { active: false } }, new Map(), {}, presentationFixture.dave)
+    view.play('smalltalk', false, 12, () => view.play('idle', true, 12))
+    view.blinkSeconds = 0
+    view.update(0.1)
+    assert.equal(blink.node.active, true)
+    assert.equal(blink.parent, talk)
+    assert.equal(talk.eyes, false)
+
+    view.update(0.15)
+    assert.equal(view.current, idle)
+    assert.equal(blink.parent, idle, 'the blink must follow the new head after the talk finishes')
+    assert.equal(idle.eyes, false, 'the new body must not show open eyes over the active blink')
+    assert.equal(blink.time, 0.25, 'switching bodies must preserve blink progress')
+
+    view.play('leave', false, 24)
+    assert.equal(blink.parent, leave)
+    assert.equal(leave.eyes, false)
+    assert.equal(blink.time, 0.25)
+    view.update(0.2)
+    assert.equal(blink.node.active, false)
+    assert.equal(leave.eyes, true, 'blink completion restores the current body eyes')
+})
+
 test('blink attachments follow both the moving head and its parent stem', () => {
     class Color {
         static WHITE = new Color()

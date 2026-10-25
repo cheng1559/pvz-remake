@@ -11,7 +11,6 @@ import { showContinueGameDialog } from '@/client/screens/ContinueGameDialog'
 import { UI } from '@/client/ui/UI'
 import { UIDialog } from '@/client/ui/UIDialog'
 import { UIInput } from '@/client/ui/UIInput'
-import type { UILabel } from '@/client/ui/UILabel'
 import { OptionsSettings } from '@/platform/OptionsSettings'
 import { MENU_PAGES, type MenuAction, type MenuPageId } from '@/client/screens/MenuPages'
 import {
@@ -38,7 +37,6 @@ const { ccclass } = _decorator
 @ccclass('GameApp')
 export class GameApp extends Component {
     private controller: LevelController | null = null
-    private status: UILabel | null = null
     private menu: MenuScreen | null = null
     private gameLayer: Node | null = null
     private transitions: ScreenTransition | null = null
@@ -83,10 +81,9 @@ export class GameApp extends Component {
         void OptionsSettings.start().catch(error => console.error('[Options]', error))
         this.transitions = new ScreenTransition(this.node)
         void this.navigate('splash')
-        void UI.load().then(ui => {
+        void UI.load().then(() => {
             if (!this.node?.isValid) return
             initializeViewport()
-            this.status = ui.label(this.node, { text: '', x: -380, y: 0, width: 760, align: 'center' })
         }).catch(error => console.error('[GameApp] Failed to initialize UI', error))
     }
 
@@ -151,7 +148,6 @@ export class GameApp extends Component {
                     gameLayer.active = MENU_PAGES[target].overlay === true && controller.isRunning()
                 }
             })
-            if (this.status?.node.isValid) this.status.node.active = false
             if (restoredGame && this.node?.isValid) {
                 this.loading = false
                 const action = await showContinueGameDialog(this.node, await UI.load())
@@ -162,7 +158,7 @@ export class GameApp extends Component {
         } catch (error) {
             if (from === null && !wasPaused && controller.isRunning()) controller.resume()
             console.error('[GameApp] Navigation failed', error)
-            this.showStatus(error instanceof Error ? error.message : String(error))
+            this.showAdvice(error instanceof Error ? error.message : String(error))
         } finally {
             this.loading = false
         }
@@ -177,14 +173,8 @@ export class GameApp extends Component {
             if (page === 'award' && this.currentPage === page) this.controller?.hide()
         } catch (error) {
             console.error('[GameApp] Failed to finish level', error)
-            this.showStatus(error instanceof Error ? error.message : String(error))
+            this.showAdvice(error instanceof Error ? error.message : String(error))
         }
-    }
-
-    private showStatus(message: string): void {
-        if (!this.status?.node.isValid) return
-        this.status.text = message
-        this.status.node.active = true
     }
 
     private showAdvice(message: string): void {

@@ -192,7 +192,7 @@ test('packet backgrounds use stable atlas IDs independently of the rendered-port
     assert.equal(errors.length, 1)
 })
 
-test('empty conveyor slots render only supplied seeds and retain their parent, position and button', () => {
+test('conveyor slots retain their bindings and draw mobile selection above the full gray overlay', () => {
     const { modules, load } = setup()
     const draws: any[] = []
     modules['@/client/hud/SeedPacketRenderer'] = { SeedPacketRenderer: { drawSeedPacket(args: any) {
@@ -211,6 +211,7 @@ test('empty conveyor slots render only supplied seeds and retain their parent, p
     SeedPacketView.prototype._createCooldownClip = function () { return new Node(this.node) }
     const hiddenBank = new Node(), conveyorClip = new Node()
     const packet = new SeedPacketView({ parent: hiddenBank, x: 0, y: 0, drawCost: false })
+    packet.applyColor = () => {}
     assert.equal(packet.node.children.length, 0)
     assert.equal(draws.length, 0, 'empty slots must not render a placeholder seed')
     const node = packet.node, button = {}
@@ -229,6 +230,15 @@ test('empty conveyor slots render only supplied seeds and retain their parent, p
         assert.equal(node.button, button)
         assert.equal(draws.at(-1).seedType, seedType)
         assert.equal(draws.at(-1).drawCost, false)
+        packet.sync({ gameStarted: true, active: true, selected: true, cooldownRemaining: 0, cooldownTotal: 0,
+            canAfford: true, tutorialColor: null, mobile: true, conveyor: true })
+        assert.equal(packet.cooldownClip.active, true, 'selection retains the gray packet overlay')
+        assert.equal(packet.selectedHighlight.active, true)
+        assert.ok(node.children.indexOf(packet.selectedHighlight) > node.children.indexOf(packet.cooldownClip),
+            'the yellow frame must draw above the overlay even without a cost label')
+        packet.sync({ gameStarted: true, active: true, selected: true, cooldownRemaining: 0, cooldownTotal: 0,
+            canAfford: true, tutorialColor: null, mobile: false, conveyor: true })
+        assert.equal(packet.selectedHighlight.active, false, 'desktop packets do not draw the mobile frame')
     }
 })
 

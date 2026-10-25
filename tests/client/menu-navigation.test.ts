@@ -114,6 +114,8 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         console: { ...console, error: (...args: unknown[]) => errors.push(args) },
     })
     const app = new module.exports.GameApp()
+    const advice: string[] = []
+    app.showAdvice = (message: string) => advice.push(message)
     let running = false
     let paused = false
     let introReady = true
@@ -195,6 +197,8 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.deepEqual([...app.history], history)
     assert.equal(errors.length, 1)
     assert.match(String(errors[0][1]), /missing background/)
+    assert.equal(advice.length, 1, 'navigation failures use advice instead of a temporary centre label')
+    assert.match(advice[0], /missing background/)
     prepare = async id => id
 
     await app.navigate('help')

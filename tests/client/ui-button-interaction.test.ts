@@ -468,9 +468,9 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
         ui.setMobile()
         const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
         const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
-        const definitions = { seeds: { pea: { plant: 'pvz:peashooter', sunCost: 100 } }, items: {} }
+        const definitions = { seeds: { pea: { plant: 'pvz:peashooter', sunCost: 100 }, sunflower: { plant: 'pvz:sunflower', sunCost: 50 } }, items: {} }
         const bank = new LevelSeedBank({
-            level: { seedPackets: ['pea'], ...(conveyor ? { conveyor: { capacity: 2, seeds: [{ id: 'pea' }] } } : {}) },
+            level: { seedPackets: ['pea', 'sunflower'], ...(conveyor ? { conveyor: { capacity: 2, seeds: [{ id: 'pea' }] } } : {}) },
             content: { definitions, presentation: presentationFixture }, seedPacketSlot: ui.root, presentation: {},
             ui: { text: (key: string) => key, tooltip: () => ({ show() {}, hide() {} }) },
         })
@@ -478,18 +478,29 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
             'conveyor slots start empty and hidden, without borrowing the first configured seed')
         const snapshot: any = { phase: 'gameplay', result: 'playing', paused: false, availableSun: conveyor ? 0 : 100,
             cursor: { mode: 'none' }, extensions: {}, items: [],
-            seedPackets: conveyor ? [] : [{ seedId: 'pea', ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 0, availability: {} }],
+            seedPackets: conveyor ? [] : ['pea', 'sunflower'].map(seedId => ({ seedId, ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 0, availability: {} })),
             conveyorPackets: conveyor ? [{ id: 17, seedId: 'pea', selected: false, x: 0, availability: {} }, { id: 29, seedId: 'pea', selected: false, x: 120, availability: {} }] : [],
         }
-        const commands: any[] = [], menu = ui.makeButton(680)
+        const commands: any[] = [], pending: any[] = [], menu = ui.makeButton(680)
         let pointer: any
-        const input = new LevelInputPresenter(ui.root, { definitions, render: () => snapshot, command(command: any) {
-            commands.push(command)
-            if (command.type === 'selectSeed' || command.type === 'selectConveyorPacket') snapshot.cursor = { mode: 'seed', seedId: 'pea' }
-            else if (command.type === 'clearCursor' || command.type === 'placePlant') snapshot.cursor = { mode: 'none' }
-            for (const packet of snapshot.seedPackets) packet.selected = snapshot.cursor.mode === 'seed'
-            for (const packet of snapshot.conveyorPackets) packet.selected = command.type === 'selectConveyorPacket' && packet.id === command.packetId
-        } }, {
+        let selectedPacket: number | undefined
+        const flush = () => {
+            for (const command of pending.splice(0)) {
+                if (command.type === 'selectSeed' || command.type === 'selectConveyorPacket') {
+                    snapshot.cursor = { mode: 'seed', seedId: command.seedId ?? 'pea' }
+                    selectedPacket = command.packetId
+                } else if (command.type === 'clearCursor' || command.type === 'placePlant') {
+                    snapshot.cursor = { mode: 'none' }
+                    selectedPacket = undefined
+                }
+            }
+            for (const packet of snapshot.seedPackets) packet.selected = packet.seedId === snapshot.cursor.seedId
+            for (const packet of snapshot.conveyorPackets) packet.selected = packet.id === selectedPacket
+            bank.sync(snapshot, [], true, null, false)
+        }
+        const input = new LevelInputPresenter(ui.root, { definitions, render: () => snapshot,
+            command(command: any) { commands.push(command); pending.push(command) },
+        }, {
             introComplete: true, bindTools() { return [] }, level: { award: { kind: 'seed' } },
             board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
             audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer(value: any) { pointer = value },
@@ -497,7 +508,7 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
             bindSeedPackets: (select: (index: number) => void) => bank.bind(select), bindMenu: () => menu.button,
         })
         input.boardPixel = (event: any) => event.getUILocation()
-        const touch = (type: string, x: number, y = 20, id = 1) => ui.dispatch(ui.root, type, x, 0, id, y)
+        const touch = (type: string, x: number, y = 20, id = 1) => { ui.dispatch(ui.root, type, x, 0, id, y); flush() }
         try {
             input.start()
             bank.sync(snapshot, [], true, null, false)
@@ -511,14 +522,16 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
             touch(e.TOUCH_START, 140, 20, 2); touch(e.TOUCH_END, 140, 20, 2)
             assert.equal(commands.length, 1, 'a second finger cannot replace the held packet')
             touch(e.TOUCH_END, 200, 250)
-            assert.deepEqual({ ...commands.at(-1) }, { type: 'placePlant', row: 1, column: 2 })
+            assert.deepEqual({ ...commands.filter(command => command.type === 'placePlant').at(-1) }, { type: 'placePlant', row: 1, column: 2 })
             touch(e.TOUCH_START, 20); touch(e.TOUCH_END, 20)
             assert.equal(snapshot.cursor.mode, 'seed', 'tap selects without planting')
-            if (conveyor) {
-                touch(e.TOUCH_START, 140); touch(e.TOUCH_END, 140)
-                assert.equal(commands.at(-1).packetId, 29, 'duplicate seed types still select distinct conveyor packets')
-            }
-            const x = conveyor ? 140 : 20
+            const x = conveyor ? 140 : 130, beforeSwitch = commands.length
+            touch(e.TOUCH_START, x); touch(e.TOUCH_END, x)
+            assert.equal(commands.length, beforeSwitch + 1, 'switching selects the new slot atomically without clearing first')
+            assert.equal(snapshot.cursor.mode, 'seed')
+            assert.equal(conveyor ? commands.at(-1).packetId : commands.at(-1).seedId, conveyor ? 29 : 'sunflower')
+            assert.equal(bank.packets[0].view.options.selected, false)
+            assert.equal(bank.packets[1].view.options.selected, true, 'the server selection reaches the newly selected packet view')
             touch(e.TOUCH_START, x); touch(e.TOUCH_MOVE, 200, 250); touch(e.TOUCH_MOVE, x); touch(e.TOUCH_END, x)
             assert.equal(snapshot.cursor.mode, 'none', 'dragging back to the packet cancels')
         } finally { input.destroy(); ui.cleanup() }

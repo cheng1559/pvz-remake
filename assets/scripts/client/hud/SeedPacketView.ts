@@ -49,8 +49,8 @@ export class SeedPacketView {
         for (const child of [...this.node.children]) { child.active = false; child.removeFromParent(); child.destroy() }
         // Keep the slot node and its button so input capture and mobile bindings stay valid.
         SeedPacketRenderer.drawSeedPacket({ ...args, node: this.node })
-        this.selectedHighlight = this._createSelectedHighlight(args)
         this.cooldownClip = this._createCooldownClip(args)
+        this.selectedHighlight = this._createSelectedHighlight(args)
     }
 
     sync(options: {

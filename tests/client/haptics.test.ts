@@ -46,13 +46,13 @@ test('haptics uses the iOS bridge only and coalesces requests by real time', () 
     Haptics.play()
     assert.equal(calls.length, 2, 'explosion feedback must not start immediately')
     assert.equal(timers.length, 1, 'simultaneous explosions share one delayed pulse')
-    assert.equal(timers[0].delay, 80)
-    now = 121
+    assert.equal(timers[0].delay, 20)
+    now = 61
     timers.shift()!.callback()
-    now = 180
+    now = 120
     Haptics.play()
     assert.equal(calls.length, 3, 'UI feedback cannot cut short an explosion')
-    now = 401
+    now = 341
     Haptics.play()
     assert.deepEqual(calls, [
         ['ViewController', 'playHapticFeedback:', 'light'],

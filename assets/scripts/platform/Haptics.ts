@@ -2,7 +2,7 @@ import { native, sys } from 'cc'
 import { GameDebugSettings } from './debug/GameDebugSettings'
 
 export type HapticStyle = 'light' | 'medium' | 'heavy' | 'explosion'
-const EXPLOSION_DELAY_MS = 80
+const EXPLOSION_DELAY_MS = 20
 
 /** Real-time feedback stays responsive while the game clock is paused. */
 export class Haptics {

@@ -120,8 +120,10 @@ export class CrazyDaveView {
         next.node.active = true
         next.setTrackSpriteOverride('Dave_mouths', null)
         next.setTrackPrefixVisible('Dave_blink', false)
-        next.setTrackPrefixVisible('Dave_eye', true)
+        const blink = this.players.get('blink')!
+        next.setTrackPrefixVisible('Dave_eye', !blink.node.active)
         next.play({ loop, rate: fps / this.config.sourceFps, timeSeconds: 0, hideOnFinish: false, onFinish })
+        if (blink.node.active) blink.attachToTrack(next, 'Dave_head')
         if (this.hand.node.active) this.hand.node.setParent(next.getTrackNode(this.config.hand.track)!)
     }
 
