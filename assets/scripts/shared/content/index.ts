@@ -22,6 +22,7 @@ export interface ContentManifest {
     saveCompatibleHashes?: readonly string[]
     gameplay: {
         definitions: string
+        seedCatalog: string
         levels: string
         strings: string
     }
@@ -64,7 +65,7 @@ export function parseContentManifest(value: unknown): ContentManifest {
     }
     const gameplay = exactObject(
         manifest.gameplay,
-        ['definitions', 'levels', 'strings'],
+        ['definitions', 'seedCatalog', 'levels', 'strings'],
         'content manifest.gameplay',
     )
     const presentation = exactObject(manifest.presentation, ['definitions'], 'content manifest.presentation')
@@ -83,6 +84,7 @@ export function parseContentManifest(value: unknown): ContentManifest {
         ...(saveCompatibleHashes === undefined ? {} : { saveCompatibleHashes }),
         gameplay: {
             definitions: relativePath(gameplay.definitions, 'content manifest.gameplay.definitions'),
+            seedCatalog: relativePath(gameplay.seedCatalog, 'content manifest.gameplay.seedCatalog'),
             levels: relativePath(gameplay.levels, 'content manifest.gameplay.levels'),
             strings: relativePath(gameplay.strings, 'content manifest.gameplay.strings'),
         },

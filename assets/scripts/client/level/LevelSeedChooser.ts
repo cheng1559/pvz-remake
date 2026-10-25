@@ -13,7 +13,6 @@ import { SpriteLoader } from '@/core/SpriteLoader'
 import { SpriteRepository } from '@/client/content/ClientContentLoader'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import { Haptics } from '@/platform/Haptics'
 
 interface Choice {
     id: string
@@ -60,19 +59,12 @@ export class LevelSeedChooser {
         this.flying = uiNode({ name: 'FlyingSeeds', parent: parent, active: false }).node
         this.buttons = uiNode({ name: 'ChooserButtons', parent, active: false }).node
         const grid = (index: number) => ({ x: index % 8 * 53 + 22, y: Math.floor(index / 8) * 73 + 128 })
-        const cells = new Map(available.map((id, index) => {
-            const seed = content.definitions.seeds[id]
-            return [id, plantDefinition(content.presentation, seed.plant).visual.preview ?? index]
-        }))
-        const usedCells = new Set(cells.values())
-        for (let index = 0; index < 40; index++) {
-            if (!usedCells.has(index)) ui.image(shadows, silhouette, grid(index))
-        }
+        for (let index = available.length; index < 40; index++) ui.image(shadows, silhouette, grid(index))
         for (let index = 0; index < slots; index++) this.emptySlots.push(ui.image(this.cards, silhouette, { x: 85 + index * 59, y: 8 }).node)
-        for (const id of available) {
+        for (const [index, id] of available.entries()) {
             const seed = content.definitions.seeds[id]
             const visual = plantDefinition(content.presentation, seed.plant).visual
-            const home = grid(cells.get(id)!)
+            const home = grid(index)
             const args = { definitions: content.presentation, name: `Choose-${id}`, parent: this.cards, layer: parent.layer,
                 x: home.x, y: -home.y, seedType: visual.seedType, cost: seed.sunCost, costFont: ui.assets.fonts.packetCost,
                 loadSprite: (name: string) => sprites.load(`pvz:${name}`) }
@@ -82,8 +74,9 @@ export class LevelSeedChooser {
             const view = new SeedPacketView(args)
             view.node.setSiblingIndex(slots)
             const nameKey = visual.nameKey ?? String(visual.seedType).toUpperCase()
-            const tooltip = ui.tooltip(view.node, { title: ui.text(nameKey), text: ui.text(`${nameKey}_TOOLTIP`), gap: 0 })
+            const tooltip = ui.tooltip(view.node, { title: ui.text(nameKey), text: ui.text(visual.tooltipKey ?? `${nameKey}_TOOLTIP`), gap: 0 })
             const button = view.node.addComponent(UIButton)
+            button.hapticsEnabled = false
             button.pressOnly = true
             button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= 425 && !this.warningOpen
             const choice: Choice = { id, view, shadow, button, tooltip, home, slot: -1 }
@@ -184,7 +177,6 @@ export class LevelSeedChooser {
         for (const candidate of this.choices) this.land(candidate)
         if (choice.slot < 0 && this.snapshot!.seedPackets.length >= this.snapshot!.seedChooser!.slots) return
         for (const candidate of this.choices) candidate.tooltip.hide()
-        Haptics.play()
         void SoundLoader.play(SoundEffect.Tap)
         this.send({ type: 'chooseSeed', seedId: choice.id })
     }

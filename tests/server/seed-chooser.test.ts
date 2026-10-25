@@ -1,14 +1,16 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import { buildGameplayContent } from '@/shared/content/DefinitionRegistry'
 import type { GameCommand, JsonValue } from '@/shared/protocol'
 
-const definitions = parseGameplayDefinitions(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/definitions.json', 'utf8')))
-const levels = parseGameplayLevels(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/levels.json', 'utf8')), definitions)
+const source = readGameplaySource
+const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
+const levels = parseGameplayLevels(source('levels'), definitions)
 const options = { levelId: 'pvz:seed-chooser-test', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] }
-const seeds = levels.levels[options.levelId].seedPackets
+const seeds = definitions.seedCatalog
 const setup = (save?: JsonValue) => {
     const game = new LocalIntegratedGame(definitions, levels)
     game.start({ ...options, ...(save === undefined ? {} : { save }) })
@@ -20,6 +22,7 @@ const chosen = (game: LocalIntegratedGame) => game.render().seedPackets.map(pack
 test('seed choice is authoritative, ordered, capacity checked and works at an input-only boundary', () => {
     const game = setup()
     assert.equal(game.render().seedChooser?.slots, 6)
+    assert.deepEqual(game.render().seedChooser?.availableSeeds, seeds)
     assert.deepEqual(chosen(game), [])
     command(game, { type: 'completeIntro' })
     assert.equal(game.lastRejection?.code, 'seed-choice-incomplete')
@@ -46,6 +49,28 @@ test('seed choice is authoritative, ordered, capacity checked and works at an in
     assert.equal(game.lastRejection?.code, 'not-choosing-seeds')
     command(game, { type: 'completeIntro' })
     assert.equal(game.render().phase, 'gameplay')
+})
+
+test('chooser levels share the global seed catalog, including registered seeds, without a per-level pool', () => {
+    const { definitions: expanded, levels: sharedLevels } = buildGameplayContent(
+        source('definitions'), source('levels'), source('strings'), source('seed-catalog'), [{
+            ownerId: 'test:chooser', data: {
+                seeds: { 'test:pea': { ...definitions.seeds['pvz:peashooter'] } },
+                seedCatalog: ['test:pea'],
+                levels: { 'test:chooser': { ...levels.levels[options.levelId], seedBankSlots: 4 } },
+            },
+        }],
+    )
+    const expected = [...seeds, 'test:pea']
+    for (const levelId of [options.levelId, 'test:chooser']) {
+        const game = new LocalIntegratedGame(expanded, sharedLevels)
+        game.start({ ...options, levelId })
+        assert.deepEqual(game.render().seedChooser?.availableSeeds, expected)
+        command(game, { type: 'chooseSeed', seedId: 'test:pea' })
+        assert.deepEqual(chosen(game), ['test:pea'])
+    }
+    assert.equal(expected.includes('pvz:bowling-wallnut'), false)
+    assert.equal(expected.includes('pvz:explodenut'), false)
 })
 
 test('partial and confirmed seed choices survive saving without reselecting or losing slot order', () => {

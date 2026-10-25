@@ -5,7 +5,7 @@ import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { loadInstalledMods } from '@/app/ModLoader'
-import { resourcePacks } from '@/client/content/ResourcePacks'
+import { modResources } from '@/client/content/ModResources'
 import { CONTENT_CATEGORIES, type ContentCategory } from '@/shared/content'
 
 // Preserve the installed asset ID and prefab UUID for existing content packs and saves.
@@ -17,22 +17,23 @@ export async function loadIntegratedGameContent() {
         loader.loadManifest(),
         loadInstalledMods(),
     ])
-    const loadJson = (path: string) => resourcePacks.baseJson(`pvz:${path.replace(/\.json$/i, '')}`)
+    const loadJson = (path: string) => modResources.baseJson(`pvz:${path.replace(/\.json$/i, '')}`)
     const prefabPath = manifest.client.prefabs[LEVEL_PREFAB_ID]
     if (!prefabPath) throw new Error(`Base content does not define prefab ${LEVEL_PREFAB_ID}`)
     const loadPrefab = () => new Promise<Prefab>((resolve, reject) => {
         resources.load(prefabPath.replace(/\.prefab$/i, ''), Prefab, (error, asset) => error ? reject(error) : resolve(asset))
     })
-    const [definitionsAsset, levelsAsset, stringsAsset, levelPrefab, presentation] = await Promise.all([
+    const [definitionsAsset, levelsAsset, stringsAsset, seedCatalog, levelPrefab, presentation] = await Promise.all([
         loadJson(manifest.gameplay.definitions),
         loadJson(manifest.gameplay.levels),
-        resourcePacks.asset(`${manifest.id.split(':')[0]}:${manifest.gameplay.strings.replace(/\.json$/i, '')}`, JsonAsset)
+        modResources.asset(`${manifest.id.split(':')[0]}:${manifest.gameplay.strings.replace(/\.json$/i, '')}`, JsonAsset)
             .then(asset => asset ? asset.json : loadJson(manifest.gameplay.strings)),
+        loadJson(manifest.gameplay.seedCatalog),
         loadPrefab(),
         loadPresentationDefinitions(manifest),
     ])
     const { definitions, levels, strings } = buildGameplayContent(
-        definitionsAsset, levelsAsset, stringsAsset, loadedMods.gameplayDefinitions,
+        definitionsAsset, levelsAsset, stringsAsset, seedCatalog, loadedMods.gameplayDefinitions,
     )
     const registry = new ContentRegistry()
     registry.register(manifest)
@@ -68,7 +69,7 @@ export async function loadIntegratedGameContent() {
         if (!definition || !zombieViews.has(definition.view ?? 'zombie')) throw new Error(`Zombie presentation is not installed: ${id}`)
     }
     const enabledMods = loadedMods.manifests
-        .filter(mod => mod.gameplay !== undefined)
+        .filter(mod => mod.gameplay !== undefined || loadedMods.gameplayDefinitions.some(source => source.ownerId === mod.id))
         .map(mod => ({ id: mod.id, version: mod.version, contentHash: mod.contentHash }))
     return {
         definitions, presentation, levels, strings, levelPrefab, registry, loader,

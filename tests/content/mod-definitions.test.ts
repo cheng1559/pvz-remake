@@ -1,3 +1,5 @@
+import { readGameplaySource, readPresentationSource } from '../../tools/content_source'
+import { readModContent } from '../../tools/content_source.mjs'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -22,20 +24,21 @@ import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistr
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { GameplayRegistry } from '@/server/GameplayRegistry'
 import { runCommand } from '../server/run-command'
+import { parseModContent, contentJson } from '@/shared/mod/content'
 
 const json = (path: string): any => JSON.parse(readFileSync(path, 'utf8'))
-const base = () => ['definitions', 'levels', 'strings'].map(name => json(`tools/content/pvz-base/gameplay/${name}.json`))
-const gameplay = () => ({ ownerId: 'example:plants', data: json('mods/example-plant/assets/gameplay.json') })
-const presentation = () => ({ ownerId: 'example:plants', data: json('mods/example-plant/assets/presentation.json') })
+const base = () => ['definitions', 'levels', 'strings', 'seed-catalog'].map(name => readGameplaySource(name))
+const gameplay = () => ({ ownerId: 'example:plants', data: readModContent('mods/example-plant/content.json').gameplay })
+const presentation = () => ({ ownerId: 'example:plants', data: readModContent('mods/example-plant/content.json').presentation })
 const build = (sources = [gameplay()]) => {
-    const [definitions, levels, strings] = base()
-    return buildGameplayContent(definitions, levels, strings, sources)
+    const [definitions, levels, strings, seedCatalog] = base()
+    return buildGameplayContent(definitions, levels, strings, seedCatalog, sources)
 }
 
 function installed(id: string, server: any, client?: any) {
     const manifest = modApi.parseModManifest({ schemaVersion: 1, apiVersion: 1, id, version: '1.0.0', contentHash: id, dependencies: [],
         gameplay: { nodeModule: 'node.js', cocosModule: 'server.js' }, ...(client ? { client: { module: 'client.js' } } : {}) })
-    return { manifest, files: { 'sprite.png': new Uint8Array([0]) }, modules: { 'server.js': server, 'client.js': client } }
+    return { manifest, content: { resources: {} }, files: { 'sprite.png': new Uint8Array([0]) }, modules: { 'server.js': server, 'client.js': client } }
 }
 
 test('Mod JSON decodes UTF-8 without package imports and uses the native single-argument decoder contract', () => {
@@ -63,13 +66,15 @@ test('Mod JSON decodes UTF-8 without package imports and uses the native single-
 })
 
 test('Release preloading loads Corn archive assets without requesting a Cocos bundle config', async () => {
-    const registry = new ContentRegistry(), table = json('mods/corn/assets/content.json')
+    const registry = new ContentRegistry(), raw = readModContent('mods/corn/content.json').resources
+    const { audio, ...other } = raw
+    const table = { ...other, sounds: audio }
     const types = { sprites: class SpriteFrame {}, reanim: class JsonAsset {}, particles: class JsonAsset {},
         fonts: class JsonAsset {}, sounds: class AudioClip {}, music: class JsonAsset {}, prefabs: class Prefab {} }
     const loaded = new Set<string>(), bundles: string[] = [], progress: number[] = []
     for (const category of CONTENT_CATEGORIES) {
         for (const [id, path] of Object.entries(table[category] ?? {})) registry.registerEntry({
-            category, id, path: path as string, bundle: 'pvzmod:///corn%3Aplants/',
+            category, id, path: typeof path === 'string' ? path : (path as any).file, bundle: 'pvzmod:///corn%3Aplants/',
             contentId: 'corn:plants', contentVersion: '0.2.3', contentHash: 'corn', schemaVersion: 2,
         })
     }
@@ -97,7 +102,7 @@ test('Release preloading loads Corn archive assets without requesting a Cocos bu
         } },
         '@/client/sound/LegacySoundSystem': { SoundLoader: { async preloadAll() {} } },
         '@/core/Particle/ParticleDefinitionLoader': { ParticleDefinitionLoader: { async preloadAll() {} } },
-        './ResourcePacks': { resourcePacks: { async preload(report: Function) { report(1) } } },
+        './ModResources': { modResources: { async preload(report: Function) { report(1) } } },
     }
     const exports: any = {}
     const code = transpileModule(readFileSync('assets/scripts/client/content/PreloadAssets.ts', 'utf8'), {
@@ -113,8 +118,8 @@ test('Release preloading loads Corn archive assets without requesting a Cocos bu
 
 /** Exercise the real app loader without requiring the Cocos engine in Node. */
 function modLoader(installed: any[], ready = async () => installed) {
-    const [definitions, levels, strings] = base()
-    const presentation = json('tools/content/pvz-base/presentation/definitions.json')
+    const [definitions, levels, strings, seedCatalog] = base()
+    const presentation = readPresentationSource()
     class Views extends EntityViewRegistry<any, any> {
         constructor() {
             super(context => ({ kind: context.kind, typeId: context.typeId }))
@@ -130,10 +135,10 @@ function modLoader(installed: any[], ready = async () => installed) {
     const modules: Record<string, unknown> = {
         cc: { JsonAsset: class {} },
         '@/client/content/ClientContentLoader': { ClientContentLoader: class {
-            async loadManifest() { return { client: { bundle: 'base' }, gameplay: { definitions: 'definitions', levels: 'levels', strings: 'strings' } } }
+            async loadManifest() { return { client: { bundle: 'base' }, gameplay: { definitions: 'definitions', levels: 'levels', strings: 'strings', seedCatalog: 'seedCatalog' } } }
         } },
         '@/client/content/ClientAnimationRegistry': { ClientAnimationRegistry },
-        '@/client/content/ResourcePacks': { resourcePacks: { baseJson: async (id: string) => ({ definitions, levels, strings } as any)[id.replace('pvz:', '')] } },
+        '@/client/content/ModResources': { modResources: { baseJson: async (id: string) => ({ definitions, levels, strings, seedCatalog } as any)[id.replace('pvz:', '')] } },
         '@/client/content/loadPresentationDefinitions': { loadPresentationDefinitions: async (_manifest: unknown, sources: unknown[]) => {
             assert.equal(sources.length, 0, 'base validation must not recursively load Mods')
             return presentation
@@ -223,8 +228,8 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
             assert.equal(views.has('test:leaked'), false)
             views.register('test:after', () => ({}))
         }
-        const [definitions, levels, strings] = base()
-        result.gameplay.freeze(buildGameplayContent(definitions, levels, strings, result.gameplayDefinitions).definitions)
+        const [definitions, levels, strings, seedCatalog] = base()
+        result.gameplay.freeze(buildGameplayContent(definitions, levels, strings, seedCatalog, result.gameplayDefinitions).definitions)
         assert.match(loader.failures.get('old:legacy')!, /registerDefinitions is not a function/)
         assert.match(loader.failures.get('test:dependent')!, /Dependency failed to load: old:legacy/)
         assert.match(loader.failures.get('test:broken')!, /client.js.*client initialization failed/)
@@ -270,7 +275,7 @@ test('definition registries reject collisions, foreign namespaces, unresolved re
     assert.throws(() => build([gameplay(), conflict]), /Conflicting level patch/)
     assert.throws(() => build([{ ownerId: 'other:mod', data: { levelPatches: { 'other:missing': {} } } }]), /unknown level/)
 
-    const source = json('tools/content/pvz-base/presentation/definitions.json')
+    const source = readPresentationSource()
     const before = JSON.stringify(source)
     const installed = buildPresentationDefinitions(source, [presentation()])
     assert.equal(JSON.stringify(source), before, 'registration cannot change the base asset')
@@ -289,17 +294,20 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         assert.equal(packed.status, 0, packed.stdout + packed.stderr)
         const archive = fflate.unzipSync(readFileSync(output + '.zip'))
         const files = Object.fromEntries(Object.entries(archive).map(([name, bytes]) => [name.slice('example/'.length), bytes]))
-        const manifest = modApi.parseModManifest(JSON.parse(fflate.strFromU8(files['mod.json'])))
+        const manifest = modApi.parseModManifest(JSON.parse(fflate.strFromU8(files['manifest.json'])))
         assert.match(manifest.contentHash, /^[a-f0-9]{64}$/)
         assert.ok(!Object.keys(files).some(name => name.endsWith('.ts')))
-        const loader = modLoader([{ manifest, files }])
+        assert.deepEqual(JSON.parse(fflate.strFromU8(files['assets/gameplay.json'])), gameplay().data)
+        assert.deepEqual(JSON.parse(fflate.strFromU8(files['assets/presentation.json'])), presentation().data)
+        assert.ok(!Object.keys(files).some(name => /^assets\/(gameplay|presentation)\//.test(name)))
+        const loader = modLoader([{ manifest, files, content: parseModContent(contentJson(files, 'content.json'), files) }])
         const loaded = await loader.load()
-        const [definitionsValue, levelsValue, stringsValue] = base()
+        const [definitionsValue, levelsValue, stringsValue, seedCatalog] = base()
         // The VM emulates Cocos; copy its JSON across the test realm boundary.
         const gameplayDefinitions = JSON.parse(JSON.stringify(loaded.gameplayDefinitions))
         const presentationDefinitions = JSON.parse(JSON.stringify(loaded.presentationDefinitions))
-        const { definitions, levels } = buildGameplayContent(definitionsValue, levelsValue, stringsValue, gameplayDefinitions)
-        const visuals = buildPresentationDefinitions(json('tools/content/pvz-base/presentation/definitions.json'), presentationDefinitions)
+        const { definitions, levels } = buildGameplayContent(definitionsValue, levelsValue, stringsValue, seedCatalog, gameplayDefinitions)
+        const visuals = buildPresentationDefinitions(readPresentationSource(), presentationDefinitions)
         assert.ok(Object.isFrozen(definitions.plants['example:rapid_pea']))
         assert.deepEqual(levels.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter', 'example:rapid_pea'])
         assert.deepEqual(levelsValue.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter'])

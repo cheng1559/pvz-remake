@@ -1,5 +1,5 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { GameplayRegistry } from '@/server/GameplayRegistry'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
@@ -7,10 +7,10 @@ import type { ZombieBehavior } from '@/server/zombies/behaviors'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { runCommand } from './run-command'
 
-const json = (name: string) => JSON.parse(readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'))
+const json = readGameplaySource
 const source = json('definitions')
 source.zombies['test:zombie'] = { ...source.zombies['pvz:normal'], maxHealth: 540, behavior: { intervalTicks: 10 } }
-const definitions = parseGameplayDefinitions(source)
+const definitions = parseGameplayDefinitions(source, json('seed-catalog'))
 const levelSource = json('levels')
 levelSource.levels['pvz:adventure-1-1'].waves[0].zombies = ['test:zombie', 'pvz:normal']
 const levels = parseGameplayLevels(levelSource, definitions)

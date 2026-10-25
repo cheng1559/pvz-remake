@@ -103,7 +103,7 @@ function setup() {
         node: FakeNode; options: unknown
         replacement?: { seedType: string, cost: number }
         constructor(options: any) { this.node = new FakeNode(options.x); options.parent.addChild(this.node) }
-        replace(seedType: string, cost: number) { this.replacement = { seedType, cost } }
+        setSeed(seedType: string, cost: number) { this.replacement = { seedType, cost } }
         sync(options: unknown) { this.options = options }
     } }
     modules['./LevelSeedBank'] = load('assets/scripts/client/level/LevelSeedBank.ts')
@@ -173,6 +173,13 @@ test('button haptics follow hover entry, including touch drag re-entry, without 
         ui.dispatch(node, e.TOUCH_END, 20)
         ui.dispatch(node, e.MOUSE_MOVE, 20)
         assert.equal(ui.haptics.length, 3)
+        button.hapticsEnabled = false
+        button.interactable = true
+        ui.dispatch(node, e.TOUCH_START, 20)
+        ui.dispatch(node, e.TOUCH_MOVE, 150)
+        ui.dispatch(node, e.TOUCH_MOVE, 20)
+        ui.dispatch(node, e.TOUCH_END, 20)
+        assert.equal(ui.haptics.length, 3, 'game controls can mute hover feedback without changing other buttons')
     } finally { ui.cleanup() }
 })
 
@@ -301,8 +308,8 @@ test('board hover shares cursor ownership with UI and never flashes default whil
 test('seed input disables its UI button while suspended and cannot submit after destruction', () => {
     const ui = setup()
     const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
-    const button = { isValid: true, enabled: true }
-    const menuButton = { isValid: true, enabled: true }
+    const button = { isValid: true, enabled: true, hapticsEnabled: true }
+    const menuButton = { isValid: true, enabled: true, hapticsEnabled: true }
     let press!: () => void
     let openMenu!: () => void
     let cursor = 'none', menus = 0
@@ -320,6 +327,8 @@ test('seed input disables its UI button while suspended and cannot submit after 
     }, () => { menus++ })
     try {
         input.start()
+        assert.equal(button.hapticsEnabled, false, 'selecting a seed has no hover vibration')
+        assert.equal(menuButton.hapticsEnabled, true, 'Menu keeps its normal UI feedback')
         press()
         assert.deepEqual(commands, ['selectSeed'])
         input.suspend()
@@ -413,6 +422,46 @@ test('level seeds keep independent affordability and cooldowns, and placement us
     } finally { presenter.destroy(); ui.cleanup() }
 })
 
+test('chooser banks reserve hidden slots and reuse their buttons for the confirmed seed order', () => {
+    const ui = setup()
+    const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
+    const bank = new LevelSeedBank({
+        content: { presentation: presentationFixture, definitions: { seeds: {
+            pea: { plant: 'pvz:peashooter', sunCost: 100 },
+            double: { plant: 'pvz:repeater', sunCost: 200 },
+        } } },
+        level: { seedPackets: [], seedBankSlots: 2 }, seedPacketSlot: ui.root, presentation: {},
+        seedChooser: { availableSeeds: ['pea', 'double'], slots: 2, choosing: true },
+        ui: { text: (key: string) => key, tooltip: () => ({ show() {}, hide() {} }) },
+    })
+    const world: any = { phase: 'intro', result: 'playing', paused: false, cursor: { mode: 'none' },
+        seedChooser: { choosing: true }, seedPackets: [],
+    }
+    try {
+        const buttons = bank.bind(() => {})
+        const nodes = bank.packets.map((packet: any) => packet.view.node)
+        assert.equal(nodes.length, 2)
+        assert.ok(nodes.every((node: any) => !node.active))
+        bank.sync(world, [], false, null, false)
+        world.seedPackets = ['double', 'pea'].map(seedId => ({ seedId, ready: true, selected: false,
+            cooldownRemaining: 0, cooldownTotal: 750, availability: {},
+        }))
+        bank.sync(world, [], false, null, false)
+        assert.ok(nodes.every((node: any) => !node.active), 'chooser owns the flying cards until confirmation')
+        world.seedChooser.choosing = false
+        world.phase = 'gameplay'
+        bank.sync(world, [], true, null, false)
+        assert.deepEqual(Array.from(bank.packets, (packet: any) => packet.seedId), ['double', 'pea'])
+        bank.packets.forEach((packet: any, index: number) => {
+            assert.equal(packet.view.node, nodes[index])
+            assert.equal(packet.button, buttons[index])
+            assert.equal(packet.view.node.active, true)
+            assert.equal(packet.button.interactable, true)
+            assert.equal(bank.packetAt(world, index).command.seedId, world.seedPackets[index].seedId)
+        })
+    } finally { ui.cleanup() }
+})
+
 test('ordinary and conveyor packets share mobile drag, tap, switch and cancel interaction', () => {
     for (const conveyor of [false, true]) {
         const ui = setup(), e = ui.events
@@ -425,6 +474,8 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
             content: { definitions, presentation: presentationFixture }, seedPacketSlot: ui.root, presentation: {},
             ui: { text: (key: string) => key, tooltip: () => ({ show() {}, hide() {} }) },
         })
+        if (conveyor) assert.ok(bank.packets.every((packet: any) => packet.seedId === undefined && !packet.view.node.active),
+            'conveyor slots start empty and hidden, without borrowing the first configured seed')
         const snapshot: any = { phase: 'gameplay', result: 'playing', paused: false, availableSun: conveyor ? 0 : 100,
             cursor: { mode: 'none' }, extensions: {}, items: [],
             seedPackets: conveyor ? [] : [{ seedId: 'pea', ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 0, availability: {} }],
@@ -450,6 +501,8 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
         try {
             input.start()
             bank.sync(snapshot, [], true, null, false)
+            if (conveyor) assert.ok(bank.packets.every((packet: any) => packet.view.replacement.seedType === 'peashooter'),
+                'each slot initializes its card from the supplied packet')
             touch(e.TOUCH_START, 20)
             assert.equal(commands.at(-1).type, conveyor ? 'selectConveyorPacket' : 'selectSeed')
             if (conveyor) assert.equal(commands.at(-1).packetId, 17)
@@ -479,10 +532,16 @@ test('mobile shovel shares drag, tap, finger ownership and drag-back cancellatio
     const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
     const world: any = { phase: 'intro', result: 'playing', paused: false, cursor: { mode: 'none' }, items: [], extensions: {} }
     const commands: any[] = []
+    let pendingTool: string | undefined
     let pointer: any
     const input = new LevelInputPresenter(ui.root, { definitions: { items: {} }, render: () => world, command(command: any) {
         commands.push(command)
-        world.cursor = command.type === 'selectTool' ? { mode: 'tool', toolId: command.toolId } : { mode: 'none' }
+        if (command.type === 'selectTool') pendingTool = command.toolId
+        else world.cursor = { mode: 'none' }
+    }, update(dt: number) {
+        assert.equal(dt, 0, 'selection processes input without advancing simulation time')
+        if (pendingTool) world.cursor = { mode: 'tool', toolId: pendingTool }
+        pendingTool = undefined
     } }, {
         introComplete: false, dialogReady: false, level: { award: { kind: 'seed' } },
         board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
@@ -496,8 +555,11 @@ test('mobile shovel shares drag, tap, finger ownership and drag-back cancellatio
     const touch = (type: string, x: number, y = 20, id = 1) => ui.dispatch(ui.root, type, x, 0, id, y)
     try {
         input.start()
+        assert.equal(shovel.button.hapticsEnabled, false, 'shovel selection has no hover vibration')
+        assert.equal(menu.button.hapticsEnabled, true)
         touch(e.TOUCH_START, 625)
         assert.equal(commands.at(-1).type, 'selectTool')
+        assert.equal(world.cursor.mode, 'tool', 'confirm the queued server selection before the next touch move')
         assert.equal(pointer, undefined)
         touch(e.TOUCH_MOVE, 280, 350)
         assert.deepEqual([(pointer as any).x, (pointer as any).y], [280, 350])

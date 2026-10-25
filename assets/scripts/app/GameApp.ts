@@ -29,7 +29,7 @@ import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
-import { resourcePacks } from '@/client/content/ResourcePacks'
+import { modResources } from '@/client/content/ModResources'
 import { modManager } from '@/client/content/ModManager'
 import { selectZips, type SelectedZip } from '@/client/content/InstalledArchives'
 
@@ -56,7 +56,7 @@ export class GameApp extends Component {
         game.frameRate = Infinity
         uiNode({ node: this.node, viewport: true })
         connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false,
-            resourcePacks.baseJson('pvz:gameplay/store').then(createStoreCatalog))
+            modResources.baseJson('pvz:gameplay/store').then(createStoreCatalog))
         UIHoverManager.start(this.node)
         this.gameLayer = uiNode({
             name: 'GameLayer', parent: this.node, viewport: true, active: false,
@@ -235,26 +235,24 @@ export class GameApp extends Component {
         if (!this.node?.isValid || !result) return
         if (!result.ok) { this.showAdvice(result.message); return }
         switch (result.action) {
-            case 'installPack': case 'restartForPacks': case 'installMod': case 'restartForMods':
+            case 'installMod': case 'restartForMods':
                 this.debugCliOpen = true
                 try {
                     await controller.saveIfRunning()
-                    const kind = result.action === 'installMod' || result.action === 'restartForMods' ? 'mod' : 'pack'
-                    if (result.action === 'installPack' || result.action === 'installMod') await this.installPackage(kind)
-                    else await this.confirmPackageRestart(kind)
+                    if (result.action === 'installMod') await this.installPackage()
+                    else await this.confirmPackageRestart()
                 } finally {
                     this.debugCliOpen = false
                     if (this.node?.isValid && running && !wasPaused && controller.isRunning() && this.currentPage === page) controller.resume()
                 }
                 break
-            case 'managePacks': case 'manageMods':
+            case 'manageMods':
                 this.debugCliOpen = true
                 try {
-                    const kind = result.action === 'manageMods' ? 'mod' : 'pack'
                     const ui = await UI.load()
                     if (!this.node?.isValid) return
-                    await (await showPackageDialog(this.node, ui, kind, {
-                        install: () => this.installPackage(kind, false),
+                    await (await showPackageDialog(this.node, ui, {
+                        install: () => this.installPackage(false),
                         restart: async () => { await controller.saveIfRunning(); this.restartGame() },
                     })).result
                 } catch (error) {
@@ -289,7 +287,7 @@ export class GameApp extends Component {
     }
 
     /** Install sequentially, then offer one restart for the whole selection. */
-    private async installPackage(kind: 'pack' | 'mod', enable = true): Promise<string[]> {
+    private async installPackage(enable = true): Promise<string[]> {
         const ui = await UI.load()
         let progress: UIDialog | undefined
         let files: SelectedZip[] = []
@@ -306,12 +304,12 @@ export class GameApp extends Component {
             // Paint the dialog before ZIP validation and native file writes occupy the main thread.
             await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
             // Save new Mods before enabling the group, so dependencies may be picked in any order.
-            const deferEnable = kind === 'mod' && enable && files.length > 1
+            const deferEnable = enable && files.length > 1
             const previouslyEnabled = deferEnable ? await modManager.list() : []
             for (const file of files) {
                 if (!this.node?.isValid) break
                 try {
-                    const id = await (kind === 'pack' ? resourcePacks : modManager).install(await file.read(), enable && !deferEnable)
+                    const id = await modManager.install(await file.read(), enable && !deferEnable)
                     if (!installed.includes(id)) installed.push(id)
                     needsRestart ||= enable && (!deferEnable || previouslyEnabled.includes(id))
                 } catch (error) { errors.push(`${file.name}: ${message(error)}`) }
@@ -329,15 +327,15 @@ export class GameApp extends Component {
         if (errors.length && this.node?.isValid) await ui.dialog(this.node, {
             title: 'Installation Failed', message: errors.join('\n'), confirmText: 'OK',
         }).result
-        if (needsRestart) await this.confirmPackageRestart(kind)
+        if (needsRestart) await this.confirmPackageRestart()
         return installed
     }
 
-    private async confirmPackageRestart(kind: 'pack' | 'mod'): Promise<void> {
+    private async confirmPackageRestart(): Promise<void> {
         if (!this.node?.isValid) return
         const ui = await UI.load()
         const confirmed = await ui.dialog(this.node, {
-            title: 'Restart Required', message: `Restart the game to apply ${kind === 'pack' ? 'resource pack' : 'Mod'} changes.`, confirmText: 'OK',
+            title: 'Restart Required', message: 'Restart the game to apply Mod changes.', confirmText: 'OK',
         }).result
         if (!confirmed || !this.node?.isValid) return
         this.restartGame()

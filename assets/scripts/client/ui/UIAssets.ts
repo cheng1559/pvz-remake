@@ -8,7 +8,7 @@ import { AssetLoader } from '@/client/content/LegacyAssetLoader'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { loadBitmapFont } from '@/client/font/BitmapFontLoader'
 import { SpriteLoader } from '@/core/SpriteLoader'
-import { resourcePacks } from '@/client/content/ResourcePacks'
+import { modResources } from '@/client/content/ModResources'
 
 const FONT_NAMES = {
     label: 'dwarventodcraft18',
@@ -54,11 +54,9 @@ export interface UIAssets {
 }
 
 let pending: Promise<UIAssets> | undefined
-let revision = -1
 
 export async function loadUIAssets(): Promise<UIAssets> {
-    await resourcePacks.ready()
-    if (revision !== resourcePacks.revision) { pending = undefined; revision = resourcePacks.revision }
+    await modResources.ready()
     if (pending) return pending
     const loader = new ClientContentLoader()
     return pending = Promise.all([

@@ -84,7 +84,7 @@ test('failure pans the live board, plays each sound once, and waits eleven game 
     view.hud = { sync() {} }
     view.audio = { play() {} }
     view.intro = { complete: true }
-    view.setPaused = view.syncHitboxes = view.syncSeedChooserIntro = () => {}
+    view.setPaused = view.syncHitboxes = view.syncSeedChooserIntro = view.hideConveyorBank = () => {}
     view.gameOver = gameOver
     view.sync({ result: 'lost', paused: true, items: [] }, { added: [], removed: [] }, [])
     assert.equal(board.x, 220, 'opening the dialog preserves the final camera position')

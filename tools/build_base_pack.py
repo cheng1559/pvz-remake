@@ -1,4 +1,4 @@
-"""Build the builtin ZIP using exactly the installed resource-pack format."""
+"""Build the builtin resources using the shared Mod archive format."""
 from __future__ import annotations
 
 import hashlib
@@ -9,6 +9,7 @@ import zipfile
 from pathlib import Path
 
 from PIL import Image
+from content_source import read_definitions
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT = ROOT / 'tools/generated/pvz-base'
@@ -72,6 +73,7 @@ def build() -> Path:
             raise ValueError(f'Unsupported base resource: {source}')
 
     content = json.loads((CONTENT / 'manifest.json').read_text())
+    content['gameplay']['seedCatalog'] = 'gameplay/seed-catalog.json'
     for resource_id, path in content['client']['sprites'].items():
         if resource_id not in pack['sprites']:
             source = CONTENT / (path.removesuffix('/spriteFrame') + '.png')
@@ -86,20 +88,28 @@ def build() -> Path:
             data('audio', resource_id, source, 'content/' + source.relative_to(CONTENT).as_posix())
     for source in sorted((ROOT / 'tools/content/pvz-base/gameplay').glob('*.json')):
         data('json', 'pvz:gameplay/' + source.stem, source, 'content/gameplay/' + source.name)
+        if source.stem == 'definitions':
+            files['content/gameplay/definitions.json'] = json.dumps(
+                read_definitions(source.parent), ensure_ascii=False, separators=(',', ':'),
+            ).encode()
     source = ROOT / 'tools/content/pvz-base/presentation/definitions.json'
     data('json', 'pvz:presentation/definitions', source, 'content/presentation/definitions.json')
+    files['content/presentation/definitions.json'] = json.dumps(
+        read_definitions(source.parent), ensure_ascii=False, separators=(',', ':'),
+    ).encode()
 
     # Save identity includes all default data, not only the old level subset.
     content['client']['bundle'] = 'base'
     content.pop('saveCompatibleHashes', None)
     content['contentHash'] = ''
-    pack['json']['pvz:content'] = 'content.json'
+    pack['json']['pvz:content'] = 'base-content.json'
     digest = hashlib.sha256(json.dumps({'content': content, 'pack': pack}, sort_keys=True).encode())
     for file, payload in sorted(files.items()):
         digest.update(file.encode()); digest.update(payload)
     content['contentHash'] = digest.hexdigest()
-    files['content.json'] = json.dumps(content, ensure_ascii=False, separators=(',', ':')).encode()
-    files['pack.json'] = json.dumps(pack, ensure_ascii=False, separators=(',', ':')).encode()
+    files['base-content.json'] = json.dumps(content, ensure_ascii=False, separators=(',', ':')).encode()
+    files['content.json'] = json.dumps({'resources': {key: value for key, value in pack.items() if key != 'id'}}, ensure_ascii=False, separators=(',', ':')).encode()
+    files['manifest.json'] = json.dumps({'schemaVersion': 1, 'id': 'pvz:base', 'version': '1.0.0', 'apiVersion': 1, 'contentHash': content['contentHash'], 'dependencies': []}, separators=(',', ':')).encode()
 
     output = ROOT / 'assets/resources/base.zip'
     output.parent.mkdir(parents=True, exist_ok=True)

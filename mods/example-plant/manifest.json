@@ -8,6 +8,5 @@
   "gameplay": {
     "nodeModule": "gameplay/node/index.js",
     "cocosModule": "gameplay/cocos/index.js"
-  },
-  "client": { "module": "client/index.js" }
+  }
 }

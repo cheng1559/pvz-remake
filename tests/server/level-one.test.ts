@@ -1,5 +1,5 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { CommandBuffer, Schedule, World } from '@/ecs/index'
@@ -25,10 +25,8 @@ import { createItemSystem } from '@/server/items'
 import { createZombieGroanSystem } from '@/server/zombieGroans'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 
-const source = (name: string): unknown => JSON.parse(
-    readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'),
-)
-const definitions = parseGameplayDefinitions(source('definitions'))
+const source = readGameplaySource
+const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 
 function setup() {

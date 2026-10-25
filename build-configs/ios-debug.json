@@ -1,0 +1,9 @@
+{
+    "debug": true,
+    "useSplashScreen": false,
+    "packages": {
+        "ios": {
+            "skipUpdateXcodeProject": false
+        }
+    }
+}

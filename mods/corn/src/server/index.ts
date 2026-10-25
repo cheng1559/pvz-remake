@@ -5,7 +5,6 @@ export interface Context { host: { get(id: string): any, around(target: any, key
 export function register({ host, assets }: Context): void {
     registerCobCannon({ host, assets })
     const gameplay = assets.json('assets/gameplay.json')
-    host.get('content/definitions').register(assets.id, gameplay)
     const { registry } = host.get('server/GameplayRegistry')
     const { defineComponent } = host.get('ecs')
     const { PositionComponent: Position, ProjectileComponent: Projectile, ZombieComponent: Zombie, RandomResource: Random } = host.get('server/components')

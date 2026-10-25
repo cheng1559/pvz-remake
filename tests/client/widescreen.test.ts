@@ -18,7 +18,7 @@ test('failed widescreen assets do not alter the viewport during Mod initializati
     assert.equal(expanded, false)
 })
 
-test('viewport expands up to 32:9, then letterboxes without cropping height or extending input into the bars', () => {
+test('viewport expands from 4:3 to 32:9, then letterboxes outside the range without extending input into the bars', () => {
     const crop = {}, letterbox = {}, originalPolicy = {}
     let policy = originalPolicy
     let design = { width: 800, height: 600 }
@@ -82,7 +82,8 @@ test('viewport expands up to 32:9, then letterboxes without cropping height or e
         [3200, 900, 6400 / 3, 6400 / 3, crop],
         [4000, 900, 6400 / 3, 6400 / 3, letterbox],
         [6400, 900, 6400 / 3, 6400 / 3, letterbox],
-        [900, 1600, 800, 337.5, crop],
+        [900, 900, 800, 800, letterbox],
+        [900, 1600, 800, 800, letterbox],
     ] as const) {
         screen.windowSize = { width, height }
         view.emit('canvas-resize')
@@ -91,12 +92,14 @@ test('viewport expands up to 32:9, then letterboxes without cropping height or e
         assert.equal(policy, expectedPolicy)
         for (const node of [level, dialog]) {
             assert.ok(Math.abs(node.width - visibleWidth) < 1e-8)
-            assert.ok(Math.abs(node.height - 600) < 1e-8, 'wide screens always preserve the full content height')
+            assert.ok(Math.abs(node.height - 600) < 1e-8, 'the full logical content height is preserved')
         }
-        const contentWidth = expectedPolicy === letterbox ? height * 32 / 9 : width
+        const contentWidth = Math.min(width, height * stageWidth / 600)
+        const contentHeight = Math.min(height, width * 600 / stageWidth)
         assert.ok(Math.abs(visibleWidth * scale() - contentWidth) < 1e-8)
-        assert.ok(Math.abs(600 * scale() - height) < 1e-8, 'content always fills the window vertically')
-        if (expectedPolicy === letterbox) assert.ok((width - contentWidth) / 2 > 0, 'extra width becomes equal side bars')
+        assert.ok(Math.abs(600 * scale() - contentHeight) < 1e-8)
+        if (width / height < 4 / 3) assert.ok((height - contentHeight) / 2 > 0, 'narrow windows have top and bottom bars')
+        if (width / height > 32 / 9) assert.ok((width - contentWidth) / 2 > 0, 'wide windows have side bars')
     }
     exports.resetViewport()
     assert.equal(constraints.length, 2, 'teardown must not constrain the native window back to 4:3')

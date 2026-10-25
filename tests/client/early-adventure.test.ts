@@ -1,3 +1,4 @@
+import { readGameplaySource, readPresentationSource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -8,7 +9,7 @@ import { parsePresentationDefinitions } from '@/shared/content/presentation'
 import { parseReanim, sampleReanimTrack } from '@/shared/content/reanim'
 import { levelAwardSize } from '@/client/level/LevelGeometry'
 
-const definitions = parsePresentationDefinitions(JSON.parse(readFileSync('tools/content/pvz-base/presentation/definitions.json', 'utf8')))
+const definitions = parsePresentationDefinitions(readPresentationSource())
 function loadLevelModule(name: string, modules: Record<string, unknown>) {
     const exports: Record<string, any> = {}
     const code = transpileModule(readFileSync(`assets/scripts/client/level/${name}.ts`, 'utf8'), {
@@ -30,7 +31,7 @@ test('conveyor keyboard selection uses packet identity and respects page and dia
     const snapshot: any = { paused: false, phase: 'gameplay', result: 'playing', cursor: { mode: 'none' },
         seedPackets: [], conveyorPackets: [{ id: 17, seedId: 'nut' }] }
     const input = new LevelInputPresenter({ isChildOf: (node: unknown) => node === page },
-        { render: () => snapshot, command: (command: unknown) => commands.push(command) },
+        { render: () => snapshot, command: (command: unknown) => commands.push(command), update() {} },
         { introComplete: true, seedPacketAt: (_snapshot: unknown, index: number) => index === 0 ? {
             cooldownRemaining: 0, canAfford: true, command: { type: 'selectConveyorPacket', packetId: 17 },
         } : undefined, audio: { seedPacketSelected() {}, plantingCancelled() {} } })
@@ -158,7 +159,7 @@ test('the shovel reward uses its own dimensions while growing and moving to the 
     runInNewContext(code.outputText, { exports: module.exports, require: (id: string) => ({
         '@/client/view/uiNode': { uiNode: () => ({}) }, './LevelGeometry': { levelAwardSize },
     }[id] ?? {}) })
-    const levels = JSON.parse(readFileSync('tools/content/pvz-base/gameplay/levels.json', 'utf8'))
+    const levels = readGameplaySource('levels')
     let position: number[] = [], scale: number[] = []
     const image = { setScale: (...value: number[]) => { scale = value } }
     const node = { setPosition: (...value: number[]) => { position = value },

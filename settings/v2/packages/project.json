@@ -5,6 +5,7 @@
     "designResolution": {
       "width": 800,
       "height": 600,
+      "fitWidth": true,
       "fitHeight": true
     },
     "highQuality": true

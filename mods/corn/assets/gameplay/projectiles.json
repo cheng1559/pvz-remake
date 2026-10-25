@@ -1,0 +1,5 @@
+{
+  "corn:cob": { "damage": 300, "speedPerTick": { "x": 0, "y": 0 }, "hitbox": { "x": -34, "y": -76, "width": 230, "height": 230 } },
+  "corn:kernel": { "damage": 20, "speedPerTick": { "x": 0, "y": 0 }, "hitbox": { "x": 0, "y": 0, "width": 40, "height": 40 } },
+  "corn:butter": { "damage": 40, "speedPerTick": { "x": 0, "y": 0 }, "hitbox": { "x": 0, "y": 0, "width": 40, "height": 40 } }
+}

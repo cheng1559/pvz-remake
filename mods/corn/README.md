@@ -2,6 +2,10 @@
 
 独立实现玉米投手 `corn:kernel_pult` 和玉米加农炮 `corn:cob_cannon`，配置、玩法与表现均放在 Mod 内。
 
+`assets/gameplay/seed-catalog.json` 将这两张卡和当前已实现的全部隐藏卡（爆炸坚果、保龄球坚果、保龄球爆炸坚果）追加到通用选卡列表，所有使用选卡界面的关卡共用；固定种子栏不受影响。
+
+玩法配置按类别放在 `assets/gameplay/`，表现配置放在 `assets/presentation/`，由 根目录 `content.json` 统一索引并保留资源映射。`mod:pack` 自动展开索引，静态定义自动注册，行为脚本可读取生成的 `assets/gameplay.json` 和 `assets/presentation.json`。
+
 ```sh
 npm run mod:pack -- mods/corn
 npm run mod:test -- dist/mods/corn
@@ -24,13 +28,17 @@ Tooltip 使用原版短提示 `requires 2 kernel-pults`，优先显示冷却、�
 - `src/server/cobCannon.ts` 处理升级、瞄准、装填和炮弹；瞄准与飞行分别保存在 `corn:cob_aim`、`corn:cob_flight`，随服务端存档。`src/client/cobCannon.ts` 处理四种主体动画、眨眼、就绪闪光、瞄准图、紫色种子包、双格预览、爆炸残痕和震屏。瞄准图使用原版完整图片，位置包含 `CursorObject::Update/Draw` 的两段偏移。
 - 就绪玉米使用动画播放器的轨道颜色，按 75 tick 周期更新，避免重新绘制姿势时失去颜色。爆米花与残痕均保持到生命周期的 80% 再淡出，分别持续 50 和 100 tick。
 
-- 费用 100、冷却 750 tick，玉米粒伤害 20，黄油伤害 40，黄油概率 25%，眩晕 400 tick。参数放在 `assets/gameplay.json`，1 tick = 0.01 秒。
+- 费用 100、冷却 750 tick，玉米粒伤害 20，黄油伤害 40，黄油概率 25%，眩晕 400 tick。参数放在 `assets/gameplay/`，1 tick = 0.01 秒。
 - `src/server/index.ts` 直接注册自己的植物行为，包装真实 `ProjectileSystem.update` 和 `ZombieSystem.updateActive`，其余实体继续原方法。按 Portable 的 `Plant::UpdateShooter/Fire`、`Projectile::UpdateLobMotion` 实现：首次随机 0–300 tick；周期 286–300 tick，无目标时也重置；50 tick 预判；逐 tick 重力 0.115，下降高度决定命中，失去目标仍向默认位置出手。飞行与定身分别保存在 `corn:lob`、`corn:buttered` 组件中，统一同步与存档。
-- `src/client/index.ts` 注册自己的视图、待机/投射/眨眼动画、子弹、命中粒子和音效；两个主体动画预先加载，投射姿势按服务端 tick 对齐。种子包支持标准、实际渲染和倾斜风格，种植预览使用自己的待机姿势。黄油按 `Zombie::DrawButter` 使用独立糊脸贴图，跟随头部中心；定身期间动作停住，死亡和碾压正常继续。子弹按服务端保存的角度旋转，玉米粒/黄油分别以 0.95/0.8 缩放。表现参数在 `assets/visuals.json`。
-- `assets/content.json` 映射自己的资源 ID；`presentation.json` 保存表现配置。动画、PNG、粒子来自项目现有 PvZ 解包素材，以 `corn:` 命名空间独立打包；不引用原版玉米投手图鉴 ID 或第 34 个种子图。音效由解包 OGG 转为 MP3，以兼容现有 Web/Native 音频链路。
+- `src/client/index.ts` 注册自己的视图、待机/投射/眨眼动画、子弹、命中粒子和音效；两个主体动画预先加载，投射姿势按服务端 tick 对齐。种子包支持标准、实际渲染和倾斜风格，种植预览使用自己的待机姿势。黄油按 `Zombie::DrawButter` 使用独立糊脸贴图，跟随头部中心；定身期间动作停住，死亡和碾压正常继续。子弹按服务端保存的角度旋转，玉米粒/黄油分别以 0.95/0.8 缩放。表现参数位于对应植物、子弹定义的 `viewConfig`，不再单独保存 visuals 文件。
+- 根目录 `content.json` 统一索引玩法、表现分类文件并映射自己的资源 ID。动画、PNG、粒子来自项目现有 PvZ 解包素材，以 `corn:` 命名空间独立打包；不引用原版玉米投手图鉴 ID 或第 34 个种子图。音效由解包 OGG 转为 MP3，以兼容现有 Web/Native 音频链路。
 
 当前战斗支持本体已有的普通、旗帜、路障、铁桶、撑杆僵尸。抛投可以击中跳跃中的撑杆，但黄油不能定住正在跳跃的僵尸或无头尸体；重复命中重置 400 tick。未实现的冰车、潜水等僵尸机制不在此 Mod 内补写。
 
 服务端碰撞、伤害、概率和计时均在 Mod 中；宿主没有玉米专用字段。瞄准通过通用 `mod` 指令发给服务端，零倍速仍能选择、取消和发射，动画与炮弹推进继续受游戏时钟和暂停控制。每份安装内容的版本与哈希参与存档校验，更新 ZIP 后旧关卡存档按不兼容处理。已构建客户端需更新本体，以包含本轮通用指令与宿主模块导出。
 
 玉米炮的选卡条件挂钩服务端 `seedAvailability`，快照与普通／传送带选卡命令使用同一判断。客户端直接使用快照中的可用状态、警告文本键和公共选卡音效，无需再挂钩置灰或点击方法。额外 advice 由服务端 `rejectSeed` 挂钩发送。读取选中种子使用 `host.get('server/seedBank').selectedSeedId(bank)`；服务端选择状态保存在互斥的 `bank.selection` 中。
+
+玉米炮的震屏和振动由客户端代码触发：挂钩 `LevelView.playFeedback`，命中时调用 `this.shakeBoard(3, -4)` 和 `Haptics.play('explosion')`。`shakeBoard(x, y, ticks = 12)` 与本体共用，受游戏 tick、暂停和倍速控制；iOS 振动使用真实时间，爆炸反馈保留 80ms 延迟。JSON 不保存这两类参数。
+
+选中玉米炮、瞄准和发射操作不触发振动，炮弹命中时保留爆炸振动。

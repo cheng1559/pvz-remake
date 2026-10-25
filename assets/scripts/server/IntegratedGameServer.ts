@@ -280,7 +280,7 @@ export class IntegratedGameServer {
         if (save.seedBank.selection.mode === 'tool' && !definition.tools?.includes(save.seedBank.selection.toolId)) throw new Error('Saved tool is unavailable in this level')
         if (save.seedBank.choosing ? !definition.seedBankSlots || save.level.phase !== 'intro' || save.seedBank.packets.length > slots
             : save.seedBank.packets.length !== slots) throw new Error('Saved seed bank size does not match the level')
-        if (definition.seedBankSlots && (save.seedBank.choosing === undefined || save.seedBank.choosing && save.seedBank.packets.some(packet => !definition.seedPackets.includes(packet.seedId)))) {
+        if (definition.seedBankSlots && (save.seedBank.choosing === undefined || save.seedBank.choosing && save.seedBank.packets.some(packet => !this.definitions.seedCatalog.includes(packet.seedId)))) {
             throw new Error('Saved seed choice does not match the level')
         }
         for (const packet of save.seedBank.packets) {

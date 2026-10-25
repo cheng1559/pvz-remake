@@ -1,13 +1,12 @@
-import { dynamicAtlasManager, macro, SpriteFrame, Texture2D, warn } from 'cc'
+import { dynamicAtlasManager, macro, SpriteFrame, sys, Texture2D, warn } from 'cc'
 import { getSpriteDensity } from '@/client/content/SpriteDensity'
-import { resourcePacks } from '@/client/content/ResourcePacks'
+import { modResources } from '@/client/content/ModResources'
 import { SpriteResourceManifest, type SpriteSampling } from './SpriteResourceManifest'
 
 export class SpriteLoader {
     private static _cache: Map<string, SpriteFrame> = new Map()
     private static _pending: Map<string, Promise<SpriteFrame | null>> = new Map()
     private static _dynamicAtlasConfigured = false
-    private static _resourceRevision = -1
 
     // ── Public API ─────────────────────────────────────────────
 
@@ -27,11 +26,7 @@ export class SpriteLoader {
             this._warnInvalidSpriteName('loadWithAlpha', name)
             return null
         }
-        await resourcePacks.ready()
-        if (this._resourceRevision !== resourcePacks.revision) {
-            this.clearCache()
-            this._resourceRevision = resourcePacks.revision
-        }
+        await modResources.ready()
 
         if (this._cache.has(name)) {
             return this._cache.get(name)!
@@ -57,12 +52,11 @@ export class SpriteLoader {
 
     private static async _loadUncached(name: string): Promise<SpriteFrame | null> {
         this._configureDynamicAtlas()
-        const revision = resourcePacks.revision
-        const mainSf = await resourcePacks.asset(name, SpriteFrame) ?? null
+        const mainSf = await modResources.asset(name, SpriteFrame) ?? null
 
         if (mainSf) {
             this._applySpriteSampling(mainSf, getSpriteDensity(mainSf) > 1 ? 'linear' : SpriteResourceManifest.getSampling(name))
-            if (revision === resourcePacks.revision) this._cache.set(name, mainSf)
+            this._cache.set(name, mainSf)
         } else {
             warn(`[SpriteLoader] Failed to load sprite '${name}'`)
         }
@@ -115,7 +109,8 @@ export class SpriteLoader {
 
         this._dynamicAtlasConfigured = true
         macro.CLEANUP_IMAGE_CACHE = false
-        dynamicAtlasManager.enabled = true
+        // Native archive uploads release their CPU images; atlas packing would copy freed image data.
+        dynamicAtlasManager.enabled = !sys.isNative
     }
 
     private static _applyTextureSampling(texture: Texture2D, sampling: SpriteSampling = 'nearest') {

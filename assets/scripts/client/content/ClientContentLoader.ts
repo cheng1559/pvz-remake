@@ -4,8 +4,7 @@ import { parseFont } from '@/shared/content/font'
 import { parseContentManifest, type ContentManifest } from '@/shared/content/index'
 import { parseParticle, type Particle } from '@/shared/content/particle'
 import { ContentRegistry, type ResolvedContent } from './ContentRegistry'
-import { resourcePacks } from './ResourcePacks'
-import { loadArchiveAsset } from './ModRuntime'
+import { modResources } from './ModResources'
 
 type AssetType<T extends Asset> = new (...args: any[]) => T
 
@@ -22,9 +21,9 @@ export class ClientContentLoader {
             const assetType: AssetType<Asset> = type
             const id = content.category === 'music' && assetType === AudioClip
                 ? `${content.id.split(':')[0]}:${content.path.slice(content.path.lastIndexOf('/') + 1)}` : content.id
-            const replacement = await resourcePacks.asset(id, type, animation)
+            const replacement = await modResources.asset(id, type, animation)
             if (replacement !== undefined) return replacement
-            if (content.bundle.startsWith('pvzmod:///')) return loadArchiveAsset(content.bundle + content.path, type)
+            if (content.bundle.startsWith('pvzmod:///')) return modResources.file(content.contentId, content.path, type)
             throw new Error(`Missing ${content.category} asset: ${id}`)
         })().catch(error => {
             this.assets.delete(key)
@@ -38,7 +37,7 @@ export class ClientContentLoader {
         const cached = this.manifests.get('base')
         if (cached) return cached
 
-        const promise = resourcePacks.baseJson('pvz:content').then(parseContentManifest).catch(error => {
+        const promise = modResources.baseJson('pvz:content').then(parseContentManifest).catch(error => {
             this.manifests.delete('base')
             throw error
         })
@@ -54,7 +53,7 @@ export class SpriteRepository {
     ) {}
 
     async load(id: string, animation?: string): Promise<SpriteFrame> {
-        const replacement = await resourcePacks.asset(id, SpriteFrame, animation)
+        const replacement = await modResources.asset(id, SpriteFrame, animation)
         if (replacement) return replacement
         const content = this.registry.resolve('sprites', id)
         if (!content) throw new Error(`unknown sprite: ${id}`)
@@ -71,7 +70,7 @@ export class FontRepository {
     ) {}
 
     async load(id: string): Promise<BitmapFontAssets> {
-        const replacement = await resourcePacks.font(id)
+        const replacement = await modResources.font(id)
         if (replacement) return replacement
         const content = this.registry.resolve('fonts', id)
         if (!content) return Promise.reject(new Error(`unknown font: ${id}`))

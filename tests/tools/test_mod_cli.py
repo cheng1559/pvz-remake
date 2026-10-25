@@ -19,19 +19,30 @@ class ModCliTests(unittest.TestCase):
 
             self.run_cli("init", "sample", "--out", str(mod))
             self.assertTrue((mod / "src" / "server" / "index.ts").is_file())
+            self.assertFalse((mod / "assets/gameplay.json").exists())
+            content_index = (mod / "content.json").read_bytes()
+            seeds = (mod / "assets/gameplay/seeds.json").read_bytes()
             self.run_cli("pack", str(mod), "--out", str(packed))
 
             self.assertFalse((mod / "gameplay" / "node").exists())
             self.assertFalse((mod / "gameplay" / "cocos").exists())
-            manifest = json.loads((packed / "mod.json").read_text(encoding="utf-8"))
+            manifest = json.loads((packed / "manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["id"], "local:sample")
             self.assertTrue((packed / "gameplay" / "node" / "index.js").is_file())
             self.assertTrue((packed / "gameplay" / "cocos" / "index.js").is_file())
             self.assertFalse((packed / "src").exists())
             with zipfile.ZipFile(packed.with_suffix(".zip")) as archive:
-                self.assertEqual(json.loads(archive.read("packed/mod.json"))["id"], "local:sample")
+                self.assertEqual(json.loads(archive.read("packed/manifest.json"))["id"], "local:sample")
                 self.assertIn("packed/gameplay/cocos/index.js", archive.namelist())
                 self.assertFalse(any(name.endswith(".ts") for name in archive.namelist()))
+                self.assertEqual(json.loads(archive.read("packed/assets/gameplay.json")), {
+                    "plants": {}, "seeds": {}, "seedCatalog": [],
+                })
+                self.assertFalse(any(name.startswith("packed/assets/gameplay/") for name in archive.namelist()))
+                self.assertEqual(json.loads(archive.read("packed/content.json"))["resources"], {})
+            self.assertFalse((mod / "assets/gameplay.json").exists())
+            self.assertEqual((mod / "content.json").read_bytes(), content_index)
+            self.assertEqual((mod / "assets/gameplay/seeds.json").read_bytes(), seeds)
 
             self.run_cli("test", str(packed))
             self.assertFalse(list(mod.rglob("*.js")))
@@ -45,7 +56,7 @@ class ModCliTests(unittest.TestCase):
             bundle = mod / "assets" / "bundles" / "demo"
             for path in [source, images, bundle]:
                 path.mkdir(parents=True)
-            (mod / "mod.json").write_text(json.dumps({
+            (mod / "manifest.json").write_text(json.dumps({
                 "schemaVersion": 1, "apiVersion": 1, "id": "local:client-mod",
                 "client": {"module": "client/index.js", "bundle": "assets/bundles/demo"},
             }))
@@ -71,16 +82,16 @@ class ModCliTests(unittest.TestCase):
             temp = Path(directory)
             mod, first, second = temp / "sample", temp / "first", temp / "second"
             self.run_cli("init", "sample", "--out", str(mod))
-            source_manifest = (mod / "mod.json").read_bytes()
+            source_manifest = (mod / "manifest.json").read_bytes()
             self.run_cli("pack", str(mod), "--out", str(first))
             self.run_cli("pack", str(mod), "--out", str(second))
-            before = json.loads((first / "mod.json").read_text())["contentHash"]
-            self.assertEqual(before, json.loads((second / "mod.json").read_text())["contentHash"])
+            before = json.loads((first / "manifest.json").read_text())["contentHash"]
+            self.assertEqual(before, json.loads((second / "manifest.json").read_text())["contentHash"])
             self.assertEqual(len(before), 64)
-            (mod / "assets" / "gameplay.json").write_text('{"plants":{},"seeds":{},"items":{}}')
+            (mod / "assets" / "gameplay" / "seeds.json").write_text('{"local:seed":{"plant":"local:plant"}}')
             self.run_cli("pack", str(mod), "--out", str(first))
-            self.assertNotEqual(before, json.loads((first / "mod.json").read_text())["contentHash"])
-            self.assertEqual(source_manifest, (mod / "mod.json").read_bytes())
+            self.assertNotEqual(before, json.loads((first / "manifest.json").read_text())["contentHash"])
+            self.assertEqual(source_manifest, (mod / "manifest.json").read_bytes())
 
     def run_cli(self, *arguments, cwd=ROOT):
         subprocess.run(

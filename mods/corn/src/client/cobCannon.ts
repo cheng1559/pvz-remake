@@ -9,7 +9,7 @@ export const flashGray = (tick: number, period: number) => {
 export function registerCobCannon({ host, assets }: Context): void {
     const config = assets.json('assets/presentation.json').plants[CANNON]
     const behavior = assets.json('assets/gameplay.json').plants[CANNON].behavior
-    const visuals = assets.json('assets/visuals.json'), visual = visuals.cannon
+    const visual = config.viewConfig
     const { Color, Graphics, Sprite, SpriteFrame, isValid } = host.get('cc')
     const { uiNode } = host.get('client/view/uiNode')
     const { ReanimPlayer } = host.get('client/reanim/ReanimPlayer')
@@ -47,7 +47,7 @@ export function registerCobCannon({ host, assets }: Context): void {
             const state = plant.behaviorState, phase = state?.phase ?? 'arming', slot = visual.phaseClips[phase]
             const active = this.players[slot], blink = this.players.blink, tick = world.gameplayTick
             if (this.phase !== phase) {
-                if (this.phase) active.blendFrom(this.players[visual.phaseClips[this.phase]], visuals.blendSeconds)
+                if (this.phase) active.blendFrom(this.players[visual.phaseClips[this.phase]], visual.blendSeconds)
                 for (const value of Object.values(this.players)) value.hide()
                 active.play({ loop: phase === 'arming' || phase === 'ready', rate: 1, hideOnFinish: false })
                 blink.attachToTrack(active, config.animations.blink.attachmentTrackId)
@@ -152,13 +152,11 @@ export function registerCobCannon({ host, assets }: Context): void {
                 return false
             }
             presenter.game.command(right ? { type: 'clearCursor' } : { type: 'mod', id: 'corn:fire_cannon', data: point })
-            if (!right && !aimed(presenter.game.render())) Haptics.play('medium')
         } else {
             if (right || snapshot.cursor.mode !== 'none') return false
             const cannon = hitCannon(snapshot, presenter.game.definitions, point)
             if (!cannon) return false
             presenter.game.command({ type: 'mod', id: 'corn:aim_cannon', data: { ...point, entityId: cannon.entityId } })
-            Haptics.play()
         }
         presenter.view.setPointer(point)
         event.propagationStopped = true
@@ -189,7 +187,6 @@ export function registerCobCannon({ host, assets }: Context): void {
         if (!press || (!aiming && !cannon)) return
         mobileAims.set(press, cannon)
         if (cannon) {
-            Haptics.play()
             press.cancelInside = !!snapshot.extensions['corn:cob_aim']?.[cannon.entityId]
             press.leftSource = false
             if (!press.cancelInside) this.game.command({ type: 'mod', id: 'corn:aim_cannon', data: { ...point, entityId: cannon.entityId } })
@@ -208,7 +205,6 @@ export function registerCobCannon({ host, assets }: Context): void {
         if (ready) {
             if (canTarget(press.point)) {
                 this.game.command({ type: 'mod', id: 'corn:fire_cannon', data: press.point })
-                if (!aimed(this.game.render())) Haptics.play('medium')
             }
             if (aimed(this.game.render())) this.game.command({ type: 'clearCursor' })
         } else if (press.cancelInside || press.leftSource) this.game.command({ type: 'clearCursor' })
@@ -295,7 +291,6 @@ export function registerCobCannon({ host, assets }: Context): void {
         for (const event of events) {
             if (event.type === 'corn:sound' && visual.sounds[event.data.id]) this.audio.sounds([visual.sounds[event.data.id]])
             if (event.type === 'projectileImpact' && event.data.typeId === 'corn:cob') {
-                Haptics.play('explosion')
                 const mark = this.spawnProjectileImpact(snapshot, event, visual.blastMark)
                 if (mark) { mark.name = 'CornBlastMark'; mark.setSiblingIndex(0) }
             }
@@ -305,10 +300,11 @@ export function registerCobCannon({ host, assets }: Context): void {
         next(snapshot)
         for (const node of this.entityLayer.children) if (node.name === 'CornBlastMark') node.setSiblingIndex(0)
     })
-    host.around(LevelView.prototype, 'syncShake', function (next, tick, events) {
+    host.around(LevelView.prototype, 'playFeedback', function (next, events) {
+        next(events)
         if (events.some((event: any) => event.type === 'projectileImpact' && event.data.typeId === 'corn:cob')) {
-            this.shake = { endTick: tick + visual.shake.ticks, x: visual.shake.x, y: visual.shake.y, tick: -1 }
+            this.shakeBoard(3, -4)
+            Haptics.play('explosion')
         }
-        return next(tick, events)
     })
 }

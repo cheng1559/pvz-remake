@@ -1,5 +1,5 @@
-import { Asset, assetManager, ImageAsset, JsonAsset, native, SpriteFrame, sys, Texture2D } from 'cc'
-import fflate from 'fflate'
+import { assetManager, native, sys } from 'cc'
+import { contentJson } from '@/shared/mod/content'
 import { installedArchiveRoot, saveInstalledArchive } from './InstalledArchives'
 import type { InstalledMod } from './ModManager'
 
@@ -35,7 +35,7 @@ function bytes(mod: MountedMod, file: string): Uint8Array {
 }
 
 function execute(mod: MountedMod, file: string, runtime: Pick<ModuleSystem, 'register'>): void {
-    const source = fflate.strFromU8(bytes(mod, file))
+    const source = new TextDecoder().decode(bytes(mod, file))
     new Function('System', `${source}\n//# sourceURL=${modFileUrl(mod.manifest.id, file)}`)(runtime)
 }
 
@@ -64,12 +64,12 @@ function initialize(): void {
             const { mod, file } = resolve(url)!
             if (type === 'bundle') {
                 const directory = file.replace(/\/$/, '')
-                const config = JSON.parse(fflate.strFromU8(bytes(mod, `${directory}/config.json`)))
+                const config = contentJson(mod.files, `${directory}/config.json`)
                 execute(mod, `${directory}/index.js`, runtime)
                 config.base = `${url.replace(/\/$/, '')}/`
                 return config
             }
-            if (type === '.json') return JSON.parse(fflate.strFromU8(bytes(mod, file)))
+            if (type === '.json') return contentJson(mod.files, file)
             if (type === '.js') { execute(mod, file, runtime); return null }
             let location: string
             if (sys.isNative) location = `${installedArchiveRoot('mod-runtime', mod.manifest.id)}/${file}`
@@ -93,8 +93,8 @@ export function clearModRuntimeCache(): void {
 export async function mountMod(mod: InstalledMod): Promise<void> {
     initialize()
     if (mounted.has(mod.manifest.id)) return
-    if (sys.isNative && mod.manifest.client) {
-        // Keep client assets alive after an installed ZIP is updated or removed.
+    if (sys.isNative && mod.manifest.client?.bundle) {
+        // Cocos bundles require a physical snapshot; ordinary resources use ModResources.
         await saveInstalledArchive('mod-runtime', mod.manifest.id, mod.archive, mod.files)
     }
     mounted.set(mod.manifest.id, { ...mod, urls: new Map() })
@@ -104,50 +104,8 @@ export function modFileUrl(id: string, file: string): string {
     return `pvzmod:///${encodeURIComponent(id)}/${file.split('/').map(encodeURIComponent).join('/')}`
 }
 
-export async function loadModSprite(id: string, file: string): Promise<SpriteFrame> {
-    const image = await new Promise<ImageAsset>((resolve, reject) => {
-        assetManager.loadRemote<ImageAsset>(modFileUrl(id, file), { ext: '.png' },
-            (error, value) => error ? reject(error) : resolve(value))
-    })
-    const texture = new Texture2D()
-    texture.image = image
-    // Match resource-pack uploads so transparent edges keep their original colors.
-    const pixels = image.data
-    if (sys.isBrowser && pixels && !ArrayBuffer.isView(pixels)) {
-        const canvas = document.createElement('canvas')
-        canvas.width = texture.width
-        canvas.height = texture.height
-        const context = canvas.getContext('2d')!
-        context.drawImage(pixels, 0, 0)
-        const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data
-        texture.uploadData(new Uint8Array(rgba.buffer, rgba.byteOffset, rgba.byteLength))
-    }
-    texture.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
-    texture.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.LINEAR)
-    const frame = new SpriteFrame()
-    frame.texture = texture
-    return frame
-}
-
 export async function importModModule(id: string, file: string): Promise<any> {
     const loaded = await system().import(modFileUrl(id, file))
     if (typeof loaded.register !== 'function') throw new Error(`${id}/${file} must export register({ host, assets })`)
     return loaded
-}
-
-export async function loadArchiveAsset<T extends Asset>(url: string, type: new (...args: any[]) => T): Promise<T> {
-    const entry = resolve(url)
-    if (!entry) throw new Error(`Mod archive is unavailable: ${url}`)
-    const assetType: new (...args: any[]) => Asset = type
-    if (assetType === JsonAsset) {
-        const asset = new JsonAsset()
-        asset.json = JSON.parse(fflate.strFromU8(bytes(entry.mod, entry.file)))
-        return asset as unknown as T
-    }
-    if (assetType === SpriteFrame || assetType === Texture2D) {
-        const frame = await loadModSprite(entry.mod.manifest.id, entry.file)
-        return (assetType === SpriteFrame ? frame : frame.texture) as unknown as T
-    }
-    return new Promise<T>((resolve, reject) => assetManager.loadRemote<T>(url,
-        { ext: entry.file.slice(entry.file.lastIndexOf('.')) }, (error, asset) => error ? reject(error) : resolve(asset)))
 }

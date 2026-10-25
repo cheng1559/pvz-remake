@@ -1,0 +1,8 @@
+{
+  "example:pea": {
+    "sprite": "pvz:projectilepea",
+    "impact": { "kind": "particle", "id": "pvz:peasplat", "offset": [49, 12], "yRange": [20, 100], "duration": 0.21 },
+    "fireSounds": [{ "id": "throw", "foley": true, "pitchRange": 10 }],
+    "impactSounds": [{ "id": "splat", "foley": true, "pitchRange": 10 }]
+  }
+}

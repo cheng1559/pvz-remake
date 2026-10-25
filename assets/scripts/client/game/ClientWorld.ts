@@ -57,7 +57,8 @@ export class ClientWorld {
 
         const current = this.currentValue
         const previous = this.previousValue
-        const t = Math.max(0, Math.min(1, alpha))
+        // Loss freezes simulation, but the host's interpolation clock keeps cycling during house entry.
+        const t = current.result === 'lost' ? 1 : Math.max(0, Math.min(1, alpha))
         return {
             ...current,
             plants: interpolate(current.plants, previous?.plants, t),

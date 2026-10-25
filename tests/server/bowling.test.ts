@@ -1,19 +1,20 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import type { World } from '@/ecs'
+import { CommandBuffer, type World } from '@/ecs'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { IntegratedGameHost } from '@/server/IntegratedGameHost'
 import { LocalGameChannel } from '@/shared/channel'
 import { spawnZombie } from '@/server/zombies/spawn'
-import { ZombieComponent } from '@/server/components'
+import { RandomResource, SeedBankResource, ZombieComponent } from '@/server/components'
+import { createConveyorSystem } from '@/server/conveyor'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { parseServerPacket, type JsonValue, type StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from './run-command'
 import { parseServerSaveSnapshot } from '@/server/save'
 
-const source = (name: string) => JSON.parse(readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'))
-const definitions = parseGameplayDefinitions(source('definitions'))
+const source = readGameplaySource
+const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 const options: StartSessionPacket = { type: 'startSession', protocolVersion: 1, sequence: 1,
     levelId: 'pvz:adventure-1-5', randomSeed: 12345, initialMoney: 0, firstAdventure: true, mods: [] }
@@ -120,6 +121,27 @@ test('seed and shovel selection are exclusive, including after save and on a non
     assert.equal(normal.snapshot().plants.length, 0)
 })
 
+test('the conveyor draws both seed types at their configured weight boundary', () => {
+    const server = begin()
+    const world = (server as unknown as { session: { world: World } }).session.world
+    const conveyor = world.resources.get(SeedBankResource).conveyor!
+    const random = world.resources.get(RandomResource)
+    const supply = createConveyorSystem()
+    const commands = new CommandBuffer(world)
+    const pool = levels.levels[options.levelId].conveyor!.seeds
+    for (const [roll, expected] of [[pool[0].weight - 1, pool[0].id], [pool[0].weight, pool[1].id]] as const) {
+        random.integer = (min, max) => {
+            assert.equal(min, 0)
+            assert.equal(max, pool.reduce((sum, seed) => sum + seed.weight, 0) - 1)
+            return roll
+        }
+        conveyor.packets.length = 0
+        conveyor.spawnAtTick = 0
+        supply.run({ world, commands, tick: 1 })
+        assert.equal(conveyor.packets[0].seedId, expected)
+    }
+})
+
 test('dialogue IDs and conveyor supply follow level configuration', () => {
     const config = source('levels'), level = config.levels['pvz:adventure-1-5']
     level.shovelTutorial.repeat = [700, 900]
@@ -211,6 +233,9 @@ test('a bowling plant hits, ricochets and resumes the same motion after save; an
         } else {
             assert.equal(world.get(id, ZombieComponent)!.health, 0)
             assert.notEqual(server.snapshot().plants[0].row, 2)
+            assert.deepEqual(events.find(event => event.type === 'bowlingImpact')!.data, {
+                entityId: id, typeId: 'pvz:normal', helm: false,
+            })
         }
         const restored = new IntegratedGameServer(definitions, levels)
         restored.start({ ...options, save: server.save() as unknown as JsonValue })

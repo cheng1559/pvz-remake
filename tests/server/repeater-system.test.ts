@@ -1,5 +1,5 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
@@ -7,12 +7,10 @@ import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from './run-command'
 
-const source = (name: string): unknown => JSON.parse(
-    readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'),
-)
+const source = readGameplaySource
 
 test('Repeater fires twice 26 ticks apart and restores between shots', () => {
-    const definitions = parseGameplayDefinitions(source('definitions'))
+    const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
     const levels = parseGameplayLevels(source('levels'), definitions)
     const level = levels.levels['pvz:adventure-1-1']
     levels.levels['pvz:adventure-1-1'] = {

@@ -1,8 +1,8 @@
 import type { BitmapFontAssets } from './BitmapFontAssets'
-import { resourcePacks } from '@/client/content/ResourcePacks'
+import { modResources } from '@/client/content/ModResources'
 
 export async function loadBitmapFont(name: string): Promise<BitmapFontAssets> {
-    const font = await resourcePacks.font(`pvz:${name}`)
+    const font = await modResources.font(`pvz:${name}`)
     if (!font) throw new Error(`Missing font: ${name}`)
     return font
 }

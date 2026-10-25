@@ -1,0 +1,7 @@
+{
+  "example:pea": {
+    "damage": 30,
+    "speedPerTick": { "x": 3.33, "y": 0 },
+    "hitbox": { "x": -15, "y": 0, "width": 55, "height": 40 }
+  }
+}

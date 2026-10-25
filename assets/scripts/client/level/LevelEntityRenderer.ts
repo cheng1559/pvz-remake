@@ -166,6 +166,8 @@ export class LevelEntityRenderer {
                 if (player && snapshot.animation) player.restore(snapshot.animation)
             }
         }
+        // Paused scenes do not tick again to reveal the restored views.
+        if (this.lastSnapshot) this.sync(this.lastSnapshot, { added: [], removed: [] }, [])
     }
 
     sync(snapshot: WorldSnapshot, changes: ClientWorldChanges, events: ServerEvent[]): void {
@@ -225,7 +227,7 @@ export class LevelEntityRenderer {
         }
         for (const zombie of snapshot.zombies) {
             const node = this.entities.get(zombie.entityId)
-            if (node) node.active = GameDebugSettings.perfZombiesVisible
+            if (node) node.active = this.zombies.has(zombie.entityId) && GameDebugSettings.perfZombiesVisible
         }
         this.playEvents(snapshot, events)
         this.syncLayerOrder(snapshot)
@@ -293,7 +295,8 @@ export class LevelEntityRenderer {
         const { x, y, row } = event.data
         if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
         const explosion = typeof event.data.typeId === 'string' ? this.content.presentation.plants[event.data.typeId]?.explosion : undefined
-        this.spawnBoardParticle(explosion?.effect ?? 'powie', x + (explosion?.x ?? 0), y, explosion?.rowOrder ? row * 10 + 0.5 : 10000)
+        if (!explosion) return
+        this.spawnBoardParticle(explosion.effect, x + explosion.x, y, explosion.rowOrder ? row * 10 + 0.5 : 10000)
     }
 
     /** Zombie::ApplyBurn leaves a charred zombie that crumbles at its own pace. */
@@ -338,12 +341,14 @@ export class LevelEntityRenderer {
         this.pending.add(id)
         const item = snapshot.items.find(value => value.entityId === id)
         const plant = snapshot.plants.find(value => value.entityId === id)
+        const zombie = snapshot.zombies.find(value => value.entityId === id)
         const isAward = item?.typeId === this.content.levels.levels[snapshot.levelId].award.id
         const node = uiNode({
             name: `Entity-${id}`, parent: isAward ? this.awardLayer : item ? this.coinLayer : this.entityLayer,
             anchor: { x: 0, y: 1 },
-            // All plant factories, including Mods, stay hidden until their first sync above.
-            active: !plant,
+            position: item ? undefined : { x: entity.x - WIDTH / 2, y: HEIGHT / 2 - entity.y },
+            // Factories stay hidden until their first sync applies the current position and pose.
+            active: !plant && !zombie,
         }).node
         this.entities.set(id, node)
         try {
@@ -362,15 +367,13 @@ export class LevelEntityRenderer {
                     plant, tick: snapshot.gameplayTick })
                 if (node.isValid) this.plantViews.set(id, view)
                 else view.destroy?.()
-            } else if (snapshot.zombies.some(value => value.entityId === id)) {
-                const zombie = snapshot.zombies.find(value => value.entityId === id)!
+            } else if (zombie) {
                 const view = await this.content.zombieViews.create({ node, content: this.content, animations: this.animations,
                     shadowParent: this.entityLayer, assets: { shadow: this.assets.mowerShadow, sprites: this.assets.zombieSprites },
                     zombie, tick: snapshot.gameplayTick })
                 if (node.isValid) {
                     this.zombies.set(id, view)
                     this.zombieTypes.set(id, zombie.typeId)
-                    view.sync(zombie, snapshot)
                 } else view.destroy()
             } else if (isAward) {
                 await this.createAward(node, snapshot)
@@ -469,8 +472,8 @@ export class LevelEntityRenderer {
             ? { x: x + impact.offset[0] - zombie.x, y: -Math.max(impact.yRange[0], Math.min(impact.yRange[1], y + impact.offset[1] - zombie.y)) }
             : { x: x + impact.offset[0] - WIDTH / 2, y: HEIGHT / 2 - y - impact.offset[1] }
         if (impact.kind === 'tod') {
-            TodParticleSystem.spawn({ parent, effect: impact.id, ...position, useGameTime: false })
-            return
+            const effect = TodParticleSystem.spawn({ parent, effect: impact.id, ...position, useGameTime: false })
+            return effect.node
         }
         const node = uiNode({ name: 'ProjectileImpact', parent, position }).node
         const player = node.addComponent(ParticlePlayer)

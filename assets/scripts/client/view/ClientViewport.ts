@@ -18,7 +18,7 @@ export function constrainNativeWindow(minimum: number, maximum: number): void {
     host.jsb.setWindowAspectRatio(minimum, maximum)
 }
 
-/** Expand the centered stage within the aspect range, letterboxing wider screens. */
+/** Expand the centered stage within the aspect range, letterboxing outside it. */
 export function expandViewport(options: { minAspect?: number, maxAspect?: number } = {}): void {
     if (restore) return
     const design = view.getDesignResolutionSize().clone()
@@ -29,7 +29,7 @@ export function expandViewport(options: { minAspect?: number, maxAspect?: number
         const { width, height } = screen.windowSize
         const aspect = Math.max(minAspect, Math.min(maxAspect, width / height))
         view.setDesignResolutionSize(design.height * aspect, design.height,
-            width / height > maxAspect ? ResolutionPolicy.SHOW_ALL : ResolutionPolicy.NO_BORDER)
+            width / height < minAspect || width / height > maxAspect ? ResolutionPolicy.SHOW_ALL : ResolutionPolicy.NO_BORDER)
     }
     restore = () => {
         view.off('canvas-resize', resize)

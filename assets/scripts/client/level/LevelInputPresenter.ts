@@ -3,7 +3,6 @@ import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { gameClock } from '@/core/GameClock'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import { Haptics } from '@/platform/Haptics'
 import { boardCell, levelAwardSize } from './LevelGeometry'
 import type { LevelGame } from './LevelGame'
 import { LevelView } from './LevelView'
@@ -57,6 +56,7 @@ export class LevelInputPresenter {
         input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this)
         this.seedButtons = this.view.bindSeedPackets(index => this.selectSeedPacket(index))
         this.toolButtons = this.view.bindTools(id => this.selectTool(id))
+        for (const button of [...this.seedButtons, ...this.toolButtons.map(entry => entry.button)]) button.hapticsEnabled = false
         this.buttons.push(...this.seedButtons, ...this.toolButtons.map(entry => entry.button), this.view.bindMenu(() => {
             if (!this.enabled || !this.view.canOpenMenu) return
             if (this.game.render().cursor.mode !== 'none') this.cancelPlanting()
@@ -107,7 +107,6 @@ export class LevelInputPresenter {
         if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
         const packet = this.view.seedPacketAt(snapshot, index)
         if (!packet) return
-        Haptics.play()
         if (snapshot.cursor.mode !== 'none') {
             this.cancelPlanting()
             return
@@ -135,7 +134,6 @@ export class LevelInputPresenter {
         // Let Menu keep its normal button capture when no plant is held.
         if (!held && !tool && index < 0 && hit(this.buttons[this.buttons.length - 1])) return
         const pickable = packet && !packet.selected && packet.ready && !packet.availability.reason
-        if (packet && held && !pickable) Haptics.play()
         if (packet && (!held || pickable)) {
             if (held) this.game.command({ type: 'clearCursor' })
             this.selectSeedPacket(index)
@@ -236,8 +234,9 @@ export class LevelInputPresenter {
     private selectTool(toolId: string): void {
         if (!this.enabled) return
         if (this.game.render().cursor.mode !== 'none') { this.cancelPlanting(); return }
-        Haptics.play()
         this.game.command({ type: 'selectTool', toolId })
+        // A touch move can arrive before the next frame; confirm selection at the input boundary.
+        this.game.update(0)
     }
 
     private canUseCursor(snapshot: WorldSnapshot): boolean {

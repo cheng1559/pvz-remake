@@ -1,9 +1,9 @@
 """Package existing HD images/fonts with stable resource IDs; no neural inference."""
 import argparse
 import json
-import zipfile
 from pathlib import Path
 
+from package_resources import package_resources
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,14 +53,7 @@ def build(pack=PACK, pack_id='hd'):
     fonts = {f'pvz:{path.stem}': f'fonts/{path.name}' for path in sorted((pack / 'fonts').glob('*.json'))}
     if any(name in fonts for name in ('pvz:pico129', 'pvz:pix118bold')):
         raise ValueError('Pixel fonts must not be included in the HD pack')
-    manifest = {'id': pack_id, 'sprites': sprites, 'fonts': fonts}
-    (pack / 'pack.json').write_text(json.dumps(manifest, ensure_ascii=False, separators=(',', ':')) + '\n')
-    archive = ROOT / f'dist/resource-packs/{pack_id}.zip'
-    archive.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as output:
-        for path in sorted(pack.rglob('*')):
-            if path.is_file() and path.suffix != '.meta' and path.name != 'manifest.json':
-                output.write(path, path.relative_to(pack).as_posix())
+    archive = package_resources(pack, pack_id, {'sprites': sprites, 'fonts': fonts})
     print(f'{pack_id}: {len(sprites)} sprites, {len(fonts)} fonts; {archive}')
 
 

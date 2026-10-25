@@ -77,6 +77,7 @@ export class ZombieView implements ZombieViewInstance {
     ) {
         this.shadowNode = uiNode({
             name: 'ZombieShadow', parent: shadowParent, anchor: { x: 0, y: 1 },
+            active: false,
             sprite: { frame: shadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
         }).node
     }

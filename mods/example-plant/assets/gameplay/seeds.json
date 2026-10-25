@@ -1,0 +1,8 @@
+{
+  "example:rapid_pea": {
+    "plant": "example:rapid_pea",
+    "sunCost": 75,
+    "cooldownTicks": 750,
+    "placement": "ground"
+  }
+}

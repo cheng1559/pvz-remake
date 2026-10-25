@@ -1,0 +1,89 @@
+{
+  "pvz:bowling-wallnut": {
+    "maxHealth": 4000, "body": {"x": 0, "y": 0, "width": 60, "height": 80}, "occupiesCell": false,
+    "behavior": {"kind": "bowling", "rateMin": 12, "rateMax": 18, "groundDeltas": [17.2, 18.7, 20.2, 20.2, 18.7, 17.2, 17.2, 18.8, 20.2, 20.2, 18.7, 17.3], "bounceSpeed": 2, "damage": 1800, "helmDamage": 900}
+  },
+  "pvz:bowling-explodenut": {
+    "maxHealth": 4000, "body": {"x": 0, "y": 0, "width": 60, "height": 80}, "occupiesCell": false,
+    "behavior": {"kind": "bowling", "rateMin": 12, "rateMax": 18, "groundDeltas": [17.2, 18.7, 20.2, 20.2, 18.7, 17.2, 17.2, 18.8, 20.2, 20.2, 18.7, 17.3], "bounceSpeed": 2, "damage": 1800, "helmDamage": 900},
+    "deathExplosion": {"offset": {"x": 40, "y": 40}, "radius": 90, "rowRange": 1, "damage": 1800, "burn": true}
+  },
+  "pvz:sunflower": {
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "producer": {"item": "pvz:sun", "cadenceTicks": 2500, "initialDelayTicks": {"min": 300, "max": 1250}}
+  },
+  "pvz:peashooter": {
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {
+      "cadenceTicks": 150,
+      "initialDelayTicks": 75,
+      "windupTicks": 33,
+      "shotsPerBurst": 1,
+      "burstIntervalTicks": 0,
+      "projectile": "pvz:pea",
+      "offset": {"x": 56, "y": 10}
+    }
+  },
+  "pvz:repeater": {
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {
+      "cadenceTicks": 150,
+      "initialDelayTicks": 75,
+      "windupTicks": 26,
+      "shotsPerBurst": 2,
+      "burstIntervalTicks": 26,
+      "projectile": "pvz:pea",
+      "offset": {"x": 56, "y": 10}
+    }
+  },
+  "pvz:cherrybomb": {
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "fuse": {"ticks": 100, "explosion": {"offset": {"x": 40, "y": 40}, "radius": 115, "rowRange": 1, "damage": 1800, "burn": true}}
+  },
+  "pvz:wallnut": {"maxHealth": 4000, "body": {"x": 10, "y": 0, "width": 60, "height": 80}},
+  "pvz:potatomine": {
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "mine": {
+      "armingTicks": 1500,
+      "riseTicks": 106,
+      "attack": {"x": 0, "y": 0, "width": 55, "height": 80},
+      "explosion": {"offset": {"x": 20, "y": 40}, "radius": 60, "rowRange": 0, "damage": 1800, "burn": false},
+      "targeting": {"eatingExtraRange": 30, "excludeHeldPole": true, "insetKey": "pvz:mine"}
+    }
+  },
+  "pvz:snowpea": {
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {
+      "cadenceTicks": 150,
+      "initialDelayTicks": 75,
+      "windupTicks": 33,
+      "shotsPerBurst": 1,
+      "burstIntervalTicks": 0,
+      "projectile": "pvz:snow_pea",
+      "offset": {"x": 56, "y": 10}
+    }
+  },
+  "pvz:chomper": {
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "chomper": {
+      "attack": {"x": 80, "y": 0, "width": 40, "height": 80},
+      "biteDelayTicks": 70,
+      "biteTicks": 105,
+      "digestTicks": 4000,
+      "swallowTicks": 234,
+      "targeting": {"eatingExtraRange": 60, "excludeHeldPole": false}
+    }
+  },
+  "pvz:explodenut": {
+    "maxHealth": 4000,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "deathExplosion": {"offset": {"x": 40, "y": 40}, "radius": 90, "rowRange": 1, "damage": 1800, "burn": true}
+  }
+}

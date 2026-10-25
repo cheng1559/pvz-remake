@@ -1,3 +1,5 @@
+import { readGameplaySource } from '../../tools/content_source'
+import { readModContent } from '../../tools/content_source.mjs'
 import { presentationFixture } from './presentationFixture'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -76,9 +78,9 @@ test('removing an entity while its custom view loads disposes the completed plan
     }
 })
 
-test('plant factories stay hidden through asynchronous loading and reveal only after syncing the current state', async () => {
+for (const kind of ['plant', 'zombie'] as const) test(`${kind} factories stay hidden while loading and paused restore reveals the current state`, async () => {
     const node = { isValid: true, active: true, setPosition() {}, destroy() { this.isValid = false } }
-    const settings = { perfPlantsVisible: true }
+    const settings = { perfPlantsVisible: true, perfZombiesVisible: true }
     const { LevelEntityRenderer } = loadClientModule('level/LevelEntityRenderer', {
         '@/client/view/uiNode': { uiNode: (options: any) => { node.active = options.active; return { node } } },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: settings },
@@ -86,12 +88,13 @@ test('plant factories stay hidden through asynchronous loading and reveal only a
     let finish!: () => void
     const loading = new Promise<void>(resolve => { finish = resolve })
     const synced: unknown[] = []
+    let restored = false
     const view = { sync(plant: unknown) {
-        if (synced.length === 0) assert.equal(node.active, false, 'the initial pose must be applied before showing the plant')
+        if (synced.length === 0) assert.equal(node.active, false, 'the initial pose must be applied before showing the entity')
         synced.push(plant)
-    } }
+    }, restore() { restored = true } }
     const content = { levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' } } } },
-        plantViews: { async create() {
+        [kind + 'Views']: { async create() {
             assert.equal(node.active, false, 'raw animation tracks must stay hidden while the factory loads')
             await loading
             return view
@@ -99,31 +102,34 @@ test('plant factories stay hidden through asynchronous loading and reveal only a
     const renderer = new LevelEntityRenderer(0, content, {}, {}, {}, {}, {}, {}, { complete: true })
     renderer.syncLayerOrder = () => {}
     const plant = { entityId: 1, typeId: 'test:plant', x: 40, y: 280, health: 300 }
-    const snapshot = { levelId: 'test:level', gameplayTick: 0, plants: [plant], zombies: [], projectiles: [],
+    const snapshot = { levelId: 'test:level', gameplayTick: 0, paused: true, plants: [], zombies: [], [kind + 's']: [plant], projectiles: [],
         items: [], lawnMowers: [], cursor: { mode: 'none' } }
     const changes = { added: [1], removed: [] }
     renderer.sync(snapshot, changes, [])
     const creation = renderer.creationTasks.get(1)
     renderer.sync(snapshot, changes, [])
     assert.equal(node.active, false, 'normal visibility updates must not reveal a pending plant')
+    const current = { ...plant, health: 200 }
+    renderer.sync({ ...snapshot, [kind + 's']: [current] }, { added: [], removed: [] }, [])
     finish()
     await creation
     assert.equal(node.active, false, 'factory completion alone must not expose its stale initial state')
-    const current = { ...plant, health: 200 }
-    renderer.sync({ ...snapshot, plants: [current] }, { added: [], removed: [] }, [])
+    await renderer.restore([{ kind, entityId: 1 }])
+    assert.equal(restored, true)
     assert.deepEqual(synced, [current])
-    assert.equal(node.active, true)
-    settings.perfPlantsVisible = false
+    assert.equal(node.active, true, 'paused restore must reveal entities without waiting for another tick')
+    settings.perfPlantsVisible = settings.perfZombiesVisible = false
     renderer.sync(snapshot, { added: [], removed: [] }, [])
     assert.equal(node.active, false, 'the performance visibility switch still applies')
 })
 
-test('projectile impact and audio use configured effects for custom IDs and equipped targets', () => {
+test('plant explosions and projectile impacts use configured visuals and audio for custom IDs', () => {
     const definitions: any = structuredClone(presentationFixture)
     definitions.projectiles['test:shot'] = {
         ...definitions.projectiles['pvz:snow_pea'], fireSounds: [{ id: 'test:fire', foley: true, pitchRange: 3 }],
     }
-    definitions.plants['test:bomb'] = { explosionSounds: [{ id: 'test:explode', foley: false }] }
+    definitions.plants['test:bomb'] = { explosionSounds: [{ id: 'test:explode', foley: false }],
+        explosion: { effect: 'test:blast', x: 7, rowOrder: true } }
     definitions.zombies['test:armored'] = definitions.zombies['pvz:buckethead']
     const calls: unknown[] = []
     const { LevelAudioPresenter } = loadClientModule('level/LevelAudioPresenter', {
@@ -148,6 +154,14 @@ test('projectile impact and audio use configured effects for custom IDs and equi
     assert.equal(impacts[0], definitions.projectiles['test:shot'].impact)
     assert.equal(impacts[1], definitions.projectiles['test:shot'].impact)
     assert.deepEqual(calls.slice(2), [['foley', 'splat', 10], ['foley', 'shieldhit', undefined]])
+
+    const explosions: unknown[][] = []
+    renderer.spawnBoardParticle = (...args: unknown[]) => explosions.push(args)
+    const explosion = { type: 'plantExploded', data: { typeId: 'test:bomb', x: 300, y: 200, row: 2 } }
+    renderer.playEvents(snapshot, [explosion])
+    assert.deepEqual(explosions, [['test:blast', 307, 200, 20.5]])
+    audio.play({ type: 'bowlingImpact', data: { typeId: 'test:armored', helm: true } })
+    assert.deepEqual(calls.at(-1), ['foley', 'shieldhit', undefined], 'bowling armor audio uses the target definition')
 })
 
 test('presentation definitions use the common ZIP resolver without mutating base data', async () => {
@@ -156,7 +170,7 @@ test('presentation definitions use the common ZIP resolver without mutating base
     const manifest = { id: 'pvz:base', presentation: { definitions: 'presentation/definitions.json' } }
     const { loadPresentationDefinitions } = loadClientModule('content/loadPresentationDefinitions', {
         cc: { JsonAsset: class {} },
-        './ResourcePacks': { resourcePacks: { async asset(id: string) {
+        './ModResources': { modResources: { async asset(id: string) {
             assert.equal(id, 'pvz:presentation/definitions')
             return current
         } } },
@@ -173,7 +187,7 @@ test('presentation definitions use the common ZIP resolver without mutating base
 })
 
 test('UI assets include registered Mod presentations and names before opening a level', async () => {
-    const sources = [{ ownerId: 'example:plants', data: JSON.parse(readFileSync('mods/example-plant/assets/presentation.json', 'utf8')) }]
+    const sources = [{ ownerId: 'example:plants', data: readModContent('mods/example-plant/content.json').presentation }]
     const presentation = buildPresentationDefinitions(presentationFixture, sources)
     const { loadUIAssets } = loadClientModule('ui/UIAssets', {
         cc: { JsonAsset: class {} },
@@ -181,7 +195,7 @@ test('UI assets include registered Mod presentations and names before opening a 
         '@/client/content/loadPresentationDefinitions': { loadPresentationDefinitions: async () => presentation },
         '@/app/ModLoader': { loadInstalledMods: async () => ({ presentationDefinitions: sources }) },
         '@/shared/content/DefinitionRegistry': { buildModStrings },
-        '@/client/content/ResourcePacks': { resourcePacks: { ready: async () => {}, revision: 0 } },
+        '@/client/content/ModResources': { modResources: { ready: async () => {}, revision: 0 } },
         '@/client/content/LegacyAssetLoader': { AssetLoader: { load: async () => ({ json: { EXISTING: 'Existing' } }) } },
         '@/core/SpriteLoader': { SpriteLoader: { load: async () => ({}) } },
         '@/client/font/BitmapFontLoader': { loadBitmapFont: async () => ({}) },
@@ -210,10 +224,10 @@ test('ZIP caches are shared across content loaders and failed requests can retry
     const { ClientContentLoader } = loadClientModule('content/ClientContentLoader', {
         cc: { JsonAsset: class {} },
         '@/shared/content/index': { parseContentManifest: (value: unknown) => value },
-        './ResourcePacks': { resourcePacks: packs },
+        './ModResources': { modResources: packs },
     })
     const { AssetLoader } = loadClientModule('content/LegacyAssetLoader', {
-        cc: { EffectAsset: class {} }, './ResourcePacks': { resourcePacks: packs },
+        cc: { EffectAsset: class {} }, './ModResources': { modResources: packs },
     })
     const content = { bundle: 'base', contentHash: 'hash', category: 'sprites', id: 'pvz:ready', path: 'ready' }
     class Asset {}
@@ -441,7 +455,7 @@ test('potato mine light keeps its own phase, shortens its cycle and shares the b
         setTrackPrefixVisible(prefix: string, visible: boolean) { this.tracks.set(prefix, visible) },
     })
     const body = player('pvz:potatomine_rise'), blink = player('pvz:potatomine_blink'), glow = player('pvz:potatomine_glow')
-    const definitions = parseGameplayDefinitions(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/definitions.json', 'utf8')))
+    const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
     const { PotatoMineView } = plantViewModule('PotatoMineView', body)
     const view = new PotatoMineView({ node: { isValid: true }, content: { definitions }, animations: new ClientAnimationRegistry(presentationFixture),
         assets: {}, plant: { typeId: 'pvz:potatomine' }, tick: 0 })

@@ -6,6 +6,7 @@ export interface GameplayDefinitions {
     tickSeconds: number
     boards: Record<string, BoardDefinition>
     seeds: Record<string, SeedDefinition>
+    seedCatalog: string[]
     plants: Record<string, PlantDefinition>
     zombies: Record<string, ZombieDefinition>
     zombieGaits: Record<string, ZombieGait>
@@ -150,7 +151,7 @@ export interface LevelDefinition {
     activeRows: number[]
     startingSun: number
     seedPackets: string[]
-    /** When present, seedPackets is the chooser's available pool. Otherwise it is the fixed bank. */
+    /** Enables the shared chooser and sets its carrying capacity; seedPackets is only for a fixed bank. */
     seedBankSlots?: number
     lawnMower: string
     skySun: string
@@ -184,7 +185,7 @@ export interface LevelDefinition {
 interface Point { x: number; y: number }
 interface Rect extends Point { width: number; height: number }
 
-export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
+export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): GameplayDefinitions {
     const source = exactObject(value, [
         'schemaVersion', 'tickSeconds', 'boards', 'seeds', 'plants', 'zombies',
         'projectiles', 'items', 'lawnMowers', 'zombieGaits',
@@ -196,6 +197,7 @@ export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
         tickSeconds: positiveFinite(source.tickSeconds, 'gameplay definitions.tickSeconds'),
         boards: mapped(source.boards, 'boards', parseBoard),
         seeds: mapped(source.seeds, 'seeds', parseSeed),
+        seedCatalog: qualifiedIdArray(seedCatalog, 'seed catalog'),
         plants: mapped(source.plants, 'plants', parsePlant),
         zombies: mapped(source.zombies, 'zombies', parseZombie),
         zombieGaits: mapped(source.zombieGaits, 'zombieGaits', parseZombieGait),
@@ -204,6 +206,8 @@ export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
         lawnMowers: mapped(source.lawnMowers, 'lawnMowers', parseLawnMower),
     }
 
+    if (new Set(definitions.seedCatalog).size !== definitions.seedCatalog.length) throw new Error('seed catalog must not contain duplicates')
+    for (const id of definitions.seedCatalog) reference(id, definitions.seeds, 'seed catalog')
     for (const [id, seed] of Object.entries(definitions.seeds)) {
         reference(seed.plant, definitions.plants, `seeds.${id}.plant`)
     }
@@ -518,9 +522,9 @@ function parseLawnMower(value: unknown, name: string): LawnMowerDefinition {
 
 function parseLevel(value: unknown, name: string, definitions: GameplayDefinitions): LevelDefinition {
     const source = exactObject(value, [
-        'adventureIndex', 'board', 'activeRows', 'startingSun', 'seedPackets',
+        'adventureIndex', 'board', 'activeRows', 'startingSun',
         'lawnMower', 'skySun', 'waves', 'tutorial', 'award',
-    ], name, ['nextLevel', 'seedBankSlots', 'firstWaveTicks', 'zombiePool', 'bowling', 'conveyor', 'tools', 'shovelTutorial'])
+    ], name, ['nextLevel', 'seedPackets', 'seedBankSlots', 'firstWaveTicks', 'zombiePool', 'bowling', 'conveyor', 'tools', 'shovelTutorial'])
     const boardId = qualifiedId(source.board, `${name}.board`)
     const board = reference(boardId, definitions.boards, `${name}.board`)
     const activeRows = array(source.activeRows, `${name}.activeRows`).map((row, index) => {
@@ -531,7 +535,8 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     if (activeRows.length === 0) throw new Error(`${name}.activeRows must not be empty`)
     if (new Set(activeRows).size !== activeRows.length) throw new Error(`${name}.activeRows must not contain duplicates`)
 
-    const seedPackets = qualifiedIdArray(source.seedPackets, `${name}.seedPackets`)
+    const seedPackets = source.seedPackets === undefined && source.seedBankSlots !== undefined
+        ? [] : qualifiedIdArray(source.seedPackets, `${name}.seedPackets`)
     seedPackets.forEach((id, index) => reference(id, definitions.seeds, `${name}.seedPackets[${index}]`))
     let bowling: LevelDefinition['bowling']
     if (source.bowling !== undefined) {
@@ -587,7 +592,8 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const tools = source.tools === undefined ? undefined : qualifiedIdArray(source.tools, `${name}.tools`)
     if (source.tutorial === 'pvz:shovel' && (!shovelTutorial || !tools?.includes('pvz:shovel'))) throw new Error(`${name} shovel tutorial requires dialogue and shovel`)
     const seedBankSlots = source.seedBankSlots === undefined ? undefined : positiveInteger(source.seedBankSlots, `${name}.seedBankSlots`)
-    if (seedBankSlots !== undefined && (seedBankSlots > 10 || seedBankSlots > seedPackets.length)) throw new Error(`${name}.seedBankSlots exceeds the available packets or bank capacity`)
+    if (seedBankSlots !== undefined && (seedBankSlots > 10 || seedBankSlots > definitions.seedCatalog.length)) throw new Error(`${name}.seedBankSlots exceeds the shared chooser or bank capacity`)
+    if (seedBankSlots !== undefined && seedPackets.length) throw new Error(`${name}.seedPackets is only for a fixed bank`)
     const wavesSource = array(source.waves, `${name}.waves`)
     if (wavesSource.length === 0) throw new Error(`${name}.waves must not be empty`)
     const waves = wavesSource.map((wave, waveIndex) => {

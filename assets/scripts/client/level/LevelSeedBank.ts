@@ -10,7 +10,7 @@ import { plantDefinition } from '@/client/plants/definitions'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 interface Packet {
-    seedId: string
+    seedId?: string
     view: SeedPacketView
     tooltip: UITooltip
     button?: UIButton
@@ -27,21 +27,24 @@ export class LevelSeedBank {
 
     constructor(private readonly options: LevelHudOptions) {
         const seeds = options.level.conveyor
-            ? Array<string>(options.level.conveyor.capacity).fill(options.level.conveyor.seeds[0].id)
-            : options.level.seedPackets.slice(0, options.level.seedBankSlots ?? options.level.seedPackets.length)
+            ? Array<string | undefined>(options.level.conveyor.capacity).fill(undefined)
+            : options.seedChooser
+                ? options.seedChooser.availableSeeds.slice(0, options.seedChooser.slots)
+                : options.level.seedPackets
         this.packets = seeds.map((seedId, index) => {
-            const seed = options.content.definitions.seeds[seedId]
-            const visual = plantDefinition(options.content.presentation, seed.plant).visual
+            const seed = seedId === undefined ? undefined : options.content.definitions.seeds[seedId]
+            const visual = seedId === undefined ? undefined : plantDefinition(options.content.presentation, seed!.plant).visual
             const view = new SeedPacketView({
-                definitions: options.content.presentation, name: `SeedPacket-${seedId}`, parent: options.seedPacketSlot, layer: options.rootLayer,
-                x: index * 59, y: 0, seedType: visual.seedType, cost: seed.sunCost, drawCost: !options.level.conveyor,
+                definitions: options.content.presentation, name: `SeedPacket-${index}`, parent: options.seedPacketSlot, layer: options.rootLayer,
+                x: index * 59, y: 0, seedType: visual?.seedType, cost: seed?.sunCost, drawCost: !options.level.conveyor,
                 loadSprite: options.loadPacketSprite,
                 costFont: options.packetCostFont,
             })
             // Left packets draw last so their plants can overlap the packets to their right.
             view.node.setSiblingIndex(0)
+            if (seedId === undefined || options.seedChooser) view.node.active = false
             const tooltip = options.ui.tooltip(view.node, {
-                text: options.ui.text(visual.nameKey ?? String(visual.seedType).toUpperCase()), gap: 0,
+                text: visual ? options.ui.text(visual.nameKey ?? String(visual.seedType).toUpperCase()) : '', gap: 0,
                 surface: options.level.conveyor ? options.adviceParent : undefined,
             })
             return { seedId, view, tooltip }
@@ -101,7 +104,7 @@ export class LevelSeedBank {
                 const seed = this.options.content.definitions.seeds[packet.seedId]
                 const visual = plantDefinition(this.options.content.presentation, seed.plant).visual
                 entry.seedId = packet.seedId
-                entry.view.replace(visual.seedType, seed.sunCost)
+                entry.view.setSeed(visual.seedType, seed.sunCost)
                 entry.tooltip.hide()
                 entry.tooltip.text = this.options.ui.text(visual.nameKey ?? String(visual.seedType).toUpperCase())
                 entry.previousCooldown = undefined

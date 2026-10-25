@@ -10,6 +10,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from package_resources import package_resources
 from PIL import Image
 
 from font_converter import PvZFontParser, _write_font_atlases
@@ -152,18 +153,10 @@ def build(source: Path):
         gameplay['entries'] = {key: strings[key] for key in gameplay['entries']}
         write_json(PACK / 'text/level_strings.json', gameplay)
 
-    manifest = {'id': 'zh-cn', 'sprites': sprites, 'fonts': fonts, 'json': {
+    resources = {'sprites': sprites, 'fonts': fonts, 'json': {
         'pvz:properties/lawnstrings': 'text/lawnstrings.json', 'pvz:gameplay/strings': 'text/level_strings.json',
     }}
-    write_json(PACK / 'pack.json', manifest)
-    archive = ROOT / 'dist/resource-packs/zh-cn.zip'
-    archive.parent.mkdir(parents=True, exist_ok=True)
-    files = {'pack.json', 'README.md', *manifest['json'].values(), *fonts.values(),
-             *(entry['file'] for entry in sprites.values()),
-             *(path.relative_to(PACK).as_posix() for path in (PACK / 'fonts').glob('*.png'))}
-    with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as output:
-        for name in sorted(files):
-            output.write(PACK / name, name)
+    archive = package_resources(PACK, 'zh-cn', resources)
     print(f'Chinese pack: {len(sprites)} sprites, {len(fonts)} fonts, {len(strings)} strings; {archive} ({archive.stat().st_size:,} bytes)')
 
 

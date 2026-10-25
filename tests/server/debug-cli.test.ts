@@ -1,12 +1,12 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { getDebugCliCompletions, getDebugCliSuffix, parseDebugCliCommand } from '@/shared/debug/DebugCli'
 
-const definitions = parseGameplayDefinitions(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/definitions.json', 'utf8')))
-const levels = parseGameplayLevels(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/levels.json', 'utf8')), definitions)
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 function setup(debug = true, levelId = 'pvz:adventure-1-1', content = definitions) {
     const game = new LocalIntegratedGame(content, levels, undefined, debug)
     game.start({ levelId, randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
@@ -20,24 +20,24 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     assert.deepEqual(parseDebugCliCommand(' /PLANT "Pea Shooter" 3 1 '), { name: 'plant', args: ['Pea Shooter', '3', '1'] })
     assert.deepEqual(parseDebugCliCommand('sun set 100'), { name: 'sun', args: ['set', '100'] })
     assert.deepEqual(parseDebugCliCommand('/seed 1 snowpea'), { name: 'seed', args: ['1', 'snowpea'] })
-    assert.deepEqual(parseDebugCliCommand('/pack load hd'), { name: 'pack', args: ['load', 'hd'] })
-    assert.deepEqual(getDebugCliCompletions('/pack ', undefined, true), ['/pack install', '/pack load', '/pack unload', '/pack uninstall', '/pack list'])
-    assert.equal(getDebugCliSuffix('/pack is'), '')
-    assert.equal(getDebugCliSuffix('/pack is '), '')
-    assert.equal(getDebugCliSuffix('/pack ins'), 'tall')
-    assert.equal(getDebugCliSuffix('/pack install'), '')
-    assert.equal(getDebugCliSuffix('/pack load'), ' [installed_id]')
+    assert.deepEqual(parseDebugCliCommand('/mod load hd'), { name: 'mod', args: ['load', 'hd'] })
+    assert.deepEqual(getDebugCliCompletions('/mod ', undefined, true), ['/mod install', '/mod load', '/mod unload', '/mod uninstall', '/mod list'])
+    assert.equal(getDebugCliSuffix('/mod is'), '')
+    assert.equal(getDebugCliSuffix('/mod is '), '')
+    assert.equal(getDebugCliSuffix('/mod ins'), 'tall')
+    assert.equal(getDebugCliSuffix('/mod install'), '')
+    assert.equal(getDebugCliSuffix('/mod load'), ' [installed_id]')
     assert.deepEqual(parseDebugCliCommand('/mod load local:widescreen'), { name: 'mod', args: ['load', 'local:widescreen'] })
     assert.deepEqual(getDebugCliCompletions('/mod ', undefined, true), ['/mod install', '/mod load', '/mod unload', '/mod uninstall', '/mod list'])
     assert.equal(getDebugCliSuffix('/mod is'), '')
     assert.equal(getDebugCliSuffix('/mod ins'), 'tall')
     assert.equal(getDebugCliSuffix('/mod install'), '')
-    for (const command of ['/unknown', '/win extra', '/cooldown yes', '/pack invalid', '/item sun 3', '/sun remove 1']) {
+    for (const command of ['/unknown', '/win extra', '/cooldown yes', '/mod invalid', '/item sun 3', '/sun remove 1']) {
         assert.equal((parseDebugCliCommand(command) as { failure: string }).failure, 'syntax')
     }
     const game = setup()
     const catalog = game.debugCommand('catalog').catalog!
-    assert.deepEqual(catalog.plants, ['sunflower', 'peashooter', 'repeater', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'explodenut'])
+    assert.deepEqual(catalog.plants, ['bowling-wallnut', 'bowling-explodenut', 'sunflower', 'peashooter', 'repeater', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'explodenut'])
     assert.deepEqual(catalog.zombies, ['flag', 'normal', 'conehead', 'buckethead', 'pole_vaulter'])
     assert.deepEqual(getDebugCliCompletions('/plant re', catalog), ['/plant repeater'])
     assert.deepEqual(getDebugCliCompletions('/seed 1 sn', catalog), ['/seed 1 snowpea'])

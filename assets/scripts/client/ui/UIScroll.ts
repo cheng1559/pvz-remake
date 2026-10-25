@@ -90,7 +90,9 @@ export class UIScroll extends Component {
         const visualMaxScroll = Math.max(0, contentHeight - this.height)
         const scrolling = visualMaxScroll > 0
         this.maxScroll = scrolling ? visualMaxScroll + this.bottomPadding : 0
-        this.thumbHeight = Math.min(this.height, Math.max(20, this.height - visualMaxScroll) * 1.5)
+        this.thumbHeight = scrolling
+            ? Math.min(this.height, Math.max(30, this.height * this.height / (this.height + this.maxScroll)))
+            : this.height
         this.thumbRange = Math.max(1, this.height - this.thumbHeight)
         this.viewport.transform.setContentSize(this.width - (scrolling && this.showScrollbar ? 8 : 0), this.height)
         this.content.getComponent(UITransform)!.setContentSize(this.contentWidth, contentHeight)

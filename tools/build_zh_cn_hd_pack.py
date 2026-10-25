@@ -7,10 +7,10 @@ import hashlib
 import json
 import shutil
 import time
-import zipfile
 from pathlib import Path
 
 import torch
+from package_resources import package_resources
 from PIL import Image
 
 from upscale_fonts import Upscaler, pack_glyphs
@@ -209,20 +209,11 @@ def build_fonts(device: str, zh: dict, model_name: str):
 
 
 def package(sprites: dict, fonts: dict, zh: dict):
-    manifest = {'id': 'zh-cn-hd', 'sprites': sprites, 'fonts': fonts, 'json': copy.deepcopy(zh['json'])}
+    resources = {'sprites': sprites, 'fonts': fonts, 'json': copy.deepcopy(zh['json'])}
     for file in zh['json'].values():
         (PACK / file).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ZH / file, PACK / file)
-    write_json(PACK / 'pack.json', manifest)
-    files = {'pack.json', 'README.md', *fonts.values(), *manifest['json'].values(), *(entry['file'] for entry in sprites.values())}
-    for file in fonts.values():
-        config = json.loads((PACK / file).read_text())
-        files.update(f'fonts/{layer["image"]}.png' for layer in config['layers'])
-    target = ROOT / 'dist/resource-packs/zh-cn-hd.zip'
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as archive:
-        for name in sorted(files):
-            archive.write(PACK / name, name)
+    target = package_resources(PACK, 'zh-cn-hd', resources)
     print(f'Chinese HD pack: {len(sprites)} sprites, {len(fonts)} fonts; {target} ({target.stat().st_size:,} bytes)', flush=True)
 
 
@@ -233,8 +224,8 @@ def main():
     parser.add_argument('--images-only', action='store_true')
     parser.add_argument('--fonts-only', action='store_true')
     args = parser.parse_args()
-    hd = json.loads((HD / 'pack.json').read_text())
-    zh = json.loads((ZH / 'pack.json').read_text())
+    hd = json.loads((HD / 'content.json').read_text())['resources']
+    zh = json.loads((ZH / 'content.json').read_text())['resources']
     sprites = json.loads((CACHE / 'sprites.json').read_text()) if args.fonts_only else build_images(
         args.device, hd, zh, 'general' if args.model == 'auto' else args.model)
     if not args.images_only:

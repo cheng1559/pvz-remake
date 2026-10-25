@@ -1,5 +1,5 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { Schedule, World } from '@/ecs/index'
@@ -24,10 +24,8 @@ import { damageZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 import type { JsonValue } from '@/shared/protocol/index'
 
-const definitions = parseGameplayDefinitions(JSON.parse(
-    readFileSync('tools/content/pvz-base/gameplay/definitions.json', 'utf8'),
-))
-const levels = parseGameplayLevels(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/levels.json', 'utf8')), definitions)
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 const board = definitions.boards['pvz:day']
 
 function game(config = definitions) {

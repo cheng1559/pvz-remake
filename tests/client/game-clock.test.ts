@@ -1,3 +1,4 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
@@ -84,8 +85,8 @@ test('adventure pause freezes scene animation, particles and tweens without chan
 })
 
 test('one clock scales fixed-tick gameplay across frame rates, live speed changes, and freezing', () => {
-    const definitions = parseGameplayDefinitions(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/definitions.json', 'utf8')))
-    const levels = parseGameplayLevels(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/levels.json', 'utf8')), definitions)
+    const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+    const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
     for (const fps of [30, 60, 144]) {
         const clock = new GameClock()
         const game = new LocalIntegratedGame(definitions, levels, undefined, true)

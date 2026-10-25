@@ -51,7 +51,6 @@ export function parseModManifest(value: unknown): ModManifest {
 
     const gameplay = manifest.gameplay === undefined ? undefined : parseGameplay(manifest.gameplay)
     const client = manifest.client === undefined ? undefined : parseClient(manifest.client)
-    if (!gameplay && !client) throw new Error('manifest must define gameplay or client')
 
     return {
         schemaVersion: 1,
@@ -88,19 +87,19 @@ export function sortModManifests(manifests: readonly ModManifest[]): ModManifest
         }
     }
 
-    let ready = [...byId.keys()].filter(id => remaining.get(id) === 0).sort()
+    let ready = [...byId.keys()].filter(id => remaining.get(id) === 0)
     const sorted: ModManifest[] = []
     while (ready.length > 0) {
         const next: string[] = []
         for (const id of ready) {
             sorted.push(byId.get(id)!)
-            for (const dependant of dependants.get(id)?.sort() ?? []) {
+            for (const dependant of dependants.get(id) ?? []) {
                 const count = remaining.get(dependant)! - 1
                 remaining.set(dependant, count)
                 if (count === 0) next.push(dependant)
             }
         }
-        ready = next.sort()
+        ready = next
     }
 
     if (sorted.length !== manifests.length) throw new Error('mod dependency cycle')

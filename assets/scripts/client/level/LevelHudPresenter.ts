@@ -29,6 +29,7 @@ export interface LevelHudOptions {
     ui: UI
     content: LoadedContent
     level: LevelDefinition
+    seedChooser?: WorldSnapshot['seedChooser']
     presentation: LevelPresentation
     seedPacketSlot: Node
     rootLayer: number
@@ -118,10 +119,6 @@ export class LevelHudPresenter {
             UIHoverManager.unregisterClient(this.hoverClient)
             UIHoverManager.refreshHoverStates()
         })
-    }
-
-    get seedPacketNode(): Node {
-        return this.seedBank.packets[0].view.node
     }
 
     snapshot(): { hud: LevelHudSnapshot, advice: LevelAdviceSnapshot } {

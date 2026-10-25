@@ -12,6 +12,7 @@ function manifest(id = 'pvz:base') {
         contentHash: `${id}@2`,
         gameplay: {
             definitions: 'gameplay/definitions.json',
+            seedCatalog: 'gameplay/seed-catalog.json',
             levels: 'gameplay/levels.json',
             strings: 'gameplay/strings.json',
         },

@@ -1,0 +1,15 @@
+{
+  "pvz:pea": {
+    "impact": {"kind": "particle", "id": "pvz:peasplat", "offset": [49, 12], "yRange": [20, 100], "duration": 0.21},
+    "fireSounds": [{"id": "throw", "foley": true, "pitchRange": 10}],
+    "impactSounds": [{"id": "splat", "foley": true, "pitchRange": 10}],
+    "sprite": "pvz:projectilepea"
+  },
+  "pvz:snow_pea": {
+    "trail": {"effect": "snowpeatrail", "x": 8, "y": -13},
+    "impact": {"kind": "tod", "id": "snowpeasplat", "offset": [49, 12], "yRange": [20, 100]},
+    "fireSounds": [{"id": "throw", "foley": true, "pitchRange": 10}, {"id": "snow_pea_sparkles", "foley": true}],
+    "impactSounds": [{"id": "splat", "foley": true, "pitchRange": 10}],
+    "sprite": "pvz:projectilesnowpea"
+  }
+}

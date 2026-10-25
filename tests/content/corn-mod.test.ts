@@ -1,3 +1,5 @@
+import { readGameplaySource, readPresentationSource } from '../../tools/content_source'
+import { readModContent } from '../../tools/content_source.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -42,8 +44,13 @@ function setup(levelId = 'corn:testing') {
         const path = join(file.parentPath, file.name)
         files[relative(root, path)] = new Uint8Array(readFileSync(path))
     }
-    const assets = new ModAssets(parseModManifest(json(root + '/mod.json')), files)
-    const resources = assets.json('assets/content.json')
+    const packedContent = readModContent(`${root}/content.json`)
+    for (const [name, data] of Object.entries({ gameplay: packedContent.gameplay, presentation: packedContent.presentation })) {
+        files[`assets/${name}.json`] = new TextEncoder().encode(JSON.stringify(data))
+    }
+    files['content.json'] = new TextEncoder().encode(JSON.stringify({ resources: packedContent.resources }))
+    const assets = new ModAssets(parseModManifest(json(root + '/manifest.json')), files)
+    const resources = assets.json('content.json').resources
     for (const [id, path] of Object.entries(resources.reanim)) {
         const clip = parseReanim(assets.json(path as string))
         assert.equal(clip.id, id)
@@ -58,9 +65,10 @@ function setup(levelId = 'corn:testing') {
     }
     const sources = new DefinitionSources(), registry = new GameplayRegistry()
     const host = createServerModHost(assets.id, registry, sources)
+    sources.register(assets.id, packedContent.gameplay)
     loadModModule(root + '/src/server/index.ts').register({ host, assets })
-    const content = buildGameplayContent(...(['definitions', 'levels', 'strings'].map(name => json(`tools/content/pvz-base/gameplay/${name}.json`)) as [any, any, any]), sources.sources)
-    const presentation = buildPresentationDefinitions(json('tools/content/pvz-base/presentation/definitions.json'), [{ ownerId: assets.id, data: assets.json('assets/presentation.json') }])
+    const content = buildGameplayContent(...(['definitions', 'levels', 'strings', 'seed-catalog'].map(name => readGameplaySource(name)) as [any, any, any, any]), sources.sources)
+    const presentation = buildPresentationDefinitions(readPresentationSource(), [{ ownerId: assets.id, data: assets.json('assets/presentation.json') }])
     assert.equal(presentation.plants['corn:kernel_pult'].visual.preview, undefined, 'new art must not borrow a base plant atlas cell')
     const create = () => new IntegratedGameServer(content.definitions, content.levels, registry)
     const server = create(), mods = [{ id: assets.id, version: assets.manifest.version, contentHash: assets.manifest.contentHash }]
@@ -284,7 +292,7 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         color: any
         async load(id: string) {
             this.id = id
-            const data = json('mods/corn/' + json('mods/corn/assets/content.json').reanim[id])
+            const data = json('mods/corn/' + json('mods/corn/content.json').resources.reanim[id])
             this.durationSeconds = data.durationSeconds
             this.lastFrameTimeSeconds = Math.max(...data.tracks.flatMap((track: any) => track.keyframes.map((frame: any) => frame.timeSeconds)))
         }
@@ -294,7 +302,7 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         seek(time: number) { this.time = time; this.applyPose() }
         blendFrom(previous: any) { this.blend = previous }
         attachToTrack(parent: any, track: string) {
-            const data = json('mods/corn/' + json('mods/corn/assets/content.json').reanim[parent.id])
+            const data = json('mods/corn/' + json('mods/corn/content.json').resources.reanim[parent.id])
             assert.ok(data.tracks.some((value: any) => value.id === track))
             this.parent = parent
         }
@@ -331,7 +339,8 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         selectSeedPacket() { fallback.push('select') }
     }
     class LevelHud { syncPreviews(this: any) { if (this.mobileGridGuide) this.mobileGridGuide.active = false }; isPointerOverItem() {}; syncAdvice() {} }
-    class LevelView { syncShake() {} }
+    const shakes: number[][] = [], haptics: string[] = []
+    class LevelView { playFeedback(_events: unknown[]) {}; shakeBoard(...args: number[]) { shakes.push(args) } }
     const { LevelSeedBank } = loadHostModule('level/LevelSeedBank', {
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => mobile } },
     })
@@ -362,11 +371,27 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         'client/level/LevelSeedBank': { LevelSeedBank },
         'client/level/LevelView': { LevelView },
         'platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => mobile } },
-        'platform/Haptics': { Haptics: { play() {} } },
+        'platform/Haptics': { Haptics: { play: (style: string) => haptics.push(style) } },
     }
     const host = new ModHost('corn:plants', modules)
     try {
-        loadModModule('mods/corn/src/client/index.ts').register({ host, assets: { id: 'corn:plants', json: (path: string) => json('mods/corn/' + path) } })
+        loadModModule('mods/corn/src/client/index.ts').register({ host, assets: {
+            id: 'corn:plants',
+            json(path: string) {
+                const content = readModContent('mods/corn/content.json')
+                if (path === 'assets/gameplay.json') return content.gameplay
+                if (path === 'assets/presentation.json') return content.presentation
+                if (path === 'content.json') return { resources: content.resources }
+                return json('mods/corn/' + path)
+            },
+        } })
+        const feedback = new LevelView()
+        feedback.playFeedback([{ type: 'projectileImpact', data: { typeId: 'corn:kernel' } }])
+        assert.deepEqual(shakes, [])
+        assert.deepEqual(haptics, [])
+        feedback.playFeedback([0, 1].map(() => ({ type: 'projectileImpact', data: { typeId: 'corn:cob' } })))
+        assert.deepEqual(shakes, [[3, -4]], 'the Mod triggers the shared board-shake method once per batch')
+        assert.deepEqual(haptics, ['explosion'], 'the Mod requests explosion vibration directly in code')
         const view = new ZombieView(), zombie = { entityId: 1, hasHead: true, state: 'walking' }
         const sync = () => (view.sync as any)(zombie, { extensions: { 'corn:buttered': { 1: { ticks: 400 } } } })
         sync()
@@ -396,7 +421,7 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
             boardPixel: (event: any) => event.point,
             onMenu: () => fallback.push('menu'),
             view: { introComplete: true, level: { award: { id: 'test:award' } }, seedPacketAt() {}, setPointer(value?: any) { pointer = value }, resetCursor() {} },
-            game: { render: () => snapshot, definitions: { ...json('mods/corn/assets/gameplay.json'), items: { sun: { width: 60, height: 60 } } }, command: (command: any) => commands.push(command) },
+            game: { render: () => snapshot, definitions: { ...readModContent('mods/corn/content.json').gameplay, items: { sun: { width: 60, height: 60 } } }, command: (command: any) => commands.push(command) },
         })
         const event = (x: number, y: number, button = 0, id = 1) => ({ point: { x, y }, getLocation: () => ({ x, y }),
             touch: { getID: () => id }, windowId: 0, getButton: () => button, propagationStopped: false })
@@ -511,8 +536,8 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         const bank: any = Object.create(LevelSeedBank.prototype), states: any[] = [], warnings: string[] = []
         const tooltip = { set warning(value: string) { warnings.push(value) } }
         bank.packets = [{ seedId: 'corn:cob_cannon', tooltip, view: { node: {}, sync: (state: any) => states.push(state) }, button: {} }]
-        const strings = json('mods/corn/assets/presentation.json').strings
-        bank.options = { level: {}, ui: { text: (key: string) => strings[key] ?? key }, content: { definitions: json('mods/corn/assets/gameplay.json') }, presentation: {} }
+        const modContent = readModContent('mods/corn/content.json'), strings = modContent.presentation.strings
+        bank.options = { level: {}, ui: { text: (key: string) => strings[key] ?? key }, content: { definitions: modContent.gameplay }, presentation: {} }
         const packets = { extensions: {}, availableSun: 2000, phase: 'gameplay', result: 'playing', cursor: { mode: 'none' },
             seedPackets: [{ seedId: 'corn:cob_cannon', ready: true, cooldownRemaining: 0, availability: { reason: 'seed-not-available', warningKey: 'corn:requires_kernel_pults' } as any }] }
         bank.sync(packets, [], true, null)
@@ -614,6 +639,7 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         assert.equal(kernelView.players.body.color.r, 55, 'both eligible bases flash at the original 90 tick period')
         world.cursor.mode = 'none'; kernelView.sync(kernel, world)
         assert.equal(kernelView.players.body.color.r, 255, 'cancelling the upgrade restores the normal plant tint')
+        assert.deepEqual(haptics, ['explosion'], 'aiming and firing on desktop or mobile do not add vibration')
     } finally { host.dispose() }
 })
 

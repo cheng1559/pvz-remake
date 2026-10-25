@@ -25,7 +25,6 @@
       "activeRows": [0, 1, 2, 3, 4],
       "startingSun": 50,
       "seedBankSlots": 6,
-      "seedPackets": ["pvz:peashooter", "pvz:sunflower", "pvz:cherrybomb", "pvz:wallnut", "pvz:potatomine", "pvz:snowpea", "pvz:chomper", "pvz:repeater"],
       "lawnMower": "pvz:standard",
       "skySun": "pvz:sun",
       "waves": [

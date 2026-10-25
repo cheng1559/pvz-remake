@@ -1,5 +1,5 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { DeterministicRng } from '@/server/DeterministicRng'
@@ -24,11 +24,9 @@ import {
 import { isJsonValue, parseServerPacket, type JsonValue, type StartSessionPacket } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
 
-const source = (name: string): unknown => JSON.parse(
-    readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'),
-)
+const source = readGameplaySource
 
-const definitions = parseGameplayDefinitions(source('definitions'))
+const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 const startPacket: StartSessionPacket = {
     protocolVersion: 1,

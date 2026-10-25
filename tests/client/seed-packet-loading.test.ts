@@ -33,6 +33,10 @@ class Node {
     setPosition(x: number, y: number) { this.position = { x, y } }
     setScale(x: number, y: number) { this.scale = { x, y } }
     addComponent(type: typeof Mask) { return new type() }
+    removeFromParent() {
+        if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this)
+        this.parent = undefined
+    }
     destroy() {
         this.isValid = false
         for (const child of [...this.children]) child.destroy()
@@ -186,6 +190,46 @@ test('packet backgrounds use stable atlas IDs independently of the rendered-port
     assert.deepEqual(paths, ['seeds', 'seeds'])
     assert.equal(upgradeSprite.spriteFrame, null)
     assert.equal(errors.length, 1)
+})
+
+test('empty conveyor slots render only supplied seeds and retain their parent, position and button', () => {
+    const { modules, load } = setup()
+    const draws: any[] = []
+    modules['@/client/hud/SeedPacketRenderer'] = { SeedPacketRenderer: { drawSeedPacket(args: any) {
+        draws.push(args)
+        const node = args.node ?? new Node(args.parent)
+        if (node.parent !== args.parent) {
+            node.removeFromParent()
+            node.parent = args.parent
+            args.parent.children.push(node)
+        }
+        node.setPosition(args.x, args.y)
+        return node
+    } } }
+    const { SeedPacketView } = load('SeedPacketView')
+    SeedPacketView.prototype._createSelectedHighlight = function () { return new Node(this.node) }
+    SeedPacketView.prototype._createCooldownClip = function () { return new Node(this.node) }
+    const hiddenBank = new Node(), conveyorClip = new Node()
+    const packet = new SeedPacketView({ parent: hiddenBank, x: 0, y: 0, drawCost: false })
+    assert.equal(packet.node.children.length, 0)
+    assert.equal(draws.length, 0, 'empty slots must not render a placeholder seed')
+    const node = packet.node, button = {}
+    node.button = button
+    node.removeFromParent()
+    node.parent = conveyorClip
+    conveyorClip.children.push(node)
+    node.active = true
+    node.setPosition(250, -4)
+    for (const seedType of ['explodenut', 'wallnut', 'explodenut']) {
+        packet.setSeed(seedType, 0)
+        assert.equal(packet.node, node)
+        assert.equal(node.parent, conveyorClip)
+        assert.deepEqual(node.position, { x: 250, y: -4 })
+        assert.equal(node.active, true)
+        assert.equal(node.button, button)
+        assert.equal(draws.at(-1).seedType, seedType)
+        assert.equal(draws.at(-1).drawCost, false)
+    }
 })
 
 test('plant previews create one selected representation and preserve tint across asynchronous loads', async () => {

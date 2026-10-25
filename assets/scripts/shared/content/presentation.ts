@@ -1,4 +1,5 @@
 import type { MusicTuneId } from './music'
+import type { JsonObject } from '@/shared/protocol'
 
 export interface ClientAnimationClip {
     readonly reanimId: string
@@ -97,11 +98,13 @@ export type PlantViewKind = string
 export interface PlantVisual {
     readonly seedType: SeedPacketSeedType
     readonly nameKey?: string
+    readonly tooltipKey?: string
     readonly preview?: number
     readonly tint?: readonly [number, number, number]
 }
 
 export interface PlantPresentationDefinition {
+    readonly viewConfig?: Readonly<JsonObject>
     readonly rowOrder?: number
     readonly shadow: { readonly x: number; readonly y: number }
     readonly scale: number
@@ -130,6 +133,7 @@ export interface PresentationSound {
 }
 
 export interface ProjectilePresentationDefinition {
+    readonly viewConfig?: Readonly<JsonObject>
     readonly sprite: string
     readonly trail?: { readonly effect: string; readonly x: number; readonly y: number }
     readonly impact?: {
@@ -239,6 +243,7 @@ export interface PresentationDefinitions {
     readonly projectiles: Readonly<Record<string, ProjectilePresentationDefinition>>
     readonly seedPackets: {
         readonly flash: { readonly id: string; readonly duration: number }
+        readonly selection: { readonly sprite: string; readonly color: readonly [number, number, number] }
         readonly defaultPlacement: SeedPacketPlacement
         readonly placements: Readonly<Record<string, SeedPacketPlacement>>
         readonly plantCels: Readonly<Record<string, number>>
@@ -318,6 +323,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     const zombies = object(data.zombies, 'presentation definitions.zombies')
     for (const [id, entry] of Object.entries(plants)) {
         const plant = object(entry, id), visual = object(plant.visual, id + '.visual')
+        if (plant.viewConfig !== undefined) object(plant.viewConfig, id + '.viewConfig')
         if (typeof visual.seedType !== 'string' && typeof visual.seedType !== 'number') throw new TypeError(id + '.seedType is invalid')
         if (visual.preview !== undefined && (!Number.isInteger(visual.preview) || (visual.preview as number) < 0)) throw new TypeError(id + '.preview is invalid')
         point(plant.shadow, id + '.shadow')
@@ -325,11 +331,17 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (plant.rowOrder !== undefined) finite(plant.rowOrder, id + '.rowOrder')
         if (plant.packetVisibleTracks !== undefined) texts(plant.packetVisibleTracks, id + '.packetVisibleTracks')
         if (visual.nameKey !== undefined) text(visual.nameKey, id + '.visual.nameKey')
+        if (visual.tooltipKey !== undefined) text(visual.tooltipKey, id + '.visual.tooltipKey')
         if (plant.view !== undefined) text(plant.view, id + '.view')
         if (plant.animationTarget !== undefined) text(plant.animationTarget, id + '.animationTarget')
         if (typeof plant.view === 'string' && VIEW_SLOTS[plant.view] && !plant.animationTarget) throw new TypeError(id + '.animationTarget is missing')
         sounds(plant.plantedSounds, id + '.plantedSounds')
         sounds(plant.explosionSounds, id + '.explosionSounds')
+        if (plant.explosion !== undefined) {
+            const explosion = object(plant.explosion, id + '.explosion')
+            text(explosion.effect, id + '.explosion.effect'); finite(explosion.x, id + '.explosion.x')
+            if (typeof explosion.rowOrder !== 'boolean') throw new TypeError(id + '.explosion.rowOrder must be boolean')
+        }
         if (plant.mine !== undefined) {
             const mine = object(plant.mine, id + '.mine'), glow = object(mine.glow, id + '.mine.glow')
             range(mine.blinkTicks, id + '.mine.blinkTicks')
@@ -387,6 +399,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     }
     for (const [id, value] of Object.entries(object(data.projectiles, 'projectiles'))) {
         const projectile = object(value, id)
+        if (projectile.viewConfig !== undefined) object(projectile.viewConfig, id + '.viewConfig')
         text(projectile.sprite, id + '.sprite')
         if (projectile.impact !== undefined) {
             const impact = object(projectile.impact, id + '.impact')
@@ -407,6 +420,9 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     const packets = object(data.seedPackets, 'seedPackets')
     const flash = object(packets.flash, 'seedPackets.flash')
     text(flash.id, 'seedPackets.flash.id'); positive(flash.duration, 'seedPackets.flash.duration')
+    const selection = object(packets.selection, 'seedPackets.selection')
+    text(selection.sprite, 'seedPackets.selection.sprite')
+    if (!Array.isArray(selection.color) || selection.color.length !== 3 || selection.color.some(value => !Number.isInteger(value) || value < 0 || value > 255)) throw new TypeError('Invalid seedPackets.selection.color')
     placement(packets.defaultPlacement, 'seedPackets.defaultPlacement')
     for (const [id, value] of Object.entries(object(packets.placements, 'seedPackets.placements'))) placement(value, 'seedPackets.placements.' + id)
     for (const [id, value] of Object.entries(object(packets.plantCels, 'seedPackets.plantCels'))) {

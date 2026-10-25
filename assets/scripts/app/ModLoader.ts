@@ -1,5 +1,5 @@
 import { DefinitionSources, buildGameplayContent, buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
-import { resourcePacks } from '@/client/content/ResourcePacks'
+import { modResources } from '@/client/content/ModResources'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { loadPresentationDefinitions } from '@/client/content/loadPresentationDefinitions'
@@ -51,7 +51,12 @@ async function loadMods() {
         let stage = 'mount'
         try {
             console.info(`[Mods] Loading ${manifest.id}@${manifest.version}`)
-            await mountMod(mod)
+            if (manifest.gameplay || manifest.client) await mountMod(mod)
+            stage = 'content'
+            const assets = new ModAssets(manifest, mod.files)
+            if (mod.content.gameplay) gameplayDefinitions.register(manifest.id, assets.json(mod.content.gameplay))
+            if (mod.content.presentation) presentationDefinitions.register(manifest.id, assets.json(mod.content.presentation))
+            clientContent.register(assets, mod.content.resources)
             if (manifest.gameplay) {
                 stage = manifest.gameplay.cocosModule
                 const module = await importModModule(manifest.id, stage) as ModModule
@@ -69,7 +74,7 @@ async function loadMods() {
                 await module.register({ host, assets: new ClientModAssets(manifest, mod.files) })
             }
             stage = 'definitions'
-            const content = buildGameplayContent(base!.definitions, base!.levels, base!.strings, gameplayDefinitions.sources)
+            const content = buildGameplayContent(base!.definitions, base!.levels, base!.strings, base!.seedCatalog, gameplayDefinitions.sources)
             const presentation = buildPresentationDefinitions(base!.presentation, presentationDefinitions.sources)
             gameplay.validate(content.definitions)
             new ClientAnimationRegistry(presentation)
@@ -102,12 +107,13 @@ async function loadMods() {
 
 async function loadBaseDefinitions() {
     const loader = new ClientContentLoader(), manifest = await loader.loadManifest()
-    const load = (path: string) => resourcePacks.baseJson(`pvz:${path.replace(/\.json$/i, '')}`)
-    const [definitions, levels, strings, presentation] = await Promise.all([
+    const load = (path: string) => modResources.baseJson(`pvz:${path.replace(/\.json$/i, '')}`)
+    const [definitions, levels, strings, seedCatalog, presentation] = await Promise.all([
         load(manifest.gameplay.definitions), load(manifest.gameplay.levels), load(manifest.gameplay.strings),
+        load(manifest.gameplay.seedCatalog),
         loadPresentationDefinitions(manifest, []),
     ])
-    buildGameplayContent(definitions, levels, strings)
+    buildGameplayContent(definitions, levels, strings, seedCatalog)
     new ClientAnimationRegistry(presentation)
-    return { definitions, levels, strings, presentation }
+    return { definitions, levels, strings, seedCatalog, presentation }
 }

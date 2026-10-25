@@ -35,6 +35,7 @@ export class UIButton extends Component {
     /** Select immediately without capturing the pointer or emitting a release click. */
     pressOnly = false
     changeCursor = true
+    hapticsEnabled = true
     /** Temporary input gate; keeps the normal appearance when blocked. */
     canInteract: () => boolean = () => true
     polygon: UIButtonPolygon = []
@@ -136,7 +137,7 @@ export class UIButton extends Component {
         this.hovering = inside
         if (!this.pressed) this.applyState(!this.interactable ? 'disabled' : inside ? 'hover' : 'normal')
         if (changed) this.onHoverChange?.(inside)
-        if (entered) Haptics.play()
+        if (entered && this.hapticsEnabled) Haptics.play()
         if (entered && emit) this.onHoverEnter?.()
     }
 

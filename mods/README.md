@@ -1,32 +1,30 @@
 # Mod 项目结构
 
-每个子目录是一份独立的 Mod 项目，源码与运行资源分开放置：
+资源、数据和脚本扩展统一使用同一格式；只创建需要的目录。
 
 ```text
 my-mod/
-├── mod.json                 # ID、版本、依赖和打包后的模块入口
-├── README.md
+├── manifest.json             # ID、版本、依赖和可选模块入口
+├── content.json              # 游戏/表现配置索引及资源映射
 ├── src/
-│   ├── client/              # 客户端展示，入口 index.ts
-│   └── server/              # 服务端玩法，入口 index.ts
+│   ├── server/index.ts       # 可选的服务端代码
+│   └── client/index.ts       # 可选的客户端代码
 └── assets/
-    ├── images/              # 图片
-    └── bundles/             # 可选的 Cocos Asset Bundle
+    ├── gameplay/            # 游戏定义分类 JSON
+    ├── presentation/        # 表现定义分类 JSON
+    ├── sprites/
+    └── audio/
 ```
 
-只创建需要的模块和资源目录。宽屏 Mod 只有 `src/client/` 和 `assets/images/`。
-
-`mod.json` 声明的是打包后的 JS 入口：客户端使用 `client/index.js`，`gameplay` 字段声明服务端模块，分别输出 `gameplay/node/index.js` 和 `gameplay/cocos/index.js`，与源码目录名独立。`assets/` 原样复制进 ZIP，例如客户端通过 `assets.sprite('assets/images/left.png')` 加载图片。
+纯资源 Mod 只需清单、内容索引和资源文件。`content.json` 中所有路径相对于项目根目录。静态游戏定义、表现定义和新增资源自动注册；代码入口只负责自定义行为、视图和方法包装。
 
 ```sh
-npm run mod:pack -- mods/widescreen
-npm run mod:test -- dist/mods/widescreen
+npm run mod:pack -- mods/corn
+npm run mod:test -- dist/mods/corn
 ```
 
-仅打包时编译。生成的 JS、资源和清单放在 `dist/mods/<目录名>/`，ZIP 位于旁边的 `<目录名>.zip`；源码目录不存编译产物。`mod:test` 直接验证打包目录。游戏使用 `/mod install` 安装 ZIP，详见[安装与管理](../docs/MODS.md)。
+只有打包时编译，输出 `dist/mods/<name>/` 和 `<name>.zip`。管理入口统一为 `/mod`；安装、优先级和完整配置格式见 [Mod 文档](../docs/MODS.md)。
 
-入口统一为 `register({ host, assets })`。配置经 `host.get('content/definitions')` 注册；玩法和视图直接使用宿主注册表，修改既有方法使用 `host.around()`。不再提供各类专用 Mod API。
-
-- [corn](corn/README.md)：独立玉米投手与双格升级的玉米加农炮，自带资源、瞄准和炮弹机制。
-- [example-plant](example-plant/README.md)：复用原版资源的植物、僵尸和回血行为。
-- [widescreen](widescreen/README.md)：视口与主界面资源、动画扩展。
+- [corn](corn/README.md)：玉米投手与玉米加农炮，自带资源和行为。
+- [example-plant](example-plant/README.md)：注册自定义植物、僵尸行为的最小示例。
+- [widescreen](widescreen/README.md)：主界面与全局视口扩展。

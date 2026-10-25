@@ -1,3 +1,4 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import test from 'node:test'
@@ -18,13 +19,13 @@ function fixture(getLevel?: () => LevelDefinition | null, canCompleteLevel?: () 
         get length() { return data.size },
     }
     const profiles = createProfileStore(storage)
-    const catalog = createStoreCatalog(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/store.json', 'utf8')))
+    const catalog = createStoreCatalog(readGameplaySource('store'))
     const api = new MenuApi(createLocalMenuTransport(storage, getLevel, canCompleteLevel, catalog))
     return { data, storage, profiles, api }
 }
 
 test('shop rules, tiers and purchase effects follow JSON after changing the item ID', async () => {
-    const definition = JSON.parse(readFileSync('tools/content/pvz-base/gameplay/store.json', 'utf8'))
+    const definition = readGameplaySource('store')
     const upgrade = definition.pages[0].items[0]
     upgrade.id = 39
     upgrade.prices[0] = 123
@@ -170,7 +171,7 @@ test('achievement entries preserve saved flag/icon order and expose only the act
 })
 
 test('award API resolves the loaded level reward and packet cost instead of choosing a plant in the UI', async () => {
-    const levels = JSON.parse(readFileSync('tools/content/pvz-base/gameplay/levels.json', 'utf8')) as GameplayLevels
+    const levels = readGameplaySource('levels') as GameplayLevels
     let level: LevelDefinition | null = levels.levels['pvz:adventure-1-1']
     const { api } = fixture(() => level)
     const award = await api.getAward()
@@ -192,7 +193,7 @@ test('award API resolves the loaded level reward and packet cost instead of choo
 })
 
 test('winning advances the current profile once and exposes the next installed level', async () => {
-    const levels = JSON.parse(readFileSync('tools/content/pvz-base/gameplay/levels.json', 'utf8')) as GameplayLevels
+    const levels = readGameplaySource('levels') as GameplayLevels
     let level = levels.levels['pvz:adventure-1-1']
     let won = false
     const { api, storage } = fixture(() => level, () => won)

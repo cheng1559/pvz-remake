@@ -4,7 +4,7 @@
 
 `pvz:bowling-wallnut`、`pvz:bowling-explodenut` 是独立植物和种子定义，配置放在 gameplay／presentation JSON。服务端通过现有 `PlantBehaviorRegistry` 注册 `bowling` 行为，状态存入 `behaviorState`；客户端通过 `PlantViewRegistry` 注册 `BowlingNutView`。只复用坚果的美术资源，普通坚果不参与保龄球判断。`occupiesCell: false` 声明移动植物不占格、不作为啃食目标；`rowOrder` 控制行内表现顺序。
 
-关卡设置 `seedBankSlots` 时，`seedPackets` 表示可选种子池；未设置则保持固定种子栏。`server/seedChooser.ts` 校验选择、移除和确认，顺序与初始冷却随服务端存档保存。`LevelSeedChooser` 读取初始快照并提交 `chooseSeed`／`confirmSeeds` 命令，只负责卡片飞行、补位、面板和提示；演出与全局时钟一致。测试入口为 `/level pvz:seed-chooser-test`，不改变正式关卡的选卡规则。
+选卡目录全局共用：独立的 `gameplay/seed-catalog.json` 按数组顺序列出种子 ID，种子定义不再包含目录属性；保龄球等特殊种子不在目录中。Mod 注册的玩法数据可通过顶层 `seedCatalog` 数组追加自身命名空间的种子 ID。关卡通过 `seedBankSlots` 开启选卡并指定携带数量，不再配置候选池；未开启选卡时，`seedPackets` 仍表示固定种子栏。`server/seedChooser.ts` 统一生成目录并校验选择、移除和确认，顺序与初始冷却随服务端存档保存。`LevelSeedChooser` 按服务端目录顺序排卡，不使用预览图编号决定位置，只负责卡片飞行、补位、面板和提示；演出与全局时钟一致。测试入口为 `/level pvz:seed-chooser-test`。
 
 图鉴首页和详情已接入全部 49 种植物、26 种僵尸的 Reanim 展示动画，包含独立头部、眨眼、旗帜、装备及僵尸博士驾驶员；左侧缩略图沿用原版静态展示。`AlmanacEntityView` 只负责动画播放和裁剪，不创建后端实体，不实现攻击、产出、移动或受伤逻辑。全部动画使用全局时钟。资源配置由 `python tools/build_pvz_base.py --almanac-only --raw-root <raw目录>` 生成，完整构建也会包含这些资源。
 
@@ -40,7 +40,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 ## 植物与僵尸
 
-植物和僵尸的数值都在 `tools/content/pvz-base/gameplay/definitions.json`，与 PvZ-Portable 和上一版一致。植物最多带一种能力：`shooter`（射手）、`producer`（向日葵）、`fuse`（樱桃炸弹，100 tick 后 3x3 烧焦）、`mine`（土豆雷，1500 tick 出土、106 tick 升起，炸 1800 且不留尸体）、`chomper`（大嘴花，70 tick 咬合、吞下后消化 4000 tick），没有能力的植物只阻挡（坚果墙）；`deathExplosion` 让爆炸坚果被吃掉时爆炸。`server/plants/abilities.ts` 的 `pvz:plant-abilities` 系统按 `Plant.ability` 状态推进，客户端 `client/plants` 下的视图按该状态切换动画，并负责眨眼、裂纹和土豆雷红灯。
+玩法配置按类别拆分在 `tools/content/pvz-base/gameplay/definitions/`：`plants.json`、`zombies.json`、`seeds.json` 等；同级 `definitions.json` 仅保存全局设置和文件索引，打包时合并成原来的运行时格式，不增加资源请求。植物和僵尸的数值与 PvZ-Portable 和上一版一致。植物最多带一种能力：`shooter`（射手）、`producer`（向日葵）、`fuse`（樱桃炸弹，100 tick 后 3x3 烧焦）、`mine`（土豆雷，1500 tick 出土、106 tick 升起，炸 1800 且不留尸体）、`chomper`（大嘴花，70 tick 咬合、吞下后消化 4000 tick），没有能力的植物只阻挡（坚果墙）；`deathExplosion` 让爆炸坚果被吃掉时爆炸。`server/plants/abilities.ts` 的 `pvz:plant-abilities` 系统按 `Plant.ability` 状态推进，客户端 `client/plants` 下的视图按该状态切换动画，并负责眨眼、裂纹和土豆雷红灯。
 
 僵尸的 `helm` 先吸收伤害（路障 370、铁桶 1100），耗尽时发出 `zombieHelmDropped`；`gait` 引用共用步态表，提供走路地面轨迹、啃食与死亡帧数；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `python3 tools/build_pvz_base.py --plants-zombies-only --raw-root <raw目录>` 合并进现有转换输出，同步玩法数据并重新打包内置 ZIP。
 
@@ -56,7 +56,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 `client/level/LevelScene` 负责通用的开场 → 战斗 → 领奖／失败流程、全局时钟倍率、输入挂起和表现存档，只依赖 `LevelGame` 客户端接口。`LevelView` 组合 HUD、输入、实体、粒子、音频和结算 presenter；`LevelSeedBank` 按关卡配置创建种子包，分别处理费用、冷却、闪光和按钮输入。棋盘行列、可种行、种子费用和关卡编号均读取现有后端关卡定义。
 
-`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`tools/content/pvz-base/presentation/definitions.json` 集中维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，打包生成内容包内的 `presentation/definitions.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前仍只安装了 1-1 内容。
+`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`tools/content/pvz-base/presentation/definitions/` 按类别维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，同级 `definitions.json` 仅保存文件索引，和 gameplay 共用索引读取逻辑，打包时合并生成内容包内的 `presentation/definitions.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前仍只安装了 1-1 内容。
 
 客户端存档统一写入 `level` 字段，读取时兼容原 `adventure11` 字段；开场专属的状态校验放在各自的实现中。共用关卡布局为 `assets/resources/ui/level.prefab`，资源 ID 为 `pvz:level`，保留原 Prefab 和脚本 UUID。`client/showcase` 仅保留独立资源预览探针。
 
@@ -127,7 +127,7 @@ Options 保留旧版位置和操作：音量实时保存（音效上限为 0.65�
 
 ## 资源
 
-转换中间产物位于 `tools/generated/pvz-base` 和 `tools/generated/resources`，运行时只加载生成的 `assets/resources/base.zip`。基础包与外部资源包使用相同的 `pack.json` 和资源解码缓存；仅引导场景、布局 Prefab 和编译 shader 保留在 Cocos 资源中。
+转换中间产物位于 `tools/generated/pvz-base` 和 `tools/generated/resources`，运行时只加载生成的 `assets/resources/base.zip`。基础包与外部资源包使用相同的 `manifest.json / content.json` 和资源解码缓存；仅引导场景、布局 Prefab 和编译 shader 保留在 Cocos 资源中。
 
 将自己游戏副本的 `main.pak` 放到 `tools/main.pak`，在项目根目录执行：
 

@@ -1,0 +1,24 @@
+{
+  "example:regenerating_zombie": {
+    "view": "zombie",
+    "animationTarget": "example:regenerating_zombie",
+    "shadowX": 23,
+    "arm": { "lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper" },
+    "damagedArm": "damagedArm",
+    "animations": {
+      "idle": { "reanimId": "pvz:zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0 },
+      "idle2": { "reanimId": "pvz:zombie_idle2", "rateScale": 1, "fps": 12, "x": 0, "y": 0 },
+      "walk": { "reanimId": "pvz:zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8 },
+      "walk2": { "reanimId": "pvz:zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8 },
+      "eat": { "reanimId": "pvz:zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8 },
+      "death": { "reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8 },
+      "death2": { "reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8 },
+      "mowered": { "reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator" }
+    },
+    "drops": {
+      "head": { "track": "anim_head1", "effect": "zombiehead", "offset": [58, -30], "moweredEffect": "moweredzombiehead", "sounds": [{ "id": "limbs_pop", "foley": true, "pitchRange": 10 }] },
+      "arm": { "track": "Zombie_outerarm_lower", "effect": "zombiearm", "offset": [25, -55], "moweredEffect": "moweredzombiearm", "sounds": [{ "id": "limbs_pop", "foley": true, "pitchRange": 10 }] }
+    },
+    "helmTracks": ["anim_cone", "anim_bucket"]
+  }
+}

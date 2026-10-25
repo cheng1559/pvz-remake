@@ -3,7 +3,7 @@ export interface DebugCliResult {
     ok: boolean
     message: string
     failure?: 'syntax' | 'condition'
-    action?: 'restart' | 'reload' | 'restartForPacks' | 'installPack' | 'managePacks' | 'restartForMods' | 'installMod' | 'manageMods' | 'home' | 'quit' | 'help' | 'menu' | 'shop' | 'almanac' | 'zengarden' | 'level'
+    action?: 'restart' | 'reload' | 'restartForMods' | 'installMod' | 'manageMods' | 'home' | 'quit' | 'help' | 'menu' | 'shop' | 'almanac' | 'zengarden' | 'level'
     levelId?: string
     catalog?: DebugCliCatalog
 }
@@ -23,7 +23,7 @@ const specs: CommandSpec[] = [
     ...['music', 'sfx'].map(name => ({ name, parameters: ['{0-100}'], minimum: 1 })),
     ...['hotkeys', 'haptics', 'cooldown', 'suncost', 'sunspawning', 'hitboxes', 'background', 'mobile', 'fullscreen', 'hdseed'].map(name => ({ name, parameters: ['{enabled}'], minimum: 1, values: { 0: bool } })),
     { name: 'seedstyle', parameters: ['{standard|rendered|tilted}'], minimum: 1, values: { 0: ['standard', 'rendered', 'tilted'] } },
-    ...['pack', 'mod'].map(name => ({ name, parameters: ['[install|load|unload|uninstall|list]', '[installed_id]'], minimum: 0, values: { 0: ['install', 'load', 'unload', 'uninstall', 'list'] } })),
+    { name: 'mod', parameters: ['[install|load|unload|uninstall|list]', '[installed_id]'], minimum: 0, values: { 0: ['install', 'load', 'unload', 'uninstall', 'list'] } },
     { name: 'perf', parameters: ['{plants|zombies|particles|sfx|logic}', '{enabled}'], minimum: 2, values: { 0: ['plants', 'zombies', 'particles', 'sfx', 'logic'], 1: bool } },
     { name: 'lawnmower', parameters: ['{trigger|reset}', '[row]'], minimum: 1, values: { 0: ['trigger', 'reset'] } },
     ...['sun', 'money'].map(name => ({ name, parameters: ['{add|set}', '{number}'], minimum: 2, values: { 0: ['add', 'set'] } })),
@@ -81,7 +81,7 @@ export function getDebugCliSuffix(value: string, catalog?: DebugCliCatalog): str
     const spec = specs.find(spec => spec.name === tokens[0].replace(/^\//, '').toLowerCase())
     if (spec?.values?.[tokens.length - 2]
         && !spec.values[tokens.length - 2].includes(tokens[tokens.length - 1].toLowerCase())) return ''
-    if ((spec?.name === 'pack' || spec?.name === 'mod') && ['install', 'list'].includes(tokens[1]?.toLowerCase())) return ''
+    if (spec?.name === 'mod' && ['install', 'list'].includes(tokens[1]?.toLowerCase())) return ''
     const hints = spec?.parameters.slice(tokens.length - 1) ?? []
     return hints.length ? (/\s$/.test(value) ? '' : ' ') + hints.join(' ') : ''
 }

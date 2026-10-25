@@ -5,7 +5,7 @@ import type { DefinitionSources } from '@/shared/content/DefinitionRegistry'
 import { PlantViewRegistry } from '@/client/plants/PlantViewRegistry'
 import { ZombieViewRegistry } from '@/client/zombies/ZombieViewRegistry'
 import type { ArchiveContentRegistry } from './ArchiveContentRegistry'
-import { loadModSprite } from './ModRuntime'
+import { modResources } from './ModResources'
 
 import * as viewport from '@/client/view/ClientViewport'
 import * as menu from '@/client/screens/MainMenuScreen'
@@ -27,7 +27,7 @@ import * as debugSettings from '@/platform/debug/GameDebugSettings'
 import * as haptics from '@/platform/Haptics'
 
 export class ClientModAssets extends ModAssets {
-    sprite(path: string) { this.url(path); return loadModSprite(this.id, path) }
+    sprite(path: string) { return modResources.file(this.id, path, engine.SpriteFrame) }
 }
 
 export function createClientModHost(ownerId: string, definitions: DefinitionSources, resources: ArchiveContentRegistry,

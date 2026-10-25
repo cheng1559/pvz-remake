@@ -1,7 +1,6 @@
 import { Button, Color, KeyCode, Node, UITransform } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
 import { modManager } from '@/client/content/ModManager'
-import { resourcePacks } from '@/client/content/ResourcePacks'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import type { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
@@ -19,8 +18,6 @@ const CHECKBOX_SCALE = 0.8
 const CHECKBOX_CENTER_Y = 17
 const ARROW_WIDTH = 20
 
-export type PackageKind = 'pack' | 'mod'
-
 export interface PackageDialogOptions {
     /** Picks and installs ZIPs without enabling them; empty when cancelled or all failed. */
     install: () => Promise<string[]>
@@ -33,27 +30,26 @@ interface Entry { id: string, version?: string, error?: string, builtin?: boolea
 /**
  * Enabled states and uninstalls stay in the draft until Apply; Cancel discards them.
  * Import saves the ZIP immediately, without enabling it.
- * The pack list order is its priority, highest first, and checking a row never moves it.
- * Mods load in dependency order, so they have no priority.
+ * The Mod list order is its priority, highest first, and checking a row never moves it.
+ * Dependencies load first; later Mods override earlier resources.
  */
-export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind, options: PackageDialogOptions): Promise<UIDialog> {
-    const manager = kind === 'pack' ? resourcePacks : modManager
-    const ordered = kind === 'pack'
+export async function showPackageDialog(parent: Node, ui: UI, options: PackageDialogOptions): Promise<UIDialog> {
+    const manager = modManager
     const running = await manager.running()
-    const initial = ordered ? running : await modManager.list()
-    const packEntries = ordered ? await resourcePacks.entries() : []
-    const checked = new Set(ordered ? packEntries.filter(entry => entry.enabled).map(entry => entry.id) : initial)
+    const initial = await manager.list()
+    const installedEntries = await manager.installed()
+    const checked = new Set(initial)
     const pendingUninstalls = new Set<string>()
-    /** Display order; for packs, the first row has the highest priority. */
+    /** Display order; the first row has the highest priority. */
     let entries: Entry[] = []
-    let order = packEntries.map(entry => entry.id)
+    let order = installedEntries.map(entry => entry.id)
     /** An import replaced files used by this session. */
     let touchedRunning = false
     let busy = false
     if (!parent.isValid) throw new Error('Package dialog was closed while loading')
 
     const dialog = ui.dialog(parent, {
-        title: ui.text(kind === 'pack' ? 'PACKAGE_PACKS_TITLE' : 'PACKAGE_MODS_TITLE', kind === 'pack' ? 'Resource Packs' : 'Mods'),
+        title: ui.text('PACKAGE_MODS_TITLE', 'Mods'),
         width: 640, extraHeight: 270, tall: true,
         confirmText: ui.text('PACKAGE_APPLY', 'Apply'), cancelText: ui.text('BUTTON_CANCEL'),
     })
@@ -93,13 +89,13 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
     }
 
     async function refresh(): Promise<void> {
-        const installed: Entry[] = kind === 'pack' ? (await resourcePacks.installed()).map(id => ({ id })) : await modManager.installed()
+        const installed: Entry[] = await manager.installed()
         if (!dialog.node.isValid) return
         const ids = installed.filter(entry => !pendingUninstalls.has(entry.id)).map(entry => entry.id)
-        order = ordered ? [...order, ...ids].filter((id, index, all) => all.indexOf(id) === index && ids.includes(id)) : ids
+        order = [...order, ...ids].filter((id, index, all) => all.indexOf(id) === index && ids.includes(id))
         for (const id of checked) if (!order.includes(id)) checked.delete(id)
         entries = order.map(id => installed.find(entry => entry.id === id)!)
-        if (ordered) entries.push({ id: 'base', builtin: true })
+        entries.push({ id: 'pvz:base', builtin: true })
         render()
     }
 
@@ -108,7 +104,7 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
         for (const child of [...scroll.content.children]) { child.active = false; child.destroy() }
         scroll.setContentHeight(entries.length * ROW_HEIGHT)
         if (!entries.length) {
-            const text = ui.text(kind === 'pack' ? 'PACKAGE_NO_PACKS' : 'PACKAGE_NO_MODS', kind === 'pack' ? 'No resource packs installed' : 'No Mods installed')
+            const text = ui.text('PACKAGE_NO_MODS', 'No Mods installed')
             ui.label(scroll.content, {
                 text, font: 'profile', color: DIM_COLOR, y: textY,
                 x: Math.max(0, Math.floor((width - FontMetricsUtil.measureTextWidth(font, text)) / 2)),
@@ -145,12 +141,12 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
         rowButton(row, uninstallX, textWidth, LINK_COLOR, true, () => { void run(() => uninstallEntry(entry.id)) },
             color => { label.renderer.fontColor = color })
         // Clicking the name toggles the checkbox, as clicking the box does.
-        const nameRight = ordered ? uninstallX - 2 * ARROW_WIDTH - 14 : uninstallX - 4
+        const nameRight = uninstallX - 2 * ARROW_WIDTH - 14
         rowButton(row, 46, Math.max(0, nameRight - 46), nameColor, true, () => {
             checkbox.value = !checkbox.value
             toggle(checkbox.value)
         }, color => { nameLabel.renderer.fontColor = color })
-        if (ordered) {
+        {
             arrowButton(row, uninstallX - 2 * ARROW_WIDTH - 10, true, index > 0, () => move(index, -1))
             arrowButton(row, uninstallX - ARROW_WIDTH - 6, false, index < order.length - 1, () => move(index, 1))
         }
@@ -204,7 +200,7 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
     /** The draft enabled list in load order (lowest priority first), comparable with `running`. */
     function enabledDraft(): string[] {
         const ids = order.filter(id => checked.has(id))
-        return ordered ? ids.reverse() : ids
+        return ids.reverse()
     }
 
     async function importArchive(): Promise<void> {
@@ -213,7 +209,7 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
         for (const id of ids) {
             pendingUninstalls.delete(id)
             if (running.includes(id) || initial.includes(id)) touchedRunning = true
-            if (ordered && !order.includes(id)) order.unshift(id)
+            if (!order.includes(id)) order.unshift(id)
             checked.add(id)
         }
         await refresh()
@@ -233,7 +229,7 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
     async function apply(): Promise<void> {
         const enabled = enabledDraft()
         const same = enabled.length === initial.length
-            && enabled.every((id, index) => ordered ? initial[index] === id : initial.includes(id))
+            && enabled.every((id, index) => initial[index] === id)
         const restart = !same || touchedRunning
         if (restart) {
             const confirmed = await ui.dialog(dialog.node, {
@@ -243,8 +239,7 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
             }).result
             if (!confirmed || !dialog.node.isValid) return
         }
-        if (ordered) await resourcePacks.setEntries(order.map(id => ({ id, enabled: checked.has(id) })))
-        else await modManager.setEnabled(enabled)
+        await manager.setEnabled(enabled, order)
         for (const id of pendingUninstalls) {
             await manager.uninstall(id)
             pendingUninstalls.delete(id)
@@ -256,7 +251,7 @@ export async function showPackageDialog(parent: Node, ui: UI, kind: PackageKind,
     dialog.onConfirm = () => { void run(apply) }
     dialog.onKeyDown = event => event.keyCode === KeyCode.SPACE
     await refresh()
-    const draft = () => JSON.stringify([ordered ? order : [], [...checked].sort()])
+    const draft = () => JSON.stringify([order, [...checked].sort()])
     const initialDraft = draft()
     dialog.onCancel = () => { void run(async () => {
         if (pendingUninstalls.size || draft() !== initialDraft) {

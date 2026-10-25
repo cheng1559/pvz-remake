@@ -1,5 +1,5 @@
 import type { PresentationDefinitions } from '@/shared/content/presentation'
-import { Color, Mask, Node, Sprite, SpriteFrame } from 'cc'
+import { Color, Mask, Node, Sprite } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontRenderer } from '@/client/font'
 import {
@@ -20,36 +20,37 @@ export interface SeedPacketViewArgs {
     layer: number
     x: number
     y: number
-    seedType: SeedPacketSeedType
+    seedType?: SeedPacketSeedType
     costFont: BitmapFontAssets | null
     drawCost?: boolean
-    cost: number
+    cost?: number
     loadSprite?: SeedPacketRenderArgs['loadSprite']
-    seedPacketFlash?: SpriteFrame
 }
 
 export class SeedPacketView {
     readonly node: Node
-    selectedHighlight: Node
-    cooldownClip: Node
-    seedType: SeedPacketSeedType
+    selectedHighlight?: Node
+    cooldownClip?: Node
+    seedType?: SeedPacketSeedType
     private readonly _baseSpriteColors = new WeakMap<Sprite, Color>()
 
     constructor(private args: SeedPacketViewArgs) {
-        this.seedType = args.seedType
-        this.node = SeedPacketRenderer.drawSeedPacket(args)
-        this.selectedHighlight = this._createSelectedHighlight(args)
-        this.cooldownClip = this._createCooldownClip(args)
+        this.node = uiNode({ name: args.name, parent: args.parent, layer: args.layer,
+            position: { x: args.x, y: args.y }, anchor: { x: 0, y: 1 },
+            size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT } }).node
+        if (args.seedType !== undefined) this.setSeed(args.seedType, args.cost ?? 0)
     }
 
-    replace(seedType: SeedPacketSeedType, cost: number): void {
-        this.args = { ...this.args, seedType, cost }
+    setSeed(seedType: SeedPacketSeedType, cost: number): void {
+        const args = { ...this.args, seedType, cost,
+            parent: this.node.parent!, x: this.node.position.x, y: this.node.position.y }
+        this.args = args
         this.seedType = seedType
         for (const child of [...this.node.children]) { child.active = false; child.removeFromParent(); child.destroy() }
         // Keep the slot node and its button so input capture and mobile bindings stay valid.
-        SeedPacketRenderer.drawSeedPacket({ ...this.args, node: this.node })
-        this.selectedHighlight = this._createSelectedHighlight(this.args)
-        this.cooldownClip = this._createCooldownClip(this.args)
+        SeedPacketRenderer.drawSeedPacket({ ...args, node: this.node })
+        this.selectedHighlight = this._createSelectedHighlight(args)
+        this.cooldownClip = this._createCooldownClip(args)
     }
 
     sync(options: {
@@ -72,11 +73,12 @@ export class SeedPacketView {
             )
         this.applyColor(color)
 
-        const percentDark = !options.mobile && options.selected
+        const percentDark = options.selected
             ? 1
             : options.cooldownTotal > 0 ? options.cooldownRemaining / options.cooldownTotal : 0
         this.syncCooldown(options.gameStarted ? percentDark : 0)
-        this.selectedHighlight.active = options.mobile &&
+        if (this.selectedHighlight) this.selectedHighlight.active = options.mobile &&
+            this.seedType !== 48 &&
             options.gameStarted &&
             options.selected &&
             (options.conveyor || options.cooldownRemaining <= 0)
@@ -92,6 +94,7 @@ export class SeedPacketView {
     }
 
     syncCooldown(percentDark: number) {
+        if (!this.cooldownClip) return
         if (percentDark <= 0) {
             this.cooldownClip.active = false
             return
@@ -123,31 +126,12 @@ export class SeedPacketView {
     }
 
     private _createSelectedHighlight(args: SeedPacketViewArgs) {
-        const layer = args.layer
-        const highlight = uiNode({
-            name: 'SelectedHighlight',
-            parent: this.node,
-            layer,
-            active: false,
-            anchor: { x: 0, y: 1 },
-            size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT },
-            position: { x: 0, y: 0, z: 15 },
-        }).node
-        const flash = args.seedPacketFlash
-        if (flash) {
-            uiNode({
-                name: 'SeedPacketFlash',
-                parent: highlight,
-                layer,
-                position: { x: 0, y: 0 },
-                anchor: { x: 0, y: 1 },
-                sprite: { frame: flash, sizeMode: Sprite.SizeMode.RAW, trim: false },
-            })
-        }
+        const highlight = SeedPacketRenderer.drawSelectionFrame(this.node, args.definitions)
+        highlight.active = false
         return highlight
     }
 
-    private _createCooldownClip(args: SeedPacketViewArgs) {
+    private _createCooldownClip(args: SeedPacketRenderArgs) {
         const layer = args.layer
         const clip = uiNode({
             name: 'CooldownClip',

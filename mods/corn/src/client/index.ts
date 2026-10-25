@@ -8,15 +8,13 @@ export interface Context {
 export function register({ host, assets }: Context): void {
     registerCobCannon({ host, assets })
     const presentation = assets.json('assets/presentation.json')
-    host.get('content/definitions').register(assets.id, presentation)
-    host.get('content/resources').register(assets, assets.json('assets/content.json'))
     const { AudioClip, Color, Sprite, SpriteFrame, UITransform, Vec3, isValid } = host.get('cc')
     const { uiNode } = host.get('client/view/uiNode')
     const { ReanimPlayer } = host.get('client/reanim/ReanimPlayer')
     const { loadIntegratedGameContent } = host.get('client/game/loadIntegratedGameContent')
     let contentReady: Promise<any> | undefined
     const content = () => contentReady ??= loadIntegratedGameContent()
-    const sounds = assets.json('assets/content.json').sounds
+    const sounds = assets.json('content.json').resources.audio
     const { SoundLoader } = host.get('client/sound/LegacySoundSystem')
     host.around(SoundLoader, 'load', function (next, id) {
         if (!sounds[id]) return next(id)
@@ -25,7 +23,8 @@ export function register({ host, assets }: Context): void {
     })
     const config = presentation.plants['corn:kernel_pult']
     const behavior = assets.json('assets/gameplay.json').plants['corn:kernel_pult'].behavior
-    const visuals = assets.json('assets/visuals.json')
+    const visuals = config.viewConfig
+    const cannonVisual = presentation.plants['corn:cob_cannon'].viewConfig
     const animation = config.animations
     const plantId = 'corn:kernel_pult'
     let butterFrame: any, butterReady: Promise<any> | undefined
@@ -82,7 +81,7 @@ export function register({ host, assets }: Context): void {
             heldCorn(active, phase === 'shooting' && state.butter && !state.released)
             const upgrade = world.cursor?.mode === 'seed' && world.cursor.seedId === 'corn:cob_cannon' &&
                 world.extensions?.['corn:cob_upgrade']?.targets.includes(plant.entityId)
-            const tint = upgrade ? flashGray(tick, visuals.cannon.upgradeFlashPeriod) : 255
+            const tint = upgrade ? flashGray(tick, cannonVisual.upgradeFlashPeriod) : 255
             for (const player of Object.values(this.players)) player.setColorOverride(new Color(tint, tint, tint))
             const gray = Math.min(255, plant.eatenFlashCounter * 3)
             active.setExtraAdditiveDraw(gray > 0, new Color(gray, gray, gray))
@@ -180,7 +179,7 @@ export function register({ host, assets }: Context): void {
     host.around(LevelEntityRenderer.prototype, 'sync', function (next, snapshot, changes, events) {
         next(snapshot, changes, events)
         for (const projectile of snapshot.projectiles) {
-            const visual = visuals.projectiles[projectile.typeId]
+            const visual = presentation.projectiles[projectile.typeId]?.viewConfig
             const pose = snapshot.extensions['corn:lob']?.[String(projectile.entityId)] ?? snapshot.extensions['corn:cob_flight']?.[String(projectile.entityId)]
             const node = this.entities.get(projectile.entityId)
             if (!visual || !pose || !node) continue

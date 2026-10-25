@@ -4,6 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { fileURLToPath } from 'node:url'
 import { zipSync } from 'fflate'
 import { createHash } from 'node:crypto'
+import { readModContent } from './content_source.mjs'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const tsc = join(projectRoot, 'node_modules', 'typescript', 'bin', 'tsc')
@@ -26,9 +27,14 @@ async function init(name, output) {
     const root = output ? resolve(output) : join(projectRoot, 'mods', name)
     if (await exists(root)) throw new Error(`${relative(projectRoot, root)} already exists`)
     await mkdir(join(root, 'src', 'server'), { recursive: true })
-    await mkdir(join(root, 'assets'), { recursive: true })
-    await writeJson(join(root, 'assets', 'gameplay.json'), { plants: {}, seeds: {} })
-    await writeJson(join(root, 'mod.json'), {
+    await mkdir(join(root, 'assets', 'gameplay'), { recursive: true })
+    await writeJson(join(root, 'content.json'), { gameplay: {
+        plants: 'assets/gameplay/plants.json', seeds: 'assets/gameplay/seeds.json', seedCatalog: 'assets/gameplay/seed-catalog.json',
+    }, resources: {} })
+    await writeJson(join(root, 'assets', 'gameplay', 'plants.json'), {})
+    await writeJson(join(root, 'assets', 'gameplay', 'seeds.json'), {})
+    await writeJson(join(root, 'assets', 'gameplay', 'seed-catalog.json'), [])
+    await writeJson(join(root, 'manifest.json'), {
         schemaVersion: 1,
         id: `local:${name}`,
         version: '0.1.0',
@@ -46,7 +52,7 @@ async function init(name, output) {
 }
 
 export function register({ host, assets }: Context) {
-    host.get('content/definitions').register(assets.id, assets.json('assets/gameplay.json'))
+    // Definition files are registered automatically from content.json.
 }
 `)
     console.info(`[mod] Created ${relative(projectRoot, root)}`)
@@ -59,9 +65,39 @@ async function pack(input, output) {
     if (root === destination || root.startsWith(`${destination}${sep}`)) throw new Error('Output must not contain the Mod source directory')
     await rm(destination, { recursive: true, force: true })
     await mkdir(destination, { recursive: true })
-    await cp(join(root, 'mod.json'), join(destination, 'mod.json'))
-    const assets = join(root, 'assets')
-    if (await exists(assets)) await cp(assets, join(destination, 'assets'), { recursive: true })
+    await cp(join(root, 'manifest.json'), join(destination, 'manifest.json'))
+    for (const entry of await readdir(root, { withFileTypes: true })) {
+        if (entry.isFile() && (/(?:readme|license|notice|copying)/i.test(entry.name) || entry.name === 'conversion.json')) {
+            await cp(join(root, entry.name), join(destination, entry.name))
+        }
+    }
+    const assets = join(root, 'assets'), sourceFiles = new Set()
+    const contentFile = join(root, 'content.json')
+    const content = await exists(contentFile) ? readModContent(contentFile, sourceFiles) : { resources: {} }
+    if (await exists(assets)) await cp(assets, join(destination, 'assets'), {
+        recursive: true, filter: path => !sourceFiles.has(resolve(path)),
+    })
+    const resourceFiles = new Set()
+    for (const entries of Object.values(content.resources)) for (const entry of Object.values(entries)) resourceFiles.add(typeof entry === 'string' ? entry : entry.file)
+    for (const file of Object.values(content.resources.fonts ?? {})) {
+        const config = JSON.parse(await readFile(inside(root, file), 'utf8'))
+        for (const layer of config.layers) resourceFiles.add(join(dirname(file), layer.image + '.png'))
+    }
+    for (const file of resourceFiles) {
+        const target = inside(destination, file)
+        await mkdir(dirname(target), { recursive: true })
+        await cp(inside(root, file), target)
+    }
+    const runtime = { resources: content.resources }
+    for (const name of ['gameplay', 'presentation']) {
+        if (content[name] !== undefined) {
+            const file = `assets/${name}.json`
+            await mkdir(join(destination, 'assets'), { recursive: true })
+            await writeJson(join(destination, file), content[name])
+            runtime[name] = file
+        }
+    }
+    await writeJson(join(destination, 'content.json'), runtime)
     if (manifest.gameplay) {
         const sourceRoot = join(root, 'src', 'server')
         const source = join(sourceRoot, 'index.ts')
@@ -95,14 +131,14 @@ async function pack(input, output) {
     const hash = createHash('sha256')
     const { contentHash: _contentHash, ...metadata } = manifest
     hash.update(JSON.stringify(metadata))
-    const manifestKey = `${basename(destination)}/mod.json`
+    const manifestKey = `${basename(destination)}/manifest.json`
     for (const path of Object.keys(files).filter(path => path !== manifestKey).sort()) {
         hash.update(path.slice(basename(destination).length + 1))
         hash.update(files[path])
     }
     manifest.contentHash = hash.digest('hex')
-    await writeJson(join(destination, 'mod.json'), manifest)
-    files[manifestKey] = await readFile(join(destination, 'mod.json'))
+    await writeJson(join(destination, 'manifest.json'), manifest)
+    files[manifestKey] = await readFile(join(destination, 'manifest.json'))
     await writeFile(`${destination}.zip`, zipSync(files))
     console.info(`[mod] Packed ${manifest.id} -> ${destination}.zip`)
 }
@@ -145,11 +181,10 @@ async function modRoot(input) {
 }
 
 async function manifestAt(root) {
-    const manifest = JSON.parse(await readFile(join(root, 'mod.json'), 'utf8'))
+    const manifest = JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8'))
     if (manifest?.schemaVersion !== 1 || manifest.apiVersion !== 1 ||
-        typeof manifest.id !== 'string' || !/^[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9/._-]*$/.test(manifest.id) ||
-        (!manifest.gameplay && !manifest.client)) {
-        throw new Error('Invalid mod.json')
+        typeof manifest.id !== 'string' || !/^[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9/._-]*$/.test(manifest.id)) {
+        throw new Error('Invalid manifest.json')
     }
     return manifest
 }

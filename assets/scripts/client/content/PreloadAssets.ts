@@ -4,7 +4,7 @@ import { ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import { SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { CONTENT_CATEGORIES } from '@/shared/content'
 import { ParticleDefinitionLoader } from '@/core/Particle/ParticleDefinitionLoader'
-import { resourcePacks } from './ResourcePacks'
+import { modResources } from './ModResources'
 import type { ResolvedContent } from './ContentRegistry'
 
 const assetTypes = { sprites: SpriteFrame, reanim: JsonAsset, particles: JsonAsset,
@@ -20,7 +20,7 @@ export async function preloadAssets(onProgress: (progress: number) => void): Pro
         }
     }
     await Promise.all([
-        resourcePacks.preload(value => onProgress(value * 0.7)),
+        modResources.preload(value => onProgress(value * 0.7)),
         ...archives.map(async content => {
             await loader.load<Asset>(content, assetTypes[content.category])
         }),

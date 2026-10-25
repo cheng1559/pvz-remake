@@ -12,6 +12,7 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
+from package_resources import package_resources
 from PIL import Image
 
 from almanac_assets import almanac_definitions
@@ -29,7 +30,7 @@ from sprite_texture_preprocessor import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-PACK = ROOT / 'dist/resource-packs/jiangnan-pvz2'
+PACK = ROOT / 'art/resource-packs/jiangnan-pvz2'
 COMMIT = '74ec8f95c369d4aa30afdd2fc9b7e764bff924c7'
 
 
@@ -216,7 +217,6 @@ def build(source: Path):
         if path.exists():
             shutil.rmtree(path)
         path.mkdir(parents=True)
-    shutil.copyfile(ROOT / 'art/resource-packs/jiangnan-pvz2/README.md', PACK / 'README.md')
     with tempfile.TemporaryDirectory(prefix='pvz2pak-') as temporary:
         raw, legacy = Path(temporary) / 'raw', Path(temporary) / 'legacy'
         extract(source, raw)
@@ -236,15 +236,9 @@ def build(source: Path):
         gameplay['entries'] = {key: strings.get(key, value) for key, value in gameplay['entries'].items()}
         write_json(PACK / 'text/level_strings.json', gameplay)
         entries.update({'pvz:properties/lawnstrings': 'text/lawnstrings.json', 'pvz:gameplay/strings': 'text/level_strings.json'})
-    write_json(PACK / 'pack.json', {'id': 'jiangnan-pvz2', 'sprites': sprites, 'fonts': fonts, 'json': entries})
     write_json(PACK / 'conversion.json', {'source': 'https://github.com/jiangnangame/PVZ2PAK', 'commit': COMMIT,
         'sourceZipSha256': hashlib.sha256(source.read_bytes()).hexdigest(), 'unusedBrokenImages': rejected, **adaptations})
-    output = ROOT / 'dist/resource-packs/jiangnan-pvz2.zip'
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
-        for file in sorted(PACK.rglob('*')):
-            if file.is_file():
-                archive.write(file, file.relative_to(PACK))
+    output = package_resources(PACK, 'jiangnan-pvz2', {'sprites': sprites, 'fonts': fonts, 'json': entries})
     print(f'PVZ2PAK: {len(sprites)} sprites, {len(fonts)} fonts, {len(entries)} JSON assets; {output} ({output.stat().st_size:,} bytes)')
 
 

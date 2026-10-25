@@ -48,7 +48,7 @@ class DefinitionRegistry {
 }
 
 export function buildGameplayContent(
-    definitionsValue: unknown, levelsValue: unknown, stringsValue: unknown, sources: readonly DefinitionSource[] = [],
+    definitionsValue: unknown, levelsValue: unknown, stringsValue: unknown, seedCatalogValue: unknown, sources: readonly DefinitionSource[] = [],
 ) {
     const definitions = object(definitionsValue, 'gameplay definitions')
     const levels = object(levelsValue, 'gameplay levels')
@@ -57,9 +57,15 @@ export function buildGameplayContent(
         ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, definitions[kind]])), levels: levels.levels,
     }, true)
     const patches: DefinitionSource[] = []
+    if (!Array.isArray(seedCatalogValue)) throw new Error('seed catalog must be an array')
+    const seedCatalog = [...seedCatalogValue]
     for (const source of sources) {
-        const { levelPatches, ...tables } = object(source.data, source.ownerId)
+        const { levelPatches, seedCatalog: additions, ...tables } = object(source.data, source.ownerId)
         registry.register(source.ownerId, tables)
+        if (additions !== undefined) {
+            if (!Array.isArray(additions)) throw new Error(`${source.ownerId}.seedCatalog must be an array`)
+            seedCatalog.push(...additions)
+        }
         if (levelPatches !== undefined) patches.push({ ownerId: source.ownerId, data: levelPatches })
     }
     const installedLevels = registry.values('levels')
@@ -76,7 +82,7 @@ export function buildGameplayContent(
     }
     const resultDefinitions = parseGameplayDefinitions({
         ...definitions, ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, registry.values(kind)])),
-    })
+    }, seedCatalog)
     const result = {
         definitions: resultDefinitions,
         levels: parseGameplayLevels({ ...levels, levels: installedLevels }, resultDefinitions),

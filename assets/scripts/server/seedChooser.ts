@@ -14,7 +14,7 @@ export function applySeedChoice(world: World, definitions: GameplayDefinitions, 
         bank.choosing = false
         return
     }
-    if (!level.definition.seedPackets.includes(command.seedId)) return 'seed-not-available'
+    if (!definitions.seedCatalog.includes(command.seedId)) return 'seed-not-available'
     const index = bank.packets.findIndex(packet => packet.seedId === command.seedId)
     if (index >= 0) bank.packets.splice(index, 1)
     else {
@@ -29,7 +29,7 @@ export function seedChooserSnapshot(world: World, definitions: GameplayDefinitio
     if (level.seedBankSlots === undefined) return
     const bank = world.resources.get(SeedBankResource)
     return {
-        availableSeeds: [...level.seedPackets], slots: level.seedBankSlots, choosing: bank.choosing === true,
+        availableSeeds: [...definitions.seedCatalog], slots: level.seedBankSlots, choosing: bank.choosing === true,
         ...(bank.packets.some(packet => definitions.plants[definitions.seeds[packet.seedId].plant].producer)
             ? {} : { warning: 'SEED_CHOOSER_SUN_WARNING' }),
     }

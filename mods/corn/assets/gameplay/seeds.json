@@ -1,0 +1,4 @@
+{
+  "corn:kernel_pult": { "plant": "corn:kernel_pult", "sunCost": 100, "cooldownTicks": 750, "placement": "ground" },
+  "corn:cob_cannon": { "plant": "corn:cob_cannon", "sunCost": 500, "cooldownTicks": 5000, "placement": "ground" }
+}

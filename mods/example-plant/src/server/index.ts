@@ -37,7 +37,6 @@ function regeneration<Kind extends string>(kind: Kind): Behavior<Kind> {
 }
 
 export function register(api: GameplayApi): void {
-    api.host.get('content/definitions').register(api.assets.id, api.assets.json('assets/gameplay.json'))
     const registry = api.host.get('server/GameplayRegistry').registry
     registry.plantBehaviors.register(api.assets.id, 'example:rapid_pea', regeneration('plant'))
     registry.zombieBehaviors.register(api.assets.id, 'example:regenerating_zombie', regeneration('zombie'))

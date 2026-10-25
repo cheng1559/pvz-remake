@@ -2,9 +2,9 @@ import { native, sys } from 'cc'
 import fflate from 'fflate'
 
 export type ArchiveFiles = Record<string, Uint8Array>
-export type ArchiveKind = 'resource-packs' | 'resource-pack-runtime' | 'mods' | 'mod-runtime'
+export type ArchiveKind = 'mods' | 'mod-runtime' | 'mod-resources'
 
-export function unpackArchive(data: Uint8Array, manifest: 'pack.json' | 'mod.json'): ArchiveFiles {
+export function unpackArchive(data: Uint8Array, manifest: 'manifest.json'): ArchiveFiles {
     const files: ArchiveFiles = Object.create(null)
     const entries = fflate.unzipSync(data, { filter: entry => !entry.name.endsWith('/') })
     for (const [path, bytes] of Object.entries(entries)) {

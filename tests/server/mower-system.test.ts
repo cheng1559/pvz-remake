@@ -1,5 +1,5 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import { Schedule, World } from '@/ecs/index'
@@ -16,9 +16,7 @@ import { createMowerSystem } from '@/server/mower'
 import { EventQueueResource, createEventQueue } from '@/server/events'
 import { DeterministicRng } from '@/server/DeterministicRng'
 
-const definitions = parseGameplayDefinitions(JSON.parse(
-    readFileSync('tools/content/pvz-base/gameplay/definitions.json', 'utf8'),
-))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
 const board = definitions.boards['pvz:day']
 
 test('mower transitions ready to active, kills overlaps, and remains spent off-board', () => {

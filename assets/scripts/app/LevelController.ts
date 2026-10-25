@@ -50,7 +50,6 @@ interface RunningLevel {
 
 const DEFAULT_START_OPTIONS = {
     levelId: 'pvz:adventure-1-1',
-    randomSeed: 0x50565a31,
     initialMoney: 0,
     firstAdventure: true,
     mods: [] as EnabledMod[],
@@ -107,10 +106,12 @@ export function createLevelController(
             const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true)
             const startOptions = save ? {
                 ...DEFAULT_START_OPTIONS,
+                randomSeed: save.server.random.state,
                 levelId: save.levelId,
                 mods: save.contentSet.mods,
                 save: save.server as unknown as JsonValue,
-            } : { ...DEFAULT_START_OPTIONS, firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods }
+            } : { ...DEFAULT_START_OPTIONS, randomSeed: Math.floor(Math.random() * 0x100000000),
+                firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods }
             game.start(startOptions)
             const view = await LevelView.create(root, content, save?.levelId ?? levelId, playerName, game.render())
             scene = root.addComponent(LevelScene)

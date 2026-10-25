@@ -50,6 +50,7 @@ export class LevelView {
     private syncSeedChooserIntro = () => {}
     private readonly pausedComponents: Component[] = []
     private presentationPaused = false
+    private gameplayTick = 0
     private hitboxes: Graphics | null = null
     get introComplete(): boolean {
         return this.intro.complete
@@ -264,7 +265,7 @@ export class LevelView {
             id => entityRenderer.node(id), audio, ui,
         )
         const hudPresenter = LevelHudPresenter.create({
-            ui, content, level, presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
+            ui, content, level, seedChooser: initial.seedChooser, presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
             loadPacketSprite, packetCostFont: pico129,
             adviceNode: slots.advice, adviceParent: hud, controlsParent: bankLayer, adviceFont: houseOfTerror28,
             tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
@@ -275,8 +276,8 @@ export class LevelView {
             content, layout,
             new Map<Extract<LevelParticleOwnerSnapshot, { kind: 'screen' }>['slot'], Node>([
                 ['board', board], ['entity-layer', entityLayer], ['coin-layer', coinLayer],
-                ['hud', hud], ['seed-packet', hudPresenter.seedPacketNode], ['award-layer', awardLayer],
-                ...hudPresenter.seedBank.packets.slice(1).map((packet, index) => [`seed-packet-${index + 1}` as const, packet.view.node] as const),
+                ['hud', hud], ['award-layer', awardLayer],
+                ...hudPresenter.seedBank.packets.map((packet, index) => [index === 0 ? 'seed-packet' : `seed-packet-${index}` as const, packet.view.node] as const),
                 ['overlay-layer', overlayLayer],
             ]),
             entityRenderer,
@@ -375,17 +376,18 @@ export class LevelView {
     }
 
     sync(snapshot: WorldSnapshot, changes: ClientWorldChanges, events: ServerEvent[]): void {
+        this.gameplayTick = snapshot.gameplayTick
         this.boardHud?.sync(snapshot)
         this.seedChooser?.sync(snapshot)
         this.entityRenderer.sync(snapshot, changes, events)
         this.hideConveyorBank()
         this.syncSeedChooserIntro()
-        this.syncShake(snapshot.gameplayTick, events)
+        this.playFeedback(events)
+        this.syncShake(snapshot.gameplayTick)
         this.end.sync(snapshot, events)
         for (const item of snapshot.items) this.end.syncAward(item, snapshot.levelId)
         this.hud.sync(snapshot, events, this.introComplete, this.canOpenMenu)
         for (const event of events) this.audio.play(event)
-        this.playHaptics(events)
         this.syncHitboxes(snapshot)
         if (snapshot.result === 'lost') {
             this.setPaused(true)
@@ -394,15 +396,12 @@ export class LevelView {
         }
     }
 
-    private playHaptics(events: ServerEvent[]): void {
+    private playFeedback(events: ServerEvent[]): void {
         let style: HapticStyle | undefined
         for (const event of events) {
             switch (event.type) {
-                case 'plantExploded':
-                    Haptics.play('explosion')
-                    return
-                case 'mowerActivated': case 'levelWon': case 'levelLost': style = 'heavy'; break
-                case 'plantPlaced': case 'levelAwardCollected': style ??= 'medium'; break
+                case 'plantExploded': this.shakeBoard(3, -4); style = 'explosion'; break
+                case 'bowlingImpact': this.shakeBoard(1, -2); style ??= 'heavy'; break
             }
         }
         if (style) Haptics.play(style)
@@ -427,20 +426,22 @@ export class LevelView {
         for (const mower of snapshot.lawnMowers) draw(mower, this.definitions.lawnMowers[mower.typeId].attack, Color.YELLOW)
     }
 
-    private shake = { endTick: 0, x: 0, y: 0, tick: 0 }
+    private shake = { endTick: 0, ticks: 0, x: 0, y: 0, tick: 0 }
     private shakeTarget: { node: Node, x: number, y: number } | null = null
 
-    /** Board::ShakeBoard: explosions bounce the board for 12 ticks, flipping sideways at random. */
-    private syncShake(tick: number, events: ServerEvent[]): void {
+    /** Board::ShakeBoard: callers supply amplitude and duration; playback follows gameplay ticks. */
+    shakeBoard(x: number, y: number, ticks = 12): void {
+        this.shake = { x, y, ticks, endTick: this.gameplayTick + ticks, tick: -1 }
+    }
+
+    private syncShake(tick: number): void {
         const target = this.shakeTarget
-        if (events.some(event => event.type === 'plantExploded')) this.shake = { endTick: tick + 12, x: 3, y: -4, tick: -1 }
-        else if (events.some(event => event.type === 'bowlingImpact')) this.shake = { endTick: tick + 12, x: 1, y: -2, tick: -1 }
         if (!target?.node.isValid || tick === this.shake.tick) return
         this.shake.tick = tick
         const remaining = this.shake.endTick - tick
         if (remaining <= 0) { target.node.setPosition(target.x, target.y); return }
         if (Math.random() < 1 / 3) this.shake.x = -this.shake.x
-        const bounce = 1 - Math.abs(2 * (12 - remaining) / 12 - 1)
+        const bounce = 1 - Math.abs(2 * remaining / this.shake.ticks - 1)
         target.node.setPosition(target.x + Math.round(this.shake.x * bounce), target.y - Math.round(this.shake.y * bounce))
     }
 

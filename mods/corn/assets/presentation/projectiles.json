@@ -1,0 +1,21 @@
+{
+  "corn:cob": {
+    "viewConfig": {"scale":0.9},
+    "sprite": "corn:cobcannon_cob",
+    "impact": { "kind": "particle", "id": "corn:popcornsplash", "offset": [80, 40], "yRange": [0, 600], "duration": 0.51 },
+    "fireSounds": [], "impactSounds": [{ "id": "corn:doomshroom", "foley": false }]
+  },
+  "corn:kernel": {
+    "viewConfig": {"scale":0.95},
+    "sprite": "corn:cornpult_kernal",
+    "fireSounds": [{ "id": "throw", "foley": true, "pitchRange": 10 }],
+    "impactSounds": [{ "id": "corn:kernelpult", "foley": true, "pitchRange": 10 }]
+  },
+  "corn:butter": {
+    "viewConfig": {"scale":0.8},
+    "sprite": "corn:cornpult_butter",
+    "impact": { "kind": "particle", "id": "corn:buttersplat", "offset": [0, 0], "yRange": [20, 100], "duration": 0.31 },
+    "fireSounds": [{ "id": "throw", "foley": true, "pitchRange": 10 }],
+    "impactSounds": [{ "id": "corn:butter", "foley": true, "pitchRange": 2 }]
+  }
+}

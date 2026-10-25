@@ -1,8 +1,10 @@
+import { readGameplaySource } from './content_source'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseModManifest } from '@/shared/mod'
 import { ModAssets } from '@/shared/mod/ModAssets'
+import { contentJson, parseModContent } from '@/shared/mod/content'
 import { DefinitionSources, buildGameplayContent } from '@/shared/content/DefinitionRegistry'
 import { GameplayRegistry } from '@/server/GameplayRegistry'
 import { createServerModHost } from '@/server/createModHost'
@@ -18,18 +20,19 @@ async function collect(directory: string): Promise<void> {
 }
 async function main() {
     await collect(root)
-    const manifest = parseModManifest(JSON.parse(await readFile(join(root, 'mod.json'), 'utf8')))
+    const manifest = parseModManifest(JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8')))
     const definitions = new DefinitionSources(), registry = new GameplayRegistry()
     const host = createServerModHost(manifest.id, registry, definitions)
     try {
+        const packagedContent = parseModContent(contentJson(files, 'content.json'), files)
+        if (packagedContent.gameplay) definitions.register(manifest.id, contentJson(files, packagedContent.gameplay))
         if (manifest.gameplay) {
             const module = await import(pathToFileURL(join(root, manifest.gameplay.nodeModule)).href)
             if (typeof module.register !== 'function') throw new Error('Mod must export register({ host, assets })')
             await module.register({ host, assets: new ModAssets(manifest, files) })
         }
-        const base = await Promise.all(['definitions', 'levels', 'strings'].map(async name =>
-            JSON.parse(await readFile(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'))))
-        const content = buildGameplayContent(base[0], base[1], base[2], definitions.sources)
+        const base = ['definitions', 'levels', 'strings', 'seed-catalog'].map(name => readGameplaySource(name))
+        const content = buildGameplayContent(base[0], base[1], base[2], base[3], definitions.sources)
         registry.freeze(content.definitions)
         console.info(`[mod] Validated ${manifest.id} with the server host`)
     } finally { host.dispose() }

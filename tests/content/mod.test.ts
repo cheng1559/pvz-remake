@@ -30,8 +30,8 @@ test('manifests validate, sort deterministically, and register once before freez
     const exact = manifest('author:exact', '1.0.0', [{ id: 'author:addon', version: '1.0.0' }])
 
     assert.deepEqual(sortModManifests([exact, addon, independent, base]).map(mod => mod.id), [
-        'pvz:base',
         'zzz:independent',
+        'pvz:base',
         'author:addon',
         'author:exact',
     ])

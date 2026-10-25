@@ -1,0 +1,80 @@
+{
+  "pvz:flag": {
+    "dropsFlag": true,
+    "maxHealth": 270,
+    "boardEdgeX": -100,
+    "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
+    "speedPerTick": {"min": 0.45, "max": 0.45},
+    "body": {"x": 36, "y": 0, "width": 42, "height": 115},
+    "attack": {"x": 20, "y": 0, "width": 50, "height": 115},
+    "bite": {"damage": 4, "cadenceTicks": 4},
+    "gait": "pvz:normal",
+    "tongueChance": 0.2,
+    "walk2Chance": 0.5
+  },
+  "pvz:normal": {
+    "maxHealth": 270,
+    "boardEdgeX": -100,
+    "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
+    "speedPerTick": {"min": 0.23, "max": 0.37},
+    "body": {"x": 36, "y": 0, "width": 42, "height": 115},
+    "attack": {"x": 20, "y": 0, "width": 50, "height": 115},
+    "bite": {"damage": 4, "cadenceTicks": 4},
+    "gait": "pvz:normal",
+    "tongueChance": 0.2,
+    "walk2Chance": 0.5
+  },
+  "pvz:conehead": {
+    "maxHealth": 270,
+    "boardEdgeX": -100,
+    "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
+    "speedPerTick": {"min": 0.23, "max": 0.37},
+    "body": {"x": 36, "y": 0, "width": 42, "height": 115},
+    "attack": {"x": 20, "y": 0, "width": 50, "height": 115},
+    "bite": {"damage": 4, "cadenceTicks": 4},
+    "helm": {"type": "cone", "health": 370},
+    "gait": "pvz:normal",
+    "tongueChance": 0.2,
+    "walk2Chance": 0.5
+  },
+  "pvz:buckethead": {
+    "maxHealth": 270,
+    "boardEdgeX": -100,
+    "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
+    "speedPerTick": {"min": 0.23, "max": 0.37},
+    "body": {"x": 36, "y": 0, "width": 42, "height": 115},
+    "attack": {"x": 20, "y": 0, "width": 50, "height": 115},
+    "bite": {"damage": 4, "cadenceTicks": 4},
+    "helm": {"type": "bucket", "health": 1100},
+    "gait": "pvz:normal",
+    "tongueChance": 0.2,
+    "walk2Chance": 0.5
+  },
+  "pvz:pole_vaulter": {
+    "maxHealth": 500,
+    "boardEdgeX": -150,
+    "spawn": {"minX": 870, "maxX": 879, "flagWaveOffset": 0},
+    "speedPerTick": {"min": 0.23, "max": 0.37},
+    "body": {"x": 36, "y": 0, "width": 42, "height": 115},
+    "attack": {"x": 20, "y": 0, "width": 50, "height": 115},
+    "bite": {"damage": 4, "cadenceTicks": 4},
+    "gait": "pvz:pole_vaulter",
+    "vault": {
+      "runSpeedPerTick": {"min": 0.66, "max": 0.68},
+      "runGround": [
+        -59.799999, -59.0, -58.200001, -57.299999, -56.5, -55.700001, -54.799999, -54.0, -53.200001, -52.299999, -51.5, -50.700001,
+        -49.799999, -49.0, -48.200001, -47.299999, -46.5, -45.700001, -44.799999, -44.0, -43.200001, -42.299999, -41.5, -40.700001,
+        -39.799999, -39.0, -38.200001, -37.299999, -36.5, -35.700001, -34.799999, -34.0, -33.200001, -32.299999, -31.5, -30.700001,
+        -29.799999
+      ],
+      "attack": {"x": -29, "y": 0, "width": 70, "height": 115},
+      "jumpFrames": 43,
+      "jumpRate": 24,
+      "landingOffset": 150,
+      "landedAttack": {"x": 50, "y": 0, "width": 20, "height": 115}
+    },
+    "tongueChance": 0,
+    "walk2Chance": 0,
+    "targetingInsets": {"pvz:mine": 40}
+  }
+}

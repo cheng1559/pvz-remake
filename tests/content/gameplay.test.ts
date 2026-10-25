@@ -1,5 +1,5 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
@@ -8,10 +8,10 @@ import {
     parseGameplayStrings,
 } from '@/shared/content/gameplay'
 
-const source = (name: string): any => JSON.parse(readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'))
+const source = readGameplaySource
 
 test('Gameplay parses the 1-1 definitions, level, and strings headlessly', () => {
-    const definitions = parseGameplayDefinitions(source('definitions'))
+    const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
     const levels = parseGameplayLevels(source('levels'), definitions)
     const strings = parseGameplayStrings(source('strings'))
 
@@ -31,7 +31,7 @@ test('Gameplay definitions reject unsupported, unsafe, and unresolved data', () 
     const invalid = (change: (value: any) => void) => {
         const value = source('definitions')
         change(value)
-        return () => parseGameplayDefinitions(value)
+        return () => parseGameplayDefinitions(value, source('seed-catalog'))
     }
 
     assert.throws(invalid(value => { value.extra = true }), /not supported/)
@@ -49,10 +49,12 @@ test('Gameplay definitions reject unsupported, unsafe, and unresolved data', () 
     assert.throws(invalid(value => { value.plants['pvz:peashooter'].shooter.windupTicks = 0 }), /positive/)
     assert.throws(invalid(value => { value.seeds['pvz:peashooter'].plant = 'pvz:missing' }), /unknown ID/)
     assert.throws(invalid(value => { value.plants['pvz:peashooter'].shooter.projectile = 'pvz:missing' }), /unknown ID/)
+    assert.throws(() => parseGameplayDefinitions(source('definitions'), ['pvz:missing']), /unknown ID/)
+    assert.throws(() => parseGameplayDefinitions(source('definitions'), ['pvz:peashooter', 'pvz:peashooter']), /duplicates/)
 })
 
 test('Gameplay levels validate all 1-1 references, active rows, and waves', () => {
-    const definitions = parseGameplayDefinitions(source('definitions'))
+    const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
     const invalid = (change: (level: any) => void) => {
         const value = source('levels')
         change(value.levels['pvz:adventure-1-1'])

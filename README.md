@@ -22,9 +22,9 @@ Requires the local Cocos CLI and Cocos 4.0.0-alpha.35. Use the menu buttons to e
 - `assets/scripts/core`: particle and sprite utilities still used by the new presentation layer.
 - `tools/content/pvz-base`: authored gameplay and presentation JSON.
 - `tools/generated`: converted images, animations and other packaging inputs.
-- `assets/resources/base.zip`: generated builtin content, using the same `pack.json` format as installed resource packs.
+- `assets/resources/base.zip`: generated builtin content, using the same `manifest.json` and `content.json` format as installed Mods.
 - `tools`: shared resource conversion and Mod tooling.
 
-Builtin content and installed resource packs share ZIP decoding, asset caches and resource IDs. Only the bootstrap scene, level layout prefab and compiled shader remain Cocos assets. Run `npm run build:base-pack` after editing content JSON; `npm run build:content` also rebuilds the builtin ZIP.
+Builtin content, resource-only Mods and scripted Mods share ZIP validation, decoding, asset caches and resource IDs. All installed packages use `/mod`; source metadata is `manifest.json` and `content.json`. Only the bootstrap scene, level layout prefab and compiled shader remain Cocos assets. Run `npm run build:base-pack` after editing content JSON; `npm run build:content` also rebuilds the builtin ZIP.
 
 See [Development Guide](docs/DEVELOPMENT.md) for resource preparation, validation, and builds. Source code is licensed under [MIT](LICENSE); original game assets retain their respective ownership.

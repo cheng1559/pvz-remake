@@ -1,0 +1,6 @@
+{
+  "zombieOrigin": {"offset": [15, 8], "scaleOffset": [30, -120]},
+  "cords": {"20": {"sprite": "pvz:bungeecord", "track": "Zombie_bungi_body", "x": 35, "height": 600}},
+  "pogo": {"bounceTicks": 80, "restartCounter": 7, "rate": 40, "offset": 9, "height": 40},
+  "bungee": {"height": 40, "periodSeconds": 2}
+}

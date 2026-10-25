@@ -70,6 +70,18 @@ class SeedPacketBackground extends Component {
 }
 
 export class SeedPacketRenderer {
+    static drawSelectionFrame(parent: Node, definitions: PresentationDefinitions): Node {
+        const selection = definitions.seedPackets.selection
+        const { node, sprite } = uiNode({ name: 'SelectedHighlight', parent, layer: parent.layer,
+            anchor: { x: 0, y: 1 }, size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT },
+            sprite: { sizeMode: Sprite.SizeMode.CUSTOM, trim: false } })
+        sprite!.color = new Color(...selection.color)
+        void loadPacketSprite(selection.sprite).then(frame => {
+            if (isValid(node, true)) sprite!.spriteFrame = frame
+        }).catch(error => console.error('[SeedPacket] Failed to load selection frame', error))
+        return node
+    }
+
     static drawSeedPacket(args: SeedPacketRenderArgs): Node {
         const scale = args.scale ?? 1
         const rootScale = scale > 1 ? 1 : scale

@@ -1,0 +1,17 @@
+{
+  "gameplay": {
+    "levelPatches": "assets/gameplay/level-patches.json",
+    "levels": "assets/gameplay/levels.json",
+    "plants": "assets/gameplay/plants.json",
+    "projectiles": "assets/gameplay/projectiles.json",
+    "seeds": "assets/gameplay/seeds.json",
+    "zombies": "assets/gameplay/zombies.json"
+  },
+  "presentation": {
+    "plants": "assets/presentation/plants.json",
+    "projectiles": "assets/presentation/projectiles.json",
+    "strings": "assets/presentation/strings.json",
+    "zombies": "assets/presentation/zombies.json"
+  },
+  "resources": {}
+}

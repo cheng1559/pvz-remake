@@ -11,6 +11,7 @@ import { drawAlmanacText } from './AlmanacText'
 import type { MenuAction } from './MenuPages'
 import { AlmanacEntityView } from './AlmanacEntityView'
 import { AlmanacZombiePortrait } from './AlmanacZombiePortrait'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 export interface AlmanacSelection { plant: number, zombie: number }
 
@@ -33,11 +34,18 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
         if (!parent.isValid) throw new Error('Almanac was destroyed while loading')
         const sprites = Object.fromEntries(frames)
         let details: Node | null = null
+        let plantHighlight: Node | null = null
+        const plantPosition = (id: number) => ({ x: id === 48 ? 20 : id % 8 * 52 + 26, y: id === 48 ? 23 : Math.floor(id / 8) * 78 + 92 })
         const select = (entry: AlmanacPlantDefinition | AlmanacZombieDefinition) => {
             if (details) { details.active = false; details.destroy() }
             details = uiNode({ name: `${entry.key}Details`, parent, anchor: { x: 0, y: 1 } }).node
             if (page === 'plants') {
                 const plant = entry as AlmanacPlantDefinition
+                const { x, y } = plantPosition(plant.id)
+                if (plantHighlight) {
+                    plantHighlight.active = plant.id !== 48
+                    plantHighlight.setPosition(x, -y)
+                }
                 ui.image(details, sprites[`almanac_ground${plant.ground}`], { x: 521, y: 107 })
                 AlmanacEntityView.create(details, 'plants', plant.id, 578, 140)
                 ui.image(details, sprites.almanac_plantcard, { x: 459, y: 86 })
@@ -70,8 +78,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             // Draw rows top to bottom, right to left: plants may overflow upwards and rightwards.
             const drawOrder = [...plants].sort((a, b) => Math.floor(a.id / 8) - Math.floor(b.id / 8) || b.id - a.id)
             for (const plant of drawOrder) {
-                const x = plant.id === 48 ? 20 : plant.id % 8 * 52 + 26
-                const y = plant.id === 48 ? 23 : Math.floor(plant.id / 8) * 78 + 92
+                const { x, y } = plantPosition(plant.id)
                 const button = ui.button(parent, {
                     images: { normal: plant.id === 48 ? sprites.almanac_imitater : sprites['particles/seedpacketflash'] },
                     x, y, width: plant.id === 48 ? 34 : 50, height: plant.id === 48 ? 46 : 70,
@@ -94,6 +101,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     button.onStateChange(button.isHovering ? 'hover' : 'normal')
                 }
             }
+            if (GameDebugSettings.isMobileMode()) plantHighlight = SeedPacketRenderer.drawSelectionFrame(parent, ui.assets.presentation)
             select(plants.find(plant => plant.id === selection.plant) ?? plants[0])
         } else {
             for (const zombie of zombies) {

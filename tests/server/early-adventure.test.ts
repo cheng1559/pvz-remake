@@ -1,13 +1,13 @@
+import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from './run-command'
 
-const source = (name: string) => JSON.parse(readFileSync(`tools/content/pvz-base/gameplay/${name}.json`, 'utf8'))
-const definitions = parseGameplayDefinitions(source('definitions'))
+const source = readGameplaySource
+const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 const options = (index: number): StartSessionPacket => ({
     protocolVersion: 1, sequence: 1, type: 'startSession', levelId: `pvz:adventure-1-${index}`,

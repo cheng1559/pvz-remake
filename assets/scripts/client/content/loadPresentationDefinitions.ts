@@ -2,7 +2,7 @@ import { buildPresentationDefinitions, type DefinitionSource } from '@/shared/co
 import { JsonAsset } from 'cc'
 import type { ContentManifest } from '@/shared/content'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
-import { resourcePacks } from './ResourcePacks'
+import { modResources } from './ModResources'
 
 export async function loadPresentationDefinitions(
     manifest: ContentManifest,
@@ -17,7 +17,7 @@ export async function loadPresentationDefinitions(
     const parse = (value: unknown) => buildPresentationDefinitions(value, definitions)
     const path = manifest.presentation.definitions.replace(/\.json$/i, '')
     const id = manifest.id.slice(0, manifest.id.indexOf(':') + 1) + path
-    const replacement = await resourcePacks.asset(id, JsonAsset)
+    const replacement = await modResources.asset(id, JsonAsset)
     if (!replacement) throw new Error(`Missing presentation definitions: ${id}`)
     return parse(replacement.json)
 }

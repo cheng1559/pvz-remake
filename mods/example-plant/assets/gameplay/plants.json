@@ -1,0 +1,16 @@
+{
+  "example:rapid_pea": {
+    "maxHealth": 300,
+    "behavior": { "intervalTicks": 100, "amount": 10 },
+    "body": { "x": 10, "y": 0, "width": 60, "height": 80 },
+    "shooter": {
+      "cadenceTicks": 75,
+      "initialDelayTicks": 40,
+      "windupTicks": 33,
+      "shotsPerBurst": 1,
+      "burstIntervalTicks": 0,
+      "projectile": "example:pea",
+      "offset": { "x": 56, "y": 10 }
+    }
+  }
+}

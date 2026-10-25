@@ -1,3 +1,4 @@
+import { readGameplaySource } from '../../tools/content_source'
 import { presentationFixture } from './presentationFixture'
 import assert from 'node:assert/strict'
 import { MenuApi } from '@/client/api/MenuApi'
@@ -76,7 +77,7 @@ function fixture() {
         get length() { return data.size },
     }
     const ProfileStore = load('server/menu/ProfileStore').createProfileStore(storage)
-    const catalog = load('server/menu/StoreCatalog').createStoreCatalog(JSON.parse(readFileSync('tools/content/pvz-base/gameplay/store.json', 'utf8')))
+    const catalog = load('server/menu/StoreCatalog').createStoreCatalog(readGameplaySource('store'))
     const store = { ...catalog, ...load('client/ui/formatMoney') }
     const menuApi = new MenuApi(createLocalMenuTransport(storage, undefined, undefined, catalog))
     const item = (id: number) => store.STORE_PAGES.flat().find((item: { id: number }) => item.id === id)

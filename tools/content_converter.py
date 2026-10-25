@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from content_source import read_definitions
 import re
 import shutil
 from pathlib import Path
@@ -183,7 +184,7 @@ def build_sprite_content(
         source_path = gameplay_source / f"{category}.json"
         if not source_path.is_file():
             raise ValueError(f"missing gameplay source: {source_path}")
-        data = json.loads(source_path.read_text(encoding="utf-8"))
+        data = read_definitions(gameplay_source) if category == "definitions" else json.loads(source_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or data.get("schemaVersion") != 2:
             raise ValueError(f"invalid gameplay {category} schemaVersion")
         if set(data) != expected_gameplay_fields[category]:
@@ -192,6 +193,14 @@ def build_sprite_content(
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(_json_bytes(data) + b"\n")
         outputs.append(output)
+
+    catalog = json.loads((gameplay_source / "seed-catalog.json").read_text(encoding="utf-8"))
+    if not isinstance(catalog, list) or not all(isinstance(seed, str) for seed in catalog):
+        raise ValueError("invalid seed catalog")
+    gameplay_entries["seedCatalog"] = "gameplay/seed-catalog.json"
+    catalog_output = bundle / gameplay_entries["seedCatalog"]
+    catalog_output.write_bytes(_json_bytes(catalog) + b"\n")
+    outputs.append(catalog_output)
 
     store_source = gameplay_source / "store.json"
     if store_source.is_file():
@@ -202,7 +211,7 @@ def build_sprite_content(
     presentation_path = presentation_source / "definitions.json"
     if not presentation_path.is_file():
         raise ValueError(f"missing presentation source: {presentation_path}")
-    presentation = json.loads(presentation_path.read_text(encoding="utf-8"))
+    presentation = read_definitions(presentation_source)
     required = {"animation", "plants", "zombies", "projectiles", "seedPackets", "almanac", "conveyor", "shovel", "dave"}
     if not isinstance(presentation, dict) or not required <= set(presentation) or set(presentation) - required - {"levels", "awards", "boards"}:
         raise ValueError("invalid presentation definitions fields")

@@ -100,6 +100,7 @@ tools/generated/resources/textures/*
 !tools/generated/resources/textures/seedpacket_upgrade_larger.png.meta
 !tools/generated/resources/textures/zombie_previews_cached.png
 !tools/generated/resources/textures/zombie_previews_cached.png.meta
+!tools/generated/resources/textures/selected_packet_2.png
 tools/generated/resources/images/*
 tools/generated/resources/images.meta
 tools/generated/resources/audio/*

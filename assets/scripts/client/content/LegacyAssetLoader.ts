@@ -1,5 +1,5 @@
 import { Asset, EffectAsset, resources } from 'cc'
-import { resourcePacks } from './ResourcePacks'
+import { modResources } from './ModResources'
 
 export class AssetLoader {
     private static _pending: Map<string, Promise<Asset | null>> = new Map()
@@ -15,7 +15,7 @@ export class AssetLoader {
         if (pending) return pending
 
         const promise = (async () => {
-            const replacement = await resourcePacks.asset<T>(path, type)
+            const replacement = await modResources.asset<T>(path, type)
             if (replacement !== undefined) return replacement
             if (type !== EffectAsset) {
                 if (label) console.warn(`[AssetLoader] Missing archive asset: ${label}`)
@@ -45,7 +45,7 @@ export class AssetLoader {
         const pending = this._pendingDirs.get(key) as Promise<T[]> | undefined
         if (pending) return pending
 
-        const promise = resourcePacks.ids(type, `pvz:${path}/`).then(ids => Promise.all(ids.map(id => this.load<T>(id, type, label))))
+        const promise = modResources.ids(type, `pvz:${path}/`).then(ids => Promise.all(ids.map(id => this.load<T>(id, type, label))))
             .then(assets => assets.filter(asset => asset !== null) as T[])
             .finally(() => this._pendingDirs.delete(key))
         this._pendingDirs.set(key, promise as Promise<Asset[]>)
