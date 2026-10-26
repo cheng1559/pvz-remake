@@ -27,9 +27,11 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     for (const args of ['install', 'load local:widescreen', 'unload all', 'uninstall local:hd', 'list']) {
         assert.equal((parseDebugCliCommand('/mod ' + args) as { failure: string }).failure, 'syntax')
     }
-    for (const command of ['/unknown', '/win extra', '/cooldown yes', '/mod invalid', '/item sun 3', '/sun remove 1']) {
+    for (const command of ['/unknown', '/win extra', '/cooldown yes', '/mod invalid', '/item sun 3', '/sun remove 1', '/hdseed true', '/hdseed false']) {
         assert.equal((parseDebugCliCommand(command) as { failure: string }).failure, 'syntax')
     }
+    assert.deepEqual(getDebugCliCompletions('/hd'), [])
+    assert.equal(getDebugCliSuffix('/hdseed'), '')
     const game = setup()
     const catalog = game.debugCommand('catalog').catalog!
     assert.deepEqual(catalog.plants, ['bowling-wallnut', 'bowling-explodenut', 'sunflower', 'peashooter', 'repeater', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'explodenut'])

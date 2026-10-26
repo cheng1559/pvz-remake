@@ -231,13 +231,15 @@ test('input keeps programmatic values silent, filters pasted text, and releases 
 
 test('native input keeps its caret and text through completion and repeated submission', () => {
     let text = '', start = 0, end = 0, focuses = 0, submissions = 0
+    const shown: Record<string, unknown>[] = []
     const bridge = {
+        showInputBox: (options: Record<string, unknown>) => { shown.push(options) },
         onInputBoxKey: undefined as ((key: string, shift: boolean) => boolean) | undefined,
         setInputBoxText(value: string, from: number, to: number) { text = value; start = from; end = to },
         getInputBoxSelection: () => ({ start, end }),
     }
     const { UIInput } = load('client/ui/UIInput', {
-        cc: { Component: class {}, Color: class {}, KeyCode: { ENTER: 13 }, _decorator: { ccclass: () => (value: unknown) => value } },
+        cc: { Component: class {}, Color: class {}, KeyCode: { ENTER: 13 }, sys: { isNative: true, os: 'ios', OS: { IOS: 'ios' } }, _decorator: { ccclass: () => (value: unknown) => value } },
         '@/client/input/UIHoverManager': { UIHoverManager: { activeModalRoot: null, isInputBlocked: false } },
     }, { jsb: bridge })
     const field = new UIInput()
@@ -246,12 +248,16 @@ test('native input keeps its caret and text through completion and repeated subm
     field.draw = () => {}
     field.native = {
         string: '', _impl: {}, blur() {},
-        focus() { focuses++; text = this.string; start = 0; end = text.length },
+        focus() { focuses++; text = this.string; start = 0; end = text.length; bridge.showInputBox({ inputType: 'text', defaultValue: text }) },
     }
     field.options = { onKey: (key: string) => { if (key !== 'Tab') return false; field.value = '/speed'; return true } }
     field.onSubmit = () => { submissions++; field.focus() }
     field.value = '/'
+    const originalShow = bridge.showInputBox
     field.focus()
+    assert.equal(shown.at(-1)!.inputType, 'ascii')
+    assert.equal(shown.at(-1)!.autocorrect, false)
+    assert.equal(bridge.showInputBox, originalShow, 'keyboard options never replace the shared bridge permanently')
     assert.deepEqual([start, end], [1, 1], 'opening native entry puts the caret after the slash')
     const type = (value: string) => {
         text = text.slice(0, start) + value + text.slice(end)
@@ -297,4 +303,15 @@ test('native input keeps its caret and text through completion and repeated subm
     assert.equal(UIInput.handleKey({ keyCode: 13 }), true)
     assert.equal(field.hasFocus, false, 'game key events still submit when the platform has no native key callback')
     UIInput.handleKeyUp({ keyCode: 13 })
+    for (const keyboardType of ['default', 'email', 'number', 'url']) {
+        field.options.keyboardType = keyboardType
+        field.options.autocorrect = true
+        field.focus()
+        assert.equal(shown.at(-1)!.inputType, keyboardType === 'default' ? 'text' : keyboardType)
+        assert.equal(shown.at(-1)!.autocorrect, true)
+        field.blur()
+    }
+    bridge.showInputBox({ inputType: 'text' })
+    assert.equal(shown.at(-1)!.inputType, 'text', 'other Cocos inputs retain their requested keyboard')
+    assert.equal(shown.at(-1)!.autocorrect, undefined, 'other Cocos inputs retain system correction defaults')
 })

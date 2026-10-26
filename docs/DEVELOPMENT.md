@@ -137,6 +137,8 @@ npm run build:web:debug
 
 Prefer existing focused tests for changed critical logic. Avoid browser automation unless visual or interaction validation is required. Windows and Android build commands remain available; native compilation and device checks are separate from Web validation.
 
+On macOS with Xcode, `npm run compile:ios:release` exports current resources and calls `cocos make` to compile and package `build/ios/pvz-remake-mobile-unsigned.ipa` for self-signing. The arm64 iPhone Release build requires no developer team. Cocos checks ZIP integrity and writes a `.ipa.sha256` checksum file; the intermediate `.app` remains under `build/ios/proj/Release-iphoneos/`.
+
 The `pvzPhase4` level probe remains available in debug builds. See [the Mod guide](MODS.md) for Mod development and installation.
 
 Gameplay and presentation configuration use `GameplayDefinitions` and `PresentationDefinitions`. Both are loaded, validated, returned as objects, and injected into consumers. `loadIntegratedGameContent` returns `definitions` and `presentation`; UI owns its definitions through `UIAssets.presentation`. Animation registries, entity views and seed packets receive their definitions explicitly rather than consulting global configuration state.

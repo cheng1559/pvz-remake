@@ -50,7 +50,6 @@ export async function executeDebugCliCommand(
         case 'hotkeys': GameDebugSettings.setHotkeysEnabled(args[0].toLowerCase() === 'true'); break
         case 'haptics': GameDebugSettings.setHapticsEnabled(args[0].toLowerCase() === 'true'); break
         case 'hitboxes': GameDebugSettings.setHitboxesVisible(args[0].toLowerCase() === 'true'); break
-        case 'hdseed': GameDebugSettings.setHDSeedPacketsEnabled(args[0].toLowerCase() === 'true'); break
         case 'seedstyle': GameDebugSettings.setSeedPacketStyle(args[0].toLowerCase() as SeedPacketStyle); break
         case 'mod': return { ...debugSuccess('Opening Mod manager'), action: 'manageMods' }
         case 'perf': GameDebugSettings.setPerfToggle(args[0].toLowerCase() as DebugPerfToggle, args[1].toLowerCase() === 'true'); break

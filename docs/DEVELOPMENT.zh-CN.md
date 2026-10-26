@@ -143,6 +143,8 @@ python3 tools/process_pak.py
 
 ## 检查与构建
 
+macOS 安装 Xcode 后，`npm run compile:ios:release` 会导出当前资源，再调用 `cocos make` 编译并生成用于自签的 `build/ios/pvz-remake-mobile-unsigned.ipa`。该 arm64 iPhone Release 构建不需要配置开发团队。Cocos 检查 ZIP 完整性并生成 `.ipa.sha256` 校验文件；中间 `.app` 保留在 `build/ios/proj/Release-iphoneos/`。
+
 ```sh
 npm run typecheck:server
 npm run test:server

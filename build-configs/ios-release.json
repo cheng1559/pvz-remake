@@ -4,7 +4,8 @@
     "useSplashScreen": false,
     "packages": {
         "ios": {
-            "skipUpdateXcodeProject": false
+            "skipUpdateXcodeProject": false,
+            "osTarget": { "iphoneos": true, "simulator": false }
         }
     }
 }

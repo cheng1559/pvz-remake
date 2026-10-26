@@ -10,7 +10,6 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 
 ```text
 /gamespeed 2
-/hdseed true
 /seedstyle tilted
 /level pvz:seed-chooser-test
 /haptics false
@@ -29,8 +28,6 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 `/plant {plant_name} {row} {col}` directly creates an installed plant, including Mod plants such as `/plant corn:cob_cannon 3 1`. It bypasses occupancy, upgrade prerequisites, seed-bank availability, sun cost, cooldown, tutorials and level phase/result restrictions. It preserves the held seed and initializes the plant's registered behavior normally. Only installed IDs and valid board coordinates are required; overlapping plants are saved normally. Mouse/touch planting keeps its usual rules.
 
 `/seed {slot} {seed_name}` replaces a seed-bank slot, numbered from 1 on the left, with an installed seed. The new packet is immediately ready and uses its own cost and cooldown. Replacing a held packet clears the cursor; duplicates in other slots are rejected. Changes work while paused or at zero speed and persist in the level save.
-
-`/hdseed true` enables actual Reanim portraits for almanac plants and zombies, plus held/grid placement previews for implemented plants, and sets seed packets to `rendered`. `false` selects cached portraits and `standard` packets. Only the selected representation is created; failures report an error without falling back. This setting is saved locally. Seed background resolution is controlled by resource-only Mods independently.
 
 `/seedstyle standard|rendered|tilted` independently selects the seed packet style and saves it locally. `standard` uses cached plant art; `rendered` uses the original Reanim pose; `tilted` enlarges that pose and rotates it clockwise. Plants are clipped only at the image area's inner left and bottom borders; the top and right sides may overflow. Backgrounds, costs and hit areas keep their original size. Switching between `rendered` and `tilted` reuses the loaded plant. Almanac portraits and held/grid previews are unaffected.
 

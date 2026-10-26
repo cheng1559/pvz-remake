@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, EditBox, EventMouse, game, Graphics, input, Input, KeyCode, Mask, Node, UITransform, Vec3, type EventKeyboard, type EventTouch } from 'cc'
+import { _decorator, Color, Component, EditBox, EventMouse, game, Graphics, input, Input, KeyCode, Mask, Node, sys, UITransform, Vec3, type EventKeyboard, type EventTouch } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil } from '@/client/font'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
@@ -11,6 +11,7 @@ const { ccclass } = _decorator
 type PointerEvent = EventMouse | EventTouch
 type InputElement = HTMLInputElement | HTMLTextAreaElement
 type NativeInputBox = {
+    showInputBox?: (options: Record<string, unknown>) => void
     setInputBoxText?: (text: string, start: number, end: number) => void
     getInputBoxSelection?: () => { start: number, end: number } | null
     onInputBoxKey?: (key: string, shift: boolean) => boolean
@@ -22,6 +23,10 @@ export interface UIInputOptions {
     value?: string
     placeholder?: string
     maxLength?: number
+    /** iOS keyboard layout; the game's text fields default to ASCII. */
+    keyboardType?: 'default' | 'ascii' | 'email' | 'number' | 'url'
+    /** iOS text corrections and smart substitutions; off by default. */
+    autocorrect?: boolean
     color?: Color
     filter?: (value: string) => string
     onChange?: (value: string) => void
@@ -159,7 +164,16 @@ export class UIInput extends Component {
         } else {
             const box = nativeInputBox()
             if (box && 'onInputBoxKey' in box) box.onInputBoxKey = this.nativeKey
-            this.native.focus()
+            const show = box?.showInputBox
+            if (box && show && sys.isNative && sys.os === sys.OS.IOS) {
+                // Scope traits to this focus call, as with the DOM focus options above.
+                box.showInputBox = options => show.call(box, {
+                    ...options,
+                    inputType: this.options.keyboardType === 'default' ? 'text' : this.options.keyboardType ?? 'ascii',
+                    autocorrect: this.options.autocorrect ?? false,
+                })
+                try { this.native.focus() } finally { box.showInputBox = show }
+            } else this.native.focus()
         }
         nativeInputBox()?.hideInputBoxAccessory?.()
         this.syncSelection()
