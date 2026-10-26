@@ -9,6 +9,38 @@ import { gameClock } from '@/core/GameClock'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import { ModHost } from '@/shared/mod/ModHost'
 
+test('startup UI preparation yields for rendering without adding waits after asynchronous loading', async () => {
+    let time = 0, frame = 0, rendered = 0
+    const progress: number[] = [], module = { exports: {} as any }
+    const compiled = transpileModule(readFileSync('assets/scripts/client/content/preloadTasks.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+    })
+    runInNewContext(compiled.outputText, {
+        exports: module.exports, Date: { now: () => time }, setTimeout,
+        require: () => ({ Director: { EVENT_AFTER_DRAW: 'draw' }, director: {
+            getTotalFrames: () => frame,
+            once(_event: string, callback: () => void) {
+                rendered++
+                void setImmediate().then(() => { frame++; callback() })
+            },
+        } }),
+    })
+    const { preloadTasks } = module.exports
+    await preloadTasks(Array.from({ length: 10 }, () => async () => { time += 5 }), (value: number) => progress.push(value))
+    assert.equal(rendered, 4, 'UI initialization must let frames render between work slices')
+    assert.equal(progress.at(-1), 1)
+    assert.ok(progress.every((value, index) => !index || value >= progress[index - 1]))
+    const beforeIO = rendered
+    await preloadTasks(Array.from({ length: 10 }, () => async () => {
+        await setImmediate()
+        time += 50
+        frame++
+    }))
+    assert.equal(rendered, beforeIO, 'a new frame replenishes the budget without an extra wait')
+    await preloadTasks([], (value: number) => assert.equal(value, 1))
+    await assert.rejects(preloadTasks([async () => { throw new Error('load failed') }]), /load failed/)
+})
+
 test('the first main menu uses Mod wrappers installed while UI assets are still loading', async () => {
     const calls: string[] = [], ui = {}
     class MainMenuScreen {
@@ -502,7 +534,7 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
     let quitOptions: any
     let gameOptions: any
     let quits = 0
-    let achievementInitializations = 0, achievementRefreshes = 0, warmDraws = 0
+    let achievementInitializations = 0, achievementRefreshes = 0, warmDraws = 0, preparationYields = 0
     let achievementRoot: any, achievementView: any
     let preload!: (progress: (value: number) => void) => Promise<void>
     const module = { exports: {} as Record<string, any> }
@@ -514,6 +546,7 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
         require: () => ({
             Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
             DEBUG: false, preloadAssets: async (progress: (value: number) => void) => progress(1),
+            waitForPreloadFrame: async () => { preparationYields++ },
             Director: { EVENT_AFTER_DRAW: 'draw' }, director: { once(_event: string, callback: () => void) {
                 assert.equal(achievementRoot.active, true, 'the loading screen warms the cached components before opening them')
                 warmDraws++
@@ -535,7 +568,12 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
                         const component = { node: this, show() {}, refresh: async () => { achievementRefreshes++ },
                             initialize: async (_ui: unknown, callback: any) => {
                                 if (this.name === 'Startup') preload = callback
-                                if (this.name === 'Controls') { achievementInitializations++; achievementView = component }
+                                if (this.name === 'Controls') {
+                                    assert.equal(achievementRoot.active, true, 'prewarm activates the page before constructing its components')
+                                    assert.equal(achievementRoot.siblingIndex, 0, 'incremental initialization stays behind the loading screen')
+                                    achievementInitializations++
+                                    achievementView = component
+                                }
                             } }
                         return component
                     },
@@ -621,6 +659,7 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
     await preload(value => { progress = value })
     assert.equal(progress, 1)
     assert.equal(warmDraws, 1)
+    assert.equal(preparationYields, 2, 'resource preloading, main-menu construction and achievement construction use separate frames')
     assert.equal(achievementInitializations, 1)
     assert.equal(achievementRoot.active, false, 'prewarmed achievements stay hidden on the loading screen')
     const cached = await screen.prepare('achievements')

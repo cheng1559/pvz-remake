@@ -1,6 +1,7 @@
 import { _decorator, BlockInputEvents, Color, Component, director, Director, game, isValid, Node, Sprite } from 'cc'
 import { DEBUG } from 'cc/env'
 import { preloadAssets } from '@/client/content/PreloadAssets'
+import { waitForPreloadFrame } from '@/client/content/preloadTasks'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { uiNode } from '@/client/view/uiNode'
 import { UI, type UIButtonOptions } from '@/client/ui/UI'
@@ -59,8 +60,10 @@ export class MenuScreen extends Component {
             try {
                 await startup.initialize(id === 'splash', async progress => {
                     if (!DEBUG) await preloadAssets(value => progress(value * 0.95))
+                    await waitForPreloadFrame()
                     await this.prepareMain(value => progress(DEBUG ? value * 0.9 : 0.95 + value * 0.04))
-                    const achievements = await this.prepareAchievements()
+                    await waitForPreloadFrame()
+                    const achievements = await this.prepareAchievements(true)
                     // Initialize components and render data behind the loading screen once.
                     achievements.root.setSiblingIndex(0)
                     achievements.root.active = true
@@ -77,7 +80,7 @@ export class MenuScreen extends Component {
         return this.createPage(id)
     }
 
-    private async createPage(id: MenuPageId): Promise<PreparedMenuPage> {
+    private async createPage(id: MenuPageId, prewarm = false): Promise<PreparedMenuPage> {
         const page = MENU_PAGES[id]
         const optionsPage = id === 'options' || id === 'gameOptions'
         const overMain = !!this.mainMenu?.node.isValid && (id === 'options' || id === 'players' || id === 'quit')
@@ -95,6 +98,11 @@ export class MenuScreen extends Component {
             name: id, parent: this.node, viewport: true, active: false,
             graphics: !optionsPage && id !== 'pause' && id !== 'gameOver' && !overMain,
         })
+        if (prewarm) {
+            // Initialize and draw new components incrementally behind the loading page.
+            root.node.setSiblingIndex(0)
+            root.node.active = true
+        }
         if (page.retainPrevious) root.node.addComponent(BlockInputEvents)
         if (root.graphics) {
             const draw = () => {
@@ -287,8 +295,8 @@ export class MenuScreen extends Component {
         if (page.id !== 'achievements') page.root.destroy()
     }
 
-    private prepareAchievements(): Promise<PreparedMenuPage> {
-        return this.achievementPreparation ??= this.createPage('achievements').catch(error => {
+    private prepareAchievements(prewarm = false): Promise<PreparedMenuPage> {
+        return this.achievementPreparation ??= this.createPage('achievements', prewarm).catch(error => {
             this.achievementPreparation = null
             throw error
         })

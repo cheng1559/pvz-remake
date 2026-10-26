@@ -1,5 +1,6 @@
 import { _decorator, Color, Component, input, Input, KeyCode, Sprite, type EventKeyboard } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
+import { preloadTasks } from '@/client/content/preloadTasks'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
@@ -42,15 +43,21 @@ export class AchievementScreen extends Component {
         })
         const content = this.scroll.content
         ui.image(content, sprites.selectorscreen_achievements_bg)
-        for (let i = 1; i <= 70; i++) ui.image(content, sprites[i === 70 ? 'acheesements_china' : 'acheesements_hole_tile'], {
-            y: sprites.acheesements_hole_tile.originalSize.height * i - (i === 70 ? 30 : 0),
-        })
+        await preloadTasks(Array.from({ length: 70 }, (_, index) => async () => {
+            if (!this.node.isValid) throw new Error('Achievement screen was destroyed while loading')
+            const i = index + 1
+            ui.image(content, sprites[i === 70 ? 'acheesements_china' : 'acheesements_hole_tile'], {
+                y: sprites.acheesements_hole_tile.originalSize.height * i - (i === 70 ? 30 : 0),
+            })
+        }))
+        if (!this.node.isValid) throw new Error('Achievement screen was destroyed while loading')
         for (const [name, y] of [
             ['bookworm', 1125], ['bejeweled', 2250], ['chuzzle', 4500],
             ['peggle', 6750], ['pipe', 9000], ['zuma', 11250],
         ] as const) ui.image(content, sprites[`acheesements_${name}`], { y })
 
-        for (const [index, item] of data.items.entries()) {
+        await preloadTasks(data.items.map((item, index) => async () => {
+            if (!this.node.isValid) throw new Error('Achievement screen was destroyed while loading')
             const x = 190 + index % 2 * 290, y = 178 + Math.floor(index / 2) * 57
             const icon = ui.image(content, getAtlasFrame(sprites.acheesements_icons, item.icon, 70, 70, 7), {
                 x: x - 70, y, width: 56, height: 56,
@@ -66,7 +73,8 @@ export class AchievementScreen extends Component {
                 text: ui.text(item.descriptionKey), font: 'achievement', color: Color.WHITE,
                 x, y: y + 31, width: 215, baseline: true, lineSpacing: 12,
             })
-        }
+        }))
+        if (!this.node.isValid) throw new Error('Achievement screen was destroyed while loading')
 
         await showMenuPageControls(content, ui, 'achievements', onBack)
         ui.image(content, sprites.acheesements_more_rock, { x: 700, y: 450 })

@@ -5,6 +5,7 @@ import { SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { CONTENT_CATEGORIES } from '@/shared/content'
 import { ParticleDefinitionLoader } from '@/core/Particle/ParticleDefinitionLoader'
 import { modResources } from './ModResources'
+import { preloadTasks } from './preloadTasks'
 import type { ResolvedContent } from './ContentRegistry'
 
 const assetTypes = { sprites: SpriteFrame, reanim: JsonAsset, particles: JsonAsset,
@@ -27,11 +28,7 @@ export async function preloadAssets(onProgress: (progress: number) => void): Pro
     ])
     const reanims = [...registry.entries('reanim')]
     const repository = new ReanimRepository(registry, loader)
-    let completed = 0
-    await Promise.all(reanims.map(async ([id]) => {
-        await repository.load(id)
-        onProgress(0.7 + ++completed / reanims.length * 0.15)
-    }))
+    await preloadTasks(reanims.map(([id]) => () => repository.load(id)), value => onProgress(0.7 + value * 0.15))
     await Promise.all([
         SoundLoader.preloadAll(),
         ParticleDefinitionLoader.preloadAll(),

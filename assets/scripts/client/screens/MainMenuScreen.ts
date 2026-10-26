@@ -2,6 +2,7 @@ import { _decorator, Color, Component, director, Director, Mask, Node, Sprite, t
 import { menuApi } from '@/client/api/MenuApi'
 import type { UserView } from '@/shared/menu'
 import { loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
+import { preloadTasks } from '@/client/content/preloadTasks'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -71,10 +72,10 @@ export class MainMenuScreen extends Component {
         if (!this.node.isValid) return
         const content = uiNode({ name: 'Selector', parent: this.node, anchor: { x: 0, y: 1 }, position: { x: -400, y: 300 } }).node
         this.background = ui.image(content, this.frames.get('selectorscreen_bg')!, { width: 800, height: 600 })
-        const pending: Promise<void>[] = []
+        const pending: (() => Promise<void>)[] = []
         const player = (name: string, parent = content): ReanimPlayer => {
             const animation = uiNode({ name, parent, anchor: { x: 0, y: 1 } }).node.addComponent(ReanimPlayer)
-            pending.push(animation.load(`pvz:selector_${name}`, registry, loader).then(report))
+            pending.push(() => animation.load(`pvz:selector_${name}`, registry, loader).then(report))
             return animation
         }
         this.clouds = MAIN_MENU_CLOUDS.map(name => ({ player: player(name), delay: 0 }))
@@ -84,7 +85,7 @@ export class MainMenuScreen extends Component {
         this.flowers = MAIN_MENU_FLOWERS.map((_, index) => player(`flower${index + 1}`))
         const clip = uiNode({ name: 'HandClip', parent: content, anchor: { x: 0, y: 1 }, size: { width: 800, height: 560 }, mask: Mask.Type.GRAPHICS_RECT }).node
         this.hand = [player('zombie_hand', clip), player('zombie_hand')]
-        await Promise.all(pending)
+        await preloadTasks(pending)
         if (!this.node.isValid) return
         this.current = this.open
         this.sign.node.active = false
