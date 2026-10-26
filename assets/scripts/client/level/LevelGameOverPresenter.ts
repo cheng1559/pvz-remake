@@ -1,8 +1,9 @@
 import type { BoardPresentation } from '@/shared/content/presentation'
-import { Color, Graphics, Mask, Node, Sprite, type SpriteFrame } from 'cc'
+import { Color, Graphics, Mask, Node, Sprite, UITransform, type SpriteFrame } from 'cc'
 import { SpriteLoader } from '@/core/SpriteLoader'
 import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
 import { uiNode } from '@/client/view/uiNode'
+import { fitViewport } from '@/client/view/ClientViewport'
 import { easeInOut, lerp } from '@/client/view/GameScreenMath'
 import type { ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol'
 import type { LevelAudioPresenter } from './LevelAudioPresenter'
@@ -80,7 +81,7 @@ export class LevelGameOverPresenter {
         doorway.setSiblingIndex(this.entityLayer.getSiblingIndex())
         this.black = uiNode({ name: 'GameOverBlack', parent: this.overlay, graphics: true }).graphics!
         this.title = image('ZombiesWonTitle', this.overlay, this.frames[0], 0, 0)
-        this.draw()
+        fitViewport(this.black.node, () => this.draw())
     }
 
     update(dt: number): boolean {
@@ -107,7 +108,8 @@ export class LevelGameOverPresenter {
         const alpha = this.ticks < GRAPHIC_START ? 0 : Math.min(128, Math.round(255 * lerp(BLACK_KEYS[left], BLACK_KEYS[right], t)))
         if (alpha > 0) {
             this.black!.fillColor = new Color(0, 0, 0, alpha)
-            this.black!.fillRect(-400, -300, 800, 600)
+            const { width, height } = this.black!.node.getComponent(UITransform)!
+            this.black!.fillRect(-width / 2, -height / 2, width, height)
         }
         this.title!.active = this.ticks >= GRAPHIC_START && this.ticks < END
         let x = lerp(TITLE_KEYS[left][0], TITLE_KEYS[right][0], t)

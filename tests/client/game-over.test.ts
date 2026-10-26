@@ -23,9 +23,11 @@ test('failure pans the live board, plays each sound once, and waits eleven game 
         children: Node[] = []
         parent?: Node
         x = 0; y = 0; scale = 1
+        width = 800; height = 600
         constructor(public name = '') {}
         setPosition(x: number, y: number) { this.x = x; this.y = y }
         setScale(scale: number) { this.scale = scale }
+        getComponent() { return this }
         getSiblingIndex() { return this.parent?.children.indexOf(this) ?? 0 }
         setSiblingIndex(index: number) {
             if (!this.parent) return
@@ -34,16 +36,22 @@ test('failure pans the live board, plays each sound once, and waits eleven game 
         }
     }
     const sounds: string[] = []
+    const fills: number[][] = []
+    let resize!: (width: number, height: number) => void
     const modules = {
-        cc: { Node, Sprite: { SizeMode: { RAW: 0 } }, Mask: { Type: { GRAPHICS_RECT: 0 } },
+        cc: { Node, UITransform: class {}, Sprite: { SizeMode: { RAW: 0 } }, Mask: { Type: { GRAPHICS_RECT: 0 } },
             Color: class { constructor(public r: number, public g: number, public b: number, public a: number) {} } },
         '@/client/view/GameScreenMath': { easeInOut, lerp },
+        '@/client/view/ClientViewport': { fitViewport(node: Node, redraw: () => void) {
+            resize = (width, height) => { node.width = width; node.height = height; redraw() }
+            resize(800, 600)
+        } },
         '@/client/sound/LegacySoundSystem': { SoundEffect: { LoseMusic: 'lose', Chomp: 'chomp', Scream: 'scream' },
             SoundLoader: { play: (sound: string) => sounds.push(sound), playFoley: (sound: string) => sounds.push(sound) } },
         '@/client/view/uiNode': { uiNode(options: any) {
             const node = new Node(options.name)
             if (options.parent) { node.parent = options.parent; node.parent!.children.push(node) }
-            return { node, graphics: { clear() {}, fillRect() {}, fillColor: null } }
+            return { node, graphics: { node, clear() {}, fillRect(...rect: number[]) { fills.push(rect) }, fillColor: null } }
         } },
     }
     const { LevelGameOverPresenter } = load('LevelGameOverPresenter', modules)
@@ -77,6 +85,13 @@ test('failure pans the live board, plays each sound once, and waits eleven game 
     assert.equal(gameOver.update(4.99), false)
     assert.equal(gameOver.update(0.01), true)
     assert.equal(title.active, false)
+    assert.deepEqual(fills.at(-1), [-400, -300, 800, 600])
+    const titlePosition = [title.x, title.y, title.scale]
+    for (const [width, height] of [[1400, 600], [600 * 32 / 9, 600], [800, 600]]) {
+        resize(width, height)
+        assert.deepEqual(fills.at(-1), [-width / 2, -height / 2, width, height], 'the death cover follows viewport changes even after the cutscene ends')
+        assert.deepEqual([title.x, title.y, title.scale], titlePosition, 'resizing the cover preserves the original title animation coordinates')
+    }
     const { LevelView } = load('LevelView', modules)
     const view = Object.create(LevelView.prototype)
     view.entityRenderer = { sync() { board.setPosition(0, 0); walkTicks = 0; visible = false } }
