@@ -1,0 +1,72 @@
+{
+  "example:rapid_pea": {
+    "visual": {
+      "seedType": "example:rapid_pea",
+      "preview": 0,
+      "nameKey": "example:rapid_pea"
+    },
+    "view": "shooter",
+    "animationTarget": "example:rapid_pea",
+    "animations": {
+      "body": {
+        "reanimId": "pvz:peashooter",
+        "rateScale": 1,
+        "fps": 12,
+        "x": 0,
+        "y": 0
+      },
+      "idleHead": {
+        "reanimId": "pvz:peashooter_head_idle",
+        "rateScale": 1,
+        "fps": 12,
+        "x": 0,
+        "y": 0,
+        "attachmentTrackId": "anim_stem"
+      },
+      "shootHead": {
+        "reanimId": "pvz:peashooter_shoot",
+        "rateScale": 1,
+        "fps": 12,
+        "x": 0,
+        "y": 0,
+        "attachmentTrackId": "anim_stem"
+      },
+      "blink": {
+        "reanimId": "pvz:peashooter_blink",
+        "rateScale": 1,
+        "fps": 12,
+        "x": 0,
+        "y": 0,
+        "attachmentTrackId": "anim_face"
+      }
+    },
+    "shadow": {
+      "x": -3,
+      "y": -51
+    },
+    "scale": 1
+  },
+  "example:beacon": {
+    "visual": {
+      "seedType": "example:beacon",
+      "preview": 1,
+      "nameKey": "example:beacon"
+    },
+    "view": "example:beacon",
+    "animationTarget": "example:beacon",
+    "animations": {
+      "body": {
+        "reanimId": "example:beacon",
+        "rateScale": 1,
+        "fps": 12,
+        "x": 0,
+        "y": 0
+      }
+    },
+    "shadow": {
+      "x": 0,
+      "y": -50
+    },
+    "scale": 1
+  }
+}

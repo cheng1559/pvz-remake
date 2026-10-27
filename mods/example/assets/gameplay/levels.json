@@ -1,0 +1,31 @@
+{
+  "example:testing": {
+    "adventureIndex": 1,
+    "board": "pvz:day",
+    "activeRows": [
+      2
+    ],
+    "startingSun": 300,
+    "seedPackets": [
+      "pvz:peashooter",
+      "example:rapid_pea",
+      "example:beacon"
+    ],
+    "lawnMower": "pvz:standard",
+    "skySun": "pvz:sun",
+    "waves": [
+      {
+        "zombies": [
+          "pvz:normal",
+          "example:regenerating_zombie"
+        ]
+      }
+    ],
+    "tutorial": "example:testing",
+    "award": {
+      "kind": "seed",
+      "id": "pvz:sunflower",
+      "packetCost": 50
+    }
+  }
+}

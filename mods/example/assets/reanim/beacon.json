@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 2,
+  "id": "example:beacon",
+  "durationSeconds": 1,
+  "tracks": [
+    {
+      "id": "lamp",
+      "zIndex": 0,
+      "keyframes": [
+        {
+          "timeSeconds": 0,
+          "x": 16,
+          "y": 4,
+          "scaleX": 1,
+          "scaleY": 1,
+          "skewX": 0,
+          "skewY": 0,
+          "alpha": 1,
+          "sprite": "example:beacon",
+          "interpolation": "linear"
+        },
+        {
+          "timeSeconds": 0.5,
+          "x": 16,
+          "y": 0,
+          "scaleX": 1.08,
+          "scaleY": 1.08,
+          "skewX": 0,
+          "skewY": 0,
+          "alpha": 1,
+          "sprite": "example:beacon",
+          "interpolation": "linear"
+        },
+        {
+          "timeSeconds": 1,
+          "x": 16,
+          "y": 4,
+          "scaleX": 1,
+          "scaleY": 1,
+          "skewX": 0,
+          "skewY": 0,
+          "alpha": 1,
+          "sprite": "example:beacon",
+          "interpolation": "linear"
+        }
+      ]
+    }
+  ]
+}

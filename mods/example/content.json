@@ -1,0 +1,61 @@
+{
+  "gameplay": {
+    "levelPatches": "assets/gameplay/level-patches.json",
+    "levels": "assets/gameplay/levels.json",
+    "plants": "assets/gameplay/plants.json",
+    "projectiles": "assets/gameplay/projectiles.json",
+    "seeds": "assets/gameplay/seeds.json",
+    "zombies": "assets/gameplay/zombies.json"
+  },
+  "presentation": {
+    "plants": "assets/presentation/plants.json",
+    "projectiles": "assets/presentation/projectiles.json",
+    "strings": "assets/presentation/strings.json",
+    "zombies": "assets/presentation/zombies.json",
+    "levels": "assets/presentation/levels.json"
+  },
+  "resources": {
+    "sprites": {
+      "example:beacon": {
+        "file": "assets/sprites/beacon.png",
+        "width": 48,
+        "height": 64
+      },
+      "example:orb": {
+        "file": "assets/sprites/orb.png",
+        "width": 16,
+        "height": 16
+      },
+      "example:spark": {
+        "file": "assets/sprites/spark.png",
+        "width": 8,
+        "height": 8
+      },
+      "example:button": {
+        "file": "assets/sprites/button.png",
+        "width": 160,
+        "height": 32
+      },
+      "pvz:projectilepea": {
+        "file": "assets/sprites/orb.png",
+        "width": 16,
+        "height": 16
+      }
+    },
+    "reanim": {
+      "example:beacon": "assets/reanim/beacon.json"
+    },
+    "particles": {
+      "example:sparks": "assets/particles/sparks.json"
+    },
+    "audio": {
+      "example:chime": "assets/audio/chime.wav"
+    },
+    "json": {
+      "example:settings": "assets/settings.json"
+    },
+    "text": {
+      "example:help": "assets/help.txt"
+    }
+  }
+}

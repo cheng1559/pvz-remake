@@ -1,0 +1,31 @@
+{
+  "example:pea": {
+    "sprite": "example:orb",
+    "impact": {
+      "kind": "particle",
+      "id": "example:sparks",
+      "offset": [
+        49,
+        12
+      ],
+      "yRange": [
+        20,
+        100
+      ],
+      "duration": 0.21
+    },
+    "fireSounds": [
+      {
+        "id": "example:chime",
+        "foley": false
+      }
+    ],
+    "impactSounds": [
+      {
+        "id": "splat",
+        "foley": true,
+        "pitchRange": 10
+      }
+    ]
+  }
+}
