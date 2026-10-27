@@ -1,8 +1,0 @@
-{
-  "corn:kernel_pult": "Kernel-pult", "corn:cob_cannon": "Cob Cannon",
-  "corn:kernel_pult_tooltip": "Flings corn kernels and butter at zombies",
-  "corn:cob_cannon_tooltip": "Click to launch deadly cobs of corn\n(requires 2 kernel-pults)",
-  "corn:requires_kernel_pults": "requires 2 kernel-pults",
-  "corn:needs_kernel_pults": "Plant a pair of kernel-pults first!",
-  "corn:only_on_kernel_pults": "Can only be planted on a pair of kernel-pults"
-}
