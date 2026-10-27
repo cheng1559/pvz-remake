@@ -1,5 +1,7 @@
 # Mod 项目结构
 
+仓库只保留 `example` 一个示例，以及通用 Mod 开发工具。其他 `mods/` 子目录用于本地开发，默认由 Git 忽略，源码和资源不随本体提交。
+
 资源、数据和脚本扩展统一使用同一格式；只创建需要的目录。
 
 ```text
@@ -19,14 +21,10 @@ my-mod/
 纯资源 Mod 只需清单、内容索引和资源文件。`content.json` 中所有路径相对于项目根目录。静态游戏定义、表现定义和新增资源自动注册；代码入口只负责自定义行为、视图和方法包装。
 
 ```sh
-npm run mod:pack -- mods/corn
-npm run mod:test -- dist/mods/corn
+npm run mod:pack -- mods/example
+npm run mod:test -- dist/mods/example
 ```
 
 只有打包时编译，输出 `dist/mods/<name>/` 和 `<name>.zip`。管理入口统一为 `/mod`；安装、优先级和完整配置格式见 [Mod 文档](../docs/MODS.md)。
 
-- [corn](corn/README.md)：玉米投手与玉米加农炮，自带资源和行为。
-- [example-plant](example-plant/README.md)：注册自定义植物、僵尸行为的最小示例。
-- [widescreen](widescreen/README.md)：Ultimate 素材版宽屏。
-- [widescreen-pvz](widescreen-pvz/README.md)：工作区 PvZ 素材版宽屏，保留原图尺寸，视口支持 4:3～32:9。
-- [widescreen-bgm](widescreen-bgm/README.md)：独立背景音乐 Mod，使用工作区 PvZ 宽屏版的 8 首 BGM。
+- [example](example/README.md)：玩法、资源、客户端视图、命令、存档与生命周期的完整示例。

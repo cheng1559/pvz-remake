@@ -1,5 +1,0 @@
-{
-  "x": 10, "backdropX": 83, "clipX": 90, "width": 501, "height": 87,
-  "packetX": 1, "packetY": 8, "beltY": 63, "beltWidth": 502, "beltHeight": 16, "frames": 6, "frameTicks": 4,
-  "introStart": 600, "introDuration": 25, "stripeOffset": [-12, -3], "stripeDialogs": []
-}

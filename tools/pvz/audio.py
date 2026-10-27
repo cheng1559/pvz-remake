@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""
+Convert extracted PvZ sound effects into the Cocos resources library.
+
+The original package also contains tracker music and a few legacy audio formats.
+This script intentionally imports sound effects only and normalizes them to MP3.
+"""
+
+import argparse
+import shutil
+import subprocess
+from pathlib import Path
+
+
+SUPPORTED_SOUND_SUFFIXES = (".au", ".ogg", ".mp3", ".wav")
+OUTPUT_SUFFIX = ".mp3"
+
+def _resource_stem(path: Path) -> str:
+    return path.with_suffix("").name.lower()
+
+
+def convert_sound(ffmpeg: str, src: Path, dst: Path, overwrite: bool) -> None:
+    ffmpeg_path = resolve_ffmpeg(ffmpeg)
+    args = [
+        ffmpeg_path,
+        "-y" if overwrite else "-n",
+        "-v",
+        "error",
+        "-i",
+        str(src),
+        "-vn",
+        "-acodec",
+        "libmp3lame",
+        "-q:a",
+        "4",
+        "-ar",
+        "44100",
+        "-ac",
+        "2",
+    ]
+    args.append(str(dst))
+    subprocess.run(args, check=True)
+
+
+def resolve_ffmpeg(ffmpeg: str) -> str:
+    resolved = shutil.which(ffmpeg)
+    if resolved:
+        return resolved
+
+    for candidate in (
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+    ):
+        if Path(candidate).exists():
+            return candidate
+
+    raise RuntimeError(
+        "ffmpeg is required to convert PvZ sound files to MP3. "
+        "Install it with `brew install ffmpeg` on macOS, or pass --ffmpeg /path/to/ffmpeg."
+    )
+
+
+def copy_sounds(src_dir: Path, dst_dir: Path, overwrite: bool = False, ffmpeg: str = "ffmpeg") -> int:
+    dst_dir.mkdir(parents=True, exist_ok=True)
+
+    sound_files: dict[str, list[Path]] = {}
+    for src in sorted(src_dir.iterdir()):
+        suffix = src.suffix.lower()
+        if not src.is_file() or suffix not in SUPPORTED_SOUND_SUFFIXES:
+            continue
+        sound_files.setdefault(_resource_stem(src), []).append(src)
+
+    copied = 0
+    suffix_priority = {".wav": 0, ".ogg": 1, ".mp3": 2, ".au": 3}
+    for resource_stem, candidates in sorted(sound_files.items()):
+        src = min(candidates, key=lambda path: suffix_priority[path.suffix.lower()])
+        dst = dst_dir / f"{resource_stem}{OUTPUT_SUFFIX}"
+        if dst.exists() and not overwrite:
+            continue
+        existing = [
+            path for path in dst_dir.glob(f"{resource_stem}.*")
+            if path.suffix.lower() in SUPPORTED_SOUND_SUFFIXES
+        ]
+        for old_dst in existing:
+            if old_dst != dst:
+                old_dst.unlink()
+
+        convert_sound(ffmpeg, src, dst, overwrite=True)
+        print(f"[sounds] Wrote: {dst}")
+        copied += 1
+
+    return copied
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--src",
+        type=Path,
+        required=True,
+        help="Directory containing extracted PvZ sound files.",
+    )
+    parser.add_argument(
+        "--dst",
+        type=Path,
+        default=Path("./mods/pvz-base/assets/audio/sfx"),
+        help="Destination under the Cocos resources directory.",
+    )
+    parser.add_argument("--overwrite", action="store_true", help="Replace existing copied files.")
+    parser.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg executable used for MP3 conversion.")
+    args = parser.parse_args()
+
+    if not args.src.exists():
+        raise FileNotFoundError(f"Sound source directory does not exist: {args.src}")
+
+    count = copy_sounds(args.src, args.dst, args.overwrite, args.ffmpeg)
+    print(f"[sounds] Copied {count} sound effect files -> {args.dst}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,124 @@
+{
+  "pvz:adventure-1-5": {
+    "adviceDuringIntro": true, "adviceStyle": "hint-stay",
+    "music": {"choosing": "title_theme", "gameplay": "minigame"},
+    "intro": {"previewCapacity": 10, "sod": "pvz:background1", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true, "stationary": true},
+    "seedGuideSteps": [], "lawnGuideSteps": [],
+    "advice": {"shovel-pickup": "ADVICE_CLICK_SHOVEL", "shovel-dig": "ADVICE_CLICK_PLANT", "shovel-keep-digging": "ADVICE_KEEP_DIGGING"}
+  },
+  "pvz:stress-test": {
+    "intro": {"previewCapacity": 10, "sod": "pvz:background1", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true, "stationary": true},
+    "seedGuideSteps": [], "lawnGuideSteps": [], "advice": {}
+  },
+  "pvz:seed-chooser-test": {
+    "intro": {"previewCapacity": 10, "sod": "pvz:background1", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true},
+    "seedGuideSteps": [], "lawnGuideSteps": [], "advice": {}
+  },
+  "pvz:adventure-1-1": {
+    "intro": {"previewCapacity": 10, "sod": "pvz:sod1row", "x": 19, "y": 265, "width": 771, "rolls": [{"x": 0, "y": 0, "particleY": 348}], "readySetPlant": false},
+    "seedGuideSteps": ["pick-first-seed", "pick-second-seed"], "lawnGuideSteps": ["plant-first-seed", "plant-second-seed"],
+    "advice": {
+      "pick-first-seed": "ADVICE_CLICK_SEED_PACKET", "plant-first-seed": "ADVICE_CLICK_ON_GRASS",
+      "first-plant-done": "ADVICE_PLANTED_PEASHOOTER", "collect-first-sun": "ADVICE_CLICK_ON_SUN",
+      "collect-more-sun": "ADVICE_CLICKED_ON_SUN", "enough-sun": "ADVICE_ENOUGH_SUN",
+      "pick-second-seed": "ADVICE_CLICK_PEASHOOTER", "plant-second-seed": "", "complete": "ADVICE_ZOMBIE_ONSLAUGHT"
+    }
+  },
+  "pvz:adventure-1-2": {
+    "intro": {"previewCapacity": 10, "sod": "pvz:sod3row", "x": 15, "y": 149, "width": 771,
+      "existingSod": {"sprite": "pvz:sod1row", "x": 19, "y": 265},
+      "rolls": [{"x": 0, "y": -102, "particleY": 246}, {"x": 0, "y": 111, "particleY": 459}], "readySetPlant": false},
+    "guideSeed": "pvz:sunflower", "seedGuideSteps": ["pick-sunflower"], "lawnGuideSteps": [], "advice": {}
+  },
+  "pvz:adventure-1-3": {
+    "intro": {"previewCapacity": 10, "sod": "pvz:sod3row", "x": 15, "y": 149, "width": 771, "rolls": [], "readySetPlant": true},
+    "guideSeed": "pvz:sunflower", "seedGuideSteps": ["pick-sunflower"], "lawnGuideSteps": [], "advice": {}
+  },
+  "pvz:adventure-1-4": {
+    "intro": {"previewCapacity": 10, "sod": "pvz:background1", "x": 12, "y": 0, "width": 773, "sourceX": 232,
+      "existingSod": {"sprite": "pvz:sod3row", "x": 15, "y": 149},
+      "rolls": [{"x": -3, "y": -198, "particleY": 150}, {"x": -3, "y": 203, "particleY": 511}], "readySetPlant": true},
+    "guideSeed": "pvz:sunflower", "seedGuideSteps": ["pick-sunflower"], "lawnGuideSteps": [], "advice": {}
+  },
+  "pvz:adventure-1-6": {
+    "intro": {
+      "previewCapacity": 10,
+      "sod": "pvz:background1",
+      "x": 12,
+      "y": 0,
+      "width": 773,
+      "sourceX": 232,
+      "rolls": [],
+      "readySetPlant": true
+    },
+    "guideSeed": "pvz:sunflower",
+    "seedGuideSteps": ["pick-sunflower"],
+    "lawnGuideSteps": [],
+    "advice": {}
+  },
+  "pvz:adventure-1-7": {
+    "intro": {
+      "previewCapacity": 10,
+      "sod": "pvz:background1",
+      "x": 12,
+      "y": 0,
+      "width": 773,
+      "sourceX": 232,
+      "rolls": [],
+      "readySetPlant": true
+    },
+    "guideSeed": "pvz:sunflower",
+    "seedGuideSteps": ["pick-sunflower"],
+    "lawnGuideSteps": [],
+    "advice": {}
+  },
+  "pvz:adventure-1-8": {
+    "intro": {
+      "previewCapacity": 10,
+      "sod": "pvz:background1",
+      "x": 12,
+      "y": 0,
+      "width": 773,
+      "sourceX": 232,
+      "rolls": [],
+      "readySetPlant": true
+    },
+    "seedGuideSteps": [],
+    "lawnGuideSteps": [],
+    "advice": {}
+  },
+  "pvz:adventure-1-9": {
+    "intro": {
+      "previewCapacity": 10,
+      "sod": "pvz:background1",
+      "x": 12,
+      "y": 0,
+      "width": 773,
+      "sourceX": 232,
+      "rolls": [],
+      "readySetPlant": true
+    },
+    "seedGuideSteps": [],
+    "lawnGuideSteps": [],
+    "advice": {}
+  },
+  "pvz:adventure-1-10": {
+    "intro": {
+      "previewCapacity": 18,
+      "sod": "pvz:background1",
+      "x": 12,
+      "y": 0,
+      "width": 773,
+      "sourceX": 232,
+      "rolls": [],
+      "readySetPlant": true
+    },
+    "seedGuideSteps": [],
+    "lawnGuideSteps": [],
+    "advice": {},
+    "music": {
+      "choosing": "choose_seeds",
+      "gameplay": "minigame"
+    }
+  }
+}

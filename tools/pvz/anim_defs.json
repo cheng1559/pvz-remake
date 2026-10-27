@@ -1,0 +1,1500 @@
+{
+  "peashooter": {
+    "body": {
+      "slots": [
+        "anim_stem"
+      ],
+      "animations": [
+        "anim_idle"
+      ],
+      "exports": {
+        "anim_idle": "pvz:repeater"
+      }
+    },
+    "head": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_head_idle",
+        "anim_shooting"
+      ],
+      "exports": {
+        "anim_head_idle": "pvz:repeater_head_idle",
+        "anim_shooting": "pvz:repeater_shoot"
+      }
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "peashootersingle": {
+    "body": {
+      "slots": [
+        "anim_stem"
+      ],
+      "animations": [
+        "anim_idle"
+      ],
+      "exports": {
+        "anim_idle": "pvz:peashooter"
+      }
+    },
+    "head": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_head_idle",
+        "anim_shooting"
+      ],
+      "exports": {
+        "anim_head_idle": "pvz:peashooter_head_idle",
+        "anim_shooting": "pvz:peashooter_shoot"
+      }
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ],
+      "exports": {
+        "anim_blink": "pvz:peashooter_blink"
+      }
+    }
+  },
+  "sunflower": {
+    "body": {
+      "slots": [
+        "anim_idle"
+      ],
+      "animations": [
+        "anim_idle"
+      ],
+      "exports": {
+        "anim_idle": "pvz:sunflower"
+      }
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ],
+      "exports": {
+        "anim_blink": "pvz:sunflower_blink"
+      }
+    }
+  },
+  "cherrybomb": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_explode"
+      ],
+      "exports": {
+        "anim_explode": "pvz:cherrybomb_explode"
+      }
+    }
+  },
+  "wallnut": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "_ground"
+      ],
+      "exports": {
+        "_ground": "pvz:wallnut_roll",
+        "anim_idle": "pvz:wallnut"
+      }
+    },
+    "face": {
+      "animations": [
+        "anim_blink_twitch",
+        "anim_blink_twice",
+        "anim_blink_thrice"
+      ],
+      "exports": {
+        "anim_blink_twitch": "pvz:wallnut_blink_twitch",
+        "anim_blink_twice": "pvz:wallnut_blink_twice",
+        "anim_blink_thrice": "pvz:wallnut_blink_thrice"
+      }
+    }
+  },
+  "potatomine": {
+    "body": {
+      "slots": [
+        "anim_face",
+        "anim_eye",
+        "anim_light"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_armed",
+        "anim_rise",
+        "anim_mashed"
+      ],
+      "exports": {
+        "anim_idle": "pvz:potatomine_buried",
+        "anim_rise": "pvz:potatomine_rise",
+        "anim_armed": "pvz:potatomine_armed"
+      }
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ],
+      "exports": {
+        "anim_blink": "pvz:potatomine_blink"
+      }
+    },
+    "glow": {
+      "animations": [
+        "anim_glow"
+      ],
+      "exports": {
+        "anim_glow": "pvz:potatomine_glow"
+      }
+    }
+  },
+  "snowpea": {
+    "body": {
+      "slots": [
+        "anim_stem"
+      ],
+      "animations": [
+        "anim_idle"
+      ],
+      "exports": {
+        "anim_idle": "pvz:snowpea"
+      }
+    },
+    "head": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_head_idle",
+        "anim_shooting"
+      ],
+      "exports": {
+        "anim_head_idle": "pvz:snowpea_head_idle",
+        "anim_shooting": "pvz:snowpea_shoot"
+      }
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ],
+      "exports": {
+        "anim_blink": "pvz:snowpea_blink"
+      }
+    }
+  },
+  "chomper": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_bite",
+        "anim_chew",
+        "anim_swallow"
+      ],
+      "exports": {
+        "anim_idle": "pvz:chomper",
+        "anim_bite": "pvz:chomper_bite",
+        "anim_chew": "pvz:chomper_chew",
+        "anim_swallow": "pvz:chomper_swallow"
+      }
+    }
+  },
+  "puffshroom": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_sleep",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "sunshroom": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_sleep",
+        "anim_bigidle",
+        "anim_bigsleep",
+        "anim_grow"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "fumeshroom": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_sleep",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "gravebuster": {
+    "body": {}
+  },
+  "hypnoshroom": {
+    "body": {}
+  },
+  "scaredyshroom": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_sleep",
+        "anim_grow",
+        "anim_scaredidle",
+        "anim_scared",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "iceshroom": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_sleep"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "doomshroom": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_sleep",
+        "anim_explode"
+      ]
+    }
+  },
+  "lilypad": {
+    "body": {
+      "slots": [
+        "anim_idle"
+      ],
+      "animations": [
+        "anim_idle"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "squash": {
+    "body": {
+      "slots": [
+        "anim_face",
+        "anim_eye"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_lookleft",
+        "anim_lookright",
+        "anim_jumpup",
+        "anim_jumpdown"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "threepeater": {
+    "body": {
+      "slots": [
+        "anim_head1",
+        "anim_head2",
+        "anim_head3"
+      ],
+      "animations": [
+        "anim_idle"
+      ]
+    },
+    "head1": {
+      "slots": [
+        "anim_face1"
+      ],
+      "animations": [
+        "anim_head_idle1",
+        "anim_shooting1"
+      ]
+    },
+    "face1": {
+      "animations": [
+        "anim_blink1"
+      ]
+    },
+    "head2": {
+      "slots": [
+        "anim_face2"
+      ],
+      "animations": [
+        "anim_head_idle2",
+        "anim_shooting2"
+      ]
+    },
+    "face2": {
+      "animations": [
+        "anim_blink2"
+      ]
+    },
+    "head3": {
+      "slots": [
+        "anim_face3"
+      ],
+      "animations": [
+        "anim_head_idle3",
+        "anim_shooting3"
+      ]
+    },
+    "face3": {
+      "animations": [
+        "anim_blink3"
+      ]
+    }
+  },
+  "tanglekelp": {
+    "body": {
+      "slots": [
+        "anim_face",
+        "anim_waterline"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_idle_aquarium",
+        "anim_grab"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "jalapeno": {
+    "body": {
+      "slots": [
+        "anim_idle"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_explode"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "caltrop": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_attack"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "spikerock": {
+    "body": {
+      "slots": [
+        "anim_face",
+        "anim_eye_leftbrow",
+        "anim_eye_rightbrow"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_attack"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "torchwood": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "tallnut": {
+    "body": {
+      "slots": [
+        "anim_idle"
+      ],
+      "animations": [
+        "anim_idle"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink_twice",
+        "anim_blink_thrice"
+      ]
+    }
+  },
+  "seashroom": {
+    "body": {
+      "slots": [
+        "anim_face",
+        "anim_waterline"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_idle_aquarium",
+        "anim_sleep",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "plantern": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "cactus": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_shooting",
+        "anim_rise",
+        "anim_idlehigh",
+        "anim_shootinghigh",
+        "anim_lower"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "blover": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_blow",
+        "anim_loop"
+      ]
+    }
+  },
+  "splitpea": {
+    "body": {
+      "slots": [
+        "anim_idle"
+      ],
+      "animations": [
+        "anim_idle"
+      ]
+    },
+    "head": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_head_idle",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    },
+    "backHead": {
+      "animations": [
+        "anim_splitpea_idle",
+        "anim_splitpea_shooting"
+      ]
+    },
+    "backFace": {
+      "animations": [
+        "anim_SplitPea_blink"
+      ]
+    }
+  },
+  "starfruit": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_shoot"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "pumpkin": {
+    "body": {}
+  },
+  "magnetshroom": {
+    "body": {
+      "slots": [
+        "anim_face",
+        "anim_eyes",
+        "anim_eyes2",
+        "anim_eyes22"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_sleep",
+        "anim_shooting",
+        "anim_nonactive_idle",
+        "anim_nonactive_idle2"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "cabbagepult": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "pot": {
+    "body": {}
+  },
+  "cornpult": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "coffeebean": {
+    "body": {}
+  },
+  "garlic": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "umbrellaleaf": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_block"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "marigold": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "melonpult": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "gatlingpea": {
+    "body": {
+      "slots": [
+        "anim_idle"
+      ],
+      "animations": [
+        "anim_idle"
+      ]
+    },
+    "head": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_head_idle",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "twinsunflower": {
+    "body": {
+      "slots": [
+        "anim_face",
+        "anim_face2"
+      ],
+      "animations": [
+        "anim_idle"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    },
+    "face2": {
+      "animations": [
+        "anim_blink2"
+      ]
+    }
+  },
+  "gloomshroom": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_sleep",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "cattail": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "wintermelon": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_shooting"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "goldmagnet": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_attract"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "cobcannon": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_unarmed_idle",
+        "anim_idle",
+        "anim_shooting",
+        "anim_charge"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "imitater": {
+    "body": {
+      "slots": [
+        "anim_face"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_explode"
+      ]
+    },
+    "face": {
+      "animations": [
+        "anim_blink"
+      ]
+    }
+  },
+  "selectorscreen": {
+    "cloud1": {
+      "animations": [
+        "anim_cloud1"
+      ],
+      "exports": {
+        "anim_cloud1": "pvz:selector_cloud1"
+      }
+    },
+    "cloud2": {
+      "animations": [
+        "anim_cloud2"
+      ],
+      "exports": {
+        "anim_cloud2": "pvz:selector_cloud2"
+      }
+    },
+    "cloud4": {
+      "animations": [
+        "anim_cloud4"
+      ],
+      "exports": {
+        "anim_cloud4": "pvz:selector_cloud4"
+      }
+    },
+    "cloud5": {
+      "animations": [
+        "anim_cloud5"
+      ],
+      "exports": {
+        "anim_cloud5": "pvz:selector_cloud5"
+      }
+    },
+    "cloud6": {
+      "animations": [
+        "anim_cloud6"
+      ],
+      "exports": {
+        "anim_cloud6": "pvz:selector_cloud6"
+      }
+    },
+    "cloud7": {
+      "animations": [
+        "anim_cloud7"
+      ],
+      "exports": {
+        "anim_cloud7": "pvz:selector_cloud7"
+      }
+    },
+    "flower1": {
+      "animations": [
+        "anim_flower1"
+      ],
+      "exports": {
+        "anim_flower1": "pvz:selector_flower1"
+      }
+    },
+    "flower2": {
+      "animations": [
+        "anim_flower2"
+      ],
+      "exports": {
+        "anim_flower2": "pvz:selector_flower2"
+      }
+    },
+    "flower3": {
+      "animations": [
+        "anim_flower3"
+      ],
+      "exports": {
+        "anim_flower3": "pvz:selector_flower3"
+      }
+    },
+    "grass": {
+      "animations": [
+        "anim_grass"
+      ],
+      "exports": {
+        "anim_grass": "pvz:selector_grass"
+      }
+    },
+    "sign": {
+      "animations": [
+        "anim_sign"
+      ],
+      "exports": {
+        "anim_sign": "pvz:selector_sign"
+      }
+    },
+    "idle": {
+      "animations": [
+        "anim_idle"
+      ]
+    },
+    "open": {
+      "animations": [
+        "anim_open"
+      ],
+      "exports": {
+        "anim_open": "pvz:selector_open"
+      }
+    }
+  },
+  "zombie": {
+    "body": {
+      "slots": [
+        "Zombie_flaghand"
+      ],
+      "hiddenTrackPrefixes": [
+        "anim_cone",
+        "anim_bucket",
+        "anim_screendoor",
+        "Zombie_flaghand",
+        "Zombie_duckytube",
+        "Zombie_mustache",
+        "Zombie_innerarm_screendoor",
+        "Zombie_outerarm_screendoor"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_idle2",
+        "anim_walk",
+        "anim_walk2",
+        "anim_eat",
+        "anim_swim",
+        "anim_death",
+        "anim_death2",
+        "anim_superlongdeath",
+        "anim_waterdeath"
+      ],
+      "exports": {
+        "anim_idle": "pvz:zombie",
+        "anim_idle2": "pvz:zombie_idle2",
+        "anim_walk": "pvz:zombie_walk",
+        "anim_walk2": "pvz:zombie_walk2",
+        "anim_eat": "pvz:zombie_eat",
+        "anim_death": "pvz:zombie_death",
+        "anim_death2": "pvz:zombie_death2"
+      }
+    },
+    "helmbody": {
+      "slots": [
+        "Zombie_flaghand"
+      ],
+      "hiddenTrackPrefixes": [
+        "anim_screendoor",
+        "Zombie_flaghand",
+        "Zombie_duckytube",
+        "Zombie_mustache",
+        "Zombie_innerarm_screendoor",
+        "Zombie_outerarm_screendoor"
+      ],
+      "animations": [
+        "anim_walk",
+        "anim_walk2",
+        "anim_eat",
+        "anim_death",
+        "anim_death2"
+      ],
+      "exports": {
+        "anim_walk": "pvz:helm_zombie_walk",
+        "anim_walk2": "pvz:helm_zombie_walk2",
+        "anim_eat": "pvz:helm_zombie_eat"
+      }
+    },
+    "flagbody": {
+      "slots": [
+        "Zombie_flaghand"
+      ],
+      "hiddenTrackPrefixes": [
+        "anim_cone",
+        "anim_bucket",
+        "anim_screendoor",
+        "Zombie_duckytube",
+        "Zombie_mustache",
+        "Zombie_outerarm_screendoor",
+        "Zombie_innerarm_screendoor_hand"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_idle2",
+        "anim_walk",
+        "anim_walk2",
+        "anim_eat",
+        "anim_swim",
+        "anim_death",
+        "anim_death2",
+        "anim_superlongdeath",
+        "anim_waterdeath"
+      ],
+      "exports": {
+        "anim_walk": "pvz:flag_walk",
+        "anim_walk2": "pvz:flag_walk2",
+        "anim_eat": "pvz:flag_eat"
+      }
+    }
+  },
+  "zombie_flagpole": {
+    "flag": {
+      "animations": [
+        "Zombie_flag"
+      ],
+      "exports": {
+        "Zombie_flag": "pvz:zombie_flag"
+      }
+    }
+  },
+  "zombie_paper": {
+    "body": {
+      "animations": [
+        "anim_death",
+        "anim_eat",
+        "anim_eat_nopaper",
+        "anim_walk",
+        "anim_walk_nopaper",
+        "anim_idle",
+        "anim_gasp"
+      ]
+    }
+  },
+  "zombie_hand": {
+    "default": {
+      "exports": {
+        "default": "pvz:selector_zombie_hand"
+      }
+    }
+  },
+  "zombie_polevaulter": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_run",
+        "anim_jump",
+        "anim_walk",
+        "anim_death",
+        "anim_eat"
+      ],
+      "exports": {
+        "anim_run": "pvz:pole_vaulter_run",
+        "anim_jump": "pvz:pole_vaulter_jump",
+        "anim_walk": "pvz:pole_vaulter_walk",
+        "anim_eat": "pvz:pole_vaulter_eat",
+        "anim_death": "pvz:pole_vaulter_death"
+      }
+    }
+  },
+  "zombie_football": {
+    "body": {
+      "animations": [
+        "anim_death",
+        "anim_eat",
+        "anim_walk",
+        "anim_idle"
+      ]
+    }
+  },
+  "zombie_disco": {
+    "body": {
+      "animations": [
+        "anim_moonwalk",
+        "anim_point",
+        "anim_walk",
+        "anim_armraise",
+        "anim_eat",
+        "anim_death"
+      ]
+    }
+  },
+  "zombie_backup": {
+    "body": {
+      "animations": [
+        "anim_walk",
+        "anim_armraise",
+        "anim_eat",
+        "anim_death"
+      ]
+    }
+  },
+  "zombie_snorkle": {
+    "body": {
+      "animations": [
+        "anim_aquarium_death",
+        "anim_aquarium_bite",
+        "anim_aquarium_swim",
+        "anim_death",
+        "anim_eat",
+        "anim_uptoeat",
+        "anim_swim",
+        "anim_jumpinpool",
+        "anim_walk",
+        "anim_idle"
+      ]
+    }
+  },
+  "zombie_zamboni": {
+    "body": {}
+  },
+  "zombie_bobsled": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_walk",
+        "anim_push",
+        "anim_jump",
+        "anim_death",
+        "anim_eat"
+      ]
+    }
+  },
+  "zombie_dolphinrider": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_walkdolphin",
+        "anim_walk",
+        "anim_jumpinpool",
+        "anim_ride",
+        "anim_dolphinjump",
+        "anim_eat",
+        "anim_swim",
+        "anim_death"
+      ]
+    }
+  },
+  "zombie_jackbox": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_walk",
+        "anim_eat",
+        "anim_pop",
+        "anim_death"
+      ]
+    }
+  },
+  "zombie_balloon": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_swing",
+        "anim_pop",
+        "anim_eat",
+        "anim_walk",
+        "anim_death"
+      ]
+    },
+    "propeller": {
+      "animations": [
+        "propeller"
+      ]
+    }
+  },
+  "zombie_digger": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_walk",
+        "anim_eat",
+        "anim_death",
+        "anim_dig",
+        "anim_drill",
+        "anim_landing",
+        "anim_dizzy"
+      ]
+    }
+  },
+  "zombie_pogo": {
+    "body": {
+      "animations": [
+        "anim_pogo",
+        "anim_death",
+        "anim_walk",
+        "anim_idle",
+        "anim_eat"
+      ]
+    }
+  },
+  "zombie_yeti": {
+    "body": {
+      "animations": [
+        "anim_death",
+        "anim_eat",
+        "anim_walk",
+        "anim_idle"
+      ]
+    }
+  },
+  "zombie_bungi": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_drop",
+        "anim_grab",
+        "anim_hold",
+        "anim_raise"
+      ]
+    }
+  },
+  "zombie_ladder": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_ladderwalk",
+        "anim_laddereat",
+        "anim_death",
+        "anim_walk",
+        "anim_eat",
+        "anim_placeladder"
+      ]
+    }
+  },
+  "zombie_catapult": {
+    "body": {}
+  },
+  "zombie_gargantuar": {
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_walk",
+        "anim_smash",
+        "anim_throw",
+        "anim_death"
+      ]
+    }
+  },
+  "zombie_imp": {
+    "body": {
+      "animations": [
+        "anim_land",
+        "anim_thrown",
+        "anim_walk",
+        "anim_eat",
+        "anim_death"
+      ]
+    }
+  },
+  "treeofwisdom": {
+    "tree": {
+      "exports": {
+        "anim_grow50": "pvz:tree_grow50"
+      }
+    }
+  },
+  "treeofwisdomclouds": {
+    "Cloud1": {
+      "animations": [
+        "Cloud1"
+      ],
+      "exports": {
+        "Cloud1": "pvz:tree_cloud1"
+      }
+    },
+    "Cloud2": {
+      "animations": [
+        "Cloud2"
+      ],
+      "exports": {
+        "Cloud2": "pvz:tree_cloud2"
+      }
+    },
+    "Cloud3": {
+      "animations": [
+        "Cloud3"
+      ],
+      "exports": {
+        "Cloud3": "pvz:tree_cloud3"
+      }
+    },
+    "Cloud4": {
+      "animations": [
+        "Cloud4"
+      ],
+      "exports": {
+        "Cloud4": "pvz:tree_cloud4"
+      }
+    },
+    "Cloud5": {
+      "animations": [
+        "Cloud5"
+      ],
+      "exports": {
+        "Cloud5": "pvz:tree_cloud5"
+      }
+    },
+    "Cloud6": {
+      "animations": [
+        "Cloud6"
+      ],
+      "exports": {
+        "Cloud6": "pvz:tree_cloud6"
+      }
+    }
+  },
+  "sodroll": {
+    "default": {
+      "exports": {
+        "default": "pvz:sodroll"
+      }
+    }
+  },
+  "loadbar_sprout": {
+    "default": {
+      "animations": [],
+      "exports": {
+        "default": "pvz:loadbar_sprout"
+      }
+    }
+  },
+  "loadbar_zombiehead": {
+    "default": {
+      "animations": [],
+      "exports": {
+        "default": "pvz:loadbar_zombiehead"
+      }
+    }
+  },
+  "finalwave": {
+    "default": {
+      "exports": {
+        "default": "pvz:finalwave"
+      }
+    }
+  },
+  "startreadysetplant": {
+    "default": {
+      "exports": {
+        "default": "pvz:readysetplant"
+      }
+    }
+  },
+  "lawnmower": {
+    "default": {
+      "animations": [
+        "anim_normal"
+      ],
+      "exports": {
+        "anim_normal": "pvz:lawnmower"
+      }
+    }
+  },
+  "lawnmoweredzombie": {
+    "default": {
+      "exports": {
+        "default": "pvz:lawnmowered_zombie"
+      }
+    }
+  },
+  "zombie_charred": {
+    "default": {
+      "animations": [
+        "anim_crumble"
+      ],
+      "exports": {
+        "anim_crumble": "pvz:zombie_charred"
+      }
+    }
+  },
+  "coin_silver": {
+    "default": {}
+  },
+  "coin_gold": {
+    "default": {}
+  },
+  "diamond": {
+    "default": {}
+  },
+  "crazydave": {
+    "body": {
+      "slots": [
+        "Dave_eye"
+      ],
+      "animations": [
+        "anim_enter",
+        "anim_leave",
+        "anim_blahblah",
+        "anim_idle",
+        "anim_smalltalk",
+        "anim_crazy",
+        "anim_mediumtalk",
+        "anim_grab",
+        "anim_enter_handing",
+        "anim_idle_handing",
+        "anim_talk_handing",
+        "anim_enterup"
+      ],
+      "exports": {
+        "anim_enter": "pvz:dave_enter",
+        "anim_leave": "pvz:dave_leave",
+        "anim_idle": "pvz:dave_idle",
+        "anim_smalltalk": "pvz:dave_smalltalk",
+        "anim_mediumtalk": "pvz:dave_mediumtalk",
+        "anim_blahblah": "pvz:dave_blahblah",
+        "anim_crazy": "pvz:dave_crazy",
+        "anim_idle_handing": "pvz:dave_idle_handing",
+        "anim_talk_handing": "pvz:dave_talk_handing"
+      }
+    },
+    "blink": {
+      "animations": [
+        "anim_blink"
+      ],
+      "exports": {
+        "anim_blink": "pvz:dave_blink"
+      }
+    }
+  },
+  "sun": {
+    "default": {
+      "exports": {
+        "default": "pvz:sun"
+      }
+    }
+  }
+}
