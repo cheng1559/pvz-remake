@@ -21,6 +21,7 @@ import { StoreScreen } from './StoreScreen'
 import { AchievementScreen } from './AchievementScreen'
 import { showAwardScreen } from './AwardScreen'
 import { loadDisplayParts, loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
+import { showScreenAnimations } from './ScreenAnimations'
 
 const { ccclass } = _decorator
 
@@ -81,6 +82,7 @@ export class MenuScreen extends Component {
     }
 
     private async createPage(id: MenuPageId, prewarm = false): Promise<PreparedMenuPage> {
+        let paperAward = false
         const page = MENU_PAGES[id]
         const optionsPage = id === 'options' || id === 'gameOptions'
         const overMain = !!this.mainMenu?.node.isValid && (id === 'options' || id === 'players' || id === 'quit')
@@ -124,6 +126,11 @@ export class MenuScreen extends Component {
                 sprite: { frame, sizeMode: Sprite.SizeMode.CUSTOM, trim: false },
             })
         })
+        const animations = ui.assets.presentation.screens?.[`pvz:${id}`]
+        if (animations?.length) {
+            try { await showScreenAnimations(root.node, animations) }
+            catch (error) { root.node.destroy(); throw error }
+        }
         if (optionsPage) {
             const inGame = id !== 'options'
             await showOptionsDialog(root.node, ui, {
@@ -215,8 +222,9 @@ export class MenuScreen extends Component {
             } else if (id === 'award') {
                 try {
                     const award = await showAwardScreen(controls, ui)
+                    paperAward = award.kind === 'note'
                     navigateButton('nextLevel', {
-                        skin: 'seed', text: ui.text('NEXT_LEVEL_BUTTON', 'NEXT LEVEL!'), x: 324, y: 500,
+                        skin: 'seed', text: ui.text('NEXT_LEVEL_BUTTON', 'NEXT LEVEL!'), x: 324, y: paperAward ? 520 : 500,
                         pressOffset: [0, 0], rightClickTriggers: false,
                     })
                     if (award.showMainMenu) navigateButton('main', {
@@ -241,10 +249,10 @@ export class MenuScreen extends Component {
                 })
             }
         }
-        if (id === 'help' || id === 'award') PageFade.create(root.node, id === 'help' ? Color.BLACK : Color.WHITE)
+        if (id === 'help' || id === 'award') PageFade.create(root.node, id === 'help' || paperAward ? Color.BLACK : Color.WHITE)
         return {
             id, root: root.node, retainPrevious: page.retainPrevious,
-            enter: id === 'help' ? () => {
+            enter: id === 'help' || paperAward ? () => {
                 MusicSystem.stop()
                 void SoundLoader.play(SoundEffect.Paper)
             } : undefined,

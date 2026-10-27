@@ -8,9 +8,9 @@ export interface DebugCliResult {
     catalog?: DebugCliCatalog
 }
 export interface DebugCliCommand { name: string, args: string[] }
-interface CommandSpec { name: string, parameters: string[], minimum: number, values?: Record<number, readonly string[]> }
+export interface CommandSpec { name: string, parameters: string[], minimum: number, values?: Record<number, readonly string[]> }
 const bool = ['true', 'false']
-const specs: CommandSpec[] = [
+const builtins: CommandSpec[] = [
     ...['win', 'lose', 'nextflag', 'nextwave', 'kill', 'restart', 'reload', 'home', 'quit', 'help', 'menu', 'shop', 'almanac', 'zengarden'].map(name => ({ name, parameters: [], minimum: 0 })),
     { name: 'plant', parameters: ['{plant_name}', '{row}', '{col}'], minimum: 3 },
     { name: 'seed', parameters: ['{slot}', '{seed_name}'], minimum: 2 },
@@ -30,6 +30,9 @@ const specs: CommandSpec[] = [
     { name: 'collect', parameters: ['{auto|click|move}'], minimum: 1, values: { 0: ['auto', 'click', 'move'] } },
 ]
 
+// Wrap the read instead of mutating the table so host.dispose() also removes Mod syntax.
+export const specs = { list: (): readonly CommandSpec[] => builtins }
+
 export const debugSyntax = (message: string): DebugCliResult => ({ ok: false, message, failure: 'syntax' })
 export const debugCondition = (message: string): DebugCliResult => ({ ok: false, message, failure: 'condition' })
 export const debugSuccess = (message: string): DebugCliResult => ({ ok: true, message })
@@ -40,7 +43,7 @@ export const debugInteger = (value: string | undefined): number | null =>
 export function parseDebugCliCommand(value: string): DebugCliCommand | DebugCliResult {
     const tokens = [...value.trim().matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map(match => match[1] ?? match[2] ?? match[3])
     const name = tokens.shift()?.replace(/^\//, '').toLowerCase() ?? ''
-    const spec = specs.find(spec => spec.name === name)
+    const spec = specs.list().find(spec => spec.name === name)
     if (!spec) return debugSyntax(`Unknown command: ${name}`)
     if (tokens.length < spec.minimum || tokens.length > spec.parameters.length || name === 'item' && tokens.length === 2) {
         return debugSyntax(`Usage: /${name} ${spec.parameters.join(' ')}`.trim())
@@ -61,12 +64,13 @@ export function getDebugCliCompletions(value: string, catalog?: DebugCliCatalog,
     const token = trailing ? '' : tokens[index][0]
     const start = trailing ? value.length : tokens[index].index!
     const name = tokens[0][0].replace(/^\//, '').toLowerCase()
+    const commands = specs.list()
     if (index === 0) {
-        if (!allowEmpty && specs.some(spec => spec.name === name)) return []
-        return specs.filter(spec => spec.name.startsWith(name)).map(spec => value.slice(0, start) + (token.startsWith('/') ? '/' : '') + spec.name)
+        if (!allowEmpty && commands.some(spec => spec.name === name)) return []
+        return commands.filter(spec => spec.name.startsWith(name)).map(spec => value.slice(0, start) + (token.startsWith('/') ? '/' : '') + spec.name)
     }
     if (!token && !allowEmpty) return []
-    const spec = specs.find(spec => spec.name === name)
+    const spec = commands.find(spec => spec.name === name)
     const dynamic = name === 'seed' && index === 2 ? catalog?.plants : index !== 1 ? undefined : name === 'plant' ? catalog?.plants : name === 'zombie' ? catalog?.zombies
         : name === 'item' ? catalog?.items : name === 'level' ? catalog?.levels : undefined
     const values = dynamic ?? spec?.values?.[index - 1] ?? []
@@ -78,7 +82,7 @@ export function getDebugCliSuffix(value: string, catalog?: DebugCliCatalog): str
     const completion = getDebugCliCompletions(value, catalog)[0]
     if (completion && completion.length > value.length) return completion.slice(value.length)
     const tokens = value.trim().split(/\s+/)
-    const spec = specs.find(spec => spec.name === tokens[0].replace(/^\//, '').toLowerCase())
+    const spec = specs.list().find(spec => spec.name === tokens[0].replace(/^\//, '').toLowerCase())
     if (spec?.values?.[tokens.length - 2]
         && !spec.values[tokens.length - 2].includes(tokens[tokens.length - 1].toLowerCase())) return ''
     const hints = spec?.parameters.slice(tokens.length - 1) ?? []

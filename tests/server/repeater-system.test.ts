@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
+import { spawnZombie } from '@/server/zombies/spawn'
+import type { World } from '@/ecs'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from './run-command'
@@ -33,11 +35,13 @@ test('Repeater fires twice 26 ticks apart and restores between shots', () => {
     runCommand(server, { type: 'completeIntro' })
     runCommand(server, { type: 'selectSeed', seedId: 'pvz:repeater' })
     runCommand(server, { type: 'placePlant', row: 2, column: 0 })
-    ;(server as unknown as { spawnZombie(typeId: string, row: number, x: number): number })
-        .spawnZombie('pvz:normal', 2, 400)
+    const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
+    spawnZombie(world, definitions, 'pvz:normal', 2, 400, 250)
     server.drainEvents()
 
-    while (server.save().gameplayTick < 100) server.tick()
+    const ready = Math.max(1, server.save().entities.find(entity => entity.plantAttack)!.plantAttack!.readyAtTick)
+    const firstShot = ready + definitions.plants['pvz:repeater'].shooter!.windupTicks - 1
+    while (server.save().gameplayTick < firstShot) server.tick()
     assert.deepEqual(server.drainEvents().map(event => event.type).filter(type =>
         type === 'plantFiring' || type === 'projectileFired'),
     ['plantFiring', 'projectileFired', 'plantFiring'])
@@ -45,12 +49,17 @@ test('Repeater fires twice 26 ticks apart and restores between shots', () => {
     restored.start({ ...packet, save: server.save() as unknown as JsonValue })
     restored.drainEvents()
 
-    while (restored.save().gameplayTick < 125) restored.tick()
+    while (restored.save().gameplayTick < firstShot + 25) restored.tick()
     assert.equal(restored.drainEvents().some(event => event.type === 'projectileFired'), false)
     restored.tick()
     assert.deepEqual(restored.drainEvents().map(event => event.type).filter(type =>
         type === 'plantFiring' || type === 'projectileFired'),
     ['projectileFired'])
-    while (restored.save().gameplayTick < 200) restored.tick()
-    assert.equal(restored.drainEvents().some(event => event.type === 'projectileFired'), false)
+    server.drainEvents()
+    while (server.save().gameplayTick < firstShot + 26) server.tick()
+    server.drainEvents()
+    for (let tick = 0; tick < 300; tick++) {
+        assert.deepEqual(restored.tick(), server.tick(), 'restoring preserves the random cadence and burst phase')
+        assert.deepEqual(restored.drainEvents(), server.drainEvents())
+    }
 })

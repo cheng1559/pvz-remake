@@ -46,6 +46,14 @@ export class UITooltip extends Component {
         this.options = options
     }
 
+    get title(): string { return this.options.title ?? '' }
+    set title(value: string) {
+        if (value === this.title) return
+        this.options.title = value
+        this.dirty = true
+        if (this.visible) this.refresh()
+    }
+
     get text(): string { return this.options.text }
     set text(value: string) {
         if (value === this.text) return

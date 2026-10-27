@@ -1,0 +1,79 @@
+{
+    "source": "Workspace PvZ widescreen lawnbgm(*).mp3",
+    "mapping": "bass.dll MO3 order table at VA 0x46dbdc, corroborated by debugs.txt",
+    "processing": "Byte-for-byte copy; full-track loop; no transcoding or added stems",
+    "tracks": [
+        {
+            "tune": "day_grasswalk",
+            "source": "lawnbgm(1).mp3",
+            "mo3Order": 0,
+            "file": "assets/audio/day_grasswalk.mp3",
+            "durationSec": 299.859563,
+            "sampleRate": 44100,
+            "sha256": "5286c3c85c2c1d05bbbbaec45927d7eb97e9ff3244de047014680a6072a0649d"
+        },
+        {
+            "tune": "choose_seeds",
+            "source": "lawnbgm(6).mp3",
+            "mo3Order": 122,
+            "file": "assets/audio/choose_seeds.mp3",
+            "durationSec": 89.443265,
+            "sampleRate": 44100,
+            "sha256": "fbfd71f63ec567b4c158424aa5a82170ef4e1caa04d1cf6ffea6114179db0a72"
+        },
+        {
+            "tune": "title_theme",
+            "source": "lawnbgm(8).mp3",
+            "mo3Order": 152,
+            "file": "assets/audio/title_theme.mp3",
+            "durationSec": 87.6,
+            "sampleRate": 48000,
+            "sha256": "e84c1bee8a42ee44cc6c04152628f679e240da852ac0a1c620ffe1d913151c20"
+        },
+        {
+            "tune": "zen_garden",
+            "source": "lawnbgm(14).mp3",
+            "mo3Order": 221,
+            "file": "assets/audio/zen_garden.mp3",
+            "durationSec": 54.12678,
+            "sampleRate": 44100,
+            "sha256": "c609196262a85de16eb572a39ec24eedf39dbbbe886e87fe9f58d9fc0d14b557"
+        },
+        {
+            "tune": "puzzle",
+            "source": "lawnbgm(11).mp3",
+            "mo3Order": 177,
+            "file": "assets/audio/puzzle.mp3",
+            "durationSec": 117.681633,
+            "sampleRate": 44100,
+            "sha256": "325aa1c9511337961b408c262947e279df53ac05cf11c794267bf596d186da77"
+        },
+        {
+            "tune": "minigame",
+            "source": "lawnbgm(10).mp3",
+            "mo3Order": 166,
+            "file": "assets/audio/minigame.mp3",
+            "durationSec": 206.706939,
+            "sampleRate": 44100,
+            "sha256": "ea38f4e12529992648af9e479d34cc0965617373ae6a38a192c1c4a3fe23a3b7"
+        },
+        {
+            "tune": "conveyer",
+            "source": "lawnbgm(13).mp3",
+            "mo3Order": 212,
+            "file": "assets/audio/conveyer.mp3",
+            "durationSec": 216.99483,
+            "sampleRate": 44100,
+            "sha256": "48448ea26f64574b1862b049a61c1fc0335c33c09a5fdff6ebe8ff71f73a86b1"
+        },
+        {
+            "tune": "final_boss",
+            "source": "lawnbgm(9).mp3",
+            "mo3Order": 158,
+            "file": "assets/audio/final_boss.mp3",
+            "durationSec": 207.333878,
+            "sampleRate": 44100,
+            "sha256": "2929c6bfc3b07d7160cbda6658adad1d5dcbb0e6571d89fc5bd9bdf3a3feb129"
+        }
+    ]
+}

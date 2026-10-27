@@ -49,7 +49,7 @@ def build_sprite_content(
     prefab_ids = _validated_local_ids(prefabs or [], 1, namespace, "prefab")
     gameplay_source = gameplay_source or source / "gameplay"
     presentation_source = presentation_source or gameplay_source.parent / "presentation"
-    inputs = sorted(path for path in source.iterdir() if path.is_file())
+    inputs = sorted(path for path in source.iterdir() if path.is_file() and path.name != 'content.json')
     sprites: dict[str, str] = {}
     outputs: list[Path] = []
 
@@ -181,10 +181,12 @@ def build_sprite_content(
         "strings": {"schemaVersion", "locale", "entries"},
     }
     for category, relative_path in gameplay_entries.items():
-        source_path = gameplay_source / f"{category}.json"
+        source_path = gameplay_source.parent / 'content.json' if category == 'definitions' else gameplay_source / f"{category}.json"
         if not source_path.is_file():
             raise ValueError(f"missing gameplay source: {source_path}")
         data = read_definitions(gameplay_source) if category == "definitions" else json.loads(source_path.read_text(encoding="utf-8"))
+        if category == "levels":
+            data = {"schemaVersion": 2, "levels": data}
         if not isinstance(data, dict) or data.get("schemaVersion") != 2:
             raise ValueError(f"invalid gameplay {category} schemaVersion")
         if set(data) != expected_gameplay_fields[category]:
@@ -208,7 +210,7 @@ def build_sprite_content(
         store_output.write_bytes(_json_bytes(json.loads(store_source.read_text(encoding="utf-8"))) + b"\n")
         outputs.append(store_output)
 
-    presentation_path = presentation_source / "definitions.json"
+    presentation_path = presentation_source.parent / "content.json"
     if not presentation_path.is_file():
         raise ValueError(f"missing presentation source: {presentation_path}")
     presentation = read_definitions(presentation_source)

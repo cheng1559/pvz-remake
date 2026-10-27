@@ -1,4 +1,4 @@
-import { readGameplaySource } from '../../tools/content_source'
+import { readBaseContent, readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
@@ -53,7 +53,7 @@ test('seed choice is authoritative, ordered, capacity checked and works at an in
 
 test('chooser levels share the global seed catalog, including registered seeds, without a per-level pool', () => {
     const { definitions: expanded, levels: sharedLevels } = buildGameplayContent(
-        source('definitions'), source('levels'), source('strings'), source('seed-catalog'), [{
+        readBaseContent().gameplay, [{
             ownerId: 'test:chooser', data: {
                 seeds: { 'test:pea': { ...definitions.seeds['pvz:peashooter'] } },
                 seedCatalog: ['test:pea'],

@@ -470,6 +470,49 @@ test('chooser banks reserve hidden slots and reuse their buttons for the confirm
     } finally { ui.cleanup() }
 })
 
+test('conveyor removal keeps surviving artwork, positions and input bindings while reusing the consumed view', () => {
+    const ui = setup()
+    const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
+    const bank = new LevelSeedBank({
+        level: { conveyor: { capacity: 4 } },
+        content: { presentation: presentationFixture, definitions: { seeds: {
+            pea: { plant: 'pvz:peashooter', sunCost: 100 }, sunflower: { plant: 'pvz:sunflower', sunCost: 50 },
+        } } }, seedPacketSlot: ui.root, presentation: {},
+        ui: { text: (key: string) => key, tooltip: () => ({ show() {}, hide() {} }) },
+    })
+    const world: any = { phase: 'gameplay', result: 'playing', paused: false, cursor: { mode: 'none' },
+        conveyorPackets: ['pea', 'sunflower', 'pea', 'sunflower'].map((seedId, index) => ({
+            id: index + 1, seedId, x: index * 80, selected: false, availability: {},
+        })),
+    }
+    const commands: number[] = []
+    const buttons = bank.bind((index: number) => commands.push(bank.packetAt(world, index).command.packetId))
+    try {
+        bank.sync(world, [], true, null, false)
+        const original = [...bank.packets], artwork = original.map(entry => entry.view.replacement)
+        for (const removedId of [2, 1, 4]) {
+            world.conveyorPackets = world.conveyorPackets.filter((packet: any) => packet.id !== removedId)
+            bank.sync(world, [], true, null, false)
+            for (const [index, packet] of world.conveyorPackets.entries()) {
+                const entry = bank.packets[index]
+                assert.equal(entry, original[packet.id - 1], 'packet identity retains the loaded view')
+                assert.equal(entry.view.replacement, artwork[packet.id - 1], 'surviving artwork is not rebuilt')
+                assert.equal(entry.view.node.x, presentationFixture.conveyor.packetX + packet.x)
+                assert.equal(buttons[index], entry.button, 'mobile hit testing follows the new packet order')
+                buttons[index].onPress()
+                assert.equal(commands.at(-1), packet.id, 'desktop presses select the surviving packet')
+            }
+        }
+        world.conveyorPackets.push({ id: 5, seedId: 'sunflower', x: 515, selected: false, availability: {} })
+        bank.sync(world, [], true, null, false)
+        assert.equal(bank.packets[0], original[2], 'new supplies leave the surviving packet intact')
+        assert.equal(bank.packets[0].view.replacement, artwork[2])
+        assert.ok(original.includes(bank.packets[1]), 'new supplies reuse a free view')
+        buttons[1].onPress()
+        assert.equal(commands.at(-1), 5)
+    } finally { ui.cleanup() }
+})
+
 test('ordinary and conveyor packets share mobile drag, tap, switch and cancel interaction', () => {
     for (const conveyor of [false, true]) {
         const ui = setup(), e = ui.events
@@ -542,6 +585,13 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
             assert.equal(bank.packets[1].view.options.selected, true, 'the server selection reaches the newly selected packet view')
             touch(e.TOUCH_START, x); touch(e.TOUCH_MOVE, 200, 250); touch(e.TOUCH_MOVE, x); touch(e.TOUCH_END, x)
             assert.equal(snapshot.cursor.mode, 'none', 'dragging back to the packet cancels')
+            if (conveyor) {
+                snapshot.conveyorPackets = snapshot.conveyorPackets.slice(1)
+                snapshot.conveyorPackets[0].x = 0
+                bank.sync(snapshot, [], true, null, false)
+                touch(e.TOUCH_START, 20); touch(e.TOUCH_END, 20)
+                assert.equal(commands.at(-1).packetId, 29, 'touch selects the surviving card after its slot changes')
+            }
         } finally { input.destroy(); ui.cleanup() }
     }
 })

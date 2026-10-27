@@ -135,6 +135,10 @@ export interface PresentationSound {
 export interface ProjectilePresentationDefinition {
     readonly viewConfig?: Readonly<JsonObject>
     readonly sprite: string
+    readonly shadow?: {
+        readonly sprite: string; readonly columns: number; readonly cell: number
+        readonly offset: { readonly x: number; readonly y: number }; readonly scale: number
+    }
     readonly trail?: { readonly effect: string; readonly x: number; readonly y: number }
     readonly impact?: {
         readonly kind: 'particle' | 'tod'
@@ -145,6 +149,17 @@ export interface ProjectilePresentationDefinition {
     }
     readonly fireSounds: readonly PresentationSound[]
     readonly impactSounds: readonly PresentationSound[]
+}
+
+export interface ScreenAnimationDefinition {
+    readonly name: string
+    readonly reanimId: string
+    readonly x: number
+    readonly y: number
+    readonly rate: number
+    readonly playback: 'loop' | 'last'
+    readonly randomPhase?: boolean
+    readonly visibleTracks?: readonly string[]
 }
 
 export interface SeedPacketPlacement { readonly scale: number; readonly offsetX: number; readonly offsetY: number }
@@ -159,6 +174,7 @@ export interface ZombieDrop {
 }
 
 export interface ZombiePresentationDefinition {
+    readonly nameKey?: string
     readonly view?: string
     readonly animationTarget: ClientAnimationTarget
     readonly animations: ClientAnimationDefinitions[ClientAnimationTarget]
@@ -201,6 +217,7 @@ export interface AwardPresentationDefinition {
     readonly x: number
     readonly y: number
     readonly pageY: number
+    readonly pageImages?: readonly { readonly sprite: string; readonly x: number; readonly y: number; readonly width?: number; readonly height?: number }[]
 }
 const VIEW_SLOTS: Readonly<Record<string, readonly string[]>> = {
     bowling: ['body', 'blinkTwitch', 'blinkTwice', 'blinkThrice'],
@@ -229,6 +246,7 @@ export interface PresentationDefinitions {
         readonly mouths: Readonly<Record<string, string>>
     }
     readonly boards?: Readonly<Record<string, BoardPresentation>>
+    readonly screens?: Readonly<Record<string, readonly ScreenAnimationDefinition[]>>
     readonly levels?: Readonly<Record<string, LevelPresentationDefinition>>
     readonly awards?: Readonly<Record<string, AwardPresentationDefinition>>
     readonly animation: {
@@ -258,6 +276,20 @@ export interface PresentationDefinitions {
 
 export function parsePresentationDefinitions(value: unknown): PresentationDefinitions {
     const data = object(value, 'presentation definitions')
+    for (const [id, layers] of Object.entries(object(data.screens ?? {}, 'presentation screens'))) {
+        if (!Array.isArray(layers)) throw new TypeError(id + ' screen animations must be an array')
+        const names = new Set<string>()
+        for (const entry of layers) {
+            const layer = object(entry, id)
+            text(layer.name, id + '.name'); text(layer.reanimId, id + '.reanimId')
+            if (names.has(layer.name as string)) throw new TypeError(id + ' has duplicate animation names')
+            names.add(layer.name as string)
+            point(layer, id); positive(layer.rate, id + '.rate')
+            if (layer.playback !== 'loop' && layer.playback !== 'last') throw new TypeError(id + '.playback is invalid')
+            if (layer.randomPhase !== undefined && (typeof layer.randomPhase !== 'boolean' || layer.playback !== 'loop')) throw new TypeError(id + '.randomPhase requires loop playback')
+            if (layer.visibleTracks !== undefined) texts(layer.visibleTracks, id + '.visibleTracks')
+        }
+    }
     const conveyor = object(data.conveyor, 'conveyor')
     for (const key of ['x', 'backdropX', 'clipX', 'packetX', 'packetY', 'beltY', 'introStart']) finite(conveyor[key], 'conveyor.' + key)
     for (const key of ['width', 'height', 'beltWidth', 'beltHeight', 'frames', 'frameTicks', 'introDuration']) positive(conveyor[key], 'conveyor.' + key)
@@ -309,6 +341,14 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         const award = object(entry, id)
         text(award.sprite, id + '.sprite'); positive(award.scale, id + '.scale')
         for (const field of ['x', 'y', 'pageY']) finite(award[field], id + '.' + field)
+        if (award.pageImages !== undefined) {
+            if (!Array.isArray(award.pageImages) || !award.pageImages.length) throw new TypeError(id + '.pageImages must not be empty')
+            for (const value of award.pageImages) {
+                const image = object(value, id + '.pageImages')
+                text(image.sprite, id + '.pageImages.sprite'); point(image, id + '.pageImages')
+                for (const field of ['width', 'height']) if (image[field] !== undefined) positive(image[field], id + '.pageImages.' + field)
+            }
+        }
     }
     const animation = object(data.animation, 'presentation definitions.animation')
     const rates = object(animation.rates, 'animation.rates')
@@ -356,6 +396,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     }
     for (const [id, entry] of Object.entries(zombies)) {
         const zombie = object(entry, id), arm = object(zombie.arm, id + '.arm')
+        if (zombie.nameKey !== undefined) text(zombie.nameKey, id + '.nameKey')
         if (zombie.view !== undefined) text(zombie.view, id + '.view')
         if (typeof zombie.animationTarget !== 'string' || !Number.isFinite(zombie.shadowX)) throw new TypeError(id + ' has invalid presentation')
         for (const track of ['lower', 'upper', 'hand']) if (typeof arm[track] !== 'string') throw new TypeError(id + '.arm.' + track + ' is invalid')
@@ -401,6 +442,13 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         const projectile = object(value, id)
         if (projectile.viewConfig !== undefined) object(projectile.viewConfig, id + '.viewConfig')
         text(projectile.sprite, id + '.sprite')
+        if (projectile.shadow !== undefined) {
+            const shadow = object(projectile.shadow, id + '.shadow')
+            text(shadow.sprite, id + '.shadow.sprite'); point(shadow.offset, id + '.shadow.offset')
+            positive(shadow.scale, id + '.shadow.scale')
+            if (!Number.isInteger(shadow.columns) || (shadow.columns as number) < 1 || !Number.isInteger(shadow.cell)
+                || (shadow.cell as number) < 0 || (shadow.cell as number) >= (shadow.columns as number)) throw new TypeError(id + '.shadow has invalid atlas cells')
+        }
         if (projectile.impact !== undefined) {
             const impact = object(projectile.impact, id + '.impact')
             if (impact.kind !== 'particle' && impact.kind !== 'tod') throw new TypeError(id + '.impact.kind is invalid')

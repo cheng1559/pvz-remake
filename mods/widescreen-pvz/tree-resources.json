@@ -1,0 +1,144 @@
+{
+    "sprites": {
+        "pvz:leafbunch1": {
+            "file": "assets/tree/leafbunch1.png",
+            "width": 138,
+            "height": 130,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_grow50"
+            ],
+            "scale": 2
+        },
+        "pvz:leafbunch2": {
+            "file": "assets/tree/leafbunch2.png",
+            "width": 126,
+            "height": 100,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_grow50"
+            ],
+            "scale": 2
+        },
+        "pvz:leafbunch3": {
+            "file": "assets/tree/leafbunch3.png",
+            "width": 199,
+            "height": 70,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_grow50"
+            ],
+            "scale": 2
+        },
+        "pvz:selectorscreen_cloud1": {
+            "file": "assets/tree/selectorscreen_cloud1.png",
+            "width": 220,
+            "height": 206,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_cloud6"
+            ],
+            "scale": 2
+        },
+        "pvz:selectorscreen_cloud2": {
+            "file": "assets/tree/selectorscreen_cloud2.png",
+            "width": 152,
+            "height": 121,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_cloud4"
+            ],
+            "scale": 2
+        },
+        "pvz:selectorscreen_cloud4": {
+            "file": "assets/tree/selectorscreen_cloud4.png",
+            "width": 239,
+            "height": 91,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_cloud3"
+            ],
+            "scale": 2
+        },
+        "pvz:selectorscreen_cloud5": {
+            "file": "assets/tree/selectorscreen_cloud5.png",
+            "width": 434,
+            "height": 144,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_cloud1"
+            ],
+            "scale": 2
+        },
+        "pvz:selectorscreen_cloud6": {
+            "file": "assets/tree/selectorscreen_cloud6.png",
+            "width": 76,
+            "height": 44,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_cloud2"
+            ],
+            "scale": 2
+        },
+        "pvz:selectorscreen_cloud7": {
+            "file": "assets/tree/selectorscreen_cloud7.png",
+            "width": 211,
+            "height": 73,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_cloud5"
+            ],
+            "scale": 2
+        },
+        "pvz:tree8": {
+            "file": "assets/tree/tree8.png",
+            "width": 806,
+            "height": 561,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_grow50"
+            ],
+            "scale": 2
+        },
+        "pvz:tree9": {
+            "file": "assets/tree/tree9.png",
+            "width": 525,
+            "height": 559,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_grow50"
+            ],
+            "scale": 2
+        },
+        "pvz:tree_grass": {
+            "file": "assets/tree/tree_grass.png",
+            "width": 849,
+            "height": 207,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_grow50"
+            ],
+            "scale": 2
+        },
+        "pvz:tree_overlay8": {
+            "file": "assets/tree/tree_overlay8.png",
+            "width": 482,
+            "height": 147,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_grow50"
+            ],
+            "scale": 2
+        },
+        "pvz:tree_overlay9": {
+            "file": "assets/tree/tree_overlay9.png",
+            "width": 515,
+            "height": 180,
+            "alphaMode": "straight",
+            "animations": [
+                "pvz:tree_grow50"
+            ],
+            "scale": 2
+        }
+    }
+}

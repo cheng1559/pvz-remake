@@ -55,7 +55,9 @@ function game(config = definitions) {
             typeId, seedId: typeId, column, health: definition.maxHealth, maxHealth: definition.maxHealth, eatenFlashCounter: 0, recentlyEatenCounter: 0,
             ...(initialPlantAbility(definition) ? { ability: initialPlantAbility(definition) } : {}),
         })
-        if (definition.shooter) world.add(entity, PlantAttackComponent, { readyAtTick: definition.shooter.initialDelayTicks })
+        if (definition.shooter) world.add(entity, PlantAttackComponent, { readyAtTick: world.resources.get(RandomResource).integer(
+            definition.shooter.initialDelayTicks.min, definition.shooter.initialDelayTicks.max,
+        ) })
         return entity
     }
     const zombie = (typeId: string, row: number, x: number) =>
@@ -76,6 +78,29 @@ test('projectile cleanup follows the current board bounds instead of a fixed scr
     level.board = { ...level.board, bounds: { left: 0, right: 850 } }
     run()
     assert.equal(world.hasEntity(id), false)
+})
+
+test('shooters stagger their initial clocks and keep random cadence while no target is present', () => {
+    const { world, plant, run, events } = game()
+    const ids = [plant('pvz:peashooter', 1, 0), plant('pvz:peashooter', 2, 0), plant('pvz:snowpea', 3, 0)]
+    const initial = ids.map(id => world.get(id, PlantAttackComponent)!.readyAtTick)
+    assert.ok(initial.every(tick => tick >= 0 && tick <= 150))
+    assert.ok(new Set(initial).size > 1)
+    const delays = new Set<number>()
+    for (let tick = 1; tick <= 1000; tick++) {
+        const previous = ids.map(id => world.get(id, PlantAttackComponent)!.readyAtTick)
+        run()
+        ids.forEach((id, index) => {
+            const attack = world.get(id, PlantAttackComponent)!
+            if (attack.readyAtTick === previous[index]) return
+            const delay = attack.readyAtTick - tick
+            assert.ok(delay >= 136 && delay <= 150)
+            delays.add(delay)
+            assert.equal(attack.fireAtTick, undefined)
+        })
+    }
+    assert.ok(delays.size > 1)
+    assert.equal(events('plantFiring').length, 0)
 })
 
 test('a cherry bomb burns every zombie in its 3x3 area after the fuse, ignoring helms, while zombies cannot hurt it', () => {

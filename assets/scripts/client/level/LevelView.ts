@@ -83,7 +83,7 @@ export class LevelView {
         const helmSpriteIds = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => zombie.helm?.damagedSprites ?? []))]
         const dropImages = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => Object.values(zombie.drops).flatMap(drop => drop?.image ? [drop.image] : [])))]
         const [
-            background, seedbank, projectileEntries,
+            background, seedbank, projectileEntries, projectileShadowEntries,
             mowerFrame, mowerShadow, damagedZombieArm, flagMeter, flagMeterParts,
             flagMeterLevelProgress, sunFont, pico129, houseOfTerror16, houseOfTerror28, gameOverFrames, ui,
             [poleVaulterArm, wallnutCracked1, wallnutCracked2], helmEntries,
@@ -91,6 +91,11 @@ export class LevelView {
             sprites.load(presentation.board.background),
             sprites.load('pvz:seedbank'),
             Promise.all(Object.entries(content.presentation.projectiles).map(async ([id, definition]) => [id, await sprites.load(definition.sprite)] as const)),
+            Promise.all(Object.entries(content.presentation.projectiles).flatMap(([id, definition]) => definition.shadow ? [(async () => {
+                const shadow = definition.shadow!
+                const atlas = await sprites.load(shadow.sprite)
+                return [id, getAtlasFrame(atlas, shadow.cell, atlas.originalSize.width / shadow.columns, atlas.originalSize.height, shadow.columns)] as const
+            })()] : [])),
             sprites.load('pvz:lawnmower_cached'),
             sprites.load('pvz:plantshadow'),
             sprites.load('pvz:zombie_outerarm_upper2'),
@@ -230,7 +235,7 @@ export class LevelView {
             node: slots.overlayLayer, size: { width: WIDTH, height: HEIGHT },
         }).node
         const fadeParts = uiNode({
-            node: slots.fade, size: { width: WIDTH, height: HEIGHT },
+            node: slots.fade,
             graphics: true,
         })
         const levelCompleteFade = fadeParts.node
@@ -242,13 +247,15 @@ export class LevelView {
         let view!: LevelView
         let entityRenderer!: LevelEntityRenderer
         const intro = await presentation.createIntro({
-            content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow,
+            content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow, ui,
+            previewTooltipSurface: seedChooser?.previewTooltipSurface,
             entityNodes: () => entityRenderer.nodes(),
             previewZombies: initial.wave.previewZombies ?? {},
         })
         entityRenderer = new LevelEntityRenderer(
             root.layer, content, animations, {
                 projectileFrames: Object.fromEntries(projectileEntries),
+                projectileShadowFrames: Object.fromEntries(projectileShadowEntries),
                 mowerFrame, mowerShadow,
                 zombieSprites: {
                     damagedArm: damagedZombieArm, poleVaulterDamagedArm: poleVaulterArm,

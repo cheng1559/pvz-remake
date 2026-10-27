@@ -1,0 +1,13 @@
+{
+  "pvz:tree": [
+    {"name": "Cloud1", "reanimId": "pvz:tree_cloud1", "x": 0, "y": 0, "rate": 0.016666666666666666, "playback": "loop", "randomPhase": true},
+    {"name": "Cloud2", "reanimId": "pvz:tree_cloud2", "x": 0, "y": 0, "rate": 0.016666666666666666, "playback": "loop", "randomPhase": true},
+    {"name": "Cloud3", "reanimId": "pvz:tree_cloud3", "x": 0, "y": 0, "rate": 0.016666666666666666, "playback": "loop", "randomPhase": true},
+    {"name": "Cloud4", "reanimId": "pvz:tree_cloud4", "x": 0, "y": 0, "rate": 0.016666666666666666, "playback": "loop", "randomPhase": true},
+    {"name": "Cloud5", "reanimId": "pvz:tree_cloud5", "x": 0, "y": 0, "rate": 0.016666666666666666, "playback": "loop", "randomPhase": true},
+    {"name": "Cloud6", "reanimId": "pvz:tree_cloud6", "x": 0, "y": 0, "rate": 0.016666666666666666, "playback": "loop", "randomPhase": true},
+    {"name": "Tree", "reanimId": "pvz:tree_grow50", "x": 0, "y": 0, "rate": 1.5, "playback": "last", "visibleTracks": ["tree"]},
+    {"name": "TreeGrass", "reanimId": "pvz:tree_grow50", "x": 0, "y": 0, "rate": 1.5, "playback": "last", "visibleTracks": ["grass"]},
+    {"name": "TreeOverlay", "reanimId": "pvz:tree_grow50", "x": 0, "y": 0, "rate": 1.5, "playback": "last", "visibleTracks": ["overlay", "leaf", "bunch"]}
+  ]
+}

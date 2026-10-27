@@ -1,106 +1,66 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-
 import { ContentRegistry } from '@/client/content/ContentRegistry'
-import { parseContentManifest } from '@/shared/content/index'
+import { parseModManifest } from '@/shared/mod'
+import { parseModContent, type ContentArchive } from '@/shared/mod/content'
 
-function manifest(id = 'pvz:base') {
-    return parseContentManifest({
-        schemaVersion: 2,
-        id,
-        version: '2.0.0',
-        contentHash: `${id}@2`,
-        gameplay: {
-            definitions: 'gameplay/definitions.json',
-            seedCatalog: 'gameplay/seed-catalog.json',
-            levels: 'gameplay/levels.json',
-            strings: 'gameplay/strings.json',
-        },
-        presentation: { definitions: 'presentation/definitions.json' },
-        client: {
-            bundle: id.replace(':', '-'),
-            sprites: { [`${id.slice(0, id.indexOf(':'))}:sunflower`]: 'sprites/sunflower/spriteFrame' },
-            reanim: {},
-            particles: {},
-            fonts: {},
-            sounds: {},
-            music: {},
-            prefabs: {},
-        },
-    })
+function archive(id = 'pvz:base'): ContentArchive {
+    const image = new Uint8Array(24), view = new DataView(image.buffer)
+    view.setUint32(0, 0x89504e47); view.setUint32(12, 0x49484452)
+    view.setUint32(16, 1); view.setUint32(20, 1)
+    const files = { 'sprite.png': image, 'gameplay.json': new TextEncoder().encode('{}'),
+        'presentation.json': new TextEncoder().encode('{}') }
+    return {
+        manifest: parseModManifest({ schemaVersion: 1, id, version: '2.0.0', apiVersion: 1,
+            contentHash: id + '@2', dependencies: [] }),
+        content: parseModContent({ gameplay: 'gameplay.json', presentation: 'presentation.json',
+            resources: { sprites: { [id.split(':')[0] + ':sunflower']: { file: 'sprite.png', width: 1, height: 1 } } } }, files),
+        files,
+    }
 }
 
-test('ContentManifest validates its complete shape and trust boundaries', () => {
-    const base = manifest()
-    assert.equal(base.client.sprites['pvz:sunflower'], 'sprites/sunflower/spriteFrame')
-    assert.equal(base.presentation.definitions, 'presentation/definitions.json')
-
-    const invalid = (change: (value: any) => void) => {
-        const value: any = structuredClone(base)
-        change(value)
-        return () => parseContentManifest(value)
-    }
-    assert.throws(invalid(value => { value.schemaVersion = 1 }), /schemaVersion must be 2/)
-    assert.throws(invalid(value => { value.extra = true }), /not supported/)
-    assert.throws(invalid(value => { value.gameplay.levels = '%2e%2e/levels.json' }), /relative path/)
-    assert.throws(invalid(value => { value.presentation.definitions = '../definitions.json' }), /relative path/)
-    assert.throws(invalid(value => { delete value.presentation }), /required/)
-    assert.throws(invalid(value => { value.client.sounds['other:hit'] = 'audio/hit' }), /outside pvz:/)
-    assert.throws(invalid(value => { delete value.client.music }), /music is required/)
-})
-
-test('ContentManifest accepts explicit save compatibility and rejects malformed declarations', () => {
-    const base = manifest()
-    assert.equal(base.saveCompatibleHashes, undefined)
-    assert.deepEqual(parseContentManifest({ ...base, saveCompatibleHashes: ['before-menu'] }).saveCompatibleHashes, ['before-menu'])
-    for (const saveCompatibleHashes of ['before-menu', [''], [42], ['same', 'same']]) {
-        assert.throws(() => parseContentManifest({ ...base, saveCompatibleHashes }), /saveCompatibleHashes/)
+test('base and Mod archives use the same manifest, content parser and file validation', () => {
+    for (const id of ['pvz:base', 'example:plants']) {
+        const base = archive(id)
+        assert.equal(base.manifest.schemaVersion, 1)
+        assert.equal(base.content.presentation, 'presentation.json')
+        assert.throws(() => parseModContent({ ...base.content, extra: true }, base.files), /Unknown content field/)
+        assert.throws(() => parseModContent({ ...base.content, gameplay: '../gameplay.json' }, base.files), /Invalid content file/)
+        assert.throws(() => parseModContent({ ...base.content, presentation: 'missing.json' }, base.files), /Missing ZIP file/)
+        assert.throws(() => parseModContent({ ...base.content, resources: { unknown: {} } }, base.files), /Unknown resource category/)
     }
 })
 
-test('ContentRegistry resolves by category, rejects duplicates, and freezes', () => {
-    const base = manifest()
+test('ContentRegistry resolves common archive resources by category, rejects duplicates, and freezes', () => {
+    const base = archive()
     const registry = new ContentRegistry()
     registry.register(base)
-
     assert.deepEqual(registry.resolve('sprites', 'pvz:sunflower'), {
-        category: 'sprites',
-        id: 'pvz:sunflower',
-        contentId: 'pvz:base',
-        contentVersion: '2.0.0',
-        contentHash: 'pvz:base@2',
-        bundle: 'pvz-base',
-        path: 'sprites/sunflower/spriteFrame',
-        schemaVersion: 2,
+        category: 'sprites', id: 'pvz:sunflower', contentId: 'pvz:base', contentVersion: '2.0.0',
+        contentHash: 'pvz:base@2', bundle: 'pvzmod:///pvz%3Abase/', path: 'sprite.png', schemaVersion: 2,
     })
     assert.equal(registry.resolve('sounds', 'pvz:sunflower'), undefined)
+    const warmed = new ContentRegistry()
+    warmed.register({ ...base, files: {} })
+    assert.equal(warmed.resolve('sprites', 'pvz:sunflower')?.path, 'sprite.png', 'decoded Native image bytes are not needed for metadata')
     assert.throws(() => registry.register(base), /duplicate content manifest/)
-
-    const conflicting = manifest('pvz:addon')
-    assert.throws(() => registry.register(conflicting), /duplicate sprites content/)
+    assert.throws(() => registry.register(archive('pvz:addon')), /duplicate sprites content/)
     assert.equal([...registry.entries('sprites')].length, 1)
 
-    const sameIdInAnotherCategory = structuredClone(base)
-    sameIdInAnotherCategory.id = 'pvz:addon'
-    sameIdInAnotherCategory.client.sprites = {}
-    sameIdInAnotherCategory.client.sounds = { 'pvz:sunflower': 'audio/sunflower' }
+    const other = archive('pvz:addon')
+    other.content.resources.sprites = {}
+    other.content.resources.audio['pvz:sunflower'] = 'hit.mp3'
+    const files = { ...other.files, 'hit.mp3': new Uint8Array([1]) }
     const second = new ContentRegistry()
     second.register(base)
-    second.register(sameIdInAnotherCategory)
-    assert.equal(second.resolve('sounds', 'pvz:sunflower')?.path, 'audio/sunflower')
+    second.register({ ...other, files })
+    assert.equal(second.resolve('sounds', 'pvz:sunflower')?.path, 'hit.mp3')
     second.registerEntry({
-        category: 'reanim',
-        id: 'example:solar_peashooter',
-        contentId: 'example:solar-mod',
-        contentVersion: '1.0.0',
-        contentHash: 'example-solar-mod@1',
-        bundle: 'example-solar-mod',
-        path: 'reanim/solar_peashooter',
-        schemaVersion: 2,
+        category: 'reanim', id: 'example:solar_peashooter', contentId: 'example:solar-mod',
+        contentVersion: '1.0.0', contentHash: 'example-solar-mod@1',
+        bundle: 'pvzmod:///example%3Asolar-mod/', path: 'solar.json', schemaVersion: 2,
     })
-    assert.equal(second.resolve('reanim', 'example:solar_peashooter')?.bundle, 'example-solar-mod')
     assert.throws(() => second.registerEntry(second.resolve('reanim', 'example:solar_peashooter')!), /duplicate reanim/)
-
     second.freeze()
     assert.throws(() => second.register(base), /frozen/)
     assert.throws(() => second.registerEntry(second.resolve('reanim', 'example:solar_peashooter')!), /frozen/)

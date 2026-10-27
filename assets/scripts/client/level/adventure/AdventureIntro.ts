@@ -17,6 +17,11 @@ import type { LevelIntro } from '../LevelIntro'
 import type { LevelIntroContext } from '../LevelPresentation'
 import type { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { randomAnimationRate, type ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
+import { UIButton } from '@/client/ui/UIButton'
+import type { UITooltip } from '@/client/ui/UITooltip'
+import type { UI } from '@/client/ui/UI'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import type { GameplayDefinitions } from '@/shared/content/gameplay'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -51,6 +56,8 @@ function applyPreviewParts(player: ReanimPlayer, typeId: string, definitions: Pr
 export class AdventureIntro implements LevelIntro {
     private ticks = 0
     private destroyed = false
+    private readonly previewTooltips = new Map<Node, { hit: Node; tooltip: UITooltip }>()
+    private previewTooltipContext?: { ui: UI; gameplay: GameplayDefinitions }
 
     static async create(context: LevelIntroContext, layout: AdventureIntroLayout): Promise<AdventureIntro> {
         const { content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow, entityNodes, previewZombies } = context
@@ -137,9 +144,38 @@ export class AdventureIntro implements LevelIntro {
         }))
         introZombies.sort((left, right) => left.position.z - right.position.z)
             .forEach((node, index) => node.setSiblingIndex(index))
-        return new AdventureIntro(board, sodClip, sodRolls, layout, ready, introZombies, previewTypes, content.presentation, bank, houseName,
+        const intro = new AdventureIntro(board, sodClip, sodRolls, layout, ready, introZombies, previewTypes, content.presentation, bank, houseName,
             content.definitions.boards[level.board],
             entityNodes, audio, content.registry, content.loader, content.animations)
+        if (context.previewTooltipSurface) intro.installPreviewTooltips(context.ui, context.previewTooltipSurface, content.definitions)
+        return intro
+    }
+
+    private installPreviewTooltips(ui: UI, surface: Node, gameplay: GameplayDefinitions): void {
+        this.previewTooltipContext = { ui, gameplay }
+        for (const node of this.introZombies) {
+            const hit = uiNode({ name: 'ZombieHitArea', parent: node, active: false, anchor: { x: 0, y: 1 } }).node
+            const tooltip = ui.tooltip(hit, { text: '', gap: -10, offset: [5, 0], surface })
+            const button = hit.addComponent(UIButton)
+            button.changeCursor = false
+            button.hapticsEnabled = false
+            button.rightClickTriggers = false
+            button.onPress = () => {}
+            button.canInteract = () => surface.activeInHierarchy && this.ticks === 425 && !GameDebugSettings.isMobileMode()
+            button.onHoverChange = hovering => hovering ? tooltip.show() : tooltip.hide()
+            this.previewTooltips.set(node, { hit, tooltip })
+            this.syncPreviewTooltip(node)
+        }
+    }
+
+    private syncPreviewTooltip(node: Node): void {
+        const preview = this.previewTooltips.get(node)
+        if (!preview) return
+        const { ui, gameplay } = this.previewTooltipContext!
+        const typeId = this.previewTypes.get(node)!
+        const body = gameplay.zombies[typeId].body
+        uiNode({ node: preview.hit, position: { x: body.x, y: -body.y }, size: body })
+        preview.tooltip.title = ui.text(this.definitions.zombies[typeId].nameKey ?? typeId)
     }
 
     constructor(
@@ -234,6 +270,7 @@ export class AdventureIntro implements LevelIntro {
                 }
                 player.restore(preview.reanim)
                 applyPreviewParts(player, preview.typeId, this.definitions, preview.hasTongue)
+                this.syncPreviewTooltip(node)
             }
         }
         this.sync()
@@ -256,6 +293,10 @@ export class AdventureIntro implements LevelIntro {
 
     sync(): void {
         const tick = this.ticks
+        for (const { hit, tooltip } of this.previewTooltips.values()) if (hit.isValid) {
+            hit.active = tick === 425
+            if (!hit.active) tooltip.hide()
+        }
         const boardX = this.layout.stationary ? 0 : tick <= PAN_RIGHT_START
             ? 220
             : tick <= PAN_RIGHT_END

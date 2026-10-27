@@ -26,6 +26,7 @@ Tooltip 使用原版短提示 `requires 2 kernel-pults`，优先显示冷却、�
 - 加农炮费用 500、种子包冷却 5000 tick，占用横向两格。升级失败不消耗阳光、不移除投手；成功后沿用本体扣费与冷却。两格占用在读档后仍生效。
 - 对照 Portable 的 `Plant::UpdateCobCannon/CobCannonFire` 和 `Projectile::UpdateLobMotion`：首次装填 500 tick，再播 125 tick 装填动画；射击后第 205 tick 出弹，射击动画 350 tick，随后等待 3000 tick 并再次装填。瞄准的前 30 tick 保留原版 100px 防误触距离。爆炸半径 115、行距最多 1、燃烧伤害 1800，复用本体爆炸判定。
 - `src/server/cobCannon.ts` 处理升级、瞄准、装填和炮弹；瞄准与飞行分别保存在 `corn:cob_aim`、`corn:cob_flight`，随服务端存档。`src/client/cobCannon.ts` 处理四种主体动画、眨眼、就绪闪光、瞄准图、紫色种子包、双格预览、爆炸残痕和震屏。瞄准图使用原版完整图片，位置包含 `CursorObject::Update/Draw` 的两段偏移。
+- `src/client/cobShadow.ts` 按原版 `Projectile::DrawShadow` 绘制炮弹地面影子：复用 `pea_shadows` 白天帧，横向拉伸三倍，随高度缩放，在转向时随炮弹切换目标行，并在命中时移除。影子独立于炮弹旋转，位于植物与其他实体下方。
 - 就绪玉米使用动画播放器的轨道颜色，按 75 tick 周期更新，避免重新绘制姿势时失去颜色。爆米花与残痕均保持到生命周期的 80% 再淡出，分别持续 50 和 100 tick。
 
 - 费用 100、冷却 750 tick，玉米粒伤害 20，黄油伤害 40，黄油概率 25%，眩晕 400 tick。参数放在 `assets/gameplay/`，1 tick = 0.01 秒。

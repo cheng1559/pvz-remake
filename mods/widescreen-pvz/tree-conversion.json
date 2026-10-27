@@ -1,0 +1,201 @@
+{
+    "sourceRoot": "/Users/cheng/Downloads/pvz",
+    "clips": [
+        "pvz:tree_grow50",
+        "pvz:tree_cloud1",
+        "pvz:tree_cloud2",
+        "pvz:tree_cloud3",
+        "pvz:tree_cloud4",
+        "pvz:tree_cloud5",
+        "pvz:tree_cloud6"
+    ],
+    "images": [
+        {
+            "id": "pvz:leafbunch1",
+            "file": "assets/tree/leafbunch1.png",
+            "width": 138,
+            "height": 130,
+            "sources": {
+                "reanim/leafbunch1.png": "a9c203821c61d2f3c3c4db0575b667d7a183511d15f6185a6356bfef9c740b4d"
+            },
+            "sha256": "a9c203821c61d2f3c3c4db0575b667d7a183511d15f6185a6356bfef9c740b4d",
+            "animations": [
+                "pvz:tree_grow50"
+            ]
+        },
+        {
+            "id": "pvz:leafbunch2",
+            "file": "assets/tree/leafbunch2.png",
+            "width": 126,
+            "height": 100,
+            "sources": {
+                "reanim/leafbunch2.png": "d8e711841ac5787f18b5e406e6ba92cb09fbbc260a3d637ff2d6fd07e261efcc"
+            },
+            "sha256": "d8e711841ac5787f18b5e406e6ba92cb09fbbc260a3d637ff2d6fd07e261efcc",
+            "animations": [
+                "pvz:tree_grow50"
+            ]
+        },
+        {
+            "id": "pvz:leafbunch3",
+            "file": "assets/tree/leafbunch3.png",
+            "width": 199,
+            "height": 70,
+            "sources": {
+                "reanim/leafbunch3.png": "843534ee5425e1bc2db40df53143a422e3af8f27010f86b192606777fc0174b6"
+            },
+            "sha256": "843534ee5425e1bc2db40df53143a422e3af8f27010f86b192606777fc0174b6",
+            "animations": [
+                "pvz:tree_grow50"
+            ]
+        },
+        {
+            "id": "pvz:selectorscreen_cloud1",
+            "file": "assets/tree/selectorscreen_cloud1.png",
+            "width": 220,
+            "height": 206,
+            "sources": {
+                "reanim/SelectorScreen_Cloud1.png": "8d04a4a5dc1b1c8a736abdada1c32579a882b59036009b34a0def5299ee2eee9"
+            },
+            "sha256": "8d04a4a5dc1b1c8a736abdada1c32579a882b59036009b34a0def5299ee2eee9",
+            "animations": [
+                "pvz:tree_cloud6"
+            ]
+        },
+        {
+            "id": "pvz:selectorscreen_cloud2",
+            "file": "assets/tree/selectorscreen_cloud2.png",
+            "width": 152,
+            "height": 121,
+            "sources": {
+                "reanim/SelectorScreen_Cloud2.png": "8684bcd764e8ea27e7479b037338f04c86af9379d97f23f8ee828238b501abdd"
+            },
+            "sha256": "8684bcd764e8ea27e7479b037338f04c86af9379d97f23f8ee828238b501abdd",
+            "animations": [
+                "pvz:tree_cloud4"
+            ]
+        },
+        {
+            "id": "pvz:selectorscreen_cloud4",
+            "file": "assets/tree/selectorscreen_cloud4.png",
+            "width": 239,
+            "height": 91,
+            "sources": {
+                "reanim/SelectorScreen_Cloud4.png": "c6949d441a0f1b16c3f47dc1f8f8526d1ca1496046b271204ea22f13ff9b300d"
+            },
+            "sha256": "c6949d441a0f1b16c3f47dc1f8f8526d1ca1496046b271204ea22f13ff9b300d",
+            "animations": [
+                "pvz:tree_cloud3"
+            ]
+        },
+        {
+            "id": "pvz:selectorscreen_cloud5",
+            "file": "assets/tree/selectorscreen_cloud5.png",
+            "width": 434,
+            "height": 144,
+            "sources": {
+                "reanim/SelectorScreen_Cloud5.png": "6095f76badea5ef5cda708dbcdef31b327e5fb7840ea828049c132b7b922ecd7"
+            },
+            "sha256": "6095f76badea5ef5cda708dbcdef31b327e5fb7840ea828049c132b7b922ecd7",
+            "animations": [
+                "pvz:tree_cloud1"
+            ]
+        },
+        {
+            "id": "pvz:selectorscreen_cloud6",
+            "file": "assets/tree/selectorscreen_cloud6.png",
+            "width": 76,
+            "height": 44,
+            "sources": {
+                "reanim/SelectorScreen_Cloud6.png": "fe1324c56bd5895dc65ed180c96409402043af1efdaf6478c764f0703ee5944a"
+            },
+            "sha256": "fe1324c56bd5895dc65ed180c96409402043af1efdaf6478c764f0703ee5944a",
+            "animations": [
+                "pvz:tree_cloud2"
+            ]
+        },
+        {
+            "id": "pvz:selectorscreen_cloud7",
+            "file": "assets/tree/selectorscreen_cloud7.png",
+            "width": 211,
+            "height": 73,
+            "sources": {
+                "reanim/SelectorScreen_Cloud7.png": "f30271008c5dd87241aca2f3135f7930c4af29f0b5680b3e2d588d61d5918f22"
+            },
+            "sha256": "f30271008c5dd87241aca2f3135f7930c4af29f0b5680b3e2d588d61d5918f22",
+            "animations": [
+                "pvz:tree_cloud5"
+            ]
+        },
+        {
+            "id": "pvz:tree8",
+            "file": "assets/tree/tree8.png",
+            "width": 806,
+            "height": 561,
+            "sources": {
+                "reanim/tree8.jpg": "d0ed8a828ec7072ce22fd565045572a19cbc344e578fb50c67a22988ad689534",
+                "reanim/tree8_.png": "6d944e38ff7510ed4c742a6aaf110501620b499c6827a9ca1df3f1623be10407"
+            },
+            "sha256": "b9b2b7b1d6e2aa17b32a33207e85ad1859ef9721eb54a80084e884a17da7dcc7",
+            "animations": [
+                "pvz:tree_grow50"
+            ]
+        },
+        {
+            "id": "pvz:tree9",
+            "file": "assets/tree/tree9.png",
+            "width": 525,
+            "height": 559,
+            "sources": {
+                "reanim/tree9.jpg": "95724ddd98b09132cdb5e43e8fd56233208c60afa1bec56766888a72aee1e06e",
+                "reanim/tree9_.png": "2992efd679bf61e3be26e980a6b9e7ca622971a7f16dc5dd7d0012a1d3305aaa"
+            },
+            "sha256": "68600fb86db64fef687e7a0e36b391e45a0d2c52c618e9510c1e4c812fba77ad",
+            "animations": [
+                "pvz:tree_grow50"
+            ]
+        },
+        {
+            "id": "pvz:tree_grass",
+            "file": "assets/tree/tree_grass.png",
+            "width": 849,
+            "height": 207,
+            "sources": {
+                "reanim/tree_grass.png": "4aac0e41a81809c293caff63561e6293d1c698f08bcc8dfc78006a7a5f1c5eb8"
+            },
+            "sha256": "4aac0e41a81809c293caff63561e6293d1c698f08bcc8dfc78006a7a5f1c5eb8",
+            "animations": [
+                "pvz:tree_grow50"
+            ]
+        },
+        {
+            "id": "pvz:tree_overlay8",
+            "file": "assets/tree/tree_overlay8.png",
+            "width": 482,
+            "height": 147,
+            "sources": {
+                "reanim/tree_overlay8.jpg": "a08570a82cee3ad1e09461c6b4b7b2c2422223bd497eb20afb18a6c377a35bee",
+                "reanim/tree_overlay8_.png": "ac1187fac742e09b93db372365969686fd5f8ee60eca9fd363775caa0c14ea3e"
+            },
+            "sha256": "bc0cfed24304e435a6251b71b145dac5b093e9717e85f7ffdd414e1228c696b6",
+            "animations": [
+                "pvz:tree_grow50"
+            ]
+        },
+        {
+            "id": "pvz:tree_overlay9",
+            "file": "assets/tree/tree_overlay9.png",
+            "width": 515,
+            "height": 180,
+            "sources": {
+                "reanim/tree_overlay9.jpg": "e771f1127adfb19476974db62b43577ebf1d2d61f0a253e22314671e5dad9994",
+                "reanim/tree_overlay9_.png": "f15f3b44713f16f6ab3b739e6076b502a565b560f8e95505db007ea5537ca7b1"
+            },
+            "sha256": "badf716e11ea7a547be94d3937e80ed14cfb079e005eb064cb0ed7998de3aa93",
+            "animations": [
+                "pvz:tree_grow50"
+            ]
+        }
+    ],
+    "note": "Reuse existing screen animation tracks; overrides apply only to the listed tree clips."
+}

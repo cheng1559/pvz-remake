@@ -7,7 +7,14 @@ import { SFX_VOLUME_SCALE } from '@/shared/menu'
 import { OptionsSettings } from '@/platform/OptionsSettings'
 import { GameDebugSettings, type DebugPerfToggle, type SeedPacketStyle } from './GameDebugSettings'
 
-export async function executeDebugCliCommand(
+export async function executeDebugCliCommand(...args: Parameters<typeof executeCommand>): Promise<DebugCliResult> {
+    return executor.execute(...args)
+}
+
+// Call through a mutable object: ES module namespace exports cannot be patched reliably.
+export const executor = { execute: executeCommand }
+
+async function executeCommand(
     command: string,
     running: boolean,
     runGameCommand: (command: string) => DebugCliResult,

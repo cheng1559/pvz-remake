@@ -47,11 +47,10 @@ class DefinitionRegistry {
     }
 }
 
-export function buildGameplayContent(
-    definitionsValue: unknown, levelsValue: unknown, stringsValue: unknown, seedCatalogValue: unknown, sources: readonly DefinitionSource[] = [],
-) {
-    const definitions = object(definitionsValue, 'gameplay definitions')
-    const levels = object(levelsValue, 'gameplay levels')
+export function buildGameplayContent(value: unknown, sources: readonly DefinitionSource[] = []) {
+    const { settings, levels: levelEntries, strings, seedCatalog: seedCatalogValue, ...tables } = object(value, 'base gameplay')
+    const definitions = { ...object(settings, 'gameplay settings'), ...tables }
+    const levels = { schemaVersion: definitions.schemaVersion, levels: object(levelEntries, 'gameplay levels') }
     const registry = new DefinitionRegistry([...GAMEPLAY_TABLES, 'levels'])
     registry.register('pvz:base', {
         ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, definitions[kind]])), levels: levels.levels,
@@ -86,7 +85,7 @@ export function buildGameplayContent(
     const result = {
         definitions: resultDefinitions,
         levels: parseGameplayLevels({ ...levels, levels: installedLevels }, resultDefinitions),
-        strings: parseGameplayStrings(stringsValue),
+        strings: parseGameplayStrings(strings),
     }
     deepFreeze(result)
     return result
@@ -94,7 +93,7 @@ export function buildGameplayContent(
 
 export function buildPresentationDefinitions(value: unknown, sources: readonly DefinitionSource[] = []) {
     const base = object(jsonRoundTrip(value), 'presentation definitions')
-    const kinds = ['plants', 'zombies', 'projectiles', 'boards']
+    const kinds = ['plants', 'zombies', 'projectiles', 'boards', 'screens']
     const registry = new DefinitionRegistry(kinds)
     registry.register('pvz:base', Object.fromEntries(kinds.map(kind => [kind, base[kind] ?? {}])), true)
     for (const source of sources) {

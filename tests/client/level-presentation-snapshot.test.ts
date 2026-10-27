@@ -74,6 +74,20 @@ test('Adventure 1-1 presentation snapshot round-trips every owned presentation s
     assert.throws(() => parseLevelPresentationSnapshot(previous), /backend is invalid/)
 })
 
+test('note collection preserves its shorter completion boundary when saved during and after fading', () => {
+    for (const ticks of [0, 15, 300, 499, 500]) {
+        const value = snapshot()
+        value.end = { ticks, durationTicks: 500, finalWave: null }
+        value.flow.completionStarted = ticks === 500
+        assert.deepEqual(parseLevelPresentationSnapshot(JSON.parse(JSON.stringify(value))), value)
+        value.flow.completionStarted = !value.flow.completionStarted
+        assert.throws(() => parseLevelPresentationSnapshot(value), /completion flow/)
+    }
+    const invalid = snapshot()
+    invalid.end = { ticks: 501, durationTicks: 500, finalWave: null }
+    assert.throws(() => parseLevelPresentationSnapshot(invalid), /end.ticks/)
+})
+
 test('1-2 presentation saves Sunflower blinking, flag attachment and huge-wave timing', () => {
     const value = snapshot()
     value.end.hugeWaveTicks = 725

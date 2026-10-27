@@ -108,19 +108,19 @@ export class StartupScreen extends Component {
     private async loadTitle(): Promise<void> {
         const loader = new ClientContentLoader()
         const names = ['titlescreen', 'pvz_logo', 'loadbar_dirt', 'loadbar_grass', 'sodrollcap']
-        const [ui, frames, manifest] = await Promise.all([
+        const [ui, frames, base] = await Promise.all([
             UI.load(), Promise.all(names.map(async name => {
                 const frame = await SpriteLoader.load(name)
                 if (!frame) throw new Error(`Missing startup image: ${name}`)
                 return frame
-            })), loader.loadManifest(),
+            })), loader.loadBaseContent(),
             MusicSystem.preloadTune('title_theme'),
             SoundLoader.load(SoundEffect.LoadingBarFlower), SoundLoader.load(SoundEffect.LoadingBarZombie),
         ])
         if (!this.node?.isValid) return
         this.ui = ui
         const registry = new ContentRegistry()
-        registry.register(manifest)
+        registry.register(base)
         registry.freeze()
         const title = uiNode({ name: 'LoadingScreen', parent: this.content, active: false }).node
         const [background, logo, dirt, grass, roll] = frames

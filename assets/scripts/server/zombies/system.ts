@@ -13,7 +13,7 @@ import type { GameSystem, SystemContext, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { HIT_FLASH_TICKS, damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
 import { LevelStateResource, PlantComponent, type Position, PositionComponent, ZombieComponent } from '../components'
-import { startVault, updateVault } from './poleVault'
+import { startPostVaultWalk, startVault, updateVault } from './poleVault'
 import { RECENTLY_EATEN_TICKS, destroyEatenPlant, isPlantInedible } from '../plants/damage'
 import { rectOverlap } from '../collision'
 
@@ -174,6 +174,8 @@ export class ZombieSystem implements GameSystem {
         if (!zombie.hasHead && position.x <= edge + 70) {
             damageZombie(world, definitions, entity, 1800, { flash: false })
         } else if (zombie.hasHead && level.result === 'playing' && position.x <= edge) {
+            // Zombie::WalkIntoHouse changes a pre-vault winner to its unarmed walking phase.
+            if (definition.vault && zombie.hasPole) startPostVaultWalk(world, definitions, zombie, pace)
             level.result = 'lost'
             emitServerEvent(world.resources.get(EventQueueResource), 'levelLost', {
                 zombieId: entity,

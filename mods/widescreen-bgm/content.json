@@ -1,0 +1,17 @@
+{
+    "resources": {
+        "audio": {
+            "local:widescreen-bgm/day_grasswalk": "assets/audio/day_grasswalk.mp3",
+            "local:widescreen-bgm/choose_seeds": "assets/audio/choose_seeds.mp3",
+            "local:widescreen-bgm/title_theme": "assets/audio/title_theme.mp3",
+            "local:widescreen-bgm/zen_garden": "assets/audio/zen_garden.mp3",
+            "local:widescreen-bgm/puzzle": "assets/audio/puzzle.mp3",
+            "local:widescreen-bgm/minigame": "assets/audio/minigame.mp3",
+            "local:widescreen-bgm/conveyer": "assets/audio/conveyer.mp3",
+            "local:widescreen-bgm/final_boss": "assets/audio/final_boss.mp3"
+        },
+        "json": {
+            "pvz:audio/music/music_manifest": "assets/music_manifest.json"
+        }
+    }
+}

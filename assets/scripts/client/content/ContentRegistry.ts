@@ -1,8 +1,7 @@
-import {
-    CONTENT_CATEGORIES,
-    type ContentCategory,
-    type ContentManifest,
-} from '@/shared/content/index'
+import { CONTENT_CATEGORIES, type ContentCategory } from '@/shared/content/index'
+import type { ContentArchive } from '@/shared/mod/content'
+import { ModAssets } from '@/shared/mod/ModAssets'
+import { archiveEntries } from './ArchiveContentRegistry'
 
 export interface ResolvedContent<K extends ContentCategory = ContentCategory> {
     readonly category: K
@@ -24,32 +23,18 @@ export class ContentRegistry {
         for (const category of CONTENT_CATEGORIES) this.values.set(category, new Map())
     }
 
-    register(manifest: ContentManifest): void {
+    register(archive: ContentArchive): void {
+        const { manifest, content, files } = archive
         if (this.frozen) throw new Error('content registry is frozen')
         if (this.contentIds.has(manifest.id)) throw new Error(`duplicate content manifest: ${manifest.id}`)
-        for (const category of CONTENT_CATEGORIES) {
-            const values = this.values.get(category)!
-            for (const id of Object.keys(manifest.client[category])) {
-                if (values.has(id)) throw new Error(`duplicate ${category} content: ${id}`)
-            }
+        const entries = [...archiveEntries(new ModAssets(manifest, files), content.resources)]
+        for (const entry of entries) {
+            if (this.values.get(entry.kind)!.has(entry.id)) throw new Error(`duplicate ${entry.kind} content: ${entry.id}`)
         }
-
         this.contentIds.add(manifest.id)
-        for (const category of CONTENT_CATEGORIES) {
-            const values = this.values.get(category)!
-            for (const [id, path] of Object.entries(manifest.client[category])) {
-                values.set(id, {
-                    category,
-                    id,
-                    contentId: manifest.id,
-                    contentVersion: manifest.version,
-                    contentHash: manifest.contentHash,
-                    bundle: manifest.client.bundle,
-                    path,
-                    schemaVersion: 2,
-                })
-            }
-        }
+        for (const entry of entries) this.registerEntry({ category: entry.kind, id: entry.id, path: entry.path,
+            contentId: entry.ownerId, contentVersion: entry.ownerVersion, contentHash: entry.contentHash,
+            bundle: entry.bundle, schemaVersion: 2 })
     }
 
     registerEntry(content: ResolvedContent): void {

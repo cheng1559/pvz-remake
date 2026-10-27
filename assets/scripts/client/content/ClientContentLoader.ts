@@ -1,7 +1,7 @@
-import { Asset, AudioClip, JsonAsset, SpriteFrame, Texture2D } from 'cc'
+import { Asset, AudioClip, JsonAsset, Prefab, resources, SpriteFrame, Texture2D } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { parseFont } from '@/shared/content/font'
-import { parseContentManifest, type ContentManifest } from '@/shared/content/index'
+import type { ContentArchive } from '@/shared/mod/content'
 import { parseParticle, type Particle } from '@/shared/content/particle'
 import { ContentRegistry, type ResolvedContent } from './ContentRegistry'
 import { modResources } from './ModResources'
@@ -10,7 +10,6 @@ type AssetType<T extends Asset> = new (...args: any[]) => T
 
 export class ClientContentLoader {
     private readonly assets = new Map<string, Promise<Asset>>()
-    private readonly manifests = new Map<string, Promise<ContentManifest>>()
 
     load<T extends Asset>(content: ResolvedContent, type: AssetType<T>, animation?: string): Promise<T> {
         const key = `${content.contentHash}:${content.category}:${content.id}:${content.path}:${type.name}:${animation ?? ''}`
@@ -19,6 +18,11 @@ export class ClientContentLoader {
 
         const promise = (async () => {
             const assetType: AssetType<Asset> = type
+            // Engine-imported prefabs retain their compiled script and dependency bindings.
+            if (assetType === Prefab && content.contentId === 'pvz:base') {
+                return new Promise<T>((resolve, reject) => resources.load(content.path.replace(/\.prefab$/i, ''), type,
+                    (error, asset) => error ? reject(error) : resolve(asset)))
+            }
             const id = content.category === 'music' && assetType === AudioClip
                 ? `${content.id.split(':')[0]}:${content.path.slice(content.path.lastIndexOf('/') + 1)}` : content.id
             const replacement = await modResources.asset(id, type, animation)
@@ -33,17 +37,7 @@ export class ClientContentLoader {
         return promise
     }
 
-    loadManifest(): Promise<ContentManifest> {
-        const cached = this.manifests.get('base')
-        if (cached) return cached
-
-        const promise = modResources.baseJson('pvz:content').then(parseContentManifest).catch(error => {
-            this.manifests.delete('base')
-            throw error
-        })
-        this.manifests.set('base', promise)
-        return promise
-    }
+    loadBaseContent(): Promise<ContentArchive> { return modResources.baseContent() }
 }
 
 export class SpriteRepository {

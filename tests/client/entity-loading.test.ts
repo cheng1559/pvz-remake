@@ -15,6 +15,8 @@ import { parseGameplayDefinitions } from '@/shared/content/gameplay'
 import { buildModStrings, buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
 import * as modRegistry from '@/shared/mod'
 import { EntityViewRegistry } from '@/client/content/EntityViewRegistry'
+import { ContentRegistry } from '@/client/content/ContentRegistry'
+import { contentJson } from '@/shared/mod/content'
 
 function loadClientModule(path: string, modules: Record<string, unknown>) {
     const module = { exports: {} as Record<string, any> }
@@ -32,6 +34,96 @@ function plantViewModule(name: string, body: unknown, modules: Record<string, un
     const base = loadClientModule('plants/AnimatedPlantView', { ...shared, './definitions': plantDefinitions })
     return loadClientModule('plants/' + name, { ...shared, './AnimatedPlantView': base, './definitions': plantDefinitions })
 }
+
+test('configured projectile shadows stay on the ground, sort below bodies and disappear with the projectile', async () => {
+    const layer = { children: [] as any[] }
+    const createNode = (options: any) => {
+        const node = { name: options.name, isValid: true, frame: options.sprite?.frame, position: options.position, scale: [1, 1],
+            setPosition(x: number, y: number) { this.position = { x, y } },
+            setScale(x: number, y: number) { this.scale = [x, y] },
+            getComponent() { return null },
+            destroy() { this.isValid = false; const index = layer.children.indexOf(this); if (index >= 0) layer.children.splice(index, 1) },
+        }
+        layer.children.push(node)
+        return node
+    }
+    const { LevelEntityRenderer } = loadClientModule('level/LevelEntityRenderer', {
+        cc: { Sprite: { SizeMode: { RAW: 0 } } },
+        '@/client/view/uiNode': { uiNode: (options: any) => ({ node: options.node ?? createNode(options) }) },
+        '@/core/Particle': { TodParticleSystem: { spawn() {} } },
+    })
+    const content = {
+        levels: { levels: { test: { board: 'day', award: { id: 'award' } } } },
+        definitions: { boards: { day: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 } } } },
+        presentation: presentationFixture,
+    }
+    const frames = { 'pvz:pea': {}, 'pvz:snow_pea': {} }
+    const renderer = new LevelEntityRenderer(0, content, {}, { projectileFrames: frames, projectileShadowFrames: frames }, layer, {}, {}, {}, {})
+    const snapshot = { levelId: 'test', plants: [], zombies: [], lawnMowers: [], items: [], projectiles: [
+        { entityId: 1, typeId: 'pvz:pea', x: 200, y: 290, row: 2 },
+        { entityId: 2, typeId: 'pvz:snow_pea', x: 300, y: 390, row: 3 },
+    ] }
+    await renderer.create(1, snapshot)
+    await renderer.create(2, snapshot)
+    const pea = layer.children.find(node => node.name === 'ProjectileShadow-1')
+    const snow = layer.children.find(node => node.name === 'ProjectileShadow-2')
+    assert.deepEqual(JSON.parse(JSON.stringify(pea.position)), { x: -197, y: -47 })
+    assert.deepEqual(JSON.parse(JSON.stringify(snow.position)), { x: -101, y: -147 })
+    assert.deepEqual(snow.scale, [1.3, 1.3])
+    assert.equal(pea.frame, frames['pvz:pea'])
+    const entries = renderer.collectLayerEntries(snapshot).sort((a: any, b: any) => a.order - b.order)
+    assert.deepEqual(Array.from(entries, (entry: any) => entry.node.name), ['ProjectileShadow-1', 'ProjectileShadow-2', 'Entity-1', 'Entity-2'])
+    renderer.remove(1)
+    assert.equal(pea.isValid, false)
+    assert.equal(snow.isValid, true)
+    assert.equal(renderer.projectileShadows.size, 1)
+})
+
+test('screen animation layers use the shared loader, preserve order and prepare their poses before display', async () => {
+    const children: any[] = [], players: any[] = []
+    class Player {
+        lastFrameTimeSeconds = 4
+        visible: string[] = []
+        paused = false
+        options: any
+        id?: string
+        async load(id: string, registry: unknown, loader: unknown) { assert.equal(registry, 'registry'); assert.equal(loader, 'loader'); this.id = id }
+        setTrackPrefixVisible(prefix: string, visible: boolean) { if (visible) this.visible.push(prefix) }
+        play(options: unknown) { this.options = options }
+        pause() { this.paused = true }
+    }
+    const { showScreenAnimations } = loadClientModule('screens/ScreenAnimations', {
+        cc: { isValid: () => true },
+        '@/client/content/loadClientContent': { async loadClientContent() { return { registry: 'registry', loader: 'loader' } } },
+        '@/client/reanim/ReanimPlayer': { ReanimPlayer: Player },
+        '@/client/view/uiNode': { uiNode(options: any) {
+            const node = { ...options, addComponent(Type: any) { const player = new Type(); players.push(player); return player } }
+            children.push(node); return { node }
+        } },
+    })
+    const layers = presentationFixture.screens!['pvz:tree']
+    assert.deepEqual(layers.map(layer => layer.name), [
+        'Cloud1', 'Cloud2', 'Cloud3', 'Cloud4', 'Cloud5', 'Cloud6', 'Tree', 'TreeGrass', 'TreeOverlay',
+    ], 'the page owns its static background; animation layers must not cover its resource overrides')
+    await showScreenAnimations({}, layers)
+    assert.deepEqual(children.map(node => node.name), layers.map(layer => layer.name))
+    assert.ok(children.every(node => node.active && node.position.x === -400 && node.position.y === 300))
+    for (let index = 0; index < layers.length; index++) {
+        const layer = layers[index], player = players[index]
+        assert.equal(player.id, layer.reanimId)
+        assert.equal(player.options.rate, layer.rate)
+        assert.equal(player.options.hideOnFinish, false)
+        if (layer.playback === 'last') {
+            assert.equal(player.paused, true)
+            assert.equal(player.options.timeSeconds, 4)
+            assert.deepEqual(player.visible, layer.visibleTracks)
+        } else {
+            assert.equal(player.options.loop, true)
+            assert.equal(player.options.rate, 0.2 / 12)
+            assert.ok(player.options.timeSeconds >= 0 && player.options.timeSeconds < 4)
+        }
+    }
+})
 
 test('plant and zombie Mod view factories share registration, conflict and freeze rules', async () => {
     for (const [kind, definitions, className] of [
@@ -167,7 +259,8 @@ test('plant explosions and projectile impacts use configured visuals and audio f
 test('presentation definitions use the common ZIP resolver without mutating base data', async () => {
     const asset = { json: presentationFixture }
     let current: unknown = asset
-    const manifest = { id: 'pvz:base', presentation: { definitions: 'presentation/definitions.json' } }
+    const manifest = { content: { presentation: 'presentation.json' },
+        files: { 'presentation.json': new TextEncoder().encode(JSON.stringify(presentationFixture)) } }
     const { loadPresentationDefinitions } = loadClientModule('content/loadPresentationDefinitions', {
         cc: { JsonAsset: class {} },
         './ModResources': { modResources: { async asset(id: string) {
@@ -176,6 +269,7 @@ test('presentation definitions use the common ZIP resolver without mutating base
         } } },
         '@/app/ModLoader': { loadInstalledMods: async () => ({ presentationDefinitions: [] }) },
         '@/shared/content/DefinitionRegistry': { buildPresentationDefinitions },
+        '@/shared/mod/content': { contentJson },
     })
     assert.deepEqual(await loadPresentationDefinitions(manifest), presentationFixture)
     const alternate = structuredClone(presentationFixture)
@@ -183,7 +277,8 @@ test('presentation definitions use the common ZIP resolver without mutating base
     assert.deepEqual(await loadPresentationDefinitions(manifest), alternate)
     assert.equal(asset.json, presentationFixture)
     current = undefined
-    await assert.rejects(loadPresentationDefinitions(manifest), /Missing presentation/)
+    assert.deepEqual(await loadPresentationDefinitions(manifest), presentationFixture)
+    await assert.rejects(loadPresentationDefinitions({ ...manifest, content: {} }), /does not define presentation/)
 })
 
 test('UI assets include registered Mod presentations and names before opening a level', async () => {
@@ -191,7 +286,7 @@ test('UI assets include registered Mod presentations and names before opening a 
     const presentation = buildPresentationDefinitions(presentationFixture, sources)
     const { loadUIAssets } = loadClientModule('ui/UIAssets', {
         cc: { JsonAsset: class {} },
-        '@/client/content/ClientContentLoader': { ClientContentLoader: class { async loadManifest() { return {} } } },
+        '@/client/content/ClientContentLoader': { ClientContentLoader: class { async loadBaseContent() { return {} } } },
         '@/client/content/loadPresentationDefinitions': { loadPresentationDefinitions: async () => presentation },
         '@/app/ModLoader': { loadInstalledMods: async () => ({ presentationDefinitions: sources }) },
         '@/shared/content/DefinitionRegistry': { buildModStrings },
@@ -212,7 +307,7 @@ test('ZIP caches are shared across content loaders and failed requests can retry
     const manifest = {}
     let loads = 0
     const packs = {
-        async baseJson() { return manifest },
+        async baseContent() { return manifest },
         async asset(id: string) {
             if (assets.has(id)) return assets.get(id)
             if (++loads === 1) throw new Error('temporary read failure')
@@ -223,7 +318,6 @@ test('ZIP caches are shared across content loaders and failed requests can retry
     }
     const { ClientContentLoader } = loadClientModule('content/ClientContentLoader', {
         cc: { JsonAsset: class {} },
-        '@/shared/content/index': { parseContentManifest: (value: unknown) => value },
         './ModResources': { modResources: packs },
     })
     const { AssetLoader } = loadClientModule('content/LegacyAssetLoader', {
@@ -234,7 +328,7 @@ test('ZIP caches are shared across content loaders and failed requests can retry
     const loader = new ClientContentLoader()
     assert.equal(await loader.load(content, Asset), assets.get('pvz:ready'))
     assert.equal(await new ClientContentLoader().load(content, Asset), assets.get('pvz:ready'))
-    assert.equal(await loader.loadManifest(), manifest)
+    assert.equal(await loader.loadBaseContent(), manifest)
     assert.equal(await AssetLoader.load('pvz:ready', Asset), assets.get('pvz:ready'))
     assert.equal(loads, 0)
     const missing = { ...content, id: 'pvz:missing', path: 'missing' }
@@ -243,6 +337,26 @@ test('ZIP caches are shared across content loaders and failed requests can retry
     assert.equal(loader.load(missing, Asset), first)
     await first
     assert.equal(loads, 2)
+})
+
+test('base prefab entries retain engine-imported script bindings through the common loader', async () => {
+    class Prefab {}
+    const prefab = new Prefab()
+    let loads = 0
+    const { ClientContentLoader } = loadClientModule('content/ClientContentLoader', {
+        cc: { Prefab, resources: { load(path: string, type: unknown, complete: Function) {
+            assert.equal(path, 'ui/level')
+            assert.equal(type, Prefab)
+            loads++
+            complete(null, prefab)
+        } } },
+        './ModResources': { modResources: { asset() { assert.fail('compiled engine prefab must use its imported dependencies') } } },
+    })
+    const loader = new ClientContentLoader()
+    const content = { contentId: 'pvz:base', contentHash: 'base', category: 'prefabs', id: 'pvz:level', path: 'ui/level.prefab' }
+    assert.equal(await loader.load(content, Prefab), prefab)
+    assert.equal(await loader.load(content, Prefab), prefab)
+    assert.equal(loads, 1)
 })
 
 test('preloaded animation frames are shared by registry and failed preparation can retry', async () => {
@@ -280,17 +394,13 @@ test('preloaded animation frames are shared by registry and failed preparation c
 
 test('store and level presentation resources share a warmed registry including installed Mod clips', async () => {
     const categories = ['sprites', 'reanim']
-    const { ContentRegistry } = loadClientModule('content/ContentRegistry', {
-        '@/shared/content/index': { CONTENT_CATEGORIES: categories },
-    })
     let reads = 0
-    const manifest = { id: 'pvz:base', version: '1', contentHash: 'base', client: {
-        bundle: 'base', sprites: {}, reanim: { 'pvz:dave_idle': 'reanim/dave_idle' },
-    } }
+    const base = { manifest: { id: 'pvz:base', version: '1', contentHash: 'base' },
+        content: { resources: { sprites: {}, reanim: { 'pvz:dave_idle': 'reanim/dave_idle' } } }, files: {} }
     const { loadClientContent } = loadClientModule('content/loadClientContent', {
         '@/shared/content': { CONTENT_CATEGORIES: categories },
         './ContentRegistry': { ContentRegistry },
-        './ClientContentLoader': { ClientContentLoader: class { async loadManifest() { reads++; return manifest } } },
+        './ClientContentLoader': { ClientContentLoader: class { async loadBaseContent() { reads++; return base } } },
         '@/app/ModLoader': { loadInstalledMods: async () => ({ clientContent: { entries: () => [['demo:talk/reanim', {
             id: 'demo:talk', kind: 'reanim', ownerId: 'demo:character', ownerVersion: '1', contentHash: 'mod',
             bundle: 'pvzmod:///demo:character/', path: 'talk.json',
@@ -724,6 +834,7 @@ function zombieViewFixture() {
         lastFrameTimeSeconds = 0
         timeSeconds = 0
         paused = false
+        blends = 0
         color = Color.WHITE
         additive = { enabled: false, color: new Color() }
         constructor(readonly node: Node) {}
@@ -745,7 +856,7 @@ function zombieViewFixture() {
         pause() { this.paused = true }
         hide() {}
         seek(time: number) { this.timeSeconds = time }
-        blendFrom() {}
+        blendFrom() { this.blends++ }
         getTrackNode(id: string) { return this.node.children.find(child => child.name === id) }
         setTrackPrefixVisible(prefix: string, visible: boolean) {
             this.node.children.filter(child => child.name.startsWith(prefix)).forEach(child => { child.active = visible })
@@ -839,6 +950,29 @@ test('pole vaulter landing holds the final jump pose until its new animation is 
     assert.equal(view.player.timeSeconds, 0.5)
     assert.equal(view.player.node.active, true)
     assert.equal(previous.node.active, false)
+    assert.deepEqual(errors, [])
+})
+
+test('house entry replaces a pole vaulter run with an unarmed walk without blending the pole back in', async () => {
+    const { create, blockLoads, errors } = zombieViewFixture()
+    const view = create('pvz:pole_vaulter')
+    const running = { state: 'walking', animation: 'anim_run', animationTime: 12, animationSpeed: 1,
+        hasPole: true, hasHead: true, hasTongue: false, hasArm: true, hitFlashCounter: 0 }
+    view.sync(running)
+    await setImmediate()
+    assert.equal(view.snapshot(1).body.id, 'pvz:pole_vaulter_run')
+    const previous = view.player
+    const finish = blockLoads()
+    const entering = { ...running, hasPole: false, animation: 'anim_walk', animationTime: 0 }
+    view.sync(entering)
+    view.sync(entering)
+    finish()
+    await setImmediate()
+    assert.equal(view.snapshot(1).body.id, 'pvz:pole_vaulter_walk')
+    assert.equal(view.player.blends, 0)
+    assert.equal(view.player.timeSeconds, 0)
+    assert.equal(previous.node.isValid, false)
+    assert.equal(running.hasPole, true, 'the renderer does not rewrite the server snapshot')
     assert.deepEqual(errors, [])
 })
 

@@ -1,5 +1,11 @@
 # 开发说明
 
+冒险日间关卡已接通至 1-10，关卡数据对照 `PvZ-Portable` 的 `Challenge.h`、`Board::PickZombieWaves`、`Challenge::UpdateConveyorBelt` 和 `LawnApp::GetAwardSeedForLevel`：1-6／1-7／1-8／1-9／1-10 分别为 10／20／10／20／20 波，每 10 波一面旗帜。1-6 引入撑杆；1-8 引入铁桶且不出现撑杆；最终波包含当前关卡全部普通出怪类型。1-6、1-7 使用固定 5、6 张卡，1-8、1-9 从同一选卡目录选择 6 张；种子的 `unlockAdventureIndex` 只限制首次冒险，服务端统一校验选卡与存档。
+
+1-6 至 1-8 的奖励依次为寒冰射手、大嘴花、双发射手。1-9 使用独立的 `note` 奖励：原版小纸条掉落、原地淡出、500 tick 黑色转场，以及来信贴图和翻纸音效；奖励表现的 `pageImages` 负责页面排布。1-10 不选卡、不掉落天空阳光，100 tick 出第一波，200 tick 后开始七种植物的免费传送带；供卡重复降权和上一张卡片随存档恢复，通关奖励为小喷菇。当前未安装 2-1，领取奖励后可返回主菜单。
+
+普通种子栏的铲子基准位置为 x=456，十槽传送带为 x=609；选卡时隐藏，开场结束后出现。选卡僵尸预览复用 `UIButton` 悬停与 `UITooltip`，名称读取表现定义的 `nameKey`，提示限制在右侧预览区域；确认选卡、暂停或打开弹窗时隐藏。1-8／1-9 尚未获得原版图鉴，因此提示只显示名称。
+
 冒险 1-5 使用 `ShovelTutorial` 保存戴夫两段对话和三株豌豆射手的铲除进度，客户端 `CrazyDaveView` 只播放动画、显示原版文案并发出交互指令。教程结束后进入 8 波坚果保龄球，传送带按 85:15 提供普通／爆炸保龄球，通关奖励为土豆雷。
 
 `pvz:bowling-wallnut`、`pvz:bowling-explodenut` 是独立植物和种子定义，配置放在 gameplay／presentation JSON。服务端通过现有 `PlantBehaviorRegistry` 注册 `bowling` 行为，状态存入 `behaviorState`；客户端通过 `PlantViewRegistry` 注册 `BowlingNutView`。只复用坚果的美术资源，普通坚果不参与保龄球判断。`occupiesCell: false` 声明移动植物不占格、不作为啃食目标；`rowOrder` 控制行内表现顺序。
@@ -16,7 +22,7 @@
 
 `app/LocalMenuApi.ts` 接入项目现有的进程内本地后端，`GameApp` 启动时注入 Cocos 存储适配器；后端不依赖 Cocos 或 client。用户、设置和各用户存档继续沿用原键名。贴图、位图字体、本地化文案、布局、音效和实际全屏操作由前端负责。以后可替换同一 `MenuTransport` 接入网络服务，目前使用本地传输。
 
-当前仅接通冒险 1-1。Debug 和 Release 构建均可按 `/` 打开调试 CLI；移动模式双击右下角打开，命令见 [Debug CLI](DEBUG_CLI.zh-CN.md)。主菜单已使用原版图片按钮和 Reanim 入场动画，Options 已接通设置与游戏内操作，图鉴和商店已接入内容与交互；后续关卡及其他模式玩法尚未实现。迁移行为时可参考工作区的 `pvz-remake` 仓库。
+当前接通冒险 1-1 至 1-10。Debug 和 Release 构建均可按 `/` 打开调试 CLI；移动模式双击右下角打开，命令见 [Debug CLI](DEBUG_CLI.zh-CN.md)。主菜单已使用原版图片按钮和 Reanim 入场动画，Options 已接通设置与游戏内操作，图鉴和商店已接入内容与交互；2-1 起的后续关卡及其他模式玩法尚未实现。迁移行为时可参考工作区的 `pvz-remake` 仓库。
 
 `StartupScreen` 自动播放 PopCap Logo 的 200 tick 淡入停留淡出，再进入标题／加载页：标题下落、草皮卷展开，在原版五个进度点播放新版 `ReanimPlayer` 小花／僵尸头动画和音效。计时使用全局时钟的 100Hz 游戏 tick。进度来自主菜单图片和动画的实际准备，预加载的主菜单保持隐藏，点击进入时复用并开始入场。资源全部就绪后，加载条内按按钮规则响应左右键，背景按下、触摸或任意键也可进入；返回标题页不重播 PopCap Logo。新增动画可用 `python tools/build_pvz_base.py --startup-only --raw-root <raw目录>` 单独生成，再重新打包内置 ZIP。
 
@@ -40,7 +46,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 ## 植物与僵尸
 
-玩法配置按类别拆分在 `tools/content/pvz-base/gameplay/definitions/`：`plants.json`、`zombies.json`、`seeds.json` 等；同级 `definitions.json` 仅保存全局设置和文件索引，打包时合并成原来的运行时格式，不增加资源请求。植物和僵尸的数值与 PvZ-Portable 和上一版一致。植物最多带一种能力：`shooter`（射手）、`producer`（向日葵）、`fuse`（樱桃炸弹，100 tick 后 3x3 烧焦）、`mine`（土豆雷，1500 tick 出土、106 tick 升起，炸 1800 且不留尸体）、`chomper`（大嘴花，70 tick 咬合、吞下后消化 4000 tick），没有能力的植物只阻挡（坚果墙）；`deathExplosion` 让爆炸坚果被吃掉时爆炸。`server/plants/abilities.ts` 的 `pvz:plant-abilities` 系统按 `Plant.ability` 状态推进，客户端 `client/plants` 下的视图按该状态切换动画，并负责眨眼、裂纹和土豆雷红灯。
+玩法配置按类别拆分在 `tools/content/pvz-base/gameplay/definitions/`：`plants.json`、`zombies.json`、`seeds.json` 等；`gameplay/settings.json` 保存全局默认参数，根目录 `content.json` 索引所有分类文件；打包时和 Mod 一样合并为 `assets/gameplay.json`，不增加资源请求。植物和僵尸的数值与 PvZ-Portable 和上一版一致。植物最多带一种能力：`shooter`（射手）、`producer`（向日葵）、`fuse`（樱桃炸弹，100 tick 后 3x3 烧焦）、`mine`（土豆雷，1500 tick 出土、106 tick 升起，炸 1800 且不留尸体）、`chomper`（大嘴花，70 tick 咬合、吞下后消化 4000 tick），没有能力的植物只阻挡（坚果墙）；`deathExplosion` 让爆炸坚果被吃掉时爆炸。`server/plants/abilities.ts` 的 `pvz:plant-abilities` 系统按 `Plant.ability` 状态推进，客户端 `client/plants` 下的视图按该状态切换动画，并负责眨眼、裂纹和土豆雷红灯。
 
 僵尸的 `helm` 先吸收伤害（路障 370、铁桶 1100），耗尽时发出 `zombieHelmDropped`；`gait` 引用共用步态表，提供走路地面轨迹、啃食与死亡帧数；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `python3 tools/build_pvz_base.py --plants-zombies-only --raw-root <raw目录>` 合并进现有转换输出，同步玩法数据并重新打包内置 ZIP。
 
@@ -56,7 +62,9 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 `client/level/LevelScene` 负责通用的开场 → 战斗 → 领奖／失败流程、全局时钟倍率、输入挂起和表现存档，只依赖 `LevelGame` 客户端接口。`LevelView` 组合 HUD、输入、实体、粒子、音频和结算 presenter；`LevelSeedBank` 按关卡配置创建种子包，分别处理费用、冷却、闪光和按钮输入。棋盘行列、可种行、种子费用和关卡编号均读取现有后端关卡定义。
 
-`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`tools/content/pvz-base/presentation/definitions/` 按类别维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，同级 `definitions.json` 仅保存文件索引，和 gameplay 共用索引读取逻辑，打包时合并生成内容包内的 `presentation/definitions.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前仍只安装了 1-1 内容。
+`LevelGameOverPresenter` 使用失败后的前 150 tick，让获胜僵尸保持可见并从当前行走到门口，再衔接进屋行走和镜头移动。靠近门口时保留在门框前方的普通实体层，进入门口后才转入遮挡层；撑杆僵尸等越界位置已在门后方的对象，会在靠近过程中平滑移动到门口裁剪边缘再进入。`ZombieView` 连续推进两段动作的步态，不重新开始动画；服务端快照保持冻结。失败演出仍持续 1100 tick，音效时序沿用原流程。
+
+`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`tools/content/pvz-base/presentation/definitions/` 按类别维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，根目录 `tools/content/pvz-base/content.json` 和 Mod 使用相同的分类索引，打包时合并生成归档内的 `assets/presentation.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前安装了 1-1 至 1-10 内容。
 
 客户端存档统一写入 `level` 字段，读取时兼容原 `adventure11` 字段；开场专属的状态校验放在各自的实现中。共用关卡布局为 `assets/resources/ui/level.prefab`，资源 ID 为 `pvz:level`，保留原 Prefab 和脚本 UUID。`client/showcase` 仅保留独立资源预览探针。
 
@@ -139,7 +147,7 @@ python3 tools/process_pak.py
 
 只调整主菜单动画时，可执行 `python tools/build_pvz_base.py --main-menu-only`，复用现有转换器更新 13 个菜单片段和引用贴图，保留其他转换输出，再重新打包内置 ZIP。
 
-存档继续检查基础内容 ID、版本、哈希和玩法 Mod。ZIP 中的普通 JSON 条目 `pvz:content` 提供内容索引，哈希覆盖默认文件和资源映射；外部表现覆盖不会修改服务端玩法 JSON。
+存档继续检查基础内容 ID、版本、哈希和玩法 Mod。ZIP 和 Mod 共用 `manifest.json`、`content.json`，玩法与表现定义直接由统一索引引用，哈希覆盖默认文件和资源映射；外部表现覆盖不会修改服务端玩法 JSON。
 
 ## 检查与构建
 

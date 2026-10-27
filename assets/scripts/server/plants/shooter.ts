@@ -10,6 +10,7 @@ import {
     type Position,
     PositionComponent,
     ProjectileComponent,
+    RandomResource,
     ZombieComponent,
 } from '../components'
 import { isTargetableZombie } from '../zombies/damage'
@@ -59,8 +60,7 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                 }
                 if (tick < attack.readyAtTick) continue
 
-                // ponytail: uses fixed timing; add range fields when original cadence jitter is migrated.
-                attack.readyAtTick = tick + shooter.cadenceTicks
+                attack.readyAtTick = tick + world.resources.get(RandomResource).integer(shooter.cadenceTicks.min, shooter.cadenceTicks.max)
                 if (!hasTargetAhead(world, definitions, position, plant)) continue
                 attack.fireAtTick = tick + shooter.windupTicks - 1
                 attack.shotsRemaining = shooter.shotsPerBurst

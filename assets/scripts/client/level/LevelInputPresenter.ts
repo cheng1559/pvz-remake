@@ -109,7 +109,7 @@ export class LevelInputPresenter {
         if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
         const packet = this.view.seedPacketAt(snapshot, index)
         if (!packet) return
-        if (snapshot.cursor.mode !== 'none' && !replace) {
+        if (snapshot.cursor.mode !== 'none' && (!replace || packet.selected)) {
             this.cancelPlanting()
             return
         }
@@ -305,7 +305,7 @@ export class LevelInputPresenter {
         if (packetIndex >= 0 && packetIndex < 10) {
             const snapshot = this.game.render()
             if (snapshot.paused || snapshot.phase !== 'gameplay' || snapshot.result !== 'playing') return
-            this.selectSeedPacket(packetIndex)
+            this.selectSeedPacket(packetIndex, true)
         }
         else if (event.keyCode === KeyCode.KEY_D) {
             if (gameClock.speed > 0) { this.previousSpeed = gameClock.speed; gameClock.setSpeed(0) }

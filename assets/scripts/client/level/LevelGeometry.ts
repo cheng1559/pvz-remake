@@ -1,7 +1,12 @@
 import type { BoardDefinition, LevelDefinition } from '@/shared/content/gameplay'
 
+/** Board::GetSeedBankExtraWidth, shared by the adjacent board tools. */
+export function seedBankExtraWidth(slots: number): number {
+    return slots <= 6 ? 0 : slots === 7 ? 60 : slots === 8 ? 76 : slots === 9 ? 112 : 153
+}
+
 export function levelAwardSize(award: LevelDefinition['award']): { width: number; height: number } {
-    return award.kind === 'tool' ? award : { width: 50, height: 70 }
+    return award.kind === 'seed' ? { width: 50, height: 70 } : award
 }
 
 export function boardCell(board: BoardDefinition, x: number, y: number) {

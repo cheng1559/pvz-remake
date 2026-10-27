@@ -97,8 +97,14 @@ export class LevelGameOverPresenter {
     private draw(): void {
         this.board.setPosition(easeInOut(PAN_START, PAN_END, this.ticks, 0, this.presentation.panX), 0)
         if (this.winner && this.winnerLayer) {
-            this.entities.syncGameOverWinner(this.winner, this.winnerLayer, this.ticks > PAN_START,
-                Math.max(0, this.ticks - PAN_START), this.presentation.winnerY)
+            // The original hides the winner while relocating it to the doorway row.
+            // Keep that approach visible so a wide viewport never reveals a teleport.
+            const y = easeInOut(0, PAN_START, this.ticks, this.winner.y, this.presentation.winnerY)
+            const x = easeInOut(0, PAN_START, this.ticks, this.winner.x, Math.max(this.winner.x, this.presentation.clipX))
+            // Late loss thresholds can put the root behind the doorway already.
+            // Approach in front of the door, then start the clipped walk from its edge.
+            this.entities.syncGameOverWinner({ ...this.winner, x }, this.ticks < PAN_START ? this.entityLayer : this.winnerLayer, true,
+                Math.max(0, this.ticks - PAN_START), y, Math.min(this.ticks, PAN_START))
         }
         const frame = Math.max(0, (this.ticks - GRAPHIC_START) * 12 / 100)
         const left = Math.min(TITLE_KEYS.length - 1, Math.floor(frame))

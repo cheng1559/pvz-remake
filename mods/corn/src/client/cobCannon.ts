@@ -1,4 +1,5 @@
 import type { Context } from './index.js'
+import { registerCobShadow } from './cobShadow.js'
 
 const CANNON = 'corn:cob_cannon'
 export const flashGray = (tick: number, period: number) => {
@@ -21,7 +22,9 @@ export function registerCobCannon({ host, assets }: Context): void {
     const { LevelView } = host.get('client/level/LevelView')
     const { LevelEntityRenderer } = host.get('client/level/LevelEntityRenderer')
     let contentReady: Promise<any> | undefined, targetReady: Promise<any> | undefined, targetFrame: any
-    const content = () => contentReady ??= loadIntegratedGameContent()
+    const content = (): Promise<any> => contentReady ??= loadIntegratedGameContent()
+    const preloadShadow = registerCobShadow(host, content, behavior.projectile,
+        assets.json('assets/presentation.json').projectiles[behavior.projectile].viewConfig.shadow)
     const loadTarget = () => targetReady ??= content().then(game =>
         game.loader.load(game.registry.resolve('sprites', visual.target.sprite), SpriteFrame)).then(frame => targetFrame = frame)
     const player = async (parent: any, name: string, clip: any, game: any) => {
@@ -36,7 +39,7 @@ export function registerCobCannon({ host, assets }: Context): void {
         blinkAtTick: number
         constructor(readonly context: any) { this.blinkAtTick = context.tick + context.animations.nextPlantBlinkTicks() }
         async initialize() {
-            await Promise.all([loadTarget(), ...Object.entries(config.animations).map(async ([name, clip]) => {
+            await Promise.all([loadTarget(), preloadShadow(), ...Object.entries(config.animations).map(async ([name, clip]) => {
                 this.players[name] = await player(this.context.node, name, clip, this.context.content)
             })])
             if (!isValid(this.context.node, true)) return

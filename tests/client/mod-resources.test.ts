@@ -5,6 +5,8 @@ import { runInNewContext } from 'node:vm'
 import { setImmediate } from 'node:timers/promises'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
+import { readBaseContent } from '../../tools/content_source'
+import { decodePremultipliedPng } from '@/client/content/PremultipliedPng'
 
 function setup() {
     const files = new Map<string, any>()
@@ -58,7 +60,11 @@ function setup() {
     class Texture {
         static WrapMode = { CLAMP_TO_EDGE: 0 }
         static Filter = { LINEAR: 1, NEAREST: 0 }
+        static PixelFormat = { RGBA8888: 0 }
         width = 100; height = 140
+        pixels?: Uint8Array
+        reset(size: { width: number; height: number }) { this.width = size.width; this.height = size.height }
+        uploadData(pixels: Uint8Array) { this.pixels = pixels.slice() }
         set image(image: any) { this.width = image.width; this.height = image.height }
         setWrapMode() {}
         filters: number[] = []
@@ -98,6 +104,7 @@ function setup() {
             }, releaseAsset() {} } },
         './LegacyAssetLoader': { AssetLoader: { async load(path: string) { return asset(path) } } },
         './SpriteDensity': { setSpriteDensity() {}, applySpriteDensity(frame: any) { frame.normalized = true } },
+        './PremultipliedPng': { decodePremultipliedPng },
     }
     const blobs = new Map<string, Blob>()
     class TestURL extends URL {
@@ -159,12 +166,42 @@ function zipFiles(id = 'local:hd', tag = 'first', options: any = {}) {
 
 const key = 'pvz-remake:active-mods'
 
+test('declared premultiplied images normalize once for both resource IDs and raw Mod paths', async () => {
+    const { manager, fresh, modules, requests } = setup()
+    const files = zipFiles('local:alpha', 'alpha', { width: 74, height: 397, scale: 1, alphaMode: 'premultiplied' })
+    files['button.png'] = new Uint8Array(readFileSync('mods/widescreen/assets/images/background1_gameover_mask.png'))
+    await manager.install(zipSync(files))
+    const resources = fresh()
+    const frame = await resources.asset('pvz:button', modules.cc.SpriteFrame)
+    const raw = await resources.file('local:alpha', 'button.png', modules.cc.SpriteFrame)
+    assert.equal(frame.texture, raw.texture, 'both access paths use the same decoded texture cache')
+    assert.deepEqual([...frame.texture.pixels.slice(40, 44)], [247, 231, 206, 233])
+    assert.equal(frame.packable, false, 'raw GPU uploads do not retain an ImageAsset for dynamic atlas copies')
+    assert.equal(requests.length, 0, 'premultiplied bytes bypass platform PNG decoders')
+    const font = await resources.font('pvz:demo')
+    assert.equal(font!.textures[0].pixels, undefined, 'unmarked images keep the existing decoder')
+    assert.equal(requests.length, 1)
+    const invalid = zipFiles('local:bad-alpha', 'bad-alpha', { alphaMode: 'guess' })
+    await assert.rejects(manager.install(zipSync(invalid)), /Invalid sprite alpha mode/)
+    const conflict = zipFiles('local:alpha-conflict', 'conflict', { alphaMode: 'premultiplied' })
+    const content = JSON.parse(strFromU8(conflict['content.json']))
+    content.resources.sprites['pvz:other'] = { ...content.resources.sprites['pvz:button'], alphaMode: 'straight' }
+    conflict['content.json'] = strToU8(JSON.stringify(content))
+    await assert.rejects(manager.install(zipSync(conflict)), /Conflicting sprite alpha modes/)
+})
+
 test('the builtin archive and resource-only Mods share validation and decoding', async () => {
     const { manager, fresh, modules } = setup()
     const bytes = new Uint8Array(readFileSync('assets/resources/base.zip'))
     const base = fresh(async () => bytes)
-    const definitions = await base.baseJson('pvz:gameplay/definitions')
+    const archive = await base.baseContent()
+    const definitions = JSON.parse(new TextDecoder().decode(archive.files[archive.content.gameplay!]))
     assert.equal(definitions.seeds['pvz:peashooter'].sunCost, 100)
+    const source = readBaseContent()
+    assert.deepEqual(definitions, source.gameplay, 'the ZIP matches the shared authoring index')
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(archive.files[archive.content.presentation!])), source.presentation)
+    assert.equal(archive.files['base-content.json'], undefined)
+    assert.equal(archive.content.resources.json['pvz:content'], undefined)
     const font = await base.font('pvz:briannetod12')
     assert.ok(font.textures.length > 0)
     for (const texture of font.textures) assert.deepEqual(texture.filters, [1, 0], 'base fonts blend thin strokes when shrinking and retain nearest magnification')
@@ -433,14 +470,22 @@ test('Native builtin ZIP loading reads nativeUrl when the Asset has no nativeAss
     assert.deepEqual(reads, [path])
 })
 
-test('raw Mod paths use the shared image and JSON decoders', async () => {
+test('raw Mod paths preserve declared density and share the image and JSON decoders', async () => {
     const { manager, fresh, modules } = setup()
     await manager.install(zipSync(zipFiles()))
     const resources = fresh()
     const frame = await resources.file('local:hd', 'button.png', modules.cc.SpriteFrame)
-    assert.equal(frame.originalSize.width, 100)
+    assert.equal(frame.originalSize.width, 50)
+    assert.equal(frame.originalSize.height, 70)
+    assert.equal(frame.texture.width, 100)
+    const registered = await resources.asset('pvz:button', modules.cc.SpriteFrame)
+    assert.equal(registered.texture, frame.texture)
+    assert.equal(registered.originalSize.width, frame.originalSize.width)
     assert.equal(await resources.file('local:hd', 'button.png', modules.cc.SpriteFrame), frame)
     assert.equal((await resources.file('local:hd', 'config.json', modules.cc.JsonAsset)).json.tag, 'first')
+    const registeredFirst = fresh()
+    await registeredFirst.asset('pvz:button', modules.cc.SpriteFrame)
+    assert.equal((await registeredFirst.file('local:hd', 'button.png', modules.cc.SpriteFrame)).originalSize.width, 50)
 })
 
 test('Windows ZIP selection preserves Unicode paths, multiple files, cancellation and picker errors', async () => {

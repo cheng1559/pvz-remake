@@ -19,8 +19,8 @@ export function startConveyor(world: World): void {
     const rules = level.definition.conveyor
     if (!rules) return
     const conveyor = world.resources.get(SeedBankResource).conveyor!
-    conveyor.packets.push({ id: conveyor.nextId++, seedId: rules.seeds[0].id, x: rules.entryX })
-    conveyor.spawnAtTick = rules.spawnDelay[0].ticks
+    if (rules.initialSeed) conveyor.packets.push({ id: conveyor.nextId++, seedId: rules.initialSeed, x: rules.entryX })
+    conveyor.spawnAtTick = rules.initialDelayTicks ?? rules.spawnDelay[0].ticks
     world.resources.get(WaveResource).nextWaveAtTick = level.definition.firstWaveTicks
 }
 
@@ -39,11 +39,19 @@ export function createConveyorSystem(): GameSystem {
         const count = conveyor.packets.length
         conveyor.spawnAtTick = tick + rules.spawnDelay.filter(entry => count >= entry.minPackets).at(-1)!.ticks
         if (count >= rules.capacity) return
-        let roll = world.resources.get(RandomResource).integer(0, rules.seeds.reduce((sum, seed) => sum + seed.weight, 0) - 1)
-        const seed = rules.seeds.find(seed => (roll -= seed.weight) < 0)!
+        // Challenge::UpdateConveyorBelt reduces duplicates in a multi-plant supply.
+        const choices = rules.seeds.map(seed => {
+            const count = conveyor.packets.filter(packet => packet.seedId === seed.id).length
+            const weight = rules.seeds.length <= 2 ? seed.weight : count >= 4 ? 1 : count >= 3 ? 5
+                : seed.id === conveyor.lastSeedId ? Math.trunc(seed.weight / 2) : seed.weight
+            return { ...seed, weight }
+        })
+        let roll = world.resources.get(RandomResource).integer(0, choices.reduce((sum, seed) => sum + seed.weight, 0) - 1)
+        const seed = choices.find(seed => (roll -= seed.weight) < 0)!
         const previousOffset = count ? conveyor.packets[count - 1].x - (count - 1) * rules.spacing : 0
         let offset = rules.entryX - (rules.spacing + rules.removalGap) * count
         if (count && offset < previousOffset) offset = previousOffset + rules.insertionGap
         conveyor.packets.push({ id: conveyor.nextId++, seedId: seed.id, x: count * rules.spacing + offset })
+        conveyor.lastSeedId = seed.id
     } }
 }

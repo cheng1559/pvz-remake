@@ -18,7 +18,13 @@ import { createWaveSystem } from '../waves'
 import { emitServerEvent, EventQueueResource } from '../events'
 import { DebugRulesResource, getDebugRules } from './DebugRules'
 
-export function executeDebugGameCommand(
+export const executor = { execute: executeCommand }
+
+export function executeDebugGameCommand(...args: Parameters<typeof executeCommand>): DebugCliResult {
+    return executor.execute(...args)
+}
+
+function executeCommand(
     world: World, definitions: GameplayDefinitions, tick: number, command: DebugCliCommand,
     createPlant: (seedId: string, row: number, column: number) => number,
 ): DebugCliResult {

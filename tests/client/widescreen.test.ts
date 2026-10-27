@@ -11,6 +11,7 @@ import { installDaveAnimation } from '../../mods/widescreen/src/client/dave'
 import { installLoadingBackground } from '../../mods/widescreen/src/client/startup'
 import { installPageBackgrounds } from '../../mods/widescreen/src/client/pages'
 import { installStoreCar } from '../../mods/widescreen/src/client/store'
+import { battlePanX, installBattleBackgrounds } from '../../mods/widescreen/src/client/battle'
 import { parseReanim, sampleReanimTrack } from '@/shared/content/reanim'
 
 test('failed widescreen assets do not alter the viewport during Mod initialization', async () => {
@@ -20,7 +21,185 @@ test('failed widescreen assets do not alter the viewport during Mod initializati
     assert.equal(expanded, false)
 })
 
-test('viewport expands from 4:3 to 32:9, then letterboxes outside the range without extending input into the bars', () => {
+test('battle camera endpoints fit the image edges while preserving easing and the gameplay origin', () => {
+    const left = -862, right = 1033
+    for (const width of [800, 600 * 16 / 9, 1400, 1700]) {
+        const start = battlePanX(220, 220, -380, width, left, right)
+        const end = battlePanX(-380, 220, -380, width, left, right)
+        assert.ok(start + left <= -width / 2 && start + right >= width / 2)
+        assert.ok(end + left <= -width / 2 && end + right >= width / 2)
+        for (const progress of [0, 0.1, 0.5, 0.9, 1]) {
+            const x = battlePanX(220 - 600 * progress, 220, -380, width, left, right)
+            assert.ok(Math.abs(x - (start + (end - start) * progress)) < 1e-8, 'the existing eased progress spans the adjusted endpoints')
+            assert.equal(battlePanX(0, -380, 0, width, left, right), 0)
+        }
+        assert.equal(battlePanX(220, 0, 220, width, left, right), start, 'the losing camera uses the same house edge')
+    }
+    assert.equal(battlePanX(220, 220, -380, 1400, left, right), 162)
+    assert.equal(battlePanX(-380, 220, -380, 1400, left, right), -333)
+    assert.equal(battlePanX(-80, 220, -380, 1400, left, right), -85.5, 'movement is remapped throughout, without stopping abruptly at an edge')
+    assert.equal(battlePanX(220, 220, -380, 6400 / 3, left, right), 0, 'a view wider than the image has no additional pan')
+})
+
+test('TV115 battle artwork preserves the lawn coordinates, reveal masks and game-over doorway', async () => {
+    class Sprite {
+        static SizeMode = { CUSTOM: 'custom' }
+        spriteFrame: any; sizeMode: any; srcBlendFactor: any; dstBlendFactor: any
+        materialUpdates = 0
+        updateMaterial() { this.materialUpdates++ }
+    }
+    class UITransform {
+        width = 0; height = 600; anchor: number[] = []
+        setContentSize(width: number, height: number) { Object.assign(this, { width, height }) }
+        setAnchorPoint(...anchor: number[]) { this.anchor = anchor }
+    }
+    class Node extends EventEmitter {
+        static EventType = { NODE_DESTROYED: 'destroyed' }
+        name = ''
+        active = true
+        position = { x: 0, y: 0, z: 7 }
+        sprite = new Sprite(); transform = new UITransform(); children = Object.assign(new Map<string, Node>(), { slice: () => [...this.children.values()] })
+        getSiblingIndex() { return 0 }
+        setSiblingIndex(_index: number) {}
+        getComponent(type: any) { return type === Sprite ? this.sprite : this.transform }
+        getChildByName(name: string) { return this.children.get(name) }
+        setPosition(x: number, y: number, z: number) { this.position = { x, y, z } }
+    }
+    class GameOver {
+        constructor(readonly board = new Node()) {}
+        presentation = { panX: 220 }
+        requestedX = 0
+        draw() { this.board.setPosition(this.requestedX, 0, 7) }
+        sync() {
+            if (!this.board.children.has('GameOverDoorInterior')) for (const name of ['GameOverDoorInterior', 'GameOverDoorMask']) {
+                const node = new Node(); node.setPosition(name === 'GameOverDoorInterior' ? -526 : -530, name === 'GameOverDoorInterior' ? 75 : 98, 7); this.board.children.set(name, node)
+            }
+        }
+    }
+    class Intro {
+        elapsedTicks = 0
+        requestedX = 220
+        constructor(readonly board: Node, readonly layout: any) {}
+        sync() { this.board.setPosition(this.layout.stationary ? 0 : this.requestedX, 0, 7) }
+    }
+    class LevelView {
+        static async create(root: any, content: any, levelId: string) {
+            const board = root.slots?.board ?? new Node()
+            return { level: { board: 'day' }, gameOver: new GameOver(board), intro: new Intro(board, content.presentation.levels[levelId].intro),
+                entityRenderer: { syncLayerOrder() {} } }
+        }
+    }
+    const sizes: Record<string, number[]> = { background1: [1880, 720], background1unsodded: [1880, 720],
+        sod1row: [771, 127], sod3row: [771, 355], background1_gameover_interior_overlay: [70, 195], background1_gameover_mask: [47, 248] }
+    const frames = Object.fromEntries(Object.entries(sizes).map(([name, [width, height]]) => [name, { originalSize: { width, height } }]))
+    let width = 800
+    const viewport = Object.assign(new EventEmitter(), { getVisibleSize: () => ({ width, height: 600 }) })
+    const gfx = { BlendFactor: { ONE: 1, ONE_MINUS_SRC_ALPHA: 2 } }
+    class ReanimPlayer {
+        async load(id: string) { assert.match(id, /^local:widescreen\/bushes[345]$/) }
+        play() {}
+        pause() {}
+    }
+    class LevelEntityRenderer { sync() {}; collectLayerEntries() { return [] } }
+    const host = new ModHost('local:widescreen', {
+        cc: { Sprite, UITransform, Node, gfx, view: viewport }, 'client/level/LevelView': { LevelView },
+        'client/level/LevelEntityRenderer': { LevelEntityRenderer },
+        'client/reanim/ReanimPlayer': { ReanimPlayer },
+        'client/view/uiNode': { uiNode(options: any) { return { node: {
+            ...options, addComponent(Type: any) { return new Type() },
+        } } } },
+    })
+    const originalCreate = LevelView.create, originalSync = GameOver.prototype.sync, originalDraw = GameOver.prototype.draw, originalIntro = Intro.prototype.sync
+    await installBattleBackgrounds({ host, assets: { async sprite(path: string) { return frames[path.split('/').at(-1)!.replace('.png', '')] } } })
+    const levels = JSON.parse(readFileSync('tools/content/pvz-base/presentation/definitions/levels.json', 'utf8'))
+    const boards = { day: { background: 'pvz:background1unsodded', backgroundX: 80 } }
+    for (const id of ['pvz:adventure-1-1', 'pvz:adventure-1-2', 'pvz:adventure-1-3', 'pvz:adventure-1-4', 'pvz:adventure-1-6', 'pvz:adventure-1-10']) {
+        const slots = Object.fromEntries(['background', 'sodClip', 'sodRow', 'tutorialLawnFlash', 'board', 'entityLayer'].map(name => [name, new Node()]))
+        slots.sodClip.transform.width = 193.25 // An in-progress reveal remains in charge of its own width.
+        slots.board.children.set('ExistingSod', new Node())
+        const root = Object.assign(new EventEmitter(), { slots, isValid: true, getComponentInChildren: () => slots })
+        const view = await LevelView.create(root, { presentation: { boards, levels } }, id)
+        assert.deepEqual(slots.background.position, { x: -860, y: 360, z: 7 })
+        const layout = levels[id].intro
+        const fullLawn = layout.sod === 'pvz:background1' && !layout.rolls.length
+        assert.equal(slots.background.sprite.spriteFrame, fullLawn ? frames.background1 : frames.background1unsodded)
+        assert.equal(slots.sodRow.active, !fullLawn, 'a completed full lawn uses one whole background without the clipped overlay')
+        assert.deepEqual([slots.background.transform.width, slots.background.transform.height], [1880, 720])
+        assert.equal(slots.sodClip.transform.width, 193.25, 'the intro still controls the reveal width')
+        if (layout.sod === 'pvz:background1') {
+            assert.deepEqual(slots.sodRow.position, { x: -472, y: 60, z: 7 })
+            // Source x=472 now represents the same lawn edge at screen x=12.
+            assert.equal(472 + slots.background.position.x + 400, layout.x)
+        } else {
+            assert.equal(slots.sodClip.position.x + 400, layout.x)
+            assert.equal(slots.sodClip.position.y, 300 - layout.y)
+            assert.equal(slots.sodRow.position.x, 0)
+            assert.deepEqual(slots.tutorialLawnFlash.position, slots.sodClip.position)
+        }
+        if (layout.existingSod) {
+            const node = slots.board.getChildByName('ExistingSod')!
+            assert.equal(node.sprite.spriteFrame, frames[layout.existingSod.sprite.replace('pvz:', '')])
+            assert.equal(node.position.x + 400, layout.existingSod.x)
+        }
+        if (id === 'pvz:adventure-1-4') {
+            const existing = slots.board.getChildByName('ExistingSod')!
+            slots.sodClip.transform.width = layout.width
+            view.intro.sync()
+            assert.equal(slots.background.sprite.spriteFrame, frames.background1, 'finishing the roll replaces the entire background, including the pavement')
+            assert.equal(slots.sodRow.active, false)
+            assert.equal(existing.active, false, 'the previous three-row overlay must not add its own edge over the full image')
+            slots.sodClip.transform.width = layout.width / 2
+            view.intro.sync()
+            assert.equal(slots.background.sprite.spriteFrame, frames.background1unsodded, 'restoring an unfinished roll restores the unsodded background')
+            assert.equal(slots.sodRow.active, true)
+            assert.equal(existing.active, true)
+        }
+        view.gameOver.sync()
+        const door = view.gameOver.board.getChildByName('GameOverDoorInterior')!
+        assert.equal(door.sprite.spriteFrame, frames.background1_gameover_interior_overlay)
+        assert.deepEqual([door.transform.width, door.transform.height], [70, 195])
+        assert.deepEqual(door.position, { x: -526, y: 75, z: 7 }, 'TV artwork keeps the original doorway coordinates')
+        const mask = view.gameOver.board.getChildByName('GameOverDoorMask')!
+        assert.deepEqual(mask.position, { x: -530, y: 98, z: 7 }, 'the TV door frame keeps the original clipping origin')
+        view.gameOver.sync()
+        for (const node of [door, mask]) {
+            assert.equal(node.sprite.srcBlendFactor, undefined, 'texture decoding in the host owns alpha normalization')
+            assert.equal(node.sprite.materialUpdates, 0, 'the Mod no longer patches individual sprite blending')
+        }
+        assert.equal(slots.background.sprite.materialUpdates, 0, 'the surrounding scene keeps its existing blend mode')
+        width = 1400
+        viewport.emit('design-resolution-changed')
+        view.intro.requestedX = 220
+        view.intro.sync()
+        assert.equal(slots.board.position.x, 160)
+        view.intro.requestedX = -80
+        view.intro.sync()
+        assert.equal(slots.board.position.x, -80)
+        view.intro.requestedX = -380
+        view.intro.sync()
+        assert.equal(slots.board.position.x, -320)
+        width = 800
+        viewport.emit('design-resolution-changed')
+        assert.equal(slots.board.position.x, -380, 'resize recalculates from the original camera position')
+        view.gameOver.requestedX = 220
+        view.gameOver.draw()
+        width = 1400
+        viewport.emit('design-resolution-changed')
+        assert.equal(slots.board.position.x, 160, 'resize also updates the losing camera')
+        root.emit('destroyed')
+        assert.equal(viewport.listenerCount('design-resolution-changed'), 0)
+        width = 800
+    }
+    boards.day.background = 'another-mod:night'
+    await LevelView.create({ isValid: true, getComponentInChildren() { throw new Error('unrelated board') } }, { presentation: { boards, levels } }, 'pvz:adventure-1-6')
+    host.dispose()
+    assert.equal(LevelView.create, originalCreate)
+    assert.equal(GameOver.prototype.sync, originalSync)
+    assert.equal(GameOver.prototype.draw, originalDraw)
+    assert.equal(Intro.prototype.sync, originalIntro)
+})
+
+test('viewport expands from 4:3 to 21:9, then letterboxes outside the range without extending input into the bars', () => {
     const crop = {}, letterbox = {}, originalPolicy = {}
     let policy = originalPolicy
     let design = { width: 800, height: 600 }
@@ -55,23 +234,23 @@ test('viewport expands from 4:3 to 32:9, then letterboxes outside the range with
         jsb: { setWindowAspectRatio: (...args: number[]) => { constraints.push(args); return true } },
         require: () => ({ Node, view, screen, sys, ResolutionPolicy: { NO_BORDER: crop, SHOW_ALL: letterbox } }),
     })
-    exports.constrainNativeWindow(4 / 3, 32 / 9)
+    exports.constrainNativeWindow(4 / 3, 21 / 9)
     assert.equal(constraints.length, 0, 'web preview does not constrain its host window')
     sys.isNative = true
     for (const os of [sys.OS.OSX, sys.OS.WINDOWS, sys.OS.IOS]) {
         sys.os = os
-        exports.constrainNativeWindow(4 / 3, 32 / 9)
+        exports.constrainNativeWindow(4 / 3, 21 / 9)
     }
-    assert.deepEqual(constraints, [[4 / 3, 32 / 9], [4 / 3, 32 / 9]], 'only native desktop windows are constrained')
+    assert.deepEqual(constraints, [[4 / 3, 21 / 9], [4 / 3, 21 / 9]], 'only native desktop windows are constrained')
     sys.os = sys.OS.OSX
     constraints.length = 0
     exports.initializeViewport()
     const menu = new Node(), level = new Node(), dialog = new Node()
     for (const node of [menu, level, dialog]) exports.fitViewport(node)
-    exports.expandViewport({ minAspect: 4 / 3, maxAspect: 32 / 9 })
+    exports.expandViewport({ minAspect: 4 / 3, maxAspect: 21 / 9 })
     exports.expandViewport()
     exports.initializeViewport()
-    assert.deepEqual(constraints, [[4 / 3, 4 / 3], [4 / 3, 32 / 9]], 'the Mod opens the default fixed window aspect range')
+    assert.deepEqual(constraints, [[4 / 3, 4 / 3], [4 / 3, 21 / 9]], 'the Mod opens the default fixed window aspect range')
     assert.equal(view.listenerCount('canvas-resize'), 1)
     for (const node of [menu, level, dialog]) assert.ok(Math.abs(node.width - 600 * 1600 / 900) < 1e-8)
     // Hiding/destroying a menu does not restore the old letterboxed viewport.
@@ -81,9 +260,10 @@ test('viewport expands from 4:3 to 32:9, then letterboxes outside the range with
         [1200, 900, 800, 800, crop],
         [1600, 900, 600 * 1600 / 900, 600 * 1600 / 900, crop],
         [2100, 900, 1400, 1400, crop],
-        [3200, 900, 6400 / 3, 6400 / 3, crop],
-        [4000, 900, 6400 / 3, 6400 / 3, letterbox],
-        [6400, 900, 6400 / 3, 6400 / 3, letterbox],
+        [2200, 900, 1400, 1400, letterbox],
+        [3200, 900, 1400, 1400, letterbox],
+        [4000, 900, 1400, 1400, letterbox],
+        [6400, 900, 1400, 1400, letterbox],
         [900, 900, 800, 800, letterbox],
         [900, 1600, 800, 800, letterbox],
     ] as const) {
@@ -101,16 +281,16 @@ test('viewport expands from 4:3 to 32:9, then letterboxes outside the range with
         assert.ok(Math.abs(visibleWidth * scale() - contentWidth) < 1e-8)
         assert.ok(Math.abs(600 * scale() - contentHeight) < 1e-8)
         if (width / height < 4 / 3) assert.ok((height - contentHeight) / 2 > 0, 'narrow windows have top and bottom bars')
-        if (width / height > 32 / 9) assert.ok((width - contentWidth) / 2 > 0, 'wide windows have side bars')
+        if (width / height > 21 / 9) assert.ok((width - contentWidth) / 2 > 0, 'wide windows have side bars')
     }
     exports.resetViewport()
     assert.equal(constraints.length, 2, 'teardown must not constrain the native window back to 4:3')
     assert.equal(policy, originalPolicy)
     assert.equal(level.width, 800)
     assert.equal(level.height, 600)
-    exports.expandViewport({ minAspect: 4 / 3, maxAspect: 32 / 9 })
+    exports.expandViewport({ minAspect: 4 / 3, maxAspect: 21 / 9 })
     exports.initializeViewport()
-    assert.deepEqual(constraints.slice(2), [[4 / 3, 32 / 9]], 'restart with the Mod never applies a fixed 4:3 constraint')
+    assert.deepEqual(constraints.slice(2), [[4 / 3, 21 / 9]], 'restart with the Mod never applies a fixed 4:3 constraint')
     exports.resetViewport()
     exports.initializeViewport()
     assert.deepEqual(constraints.at(-1), [4 / 3, 4 / 3], 'startup without the Mod restores the fixed window ratio')
@@ -279,14 +459,17 @@ test('menu artwork preserves track origins and follows its parent without owning
     }
     class StartupScreen { render() {} }
     class MenuScreen { async prepare() {} }
-    class StoreScreen { async initialize() {} }
+    class StoreScreen { async initialize() {}; renderItem() {}; turnPage() {}; update() {} }
     const host = new ModHost('local:widescreen', {
         'cc': { view, Sprite, UITransform, Node: { EventType: { NODE_DESTROYED: 'destroyed' } },
             js: { getClassByName: (name: string) => name === 'StartupScreen' ? StartupScreen : name === 'PvZStoreScreen' ? StoreScreen : MenuScreen } },
         'client/screens/MainMenuScreen': { MainMenuScreen },
+        'client/level/LevelView': { LevelView: class { static async create() {} } },
+        'client/view/uiNode': {},
+        'client/level/LevelEntityRenderer': { LevelEntityRenderer: class { sync() {}; collectLayerEntries() { return [] } } },
         'client/reanim/ReanimPlayer': { ReanimPlayer: class { play() {} } },
         'client/view/ClientViewport': { expandViewport(options: any) {
-            assert.deepEqual(options, { minAspect: 4 / 3, maxAspect: 32 / 9 }); expanded = true
+            assert.deepEqual(options, { minAspect: 4 / 3, maxAspect: 21 / 9 }); expanded = true
         } },
     })
     await register({ host, assets: {
@@ -318,14 +501,12 @@ test('menu artwork preserves track origins and follows its parent without owning
     assert.deepEqual(view.eventNames(), [])
 })
 
-test('the complete store car is used for both hatch states without changing controls or the shake origin', async () => {
-    const open = {}, closed = {}, hatch = {}, originalOpen = {}, originalClosed = {}
+test('store car matches widescreen-pvz in both hatch states and keeps the original controls', async () => {
+    const open = { originalSize: { width: 788, height: 495 } }, closed = {}, hatch = {}, originalOpen = {}, originalClosed = {}
     class UITransform {}
-    class Sprite {}
-    const transform = {
-        width: 604, height: 462, anchorX: 0, anchorY: 1,
+    class Sprite { static SizeMode = { CUSTOM: 'custom' } }
+    const transform = { width: 604, height: 462,
         setContentSize(width: number, height: number) { Object.assign(this, { width, height }) },
-        setAnchorPoint(anchorX: number, anchorY: number) { Object.assign(this, { anchorX, anchorY }) },
     }
     const node = { position: { x: 196, y: -138 }, getComponent: () => transform }
     class StoreScreen {
@@ -338,35 +519,38 @@ test('the complete store car is used for both hatch states without changing cont
         async initialize(shut: boolean) { this.car.spriteFrame = shut ? originalClosed : originalOpen }
         turnPage(shut: boolean) { this.car.spriteFrame = this.sprites[shut ? 'store_carclosed' : 'store_car'] }
     }
-    const host = new ModHost('local:widescreen', { cc: { Sprite, UITransform, js: { getClassByName(name: string) {
-        assert.equal(name, 'PvZStoreScreen')
-        return StoreScreen
-    } } } })
+    const host = new ModHost('local:widescreen', { cc: { Sprite, UITransform, js: { getClassByName: () => StoreScreen } } })
     await installStoreCar({ host, assets: { async sprite(path: string) { return path.endsWith('store_car.png') ? open : path.endsWith('store_carclosed.png') ? closed : hatch } } })
     try {
         for (const shut of [false, true]) {
             const store = new StoreScreen(), controls = store.controls
             await store.initialize(shut)
             assert.equal(store.car.spriteFrame, shut ? closed : open)
-            assert.equal(store.hatchSprite.spriteFrame, hatch, 'the raised hatch uses the matching Ultimate artwork')
+            assert.equal(store.hatchSprite.spriteFrame, hatch)
             store.turnPage(!shut)
-            assert.equal(store.car.spriteFrame, shut ? open : closed, 'later state changes retain the complete car')
-            assert.deepEqual([transform.width, transform.height], [781, 494], 'HD pixels do not enlarge the car')
-            assert.deepEqual(node.position, { x: 196, y: -138 }, 'the original shake position stays intact')
-            assert.equal(node.position.x - transform.anchorX * transform.width, 198)
-            assert.ok(Math.abs(node.position.y + (1 - transform.anchorY) * transform.height + 136) < 1e-6)
+            assert.equal(store.car.spriteFrame, shut ? open : closed)
+            assert.deepEqual([transform.width, transform.height], [788, 495])
+            assert.deepEqual(node.position, { x: 196, y: -138 })
             assert.equal(store.controls, controls)
+        }
+        const wide = JSON.parse(readFileSync('mods/widescreen/content.json', 'utf8')).resources.sprites
+        const pvz = JSON.parse(readFileSync('mods/widescreen-pvz/content.json', 'utf8')).resources.sprites
+        for (const name of ['store_car', 'store_carclosed', 'store_hatchbackopen']) {
+            const entry = wide[`local:widescreen/${name}`], original = pvz[`local:widescreen-pvz/${name}`]
+            assert.deepEqual(entry, original, 'dimensions, pixel density and alpha mode match the other Mod')
+            assert.deepEqual(readFileSync(`mods/widescreen/${entry.file}`), readFileSync(`mods/widescreen-pvz/${original.file}`))
         }
     } finally { host.dispose() }
 })
 
-test('loading, garden and store backgrounds preserve scene height across viewport widths and in-flight initialization', async () => {
-    class Sprite {}
+test('loading, gardens, store, almanac and challenge pages retain their standard background sizes', async () => {
+    class Sprite { static SizeMode = { CUSTOM: 0 } }
     class UITransform {}
     const frame = { originalSize: { width: 2800, height: 1200 } }
     const sprite = { spriteFrame: null }
     const transform = { width: 800, height: 600, setContentSize(width: number, height: number) { Object.assign(this, { width, height }) } }
     const background = Object.assign(new EventEmitter(), { position: { x: 0, y: 0, z: 0 },
+        getSiblingIndex: () => 2,
         getComponent: (type: any) => type === Sprite ? sprite : transform,
         setPosition(x: number, y: number, z: number) { this.position = { x, y, z } },
     })
@@ -413,22 +597,53 @@ test('loading, garden and store backgrounds preserve scene height across viewpor
         assert.equal(name, 'store_background')
         return background
     } } }
-    class MenuScreen { async prepare(id: string) { await Promise.resolve(); return id === 'store' ? storePage : page } }
+    const menuBackgrounds: Record<string, string> = {
+        almanac: 'almanac_indexback', plants: 'almanac_plantback', zombies: 'almanac_zombieback',
+        minigames: 'challenge_background', puzzle: 'challenge_background', survival: 'challenge_background',
+    }
+    const pages = new Map(['mushroom', 'aquarium', 'tree', ...Object.keys(menuBackgrounds)].map(id => [id, {
+        root: { isValid: true, getChildByName(name: string) {
+            if (menuBackgrounds[id]) assert.equal(name, menuBackgrounds[id], `${id} replaces its own background node`)
+            return background
+        } },
+    }]))
+    class MenuScreen { async prepare(id: string) { await Promise.resolve(); return id === 'store' ? storePage : pages.get(id) ?? page } }
     const gardenHost = new ModHost('local:widescreen', { cc: { Sprite, UITransform, view,
         Node: { EventType: { NODE_DESTROYED: 'destroyed' } }, js: { getClassByName: () => MenuScreen },
     } })
-    await installPageBackgrounds({ host: gardenHost, assets: { async sprite() { return frame } } })
+    const sprites = JSON.parse(readFileSync('mods/widescreen/content.json', 'utf8')).resources.sprites
+    const pvzSprites = JSON.parse(readFileSync('mods/widescreen-pvz/content.json', 'utf8')).resources.sprites
+    const loaded: string[] = []
+    await installPageBackgrounds({ host: gardenHost, assets: { async sprite(path: string) {
+        loaded.push(path)
+        const name = path.split('/').at(-1)!.replace('.png', '')
+        const entry = sprites[`local:widescreen/${name}`]
+        if (['background_greenhouse', 'background_mushroomgarden', 'aquarium1', 'tree_bg'].includes(name)) {
+            const original = pvzSprites[`local:widescreen-pvz/${name}`]
+            assert.deepEqual(entry, original, 'garden dimensions, density and alpha mode match widescreen-pvz')
+            assert.deepEqual(readFileSync(`mods/widescreen/${entry.file}`), readFileSync(`mods/widescreen-pvz/${original.file}`))
+        }
+        return { originalSize: { width: entry.width, height: entry.height } }
+    } } })
+    assert.equal(loaded.filter(path => path.endsWith('/challenge_background.png')).length, 1, 'three challenge pages share one loaded frame')
     const menu = new MenuScreen()
     await menu.prepare('main')
     assert.equal(view.listenerCount('design-resolution-changed'), 0, 'other pages are unchanged')
-    assert.equal(await menu.prepare('garden'), page)
-    assert.equal(background.position.x + transform.width / 2, 0, 'garden background uses the centered page origin')
-    assert.equal(background.position.y - transform.height / 2, 0)
-    assert.equal(transform.height, 600, 'garden shares the fixed scene height')
-    await menu.prepare('garden')
-    assert.equal(await menu.prepare('store'), storePage)
-    assert.equal(background.position.x + transform.width / 2, 0, 'the store shares the centered page origin')
-    assert.deepEqual([transform.width, transform.height], [1400, 600], 'the store background keeps its aspect and logical height')
+    for (const id of ['garden', 'mushroom', 'aquarium', 'tree', 'store', ...Object.keys(menuBackgrounds)]) {
+        const prepared = await menu.prepare(id)
+        assert.equal(prepared, id === 'store' ? storePage : pages.get(id) ?? page)
+        const width = id === 'store' ? 1280 : 1066, height = id === 'store' ? 720 : 600
+        assert.deepEqual([transform.width, transform.height], [width, height], `${id} uses its standard scene size`)
+        assert.deepEqual(background.position, { x: -width / 2, y: height / 2, z: 0 }, 'backgrounds remain centered')
+        const source = (sprite.spriteFrame as any).originalSize
+        assert.equal(transform.width / source.width, transform.height / source.height, 'background proportions are preserved')
+        for (const visibleWidth of [800, 1066, 1400]) {
+            visible = { width: visibleWidth, height: 600 }
+            view.emit('design-resolution-changed')
+            await menu.prepare(id)
+            assert.deepEqual([transform.width, transform.height], [width, height], 'retained pages keep their standard artwork size')
+        }
+    }
     assert.equal(view.listenerCount('design-resolution-changed'), 0, 'fixed artwork placement needs no resize listener')
     background.emit('destroyed')
     assert.equal(view.listenerCount('design-resolution-changed'), 0)

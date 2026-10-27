@@ -17,7 +17,7 @@ function load(file: string, modules: Record<string, unknown>) {
     return module.exports
 }
 
-test('failure pans the live board, plays each sound once, and waits eleven game seconds before the dialog', () => {
+for (const startX of [-100, -150, -200]) test(`failure from x=${startX} approaches in front of the door and preserves the eleven-second timeline`, () => {
     class Node {
         active = true
         children: Node[] = []
@@ -57,21 +57,41 @@ test('failure pans the live board, plays each sound once, and waits eleven game 
     const { LevelGameOverPresenter } = load('LevelGameOverPresenter', modules)
     const board = new Node(), bank = new Node(), entities = new Node(), overlay = new Node()
     entities.parent = board; board.children.push(entities)
-    let walkTicks = 0, visible = false, stops = 0
+    let walkTicks = 0, approachTicks = 0, winnerX = 0, winnerY = 0, visible = false, stops = 0
+    let winnerParent: Node | undefined
     const gameOver = new LevelGameOverPresenter(board, bank, entities, overlay, {
-        syncGameOverWinner(_zombie: unknown, _parent: unknown, show: boolean, ticks: number) { walkTicks = ticks; visible = show },
+        syncGameOverWinner(zombie: { x: number }, parent: Node, show: boolean, ticks: number, y: number, approach: number) {
+            walkTicks = ticks; visible = show; winnerX = zombie.x; winnerY = y; approachTicks = approach; winnerParent = parent
+        },
     }, { stop() { stops++ } }, [{}, {}, {}], getBoardPresentation(presentationFixture, 'pvz:day').gameOver)
-    gameOver.sync({ zombies: [{ entityId: 1, x: -100 }] }, [{ type: 'levelLost', data: { zombieId: 1 } }])
+    const winner = { entityId: 1, x: startX, y: 90 }
+    gameOver.sync({ zombies: [winner] }, [{ type: 'levelLost', data: { zombieId: 1 } }])
     const title = overlay.children.find(node => node.name === 'ZombiesWonTitle')!
     assert.equal(bank.active, false)
     assert.equal(title.active, false)
-    assert.equal(visible, false)
-    assert.equal(gameOver.update(1.5), false)
+    assert.equal(visible, true, 'the winner remains visible at its original row instead of disappearing')
+    assert.equal(winnerParent, entities, 'the approach is outside the doorway mask')
+    assert.ok(entities.getSiblingIndex() > board.children.find(node => node.name === 'GameOverDoorMask')!.getSiblingIndex())
+    assert.equal(winnerX, startX, 'the approach starts at the authoritative loss position')
+    assert.equal(winnerY, 90)
+    gameOver.update(0.75)
+    assert.equal(winnerY, 190, 'the winner walks toward the doorway before the camera pan')
+    assert.equal(walkTicks, 0, 'entry behind the doorway waits until the approach finishes')
+    assert.equal(approachTicks, 75)
+    assert.equal(winnerParent, entities, 'late loss thresholds do not put the approach behind the frame')
+    assert.equal(winnerX, Math.round((startX + Math.max(startX, -123)) / 2))
+    assert.equal(gameOver.update(0.75), false)
+    assert.equal(winnerY, 290)
+    assert.equal(approachTicks, 150)
+    assert.equal(winnerParent, board.children.find(node => node.name === 'GameOverWinner'))
+    assert.equal(winnerX, Math.max(startX, -123), 'entry starts at the clipping edge instead of already behind the door')
+    assert.equal(winner.x, startX, 'presentation must not rewrite the authoritative loss position')
     assert.equal(board.x, 0)
     assert.equal(gameOver.update(1), false)
     assert.equal(board.x, 110)
     assert.equal(visible, true)
     assert.equal(walkTicks, 100)
+    assert.equal(approachTicks, 150, 'the walking phase continues from the end of the approach')
     gameOver.update(1)
     assert.equal(board.x, 220)
     gameOver.update(1.6)
@@ -128,4 +148,20 @@ test('the winning zombie walks with the original ground track while the authorit
     assert.equal(y, 10, 'all winners enter the house at the original y=290')
     assert.ok(Math.abs(time) < 1e-10)
     assert.equal(zombie.x, -100, 'game-over motion belongs to presentation')
+    const from = { ...zombie, y: 90, animationTime: 7 }
+    view.syncGameOverWalk(from, 0, 90, 0)
+    assert.equal(x, -500)
+    assert.equal(y, 210)
+    view.syncGameOverWalk(from, 0, 190, 75)
+    const approachTime = (7 / 12 + 0.75) % duration
+    assert.equal(x, -500, 'the approach stays outside the doorway clipping boundary')
+    assert.equal(y, 110)
+    assert.ok(Math.abs(time - approachTime) < 1e-10, 'the walk cycle advances while approaching the door')
+    view.syncGameOverWalk(from, 0, 290, 150)
+    const entryTime = time
+    assert.equal(x, -500)
+    view.syncGameOverWalk(from, 0.01, 290, 150)
+    assert.ok(Math.abs(x + 500) < 1, 'the first entry frame continues from the approach without jumping')
+    assert.ok(Math.abs(time - entryTime) < 0.001)
+    assert.equal(from.y, 90, 'the approach must not mutate the authoritative zombie row')
 })

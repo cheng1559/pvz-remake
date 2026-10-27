@@ -11,6 +11,7 @@ import { plantDefinition } from '@/client/plants/definitions'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 interface Packet {
+    conveyorId?: number
     seedId?: string
     view: SeedPacketView
     tooltip: UITooltip
@@ -26,6 +27,7 @@ export interface LevelSeedPacket extends SeedPacketSnapshot {
 
 export class LevelSeedBank {
     readonly packets: Packet[]
+    private buttons?: UIButton[]
 
     constructor(private readonly options: LevelHudOptions) {
         const seeds = options.level.conveyor
@@ -68,17 +70,18 @@ export class LevelSeedBank {
     }
 
     bind(select: (index: number) => void): UIButton[] {
-        return this.packets.map((packet, index) => {
+        this.buttons = this.packets.map((packet) => {
             const button = (packet.button ??= packet.view.node.addComponent(UIButton))
             button.rightClickTriggers = false
             button.touchSlide = false
             button.releaseToNormalOnPressOut = true
-            button.onPress = () => select(index)
+            button.onPress = () => select(this.packets.indexOf(packet))
             button.onHoverChange = (hovering) =>
                 hovering ? packet.tooltip.show() : packet.tooltip.hide()
             button.interactable = false
             return button
         })
+        return this.buttons
     }
 
     packetAt(snapshot: WorldSnapshot, index: number): LevelSeedPacket | undefined {
@@ -127,6 +130,7 @@ export class LevelSeedBank {
         tutorialColor: Color | null,
         effects = true,
     ): void {
+        if (this.options.level.conveyor) this.syncConveyorOrder(snapshot)
         for (const [index, entry] of this.packets.entries()) {
             const packet = this.packetAt(snapshot, index)
             entry.view.node.active = !!packet && !snapshot.seedChooser?.choosing
@@ -190,6 +194,8 @@ export class LevelSeedBank {
                     y: -10,
                 })
                 entry.hotkey.node.active = true
+                const text = String((index + 1) % 10)
+                if (entry.hotkey.text !== text) entry.hotkey.text = text
             } else if (entry.hotkey) entry.hotkey.node.active = false
             const cooldownFinished =
                 entry.previousCooldown !== undefined &&
@@ -204,6 +210,24 @@ export class LevelSeedBank {
                 this.flash(entry.view.node)
             entry.previousCooldown = packet.cooldownRemaining
         }
+    }
+
+    private syncConveyorOrder(snapshot: WorldSnapshot): void {
+        // A consumed packet frees its view; surviving packets keep their loaded artwork and buttons.
+        const ids = new Set(snapshot.conveyorPackets.map(packet => packet.id))
+        const byId = new Map(this.packets.map(entry => [entry.conveyorId, entry]))
+        const free = this.packets.filter(entry => entry.conveyorId === undefined || !ids.has(entry.conveyorId))
+        const ordered = snapshot.conveyorPackets.map(packet => {
+            const entry = byId.get(packet.id) ?? free.shift()!
+            entry.conveyorId = packet.id
+            return entry
+        })
+        for (const entry of free) entry.conveyorId = undefined
+        ordered.push(...free)
+        if (ordered.every((entry, index) => entry === this.packets[index])) return
+        this.packets.splice(0, this.packets.length, ...ordered)
+        this.buttons?.splice(0, this.buttons.length, ...ordered.map(entry => entry.button!))
+        for (const entry of ordered) entry.view.node.setSiblingIndex(0)
     }
 
     private flash(parent: Node): void {

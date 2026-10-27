@@ -9,15 +9,11 @@ export async function installStoreCar(api: ClientApi): Promise<void> {
         const result = await next(...args)
         if (!this.node.isValid) return result
         const wasClosed = this.car.spriteFrame === this.sprites.store_carclosed
-        this.sprites.store_car = open
-        this.sprites.store_carclosed = closed
-        this.sprites.store_hatchbackopen = hatch
+        Object.assign(this.sprites, { store_car: open, store_carclosed: closed, store_hatchbackopen: hatch })
         this.car.spriteFrame = wasClosed ? closed : open
         this.hatch.getComponent(Sprite).spriteFrame = hatch
-        const transform = this.car.node.getComponent(UITransform)
-        transform.setContentSize(781, 494)
-        // Ultimate draws at (198,136); keep the existing (196,138) shake origin.
-        transform.setAnchorPoint(-2 / 781, 1 - 2 / 494)
+        this.car.sizeMode = Sprite.SizeMode.CUSTOM
+        this.car.node.getComponent(UITransform).setContentSize(open.originalSize.width, open.originalSize.height)
         return result
     })
 }

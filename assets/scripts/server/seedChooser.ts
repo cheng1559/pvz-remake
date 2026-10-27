@@ -1,8 +1,14 @@
 import type { World } from '@/ecs'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import type { GameplayDefinitions, LevelDefinition } from '@/shared/content/gameplay'
 import type { GameCommand, WorldSnapshot } from '@/shared/protocol'
 import { LevelStateResource, SeedBankResource } from './components'
 import type { CommandRejectionCode } from './IntegratedGameServer'
+import { TutorialResource } from './levelState'
+
+/** Keep one catalog and its ordering; first-adventure unlocks belong to seed definitions. */
+export function availableSeeds(definitions: GameplayDefinitions, level: LevelDefinition, firstAdventure: boolean): string[] {
+    return definitions.seedCatalog.filter(id => !firstAdventure || (definitions.seeds[id].unlockAdventureIndex ?? 1) <= level.adventureIndex)
+}
 
 export function applySeedChoice(world: World, definitions: GameplayDefinitions, command: Extract<GameCommand, { type: 'chooseSeed' | 'confirmSeeds' }>): CommandRejectionCode | undefined {
     const level = world.resources.get(LevelStateResource)
@@ -14,7 +20,7 @@ export function applySeedChoice(world: World, definitions: GameplayDefinitions, 
         bank.choosing = false
         return
     }
-    if (!definitions.seedCatalog.includes(command.seedId)) return 'seed-not-available'
+    if (!availableSeeds(definitions, level.definition, world.resources.get(TutorialResource).firstAdventure).includes(command.seedId)) return 'seed-not-available'
     const index = bank.packets.findIndex(packet => packet.seedId === command.seedId)
     if (index >= 0) bank.packets.splice(index, 1)
     else {
@@ -29,7 +35,7 @@ export function seedChooserSnapshot(world: World, definitions: GameplayDefinitio
     if (level.seedBankSlots === undefined) return
     const bank = world.resources.get(SeedBankResource)
     return {
-        availableSeeds: [...definitions.seedCatalog], slots: level.seedBankSlots, choosing: bank.choosing === true,
+        availableSeeds: availableSeeds(definitions, level, world.resources.get(TutorialResource).firstAdventure), slots: level.seedBankSlots, choosing: bank.choosing === true,
         ...(bank.packets.some(packet => definitions.plants[definitions.seeds[packet.seedId].plant].producer)
             ? {} : { warning: 'SEED_CHOOSER_SUN_WARNING' }),
     }

@@ -93,6 +93,10 @@ export class MenuService {
     private award(): AwardView {
         const level = this.getLevel()
         if (!level) throw new Error('Award requires a loaded level')
+        if (level.award.kind === 'note') return {
+            kind: 'note', id: level.award.id, titleKey: level.award.titleKey,
+            nextLevelId: level.nextLevel ?? null, showMainMenu: true,
+        }
         if (level.award.kind === 'tool') return {
             kind: 'tool', id: level.award.id, nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex > 3,
             titleKey: level.award.titleKey, nameKey: level.award.nameKey, descriptionKey: level.award.descriptionKey,

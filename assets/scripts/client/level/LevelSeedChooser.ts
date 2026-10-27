@@ -27,6 +27,7 @@ interface Choice {
 
 /** Seed ownership/order comes from the server. Only card flights and panel motion live here. */
 export class LevelSeedChooser {
+    readonly previewTooltipSurface: Node
     private snapshot?: WorldSnapshot
     private send: (command: GameCommand) => void = () => {}
     private age = 0
@@ -51,6 +52,9 @@ export class LevelSeedChooser {
 
     private constructor(private readonly ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, background: SpriteFrame, silhouette: SpriteFrame, inputRoot: Node) {
         const sprites = new SpriteRepository(content.registry, content.loader)
+        this.previewTooltipSurface = uiNode({ name: 'ZombiePreviewTooltips', parent, active: false,
+            position: { x: background.originalSize.width }, anchor: { x: 0, y: 1 },
+            size: { width: 800 - background.originalSize.width, height: 600 } }).node
         this.panel = uiNode({ name: 'SeedChooser', parent, active: false, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
         ui.image(this.panel, background, { y: 87 })
         ui.label(this.panel, { text: ui.text('CHOOSE_YOUR_PLANTS'), font: 'yellow', color: Color.WHITE, x: 229, y: 110, baseline: true, align: 'center' })
@@ -151,6 +155,7 @@ export class LevelSeedChooser {
 
     syncIntro(tick: number): void {
         this.introTick = tick
+        this.previewTooltipSurface.active = tick === 425 && this.choosing && !this.snapshot?.paused
         this.panel.active = tick >= 400 && tick < 475
         this.cards.active = this.panel.active
         this.flying.active = this.panel.active

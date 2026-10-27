@@ -48,6 +48,7 @@ export interface LevelIntroSnapshot {
 
 export interface LevelEndSnapshot {
     ticks: number
+    durationTicks?: number
     finalWave: ReanimPlaybackSnapshot | null
     hugeWaveTicks?: number
 }
@@ -167,7 +168,7 @@ export function parseLevelPresentationSnapshot(value: unknown): LevelPresentatio
     if (flow.introCompletionSent && intro.previews.length > 0) {
         throw new TypeError('Level presentation cannot send intro completion before the intro ends')
     }
-    if (flow.completionStarted !== (end.ticks >= END_COMPLETE)) {
+    if (flow.completionStarted !== (end.ticks >= (end.durationTicks ?? END_COMPLETE))) {
         throw new TypeError('Level presentation completion flow and end ticks are inconsistent')
     }
 
@@ -218,9 +219,11 @@ function parseIntro(value: unknown): LevelIntroSnapshot {
 }
 
 function parseEnd(value: unknown): LevelEndSnapshot {
-    const source = exact(value, ['ticks', 'finalWave'], 'Level end', ['hugeWaveTicks'])
+    const source = exact(value, ['ticks', 'finalWave'], 'Level end', ['hugeWaveTicks', 'durationTicks'])
+    const durationTicks = source.durationTicks === undefined ? END_COMPLETE : finiteInRange(source.durationTicks, 1, END_COMPLETE, 'Level end.durationTicks')
     return {
-        ticks: finiteInRange(source.ticks, END_INACTIVE, END_COMPLETE, 'Level end.ticks'),
+        ticks: finiteInRange(source.ticks, END_INACTIVE, durationTicks, 'Level end.ticks'),
+        ...(source.durationTicks === undefined ? {} : { durationTicks }),
         finalWave: source.finalWave === null ? null : parseReanimPlaybackSnapshot(source.finalWave),
         ...(source.hugeWaveTicks === undefined ? {} : { hugeWaveTicks: finiteInRange(source.hugeWaveTicks, 0, 750, 'Level end.hugeWaveTicks') }),
     }

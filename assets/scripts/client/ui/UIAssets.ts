@@ -60,7 +60,7 @@ export async function loadUIAssets(): Promise<UIAssets> {
     if (pending) return pending
     const loader = new ClientContentLoader()
     return pending = Promise.all([
-        loader.loadManifest().then(manifest => loadPresentationDefinitions(manifest)),
+        loader.loadBaseContent().then(base => loadPresentationDefinitions(base)),
         Promise.all(Object.entries(FONT_NAMES).map(async ([key, name]) => [key, await loadBitmapFont(name)] as const)),
         Promise.all(SPRITE_NAMES.map(async name => {
             const frame = await SpriteLoader.load(name)

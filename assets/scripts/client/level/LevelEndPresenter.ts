@@ -1,4 +1,4 @@
-import { Color, Graphics, Node } from 'cc'
+import { Color, Graphics, Node, UITransform } from 'cc'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
@@ -10,6 +10,7 @@ import type { ItemSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelEndSnapshot } from './LevelPresentationSnapshot'
 import { levelAwardSize } from './LevelGeometry'
+import { fitViewport } from '@/client/view/ClientViewport'
 
 type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 
@@ -18,6 +19,7 @@ export class LevelEndPresenter {
     private finalWave: ReanimPlayer | null = null
     private hugeWaveTicks = 0
     private hugeWave: UILabel | null = null
+    private paperAward = false
 
     constructor(
         private readonly content: LoadedContent,
@@ -27,13 +29,17 @@ export class LevelEndPresenter {
         private readonly entityNode: (id: number) => Node | undefined,
         private readonly audio: LevelAudioPresenter,
         private readonly ui: UI,
-    ) {}
+    ) {
+        fitViewport(fade, () => this.syncFade())
+    }
 
     snapshot(): LevelEndSnapshot {
-        return { ticks: this.ticks, finalWave: this.finalWave?.snapshot() ?? null, ...(this.hugeWaveTicks > 0 ? { hugeWaveTicks: this.hugeWaveTicks } : {}) }
+        return { ticks: this.ticks, ...(this.paperAward ? { durationTicks: 500 } : {}),
+            finalWave: this.finalWave?.snapshot() ?? null, ...(this.hugeWaveTicks > 0 ? { hugeWaveTicks: this.hugeWaveTicks } : {}) }
     }
 
     async restore(snapshot: LevelEndSnapshot): Promise<void> {
+        if ((snapshot.durationTicks ?? 600) !== (this.paperAward ? 500 : 600)) throw new Error('Saved award duration does not match the level')
         this.ticks = snapshot.ticks
         this.hugeWaveTicks = snapshot.hugeWaveTicks ?? 0
         this.syncHugeWave()
@@ -48,12 +54,13 @@ export class LevelEndPresenter {
             this.hugeWaveTicks = Math.max(0, this.hugeWaveTicks - dt * 100)
             this.syncHugeWave()
         }
-        if (this.ticks < 0 || this.ticks >= 600) return false
+        const duration = this.paperAward ? 500 : 600
+        if (this.ticks < 0 || this.ticks >= duration) return false
         const previous = this.ticks
-        this.ticks = Math.min(600, this.ticks + dt * 100)
-        if (previous < 300 && this.ticks >= 300) this.audio.lightFill()
+        this.ticks = Math.min(duration, this.ticks + dt * 100)
+        if (!this.paperAward && previous < 300 && this.ticks >= 300) this.audio.lightFill()
         this.syncFade()
-        return this.ticks >= 600
+        return this.ticks >= duration
     }
 
     cancelWarnings(): void {
@@ -64,6 +71,7 @@ export class LevelEndPresenter {
     }
 
     sync(snapshot: WorldSnapshot, events: ServerEvent[]): void {
+        this.paperAward = this.content.levels.levels[snapshot.levelId].award.kind === 'note'
         if (snapshot.result === 'won') this.start()
         for (const event of events) {
             if (event.type === 'levelWon') this.start()
@@ -74,12 +82,13 @@ export class LevelEndPresenter {
     }
 
     syncAward(item: ItemSnapshot, levelId: string): boolean {
-        if (item.typeId !== this.content.levels.levels[levelId].award.id) return false
+        const award = this.content.levels.levels[levelId].award
+        if (item.typeId !== award.id) return false
         const node = this.entityNode(item.entityId)
         if (!node) return true
-        const size = levelAwardSize(this.content.levels.levels[levelId].award)
+        const size = levelAwardSize(award)
         let { x, y, scale } = item
-        if (item.state === 'collecting' && this.ticks >= 0) {
+        if (award.kind !== 'note' && item.state === 'collecting' && this.ticks >= 0) {
             const moveTime = Math.min(1, this.ticks / 350)
             const moveEaseOut = 2 * moveTime - moveTime * moveTime
             x += (400 - size.width / 2 - x) * moveEaseOut
@@ -90,7 +99,8 @@ export class LevelEndPresenter {
             scale = 1.01 + 0.99 * scaleEase
         }
         node.setPosition(x + size.width / 2, -(y + size.height / 2))
-        uiNode({ node, opacity: item.alpha })
+        uiNode({ node, opacity: award.kind === 'note' && item.state === 'collecting' && this.ticks >= 0
+            ? Math.round(item.alpha * Math.max(0, 1 - this.ticks / 15)) : item.alpha })
         this.syncAwardVisual(node, scale, item.state === 'collecting')
         return true
     }
@@ -135,11 +145,11 @@ export class LevelEndPresenter {
         })
         if (!item?.isValid) return
         for (const particle of item.getComponentsInChildren(TodParticleSystem)) {
-            if (particle.node.name === 'ParticleSystem_seedpacket') particle.node.destroy()
+            if (particle.node.name === 'ParticleSystem_seedpacket' || particle.node.name === 'ParticleSystem_awardpickuparrow') particle.node.destroy()
         }
         TodParticleSystem.spawn({
             parent: item.getChildByName('AwardBackEffects') ?? item,
-            effect: 'award',
+            effect: this.paperAward ? 'presentpickup' : 'award',
             x: 0,
             y: 0,
             z: -1,
@@ -171,14 +181,16 @@ export class LevelEndPresenter {
     }
 
     private syncFade(): void {
-        const alpha = Math.round(255 * Math.max(0, this.ticks - 400) / 200)
+        const alpha = Math.round(255 * Math.max(0, this.ticks - (this.paperAward ? 300 : 400)) / 200)
         const graphics = this.fade.getComponent(Graphics)
         if (!graphics) return
         graphics.clear()
         this.fade.active = alpha > 0
         if (alpha <= 0) return
-        graphics.fillColor = new Color(255, 255, 255, alpha)
-        graphics.fillRect(-400, -300, 800, 600)
+        const value = this.paperAward ? 0 : 255
+        graphics.fillColor = new Color(value, value, value, alpha)
+        const { width, height } = this.fade.getComponent(UITransform)!.contentSize
+        graphics.fillRect(-width / 2, -height / 2, width, height)
     }
 
     private async createFinalWave(snapshot?: LevelEndSnapshot['finalWave']): Promise<void> {

@@ -1,4 +1,4 @@
-import { readGameplaySource, readPresentationSource } from '../../tools/content_source'
+import { readBaseContent, readPresentationSource } from '../../tools/content_source'
 import { readModContent } from '../../tools/content_source.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -67,7 +67,7 @@ function setup(levelId = 'corn:testing') {
     const host = createServerModHost(assets.id, registry, sources)
     sources.register(assets.id, packedContent.gameplay)
     loadModModule(root + '/src/server/index.ts').register({ host, assets })
-    const content = buildGameplayContent(...(['definitions', 'levels', 'strings', 'seed-catalog'].map(name => readGameplaySource(name)) as [any, any, any, any]), sources.sources)
+    const content = buildGameplayContent(readBaseContent().gameplay, sources.sources)
     const presentation = buildPresentationDefinitions(readPresentationSource(), [{ ownerId: assets.id, data: assets.json('assets/presentation.json') }])
     assert.equal(presentation.plants['corn:kernel_pult'].visual.preview, undefined, 'new art must not borrow a base plant atlas cell')
     const create = () => new IntegratedGameServer(content.definitions, content.levels, registry)
@@ -346,7 +346,7 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
     })
     const requested: string[] = [], frames: any[] = [], factories = new Map<string, any>()
     const content = { registry: { resolve: (_kind: string, id: string) => id },
-        loader: { load: async (id: string) => { requested.push(id); return { id } } } }
+        loader: { load: async (id: string) => { requested.push(id); return { id, originalSize: { width: 42, height: 9 } } } } }
     const modules = {
         'content/definitions': { register() {} }, 'content/resources': { register() {} },
         'cc': { Sprite, Color: class { constructor(readonly r: number, readonly g: number, readonly b: number, readonly a = 255) {} }, UITransform: Transform,
@@ -364,7 +364,8 @@ test('client butter visuals and cannon mouse/touch input preserve death playback
         'client/sound/LegacySoundSystem': { SoundLoader: { load() {} } },
         'client/views': { plants: { register: (id: string, factory: any) => factories.set(id, factory) } },
         'client/hud/PlantPreview': { PlantPreview: Preview },
-        'client/hud/SeedPacketRenderer': { SeedPacketRenderer: { _drawPlantIcon() {}, drawSeedPacket() {} } },
+        'client/hud/SeedPacketRenderer': { SeedPacketRenderer: { _drawPlantIcon() {}, drawSeedPacket() {} },
+            getAtlasFrame: (atlas: any, cell: number, width: number, height: number) => ({ atlas, cell, originalSize: { width, height } }) },
         'client/zombies/ZombieView': { ZombieView }, 'client/level/LevelEntityRenderer': { LevelEntityRenderer: Renderer },
         'client/level/LevelInputPresenter': { LevelInputPresenter: LevelInput },
         'client/level/LevelHudPresenter': { LevelHudPresenter: LevelHud },

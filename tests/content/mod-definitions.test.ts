@@ -1,4 +1,4 @@
-import { readGameplaySource, readPresentationSource } from '../../tools/content_source'
+import { readBaseContent, readPresentationSource } from '../../tools/content_source'
 import { readModContent } from '../../tools/content_source.mjs'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -25,14 +25,14 @@ import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { GameplayRegistry } from '@/server/GameplayRegistry'
 import { runCommand } from '../server/run-command'
 import { parseModContent, contentJson } from '@/shared/mod/content'
+import { getDebugCliCompletions, parseDebugCliCommand } from '@/shared/debug/DebugCli'
 
 const json = (path: string): any => JSON.parse(readFileSync(path, 'utf8'))
-const base = () => ['definitions', 'levels', 'strings', 'seed-catalog'].map(name => readGameplaySource(name))
+const base = () => readBaseContent().gameplay
 const gameplay = () => ({ ownerId: 'example:plants', data: readModContent('mods/example-plant/content.json').gameplay })
 const presentation = () => ({ ownerId: 'example:plants', data: readModContent('mods/example-plant/content.json').presentation })
 const build = (sources = [gameplay()]) => {
-    const [definitions, levels, strings, seedCatalog] = base()
-    return buildGameplayContent(definitions, levels, strings, seedCatalog, sources)
+    return buildGameplayContent(base(), sources)
 }
 
 function installed(id: string, server: any, client?: any) {
@@ -103,6 +103,9 @@ test('Release preloading loads Corn archive assets without requesting a Cocos bu
         '@/client/sound/LegacySoundSystem': { SoundLoader: { async preloadAll() {} } },
         '@/core/Particle/ParticleDefinitionLoader': { ParticleDefinitionLoader: { async preloadAll() {} } },
         './ModResources': { modResources: { async preload(report: Function) { report(1) } } },
+        './preloadTasks': { async preloadTasks(tasks: (() => Promise<unknown>)[], report: (progress: number) => void) {
+            for (const [index, task] of tasks.entries()) { await task(); report((index + 1) / tasks.length) }
+        } },
     }
     const exports: any = {}
     const code = transpileModule(readFileSync('assets/scripts/client/content/PreloadAssets.ts', 'utf8'), {
@@ -118,7 +121,7 @@ test('Release preloading loads Corn archive assets without requesting a Cocos bu
 
 /** Exercise the real app loader without requiring the Cocos engine in Node. */
 function modLoader(installed: any[], ready = async () => installed) {
-    const [definitions, levels, strings, seedCatalog] = base()
+    const gameplay = base()
     const presentation = readPresentationSource()
     class Views extends EntityViewRegistry<any, any> {
         constructor() {
@@ -135,10 +138,12 @@ function modLoader(installed: any[], ready = async () => installed) {
     const modules: Record<string, unknown> = {
         cc: { JsonAsset: class {} },
         '@/client/content/ClientContentLoader': { ClientContentLoader: class {
-            async loadManifest() { return { client: { bundle: 'base' }, gameplay: { definitions: 'definitions', levels: 'levels', strings: 'strings', seedCatalog: 'seedCatalog' } } }
+            async loadBaseContent() { return { content: { gameplay: 'gameplay.json' }, files: {
+                'gameplay.json': new TextEncoder().encode(JSON.stringify(gameplay)),
+            } } }
         } },
         '@/client/content/ClientAnimationRegistry': { ClientAnimationRegistry },
-        '@/client/content/ModResources': { modResources: { baseJson: async (id: string) => ({ definitions, levels, strings, seedCatalog } as any)[id.replace('pvz:', '')] } },
+        '@/shared/mod/content': { contentJson },
         '@/client/content/loadPresentationDefinitions': { loadPresentationDefinitions: async (_manifest: unknown, sources: unknown[]) => {
             assert.equal(sources.length, 0, 'base validation must not recursively load Mods')
             return presentation
@@ -194,6 +199,11 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
     const dependent = installed('test:dependent', () => assert.fail('A dependant must not execute after its dependency fails'))
     dependent.manifest.dependencies.push({ id: 'old:legacy', version: '1.0.0' })
     const broken = installed('test:broken', ({ host, assets }: any) => {
+        const { specs } = host.get('shared/debug/DebugCli')
+        host.around(specs, 'list', (next: any) => [...next(), { name: 'test:leaked', parameters: [], minimum: 0 }])
+        const { executor } = host.get('server/debug/DebugCommands')
+        host.around(executor, 'execute', (next: any, ...args: any[]) =>
+            args[3].name === 'test:leaked' ? { ok: true, message: 'Leaked command' } : next(...args))
         host.get('content/definitions').register(assets.id, { plants: { 'test:leaked': {} } })
         const { registry } = host.get('server/GameplayRegistry')
         const behavior = { createState: () => ({}), tick() {} }
@@ -220,6 +230,8 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         assert.deepEqual(registrations, ['ok:first', 'ok:last'])
         assert.deepEqual(Array.from(result.manifests, (mod: any) => mod.id), ['ok:first', 'ok:last'])
         assert.equal(target.value(), 2, 'only the healthy Mod patch remains')
+        assert.deepEqual(getDebugCliCompletions('/test:leaked', undefined, true), [])
+        assert.equal((parseDebugCliCommand('/test:leaked') as { failure: string }).failure, 'syntax')
         assert.equal(result.gameplayDefinitions.length, 1)
         assert.equal(result.presentationDefinitions.length, 0)
         assert.equal([...result.clientContent.entries()].length, 0)
@@ -228,8 +240,7 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
             assert.equal(views.has('test:leaked'), false)
             views.register('test:after', () => ({}))
         }
-        const [definitions, levels, strings, seedCatalog] = base()
-        result.gameplay.freeze(buildGameplayContent(definitions, levels, strings, seedCatalog, result.gameplayDefinitions).definitions)
+        result.gameplay.freeze(buildGameplayContent(base(), result.gameplayDefinitions).definitions)
         assert.match(loader.failures.get('old:legacy')!, /registerDefinitions is not a function/)
         assert.match(loader.failures.get('test:dependent')!, /Dependency failed to load: old:legacy/)
         assert.match(loader.failures.get('test:broken')!, /client.js.*client initialization failed/)
@@ -302,15 +313,15 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         assert.ok(!Object.keys(files).some(name => /^assets\/(gameplay|presentation)\//.test(name)))
         const loader = modLoader([{ manifest, files, content: parseModContent(contentJson(files, 'content.json'), files) }])
         const loaded = await loader.load()
-        const [definitionsValue, levelsValue, stringsValue, seedCatalog] = base()
+        const baseGameplay = base()
         // The VM emulates Cocos; copy its JSON across the test realm boundary.
         const gameplayDefinitions = JSON.parse(JSON.stringify(loaded.gameplayDefinitions))
         const presentationDefinitions = JSON.parse(JSON.stringify(loaded.presentationDefinitions))
-        const { definitions, levels } = buildGameplayContent(definitionsValue, levelsValue, stringsValue, seedCatalog, gameplayDefinitions)
+        const { definitions, levels } = buildGameplayContent(baseGameplay, gameplayDefinitions)
         const visuals = buildPresentationDefinitions(readPresentationSource(), presentationDefinitions)
         assert.ok(Object.isFrozen(definitions.plants['example:rapid_pea']))
         assert.deepEqual(levels.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter', 'example:rapid_pea'])
-        assert.deepEqual(levelsValue.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter'])
+        assert.deepEqual(baseGameplay.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter'])
         const animations = new ClientAnimationRegistry(visuals)
         assert.equal(animations.resolve('example:rapid_pea').shootHead.rateScale, 1)
         assert.equal(animations.resolve('pvz:peashooter').shootHead.rateScale, 1)

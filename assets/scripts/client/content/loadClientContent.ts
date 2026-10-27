@@ -12,9 +12,9 @@ export function loadClientContent() {
 
 async function loadAssets() {
     const loader = new ClientContentLoader()
-    const [manifest, loadedMods] = await Promise.all([loader.loadManifest(), loadInstalledMods()])
+    const [base, loadedMods] = await Promise.all([loader.loadBaseContent(), loadInstalledMods()])
     const registry = new ContentRegistry()
-    registry.register(manifest)
+    registry.register(base)
     for (const [, content] of loadedMods.clientContent.entries()) {
         if (CONTENT_CATEGORIES.indexOf(content.kind as ContentCategory) < 0 || content.path === undefined) continue
         registry.registerEntry({
@@ -24,5 +24,5 @@ async function loadAssets() {
         })
     }
     registry.freeze()
-    return { manifest, loadedMods, registry, loader }
+    return { base, loadedMods, registry, loader }
 }

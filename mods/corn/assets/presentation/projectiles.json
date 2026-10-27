@@ -1,6 +1,6 @@
 {
   "corn:cob": {
-    "viewConfig": {"scale":0.9},
+    "viewConfig": {"scale":0.9,"shadow":{"sprite":"pvz:pea_shadows","columns":2,"cell":0,"offset":{"x":57,"y":67},"stretch":3,"maxHeight":200}},
     "sprite": "corn:cobcannon_cob",
     "impact": { "kind": "particle", "id": "corn:popcornsplash", "offset": [80, 40], "yRange": [0, 600], "duration": 0.51 },
     "fireSounds": [], "impactSounds": [{ "id": "corn:doomshroom", "foley": false }]

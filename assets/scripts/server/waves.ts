@@ -14,13 +14,13 @@ const EARLY_WAVE_DELAY_TICKS = 200
 
 /** Board::PickZombieWaves: reserve fixed spawns, then spend remaining points by weight. */
 export function planWaves(level: LevelDefinition, random: DeterministicRng): string[][] {
-    return level.waves.map(wave => {
+    return level.waves.map((wave, index) => {
         const zombies = [...wave.zombies]
         if (wave.points === undefined) return zombies
         const pool = level.zombiePool!
         let remaining = wave.points - zombies.reduce((sum, id) => sum + pool.find(entry => entry.id === id)!.points, 0)
         while (remaining > 0) {
-            const choices = pool.filter(entry => entry.weight > 0 && entry.points <= remaining)
+            const choices = pool.filter(entry => entry.weight > 0 && entry.points <= remaining && index + 1 >= (entry.firstWave ?? 1))
             let roll = random.integer(0, choices.reduce((sum, entry) => sum + entry.weight, 0) - 1)
             const picked = choices.find(entry => (roll -= entry.weight) < 0)!
             zombies.push(picked.id)

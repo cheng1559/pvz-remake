@@ -45,7 +45,7 @@ import { createMowerSystem } from './mower'
 import { debugSuccess, parseDebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { executeDebugGameCommand } from './debug/DebugCommands'
 import { DebugRulesResource, getDebugRules } from './debug/DebugRules'
-import { applySeedChoice, seedChooserSnapshot } from './seedChooser'
+import { applySeedChoice, availableSeeds, seedChooserSnapshot } from './seedChooser'
 import { selectedSeedId } from './seedBank'
 import { canPlantConveyorAt, createConveyorSystem, startConveyor } from './conveyor'
 import {
@@ -277,10 +277,11 @@ export class IntegratedGameServer {
             throw new Error('Saved conveyor does not match the level')
         }
         if (save.seedBank.conveyor && save.seedBank.conveyor.packets.length > definition.conveyor!.capacity) throw new Error('Saved conveyor exceeds capacity')
+        if (save.seedBank.conveyor?.lastSeedId && !definition.conveyor!.seeds.some(seed => seed.id === save.seedBank.conveyor!.lastSeedId)) throw new Error('Saved conveyor last seed is not in the supply')
         if (save.seedBank.selection.mode === 'tool' && !definition.tools?.includes(save.seedBank.selection.toolId)) throw new Error('Saved tool is unavailable in this level')
         if (save.seedBank.choosing ? !definition.seedBankSlots || save.level.phase !== 'intro' || save.seedBank.packets.length > slots
             : save.seedBank.packets.length !== slots) throw new Error('Saved seed bank size does not match the level')
-        if (definition.seedBankSlots && (save.seedBank.choosing === undefined || save.seedBank.choosing && save.seedBank.packets.some(packet => !this.definitions.seedCatalog.includes(packet.seedId)))) {
+        if (definition.seedBankSlots && (save.seedBank.choosing === undefined || save.seedBank.packets.some(packet => !availableSeeds(this.definitions, definition, save.tutorial.firstAdventure).includes(packet.seedId)))) {
             throw new Error('Saved seed choice does not match the level')
         }
         for (const packet of save.seedBank.packets) {
@@ -782,9 +783,8 @@ export class IntegratedGameServer {
         if (seedBank.conveyor) {
             const conveyor = seedBank.conveyor!
             const packetId = seedBank.selection.mode === 'conveyor' ? seedBank.selection.packetId : undefined
-            const removedIndex = conveyor.packets.findIndex(packet => packet.id === packetId)
+            // Positions are absolute; the remaining packets close the gap through normal belt movement.
             conveyor.packets = conveyor.packets.filter(packet => packet.id !== packetId)
-            for (let index = removedIndex; index >= 0 && index < conveyor.packets.length; index++) conveyor.packets[index].x += level.definition.conveyor!.removalGap
             emitServerEvent(world.resources.get(EventQueueResource), 'adviceCleared', { key: 'ADVICE_NOT_PASSED_LINE' })
         }
         const bankSpend = Math.min(economy.sun, sunCost)
@@ -829,10 +829,9 @@ export class IntegratedGameServer {
         })
         const ability = initialPlantAbility(definition)
         if (ability) world.get(entity, PlantComponent)!.ability = ability
-        if (definition.shooter || definition.producer) world.add(entity, PlantAttackComponent, {
-            readyAtTick: gameplayTick + (definition.shooter?.initialDelayTicks ?? world.resources.get(RandomResource).integer(
-                definition.producer!.initialDelayTicks.min, definition.producer!.initialDelayTicks.max,
-            )),
+        const delay = definition.shooter?.initialDelayTicks ?? definition.producer?.initialDelayTicks
+        if (delay) world.add(entity, PlantAttackComponent, {
+            readyAtTick: gameplayTick + world.resources.get(RandomResource).integer(delay.min, delay.max),
         })
         return entity
     }

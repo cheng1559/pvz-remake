@@ -12,6 +12,7 @@ import type { LevelSeedBank } from './LevelSeedBank'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UILabel } from '@/client/ui/UILabel'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { seedBankExtraWidth } from './LevelGeometry'
 
 /** Optional board tools, opening dialogue and conveyor layout. Packet input belongs to LevelSeedBank. */
 export class LevelBoardHud {
@@ -32,6 +33,7 @@ export class LevelBoardHud {
     private tooltip?: UITooltip
     private shovelButton?: UIButton
     private shovelHotkey?: UILabel
+    private shovelX = 0
 
     static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, plantCursor: Node, seedBank: LevelSeedBank): Promise<LevelBoardHud> {
         const root = uiNode({ name: 'BoardHud', parent, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
@@ -41,7 +43,8 @@ export class LevelBoardHud {
         if (level.tools?.includes('pvz:shovel')) {
             const [bankFrame, shovelFrame] = await Promise.all(['shovelbank', 'shovel'].map(id => sprites.load(`pvz:${id}`)))
             const layout = content.presentation.shovel
-            result.shovelBank = ui.image(bankLayer, bankFrame, { x: layout.x, y: 0 }).node
+            result.shovelX = layout.x + seedBankExtraWidth(level.conveyor?.capacity ?? level.seedBankSlots ?? level.seedPackets.length)
+            result.shovelBank = ui.image(bankLayer, bankFrame, { x: result.shovelX, y: 0 }).node
             result.shovel = ui.image(result.shovelBank, shovelFrame, { x: layout.imageOffset[0], y: layout.imageOffset[1] }).node
             result.shovelHotkey = ui.label(result.shovelBank, {
                 text: 'F', font: 'storeItem', fontSize: 16, color: new Color(213, 159, 43),
@@ -102,12 +105,12 @@ export class LevelBoardHud {
         }
         if (this.shovelBank) {
             const layout = this.content.presentation.shovel
-            this.shovelBank.active = snapshot.result !== 'lost'
+            this.shovelBank.active = snapshot.result !== 'lost' && (!!this.dave || snapshot.phase === 'gameplay')
             this.shovelHotkey!.node.active = GameDebugSettings.hotkeysEnabled
             this.shovelButton!.interactable = (snapshot.extensions['pvz:tools'] as { available: string[] } | undefined)?.available.includes('pvz:shovel') === true
             if (snapshot.tutorial.step === 'shovel-pickup') {
                 const size = uiNode({ node: this.shovelBank }).transform
-                if (!this.shovelArrow?.isValid) this.shovelArrow = TodParticleSystem.spawn({ parent: this.root, effect: 'seedpacketpick', x: layout.x + size.width / 2 + layout.arrowOffset[0], y: -size.height + layout.arrowOffset[1], z: 20 }).node
+                if (!this.shovelArrow?.isValid) this.shovelArrow = TodParticleSystem.spawn({ parent: this.root, effect: 'seedpacketpick', x: this.shovelX + size.width / 2 + layout.arrowOffset[0], y: -size.height + layout.arrowOffset[1], z: 20 }).node
             } else if (this.shovelArrow?.isValid) { this.shovelArrow.destroy(); this.shovelArrow = undefined }
             const held = snapshot.cursor.mode === 'tool'
             this.shovel!.active = !held

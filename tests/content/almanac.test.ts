@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { ALMANAC_PLANTS, ALMANAC_ZOMBIES } from '@/server/menu/AlmanacCatalog'
-import { parseContentManifest } from '@/shared/content'
 import { parseReanim, sampleReanimTrack } from '@/shared/content/reanim'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
@@ -11,7 +10,7 @@ import * as animationDefinitions from '@/client/content/ClientAnimationRegistry'
 
 const json = (path: string) => JSON.parse(readFileSync(path, 'utf8'))
 const bundle = 'tools/generated/pvz-base'
-const manifest = parseContentManifest(json(`${bundle}/manifest.json`))
+const manifest = json(`${bundle}/manifest.json`)
 interface Part { name: string, id: string, parent?: string, track?: string, blink?: boolean, packetId?: string }
 const displayModule = { exports: {} as Record<string, any> }
 const displayCode = transpileModule(readFileSync('assets/scripts/client/reanim/EntityDisplay.ts', 'utf8'), {

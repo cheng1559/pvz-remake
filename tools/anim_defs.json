@@ -1322,6 +1322,7 @@
     },
     "treeofwisdom": {
         "tree": {
+            "contentClips": {"anim_grow50": "pvz:tree_grow50"},
             "slots": [],
             "animations": [
                 "anim_start",
@@ -1381,36 +1382,42 @@
     },
     "treeofwisdomclouds": {
         "Cloud1": {
+            "contentClips": {"Cloud1": "pvz:tree_cloud1"},
             "slots": [],
             "animations": [
                 "Cloud1"
             ]
         },
         "Cloud2": {
+            "contentClips": {"Cloud2": "pvz:tree_cloud2"},
             "slots": [],
             "animations": [
                 "Cloud2"
             ]
         },
         "Cloud3": {
+            "contentClips": {"Cloud3": "pvz:tree_cloud3"},
             "slots": [],
             "animations": [
                 "Cloud3"
             ]
         },
         "Cloud4": {
+            "contentClips": {"Cloud4": "pvz:tree_cloud4"},
             "slots": [],
             "animations": [
                 "Cloud4"
             ]
         },
         "Cloud5": {
+            "contentClips": {"Cloud5": "pvz:tree_cloud5"},
             "slots": [],
             "animations": [
                 "Cloud5"
             ]
         },
         "Cloud6": {
+            "contentClips": {"Cloud6": "pvz:tree_cloud6"},
             "slots": [],
             "animations": [
                 "Cloud6"

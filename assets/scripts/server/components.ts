@@ -84,7 +84,7 @@ export type SeedSelection = { mode: 'none' } | { mode: 'seed'; seedId: string }
 
 export interface SeedBankState {
     selection: SeedSelection
-    conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; packets: Array<{ id: number; seedId: string; x: number }> }
+    conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; lastSeedId?: string; packets: Array<{ id: number; seedId: string; x: number }> }
     choosing?: boolean
     packets: Array<{ seedId: string, readyAtTick: number, cooldownTotal?: number }>
 }

@@ -22,6 +22,7 @@ import { boardCell, levelAwardSize } from './LevelGeometry'
 
 const WIDTH = 800
 const HEIGHT = 600
+const GROUND_LAYER_ORDER = -100
 type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 type SpriteAsset = Awaited<ReturnType<SpriteRepository['load']>>
 type FontAsset = Awaited<ReturnType<FontRepository['load']>>
@@ -29,6 +30,7 @@ type FontAsset = Awaited<ReturnType<FontRepository['load']>>
 export interface LevelEntityAssets {
     /** Projectile sprites by projectile ID. */
     projectileFrames: Record<string, SpriteAsset>
+    projectileShadowFrames: Record<string, SpriteAsset>
     mowerFrame: SpriteAsset
     mowerShadow: SpriteAsset
     zombieSprites: ZombieViewSprites
@@ -39,6 +41,7 @@ export interface LevelEntityAssets {
 
 export class LevelEntityRenderer {
     private readonly entities = new Map<number, Node>()
+    private readonly projectileShadows = new Map<number, Node>()
     private readonly pending = new Set<number>()
     private readonly creationTasks = new Map<number, Promise<void>>()
     private readonly plantViews = new Map<number, PlantView>()
@@ -94,14 +97,14 @@ export class LevelEntityRenderer {
         this.highlightedPlant = highlighted
     }
 
-    syncGameOverWinner(zombie: ZombieSnapshot, parent: Node, visible: boolean, ticks: number, y: number): void {
+    syncGameOverWinner(zombie: ZombieSnapshot, parent: Node, visible: boolean, ticks: number, y: number, approachTicks = 0): void {
         const node = this.entities.get(zombie.entityId)
         const view = this.zombies.get(zombie.entityId)
         if (!node || !view) return
         if (node.parent !== parent) node.setParent(parent)
         if (view.shadowNode.parent !== parent) view.shadowNode.setParent(parent)
         node.active = view.shadowNode.active = visible
-        view.syncGameOverWalk(zombie, ticks, y)
+        view.syncGameOverWalk(zombie, ticks, y, approachTicks)
     }
 
     particleOwner(node: Node): Extract<LevelParticleOwnerSnapshot, { kind: 'entity' }> | null {
@@ -200,6 +203,13 @@ export class LevelEntityRenderer {
         for (const entity of [...snapshot.plants, ...snapshot.zombies, ...snapshot.projectiles, ...snapshot.lawnMowers]) {
             this.entities.get(entity.entityId)?.setPosition(entity.x - WIDTH / 2, HEIGHT / 2 - entity.y)
         }
+        for (const projectile of snapshot.projectiles) {
+            const shadow = this.content.presentation.projectiles[projectile.typeId]?.shadow
+            if (!shadow) continue
+            const board = this.content.definitions.boards[this.content.levels.levels[snapshot.levelId].board]
+            this.projectileShadows.get(projectile.entityId)?.setPosition(projectile.x + shadow.offset.x - WIDTH / 2,
+                HEIGHT / 2 - (board.origin.y + projectile.row * board.cell.height + shadow.offset.y))
+        }
         for (const item of snapshot.items) {
             const node = this.entities.get(item.entityId)
             if (!node) continue
@@ -245,6 +255,8 @@ export class LevelEntityRenderer {
         this.mowerStates.delete(id)
         this.entities.get(id)?.destroy()
         this.entities.delete(id)
+        this.projectileShadows.get(id)?.destroy()
+        this.projectileShadows.delete(id)
     }
 
     private playEvents(snapshot: WorldSnapshot, events: ServerEvent[]): void {
@@ -357,6 +369,18 @@ export class LevelEntityRenderer {
                 const frame = this.assets.projectileFrames[projectile.typeId]
                 if (!frame) throw new Error(`Projectile sprite is not installed: ${projectile.typeId}`)
                 uiNode({ node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+                const shadow = this.content.presentation.projectiles[projectile.typeId]?.shadow
+                if (shadow) {
+                    const frame = this.assets.projectileShadowFrames[projectile.typeId]
+                    if (!frame) throw new Error(`Projectile shadow is not installed: ${projectile.typeId}`)
+                    const board = this.content.definitions.boards[this.content.levels.levels[snapshot.levelId].board]
+                    const shadowNode = uiNode({ name: `ProjectileShadow-${id}`, parent: this.entityLayer, anchor: { x: 0, y: 1 },
+                        position: { x: projectile.x + shadow.offset.x - WIDTH / 2,
+                            y: HEIGHT / 2 - (board.origin.y + projectile.row * board.cell.height + shadow.offset.y) },
+                        sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node
+                    shadowNode.setScale(shadow.scale, shadow.scale, 1)
+                    this.projectileShadows.set(id, shadowNode)
+                }
                 const trail = this.content.presentation.projectiles[projectile.typeId]?.trail
                 if (trail) TodParticleSystem.spawn({ parent: node, ...trail, useGameTime: false })
             } else if (snapshot.lawnMowers.some(value => value.entityId === id)) {
@@ -385,6 +409,8 @@ export class LevelEntityRenderer {
         } catch (error) {
             if (node.isValid) node.destroy()
             this.entities.delete(id)
+            this.projectileShadows.get(id)?.destroy()
+            this.projectileShadows.delete(id)
             throw error
         } finally {
             this.pending.delete(id)
@@ -396,8 +422,8 @@ export class LevelEntityRenderer {
         const size = levelAwardSize(award)
         uiNode({ node, size, anchor: { x: 0.5, y: 0.5 } })
         const backEffects = uiNode({ name: 'AwardBackEffects', parent: node }).node
-        TodParticleSystem.spawn({ parent: backEffects, effect: 'seedpacket', x: 0, y: 60, z: -1 })
-        if (award.kind === 'tool') {
+        TodParticleSystem.spawn({ parent: backEffects, effect: award.kind === 'note' ? 'awardpickuparrow' : 'seedpacket', x: 0, y: 60, z: -1 })
+        if (award.kind !== 'seed') {
             const visual = this.content.presentation.awards?.[award.id]
             if (!visual) throw new Error(`Award presentation is not installed: ${award.id}`)
             const frame = await new SpriteRepository(this.content.registry, this.content.loader).load(visual.sprite)
@@ -487,7 +513,8 @@ export class LevelEntityRenderer {
         return node
     }
 
-    private syncLayerOrder(snapshot: WorldSnapshot): void {
+    /** Mods can append scenery to the same ordering pass as entities and particles. */
+    private collectLayerEntries(snapshot: WorldSnapshot): { node: Node, order: number, entityId?: number }[] {
         const entries: { node: Node, order: number, entityId?: number }[] = []
         const add = (entityId: number, order: number) => {
             const node = this.entities.get(entityId)
@@ -499,13 +526,23 @@ export class LevelEntityRenderer {
             const shadow = this.zombies.get(entity.entityId)?.shadowNode
             if (shadow?.isValid) entries.push({ node: shadow, order: entity.row * 10 - 0.1 })
         }
-        for (const entity of snapshot.projectiles) add(entity.entityId, entity.row * 10 + 2)
+        for (const entity of snapshot.projectiles) {
+            add(entity.entityId, entity.row * 10 + 2)
+            const shadow = this.projectileShadows.get(entity.entityId)
+            // Ground shadows precede plants and projectiles in every row.
+            if (shadow?.isValid) entries.push({ node: shadow, order: GROUND_LAYER_ORDER + entity.row * 10, entityId: entity.entityId })
+        }
         for (const [node, entry] of this.charred) if (node.isValid) entries.push({ node, ...entry })
         for (const entity of snapshot.lawnMowers) add(entity.entityId, entity.row * 10 + 3)
         for (const child of this.entityLayer.children) {
             const particle = child.getComponent(TodParticleSystem)
             if (particle) entries.push({ node: child, order: particle.renderOrder })
         }
+        return entries
+    }
+
+    private syncLayerOrder(snapshot: WorldSnapshot): void {
+        const entries = this.collectLayerEntries(snapshot)
         entries.sort((left, right) => left.order - right.order || (left.entityId ?? 0) - (right.entityId ?? 0))
         entries.forEach((entry, index) => entry.node.setSiblingIndex(index))
     }

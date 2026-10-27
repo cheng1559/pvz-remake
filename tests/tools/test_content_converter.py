@@ -33,6 +33,7 @@ class ContentConverterTest(unittest.TestCase):
             }))
             shutil.copytree(fixtures / "content/gameplay", root / "tools/content/pvz-base/gameplay")
             shutil.copytree(fixtures / "content/presentation", root / "tools/content/pvz-base/presentation")
+            shutil.copyfile(fixtures / 'content/content.json', root / 'tools/content/pvz-base/content.json')
             clips = [(source, "body", "back", "pvz:selector_test")]
             with patch("build_pvz_base.ROOT", root), patch("build_pvz_base.MAIN_MENU_CLIPS", clips):
                 first = build_main_menu()

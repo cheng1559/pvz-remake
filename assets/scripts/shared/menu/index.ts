@@ -66,12 +66,11 @@ interface AwardDetails {
     nextLevelId: string | null
     showMainMenu: boolean
     titleKey: string
-    nameKey: string
-    descriptionKey: string
 }
 export type AwardView = AwardDetails & (
-    { kind: 'seed'; seed: number; cost: number; name: string }
-    | { kind: 'tool'; id: string; seed?: never; cost?: never; name?: never }
+    { kind: 'seed'; seed: number; cost: number; name: string; nameKey: string; descriptionKey: string }
+    | { kind: 'tool'; id: string; seed?: never; cost?: never; name?: never; nameKey: string; descriptionKey: string }
+    | { kind: 'note'; id: string; seed?: never; cost?: never; name?: never }
 )
 
 export interface MenuEndpoints {

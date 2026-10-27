@@ -1,0 +1,11 @@
+{
+    "schemaVersion": 1,
+    "id": "local:widescreen-pvz",
+    "version": "0.1.11",
+    "apiVersion": 1,
+    "contentHash": "widescreen-pvz-0.1.11",
+    "dependencies": [],
+    "client": {
+        "module": "client/index.js"
+    }
+}

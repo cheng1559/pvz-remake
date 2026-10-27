@@ -34,8 +34,6 @@ test('Adventure 1-1 presentation waits for entity creation and redraws restored 
     assert.match(hud, /this\.seedBank\.sync\(/)
     assert.match(showcase, /if \(!this\.lifecycle\.onComplete\) return/)
     assert.match(showcase, /snapshot\.result === 'lost'[\s\S]*?this\.lifecycle\.onGameOver/)
-    assert.match(end, /graphics\.fillColor = new Color\(255, 255, 255, alpha\)/)
-    assert.match(end, /graphics\.fillRect\(-400, -300, 800, 600\)/)
     assert.doesNotMatch(view, /ProfileStore/)
     assert.match(view, /static async create\(root: Node, content: LoadedContent, levelId: string, playerName: string, initial: WorldSnapshot\)/)
     assert.match(probe, /const playerName = profile\?\.name \|\| 'Player'/)

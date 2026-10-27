@@ -1,13 +1,11 @@
 import { sys } from 'cc'
-import { isQualifiedId, parseModManifest, sortModManifests, type ModManifest } from '@/shared/mod'
-import { contentJson, parseModContent, type ModContent } from '@/shared/mod/content'
+import { isQualifiedId, sortModManifests, type ModManifest } from '@/shared/mod'
+import { contentJson, parseContentArchive, type ContentArchive } from '@/shared/mod/content'
 import { listInstalledArchives, readInstalledArchive, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveFiles } from './InstalledArchives'
 
-export interface InstalledMod {
-    manifest: ModManifest
+export interface InstalledMod extends ContentArchive {
     files: ArchiveFiles
     archive: Uint8Array
-    content: ModContent
 }
 
 const storageKey = 'pvz-remake:active-mods'
@@ -15,8 +13,7 @@ const orderStorageKey = 'pvz-remake:mod-order'
 
 function parseArchive(archive: Uint8Array): InstalledMod {
     const files = unpackArchive(archive, 'manifest.json')
-    const manifest = parseModManifest(contentJson(files, 'manifest.json'))
-    const content = parseModContent(contentJson(files, 'content.json'), files)
+    const { manifest, content } = parseContentArchive(files)
     for (const file of [manifest.gameplay?.cocosModule, manifest.client?.module]) {
         if (file && !files[file]) throw new Error(`Missing Mod module: ${file}`)
     }

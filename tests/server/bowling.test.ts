@@ -205,11 +205,32 @@ test('conveyor packets stop in 50px slots and removing the first preserves the f
     assert.deepEqual(server.snapshot().conveyorPackets.map(packet => packet.x), [0, 50])
     runCommand(server, { type: 'selectConveyorPacket', packetId: 1 })
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 0 }), undefined)
-    assert.equal(server.snapshot().conveyorPackets[0].x, 51)
+    assert.equal(server.snapshot().conveyorPackets[0].x, 50)
+    for (let tick = 0; tick < 4; tick++) server.tick()
+    assert.equal(server.snapshot().conveyorPackets[0].x, 49, 'the gap closes at normal conveyor speed')
     runCommand(server, { type: 'selectConveyorPacket', packetId: 2 })
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 0 }), undefined, 'a rolling nut never occupies its launch tile')
     assert.equal(server.snapshot().plants.length, 2)
     assert.equal(runCommand(server, { type: 'selectTool', toolId: 'pvz:shovel' }), undefined, 'the shovel remains available after the intro')
+})
+
+test('consuming a moving conveyor packet preserves every surviving position, including after restore', () => {
+    for (const removedId of [1, 2, 4]) {
+        const server = begin(), saved = server.save()
+        const packets = [0, 140, 230, 440].map((x, index) => ({ id: index + 1, seedId: 'pvz:bowling-wallnut', x }))
+        saved.seedBank.conveyor!.packets = packets
+        saved.seedBank.conveyor!.nextId = 5
+        server.start({ ...options, save: saved as unknown as JsonValue })
+        runCommand(server, { type: 'selectConveyorPacket', packetId: removedId })
+        assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 0 }), undefined)
+        const remaining = packets.filter(packet => packet.id !== removedId)
+        assert.deepEqual(server.save().seedBank.conveyor!.packets, remaining)
+        restore(server)
+        assert.deepEqual(server.save().seedBank.conveyor!.packets, remaining)
+        for (let tick = 0; tick < 4; tick++) server.tick()
+        assert.deepEqual(server.save().seedBank.conveyor!.packets,
+            remaining.map((packet, index) => ({ ...packet, x: Math.max(index * 50, packet.x - 1) })))
+    }
 })
 
 test('a bowling plant hits, ricochets and resumes the same motion after save; an explosive one burns nearby zombies', () => {

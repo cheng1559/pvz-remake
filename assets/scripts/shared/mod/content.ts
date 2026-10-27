@@ -1,8 +1,11 @@
+import { parseModManifest, type ModManifest } from '@/shared/mod'
+
 export interface ResourceSprite {
     file: string
     width: number
     height: number
     scale?: number
+    alphaMode?: 'straight' | 'premultiplied'
     rect?: [number, number, number, number]
     offset?: [number, number]
     borders?: [number, number, number, number]
@@ -13,6 +16,12 @@ export const RESOURCE_FILES = ['fonts', 'audio', 'json', 'text', 'reanim', 'part
 export type ResourceManifest = { sprites: Record<string, ResourceSprite> } & Record<typeof RESOURCE_FILES[number], Record<string, string>>
 export interface ModContent { resources: ResourceManifest; gameplay?: string; presentation?: string }
 export type ContentFiles = Readonly<Record<string, Uint8Array>>
+export interface ContentArchive { manifest: ModManifest; content: ModContent; files: ContentFiles }
+
+export function parseContentArchive(files: ContentFiles): ContentArchive {
+    return { manifest: parseModManifest(contentJson(files, 'manifest.json')),
+        content: parseModContent(contentJson(files, 'content.json'), files), files }
+}
 
 export function relativeFile(value: unknown): asserts value is string {
     if (typeof value !== 'string' || !value || /^(?:[\\/]|[a-z][a-z0-9+.-]*:)/i.test(value)
@@ -32,10 +41,16 @@ export function parseModContent(value: unknown, files: ContentFiles): ModContent
     const raw = record(source.resources ?? {}, 'resources')
     for (const key of Object.keys(raw)) if (!['sprites', ...RESOURCE_FILES].includes(key)) throw new Error(`Unknown resource category: ${key}`)
     const resources = Object.fromEntries(['sprites', ...RESOURCE_FILES].map(kind => [kind, { ...record(raw[kind] ?? {}, kind) }])) as ResourceManifest
+    const alphaModes = new Map<string, ResourceSprite['alphaMode']>()
     for (const [id, sprite] of Object.entries(resources.sprites)) {
         qualifiedId(id)
         if (!sprite || typeof sprite !== 'object') throw new Error(`Invalid sprite: ${id}`)
         const [width, height] = pngSize(files, sprite.file)
+        if (sprite.alphaMode !== undefined) {
+            if (sprite.alphaMode !== 'straight' && sprite.alphaMode !== 'premultiplied') throw new Error(`Invalid sprite alpha mode: ${id}`)
+            if (alphaModes.has(sprite.file) && alphaModes.get(sprite.file) !== sprite.alphaMode) throw new Error(`Conflicting sprite alpha modes: ${sprite.file}`)
+            alphaModes.set(sprite.file, sprite.alphaMode)
+        }
         if (![sprite.width, sprite.height, sprite.scale ?? 1].every(v => Number.isFinite(v) && v > 0)
             || width !== sprite.width * (sprite.scale ?? 1) || height !== sprite.height * (sprite.scale ?? 1)) throw new Error(`Sprite dimensions do not match: ${id}`)
         for (const [values, length] of [[sprite.rect, 4], [sprite.offset, 2], [sprite.borders, 4]] as const) {

@@ -45,7 +45,7 @@ export interface ZombieViewInstance {
     snapshot(entityId: number): ZombieViewSnapshot
     restore(snapshot: ZombieViewSnapshot): void | Promise<void>
     getTrackWorldPosition(trackId: string): Vec3 | null
-    syncGameOverWalk(zombie: ZombieSnapshot, ticks: number, y: number): void
+    syncGameOverWalk(zombie: ZombieSnapshot, ticks: number, y: number, approachTicks?: number): void
     destroy(): void
 }
 
@@ -117,12 +117,12 @@ export class ZombieView implements ZombieViewInstance {
         return (trackId === 'Zombie_flag' ? this.flag : this.player)?.getTrackWorldPosition(trackId) ?? null
     }
 
-    syncGameOverWalk(zombie: ZombieSnapshot, ticks: number, y: number): void {
+    syncGameOverWalk(zombie: ZombieSnapshot, ticks: number, y: number, approachTicks = 0): void {
         const player = this.player
         if (!player) return
         const duration = player.lastFrameTimeSeconds
         const rate = this.definition(zombie.animation).rateScale
-        const start = zombie.animationTime / 12 * rate
+        const start = zombie.animationTime / 12 * rate + approachTicks / 100 * zombie.animationSpeed * rate
         const time = start + ticks / 100 * zombie.animationSpeed * rate
         const cycleDistance = (player.sampleTrack('_ground', duration)?.x ?? 0) - (player.sampleTrack('_ground', 0)?.x ?? 0)
         const distance = (Math.floor(time / duration) - Math.floor(start / duration)) * cycleDistance
@@ -247,8 +247,9 @@ export class ZombieView implements ZombieViewInstance {
 
     private async load(zombie: ZombieSnapshot): Promise<void> {
         const version = ++this.loadVersion
-        // Zombie::UpdateZombiePolevaulter lands with StartWalkAnim(0): no blend out of the jump.
-        const landing = this.animation === 'anim_jump' && (zombie.state === 'walking' || zombie.state === 'eating')
+        // Landing and WalkIntoHouse both use StartWalkAnim(0), without blending the held pole into the walk.
+        const landing = (this.animation === 'anim_jump' || this.presentation.vault && this.animation === 'anim_run' && zombie.hasPole === false)
+            && (zombie.state === 'walking' || zombie.state === 'eating')
         this.pendingAnimation = zombie.animation
         const animation = this.definition(zombie.animation)
         const animationNode = uiNode({

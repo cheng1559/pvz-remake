@@ -1,1 +1,35 @@
-{ "pvz:shovel": {"sprite": "pvz:shovel_hi_res", "scale": 0.5, "x": -20, "y": -20, "pageY": 137} }
+{
+  "pvz:shovel": {
+    "sprite": "pvz:shovel_hi_res",
+    "scale": 0.5,
+    "x": -20,
+    "y": -20,
+    "pageY": 137
+  },
+  "pvz:zombie-note-1": {
+    "sprite": "pvz:zombienotesmall",
+    "scale": 1,
+    "x": 0,
+    "y": 0,
+    "pageY": 80,
+    "pageImages": [
+      {
+        "sprite": "pvz:background1",
+        "x": -700,
+        "y": -300,
+        "width": 2800,
+        "height": 1200
+      },
+      {
+        "sprite": "pvz:zombienote",
+        "x": 80,
+        "y": 80
+      },
+      {
+        "sprite": "pvz:zombie_note1",
+        "x": 131,
+        "y": 132
+      }
+    ]
+  }
+}

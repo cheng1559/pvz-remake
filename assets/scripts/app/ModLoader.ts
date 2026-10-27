@@ -1,11 +1,11 @@
 import { DefinitionSources, buildGameplayContent, buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
-import { modResources } from '@/client/content/ModResources'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { loadPresentationDefinitions } from '@/client/content/loadPresentationDefinitions'
 import { ModAssets } from '@/shared/mod/ModAssets'
 import type { ModHost } from '@/shared/mod/ModHost'
 import type { ModManifest } from '@/shared/mod'
+import { contentJson } from '@/shared/mod/content'
 import { GameplayRegistry } from '@/server/GameplayRegistry'
 import { createServerModHost } from '@/server/createModHost'
 import { PlantViewRegistry } from '@/client/plants/PlantViewRegistry'
@@ -74,7 +74,7 @@ async function loadMods() {
                 await module.register({ host, assets: new ClientModAssets(manifest, mod.files) })
             }
             stage = 'definitions'
-            const content = buildGameplayContent(base!.definitions, base!.levels, base!.strings, base!.seedCatalog, gameplayDefinitions.sources)
+            const content = buildGameplayContent(base!.gameplay, gameplayDefinitions.sources)
             const presentation = buildPresentationDefinitions(base!.presentation, presentationDefinitions.sources)
             gameplay.validate(content.definitions)
             new ClientAnimationRegistry(presentation)
@@ -106,14 +106,11 @@ async function loadMods() {
 }
 
 async function loadBaseDefinitions() {
-    const loader = new ClientContentLoader(), manifest = await loader.loadManifest()
-    const load = (path: string) => modResources.baseJson(`pvz:${path.replace(/\.json$/i, '')}`)
-    const [definitions, levels, strings, seedCatalog, presentation] = await Promise.all([
-        load(manifest.gameplay.definitions), load(manifest.gameplay.levels), load(manifest.gameplay.strings),
-        load(manifest.gameplay.seedCatalog),
-        loadPresentationDefinitions(manifest, []),
-    ])
-    buildGameplayContent(definitions, levels, strings, seedCatalog)
+    const base = await new ClientContentLoader().loadBaseContent()
+    if (!base.content.gameplay) throw new Error('Base content does not define gameplay')
+    const gameplay = contentJson(base.files, base.content.gameplay)
+    const presentation = await loadPresentationDefinitions(base, [])
+    buildGameplayContent(gameplay)
     new ClientAnimationRegistry(presentation)
-    return { definitions, levels, strings, seedCatalog, presentation }
+    return { gameplay, presentation }
 }

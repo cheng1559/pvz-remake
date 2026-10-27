@@ -9,7 +9,8 @@ import zipfile
 from pathlib import Path
 
 from PIL import Image
-from content_source import read_definitions
+from content_source import read_content
+from reanim_converter import build_reanim_clip
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT = ROOT / 'tools/generated/pvz-base'
@@ -18,7 +19,7 @@ RESOURCES = ROOT / 'tools/generated/resources'
 
 def build() -> Path:
     files: dict[str, bytes] = {}
-    pack: dict = {'id': 'base', 'sprites': {}, 'fonts': {}, 'audio': {}, 'json': {}, 'text': {}}
+    pack: dict = {kind: {} for kind in ('sprites', 'fonts', 'audio', 'json', 'text', 'reanim', 'particles', 'music', 'prefabs')}
 
     def image(source: Path, file: str) -> tuple[int, int]:
         with Image.open(source) as pixels:
@@ -72,44 +73,65 @@ def build() -> Path:
         else:
             raise ValueError(f'Unsupported base resource: {source}')
 
-    content = json.loads((CONTENT / 'manifest.json').read_text())
-    content['gameplay']['seedCatalog'] = 'gameplay/seed-catalog.json'
-    for resource_id, path in content['client']['sprites'].items():
+    generated = json.loads((CONTENT / 'manifest.json').read_text())['client']
+    for resource_id, path in generated['sprites'].items():
         if resource_id not in pack['sprites']:
             source = CONTENT / (path.removesuffix('/spriteFrame') + '.png')
             sprite(resource_id, source, 'content/' + source.relative_to(CONTENT).as_posix())
     for category in ('reanim', 'particles', 'music'):
-        for resource_id, path in content['client'][category].items():
+        for resource_id, path in generated[category].items():
             source = CONTENT / (path + '.json')
-            data('json', resource_id, source, 'content/' + source.relative_to(CONTENT).as_posix())
-    for resource_id, path in content['client']['sounds'].items():
+            data(category, resource_id, source, 'content/' + source.relative_to(CONTENT).as_posix())
+    for resource_id, path in generated['sounds'].items():
         if resource_id not in pack['audio']:
             source = next((CONTENT / (path + ext) for ext in ('', '.mp3', '.wav') if (CONTENT / (path + ext)).is_file()))
             data('audio', resource_id, source, 'content/' + source.relative_to(CONTENT).as_posix())
-    for source in sorted((ROOT / 'tools/content/pvz-base/gameplay').glob('*.json')):
-        data('json', 'pvz:gameplay/' + source.stem, source, 'content/gameplay/' + source.name)
-        if source.stem == 'definitions':
-            files['content/gameplay/definitions.json'] = json.dumps(
-                read_definitions(source.parent), ensure_ascii=False, separators=(',', ':'),
-            ).encode()
-    source = ROOT / 'tools/content/pvz-base/presentation/definitions.json'
-    data('json', 'pvz:presentation/definitions', source, 'content/presentation/definitions.json')
-    files['content/presentation/definitions.json'] = json.dumps(
-        read_definitions(source.parent), ensure_ascii=False, separators=(',', ':'),
-    ).encode()
+    for resource_id, path in generated['prefabs'].items():
+        source = ROOT / 'assets/resources' / (path + '.prefab')
+        data('prefabs', resource_id, source, path + '.prefab')
 
-    # Save identity includes all default data, not only the old level subset.
-    content['client']['bundle'] = 'base'
-    content.pop('saveCompatibleHashes', None)
-    content['contentHash'] = ''
-    pack['json']['pvz:content'] = 'base-content.json'
-    digest = hashlib.sha256(json.dumps({'content': content, 'pack': pack}, sort_keys=True).encode())
+    # Export selected legacy clips through the shared Reanim converter.
+    for source_id, nodes in json.loads((ROOT / 'tools/anim_defs.json').read_text()).items():
+        selected = [(node, clip, resource_id) for node, settings in nodes.items()
+                    for clip, resource_id in settings.get('contentClips', {}).items()]
+        if not selected:
+            continue
+        source = RESOURCES / 'animations' / (source_id + '.json')
+        exported = json.loads(source.read_text())
+        for node, clip, resource_id in selected:
+            file = 'content/reanim/' + resource_id.replace(':', '/') + '.json'
+            animation = build_reanim_clip(source, nodes, node, clip, resource_id, set(pack['sprites']), nodes=exported)
+            files[file] = json.dumps(animation, ensure_ascii=False, separators=(',', ':')).encode()
+            pack['reanim'][resource_id] = file
+
+    source_root = ROOT / 'tools/content/pvz-base'
+    source = read_content(source_root)
+    content = {'resources': pack}
+    for kind in ('gameplay', 'presentation'):
+        file = f'assets/{kind}.json'
+        files[file] = json.dumps(source[kind], ensure_ascii=False, separators=(',', ':')).encode()
+        content[kind] = file
+    # Keep public JSON resource IDs for strings and presentation overrides.
+    pack['json']['pvz:presentation/definitions'] = content['presentation']
+    file = 'assets/strings.json'
+    files[file] = json.dumps(source['gameplay']['strings'], ensure_ascii=False, separators=(',', ':')).encode()
+    pack['json']['pvz:gameplay/strings'] = file
+    for kind, entries in source['resources'].items():
+        for resource_id, entry in entries.items():
+            if kind == 'sprites':
+                sprite(resource_id, source_root / entry['file'], entry['file'])
+                pack[kind][resource_id].update(entry)
+            else:
+                data(kind, resource_id, source_root / entry, entry)
+
+    # Identity covers the common index and every payload, including default definitions.
+    manifest = json.loads((source_root / 'manifest.json').read_text())
+    manifest.pop('contentHash', None)
+    digest = hashlib.sha256(json.dumps({'manifest': manifest, 'content': content}, sort_keys=True).encode())
     for file, payload in sorted(files.items()):
         digest.update(file.encode()); digest.update(payload)
-    content['contentHash'] = digest.hexdigest()
-    files['base-content.json'] = json.dumps(content, ensure_ascii=False, separators=(',', ':')).encode()
-    files['content.json'] = json.dumps({'resources': {key: value for key, value in pack.items() if key != 'id'}}, ensure_ascii=False, separators=(',', ':')).encode()
-    files['manifest.json'] = json.dumps({'schemaVersion': 1, 'id': 'pvz:base', 'version': '1.0.0', 'apiVersion': 1, 'contentHash': content['contentHash'], 'dependencies': []}, separators=(',', ':')).encode()
+    files['content.json'] = json.dumps(content, ensure_ascii=False, separators=(',', ':')).encode()
+    files['manifest.json'] = json.dumps({**manifest, 'contentHash': digest.hexdigest()}, separators=(',', ':')).encode()
 
     output = ROOT / 'assets/resources/base.zip'
     output.parent.mkdir(parents=True, exist_ok=True)

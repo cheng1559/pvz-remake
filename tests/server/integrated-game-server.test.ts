@@ -164,23 +164,22 @@ test('Peashooter acquires a zombie ahead and fires after its fixed windup', () =
     runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
     runCommand(server, { type: 'placePlant', row: 2, column: 0 })
 
-    const serverInternals = server as unknown as {
-        spawnZombie(typeId: string, row: number, x: number): number
-    }
-    assert.equal(serverInternals.spawnZombie('pvz:normal', 2, 700), 3)
+    const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
+    assert.equal(spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250), 3)
     server.drainEvents()
 
     let snapshot = server.snapshot()
-    while (gameplayTick(server) < 75) snapshot = server.tick()
+    const ready = Math.max(1, server.save().entities.find(entity => entity.plantAttack)!.plantAttack!.readyAtTick)
+    while (gameplayTick(server) < ready) snapshot = server.tick()
     assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [[
         'plantFiring', { plantId: 2 },
     ]])
-    while (gameplayTick(server) < 106) snapshot = server.tick()
-    assert.equal(gameplayTick(server), 106)
+    const fire = ready + definitions.plants['pvz:peashooter'].shooter!.windupTicks - 1
+    while (gameplayTick(server) < fire - 1) snapshot = server.tick()
     assert.deepEqual(snapshot.projectiles, [])
 
     snapshot = server.tick()
-    assert.equal(gameplayTick(server), 107)
+    assert.equal(gameplayTick(server), fire)
     assert.equal(snapshot.zombies[0].entityId, 3)
     assert.equal(snapshot.zombies[0].state, 'walking')
     assert.equal(snapshot.zombies[0].x < 700, true)
@@ -202,14 +201,14 @@ test('pea damages the spatially nearest zombie', () => {
     runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
     runCommand(server, { type: 'placePlant', row: 2, column: 0 })
 
-    const serverInternals = server as unknown as {
-        spawnZombie(typeId: string, row: number, x: number): number
-    }
-    assert.equal(serverInternals.spawnZombie('pvz:normal', 2, 94), 3)
-    assert.equal(serverInternals.spawnZombie('pvz:normal', 2, 90), 4)
+    const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
+    assert.equal(spawnZombie(world, definitions, 'pvz:normal', 2, 94, 250), 3)
+    assert.equal(spawnZombie(world, definitions, 'pvz:normal', 2, 90, 250), 4)
 
     let snapshot = server.snapshot()
-    while (gameplayTick(server) < 107) snapshot = server.tick()
+    const ready = Math.max(1, server.save().entities.find(entity => entity.plantAttack)!.plantAttack!.readyAtTick)
+    const fire = ready + definitions.plants['pvz:peashooter'].shooter!.windupTicks - 1
+    while (gameplayTick(server) < fire) snapshot = server.tick()
     assert.deepEqual(snapshot.projectiles, [])
     assert.deepEqual(snapshot.zombies.map(zombie => [zombie.entityId, zombie.health]), [
         [3, 270],

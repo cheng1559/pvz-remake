@@ -4,8 +4,8 @@
     "behavior": { "intervalTicks": 100, "amount": 10 },
     "body": { "x": 10, "y": 0, "width": 60, "height": 80 },
     "shooter": {
-      "cadenceTicks": 75,
-      "initialDelayTicks": 40,
+      "cadenceTicks": { "min": 75, "max": 75 },
+      "initialDelayTicks": { "min": 40, "max": 40 },
       "windupTicks": 33,
       "shotsPerBurst": 1,
       "burstIntervalTicks": 0,

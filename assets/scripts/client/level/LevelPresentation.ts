@@ -7,8 +7,11 @@ import type { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
 import { getBoardPresentation } from './boards/definitions'
 import { AdventureIntro } from './adventure/AdventureIntro'
+import type { UI } from '@/client/ui/UI'
 
 export interface LevelIntroContext {
+    ui: UI
+    previewTooltipSurface?: Node
     content: LoadedContent
     level: LevelDefinition
     slots: LevelSlots

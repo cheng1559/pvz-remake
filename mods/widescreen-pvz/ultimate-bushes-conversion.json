@@ -1,0 +1,183 @@
+{
+    "source": "/Applications/PvZ Ultimate.app",
+    "rsbSha256": "5355c6954a4696c34446c104a6315213bcd57b3411600a7312c33319bc233556",
+    "assemblySha256": "a5c901a07a7ba9f33571078c4caa212be9e631fe97d5e219050ef2fa000a1f78",
+    "resources": [
+        {
+            "source": "REANIM\\BUSHES3.REANIM",
+            "sourceSha256": "37bc0111df7c1bcd8885c7f19392d7315d93418b85cd0e9b4aeffcdb51df5f33",
+            "file": "assets/ultimate-bushes/bushes3.json",
+            "sha256": "e0b511d88df9728e17464e7f822dc117ee50dd03c95fa3ffd1856b8598d82ce2",
+            "frames": 42,
+            "fps": 12
+        },
+        {
+            "source": "REANIM\\BUSHES4.REANIM",
+            "sourceSha256": "2da46bdb8b4e43f174644cdb1ec63b030a641cd1a02bcb138f9331303e144afa",
+            "file": "assets/ultimate-bushes/bushes4.json",
+            "sha256": "9c6e8981499ad25022d4e864a4ee5da54cd7fb63faaa1c8936092e0125881d40",
+            "frames": 42,
+            "fps": 12
+        },
+        {
+            "source": "REANIM\\BUSHES5.REANIM",
+            "sourceSha256": "c5b51ca5394bab5233c2e5c7c45c3e1c50fdf0e5595bb1541d775c5a8051789f",
+            "file": "assets/ultimate-bushes/bushes5.json",
+            "sha256": "1a476710b9907b9db38042925b28f3569b0f348efc1ce92a39b185bc8fd07060",
+            "frames": 42,
+            "fps": 12
+        },
+        {
+            "source": "IMAGE_REANIM_B3_1",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                1278,
+                1324,
+                86,
+                66
+            ],
+            "file": "assets/ultimate-bushes/b3_1.png",
+            "sha256": "e6f7cda63acbdd9caa937e9003286c572044ff85af2a1f94331a6d060daa2a21"
+        },
+        {
+            "source": "IMAGE_REANIM_B3_2",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                993,
+                1072,
+                137,
+                75
+            ],
+            "file": "assets/ultimate-bushes/b3_2.png",
+            "sha256": "7f63d6fc857d227a5dc066e42e36ef9dcc2ee4b0e0d61ae0846e234e738b50b5"
+        },
+        {
+            "source": "IMAGE_REANIM_B3_3",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                1307,
+                1477,
+                110,
+                85
+            ],
+            "file": "assets/ultimate-bushes/b3_3.png",
+            "sha256": "bdb81a65328e25ad36ab5b389354864a2e28a6dea3485a642034df71a4c31d6d"
+        },
+        {
+            "source": "IMAGE_REANIM_B3_4",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                1211,
+                203,
+                198,
+                125
+            ],
+            "file": "assets/ultimate-bushes/b3_4.png",
+            "sha256": "a002a1bb25bcfff2e9028261c4a9a335727fd82b876c1f60c4fc45f5791b5571"
+        },
+        {
+            "source": "IMAGE_REANIM_B3_5",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                1653,
+                929,
+                74,
+                78
+            ],
+            "file": "assets/ultimate-bushes/b3_5.png",
+            "sha256": "7c95508c1e2bfa3c571390b0e96ae81af7f7a4c0f0efdf7f9a676d5b9ffb837c"
+        },
+        {
+            "source": "IMAGE_REANIM_B3_6",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                1251,
+                1398,
+                118,
+                77
+            ],
+            "file": "assets/ultimate-bushes/b3_6.png",
+            "sha256": "ae02b5e7433e31a959a006f69c09fe96c09477a6ebb052680e6eb8e4233228ca"
+        },
+        {
+            "source": "IMAGE_REANIM_B3_7",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                1165,
+                1401,
+                84,
+                75
+            ],
+            "file": "assets/ultimate-bushes/b3_7.png",
+            "sha256": "7d8a72cfe10aa450d2862fb174d0bdd2fdf930e5326df7b34b2249f0d47dd32a"
+        },
+        {
+            "source": "IMAGE_REANIM_B4_1",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                801,
+                221,
+                203,
+                129
+            ],
+            "file": "assets/ultimate-bushes/b4_1.png",
+            "sha256": "ed1ceb321570f1767ef88b3c10e97c69a4bbcddb5917d2b30344a9dc9a2084b5"
+        },
+        {
+            "source": "IMAGE_REANIM_B4_2",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                871,
+                352,
+                228,
+                182
+            ],
+            "file": "assets/ultimate-bushes/b4_2.png",
+            "sha256": "3e4d945539957a4b4b763b89cc4f6e863df1536ba6e37e64c031c28a8c4e7a1a"
+        },
+        {
+            "source": "IMAGE_REANIM_B4_3",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                899,
+                947,
+                194,
+                123
+            ],
+            "file": "assets/ultimate-bushes/b4_3.png",
+            "sha256": "aa22655efa564303eea18441b27300de8e40562eb0041238b69814e3a59c78e9"
+        },
+        {
+            "source": "IMAGE_REANIM_BUSH_BASE",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                1,
+                1582,
+                329,
+                210
+            ],
+            "file": "assets/ultimate-bushes/bush_base.png",
+            "sha256": "78a3955c4f44f4199324621b8bc805f300e00bffcc52e587e1e4bef09d59b56a"
+        },
+        {
+            "source": "IMAGE_REANIM_LEAF",
+            "atlas": "ATLASES\\DELAYLOAD_GAMEPLAY_LAWNOBJECTS_600.PTX",
+            "rect": [
+                1251,
+                1696,
+                24,
+                19
+            ],
+            "file": "assets/ultimate-bushes/leaf.png",
+            "sha256": "e08c4b5818780f712bd967d1236db455af0208ecafd0154f5e3c2b6c2735e471"
+        }
+    ],
+    "reference": {
+        "init": "Board.InitCoverLayer, RVA 0xb6710",
+        "trigger": "Board.AddZombieInRow, RVA 0xb4218",
+        "track": "anim_rustle",
+        "rate": 10,
+        "mode": "play once and hold",
+        "scope": "Bundled managed implementation and actual RSB animation data; not native AOT disassembly."
+    }
+}

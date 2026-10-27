@@ -1,11 +1,11 @@
 import { buildPresentationDefinitions, type DefinitionSource } from '@/shared/content/DefinitionRegistry'
 import { JsonAsset } from 'cc'
-import type { ContentManifest } from '@/shared/content'
+import { contentJson, type ContentArchive } from '@/shared/mod/content'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { modResources } from './ModResources'
 
 export async function loadPresentationDefinitions(
-    manifest: ContentManifest,
+    base: ContentArchive,
     sources?: readonly DefinitionSource[],
 ): Promise<PresentationDefinitions> {
     let definitions = sources
@@ -15,9 +15,7 @@ export async function loadPresentationDefinitions(
         definitions = (await loadInstalledMods()).presentationDefinitions
     }
     const parse = (value: unknown) => buildPresentationDefinitions(value, definitions)
-    const path = manifest.presentation.definitions.replace(/\.json$/i, '')
-    const id = manifest.id.slice(0, manifest.id.indexOf(':') + 1) + path
-    const replacement = await modResources.asset(id, JsonAsset)
-    if (!replacement) throw new Error(`Missing presentation definitions: ${id}`)
-    return parse(replacement.json)
+    if (!base.content.presentation) throw new Error('Base content does not define presentation')
+    const replacement = await modResources.asset('pvz:presentation/definitions', JsonAsset)
+    return parse(replacement?.json ?? contentJson(base.files, base.content.presentation))
 }

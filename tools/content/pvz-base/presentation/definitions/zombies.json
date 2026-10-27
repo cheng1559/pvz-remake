@@ -1,5 +1,6 @@
 {
   "pvz:normal": {
+    "nameKey": "ZOMBIE",
     "animationTarget": "pvz:normal",
     "shadowX": 23,
     "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
@@ -33,6 +34,7 @@
     "helmTracks": ["anim_cone", "anim_bucket"]
   },
   "pvz:flag": {
+    "nameKey": "FLAG_ZOMBIE",
     "animationTarget": "pvz:flag",
     "shadowX": 23,
     "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
@@ -68,6 +70,7 @@
     "helmTracks": ["anim_cone", "anim_bucket"]
   },
   "pvz:conehead": {
+    "nameKey": "CONEHEAD_ZOMBIE",
     "animationTarget": "pvz:conehead",
     "shadowX": 23,
     "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
@@ -108,6 +111,7 @@
     "helmTracks": ["anim_cone", "anim_bucket"]
   },
   "pvz:buckethead": {
+    "nameKey": "BUCKETHEAD_ZOMBIE",
     "animationTarget": "pvz:buckethead",
     "shadowX": 23,
     "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
@@ -148,6 +152,7 @@
     "helmTracks": ["anim_cone", "anim_bucket"]
   },
   "pvz:pole_vaulter": {
+    "nameKey": "POLE_VAULTING_ZOMBIE",
     "animationTarget": "pvz:pole_vaulter",
     "shadowX": 18,
     "arm": {"lower": "Zombie_polevaulter_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_polevaulter_outerarm_upper"},

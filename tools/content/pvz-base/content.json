@@ -1,0 +1,36 @@
+{
+  "gameplay": {
+    "settings": "gameplay/settings.json",
+    "boards": "gameplay/definitions/boards.json",
+    "seeds": "gameplay/definitions/seeds.json",
+    "plants": "gameplay/definitions/plants.json",
+    "zombies": "gameplay/definitions/zombies.json",
+    "zombieGaits": "gameplay/definitions/zombie-gaits.json",
+    "projectiles": "gameplay/definitions/projectiles.json",
+    "items": "gameplay/definitions/items.json",
+    "lawnMowers": "gameplay/definitions/lawn-mowers.json",
+    "levels": "gameplay/levels.json",
+    "strings": "gameplay/strings.json",
+    "seedCatalog": "gameplay/seed-catalog.json"
+  },
+  "presentation": {
+    "screens": "presentation/definitions/screens.json",
+    "conveyor": "presentation/definitions/conveyor.json",
+    "shovel": "presentation/definitions/shovel.json",
+    "dave": "presentation/definitions/dave.json",
+    "boards": "presentation/definitions/boards.json",
+    "animation": "presentation/definitions/animation.json",
+    "levels": "presentation/definitions/levels.json",
+    "awards": "presentation/definitions/awards.json",
+    "plants": "presentation/definitions/plants.json",
+    "zombies": "presentation/definitions/zombies.json",
+    "seedPackets": "presentation/definitions/seed-packets.json",
+    "almanac": "presentation/definitions/almanac.json",
+    "projectiles": "presentation/definitions/projectiles.json"
+  },
+  "resources": {
+    "json": {
+      "pvz:gameplay/store": "gameplay/store.json"
+    }
+  }
+}

@@ -24,6 +24,8 @@ import * as levelHud from '@/client/level/LevelHudPresenter'
 import * as seedBank from '@/client/level/LevelSeedBank'
 import * as levelView from '@/client/level/LevelView'
 import * as debugSettings from '@/platform/debug/GameDebugSettings'
+import * as debugCli from '@/shared/debug/DebugCli'
+import * as debugCommands from '@/platform/debug/DebugCliCommands'
 import * as haptics from '@/platform/Haptics'
 
 export class ClientModAssets extends ModAssets {
@@ -54,6 +56,8 @@ export function createClientModHost(ownerId: string, definitions: DefinitionSour
         'client/level/LevelSeedBank': seedBank,
         'client/level/LevelView': levelView,
         'platform/debug/GameDebugSettings': debugSettings,
+        'shared/debug/DebugCli': debugCli,
+        'platform/debug/DebugCliCommands': debugCommands,
         'platform/Haptics': haptics,
     })
 }

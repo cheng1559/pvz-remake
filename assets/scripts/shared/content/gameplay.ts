@@ -39,6 +39,8 @@ export interface SeedDefinition {
     sunCost: number
     cooldownTicks: number
     initialCooldownTicks?: number
+    /** First adventure level where this seed is available; omitted for unrestricted content. */
+    unlockAdventureIndex?: number
     placement: 'ground'
 }
 
@@ -65,8 +67,8 @@ export interface PlantDefinition {
     /** JSON configuration consumed by a registered plant behavior. */
     behavior?: JsonObject
     shooter?: {
-        cadenceTicks: number
-        initialDelayTicks: number
+        cadenceTicks: { min: number; max: number }
+        initialDelayTicks: { min: number; max: number }
         windupTicks: number
         shotsPerBurst: number
         burstIntervalTicks: number
@@ -156,10 +158,12 @@ export interface LevelDefinition {
     lawnMower: string
     skySun: string
     waves: Array<{ zombies: string[]; flagWave?: boolean; points?: number }>
-    zombiePool?: Array<{ id: string; points: number; weight: number }>
+    zombiePool?: Array<{ id: string; points: number; weight: number; firstWave?: number }>
     firstWaveTicks?: number
     tools?: string[]
     conveyor?: {
+        initialSeed?: string
+        initialDelayTicks?: number
         seeds: Array<{ id: string; weight: number }>
         capacity: number
         spacing: number
@@ -180,6 +184,7 @@ export interface LevelDefinition {
     tutorial: string
     award: { kind: 'seed'; id: string; packetCost: number }
         | { kind: 'tool'; id: string; titleKey: string; nameKey: string; descriptionKey: string; width: number; height: number }
+        | { kind: 'note'; id: string; titleKey: string; width: number; height: number }
 }
 
 interface Point { x: number; y: number }
@@ -269,13 +274,14 @@ function parseBoard(value: unknown, name: string): BoardDefinition {
 }
 
 function parseSeed(value: unknown, name: string): SeedDefinition {
-    const source = exactObject(value, ['plant', 'sunCost', 'cooldownTicks', 'placement'], name, ['initialCooldownTicks'])
+    const source = exactObject(value, ['plant', 'sunCost', 'cooldownTicks', 'placement'], name, ['initialCooldownTicks', 'unlockAdventureIndex'])
     if (source.placement !== 'ground') throw new Error(`${name}.placement must be ground`)
     return {
         plant: qualifiedId(source.plant, `${name}.plant`),
         sunCost: nonNegativeInteger(source.sunCost, `${name}.sunCost`),
         cooldownTicks: nonNegativeInteger(source.cooldownTicks, `${name}.cooldownTicks`),
         ...(source.initialCooldownTicks === undefined ? {} : { initialCooldownTicks: nonNegativeInteger(source.initialCooldownTicks, `${name}.initialCooldownTicks`) }),
+        ...(source.unlockAdventureIndex === undefined ? {} : { unlockAdventureIndex: positiveInteger(source.unlockAdventureIndex, `${name}.unlockAdventureIndex`) }),
         placement: 'ground',
     }
 }
@@ -302,8 +308,8 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
             `${name}.shooter`,
         )
         result.shooter = {
-            cadenceTicks: positiveInteger(shooter.cadenceTicks, `${name}.shooter.cadenceTicks`),
-            initialDelayTicks: nonNegativeInteger(shooter.initialDelayTicks, `${name}.shooter.initialDelayTicks`),
+            cadenceTicks: tickRange(shooter.cadenceTicks, `${name}.shooter.cadenceTicks`, 1),
+            initialDelayTicks: tickRange(shooter.initialDelayTicks, `${name}.shooter.initialDelayTicks`, 0),
             windupTicks: positiveInteger(shooter.windupTicks, `${name}.shooter.windupTicks`),
             shotsPerBurst: positiveInteger(shooter.shotsPerBurst, `${name}.shooter.shotsPerBurst`),
             burstIntervalTicks: nonNegativeInteger(shooter.burstIntervalTicks, `${name}.shooter.burstIntervalTicks`),
@@ -473,6 +479,14 @@ function speedRange(value: unknown, name: string): { min: number; max: number } 
     return { min, max }
 }
 
+function tickRange(value: unknown, name: string, minimum: number): { min: number; max: number } {
+    const source = exactObject(value, ['min', 'max'], name)
+    const min = nonNegativeInteger(source.min, `${name}.min`)
+    const max = nonNegativeInteger(source.max, `${name}.max`)
+    if (min < minimum || min > max) throw new Error(`${name} must satisfy ${minimum} <= min <= max`)
+    return { min, max }
+}
+
 function groundTrack(value: unknown, name: string): number[] {
     const ground = array(value, name).map((x, index) => finite(x, `${name}[${index}]`))
     if (ground.length < 2 || ground[ground.length - 1] <= ground[0]) {
@@ -546,8 +560,10 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     }
     let conveyor: LevelDefinition['conveyor']
     if (source.conveyor !== undefined) {
-        const data = exactObject(source.conveyor, ['seeds', 'capacity', 'spacing', 'entryX', 'moveTicks', 'spawnDelay', 'insertionGap', 'removalGap'], `${name}.conveyor`)
+        const data = exactObject(source.conveyor, ['seeds', 'capacity', 'spacing', 'entryX', 'moveTicks', 'spawnDelay', 'insertionGap', 'removalGap'], `${name}.conveyor`, ['initialSeed', 'initialDelayTicks'])
         conveyor = {
+            ...(data.initialSeed === undefined ? {} : { initialSeed: qualifiedId(data.initialSeed, `${name}.conveyor.initialSeed`) }),
+            ...(data.initialDelayTicks === undefined ? {} : { initialDelayTicks: positiveInteger(data.initialDelayTicks, `${name}.conveyor.initialDelayTicks`) }),
             capacity: positiveInteger(data.capacity, `${name}.conveyor.capacity`),
             spacing: positiveFinite(data.spacing, `${name}.conveyor.spacing`),
             entryX: nonNegativeInteger(data.entryX, `${name}.conveyor.entryX`),
@@ -567,6 +583,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         }
         if (!conveyor.seeds.length || conveyor.spawnDelay[0]?.minPackets !== 0 ||
             conveyor.spawnDelay.some((entry, index, entries) => index > 0 && entry.minPackets <= entries[index - 1].minPackets)) throw new Error(`${name}.conveyor has invalid supply rules`)
+        if (conveyor.initialSeed && !conveyor.seeds.some(seed => seed.id === conveyor!.initialSeed)) throw new Error(`${name}.conveyor.initialSeed is not in the supply`)
     }
     let shovelTutorial: LevelDefinition['shovelTutorial']
     if (source.shovelTutorial !== undefined) {
@@ -594,6 +611,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const seedBankSlots = source.seedBankSlots === undefined ? undefined : positiveInteger(source.seedBankSlots, `${name}.seedBankSlots`)
     if (seedBankSlots !== undefined && (seedBankSlots > 10 || seedBankSlots > definitions.seedCatalog.length)) throw new Error(`${name}.seedBankSlots exceeds the shared chooser or bank capacity`)
     if (seedBankSlots !== undefined && seedPackets.length) throw new Error(`${name}.seedPackets is only for a fixed bank`)
+    if (seedBankSlots !== undefined && conveyor) throw new Error(`${name} cannot combine a conveyor and seed chooser`)
     const wavesSource = array(source.waves, `${name}.waves`)
     if (wavesSource.length === 0) throw new Error(`${name}.waves must not be empty`)
     const waves = wavesSource.map((wave, waveIndex) => {
@@ -607,12 +625,13 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     })
     const zombiePool = source.zombiePool === undefined ? undefined : array(source.zombiePool, `${name}.zombiePool`).map((value, index) => {
         const entryName = `${name}.zombiePool[${index}]`
-        const entry = exactObject(value, ['id', 'points', 'weight'], entryName)
+        const entry = exactObject(value, ['id', 'points', 'weight'], entryName, ['firstWave'])
         const id = qualifiedId(entry.id, `${entryName}.id`)
         reference(id, definitions.zombies, `${entryName}.id`)
-        return { id, points: positiveInteger(entry.points, `${entryName}.points`), weight: nonNegativeInteger(entry.weight, `${entryName}.weight`) }
+        return { id, points: positiveInteger(entry.points, `${entryName}.points`), weight: nonNegativeInteger(entry.weight, `${entryName}.weight`),
+            ...(entry.firstWave === undefined ? {} : { firstWave: positiveInteger(entry.firstWave, `${entryName}.firstWave`) }) }
     })
-    if (waves.some(wave => wave.points !== undefined) && !zombiePool?.some(entry => entry.weight > 0 && entry.points === 1)) {
+    if (waves.some(wave => wave.points !== undefined) && !zombiePool?.some(entry => entry.weight > 0 && entry.points === 1 && (entry.firstWave ?? 1) === 1)) {
         throw new Error(`${name}.zombiePool must include a weighted one-point zombie`)
     }
     if (zombiePool && new Set(zombiePool.map(entry => entry.id)).size !== zombiePool.length) throw new Error(`${name}.zombiePool contains duplicate IDs`)
@@ -640,7 +659,11 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
             titleKey: string(award.titleKey, `${name}.award.titleKey`), nameKey: string(award.nameKey, `${name}.award.nameKey`),
             descriptionKey: string(award.descriptionKey, `${name}.award.descriptionKey`),
             width: positiveInteger(award.width, `${name}.award.width`), height: positiveInteger(award.height, `${name}.award.height`) }
-    } else throw new Error(`${name}.award.kind must be seed or tool`)
+    } else if (award.kind === 'note') {
+        exactObject(award, ['kind', 'id', 'titleKey', 'width', 'height'], `${name}.award`)
+        parsedAward = { kind: 'note', id: qualifiedId(award.id, `${name}.award.id`), titleKey: string(award.titleKey, `${name}.award.titleKey`),
+            width: positiveInteger(award.width, `${name}.award.width`), height: positiveInteger(award.height, `${name}.award.height`) }
+    } else throw new Error(`${name}.award.kind must be seed, tool or note`)
 
     return {
         adventureIndex: positiveInteger(source.adventureIndex, `${name}.adventureIndex`),

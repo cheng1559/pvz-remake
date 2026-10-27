@@ -163,10 +163,11 @@ function parseSeedBank(value: unknown): SeedBankState {
     }
     let conveyor: SeedBankState['conveyor']
     if (source.conveyor !== undefined) {
-        const data = exact(source.conveyor, ['nextId', 'spawnAtTick', 'moveTicks', 'packets'], 'seedBank.conveyor')
+        const data = optionalExact(source.conveyor, ['nextId', 'spawnAtTick', 'moveTicks', 'packets'], ['lastSeedId'], 'seedBank.conveyor')
         conveyor = {
             nextId: positiveInteger(data.nextId, 'conveyor.nextId'), spawnAtTick: nonNegativeInteger(data.spawnAtTick, 'conveyor.spawnAtTick'),
             moveTicks: nonNegativeInteger(data.moveTicks, 'conveyor.moveTicks'),
+            ...(data.lastSeedId === undefined ? {} : { lastSeedId: nonEmptyString(data.lastSeedId, 'conveyor.lastSeedId') }),
             packets: array(data.packets, 'conveyor.packets').map(value => {
                 const packet = exact(value, ['id', 'seedId', 'x'], 'conveyor packet')
                 return { id: positiveInteger(packet.id, 'packet.id'), seedId: nonEmptyString(packet.seedId, 'packet.seedId'), x: finite(packet.x, 'packet.x') }

@@ -10,6 +10,8 @@ import * as collision from './collision'
 import * as events from './events'
 import * as explosions from './explosions'
 import * as debugRules from './debug/DebugRules'
+import * as debugCli from '@/shared/debug/DebugCli'
+import * as debugCommands from './debug/DebugCommands'
 import * as gameplay from './GameplayRegistry'
 import * as seedBank from './seedBank'
 import type { DefinitionSources } from '@/shared/content/DefinitionRegistry'
@@ -30,5 +32,7 @@ export function createServerModHost(ownerId: string, registry: gameplay.Gameplay
         'server/events': events,
         'server/explosions': explosions,
         'server/debug/DebugRules': debugRules,
+        'shared/debug/DebugCli': debugCli,
+        'server/debug/DebugCommands': debugCommands,
     })
 }

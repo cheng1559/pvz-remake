@@ -51,7 +51,14 @@ export function updateVault(
     }
     if (zombie.animationTime < span) return
     position.x -= vault.landingOffset
+    startPostVaultWalk(world, definitions, zombie, pace)
+}
+
+/** StartWalkAnim(0), shared by landing and WalkIntoHouse's pre-vault transition. */
+export function startPostVaultWalk(world: World, definitions: GameplayDefinitions, zombie: Zombie, pace: number): void {
+    const definition = definitions.zombies[zombie.typeId]
     const random = world.resources.get(RandomResource)
+    zombie.hasPole = false
     zombie.state = 'walking'
     zombie.animation = zombie.walkAnimation
     zombie.animationTime = 0

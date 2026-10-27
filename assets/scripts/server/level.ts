@@ -14,7 +14,7 @@ export function initializeLevel(world: World, firstAdventure: boolean): void {
     const script = TUTORIALS[level.tutorial]
     const blocked = firstAdventure && script?.blocksStart
     world.resources.set(TutorialResource, {
-        firstAdventure: firstAdventure && !!script,
+        firstAdventure,
         step: 'complete',
         ...(blocked ? {} : { sunAtTick: world.resources.get(RandomResource).integer(425, 699) }),
     })

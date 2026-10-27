@@ -2,10 +2,10 @@ import { Asset, assetManager, AudioClip, ImageAsset, JsonAsset, native, Rect, re
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import type { FontConfig } from '@/client/font/FontRenderer.d'
 import { applySpriteDensity, setSpriteDensity } from './SpriteDensity'
+import { decodePremultipliedPng } from './PremultipliedPng'
 import { installedArchiveRoot, unpackArchive, type ArchiveFiles } from './InstalledArchives'
 import { modManager, type ModManager } from './ModManager'
-import { parseModManifest } from '@/shared/mod'
-import { contentJson, relativeFile, parseModContent, type ModContent, type ResourceManifest, type ResourceSprite as PackSprite } from '@/shared/mod/content'
+import { contentJson, relativeFile, parseContentArchive, type ContentArchive, type ModContent, type ResourceManifest, type ResourceSprite as PackSprite } from '@/shared/mod/content'
 
 type PackManifest = { id: string } & Pick<ResourceManifest, 'sprites' | 'fonts' | 'audio' | 'json' | 'text'>
 interface LoadedPack {
@@ -17,6 +17,7 @@ interface LoadedPack {
     assets: Map<string, Promise<Asset>>
     urls: Map<string, string>
     runtimeRoot?: string
+    premultiplied: Set<string>
 }
 
 const fileKinds = ['fonts', 'audio', 'json', 'text'] as const
@@ -39,7 +40,8 @@ function createPack(files: ArchiveFiles, id: string, content: ModContent): Loade
     const { resources } = content
     const manifest: PackManifest = { id, ...resources,
         json: { ...resources.json, ...resources.reanim, ...resources.particles, ...resources.music } }
-    return { manifest, files, textures: new Map(), sprites: new Map(), fonts: new Map(), assets: new Map(), urls: new Map() }
+    const premultiplied = new Set(Object.values(resources.sprites).filter(sprite => sprite.alphaMode === 'premultiplied').map(sprite => sprite.file))
+    return { manifest, files, premultiplied, textures: new Map(), sprites: new Map(), fonts: new Map(), assets: new Map(), urls: new Map() }
 }
 
 function fileUrl(pack: LoadedPack, file: string, mime: string): string {
@@ -76,9 +78,15 @@ async function texture(pack: LoadedPack, file: string, scale = 1): Promise<Textu
         }
         let image: ImageAsset | undefined
         try {
-            image = await remote<ImageAsset>(pack, file, '.png', 'image/png')
+            const decoded = pack.premultiplied.has(file) ? decodePremultipliedPng(archiveFile(pack.files, file)) : undefined
+            if (!decoded) image = await remote<ImageAsset>(pack, file, '.png', 'image/png')
             const result = new Texture2D()
-            result.image = image
+            if (decoded) {
+                result.reset({ width: decoded.width, height: decoded.height, format: Texture2D.PixelFormat.RGBA8888 })
+                result.uploadData(decoded.rgba)
+            } else {
+                result.image = image!
+            }
             // Preserve the decoded RGBA upload used by the existing HD images and fonts.
             const pixels = result.image?.data
             if (sys.isBrowser && pixels && !ArrayBuffer.isView(pixels)) {
@@ -115,6 +123,7 @@ async function texture(pack: LoadedPack, file: string, scale = 1): Promise<Textu
 /** All archive resources share decoding and caches; installation belongs to ModManager. */
 export class ModResources {
     private base?: LoadedPack
+    private baseArchive?: ContentArchive
     private active: LoadedPack[] = []
     private initialization?: Promise<void>
 
@@ -127,12 +136,17 @@ export class ModResources {
                 nativeRuntimeReady = true
             }
             if (this.loadBase) {
-                const files = unpackArchive(await this.loadBase(), 'manifest.json')
-                const manifest = parseModManifest(archiveJson(files, 'manifest.json'))
-                this.base = createPack(files, manifest.id, parseModContent(archiveJson(files, 'content.json'), files))
+                this.baseArchive = parseContentArchive(unpackArchive(await this.loadBase(), 'manifest.json'))
+                this.base = createPack(this.baseArchive.files, this.baseArchive.manifest.id, this.baseArchive.content)
             }
             this.active = (await this.manager.ready()).map(mod => createPack(mod.files, mod.manifest.id, mod.content))
         })()
+    }
+
+    async baseContent(): Promise<ContentArchive> {
+        await this.ready()
+        if (!this.baseArchive) throw new Error('Base content is not loaded')
+        return this.baseArchive
     }
 
     async preload(onProgress: (progress: number) => void): Promise<void> {
@@ -159,16 +173,17 @@ export class ModResources {
     /** Raw Mod paths use the same decoder, caches and native upload limits as registered IDs. */
     async file<T extends Asset>(owner: string, file: string, type: AssetType<T>): Promise<T> {
         await this.ready()
-        const pack = this.active.find(entry => entry.manifest.id === owner)
+        const pack = this.base?.manifest.id === owner ? this.base : this.active.find(entry => entry.manifest.id === owner)
         if (!pack) throw new Error(`Mod resources are unavailable: ${owner}`)
         relativeFile(file)
         const assetType: AssetType<Asset> = type
+        const scale = Object.values(pack.manifest.sprites).find(entry => entry.file === file)?.scale ?? 1
         if (assetType === SpriteFrame) {
-            const image = await texture(pack, file)
-            const asset: Asset = await this.spriteFrom(pack, `file:${file}`, { file, width: image.width, height: image.height })
+            const image = await texture(pack, file, scale)
+            const asset: Asset = await this.spriteFrom(pack, `file:${file}`, { file, width: image.width / scale, height: image.height / scale, scale })
             return asset as T
         }
-        if (assetType === Texture2D) { const asset: Asset = await texture(pack, file); return asset as T }
+        if (assetType === Texture2D) { const asset: Asset = await texture(pack, file, scale); return asset as T }
         return this.fileAsset(pack, file, type)
     }
 
@@ -267,6 +282,7 @@ export class ModResources {
             frame.reset({ texture, rect: new Rect(x, y, width, height), originalSize: new Size(entry.width, entry.height),
                 offset: new Vec2(...(entry.offset ?? [0, 0])), borderLeft: left, borderTop: top, borderRight: right, borderBottom: bottom })
             applySpriteDensity(frame)
+            if (pack.premultiplied.has(entry.file)) frame.packable = false
             return frame
         }).catch(error => { pack.sprites.delete(id); throw error })
         pack.sprites.set(id, pending)

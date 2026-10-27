@@ -27,4 +27,6 @@ npm run mod:test -- dist/mods/corn
 
 - [corn](corn/README.md)：玉米投手与玉米加农炮，自带资源和行为。
 - [example-plant](example-plant/README.md)：注册自定义植物、僵尸行为的最小示例。
-- [widescreen](widescreen/README.md)：主界面与全局视口扩展。
+- [widescreen](widescreen/README.md)：Ultimate 素材版宽屏。
+- [widescreen-pvz](widescreen-pvz/README.md)：工作区 PvZ 素材版宽屏，保留原图尺寸，视口支持 4:3～32:9。
+- [widescreen-bgm](widescreen-bgm/README.md)：独立背景音乐 Mod，使用工作区 PvZ 宽屏版的 8 首 BGM。

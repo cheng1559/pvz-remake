@@ -17,8 +17,8 @@
     "maxHealth": 300,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "shooter": {
-      "cadenceTicks": 150,
-      "initialDelayTicks": 75,
+      "cadenceTicks": {"min": 136, "max": 150},
+      "initialDelayTicks": {"min": 0, "max": 150},
       "windupTicks": 33,
       "shotsPerBurst": 1,
       "burstIntervalTicks": 0,
@@ -30,8 +30,8 @@
     "maxHealth": 300,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "shooter": {
-      "cadenceTicks": 150,
-      "initialDelayTicks": 75,
+      "cadenceTicks": {"min": 136, "max": 150},
+      "initialDelayTicks": {"min": 0, "max": 150},
       "windupTicks": 26,
       "shotsPerBurst": 2,
       "burstIntervalTicks": 26,
@@ -60,8 +60,8 @@
     "maxHealth": 300,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "shooter": {
-      "cadenceTicks": 150,
-      "initialDelayTicks": 75,
+      "cadenceTicks": {"min": 136, "max": 150},
+      "initialDelayTicks": {"min": 0, "max": 150},
       "windupTicks": 33,
       "shotsPerBurst": 1,
       "burstIntervalTicks": 0,

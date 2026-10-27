@@ -14,6 +14,7 @@ import {
     ZombieComponent,
 } from '@/server/components'
 import { createZombieSystem } from '@/server/zombies/system'
+import { walkAnimationSpeed } from '@/server/zombies/animation'
 import { damageZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 
@@ -235,6 +236,36 @@ test('only headed zombies lose at their board edge, while headless zombies die 7
         assert.equal(zombie.hitFlashCounter, 0)
         assert.equal(headless.world.resources.get(LevelStateResource).result, 'playing')
         assert.equal(headless.world.resources.get(EventQueueResource).events.some(event => event.type === 'levelLost'), false)
+    }
+})
+
+test('a still-armed pole vaulter enters the house with its post-vault walk and freezes that state', () => {
+    const content = structuredClone(definitions)
+    content.zombies['test:vaulter'] = structuredClone(content.zombies['pvz:pole_vaulter'])
+    for (const typeId of ['pvz:pole_vaulter', 'test:vaulter']) for (const chilled of [false, true]) {
+        const { world, run } = game(content)
+        const definition = content.zombies[typeId]
+        const id = spawnZombie(world, content, typeId, 2, definition.boardEdgeX + 10, 280)
+        const zombie = world.get(id, ZombieComponent)!
+        if (chilled) zombie.chilledTicks = 100
+        run()
+        assert.equal(zombie.hasPole, true)
+        assert.equal(zombie.animation, 'anim_run')
+        world.get(id, PositionComponent)!.x = definition.boardEdgeX
+        run()
+        assert.equal(world.resources.get(LevelStateResource).result, 'lost')
+        assert.equal(zombie.hasPole, false)
+        assert.equal(zombie.state, 'walking')
+        assert.equal(zombie.animation, 'anim_walk')
+        assert.equal(zombie.animationTime, 0)
+        assert.ok(zombie.speedPerTick >= definition.speedPerTick.min && zombie.speedPerTick <= definition.speedPerTick.max)
+        assert.equal(zombie.animationSpeed, walkAnimationSpeed(zombie.speedPerTick, content.zombieGaits[definition.gait].walkGround) * (chilled ? 0.5 : 1))
+        const frozen = structuredClone(zombie)
+        const random = world.resources.get(RandomResource).snapshot()
+        run()
+        assert.deepEqual(zombie, frozen)
+        assert.deepEqual(world.resources.get(RandomResource).snapshot(), random)
+        assert.equal(world.resources.get(EventQueueResource).events.filter(event => event.type === 'levelLost').length, 1)
     }
 })
 

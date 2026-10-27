@@ -1,0 +1,86 @@
+{
+    "version": 1,
+    "sampleRate": 44100,
+    "tunes": {
+        "day_grasswalk": {
+            "id": "day_grasswalk",
+            "sampleRate": 44100,
+            "durationSec": 299.859563,
+            "loopStartSec": 0,
+            "loopEndSec": 299.859563,
+            "stems": {
+                "main": "local:widescreen-bgm/day_grasswalk"
+            }
+        },
+        "choose_seeds": {
+            "id": "choose_seeds",
+            "sampleRate": 44100,
+            "durationSec": 89.443265,
+            "loopStartSec": 0,
+            "loopEndSec": 89.443265,
+            "stems": {
+                "main": "local:widescreen-bgm/choose_seeds"
+            }
+        },
+        "title_theme": {
+            "id": "title_theme",
+            "sampleRate": 48000,
+            "durationSec": 87.6,
+            "loopStartSec": 0,
+            "loopEndSec": 87.6,
+            "stems": {
+                "main": "local:widescreen-bgm/title_theme"
+            }
+        },
+        "zen_garden": {
+            "id": "zen_garden",
+            "sampleRate": 44100,
+            "durationSec": 54.12678,
+            "loopStartSec": 0,
+            "loopEndSec": 54.12678,
+            "stems": {
+                "main": "local:widescreen-bgm/zen_garden"
+            }
+        },
+        "puzzle": {
+            "id": "puzzle",
+            "sampleRate": 44100,
+            "durationSec": 117.681633,
+            "loopStartSec": 0,
+            "loopEndSec": 117.681633,
+            "stems": {
+                "main": "local:widescreen-bgm/puzzle"
+            }
+        },
+        "minigame": {
+            "id": "minigame",
+            "sampleRate": 44100,
+            "durationSec": 206.706939,
+            "loopStartSec": 0,
+            "loopEndSec": 206.706939,
+            "stems": {
+                "main": "local:widescreen-bgm/minigame"
+            }
+        },
+        "conveyer": {
+            "id": "conveyer",
+            "sampleRate": 44100,
+            "durationSec": 216.99483,
+            "loopStartSec": 0,
+            "loopEndSec": 216.99483,
+            "stems": {
+                "main": "local:widescreen-bgm/conveyer"
+            }
+        },
+        "final_boss": {
+            "id": "final_boss",
+            "sampleRate": 44100,
+            "durationSec": 207.333878,
+            "loopStartSec": 0,
+            "loopEndSec": 207.333878,
+            "stems": {
+                "main": "local:widescreen-bgm/final_boss"
+            }
+        }
+    }
+}

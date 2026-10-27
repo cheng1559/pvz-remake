@@ -220,8 +220,18 @@ test('winning advances the current profile once and exposes the next installed l
     level = levels.levels['pvz:adventure-1-4']
     const shovel = await api.completeLevel()
     assert.deepEqual(shovel, { kind: 'tool', id: 'pvz:shovel', titleKey: 'GOT_SHOVEL', nameKey: 'SHOVEL',
-        descriptionKey: 'SHOVEL_DESCRIPTION', nextLevelId: null, showMainMenu: true })
+        descriptionKey: 'SHOVEL_DESCRIPTION', nextLevelId: 'pvz:adventure-1-5', showMainMenu: true })
     assert.equal((await api.getCurrentUser())!.adventureLevel, 5)
+    for (const [index, kind, seed] of [[5, 'seed', 4], [6, 'seed', 5], [7, 'seed', 6], [8, 'seed', 7], [9, 'note', undefined], [10, 'seed', 8]] as const) {
+        level = levels.levels[`pvz:adventure-1-${index}`]
+        const award = await api.completeLevel()
+        assert.equal(award.kind, kind)
+        assert.equal(award.seed, seed)
+        assert.equal(award.nextLevelId, index < 10 ? `pvz:adventure-1-${index + 1}` : null)
+        const reconnected = new MenuApi(createLocalMenuTransport(storage))
+        assert.equal((await reconnected.getCurrentUser())!.adventureLevel, index + 1)
+        assert.deepEqual(await reconnected.getAdventure(), { levelId: index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1' })
+    }
 })
 
 test('menu data and business rules stay behind the API without Cocos or frontend imports', () => {

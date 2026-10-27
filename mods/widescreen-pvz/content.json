@@ -1,0 +1,368 @@
+{
+    "resources": {
+        "sprites": {
+            "local:widescreen-pvz/left": {
+                "file": "assets/images/left.png",
+                "width": 609,
+                "height": 680,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/center": {
+                "file": "assets/images/center.png",
+                "width": 720,
+                "height": 350,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/right": {
+                "file": "assets/images/right.png",
+                "width": 863,
+                "height": 560,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/sky": {
+                "file": "assets/images/sky.png",
+                "width": 1066,
+                "height": 600,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/titlescreen": {
+                "file": "assets/images/titlescreen.png",
+                "width": 1066,
+                "height": 600,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/background_greenhouse": {
+                "file": "assets/images/background_greenhouse.png",
+                "width": 1066,
+                "height": 600,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/background_mushroomgarden": {
+                "file": "assets/images/background_mushroomgarden.png",
+                "width": 1066,
+                "height": 600,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/aquarium1": {
+                "file": "assets/images/aquarium1.png",
+                "width": 1066,
+                "height": 600,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/tree_bg": {
+                "file": "assets/images/tree_bg.png",
+                "width": 1066,
+                "height": 600,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/store_background": {
+                "file": "assets/images/store_background.png",
+                "width": 1066,
+                "height": 600,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/store_car": {
+                "file": "assets/images/store_car.png",
+                "width": 788,
+                "height": 495,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/store_carclosed": {
+                "file": "assets/images/store_carclosed.png",
+                "width": 788,
+                "height": 495,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/store_hatchbackopen": {
+                "file": "assets/images/store_hatchbackopen.png",
+                "width": 406,
+                "height": 173,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/background1": {
+                "file": "assets/images/background1.png",
+                "width": 1666,
+                "height": 600,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/background1unsodded": {
+                "file": "assets/images/background1unsodded.png",
+                "width": 1666,
+                "height": 600,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/sod1row": {
+                "file": "assets/images/sod1row.png",
+                "width": 771,
+                "height": 127,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/sod3row": {
+                "file": "assets/images/sod3row.png",
+                "width": 771,
+                "height": 355,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/background1_gameover_interior_overlay": {
+                "file": "assets/images/background1_gameover_interior_overlay.png",
+                "width": 70,
+                "height": 195,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/background1_gameover_mask": {
+                "file": "assets/images/background1_gameover_mask.png",
+                "width": 47,
+                "height": 248,
+                "alphaMode": "straight",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-b3_1": {
+                "file": "assets/ultimate-bushes/b3_1.png",
+                "width": 86,
+                "height": 66,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-b3_2": {
+                "file": "assets/ultimate-bushes/b3_2.png",
+                "width": 137,
+                "height": 75,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-b3_3": {
+                "file": "assets/ultimate-bushes/b3_3.png",
+                "width": 110,
+                "height": 85,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-b3_4": {
+                "file": "assets/ultimate-bushes/b3_4.png",
+                "width": 198,
+                "height": 125,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-b3_5": {
+                "file": "assets/ultimate-bushes/b3_5.png",
+                "width": 74,
+                "height": 78,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-b3_6": {
+                "file": "assets/ultimate-bushes/b3_6.png",
+                "width": 118,
+                "height": 77,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-b3_7": {
+                "file": "assets/ultimate-bushes/b3_7.png",
+                "width": 84,
+                "height": 75,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-b4_1": {
+                "file": "assets/ultimate-bushes/b4_1.png",
+                "width": 203,
+                "height": 129,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-b4_2": {
+                "file": "assets/ultimate-bushes/b4_2.png",
+                "width": 228,
+                "height": 182,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-b4_3": {
+                "file": "assets/ultimate-bushes/b4_3.png",
+                "width": 194,
+                "height": 123,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-bush_base": {
+                "file": "assets/ultimate-bushes/bush_base.png",
+                "width": 329,
+                "height": 210,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "local:widescreen-pvz/ultimate-leaf": {
+                "file": "assets/ultimate-bushes/leaf.png",
+                "width": 24,
+                "height": 19,
+                "alphaMode": "premultiplied",
+                "scale": 2
+            },
+            "pvz:leafbunch1": {
+                "file": "assets/tree/leafbunch1.png",
+                "width": 138,
+                "height": 130,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_grow50"
+                ],
+                "scale": 2
+            },
+            "pvz:leafbunch2": {
+                "file": "assets/tree/leafbunch2.png",
+                "width": 126,
+                "height": 100,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_grow50"
+                ],
+                "scale": 2
+            },
+            "pvz:leafbunch3": {
+                "file": "assets/tree/leafbunch3.png",
+                "width": 199,
+                "height": 70,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_grow50"
+                ],
+                "scale": 2
+            },
+            "pvz:selectorscreen_cloud1": {
+                "file": "assets/tree/selectorscreen_cloud1.png",
+                "width": 220,
+                "height": 206,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_cloud6"
+                ],
+                "scale": 2
+            },
+            "pvz:selectorscreen_cloud2": {
+                "file": "assets/tree/selectorscreen_cloud2.png",
+                "width": 152,
+                "height": 121,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_cloud4"
+                ],
+                "scale": 2
+            },
+            "pvz:selectorscreen_cloud4": {
+                "file": "assets/tree/selectorscreen_cloud4.png",
+                "width": 239,
+                "height": 91,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_cloud3"
+                ],
+                "scale": 2
+            },
+            "pvz:selectorscreen_cloud5": {
+                "file": "assets/tree/selectorscreen_cloud5.png",
+                "width": 434,
+                "height": 144,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_cloud1"
+                ],
+                "scale": 2
+            },
+            "pvz:selectorscreen_cloud6": {
+                "file": "assets/tree/selectorscreen_cloud6.png",
+                "width": 76,
+                "height": 44,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_cloud2"
+                ],
+                "scale": 2
+            },
+            "pvz:selectorscreen_cloud7": {
+                "file": "assets/tree/selectorscreen_cloud7.png",
+                "width": 211,
+                "height": 73,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_cloud5"
+                ],
+                "scale": 2
+            },
+            "pvz:tree8": {
+                "file": "assets/tree/tree8.png",
+                "width": 806,
+                "height": 561,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_grow50"
+                ],
+                "scale": 2
+            },
+            "pvz:tree9": {
+                "file": "assets/tree/tree9.png",
+                "width": 525,
+                "height": 559,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_grow50"
+                ],
+                "scale": 2
+            },
+            "pvz:tree_grass": {
+                "file": "assets/tree/tree_grass.png",
+                "width": 849,
+                "height": 207,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_grow50"
+                ],
+                "scale": 2
+            },
+            "pvz:tree_overlay8": {
+                "file": "assets/tree/tree_overlay8.png",
+                "width": 482,
+                "height": 147,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_grow50"
+                ],
+                "scale": 2
+            },
+            "pvz:tree_overlay9": {
+                "file": "assets/tree/tree_overlay9.png",
+                "width": 515,
+                "height": 180,
+                "alphaMode": "straight",
+                "animations": [
+                    "pvz:tree_grow50"
+                ],
+                "scale": 2
+            }
+        },
+        "reanim": {
+            "local:widescreen-pvz/bushes3": "assets/ultimate-bushes/bushes3.json",
+            "local:widescreen-pvz/bushes4": "assets/ultimate-bushes/bushes4.json",
+            "local:widescreen-pvz/bushes5": "assets/ultimate-bushes/bushes5.json"
+        }
+    }
+}

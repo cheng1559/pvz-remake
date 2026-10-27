@@ -13,7 +13,7 @@ export function register({ host, assets }: Context): void {
     const { ReanimPlayer } = host.get('client/reanim/ReanimPlayer')
     const { loadIntegratedGameContent } = host.get('client/game/loadIntegratedGameContent')
     let contentReady: Promise<any> | undefined
-    const content = () => contentReady ??= loadIntegratedGameContent()
+    const content = (): Promise<any> => contentReady ??= loadIntegratedGameContent()
     const sounds = assets.json('content.json').resources.audio
     const { SoundLoader } = host.get('client/sound/LegacySoundSystem')
     host.around(SoundLoader, 'load', function (next, id) {
