@@ -260,7 +260,7 @@ export interface PresentationDefinitions {
     readonly projectiles: Readonly<Record<string, ProjectilePresentationDefinition>>
     readonly seedPackets: {
         readonly flash: { readonly id: string }
-        readonly selection: { readonly sprite: string; readonly color: readonly [number, number, number] }
+        readonly selection: { readonly color: readonly [number, number, number] }
         readonly defaultPlacement: SeedPacketPlacement
         readonly placements: Readonly<Record<string, SeedPacketPlacement>>
         readonly plantCels: Readonly<Record<string, number>>
@@ -468,7 +468,6 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     const flash = object(packets.flash, 'seedPackets.flash')
     text(flash.id, 'seedPackets.flash.id')
     const selection = object(packets.selection, 'seedPackets.selection')
-    text(selection.sprite, 'seedPackets.selection.sprite')
     if (!Array.isArray(selection.color) || selection.color.length !== 3 || selection.color.some(value => !Number.isInteger(value) || value < 0 || value > 255)) throw new TypeError('Invalid seedPackets.selection.color')
     placement(packets.defaultPlacement, 'seedPackets.defaultPlacement')
     for (const [id, value] of Object.entries(object(packets.placements, 'seedPackets.placements'))) placement(value, 'seedPackets.placements.' + id)

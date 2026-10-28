@@ -100,7 +100,8 @@ def parse_track_data(
         if val_i is not None:
             if not val_i.startswith('IMAGE_REANIM_'):
                 raise ValueError(f"Unexpected image format: {val_i}")
-            curr['image'] = val_i.replace('IMAGE_REANIM_', '', 1).lower()
+            # Match the converted file names, e.g. 'Tanglekelp_arm 8' -> tanglekelp_arm_8.png.
+            curr['image'] = content_sprite_name(val_i.replace('IMAGE_REANIM_', '', 1))
 
         if is_active:
             frames.append(curr.copy())

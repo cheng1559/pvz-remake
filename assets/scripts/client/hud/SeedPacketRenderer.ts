@@ -27,6 +27,15 @@ const BACKGROUND_NORMAL = 2
 const COST_BASELINE_X = 32
 const COST_BASELINE_Y = 64
 
+/**
+ * One mobile selection bracket from its packet corner, in packet units, traced from the former 100x140
+ * selected_packet_2 image: a black outline around a tinted stroke, each with a rounded outer corner.
+ */
+const SELECTION_BRACKET = [
+    { inset: 0, radius: 2, points: [[16.5, 0], [16.5, 6.5], [6.5, 6.5], [6.5, 26], [0, 26]] },
+    { inset: 2, radius: 1, points: [[15, 2], [15, 5], [5, 5], [5, 24], [2, 24]] },
+] as const
+
 const atlasFrames: WeakMap<SpriteFrame, Map<string, SpriteFrame>> = new WeakMap()
 
 export interface SeedPacketRenderArgs {
@@ -71,14 +80,23 @@ class SeedPacketBackground extends Component {
 
 export class SeedPacketRenderer {
     static drawSelectionFrame(parent: Node, definitions: PresentationDefinitions): Node {
-        const selection = definitions.seedPackets.selection
-        const { node, sprite } = uiNode({ name: 'SelectedHighlight', parent, layer: parent.layer,
-            anchor: { x: 0, y: 1 }, size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT },
-            sprite: { sizeMode: Sprite.SizeMode.CUSTOM, trim: false } })
-        sprite!.color = new Color(...selection.color)
-        void loadPacketSprite(selection.sprite).then(frame => {
-            if (isValid(node, true)) sprite!.spriteFrame = frame
-        }).catch(error => console.error('[SeedPacket] Failed to load selection frame', error))
+        const { node, graphics } = uiNode({ name: 'SelectedHighlight', parent, layer: parent.layer,
+            anchor: { x: 0, y: 1 }, size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT }, graphics: true })
+        const colors = [Color.BLACK, new Color(...definitions.seedPackets.selection.color)]
+        SELECTION_BRACKET.forEach(({ inset, radius, points }, layer) => {
+            // Mirror the bracket into each corner; y grows downward from the packet's top-left.
+            for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+                const at = (x: number, y: number): [number, number] =>
+                    [dx > 0 ? x : SEED_PACKET_WIDTH - x, -(dy > 0 ? y : SEED_PACKET_HEIGHT - y)]
+                graphics!.moveTo(...at(inset + radius, inset))
+                for (const [x, y] of points) graphics!.lineTo(...at(x, y))
+                graphics!.lineTo(...at(inset, inset + radius))
+                graphics!.quadraticCurveTo(...at(inset, inset), ...at(inset + radius, inset))
+                graphics!.close()
+            }
+            graphics!.fillColor = colors[layer]
+            graphics!.fill()
+        })
         return node
     }
 

@@ -21,6 +21,10 @@ class ReanimConverterTest(unittest.TestCase):
         selected = get_anim_nodes('example', {'body': {'animations': ['anim_idle']}}, xml)
         self.assertEqual(list(selected['body']['animations']), ['anim_idle'])
 
+    def test_track_images_use_converted_file_names(self):
+        track = ElementTree.fromstring('<track><name>arm</name><t><i>IMAGE_REANIM_TANGLEKELP_ARM 8</i></t></track>')
+        self.assertEqual(parse_track_data(track)[2][0]["image"], "tanglekelp_arm_8")
+
     def test_inherits_frames_and_writes_deterministically(self):
         source = Path(__file__).parents[2] / "tests" / "fixtures" / "reanim" / "phase2.reanim"
         sprites = {"pvz:phase2_checker"}

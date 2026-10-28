@@ -2046,27 +2046,6 @@
           0
         ]
       },
-      "pvz:background_left": {
-        "file": "assets/images/background_left.png",
-        "width": 2048,
-        "height": 2048,
-        "rect": [
-          0,
-          0,
-          2048,
-          2048
-        ],
-        "offset": [
-          0,
-          0
-        ],
-        "borders": [
-          0,
-          0,
-          0,
-          0
-        ]
-      },
       "pvz:background_mushroomgarden": {
         "file": "assets/images/background_mushroomgarden.png",
         "width": 800,
@@ -2076,27 +2055,6 @@
           0,
           800,
           600
-        ],
-        "offset": [
-          0,
-          0
-        ],
-        "borders": [
-          0,
-          0,
-          0,
-          0
-        ]
-      },
-      "pvz:background_right": {
-        "file": "assets/images/background_right.png",
-        "width": 2048,
-        "height": 2048,
-        "rect": [
-          0,
-          0,
-          2048,
-          2048
         ],
         "offset": [
           0,
@@ -21975,27 +21933,6 @@
           0
         ]
       },
-      "pvz:selected_packet_2": {
-        "file": "assets/images/selected_packet_2.png",
-        "width": 100,
-        "height": 140,
-        "rect": [
-          0,
-          0,
-          100,
-          140
-        ],
-        "offset": [
-          0,
-          0
-        ],
-        "borders": [
-          0,
-          0,
-          0,
-          0
-        ]
-      },
       "pvz:selector_morewaystoplay_background": {
         "file": "assets/images/selector_morewaystoplay_background.png",
         "width": 800,
@@ -26184,27 +26121,6 @@
           0,
           99,
           144
-        ],
-        "offset": [
-          0,
-          0
-        ],
-        "borders": [
-          0,
-          0,
-          0,
-          0
-        ]
-      },
-      "pvz:tanglekelp_arm 8": {
-        "file": "assets/images/tanglekelp_arm 8.png",
-        "width": 17,
-        "height": 13,
-        "rect": [
-          0,
-          0,
-          17,
-          13
         ],
         "offset": [
           0,
@@ -40749,27 +40665,6 @@
           0
         ]
       },
-      "pvz:zombie_charred_zamboni6 ": {
-        "file": "assets/images/zombie_charred_zamboni6 .png",
-        "width": 180,
-        "height": 129,
-        "rect": [
-          1,
-          4,
-          179,
-          124
-        ],
-        "offset": [
-          0.5,
-          -1.5
-        ],
-        "borders": [
-          0,
-          0,
-          0,
-          0
-        ]
-      },
       "pvz:zombie_charred_zamboni6": {
         "file": "assets/images/zombie_charred_zamboni6.png",
         "width": 180,
@@ -44920,27 +44815,6 @@
         "offset": [
           0,
           0
-        ],
-        "borders": [
-          0,
-          0,
-          0,
-          0
-        ]
-      },
-      "pvz:zombie_hand_rock 7": {
-        "file": "assets/images/zombie_hand_rock 7.png",
-        "width": 40,
-        "height": 45,
-        "rect": [
-          1,
-          1,
-          37,
-          44
-        ],
-        "offset": [
-          -0.5,
-          -0.5
         ],
         "borders": [
           0,

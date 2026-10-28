@@ -1,6 +1,6 @@
 {
   "flash": {"id": "pvz:seedpacketflash"},
-  "selection": {"sprite": "pvz:selected_packet_2", "color": [255, 255, 0]},
+  "selection": {"color": [255, 255, 0]},
   "defaultPlacement": {"scale": 0.5, "offsetX": 5, "offsetY": 8},
   "placements": {
     "4": {"scale": 0.4, "offsetX": 8.0, "offsetY": 12.0},
