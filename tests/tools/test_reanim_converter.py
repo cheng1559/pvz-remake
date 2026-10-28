@@ -8,12 +8,21 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parents[2] / "tools"))
 
-from reanim_converter import build_reanim_clip, build_reanim, parse_track_data, write_reanim
+from pvz.reanim import build_reanim_clip, build_reanim, parse_track_data, write_reanim, get_anim_nodes
 
 
 class ReanimConverterTest(unittest.TestCase):
+
+    def test_marker_discovery_preserves_explicit_clip_selection(self):
+        xml = ElementTree.fromstring('<root><fps>10</fps>\n<track><name>anim_idle</name><t><f>0</f></t><t/><t><f>-1</f></t></track>\n<track><name>anim_shoot</name><t><f>-1</f></t><t/><t><f>0</f></t></track>\n<track><name>body</name><t><i>IMAGE_REANIM_BODY</i></t><t/><t/></track></root>')
+        automatic = get_anim_nodes('example', {'body': {}}, xml)
+        explicit = get_anim_nodes('example', {'body': {'slots': [], 'animations': ['anim_idle', 'anim_shoot']}}, xml)
+        self.assertEqual(automatic, explicit)
+        selected = get_anim_nodes('example', {'body': {'animations': ['anim_idle']}}, xml)
+        self.assertEqual(list(selected['body']['animations']), ['anim_idle'])
+
     def test_inherits_frames_and_writes_deterministically(self):
-        source = Path(__file__).parents[2] / "tools" / "fixtures" / "reanim" / "phase2.reanim"
+        source = Path(__file__).parents[2] / "tests" / "fixtures" / "reanim" / "phase2.reanim"
         sprites = {"pvz:phase2_checker"}
         data = build_reanim(source, "pvz:phase2", sprites)
 
@@ -44,7 +53,7 @@ class ReanimConverterTest(unittest.TestCase):
             build_reanim(source, "pvz:phase2", set())
 
     def test_extracts_one_clip_with_zero_based_seconds(self):
-        source = Path(__file__).parents[2] / "tools" / "fixtures" / "reanim" / "phase2.reanim"
+        source = Path(__file__).parents[2] / "tests" / "fixtures" / "reanim" / "phase2.reanim"
         data = build_reanim_clip(
             source,
             {"body": {"animations": ["back"], "slots": []}},
@@ -58,7 +67,7 @@ class ReanimConverterTest(unittest.TestCase):
         self.assertEqual(data["tracks"][0]["keyframes"][0]["timeSeconds"], 0)
 
     def test_excludes_configured_hidden_track_prefixes(self):
-        source = Path(__file__).parents[2] / "tools" / "fixtures" / "reanim" / "phase2.reanim"
+        source = Path(__file__).parents[2] / "tests" / "fixtures" / "reanim" / "phase2.reanim"
         data = build_reanim_clip(
             source,
             {"body": {"animations": ["back"], "slots": [], "hiddenTrackPrefixes": ["face"]}},

@@ -1,7 +1,7 @@
 import { Color, screen, sys, type Node } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import { SFX_VOLUME_SCALE } from '@/shared/menu'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UI, type UIDialogOptions } from '@/client/ui/UI'
 import { OptionsSettings } from '@/platform/OptionsSettings'
 
@@ -29,11 +29,11 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
     label(ui.text('OPTIONS_FULL_SCREEN'), 274, 229 + 20 * offset)
     ui.slider(content, {
         x: 199, y: 116 + 5 * offset, value: settings.musicVolume,
-        onChange: musicVolume => { void menuApi.updateSettings({ musicVolume }).then(value => SoundLoader.setMusicVolume(value.musicVolume)).catch(error => console.error('[Options]', error)) },
+        onChange: musicVolume => { void menuApi.updateSettings({ musicVolume }).then(value => SoundSystem.setMusicVolume(value.musicVolume)).catch(error => console.error('[Options]', error)) },
     })
     ui.slider(content, {
         x: 199, y: 143 + 10 * offset, value: settings.sfxVolume / SFX_VOLUME_SCALE,
-        onChange: value => { void menuApi.updateSettings({ sfxVolume: value * SFX_VOLUME_SCALE }).then(value => SoundLoader.setSfxVolume(value.sfxVolume)).catch(error => console.error('[Options]', error)) },
+        onChange: value => { void menuApi.updateSettings({ sfxVolume: value * SFX_VOLUME_SCALE }).then(value => SoundSystem.setSfxVolume(value.sfxVolume)).catch(error => console.error('[Options]', error)) },
     })
     ui.checkbox(content, {
         x: 284, y: 175 + 15 * offset, value: true,
@@ -73,7 +73,7 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
         const confirm = showMessage(message)
         void confirm.result.then(accepted => {
             if (!accepted || !dialog.node.isValid) return
-            void SoundLoader.play(SoundEffect.ButtonClick)
+            void SoundSystem.play(SoundEffect.ButtonClick)
             close(action)
         })
     }

@@ -1,6 +1,6 @@
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { GameSystem } from '@/ecs/index'
-import { LawnMowerComponent, LevelStateResource, PositionComponent, ZombieComponent } from './components'
+import { LawnMowerComponent, LevelStateResource, type Position, PositionComponent, type Zombie, ZombieComponent } from './components'
 import { mowZombie } from './zombies/damage'
 import { dropZombieFlag } from './zombies/flag'
 import { WaveResource } from './levelState'
@@ -18,6 +18,7 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
             const level = world.resources.get(LevelStateResource)
             if (level.result === 'lost' || level.paused) return
 
+            let zombies: Array<{ entity: number, position: Position, zombie: Zombie }> | undefined
             for (const entity of world.query(PositionComponent, LawnMowerComponent)) {
                 const position = world.get(entity, PositionComponent)!
                 const mower = world.get(entity, LawnMowerComponent)!
@@ -28,10 +29,13 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
                 }
 
                 const definition = definitions.lawnMowers[mower.typeId]
-                for (const zombieEntity of world.query(PositionComponent, ZombieComponent)) {
-                    const zombiePosition = world.get(zombieEntity, PositionComponent)!
-                    const zombie = world.get(zombieEntity, ZombieComponent)!
+                // Collected once per run; positions and components are not replaced during it.
+                zombies ??= [...world.query(PositionComponent, ZombieComponent)].map(zombieEntity => ({
+                    entity: zombieEntity, position: world.get(zombieEntity, PositionComponent)!, zombie: world.get(zombieEntity, ZombieComponent)!,
+                }))
+                for (const { entity: zombieEntity, position: zombiePosition, zombie } of zombies) {
                     if (zombiePosition.row !== position.row || zombie.state === 'dying' || zombie.state === 'mowered') continue
+                    if (!world.hasEntity(zombieEntity)) continue
                     if (mower.state === 'ready' && !zombie.hasHead) continue
                     const body = definitions.zombies[zombie.typeId].body
                     if (!overlaps(position.x + definition.attack.x, definition.attack.width,

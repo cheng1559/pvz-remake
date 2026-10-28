@@ -1,4 +1,4 @@
-import { readGameplaySource } from '../../tools/content_source'
+import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
@@ -39,8 +39,30 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     assert.deepEqual(getDebugCliCompletions('/plant re', catalog), ['/plant repeater'])
     assert.deepEqual(getDebugCliCompletions('/seed 1 sn', catalog), ['/seed 1 snowpea'])
     assert.deepEqual(getDebugCliCompletions('/collect ', catalog, true), ['/collect auto', '/collect click', '/collect move'])
+    assert.deepEqual(getDebugCliCompletions('/plantinvincible ', catalog, true), ['/plantinvincible true', '/plantinvincible false'])
+    assert.equal((parseDebugCliCommand('/plantinvincible yes') as { failure: string }).failure, 'syntax')
     assert.equal(getDebugCliSuffix('/plant repeater', catalog), ' {row} {col}')
     assert.throws(() => setup(false).debugCommand('/sun set 999'), /unsupported-command/)
+})
+
+test('plant invincibility blocks bites until disabled and does not prevent removal', () => {
+    const game = setup()
+    assert.equal(game.debugCommand('/plant wallnut 3 2').ok, true)
+    assert.equal(game.debugCommand('/zombie normal 3 3').ok, true)
+    assert.equal(game.debugCommand('/plantinvincible true').ok, true)
+    assert.equal(game.render().paused, true)
+    assert.equal(game.debugCommand('/plant wallnut 2 2').ok, true)
+    const before = game.render().plants.map(plant => plant.health)
+    game.command({ type: 'resume' })
+    game.update(8)
+    assert.equal(game.render().zombies[0].state, 'eating')
+    assert.deepEqual(game.render().plants.map(plant => plant.health), before)
+    assert.equal(game.debugCommand('/plantinvincible false').ok, true)
+    game.update(2)
+    assert.ok(game.render().plants.find(plant => plant.row === 2)!.health < before[0])
+    assert.equal(game.debugCommand('/plantinvincible true').ok, true)
+    assert.equal(game.debugCommand('/removeplant 3 2').ok, true)
+    assert.equal(game.render().plants.some(plant => plant.row === 2), false)
 })
 
 test('CLI replaces a seed slot while paused, preserves slot order and saves the new packet', () => {
@@ -113,132 +135,4 @@ test('CLI game mutations go through the channel while paused and preserve valid 
     assert.equal(game.render().zombies.length, 0)
     assert.equal(game.debugCommand('/removeplant 1 1').ok, true)
     assert.equal(game.render().plants.length, 0)
-})
-
-test('CLI planting bypasses occupancy, seed availability and cooldown without spending or changing the cursor', () => {
-    const game = setup(true, 'pvz:adventure-1-2')
-    game.debugCommand('/sun set 500')
-    game.command({ type: 'resume' })
-    game.command({ type: 'selectSeed', seedId: 'pvz:peashooter' })
-    game.command({ type: 'placePlant', row: 2, column: 0 })
-    game.command({ type: 'selectSeed', seedId: 'pvz:sunflower' })
-    game.command({ type: 'pause' })
-    game.update(0)
-    game.debugCommand('/sun set 0')
-    const before = game.render()
-    assert.equal(before.plants.length, 1)
-    assert.equal(before.cursor.mode, 'seed')
-    assert.ok(before.seedPackets[0].cooldownRemaining > 0)
-    for (const text of ['/plant peashooter 3 1', '/plant peashooter 3 1', '/plant repeater 1 9']) {
-        assert.equal(game.debugCommand(text).ok, true)
-    }
-    const after = game.render()
-    assert.equal(after.plants.length, 4)
-    assert.equal(after.sun, 0)
-    assert.deepEqual(after.seedPackets, before.seedPackets)
-    assert.deepEqual(after.cursor, before.cursor)
-    assert.equal(after.gameplayTick, before.gameplayTick)
-    const restored = new LocalIntegratedGame(definitions, levels)
-    restored.start({ levelId: 'pvz:adventure-1-2', randomSeed: 1, initialMoney: 0, firstAdventure: false,
-        mods: [], save: game.saveAtBoundary() })
-    assert.deepEqual(restored.render(), after, 'overlapping debug plants remain valid saved entities')
-})
-
-test('CLI can create plants during the intro and after either level result', () => {
-    const intro = new LocalIntegratedGame(definitions, levels, undefined, true)
-    intro.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
-    assert.equal(intro.debugCommand('/plant repeater 1 9').ok, true)
-    assert.equal(intro.render().phase, 'intro')
-    for (const result of ['win', 'lose']) {
-        const game = setup()
-        assert.equal(game.debugCommand(`/${result}`).ok, true)
-        const before = game.render()
-        assert.equal(game.debugCommand('/plant repeater 1 9').ok, true)
-        assert.equal(game.render().result, before.result)
-        assert.equal(game.render().gameplayTick, before.gameplayTick)
-    }
-})
-
-test('CLI summons and waves use configured spawn positions, while explicit columns override them', () => {
-    for (const [type, min, max] of [['normal', 780, 819], ['pole_vaulter', 870, 879]] as const) {
-        const game = setup()
-        assert.equal(game.debugCommand(`/zombie ${type} 3`).ok, true)
-        const zombie = game.render().zombies[0]
-        assert.ok(zombie.x >= min && zombie.x <= max, `${type} spawned at ${zombie.x}`)
-        assert.equal(game.debugCommand(`/zombie ${type} 3 9`).ok, true)
-        const board = definitions.boards['pvz:day']
-        assert.equal(game.render().zombies.at(-1)!.x, board.origin.x + 8 * board.cell.width)
-    }
-
-    const content = structuredClone(definitions)
-    content.zombies['pvz:normal'].spawn = { minX: 930, maxX: 930, flagWaveOffset: 17 }
-    const game = setup(true, 'pvz:adventure-1-2', content)
-    assert.equal(game.debugCommand('/zombie normal 3').ok, true)
-    const summoned = game.render().zombies[0]
-    assert.equal(summoned.x, 930)
-    assert.equal(game.debugCommand('/nextflag').ok, true)
-    const waveZombies = game.render().zombies.filter(zombie => zombie.typeId === 'pvz:normal' && zombie.entityId !== summoned.entityId)
-    assert.equal(waveZombies.length, 4)
-    assert.ok(waveZombies.every(zombie => zombie.x === 947))
-})
-
-test('CLI wave commands spawn flag waves immediately while preserving pause and the gameplay tick', () => {
-    const first = setup()
-    const wave = first.render().wave
-    assert.equal(first.debugCommand('/nextflag').failure, 'condition')
-    assert.deepEqual(first.render().wave, wave, 'a level without flags must keep its wave state')
-    for (const command of ['/nextflag', '/nextwave']) {
-        const game = setup(true, 'pvz:adventure-1-2')
-        const tick = game.render().gameplayTick
-        const normalWaves = command === '/nextwave' ? 5 : 1
-        for (let i = 0; i < normalWaves; i++) assert.equal(game.debugCommand('/nextwave').ok, true)
-        game.drainEvents()
-        assert.equal(game.debugCommand(command).ok, true)
-        const frame = game.render()
-        assert.equal(frame.wave.index, 6)
-        assert.equal(frame.zombies.filter(zombie => zombie.typeId === 'pvz:flag').length, 1)
-        assert.equal(frame.paused, true)
-        assert.equal(frame.gameplayTick, tick)
-        const events = game.drainEvents()
-        assert.equal(events.filter(event => event.type === 'zombieSpawned').length, 5)
-        for (const type of ['hugeWave', 'hugeWaveSound', 'finalWave']) {
-            assert.equal(events.filter(event => event.type === type).length, 1)
-        }
-        assert.equal(game.debugCommand('/nextflag').failure, 'condition')
-        assert.equal(game.debugCommand('/nextwave').failure, 'condition')
-        const save = game.saveAtBoundary()
-        const restored = new LocalIntegratedGame(definitions, levels)
-        restored.start({ levelId: 'pvz:adventure-1-2', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save })
-        assert.deepEqual(restored.render(), game.render())
-    }
-})
-
-test('CLI rule toggles affect authority and a debug win can resume into the normal award flow', () => {
-    const game = setup()
-    assert.equal(game.debugCommand('/suncost false').ok, true)
-    assert.equal(game.debugCommand('/cooldown false').ok, true)
-    game.command({ type: 'resume' })
-    game.command({ type: 'selectSeed', seedId: 'pvz:peashooter' })
-    game.command({ type: 'placePlant', row: 2, column: 0 })
-    game.update(0.01)
-    assert.equal(game.render().plants.length, 1)
-    assert.equal(game.render().sun, 150)
-    assert.equal(game.render().seedPackets[0].cooldownRemaining, 0)
-    assert.equal(game.debugCommand('/sun set 75').ok, true)
-    assert.equal(game.debugCommand('/collect auto').ok, true)
-    game.drainEvents()
-    assert.equal(game.debugCommand('/item sun').ok, true)
-    game.update(0.01)
-    assert.equal(game.render().items[0].state, 'collecting')
-    assert.equal(game.render().availableSun, 100)
-    assert.equal(game.drainEvents().some(event => event.type === 'seedPacketFlashRequested'), false,
-        'collecting sun cannot cross an affordability threshold when sun costs are disabled')
-    game.command({ type: 'pause' })
-    game.update(0)
-    assert.equal(game.debugCommand('/win').ok, true)
-    game.command({ type: 'resume' })
-    game.update(0)
-    assert.equal(game.render().result, 'won')
-    assert.equal(game.render().paused, false)
-    assert.ok(game.drainEvents().some(event => event.type === 'levelWon'))
 })

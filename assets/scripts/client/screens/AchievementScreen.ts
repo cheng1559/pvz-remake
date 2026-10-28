@@ -1,13 +1,13 @@
-import { _decorator, Color, Component, input, Input, KeyCode, Sprite, type EventKeyboard } from 'cc'
+import { modResources } from '@/client/content/ModResources'
+import { _decorator, Color, Component, input, Input, KeyCode, Sprite, type EventKeyboard, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import { preloadTasks } from '@/client/content/preloadTasks'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
 import type { UIButton } from '@/client/ui/UIButton'
 import type { UIScroll } from '@/client/ui/UIScroll'
-import { SpriteLoader } from '@/core/SpriteLoader'
 import { showMenuPageControls } from './MenuPageControls'
 
 const { ccclass } = _decorator
@@ -30,7 +30,7 @@ export class AchievementScreen extends Component {
         const [data, frames] = await Promise.all([
             menuApi.getAchievements(),
             Promise.all(SPRITES.map(async name => {
-                const frame = await SpriteLoader.load(name)
+                const frame = await modResources.asset(name, SpriteFrame)
                 if (!frame) throw new Error(`Missing achievement image: ${name}`)
                 return [name, frame] as const
             })),
@@ -88,7 +88,7 @@ export class AchievementScreen extends Component {
             },
         })
         more.changeCursor = false
-        more.onPress = () => { if (!this.showingTop) void SoundLoader.play(SoundEffect.GraveButton) }
+        more.onPress = () => { if (!this.showingTop) void SoundSystem.play(SoundEffect.GraveButton) }
         const update = more.onStateChange!
         const image = more.node.getChildByName('Visual')!.getChildByName('Image')!.getComponent(Sprite)!
         more.onStateChange = state => {

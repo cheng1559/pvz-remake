@@ -1,3 +1,4 @@
+import { readBaseContent } from '../../tools/mod/content'
 import { presentationFixture } from './presentationFixture'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -46,8 +47,8 @@ for (const startX of [-100, -150, -200]) test(`failure from x=${startX} approach
             resize = (width, height) => { node.width = width; node.height = height; redraw() }
             resize(800, 600)
         } },
-        '@/client/sound/LegacySoundSystem': { SoundEffect: { LoseMusic: 'lose', Chomp: 'chomp', Scream: 'scream' },
-            SoundLoader: { play: (sound: string) => sounds.push(sound), playFoley: (sound: string) => sounds.push(sound) } },
+        '@/client/sound/SoundSystem': { SoundEffect: { LoseMusic: 'lose', Chomp: 'chomp', Scream: 'scream' },
+            SoundSystem: { play: (sound: string) => sounds.push(sound), playFoley: (sound: string) => sounds.push(sound) } },
         '@/client/view/uiNode': { uiNode(options: any) {
             const node = new Node(options.name)
             if (options.parent) { node.parent = options.parent; node.parent!.children.push(node) }
@@ -114,7 +115,7 @@ for (const startX of [-100, -150, -200]) test(`failure from x=${startX} approach
     }
     const { LevelView } = load('LevelView', modules)
     const view = Object.create(LevelView.prototype)
-    view.entityRenderer = { sync() { board.setPosition(0, 0); walkTicks = 0; visible = false } }
+    view.entityRenderer = { setFrameDelta() {}, sync() { board.setPosition(0, 0); walkTicks = 0; visible = false } }
     view.end = { sync() {}, cancelWarnings() {} }
     view.hud = { sync() {} }
     view.audio = { play() {} }
@@ -131,7 +132,7 @@ for (const startX of [-100, -150, -200]) test(`failure from x=${startX} approach
 })
 
 test('the winning zombie walks with the original ground track while the authoritative world stays frozen', () => {
-    const data = JSON.parse(readFileSync('tools/generated/pvz-base/reanim/zombie_walk.json', 'utf8'))
+    const data = JSON.parse(readFileSync(`mods/pvz-base/${readBaseContent().resources.reanim['pvz:zombie_walk']}`, 'utf8'))
     const ground = data.tracks.find((track: any) => track.id === '_ground')
     const duration = ground.keyframes.at(-1).timeSeconds
     const { ZombieView } = load('../zombies/ZombieView', {})

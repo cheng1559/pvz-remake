@@ -9,6 +9,8 @@ export type SeedPacketStyle = 'standard' | 'rendered' | 'tilted'
 type DebugSettings = {
     rechargingEnabled: boolean
     sunCostEnabled: boolean
+    plantInvincible: boolean
+    fpsVisible: boolean
     collectMode: DebugCollectMode
     hitboxesVisible: boolean
     hdSeedPacketsEnabled: boolean
@@ -26,6 +28,8 @@ type DebugSettings = {
 const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     rechargingEnabled: true,
     sunCostEnabled: true,
+    plantInvincible: false,
+    fpsVisible: false,
     collectMode: 'click',
     hitboxesVisible: false,
     hdSeedPacketsEnabled: false,
@@ -55,6 +59,8 @@ function loadDebugSettings(): DebugSettings {
         return {
             rechargingEnabled: parsed.rechargingEnabled ?? DEFAULT_DEBUG_SETTINGS.rechargingEnabled,
             sunCostEnabled: parsed.sunCostEnabled ?? DEFAULT_DEBUG_SETTINGS.sunCostEnabled,
+            plantInvincible: typeof parsed.plantInvincible === 'boolean' ? parsed.plantInvincible : DEFAULT_DEBUG_SETTINGS.plantInvincible,
+            fpsVisible: typeof parsed.fpsVisible === 'boolean' ? parsed.fpsVisible : DEFAULT_DEBUG_SETTINGS.fpsVisible,
             collectMode: normalizeCollectMode(parsed.collectMode),
             hitboxesVisible: parsed.hitboxesVisible ?? DEFAULT_DEBUG_SETTINGS.hitboxesVisible,
             hdSeedPacketsEnabled: parsed.hdSeedPacketsEnabled ?? DEFAULT_DEBUG_SETTINGS.hdSeedPacketsEnabled,
@@ -100,6 +106,18 @@ export const GameDebugSettings = {
         this.sunCostEnabled = enabled
         saveDebugSettings(this)
         return this.sunCostEnabled
+    },
+
+    setPlantInvincible(enabled: boolean) {
+        this.plantInvincible = enabled
+        saveDebugSettings(this)
+        return this.plantInvincible
+    },
+
+    setFpsVisible(visible: boolean) {
+        this.fpsVisible = visible
+        saveDebugSettings(this)
+        return this.fpsVisible
     },
 
     setCollectMode(mode: DebugCollectMode) {

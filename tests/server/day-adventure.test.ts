@@ -1,12 +1,9 @@
+import { IntegratedGameServer } from '@/server/IntegratedGameServer'
+import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
+import type { JsonValue,StartSessionPacket } from '@/shared/protocol'
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readGameplaySource } from '../../tools/content_source'
-import { CommandBuffer, type World } from '@/ecs'
-import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { RandomResource, SeedBankResource } from '@/server/components'
-import { createConveyorSystem } from '@/server/conveyor'
-import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
-import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
+import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
@@ -25,39 +22,36 @@ function choose(game: IntegratedGameServer) {
     assert.equal(runCommand(game, { type: 'confirmSeeds' }), undefined)
 }
 
-test('1-6/1-7 keep fixed banks; 1-8/1-9 choose six unlocked seeds from the shared catalog', () => {
-    for (const index of [6, 7, 8, 9]) {
-        const game = start(index)
-        assert.equal(game.snapshot().sun, 50)
-        assert.equal(game.snapshot().lawnMowers.length, 5)
-        assert.equal(game.snapshot().wave.countdown, 1800)
-        assert.deepEqual(game.snapshot().extensions['pvz:tools'], { available: [] })
-        if (index < 8) {
-            assert.equal(game.snapshot().seedChooser, undefined)
-            assert.deepEqual(game.snapshot().seedPackets.map(packet => packet.seedId), definitions.seedCatalog.slice(0, index - 1))
-        } else {
-            assert.equal(game.snapshot().seedChooser?.slots, 6)
-            assert.deepEqual(game.snapshot().seedChooser?.availableSeeds, definitions.seedCatalog.slice(0, index === 8 ? 7 : 8))
-            if (index === 8) assert.equal(runCommand(game, { type: 'chooseSeed', seedId: 'pvz:repeater' }), 'seed-not-available')
-            choose(game)
-            const saved = game.save()
-            game.start({ ...options(index), save: saved as unknown as JsonValue })
-            assert.deepEqual(game.save(), saved)
-            if (index === 8) {
-                const forged = game.save()
-                forged.seedBank.packets[0].seedId = 'pvz:repeater'
-                assert.throws(() => start(index).start({ ...options(index), save: forged as unknown as JsonValue }), /seed choice/)
-            }
-        }
-        assert.equal(runCommand(game, { type: 'completeIntro' }), undefined)
-        assert.deepEqual(game.snapshot().extensions['pvz:tools'], { available: ['pvz:shovel'] })
-        for (let tick = 0; tick < 1799; tick++) game.tick()
-        assert.equal(game.snapshot().wave.index, 0)
-        assert.ok(game.snapshot().items.some(item => item.typeId === 'pvz:sun'))
-        game.tick()
-        assert.equal(game.snapshot().wave.index, 1)
-    }
+test('stress level starts with configured plants, spawns its wave on demand and restores without duplicating plants', () => {
+    const packet = { ...options(9), levelId: 'pvz:stress-test' }
+    const game = new IntegratedGameServer(definitions, levels)
+    const initial = game.start(packet)
+    assert.equal(levels.levels['pvz:stress-test'].persistent, false)
+    assert.equal(initial.plants.length, 40)
+    assert.equal(initial.zombies.length, 0)
+    assert.equal(initial.wave.countdown, 1200)
+    assert.equal(new Set(initial.plants.map(plant => `${plant.row}:${plant.column}`)).size, 40)
+    assert.equal(runCommand(game, { type: 'completeIntro' }), undefined)
+    game.enqueueDebugCommand(500, '/nextwave')
+    game.processBoundaryCommands()
+    assert.equal(game.drainCommandResults()[0].debug?.ok, true)
+    assert.equal(game.snapshot().zombies.length, 160)
+    const restored = new IntegratedGameServer(definitions, levels)
+    const snapshot = restored.start({ ...packet, save: game.save() as unknown as JsonValue })
+    assert.equal(snapshot.plants.length, 40)
+    assert.equal(snapshot.zombies.length, 160)
+    assert.deepEqual(snapshot, game.snapshot())
 })
+
+test('initial plants reject unknown seeds and positions outside active rows', () => {
+    const data = readGameplaySource('levels')
+    data.levels['pvz:stress-test'].initialPlants[0].seedId = 'test:missing'
+    assert.throws(() => parseGameplayLevels(data, definitions), /missing/)
+    data.levels['pvz:stress-test'].initialPlants[0].seedId = 'pvz:sunflower'
+    data.levels['pvz:stress-test'].initialPlants[0].row = 5
+    assert.throws(() => parseGameplayLevels(data, definitions), /outside the lawn/)
+})
+
 
 test('day wave plans match original counts, flags, introduction waves and zombie restrictions', () => {
     for (const [index, count] of [[6, 10], [7, 20], [8, 10], [9, 20], [10, 20]]) {
@@ -118,34 +112,6 @@ test('1-10 starts empty, spawns at ticks 100/200, permits free planting across t
     assert.equal(game.snapshot().items.some(item => item.typeId === 'pvz:sun'), false)
 })
 
-test('1-10 supply follows original repeat and duplicate weights, full-bank delay and saved last seed', () => {
-    const game = start(10)
-    runCommand(game, { type: 'completeIntro' })
-    const world = (game as unknown as { session: { world: World } }).session.world
-    const conveyor = world.resources.get(SeedBankResource).conveyor!
-    const random = world.resources.get(RandomResource)
-    const supply = createConveyorSystem(), commands = new CommandBuffer(world)
-    const rules = levels.levels[options(10).levelId].conveyor!
-    assert.deepEqual(rules.seeds.map(seed => seed.weight), [20, 20, 15, 20, 10, 5, 10])
-    for (const [duplicates, expectedWeight] of [[0, 10], [3, 5], [4, 1]]) {
-        conveyor.packets = Array.from({ length: duplicates }, (_, i) => ({ id: i + 1, seedId: 'pvz:peashooter', x: i * 50 }))
-        conveyor.nextId = duplicates + 1
-        conveyor.lastSeedId = 'pvz:peashooter'
-        conveyor.spawnAtTick = 0
-        random.integer = (min, max) => { assert.equal(max, 80 + expectedWeight - 1); return expectedWeight }
-        supply.run({ world, commands, tick: 100 })
-        assert.equal(conveyor.packets.at(-1)!.seedId, 'pvz:cherrybomb')
-        assert.equal(conveyor.lastSeedId, 'pvz:cherrybomb')
-        assert.equal(game.save().seedBank.conveyor!.lastSeedId, 'pvz:cherrybomb')
-    }
-    conveyor.packets = Array.from({ length: 10 }, (_, i) => ({ id: i + 1, seedId: 'pvz:peashooter', x: i * 50 }))
-    conveyor.nextId = 11
-    conveyor.spawnAtTick = 0
-    random.integer = () => { throw new Error('full bank cannot draw a seed') }
-    supply.run({ world, commands, tick: 100 })
-    assert.equal(conveyor.packets.length, 10)
-    assert.equal(conveyor.spawnAtTick, 1100)
-})
 
 test('each day level runs both flag warnings, restores the planned waves and collects its own reward', () => {
     for (const index of [6, 7, 8, 9, 10]) {

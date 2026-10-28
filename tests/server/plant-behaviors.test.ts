@@ -1,4 +1,4 @@
-import { readGameplaySource } from '../../tools/content_source'
+import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { GameplayRegistry } from '@/server/GameplayRegistry'

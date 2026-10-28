@@ -3,11 +3,9 @@ import { loadInstalledMods } from '@/app/ModLoader'
 import { loadPresentationDefinitions } from '@/client/content/loadPresentationDefinitions'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
-import { JsonAsset, type SpriteFrame } from 'cc'
-import { AssetLoader } from '@/client/content/LegacyAssetLoader'
+import { JsonAsset, SpriteFrame } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { loadBitmapFont } from '@/client/font/BitmapFontLoader'
-import { SpriteLoader } from '@/core/SpriteLoader'
 import { modResources } from '@/client/content/ModResources'
 
 const FONT_NAMES = {
@@ -63,12 +61,12 @@ export async function loadUIAssets(): Promise<UIAssets> {
         loader.loadBaseContent().then(base => loadPresentationDefinitions(base)),
         Promise.all(Object.entries(FONT_NAMES).map(async ([key, name]) => [key, await loadBitmapFont(name)] as const)),
         Promise.all(SPRITE_NAMES.map(async name => {
-            const frame = await SpriteLoader.load(name)
+            const frame = await modResources.asset(name, SpriteFrame)
             if (!frame) throw new Error(`Missing UI sprite: ${name}`)
             return [name, frame] as const
         })),
         Promise.all(['ui/strings', 'properties/lawnstrings'].map(async path => {
-            const asset = await AssetLoader.load<JsonAsset>(path, JsonAsset)
+            const asset = await modResources.asset(`pvz:${path}`, JsonAsset)
             if (!asset) throw new Error(`Missing UI strings: ${path}`)
             return asset.json as Record<string, string>
         })).then(tables => Object.assign({}, ...tables)),

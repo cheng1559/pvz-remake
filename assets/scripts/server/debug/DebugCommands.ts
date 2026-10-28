@@ -6,6 +6,7 @@ import {
     EconomyStateResource,
     LawnMowerComponent,
     LevelStateResource,
+    MAX_SUN,
     PlantComponent,
     PositionComponent,
     RandomResource,
@@ -30,7 +31,7 @@ function executeCommand(
 ): DebugCliResult {
     const { name, args } = command
     const level = world.resources.get(LevelStateResource)
-    const preference = ['cooldown', 'suncost', 'sunspawning', 'collect'].includes(name)
+    const preference = ['cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'collect'].includes(name)
     if (!preference && name !== 'plant' && (level.phase !== 'gameplay' || level.result !== 'playing')) return debugCondition(`/${name} requires an active level`)
     const economy = world.resources.get(EconomyStateResource)
     const events = world.resources.get(EventQueueResource)
@@ -50,7 +51,7 @@ function executeCommand(
             if (amount === null) return debugSyntax('Amount must be an integer')
             const next = (args[0].toLowerCase() === 'add' ? economy[name] : 0) + amount
             if (!Number.isSafeInteger(next)) return debugSyntax('Amount is too large')
-            economy[name] = Math.max(0, next)
+            economy[name] = Math.max(0, name === 'sun' ? Math.min(MAX_SUN, next) : next)
             if (name === 'sun') economy.pendingSunSpend = 0
             return debugSuccess(`${name}: ${economy[name]}`)
         }
@@ -165,12 +166,14 @@ function executeCommand(
         case 'cooldown':
         case 'suncost':
         case 'sunspawning':
+        case 'plantinvincible':
         case 'collect': {
             const rules = { ...getDebugRules(world) }
             const enabled = args[0].toLowerCase() === 'true'
             if (name === 'collect') rules.collect = args[0].toLowerCase() as typeof rules.collect
             else if (name === 'suncost') rules.sunCost = enabled
             else if (name === 'sunspawning') rules.sunSpawning = enabled
+            else if (name === 'plantinvincible') rules.plantInvincible = enabled
             else {
                 rules.cooldown = enabled
                 if (!enabled) for (const packet of world.resources.get(SeedBankResource).packets) packet.readyAtTick = 0

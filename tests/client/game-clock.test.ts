@@ -1,4 +1,4 @@
-import { readGameplaySource } from '../../tools/content_source'
+import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
@@ -31,10 +31,9 @@ test('adventure pause freezes scene animation, particles and tweens without chan
     class Component { enabled = true; isValid = true }
     class ReanimPlayer extends Component {}
     class ParticlePlayer extends Component {}
-    class TodParticleSystem extends Component {}
-    const reanim = new ReanimPlayer(), disabled = new ReanimPlayer(), particle = new ParticlePlayer(), legacy = new TodParticleSystem(), ui = new Component()
+    const reanim = new ReanimPlayer(), disabled = new ReanimPlayer(), particle = new ParticlePlayer(), ui = new Component()
     disabled.enabled = false
-    const components = [reanim, disabled, particle, legacy, ui]
+    const components = [reanim, disabled, particle, ui]
     const child = { children: [] }
     const root = { children: [child], getComponentsInChildren: () => components }
     const paused = new Set<object>(), resumed = new Set<object>()
@@ -45,7 +44,6 @@ test('adventure pause freezes scene animation, particles and tweens without chan
     const modules: Record<string, unknown> = {
         cc: { Component, _decorator: { ccclass: () => (value: unknown) => value }, Tween: { pauseAllByTarget: (node: object) => paused.add(node), resumeAllByTarget: (node: object) => resumed.add(node) } },
         '@/client/reanim/ReanimPlayer': { ReanimPlayer }, '@/client/particle/ParticlePlayer': { ParticlePlayer },
-        '@/core/Particle': { TodParticleSystem },
     }
     runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {} })
     const view = new module.exports.LevelView(root)
@@ -53,10 +51,10 @@ test('adventure pause freezes scene animation, particles and tweens without chan
     const speed = gameClock.speed
     view.setPaused(true)
     view.setPaused(true)
-    assert.deepEqual(components.map(component => component.enabled), [false, false, false, false, true])
+    assert.deepEqual(components.map(component => component.enabled), [false, false, false, true])
     assert.deepEqual(paused, new Set([root, child]))
     assert.equal(gameClock.speed, speed)
-    const delayed = [new ReanimPlayer(), new ParticlePlayer(), new TodParticleSystem()]
+    const delayed = [new ReanimPlayer(), new ParticlePlayer()]
     components.push(...delayed)
     const delayedNode = { children: [] }
     root.children.push(delayedNode)
@@ -75,7 +73,7 @@ test('adventure pause freezes scene animation, particles and tweens without chan
     assert.ok(paused.has(delayedNode), 'new tween targets must inherit the pause')
     particle.isValid = false
     view.setPaused(false)
-    assert.deepEqual(components.map(component => component.enabled), [true, false, false, true, true, true, true, true])
+    assert.deepEqual(components.map(component => component.enabled), [true, false, false, true, true, true])
     assert.deepEqual(resumed, new Set([root, child, delayedNode]))
     assert.equal(gameClock.speed, speed)
     view.gameOver.active = true

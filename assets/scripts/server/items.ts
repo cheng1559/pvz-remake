@@ -3,6 +3,7 @@ import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import {
     EconomyStateResource,
     LevelStateResource,
+    MAX_SUN,
     PositionComponent,
     RandomResource,
     type Position,
@@ -53,7 +54,7 @@ export function createItemSystem(): GameSystem {
                         const economy = world.resources.get(EconomyStateResource)
                         const spent = Math.min(economy.pendingSunSpend, item.value)
                         economy.pendingSunSpend -= spent
-                        economy.sun += item.value - spent
+                        economy.sun = Math.min(MAX_SUN, economy.sun + item.value - spent)
                         commands.destroyEntity(entity)
                     } else {
                         item.scale = Math.max(0.5, Math.min(1, distance * 0.05))

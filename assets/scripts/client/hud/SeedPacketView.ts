@@ -1,3 +1,4 @@
+import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { Color, Mask, Node, Sprite } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
@@ -88,8 +89,6 @@ export class SeedPacketView {
         this._applySpriteColorRecursive(this.node, color, [
             'CooldownClip',
             'SelectedHighlight',
-            'ParticleSystem_seedpacketpick',
-            'ParticleSystem',
         ])
     }
 
@@ -161,7 +160,7 @@ export class SeedPacketView {
 
     private _applySpriteColorRecursive(node: Node, color: Color, skipName?: string | string[]) {
         if (Array.isArray(skipName) ? skipName.indexOf(node.name) >= 0 : node.name === skipName) return
-        if (node.getComponent(FontRenderer)) return
+        if (node.getComponent(ParticlePlayer) || node.getComponent(FontRenderer)) return
         const plant = node.getComponent(PlantPreview)
         if (plant) { plant.setColor(color); return }
 

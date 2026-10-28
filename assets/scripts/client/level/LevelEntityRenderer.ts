@@ -7,7 +7,6 @@ import type { ClientAnimationRegistry } from '@/client/content/ClientAnimationRe
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
-import { TodParticleSystem } from '@/core/Particle'
 import { SeedPacketRenderer, type SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
 import type { LawnMowerSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
@@ -54,6 +53,8 @@ export class LevelEntityRenderer {
     private pointer?: { x: number; y: number }
     private lastSnapshot?: WorldSnapshot
     private highlightedPlant?: number
+    /** Board particles share one node per drawing order, so a new one is appended rather than moved. */
+    private readonly particleHolders = new Map<number, Node>()
 
     constructor(
         private readonly rootLayer: number,
@@ -223,8 +224,8 @@ export class LevelEntityRenderer {
             uiNode({ node, opacity: item.alpha })
         }
         for (const mower of snapshot.lawnMowers) this.syncMower(mower)
-        const particle = (effect: string, x: number, y: number, tint?: Color) => TodParticleSystem.spawn({
-            parent: this.entityLayer, effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder: 10000, useGameTime: false, tint,
+        const particle = (effect: string, x: number, y: number, tint?: Color) => ParticlePlayer.spawn({
+            parent: this.entityLayer, id: effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder: 10000,  tint,
         })
         for (const plant of snapshot.plants) {
             this.plantViews.get(plant.entityId)?.sync(plant, snapshot, particle, false)
@@ -281,7 +282,7 @@ export class LevelEntityRenderer {
                 this.playExplosion(event)
             } else if (event.type === 'mineRising') {
                 const plant = snapshot.plants.find(candidate => candidate.entityId === event.data.entityId)
-                if (plant) this.spawnBoardParticle('potatominerise', plant.x + 40, plant.y + 40, plant.row * 10 + 0.5)
+                if (plant) this.spawnBoardParticle("pvz:potatominerise", plant.x + 40, plant.y + 40, plant.row * 10 + 0.5)
             } else if (event.type === 'zombieCharred') {
                 this.spawnCharred(event)
             }
@@ -336,15 +337,20 @@ export class LevelEntityRenderer {
         if (!node || !helm) return
         const track = this.zombies.get(entityId)?.getTrackWorldPosition(helm.track)
         const local = track ? uiNode({ node: this.entityLayer }).transform.convertToNodeSpaceAR(track) : null
-        TodParticleSystem.spawn({
-            parent: this.entityLayer, effect: helm.effect,
+        ParticlePlayer.spawn({
+            parent: this.entityLayer, id: helm.effect,
             x: local?.x ?? node.position.x + helm.offset[0], y: local?.y ?? node.position.y + helm.offset[1],
-            renderOrder: (zombie?.row ?? 0) * 10 + 1.01, useGameTime: false,
+            renderOrder: (zombie?.row ?? 0) * 10 + 1.01,
         })
     }
 
     private spawnBoardParticle(effect: string, x: number, y: number, renderOrder: number, tint?: Color): void {
-        TodParticleSystem.spawn({ parent: this.entityLayer, effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder, useGameTime: false, tint })
+        let parent = this.particleHolders.get(renderOrder)
+        if (!parent) {
+            parent = uiNode({ name: `BoardParticles-${renderOrder}`, parent: this.entityLayer, layer: this.entityLayer.layer }).node
+            this.particleHolders.set(renderOrder, parent)
+        }
+        ParticlePlayer.spawn({ parent, id: effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder, tint, recycle: true })
     }
 
     private async create(id: number, snapshot: WorldSnapshot): Promise<void> {
@@ -382,7 +388,7 @@ export class LevelEntityRenderer {
                     this.projectileShadows.set(id, shadowNode)
                 }
                 const trail = this.content.presentation.projectiles[projectile.typeId]?.trail
-                if (trail) TodParticleSystem.spawn({ parent: node, ...trail, useGameTime: false })
+                if (trail) ParticlePlayer.spawn({ parent: node, ...trail })
             } else if (snapshot.lawnMowers.some(value => value.entityId === id)) {
                 await this.createMower(id, node, snapshot)
             } else if (plant) {
@@ -422,7 +428,7 @@ export class LevelEntityRenderer {
         const size = levelAwardSize(award)
         uiNode({ node, size, anchor: { x: 0.5, y: 0.5 } })
         const backEffects = uiNode({ name: 'AwardBackEffects', parent: node }).node
-        TodParticleSystem.spawn({ parent: backEffects, effect: award.kind === 'note' ? 'awardpickuparrow' : 'seedpacket', x: 0, y: 60, z: -1 })
+        ParticlePlayer.spawn({ parent: backEffects, id: award.kind === 'note' ? "pvz:awardpickuparrow" : "pvz:seedpacket", x: 0, y: 60, z: -1 })
         if (award.kind !== 'seed') {
             const visual = this.content.presentation.awards?.[award.id]
             if (!visual) throw new Error(`Award presentation is not installed: ${award.id}`)
@@ -460,15 +466,14 @@ export class LevelEntityRenderer {
         if (!drop) return
         const trackPosition = this.zombies.get(entityId)?.getTrackWorldPosition(drop.track)
         const localPosition = trackPosition ? uiNode({ node: this.entityLayer }).transform.convertToNodeSpaceAR(trackPosition) : null
-        TodParticleSystem.spawn({
+        ParticlePlayer.spawn({
             parent: this.entityLayer,
-            effect: mowered ? drop.moweredEffect ?? drop.effect : drop.effect,
+            id: mowered ? drop.moweredEffect ?? drop.effect : drop.effect,
             x: localPosition?.x ?? node.position.x + drop.offset[0],
             y: localPosition?.y ?? node.position.y + drop.offset[1],
             renderOrder: row * 10 + 1.01,
-            useGameTime: false,
             // Zombie::DropHead and DropArm swap in the pole vaulter's own head and a bare hand.
-            imageOverride: drop.image,
+            spriteOverride: drop.image,
             // Zombie::OverrideParticleColor keeps a chilled zombie's parts blue.
             tint: chilled ? new Color(75, 75, 255, 255) : undefined,
             extraAdditive: chilled,
@@ -479,10 +484,10 @@ export class LevelEntityRenderer {
     private spawnPlantingParticle(snapshot: WorldSnapshot, entityId: number): void {
         const plant = snapshot.plants.find(candidate => candidate.entityId === entityId)
         if (!plant) return
-        TodParticleSystem.spawn({
-            parent: this.entityLayer, effect: 'planting',
+        ParticlePlayer.spawn({
+            parent: this.entityLayer, id: "pvz:planting",
             x: plant.x + 41 - WIDTH / 2, y: HEIGHT / 2 - plant.y - 74,
-            renderOrder: 10000, useGameTime: false,
+            renderOrder: 10000,
         })
     }
 
@@ -497,20 +502,7 @@ export class LevelEntityRenderer {
         const position = zombie
             ? { x: x + impact.offset[0] - zombie.x, y: -Math.max(impact.yRange[0], Math.min(impact.yRange[1], y + impact.offset[1] - zombie.y)) }
             : { x: x + impact.offset[0] - WIDTH / 2, y: HEIGHT / 2 - y - impact.offset[1] }
-        if (impact.kind === 'tod') {
-            const effect = TodParticleSystem.spawn({ parent, effect: impact.id, ...position, useGameTime: false })
-            return effect.node
-        }
-        const node = uiNode({ name: 'ProjectileImpact', parent, position }).node
-        const player = node.addComponent(ParticlePlayer)
-        void player.load(impact.id, this.content.registry, this.content.loader).then(() => {
-            if (!node.isValid) return
-            player.play(event.eventId >>> 0, impact.duration!)
-        }).catch(error => {
-            if (node.isValid) node.destroy()
-            console.error('[Level] Failed to play projectile impact', error)
-        })
-        return node
+        return ParticlePlayer.spawn({ parent, id: impact.id, ...position, seed: event.eventId >>> 0 }).node
     }
 
     /** Mods can append scenery to the same ordering pass as entities and particles. */
@@ -535,16 +527,27 @@ export class LevelEntityRenderer {
         for (const [node, entry] of this.charred) if (node.isValid) entries.push({ node, ...entry })
         for (const entity of snapshot.lawnMowers) add(entity.entityId, entity.row * 10 + 3)
         for (const child of this.entityLayer.children) {
-            const particle = child.getComponent(TodParticleSystem)
+            const particle = child.getComponent(ParticlePlayer)
             if (particle) entries.push({ node: child, order: particle.renderOrder })
         }
+        for (const [order, node] of this.particleHolders) entries.push({ node, order })
         return entries
     }
 
     private syncLayerOrder(snapshot: WorldSnapshot): void {
         const entries = this.collectLayerEntries(snapshot)
         entries.sort((left, right) => left.order - right.order || (left.entityId ?? 0) - (right.entityId ?? 0))
-        entries.forEach((entry, index) => entry.node.setSiblingIndex(index))
+        // Unlisted children (an entity leaving the snapshot) keep their place; comparing by index instead would move every
+        // node after one of them. Most nodes are already in place, so the engine is called only for the rest.
+        const layer = this.entityLayer, children = layer.children, listed = new Set<Node>()
+        for (const { node } of entries) listed.add(node)
+        let index = 0
+        for (const { node } of entries) {
+            if (node.parent !== layer) continue
+            while (index < children.length && children[index] !== node && !listed.has(children[index])) index++
+            if (children[index] !== node) node.setSiblingIndex(index)
+            index++
+        }
     }
 
     private async createMower(id: number, node: Node, snapshot: WorldSnapshot): Promise<void> {

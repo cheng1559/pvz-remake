@@ -1,4 +1,5 @@
-import { _decorator, Color, Component, director, Director, Mask, Node, Sprite, type SpriteFrame } from 'cc'
+import { modResources } from '@/client/content/ModResources'
+import { _decorator, Color, Component, director, Director, Mask, Node, Sprite, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { UserView } from '@/shared/menu'
 import { loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
@@ -6,12 +7,11 @@ import { preloadTasks } from '@/client/content/preloadTasks'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UILabel } from '@/client/ui/UILabel'
 import { uiNode } from '@/client/view/uiNode'
-import { SpriteLoader } from '@/core/SpriteLoader'
 import { gameClock } from '@/core/GameClock'
 import { MAIN_MENU_BUTTONS, MAIN_MENU_CLOUDS, MAIN_MENU_EXTRA_IMAGES, MAIN_MENU_FLOWERS, type MainMenuButton } from './MainMenuConfig'
 import type { MenuAction } from './MenuPages'
@@ -64,7 +64,7 @@ export class MainMenuScreen extends Component {
         let completed = 0
         const report = () => onProgress(++completed / total)
         await Promise.all([...imageNames].map(async name => {
-            const frame = await SpriteLoader.load(name)
+            const frame = await modResources.asset(name, SpriteFrame)
             if (!frame) throw new Error(`Missing main menu image: ${name}`)
             this.frames.set(name, frame)
             report()
@@ -154,7 +154,7 @@ export class MainMenuScreen extends Component {
     private playEntrance(): void {
         if (!this.node?.isValid || !this.node.activeInHierarchy) return
         this.entrancePending = false
-        void SoundLoader.play(SoundEffect.RollIn)
+        void SoundSystem.play(SoundEffect.RollIn)
         for (const cloud of this.clouds) {
             const delay = random(-60, 20)
             if (delay <= 0) this.playCloud(cloud, -delay / 60 * (cloud.player.durationSeconds - 1 / 20))
@@ -240,7 +240,7 @@ export class MainMenuScreen extends Component {
             })
             button.onPress = () => {
                 this.playedFlowers.add(flower)
-                void SoundLoader.playFoley(SoundEffect.LimbsPop, 10)
+                void SoundSystem.playFoley(SoundEffect.LimbsPop, 10)
                 flower.play({ loop: false, rate: 24 / 20, timeSeconds: 0, hideOnFinish: false })
             }
             this.flowerButtons.push(button)
@@ -285,8 +285,8 @@ export class MainMenuScreen extends Component {
             this.startingSeconds = 0
             this.laughPlayed = false
             MusicSystem.stop()
-            void SoundLoader.playSfx(SoundEffect.LoseMusic)
-            void SoundLoader.playFoley(SoundEffect.DirtRise)
+            void SoundSystem.playSfx(SoundEffect.LoseMusic)
+            void SoundSystem.playFoley(SoundEffect.DirtRise)
             for (const hand of this.hand) hand.play({ loop: false, timeSeconds: 0, hideOnFinish: false })
         } else if (config.target) void this.onNavigate(config.target)
         else this.ui.dialog(this.node, { title: 'Zombatar', message: 'Zombatar is not available yet.' })
@@ -324,7 +324,7 @@ export class MainMenuScreen extends Component {
         this.setAdventureShade(shade)
         if (!this.laughPlayed && this.startingSeconds >= 1.25) {
             this.laughPlayed = true
-            void SoundLoader.play(SoundEffect.EvilLaugh)
+            void SoundSystem.play(SoundEffect.EvilLaugh)
         }
         if (this.startingSeconds >= 4.5) {
             this.startingSeconds = null

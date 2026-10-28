@@ -7,10 +7,6 @@ import {
     type ReanimPlaybackSnapshot,
 } from '@/client/reanim/ReanimPlaybackSnapshot'
 import {
-    parseTodParticleSystemSnapshot,
-    type TodParticleSystemSnapshot,
-} from '@/core/Particle/TodParticleSnapshot'
-import {
     parseMusicPlaybackSnapshot,
     type MusicPlaybackSnapshot,
 } from '@/client/music/MusicPlaybackSnapshot'
@@ -125,22 +121,14 @@ export type LevelParticleOwnerSnapshot =
         z: number
     }
 
-export type LevelParticleSnapshot =
-    | {
-        instanceId: number
-        backend: 'particle'
-        owner: LevelParticleOwnerSnapshot
-        playback: ParticlePlayerSnapshot
-    }
-    | {
-        instanceId: number
-        backend: 'tod'
-        owner: LevelParticleOwnerSnapshot
-        playback: TodParticleSystemSnapshot
-    }
+export interface LevelParticleSnapshot {
+    instanceId: number
+    owner: LevelParticleOwnerSnapshot
+    playback: ParticlePlayerSnapshot
+}
 
 export interface LevelPresentationSnapshot {
-    schemaVersion: 2
+    schemaVersion: 3
     flow: LevelFlowSnapshot
     intro: LevelIntroSnapshot
     end: LevelEndSnapshot
@@ -158,7 +146,7 @@ export function parseLevelPresentationSnapshot(value: unknown): LevelPresentatio
         'schemaVersion', 'flow', 'intro', 'end', 'advice', 'hud',
         'audio', 'entities', 'particles', 'extensions',
     ], 'Level presentation')
-    if (source.schemaVersion !== 2) throw new TypeError('Level presentation.schemaVersion must be 2')
+    if (source.schemaVersion !== 3) throw new TypeError('Level presentation.schemaVersion must be 3')
 
     const flow = parseFlow(source.flow)
     const intro = parseIntro(source.intro)
@@ -173,7 +161,7 @@ export function parseLevelPresentationSnapshot(value: unknown): LevelPresentatio
     }
 
     return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         flow,
         intro,
         end,
@@ -334,19 +322,13 @@ function parseParticles(
     const introSlots = new Set(intro.previews.map(preview => preview.slot))
     const particles = array(value, 'Level particles').map((value, index) => {
         const name = `Level particles[${index}]`
-        const source = exact(value, ['instanceId', 'backend', 'owner', 'playback'], name)
+        const source = exact(value, ['instanceId', 'owner', 'playback'], name)
         const instanceId = positiveInteger(source.instanceId, `${name}.instanceId`)
         const owner = parseParticleOwner(source.owner, name)
         if (owner.kind === 'intro-preview' && !introSlots.has(owner.slot)) {
             throw new TypeError(`${name}.owner references missing intro preview ${owner.slot}`)
         }
-        if (source.backend === 'particle') {
-            return { instanceId, backend: 'particle' as const, owner, playback: parseParticlePlayerSnapshot(source.playback) }
-        }
-        if (source.backend === 'tod') {
-            return { instanceId, backend: 'tod' as const, owner, playback: parseTodParticleSystemSnapshot(source.playback) }
-        }
-        throw new TypeError(`${name}.backend is invalid`)
+        return { instanceId, owner, playback: parseParticlePlayerSnapshot(source.playback) }
     })
     unique(particles.map(particle => particle.instanceId), 'Level particle instance ID')
     return particles.sort((left, right) => left.instanceId - right.instanceId)

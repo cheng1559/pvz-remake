@@ -7,7 +7,8 @@ const root = join(process.cwd(), 'assets', 'scripts')
 
 test('runtime imports preserve client-server architecture boundaries', () => {
     const violations: string[] = []
-    check('app', /(?:@\/(?:core|ui|game)|(?:\.\.\/)+(?:core|ui|game))(?:\/|['"])/, 'app -> legacy runtime', violations)
+    // GameClock is the shared presentation clock used by GameApp, not a legacy runtime.
+    check('app', /(?:@\/|(?:\.\.\/)+)(?:core(?!\/GameClock['"])|ui|game)(?:\/|['"])/, 'app -> legacy runtime', violations)
     check('client', /(?:@\/(?:server|ui|game)|(?:\.\.\/)+(?:server|ui|game))(?:\/|['"])/, 'client -> server/legacy ui/game', violations)
     check('core', /(?:@\/(?:ui|game)|(?:\.\.\/)+(?:ui|game))(?:\/|['"])/, 'core -> legacy ui/game', violations)
     check('server', /(?:(?:@\/(?:client|platform|core|ui|game)|(?:\.\.\/)+(?:client|platform|core|ui|game))(?:\/|['"])|from ['"]cc(?:\/|['"]))/, 'server -> client/platform/runtime/cc', violations)

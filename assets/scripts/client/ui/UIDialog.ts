@@ -1,5 +1,5 @@
 import { _decorator, Component, EventTouch, KeyCode, Node, UITransform, Vec3, type EventKeyboard } from 'cc'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { UIInput } from './UIInput'
 
@@ -34,10 +34,10 @@ export class UIDialog extends Component {
         event.propagationStopped = true
         if (dialog.onKeyDown?.(event)) return true
         if (event.keyCode === KeyCode.ESCAPE) {
-            if (dialog.clickSound !== null) void SoundLoader.play(dialog.clickSound)
+            if (dialog.clickSound !== null) void SoundSystem.play(dialog.clickSound)
             dialog.onCancel()
         } else if (event.keyCode === KeyCode.ENTER || event.keyCode === KeyCode.SPACE) {
-            if (dialog.clickSound !== null) void SoundLoader.play(dialog.clickSound)
+            if (dialog.clickSound !== null) void SoundSystem.play(dialog.clickSound)
             dialog.onConfirm()
         }
         return true

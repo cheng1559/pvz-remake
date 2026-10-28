@@ -15,6 +15,7 @@ import {
     EconomyStateResource,
     LawnMowerComponent,
     LevelStateResource,
+    MAX_SUN,
     PlantAttackComponent,
     PlantComponent,
     PositionComponent,
@@ -116,7 +117,7 @@ export class IntegratedGameServer {
             paused: false,
         })
         world.resources.set(EconomyStateResource, {
-            sun: level.startingSun,
+            sun: Math.min(MAX_SUN, level.startingSun),
             money: packet.initialMoney,
             pendingSunSpend: 0,
         })
@@ -155,6 +156,7 @@ export class IntegratedGameServer {
             world.resources.get(SeedBankResource).conveyor = { nextId: 1, spawnAtTick: level.conveyor.spawnDelay[0].ticks, moveTicks: 0, packets: [] }
             world.resources.get(TutorialResource).sunAtTick = undefined
         }
+        for (const plant of level.initialPlants ?? []) this.createPlant(this.session, plant.seedId, plant.row, plant.column)
         if (packet.firstAdventure) for (const plant of level.shovelTutorial?.introPlants ?? []) this.createPlant(this.session, plant.seedId, plant.row, plant.column)
         return this.snapshot()
     }
@@ -300,7 +302,7 @@ export class IntegratedGameServer {
             board: this.definitions.boards[definition.board],
             ...save.level,
         })
-        world.resources.set(EconomyStateResource, { ...save.economy })
+        world.resources.set(EconomyStateResource, { ...save.economy, sun: Math.min(MAX_SUN, save.economy.sun) })
         world.resources.set(RandomResource, DeterministicRng.restore(save.random))
         world.resources.set(SeedBankResource, {
             selection: { ...save.seedBank.selection },
@@ -352,6 +354,10 @@ export class IntegratedGameServer {
 
     hasPendingCommands(): boolean {
         return this.requireSession().commands.length > 0
+    }
+
+    isPaused(): boolean {
+        return this.requireSession().world.resources.get(LevelStateResource).paused
     }
 
     drainCommandResults(): CommandResult[] {
@@ -450,10 +456,16 @@ export class IntegratedGameServer {
     }
 
     tick(): WorldSnapshot {
+        this.step()
+        return this.snapshot()
+    }
+
+    /** Advances one fixed tick without building a snapshot. */
+    step(): void {
         const session = this.requireSession()
-        if (this.processBoundaryCommands()) return this.snapshot()
+        if (this.processBoundaryCommands()) return
         const level = session.world.resources.get(LevelStateResource)
-        if (level.phase !== 'gameplay' || level.paused || level.result === 'lost') return this.snapshot()
+        if (level.phase !== 'gameplay' || level.paused || level.result === 'lost') return
         session.tick++
         session.gameplayTick++
         session.schedule.run(session.world, session.gameplayTick)
@@ -463,7 +475,6 @@ export class IntegratedGameServer {
                 if (this.definitions.items[item.typeId] && item.state === 'available') this.collectItem(session, entity)
             }
         }
-        return this.snapshot()
     }
 
     snapshot(): WorldSnapshot {

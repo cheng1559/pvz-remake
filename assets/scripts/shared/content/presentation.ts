@@ -139,13 +139,11 @@ export interface ProjectilePresentationDefinition {
         readonly sprite: string; readonly columns: number; readonly cell: number
         readonly offset: { readonly x: number; readonly y: number }; readonly scale: number
     }
-    readonly trail?: { readonly effect: string; readonly x: number; readonly y: number }
+    readonly trail?: { readonly id: string; readonly x: number; readonly y: number }
     readonly impact?: {
-        readonly kind: 'particle' | 'tod'
         readonly id: string
         readonly offset: readonly [number, number]
         readonly yRange: readonly [number, number]
-        readonly duration?: number
     }
     readonly fireSounds: readonly PresentationSound[]
     readonly impactSounds: readonly PresentationSound[]
@@ -191,6 +189,7 @@ export interface ZombiePresentationDefinition {
 
 export type NutBlinkSlot = 'blinkTwitch' | 'blinkTwice' | 'blinkThrice'
 export interface AdventureIntroLayout {
+    readonly previewCapacity: number
     readonly stationary?: boolean
     readonly sod: string
     readonly x: number
@@ -260,7 +259,7 @@ export interface PresentationDefinitions {
     readonly zombies: Readonly<Record<string, ZombiePresentationDefinition>>
     readonly projectiles: Readonly<Record<string, ProjectilePresentationDefinition>>
     readonly seedPackets: {
-        readonly flash: { readonly id: string; readonly duration: number }
+        readonly flash: { readonly id: string }
         readonly selection: { readonly sprite: string; readonly color: readonly [number, number, number] }
         readonly defaultPlacement: SeedPacketPlacement
         readonly placements: Readonly<Record<string, SeedPacketPlacement>>
@@ -320,6 +319,8 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     }
     for (const [id, entry] of Object.entries(object(data.levels ?? {}, 'presentation levels'))) {
         const level = object(entry, id), intro = object(level.intro, id + '.intro')
+        positive(intro.previewCapacity, id + '.intro.previewCapacity')
+        if (!Number.isInteger(intro.previewCapacity)) throw new TypeError(id + '.intro.previewCapacity must be an integer')
         text(intro.sod, id + '.intro.sod')
         finite(intro.x, id + '.intro.x'); finite(intro.y, id + '.intro.y'); positive(intro.width, id + '.intro.width')
         if (intro.sourceX !== undefined) finite(intro.sourceX, id + '.intro.sourceX')
@@ -451,15 +452,13 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         }
         if (projectile.impact !== undefined) {
             const impact = object(projectile.impact, id + '.impact')
-            if (impact.kind !== 'particle' && impact.kind !== 'tod') throw new TypeError(id + '.impact.kind is invalid')
             text(impact.id, id + '.impact.id')
             pair(impact.offset, id + '.impact.offset')
             range(impact.yRange, id + '.impact.yRange', true)
-            if (impact.kind === 'particle') positive(impact.duration, id + '.impact.duration')
         }
         if (projectile.trail !== undefined) {
             const trail = object(projectile.trail, id + '.trail')
-            text(trail.effect, id + '.trail.effect')
+            text(trail.id, id + '.trail.id')
             point(trail, id + '.trail')
         }
         sounds(projectile.fireSounds, id + '.fireSounds', true)
@@ -467,7 +466,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     }
     const packets = object(data.seedPackets, 'seedPackets')
     const flash = object(packets.flash, 'seedPackets.flash')
-    text(flash.id, 'seedPackets.flash.id'); positive(flash.duration, 'seedPackets.flash.duration')
+    text(flash.id, 'seedPackets.flash.id')
     const selection = object(packets.selection, 'seedPackets.selection')
     text(selection.sprite, 'seedPackets.selection.sprite')
     if (!Array.isArray(selection.color) || selection.color.length !== 3 || selection.color.some(value => !Number.isInteger(value) || value < 0 || value > 255)) throw new TypeError('Invalid seedPackets.selection.color')

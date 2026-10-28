@@ -1,7 +1,7 @@
+import { modResources } from '@/client/content/ModResources'
 import type { BoardPresentation } from '@/shared/content/presentation'
-import { Color, Graphics, Mask, Node, Sprite, UITransform, type SpriteFrame } from 'cc'
-import { SpriteLoader } from '@/core/SpriteLoader'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { Color, Graphics, Mask, Node, Sprite, UITransform, SpriteFrame } from 'cc'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { uiNode } from '@/client/view/uiNode'
 import { fitViewport } from '@/client/view/ClientViewport'
 import { easeInOut, lerp } from '@/client/view/GameScreenMath'
@@ -34,11 +34,11 @@ export class LevelGameOverPresenter {
     static async loadAssets(presentation: BoardPresentation['gameOver']): Promise<SpriteFrame[]> {
         const [frames] = await Promise.all([
             Promise.all(presentation.images.map(async name => {
-                const frame = await SpriteLoader.load(name)
+                const frame = await modResources.asset(name, SpriteFrame)
                 if (!frame) throw new Error(`Missing game-over image: ${name}`)
                 return frame
             })),
-            Promise.all([SoundEffect.LoseMusic, SoundEffect.Chomp, SoundEffect.Chomp2, SoundEffect.Scream].map(effect => SoundLoader.load(effect))),
+            Promise.all([SoundEffect.LoseMusic, SoundEffect.Chomp, SoundEffect.Chomp2, SoundEffect.Scream].map(effect => SoundSystem.load(effect))),
         ])
         return frames
     }
@@ -64,7 +64,7 @@ export class LevelGameOverPresenter {
         this.winner = snapshot.zombies.find(zombie => winnerId === undefined ? zombie.x <= -100 : zombie.entityId === winnerId)
         this.bank.active = false
         this.audio.stop()
-        void SoundLoader.play(SoundEffect.LoseMusic)
+        void SoundSystem.play(SoundEffect.LoseMusic)
         const image = (name: string, parent: Node, frame: SpriteFrame, x: number, y: number) => uiNode({
             name, parent, anchor: { x: 0, y: 1 }, position: { x, y },
             sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false },
@@ -88,8 +88,8 @@ export class LevelGameOverPresenter {
         if (this.ticks < 0) return false
         const previous = this.ticks
         this.ticks = Math.min(END, this.ticks + dt * 100)
-        for (const tick of [510, 560]) if (previous < tick && this.ticks >= tick) void SoundLoader.playFoley(SoundEffect.Chomp)
-        if (previous < GRAPHIC_START && this.ticks >= GRAPHIC_START) void SoundLoader.playFoley(SoundEffect.Scream)
+        for (const tick of [510, 560]) if (previous < tick && this.ticks >= tick) void SoundSystem.playFoley(SoundEffect.Chomp)
+        if (previous < GRAPHIC_START && this.ticks >= GRAPHIC_START) void SoundSystem.playFoley(SoundEffect.Scream)
         this.draw()
         return this.ticks >= END
     }

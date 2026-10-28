@@ -322,6 +322,11 @@ export function parseClientPacket(value: unknown): ClientPacket {
 
 export function parseServerPacket(value: unknown): ServerPacket {
     assertJsonValue(value)
+    return validateServerPacket(value)
+}
+
+/** Structural checks for a value already known to be JSON data, such as a JSON.parse result. */
+export function validateServerPacket(value: unknown): ServerPacket {
     const packet = record(value, 'server packet')
     protocolVersion(packet.protocolVersion)
 
@@ -378,8 +383,79 @@ export function parseServerPacket(value: unknown): ServerPacket {
     return packet as unknown as ServerPacket
 }
 
+const UNSAFE_JSON_COPY = Symbol('unsafe JSON copy')
+
+/** A validated, isolated local reply, without a second serialization/parse pass. */
+export function copyServerPacket(value: ServerPacket): ServerPacket {
+    if (value === null || typeof value !== 'object') return parseServerPacket(value)
+    const copy = copyJsonContainer(value, new WeakSet<object>())
+    // Keep the existing diagnostics (including property paths) for invalid values.
+    if (copy === UNSAFE_JSON_COPY) return validateServerPacket(jsonRoundTrip(value))
+    return validateServerPacket(copy)
+}
+
+function copyJsonContainer(value: object, ancestors: WeakSet<object>): JsonValue | typeof UNSAFE_JSON_COPY {
+    const isArray = Array.isArray(value)
+    const prototype = Object.getPrototypeOf(value)
+    if (ancestors.has(value) || (!isArray && prototype !== Object.prototype && prototype !== null)) return UNSAFE_JSON_COPY
+    // Unusual array prototypes may have inherited JSON serialization behavior; use the existing path.
+    if (isArray && prototype !== Array.prototype) return UNSAFE_JSON_COPY
+    const keys = Reflect.ownKeys(value)
+    if (isArray && keys.length !== value.length + 1) return UNSAFE_JSON_COPY
+    const copy: JsonObject | JsonValue[] = isArray ? new Array(value.length) : {}
+    ancestors.add(value)
+    for (const key of keys) {
+        if (typeof key !== 'string') return UNSAFE_JSON_COPY
+        if (isArray) {
+            if (key === 'length') continue
+            if (!/^(0|[1-9]\d*)$/.test(key) || Number(key) >= value.length) return UNSAFE_JSON_COPY
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(value, key)!
+        if (!descriptor.enumerable || !('value' in descriptor)) return UNSAFE_JSON_COPY
+        let item = descriptor.value
+        // Most snapshot fields are scalar; avoid another function call for each one on jitless V8.
+        if (typeof item === 'number') {
+            if (!Number.isFinite(item)) return UNSAFE_JSON_COPY
+            if (item === 0) item = 0 // JSON round trips normalize negative zero.
+        } else if (item !== null && typeof item !== 'string' && typeof item !== 'boolean') {
+            if (typeof item !== 'object') return UNSAFE_JSON_COPY
+            item = copyJsonContainer(item, ancestors)
+            if (item === UNSAFE_JSON_COPY) return UNSAFE_JSON_COPY
+        }
+        // JSON.parse creates an own data property here, without changing the result's prototype.
+        if (key === '__proto__') Object.defineProperty(copy, key, { value: item, enumerable: true, writable: true, configurable: true })
+        else (copy as JsonObject)[key] = item
+    }
+    ancestors.delete(value)
+    return copy
+}
+
 export function assertJsonValue(value: unknown): asserts value is JsonValue {
-    assertJsonNode(value, new WeakSet<object>(), '$')
+    // Snapshots are checked every tick; only build property paths when there is an error to report.
+    if (!isJsonNode(value, new WeakSet<object>())) assertJsonNode(value, new WeakSet<object>(), '$')
+}
+
+/** The same rules as assertJsonNode, without allocating a path for every property. */
+const isJsonNode = (value: unknown, ancestors: WeakSet<object>): boolean => {
+    if (value === null || typeof value === 'string' || typeof value === 'boolean') return true
+    if (typeof value === 'number') return Number.isFinite(value)
+    if (typeof value !== 'object' || ancestors.has(value)) return false
+    const isArray = Array.isArray(value)
+    const prototype = Object.getPrototypeOf(value)
+    if (!isArray && prototype !== Object.prototype && prototype !== null) return false
+    const keys = Reflect.ownKeys(value)
+    // Without holes, an array's own keys are exactly its indices and 'length'.
+    if (isArray && keys.length !== value.length + 1) return false
+    ancestors.add(value)
+    for (const key of keys) {
+        if (typeof key !== 'string') return false
+        if (isArray && key === 'length') continue
+        const descriptor = Object.getOwnPropertyDescriptor(value, key)!
+        if (!descriptor.enumerable || !('value' in descriptor) || !isJsonNode(descriptor.value, ancestors)) return false
+    }
+    if (isArray) for (let index = 0; index < value.length; index++) if (!Object.prototype.hasOwnProperty.call(value, index)) return false
+    ancestors.delete(value)
+    return true
 }
 
 export function isJsonValue(value: unknown): value is JsonValue {

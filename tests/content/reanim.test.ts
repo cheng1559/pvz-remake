@@ -81,6 +81,22 @@ test('Reanim samples linear values and discrete sprites', () => {
     assert.equal(sampleReanimTrack(track, 1)?.sprite, null)
 })
 
+test('Reanim finds the correct keyframes after forward and backward seeks', () => {
+    const track = parseReanim(reanim()).tracks[0]
+    const original = track.keyframes[0]
+    track.keyframes = Array.from({ length: 8 }, (_, timeSeconds) => ({
+        ...original, timeSeconds, x: timeSeconds * 10,
+        sprite: timeSeconds === 4 ? null : original.sprite,
+        interpolation: timeSeconds === 5 ? 'step' : 'linear',
+    }))
+    assert.equal(sampleReanimTrack(track, 6.5)?.x, 65)
+    assert.equal(sampleReanimTrack(track, 4)?.sprite, null)
+    assert.equal(sampleReanimTrack(track, 1.5)?.x, 15)
+    assert.equal(sampleReanimTrack(track, 5.5)?.x, 50)
+    assert.equal(sampleReanimTrack(track, 9)?.x, 70)
+    assert.equal(sampleReanimTrack(track, -1), null)
+})
+
 test('Reanim attachment applies parent motion relative to its base pose', () => {
     const child = parseReanim(reanim()).tracks[0].keyframes[0]
     const base = { ...child, x: 10, y: 20, scaleX: 2, scaleY: 2 }

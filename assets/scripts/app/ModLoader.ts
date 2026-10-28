@@ -12,7 +12,7 @@ import { PlantViewRegistry } from '@/client/plants/PlantViewRegistry'
 import { ZombieViewRegistry } from '@/client/zombies/ZombieViewRegistry'
 import { ArchiveContentRegistry } from '@/client/content/ArchiveContentRegistry'
 import { modManager } from '@/client/content/ModManager'
-import { clearModRuntimeCache, importModModule, mountMod } from '@/client/content/ModRuntime'
+import { importModModule, mountMod } from '@/client/content/ModRuntime'
 
 interface ModModule { register(context: { host: ModHost, assets: ModAssets }): void | Promise<void> }
 let installedMods: Promise<LoadedMods> | undefined
@@ -25,7 +25,6 @@ async function loadMods() {
         console.error('[Mods] Failed to read enabled Mods; starting without Mods', error)
         return []
     })
-    clearModRuntimeCache()
     // Load only base data here. Resolving installed Mods from this read would await this same promise.
     const base = installed.length ? await loadBaseDefinitions() : undefined
     const gameplayDefinitions = new DefinitionSources()

@@ -1,7 +1,7 @@
-import type { Node } from 'cc'
-import { SoundEffect } from '@/client/sound/LegacySoundSystem'
+import { SpriteFrame, type Node } from 'cc'
+import { modResources } from '@/client/content/ModResources'
+import { SoundEffect } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
-import { SpriteLoader } from '@/core/SpriteLoader'
 import type { MenuAction, MenuPageId } from './MenuPages'
 
 const GARDENS: readonly MenuPageId[] = ['garden', 'mushroom', 'aquarium', 'tree']
@@ -15,7 +15,7 @@ export async function showMenuPageControls(
         : id === 'achievements' ? ['acheesements_back_highlight'] : []
     if (!names.length) return false
     const frames = await Promise.all(names.map(async name => {
-        const frame = await SpriteLoader.load(name)
+        const frame = await modResources.asset(name, SpriteFrame)
         if (!frame) throw new Error(`Missing page control: ${name}`)
         return frame
     }))

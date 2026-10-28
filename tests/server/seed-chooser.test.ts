@@ -1,4 +1,4 @@
-import { readBaseContent, readGameplaySource } from '../../tools/content_source'
+import { readBaseContent, readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'

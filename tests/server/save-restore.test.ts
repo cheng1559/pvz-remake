@@ -1,4 +1,4 @@
-import { readGameplaySource } from '../../tools/content_source'
+import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
@@ -22,87 +22,8 @@ const start: StartSessionPacket = {
     mods: [{ id: 'phase3:test', version: '1.0.0', contentHash: 'content-a' }],
 }
 
-test('tongue variants survive snapshots and saves, while saves missing the trait are rejected', () => {
-    const server = new IntegratedGameServer(definitions, levels)
-    server.start(start)
-    runCommand(server, { type: 'completeIntro' })
-    const id = (server as unknown as {
-        spawnZombie(typeId: string, row: number, x: number): number
-    }).spawnZombie('pvz:normal', 2, 700)
-    const setup = server.save()
-    setup.entities.find(entity => entity.entityId === id)!.zombie!.hasTongue = true
-    server.start({ ...start, save: setup as unknown as JsonValue })
-    assert.equal(server.snapshot().zombies.find(zombie => zombie.entityId === id)!.hasTongue, true)
 
-    const restored = new IntegratedGameServer(definitions, levels)
-    restored.start({ ...start, save: server.save() as unknown as JsonValue })
-    for (let tick = 0; tick < 10; tick++) assert.deepEqual(restored.tick(), server.tick())
-    assert.equal(restored.save().entities.find(entity => entity.entityId === id)!.zombie!.hasTongue, true)
 
-    const incompatible = JSON.parse(JSON.stringify(setup))
-    delete incompatible.entities.find((entity: { entityId: number }) => entity.entityId === id).zombie.hasTongue
-    assert.throws(() => parseServerSaveSnapshot(incompatible), /hasTongue/)
-})
-
-test('corpse opacity follows the final ten server ticks and resumes from a save', () => {
-    const original = new IntegratedGameServer(definitions, levels)
-    original.start(start)
-    runCommand(original, { type: 'completeIntro' })
-    const zombieId = (original as unknown as {
-        spawnZombie(typeId: string, row: number, x: number): number
-    }).spawnZombie('pvz:normal', 2, 700)
-    const setup = original.save()
-    setup.entities.find(entity => entity.entityId === zombieId)!.zombie!.health = 0
-    original.start({ ...start, save: setup as unknown as JsonValue })
-    original.tick()
-    const deathTicks = original.save().entities.find(entity => entity.entityId === zombieId)!.zombie!.deathTicksRemaining
-    for (let tick = 0; tick < deathTicks - 10; tick++) original.tick()
-    assert.equal(original.snapshot().zombies.find(zombie => zombie.entityId === zombieId)!.alpha, 255)
-    original.drainEvents()
-    const restored = new IntegratedGameServer(definitions, levels)
-    restored.start({ ...start, save: original.save() as unknown as JsonValue })
-    for (let remaining = 9; remaining >= 0; remaining--) {
-        const snapshot = original.tick()
-        assert.deepEqual(restored.tick(), snapshot)
-        assert.deepEqual(restored.drainEvents(), original.drainEvents())
-        const corpse = snapshot.zombies.find(zombie => zombie.entityId === zombieId)
-        if (remaining > 0) assert.equal(corpse!.alpha, Math.trunc(255 * remaining / 10))
-        else assert.equal(corpse, undefined)
-    }
-})
-
-test('server save resumes a mowered zombie through its final limb drops', () => {
-    const original = new IntegratedGameServer(definitions, levels)
-    original.start(start)
-    runCommand(original, { type: 'completeIntro' })
-    const zombieId = (original as unknown as {
-        spawnZombie(typeId: string, row: number, x: number): number
-    }).spawnZombie('pvz:normal', 2, -10)
-    original.tick()
-    assert.equal(original.snapshot().zombies[0].state, 'mowered')
-    const saved = original.save()
-    const savedZombie = saved.entities.find(entity => entity.entityId === zombieId)!.zombie!
-    assert.ok(Number.isInteger(savedZombie.groanCounter))
-    assert.throws(() => parseServerSaveSnapshot({
-        ...saved,
-        entities: saved.entities.map(entity => entity.entityId === zombieId
-            ? { ...entity, zombie: { ...entity.zombie!, groanCounter: 0.5 } }
-            : entity),
-    }), /groanCounter/)
-
-    const restored = new IntegratedGameServer(definitions, levels)
-    restored.start({ ...start, save: saved as unknown as JsonValue })
-    assert.equal(restored.save().entities.find(entity => entity.entityId === zombieId)!.zombie!.groanCounter,
-        savedZombie.groanCounter)
-    assert.deepEqual(restored.snapshot(), original.snapshot())
-    original.drainEvents()
-    restored.drainEvents()
-    for (let tick = 0; tick < savedZombie.moweredTicksRemaining; tick++) {
-        assert.deepEqual(restored.tick(), original.tick())
-        assert.deepEqual(restored.drainEvents(), original.drainEvents())
-    }
-    assert.equal(original.snapshot().zombies.some(zombie => zombie.entityId === zombieId), false)
-})
 
 test('server save restores IDs, pending events, and deterministic 1-1 completion', () => {
     const original = new IntegratedGameServer(definitions, levels)

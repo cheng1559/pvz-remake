@@ -1,7 +1,7 @@
+import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import type { BoardDefinition } from '@/shared/content/gameplay'
 import type { AdventureIntroLayout, PresentationDefinitions } from '@/shared/content/presentation'
 import { Mask, Node, Sprite, Vec3 } from 'cc'
-import { TodParticleSystem } from '@/core/Particle'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { easeInOut, linearFloat } from '@/client/view/GameScreenMath'
@@ -12,7 +12,7 @@ import type {
 } from '../LevelPresentationSnapshot'
 import type { ContentRegistry } from '@/client/content/ContentRegistry'
 import { SpriteRepository } from '@/client/content/ClientContentLoader'
-import { ParticleDefinitionLoader } from '@/core/Particle'
+import { ParticleAssets } from '@/client/particle/ParticleAssets'
 import type { LevelIntro } from '../LevelIntro'
 import type { LevelIntroContext } from '../LevelPresentation'
 import type { ClientContentLoader } from '@/client/content/ClientContentLoader'
@@ -39,11 +39,11 @@ const SEED_BANK_START = 600
 const SEED_BANK_DURATION = 25
 const HOUSE_NAME_DURATION = 250
 
-/** CutScene::PlaceStreetZombies apportions ten slots from this game's actual wave roster. */
-export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, definitions: PresentationDefinitions): string[] {
+/** CutScene::PlaceStreetZombies apportions the configured slots from the actual wave roster. */
+export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, definitions: PresentationDefinitions, capacity: number): string[] {
     const entries = Object.entries(counts).filter(([id, count]) => count > 0 && !definitions.zombies[id]?.flag)
     const total = entries.reduce((sum, [, count]) => sum + count, 0)
-    return entries.flatMap(([id, count]) => Array.from({ length: Math.max(1, Math.min(count, Math.floor(count * 10 / total))) }, () => id))
+    return entries.flatMap(([id, count]) => Array.from({ length: Math.max(1, Math.min(count, Math.floor(count * capacity / total))) }, () => id))
 }
 
 function applyPreviewParts(player: ReanimPlayer, typeId: string, definitions: PresentationDefinitions, hasTongue: boolean): void {
@@ -62,7 +62,7 @@ export class AdventureIntro implements LevelIntro {
     static async create(context: LevelIntroContext, layout: AdventureIntroLayout): Promise<AdventureIntro> {
         const { content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow, entityNodes, previewZombies } = context
         const sprites = new SpriteRepository(content.registry, content.loader)
-        const [sod] = await Promise.all([sprites.load(layout.sod), ...(layout.rolls.length ? [ParticleDefinitionLoader.load('sodroll')] : [])])
+        const [sod] = await Promise.all([sprites.load(layout.sod), ...(layout.rolls.length ? [ParticleAssets.load('pvz:sodroll')] : [])])
         const sodClip = uiNode({
             node: slots.sodClip, position: { x: layout.x - 400, y: 300 - layout.y }, anchor: { x: 0, y: 1 },
             size: { width: layout.rolls.length ? 0 : layout.width, height: sod.originalSize.height }, mask: Mask.Type.GRAPHICS_RECT,
@@ -105,7 +105,7 @@ export class AdventureIntro implements LevelIntro {
         }
         const introZombies: Node[] = []
         const previewTypes = new Map<Node, string>()
-        const types = layout.stationary ? [] : adventurePreviewTypes(previewZombies, content.presentation)
+        const types = layout.stationary ? [] : adventurePreviewTypes(previewZombies, content.presentation, layout.previewCapacity)
         const introPositions: Array<{ x: number, y: number, z: number }> = []
         const introSpots = Array.from({ length: 5 }, (_, gridX) =>
             Array.from({ length: 5 }, (_, gridY) => ({ gridX, gridY })),
@@ -348,12 +348,12 @@ export class AdventureIntro implements LevelIntro {
     }
 
     private startSodRoll(): void {
-        for (const roll of this.layout.rolls) TodParticleSystem.spawn({
+        for (const roll of this.layout.rolls) ParticlePlayer.spawn({
             parent: this.board,
-            effect: 'sodroll',
+            id: "pvz:sodroll",
             x: 35 + roll.x - WIDTH / 2,
             y: HEIGHT / 2 - roll.particleY,
-            useGameTime: false,
+
         })
         this.audio.sodRollStarted()
     }

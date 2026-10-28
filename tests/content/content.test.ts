@@ -20,7 +20,7 @@ function archive(id = 'pvz:base'): ContentArchive {
 }
 
 test('base and Mod archives use the same manifest, content parser and file validation', () => {
-    for (const id of ['pvz:base', 'example:plants']) {
+    for (const id of ['pvz:base', 'example:showcase']) {
         const base = archive(id)
         assert.equal(base.manifest.schemaVersion, 1)
         assert.equal(base.content.presentation, 'presentation.json')

@@ -1,10 +1,10 @@
-import { Color, Mask, type Node } from 'cc'
+import { modResources } from '@/client/content/ModResources'
+import { Color, Mask, type Node, SpriteFrame } from 'cc'
 import { getAtlasFrame, SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import { PlantPreview } from '@/client/hud/PlantPreview'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
 import { uiNode } from '@/client/view/uiNode'
-import { SpriteLoader } from '@/core/SpriteLoader'
 import { menuApi } from '@/client/api/MenuApi'
 import type { AlmanacPlantDefinition, AlmanacZombieDefinition } from '@/shared/menu'
 import { drawAlmanacText } from './AlmanacText'
@@ -28,7 +28,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             ? ['almanac_imitater', 'particles/seedpacketflash', 'almanac_plantcard', 'almanac_groundday', 'almanac_groundnight', 'almanac_groundpool', 'almanac_groundnightpool', 'almanac_groundroof']
             : ['almanac_zombiewindow', 'almanac_zombiewindow2', 'almanac_zombiecard', 'almanac_groundday', 'almanac_groundice']
         const frames = await Promise.all(names.map(async name => {
-            const frame = await SpriteLoader.load(name)
+            const frame = await modResources.asset(name, SpriteFrame)
             if (!frame) throw new Error(`Missing almanac image: ${name}`)
             return [name, frame] as const
         }))
@@ -74,7 +74,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             selection[key] = entry.id
             select(entry)
             Haptics.play()
-            void SoundLoader.play(SoundEffect.Tap)
+            void SoundSystem.play(SoundEffect.Tap)
         }
         if (page === 'plants') {
             // Draw rows top to bottom, right to left: plants may overflow upwards and rightwards.
@@ -118,7 +118,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     anchor: { x: 0, y: 1 }, size: { width: 72, height: 72 }, mask: Mask.Type.GRAPHICS_RECT,
                 }).node
                 clip.addComponent(AlmanacZombiePortrait).initialize(zombie.id, async root => {
-                    const atlas = await SpriteLoader.load('zombie_previews_cached')
+                    const atlas = await modResources.asset('zombie_previews_cached', SpriteFrame)
                     if (!atlas) throw new Error('Missing zombie portrait atlas')
                     if (root.isValid) ui.image(root, getAtlasFrame(atlas, zombie.id, 76, 76, 8), { x: -2, y: -2 })
                 })

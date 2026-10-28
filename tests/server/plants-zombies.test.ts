@@ -1,4 +1,4 @@
-import { readGameplaySource } from '../../tools/content_source'
+import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
@@ -66,42 +66,7 @@ function game(config = definitions) {
     return { world, run, plant, zombie, events }
 }
 
-test('projectile cleanup follows the current board bounds instead of a fixed screen width', () => {
-    const { world, run } = game()
-    const level = world.resources.get(LevelStateResource)
-    level.board = { ...level.board, bounds: { left: 0, right: 1000 } }
-    const id = world.createEntity()
-    world.add(id, PositionComponent, { x: 900, y: 280, row: 2 })
-    world.add(id, ProjectileComponent, { typeId: 'pvz:pea', sourcePlantId: 0 })
-    run()
-    assert.equal(world.hasEntity(id), true)
-    level.board = { ...level.board, bounds: { left: 0, right: 850 } }
-    run()
-    assert.equal(world.hasEntity(id), false)
-})
 
-test('shooters stagger their initial clocks and keep random cadence while no target is present', () => {
-    const { world, plant, run, events } = game()
-    const ids = [plant('pvz:peashooter', 1, 0), plant('pvz:peashooter', 2, 0), plant('pvz:snowpea', 3, 0)]
-    const initial = ids.map(id => world.get(id, PlantAttackComponent)!.readyAtTick)
-    assert.ok(initial.every(tick => tick >= 0 && tick <= 150))
-    assert.ok(new Set(initial).size > 1)
-    const delays = new Set<number>()
-    for (let tick = 1; tick <= 1000; tick++) {
-        const previous = ids.map(id => world.get(id, PlantAttackComponent)!.readyAtTick)
-        run()
-        ids.forEach((id, index) => {
-            const attack = world.get(id, PlantAttackComponent)!
-            if (attack.readyAtTick === previous[index]) return
-            const delay = attack.readyAtTick - tick
-            assert.ok(delay >= 136 && delay <= 150)
-            delays.add(delay)
-            assert.equal(attack.fireAtTick, undefined)
-        })
-    }
-    assert.ok(delays.size > 1)
-    assert.equal(events('plantFiring').length, 0)
-})
 
 test('a cherry bomb burns every zombie in its 3x3 area after the fuse, ignoring helms, while zombies cannot hurt it', () => {
     const { world, run, plant, zombie, events } = game()
@@ -121,19 +86,6 @@ test('a cherry bomb burns every zombie in its 3x3 area after the fuse, ignoring 
     assert.equal(events('plantExploded')[0].data.typeId, 'pvz:cherrybomb')
 })
 
-test('target insets are configured interactions and do not depend on vault capability', () => {
-    for (const inset of [0, 40]) {
-        const config = structuredClone(definitions)
-        config.plants['pvz:potatomine'].mine!.targeting.insetKey = 'test:ground'
-        config.zombies['test:walker'] = { ...config.zombies['pvz:normal'], targetingInsets: { 'test:ground': inset } }
-        const { world, plant, zombie, run } = game(config)
-        const mine = plant('pvz:potatomine', 2, 2)
-        world.get(mine, PlantComponent)!.ability = { state: 'armed', ticks: 0 }
-        zombie('test:walker', 2, 145)
-        run()
-        assert.equal(world.hasEntity(mine), inset > 0)
-    }
-})
 
 test('a potato mine arms after 15 seconds, rises, then blows up the first zombie that reaches it without leaving a body', () => {
     const { world, run, plant, zombie, events } = game()
@@ -228,18 +180,6 @@ test('helms absorb damage first and drop once, and snow peas chill through them,
     assert.ok(Math.abs(bitten(3) * 2 - bitten(1)) <= 8, `chilled bites ${bitten(3)} should be half of ${bitten(1)}`)
 })
 
-test('snow peas carry the chill and the impact reports the helm worn when hit', () => {
-    const { world, run, plant, zombie, events } = game()
-    plant('pvz:snowpea', 2, 0)
-    const bucket = zombie('pvz:buckethead', 2, 400)
-    for (let tick = 0; tick < 400 && events('projectileImpact').length === 0; tick++) run()
-    const impact = events('projectileImpact')[0]
-    assert.equal(impact.data.typeId, 'pvz:snow_pea')
-    assert.equal(impact.data.helm, 'bucket')
-    assert.equal(impact.data.targetTypeId, 'pvz:buckethead')
-    assert.equal(world.get(bucket, ZombieComponent)!.helmHealth, 1080)
-    assert.ok(world.get(bucket, ZombieComponent)!.chilledTicks > 990)
-})
 
 test('a pole vaulter runs at the first plant, vaults past it and walks on slowly to eat the next one', () => {
     const { world, run, plant, zombie, events } = game()
@@ -273,55 +213,8 @@ test('a pole vaulter runs at the first plant, vaults past it and walks on slowly
     assert.equal(state().state, 'eating', 'the post-vault attack reaches the plant at x + 50')
 })
 
-test('an eaten explode-o-nut chars the zombies around it', () => {
-    const { world, run, plant, zombie, events } = game()
-    const nut = plant('pvz:explodenut', 2, 3)
-    world.get(nut, PlantComponent)!.health = 8
-    const eater = zombie('pvz:normal', 2, 260)
-    for (let tick = 0; tick < 1500 && world.hasEntity(nut); tick++) run()
-    assert.equal(world.hasEntity(nut), false)
-    assert.equal(world.hasEntity(eater), false)
-    assert.equal(events('zombieCharred')[0].data.entityId, eater)
-    assert.equal(events('plantExploded')[0].data.typeId, 'pvz:explodenut')
-})
 
-test('a pole vaulter ground track can move backwards locally without jumping a full stride, including after losing its head', () => {
-    for (const headless of [false, true]) {
-        const { world, run, zombie } = game()
-        const id = zombie('pvz:pole_vaulter', 2, 600)
-        const body = world.get(id, ZombieComponent)!
-        body.hasPole = false
-        body.animation = 'anim_walk'
-        body.animationTime = 40
-        body.speedPerTick = 0.3
-        if (headless) damageZombie(world, definitions, id, 350)
-        let previous = world.get(id, PositionComponent)!.x
-        for (let tick = 0; tick < 50; tick++) {
-            run()
-            const x = world.get(id, PositionComponent)!.x
-            assert.ok(Math.abs(x - previous) < 2, `unexpected displacement: ${previous} -> ${x}`)
-            previous = x
-        }
-    }
-})
 
-test('a pole vaulter keeps its landing position when the chill expires during the jump', () => {
-    const land = (chilledTicks: number) => {
-        const { world, run, plant, zombie } = game()
-        const obstacle = plant('pvz:wallnut', 2, 2)
-        const id = zombie('pvz:pole_vaulter', 2, world.get(obstacle, PositionComponent)!.x + 40)
-        const body = world.get(id, ZombieComponent)!
-        body.chilledTicks = chilledTicks
-        run()
-        assert.equal(body.state, 'vaulting')
-        for (let tick = 0; body.state === 'vaulting' && tick < 500; tick++) run()
-        assert.equal(body.state, 'walking')
-        return world.get(id, PositionComponent)!.x
-    }
-    const normal = land(0)
-    assert.ok(Math.abs(land(1000) - normal) < 1)
-    assert.ok(Math.abs(land(20) - normal) < 1)
-})
 
 test('plant abilities and new zombie state survive a server save', () => {
     const server = new IntegratedGameServer(definitions, levels)

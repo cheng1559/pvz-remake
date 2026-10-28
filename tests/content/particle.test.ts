@@ -1,122 +1,88 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { readBaseContent } from '../../tools/mod/content'
+import { parseParticle } from '@/shared/content/particle'
+import { KernelParticles, packParticleEmitters } from '@/shared/kernel/particles'
+import { drawParticles as render } from './particle-draw'
 
-import { ParticleSimulation, parseParticle } from '@/shared/content/particle'
-
-const track = (low: number, high = low, end?: number) => ({
-    nodes: end == null
-        ? [{ timeRatio: 0, low, high }]
-        : [{ timeRatio: 0, low, high }, { timeRatio: 1, low: end, high: end }],
-})
-
+const track = (low: number, high = low) => ({ nodes: [{ time: 0, low, high }] })
 function peasplat() {
-    const emitter = (sprite: string) => ({
-        sprite,
-        columns: 4,
-        rows: 1,
-        firstFrame: 0,
-        frameCount: 4,
-        durationSeconds: 0.2,
-        emitterOffsetX: track(0),
-        emitterOffsetY: track(0),
-        spawnMinActive: track(1),
-        spawnMaxLaunched: track(1),
-        emitterRadius: track(0, 10),
-        particleDurationSeconds: track(0.2),
-        launchSpeed: track(0),
-        particleAlpha: track(0.9, 0.9, 0),
-        particleScale: track(0.4, 0.6, 1),
-        particleSpinSpeed: track(0),
-        randomLaunchSpin: true,
-        fields: [],
-    })
-    return {
-        schemaVersion: 2,
-        id: 'pvz:peasplat',
-        durationSeconds: 0.2,
-        emitters: [
-            emitter('pvz:pea_splats'),
-            {
-                ...emitter('pvz:pea_particles'),
-                columns: 3,
-                frameCount: 3,
-                spawnMinActive: track(6, 10),
-                spawnMaxLaunched: track(-1),
-                launchSpeed: track(150),
-                particleAlpha: track(1, 1, 0),
-                particleScale: track(0.8, 1.2),
-                particleSpinSpeed: track(-200, 200),
-                fields: [
-                    { type: 'friction', x: track(0, 0, 0.1), y: track(0, 0, 0.1) },
-                    { type: 'acceleration', x: track(0), y: track(1000) },
-                ],
-            },
-        ],
-    }
+    return { schemaVersion: 3, id: 'pvz:peasplat', emitters: [{
+        sprite: 'pvz:pea_particles', columns: 3, rows: 1, firstFrame: 0, frameCount: 3,
+        systemDuration: track(20), particleDuration: track(20), spawnMinActive: track(6, 10),
+        spawnMaxLaunched: track(10), emitterRadius: track(0, 10), launchSpeed: track(150),
+        randomLaunchSpin: true, particleScale: track(.8, 1.2),
+        fields: [{ type: 'friction', x: track(.1), y: track(.1) },
+            { type: 'acceleration', x: track(0), y: track(10) }],
+    }] }
 }
 
-test('Particle strictly parses the two-emitter peasplat', () => {
+test('one particle schema parses built-in and Mod definitions with complete emitter capabilities', () => {
     const parsed = parseParticle(peasplat())
-    assert.equal(parsed.id, 'pvz:peasplat')
-    assert.equal(parsed.emitters.length, 2)
-    assert.equal(parsed.emitters[1].fields[1].type, 'acceleration')
+    assert.equal(parsed.emitters[0].fields[1].type, 'acceleration')
+    assert.equal(parsed.emitters[0].particleStretch.nodes[0].low, 1)
+    const particles = readBaseContent().resources.particles
+    assert.ok(Object.keys(particles).length > 0)
+    for (const [id, file] of Object.entries(particles)) {
+        const particle = parseParticle(JSON.parse(readFileSync(`mods/pvz-base/${file}`, 'utf8')))
+        assert.equal(particle.id, id)
+    }
 })
 
-test('Particle rejects unsupported and unsafe data', () => {
+test('particle format rejects obsolete, unsupported and unsafe definitions', () => {
     const invalid = (change: (value: any) => void) => {
-        const value = structuredClone(peasplat())
-        change(value)
+        const value = structuredClone(peasplat()); change(value)
         return () => parseParticle(value)
     }
+    assert.throws(invalid(value => { value.schemaVersion = 2 }), /schemaVersion must be 3/)
     assert.throws(invalid(value => { value.extra = true }), /not supported/)
     assert.throws(invalid(value => { value.id = 'peasplat' }), /qualified ID/)
     assert.throws(invalid(value => { value.emitters[0].sprite = '../pea' }), /qualified ID/)
-    assert.throws(invalid(value => { value.emitters[0].fields = [{ type: 'attractor', x: track(0), y: track(0) }] }), /friction or acceleration/)
-    assert.throws(invalid(value => { value.emitters[0].particleAlpha.nodes[0].high = 2 }), /out of range/)
     assert.throws(invalid(value => { value.emitters[0].spawnMinActive.nodes[0].high = 5000 }), /out of range/)
-    assert.throws(invalid(value => { delete value.emitters[0].emitterOffsetX }), /emitterOffsetX is required/)
-    assert.throws(invalid(value => { value.emitters[0].emitterOffsetY.nodes[0].high = 1_000_001 }), /out of range/)
-    assert.throws(invalid(value => { value.durationSeconds = 100 }), /too large/)
+    assert.throws(invalid(value => { value.emitters[0].emitterOffsetX = track(Infinity) }), /out of range/)
+    assert.throws(invalid(value => { value.emitters[0].particleLoops = 'yes' }), /must be boolean/)
+    assert.throws(invalid(value => { value.emitters[0].fields[0].type = 'invalid' }), /type is invalid/)
 })
 
-test('ParticleSimulation produces the same pose for the same seed', () => {
+test('particle replay is deterministic across tick batching, seeds and emitter offsets', () => {
     const definition = parseParticle(peasplat())
-    const left = new ParticleSimulation(definition, 12345)
-    const right = new ParticleSimulation(definition, 12345)
-    const different = new ParticleSimulation(definition, 54321)
-    left.advance(8)
-    right.advance(8)
-    different.advance(8)
-    assert.deepEqual(left.pose(), right.pose())
-    assert.notDeepEqual(left.pose(), different.pose())
+    const left = new KernelParticles(packParticleEmitters(definition.emitters), 123, 1)
+    const replay = new KernelParticles(packParticleEmitters(definition.emitters), 123, 1)
+    const different = new KernelParticles(packParticleEmitters(definition.emitters), 456, 1)
+    const movedDefinition = peasplat()
+    Object.assign(movedDefinition.emitters[0], { emitterOffsetX: track(25), emitterOffsetY: track(35) })
+    const moved = new KernelParticles(packParticleEmitters(parseParticle(movedDefinition).emitters), 123, 1)
+    try {
+        left.step(8); different.step(8); moved.step(8)
+        for (let i = 0; i < 8; i++) replay.step()
+        assert.deepEqual(render(left), render(replay))
+        assert.notDeepEqual(render(left), render(different))
+        const baseline = render(left), offset = render(moved)
+        baseline.forEach((particle, index) => {
+            assert.ok(Math.abs(offset[index].x - particle.x - 25) < 1e-3)
+            assert.ok(Math.abs(offset[index].y - particle.y + 35) < 1e-3)
+        })
+    } finally { for (const system of [left, replay, different, moved]) system.dispose() }
 })
 
-test('ParticleSimulation applies emitter offsets to its poses', () => {
-    const value = peasplat()
-    const baseline = new ParticleSimulation(parseParticle(structuredClone(value)), 1)
-    value.emitters[0].emitterOffsetX = track(25)
-    value.emitters[0].emitterOffsetY = track(35)
-    const simulation = new ParticleSimulation(parseParticle(value), 1)
-    baseline.advance()
-    simulation.advance()
 
-    assert.equal(simulation.pose()[0].x - baseline.pose()[0].x, 25)
-    assert.equal(simulation.pose()[0].y - baseline.pose()[0].y, 35)
-})
-
-test('ParticleSimulation restores by replaying its seed and age', () => {
-    const definition = parseParticle(peasplat())
-    const source = new ParticleSimulation(definition, 7)
-    source.advance(9)
-    source.playing = false
-    source.visible = false
-    const snapshot = source.snapshot()
-
-    const restored = new ParticleSimulation(definition, 7)
-    restored.restore(snapshot)
-    assert.deepEqual(restored.snapshot(), snapshot)
-    restored.visible = true
-    source.visible = true
-    assert.deepEqual(restored.pose(), source.pose())
-    assert.throws(() => restored.restore({ ...snapshot, ageTicks: 21 }), /exceeds effect duration/)
+test('original particle easing, bounce and random distributions reach the shared kernel', () => {
+    const definition = (curve: string, distribution?: string) => parseParticle({ schemaVersion: 3, id: 'pvz:curve', emitters: [{
+        sprite: 'pvz:star', systemDuration: track(101), particleDuration: track(201),
+        spawnMinActive: track(1), spawnMaxLaunched: track(1),
+        systemAlpha: { nodes: [{ time: 0, low: 0, high: 0, curve }, { time: 1, low: 1, high: 1 }] },
+        particleScale: { nodes: [{ time: 0, low: 0, high: 1, ...(distribution ? { distribution } : {}) }] },
+    }] })
+    for (const [curve, expected] of [['ease-in', 16], ['ease-out', 112], ['ease-in-out', 40], ['fast-in-out', 96], ['bounce', 128]] as const) {
+        const particles = new KernelParticles(packParticleEmitters(definition(curve).emitters), 1, 1)
+        try { particles.step(26); assert.equal(render(particles)[0].alpha, expected, curve) }
+        finally { particles.dispose() }
+    }
+    const linear = new KernelParticles(packParticleEmitters(definition('linear').emitters), 42, 1)
+    const eased = new KernelParticles(packParticleEmitters(definition('linear', 'ease-in').emitters), 42, 1)
+    try {
+        linear.step(); eased.step()
+        assert.ok(Math.abs(render(eased)[0].a - render(linear)[0].a ** 2) < 1e-6)
+    } finally { linear.dispose(); eased.dispose() }
 })

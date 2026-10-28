@@ -1,7 +1,7 @@
 import { _decorator, Button, Component, EventMouse, input, Input, Node, UITransform, Vec3, type EventTouch } from 'cc'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { Haptics } from '@/platform/Haptics'
 
 const { ccclass } = _decorator
@@ -26,7 +26,7 @@ export class UIButton extends Component {
     }
 
     onClick: () => void = () => {}
-    onPress: () => void = () => { void SoundLoader.play(SoundEffect.GraveButton) }
+    onPress: () => void = () => { void SoundSystem.play(SoundEffect.GraveButton) }
     onHoverEnter?: () => void
     onHoverChange?: (hovering: boolean) => void
     onStateChange?: (state: UIButtonState) => void

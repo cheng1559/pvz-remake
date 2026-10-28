@@ -1,3 +1,4 @@
+import { modResources } from '@/client/content/ModResources'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { _decorator, Color, Component, isValid, Node, Rect, Size, Sprite, SpriteFrame, Vec2 } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
@@ -6,7 +7,6 @@ import type { FontConfig, FontLayerConfig } from '@/client/font/FontRenderer.d'
 import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview } from './PlantPreview'
 import { applySpriteDensity } from '@/client/content/SpriteDensity'
-import { SpriteLoader } from '@/core/SpriteLoader'
 import { plantVisual, type SeedPacketSeedType } from '@/client/plants/definitions'
 export type { SeedPacketSeedType } from '@/client/plants/definitions'
 
@@ -47,7 +47,7 @@ export interface SeedPacketRenderArgs {
 }
 
 async function loadPacketSprite(name: string): Promise<SpriteFrame> {
-    const frame = await SpriteLoader.load(name)
+    const frame = await modResources.asset(name, SpriteFrame)
     if (!frame) throw new Error(`Missing seed packet sprite: ${name}`)
     return frame
 }

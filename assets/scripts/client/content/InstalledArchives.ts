@@ -2,23 +2,27 @@ import { native, sys } from 'cc'
 import fflate from 'fflate'
 
 export type ArchiveFiles = Record<string, Uint8Array>
-export type ArchiveKind = 'mods' | 'mod-runtime' | 'mod-resources'
+export type ArchiveKind = 'mods' | 'mod-resources' | 'mod-pending'
 
-export function unpackArchive(data: Uint8Array, manifest: 'manifest.json'): ArchiveFiles {
-    const files: ArchiveFiles = Object.create(null)
-    const entries = fflate.unzipSync(data, { filter: entry => !entry.name.endsWith('/') })
-    for (const [path, bytes] of Object.entries(entries)) {
+function archivePaths(paths: readonly string[], manifest: 'manifest.json'): Array<[string, string]> {
+    const files = new Map<string, string>()
+    for (const path of paths) {
         const name = path.replace(/\\/g, '/')
         if (/^(?:\/|[a-z]:)/i.test(name) || name.split('/').includes('..')) throw new Error(`Invalid ZIP path: ${path}`)
         const normalized = name.split('/').filter(part => part && part !== '.').join('/')
         if (normalized.startsWith('__MACOSX/') || normalized.endsWith('.meta') || normalized.endsWith('.DS_Store')) continue
-        if (files[normalized]) throw new Error(`Duplicate ZIP path: ${normalized}`)
-        files[normalized] = bytes
+        if (files.has(normalized)) throw new Error(`Duplicate ZIP path: ${normalized}`)
+        files.set(normalized, path)
     }
-    const manifests = Object.keys(files).filter(name => name === manifest || name.endsWith(`/${manifest}`))
+    const manifests = [...files.keys()].filter(name => name === manifest || name.endsWith(`/${manifest}`))
     if (manifests.length !== 1) throw new Error(`ZIP must contain exactly one ${manifest}`)
     const prefix = manifests[0].slice(0, -manifest.length)
-    return Object.fromEntries(Object.entries(files).filter(([name]) => name.startsWith(prefix)).map(([name, bytes]) => [name.slice(prefix.length), bytes]))
+    return [...files].filter(([name]) => name.startsWith(prefix)).map(([name, path]) => [path, name.slice(prefix.length)])
+}
+
+export function unpackArchive(data: Uint8Array, manifest: 'manifest.json'): ArchiveFiles {
+    const entries = fflate.unzipSync(data, { filter: entry => !entry.name.endsWith('/') })
+    return Object.fromEntries(archivePaths(Object.keys(entries), manifest).map(([path, name]) => [name, entries[path]]))
 }
 
 export function installedArchiveRoot(kind: ArchiveKind, id: string): string {
@@ -50,6 +54,36 @@ export async function readInstalledArchive(kind: ArchiveKind, id: string): Promi
         request.onsuccess = () => resolve(request.result)
         request.onerror = () => reject(request.error)
     })
+}
+
+const installedRoots = new WeakMap<ArchiveFiles, string>()
+
+/**
+ * Native installation already extracted these files; each one is read from disk when used. Installed files change
+ * only while pending changes are applied at startup, before any Mod is read, so a running game sees one version.
+ */
+export function readInstalledFiles(kind: ArchiveKind, id: string, archive: Uint8Array): ArchiveFiles | undefined {
+    if (!sys.isNative) return undefined
+    const root = `${installedArchiveRoot(kind, id)}/`
+    const paths = new Set<string>()
+    // Read the ZIP directory without inflating entries, including hidden files.
+    fflate.unzipSync(archive, { filter: entry => { if (!entry.name.endsWith('/')) paths.add(entry.name); return false } })
+    const files: ArchiveFiles = Object.create(null)
+    for (const [, name] of archivePaths([...paths], 'manifest.json')) {
+        Object.defineProperty(files, name, { enumerable: true, configurable: true, get() {
+            const data = native.fileUtils.getDataFromFile(`${root}${name}`)
+            if (!data) throw new Error(`Failed to read installed archive file: ${name}`)
+            return new Uint8Array(data)
+        } })
+    }
+    installedRoots.set(files, root)
+    return files
+}
+
+/** The file's installed path, for native loaders that read files themselves; undefined for files held in memory. */
+export function installedFilePath(files: ArchiveFiles, name: string): string | undefined {
+    const root = installedRoots.get(files)
+    return root && name in files ? `${root}${name}` : undefined
 }
 
 /** Installed archive IDs, sorted, without reading their contents. */

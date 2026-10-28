@@ -4,6 +4,8 @@ In Debug and Release builds, press `/` or double-tap the bottom-right 100 CSS pi
 
 The previous controls are preserved: Tab cycles completions, Up/Down recalls the last 64 commands, Enter executes, and Escape/Cancel closes. The slash is optional. Names ignore case, spaces, underscores and hyphens. Grid positions are one-based. Explicit positions can use any board row; an omitted zombie row still follows the level's spawn-row selection.
 
+`/level pvz:stress-test` starts a temporary level with 40 plants and spawns 160 zombies after 12 seconds. It does not overwrite the current adventure save. Use `/nextwave` to spawn them early; `/perf plants false` and `/perf zombies false` isolate rendering, with `true` restoring visibility.
+
 Opening the CLI pauses gameplay and presentation time. Closing restores the previous pause state while preserving any new `/gamespeed` setting. Input and commands work at zero speed. Syntax errors flash red and keep the dialog open; condition failures close it and show the reason.
 
 See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common examples:
@@ -13,6 +15,8 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /seedstyle tilted
 /level pvz:seed-chooser-test
 /haptics false
+/fps true
+/plantinvincible true
 /seed 1 snowpea
 /mod
 /sun set 999
@@ -24,6 +28,10 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 ```
 
 `/haptics true|false` toggles all haptic feedback immediately and saves the preference locally. Enabled by default.
+
+`/fps true|false` shows or hides a white frame-rate counter at the bottom left of the original 800×600 game area; widescreen expansion does not move it. It is off by default and persists locally. The counter measures drawn frames against real time, independent of game pause or speed.
+
+`/plantinvincible true|false` prevents or restores zombie bite damage to all current and newly planted plants. It defaults to false and persists locally across levels and restarts. Normal self-destruction, shoveling, and debug removal still work.
 
 `/plant {plant_name} {row} {col}` directly creates an installed plant, including Mod plants such as `/plant corn:cob_cannon 3 1`. It bypasses occupancy, upgrade prerequisites, seed-bank availability, sun cost, cooldown, tutorials and level phase/result restrictions. It preserves the held seed and initializes the plant's registered behavior normally. Only installed IDs and valid board coordinates are required; overlapping plants are saved normally. Mouse/touch planting keeps its usual rules.
 
@@ -37,4 +45,4 @@ The manager shows `Loading...` until the installed Mod list is ready. See [Mod i
 
 The current package provides Adventure 1-1 through 1-10; plants Peashooter, Sunflower, Repeater, Cherry Bomb, Wall-nut, Potato Mine, Snow Pea, Chomper and Explode-o-nut (`explodenut`, debug only); zombies normal, flag, Conehead (`conehead`), Buckethead (`buckethead`) and Pole Vaulting (`pole_vaulter`); sun and level awards. Completions use installed backend content. Wave commands report a condition failure when no matching waves remain; `/background` and unmigrated content remain unavailable. Main-menu widescreen support is an optional Mod.
 
-The dialog reuses `UI.dialog` and `UI.input`. Gameplay commands use the existing `debugCommand` channel and receive a `debugResult`; the backend validates and mutates the authoritative world. Audio/fullscreen settings use the menu API. Cooldown, sun-cost and collection preferences are reapplied to new sessions.
+The dialog reuses `UI.dialog` and `UI.input`. Gameplay commands use the existing `debugCommand` channel and receive a `debugResult`; the backend validates and mutates the authoritative world. Audio/fullscreen settings use the menu API. Cooldown, sun-cost, plant invincibility and collection preferences are reapplied to new sessions.

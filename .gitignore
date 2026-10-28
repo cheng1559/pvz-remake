@@ -17,6 +17,8 @@ native/engine/common/*
 native/engine/common/Classes/*
 !native/engine/common/Classes/Game.h
 !native/engine/common/Classes/Game.cpp
+!native/engine/common/Classes/KernelBindings.cpp
+!native/engine/common/kernel/
 !native/engine/common/Classes/PvzNativeBridge.h
 !native/engine/common/Classes/PvzNativeBridge.cpp
 !native/engine/common/Classes/PvzOboeSfx.h
@@ -91,27 +93,25 @@ ai-docs/
 tools/raw/
 /art/
 tools/main.pak
-tools/generated/resources/textures/*
-!tools/generated/resources/textures/background_left.png
-!tools/generated/resources/textures/background_left.png.meta
-!tools/generated/resources/textures/background_right.png
-!tools/generated/resources/textures/background_right.png.meta
-!tools/generated/resources/textures/seedpacket_upgrade_larger.png
-!tools/generated/resources/textures/seedpacket_upgrade_larger.png.meta
-!tools/generated/resources/textures/zombie_previews_cached.png
-!tools/generated/resources/textures/zombie_previews_cached.png.meta
-!tools/generated/resources/textures/selected_packet_2.png
-tools/generated/resources/images/*
-tools/generated/resources/images.meta
-tools/generated/resources/audio/*
-tools/generated/resources/audio.meta
-tools/generated/resources/fonts/*
-tools/generated/resources/fonts.meta
-tools/generated/resources/animations/*
-tools/generated/resources/animations.meta
-tools/generated/resources/properties/*
-tools/generated/resources/properties.meta
-tools/generated/resources/particles/*
-tools/generated/resources/particles.meta
 reference*
 .wrangler
+
+# Local Mod development; keep only the shared example in Git.
+/mods/*
+!/mods/README.md
+!/mods/example/
+!/mods/pvz-base/
+
+# Converted base Mod assets.
+mods/pvz-base/assets/images/
+mods/pvz-base/assets/fonts/
+mods/pvz-base/assets/audio/
+mods/pvz-base/assets/reanim/
+mods/pvz-base/assets/particles/
+mods/pvz-base/assets/music/
+mods/pvz-base/assets/json/
+mods/pvz-base/assets/text/
+mods/pvz-base/assets/prefabs/
+
+# Local resource-pack generators and their private input configuration.
+/tools/local/

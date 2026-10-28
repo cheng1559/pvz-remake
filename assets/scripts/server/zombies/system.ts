@@ -12,17 +12,21 @@ import { EventQueueResource, emitServerEvent } from '../events'
 import type { GameSystem, SystemContext, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { HIT_FLASH_TICKS, damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
-import { LevelStateResource, PlantComponent, type Position, PositionComponent, ZombieComponent } from '../components'
+import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, ZombieComponent } from '../components'
 import { startPostVaultWalk, startVault, updateVault } from './poleVault'
 import { RECENTLY_EATEN_TICKS, destroyEatenPlant, isPlantInedible } from '../plants/damage'
-import { rectOverlap } from '../collision'
+import { getDebugRules } from '../debug/DebugRules'
 
 const CHILLED_BITE_CADENCE_FACTOR = 2
+/** A plant's body span on its row; plants do not move during a run. Cell-less plants are never bitten. */
+interface PlantTarget { entity: number, position: Position, plant: Plant, left: number, right: number }
 
 export function createZombieSystem(definitions: GameplayDefinitions): GameSystem { return new ZombieSystem(definitions) }
 
 export class ZombieSystem implements GameSystem {
     readonly id = 'pvz:zombie-lifecycle'
+    /** Plants by row, collected once per run; positions and components are not replaced during it. */
+    private plantRows: PlantTarget[][] = []
     constructor(private readonly definitions: GameplayDefinitions) {}
     run(context: SystemContext): void {
         const { world, commands } = context
@@ -35,6 +39,14 @@ export class ZombieSystem implements GameSystem {
             const plant = world.get(entity, PlantComponent)!
             if (plant.eatenFlashCounter > 0) plant.eatenFlashCounter--
             if (plant.recentlyEatenCounter > 0) plant.recentlyEatenCounter--
+        }
+        this.plantRows = []
+        for (const entity of world.query(PositionComponent, PlantComponent)) {
+            const position = world.get(entity, PositionComponent)!, plant = world.get(entity, PlantComponent)!
+            const type = definitions.plants[plant.typeId]
+            if (type.occupiesCell === false) continue
+            const left = position.x + type.body.x
+            ;(this.plantRows[position.row] ??= []).push({ entity, position, plant, left, right: left + type.body.width })
         }
 
         for (const entity of world.query(PositionComponent, ZombieComponent)) {
@@ -106,7 +118,7 @@ export class ZombieSystem implements GameSystem {
         const pace = zombie.chilledTicks > 0 ? CHILLED_ANIMATION_FACTOR : 1
 
         const vaultTarget = zombie.hasPole && zombie.hasHead && zombie.state === 'walking' && definition.vault
-            ? findPlantTarget(world, definitions, position, definition.vault.attack)
+            ? findPlantTarget(world, this.plantRows[position.row] ?? [], position, definition.vault.attack)
             : undefined
         if (zombie.state === 'vaulting') {
             updateVault(world, definitions, entity, zombie, position, pace)
@@ -115,7 +127,7 @@ export class ZombieSystem implements GameSystem {
         } else {
             // A running pole vaulter never stops to eat.
             const target = !zombie.hasPole && (zombie.hasHead || zombie.state === 'eating')
-                ? findPlantTarget(world, definitions, position, definition.vault?.landedAttack ?? definition.attack)
+                ? findPlantTarget(world, this.plantRows[position.row] ?? [], position, definition.vault?.landedAttack ?? definition.attack)
                 : undefined
             if (target === undefined) {
                 if (zombie.state !== 'walking') {
@@ -153,7 +165,7 @@ export class ZombieSystem implements GameSystem {
                     if (zombie.biteTicks >= cadence) {
                         zombie.biteTicks = 0
                         const plant = world.get(target, PlantComponent)!
-                        if (!isPlantInedible(plant)) {
+                        if (!isPlantInedible(plant) && !getDebugRules(world).plantInvincible) {
                             plant.recentlyEatenCounter = RECENTLY_EATEN_TICKS
                             plant.health = Math.max(0, plant.health - definition.bite.damage)
                             if (plant.health === 0) {
@@ -193,23 +205,20 @@ function didCrossLoopingTime(previous: number, current: number, target: number):
 
 function findPlantTarget(
     world: World,
-    definitions: GameplayDefinitions,
+    /** The plants on the zombie's row. */
+    plants: readonly PlantTarget[],
     zombiePosition: Position,
     attack: { x: number, y: number, width: number, height: number },
 ): number | undefined {
     let target: number | undefined
     let targetX = Infinity
-    for (const entity of world.query(PositionComponent, PlantComponent)) {
-        const position = world.get(entity, PositionComponent)!
-        if (position.row !== zombiePosition.row) continue
-        const plant = world.get(entity, PlantComponent)!
-        if (plant.health <= 0 || definitions.plants[plant.typeId].occupiesCell === false) continue
-        const body = definitions.plants[plant.typeId].body
-        const overlap = rectOverlap(
-            { x: zombiePosition.x + attack.x, width: attack.width },
-            { x: position.x + body.x, width: body.width },
-        )
-        if (overlap < 20) continue
+    const left = zombiePosition.x + attack.x, right = left + attack.width
+    // Runs for every zombie on every tick, so the span overlap test comes before entity lookups.
+    for (let i = 0; i < plants.length; i++) {
+        const { entity, position, plant } = plants[i]
+        if (Math.min(right, plants[i].right) - Math.max(left, plants[i].left) < 20) continue
+        // An earlier zombie may have finished this plant during the same run.
+        if (plant.health <= 0 || !world.hasEntity(entity)) continue
         if (position.x < targetX || (position.x === targetX && entity < (target ?? Infinity))) {
             target = entity
             targetX = position.x

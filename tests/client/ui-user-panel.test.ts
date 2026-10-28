@@ -235,7 +235,8 @@ test('native input keeps its caret and text through completion and repeated subm
     const bridge = {
         showInputBox: (options: Record<string, unknown>) => { shown.push(options) },
         onInputBoxKey: undefined as ((key: string, shift: boolean) => boolean) | undefined,
-        setInputBoxText(value: string, from: number, to: number) { text = value; start = from; end = to },
+        // Native editors keep ordered ranges, without a direction.
+        setInputBoxText(value: string, from: number, to: number) { text = value; start = Math.min(from, to); end = Math.max(from, to) },
         getInputBoxSelection: () => ({ start, end }),
     }
     const { UIInput } = load('client/ui/UIInput', {
@@ -288,6 +289,13 @@ test('native input keeps its caret and text through completion and repeated subm
     type('X')
     type('Y')
     assert.equal(field.value, '/spXYeed 2', 'successive typing stays at the selected insertion point')
+    field.indexAt = () => 8
+    field.press({ getUILocation: () => ({ x: 80, y: 0 }) })
+    for (const index of [6, 4]) { field.caret = index; field.syncSelection(); field.update(0) }
+    assert.deepEqual([field.anchor, field.caret], [8, 4], 'a selection dragged leftward keeps its anchor')
+    start = 3
+    field.update(0)
+    assert.deepEqual([field.anchor, field.caret], [8, 3], 'native Shift+Left extends the moving end')
     field.onSubmit = () => field.blur()
     assert.equal(bridge.onInputBoxKey?.('Enter', false), true)
     assert.equal(bridge.onInputBoxKey, undefined, 'closing entry releases the native key handler')

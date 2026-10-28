@@ -119,6 +119,7 @@ export function createLevelController(
             if (save) await scene.restorePresentation(save.client)
             if (!GameDebugSettings.rechargingEnabled) game.debugCommand('/cooldown false')
             if (!GameDebugSettings.sunCostEnabled) game.debugCommand('/suncost false')
+            if (GameDebugSettings.plantInvincible) game.debugCommand('/plantinvincible true')
             if (GameDebugSettings.collectMode !== 'click') game.debugCommand(`/collect ${GameDebugSettings.collectMode}`)
             return { root, game, view, scene, base, level: content.levels.levels[game.render().levelId], createdAt: save?.createdAt }
         } catch (error) {
@@ -175,9 +176,12 @@ export function createLevelController(
             client: await current.scene.snapshotPresentation(),
         })
     }
-    const save = () => saving ??= snapshot()
+    const save = () => {
+        if (current?.level.persistent === false) return Promise.reject(new Error('Temporary levels cannot be saved'))
+        return saving ??= snapshot()
         .then(value => storeForProfile(value.profileId).save(value))
         .finally(() => { saving = null })
+    }
     const controller: LevelController = {
         async show() {
             if (loading) return loading
@@ -188,8 +192,12 @@ export function createLevelController(
             if (loading) await loading
             const requestedLevelId = options.levelId ?? (options.forceNewGame && current?.root.isValid ? current.game.render().levelId : undefined)
             if (options.forceNewGame) {
+                const targetLevel = current?.root.isValid && requestedLevelId === current.game.render().levelId
+                    ? current.level : requestedLevelId ? (await loadIntegratedGameContent()).levels.levels[requestedLevelId] : undefined
+                const temporary = targetLevel?.persistent === false
+                if (temporary) await controller.saveIfRunning()
                 controller.hide()
-                storeForProfile(await profileId()).delete()
+                if (!temporary) storeForProfile(await profileId()).delete()
             } else if (current?.root.isValid && (!requestedLevelId || requestedLevelId === current.game.render().levelId)) {
                 return current.root
             }
@@ -221,7 +229,7 @@ export function createLevelController(
             return current?.root.isValid === true && current.game.render().result === 'won'
         },
         countZombiesOnScreenForMusic() {
-            const snapshot = current?.root.isValid ? current.game.render() : null
+            const snapshot = current?.root.isValid ? current.game.currentSnapshot : null
             if (snapshot?.phase !== 'gameplay') return 0
             return snapshot.zombies.reduce((count, zombie) => count + (
                 zombie.hasHead && (zombie.state === 'walking' || zombie.state === 'eating') ? 1 : 0
@@ -259,7 +267,7 @@ export function createLevelController(
         save,
         async saveIfRunning() {
             if (loading) await loading
-            if (!current?.root.isValid || current.game.render().result === 'lost') return null
+            if (!current?.root.isValid || current.level.persistent === false || current.game.render().result === 'lost') return null
             return save()
         },
         async deleteSave() {

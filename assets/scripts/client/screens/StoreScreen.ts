@@ -1,16 +1,16 @@
-import { _decorator, Color, Component, Node, type Sprite, type SpriteFrame } from 'cc'
+import { modResources } from '@/client/content/ModResources'
+import { _decorator, Color, Component, Node, type Sprite, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { StoreView, StoreItemView } from '@/shared/menu'
 import { FontMetricsUtil } from '@/client/font'
 import { SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UILabel } from '@/client/ui/UILabel'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
-import { SpriteLoader } from '@/core/SpriteLoader'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { MenuAction } from './MenuPages'
 import { formatMoney } from '@/client/ui/formatMoney'
@@ -59,7 +59,7 @@ export class StoreScreen extends Component {
         const [content, frames] = await Promise.all([
             loadClientContent(),
             Promise.all([...new Set([...SPRITES, ...itemSprites])].map(async name => {
-                const frame = await SpriteLoader.load(name)
+                const frame = await modResources.asset(name, SpriteFrame)
                 if (!frame) throw new Error(`Missing store image: ${name}`)
                 return [name, frame] as const
             })),
@@ -292,6 +292,6 @@ export class StoreScreen extends Component {
         this.car.spriteFrame = this.sprites.store_car
         this.hatch.active = true
         this.renderItems()
-        void SoundLoader.play(SoundEffect.HatchbackOpen)
+        void SoundSystem.play(SoundEffect.HatchbackOpen)
     }
 }

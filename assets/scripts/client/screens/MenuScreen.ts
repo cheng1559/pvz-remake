@@ -1,8 +1,8 @@
-import { _decorator, BlockInputEvents, Color, Component, director, Director, game, isValid, Node, Sprite } from 'cc'
+import { modResources } from '@/client/content/ModResources'
+import { _decorator, BlockInputEvents, Color, Component, director, Director, game, isValid, Node, Sprite, SpriteFrame } from 'cc'
 import { DEBUG } from 'cc/env'
 import { preloadAssets } from '@/client/content/PreloadAssets'
 import { waitForPreloadFrame } from '@/client/content/preloadTasks'
-import { SpriteLoader } from '@/core/SpriteLoader'
 import { uiNode } from '@/client/view/uiNode'
 import { UI, type UIButtonOptions } from '@/client/ui/UI'
 import { MENU_PAGES, type MenuAction, type MenuPageId } from './MenuPages'
@@ -10,7 +10,7 @@ import { showOptionsDialog } from './OptionsDialog'
 import { MainMenuScreen } from './MainMenuScreen'
 import { PageFade } from './PageFade'
 import { MusicSystem } from '@/client/music/MusicSystem'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { showChallengeScreen } from './ChallengeScreen'
 import { showMenuPageControls } from './MenuPageControls'
@@ -91,7 +91,7 @@ export class MenuScreen extends Component {
             && !(overMain && MENU_PAGES.main.backgrounds.some(main => main.image === background.image)),
         )
         const [ui, frames] = await Promise.all([UI.load(), Promise.all(backgrounds.map(async background => {
-            const frame = await SpriteLoader.load(background.image)
+            const frame = await modResources.asset(background.image, SpriteFrame)
             if (!frame) throw new Error(`Missing menu background: ${background.image}`)
             return frame
         }))])
@@ -254,7 +254,7 @@ export class MenuScreen extends Component {
             id, root: root.node, retainPrevious: page.retainPrevious,
             enter: id === 'help' || paperAward ? () => {
                 MusicSystem.stop()
-                void SoundLoader.play(SoundEffect.Paper)
+                void SoundSystem.play(SoundEffect.Paper)
             } : undefined,
         }
     }

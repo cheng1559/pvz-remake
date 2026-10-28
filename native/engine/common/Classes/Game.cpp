@@ -24,6 +24,9 @@
  THE SOFTWARE.
  ****************************************************************************/
 #include "Game.h"
+#include "bindings/jswrapper/SeApi.h"
+
+bool registerPvzKernel(se::Object* global);
 
 #ifndef GAME_NAME
 #define GAME_NAME "CocosGame";
@@ -41,7 +44,7 @@ int Game::init() {
   // _windowInfo.height = 600;
   // _windowInfo.width  = 800;
 
-#if CC_DEBUG
+#if CC_DEBUG || defined(PVZ_JS_PROFILE)
   _debuggerInfo.enabled = true;
 #else
   _debuggerInfo.enabled = false;
@@ -51,6 +54,8 @@ int Game::init() {
   _debuggerInfo.pauseOnStart = false;
 
   _xxteaKey = SCRIPT_XXTEAKEY;
+
+  se::ScriptEngine::getInstance()->addPermanentRegisterCallback(registerPvzKernel);
 
   BaseGame::init();
   return 0;

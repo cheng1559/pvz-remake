@@ -1,6 +1,6 @@
 import { screen, sys } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
-import { SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundSystem } from '@/client/sound/SoundSystem'
 
 const FULLSCREEN_CHANGE = 'fullscreen-change' as never
 
@@ -12,8 +12,8 @@ export const OptionsSettings = {
         const generation = ++this.generation
         const settings = await menuApi.getSettings()
         if (generation !== this.generation) return
-        SoundLoader.setMusicVolume(settings.musicVolume)
-        SoundLoader.setSfxVolume(settings.sfxVolume)
+        SoundSystem.setMusicVolume(settings.musicVolume)
+        SoundSystem.setSfxVolume(settings.sfxVolume)
         screen.on(FULLSCREEN_CHANGE, this.syncFullScreen, this)
         if (this.fullScreenForced) await menuApi.updateSettings({ fullScreen: true })
         else if (settings.fullScreen && screen.supportsFullScreen) {

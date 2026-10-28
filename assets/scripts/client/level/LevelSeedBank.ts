@@ -232,21 +232,6 @@ export class LevelSeedBank {
 
     private flash(parent: Node): void {
         const effect = this.options.content.presentation.seedPackets.flash
-        const node = uiNode({
-            name: 'ParticleSystem',
-            parent,
-            position: { x: 0, y: 0, z: 16 },
-        }).node
-        const player = node.addComponent(ParticlePlayer)
-        void player
-            .load(effect.id, this.options.content.registry, this.options.content.loader)
-            .then(() => {
-                if (!node.isValid) return
-                player.play(0, effect.duration)
-            })
-            .catch((error) => {
-                if (node.isValid) node.destroy()
-                console.error('[Level] Failed to play seed packet flash', error)
-            })
+        ParticlePlayer.spawn({ parent, id: effect.id, x: 0, y: 0, z: 16, seed: 0 })
     }
 }

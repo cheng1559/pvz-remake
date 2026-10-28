@@ -1,9 +1,9 @@
 import { AudioClip, JsonAsset, Prefab, SpriteFrame, type Asset } from 'cc'
 import { loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
 import { ReanimRepository } from '@/client/reanim/ReanimPlayer'
-import { SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundSystem } from '@/client/sound/SoundSystem'
 import { CONTENT_CATEGORIES } from '@/shared/content'
-import { ParticleDefinitionLoader } from '@/core/Particle/ParticleDefinitionLoader'
+import { ParticleAssets } from '@/client/particle/ParticleAssets'
 import { modResources } from './ModResources'
 import { preloadTasks } from './preloadTasks'
 import type { ResolvedContent } from './ContentRegistry'
@@ -30,8 +30,8 @@ export async function preloadAssets(onProgress: (progress: number) => void): Pro
     const repository = new ReanimRepository(registry, loader)
     await preloadTasks(reanims.map(([id]) => () => repository.load(id)), value => onProgress(0.7 + value * 0.15))
     await Promise.all([
-        SoundLoader.preloadAll(),
-        ParticleDefinitionLoader.preloadAll(),
+        SoundSystem.preloadAll(),
+        ParticleAssets.preloadAll(),
     ])
     onProgress(1)
 }

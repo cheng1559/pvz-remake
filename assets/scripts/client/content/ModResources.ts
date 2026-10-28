@@ -1,13 +1,15 @@
-import { Asset, assetManager, AudioClip, ImageAsset, JsonAsset, native, Rect, resources, Size, SpriteFrame, sys, TextAsset, Texture2D, Vec2 } from 'cc'
+import { Asset, assetManager, AudioClip, dynamicAtlasManager, ImageAsset, macro, JsonAsset, native, Rect, resources, Size, SpriteFrame, sys, TextAsset, Texture2D, Vec2 } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
+import type { ContentCategory } from '@/shared/content'
 import type { FontConfig } from '@/client/font/FontRenderer.d'
 import { applySpriteDensity, setSpriteDensity } from './SpriteDensity'
 import { decodePremultipliedPng } from './PremultipliedPng'
-import { installedArchiveRoot, unpackArchive, type ArchiveFiles } from './InstalledArchives'
+import { loadKernel } from '@/shared/kernel/index'
+import { installedArchiveRoot, installedFilePath, unpackArchive, type ArchiveFiles } from './InstalledArchives'
 import { modManager, type ModManager } from './ModManager'
 import { contentJson, relativeFile, parseContentArchive, type ContentArchive, type ModContent, type ResourceManifest, type ResourceSprite as PackSprite } from '@/shared/mod/content'
 
-type PackManifest = { id: string } & Pick<ResourceManifest, 'sprites' | 'fonts' | 'audio' | 'json' | 'text'>
+type PackManifest = { id: string } & ResourceManifest
 interface LoadedPack {
     files: ArchiveFiles
     manifest: PackManifest
@@ -30,8 +32,10 @@ const nativeTextureWaiters: (() => void)[] = []
 
 function archiveFile(files: ArchiveFiles, file: string): Uint8Array {
     relativeFile(file)
-    if (!files[file]) throw new Error(`Missing ZIP file: ${file}`)
-    return files[file]
+    // Installed native files are read from disk on each access.
+    const bytes = files[file]
+    if (!bytes) throw new Error(`Missing ZIP file: ${file}`)
+    return bytes
 }
 
 const archiveJson = contentJson
@@ -47,8 +51,12 @@ function createPack(files: ArchiveFiles, id: string, content: ModContent): Loade
 function fileUrl(pack: LoadedPack, file: string, mime: string): string {
     const cached = pack.urls.get(file)
     if (cached) return cached
+    let url = installedFilePath(pack.files, file)
+    if (url) {
+        pack.urls.set(file, url)
+        return url
+    }
     const bytes = archiveFile(pack.files, file)
-    let url: string
     if (sys.isNative) {
         pack.runtimeRoot ??= installedArchiveRoot('mod-resources', `${pack.manifest.id}-${++nativeRuntimeId}`)
         url = `${pack.runtimeRoot}/${file}`
@@ -78,7 +86,8 @@ async function texture(pack: LoadedPack, file: string, scale = 1): Promise<Textu
         }
         let image: ImageAsset | undefined
         try {
-            const decoded = pack.premultiplied.has(file) ? decodePremultipliedPng(archiveFile(pack.files, file)) : undefined
+            // The web may still be compiling the kernel that decodes premultiplied images.
+            const decoded = pack.premultiplied.has(file) ? decodePremultipliedPng(archiveFile(pack.files, file), await loadKernel()) : undefined
             if (!decoded) image = await remote<ImageAsset>(pack, file, '.png', 'image/png')
             const result = new Texture2D()
             if (decoded) {
@@ -107,7 +116,7 @@ async function texture(pack: LoadedPack, file: string, scale = 1): Promise<Textu
                 // Remote images have no Cocos dependency edge, so automatic image cleanup misses them.
                 if (image) {
                     assetManager.releaseAsset(image)
-                    // The running snapshot already owns the file on disk, including after uninstall.
+                    // Each texture loads once; drop bytes held in memory (installed files are read on demand).
                     delete pack.files[file]
                 }
                 const next = nativeTextureWaiters.shift()
@@ -125,12 +134,16 @@ export class ModResources {
     private base?: LoadedPack
     private baseArchive?: ContentArchive
     private active: LoadedPack[] = []
+    private baseInitialization?: Promise<void>
     private initialization?: Promise<void>
 
     constructor(private readonly loadBase?: () => Promise<Uint8Array>, private readonly manager: ModManager = modManager) {}
 
-    ready(): Promise<void> {
-        return this.initialization ??= (async () => {
+    private readyBase(): Promise<void> {
+        return this.baseInitialization ??= (async () => {
+            macro.CLEANUP_IMAGE_CACHE = false
+            // Native uploads release CPU images; atlas packing would copy freed data.
+            dynamicAtlasManager.enabled = !sys.isNative
             if (sys.isNative && !nativeRuntimeReady) {
                 native.fileUtils.removeDirectory(installedArchiveRoot('mod-resources', ''))
                 nativeRuntimeReady = true
@@ -139,8 +152,20 @@ export class ModResources {
                 this.baseArchive = parseContentArchive(unpackArchive(await this.loadBase(), 'manifest.json'))
                 this.base = createPack(this.baseArchive.files, this.baseArchive.manifest.id, this.baseArchive.content)
             }
+        })()
+    }
+
+    ready(): Promise<void> {
+        return this.initialization ??= (async () => {
+            await this.readyBase()
             this.active = (await this.manager.ready()).map(mod => createPack(mod.files, mod.manifest.id, mod.content))
         })()
+    }
+
+    /** Bootstrap artwork can load from the base archive before pending Mod changes are applied. */
+    async baseAsset<T extends Asset>(id: string, type: AssetType<T>): Promise<T | undefined> {
+        await this.readyBase()
+        return this.resolveAsset(id, type, undefined, true)
     }
 
     async baseContent(): Promise<ContentArchive> {
@@ -165,9 +190,9 @@ export class ModResources {
     }
 
     /** Resolve presentation assets before either the resources bundle or the content registry. */
-    async asset<T extends Asset>(id: string, type: AssetType<T>, animation?: string): Promise<T | undefined> {
+    async asset<T extends Asset>(id: string, type: AssetType<T>, animation?: string, category?: ContentCategory): Promise<T | undefined> {
         await this.ready()
-        return this.resolveAsset(id, type, animation)
+        return this.resolveAsset(id, type, animation, false, category)
     }
 
     /** Raw Mod paths use the same decoder, caches and native upload limits as registered IDs. */
@@ -202,7 +227,7 @@ export class ModResources {
             .flatMap(pack => Object.keys(pack.manifest[kind])))].filter(id => id.startsWith(prefix))
     }
 
-    private async resolveAsset<T extends Asset>(id: string, type: AssetType<T>, animation?: string, baseOnly = false): Promise<T | undefined> {
+    private async resolveAsset<T extends Asset>(id: string, type: AssetType<T>, animation?: string, baseOnly = false, category?: ContentCategory): Promise<T | undefined> {
         const assetType: AssetType<Asset> = type
         if (!id.includes(':')) {
             if (assetType === AudioClip || assetType === SpriteFrame || assetType === Texture2D) {
@@ -223,7 +248,8 @@ export class ModResources {
             const asset: Asset = await texture(pack, entry.file, entry.scale ?? 1)
             return asset as T
         }
-        const kind = assetType === AudioClip ? 'audio' : assetType === JsonAsset ? 'json' : assetType === TextAsset ? 'text' : undefined
+        const kind = category === 'sprites' ? undefined : category === 'sounds' ? 'audio' : category ??
+            (assetType === AudioClip ? 'audio' : assetType === JsonAsset ? 'json' : assetType === TextAsset ? 'text' : undefined)
         if (!kind) return undefined
         const pack = this.find(kind, id, animation, baseOnly)
         if (!pack) return undefined
@@ -251,7 +277,7 @@ export class ModResources {
         return pending as Promise<T>
     }
 
-    private find(kind: 'sprites' | typeof fileKinds[number], id: string, animation?: string, baseOnly = false): LoadedPack | undefined {
+    private find(kind: keyof ResourceManifest, id: string, animation?: string, baseOnly = false): LoadedPack | undefined {
         return [...(baseOnly ? [] : this.active)].reverse().concat(this.base ? [this.base] : []).find(pack => {
             if (pack !== this.base && this.manager.failures.has(pack.manifest.id)) return false
             const entry = pack.manifest[kind][id]

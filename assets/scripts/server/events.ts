@@ -1,6 +1,6 @@
 import { defineResource } from '@/ecs/index'
 import {
-    assertJsonValue,
+    jsonRoundTrip,
     type JsonObject,
     type ServerEvent,
 } from '@/shared/protocol/index'
@@ -18,7 +18,8 @@ export function createEventQueue(): EventQueue {
 
 export function emitServerEvent(queue: EventQueue, type: string, data: JsonObject): ServerEvent {
     if (type.length === 0) throw new Error('Server event type must be non-empty')
-    assertJsonValue(data)
+    // Events cross to the client without another copy, so they must not share objects with game state.
+    data = jsonRoundTrip(data)
     if (!Number.isSafeInteger(queue.nextEventId) || queue.nextEventId < 1) {
         throw new Error('Server event ID must be a positive safe integer')
     }

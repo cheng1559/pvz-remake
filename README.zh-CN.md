@@ -18,9 +18,8 @@ npm run preview:debug
 - `assets/scripts/shared`、`ecs`：通信协议、资源格式、通道和 ECS。
 - `assets/scripts/client`：输入、渲染、音频、资源加载和通用关卡展示逻辑。
 - `assets/scripts/core`：新版展示层仍在使用的粒子、精灵工具。
-- `tools/content/pvz-base`：手动维护的玩法和表现 JSON。
-- `tools/generated`：转换后的图片、动画和其他打包输入。
+- `mods/pvz-base`：玩法、表现、按类别存放的运行资源及显式资源清单。
 - `assets/resources/base.zip`：生成的内置基础包，与外部资源包使用相同的 `pack.json` 格式。
 - `tools`：共用资源转换和 Mod 工具。
 
-基础内容和外部资源包共用 ZIP 解码、缓存和资源 ID，仅引导场景、关卡布局 Prefab 和编译 shader 保留为 Cocos 资源。修改配置后执行 `npm run build:base-pack`；完整转换命令 `npm run build:content` 也会生成 ZIP。资源准备、检查和构建见[开发说明](docs/DEVELOPMENT.zh-CN.md)。源码采用 [MIT](LICENSE) 许可证，原版游戏资源的权利归各自所有者。
+基础内容和外部资源包共用 ZIP 解码、缓存和资源 ID，仅引导场景、关卡布局 Prefab 和编译 shader 保留为 Cocos 资源。修改配置后执行 `npm run mod:pack -- pvz-base --publish assets/resources/base.zip`；完整转换命令 `npm run build:content -- --pak /path/to/main.pak` 从原版 PAK 临时解包、直接转换到 Mod 资源目录并生成 ZIP。资源准备、检查和构建见[开发说明](docs/DEVELOPMENT.zh-CN.md)。源码采用 [MIT](LICENSE) 许可证，原版游戏资源的权利归各自所有者。

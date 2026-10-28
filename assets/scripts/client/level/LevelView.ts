@@ -1,4 +1,5 @@
-import { Color, Component, Graphics, instantiate, Mask, Node, Sprite, Tween } from 'cc'
+import { modResources } from '@/client/content/ModResources'
+import { Color, Component, Graphics, instantiate, Mask, Node, Sprite, Tween, SpriteFrame } from 'cc'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { Haptics, type HapticStyle } from '@/platform/Haptics'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
@@ -8,7 +9,6 @@ import { uiNode } from '@/client/view/uiNode'
 import { easeInOut } from '@/client/view/GameScreenMath'
 import { LevelSlots } from './LevelSlots'
 import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
-import { SpriteLoader } from '@/core/SpriteLoader'
 import { UI } from '@/client/ui/UI'
 import type { UIButton } from '@/client/ui/UIButton'
 import { plantDefinition } from '@/client/plants/definitions'
@@ -32,7 +32,6 @@ import {
 import { LevelParticlePresenter } from './LevelParticlePresenter'
 import { LevelGameOverPresenter } from './LevelGameOverPresenter'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { TodParticleSystem } from '@/core/Particle'
 import { LevelSeedChooser } from './LevelSeedChooser'
 import { LevelBoardHud } from './LevelBoardHud'
 
@@ -112,7 +111,7 @@ export class LevelView {
                 'pvz:zombie_polevaulter_outerarm_upper2', 'pvz:wallnut_cracked1', 'pvz:wallnut_cracked2',
             ].map(id => sprites.load(id))),
             Promise.all(helmSpriteIds.map(async id => [id, await sprites.load(id)] as const)),
-            Promise.all(dropImages.map(id => SpriteLoader.load(id))),
+            Promise.all(dropImages.map(id => modResources.asset(id, SpriteFrame))),
         ])
         const layout = instantiate(content.levelPrefab)
         root.addChild(layout)
@@ -280,7 +279,7 @@ export class LevelView {
             sunText, progressMeter, progressFillClip, progressFill, progressHead, levelText,
         })
         const particlePresenter = new LevelParticlePresenter(
-            content, layout,
+            layout,
             new Map<Extract<LevelParticleOwnerSnapshot, { kind: 'screen' }>['slot'], Node>([
                 ['board', board], ['entity-layer', entityLayer], ['coin-layer', coinLayer],
                 ['hud', hud], ['award-layer', awardLayer],
@@ -304,6 +303,12 @@ export class LevelView {
             const offset = intro.complete ? 0 : board.position.x
             hud.setPosition(-WIDTH / 2 - offset, HEIGHT / 2)
             bankLayer.setPosition(-WIDTH / 2 - offset, HEIGHT / 2)
+            // Board::Draw puts the bank above the board until CutScene::IsAfterSeedChooser, then below the entities.
+            const above = !intro.complete && tick <= 450
+            if (above !== bankLayer.getSiblingIndex() > entityLayer.getSiblingIndex()) {
+                // The two layers are adjacent, so moving the bank to the entity layer's index swaps them.
+                bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
+            }
             if (intro.complete) return
             bank.active = tick > 400
             bank.setPosition(bank.position.x, easeInOut(400, 425, tick, 87, 0))
@@ -365,7 +370,7 @@ export class LevelView {
         this.presentationPaused = paused
         if (paused) {
             for (const component of this.root.getComponentsInChildren(Component)) {
-                if (component.enabled && (component instanceof ReanimPlayer || component instanceof ParticlePlayer || component instanceof TodParticleSystem)) {
+                if (component.enabled && (component instanceof ReanimPlayer || component instanceof ParticlePlayer)) {
                     this.pausedComponents.push(component)
                     component.enabled = false
                 }
@@ -459,7 +464,7 @@ export class LevelView {
             this.particles.snapshot(),
         ])
         return parseLevelPresentationSnapshot({
-            schemaVersion: 2,
+            schemaVersion: 3,
             flow,
             intro: this.intro.snapshot(),
             end: this.end.snapshot(),

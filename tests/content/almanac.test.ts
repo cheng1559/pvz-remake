@@ -1,3 +1,4 @@
+import { readBaseContent } from '../../tools/mod/content'
 import { presentationFixture } from '../client/presentationFixture'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -9,8 +10,8 @@ import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import * as animationDefinitions from '@/client/content/ClientAnimationRegistry'
 
 const json = (path: string) => JSON.parse(readFileSync(path, 'utf8'))
-const bundle = 'tools/generated/pvz-base'
-const manifest = json(`${bundle}/manifest.json`)
+const bundle = 'mods/pvz-base'
+const resources = readBaseContent().resources
 interface Part { name: string, id: string, parent?: string, track?: string, blink?: boolean, packetId?: string }
 const displayModule = { exports: {} as Record<string, any> }
 const displayCode = transpileModule(readFileSync('assets/scripts/client/reanim/EntityDisplay.ts', 'utf8'), {
@@ -18,12 +19,12 @@ const displayCode = transpileModule(readFileSync('assets/scripts/client/reanim/E
 })
 runInNewContext(displayCode.outputText, { exports: displayModule.exports,
     require: (id: string) => id === '@/client/content/ClientAnimationRegistry' ? animationDefinitions : {} })
-const layouts = json('tools/generated/resources/almanac-animations.json')
+const layouts = json(`${bundle}/${resources.json['pvz:almanac-animations']}`)
 const registry = new animationDefinitions.ClientAnimationRegistry(presentationFixture)
 const catalog = Object.fromEntries(['plants', 'zombies'].map(kind => [kind,
     layouts[kind].map((entry: any, id: number) => displayModule.exports.resolveEntityDisplay(kind, id, entry, registry)),
 ])) as Record<'plants' | 'zombies', Array<{ parts: Part[] }>>
-const animation = (part: Part) => parseReanim(json(`${bundle}/${manifest.client.reanim[part.id]}.json`))
+const animation = (part: Part) => parseReanim(json(`${bundle}/${resources.reanim[part.id]}`))
 
 test('every almanac entry has renderable animation clips, valid attachments and installed sprites', () => {
     const sprites = new Set<string>()
@@ -48,8 +49,8 @@ test('every almanac entry has renderable animation clips, valid attachments and 
         }
     }
     for (const id of sprites) {
-        const path = manifest.client.sprites[id]
-        assert.ok(path && existsSync(`${bundle}/${path.replace(/\/spriteFrame$/, '')}.png`), `Missing sprite: ${id}`)
+        const path = resources.sprites[id]?.file
+        assert.ok(path && existsSync(`${bundle}/${path}`), `Missing sprite: ${id}`)
     }
 })
 
@@ -64,7 +65,7 @@ test('almanac variants retain their equipment and composite plants retain their 
     assert.ok(catalog.zombies[1].parts.some(part => part.track === 'Zombie_flaghand'))
     assert.ok(catalog.zombies[25].parts.some(part => part.track === 'Boss_head2'))
     assert.ok(tracks(20).includes('Zombie_bungi_body'))
-    assert.ok(existsSync(`${bundle}/${manifest.client.sprites['pvz:bungeecord'].replace(/\/spriteFrame$/, '')}.png`))
+    assert.ok(existsSync(`${bundle}/${resources.sprites['pvz:bungeecord'].file}`))
     assert.equal(catalog.plants[18].parts.filter(part => part.name.startsWith('head')).length, 3)
     assert.ok(catalog.plants[28].parts.some(part => part.name === 'backHead'))
     assert.ok(catalog.plants[41].parts.some(part => part.name === 'face2'))

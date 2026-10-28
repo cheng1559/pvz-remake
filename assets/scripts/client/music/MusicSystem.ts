@@ -1,6 +1,6 @@
+import { modResources } from '@/client/content/ModResources'
 import { AudioClip, AudioSource, director, JsonAsset, Node, sys } from 'cc'
-import { AssetLoader } from '@/client/content/LegacyAssetLoader'
-import { SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundSystem } from '@/client/sound/SoundSystem'
 import {
     parseMusicPlaybackSnapshot,
     type MusicBurstState,
@@ -111,6 +111,8 @@ export class MusicSystem {
     private static _fadeOutCounter = 0
     private static _fadeOutDuration = 0
     private static _syncCounter = 0
+    /** The main stem's last observed time, to notice the backend wrapping past a missed loop end. */
+    private static _lastMainTime = 0
     private static _burstState: MusicBurstState = 'off'
     private static _burstCounter = 0
     private static _drumsState: MusicDrumsState = 'off'
@@ -154,8 +156,9 @@ export class MusicSystem {
         this._fadeOutCounter = 0
         this._fadeOutDuration = 0
         this._syncCounter = 0
+        this._lastMainTime = 0
 
-        this._unsubscribeMusicVolume ??= SoundLoader.onMusicVolumeChange(() => this._applyVolumes())
+        this._unsubscribeMusicVolume ??= SoundSystem.onMusicVolumeChange(() => this._applyVolumes())
         for (let i = 0; i < activeStems.length; i++) {
             const stem = activeStems[i]
             if (this._playNativeStem(stem, clips[i]!)) continue
@@ -163,7 +166,8 @@ export class MusicSystem {
             const source = this._getSource(stem)
             source.stop()
             source.clip = clips[i]
-            source.loop = this._usesBackendLoop(tune)
+            // The backend always loops the whole file so playback never ends; loop points are jumped to here.
+            source.loop = true
             source.volume = 0
         }
 
@@ -280,7 +284,7 @@ export class MusicSystem {
         }
 
         this._overlayActiveStemNames = activeStems
-        this._unsubscribeMusicVolume ??= SoundLoader.onMusicVolumeChange(() => this._applyVolumes())
+        this._unsubscribeMusicVolume ??= SoundSystem.onMusicVolumeChange(() => this._applyVolumes())
         for (let i = 0; i < activeStems.length; i++) {
             const stem = activeStems[i]
             if (this._playNativeOverlayStem(stem, clips[i]!, tune)) continue
@@ -288,7 +292,7 @@ export class MusicSystem {
             const source = this._getOverlaySource(stem)
             source.stop()
             source.clip = clips[i]
-            source.loop = this._usesBackendLoop(tune)
+            source.loop = this._loopsWholeFile(tune)
             source.volume = this._overlayStemVolume(stem)
             source.play()
         }
@@ -399,7 +403,7 @@ export class MusicSystem {
         if (this._manifest) return this._manifest
         if (this._manifestLoading) return this._manifestLoading
 
-        this._manifestLoading = AssetLoader.load<JsonAsset>(MANIFEST_PATH, JsonAsset, 'music manifest')
+        this._manifestLoading = modResources.asset(`pvz:${MANIFEST_PATH}`, JsonAsset)
             .then((asset) => {
                 this._manifest = (asset?.json as MusicManifest | undefined) ?? null
                 return this._manifest
@@ -411,7 +415,7 @@ export class MusicSystem {
         const cached = this._clipLoading.get(path)
         if (cached) return cached
 
-        const loading = AssetLoader.load<AudioClip>(path, AudioClip, `music: ${path}`)
+        const loading = modResources.asset(path, AudioClip).then(clip => clip ?? null)
             .catch(error => { this._clipLoading.delete(path); throw error })
         this._clipLoading.set(path, loading)
         return loading
@@ -471,6 +475,7 @@ export class MusicSystem {
         if (!tune) return
 
         const seekTime = this._wrapTime(time, tune)
+        this._lastMainTime = seekTime
         for (const stem of this._activeStemNames) {
             const audioId = this._nativeAudioIds[stem]
             if (audioId !== undefined) {
@@ -487,12 +492,15 @@ export class MusicSystem {
     private static _updateManualLoop() {
         const tune = this._currentTune
         if (!tune) return
-        if (this._usesBackendLoop(tune)) return
+        if (this._loopsWholeFile(tune)) return
 
         const mainTime = this._mainTime()
-        if (mainTime < tune.loopEndSec) return
+        // A check that comes too late finds the backend already wrapped to the start of the file.
+        const wrapped = mainTime < this._lastMainTime - 1
+        this._lastMainTime = mainTime
+        if (!wrapped && mainTime < tune.loopEndSec) return
 
-        const overflow = mainTime - tune.loopEndSec
+        const overflow = wrapped ? mainTime + tune.durationSec - tune.loopEndSec : mainTime - tune.loopEndSec
         const target = this._wrapTime(tune.loopStartSec + overflow, tune)
         this._seekAll(target)
         this._resumeSourcesAfterSeek()
@@ -514,9 +522,8 @@ export class MusicSystem {
         return loopStart + ((time - loopStart) % loopLength)
     }
 
-    private static _usesBackendLoop(tune?: MusicTuneManifest | null) {
-        const target = tune ?? this._currentTune
-        return !!target && target.loopStartSec <= 0 && target.loopEndSec >= target.durationSec
+    private static _loopsWholeFile(tune: MusicTuneManifest) {
+        return tune.loopStartSec <= 0 && tune.loopEndSec >= tune.durationSec
     }
 
     private static _updateFadeOut(ticks: number) {
@@ -693,7 +700,7 @@ export class MusicSystem {
     }
 
     private static _applyVolumes() {
-        const masterVolume = SoundLoader.getMusicVolume()
+        const masterVolume = SoundSystem.getMusicVolume()
         const fadeVolume = this._fadeOutDuration > 0 && this._fadeOutCounter > 0
             ? this._fadeOutCounter / this._fadeOutDuration
             : 1
@@ -737,7 +744,7 @@ export class MusicSystem {
 
         const url = clip.nativeUrl
         if (!url) return false
-        const audioId = player.play(url, this._usesBackendLoop(), this._stemVolume(stem) * SoundLoader.getMusicVolume())
+        const audioId = player.play(url, true, this._stemVolume(stem) * SoundSystem.getMusicVolume())
         if (typeof audioId !== 'number' || audioId < 0) return false
 
         this._nativeAudioIds[stem] = audioId
@@ -750,7 +757,7 @@ export class MusicSystem {
 
         const url = clip.nativeUrl
         if (!url) return false
-        const audioId = player.play(url, this._usesBackendLoop(tune), this._overlayStemVolume(stem))
+        const audioId = player.play(url, this._loopsWholeFile(tune), this._overlayStemVolume(stem))
         if (typeof audioId !== 'number' || audioId < 0) return false
 
         this._overlayNativeAudioIds[stem] = audioId
@@ -785,7 +792,7 @@ export class MusicSystem {
     }
 
     private static _overlayStemVolume(stem: MusicStemName) {
-        return stem === 'main' ? SoundLoader.getMusicVolume() : 0
+        return stem === 'main' ? SoundSystem.getMusicVolume() : 0
     }
 
     private static _nativePlayer(): MusicNativePlayer | null {

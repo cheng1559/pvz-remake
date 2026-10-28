@@ -1,4 +1,5 @@
-import { Color, EventMouse, Node, UITransform, type EventTouch, type SpriteFrame } from 'cc'
+import { modResources } from '@/client/content/ModResources'
+import { Color, EventMouse, Node, UITransform, type EventTouch, SpriteFrame } from 'cc'
 import { SeedPacketView } from '@/client/hud/SeedPacketView'
 import { plantDefinition } from '@/client/plants/definitions'
 import { UIButton } from '@/client/ui/UIButton'
@@ -6,10 +7,9 @@ import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
 import { uiNode } from '@/client/view/uiNode'
 import { easeInOut } from '@/client/view/GameScreenMath'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { GameCommand, WorldSnapshot } from '@/shared/protocol'
 import type { LoadedContent } from './LevelView'
-import { SpriteLoader } from '@/core/SpriteLoader'
 import { SpriteRepository } from '@/client/content/ClientContentLoader'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
@@ -43,7 +43,7 @@ export class LevelSeedChooser {
 
     static async create(ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, inputRoot: Node): Promise<LevelSeedChooser> {
         const [background, silhouette] = await Promise.all(['seedchooser_background', 'seedpacketsilhouette'].map(async id => {
-            const sprite = await SpriteLoader.load(id)
+            const sprite = await modResources.asset(id, SpriteFrame)
             if (!sprite) throw new Error(`Missing seed chooser sprite: ${id}`)
             return sprite
         }))
@@ -182,7 +182,7 @@ export class LevelSeedChooser {
         for (const candidate of this.choices) this.land(candidate)
         if (choice.slot < 0 && this.snapshot!.seedPackets.length >= this.snapshot!.seedChooser!.slots) return
         for (const candidate of this.choices) candidate.tooltip.hide()
-        void SoundLoader.play(SoundEffect.Tap)
+        void SoundSystem.play(SoundEffect.Tap)
         this.send({ type: 'chooseSeed', seedId: choice.id })
     }
 

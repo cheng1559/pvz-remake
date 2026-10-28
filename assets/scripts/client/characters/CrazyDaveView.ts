@@ -5,7 +5,7 @@ import type { ContentRegistry } from '@/client/content/ContentRegistry'
 import { uiNode } from '@/client/view/uiNode'
 import { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 
 /** Dave's original talk/idle/enter clips, token-controlled mouth, hand item and speech bubble. */
@@ -28,7 +28,7 @@ export class CrazyDaveView {
         position?: { x: number, y: number }, bubble?: Partial<PresentationDefinitions['dave']['bubble']>, clickToContinue?: boolean,
     } = {}): Promise<CrazyDaveView> {
         const root = uiNode({ name: 'CrazyDave', parent, position: options.position, anchor: { x: 0, y: 1 }, active: false }).node
-        root.once(Node.EventType.NODE_DESTROYED, () => SoundLoader.stopExclusive('crazyDave'))
+        root.once(Node.EventType.NODE_DESTROYED, () => SoundSystem.stopExclusive('crazyDave'))
         const config = { ...content.presentation.dave, bubble: { ...content.presentation.dave.bubble, ...options.bubble } }
         const layout = config.bubble
         const sprites = new SpriteRepository(content.registry, content.loader)
@@ -69,7 +69,7 @@ export class CrazyDaveView {
     get busy(): boolean { return this.node.active }
     get canAdvance(): boolean { return this.node.active && this.bubble.active && !this.entering && !this.leaving }
     get ready(): boolean { return this.node.active && !this.entering && !this.leaving }
-    get isSpeaking(): boolean { return this.voicePending || SoundLoader.isExclusivePlaying('crazyDave') }
+    get isSpeaking(): boolean { return this.voicePending || SoundSystem.isExclusivePlaying('crazyDave') }
 
     enter(): void {
         this.visible = true
@@ -97,7 +97,7 @@ export class CrazyDaveView {
         this.message = this.pending = undefined
         this.shaking = false
         this.bubble.active = this.hand.node.active = false
-        SoundLoader.stopExclusive('crazyDave')
+        SoundSystem.stopExclusive('crazyDave')
         if (this.node.active && !this.entering && !this.leaving) this.play('idle', true, this.config.talkFps)
     }
 
@@ -139,7 +139,7 @@ export class CrazyDaveView {
         if (!raw.includes('{NO_SOUND}')) {
             const sequence = ++this.voiceSequence
             this.voicePending = true
-            void SoundLoader.playFoleyExclusive(effect, 'crazyDave', 0).catch(error => console.error('[CrazyDave]', error))
+            void SoundSystem.playFoleyExclusive(effect, 'crazyDave', 0).catch(error => console.error('[CrazyDave]', error))
                 .finally(() => { if (sequence === this.voiceSequence) this.voicePending = false })
         }
     }

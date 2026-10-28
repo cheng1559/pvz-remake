@@ -1,4 +1,5 @@
-import { readGameplaySource } from '../../tools/content_source'
+import { readBaseContent } from '../../tools/mod/content'
+import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import test from 'node:test'
@@ -158,7 +159,7 @@ test('achievement entries preserve saved flag/icon order and expose only the act
     assert.equal(view.items[1].titleKey, 'ACHIEVEMENT_NOBEL_PEAS_PRIZE_TITLE')
     assert.equal(view.items[4].titleKey, 'ACHIEVEMENT_SPUDOW_TITLE')
     assert.deepEqual(view.items.filter(item => item.earned).map(item => item.id), [0, 4])
-    const strings = JSON.parse(readFileSync('tools/generated/resources/properties/lawnstrings.json', 'utf8'))
+    const strings = JSON.parse(readFileSync(`mods/pvz-base/${readBaseContent().resources.json['pvz:properties/lawnstrings']}`, 'utf8'))
     for (const [index, item] of view.items.entries()) {
         assert.equal(item.icon, index)
         assert.ok(strings[item.titleKey])

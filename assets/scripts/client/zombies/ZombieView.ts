@@ -310,11 +310,10 @@ export class ZombieView implements ZombieViewInstance {
     }
 
     private attachFlag(flag: ReanimPlayer, body: ReanimPlayer, trackId: string): void {
-        flag.node.setParent(body.node)
+        // The flag is drawn between its hand track and the arm gripping the pole.
+        body.drawAfterTrack(flag.node, trackId)
         flag.node.setPosition(0, 0)
         flag.attachToTrack(body, trackId)
-        const arm = body.getTrackNode('Zombie_innerarm_screendoor')
-        if (arm) flag.node.setSiblingIndex(arm.getSiblingIndex() + 1)
     }
 
     private applyParts(zombie: ZombieSnapshot): void {

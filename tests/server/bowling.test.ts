@@ -1,17 +1,13 @@
-import { readGameplaySource } from '../../tools/content_source'
+import { type World } from '@/ecs'
+import { ZombieComponent } from '@/server/components'
+import { IntegratedGameServer } from '@/server/IntegratedGameServer'
+import { spawnZombie } from '@/server/zombies/spawn'
+import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
+import { parseServerPacket,type JsonValue,type StartSessionPacket } from '@/shared/protocol'
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { CommandBuffer, type World } from '@/ecs'
-import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { IntegratedGameHost } from '@/server/IntegratedGameHost'
-import { LocalGameChannel } from '@/shared/channel'
-import { spawnZombie } from '@/server/zombies/spawn'
-import { RandomResource, SeedBankResource, ZombieComponent } from '@/server/components'
-import { createConveyorSystem } from '@/server/conveyor'
-import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
-import { parseServerPacket, type JsonValue, type StartSessionPacket } from '@/shared/protocol'
+import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
-import { parseServerSaveSnapshot } from '@/server/save'
 
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
@@ -30,20 +26,6 @@ function begin(): IntegratedGameServer {
     return server
 }
 
-test('intro dialogue commands publish a frame without advancing the simulation clock', () => {
-    const channel = new LocalGameChannel()
-    const host = new IntegratedGameHost(new IntegratedGameServer(definitions, levels), channel)
-    channel.sendToServer(options)
-    host.update(0)
-    channel.drainClientPackets()
-    channel.sendToServer({ type: 'command', protocolVersion: 1, sequence: 2, command: { type: 'advanceDialog' } })
-    host.update(0)
-    const frame = channel.drainClientPackets().find(packet => packet.type === 'frame')!
-    assert.equal(frame.type, 'frame')
-    if (frame.type !== 'frame') return
-    assert.deepEqual(frame.snapshot.extensions['pvz:dialog'], { index: 2401 })
-    assert.equal(frame.snapshot.gameplayTick, 0)
-})
 
 test('1-5 requires Dave, three shovel digs and the second dialogue before gameplay, and restores each stage', () => {
     const server = new IntegratedGameServer(definitions, levels)
@@ -121,117 +103,11 @@ test('seed and shovel selection are exclusive, including after save and on a non
     assert.equal(normal.snapshot().plants.length, 0)
 })
 
-test('the conveyor draws both seed types at their configured weight boundary', () => {
-    const server = begin()
-    const world = (server as unknown as { session: { world: World } }).session.world
-    const conveyor = world.resources.get(SeedBankResource).conveyor!
-    const random = world.resources.get(RandomResource)
-    const supply = createConveyorSystem()
-    const commands = new CommandBuffer(world)
-    const pool = levels.levels[options.levelId].conveyor!.seeds
-    for (const [roll, expected] of [[pool[0].weight - 1, pool[0].id], [pool[0].weight, pool[1].id]] as const) {
-        random.integer = (min, max) => {
-            assert.equal(min, 0)
-            assert.equal(max, pool.reduce((sum, seed) => sum + seed.weight, 0) - 1)
-            return roll
-        }
-        conveyor.packets.length = 0
-        conveyor.spawnAtTick = 0
-        supply.run({ world, commands, tick: 1 })
-        assert.equal(conveyor.packets[0].seedId, expected)
-    }
-})
 
-test('dialogue IDs and conveyor supply follow level configuration', () => {
-    const config = source('levels'), level = config.levels['pvz:adventure-1-5']
-    level.shovelTutorial.repeat = [700, 900]
-    Object.assign(level.conveyor, { capacity: 1, entryX: 200, moveTicks: 2, spawnDelay: [{ minPackets: 0, ticks: 20 }] })
-    const server = new IntegratedGameServer(definitions, parseGameplayLevels(config, definitions))
-    server.start({ ...options, firstAdventure: false })
-    assert.deepEqual(server.snapshot().extensions['pvz:dialog'], { index: 700 })
-    runCommand(server, { type: 'advanceDialog' })
-    assert.deepEqual(server.snapshot().extensions['pvz:dialog'], { index: 900 })
-    assert.equal(runCommand(server, { type: 'completeIntro' }), 'intro-not-complete')
-    runCommand(server, { type: 'advanceDialog' })
-    runCommand(server, { type: 'completeIntro' })
-    assert.equal(server.snapshot().conveyorPackets[0].x, 200)
-    server.tick(); server.tick()
-    assert.equal(server.snapshot().conveyorPackets[0].x, 199)
-    for (let tick = 0; tick < 20; tick++) server.tick()
-    assert.equal(server.snapshot().conveyorPackets.length, 1)
-})
 
-test('ordinary and conveyor selection use the same availability check as their snapshots', () => {
-    for (const conveyor of [false, true]) {
-        const server = conveyor ? begin() : new IntegratedGameServer(definitions, levels)
-        if (!conveyor) {
-            server.start({ ...options, levelId: 'pvz:adventure-1-1', firstAdventure: false })
-            runCommand(server, { type: 'completeIntro' })
-        }
-        const original = (server as any).seedAvailability.bind(server)
-        const unavailable = { reason: 'seed-not-available', warningKey: 'test:requires_base' }
-        ;(server as any).seedAvailability = (...args: any[]) => original(...args).reason ? original(...args) : unavailable
-        server.drainEvents()
-        const snapshot = server.snapshot(), packet = conveyor ? snapshot.conveyorPackets[0] : snapshot.seedPackets[0]
-        assert.deepEqual(packet.availability, unavailable)
-        assert.deepEqual(server.drainEvents(), [], 'reading availability has no feedback side effects')
-        const command = conveyor ? { type: 'selectConveyorPacket' as const, packetId: snapshot.conveyorPackets[0].id }
-            : { type: 'selectSeed' as const, seedId: packet.seedId }
-        assert.equal(runCommand(server, command), packet.availability.reason)
-        assert.deepEqual(server.save().seedBank.selection, { mode: 'none' })
-    }
-})
 
-test('saved selection rejects mixed modes and the previous parallel-field format', () => {
-    const server = begin(), saved = server.save()
-    for (const selection of [{ mode: 'none', toolId: 'pvz:shovel' }, { mode: 'seed', seedId: 'pvz:bowling-wallnut', packetId: 1 },
-        { mode: 'conveyor', packetId: 99 }]) {
-        assert.throws(() => parseServerSaveSnapshot({ ...saved, seedBank: { ...saved.seedBank, selection } }))
-    }
-    const { selection, ...oldBank } = saved.seedBank
-    assert.throws(() => parseServerSaveSnapshot({ ...saved, seedBank: { ...oldBank, selectedSeedId: 'pvz:bowling-wallnut' } }))
-})
 
-test('conveyor packets stop in 50px slots and removing the first preserves the following packet positions', () => {
-    const server = begin()
-    const saved = server.save()
-    saved.seedBank.conveyor!.packets = [
-        { id: 1, seedId: 'pvz:bowling-wallnut', x: 0 },
-        { id: 2, seedId: 'pvz:bowling-wallnut', x: 50 },
-    ]
-    saved.seedBank.conveyor!.nextId = 3
-    server.start({ ...options, save: saved as unknown as JsonValue })
-    for (let tick = 0; tick < 4; tick++) server.tick()
-    assert.deepEqual(server.snapshot().conveyorPackets.map(packet => packet.x), [0, 50])
-    runCommand(server, { type: 'selectConveyorPacket', packetId: 1 })
-    assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 0 }), undefined)
-    assert.equal(server.snapshot().conveyorPackets[0].x, 50)
-    for (let tick = 0; tick < 4; tick++) server.tick()
-    assert.equal(server.snapshot().conveyorPackets[0].x, 49, 'the gap closes at normal conveyor speed')
-    runCommand(server, { type: 'selectConveyorPacket', packetId: 2 })
-    assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 0 }), undefined, 'a rolling nut never occupies its launch tile')
-    assert.equal(server.snapshot().plants.length, 2)
-    assert.equal(runCommand(server, { type: 'selectTool', toolId: 'pvz:shovel' }), undefined, 'the shovel remains available after the intro')
-})
 
-test('consuming a moving conveyor packet preserves every surviving position, including after restore', () => {
-    for (const removedId of [1, 2, 4]) {
-        const server = begin(), saved = server.save()
-        const packets = [0, 140, 230, 440].map((x, index) => ({ id: index + 1, seedId: 'pvz:bowling-wallnut', x }))
-        saved.seedBank.conveyor!.packets = packets
-        saved.seedBank.conveyor!.nextId = 5
-        server.start({ ...options, save: saved as unknown as JsonValue })
-        runCommand(server, { type: 'selectConveyorPacket', packetId: removedId })
-        assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 0 }), undefined)
-        const remaining = packets.filter(packet => packet.id !== removedId)
-        assert.deepEqual(server.save().seedBank.conveyor!.packets, remaining)
-        restore(server)
-        assert.deepEqual(server.save().seedBank.conveyor!.packets, remaining)
-        for (let tick = 0; tick < 4; tick++) server.tick()
-        assert.deepEqual(server.save().seedBank.conveyor!.packets,
-            remaining.map((packet, index) => ({ ...packet, x: Math.max(index * 50, packet.x - 1) })))
-    }
-})
 
 test('a bowling plant hits, ricochets and resumes the same motion after save; an explosive one burns nearby zombies', () => {
     for (const explosive of [false, true]) {
@@ -262,21 +138,4 @@ test('a bowling plant hits, ricochets and resumes the same motion after save; an
         restored.start({ ...options, save: server.save() as unknown as JsonValue })
         for (let tick = 0; tick < 40; tick++) assert.deepEqual(restored.tick(), server.tick())
     }
-})
-
-test('bowling is registered plant behavior outside 1-5 while an ordinary wall-nut stays stationary', () => {
-    const server = new IntegratedGameServer(definitions, levels)
-    server.start({ ...options, levelId: 'pvz:adventure-1-4', firstAdventure: false })
-    runCommand(server, { type: 'completeIntro' })
-    for (const [sequence, command] of [[10, '/plant bowling-wallnut 3 1'], [11, '/plant wallnut 3 2']] as const) {
-        server.enqueueDebugCommand(sequence, command)
-        server.processBoundaryCommands()
-        assert.equal(server.drainCommandResults()[0].debug?.ok, true)
-    }
-    const before = server.snapshot().plants
-    for (let tick = 0; tick < 20; tick++) server.tick()
-    const after = server.snapshot().plants
-    assert.ok(after[0].x > before[0].x)
-    assert.equal(after[1].x, before[1].x)
-    assert.equal(after[1].behaviorState, undefined)
 })

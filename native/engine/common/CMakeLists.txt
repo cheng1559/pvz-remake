@@ -31,6 +31,12 @@ option(USE_DEBUG_RENDERER       "Use Debug Renderer"                    ON)
 option(USE_GEOMETRY_RENDERER    "Use Geometry Renderer"                 ON)
 option(USE_WEBP                 "Use Webp"                              ON)
 
+# Opt-in only: allow profiling the release JS workload without enabling CC_DEBUG.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND "$ENV{PVZ_JS_PROFILE}" STREQUAL "1")
+    set(USE_V8_DEBUGGER_FORCE ON)
+    add_compile_definitions(PVZ_JS_PROFILE=1)
+endif()
+
 if(NOT RES_DIR)
     message(FATAL_ERROR "RES_DIR is not set!")
 endif()
@@ -54,8 +60,18 @@ include(${COCOS_X_PATH}/CMakeLists.txt)
 list(APPEND CC_COMMON_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/Classes/Game.h
     ${CMAKE_CURRENT_LIST_DIR}/Classes/Game.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/Classes/KernelBindings.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/kernel/pvz_kernel.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/kernel/pvz_particles.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/kernel/pvz_png.cpp
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     add_link_options("SHELL:-weak_framework CoreHaptics")
 endif()
+
+# Match the WebAssembly build of the same sources. Fused multiply-add can change the tick at
+# which a fractional spawn accumulator reaches the next integer.
+set_source_files_properties(${CMAKE_CURRENT_LIST_DIR}/kernel/pvz_kernel.cpp ${CMAKE_CURRENT_LIST_DIR}/kernel/pvz_particles.cpp PROPERTIES
+    COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/fp:strict>;$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-ffp-contract=off>"
+)

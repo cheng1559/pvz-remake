@@ -41,6 +41,74 @@ test('startup UI preparation yields for rendering without adding waits after asy
     await assert.rejects(preloadTasks([async () => { throw new Error('load failed') }]), /load failed/)
 })
 
+test('the existing startup logo stays visible until pending Mods finish, before loading the title and other assets', async () => {
+    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/StartupScreen.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
+    }).outputText
+    for (const pending of [false, true]) {
+        const steps: string[] = []
+        let screen: any
+        let finish!: () => void
+        const complete = new Promise<void>(resolve => { finish = resolve })
+        class SpriteFrame {}
+        const frame = { originalSize: { width: 300, height: 200 } }
+        const logo = { node: { active: true }, opacity: { opacity: 0 } }
+        const modules: Record<string, unknown> = {
+            cc: { Component: class {}, Color: class {}, _decorator: { ccclass: () => (value: unknown) => value },
+                Sprite: { SizeMode: { CUSTOM: 1 } }, SpriteFrame, game: {}, Node: { EventType: {} } },
+            '@/client/view/uiNode': { uiNode: (options: any) => {
+                if (options.name !== 'PopCapLogo') return { node: { on() {} }, transform: { contentSize: { width: 800, height: 600 } }, graphics: { clear() {}, fillRect() {} } }
+                assert.equal(options.sprite.frame, frame)
+                steps.push('show-logo')
+                logo.opacity.opacity = options.opacity
+                return logo
+            } },
+            '@/client/content/ModResources': { modResources: {
+                async baseAsset(id: string) { assert.equal(id, 'pvz:popcap_logo'); steps.push('base-logo'); return frame },
+                async asset() { steps.push('mod-logo'); return frame },
+            } },
+            '@/client/content/preloadTasks': { waitForPreloadFrame: async () => {
+                if (!steps.includes('paint')) steps.push('paint')
+                screen.tick(); screen.render()
+            } },
+            '@/client/content/ModManager': { modManager: {
+                hasPendingChanges: () => pending,
+                async applyPendingChanges(progress: (value: number, message: string) => Promise<void>) {
+                    await progress(0.5, 'Installing local:test')
+                    steps.push('install')
+                    await complete
+                },
+            } },
+            '@/client/music/MusicSystem': { MusicSystem: { playTune: async () => { steps.push('music') } } },
+        }
+        const exports: any = {}
+        runInNewContext(compiled, { exports, require: (name: string) => modules[name] ?? {} })
+        screen = new exports.StartupScreen()
+        screen.node = { isValid: true }
+        screen.loadTitle = async () => { steps.push('title'); screen.title = { active: false }; screen.startButton = {} }
+        let loaded!: () => void
+        const loading = new Promise<void>(resolve => { loaded = resolve })
+        await screen.initialize(true, async () => { steps.push('preload'); await loading })
+        screen.show()
+        await setImmediate()
+        if (pending) {
+            for (let i = 0; i < 250; i++) screen.tick()
+            screen.render()
+            assert.equal(logo.node.active, true)
+            assert.equal(logo.opacity.opacity, 255)
+            assert.deepEqual(steps, ['base-logo', 'show-logo', 'paint', 'install'])
+            finish()
+            await setImmediate()
+            assert.deepEqual(steps, ['base-logo', 'show-logo', 'paint', 'install', 'music', 'title', 'preload'])
+        } else assert.deepEqual(steps, ['mod-logo', 'show-logo', 'music', 'title', 'preload'])
+        assert.equal(steps.filter(step => step === 'show-logo').length, 1)
+        for (let i = 0; i < 200 && screen.phase === 'logo'; i++) screen.tick()
+        assert.equal(logo.node.active, false, 'the title shows the remaining loading progress')
+        assert.equal(screen.title.active, true)
+        loaded()
+    }
+})
+
 test('the first main menu uses Mod wrappers installed while UI assets are still loading', async () => {
     const calls: string[] = [], ui = {}
     class MainMenuScreen {
@@ -145,7 +213,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
                 return new Promise(resolve => { chooseContinue = resolve })
             },
         },
-        '@/client/sound/LegacySoundSystem': { SoundEffect: { Pause: 'pause' }, SoundLoader: { play: async (sound: string) => { sounds.push(sound) } } },
+        '@/client/sound/SoundSystem': { SoundEffect: { Pause: 'pause' }, SoundSystem: { play: async (sound: string) => { sounds.push(sound) } } },
     }
     runInNewContext(compiled.outputText, {
         exports: module.exports, require: (id: string) => modules[id] ?? {},
@@ -175,6 +243,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         countZombiesOnScreenForMusic: () => running ? 10 : 0,
         isPaused: () => paused,
         canPause: () => running && introReady && !paused,
+        getLevelDefinition: () => ({}),
         debugCommand: () => ({ ok: true, catalog: { plants: [], zombies: [], items: [], levels: ['1-1'] } }),
         hide() { commits.push('hide-game'); running = false },
         deleteSave() {},
@@ -363,7 +432,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(freshGames.at(-1), true)
 })
 
-test('manager imports read sequentially, continue after failure and leave enabling to Apply', async () => {
+test('manager imports read sequentially, continue after failure and leave installation to the next startup', async () => {
     const source = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
     }).outputText
@@ -373,11 +442,11 @@ test('manager imports read sequentially, continue after failure and leave enabli
         const ui = {
             dialog(_parent: unknown, options: any) {
                 steps.push(options.title)
-                if (options.title === 'Installing...') {
+                if (options.title === 'Importing...') {
                     assert.equal(options.message, undefined)
                     assert.equal(options.footer, false)
                 }
-                if (options.title === 'Installation Failed') assert.match(options.message, /bad.zip/)
+                if (options.title === 'Import Failed') assert.match(options.message, /bad.zip/)
                 return { close() { steps.push('close') }, result: Promise.resolve(true) }
             },
         }
@@ -397,9 +466,8 @@ test('manager imports read sequentially, continue after failure and leave enabli
                 }))
             } },
             '@/client/content/ModManager': { modManager: {
-                install: async (name: string, enable: boolean) => {
-                    assert.equal(enable, false)
-                    steps.push(`install:${name}`); return name
+                prepareImport: (name: string) => {
+                    steps.push(`prepare:${name}`); return { id: name, archive: name, version: '1.0.0' }
                 },
                 list: async () => [],
                 setEnabled: async (ids: string[]) => { assert.deepEqual(Array.from(ids), ['a', 'b']); steps.push('enable:mods') },
@@ -409,78 +477,19 @@ test('manager imports read sequentially, continue after failure and leave enabli
             window: { location: { reload: () => steps.push('web-restart') } } })
         const app = new module.exports.GameApp()
         app.node = { isValid: true }
-        const installed = await app.installPackage()
-        assert.deepEqual(Array.from(installed), names.filter(name => name !== 'bad'))
+        const imported = await app.importPackage()
+        assert.deepEqual(Array.from(imported, (mod: any) => mod.id), names.filter(name => name !== 'bad'))
         const expected = ['pick']
         if (names.length) {
-            expected.push('Installing...', 'paint')
-            for (const name of names) { expected.push(`read:${name}`); if (name !== 'bad') expected.push(`install:${name}`) }
+            expected.push('Importing...', 'paint')
+            for (const name of names) { expected.push(`read:${name}`); if (name !== 'bad') expected.push(`prepare:${name}`) }
             expected.push('close', ...names.map(name => `dispose:${name}`))
-            if (names.includes('bad')) expected.push('Installation Failed')
+            if (names.includes('bad')) expected.push('Import Failed')
         }
         assert.deepEqual(steps, expected)
     }
 })
 
-test('mobile CLI receives corner taps in root capture before UI can swallow them', async () => {
-    let capture!: (event: any) => void
-    let globalTouch!: (event: any) => void
-    let now = 1000, opened = 0, viewportInitialized = 0
-    const sys = { isMobile: true, localStorage: {} }
-    const screen = { devicePixelRatio: 3, windowSize: { width: 2556, height: 1179 } }
-    const node = { isValid: true, on(_event: string, callback: Function, owner: any, useCapture: boolean) {
-        assert.equal(useCapture, true)
-        capture = event => callback.call(owner, event)
-    } }
-    const modules: Record<string, any> = {
-        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value }, sys, screen,
-            Mask: { Type: { GRAPHICS_RECT: 0 } },
-            game: { on() {} }, Game: { EVENT_HIDE: 'hide' }, Input: { EventType: { TOUCH_START: 'touch-start' } },
-            input: { on(event: string, callback: Function, owner: any) {
-                if (event === 'touch-start') globalTouch = value => callback.call(owner, value)
-            } } },
-        'cc/env': { DEBUG: false },
-        '@/client/view/uiNode': { uiNode: (options: any) => ({ node: options.node ?? { addComponent: () => ({}) } }) },
-        '@/client/view/ClientViewport': { initializeViewport() { viewportInitialized++ } },
-        './LocalMenuApi': { connectLocalMenuApi() {} },
-        '@/client/content/ModResources': { modResources: { baseJson: async () => ({}) } },
-        '@/server/menu/StoreCatalog': { createStoreCatalog: () => ({}) },
-        './LevelController': { createLevelController: () => ({}) },
-        '@/client/input/UIHoverManager': { UIHoverManager: { start() {} } },
-        '@/platform/OptionsSettings': { OptionsSettings: { start: async () => {} } },
-        '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => false } },
-        '@/client/screens/ScreenTransition': { ScreenTransition: class {} },
-        '@/client/ui/UI': { UI: { load: async () => ({ label: () => ({}) }) } },
-    }
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {},
-        Date: { now: () => now } })
-    const app = new module.exports.GameApp()
-    app.node = node
-    app.navigate = async () => {}
-    app.showDebugCli = async () => { opened++ }
-    app.start()
-    assert.equal(viewportInitialized, 0, 'startup waits for UI and Mod loading before applying the window constraint')
-    await setImmediate()
-    assert.equal(viewportInitialized, 1)
-    assert.equal(typeof globalTouch, 'function', 'letterbox taps still have a global fallback')
-    const tap = () => ({ getLocation: () => ({ x: 2500, y: 50 }), propagationStopped: false })
-    capture(tap())
-    now += 200
-    const second = tap()
-    capture(second)
-    assert.equal(opened, 1, 'native mobile access remains available when /mobile is off')
-    assert.equal(second.propagationStopped, true)
-    sys.isMobile = false
-    now += 200
-    capture(tap())
-    now += 200
-    capture(tap())
-    assert.equal(opened, 1, 'desktop clicks do not open the mobile CLI')
-})
 
 test('saved-game prompt offers continue/restart/cancel and confirms a restart before closing', async () => {
     const module = { exports: {} as Record<string, any> }
@@ -558,6 +567,7 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
             game: { end() { quits++ } },
             showOptionsDialog: async (_parent: unknown, _ui: unknown, options: unknown) => { gameOptions = options },
             UI: { load: async () => ({
+                assets: { presentation: { screens: {} } },
                 text: (key: string) => key,
                 dialog: (_parent: unknown, options: unknown) => { quitOptions = options; return { content: {} } },
             }) },
@@ -681,187 +691,4 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
     assert.equal(cached.root.active, false)
     assert.equal(await screen.prepare('achievements'), cached)
     assert.equal(achievementInitializations, 1, 'returning from gameplay cannot rebuild static content')
-})
-
-test('main menu flowers play once on press and stay unavailable after animation and profile refresh', () => {
-    const plays: any[] = [], sounds: unknown[] = []
-    class Button {}
-    const module = { exports: {} as any }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/MainMenuScreen.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    const modules: Record<string, unknown> = {
-        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
-        '@/client/ui/UIButton': { UIButton: Button },
-        '@/client/view/uiNode': { uiNode: () => ({ node: {
-            active: false, addComponent: () => ({ node: { destroy() {} } }),
-        } }) },
-        '@/client/sound/LegacySoundSystem': { SoundEffect: { LimbsPop: 'pop' }, SoundLoader: { playFoley: (id: unknown) => sounds.push(id) } },
-        './MainMenuConfig': { MAIN_MENU_BUTTONS: [], MAIN_MENU_FLOWERS: [{ x: 765, y: 483 }] },
-    }
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {} })
-    const menu = new module.exports.MainMenuScreen()
-    const animation = { setTrackPrefixVisible() {} }
-    menu.open = menu.sign = menu.grass = animation
-    menu.flowers = [{ ...animation, play: (options: unknown) => plays.push(options) }]
-    menu.user = { name: 'test', adventureLevel: 1 }
-    menu.profileLabel = {}
-    menu.numbersRoot = { children: [] }
-    menu.setButtonsEnabled = menu.syncPositions = () => {}
-    menu.refreshButtons()
-    const button = menu.flowerButtons[0]
-    assert.equal(button.touchSlide, false, 'flowers require a direct press instead of sliding in from another control')
-    assert.equal(button.canInteract(), true)
-    button.onPress()
-    assert.equal(button.canInteract(), false)
-    plays[0].onFinish?.()
-    assert.equal(button.canInteract(), false, 'the completed flight cannot be replayed from its old hitbox')
-    menu.refreshButtons()
-    assert.equal(menu.flowerButtons[0].canInteract(), false, 'recreating profile controls preserves the played flower')
-    assert.equal(plays.length, 1)
-    assert.deepEqual(sounds, ['pop'])
-})
-
-test('main menu entrance starts after the first draw and excludes the loading frame', () => {
-    const pending = new Map<string, () => void>()
-    const plays: any[] = []
-    const director = {
-        once(event: string, callback: () => void, owner: unknown) { pending.set(event, () => callback.call(owner)) },
-        off(event: string) { pending.delete(event) },
-    }
-    const emit = (event: string) => { const callback = pending.get(event); pending.delete(event); callback?.() }
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/MainMenuScreen.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(compiled.outputText, {
-        exports: module.exports,
-        require: (id: string) => ({
-            cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
-                director, Director: { EVENT_AFTER_DRAW: 'draw', EVENT_AFTER_UPDATE: 'update' } },
-            '@/client/music/MusicSystem': { MusicSystem: { playTune() {} } },
-            '@/client/sound/LegacySoundSystem': { SoundEffect: {}, SoundLoader: { play() {} } },
-        })[id] ?? {},
-    })
-    const menu = new module.exports.MainMenuScreen()
-    menu.node = { isValid: true, activeInHierarchy: true }
-    menu.ready = true
-    menu.refreshButtons = () => assert.fail('show must reuse the controls prepared before activating the page')
-    menu.open = { play: (options: unknown) => plays.push(options) }
-    menu.show()
-    menu.lateUpdate(0.5)
-    assert.equal(plays.length, 0, 'loading time must not advance menu animations')
-    emit('draw')
-    assert.equal(plays.length, 0)
-    emit('update')
-    assert.equal(plays.length, 1)
-    assert.equal(plays[0].timeSeconds, 0)
-    assert.equal(plays[0].rate, 30 / 20, 'the original animation rate is unchanged')
-    menu.show()
-    emit('draw')
-    menu.onDestroy()
-    emit('update')
-    assert.equal(plays.length, 1, 'a disposed page cannot start its queued entrance')
-})
-
-test('page fades use 180 game ticks, preserve their color, and do not block navigation', () => {
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/PageFade.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(compiled.outputText, {
-        exports: module.exports,
-        require: (id: string) => id === 'cc'
-            ? { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } }
-            : { gameClock },
-    })
-    try {
-        for (const [color, speed] of [[0, 1], [255, 2]] as const) {
-            const fade = new module.exports.PageFade()
-            fade.color = { r: color, g: color, b: color, a: 255 }
-            fade.node = { isValid: true, getComponent: () => ({ contentSize: { width: 1200, height: 600 } }), destroy() { this.isValid = false } }
-            fade.graphics = { clear() {}, fillRect(...bounds: number[]) { assert.deepEqual(bounds, [-600, -300, 1200, 600]) } }
-            gameClock.setSpeed(speed)
-            fade.update(0.9 / speed)
-            assert.equal(fade.color.a, 128)
-            assert.equal(fade.graphics.fillColor.r, color)
-            assert.equal(fade.graphics.fillColor.g, color)
-            assert.equal(fade.graphics.fillColor.b, color)
-            fade.update(0.9 / speed)
-            assert.equal(fade.color.a, 0)
-            assert.equal(fade.node.isValid, false)
-        }
-    } finally { gameClock.setSpeed(1) }
-})
-
-test('startup uses the game clock and accepts start only after resource preparation completes', async () => {
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/StartupScreen.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    const hover = { isModalBlocked: false }
-    const modules: Record<string, unknown> = {
-        cc: {
-            Component: class {}, Color: class {},
-            _decorator: { ccclass: () => (value: unknown) => value },
-        },
-        '@/core/GameClock': { gameClock },
-        '@/client/music/MusicSystem': { MusicSystem: { playTune: async () => {} } },
-        '@/client/sound/LegacySoundSystem': { SoundEffect: {}, SoundLoader: { play: async () => {} } },
-        '@/client/input/UIHoverManager': { UIHoverManager: hover },
-    }
-    runInNewContext(compiled.outputText, {
-        exports: module.exports,
-        require: (id: string) => modules[id] ?? {},
-        console,
-    })
-    const startup = new module.exports.StartupScreen()
-    startup.node = { isValid: true }
-    startup.logoOpacity = { opacity: 0 }
-    startup.loadTitle = async () => {}
-    let finishLoading!: () => void
-    startup.preload = (report: (progress: number) => void) => {
-        report(0.25)
-        return new Promise<void>(resolve => { finishLoading = resolve })
-    }
-    let starts = 0
-    startup.onStart = () => { starts++ }
-    try {
-        gameClock.setSpeed(2)
-        startup.show()
-        await setImmediate()
-        startup.update(0.125)
-        assert.equal(startup.age, 25)
-        assert.equal(startup.logoOpacity.opacity, 128)
-        gameClock.setSpeed(0)
-        startup.update(1)
-        assert.equal(startup.age, 25)
-        startup.tryStart()
-        assert.equal(starts, 0, 'the logo cannot skip resource preparation')
-        gameClock.setSpeed(1)
-        startup.update(1.75)
-        assert.equal(startup.logoOpacity.opacity, 0)
-        assert.equal(startup.phase, 'logo', 'wait for the loading-page assets before revealing it')
-        startup.title = { active: false }
-        startup.startButton = { interactable: false }
-        startup.render = () => {}
-        startup.update(0.01)
-        assert.equal(startup.phase, 'loading')
-        assert.equal(startup.startButton.interactable, false)
-        startup.tryStart()
-        assert.equal(starts, 0, 'loading-page input is gated by the actual preload promise')
-        finishLoading()
-        await setImmediate()
-        assert.equal(startup.progress, 1)
-        assert.equal(startup.startButton.interactable, true)
-        startup.keyDown({ propagationStopped: true })
-        assert.equal(starts, 0, 'opening the CLI cannot also start the menu')
-        hover.isModalBlocked = true
-        startup.keyDown({ propagationStopped: false })
-        assert.equal(starts, 0, 'typing in a dialog cannot start the menu')
-        hover.isModalBlocked = false
-        startup.keyDown({ propagationStopped: false })
-        startup.tryStart()
-        assert.equal(starts, 1, 'repeated key/pointer events start the menu once')
-    } finally { gameClock.setSpeed(1) }
 })

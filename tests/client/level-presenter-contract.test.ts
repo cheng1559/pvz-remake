@@ -19,7 +19,7 @@ test('Adventure 1-1 presentation waits for entity creation and redraws restored 
     assert.match(entities, /async snapshot\(\)[^{]*\{\s*await Promise\.all\(this\.creationTasks\.values\(\)\)/)
     assert.match(view, /const \[entities, particles\] = await Promise\.all\(\[\s*this\.entityRenderer\.snapshot\(\),\s*this\.particles\.snapshot\(\)/)
     assert.match(particles, /await Promise\.all\(players\.map\(player => player\.whenReady\(\)\)\)/)
-    assert.match(particles, /name: 'ParticleSystem',\s*parent,/)
+    assert.match(particles, /ParticlePlayer\.restore\(\{ parent, snapshot: snapshot\.playback/)
     assert.match(view, /this\.end\.sync\(snapshot, events\)\s*for \(const item of snapshot\.items\) this\.end\.syncAward\(item, snapshot\.levelId\)/)
     assert.match(showcase, /const level = await this\.view\.snapshot\(/)
     assert.match(showcase, /this\.snapshotting = true\s*this\.input\.suspend\(\)\s*try \{/)

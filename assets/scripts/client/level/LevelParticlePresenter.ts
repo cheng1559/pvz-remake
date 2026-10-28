@@ -1,18 +1,13 @@
 import { Node, Vec3 } from 'cc'
-import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { uiNode } from '@/client/view/uiNode'
-import { TodParticleSystem } from '@/core/Particle'
 import type { LevelParticleOwnerSnapshot, LevelParticleSnapshot } from './LevelPresentationSnapshot'
 import { LevelEntityRenderer } from './LevelEntityRenderer'
 import type { LevelIntro } from './LevelIntro'
 
-type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 type ScreenSlot = Extract<LevelParticleOwnerSnapshot, { kind: 'screen' }>['slot']
 
 export class LevelParticlePresenter {
     constructor(
-        private readonly content: LoadedContent,
         private readonly root: Node,
         private readonly screenParents: Map<ScreenSlot, Node>,
         private readonly entities: LevelEntityRenderer,
@@ -21,25 +16,18 @@ export class LevelParticlePresenter {
 
     async snapshot(): Promise<LevelParticleSnapshot[]> {
         const result: LevelParticleSnapshot[] = []
-        let instanceId = 1
         const players = this.root.getComponentsInChildren(ParticlePlayer)
         await Promise.all(players.map(player => player.whenReady()))
         for (const player of players) {
+            if (!player.node?.isValid || !player.live) continue
             const owner = this.owner(player.node)
-            if (owner) result.push({ instanceId: instanceId++, backend: 'particle', owner, playback: player.snapshot() })
-        }
-        for (const player of this.root.getComponentsInChildren(TodParticleSystem)) {
-            const owner = this.owner(player.node)
-            if (owner) result.push({ instanceId: instanceId++, backend: 'tod', owner, playback: player.snapshot() })
+            if (owner) result.push({ instanceId: result.length + 1, owner, playback: player.snapshot() })
         }
         return result
     }
 
     async restore(snapshots: LevelParticleSnapshot[]): Promise<void> {
-        const nodes = new Set<Node>()
-        for (const player of this.root.getComponentsInChildren(ParticlePlayer)) nodes.add(player.node)
-        for (const player of this.root.getComponentsInChildren(TodParticleSystem)) nodes.add(player.node)
-        for (const node of nodes) if (node.isValid) node.destroy()
+        for (const player of this.root.getComponentsInChildren(ParticlePlayer)) if (player.node.isValid) player.node.destroy()
         for (const snapshot of snapshots) {
             const parent = snapshot.owner.kind === 'entity'
                 ? this.entities.particleParent(snapshot.owner)
@@ -47,21 +35,9 @@ export class LevelParticlePresenter {
                     ? this.screenParents.get(snapshot.owner.slot) ?? null
                     : this.intro.particleParent(snapshot.owner.slot)
             if (!parent?.isValid) continue
-            if (snapshot.backend === 'tod') {
-                TodParticleSystem.restore({
-                    parent, snapshot: snapshot.playback,
-                    x: snapshot.owner.x, y: snapshot.owner.y, z: snapshot.owner.z,
-                })
-                continue
-            }
-            const node = uiNode({
-                name: 'ParticleSystem',
-                parent,
-                position: { x: snapshot.owner.x, y: snapshot.owner.y, z: snapshot.owner.z },
-            }).node
-            const player = node.addComponent(ParticlePlayer)
-            await player.load(snapshot.playback.id, this.content.registry, this.content.loader)
-            player.restore(snapshot.playback)
+            const player = ParticlePlayer.restore({ parent, snapshot: snapshot.playback,
+                x: snapshot.owner.x, y: snapshot.owner.y, z: snapshot.owner.z })
+            await player.whenReady()
         }
     }
 

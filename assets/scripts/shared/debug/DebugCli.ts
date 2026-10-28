@@ -21,7 +21,7 @@ const builtins: CommandSpec[] = [
     { name: 'level', parameters: ['{level}'], minimum: 1 },
     { name: 'gamespeed', parameters: ['{0-10}'], minimum: 1 },
     ...['music', 'sfx'].map(name => ({ name, parameters: ['{0-100}'], minimum: 1 })),
-    ...['hotkeys', 'haptics', 'cooldown', 'suncost', 'sunspawning', 'hitboxes', 'background', 'mobile', 'fullscreen'].map(name => ({ name, parameters: ['{enabled}'], minimum: 1, values: { 0: bool } })),
+    ...['hotkeys', 'haptics', 'cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'fps', 'hitboxes', 'background', 'mobile', 'fullscreen'].map(name => ({ name, parameters: ['{enabled}'], minimum: 1, values: { 0: bool } })),
     { name: 'seedstyle', parameters: ['{standard|rendered|tilted}'], minimum: 1, values: { 0: ['standard', 'rendered', 'tilted'] } },
     { name: 'mod', parameters: [], minimum: 0 },
     { name: 'perf', parameters: ['{plants|zombies|particles|sfx|logic}', '{enabled}'], minimum: 2, values: { 0: ['plants', 'zombies', 'particles', 'sfx', 'logic'], 1: bool } },

@@ -12,9 +12,11 @@
 
 选卡目录全局共用：独立的 `gameplay/seed-catalog.json` 按数组顺序列出种子 ID，种子定义不再包含目录属性；保龄球等特殊种子不在目录中。Mod 注册的玩法数据可通过顶层 `seedCatalog` 数组追加自身命名空间的种子 ID。关卡通过 `seedBankSlots` 开启选卡并指定携带数量，不再配置候选池；未开启选卡时，`seedPackets` 仍表示固定种子栏。`server/seedChooser.ts` 统一生成目录并校验选择、移除和确认，顺序与初始冷却随服务端存档保存。`LevelSeedChooser` 按服务端目录顺序排卡，不使用预览图编号决定位置，只负责卡片飞行、补位、面板和提示；演出与全局时钟一致。测试入口为 `/level pvz:seed-chooser-test`。
 
-图鉴首页和详情已接入全部 49 种植物、26 种僵尸的 Reanim 展示动画，包含独立头部、眨眼、旗帜、装备及僵尸博士驾驶员；左侧缩略图沿用原版静态展示。`AlmanacEntityView` 只负责动画播放和裁剪，不创建后端实体，不实现攻击、产出、移动或受伤逻辑。全部动画使用全局时钟。资源配置由 `python tools/build_pvz_base.py --almanac-only --raw-root <raw目录>` 生成，完整构建也会包含这些资源。
+图鉴首页和详情已接入全部 49 种植物、26 种僵尸的 Reanim 展示动画，包含独立头部、眨眼、旗帜、装备及僵尸博士驾驶员；左侧缩略图沿用原版静态展示。`AlmanacEntityView` 只负责动画播放和裁剪，不创建后端实体，不实现攻击、产出、移动或受伤逻辑。全部动画使用全局时钟。资源配置由 `npm run build:content -- --pak /path/to/main.pak` 生成，完整构建也会包含这些资源。
 
 主场景挂载 `app/GameApp.ts`，协调菜单页面，并通过 `app/LevelController.ts` 启动 `LocalIntegratedGame`。战斗逻辑在 `server` 中运行，客户端处理协议快照和事件。`server`、`shared`、`ecs` 不应引入引擎依赖。
+
+本地战斗通道的服务端响应通过 `copyServerPacket` 在一次遍历中检查 JSON 安全性并深拷贝，再做协议结构校验；避免每帧安全扫描后再次 JSON 序列化和解析。嵌套 Mod 状态、扩展数据和事件同样复制、校验，客户端修改副本不会影响服务端或其他快照。客户端请求、外部协议解析与存档格式保持原有规则。
 
 菜单数据按 `screens → client/api/MenuApi → MenuTransport → server/menu/MenuService` 流转，`shared/menu` 定义请求和响应 DTO。后端负责用户档案与名称校验、商店目录／价格／库存／购买、挑战成绩、图鉴条目、成就条目／解锁状态和设置持久化。页面只渲染 API 返回的数据、提交 ID 和操作，不导入仓库或修改档案；确认购买时由后端重新校验当前用户、价格、库存和余额。请求与响应经过 JSON 往返，前端修改副本不会影响后端状态。
 
@@ -24,17 +26,17 @@
 
 当前接通冒险 1-1 至 1-10。Debug 和 Release 构建均可按 `/` 打开调试 CLI；移动模式双击右下角打开，命令见 [Debug CLI](DEBUG_CLI.zh-CN.md)。主菜单已使用原版图片按钮和 Reanim 入场动画，Options 已接通设置与游戏内操作，图鉴和商店已接入内容与交互；2-1 起的后续关卡及其他模式玩法尚未实现。迁移行为时可参考工作区的 `pvz-remake` 仓库。
 
-`StartupScreen` 自动播放 PopCap Logo 的 200 tick 淡入停留淡出，再进入标题／加载页：标题下落、草皮卷展开，在原版五个进度点播放新版 `ReanimPlayer` 小花／僵尸头动画和音效。计时使用全局时钟的 100Hz 游戏 tick。进度来自主菜单图片和动画的实际准备，预加载的主菜单保持隐藏，点击进入时复用并开始入场。资源全部就绪后，加载条内按按钮规则响应左右键，背景按下、触摸或任意键也可进入；返回标题页不重播 PopCap Logo。新增动画可用 `python tools/build_pvz_base.py --startup-only --raw-root <raw目录>` 单独生成，再重新打包内置 ZIP。
+`StartupScreen` 自动播放 PopCap Logo 的 200 tick 淡入停留淡出，再进入标题／加载页：标题下落、草皮卷展开，在原版五个进度点播放新版 `ReanimPlayer` 小花／僵尸头动画和音效。计时使用全局时钟的 100Hz 游戏 tick。进度来自主菜单图片和动画的实际准备，预加载的主菜单保持隐藏，点击进入时复用并开始入场。资源全部就绪后，加载条内按按钮规则响应左右键，背景按下、触摸或任意键也可进入；返回标题页不重播 PopCap Logo。新增动画可用 `npm run build:content -- --pak /path/to/main.pak` 单独生成，再重新打包内置 ZIP。
 
 Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览复用 `EntityDisplay` 的内容注册表；`ReanimRepository` 按注册表共享动画数据与贴图，失败后可重试。资源已在引擎缓存时直接读取，图鉴页面等待头像与详情的首帧就绪后再显示。动画节点仍随页面创建和销毁，不常驻整套图鉴。
 
-音效和音乐统一使用 MP3，沿用现有 `copy_sounds.py`／`convert_music.py` 转换流程，兼容 Web、iOS、macOS、Windows 和 Android 的音频加载器。旧工作区可执行 `python3 tools/compress_audio.py` 将导入的 WAV 转为 MP3，保留 UUID、原声道和资源路径；PCM 原件备份到不参与打包的 `tools/raw/audio-pcm`。音乐使用 LAME VBR q2，音效使用 q4，采样率统一为 44.1kHz；动态鼓点各轨不裁剪静音、不单独归一化，循环与节拍数据保持不变。压缩减少下载和包体大小，解码后的 PCM 内存不会按同样比例减少。
+音效和音乐统一使用 MP3，沿用现有 `tools/pvz/audio.py`／`tools/pvz/music/convert.py` 转换流程，兼容 Web、iOS、macOS、Windows 和 Android 的音频加载器。旧工作区可执行 `python3 -m tools.resources.compress_audio` 将导入的 WAV 转为 MP3，保留 UUID、原声道和资源路径；PCM 原件备份到不参与打包的 `tools/raw/audio-pcm`。音乐使用 LAME VBR q2，音效使用 q4，采样率统一为 44.1kHz；动态鼓点各轨不裁剪静音、不单独归一化，循环与节拍数据保持不变。压缩减少下载和包体大小，解码后的 PCM 内存不会按同样比例减少。
 
 关卡触摸种植沿用旧版 `pvz-remake`：轻点种子包保留选中，拖出后显示植物预览和行列辅助线，松手提交种植；拖回原种子包或落点无效则取消，也可直接点选另一张可用卡。`LevelInputPresenter` 捕获同一根手指的完整操作，暂停时清理；滑动收集按每 24px 采样，选卡高亮复用 `SeedPacketView` 的移动模式，仍调用现有后端指令。
 
 页面不再显示临时黑色标题条。`MenuPages.heading` 声明原版标题的字体、基线和颜色，文案从 `lawnstrings` 读取；商店使用原版招牌。`ChallengeScreen` 绘制 Mini-games／Puzzle／Survival 的 20／20／11 个缩略图按钮和档案奖杯计数，复用 `UI.button` 的捕获、hover 与按下状态，点击尚未接通的模式显示未开放提示。`MenuPageControls` 提供花园切换／商店入口和成就返回按钮；领奖页使用原版按钮贴图，目前仍提供重玩 1-1。
 
-`AlmanacScreen` 提供植物种子包、僵尸静态缩略图、条目选择、详情卡、费用、冷却说明和彩色位图介绍。`AlmanacEntityView` 播放 49 种植物和 26 种僵尸的详情动画，不创建战斗实体；部件组装通过 `EntityDisplay` 与种子包静态姿态复用。绘制偏移、缩放和阴影对应原版 `Plant::UpdateReanim`／`Zombie::GetDrawPos`；蹦极绳索使用原贴图随身体挂点移动，计时接全局时钟。资源用 `python tools/build_pvz_base.py --almanac-only --raw-root <raw目录>` 生成。`AlmanacText` 保留原文格式标签，在 `UI.scroll` 的内容容器中排版；通用的 `UIScroll` 和 `ScrollGesture` 复用上一版 `pvz-remake` TypeScript 的滚轮、滑块拖动和移动端触摸滚动，惯性使用全局时钟。`StoreScreen` 提供汽车、招牌入场、四页货架、悬停说明、金币和 0.5 秒车门翻页，动画使用全局时钟。`server/menu/StoreCatalog` 根据当前档案的进度和购买槽位计算开放条件、价格、库存和确认购买，金币沿用原版单位（存档的 1 金币显示为 $10）；API 确认时重新读取档案后扣款，在后端保存。戴夫动画暂不创建；购买道具在战斗内的具体效果由对应系统接入。
+`AlmanacScreen` 提供植物种子包、僵尸静态缩略图、条目选择、详情卡、费用、冷却说明和彩色位图介绍。`AlmanacEntityView` 播放 49 种植物和 26 种僵尸的详情动画，不创建战斗实体；部件组装通过 `EntityDisplay` 与种子包静态姿态复用。绘制偏移、缩放和阴影对应原版 `Plant::UpdateReanim`／`Zombie::GetDrawPos`；蹦极绳索使用原贴图随身体挂点移动，计时接全局时钟。资源用 `npm run build:content -- --pak /path/to/main.pak` 生成。`AlmanacText` 保留原文格式标签，在 `UI.scroll` 的内容容器中排版；通用的 `UIScroll` 和 `ScrollGesture` 复用上一版 `pvz-remake` TypeScript 的滚轮、滑块拖动和移动端触摸滚动，惯性使用全局时钟。`StoreScreen` 提供汽车、招牌入场、四页货架、悬停说明、金币和 0.5 秒车门翻页，动画使用全局时钟。`server/menu/StoreCatalog` 根据当前档案的进度和购买槽位计算开放条件、价格、库存和确认购买，金币沿用原版单位（存档的 1 金币显示为 $10）；API 确认时重新读取档案后扣款，在后端保存。戴夫动画暂不创建；购买道具在战斗内的具体效果由对应系统接入。
 
 `AchievementScreen` 进入时通过 `getAchievements()` 一次读取 21 条定义和当前用户的存档解锁标记，`server/menu/AchievementCatalog` 保留上一版标记／图标的索引顺序。页面沿用两列坐标、70px 图集单元的 0.8 倍图标、绿色标题、位图换行说明，以及已解锁／未解锁图标的 255／32 透明度。复用 `UIScroll` 实现原滚轮每步 435px／0.35 秒、More／Top 每次 230px、触摸惯性和方向键每次 15px，滚动动画接全局时钟。地下平铺背景和返回按钮随内容移动；滚动不请求数据，页面也不授予成就。
 
@@ -46,9 +48,9 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 ## 植物与僵尸
 
-玩法配置按类别拆分在 `tools/content/pvz-base/gameplay/definitions/`：`plants.json`、`zombies.json`、`seeds.json` 等；`gameplay/settings.json` 保存全局默认参数，根目录 `content.json` 索引所有分类文件；打包时和 Mod 一样合并为 `assets/gameplay.json`，不增加资源请求。植物和僵尸的数值与 PvZ-Portable 和上一版一致。植物最多带一种能力：`shooter`（射手）、`producer`（向日葵）、`fuse`（樱桃炸弹，100 tick 后 3x3 烧焦）、`mine`（土豆雷，1500 tick 出土、106 tick 升起，炸 1800 且不留尸体）、`chomper`（大嘴花，70 tick 咬合、吞下后消化 4000 tick），没有能力的植物只阻挡（坚果墙）；`deathExplosion` 让爆炸坚果被吃掉时爆炸。`server/plants/abilities.ts` 的 `pvz:plant-abilities` 系统按 `Plant.ability` 状态推进，客户端 `client/plants` 下的视图按该状态切换动画，并负责眨眼、裂纹和土豆雷红灯。
+玩法配置按类别拆分在 `mods/pvz-base/gameplay/definitions/`：`plants.json`、`zombies.json`、`seeds.json` 等；`gameplay/settings.json` 保存全局默认参数，根目录 `content.json` 索引所有分类文件；打包时和 Mod 一样合并为 `assets/gameplay.json`，不增加资源请求。植物和僵尸的数值与 PvZ-Portable 和上一版一致。植物最多带一种能力：`shooter`（射手）、`producer`（向日葵）、`fuse`（樱桃炸弹，100 tick 后 3x3 烧焦）、`mine`（土豆雷，1500 tick 出土、106 tick 升起，炸 1800 且不留尸体）、`chomper`（大嘴花，70 tick 咬合、吞下后消化 4000 tick），没有能力的植物只阻挡（坚果墙）；`deathExplosion` 让爆炸坚果被吃掉时爆炸。`server/plants/abilities.ts` 的 `pvz:plant-abilities` 系统按 `Plant.ability` 状态推进，客户端 `client/plants` 下的视图按该状态切换动画，并负责眨眼、裂纹和土豆雷红灯。
 
-僵尸的 `helm` 先吸收伤害（路障 370、铁桶 1100），耗尽时发出 `zombieHelmDropped`；`gait` 引用共用步态表，提供走路地面轨迹、啃食与死亡帧数；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `python3 tools/build_pvz_base.py --plants-zombies-only --raw-root <raw目录>` 合并进现有转换输出，同步玩法数据并重新打包内置 ZIP。
+僵尸的 `helm` 先吸收伤害（路障 370、铁桶 1100），耗尽时发出 `zombieHelmDropped`；`gait` 引用共用步态表，提供走路地面轨迹、啃食与死亡帧数；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `npm run build:content -- --pak /path/to/main.pak` 合并进现有转换输出，同步玩法数据并重新打包内置 ZIP。
 
 ## 服务端关卡结构
 
@@ -56,7 +58,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 战斗逻辑按职责组织：`plants/shooter.ts` 处理射击，`plants/production.ts` 处理植物产出，`plants/abilities.ts` 推进特殊能力，`plants/damage.ts` 处理植物被吃与死亡爆炸；`zombies/system.ts` 调度僵尸生命周期，`animation.ts` 计算地面轨迹与动画时间，`damage.ts` 处理受伤与死亡，`poleVault.ts` 实现撑杆跳，`flag.ts` 处理旗帜掉落，`spawn.ts` 共用出生规则。`projectiles.ts` 处理子弹，`explosions.ts` 处理范围爆炸，`collision.ts` 只提供几何计算。模块直接导入各自依赖，不保留统一转发入口；tick 阶段、系统 ID 和 Mod 调度仍由 `IntegratedGameServer` 管理；`GameplayRegistry` 只保留行为注册表和 JSON 组件存档。
 
-`server/tutorials/index.ts` 按关卡定义的 `tutorial` ID 选择脚本，统一接收选种、取消、种植、冷却完成和收集阳光回调；`PlantingTutorial.ts` 与 `SunflowerTutorial.ts` 只保留对应的特殊引导。没有教程脚本的关卡直接使用通用流程。普通关卡通过 `tools/content/pvz-base/gameplay/levels.json` 配置行数、初始阳光、种子、波次和奖励，无需新增按关卡编号命名的服务端文件。新增特殊教程时只登记教程脚本，主服务器不增加关卡分支。
+`server/tutorials/index.ts` 按关卡定义的 `tutorial` ID 选择脚本，统一接收选种、取消、种植、冷却完成和收集阳光回调；`PlantingTutorial.ts` 与 `SunflowerTutorial.ts` 只保留对应的特殊引导。没有教程脚本的关卡直接使用通用流程。普通关卡通过 `mods/pvz-base/gameplay/levels.json` 配置行数、初始阳光、种子、波次和奖励，无需新增按关卡编号命名的服务端文件。新增特殊教程时只登记教程脚本，主服务器不增加关卡分支。
 
 ## 关卡展示结构
 
@@ -64,7 +66,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 `LevelGameOverPresenter` 使用失败后的前 150 tick，让获胜僵尸保持可见并从当前行走到门口，再衔接进屋行走和镜头移动。靠近门口时保留在门框前方的普通实体层，进入门口后才转入遮挡层；撑杆僵尸等越界位置已在门后方的对象，会在靠近过程中平滑移动到门口裁剪边缘再进入。`ZombieView` 连续推进两段动作的步态，不重新开始动画；服务端快照保持冻结。失败演出仍持续 1100 tick，音效时序沿用原流程。
 
-`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`tools/content/pvz-base/presentation/definitions/` 按类别维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，根目录 `tools/content/pvz-base/content.json` 和 Mod 使用相同的分类索引，打包时合并生成归档内的 `assets/presentation.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前安装了 1-1 至 1-10 内容。
+`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`mods/pvz-base/presentation/definitions/` 按类别维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，根目录 `mods/pvz-base/content.json` 和 Mod 使用相同的分类索引，打包时合并生成归档内的 `assets/presentation.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前安装了 1-1 至 1-10 内容。
 
 客户端存档统一写入 `level` 字段，读取时兼容原 `adventure11` 字段；开场专属的状态校验放在各自的实现中。共用关卡布局为 `assets/resources/ui/level.prefab`，资源 ID 为 `pvz:level`，保留原 Prefab 和脚本 UUID。`client/showcase` 仅保留独立资源预览探针。
 
@@ -119,7 +121,7 @@ ui.button(parent, {
 })
 ```
 
-图片通过现有 `SpriteLoader.load()` 加载。缺失状态图回退到普通图，按下优先回退到悬停图；缺少禁用图时自动半透明。`font`、`color`、`pressOffset: [x, y]` 可覆盖文字和按下偏移，`pressSound`／`clickSound` 传 `null` 关闭对应音效，`rightClickTriggers: false` 关闭右键触发，`rightClickPressesVisual: false` 保留右键触发但不显示按下效果（图鉴底部按钮默认如此）。
+图片通过现有 `modResources.asset(id, SpriteFrame)` 加载。缺失状态图回退到普通图，按下优先回退到悬停图；缺少禁用图时自动半透明。`font`、`color`、`pressOffset: [x, y]` 可覆盖文字和按下偏移，`pressSound`／`clickSound` 传 `null` 关闭对应音效，`rightClickTriggers: false` 关闭右键触发，`rightClickPressesVisual: false` 保留右键触发但不显示按下效果（图鉴底部按钮默认如此）。
 
 自定义图片按钮可用 `imageBox: { x, y, width, height }` 将贴图布局与命中区域分开，`hoverSound` 设置悬停音效。主菜单底部按钮用此接口保留原版较大的交互区域，图片保持原始大小。
 
@@ -135,17 +137,16 @@ Options 保留旧版位置和操作：音量实时保存（音效上限为 0.65�
 
 ## 资源
 
-转换中间产物位于 `tools/generated/pvz-base` 和 `tools/generated/resources`，运行时只加载生成的 `assets/resources/base.zip`。基础包与外部资源包使用相同的 `manifest.json / content.json` 和资源解码缓存；仅引导场景、布局 Prefab 和编译 shader 保留在 Cocos 资源中。
+`npm run build:content -- --pak /path/to/main.pak` 将原版 PAK 解包到临时目录，资源按 `images`、`fonts`、`audio`、`reanim`、`particles`、`music`、`json`、`text`、`prefabs` 直接转换到 `mods/pvz-base/assets/`，更新 `content.json` 的显式索引，再调用通用 Mod 打包器。转换资源由 Git 忽略；手工维护的玩法和表现配置保持不变。临时解包目录在成功或失败后都会清理，不再生成旧 Bundle 或持久化的 raw/generated 目录。引导场景、编译 Prefab 和 shader 继续由引擎管理。
 
 将自己游戏副本的 `main.pak` 放到 `tools/main.pak`，在项目根目录执行：
 
 ```sh
-python3 tools/process_pak.py
+npm run build:content -- --pak /path/to/main.pak
 ```
 
-现有管线会准备共用资源并生成基础 ZIP，需要 Python 3.10+、Pillow、ffmpeg 和音乐转换器使用的 libopenmpt 后端。`npm run build:content` 运行转换并打包；`npm run build:base-pack` 直接使用已有转换产物和当前配置源文件重新打包，不重复转换动画。
+完整导入需要 Python 3.10+、Pillow、ffmpeg 和 libopenmpt。`npm run build:content -- --pak /path/to/main.pak` 从原版 PAK 转换并发布内置 ZIP；省略 `--pak` 时默认读取 `tools/main.pak`。日常修改现有 Mod 资源或配置后，执行 `npm run mod:pack -- pvz-base --publish assets/resources/base.zip` 即可，无需重复转换。
 
-只调整主菜单动画时，可执行 `python tools/build_pvz_base.py --main-menu-only`，复用现有转换器更新 13 个菜单片段和引用贴图，保留其他转换输出，再重新打包内置 ZIP。
 
 存档继续检查基础内容 ID、版本、哈希和玩法 Mod。ZIP 和 Mod 共用 `manifest.json`、`content.json`，玩法与表现定义直接由统一索引引用，哈希覆盖默认文件和资源映射；外部表现覆盖不会修改服务端玩法 JSON。
 
@@ -159,7 +160,21 @@ npm run test:server
 npm run build:web:debug
 ```
 
-对改动涉及的关键逻辑优先复用已有测试。除非需要验证实际画面或交互，避免使用浏览器自动化。Windows 和 Android 构建命令仍然保留；Web 验证不代表已通过原生编译或真机检查。
+### 测试规范
+
+- 自动测试主要覆盖核心玩法、存档和恢复、Mod 加载与隔离、客户端与服务端边界，以及关键输入流程。优先验证可观察的行为和必要边界，复用或扩展现有用例，避免重复覆盖和依赖内部实现的断言。
+- 简单、低风险改动采用最小必要验证；动画、布局、文案等细节通常通过针对性的人工检查验证，只有存在重要回归风险时才增加自动测试。不要为每个位置、帧或参数单独建立用例。
+- 日常改动先运行直接相关的测试，必要时执行类型检查；跨模块改动或明确要求完整验证时运行 `npm run test:server`。该命令包含服务端类型检查和 `tests/**/*.test.ts` 的全部测试，无需再重复运行 `typecheck:server`。
+- 例如，单独运行一个测试文件：`npx tsx --tsconfig tsconfig.server.json --test tests/server/save-restore.test.ts`。测试失败时保留有效检查，区分本次引入的问题与已有问题，不通过删除或跳过关键测试掩盖失败。
+- 自动测试、构建和实际运行验证分别报告。画面、交互或平台问题需要时在对应环境检查；原生构建成功不等于已完成真机验证。除非需要验证实际画面或交互，避免使用浏览器自动化。
+
+Windows 和 Android 构建命令仍然保留；Web 验证不代表已通过原生编译或真机检查。
+
+### iOS 性能分析
+
+iOS 禁止 JIT，V8 以解释模式运行，JS 开销远高于桌面，性能结论以真机为准。`PVZ_JS_PROFILE=1 npm run compile:ios:release` 在 Release 构建中打开 V8 调试端口（6086），不改变 `CC_DEBUG`。安装后用 `pymobiledevice3 usbmux forward 16086 6086` 转发端口，再运行 `npx tsx tools/profile/ios.ts http://127.0.0.1:16086 10 /tmp/pvz.cpuprofile` 采样并列出耗时最高的函数。`/level pvz:stress-test` 加 `/fps true` 用于高负载对比。
+
+动画和粒子不再每个部件一个节点：`ReanimPlayer` 把动画的图片放进共享图集页（`AnimationAtlas`），每个实例用一两个 `ReanimBatch` 直接写顶点；只有 `getTrackNode` 用到的部件才建节点，并在该处切开批次以保持绘制顺序。关键帧采样、过渡、附着矩阵、写顶点只在 `native/engine/common/kernel/` 的 C++ 里实现一次：原生平台经 `KernelBindings.cpp` 直接调用（iOS 的 JS 引擎没有 JIT，也就没有 WebAssembly）；Web 和测试使用同一源码编译的 WebAssembly，由 `assets/scripts/shared/kernel/` 统一封装。修改 C++ 后运行 `npm run build:kernel`（需要 Emscripten）重新生成并提交 `binary.ts`，其他构建不需要 Emscripten。粒子统一使用 `shared/content/particle.ts` 的 schemaVersion 3 格式与 `client/particle/ParticlePlayer` 入口。随机数、生成、寿命、场、颜色和变换由同一 C++ 核心计算，每个发射器一个 `ParticleBatch`，直接接收核心生成的四边形；同一帧的多个模拟 tick 一次进入核心，仅渲染最后状态。存档继续保存种子和年龄，通过核心重放恢复，播放器销毁或重新播放时释放核心状态。达到固定生成上限且已无粒子的系统会合并等待到期的 tick，并跳过空渲染，原寿命和存档年龄保持一致。
 
 Debug 构建保留 `pvzPhase4` 关卡调试入口；Mod 开发和安装见 [Mod 说明](MODS.md)。
 
@@ -186,6 +201,6 @@ Debug 构建保留 `pvzPhase4` 关卡调试入口；Mod 开发和安装见 [Mod 
 
 关卡玩法配置中，`tools` 声明可用工具；`conveyor` 声明容量、间距、移动周期、供卡权重和分档生成间隔；`bowling` 只声明种植线；`shovelTutorial` 声明初始植物与首次、重玩、铲除后的对话序列。教程的 `blocksIntro` 阻止入场结束，`blocksStart` 阻止出怪，二者独立。表现配置 `conveyor`、`shovel`、`dave` 保存布局、动画资源、速率和对话表现参数。
 
-玩法 `boards.*.bounds` 决定场地水平边界，僵尸 `dropsFlag` 决定掉旗能力；表现 `boards` 保存背景、音乐和失败场景坐标。粒子的可选剩余时长随快照保存，种子闪光读取 `seedPackets.flash`，恢复不再按特效 ID 分支。商店数据位于 `tools/content/pvz-base/gameplay/store.json`，价格档位、购买条件、库存规则和购买结果均由服务端目录实例执行；应用只负责加载 JSON 并注入后端。
+玩法 `boards.*.bounds` 决定场地水平边界，僵尸 `dropsFlag` 决定掉旗能力；表现 `boards` 保存背景、音乐和失败场景坐标。粒子的可选剩余时长随快照保存，种子闪光读取 `seedPackets.flash`，恢复不再按特效 ID 分支。商店数据位于 `mods/pvz-base/gameplay/store.json`，价格档位、购买条件、库存规则和购买结果均由服务端目录实例执行；应用只负责加载 JSON 并注入后端。
 
-Mod 入口统一为 `register({ host, assets })`，通过 `host.get()` 访问真实宿主模块与注册表，`host.around()`／`host.replace()` 包装实际方法。不再提供系统、页面、动画的专用增强接口。额外 ECS 组件经 `GameplayRegistry.components` 登记后参与世界快照和存档。示例见 [玉米投手 Mod](../mods/corn/README.md) 和 [Mod 文档](MODS.md)。
+Mod 入口统一为 `register({ host, assets })`，通过 `host.get()` 访问真实宿主模块与注册表，`host.around()`／`host.replace()` 包装实际方法。不再提供系统、页面、动画的专用增强接口。额外 ECS 组件经 `GameplayRegistry.components` 登记后参与世界快照和存档。示例见 [Mod 能力示例](../mods/example/README.md) 和 [Mod 文档](MODS.md)。

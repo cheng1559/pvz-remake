@@ -1,16 +1,18 @@
-import { _decorator, Button, Color, Component, input, Input, Mask, Node, Sprite, UITransform, type EventKeyboard, type EventMouse, type EventTouch, type UIOpacity } from 'cc'
+import { modResources } from '@/client/content/ModResources'
+import { modManager } from '@/client/content/ModManager'
+import { waitForPreloadFrame } from '@/client/content/preloadTasks'
+import { _decorator, Button, Color, Component, input, Input, Mask, Node, Sprite, UITransform, type EventKeyboard, type EventMouse, type EventTouch, type UIOpacity, SpriteFrame } from 'cc'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { FontMetricsUtil } from '@/client/font'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UILabel } from '@/client/ui/UILabel'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
-import { SpriteLoader } from '@/core/SpriteLoader'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 
@@ -49,16 +51,29 @@ export class StartupScreen extends Component {
     private complete = false
     private started = false
     private grassX = 0
+    private applyingMods = false
+    private retryMods?: () => void
 
     async initialize(showLogo: boolean, preload: Preload): Promise<void> {
         this.preload = preload
+        this.applyingMods = modManager.hasPendingChanges()
+        showLogo ||= this.applyingMods
         this.age = showLogo ? 0 : 200
-        const background = uiNode({ parent: this.node, size: { width: 800, height: 600 }, graphics: true })
-        background.graphics!.fillColor = Color.BLACK
-        background.graphics!.fillRect(-400, -300, 800, 600)
+        // Cover the whole viewport: menu pages are prepared and drawn once behind this screen.
+        const background = uiNode({ parent: this.node, graphics: true, viewport: true })
+        const fill = () => {
+            const { width, height } = background.transform.contentSize
+            background.graphics!.clear()
+            background.graphics!.fillColor = Color.BLACK
+            background.graphics!.fillRect(-width / 2, -height / 2, width, height)
+        }
+        background.node.on(Node.EventType.SIZE_CHANGED, fill)
+        fill()
         this.content = uiNode({ parent: this.node, position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 } }).node
         if (!showLogo) return
-        const frame = await SpriteLoader.load('popcap_logo')
+        const frame = this.applyingMods
+            ? await modResources.baseAsset('pvz:popcap_logo', SpriteFrame)
+            : await modResources.asset('popcap_logo', SpriteFrame)
         if (!frame) throw new Error('Missing PopCap logo')
         if (!this.node?.isValid) return
         const logo = uiNode({
@@ -76,6 +91,19 @@ export class StartupScreen extends Component {
         // Let the menu commit first, including disposing any menu behind a returned title page.
         void Promise.resolve().then(async () => {
             if (!this.node?.isValid) return
+            while (this.applyingMods && this.age < 50 && this.node?.isValid) await waitForPreloadFrame()
+            while (this.applyingMods && this.node?.isValid) {
+                try {
+                    await modManager.applyPendingChanges(waitForPreloadFrame)
+                    break
+                } catch (error) {
+                    console.error('[Mods] Pending changes failed', error)
+                    await new Promise<void>(resolve => { this.retryMods = resolve })
+                }
+            }
+            if (!this.node?.isValid) return
+            // The logo waits only for Mod installation; loading continues on the title screen.
+            this.applyingMods = false
             void MusicSystem.playTune('title_theme', true)
             await Promise.all([
                 this.loadTitle(),
@@ -110,12 +138,12 @@ export class StartupScreen extends Component {
         const names = ['titlescreen', 'pvz_logo', 'loadbar_dirt', 'loadbar_grass', 'sodrollcap']
         const [ui, frames, base] = await Promise.all([
             UI.load(), Promise.all(names.map(async name => {
-                const frame = await SpriteLoader.load(name)
+                const frame = await modResources.asset(name, SpriteFrame)
                 if (!frame) throw new Error(`Missing startup image: ${name}`)
                 return frame
             })), loader.loadBaseContent(),
             MusicSystem.preloadTune('title_theme'),
-            SoundLoader.load(SoundEffect.LoadingBarFlower), SoundLoader.load(SoundEffect.LoadingBarZombie),
+            SoundSystem.load(SoundEffect.LoadingBarFlower), SoundSystem.load(SoundEffect.LoadingBarZombie),
         ])
         if (!this.node?.isValid) return
         this.ui = ui
@@ -155,7 +183,7 @@ export class StartupScreen extends Component {
         this.startButton = buttonNode.addComponent(UIButton)
         this.startButton.interactable = false
         this.startButton.releaseToNormalOnPressOut = true
-        this.startButton.onPress = () => { void SoundLoader.play(SoundEffect.ButtonClick) }
+        this.startButton.onPress = () => { void SoundSystem.play(SoundEffect.ButtonClick) }
         this.startButton.onClick = () => this.tryStart(false)
         buttonNode.on(Button.EventType.CLICK, () => this.startButton.onClick())
         this.label = ui.label(buttonNode, { text: ui.text('LOADING', 'Loading...'), font: 'profile', color: NORMAL_COLOR })
@@ -179,6 +207,7 @@ export class StartupScreen extends Component {
         if (this.phase === 'done' || this.phase === 'failed') return
         this.age++
         if (this.phase === 'logo') {
+            if (this.applyingMods) { this.age = Math.min(this.age, 100); return }
             if (this.age < 200 || !this.title) return
             if (this.logo) this.logo.active = false
             this.title.active = true
@@ -204,8 +233,8 @@ export class StartupScreen extends Component {
             const player = this.effects[index]
             player.node.active = true
             player.play({ loop: false, rate: 18 / 12, timeSeconds: 0, hideOnFinish: false })
-            void SoundLoader.play(SoundEffect.LoadingBarFlower)
-            if (index === 4) void SoundLoader.play(SoundEffect.LoadingBarZombie)
+            void SoundSystem.play(SoundEffect.LoadingBarFlower)
+            if (index === 4) void SoundSystem.play(SoundEffect.LoadingBarZombie)
         })
         if (this.width >= BAR_WIDTH && this.label.text !== this.ui!.text('CLICK_TO_START')) this.label.text = this.ui!.text('CLICK_TO_START')
     }
@@ -254,9 +283,15 @@ export class StartupScreen extends Component {
     }
 
     private tryStart(playSound = true): void {
+        if (this.retryMods) {
+            const retry = this.retryMods
+            this.retryMods = undefined
+            retry()
+            return
+        }
         if (this.phase !== 'loading' || !this.complete) return
         this.phase = 'done'
-        if (playSound) void SoundLoader.play(SoundEffect.ButtonClick)
+        if (playSound) void SoundSystem.play(SoundEffect.ButtonClick)
         this.onStart()
     }
 }

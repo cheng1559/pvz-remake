@@ -1,5 +1,5 @@
 import { _decorator, Color, Component, UITransform, type Node } from 'cc'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
 import type { UIDialog } from '@/client/ui/UIDialog'
 import type { UIInput } from '@/client/ui/UIInput'
@@ -96,7 +96,7 @@ class DebugCliDialog extends Component {
                 this.field.blur()
                 this.dialog.close(result.ok)
             }
-            void SoundLoader.play(result.ok ? SoundEffect.ButtonClick : SoundEffect.Buzzer)
+            void SoundSystem.play(result.ok ? SoundEffect.ButtonClick : SoundEffect.Buzzer)
         } catch (error) {
             console.error('[Debug CLI]', error)
             if (this.node.isValid) { this.flash = 0.7; this.field.focus() }
@@ -117,6 +117,6 @@ export function showDebugCliDialog(parent: Node, ui: UI, execute: (command: stri
     })
     const cli = dialog.node.addComponent(DebugCliDialog)
     cli.initialize(dialog, ui, execute, catalog)
-    void SoundLoader.play(SoundEffect.GraveButton)
+    void SoundSystem.play(SoundEffect.GraveButton)
     return dialog.result.then(() => cli.result)
 }

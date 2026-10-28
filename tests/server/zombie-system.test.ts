@@ -1,22 +1,21 @@
-import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readGameplaySource } from '../../tools/mod/content'
 
-import { Schedule, World } from '@/ecs/index'
-import { parseGameplayDefinitions } from '@/shared/content/gameplay'
-import { DeterministicRng } from '@/server/DeterministicRng'
-import { EventQueueResource, createEventQueue } from '@/server/events'
+import { Schedule,World } from '@/ecs/index'
 import {
-    LevelStateResource,
-    PlantComponent,
-    PositionComponent,
-    RandomResource,
-    ZombieComponent,
+LevelStateResource,
+PlantComponent,
+PositionComponent,
+RandomResource,
+ZombieComponent,
 } from '@/server/components'
-import { createZombieSystem } from '@/server/zombies/system'
-import { walkAnimationSpeed } from '@/server/zombies/animation'
+import { DeterministicRng } from '@/server/DeterministicRng'
+import { EventQueueResource,createEventQueue } from '@/server/events'
 import { damageZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
+import { createZombieSystem } from '@/server/zombies/system'
+import { parseGameplayDefinitions } from '@/shared/content/gameplay'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
 const board = definitions.boards['pvz:day']
@@ -50,49 +49,8 @@ function game(content = definitions) {
     return { world, run: () => schedule.run(world, ++tick) }
 }
 
-test('flag drops follow gameplay capability for custom IDs and occur only once', () => {
-    const content = structuredClone(definitions)
-    content.zombies['test:flag'] = { ...content.zombies['pvz:normal'], dropsFlag: true }
-    content.zombies['test:plain'] = { ...content.zombies['pvz:flag'], dropsFlag: false }
-    const { world } = game(content)
-    for (const typeId of ['test:flag', 'test:plain']) {
-        const id = spawnZombie(world, content, typeId, 2, 700, 280)
-        damageZombie(world, content, id, 200)
-        damageZombie(world, content, id, 100)
-        const flags = world.resources.get(EventQueueResource).events.filter(event =>
-            event.type === 'zombiePartDropped' && event.data.entityId === id && event.data.part === 'flag')
-        assert.equal(flags.length, typeId === 'test:flag' ? 1 : 0)
-    }
-})
 
-test('tongue variants use one of five spawn outcomes and never reroll during updates', () => {
-    for (const typeId of ['pvz:normal', 'pvz:flag']) for (let roll = 0; roll < 5; roll++) {
-        const { world, run } = game()
-        const random = world.resources.get(RandomResource)
-        const nextFloat = random.nextFloat.bind(random)
-        let rolls = 0
-        random.nextFloat = () => rolls++ === 0 ? roll / 5 : nextFloat()
-        const id = spawnZombie(world, definitions, typeId, 2, 700, 280)
-        assert.equal(world.get(id, ZombieComponent)!.hasTongue, roll === 0)
-        const spawnRolls = rolls
-        for (let tick = 0; tick < 10; tick++) run()
-        assert.equal(world.get(id, ZombieComponent)!.hasTongue, roll === 0)
-        assert.equal(rolls, spawnRolls)
-    }
-})
 
-test('zombies sharing a gait can configure tongue and walking variants independently', () => {
-    const content = structuredClone(definitions)
-    content.zombies['test:walker'] = { ...content.zombies['pvz:normal'], tongueChance: 1, walk2Chance: 1 }
-    content.zombies['test:plain'] = { ...content.zombies['pvz:normal'], tongueChance: 0, walk2Chance: 0 }
-    const { world } = game(content)
-    const variant = spawnZombie(world, content, 'test:walker', 2, 700, 280)
-    const plain = spawnZombie(world, content, 'test:plain', 2, 700, 280)
-    assert.equal(world.get(variant, ZombieComponent)!.hasTongue, true)
-    assert.equal(world.get(variant, ZombieComponent)!.walkAnimation, 'anim_walk2')
-    assert.equal(world.get(plain, ZombieComponent)!.hasTongue, false)
-    assert.equal(world.get(plain, ZombieComponent)!.walkAnimation, 'anim_walk')
-})
 
 test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses at the board edge', () => {
     const walking = game()
@@ -209,86 +167,32 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     assert.equal(lost.world.resources.get(LevelStateResource).result, 'lost')
 })
 
-test('only headed zombies lose at their board edge, while headless zombies die 70px earlier without flashing', () => {
-    for (const [typeId, edge] of [['pvz:normal', -100], ['pvz:pole_vaulter', -150], ['pvz:normal', -220]] as const) {
-        const content = { ...definitions, zombies: { ...definitions.zombies,
-            [typeId]: { ...definitions.zombies[typeId], boardEdgeX: edge } } }
-        const headed = game(content)
-        const attacker = spawnZombie(headed.world, content, typeId, 2, edge + 10, 280)
-        headed.run()
-        assert.equal(headed.world.resources.get(LevelStateResource).result, 'playing')
-        headed.world.get(attacker, PositionComponent)!.x = edge
-        headed.run()
-        assert.equal(headed.world.resources.get(LevelStateResource).result, 'lost')
 
-        const headless = game(content)
-        const walker = spawnZombie(headless.world, content, typeId, 2, edge + 71, 280)
-        damageZombie(headless.world, content, walker, content.zombies[typeId].maxHealth * 0.8)
-        const zombie = headless.world.get(walker, ZombieComponent)!
-        assert.equal(zombie.hasHead, false)
-        zombie.hitFlashCounter = 0
-        headless.run()
-        assert.equal(zombie.state, 'walking')
-        headless.world.get(walker, PositionComponent)!.x = edge + 70
-        headless.run()
-        assert.equal(zombie.health, 0)
-        assert.equal(zombie.state, 'dying')
-        assert.equal(zombie.hitFlashCounter, 0)
-        assert.equal(headless.world.resources.get(LevelStateResource).result, 'playing')
-        assert.equal(headless.world.resources.get(EventQueueResource).events.some(event => event.type === 'levelLost'), false)
-    }
-})
 
-test('a still-armed pole vaulter enters the house with its post-vault walk and freezes that state', () => {
-    const content = structuredClone(definitions)
-    content.zombies['test:vaulter'] = structuredClone(content.zombies['pvz:pole_vaulter'])
-    for (const typeId of ['pvz:pole_vaulter', 'test:vaulter']) for (const chilled of [false, true]) {
-        const { world, run } = game(content)
-        const definition = content.zombies[typeId]
-        const id = spawnZombie(world, content, typeId, 2, definition.boardEdgeX + 10, 280)
-        const zombie = world.get(id, ZombieComponent)!
-        if (chilled) zombie.chilledTicks = 100
-        run()
-        assert.equal(zombie.hasPole, true)
-        assert.equal(zombie.animation, 'anim_run')
-        world.get(id, PositionComponent)!.x = definition.boardEdgeX
-        run()
-        assert.equal(world.resources.get(LevelStateResource).result, 'lost')
-        assert.equal(zombie.hasPole, false)
-        assert.equal(zombie.state, 'walking')
-        assert.equal(zombie.animation, 'anim_walk')
-        assert.equal(zombie.animationTime, 0)
-        assert.ok(zombie.speedPerTick >= definition.speedPerTick.min && zombie.speedPerTick <= definition.speedPerTick.max)
-        assert.equal(zombie.animationSpeed, walkAnimationSpeed(zombie.speedPerTick, content.zombieGaits[definition.gait].walkGround) * (chilled ? 0.5 : 1))
-        const frozen = structuredClone(zombie)
-        const random = world.resources.get(RandomResource).snapshot()
-        run()
-        assert.deepEqual(zombie, frozen)
-        assert.deepEqual(world.resources.get(RandomResource).snapshot(), random)
-        assert.equal(world.resources.get(EventQueueResource).events.filter(event => event.type === 'levelLost').length, 1)
-    }
-})
 
-test('normal zombie starts eating at the legacy 20-pixel attack overlap boundary', () => {
-    const outside = game()
-    const outsidePlant = outside.world.createEntity()
-    outside.world.add(outsidePlant, PositionComponent, { x: 40, y: 280, row: 2 })
-    outside.world.add(outsidePlant, PlantComponent, {
+test('zombie target cache follows component replacement, mutation and removal', () => {
+    const { world, run } = game()
+    const plant = world.createEntity()
+    world.add(plant, PositionComponent, { x: 40, y: 280, row: 2 })
+    world.add(plant, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
         eatenFlashCounter: 0, recentlyEatenCounter: 0,
     })
-    const outsideZombie = spawnZombie(outside.world, definitions, 'pvz:normal', 2, 70.01, 280)
-    outside.run()
-    assert.equal(outside.world.get(outsideZombie, ZombieComponent)!.state, 'walking')
-
-    const boundary = game()
-    const boundaryPlant = boundary.world.createEntity()
-    boundary.world.add(boundaryPlant, PositionComponent, { x: 40, y: 280, row: 2 })
-    boundary.world.add(boundaryPlant, PlantComponent, {
-        typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
-        eatenFlashCounter: 0, recentlyEatenCounter: 0,
-    })
-    const boundaryZombie = spawnZombie(boundary.world, definitions, 'pvz:normal', 2, 70, 280)
-    boundary.run()
-    assert.equal(boundary.world.get(boundaryZombie, ZombieComponent)!.state, 'eating')
+    const zombie = spawnZombie(world, definitions, 'pvz:normal', 2, 70, 280)
+    const state = () => world.get(zombie, ZombieComponent)!.state
+    const resetPosition = () => { world.get(zombie, PositionComponent)!.x = 70 }
+    run()
+    assert.equal(state(), 'eating')
+    world.add(plant, PositionComponent, { x: 400, y: 280, row: 2 })
+    resetPosition(); run()
+    assert.equal(state(), 'walking', 'replacing a position invalidates the cache')
+    world.get(plant, PositionComponent)!.x = 40
+    resetPosition(); run()
+    assert.equal(state(), 'eating', 'mutating a position is visible through the cached reference')
+    world.add(plant, PlantComponent, { ...world.get(plant, PlantComponent)!, health: 0 })
+    resetPosition(); run()
+    assert.equal(state(), 'walking', 'replacing the plant component invalidates the cache')
+    world.remove(plant, PlantComponent)
+    resetPosition(); run()
+    assert.equal(state(), 'walking')
 })

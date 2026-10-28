@@ -93,7 +93,7 @@ export function buildGameplayContent(value: unknown, sources: readonly Definitio
 
 export function buildPresentationDefinitions(value: unknown, sources: readonly DefinitionSource[] = []) {
     const base = object(jsonRoundTrip(value), 'presentation definitions')
-    const kinds = ['plants', 'zombies', 'projectiles', 'boards', 'screens']
+    const kinds = ['plants', 'zombies', 'projectiles', 'boards', 'screens', 'levels']
     const registry = new DefinitionRegistry(kinds)
     registry.register('pvz:base', Object.fromEntries(kinds.map(kind => [kind, base[kind] ?? {}])), true)
     for (const source of sources) {

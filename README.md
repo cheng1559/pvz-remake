@@ -20,11 +20,10 @@ Requires the local Cocos CLI and Cocos 4.0.0-alpha.35. Adventure follows the cur
 - `assets/scripts/shared` and `ecs`: protocol, content schemas, channel, and ECS.
 - `assets/scripts/client`: input, rendering, audio, content loading, and shared level presenters.
 - `assets/scripts/core`: particle and sprite utilities still used by the new presentation layer.
-- `tools/content/pvz-base`: authored gameplay and presentation JSON.
-- `tools/generated`: converted images, animations and other packaging inputs.
+- `mods/pvz-base`: gameplay, presentation, categorized runtime assets, and the explicit resource index.
 - `assets/resources/base.zip`: generated builtin content, using the same `manifest.json` and `content.json` format as installed Mods.
 - `tools`: shared resource conversion and Mod tooling.
 
-Builtin content, resource-only Mods and scripted Mods share ZIP validation, decoding, asset caches and resource IDs. All installed packages use `/mod`; source metadata is `manifest.json` and `content.json`. Only the bootstrap scene, level layout prefab and compiled shader remain Cocos assets. Run `npm run build:base-pack` after editing content JSON; `npm run build:content` also rebuilds the builtin ZIP.
+Builtin content, resource-only Mods and scripted Mods share ZIP validation, decoding, asset caches and resource IDs. All installed packages use `/mod`; source metadata is `manifest.json` and `content.json`. Only the bootstrap scene, level layout prefab and compiled shader remain Cocos assets. Run `npm run mod:pack -- pvz-base --publish assets/resources/base.zip` after editing content JSON; `npm run build:content -- --pak /path/to/main.pak` converts directly from the original PAK and rebuilds the builtin ZIP.
 
 See [Development Guide](docs/DEVELOPMENT.md) for resource preparation, validation, and builds. Source code is licensed under [MIT](LICENSE); original game assets retain their respective ownership.

@@ -1,5 +1,7 @@
 import { Camera, Color, Director, director, EffectAsset, isValid, Material, Node, RenderRoot2D, RenderTexture, resources, Sprite, SpriteFrame, UITransform, view, gfx } from 'cc'
 import { getSpriteDensity } from '@/client/content/SpriteDensity'
+import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { KernelBatch } from '@/client/render/KernelBatch'
 import { uiNode } from './uiNode'
 
 const CAPTURE_LAYER = 1 << 19
@@ -35,9 +37,11 @@ export function bakeSprite(source: Node): Promise<Sprite | undefined> {
             }
             visit(source)
             source.active = stage.active = true
-            const sprites = source.getComponentsInChildren(Sprite).filter(sprite => sprite.enabledInHierarchy && sprite.spriteFrame)
+            for (const player of source.getComponentsInChildren(ReanimPlayer)) player.flushPose()
+            const sprites = source.getComponentsInChildren(Sprite).filter(sprite => sprite.enabledInHierarchy && sprite.spriteFrame &&
+                !(sprite instanceof KernelBatch && !sprite.count))
             if (!sprites.length) throw new Error('Cannot composite an empty plant pose')
-            const rects = sprites.map(sprite => sprite.node.getComponent(UITransform)!.getBoundingBoxToWorld())
+            const rects = sprites.map(sprite => sprite instanceof KernelBatch ? sprite.getWorldBounds() : sprite.node.getComponent(UITransform)!.getBoundingBoxToWorld())
             const left = Math.floor(Math.min(...rects.map(rect => rect.x))) - 1
             const bottom = Math.floor(Math.min(...rects.map(rect => rect.y))) - 1
             const width = Math.ceil(Math.max(...rects.map(rect => rect.xMax))) + 1 - left

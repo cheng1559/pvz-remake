@@ -5,6 +5,7 @@ import { plantVisual } from '@/client/plants/definitions'
 import { loadDisplayParts, loadEntityDisplayAssets, resolveEntityDisplay } from '@/client/reanim/EntityDisplay'
 import { uiNode } from '@/client/view/uiNode'
 import { bakeSprite } from '@/client/view/bakeSprite'
+import { KernelBatch } from '@/client/render/KernelBatch'
 import { GameDebugSettings, type SeedPacketStyle } from '@/platform/debug/GameDebugSettings'
 
 const { ccclass } = _decorator
@@ -97,7 +98,10 @@ export class PlantPreview extends Component {
     }
 
     private async finish(root: Node): Promise<void> {
-        if (this.color.a < 255 && !this.composite && root.getComponentsInChildren(Sprite).length > 1) {
+        // A batch draws several images; translucent overlapping images need compositing.
+        for (const player of this.players) player.flushPose()
+        const images = root.getComponentsInChildren(Sprite).reduce((count, sprite) => count + (sprite instanceof KernelBatch ? sprite.count : 1), 0)
+        if (this.color.a < 255 && !this.composite && images > 1) {
             if (!this.compositeReady) {
                 root.active = false
                 const parts = [...root.children]

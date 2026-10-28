@@ -149,10 +149,12 @@ export interface LawnMowerDefinition {
 
 export interface LevelDefinition {
     adventureIndex: number
+    persistent?: boolean
     board: string
     activeRows: number[]
     startingSun: number
     seedPackets: string[]
+    initialPlants?: Array<{ seedId: string; row: number; column: number }>
     /** Enables the shared chooser and sets its carrying capacity; seedPackets is only for a fixed bank. */
     seedBankSlots?: number
     lawnMower: string
@@ -538,7 +540,8 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const source = exactObject(value, [
         'adventureIndex', 'board', 'activeRows', 'startingSun',
         'lawnMower', 'skySun', 'waves', 'tutorial', 'award',
-    ], name, ['nextLevel', 'seedPackets', 'seedBankSlots', 'firstWaveTicks', 'zombiePool', 'bowling', 'conveyor', 'tools', 'shovelTutorial'])
+    ], name, ['nextLevel', 'seedPackets', 'seedBankSlots', 'firstWaveTicks', 'zombiePool', 'bowling', 'conveyor', 'tools', 'shovelTutorial', 'initialPlants', 'persistent'])
+    if (source.persistent !== undefined && typeof source.persistent !== 'boolean') throw new Error(`${name}.persistent must be a boolean`)
     const boardId = qualifiedId(source.board, `${name}.board`)
     const board = reference(boardId, definitions.boards, `${name}.board`)
     const activeRows = array(source.activeRows, `${name}.activeRows`).map((row, index) => {
@@ -585,6 +588,17 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
             conveyor.spawnDelay.some((entry, index, entries) => index > 0 && entry.minPackets <= entries[index - 1].minPackets)) throw new Error(`${name}.conveyor has invalid supply rules`)
         if (conveyor.initialSeed && !conveyor.seeds.some(seed => seed.id === conveyor!.initialSeed)) throw new Error(`${name}.conveyor.initialSeed is not in the supply`)
     }
+    const plantPositions = (value: unknown, field: string) => array(value, field).map((item, index) => {
+        const entryName = `${field}[${index}]`
+        const entry = exactObject(item, ['seedId', 'row', 'column'], entryName)
+        const seedId = qualifiedId(entry.seedId, `${entryName}.seedId`)
+        reference(seedId, definitions.seeds, `${entryName}.seedId`)
+        const row = nonNegativeInteger(entry.row, `${entryName}.row`)
+        const column = nonNegativeInteger(entry.column, `${entryName}.column`)
+        if (!activeRows.includes(row) || column >= board.columns) throw new Error(`${entryName} is outside the lawn`)
+        return { seedId, row, column }
+    })
+    const initialPlants = source.initialPlants === undefined ? undefined : plantPositions(source.initialPlants, `${name}.initialPlants`)
     let shovelTutorial: LevelDefinition['shovelTutorial']
     if (source.shovelTutorial !== undefined) {
         const data = exactObject(source.shovelTutorial, ['opening', 'repeat', 'afterDig', 'introPlants'], `${name}.shovelTutorial`)
@@ -595,15 +609,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         }
         shovelTutorial = {
             opening: dialogue('opening'), repeat: dialogue('repeat'), afterDig: dialogue('afterDig'),
-            introPlants: array(data.introPlants, `${name}.shovelTutorial.introPlants`).map((value, index) => {
-                const entry = exactObject(value, ['seedId', 'row', 'column'], `${name}.shovelTutorial.introPlants[${index}]`)
-                const seedId = qualifiedId(entry.seedId, `${name}.shovelTutorial.introPlants.seedId`)
-                reference(seedId, definitions.seeds, `${name}.shovelTutorial.introPlants.seedId`)
-                const row = nonNegativeInteger(entry.row, `${name}.shovelTutorial.introPlants.row`)
-                const column = nonNegativeInteger(entry.column, `${name}.shovelTutorial.introPlants.column`)
-                if (!activeRows.includes(row) || column >= board.columns) throw new Error(`${name}.shovelTutorial.introPlants is outside the lawn`)
-                return { seedId, row, column }
-            }),
+            introPlants: plantPositions(data.introPlants, `${name}.shovelTutorial.introPlants`),
         }
     }
     const tools = source.tools === undefined ? undefined : qualifiedIdArray(source.tools, `${name}.tools`)
@@ -667,11 +673,13 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
 
     return {
         adventureIndex: positiveInteger(source.adventureIndex, `${name}.adventureIndex`),
+        ...(source.persistent === undefined ? {} : { persistent: source.persistent as boolean }),
         ...(source.nextLevel === undefined ? {} : { nextLevel: qualifiedId(source.nextLevel, `${name}.nextLevel`) }),
         board: boardId,
         activeRows,
         startingSun: nonNegativeInteger(source.startingSun, `${name}.startingSun`),
         seedPackets,
+        ...(initialPlants === undefined ? {} : { initialPlants }),
         ...(seedBankSlots === undefined ? {} : { seedBankSlots }),
         ...(bowling === undefined ? {} : { bowling }),
         ...(conveyor === undefined ? {} : { conveyor }),

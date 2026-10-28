@@ -42,6 +42,8 @@ export class SparseSet<T> {
     readonly denseEntities: EntityId[] = []
     readonly denseValues: T[] = []
     readonly sparseIndices: number[] = []
+    /** Changes whenever an entity joins or leaves this store, not when its value is replaced. */
+    membershipVersion = 0
 
     get size(): number {
         return this.denseEntities.length
@@ -69,6 +71,7 @@ export class SparseSet<T> {
         this.sparseIndices[entity] = this.denseEntities.length
         this.denseEntities.push(entity)
         this.denseValues.push(value)
+        this.membershipVersion++
     }
 
     delete(entity: EntityId): boolean {
@@ -85,6 +88,7 @@ export class SparseSet<T> {
         this.denseEntities.pop()
         this.denseValues.pop()
         this.sparseIndices[entity] = -1
+        this.membershipVersion++
         return true
     }
 }
@@ -93,25 +97,39 @@ type AnyComponent = Component<unknown>
 const addBuffered = Symbol('addBuffered')
 
 export class Query implements Iterable<EntityId> {
+    private readonly stores: SparseSet<unknown>[]
+    private entities: EntityId[] = []
+    private version = -1
+
     constructor(
         private readonly world: World,
-        private readonly components: readonly AnyComponent[],
-    ) {}
+        components: readonly AnyComponent[],
+    ) {
+        this.stores = components.map(component => world.store(component))
+    }
 
+    /** Systems query every tick; the matching IDs only change with entity or component membership. */
     *[Symbol.iterator](): Iterator<EntityId> {
-        if (this.components.length === 0) {
-            yield* this.world.queryableEntities()
-            return
+        // Every counter only increases, so their sum changes whenever any of them does.
+        let version = this.world.membershipVersion
+        for (const store of this.stores) version += store.membershipVersion
+        if (version !== this.version) {
+            this.version = version
+            this.entities = this.match()
         }
+        // An iteration in progress keeps the list it started with.
+        yield* this.entities
+    }
 
-        const stores = this.components.map(component => this.world.store(component))
+    private match(): EntityId[] {
+        const stores = this.stores
+        if (stores.length === 0) return this.world.queryableEntities()
         const candidate = stores.reduce((smallest, store) =>
             store.size < smallest.size ? store : smallest,
         )
-        const entities = candidate.denseEntities
+        return candidate.denseEntities
             .filter(entity => this.world.isQueryable(entity) && stores.every(store => store.has(entity)))
             .sort((a, b) => a - b)
-        yield* entities
     }
 }
 
@@ -147,6 +165,8 @@ export class World {
     private readonly pendingDestroy = new Set<EntityId>()
     private readonly stores = new Map<string, { token: AnyComponent, store: SparseSet<unknown> }>()
     private readonly queries = new Map<string, Query>()
+    /** Changes whenever an entity becomes queryable or stops being queryable. */
+    membershipVersion = 0
 
     createEntity(): EntityId {
         const entity = this.allocateEntity()
@@ -174,6 +194,7 @@ export class World {
 
     destroyEntity(entity: EntityId): boolean {
         if (!this.entities.delete(entity)) return false
+        this.membershipVersion++
         this.pendingDestroy.delete(entity)
         for (const { store } of this.stores.values()) store.delete(entity)
         return true
@@ -250,11 +271,15 @@ export class World {
     }
 
     activateEntity(entity: EntityId): void {
+        if (this.entities.has(entity)) return
         this.entities.add(entity)
+        this.membershipVersion++
     }
 
     markDestroy(entity: EntityId): void {
-        if (this.entities.has(entity)) this.pendingDestroy.add(entity)
+        if (!this.entities.has(entity) || this.pendingDestroy.has(entity)) return
+        this.pendingDestroy.add(entity)
+        this.membershipVersion++
     }
 
     private assertEntity(entity: EntityId): void {

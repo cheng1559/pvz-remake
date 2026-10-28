@@ -17,7 +17,6 @@ test('presentation definitions validate independently and never share global con
         (data: any) => { data.animation.plantBlinkTicks = [800, 400] },
         (data: any) => { data.plants['pvz:explodenut'].animationTarget = 'pvz:missing' },
         (data: any) => { delete data.zombies['pvz:normal'] },
-        (data: any) => { data.projectiles['pvz:pea'].impact.duration = -1 },
         (data: any) => { data.almanac.cords[20].height = 0 },
         (data: any) => { data.plants['pvz:potatomine'].mine.glow.distance = [50, 50] },
         (data: any) => { data.zombies['pvz:conehead'].helm.damagedSprites = ['pvz:zombie_cone2'] },

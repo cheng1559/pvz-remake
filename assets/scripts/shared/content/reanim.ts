@@ -1,4 +1,5 @@
 import { isQualifiedId } from '@/shared/mod/index'
+import { kernel, KEY } from '@/shared/kernel/index'
 
 export type ReanimInterpolation = 'linear' | 'step'
 
@@ -28,27 +29,33 @@ export interface Reanim {
     tracks: ReanimTrack[]
 }
 
+/** Keyframes in the kernel's layout: time, x, y, scaleX, scaleY, skewX, skewY, alpha, step, sprite slot. */
+export function packKeyframes(frames: readonly ReanimKeyframe[], keys: Float64Array, offset: number, slot: (frame: ReanimKeyframe) => number): void {
+    frames.forEach((frame, index) => keys.set([frame.timeSeconds, frame.x, frame.y, frame.scaleX, frame.scaleY, frame.skewX,
+        frame.skewY, frame.alpha, frame.interpolation === 'step' ? 1 : 0, slot(frame)], (offset + index) * KEY))
+}
+
+// Keyed by the keyframe list, so replacing a track's keyframes repacks them.
+const packedTracks = new WeakMap<readonly ReanimKeyframe[], Float64Array>()
+let samplePose: Float64Array | undefined
+
+/** The track's pose at a time; between linear keyframes a new keyframe, otherwise the keyframe reached. */
 export function sampleReanimTrack(track: ReanimTrack, timeSeconds: number): ReanimKeyframe | null {
-    const frames = track.keyframes
-    if (timeSeconds < frames[0].timeSeconds) return null
-
-    let index = 0
-    while (index + 1 < frames.length && frames[index + 1].timeSeconds <= timeSeconds) index++
+    const frames = track.keyframes, drawing = kernel()
+    let keys = packedTracks.get(frames)
+    if (!keys) {
+        keys = drawing.f64(frames.length * KEY)
+        packKeyframes(frames, keys, 0, () => -1)
+        packedTracks.set(frames, keys)
+    }
+    const pose = samplePose ??= drawing.f64(7)
+    const index = drawing.sample(keys, 0, frames.length, timeSeconds, pose)
+    if (index < 0) return null
     const left = frames[index]
-    const right = frames[index + 1]
-    if (!right || left.interpolation === 'step') return left
-
-    const ratio = (timeSeconds - left.timeSeconds) / (right.timeSeconds - left.timeSeconds)
-    const lerp = (a: number, b: number) => a + (b - a) * ratio
+    if (index + 1 >= frames.length || left.interpolation === 'step') return left
     return {
         timeSeconds,
-        x: lerp(left.x, right.x),
-        y: lerp(left.y, right.y),
-        scaleX: lerp(left.scaleX, right.scaleX),
-        scaleY: lerp(left.scaleY, right.scaleY),
-        skewX: lerp(left.skewX, right.skewX),
-        skewY: lerp(left.skewY, right.skewY),
-        alpha: lerp(left.alpha, right.alpha),
+        x: pose[0], y: pose[1], scaleX: pose[2], scaleY: pose[3], skewX: pose[4], skewY: pose[5], alpha: pose[6],
         sprite: left.sprite,
         interpolation: left.interpolation,
     }
@@ -59,11 +66,7 @@ export function attachReanimPose(
     parentPose: ReanimKeyframe,
     parentBasePose: ReanimKeyframe,
 ): ReanimKeyframe {
-    const baseInverse = invertMatrix(poseMatrix(parentBasePose))
-    const attached = multiplyMatrix(
-        multiplyMatrix(poseMatrix(parentPose), baseInverse),
-        poseMatrix(pose),
-    )
+    const attached = multiplyMatrix(attachmentMatrix(parentPose, parentBasePose), poseMatrix(pose))
     const determinant = attached.a * attached.d - attached.b * attached.c
     const scaleX = Math.hypot(attached.a, attached.b)
     let scaleY = Math.hypot(attached.c, attached.d)
@@ -181,7 +184,13 @@ function positiveNumber(value: unknown, name: string): number {
     return number
 }
 
-interface PoseMatrix {
+/** The parent's movement since its base pose, applied before an attached pose. */
+export function attachmentMatrix(parentPose: ReanimKeyframe, parentBasePose: ReanimKeyframe): PoseMatrix {
+    return multiplyMatrix(poseMatrix(parentPose), invertMatrix(poseMatrix(parentBasePose)))
+}
+
+/** Pose transform in drawing coordinates: x' = a * u + c * v + tx, y' = b * u + d * v + ty. */
+export interface PoseMatrix {
     a: number
     b: number
     c: number

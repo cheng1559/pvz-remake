@@ -1,5 +1,5 @@
+import { modResources } from '@/client/content/ModResources'
 import { isValid, JsonAsset, Sprite, type Node, type SpriteFrame } from 'cc'
-import { AssetLoader } from '@/client/content/LegacyAssetLoader'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { uiNode } from '@/client/view/uiNode'
 import { ReanimPlayer } from './ReanimPlayer'
@@ -29,7 +29,7 @@ let assets: ReturnType<typeof loadAssets> | undefined
 
 async function loadAssets() {
     const [content, data] = await Promise.all([
-        loadIntegratedGameContent(), AssetLoader.load<JsonAsset>('almanac-animations', JsonAsset),
+        loadIntegratedGameContent(), modResources.asset('pvz:almanac-animations', JsonAsset),
     ])
     if (!data) throw new Error('Missing entity display catalog; rebuild almanac assets')
     const catalog = data.json as Record<EntityKind, EntityDisplayLayout[]>
@@ -117,11 +117,7 @@ export async function loadDisplayParts(parent: Node, parts: DisplayPart[], conte
                 player.node.setPosition(...part.offset!, 0)
                 player.node.setScale(part.scale ?? 1, part.scale ?? 1, 1)
             } else player.attachToTrack(body, part.track)
-            if (part.behind) {
-                player.node.setParent(body.node)
-                const track = body.getTrackNode(part.behind)
-                if (track) player.node.setSiblingIndex(track.getSiblingIndex() + 1)
-            }
+            if (part.behind) body.drawAfterTrack(player.node, part.behind)
         }
         if (part.blink) player.hide()
     }

@@ -1,7 +1,7 @@
 import { BlockInputEvents, Button, Canvas, Color, gfx, Material, Node, Sprite, UITransform, type SpriteFrame } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { uiNode } from '@/client/view/uiNode'
 import { applySpriteDensity } from '@/client/content/SpriteDensity'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
@@ -180,13 +180,13 @@ export class UI {
         button.releaseToNormalOnPressOut = options.releaseToNormalOnPressOut ?? skin !== 'image'
         button.refreshHoverOnEnable = options.refreshHoverOnEnable ?? true
         button.pressOnly = options.pressOnly ?? false
-        button.onHoverEnter = () => { if (options.hoverSound) void SoundLoader.play(options.hoverSound) }
+        button.onHoverEnter = () => { if (options.hoverSound) void SoundSystem.play(options.hoverSound) }
         if (options.tooltip) {
             const tooltip = this.tooltip(node, options.tooltip)
             button.onHoverChange = hovering => hovering ? tooltip.show() : tooltip.hide()
         }
         button.onPress = () => {
-            if (pressSound !== null) void SoundLoader.play(pressSound)
+            if (pressSound !== null) void SoundSystem.play(pressSound)
             options.onPress?.()
         }
         button.onClick = options.onClick ?? (() => {})
@@ -216,7 +216,7 @@ export class UI {
         button.onStateChange('normal')
         button.interactable = options.enabled ?? true
         node.on(Button.EventType.CLICK, () => {
-            if (clickSound !== null) void SoundLoader.play(clickSound)
+            if (clickSound !== null) void SoundSystem.play(clickSound)
             button.onClick()
         })
         node.active = true
@@ -251,7 +251,7 @@ export class UI {
         const button = node.addComponent(UIButton)
         button.touchSlide = false
         button.onPress = () => {
-            void SoundLoader.play(SoundEffect.ButtonClick)
+            void SoundSystem.play(SoundEffect.ButtonClick)
             if (options.locked) options.locked()
             else { setValue(!value); options.onChange?.(value) }
         }

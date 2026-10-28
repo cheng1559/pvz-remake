@@ -1,3 +1,4 @@
+import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { Color, Graphics, isValid, Node } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { FontRepository } from '@/client/content/ClientContentLoader'
@@ -6,7 +7,6 @@ import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
-import { TodParticleSystem } from '@/core/Particle'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
@@ -348,7 +348,7 @@ export class LevelHudPresenter {
     private syncSeedTutorialArrow(visible: boolean): void {
         // Restore recreates particle nodes, so reuse the live arrow instead of caching its component.
         const [arrow, ...duplicates] = this.tutorialArrowLayer.children.filter(node =>
-            node.name === 'ParticleSystem_seedpacketpick' && isValid(node, true),
+            node.getComponent(ParticlePlayer)?.id === 'pvz:seedpacketpick' && isValid(node, true),
         )
         for (const duplicate of duplicates) duplicate.destroy()
         if (!visible) {
@@ -360,7 +360,7 @@ export class LevelHudPresenter {
             arrow.setPosition(rect.x, -rect.y, 20)
             return
         }
-        TodParticleSystem.spawn({ parent: this.tutorialArrowLayer, effect: 'seedpacketpick', x: rect.x, y: -rect.y, z: 20 })
+        ParticlePlayer.spawn({ parent: this.tutorialArrowLayer, id: "pvz:seedpacketpick", x: rect.x, y: -rect.y, z: 20 })
     }
 
 }

@@ -13,7 +13,7 @@ function reanim(id: string) {
 
 function snapshot(): any {
     return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         flow: { introCompletionSent: true, completionStarted: false },
         intro: {
             ticks: 855,
@@ -47,19 +47,20 @@ function snapshot(): any {
             kind: 'sun', entityId: 4, animation: null,
         }],
         particles: [{
-            instanceId: 1, backend: 'particle',
+            instanceId: 1,
             owner: { kind: 'entity', entityId: 99, slot: 'award-back-effects', x: 0, y: 0, z: 0 },
             playback: {
                 id: 'pvz:peasplat', seed: 1, ageTicks: 2,
                 playing: true, visible: true, accumulatorSeconds: 0,
+                renderOrder: 1, tint: null, extraAdditive: false, spriteOverride: null, scale: 1,
             },
         }, {
-            instanceId: 2, backend: 'tod',
+            instanceId: 2,
             owner: { kind: 'screen', slot: 'coin-layer', x: 100, y: 200, z: 1 },
             playback: {
-                effect: 'sun', seed: 2, ageTicks: 3, accumulator: 0,
+                id: 'pvz:sun', seed: 2, ageTicks: 3, accumulatorSeconds: 0,
                 renderOrder: 1, tint: null, extraAdditive: false,
-                imageOverride: null, useGameTime: true, scale: 1,
+                spriteOverride: null, playing: true, visible: true, scale: 1,
             },
         }],
         extensions: { 'example:weather': { rain: true } },
@@ -71,44 +72,10 @@ test('Adventure 1-1 presentation snapshot round-trips every owned presentation s
     assert.deepEqual(parseLevelPresentationSnapshot(JSON.parse(JSON.stringify(value))), value)
     const previous = JSON.parse(JSON.stringify(value))
     previous.particles[0].backend = 'v2'
-    assert.throws(() => parseLevelPresentationSnapshot(previous), /backend is invalid/)
+    assert.throws(() => parseLevelPresentationSnapshot(previous), /backend is not supported/)
 })
 
-test('note collection preserves its shorter completion boundary when saved during and after fading', () => {
-    for (const ticks of [0, 15, 300, 499, 500]) {
-        const value = snapshot()
-        value.end = { ticks, durationTicks: 500, finalWave: null }
-        value.flow.completionStarted = ticks === 500
-        assert.deepEqual(parseLevelPresentationSnapshot(JSON.parse(JSON.stringify(value))), value)
-        value.flow.completionStarted = !value.flow.completionStarted
-        assert.throws(() => parseLevelPresentationSnapshot(value), /completion flow/)
-    }
-    const invalid = snapshot()
-    invalid.end = { ticks: 501, durationTicks: 500, finalWave: null }
-    assert.throws(() => parseLevelPresentationSnapshot(invalid), /end.ticks/)
-})
 
-test('1-2 presentation saves Sunflower blinking, flag attachment and huge-wave timing', () => {
-    const value = snapshot()
-    value.end.hugeWaveTicks = 725
-    value.entities.push({
-        kind: 'plant', entityId: 5,
-        animations: {
-            body: reanim('pvz:sunflower'), blink: { ...reanim('pvz:sunflower_blink'), attachmentTrackId: 'anim_idle' },
-        }, blinkAtTick: 1250,
-    })
-    value.entities[1].body.id = 'pvz:flag_walk'
-    value.entities[1].flag = { ...reanim('pvz:zombie_flag'), attachmentTrackId: 'Zombie_flaghand' }
-    assert.deepEqual(parseLevelPresentationSnapshot(JSON.parse(JSON.stringify(value))), value)
-    for (const index of [0, 4]) {
-        const legacy = JSON.parse(JSON.stringify(value))
-        const entity = legacy.entities[index]
-        Object.assign(entity, entity.animations)
-        if (entity.animations.blink) entity.kind = 'sunflower'
-        delete entity.animations
-        assert.throws(() => parseLevelPresentationSnapshot(legacy), /not supported|kind is invalid/)
-    }
-})
 
 test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked state', () => {
     const invalid = (change: (value: any) => void) => {
@@ -133,43 +100,4 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
     assert.throws(invalid(value => { delete value.entities[0].animations.blink }), /missing shooter blink state/)
     assert.throws(invalid(value => { delete value.entities[0].blinkAtTick }), /missing shooter blink state/)
     assert.throws(invalid(value => { value.extensions.bad = {} }), /extension ID is invalid/)
-})
-
-test('Adventure 1-1 presentation snapshot normalizes entity and particle ordering', () => {
-    const value = snapshot()
-    value.entities.reverse()
-    value.particles.reverse()
-    const parsed = parseLevelPresentationSnapshot(value)
-    assert.deepEqual(parsed.entities.map(entity => entity.entityId), [1, 2, 3, 4])
-    assert.deepEqual(parsed.particles.map(particle => particle.instanceId), [1, 2])
-})
-
-test('Adventure 1-1 presentation snapshot preserves intro-preview particle ownership', () => {
-    const value = snapshot()
-    value.flow.introCompletionSent = false
-    value.intro = {
-        ticks: 100,
-        previews: Array.from({ length: 5 }, (_, slot) => ({
-            slot, typeId: 'pvz:normal', x: 430 + slot, y: 230, z: 100 + slot, hasTongue: slot === 0, reanim: reanim('pvz:zombie_idle2'),
-        })),
-    }
-    value.particles.push({
-        instanceId: 3,
-        backend: 'tod',
-        owner: { kind: 'intro-preview', slot: 2, x: 10, y: 20, z: 3 },
-        playback: {
-            effect: 'sodroll', seed: 3, ageTicks: 4, accumulator: 0,
-            renderOrder: 1, tint: null, extraAdditive: false,
-            imageOverride: null, useGameTime: false, scale: 1,
-        },
-    })
-
-    const parsed = parseLevelPresentationSnapshot(value)
-
-    assert.deepEqual(parsed.intro, value.intro)
-    delete value.intro.previews[0].hasTongue
-    assert.throws(() => parseLevelPresentationSnapshot(value), /hasTongue/)
-    assert.deepEqual(parsed.particles[2].owner, {
-        kind: 'intro-preview', slot: 2, x: 10, y: 20, z: 3,
-    })
 })

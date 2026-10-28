@@ -11,7 +11,7 @@ import { GameplayRegistry } from '@/server/GameplayRegistry'
 import { EconomyStateResource } from '@/server/components'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
-import { readGameplaySource } from '../../tools/content_source'
+import { readGameplaySource } from '../../tools/mod/content'
 
 function client() {
     const modules: Record<string, any> = {
@@ -42,6 +42,64 @@ function syntax(host: ModHost, name: string) {
             : [...entries, { name, parameters: ['{value}'], minimum: 1 }]
     })
 }
+
+test('plant invincibility is saved only after a successful server command', async () => {
+    const storage = new Map<string, string>()
+    const sys = { isMobile: false, localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+    } }
+    const load = (path: string, modules: Record<string, unknown>) => {
+        const exports: any = {}
+        const code = transpileModule(readFileSync(`assets/scripts/${path}.ts`, 'utf8'), {
+            compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+        })
+        runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
+        return exports
+    }
+    const settings = () => load('platform/debug/GameDebugSettings', { cc: { sys } }).GameDebugSettings
+    const GameDebugSettings = settings()
+    const { executeDebugCliCommand } = load('platform/debug/DebugCliCommands', {
+        cc: { sys }, '@/shared/debug/DebugCli': cli, './GameDebugSettings': { GameDebugSettings },
+    })
+    assert.equal(GameDebugSettings.plantInvincible, false)
+    assert.equal((await executeDebugCliCommand('/plantinvincible true', true, () => cli.debugCondition('rejected'))).ok, false)
+    assert.equal(settings().plantInvincible, false)
+    assert.equal((await executeDebugCliCommand('/plantinvincible true', true, () => cli.debugSuccess('ok'))).ok, true)
+    assert.equal(settings().plantInvincible, true)
+    assert.equal((await executeDebugCliCommand('/plantinvincible false', true, () => cli.debugSuccess('ok'))).ok, true)
+    assert.equal(settings().plantInvincible, false)
+})
+
+test('FPS command persists its setting and works without an active level', async () => {
+    const storage = new Map<string, string>()
+    const sys = { isMobile: false, localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+    } }
+    const load = (path: string, modules: Record<string, unknown>) => {
+        const exports: any = {}
+        const code = transpileModule(readFileSync(`assets/scripts/${path}.ts`, 'utf8'), {
+            compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+        })
+        runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
+        return exports
+    }
+    const settings = () => load('platform/debug/GameDebugSettings', { cc: { sys } }).GameDebugSettings
+    const GameDebugSettings = settings()
+    const { executeDebugCliCommand } = load('platform/debug/DebugCliCommands', {
+        cc: { sys }, '@/shared/debug/DebugCli': cli, './GameDebugSettings': { GameDebugSettings },
+    })
+    assert.equal(GameDebugSettings.fpsVisible, false)
+    assert.deepEqual(cli.getDebugCliCompletions('/fps ', undefined, true), ['/fps true', '/fps false'])
+    const run = (command: string) => executeDebugCliCommand(command, false, () => assert.fail('FPS is a client setting'))
+    assert.equal((await run('/fps true')).ok, true)
+    assert.equal(settings().fpsVisible, true)
+    assert.equal((await run('/fps invalid')).failure, 'syntax')
+    assert.equal(settings().fpsVisible, true)
+    assert.equal((await run('/fps false')).ok, true)
+    assert.equal(settings().fpsVisible, false)
+})
 
 test('client Mod commands reuse parsing and completion, and disappear when their host is disposed', async () => {
     const { host, execute } = client()

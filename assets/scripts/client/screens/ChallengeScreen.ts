@@ -1,11 +1,11 @@
-import { Color, type Node } from 'cc'
+import { modResources } from '@/client/content/ModResources'
+import { Color, type Node, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { ChallengePageId } from '@/shared/menu'
 export type { ChallengePageId } from '@/shared/menu'
 import { FontMetricsUtil } from '@/client/font'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import type { UI } from '@/client/ui/UI'
-import { SpriteLoader } from '@/core/SpriteLoader'
 
 export async function showChallengeScreen(
     parent: Node, ui: UI, page: ChallengePageId, onBack: () => void,
@@ -14,7 +14,7 @@ export async function showChallengeScreen(
     const names = ['challenge_window', 'challenge_window_highlight', 'trophy', 'minigame_trophy',
         page === 'survival' ? 'survival_thumbnails' : 'challenge_thumbnails']
     const frames = await Promise.all(names.map(async name => {
-        const frame = await SpriteLoader.load(name)
+        const frame = await modResources.asset(name, SpriteFrame)
         if (!frame) throw new Error(`Missing challenge image: ${name}`)
         return frame
     }))

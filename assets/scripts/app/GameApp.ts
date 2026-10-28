@@ -2,6 +2,9 @@ import { _decorator, Component, director, Director, EventKeyboard, type EventTou
 import { DEBUG } from 'cc/env'
 import { uiNode } from '@/client/view/uiNode'
 import { initializeViewport, resetViewport } from '@/client/view/ClientViewport'
+import { FpsDisplay } from '@/client/view/FpsDisplay'
+import { loadKernel } from '@/shared/kernel/index'
+import { loadKernelMaterial } from '@/client/render/KernelBatch'
 import { gameClock } from '@/core/GameClock'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
@@ -21,7 +24,7 @@ import {
 import { menuApi } from '@/client/api/MenuApi'
 import { connectLocalMenuApi } from './LocalMenuApi'
 import { createStoreCatalog } from '@/server/menu/StoreCatalog'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { showDebugCliDialog } from '@/client/screens/DebugCliDialog'
 import { showPackageDialog } from '@/client/screens/PackageDialog'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
@@ -29,7 +32,7 @@ import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { modResources } from '@/client/content/ModResources'
-import { modManager } from '@/client/content/ModManager'
+import { modManager, type ModImport } from '@/client/content/ModManager'
 import { selectZips, type SelectedZip } from '@/client/content/InstalledArchives'
 
 const { ccclass } = _decorator
@@ -49,10 +52,12 @@ export class GameApp extends Component {
     private advice: AdviceWidget | null = null
     private adviceTick = 0
     private nextLevelId: string | null = null
+    private fpsDisplay: FpsDisplay | null = null
 
     start(): void {
         game.frameRate = Infinity
         uiNode({ node: this.node, viewport: true })
+        modManager.deferPendingChanges()
         connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false,
             modResources.baseJson('pvz:gameplay/store').then(createStoreCatalog))
         UIHoverManager.start(this.node)
@@ -80,10 +85,13 @@ export class GameApp extends Component {
         input.on(Input.EventType.TOUCH_START, this.onDebugTouch, this)
         void OptionsSettings.start().catch(error => console.error('[Options]', error))
         this.transitions = new ScreenTransition(this.node)
-        void this.navigate('splash')
-        void UI.load().then(() => {
+        // Animations and particles draw through the kernel and its material; the kernel may compile asynchronously on the web.
+        void Promise.all([loadKernel(), loadKernelMaterial()]).then(() => this.node?.isValid && this.navigate('splash'))
+            .catch(error => console.error('[GameApp] Failed to load the drawing kernel', error))
+        void UI.load().then(ui => {
             if (!this.node?.isValid) return
             initializeViewport()
+            this.fpsDisplay = new FpsDisplay(this.node, ui)
         }).catch(error => console.error('[GameApp] Failed to initialize UI', error))
     }
 
@@ -133,7 +141,7 @@ export class GameApp extends Component {
                     }
                 }
                 controller.pause()
-                if (from === null && (target === 'pause' || target === 'gameOptions')) void SoundLoader.play(SoundEffect.Pause)
+                if (from === null && (target === 'pause' || target === 'gameOptions')) void SoundSystem.play(SoundEffect.Pause)
                 if ((target === 'main' || target === 'pause') && controller.isRunning()) await controller.saveIfRunning()
                 const page = await menu.prepare(target)
                 return async () => {
@@ -167,6 +175,10 @@ export class GameApp extends Component {
 
     private async finish(page: 'award' | 'gameOver'): Promise<void> {
         try {
+            if (this.controller?.getLevelDefinition()?.persistent === false) {
+                await this.navigate('main')
+                return
+            }
             if (page === 'award') this.nextLevelId = (await menuApi.completeLevel()).nextLevelId
             await this.controller?.deleteSave()
             await this.navigate(page)
@@ -193,6 +205,7 @@ export class GameApp extends Component {
     }
 
     update(dt: number): void {
+        this.fpsDisplay?.update(GameDebugSettings.fpsVisible)
         const ticks = gameClock.delta(dt) * 100
         MusicSystem.update(ticks, { zombiesOnScreen: this.controller?.countZombiesOnScreenForMusic() ?? 0 })
         this.adviceTick += ticks
@@ -231,8 +244,9 @@ export class GameApp extends Component {
                     const ui = await UI.load()
                     if (!this.node?.isValid) return
                     await (await showPackageDialog(this.node, ui, {
-                        install: () => this.installPackage(),
-                        restart: async () => { await controller.saveIfRunning(); this.restartGame() },
+                        import: () => this.importPackage(),
+                        save: () => controller.saveIfRunning(),
+                        restart: async () => { this.restartGame() },
                     })).result
                 } catch (error) {
                     console.error('[Packages]', error)
@@ -265,27 +279,29 @@ export class GameApp extends Component {
         }
     }
 
-    /** Save selected ZIPs sequentially; the manager applies enabled states and restart. */
-    private async installPackage(): Promise<string[]> {
+    /** Validate selected ZIPs sequentially; the dialog keeps them in its draft until Apply. */
+    private async importPackage(): Promise<ModImport[]> {
         const ui = await UI.load()
         let progress: UIDialog | undefined
         let files: SelectedZip[] = []
-        const installed: string[] = [], errors: string[] = []
+        const imports = new Map<string, ModImport>(), errors: string[] = []
         const message = (error: unknown) => error instanceof Error ? error.message : String(error)
         try {
             files = await selectZips()
             if (!files.length || !this.node?.isValid) return []
             progress = ui.dialog(this.node, {
-                title: 'Installing...', footer: false, clickSound: null,
+                title: 'Importing...', footer: false, clickSound: null,
             })
             progress.onConfirm = progress.onCancel = () => {}
-            // Paint the dialog before ZIP validation and native file writes occupy the main thread.
+            // Paint the dialog before ZIP validation occupies the main thread.
             await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
             for (const file of files) {
                 if (!this.node?.isValid) break
                 try {
-                    const id = await modManager.install(await file.read(), false)
-                    if (!installed.includes(id)) installed.push(id)
+                    const mod = await modManager.prepareImport(await file.read())
+                    const previous = imports.get(mod.id)
+                    if (previous) await modManager.discardImports([previous])
+                    imports.set(mod.id, mod)
                 } catch (error) { errors.push(`${file.name}: ${message(error)}`) }
             }
         } catch (error) {
@@ -295,9 +311,9 @@ export class GameApp extends Component {
             for (const file of files) file.dispose?.()
         }
         if (errors.length && this.node?.isValid) await ui.dialog(this.node, {
-            title: 'Installation Failed', message: errors.join('\n'), confirmText: 'OK',
+            title: 'Import Failed', message: errors.join('\n'), confirmText: 'OK',
         }).result
-        return installed
+        return [...imports.values()]
     }
 
     private restartGame(): void {
@@ -353,6 +369,7 @@ export class GameApp extends Component {
     }
 
     private save(): void {
+        this.fpsDisplay?.reset()
         this.spacePressed = false
         void this.controller?.saveIfRunning().catch(error => {
             console.error('[GameApp] Failed to save level', error)
@@ -360,6 +377,8 @@ export class GameApp extends Component {
     }
 
     onDestroy(): void {
+        this.fpsDisplay?.dispose()
+        this.fpsDisplay = null
         resetViewport()
         UIHoverManager.stop()
         this.transitions?.dispose()

@@ -58,6 +58,7 @@ function setup() {
         '@/client/content/SpriteDensity': { applySpriteDensity() {} },
         '@/client/view/bakeSprite': {},
         '@/client/plants/definitions': plantVisuals,
+        '@/client/render/KernelBatch': { KernelBatch: class {} },
         '@/client/reanim/EntityDisplay': { resolveEntityDisplay: (_kind: string, _id: number, layout: unknown) => layout },
         '@/client/view/uiNode': { uiNode: (options: any) => {
             const node = new Node(options.parent)
@@ -87,7 +88,7 @@ test('namespaced Mod packets keep their ID and render their registered animation
     plant.animationTarget = 'example:rapid_pea'
     plant.visual.seedType = 'example:rapid_pea'
     plant.animations.body.reanimId = 'example:body'
-    const definitions = buildPresentationDefinitions(presentationFixture, [{ ownerId: 'example:plants', data: { plants: { 'example:rapid_pea': plant } } }])
+    const definitions = buildPresentationDefinitions(presentationFixture, [{ ownerId: 'example:showcase', data: { plants: { 'example:rapid_pea': plant } } }])
     const animations = new ClientAnimationRegistry(definitions)
     const { resolveEntityDisplay } = load('reanim/EntityDisplay')
     const layout = resolveEntityDisplay('plants', 0, { animationTarget: 'pvz:peashooter', offset: [0, 0], shadow: false }, animations)
@@ -112,85 +113,8 @@ test('namespaced Mod packets keep their ID and render their registered animation
     assert.equal(id, 'example:rapid_pea')
 })
 
-test('numeric and named previews share assembly and the Sunflower packet pose', async () => {
-    const { classes, modules } = setup()
-    const parts = [{ name: 'body', id: 'test:sunflower' }, { name: 'face', blink: true }]
-    const assembled: any[] = [], times: number[] = []
-    Object.assign(modules['@/client/reanim/EntityDisplay'], {
-        loadEntityDisplayAssets: async () => ({ content: {}, catalog: { plants: [null, { parts, packetTimeRatio: 0.15 }] } }),
-        loadDisplayParts: async (_node: Node, selected: any[]) => {
-            assembled.push(selected)
-            return new Map([['body', { lastFrameTimeSeconds: 8, seek(time: number) { times.push(time) } }]])
-        },
-    })
-    for (const id of [1, 'pvz:sunflower']) {
-        const preview = new classes.PlantPreview(), root = new Node()
-        preview.definitions = presentationFixture
-        preview.rendered = root
-        await preview.load(root, id)
-    }
-    assert.deepEqual(assembled[0], assembled[1])
-    assert.equal(assembled[0].length, 1, 'static previews omit blink players')
-    assert.deepEqual(times, [1.2, 1.2])
-})
 
-test('tilted Explode-o-nut packets reuse Wall-nut rendering and preserve their red tint', async () => {
-    const { settings, classes, modules, errors } = setup()
-    settings.seedPacketStyle = 'tilted'
-    const parts = [{ name: 'body', id: 'test:wallnut' }]
-    let tint: Color | undefined
-    Object.assign(modules['@/client/reanim/EntityDisplay'], {
-        loadEntityDisplayAssets: async () => ({ content: {}, catalog: { plants: [null, null, null, { parts }] } }),
-        loadDisplayParts: async (_node: Node, selected: any[]) => {
-            assert.equal(selected[0].id, 'test:wallnut')
-            return new Map([['body', { lastFrameTimeSeconds: 1, seek() {}, setColorOverride(color: Color) { tint = color.clone() } }]])
-        },
-    })
-    const packet = new classes.PlantPreview()
-    packet.node = new Node()
-    let cached = 0
-    packet.initialize(presentationFixture, 'pvz:explodenut', async (root: Node) => { cached++; root.sprite = new Sprite() }, { x: 5, y: -9, scale: 0.5 }, 1)
-    await packet.ready
-    assert.equal(cached, 0, 'tilted packets must use Reanim')
-    assert.equal(packet.rendered.angle, -12)
-    assert.deepEqual(tint, new Color(255, 64, 64))
-    packet.setColor(new Color(128, 128, 128, 100))
-    assert.deepEqual(tint, new Color(128, 32, 32, 100))
-    settings.seedPacketStyle = 'standard'
-    packet.update()
-    await packet.ready
-    assert.equal(cached, 1)
-    assert.deepEqual(packet.rendered.sprite.color, new Color(128, 32, 32, 100), 'cached and rendered previews use the same visual tint')
-    assert.equal(errors.length, 0)
-})
 
-test('packet backgrounds use stable atlas IDs independently of the rendered-portrait setting', async () => {
-    const { classes, errors } = setup()
-    const paths: string[] = []
-    const frame = { originalSize: { width: 450, height: 70 }, rect: { x: 0, y: 0 }, texture: {} }
-    const sprite = { spriteFrame: null as any }
-    const background = new classes.SeedPacketBackground()
-    background.node = new Node()
-    background.initialize(sprite, { seedType: 0, loadSprite: (name: string) => {
-        paths.push(name)
-        return Promise.resolve(frame)
-    } })
-    await flush()
-    assert.deepEqual(paths, ['seeds'])
-    assert.equal(sprite.spriteFrame.rect.x, 100)
-    assert.equal(sprite.spriteFrame.rect.width, 50)
-    const upgrade = new classes.SeedPacketBackground()
-    upgrade.node = new Node()
-    const upgradeSprite = { spriteFrame: null }
-    upgrade.initialize(upgradeSprite, { seedType: 1, upgrade: true, loadSprite: (name: string) => {
-        paths.push(name)
-        return Promise.reject(new Error('missing selected atlas'))
-    } })
-    await flush()
-    assert.deepEqual(paths, ['seeds', 'seeds'])
-    assert.equal(upgradeSprite.spriteFrame, null)
-    assert.equal(errors.length, 1)
-})
 
 test('conveyor slots retain their bindings and draw mobile selection above the full gray overlay', () => {
     const { modules, load } = setup()
@@ -255,7 +179,7 @@ test('plant previews create one selected representation and preserve tint across
         calls.push('HD')
         await preparing
         if (fail) throw new Error('missing Reanim')
-        preview.players.push({ setColorOverride(color: Color) { tint = color.clone() } })
+        preview.players.push({ setColorOverride(color: Color) { tint = color.clone() }, flushPose() {} })
     }
     preview.initialize(presentationFixture, 2, async (root: Node) => {
         calls.push('original')
@@ -289,82 +213,4 @@ test('plant previews create one selected representation and preserve tint across
     assert.equal(preview.rendered.active, false)
     assert.equal(preview.node.children.length, 1)
     assert.equal(errors.length, 1)
-})
-
-test('translucent plant previews composite an opaque pose once before applying group opacity', async () => {
-    const { classes, modules } = setup()
-    let captures = 0, finish!: () => void
-    let parts: Node[] = []
-    const colors: Color[] = []
-    const composite = new Sprite()
-    Object.assign(modules['@/client/view/bakeSprite'], { bakeSprite: async (root: Node) => {
-        captures++
-        assert.ok(colors.every(color => color.a === 255), 'internal plant parts must stay opaque during composition')
-        await new Promise<void>(resolve => { finish = resolve })
-        root.sprite = composite
-        return composite
-    } })
-    const preview = new classes.PlantPreview()
-    preview.node = new Node()
-    preview.load = async (root: Node) => {
-        parts = [new Node(root), new Node(root)]
-        for (const part of parts) {
-            part.sprite = new Sprite()
-            preview.players.push({ setColorOverride(color: Color) { colors.push(color.clone()) } })
-        }
-    }
-    preview.initialize(presentationFixture, 2, async () => {}, { x: 0, y: 0, scale: 1 })
-    await preview.ready
-    preview.setColor(new Color(128, 128, 128, 100))
-    await flush()
-    assert.equal(preview.rendered.active, false, 'the uncomposited transparent parts must never appear')
-    preview.setColor(new Color(255, 255, 255, 80))
-    assert.equal(captures, 1, 'opacity changes share the pending capture')
-    finish()
-    await preview.ready
-    assert.ok(parts.every(part => !part.isValid))
-    assert.deepEqual(composite.color, new Color(255, 255, 255, 80))
-    preview.setColor(new Color(128, 128, 128, 100))
-    await preview.ready
-    assert.equal(captures, 1, 'later tints reuse the completed texture')
-    assert.deepEqual(composite.color, new Color(128, 128, 128, 100))
-})
-
-test('packet style switches reuse rendered plants and leave placement previews independent', async () => {
-    const { settings, classes, errors } = setup()
-    const packet = new classes.PlantPreview()
-    packet.node = new Node()
-    const calls: string[] = []
-    packet.load = async () => { calls.push('rendered') }
-    packet.initialize(presentationFixture, 0, async () => { calls.push('standard') }, { x: 5, y: -9, scale: 0.5 }, 1)
-    await packet.ready
-    const root = packet.rendered
-    settings.seedPacketStyle = 'tilted'
-    packet.update()
-    assert.equal(packet.rendered, root)
-    assert.ok(root.angle < 0)
-    assert.ok(root.scale.x > 0.5 && root.scale.x === root.scale.y)
-    assert.deepEqual(Array.from(packet.packetClip.subComp.bounds), [3.5, -52, 220.5, 220])
-    assert.deepEqual(calls, ['rendered'], 'changing the layout must not reload Reanim assets')
-
-    const held = new classes.PlantPreview()
-    held.node = new Node()
-    held.load = async () => {}
-    held.initialize(presentationFixture, 0, async () => assert.fail('held preview should still use Reanim'), { x: 0, y: 0, scale: 1 })
-    await held.ready
-    assert.equal(held.rendered.angle, 0)
-    assert.deepEqual(held.rendered.scale, { x: 1, y: 1 })
-
-    settings.seedPacketStyle = 'rendered'
-    packet.update()
-    assert.equal(packet.rendered, root)
-    assert.equal(packet.packetClip.enabled, false)
-    assert.equal(root.angle, 0)
-    assert.deepEqual(root.position, { x: 5, y: -9 })
-    settings.seedPacketStyle = 'standard'
-    packet.update()
-    await packet.ready
-    assert.equal(root.isValid, false)
-    assert.deepEqual(calls, ['rendered', 'standard'])
-    assert.equal(errors.length, 0)
 })

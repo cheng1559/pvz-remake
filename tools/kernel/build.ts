@@ -9,8 +9,8 @@ const directory = mkdtempSync(join(tmpdir(), 'pvz-kernel-'))
 const output = join(directory, 'kernel.wasm')
 try {
     execFileSync('em++', [
-        'native/engine/common/kernel/pvz_kernel.cpp', 'native/engine/common/kernel/pvz_particles.cpp', '-O3', '-std=c++17', '-fno-exceptions', '-ffp-contract=off', '--no-entry', '-sSTANDALONE_WASM',
-        '-sEXPORTED_FUNCTIONS=_pvz_sample,_pvz_blend,_pvz_write_reanim,_pvz_particles_create,_pvz_particles_step,_pvz_particles_info,_pvz_particles_write,_pvz_particles_destroy,_malloc,_free',
+        'native/engine/common/kernel/pvz_kernel.cpp', 'native/engine/common/kernel/pvz_particles.cpp', 'native/engine/common/kernel/pvz_png.cpp', '-O3', '-sUSE_ZLIB=1', '-std=c++17', '-fno-exceptions', '-ffp-contract=off', '--no-entry', '-sSTANDALONE_WASM',
+        '-sEXPORTED_FUNCTIONS=_pvz_sample,_pvz_blend,_pvz_write_reanim,_pvz_particles_create,_pvz_particles_step,_pvz_particles_info,_pvz_particles_write,_pvz_particles_destroy,_pvz_png_decode_premultiplied,_malloc,_free',
         // A fixed memory keeps typed-array views into it valid. Particle memory is bounded by the kernel's live
         // particle cap; a failed malloc returns null so JavaScript falls back to ordinary arrays instead of aborting.
         '-sINITIAL_MEMORY=67108864', '-sALLOW_MEMORY_GROWTH=0', '-sABORTING_MALLOC=0', '-sERROR_ON_UNDEFINED_SYMBOLS=1',

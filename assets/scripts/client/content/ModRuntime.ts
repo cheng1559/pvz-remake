@@ -1,6 +1,6 @@
-import { assetManager, native, sys } from 'cc'
+import { assetManager } from 'cc'
 import { contentJson } from '@/shared/mod/content'
-import { installedArchiveRoot, saveInstalledArchive } from './InstalledArchives'
+import { installedFilePath } from './InstalledArchives'
 import type { InstalledMod } from './ModManager'
 
 type Registration = [string[], (...args: any[]) => any]
@@ -71,9 +71,8 @@ function initialize(): void {
             }
             if (type === '.json') return contentJson(mod.files, file)
             if (type === '.js') { execute(mod, file, runtime); return null }
-            let location: string
-            if (sys.isNative) location = `${installedArchiveRoot('mod-runtime', mod.manifest.id)}/${file}`
-            else {
+            let location = installedFilePath(mod.files, file)
+            if (!location) {
                 const cached = mod.urls.get(file)
                 location = cached ?? URL.createObjectURL(new Blob([bytes(mod, file).slice().buffer]))
                 if (!cached) mod.urls.set(file, location)
@@ -86,17 +85,10 @@ function initialize(): void {
     initialized = true
 }
 
-export function clearModRuntimeCache(): void {
-    if (sys.isNative) native.fileUtils.removeDirectory(installedArchiveRoot('mod-runtime', ''))
-}
-
 export async function mountMod(mod: InstalledMod): Promise<void> {
     initialize()
     if (mounted.has(mod.manifest.id)) return
-    if (sys.isNative && mod.manifest.client?.bundle) {
-        // Cocos bundles require a physical snapshot; ordinary resources use ModResources.
-        await saveInstalledArchive('mod-runtime', mod.manifest.id, mod.archive, mod.files)
-    }
+    // Native Cocos bundles load their installed files; the Web serves them from memory.
     mounted.set(mod.manifest.id, { ...mod, urls: new Map() })
 }
 

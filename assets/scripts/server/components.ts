@@ -89,6 +89,8 @@ export interface SeedBankState {
     packets: Array<{ seedId: string, readyAtTick: number, cooldownTotal?: number }>
 }
 
+export const MAX_SUN = 9990
+
 export interface EconomyState {
     sun: number
     money: number

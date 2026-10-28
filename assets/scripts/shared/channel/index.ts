@@ -1,7 +1,8 @@
 import {
     jsonRoundTrip,
     parseClientPacket,
-    parseServerPacket,
+    copyServerPacket,
+    validateServerPacket,
     type ClientPacket,
     type ServerPacket,
 } from '../protocol'
@@ -18,8 +19,12 @@ export class LocalGameChannel {
         return this.serverPackets.splice(0)
     }
 
+    /**
+     * Frames are sent every tick. The server builds each snapshot and event from new objects, so a frame is
+     * handed over after validation instead of copied; other packets may reference server state and are copied.
+     */
     sendToClient(packet: ServerPacket): void {
-        this.clientPackets.push(parseServerPacket(jsonRoundTrip(packet)))
+        this.clientPackets.push(packet.type === 'frame' ? validateServerPacket(packet) : copyServerPacket(packet))
     }
 
     drainClientPackets(): ServerPacket[] {

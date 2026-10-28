@@ -2,6 +2,7 @@ import { LocalGameChannel } from '@/shared/channel/index'
 import type {
     ClientPacket,
     JsonValue,
+    ServerEvent,
     ServerFramePacket,
     WorldSnapshot,
 } from '@/shared/protocol/index'
@@ -42,7 +43,7 @@ export class IntegratedGameHost {
             this.flushCommandResults()
             if (boundaryChanged && !this.server.hasPendingCommands()) this.sendFrame(this.server.snapshot())
             if (!this.server.hasPendingCommands()) this.flushSaveRequest()
-            if (this.server.snapshot().paused) {
+            if (this.server.isPaused()) {
                 this.accumulatorSeconds = 0
                 return
             }
@@ -133,26 +134,32 @@ export class IntegratedGameHost {
         }
 
         this.accumulatorSeconds = Math.max(0, this.accumulatorSeconds - ticks * TICK_SECONDS)
+        const events: ServerEvent[] = []
         for (let tick = 0; tick < ticks; tick++) {
-            const snapshot = this.server.tick()
+            this.server.step()
             this.flushCommandResults()
-            this.sendFrame(snapshot)
-            if (!this.server.hasPendingCommands()) this.flushSaveRequest(false)
-            if (snapshot.paused) {
+            events.push(...this.server.drainEvents())
+            const paused = this.server.isPaused()
+            const saving = this.pendingSaveSequences.length > 0 && !this.server.hasPendingCommands()
+            // The client renders once per update from the last two frames. When catching up,
+            // skip building earlier snapshots but keep every event and any save point.
+            if (tick >= ticks - 2 || paused || saving) this.sendFrame(this.server.snapshot(), events.splice(0))
+            if (saving) this.flushSaveRequest(false)
+            if (paused) {
                 this.accumulatorSeconds = 0
                 break
             }
         }
     }
 
-    private sendFrame(snapshot: WorldSnapshot): void {
+    private sendFrame(snapshot: WorldSnapshot, events = this.server.drainEvents()): void {
         const packet: ServerFramePacket = {
             protocolVersion: 1,
             type: 'frame',
             serverTick: snapshot.tick,
             acknowledgedSequence: this.acknowledgedSequence,
             snapshot,
-            events: this.server.drainEvents(),
+            events,
         }
         this.channel.sendToClient(packet)
     }

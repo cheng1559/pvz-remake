@@ -176,3 +176,48 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
     snapshot.cursor = { mode: 'none', seedId: 'pvz:peashooter' }
     assert.throws(() => parseServerPacket(packet), /does not match/)
 })
+
+test('local server replies deeply isolate nested data with JSON copy semantics', () => {
+    const channel = new LocalGameChannel()
+    const shared = { values: [1, 2] }
+    const special = Object.assign(Object.create(null), { negativeZero: -0 })
+    Object.defineProperty(special, '__proto__', { enumerable: true, value: { marker: 'data' } })
+    const packet: ServerPacket = { protocolVersion: 1, type: 'saveReady', acknowledgedSequence: 1,
+        save: { left: shared, right: shared, special } }
+    const expected = jsonRoundTrip(packet)
+    channel.sendToClient(packet)
+    shared.values[0] = 99
+    special.negativeZero = 99
+    const [received] = channel.drainClientPackets()
+    assert.deepEqual(received, expected)
+    assert.equal(received.type, 'saveReady')
+    if (received.type !== 'saveReady') return
+    const save = received.save as any
+    assert.notEqual(save.left, save.right)
+    assert.equal(Object.is(save.special.negativeZero, -0), false)
+    assert.equal(Object.getPrototypeOf(save.special), Object.prototype)
+    assert.equal(Object.hasOwn(save.special, '__proto__'), true)
+    save.left.values[1] = 100
+    assert.equal(shared.values[1], 2)
+    assert.equal(save.right.values[1], 2)
+})
+
+test('local server copy rejects unsafe nested data before getters or toJSON can run', () => {
+    const channel = new LocalGameChannel()
+    let invoked = false
+    const accessor = Object.defineProperty({}, 'value', { enumerable: true, get() { invoked = true; return 1 } })
+    const hidden = Object.defineProperty({}, 'value', { value: 1 })
+    const serializer = { toJSON() { invoked = true; return {} } }
+    const cyclic: any = {}; cyclic.self = cyclic
+    const sparse = new Array(2); sparse[1] = 1
+    const extra = [1]; (extra as any).label = 'extra'
+    const disguisedHole = new Array(1); (disguisedHole as any).label = 1
+    for (const value of [undefined, NaN, Infinity, () => {}, 1n, new Map(), accessor, hidden, serializer,
+        { [Symbol('hidden')]: 1 }, cyclic, sparse, extra, disguisedHole]) {
+        assert.throws(() => channel.sendToClient({ protocolVersion: 1, type: 'saveReady', acknowledgedSequence: 1,
+            save: { nested: value } } as any), TypeError)
+    }
+    assert.equal(invoked, false)
+    assert.deepEqual(channel.drainClientPackets(), [])
+    assert.throws(() => channel.sendToClient({ protocolVersion: 1, type: 'commandRejected', sequence: -1, code: 'bad' }), /sequence/)
+})

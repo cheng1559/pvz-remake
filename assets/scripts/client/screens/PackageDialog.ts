@@ -1,7 +1,8 @@
 import { Button, Color, director, Director, KeyCode, Node, UITransform } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
-import { modManager } from '@/client/content/ModManager'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { modManager, type ModImport } from '@/client/content/ModManager'
+import { waitForPreloadFrame } from '@/client/content/preloadTasks'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UIDialog } from '@/client/ui/UIDialog'
@@ -19,17 +20,18 @@ const CHECKBOX_CENTER_Y = 17
 const ARROW_WIDTH = 20
 
 export interface PackageDialogOptions {
-    /** Picks and installs ZIPs without enabling them; empty when cancelled or all failed. */
-    install: () => Promise<string[]>
-    /** Saves the running level and restarts the game. */
+    /** Picks and validates ZIPs without saving them; empty when cancelled or all failed. */
+    import: () => Promise<ModImport[]>
+    /** Saves the running level before handing the draft to the next startup. */
+    save: () => Promise<unknown>
+    /** Restarts after the pending changes have been persisted. */
     restart: () => Promise<void>
 }
 
 interface Entry { id: string, version?: string, error?: string, builtin?: boolean }
 
 /**
- * Enabled states and uninstalls stay in the draft until Apply; Cancel discards them.
- * Import saves the ZIP immediately, without enabling it.
+ * Imports, enabled states and uninstalls stay in the draft until Apply; Cancel discards them.
  * The Mod list order is its priority, highest first, and checking a row never moves it.
  * Dependencies load first; later Mods override earlier resources.
  */
@@ -70,9 +72,8 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
     if (!dialog.node.isValid || !dialog.node.activeInHierarchy) return dialog
     const manager = modManager
-    let running: string[], initial: string[], installedEntries: Entry[]
+    let initial: string[], installedEntries: Entry[]
     try {
-        running = await manager.running()
         initial = await manager.list()
         installedEntries = await manager.installed()
     } catch (error) {
@@ -83,12 +84,16 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     loading.node.destroy()
     const checked = new Set(initial)
     const pendingUninstalls = new Set<string>()
+    const pendingImports = new Map<string, ModImport>()
+    void dialog.result.then(async () => {
+        await manager.discardImports([...pendingImports.values()])
+        pendingImports.clear()
+    }).catch(error => console.warn('[Mods] Failed to discard staged imports', error))
     /** Display order; the first row has the highest priority. */
     let entries: Entry[] = []
     let order = installedEntries.map(entry => entry.id)
-    /** An import replaced files used by this session. */
-    let touchedRunning = false
     let busy = false
+    let restarting = false
 
     const fail = (error: unknown) => {
         if (dialog.node.isValid) ui.dialog(dialog.node, { title: 'Error', message: error instanceof Error ? error.message : String(error) })
@@ -98,7 +103,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
 
     /** Runs one operation at a time, reporting failures without closing the manager. */
     async function run(operation: () => Promise<void>): Promise<void> {
-        if (busy || !dialog.node.activeInHierarchy) return
+        if (busy || restarting || !dialog.node.activeInHierarchy) return
         busy = true
         try { await operation() } catch (error) { fail(error) } finally { busy = false }
     }
@@ -106,6 +111,9 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     async function refresh(installed?: Entry[]): Promise<void> {
         installed ??= await manager.installed()
         if (!dialog.node.isValid) return
+        const merged = new Map(installed.map(entry => [entry.id, entry]))
+        for (const { id, version } of pendingImports.values()) merged.set(id, { id, version })
+        installed = [...merged.values()]
         const ids = installed.filter(entry => !pendingUninstalls.has(entry.id)).map(entry => entry.id)
         order = [...order, ...ids].filter((id, index, all) => all.indexOf(id) === index && ids.includes(id))
         for (const id of checked) if (!order.includes(id)) checked.delete(id)
@@ -187,7 +195,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         const button = node.addComponent(UIButton)
         button.refreshHoverOnEnable = false
         button.releaseToNormalOnPressOut = true
-        button.onPress = () => { void SoundLoader.play(SoundEffect.ButtonClick) }
+        button.onPress = () => { void SoundSystem.play(SoundEffect.ButtonClick) }
         button.onClick = onClick
         button.onStateChange = state => paint(state === 'hover' || state === 'pressed' ? Color.WHITE : normal)
         node.on(Button.EventType.CLICK, () => button.onClick())
@@ -226,11 +234,15 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     }
 
     async function importArchive(): Promise<void> {
-        const ids = await options.install()
-        if (!ids.length || !dialog.node.isValid) return
-        for (const id of ids) {
+        const imports = await options.import()
+        if (!dialog.node.isValid) { await manager.discardImports(imports); return }
+        if (!imports.length) return
+        for (const mod of imports) {
+            const { id } = mod
+            const previous = pendingImports.get(id)
+            if (previous) await manager.discardImports([previous])
+            pendingImports.set(id, mod)
             pendingUninstalls.delete(id)
-            if (running.includes(id) || initial.includes(id)) touchedRunning = true
             if (!order.includes(id)) order.unshift(id)
             checked.add(id)
         }
@@ -243,7 +255,10 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
             confirmText: ui.text('BUTTON_YES'), cancelText: ui.text('BUTTON_NO'),
         }).result
         if (!confirmed || !dialog.node.isValid) return
-        pendingUninstalls.add(id)
+        const imported = pendingImports.get(id)
+        if (imported) await manager.discardImports([imported])
+        pendingImports.delete(id)
+        if (installedEntries.some(entry => entry.id === id)) pendingUninstalls.add(id)
         checked.delete(id)
         await refresh()
     }
@@ -252,7 +267,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         const enabled = enabledDraft()
         const same = enabled.length === initial.length
             && enabled.every((id, index) => initial[index] === id)
-        const restart = !same || touchedRunning
+        const restart = !same || pendingImports.size > 0 || pendingUninstalls.size > 0
         if (restart) {
             const confirmed = await ui.dialog(dialog.node, {
                 title: ui.text('PACKAGE_RESTART_HEADER', 'Restart Game?'),
@@ -261,13 +276,21 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
             }).result
             if (!confirmed || !dialog.node.isValid) return
         }
-        await manager.setEnabled(enabled, order)
-        for (const id of pendingUninstalls) {
-            await manager.uninstall(id)
-            pendingUninstalls.delete(id)
+        if (restart) {
+            const progress = ui.dialog(dialog.node, { title: 'Restarting...', footer: false, clickSound: null })
+            progress.onConfirm = progress.onCancel = () => {}
+            await waitForPreloadFrame()
+            try {
+                await options.save()
+                await manager.queueChanges({ enabled, order, imports: [...pendingImports.values()], uninstalls: [...pendingUninstalls] })
+                pendingImports.clear()
+                restarting = true
+                await options.restart()
+            } catch (error) { progress.close(); throw error }
+        } else {
+            await manager.setEnabled(enabled, order)
+            dialog.close(true)
         }
-        if (restart) await options.restart()
-        else dialog.close(true)
     }
 
     dialog.onConfirm = () => { void run(apply) }
@@ -276,7 +299,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     const draft = () => JSON.stringify([order, [...checked].sort()])
     const initialDraft = draft()
     dialog.onCancel = () => { void run(async () => {
-        if (pendingUninstalls.size || draft() !== initialDraft) {
+        if (pendingImports.size || pendingUninstalls.size || draft() !== initialDraft) {
             const discard = await ui.dialog(dialog.node, {
                 title: ui.text('ARE_YOU_SURE'),
                 message: ui.text('PACKAGE_DISCARD_WARNING', 'Unapplied changes will not be saved. Discard them?'),

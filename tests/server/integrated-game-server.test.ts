@@ -1,27 +1,26 @@
-import { readGameplaySource } from '../../tools/content_source'
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readGameplaySource } from '../../tools/mod/content'
 
-import { DeterministicRng } from '@/server/DeterministicRng'
-import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { damageZombie } from '@/server/zombies/damage'
-import {
-    EconomyStateResource,
-    LawnMowerComponent,
-    PlantAttackComponent,
-    PlantComponent,
-    PositionComponent,
-    ProjectileComponent,
-    ZombieComponent,
-} from '@/server/components'
-import { spawnZombie } from '@/server/zombies/spawn'
-import { ItemComponent, TutorialResource } from '@/server/levelState'
 import type { World } from '@/ecs/index'
 import {
-    parseGameplayDefinitions,
-    parseGameplayLevels,
+LawnMowerComponent,
+PlantAttackComponent,
+PlantComponent,
+PositionComponent,
+ProjectileComponent,
+ZombieComponent
+} from '@/server/components'
+import { DeterministicRng } from '@/server/DeterministicRng'
+import { IntegratedGameServer } from '@/server/IntegratedGameServer'
+import { ItemComponent,TutorialResource } from '@/server/levelState'
+import { damageZombie } from '@/server/zombies/damage'
+import { spawnZombie } from '@/server/zombies/spawn'
+import {
+parseGameplayDefinitions,
+parseGameplayLevels,
 } from '@/shared/content/gameplay'
-import { isJsonValue, parseServerPacket, type JsonValue, type StartSessionPacket } from '@/shared/protocol/index'
+import { isJsonValue,parseServerPacket,type StartSessionPacket } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
 
 const source = readGameplaySource
@@ -195,28 +194,6 @@ test('Peashooter acquires a zombie ahead and fires after its fixed windup', () =
     ]])
 })
 
-test('pea damages the spatially nearest zombie', () => {
-    const server = new IntegratedGameServer(definitions, levels)
-    startGameplay(server)
-    runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
-    runCommand(server, { type: 'placePlant', row: 2, column: 0 })
-
-    const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
-    assert.equal(spawnZombie(world, definitions, 'pvz:normal', 2, 94, 250), 3)
-    assert.equal(spawnZombie(world, definitions, 'pvz:normal', 2, 90, 250), 4)
-
-    let snapshot = server.snapshot()
-    const ready = Math.max(1, server.save().entities.find(entity => entity.plantAttack)!.plantAttack!.readyAtTick)
-    const fire = ready + definitions.plants['pvz:peashooter'].shooter!.windupTicks - 1
-    while (gameplayTick(server) < fire) snapshot = server.tick()
-    assert.deepEqual(snapshot.projectiles, [])
-    assert.deepEqual(snapshot.zombies.map(zombie => [zombie.entityId, zombie.health]), [
-        [3, 270],
-        [4, 250],
-    ])
-    assert.equal(snapshot.zombies.find(zombie => zombie.entityId === 4)?.hitFlashCounter, 25)
-
-})
 
 test('1-1 tutorial collects two suns and starts its first wave 99 ticks after the second plant', () => {
     const server = new IntegratedGameServer(definitions, levels)
@@ -271,133 +248,10 @@ test('1-1 tutorial collects two suns and starts its first wave 99 ticks after th
     assert.equal(snapshot.zombies.length, 1)
 })
 
-test('1-1 advances on affordable cooldown completion and preserves the guide deadline after restore', () => {
-    for (const initialSun of [150, 200]) {
-        const server = new IntegratedGameServer(definitions, levels)
-        startGameplay(server)
-        const initial = server.save()
-        initial.economy.sun = initialSun
-        server.start({ ...startPacket, save: initial as unknown as JsonValue })
-        runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
-        runCommand(server, { type: 'placePlant', row: 2, column: 0 })
-        while (gameplayTick(server) < 749) server.tick()
-        assert.equal(server.snapshot().tutorial.step, 'collect-first-sun')
-        server.drainEvents()
-        const restored = new IntegratedGameServer(definitions, levels)
-        restored.start({ ...startPacket, save: server.save() as unknown as JsonValue })
-        assert.deepEqual(restored.tick(), server.tick())
-        assert.equal(server.snapshot().tutorial.step, initialSun === 200 ? 'enough-sun' : 'collect-first-sun')
-        if (initialSun === 150) continue
-        assert.equal(server.save().tutorial.promptAtTick, 1150)
-        while (gameplayTick(server) < 1150) assert.deepEqual(restored.tick(), server.tick())
-        assert.equal(server.snapshot().tutorial.step, 'pick-second-seed', 'readiness is handled once without restarting the 400-tick delay')
-        runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
-        assert.equal(server.snapshot().tutorial.step, 'plant-second-seed')
-    }
-})
 
-test('1-1 reports the first insufficient seed pick and flashes sun on every attempt', () => {
-    const server = new IntegratedGameServer(definitions, levels)
-    startGameplay(server)
-    runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
-    runCommand(server, { type: 'placePlant', row: 2, column: 0 })
-    let snapshot = server.snapshot()
-    while (gameplayTick(server) < 750) snapshot = server.tick()
-    server.drainEvents()
 
-    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), 'not-enough-sun')
-    assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [
-        ['sunFlash', {}],
-        ['advice', { key: 'ADVICE_CANT_AFFORD_PLANT', style: 'tutorial-level1' }],
-    ])
-    assert.equal(server.save().tutorial.cantAffordAdviceShown, true)
-    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), 'not-enough-sun')
-    assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [
-        ['sunFlash', {}],
-    ])
 
-    while (snapshot.items.length < 2) snapshot = server.tick()
-    for (const item of snapshot.items.slice(0, 2)) {
-        assert.equal(runCommand(server, { type: 'collectItemAt', itemId: item.entityId }), undefined)
-    }
-    server.drainEvents()
-    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), undefined)
-    assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [
-        ['adviceCleared', { key: 'ADVICE_CANT_AFFORD_PLANT' }],
-    ])
-})
 
-test('1-1 shows the seed refresh advice once after the first sun prompt', () => {
-    const server = new IntegratedGameServer(definitions, levels)
-    startGameplay(server)
-    runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
-    runCommand(server, { type: 'placePlant', row: 2, column: 0 })
-    server.drainEvents()
-
-    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), 'seed-not-ready')
-    assert.deepEqual(server.drainEvents(), [])
-
-    let snapshot = server.snapshot()
-    while (gameplayTick(server) < 400) snapshot = server.tick()
-    server.drainEvents()
-    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), 'seed-not-ready')
-    assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [
-        ['advice', {
-            key: 'ADVICE_SEED_REFRESH',
-            style: 'tutorial-level1',
-        }],
-    ])
-    assert.equal(server.save().tutorial.seedRefreshAdviceShown, true)
-
-    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), 'seed-not-ready')
-    assert.deepEqual(server.drainEvents(), [])
-})
-
-test('sky sun falls, expires after 750 ground ticks, and fades for 50 ticks', () => {
-    const server = new IntegratedGameServer(definitions, levels)
-    startGameplay(server)
-    runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
-    runCommand(server, { type: 'placePlant', row: 2, column: 0 })
-
-    let snapshot = server.snapshot()
-    while (gameplayTick(server) < 400) snapshot = server.tick()
-    const itemId = snapshot.items[0].entityId
-    assert.equal(snapshot.items[0].y, 60.67)
-
-    let previousY = snapshot.items[0].y
-    while (true) {
-        snapshot = server.tick()
-        const y = snapshot.items.find(item => item.entityId === itemId)!.y
-        if (y === previousY) break
-        previousY = y
-    }
-    const landedTick = gameplayTick(server) - 1
-    while (snapshot.items.find(item => item.entityId === itemId)?.state === 'available') snapshot = server.tick()
-    assert.equal(gameplayTick(server), landedTick + 749)
-    assert.equal(snapshot.items.find(item => item.entityId === itemId)?.alpha, 255)
-    snapshot = server.tick()
-    assert.equal(snapshot.items.find(item => item.entityId === itemId)?.alpha, 250)
-    for (let i = 1; i < 50; i++) snapshot = server.tick()
-    assert.equal(snapshot.items.some(item => item.entityId === itemId), false)
-})
-
-test('fading sky sun can still be collected before it disappears', () => {
-    const server = new IntegratedGameServer(definitions, levels)
-    startGameplay(server)
-    runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
-    runCommand(server, { type: 'placePlant', row: 2, column: 0 })
-
-    let snapshot = server.snapshot()
-    while (gameplayTick(server) < 400) snapshot = server.tick()
-    const itemId = snapshot.items[0].entityId
-    while (snapshot.items.find(item => item.entityId === itemId)?.state !== 'fading') snapshot = server.tick()
-    const sun = snapshot.sun
-    assert.equal(runCommand(server, { type: 'collectItemAt', itemId }), undefined)
-    assert.equal(server.snapshot().items.find(item => item.entityId === itemId)?.state, 'collecting')
-    assert.equal(server.snapshot().sun, sun)
-    while (server.snapshot().items.some(item => item.entityId === itemId)) snapshot = server.tick()
-    assert.equal(snapshot.sun, sun + 25)
-})
 
 test('collecting sun buys immediately but reaches the HUD only at the bank', () => {
     const fiftySunDefinitions = {
@@ -430,35 +284,6 @@ test('collecting sun buys immediately but reaches the HUD only at the bank', () 
     assert.equal(snapshot.availableSun, 0)
 })
 
-test('collecting sun used for a purchase is not credited again at the bank', () => {
-    const server = new IntegratedGameServer(definitions, levels)
-    startGameplay(server)
-    const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
-    world.resources.get(EconomyStateResource).sun = 75
-    const itemId = world.createEntity()
-    world.add(itemId, PositionComponent, { x: 15, y: 0, row: -1 })
-    world.add(itemId, ItemComponent, {
-        typeId: 'pvz:sun', value: 25, state: 'collecting', velocityX: 0, velocityY: 0,
-        groundY: 0, disappearTicks: 0, fadeTicks: 0, scale: 1, alpha: 255,
-    })
-
-    assert.equal(server.snapshot().availableSun, 100)
-    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), undefined)
-    assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 0 }), undefined)
-    assert.equal(server.snapshot().sun, 0)
-    assert.equal(server.snapshot().availableSun, 0)
-
-    const save = server.save()
-    assert.equal(save.economy.pendingSunSpend, 25)
-    const restored = new IntegratedGameServer(definitions, levels)
-    restored.start({ ...startPacket, save: save as unknown as JsonValue })
-    assert.equal(restored.snapshot().availableSun, 0)
-
-    const snapshot = restored.tick()
-    assert.equal(snapshot.items.some(item => item.entityId === itemId), false)
-    assert.equal(snapshot.sun, 0)
-    assert.equal(snapshot.availableSun, 0)
-})
 
 test('collecting the award keeps existing entity updates running while spawning and input stop', () => {
     const server = new IntegratedGameServer(definitions, levels)

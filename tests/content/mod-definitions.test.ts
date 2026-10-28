@@ -1,9 +1,12 @@
-import { readBaseContent, readPresentationSource } from '../../tools/content_source'
-import { readModContent } from '../../tools/content_source.mjs'
+import { exampleClient } from './example-client'
+import { parseParticle } from '@/shared/content/particle'
+import { parseReanim } from '@/shared/content/reanim'
+import { readBaseContent, readPresentationSource } from '../../tools/mod/content'
+import { readModContent } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, posix } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { runInNewContext } from 'node:vm'
 import test from 'node:test'
@@ -29,8 +32,8 @@ import { getDebugCliCompletions, parseDebugCliCommand } from '@/shared/debug/Deb
 
 const json = (path: string): any => JSON.parse(readFileSync(path, 'utf8'))
 const base = () => readBaseContent().gameplay
-const gameplay = () => ({ ownerId: 'example:plants', data: readModContent('mods/example-plant/content.json').gameplay })
-const presentation = () => ({ ownerId: 'example:plants', data: readModContent('mods/example-plant/content.json').presentation })
+const gameplay = () => ({ ownerId: 'example:showcase', data: readModContent('mods/example/content.json').gameplay })
+const presentation = () => ({ ownerId: 'example:showcase', data: readModContent('mods/example/content.json').presentation })
 const build = (sources = [gameplay()]) => {
     return buildGameplayContent(base(), sources)
 }
@@ -65,17 +68,19 @@ test('Mod JSON decodes UTF-8 without package imports and uses the native single-
     assert.equal(decodes, 1)
 })
 
-test('Release preloading loads Corn archive assets without requesting a Cocos bundle config', async () => {
-    const registry = new ContentRegistry(), raw = readModContent('mods/corn/content.json').resources
-    const { audio, ...other } = raw
-    const table: Record<string, Record<string, unknown>> = { ...other, sounds: audio }
+test('Release preloading loads Mod archive assets without requesting a Cocos bundle config', async () => {
+    const registry = new ContentRegistry()
+    const table: Record<string, Record<string, string>> = Object.fromEntries(CONTENT_CATEGORIES.map(category =>
+        [category, { [`example:${category}`]: `assets/${category}.json` }]))
+    const files = new Map(Object.values(table).flatMap(entries =>
+        Object.values(entries).map(path => [path, Buffer.from('{}')] as const)))
     const types = { sprites: class SpriteFrame {}, reanim: class JsonAsset {}, particles: class JsonAsset {},
         fonts: class JsonAsset {}, sounds: class AudioClip {}, music: class JsonAsset {}, prefabs: class Prefab {} }
     const loaded = new Set<string>(), bundles: string[] = [], progress: number[] = []
     for (const category of CONTENT_CATEGORIES) {
         for (const [id, path] of Object.entries(table[category] ?? {})) registry.registerEntry({
-            category, id, path: typeof path === 'string' ? path : (path as any).file, bundle: 'pvzmod:///corn%3Aplants/',
-            contentId: 'corn:plants', contentVersion: '0.2.3', contentHash: 'corn', schemaVersion: 2,
+            category, id, path, bundle: 'pvzmod:///example%3Aarchive/',
+            contentId: 'example:archive', contentVersion: '1.0.0', contentHash: 'example', schemaVersion: 2,
         })
     }
     registry.registerEntry({ category: 'sprites', id: 'pvz:background', path: 'sprites/background',
@@ -87,7 +92,8 @@ test('Release preloading loads Corn archive assets without requesting a Cocos bu
             return { loadDir(_path: string, report: Function, done: Function) { report(1, 1); done(null) } }
         },
         async load(content: any, type: any) {
-            const data = readFileSync(`mods/corn/${content.path}`)
+            const data = files.get(content.path)
+            assert.ok(data, `Missing archive fixture: ${content.path}`)
             assert.equal(type.name, types[content.category as keyof typeof types].name)
             if (type.name === 'JsonAsset') JSON.parse(data.toString('utf8'))
             loaded.add(`${content.category}/${content.id}`)
@@ -100,10 +106,10 @@ test('Release preloading loads Corn archive assets without requesting a Cocos bu
         '@/client/reanim/ReanimPlayer': { ReanimRepository: class {
             async load(id: string) { assert.ok(loaded.has(`reanim/${id}`), 'archive JSON must be preloaded before animation preparation') }
         } },
-        '@/client/sound/LegacySoundSystem': { SoundLoader: { async preloadAll() {} } },
-        '@/core/Particle/ParticleDefinitionLoader': { ParticleDefinitionLoader: { async preloadAll() {} } },
+        '@/client/sound/SoundSystem': { SoundSystem: { async preloadAll() {} } },
+        '@/client/particle/ParticleAssets': { ParticleAssets: { async preloadAll() {} } },
         './ModResources': { modResources: { async preload(report: Function) { report(1) } } },
-        './preloadTasks': { async preloadTasks(tasks: (() => Promise<unknown>)[], report: (progress: number) => void) {
+        './preloadTasks': { async preloadTasks(tasks: (() => Promise<unknown>)[], report: (progress: number) => void = () => {}) {
             for (const [index, task] of tasks.entries()) { await task(); report((index + 1) / tasks.length) }
         } },
     }
@@ -120,7 +126,9 @@ test('Release preloading loads Corn archive assets without requesting a Cocos bu
 })
 
 /** Exercise the real app loader without requiring the Cocos engine in Node. */
-function modLoader(installed: any[], ready = async () => installed) {
+function modLoader(installed: any[], ready = async () => installed, clientModules: Record<string, unknown> = {}) {
+    const hosts: ModHost[] = []
+    const keep = (host: ModHost) => { hosts.push(host); return host }
     const gameplay = base()
     const presentation = readPresentationSource()
     class Views extends EntityViewRegistry<any, any> {
@@ -151,18 +159,22 @@ function modLoader(installed: any[], ready = async () => installed) {
         '@/shared/content/DefinitionRegistry': { DefinitionSources, buildGameplayContent, buildPresentationDefinitions },
         '@/shared/mod/ModAssets': { ModAssets },
         '@/server/GameplayRegistry': { GameplayRegistry },
-        '@/server/createModHost': { createServerModHost },
+        '@/server/createModHost': { createServerModHost: (...args: Parameters<typeof createServerModHost>) => keep(createServerModHost(...args)) },
         '@/client/plants/PlantViewRegistry': { PlantViewRegistry: Views },
         '@/client/zombies/ZombieViewRegistry': { ZombieViewRegistry: Views },
         '@/client/content/ArchiveContentRegistry': { ArchiveContentRegistry },
         '@/client/content/createModHost': {
-            ClientModAssets: ModAssets,
+            ClientModAssets: class extends ModAssets { async sprite(path: string) {
+                const png = this.bytes(path)
+                assert.deepEqual(Array.from(png.slice(0, 8)), [137, 80, 78, 71, 13, 10, 26, 10])
+                return { source: path }
+            } },
             createClientModHost: (owner: string, sources: DefinitionSources, resources: ArchiveContentRegistry, plants: Views, zombies: Views) =>
-                new ModHost(owner, { 'content/definitions': sources, 'content/resources': resources, 'client/views': { plants, zombies } }),
+                keep(new ModHost(owner, { ...clientModules, 'content/definitions': sources, 'content/resources': resources, 'client/views': { plants, zombies } })),
         },
         '@/client/content/ModManager': { modManager: { ready, failures } },
         '@/client/content/ModRuntime': {
-            clearModRuntimeCache() {}, async mountMod() {},
+            async mountMod() {},
             async importModModule(owner: string, path: string) {
                 const mod = installed.find(mod => mod.manifest.id === owner)
                 if (mod.modules) {
@@ -170,21 +182,32 @@ function modLoader(installed: any[], ready = async () => installed) {
                     if (entry instanceof Error) throw entry
                     return { register: entry }
                 }
-                const exports: Record<string, unknown> = {}
-                // Mod callbacks share the engine's realm, including JSON object prototypes.
-                new Function('System', fflate.strFromU8(mod.files[path]))({
-                    register(dependencies: string[], declare: Function) {
-                        assert.deepEqual(Array.from(dependencies), [])
-                        declare((key: string, value: unknown) => { exports[key] = value }).execute()
-                    },
-                })
-                return exports
+                const cache = new Map<string, Record<string, unknown>>()
+                const load = (file: string): Record<string, unknown> => {
+                    const cached = cache.get(file)
+                    if (cached) return cached
+                    const exports: Record<string, unknown> = {}
+                    cache.set(file, exports)
+                    // Execute the same local SystemJS dependency graph emitted for Cocos.
+                    new Function('System', fflate.strFromU8(mod.files[file]))({
+                        register(dependencies: string[], declare: Function) {
+                            const module = declare((key: string, value: unknown) => { exports[key] = value })
+                            dependencies.forEach((dependency, index) => {
+                                assert.ok(dependency.startsWith('./'), 'the example must stay self-contained')
+                                module.setters[index](load(posix.join(posix.dirname(file), dependency)))
+                            })
+                            module.execute()
+                        },
+                    })
+                    return exports
+                }
+                return load(path)
             },
         },
     }
     runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {},
         console: { info() {}, error: (...args: unknown[]) => errors.push(args) } })
-    return { load: module.exports.loadInstalledMods, failures, errors }
+    return { load: module.exports.loadInstalledMods, failures, errors, dispose: () => { for (const host of hosts.reverse()) host.dispose() } }
 }
 
 test('a failed Mod rolls back both entries and patches; dependants skip while independent Mods keep loading', async () => {
@@ -299,9 +322,10 @@ test('definition registries reject collisions, foreign namespaces, unresolved re
 
 test('a packed Mod registers both entity kinds, runs custom behaviors and restores without modifying base content', async () => {
     const temporary = mkdtempSync(join(tmpdir(), 'pvz-plant-mod-'))
+    let dispose = () => {}
     try {
         const output = join(temporary, 'example')
-        const packed = spawnSync(process.execPath, ['tools/mod.mjs', 'pack', 'mods/example-plant', '--out', output], { encoding: 'utf8' })
+        const packed = spawnSync(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'tools/mod/cli.ts', 'pack', 'mods/example', '--out', output], { encoding: 'utf8' })
         assert.equal(packed.status, 0, packed.stdout + packed.stderr)
         const archive = fflate.unzipSync(readFileSync(output + '.zip'))
         const files = Object.fromEntries(Object.entries(archive).map(([name, bytes]) => [name.slice('example/'.length), bytes]))
@@ -311,8 +335,41 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         assert.deepEqual(JSON.parse(fflate.strFromU8(files['assets/gameplay.json'])), gameplay().data)
         assert.deepEqual(JSON.parse(fflate.strFromU8(files['assets/presentation.json'])), presentation().data)
         assert.ok(!Object.keys(files).some(name => /^assets\/(gameplay|presentation)\//.test(name)))
-        const loader = modLoader([{ manifest, files, content: parseModContent(contentJson(files, 'content.json'), files) }])
+        const client = exampleClient()
+        const initialize = client.MainMenuScreen.prototype.initialize
+        const execute = client.executor.execute
+        const loader = modLoader([{ manifest, files, content: parseModContent(contentJson(files, 'content.json'), files) }], undefined, client.modules)
+        dispose = loader.dispose
         const loaded = await loader.load()
+        assert.deepEqual([...loader.failures], [])
+        assert.deepEqual(Array.from(loaded.manifests, (entry: any) => entry.id), [manifest.id])
+        assert.ok(loaded.plantViews.has('example:beacon'))
+        assert.deepEqual(getDebugCliCompletions('/example:').sort(), ['/example:charge', '/example:hello'])
+        assert.equal((await client.executor.execute('/sun set 1', true, () => assert.fail())).message, 'delegated')
+        parseParticle(contentJson(files, 'assets/particles/sparks.json'))
+        parseReanim(contentJson(files, 'assets/reanim/beacon.json'))
+        const hello = await client.executor.execute('/example:hello', false, () => assert.fail('client command must not reach server'))
+        assert.match(hello.message, /Mod Lab/)
+        await new Promise(setImmediate)
+        assert.equal(client.sounds[0].id, 'example:chime')
+        const menu = new client.MainMenuScreen()
+        await menu.initialize(menu.ui); await menu.initialize(menu.ui)
+        assert.equal(menu.initialized, 2, 'wrapper keeps the original menu initialization')
+        assert.equal(client.buttons.length, 1, 're-initializing does not duplicate the Mod panel')
+        client.buttons[0].onPress()
+        client.buttons[0].options.onClick()
+        assert.match(client.dialogs[0].options.message, /example:charge/)
+        const view = await loaded.plantViews.create({ kind: 'example:beacon', typeId: 'example:beacon', content: client.game })
+        assert.equal(view.body.loadedId, 'example:beacon')
+        const particles: unknown[][] = []
+        const world = { phase: 'gameplay', result: 'playing', paused: false, gameplayTick: 50, extensions: { 'example:charge': { '1': { remainingTicks: 200 } } } }
+        view.sync({ entityId: 1, x: 0, y: 0 }, world, (...args: unknown[]) => particles.push(args))
+        view.sync({ entityId: 1, x: 0, y: 0 }, world, (...args: unknown[]) => particles.push(args))
+        assert.equal(particles.length, 1, 'drawing the same authoritative tick does not duplicate particles')
+        world.paused = true; world.gameplayTick = 100
+        view.sync({ entityId: 1, x: 0, y: 0 }, world, (...args: unknown[]) => particles.push(args))
+        assert.equal(particles.length, 1)
+        assert.equal(view.body.tint.b, 110)
         const baseGameplay = base()
         // The VM emulates Cocos; copy its JSON across the test realm boundary.
         const gameplayDefinitions = JSON.parse(JSON.stringify(loaded.gameplayDefinitions))
@@ -320,7 +377,8 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         const { definitions, levels } = buildGameplayContent(baseGameplay, gameplayDefinitions)
         const visuals = buildPresentationDefinitions(readPresentationSource(), presentationDefinitions)
         assert.ok(Object.isFrozen(definitions.plants['example:rapid_pea']))
-        assert.deepEqual(levels.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter', 'example:rapid_pea'])
+        assert.ok(visuals.levels?.['example:testing'], 'custom levels must include registered client presentation')
+        assert.deepEqual(levels.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter', 'example:rapid_pea', 'example:beacon'])
         assert.deepEqual(baseGameplay.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter'])
         const animations = new ClientAnimationRegistry(visuals)
         assert.equal(animations.resolve('example:rapid_pea').shootHead.rateScale, 1)
@@ -361,5 +419,36 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         for (let tick = 0; tick < 100; tick++) assert.deepEqual(restored.tick(), server.tick())
         assert.equal(server.snapshot().plants[0].health, 110, 'the registered behavior must heal independently of shooting')
         assert.equal(server.snapshot().zombies.find(zombie => zombie.entityId === summoned.entityId)!.health, 410)
-    } finally { rmSync(temporary, { recursive: true, force: true }) }
+        assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'example:beacon' }), undefined)
+        assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 1 }), undefined)
+        const beacon = server.snapshot().plants.find(plant => plant.typeId === 'example:beacon')!
+        let sequence = 200
+        const command = (input: string) => {
+            server.enqueueDebugCommand(sequence++, input); server.processBoundaryCommands()
+            return server.drainCommandResults()[0].debug!
+        }
+        assert.equal(command('/example:charge 0 1').ok, false)
+        assert.equal(command('/example:charge 3 9').ok, false)
+        assert.equal(command('/example:charge 3 2').ok, true)
+        assert.equal((server.snapshot().extensions['example:charge'] as any)[beacon.entityId].remainingTicks, 300)
+        const chargeSave = server.save()
+        const bad = structuredClone(chargeSave)
+        bad.entities.find(entity => entity.entityId === beacon.entityId)!.extensions!['example:charge'] = { remainingTicks: 0 }
+        assert.throws(() => restored.restore(bad, 'example:testing', mods), /Invalid example charge/)
+        assert.equal(runCommand(server, { type: 'pause' }), undefined)
+        for (let i = 0; i < 20; i++) server.tick()
+        assert.equal((server.snapshot().extensions['example:charge'] as any)[beacon.entityId].remainingTicks, 300)
+        assert.equal(runCommand(server, { type: 'resume' }), undefined)
+        restored.restore(server.save(), 'example:testing', mods)
+        const sun = server.snapshot().sun
+        for (let i = 0; i < 300; i++) assert.deepEqual(restored.tick(), server.tick())
+        assert.equal(server.snapshot().sun, sun + 75, 'charged beacon earns three times its configured sun')
+        assert.equal((server.snapshot().extensions['example:charge'] as any)[beacon.entityId], undefined)
+        dispose()
+        assert.equal(client.MainMenuScreen.prototype.initialize, initialize)
+        assert.equal(client.executor.execute, execute)
+        assert.equal(client.dialogs[0].node.isValid, false)
+        assert.equal(client.buttons[0].node.isValid, false)
+        assert.ok(!getDebugCliCompletions('/example:').some(value => value.includes('example:charge') || value.includes('example:hello')))
+    } finally { dispose(); rmSync(temporary, { recursive: true, force: true }) }
 })

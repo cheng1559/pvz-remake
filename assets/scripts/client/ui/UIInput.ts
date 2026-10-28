@@ -355,9 +355,13 @@ export class UIInput extends Component {
             const anchor = caret === from ? to : from
             if (caret !== this.caret || anchor !== this.anchor) { this.caret = caret; this.anchor = anchor; this.blink = 0 }
         } else {
+            // Native boxes report an ordered range; keep the anchor on whichever end it still matches.
             const range = nativeInputBox()?.getInputBoxSelection?.()
-            if (range && (range.start !== this.anchor || range.end !== this.caret)) {
-                this.anchor = range.start; this.caret = range.end; this.blink = 0
+            if (range && (range.start !== Math.min(this.anchor, this.caret) || range.end !== Math.max(this.anchor, this.caret))) {
+                const backward = range.end === this.anchor && range.start !== this.anchor
+                this.anchor = backward ? range.end : range.start
+                this.caret = backward ? range.start : range.end
+                this.blink = 0
             }
         }
     }

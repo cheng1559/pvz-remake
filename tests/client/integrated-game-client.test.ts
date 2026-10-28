@@ -1,4 +1,4 @@
-import { readGameplaySource } from '../../tools/content_source'
+import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
@@ -18,6 +18,7 @@ test('integrated client hides channel packets behind start, command, update, and
         firstAdventure: false, mods: [],
     })
     assert.equal(game.render().tick, 0)
+    assert.equal(game.currentSnapshot?.tick, 0)
 
     game.command({ type: 'completeIntro' })
     game.command({ type: 'selectSeed', seedId: 'pvz:peashooter' })
@@ -25,6 +26,10 @@ test('integrated client hides channel packets behind start, command, update, and
     game.update(0.015)
     assert.equal(game.render().plants.length, 1)
     assert.equal(game.render().tick, 2)
+    assert.equal(game.currentSnapshot?.tick, 2)
+    assert.equal(game.currentSnapshot?.phase, game.render().phase)
+    assert.deepEqual(game.currentSnapshot?.zombies.map(zombie => [zombie.hasHead, zombie.state]),
+        game.render().zombies.map(zombie => [zombie.hasHead, zombie.state]))
     assert.equal(game.drainEvents().some(event => event.type === 'plantPlaced'), true)
     assert.equal(game.drainChanges().added.includes(2), true)
 

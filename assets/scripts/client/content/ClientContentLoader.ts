@@ -20,12 +20,13 @@ export class ClientContentLoader {
             const assetType: AssetType<Asset> = type
             // Engine-imported prefabs retain their compiled script and dependency bindings.
             if (assetType === Prefab && content.contentId === 'pvz:base') {
-                return new Promise<T>((resolve, reject) => resources.load(content.path.replace(/\.prefab$/i, ''), type,
+                const path = content.path.replace(/^assets\/prefabs\//, '').replace(/\.prefab$/i, '')
+                return new Promise<T>((resolve, reject) => resources.load(path, type,
                     (error, asset) => error ? reject(error) : resolve(asset)))
             }
             const id = content.category === 'music' && assetType === AudioClip
                 ? `${content.id.split(':')[0]}:${content.path.slice(content.path.lastIndexOf('/') + 1)}` : content.id
-            const replacement = await modResources.asset(id, type, animation)
+            const replacement = await modResources.asset(id, type, animation, assetType === JsonAsset ? content.category : undefined)
             if (replacement !== undefined) return replacement
             if (content.bundle.startsWith('pvzmod:///')) return modResources.file(content.contentId, content.path, type)
             throw new Error(`Missing ${content.category} asset: ${id}`)

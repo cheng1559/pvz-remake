@@ -8,9 +8,11 @@
 /mod
 ```
 
-`/mod` 是唯一管理命令，不接受子命令。窗口中点 Import 选择 ZIP，可一次选择多个包；勾选启用，箭头调整资源优先级，越靠上优先级越高。依赖先加载；同 ID 资源由后加载的 Mod 覆盖，游戏定义的重复 ID 会报错。
+`/mod` 是唯一管理命令，不接受子命令。窗口中点 Import 选择 ZIP，可一次选择多个包；勾选启用，箭头调整资源优先级，越靠上优先级越高。依赖先加载；同 ID 资源由后加载的 Mod 覆盖，游戏定义的重复 ID 会报错。`pvz:base` 是内置基础包的保留 ID，不允许导入。
 
-启用、完整列表排序（包括未启用项）和卸载在 Apply 后保存；Cancel/ESC 提示未应用的更改将被丢弃。仅移动未启用项无需重启；启用状态或已启用项优先级改变时，重启后生效。安装文件立即保存，更新已有 Mod 保留原位置；运行中的代码、音频和图片继续使用原归档快照。安装失败不会覆盖原文件。
+导入时校验 ZIP，将压缩文件原样写入独立暂存区，不覆盖已安装的 Mod；Cancel/ESC 会丢弃草稿并删除暂存文件，包括新包和已有 Mod 的更新。更新已有 Mod 保留原位置。
+
+Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启后先显示 `Restarting...` 并锁住管理窗口，保存当前关卡及待应用清单，再重启。Apply 不重新解压 ZIP 或安装、删除 Mod；下次启动期间只显示原有 PopCap Logo，后台校验依赖、安装和卸载，完成后加载游戏资源并进入标题页。任务失败会保留清单和暂存 ZIP，错误记入日志，点击 Logo 重试；运行中的代码、音频和图片继续使用原归档快照。仅调整未启用项的排序直接保存，无需重启。
 
 只有 ZIP 安装方式。Web 使用 IndexedDB；Native 使用应用可写目录的 `mods/`。损坏或缺少依赖的归档会停用并在窗口显示错误，不阻止打开管理窗口。
 
@@ -23,7 +25,7 @@
 ```json
 {
   "schemaVersion": 1,
-  "id": "example:plants",
+  "id": "example:showcase",
   "version": "1.0.0",
   "apiVersion": 1,
   "contentHash": "generated-on-pack",
@@ -72,9 +74,13 @@
 
 ```sh
 npm run mod:init -- my-mod
-npm run mod:pack -- mods/corn
-npm run mod:test -- dist/mods/corn
+npm run mod:pack -- mods/example
+npm run mod:test -- dist/mods/example
 ```
+
+仓库只跟踪 `mods/example/` 示例；其余 `mods/` 子目录用于本地开发并由 Git 忽略。
+
+[Mod 实验场](../mods/example/README.md) 展示玩法行为、ECS 组件与存档、关卡补丁、资源新增与覆盖、自定义视图、两端命令、菜单扩展和生命周期清理。可按其中的能力表查找实际实现。
 
 只有 `mod:pack` 编译。它合并分类定义、收集资源和字体图集、生成内容哈希，输出 `dist/mods/<name>/` 与旁边的 ZIP；源码目录不产生编译文件。ZIP 的 `content.json` 保留资源映射，`gameplay`、`presentation` 则指向生成的合并 JSON。安装器验证清单、模块、文件路径、PNG 尺寸及字体图集。
 
@@ -135,10 +141,16 @@ host.around(executor, 'execute', function (next, world, definitions, tick, comma
 
 服务端命令仍经过原有调试权限和命令队列，支持暂停时执行；Mod 自行检查其操作所需的世界状态。执行包装只处理自己的命令，其他命令调用 `next`。语法也使用包装扩展，避免直接修改列表；注册失败时，加载器会随 `host.dispose()` 一起撤销语法和执行包装，不留下失效命令或补全。
 
-## 现有资源 Mod
-
-`dist/mods/` 包含 `hd.zip`、`hd-2.zip`、`zh-cn.zip`、`zh-cn-hd.zip` 和 `jiangnan-pvz2.zip`，ID 分别为 `local:hd`、`local:hd-2`、`local:zh-cn`、`local:zh-cn-hd`、`local:jiangnan-pvz2`。资源字节沿用原包，没有重新超分。
-
 旧 `mod.json`、`pack.json` ZIP 不再作为安装格式，需要安装重新打包后的版本。`/pack` 命令及独立资源包管理器已移除。
 
-本体 `assets/resources/base.zip` 与 Mod 共用 `manifest.json`、`content.json`、定义和资源解析器，不再包含专用内容索引。基础包固定最先加载且不可禁用／卸载；其源码 `tools/content/pvz-base/content.json` 与 Mod 一样索引分类 JSON，打包时合并成 `assets/gameplay.json` 和 `assets/presentation.json`。基础玩法额外提供 `settings`（schemaVersion、tickSeconds）、完整关卡、默认文本和种子目录；后加载的 Mod 使用自己的命名空间添加内容。`npm run build:base-pack` 重新生成内置 ZIP，哈希覆盖统一索引及全部文件。
+本体 `assets/resources/base.zip` 与 Mod 共用 `manifest.json`、`content.json`、定义和资源解析器，不再包含专用内容索引。基础包固定最先加载且不可禁用／卸载；其源码 `mods/pvz-base/content.json` 与 Mod 一样索引分类 JSON，打包时合并成 `assets/gameplay.json` 和 `assets/presentation.json`。基础玩法额外提供 `settings`（schemaVersion、tickSeconds）、完整关卡、默认文本和种子目录；后加载的 Mod 使用自己的命名空间添加内容。`npm run mod:pack -- pvz-base` 使用通用 Mod 打包器生成 `dist/mods/pvz-base.zip`，`npm run mod:pack -- pvz-base --publish assets/resources/base.zip` 将同一产物发布到内置位置，哈希覆盖统一索引及全部文件。所有资源（含粒子）均在源 `content.json` 的 `resources` 中显式登记，打包阶段不扫描补齐。
+
+### 粒子资源
+
+粒子统一登记在 `resources.particles`，JSON 使用 `schemaVersion: 3`、完整限定的 `id` 和 `emitters`。每个发射器的 `sprite` 也是限定 ID；图集使用 `columns`、`rows`、`firstFrame`、`frameCount`。可选属性覆盖原版的循环、生成额度、色调、旋转、碰撞和场，缺省值由公共解析器统一补全。
+
+轨道使用 `{ "nodes": [{ "time": 0, "low": 1, "high": 1 }] }`；`time` 是寿命比例，`systemDuration` / `particleDuration` 的值以 0.01 秒的 tick 计。XML 转换统一通过 `tools/pvz/particles.py`，基础包从 PAK 临时解包，直接转换到 `mods/pvz-base/assets/particles/` 并登记资源清单，再由通用 Mod 打包器打包。原版曲线及随机分布在转换时保留，由公共粒子内核运算。
+
+脚本通过 `ParticlePlayer.spawn({ parent, id: 'example:burst', x: 0, y: 0, seed: 123 })` 播放，所有平台使用同一 C++ 核心。`whenReady()` 等待加载；`snapshot()` 与 `ParticlePlayer.restore()` 使用同一种存档结构。旧粒子格式和旧粒子存档不再接受，已有 Mod 的粒子资源需要重新转换和打包。
+
+`mod:pack` 支持 `--publish <zip-file>`：打包成功后将完整 ZIP 原子替换到指定位置；失败时保留此前发布的文件。基础包使用 `npm run mod:pack -- pvz-base --publish assets/resources/base.zip`。

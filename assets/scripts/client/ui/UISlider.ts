@@ -1,5 +1,5 @@
 import { _decorator, Component, EventTouch, Node, UITransform, Vec3 } from 'cc'
-import { SoundEffect, SoundLoader } from '@/client/sound/LegacySoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { Haptics } from '@/platform/Haptics'
 
 const { ccclass } = _decorator
@@ -64,7 +64,7 @@ export class UISlider extends Component {
 
     private endDrag(event: EventTouch): void {
         this.cancelDrag(event)
-        void SoundLoader.play(SoundEffect.ButtonClick)
+        void SoundSystem.play(SoundEffect.ButtonClick)
     }
 
     private cancelDrag(event: EventTouch): void {

@@ -1,4 +1,4 @@
-import { readGameplaySource } from '../../tools/content_source'
+import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
@@ -126,4 +126,55 @@ test('integrated host fatally stops before an oversized catch-up', () => {
     assert.equal(packets[0].type === 'sessionStarted' && packets[0].snapshot.tick, 0)
     host.update(1)
     assert.deepEqual(channel.drainClientPackets(), [])
+})
+
+test('a catch-up update sends the last two frames with every event and matches single steps', () => {
+    function run(updates: number[]) {
+        const channel = new LocalGameChannel()
+        const server = new IntegratedGameServer(definitions, levels)
+        const host = new IntegratedGameHost(server, channel, true)
+        send(channel, { ...startPacket, levelId: 'pvz:stress-test' })
+        send(channel, { protocolVersion: 1, sequence: 2, type: 'command', command: { type: 'completeIntro' } })
+        send(channel, { protocolVersion: 1, sequence: 3, type: 'debugCommand', command: '/nextwave', args: null })
+        host.update(0.01)
+        channel.drainClientPackets()
+        const frames = updates.flatMap(dt => { host.update(dt); return channel.drainClientPackets() })
+            .flatMap(packet => packet.type === 'frame' ? [packet] : [])
+        return { frames, save: server.save() }
+    }
+    const batched = run([5]), stepped = run(Array(500).fill(0.01))
+    assert.equal(batched.frames.length, 2)
+    assert.deepEqual(batched.frames.map(frame => frame.snapshot), stepped.frames.slice(-2).map(frame => frame.snapshot))
+    const events = (frames: typeof batched.frames) => frames.flatMap(frame => frame.events)
+    assert.ok(events(stepped.frames).length > 0)
+    assert.deepEqual(events(batched.frames), events(stepped.frames))
+    assert.deepEqual(batched.save, stepped.save)
+})
+
+test('frames are handed to the client without copying yet share nothing with server state', () => {
+    function run(tamper: boolean) {
+        const channel = new LocalGameChannel()
+        const server = new IntegratedGameServer(definitions, levels)
+        const host = new IntegratedGameHost(server, channel, true)
+        send(channel, { ...startPacket, levelId: 'pvz:stress-test' })
+        send(channel, { protocolVersion: 1, sequence: 2, type: 'command', command: { type: 'completeIntro' } })
+        send(channel, { protocolVersion: 1, sequence: 3, type: 'debugCommand', command: '/nextwave', args: null })
+        const damage = (value: unknown): void => {
+            if (Array.isArray(value)) { value.forEach(damage); value.push(null); return }
+            if (!value || typeof value !== 'object') return
+            const object = value as Record<string, unknown>
+            for (const key of Object.keys(object)) {
+                if (typeof object[key] === 'number') object[key] = -999
+                else if (typeof object[key] === 'string') object[key] = 'tampered'
+                else damage(object[key])
+            }
+        }
+        for (let i = 0; i < 300; i++) {
+            host.update(0.01)
+            const packets = channel.drainClientPackets()
+            if (tamper) for (const packet of packets) if (packet.type === 'frame') { damage(packet.snapshot); damage(packet.events) }
+        }
+        return server.save()
+    }
+    assert.deepEqual(run(true), run(false))
 })

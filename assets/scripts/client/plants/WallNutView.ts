@@ -44,7 +44,7 @@ export class WallNutView extends AnimatedPlantView {
         if (stage !== this.crackStage) {
             this.body.setTrackSpriteOverride('anim_face', stage === 0 ? null : this.assets.wallnutCracked[stage - 1])
             if (this.crackStage >= 0 && stage > this.crackStage) {
-                particle('wallnuteatlarge', plant.x + 40, plant.y + 10, this.tint)
+                particle("pvz:wallnuteatlarge", plant.x + 40, plant.y + 10, this.tint)
             }
             this.crackStage = stage
         }

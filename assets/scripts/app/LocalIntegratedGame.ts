@@ -4,7 +4,7 @@ import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { GameplayRegistry } from '@/server/GameplayRegistry'
 import { LocalGameChannel } from '@/shared/channel/index'
 import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
-import type { GameCommand, JsonValue, StartSessionPacket } from '@/shared/protocol/index'
+import type { GameCommand, JsonValue, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import type { LevelPresentationSnapshot } from '@/client/level/LevelPresentationSnapshot'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 
@@ -73,6 +73,10 @@ export class LocalIntegratedGame {
 
     render() {
         return this.client.render(this.host.interpolationAlpha)
+    }
+
+    get currentSnapshot(): Readonly<WorldSnapshot> | undefined {
+        return this.client.world.current
     }
 
     drainEvents() {

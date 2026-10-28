@@ -18,9 +18,10 @@ export interface ModContent { resources: ResourceManifest; gameplay?: string; pr
 export type ContentFiles = Readonly<Record<string, Uint8Array>>
 export interface ContentArchive { manifest: ModManifest; content: ModContent; files: ContentFiles }
 
-export function parseContentArchive(files: ContentFiles): ContentArchive {
+/** With checkFiles false, only the manifest and content index are read; the files were checked when installed. */
+export function parseContentArchive(files: ContentFiles, checkFiles = true): ContentArchive {
     return { manifest: parseModManifest(contentJson(files, 'manifest.json')),
-        content: parseModContent(contentJson(files, 'content.json'), files), files }
+        content: parseModContent(contentJson(files, 'content.json'), files, checkFiles), files }
 }
 
 export function relativeFile(value: unknown): asserts value is string {
@@ -35,7 +36,7 @@ export function contentJson(files: ContentFiles, file: string): any {
     return JSON.parse(new TextDecoder('utf-8').decode(bytes))
 }
 
-export function parseModContent(value: unknown, files: ContentFiles): ModContent {
+export function parseModContent(value: unknown, files: ContentFiles, checkFiles = true): ModContent {
     const source = record(value, 'content')
     for (const key of Object.keys(source)) if (!['resources', 'gameplay', 'presentation'].includes(key)) throw new Error(`Unknown content field: ${key}`)
     const raw = record(source.resources ?? {}, 'resources')
@@ -45,14 +46,17 @@ export function parseModContent(value: unknown, files: ContentFiles): ModContent
     for (const [id, sprite] of Object.entries(resources.sprites)) {
         qualifiedId(id)
         if (!sprite || typeof sprite !== 'object') throw new Error(`Invalid sprite: ${id}`)
-        const [width, height] = pngSize(files, sprite.file)
+        relativeFile(sprite.file)
         if (sprite.alphaMode !== undefined) {
             if (sprite.alphaMode !== 'straight' && sprite.alphaMode !== 'premultiplied') throw new Error(`Invalid sprite alpha mode: ${id}`)
             if (alphaModes.has(sprite.file) && alphaModes.get(sprite.file) !== sprite.alphaMode) throw new Error(`Conflicting sprite alpha modes: ${sprite.file}`)
             alphaModes.set(sprite.file, sprite.alphaMode)
         }
-        if (![sprite.width, sprite.height, sprite.scale ?? 1].every(v => Number.isFinite(v) && v > 0)
-            || width !== sprite.width * (sprite.scale ?? 1) || height !== sprite.height * (sprite.scale ?? 1)) throw new Error(`Sprite dimensions do not match: ${id}`)
+        if (![sprite.width, sprite.height, sprite.scale ?? 1].every(v => Number.isFinite(v) && v > 0)) throw new Error(`Sprite dimensions do not match: ${id}`)
+        if (checkFiles) {
+            const [width, height] = pngSize(files, sprite.file)
+            if (width !== sprite.width * (sprite.scale ?? 1) || height !== sprite.height * (sprite.scale ?? 1)) throw new Error(`Sprite dimensions do not match: ${id}`)
+        }
         for (const [values, length] of [[sprite.rect, 4], [sprite.offset, 2], [sprite.borders, 4]] as const) {
             if (values !== undefined && (!Array.isArray(values) || values.length !== length || !values.every(Number.isFinite))) throw new Error(`Invalid sprite geometry: ${id}`)
         }
@@ -61,8 +65,9 @@ export function parseModContent(value: unknown, files: ContentFiles): ModContent
     for (const kind of RESOURCE_FILES) for (const [id, file] of Object.entries(resources[kind])) {
         qualifiedId(id)
         relativeFile(file)
-        if (!files[file]) throw new Error(`Missing ZIP file: ${file}`)
         if (kind === 'audio' && !/\.(mp3|wav)$/i.test(file)) throw new Error(`Mod audio must be MP3 or WAV: ${id}`)
+        if (!checkFiles) continue
+        if (!files[file]) throw new Error(`Missing ZIP file: ${file}`)
         if (['json', 'reanim', 'particles', 'music'].includes(kind)) contentJson(files, file)
         if (kind === 'fonts') {
             const config = contentJson(files, file)
@@ -75,7 +80,7 @@ export function parseModContent(value: unknown, files: ContentFiles): ModContent
     for (const kind of ['gameplay', 'presentation'] as const) {
         if (source[kind] !== undefined) {
             relativeFile(source[kind])
-            contentJson(files, source[kind])
+            if (checkFiles) contentJson(files, source[kind])
             result[kind] = source[kind]
         }
     }

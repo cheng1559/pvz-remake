@@ -18,7 +18,7 @@ import * as preview from '@/client/hud/PlantPreview'
 import * as packets from '@/client/hud/SeedPacketRenderer'
 import * as content from '@/client/game/loadIntegratedGameContent'
 import * as animations from './ClientAnimationRegistry'
-import * as sounds from '@/client/sound/LegacySoundSystem'
+import * as sounds from '@/client/sound/SoundSystem'
 import * as levelInput from '@/client/level/LevelInputPresenter'
 import * as levelHud from '@/client/level/LevelHudPresenter'
 import * as seedBank from '@/client/level/LevelSeedBank'
@@ -50,7 +50,7 @@ export function createClientModHost(ownerId: string, definitions: DefinitionSour
         'client/hud/SeedPacketRenderer': packets,
         'client/game/loadIntegratedGameContent': content,
         'client/content/ClientAnimationRegistry': animations,
-        'client/sound/LegacySoundSystem': sounds,
+        'client/sound/SoundSystem': sounds,
         'client/level/LevelInputPresenter': levelInput,
         'client/level/LevelHudPresenter': levelHud,
         'client/level/LevelSeedBank': seedBank,

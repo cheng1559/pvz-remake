@@ -1,9 +1,9 @@
-import { Color, type Node } from 'cc'
+import { modResources } from '@/client/content/ModResources'
+import { Color, type Node, SpriteFrame } from 'cc'
 import type { AwardView } from '@/shared/menu'
 import { menuApi } from '@/client/api/MenuApi'
 import { SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import type { UI } from '@/client/ui/UI'
-import { SpriteLoader } from '@/core/SpriteLoader'
 
 export async function showAwardScreen(parent: Node, ui: UI): Promise<AwardView> {
     const award = await menuApi.getAward()
@@ -11,7 +11,7 @@ export async function showAwardScreen(parent: Node, ui: UI): Promise<AwardView> 
     if (award.kind === 'note') {
         const images = ui.assets.presentation.awards?.[award.id]?.pageImages
         if (!images) throw new Error(`Note presentation is not installed: ${award.id}`)
-        const frames = await Promise.all(images.map(image => SpriteLoader.load(image.sprite.replace(/^pvz:/, ''))))
+        const frames = await Promise.all(images.map(image => modResources.asset(image.sprite, SpriteFrame)))
         if (!parent.isValid) throw new Error('Award screen was destroyed while loading')
         images.forEach((image, index) => {
             const frame = frames[index]
@@ -31,7 +31,7 @@ export async function showAwardScreen(parent: Node, ui: UI): Promise<AwardView> 
     else {
         const visual = ui.assets.presentation.awards?.[award.id]
         if (!visual) throw new Error(`Award presentation is not installed: ${award.id}`)
-        const frame = await SpriteLoader.load(visual.sprite.replace(/^pvz:/, ''))
+        const frame = await modResources.asset(visual.sprite, SpriteFrame)
         if (!parent.isValid) throw new Error('Award screen was destroyed while loading')
         if (!frame) throw new Error(`Award sprite is not installed: ${visual.sprite}`)
         ui.image(parent, frame, { x: 400 - frame.originalSize.width / 2, y: visual.pageY })

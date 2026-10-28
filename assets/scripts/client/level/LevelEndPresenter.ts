@@ -1,10 +1,10 @@
+import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { Color, Graphics, Node, UITransform } from 'cc'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
-import { TodParticleSystem } from '@/core/Particle'
 import { SEED_PACKET_HEIGHT, SEED_PACKET_WIDTH } from '@/client/hud/SeedPacketRenderer'
 import type { ItemSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
@@ -135,25 +135,23 @@ export class LevelEndPresenter {
         const y = event.data.y
         if (typeof entityId !== 'number' || typeof x !== 'number' || typeof y !== 'number') return
         const item = this.entityNode(entityId)
-        TodParticleSystem.spawn({
+        ParticlePlayer.spawn({
             parent: this.awardLayer,
-            effect: 'starburst',
+            id: "pvz:starburst",
             x: x + 30,
             y: -(y + 30),
             z: 1,
-            useGameTime: false,
         })
         if (!item?.isValid) return
-        for (const particle of item.getComponentsInChildren(TodParticleSystem)) {
-            if (particle.node.name === 'ParticleSystem_seedpacket' || particle.node.name === 'ParticleSystem_awardpickuparrow') particle.node.destroy()
+        for (const particle of item.getComponentsInChildren(ParticlePlayer)) {
+            if (particle.id === 'pvz:seedpacket' || particle.id === 'pvz:awardpickuparrow') particle.node.destroy()
         }
-        TodParticleSystem.spawn({
+        ParticlePlayer.spawn({
             parent: item.getChildByName('AwardBackEffects') ?? item,
-            effect: this.paperAward ? 'presentpickup' : 'award',
+            id: this.paperAward ? "pvz:presentpickup" : "pvz:award",
             x: 0,
             y: 0,
             z: -1,
-            useGameTime: false,
         })
     }
 
@@ -174,9 +172,9 @@ export class LevelEndPresenter {
             large.setPosition(x, y)
             large.setScale(visualScale / 2, visualScale / 2, 1)
         }
-        for (const particle of node.getComponentsInChildren(TodParticleSystem)) {
+        for (const particle of node.getComponentsInChildren(ParticlePlayer)) {
             particle.overrideScale(visualScale)
-            if (collecting && particle.node.name === 'ParticleSystem_seedpacket') particle.node.destroy()
+            if (collecting && particle.id === 'pvz:seedpacket') particle.node.destroy()
         }
     }
 
