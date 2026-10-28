@@ -123,8 +123,9 @@ int32_t pvz_write_reanim(const double *keys, int32_t keyCount, const int32_t *tr
         }
         pvz_write_quad(image, x, y, a, b, c, d, red / 255, green / 255, blue / 255, alpha * opacity, positions, vertices, quad++, stride);
         if (extra && quad < capacity) {
-            // The extra additive image inherited the track's alpha; a negative alpha marks it additive.
-            const double extraAlpha = -roundHalfUp(state[PVZ_EXTRA_ALPHA] * pose[6]) * alpha / 255;
+            // The extra additive image takes the image alpha, which already includes the track's, as
+            // ColorComponentMultiply in Reanimation::DrawTrack; a negative alpha marks it additive.
+            const double extraAlpha = -std::floor(state[PVZ_EXTRA_ALPHA] * alpha / 255);
             pvz_write_quad(image, x, y, a, b, c, d, state[PVZ_EXTRA_RED] / 255, state[PVZ_EXTRA_GREEN] / 255,
                       state[PVZ_EXTRA_BLUE] / 255, extraAlpha * opacity, positions, vertices, quad++, stride);
         }

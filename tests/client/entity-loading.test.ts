@@ -245,9 +245,11 @@ test('blink attachments follow both the moving head and its parent stem', () => 
         clone() { return new Color(this.r, this.g, this.b, this.a) }
     }
     const modules: Record<string, any> = {
-        cc: { Color, Component: class {}, Node: { EventType: {} }, toRadian: (degrees: number) => degrees * Math.PI / 180,
+        cc: { Color, Component: class {}, Node: { EventType: {} }, Sprite: { SizeMode: { RAW: 0 } }, toRadian: (degrees: number) => degrees * Math.PI / 180,
             _decorator: { ccclass: () => (value: unknown) => value } },
         '@/shared/mod/index': { isQualifiedId: () => true },
+        // Track nodes created by the player; see the atlas page check below.
+        '@/client/view/uiNode': { uiNode: (options: any) => ({ node: { name: options.name, setPosition() {}, setScale() {} }, sprite: {}, skew: { setSkew() {} } }) },
     }
     const load = (path: string) => {
         const module = { exports: {} as Record<string, any> }
@@ -358,6 +360,16 @@ test('blink attachments follow both the moving head and its parent stem', () => 
     zombie.drawAfterTrack(node('flag', { children: [] }), 'hand')
     zombie.seek(1)
     assert.deepEqual(root.children.map(child => child.name), ['hand', 'flag', 'arm'])
+
+    // A batch binds one texture, so a track whose images landed on different atlas pages draws through its own node.
+    const paged = player('antenna', [0, 0])
+    paged.node = { children: [], once() {} }
+    paged.data.tracks[0].keyframes[1].sprite = 'pvz:other'
+    const page = (texture: object) => ({ texture, trimmedBorder: { x: 0, y: 0, z: 0, w: 0 }, originalSize: { width: 1, height: 1 }, uv: [0, 0, 1, 0, 0, 1, 1, 1] })
+    paged.frames.set('pvz:test', page({})); paged.frames.set('pvz:other', page({}))
+    paged.views.set('antenna', { track: paged.data.tracks[0] })
+    paged.seek(0)
+    assert.equal(paged.views.get('antenna').node?.name, 'antenna')
 })
 
 

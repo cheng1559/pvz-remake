@@ -609,14 +609,18 @@ export class ReanimPlayer extends Component {
             const override = this.frameOverrides.get(id)
             const overrideSlot = override && !view.node ? images.push(frameGeometry(override)) - 1 : -1
             tracks.set(track ? [clip.starts.get(track)!, track.keyframes.length, overrideSlot, view.visible === false ? 0 : 1] : [0, 0, -1, 0], index * TRACK)
+            const trackImages = view.node ? [] : overrideSlot >= 0 ? [images[overrideSlot]]
+                : track?.keyframes.flatMap(frame => frame.sprite ? [images[clip.sprites.indexOf(frame.sprite)]] : []) ?? []
+            const image = trackImages.find(Boolean)
+            // A batch binds one texture. Images too many for one atlas page can spread over several,
+            // so a track switching between pages draws through its own node.
+            if (image && trackImages.some(other => other && other.texture !== image.texture)) this.createTrackNode(id, view)
             if (view.node) {
                 run = null
                 segments.push({ trackId: id, view })
                 return
             }
             // Batches split where the texture changes; images of one animation normally share an atlas page.
-            const image = overrideSlot >= 0 ? images[overrideSlot]
-                : track?.keyframes.map(frame => frame.sprite ? images[clip.sprites.indexOf(frame.sprite)] : undefined).find(Boolean)
             if (run && (!image || image.texture === run.frame.texture)) { run.end = index + 1; return }
             if (!image) return
             const segment: Extract<Segment, { first: number }> = {

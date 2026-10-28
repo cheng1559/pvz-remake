@@ -32,7 +32,8 @@ class ParticleEmitterView implements KernelQuadSource {
     render(system: KernelParticles, tint: Color | null, scale: number, extraAdditive: boolean): void {
         const options = this.options
         options[ParticleOption.RED] = tint?.r ?? 255; options[ParticleOption.GREEN] = tint?.g ?? 255
-        options[ParticleOption.BLUE] = tint?.b ?? 255; options[ParticleOption.SCALE] = scale
+        options[ParticleOption.BLUE] = tint?.b ?? 255; options[ParticleOption.ALPHA] = tint?.a ?? 255
+        options[ParticleOption.SCALE] = scale
         options[ParticleOption.ADDITIVE] = this.additive ? 1 : 0; options[ParticleOption.EXTRA] = extraAdditive ? 1 : 0
         this.system = system
         const capacity = Math.max(0, system.counts[this.index]) * (extraAdditive ? 2 : 1)

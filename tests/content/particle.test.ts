@@ -86,3 +86,20 @@ test('original particle easing, bounce and random distributions reach the shared
         assert.ok(Math.abs(render(eased)[0].a - render(linear)[0].a ** 2) < 1e-6)
     } finally { linear.dispose(); eased.dispose() }
 })
+
+test('an emitter draws its newest particles first and applies the tint alpha, as TodParticleEmitter', () => {
+    // One particle per tick, fading over its life, so age shows in alpha.
+    const definition = parseParticle({ schemaVersion: 3, id: 'pvz:trail', emitters: [{
+        sprite: 'pvz:star', systemDuration: track(100), particleDuration: track(100), spawnRate: track(100),
+        particleAlpha: { nodes: [{ time: 0, low: 1, high: 1 }, { time: 1, low: 0, high: 0 }] },
+    }] })
+    const particles = new KernelParticles(packParticleEmitters(definition.emitters), 1, 1)
+    try {
+        particles.step(20)
+        const alphas = render(particles).map(particle => particle.alpha)
+        assert.ok(alphas.length > 2)
+        assert.deepEqual(alphas, [...alphas].sort((a, b) => b - a), 'newest (most opaque) first')
+        const faded = render(particles, [255, 255, 255, 128]).map(particle => particle.alpha)
+        faded.forEach((alpha, index) => assert.ok(Math.abs(alpha - alphas[index] * 128 / 255) <= 1))
+    } finally { particles.dispose() }
+})

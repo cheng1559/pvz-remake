@@ -108,3 +108,19 @@ test('Reanim attachment applies parent motion relative to its base pose', () => 
     assert.equal(attached.scaleX, 1)
     assert.equal(attached.scaleY, 1)
 })
+
+test('an extra additive image takes the track alpha once, as Reanimation::DrawTrack', async () => {
+    const { loadKernel, Header, BLEND, IMAGE } = await import('@/shared/kernel/index')
+    const api = await loadKernel()
+    // One keyframe at 50% alpha: time, x, y, scaleX, scaleY, skewX, skewY, alpha, interpolation, image slot.
+    const keys = new Float64Array([0, 0, 0, 1, 1, 0, 0, 0.5, 0, 0])
+    const state = new Float64Array(Header.SIZE + 4 + BLEND + IMAGE)
+    state.set([1, 0, 1, 0], Header.SIZE + 4 + BLEND)
+    for (const field of ['RED', 'GREEN', 'BLUE', 'ALPHA', 'EXTRA_RED', 'EXTRA_GREEN', 'EXTRA_BLUE', 'EXTRA_ALPHA'] as const) state[Header[field]] = 255
+    Object.assign(state, { [Header.EXTRA]: 1, [Header.OPACITY]: 1, [Header.STRIDE]: 9, [Header.TRACKS]: 1, [Header.CAPACITY]: 2,
+        [Header.IMAGES]: 1, [Header.END]: 1, [Header.MATRIX_A]: 1, [Header.MATRIX_D]: 1 })
+    const positions = new Float32Array(2 * 4 * 9), vertices = new Float32Array(2 * 4 * 9)
+    assert.equal(api.writeReanim(keys, new Int32Array([0, 1, -1, 1]), state, positions, vertices), 2)
+    // Alpha sits at offset 8 of each vertex; the additive copy is marked by a negative alpha.
+    assert.deepEqual([vertices[8], vertices[4 * 9 + 8]], [128, -128])
+})

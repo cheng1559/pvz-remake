@@ -9,7 +9,7 @@ int32_t pvz_particles_step(int32_t handle, int32_t ticks, const double *motion, 
 // Writes per-emitter live counts (-1 if dead), then optional ticks until an empty capped system expires.
 int32_t pvz_particles_info(int32_t handle, double *output, int32_t length);
 enum PvzParticleOption {
-    PVZ_PARTICLE_RED, PVZ_PARTICLE_GREEN, PVZ_PARTICLE_BLUE, PVZ_PARTICLE_SCALE, PVZ_PARTICLE_ADDITIVE, PVZ_PARTICLE_EXTRA,
+    PVZ_PARTICLE_RED, PVZ_PARTICLE_GREEN, PVZ_PARTICLE_BLUE, PVZ_PARTICLE_ALPHA, PVZ_PARTICLE_SCALE, PVZ_PARTICLE_ADDITIVE, PVZ_PARTICLE_EXTRA,
     PVZ_PARTICLE_OPACITY, PVZ_PARTICLE_STRIDE, PVZ_PARTICLE_CAPACITY, PVZ_PARTICLE_OPTIONS
 };
 // Writes one emitter's particles as quads, each followed by its extra additive copy when enabled, and clears the rest

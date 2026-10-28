@@ -88,7 +88,7 @@ test('shared particle core replays seeds, batches ticks and compensates parent m
     const source = new KernelParticles(packed, 123, 1)
     const restored = new KernelParticles(packed, 123, 1)
     const moved = new KernelParticles(packed, 123, 1)
-    const render = (system: InstanceType<typeof KernelParticles>) => drawParticles(system, [200, 180, 160], 1.5)
+    const render = (system: InstanceType<typeof KernelParticles>) => drawParticles(system, [200, 180, 160, 255], 1.5)
     try {
         source.step(10)
         for (let tick = 0; tick < 10; tick++) restored.step()

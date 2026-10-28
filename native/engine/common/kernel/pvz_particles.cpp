@@ -288,7 +288,9 @@ int32_t pvz_particles_write(int32_t handle, int32_t emitter, const double *geome
     const double red = e.tracks[SysRed].at(time, e.interpolation[1]), green = e.tracks[SysGreen].at(time, e.interpolation[2]);
     const double blue = e.tracks[SysBlue].at(time, e.interpolation[3]), brightness = e.tracks[SysBrightness].at(time, e.interpolation[4]);
     size_t quad = 0;
-    for (const auto &p : e.particles) {
+    // TodParticleEmitter adds particles at the head of its list and draws from the head: newest first.
+    for (auto it = e.particles.rbegin(); it != e.particles.rend(); ++it) {
+        const auto &p = *it;
         if (p.frame < 0 || static_cast<int64_t>(p.frame + 1) * PVZ_IMAGE > geometryLength) return -1;
         const double *image = geometry + p.frame * PVZ_IMAGE;
         const double scale = e.tracks[Scale].at(p.lastTime, p.interpolation[7]) * options[PVZ_PARTICLE_SCALE];
@@ -298,7 +300,7 @@ int32_t pvz_particles_write(int32_t handle, int32_t emitter, const double *geome
         const double r = rounded(options[PVZ_PARTICLE_RED] * red * e.tracks[Red].at(p.lastTime, p.interpolation[0]) * light) / 255;
         const double g = rounded(options[PVZ_PARTICLE_GREEN] * green * e.tracks[Green].at(p.lastTime, p.interpolation[1]) * light) / 255;
         const double b = rounded(options[PVZ_PARTICLE_BLUE] * blue * e.tracks[Blue].at(p.lastTime, p.interpolation[2]) * light) / 255;
-        const double a = rounded(255 * alpha * e.tracks[Alpha].at(p.lastTime, p.interpolation[3]) * light) * opacity;
+        const double a = rounded(options[PVZ_PARTICLE_ALPHA] * alpha * e.tracks[Alpha].at(p.lastTime, p.interpolation[3]) * light) * opacity;
         // A negative alpha marks additive images for the shared material; the extra image follows its particle.
         pvz_write_quad(image, p.x, -p.y, c * scale, -sn * scale, sn * scale * stretch, c * scale * stretch, r, g, b,
                        additive ? -a : a, positions, vertices, quad++, stride);
