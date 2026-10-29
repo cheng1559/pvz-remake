@@ -35,6 +35,7 @@ export interface PreparedMenuPage {
 @ccclass('MenuScreen')
 export class MenuScreen extends Component {
     onNavigate: (action: MenuAction) => void | Promise<void> = () => {}
+    isLevelIntro: () => boolean = () => false
     private page: PreparedMenuPage | null = null
     private retainedPage: PreparedMenuPage | null = null
     private mainMenu: MainMenuScreen | null = null
@@ -135,6 +136,7 @@ export class MenuScreen extends Component {
             const inGame = id !== 'options'
             await showOptionsDialog(root.node, ui, {
                 inGame,
+                levelIntro: inGame && this.isLevelIntro(),
                 onClose: () => this.onNavigate(inGame ? 'resume' : 'back'),
                 onRestart: () => this.onNavigate('restart'),
                 onMainMenu: () => this.onNavigate('main'),
@@ -166,7 +168,7 @@ export class MenuScreen extends Component {
                 const parts = catalog.zombies[5].parts
                 const players = await loadDisplayParts(zombie, parts, content)
                 if (!players) return
-                for (const part of parts) players.get(part.name)!.play({ loop: true, rate: 12 / part.fps })
+                for (const part of parts) players.get(part.name)!.play({ loop: true, rate: 12 / part.fps * (part.rateScale ?? 1) })
                 zombie.active = true
             }).catch(error => {
                 if (isValid(zombie, true)) console.error('[PauseDialog] Failed to load newspaper zombie', error)

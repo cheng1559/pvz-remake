@@ -8,6 +8,8 @@ import { getActiveTutorial, TUTORIALS } from './tutorials'
 import { EventQueueResource, emitServerEvent } from './events'
 import { planWaves } from './waves'
 import { selectedSeedId } from './seedBank'
+import { createGraves } from './graves'
+import { getDebugRules } from './debug/DebugRules'
 
 export function initializeLevel(world: World, firstAdventure: boolean): void {
     const level = world.resources.get(LevelStateResource).definition
@@ -16,10 +18,11 @@ export function initializeLevel(world: World, firstAdventure: boolean): void {
     world.resources.set(TutorialResource, {
         firstAdventure,
         step: 'complete',
-        ...(blocked ? {} : { sunAtTick: world.resources.get(RandomResource).integer(425, 699) }),
+        ...(blocked || !level.skySun ? {} : { sunAtTick: world.resources.get(RandomResource).integer(425, 699) }),
     })
     world.resources.set(WaveResource, {
         index: 0,
+        ...(level.graves ? { graves: createGraves(world) } : {}),
         nextWaveAtTick: blocked ? undefined : level.firstWaveTicks ?? 1,
         ...(level.zombiePool ? { zombiesByWave: planWaves(level, world.resources.get(RandomResource)) } : {}),
         ...(level.activeRows.length > 1 ? {
@@ -37,18 +40,18 @@ export function createLevelProgressSystem(definitions: GameplayDefinitions): Gam
             // Keep tutorial transitions on the same side of sky-sun spawning as before.
             script?.beforeSun?.(world, tick)
             if (updateSkySun(world, commands, definitions, tick)) script?.sunSpawned?.(world)
-            // Match FlashIfReady on the first gameplay update and when a usable packet finishes cooling down.
-            if (tick === 1 || script?.seedReady) {
-                const bank = world.resources.get(SeedBankResource)
-                for (const packet of bank.packets) {
-                    const initialReady = tick === 1 && packet.readyAtTick <= tick
-                    const cooldownFinished = packet.readyAtTick === tick
-                    if ((initialReady || cooldownFinished) && selectedSeedId(bank) !== packet.seedId &&
-                        getAvailableSun(world, definitions) >= definitions.seeds[packet.seedId].sunCost) {
-                        if (initialReady) emitServerEvent(world.resources.get(EventQueueResource), 'seedPacketFlashRequested', { seedId: packet.seedId })
-                        if (cooldownFinished) script?.seedReady?.(world, tick, packet.seedId)
-                    }
-                }
+            // SeedPacket::FlashIfReady: on the first gameplay update and when a usable packet finishes recharging.
+            // Debug commands that clear a recharge do not count as finishing it.
+            const bank = world.resources.get(SeedBankResource)
+            // `/suncost false` makes every packet affordable, as the planting check already does.
+            const sunCost = getDebugRules(world).sunCost
+            for (const [slot, packet] of bank.packets.entries()) {
+                const initialReady = tick === 1 && packet.readyAtTick <= tick
+                const cooldownFinished = packet.readyAtTick === tick
+                if (!initialReady && !cooldownFinished || bank.selection.mode === 'seed' && bank.selection.slot === slot ||
+                    getAvailableSun(world, definitions) < (sunCost ? definitions.seeds[packet.seedId].sunCost : 0)) continue
+                emitServerEvent(world.resources.get(EventQueueResource), 'seedPacketFlashRequested', { seedId: packet.seedId, slot })
+                if (cooldownFinished) script?.seedReady?.(world, tick, packet.seedId)
             }
             script?.update?.(world, tick)
         },

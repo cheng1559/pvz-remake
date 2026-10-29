@@ -85,5 +85,26 @@
     "maxHealth": 4000,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "deathExplosion": {"offset": {"x": 40, "y": 40}, "radius": 90, "rowRange": 1, "damage": 1800, "burn": true}
+  },
+  "pvz:puffshroom": {
+    "plantingOffset": {"min": {"x": -5, "y": -3}, "max": {"x": 4, "y": 2}},
+    "maxHealth": 300,
+    "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 29, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": "pvz:spore", "offset": {"x": 40, "y": 40}, "range": 230},
+    "nocturnal": true
+  },
+  "pvz:sunshroom": {
+    "plantingOffset": {"min": {"x": -5, "y": -5}, "max": {"x": 4, "y": 4}}, "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "producer": {"item": "pvz:sun", "cadenceTicks": 2500, "initialDelayTicks": {"min": 300, "max": 1250}, "growth": {"ticks": 12000, "growingTicks": 100, "smallItem": "pvz:smallsun"}},
+    "nocturnal": true
+  },
+  "pvz:fumeshroom": {
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 50, "shotsPerBurst": 1, "burstIntervalTicks": 0, "area": {"damage": 20, "hitsShieldAndBody": true}, "offset": {"x": 85, "y": 31}, "range": 340},
+    "nocturnal": true
+  },
+  "pvz:gravebuster": {
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "graveBuster": {"landTicks": {"min": 47, "max": 70}, "eatTicks": 400}
   }
 }

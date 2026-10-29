@@ -108,7 +108,9 @@ def import_assets(raw: Path) -> None:
               for clip, id in settings.get('exports', {}).items()]
     emit_clips(shared, configs)
     from .almanac import almanac_definitions
-    catalog, display_configs, clips = almanac_definitions(raw, shared, configs)
+    presentation = {kind: json.loads((mod / index['presentation'][kind]).read_text())
+                    for kind in ('plants', 'zombies')}
+    catalog, display_configs, clips = almanac_definitions(raw, shared, configs, presentation)
     emit_clips(clips, display_configs)
     file = assets / 'json/almanac-animations.json'
     write_json(file, catalog)
@@ -157,11 +159,6 @@ def import_assets(raw: Path) -> None:
     file.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / 'assets/resources/ui/level.prefab', file)
     register('prefabs', 'pvz:level', file)
-    # Development fixtures do not belong to the base game's resource index.
-    resources['sprites'].pop('pvz:phase2_checker', None)
-    resources['reanim'].pop('pvz:phase2', None)
-    for file in (assets / 'images/phase2_checker.png', assets / 'reanim/phase2.json'):
-        file.unlink(missing_ok=True)
     for kind, entries in resources.items():
         for id, entry in entries.items():
             file = entry['file'] if kind == 'sprites' else entry

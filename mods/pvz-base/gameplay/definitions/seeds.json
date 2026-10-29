@@ -9,5 +9,9 @@
   "pvz:potatomine": {"unlockAdventureIndex": 6, "plant": "pvz:potatomine", "sunCost": 25, "cooldownTicks": 3000, "placement": "ground"},
   "pvz:snowpea": {"unlockAdventureIndex": 7, "plant": "pvz:snowpea", "sunCost": 175, "cooldownTicks": 750, "placement": "ground"},
   "pvz:chomper": {"unlockAdventureIndex": 8, "plant": "pvz:chomper", "sunCost": 150, "cooldownTicks": 750, "placement": "ground"},
-  "pvz:explodenut": {"plant": "pvz:explodenut", "sunCost": 150, "cooldownTicks": 3000, "placement": "ground"}
+  "pvz:explodenut": {"plant": "pvz:explodenut", "sunCost": 150, "cooldownTicks": 3000, "placement": "ground"},
+  "pvz:puffshroom": {"unlockAdventureIndex": 11, "plant": "pvz:puffshroom", "sunCost": 0, "cooldownTicks": 750, "placement": "ground"},
+  "pvz:sunshroom": {"unlockAdventureIndex": 12, "plant": "pvz:sunshroom", "sunCost": 25, "cooldownTicks": 750, "placement": "ground"},
+  "pvz:fumeshroom": {"unlockAdventureIndex": 13, "plant": "pvz:fumeshroom", "sunCost": 75, "cooldownTicks": 750, "placement": "ground"},
+  "pvz:gravebuster": {"unlockAdventureIndex": 14, "plant": "pvz:gravebuster", "sunCost": 75, "cooldownTicks": 750, "placement": "grave"}
 }

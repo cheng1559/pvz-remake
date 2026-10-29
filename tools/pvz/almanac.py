@@ -7,18 +7,19 @@ from .cache.packets import ANIMATION_NAMES, style_for
 from .reanim import plant_display_nodes, resolve_animation_config
 from .cache.zombies import CACHE_BASE_X, CACHE_BASE_Y, HIDDEN_BY_DEFAULT, ZOMBIE_DEFINITIONS, zombie_preview_matrix
 
+# Per-type drawing values below are fallbacks for entries without authored animation definitions.
 PLANT_OFFSET = {11: [0, 55], 23: [0, 18], 33: [0, -20], 35: [0, 20], 47: [-40, 0]}
 # PlantDrawHeightOffset and Plant::UpdateReanim, in the original Y-down coordinates.
-PLANT_HEIGHT = {8: 5, 11: -40, 13: -14, 16: 25, 19: 24, 21: 15, 24: 28, 29: 10, 30: 15, 33: 26, 35: -20, 46: 21}
-PLANT_SHADOW = {6: [-21, 57], 8: [-3, 42], 9: [-3, 42], 10: [-3, 47], 13: [-9, 55], 17: [-3, 56], 23: [-3, 54], 25: [-3, 57], 26: [-8, 50], 30: [-3, 46], 32: [-3, 47], 33: [-4, 46], 34: [0, 47], 35: [-3, 81], 37: [-7, 52], 39: [-3, 47], 42: [-3, 47], 44: [-3, 47]}
+PLANT_HEIGHT = {11: -40, 13: -14, 16: 25, 19: 24, 21: 15, 24: 28, 29: 10, 30: 15, 33: 26, 35: -20, 46: 21}
+PLANT_SHADOW = {9: [-3, 42], 10: [-3, 47], 13: [-9, 55], 17: [-3, 56], 23: [-3, 54], 25: [-3, 57], 26: [-8, 50], 30: [-3, 46], 32: [-3, 47], 33: [-4, 46], 34: [0, 47], 35: [-3, 81], 37: [-7, 52], 39: [-3, 47], 42: [-3, 47], 44: [-3, 47]}
 ZOMBIE_OFFSET = {7: [-10, 0], 12: [-30, 5], 16: [0, -20], 20: [15, 0], 22: [-10, 0], 23: [0, 40], 25: [-540, -175]}
 # Zombie::GetDrawPos, including the UI bobsled's fixed -10 altitude.
-ZOMBIE_DRAW = {3: [-6, -11], 7: [0, -16], 12: [68, -23], 13: [0, -2], 16: [0, 17], 18: [0, 16], 19: [0, -20], 20: [-18, 0], 22: [-25, -18], 23: [0, -8]}
+ZOMBIE_DRAW = {7: [0, -16], 12: [68, -23], 13: [0, -2], 16: [0, 17], 18: [0, 16], 19: [0, -20], 20: [-18, 0], 22: [-25, -18], 23: [0, -8]}
 # Zombie::DrawShadow includes GetDrawPos; bouncing Pogo altitude cancels out.
-ZOMBIE_SHADOW = {3: [30, 92], 5: [29, 96], 7: [41, 92], 8: [19, 92], 9: [19, 92], 11: [35, 97], 13: [20, 103], 14: [19, 103], 16: [23, 122], 17: [17, 97], 18: [23, 108], 19: [3, 92], 23: [27, 91], 24: [25, 99]}
+ZOMBIE_SHADOW = {7: [41, 92], 8: [19, 92], 9: [19, 92], 11: [35, 97], 13: [20, 103], 14: [19, 103], 16: [23, 122], 17: [17, 97], 18: [23, 108], 19: [3, 92], 23: [27, 91], 24: [25, 99]}
 
 
-def almanac_definitions(raw_root: Path, shared: list, configuration: dict) -> tuple[dict, dict, list]:
+def almanac_definitions(raw_root: Path, shared: list, configuration: dict, presentation: dict) -> tuple[dict, dict, list]:
     shared_clips = {(source.stem, node, clip): content_id
                     for source, node, clip, content_id in shared}
     shared_clips[('peashooter', 'face', 'anim_blink')] = shared_clips[('peashootersingle', 'face', 'anim_blink')]
@@ -57,19 +58,17 @@ def almanac_definitions(raw_root: Path, shared: list, configuration: dict) -> tu
             if packet_clip:
                 value['packetId'] = part('plant', seed_id, source, node, packet_clip, content_name='packet_body')['id']
             parts.append(value)
-        rate = [15, 20] if seed_id in (0, 5, 7, 18, 28, 40) else [10, 15]
-        if seed_id == 4:
-            rate = [12, 12]
-        elif seed_id == 27:
+        rate = [15, 20] if seed_id in (18, 28, 40) else [10, 15]
+        if seed_id == 27:
             rate = [10, 10]
         elif seed_id == 48:
             rate = [25, 30]
         height = PLANT_HEIGHT.get(seed_id, 0)
         shadow_x, shadow_y = PLANT_SHADOW.get(seed_id, [-3, 51])
-        shadow_scale = 0.5 if seed_id in (8, 9, 37) else 1.3 if seed_id in (10, 23, 42) else 1.4 if seed_id == 30 else 1
+        shadow_scale = 0.5 if seed_id in (9, 37) else 1.3 if seed_id in (10, 23, 42) else 1.4 if seed_id == 30 else 1
         catalog["plants"].append({"parts": parts, "rate": rate, "offset": PLANT_OFFSET.get(seed_id, [0, 0]),
-            "drawOffset": [12, height + (12 if seed_id == 4 else 10)] if seed_id in (4, 35) else [0, height],
-            "scale": 0.8 if seed_id in (4, 35) else 1,
+            "drawOffset": [12, height + 10] if seed_id == 35 else [0, height],
+            "scale": 0.8 if seed_id == 35 else 1,
             "shadow": seed_id not in (11, 16, 19, 21, 24, 29, 43, 46, 47),
             "shadowOffset": [shadow_x, shadow_y + height], "shadowScale": shadow_scale,
             **({"packetOffset": [12, 12], "packetScale": 0.85 if seed_id == 4 else 0.8} if seed_id in (4, 35) else {})})
@@ -123,16 +122,25 @@ def almanac_definitions(raw_root: Path, shared: list, configuration: dict) -> tu
         catalog["zombies"].append({"parts": parts, "offset": ZOMBIE_OFFSET.get(zombie_id, [0, 0]), "drawOffset": ZOMBIE_DRAW.get(zombie_id, [0, 0]), "rate": rates.get(zombie_id, [12, 18]), "scale": scale,
             "shadow": zombie_id not in (12, 20, 22, 25), "shadowOffset": ZOMBIE_SHADOW.get(zombie_id, [23, 92]), "shadowScale": scale * (1.5 if zombie_id == 23 else 0.6 if zombie_id == 24 else 1),
             "portrait": portrait, **({"motion": "pogo"} if zombie_id == 18 else {"motion": "bungee"} if zombie_id == 20 else {})})
-    # Registered entities keep only UI layout here; resources/attachments/rates come from the registry.
-    for kind, targets in [('plants', ['peashooter', 'sunflower', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'repeater']),
-                          ('zombies', ['normal', 'flag', 'conehead', 'pole_vaulter', 'buckethead'])]:
-        for entry_id, target in enumerate(targets):
-            entry = catalog[kind][entry_id]
-            entry['animationTarget'] = f'pvz:{target}'
-            entry.pop('parts')
-            entry.pop('rate')
+    # Match authored definitions by their body clip, so new implementations join automatically.
+    for kind, entries in catalog.items():
+        registered = {}
+        for target, definition in presentation[kind].items():
+            animations = definition.get('animations', {})
+            body = animations.get('body') or animations.get('armed') or animations.get('idle')
+            if body:
+                registered[body['reanimId']] = target
+        for entry in entries:
+            target = registered.get(entry['parts'][0]['id'])
+            if not target:
+                continue
+            body_name = entry['parts'][0]['name']
+            entry['animationTarget'] = target
+            for key in ('parts', 'rate', 'drawOffset', 'scale', 'shadowOffset', 'shadowScale'):
+                entry.pop(key)
             if kind == 'zombies' and entry.get('portrait', {}).get('parts'):
-                entry['portrait']['parts'] = [{'name': 'flag'}, {'name': 'body'}]
+                entry['portrait']['parts'] = [{'name': 'body' if part['name'] == body_name else part['name']}
+                                             for part in entry['portrait']['parts']]
     for seed_id, entry in enumerate(catalog['plants']):
         ratio = style_for(seed_id)['timeRatio']
         if ratio:

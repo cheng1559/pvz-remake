@@ -23,6 +23,7 @@ export interface LevelIntroContext {
     mowerShadow: SpriteFrame
     entityNodes: () => Iterable<Node>
     previewZombies: Readonly<Record<string, number>>
+    hasOpeningDialog?: boolean
 }
 
 export interface LevelPresentation {

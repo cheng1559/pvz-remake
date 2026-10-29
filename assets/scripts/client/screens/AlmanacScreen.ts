@@ -13,6 +13,7 @@ import { AlmanacEntityView } from './AlmanacEntityView'
 import { AlmanacZombiePortrait } from './AlmanacZombiePortrait'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { Haptics } from '@/platform/Haptics'
+import { uiAreaEdge } from '@/client/view/ClientViewport'
 
 export interface AlmanacSelection { plant: number, zombie: number }
 
@@ -130,9 +131,10 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             }
             select(zombies.find(zombie => zombie.id === selection.zombie) ?? zombies[0])
         }
-        ui.button(parent, { skin: 'almanacIndex', text: ui.text('ALMANAC_INDEX'), x: 32, y: 567, rightClickPressesVisual: true, onClick: () => navigate('almanac') })
+        // Footer buttons keep their margins from the UI area's edges.
+        ui.button(uiAreaEdge(parent, 'left'), { skin: 'almanacIndex', text: ui.text('ALMANAC_INDEX'), x: 32, y: 567, rightClickPressesVisual: true, onClick: () => navigate('almanac') })
     }
-    ui.button(parent, { skin: 'almanacClose', text: ui.text('CLOSE_BUTTON'), x: 676, y: 567, rightClickPressesVisual: true, onClick: () => navigate('main') })
+    ui.button(uiAreaEdge(parent, 'right'), { skin: 'almanacClose', text: ui.text('CLOSE_BUTTON'), x: 676, y: 567, rightClickPressesVisual: true, onClick: () => navigate('main') })
     await Promise.all([
         ...parent.getComponentsInChildren(PlantPreview).map(view => view.ready),
         ...parent.getComponentsInChildren(AlmanacEntityView).map(view => view.ready),

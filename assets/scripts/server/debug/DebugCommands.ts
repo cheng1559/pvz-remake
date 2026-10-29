@@ -16,6 +16,8 @@ import {
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { ItemComponent, TutorialResource, WaveResource } from '../levelState'
 import { createWaveSystem } from '../waves'
+import { createGrave } from '../graves'
+import { graveAt } from '@/shared/protocol/index'
 import { emitServerEvent, EventQueueResource } from '../events'
 import { DebugRulesResource, getDebugRules } from './DebugRules'
 
@@ -67,16 +69,16 @@ function executeCommand(
         }
         case 'seed': {
             const bank = world.resources.get(SeedBankResource)
+            if (bank.choosing) return debugCondition('Finish choosing seeds first')
             const slot = debugInteger(args[0])
             if (slot === null || slot < 1 || slot > bank.packets.length) {
                 return debugSyntax(`Use slot 1-${bank.packets.length}`)
             }
             const seedId = findType(definitions.seeds, args[1])
             if (!seedId) return debugCondition(`Seed is not installed: ${args[1]}`)
-            const duplicate = bank.packets.findIndex((packet, index) => index !== slot - 1 && packet.seedId === seedId)
-            if (duplicate >= 0) return debugCondition(`Seed is already in slot ${duplicate + 1}`)
+            // A bank may hold the same seed twice; each slot keeps its own recharge.
             const packet = bank.packets[slot - 1]
-            if (bank.selection.mode === 'seed' && bank.selection.seedId === packet.seedId) bank.selection = { mode: 'none' }
+            if (bank.selection.mode === 'seed' && bank.selection.slot === slot - 1) bank.selection = { mode: 'none' }
             packet.seedId = seedId
             packet.readyAtTick = tick
             return debugSuccess(`Seed slot ${slot}: ${seedId}`)
@@ -89,6 +91,21 @@ function executeCommand(
             if (entity === undefined) return debugCondition('No plant at that position')
             world.destroyEntity(entity)
             return debugSuccess('Plant removed')
+        }
+        case 'grave': {
+            const grid = position(args[0], args[1])
+            if (!grid) return invalidPosition()
+            const wave = world.resources.get(WaveResource)
+            if (graveAt(wave.graves, grid.row, grid.column!)) {
+                return debugCondition('A grave already exists at that position')
+            }
+            if ([...world.query(PositionComponent, PlantComponent)].some(entity =>
+                world.get(entity, PositionComponent)!.row === grid.row && world.get(entity, PlantComponent)!.column === grid.column)) {
+                return debugCondition('A plant occupies that position')
+            }
+            wave.graves ??= []
+            wave.graves.push(createGrave(world, grid.row, grid.column!))
+            return debugSuccess(`Spawned grave at ${args[0]}, ${args[1]}`)
         }
         case 'zombie': {
             const typeId = findType(definitions.zombies, args[0])

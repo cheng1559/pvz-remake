@@ -24,7 +24,7 @@ export interface Plant extends EntityBehaviorState {
     eatenFlashCounter: number
     /** Ticks since the last bite, from Plant::mRecentlyEatenCountdown; wall-nuts freeze while it runs. */
     recentlyEatenCounter: number
-    /** Fuse, mine or chomper progress; `ticks` counts down to the next state. */
+    /** Fuse, mine, chomper, sun-shroom growth or grave buster progress; `ticks` counts down to the next state. */
     ability?: PlantAbility
 }
 
@@ -32,6 +32,8 @@ export type PlantAbilityState =
     | 'fuse'
     | 'arming' | 'rising' | 'armed'
     | 'ready' | 'biting' | 'got-one' | 'missed' | 'digesting' | 'swallowing'
+    | 'small' | 'growing' | 'big'
+    | 'landing' | 'eating'
 
 export interface PlantAbility {
     state: PlantAbilityState
@@ -45,7 +47,7 @@ export interface PlantAttack {
 }
 
 export type ZombieAnimation =
-    | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_death' | 'anim_death2' | 'mowered'
+    | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_gasp' | 'anim_death' | 'anim_death2' | 'mowered'
 
 export interface Zombie extends EntityBehaviorState {
     typeId: string
@@ -67,19 +69,27 @@ export interface Zombie extends EntityBehaviorState {
     hasTongue: boolean
     hasArm: boolean
     hitFlashCounter: number
+    /** The last hit passed the shield into the body (DAMAGE_HITS_SHIELD_AND_BODY): both flash and the shield does not recoil. */
+    hitThroughShield?: true
     groanCounter: number
     helmHealth: number
     chilledTicks: number
     /** Pole vaulters run with the pole until their single vault. */
     hasPole: boolean
+    /** Newspaper gasp and grave emergence progress, persisted with the entity. */
+    enrageTicks?: number
+    riseTicks?: number
 }
 
 export interface Projectile {
     typeId: string
     sourcePlantId?: number
+    /** Updates left before a limited-lifetime projectile disappears. */
+    ticksLeft?: number
 }
 
-export type SeedSelection = { mode: 'none' } | { mode: 'seed'; seedId: string }
+/** A bank packet is picked by slot, so a bank may hold the same seed twice with separate recharges. */
+export type SeedSelection = { mode: 'none' } | { mode: 'seed'; slot: number }
     | { mode: 'conveyor'; packetId: number } | { mode: 'tool'; toolId: string }
 
 export interface SeedBankState {

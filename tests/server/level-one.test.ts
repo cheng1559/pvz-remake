@@ -96,7 +96,7 @@ test('level one drops its award from the last effective zombie before its corpse
     const schedule = new Schedule()
     schedule.add('spawn', createWaveSystem(definitions))
     schedule.add('zombie', createZombieSystem(definitions))
-    schedule.add('cleanup', createItemSystem())
+    schedule.add('cleanup', createItemSystem(definitions))
 
     schedule.run(world, 1)
     assert.equal([...world.query(ItemComponent)].length, 0)

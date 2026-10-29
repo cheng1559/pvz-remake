@@ -6,16 +6,17 @@ export interface EntityBehaviorState { behaviorState?: JsonObject }
 
 const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
     'fuse', 'arming', 'rising', 'armed', 'ready', 'biting', 'got-one', 'missed', 'digesting', 'swallowing',
+    'small', 'growing', 'big', 'landing', 'eating',
 ]
 const ZOMBIE_STATES: readonly ZombieState[] = ['walking', 'eating', 'vaulting', 'dying', 'burned', 'mowered']
 const ZOMBIE_ANIMATIONS: readonly ZombieAnimationName[] = [
-    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_death', 'anim_death2', 'mowered',
+    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_gasp', 'anim_death', 'anim_death2', 'mowered',
 ]
 
 /** A burned zombie keeps the frame it was standing in. */
 export function zombieAnimationMatchesState(state: ZombieState, animation: ZombieAnimationName): boolean {
     switch (state) {
-        case 'walking': return animation === 'anim_walk' || animation === 'anim_walk2' || animation === 'anim_run'
+        case 'walking': return animation === 'anim_walk' || animation === 'anim_walk2' || animation === 'anim_run' || animation === 'anim_gasp'
         case 'eating': return animation === 'anim_eat'
         case 'vaulting': return animation === 'anim_jump'
         case 'dying': return animation === 'anim_death' || animation === 'anim_death2'
@@ -37,7 +38,8 @@ export interface EnabledMod {
 
 export type GameCommand =
     | { type: 'mod'; id: string; data: JsonObject }
-    | { type: 'selectSeed'; seedId: string }
+    /** `slot` picks one bank packet when the bank holds the seed more than once. */
+    | { type: 'selectSeed'; seedId: string; slot?: number }
     | { type: 'chooseSeed'; seedId: string }
     | { type: 'confirmSeeds' }
     | { type: 'selectConveyorPacket'; packetId: EntityId }
@@ -98,6 +100,29 @@ export interface ServerEvent {
     data: JsonObject
 }
 
+export interface GraveSnapshot {
+    column: number
+    row: number
+    variant: number
+    riseDelay: number
+    offsetX: number
+    offsetY: number
+}
+
+/** Board::AddAGraveStone: 20 stone looks and a rise delay of 0-49 ticks. */
+export const GRAVE_VARIANTS = 20
+export const GRAVE_MAX_RISE_DELAY = 49
+
+export function graveAt(graves: readonly GraveSnapshot[] | undefined, row: number, column: number): GraveSnapshot | undefined {
+    return graves?.find(grave => grave.row === row && grave.column === column)
+}
+
+/** Shared by snapshots and saves: the look and rise delay must come from AddAGraveStone's ranges. */
+export function checkGraveRanges(grave: Pick<GraveSnapshot, 'variant' | 'riseDelay'>, name: string): void {
+    if (grave.variant < 0 || grave.variant >= GRAVE_VARIANTS) throw new TypeError(`${name}.variant is invalid`)
+    if (grave.riseDelay < 0 || grave.riseDelay > GRAVE_MAX_RISE_DELAY) throw new TypeError(`${name}.riseDelay is invalid`)
+}
+
 export interface WorldSnapshot {
     levelId: string
     tick: ServerTick
@@ -113,6 +138,7 @@ export interface WorldSnapshot {
     seedPackets: SeedPacketSnapshot[]
     seedChooser?: { availableSeeds: string[], slots: number, choosing: boolean, warning?: string }
     conveyorPackets: Array<{ id: number; seedId: string; x: number; selected: boolean; availability: SeedAvailability }>
+    graves?: GraveSnapshot[]
     plants: PlantSnapshot[]
     zombies: ZombieSnapshot[]
     projectiles: ProjectileSnapshot[]
@@ -156,16 +182,20 @@ export interface PlantSnapshot extends EntityBehaviorState {
     recentlyEatenCounter?: number
     /** Fuse, mine or chomper progress; drives the plant animation. */
     ability?: { state: PlantAbilityState, ticks: number }
+    /** A nocturnal plant on a day board. */
+    asleep?: true
 }
 
 export type PlantAbilityState =
     | 'fuse'
     | 'arming' | 'rising' | 'armed'
     | 'ready' | 'biting' | 'got-one' | 'missed' | 'digesting' | 'swallowing'
+    | 'small' | 'growing' | 'big'
+    | 'landing' | 'eating'
 
 export type ZombieState = 'walking' | 'eating' | 'vaulting' | 'dying' | 'burned' | 'mowered'
 export type ZombieAnimationName =
-    | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_death' | 'anim_death2' | 'mowered'
+    | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_gasp' | 'anim_death' | 'anim_death2' | 'mowered'
 
 export interface ZombieSnapshot extends EntityBehaviorState {
     entityId: EntityId
@@ -186,11 +216,15 @@ export interface ZombieSnapshot extends EntityBehaviorState {
     hasTongue: boolean
     hasArm: boolean
     hitFlashCounter: number
+    /** The last hit went through the newspaper into the body (Fume-shroom): no recoil, and the body flashes too. */
+    hitThroughShield?: true
     /** Remaining helm health; 0 once the helm drops. Omitted by older snapshots. */
     helmHealth?: number
     chilled?: boolean
     /** A pole vaulter still carrying the pole. */
     hasPole?: boolean
+    enraged?: boolean
+    riseTicks?: number
 }
 
 export interface ProjectileSnapshot {
@@ -530,7 +564,11 @@ const validateGameCommand = (value: unknown): void => {
             record(command.data, 'mod.data')
             assertJsonValue(command.data)
             return
-        case 'selectSeed': case 'chooseSeed': nonEmptyString(command.seedId, `${command.type}.seedId`); return
+        case 'selectSeed':
+            nonEmptyString(command.seedId, 'selectSeed.seedId')
+            if (command.slot !== undefined) integer(command.slot, 'selectSeed.slot')
+            return
+        case 'chooseSeed': nonEmptyString(command.seedId, 'chooseSeed.seedId'); return
         case 'selectConveyorPacket': integer(command.packetId, 'selectConveyorPacket.packetId'); return
         case 'selectTool': nonEmptyString(command.toolId, 'selectTool.toolId'); return
         case 'placePlant':
@@ -629,6 +667,12 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
             seedPackets.length > slots || chooser.choosing && seedPackets.some(packet => !available.includes(packet.seedId))) throw new TypeError('Invalid seed chooser bank')
         if (chooser.warning !== undefined) nonEmptyString(chooser.warning, 'snapshot.seedChooser.warning')
     }
+    if (snapshot.graves !== undefined) array(snapshot.graves, 'snapshot.graves').forEach((value, index) => {
+        const name = `snapshot.graves[${index}]`, grave = record(value, name)
+        for (const key of ['column', 'row', 'variant', 'riseDelay']) integer(grave[key], `${name}.${key}`)
+        checkGraveRanges(grave as unknown as GraveSnapshot, name)
+        finite(grave.offsetX, `${name}.offsetX`); finite(grave.offsetY, `${name}.offsetY`)
+    })
     array(snapshot.plants, 'snapshot.plants').forEach((entry, index) => {
         const name = `snapshot.plants[${index}]`
         const plant = record(entry, name)
@@ -647,6 +691,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         }
         if ((plant.eatenFlashCounter as number) < 0) throw new TypeError(`${name}.eatenFlashCounter must be non-negative`)
         if (plant.recentlyEatenCounter !== undefined) integer(plant.recentlyEatenCounter, `${name}.recentlyEatenCounter`)
+        if (plant.asleep !== undefined && plant.asleep !== true) throw new TypeError(`${name}.asleep must be true when present`)
         if (plant.behaviorState !== undefined) record(plant.behaviorState, `${name}.behaviorState`)
         if (plant.ability !== undefined) {
             const ability = record(plant.ability, `${name}.ability`)
@@ -688,6 +733,9 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
             if ((zombie.helmHealth as number) < 0) throw new TypeError(`${name}.helmHealth must be non-negative`)
         }
         if (zombie.chilled !== undefined) boolean(zombie.chilled, `${name}.chilled`)
+        if (zombie.enraged !== undefined) boolean(zombie.enraged, `${name}.enraged`)
+        if (zombie.hitThroughShield !== undefined && zombie.hitThroughShield !== true) throw new TypeError(`${name}.hitThroughShield must be true`)
+        if (zombie.riseTicks !== undefined) integer(zombie.riseTicks, `${name}.riseTicks`)
         if (zombie.hasPole !== undefined) boolean(zombie.hasPole, `${name}.hasPole`)
     })
     array(snapshot.projectiles, 'snapshot.projectiles').forEach((entry, index) => {

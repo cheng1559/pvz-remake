@@ -16,15 +16,12 @@ const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 
-test('base save compatibility accepts declared UI-only updates while keeping identity and version checks', () => {
-    const installed = { id: 'pvz:base', version: '2.0.0', contentHash: 'new-menu' }
-    const saved = { ...installed, contentHash: 'before-menu' }
+test('base save compatibility requires matching identity, version and content hash', () => {
+    const installed = { id: 'pvz:base', version: '2.0.0', contentHash: 'hash' }
     assert.equal(isCompatibleBaseContent(installed, installed), true)
-    assert.equal(isCompatibleBaseContent(saved, installed), false)
-    assert.equal(isCompatibleBaseContent(saved, installed, ['before-menu']), true)
-    assert.equal(isCompatibleBaseContent({ ...saved, id: 'other:base' }, installed, ['before-menu']), false)
-    assert.equal(isCompatibleBaseContent({ ...saved, version: '1.0.0' }, installed, ['before-menu']), false)
-    assert.equal(isCompatibleBaseContent({ ...saved, contentHash: 'different-gameplay' }, installed, ['before-menu']), false)
+    assert.equal(isCompatibleBaseContent({ ...installed, id: 'other:base' }, installed), false)
+    assert.equal(isCompatibleBaseContent({ ...installed, version: '1.0.0' }, installed), false)
+    assert.equal(isCompatibleBaseContent({ ...installed, contentHash: 'different-gameplay' }, installed), false)
 })
 
 test('LocalIntegratedGame uses real systems wrapped through the host', () => {
@@ -184,7 +181,7 @@ test('LocalIntegratedGame finishes a queued gameplay command before saving', () 
     const save = game.saveAtBoundary() as unknown as ServerSaveSnapshot
 
     assert.equal(save.tick, beforeTick + 1)
-    assert.deepEqual(save.seedBank.selection, { mode: 'seed', seedId: 'pvz:peashooter' })
+    assert.deepEqual(save.seedBank.selection, { mode: 'seed', slot: 0 })
 })
 
 test('LocalIntegratedGame saves before a command queued after the request', () => {
@@ -220,6 +217,6 @@ test('LocalIntegratedGame advances every gameplay and session boundary before sa
 
     const save = game.saveAtBoundary() as unknown as ServerSaveSnapshot
 
-    assert.deepEqual(save.seedBank.selection, { mode: 'seed', seedId: 'pvz:peashooter' })
+    assert.deepEqual(save.seedBank.selection, { mode: 'seed', slot: 0 })
     assert.equal(save.level.paused, true)
 })

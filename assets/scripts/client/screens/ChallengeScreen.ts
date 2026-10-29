@@ -6,6 +6,7 @@ export type { ChallengePageId } from '@/shared/menu'
 import { FontMetricsUtil } from '@/client/font'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import type { UI } from '@/client/ui/UI'
+import { uiAreaEdge } from '@/client/view/ClientViewport'
 
 export async function showChallengeScreen(
     parent: Node, ui: UI, page: ChallengePageId, onBack: () => void,
@@ -59,7 +60,8 @@ export async function showChallengeScreen(
         }
         if (challenge.completed) ui.image(visual, miniTrophy, { x: -6, y: -2 })
     })
-    ui.button(parent, {
+    // Keep the back button's margin from the UI area's left edge.
+    ui.button(uiAreaEdge(parent, 'left'), {
         skin: 'seedSmall', text: ui.text('BACK_TO_MENU', 'Back to Menu'),
         x: 18, y: 568, width: 111, height: 26, onClick: onBack,
     })

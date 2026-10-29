@@ -12,7 +12,7 @@ import { EventQueueResource, emitServerEvent } from '../events'
 import type { GameSystem, SystemContext, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { HIT_FLASH_TICKS, damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
-import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, ZombieComponent } from '../components'
+import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, RandomResource, ZombieComponent } from '../components'
 import { startPostVaultWalk, startVault, updateVault } from './poleVault'
 import { RECENTLY_EATEN_TICKS, destroyEatenPlant, isPlantInedible } from '../plants/damage'
 import { getDebugRules } from '../debug/DebugRules'
@@ -104,6 +104,30 @@ export class ZombieSystem implements GameSystem {
                 continue
             }
             if (zombie.chilledTicks > 0) zombie.chilledTicks--
+            if (zombie.riseTicks) {
+                zombie.riseTicks--
+                if (zombie.riseTicks === 0) delete zombie.riseTicks
+                continue
+            }
+            if (zombie.enrageTicks) {
+                const pace = zombie.chilledTicks > 0 ? CHILLED_ANIMATION_FACTOR : 1
+                zombie.animationTime += (Math.round(definition.enrage!.pauseTicks * 8 / 100) - 1) / definition.enrage!.pauseTicks * pace
+                zombie.enrageTicks = Math.max(0, zombie.enrageTicks - pace)
+                if (zombie.enrageTicks === 0) {
+                    delete zombie.enrageTicks
+                    const speed = definition.enrage!.speedPerTick
+                    zombie.speedPerTick = speed.min + world.resources.get(RandomResource).nextFloat() * (speed.max - speed.min)
+                    zombie.animation = zombie.walkAnimation
+                    zombie.animationTime = 0
+                    // Zombie::UpdateZombieNewspaper roars only with its head on and at most 10 live headed zombies.
+                    const headed = [...world.query(ZombieComponent)].filter(other => {
+                        const state = world.get(other, ZombieComponent)!
+                        return state.hasHead && state.health > 0 && state.state !== 'dying' && state.state !== 'burned' && state.state !== 'mowered'
+                    }).length
+                    emitServerEvent(world.resources.get(EventQueueResource), 'zombieEnraged', { entityId: entity, roar: zombie.hasHead && headed <= 10 })
+                }
+                continue
+            }
             this.updateActive(context, entity)
             if (world.resources.get(LevelStateResource).result === 'lost') return
         }

@@ -34,6 +34,14 @@ interface TrackView {
     sprite?: Sprite
     skew?: UISkew
     additive?: Sprite
+    renderOverride?: TrackRenderOverride
+}
+
+interface TrackRenderOverride {
+    color: Color
+    extraAdditive: boolean
+    extraAdditiveColor: Color
+    offsetX: number
 }
 
 const DEG_TO_RAD = Math.PI / 180
@@ -161,6 +169,8 @@ export class ReanimPlayer extends Component {
     private readonly frameOverrides = new Map<string, SpriteFrame>()
     private readonly trackColors = new Map<string, Color>()
     private attachment: TrackAttachment | null = null
+    /** Players attached to this one's tracks; stale entries are skipped and pruned. */
+    private readonly trackAttachments = new Set<ReanimPlayer>()
     private restoredAttachmentTrackId: string | null = null
     private extraAdditive = false
     private extraAdditiveColor = Color.BLACK.clone()
@@ -262,8 +272,19 @@ export class ReanimPlayer extends Component {
         const basePose = sampleReanimTrack(track, 0)
         if (!basePose) throw new Error(`parent reanim track has no base pose: ${trackId}`)
         this.attachment = { parent, trackId, basePose }
+        parent.trackAttachments.add(this)
         this.restoredAttachmentTrackId = null
         this.applyPose()
+    }
+
+    /** Reanimation::PropogateColorToAttachments: track attachments take this player's colors. */
+    private attachedPlayers(): ReanimPlayer[] {
+        const players: ReanimPlayer[] = []
+        for (const player of this.trackAttachments) {
+            if (player.isValid && player.attachment?.parent === this) players.push(player)
+            else this.trackAttachments.delete(player)
+        }
+        return players
     }
 
     reattachAfterRestore(parent: ReanimPlayer): void {
@@ -346,17 +367,41 @@ export class ReanimPlayer extends Component {
         this.applyPose(trackId)
     }
 
-    setExtraAdditiveDraw(enabled: boolean, color: Color = Color.BLACK): void {
-        if (this.extraAdditive === enabled && sameColor(this.extraAdditiveColor, color)) return
-        this.extraAdditive = enabled
-        this.extraAdditiveColor = color.clone()
-        this.applyPose()
+    /** A shield or attachment can draw independently of the body's tint and hit flash. */
+    setTrackRenderOverride(trackId: string, override: TrackRenderOverride | null): void {
+        const view = this.views.get(trackId)
+        if (!view) throw new Error(`unknown reanim track: ${trackId}`)
+        const previous = view.renderOverride
+        if (!override && !previous) return
+        if (override && previous && sameColor(override.color, previous.color) &&
+            sameColor(override.extraAdditiveColor, previous.extraAdditiveColor) &&
+            override.extraAdditive === previous.extraAdditive && override.offsetX === previous.offsetX) return
+        view.renderOverride = override ? { ...override, color: override.color.clone(), extraAdditiveColor: override.extraAdditiveColor.clone() } : undefined
+        const created = override && !view.node
+        if (created) {
+            this.createTrackNode(trackId, view)
+            this.drawingStale = true
+        }
+        this.applyPose(created ? undefined : trackId)
     }
 
+    /** Also applies to players attached to this one's tracks, like the original color propagation. */
+    setExtraAdditiveDraw(enabled: boolean, color: Color = Color.BLACK): void {
+        if (this.extraAdditive !== enabled || !sameColor(this.extraAdditiveColor, color)) {
+            this.extraAdditive = enabled
+            this.extraAdditiveColor = color.clone()
+            this.applyPose()
+        }
+        for (const player of this.attachedPlayers()) player.setExtraAdditiveDraw(enabled, color)
+    }
+
+    /** Also applies to players attached to this one's tracks, like the original color propagation. */
     setColorOverride(color: Color = Color.WHITE): void {
-        if (sameColor(this.colorOverride, color)) return
-        this.colorOverride = color.clone()
-        this.applyPose()
+        if (!sameColor(this.colorOverride, color)) {
+            this.colorOverride = color.clone()
+            this.applyPose()
+        }
+        for (const player of this.attachedPlayers()) player.setColorOverride(color)
     }
 
     /** World position of the center of the track's current image. */
@@ -556,7 +601,8 @@ export class ReanimPlayer extends Component {
         for (const segment of drawing.segments) {
             if ('view' in segment) {
                 this.writeTrackNode(segment.trackId, segment.view)
-                order.push(segment.view.node!)
+                // A track node moved under another parent (the menu's wood sign) keeps that parent's order.
+                if (segment.view.node!.parent === this.node) order.push(segment.view.node!)
                 for (const node of this.followers.get(segment.trackId) ?? []) if (node.parent === this.node) order.push(node)
             } else if (shown) {
                 const batch = this.batchAt(used++)
@@ -664,7 +710,11 @@ export class ReanimPlayer extends Component {
             return
         }
 
-        node.setPosition(pose.x, -pose.y, 0)
+        const override = view.renderOverride
+        const color = override?.color ?? this.colorOverride
+        const extraAdditive = override?.extraAdditive ?? this.extraAdditive
+        const extraColor = override?.extraAdditiveColor ?? this.extraAdditiveColor
+        node.setPosition(pose.x + (override?.offsetX ?? 0), -pose.y, 0)
         node.angle = -pose.skewX
         const skewDifference = pose.skewX - pose.skewY
         let scaleY = pose.scaleY
@@ -681,13 +731,13 @@ export class ReanimPlayer extends Component {
         sprite.spriteFrame = frame
         const trackColor = this.trackColors.get(trackId) ?? Color.WHITE
         setSpriteColor(sprite,
-            Math.round(this.colorOverride.r * trackColor.r / 255),
-            Math.round(this.colorOverride.g * trackColor.g / 255),
-            Math.round(this.colorOverride.b * trackColor.b / 255),
-            Math.round(pose.alpha * this.colorOverride.a * trackColor.a / 255),
+            Math.round(color.r * trackColor.r / 255),
+            Math.round(color.g * trackColor.g / 255),
+            Math.round(color.b * trackColor.b / 255),
+            Math.round(pose.alpha * color.a * trackColor.a / 255),
         )
         sprite.enabled = true
-        if (this.extraAdditive) {
+        if (extraAdditive) {
             if (!view.additive) {
                 view.additive = uiNode({
                     name: `${trackId}_extra_additive`, parent: node,
@@ -699,13 +749,13 @@ export class ReanimPlayer extends Component {
             }
             view.additive.spriteFrame = frame
             setSpriteColor(view.additive,
-                this.extraAdditiveColor.r,
-                this.extraAdditiveColor.g,
-                this.extraAdditiveColor.b,
-                Math.round(this.extraAdditiveColor.a * pose.alpha),
+                extraColor.r,
+                extraColor.g,
+                extraColor.b,
+                Math.round(extraColor.a * pose.alpha),
             )
         }
-        if (view.additive) view.additive.enabled = this.extraAdditive
+        if (view.additive) view.additive.enabled = extraAdditive
     }
 
     private requireData(): Reanim {

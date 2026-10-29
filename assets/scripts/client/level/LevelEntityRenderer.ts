@@ -1,5 +1,5 @@
 import type { ProjectilePresentationDefinition } from '@/shared/content/presentation'
-import { Color, Node, Sprite, Vec3 } from 'cc'
+import { Color, Component, Node, Sprite, Vec3 } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
 import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
@@ -8,11 +8,13 @@ import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { SeedPacketRenderer, type SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
-import type { LawnMowerSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
+import type { ItemSnapshot, LawnMowerSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
+import { SUN_BANK_TARGET } from '@/shared/content/gameplay'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
 import { plantDefinition } from '@/client/plants/definitions'
 import type { ZombieViewInstance, ZombieViewSprites } from '@/client/zombies/ZombieView'
+import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { zombieDefinition } from '@/client/zombies/definitions'
 import type { PlantView } from '@/client/plants/PlantView'
 import type { LevelEntitySnapshot, LevelParticleOwnerSnapshot } from './LevelPresentationSnapshot'
@@ -39,13 +41,20 @@ export interface LevelEntityAssets {
 }
 
 export class LevelEntityRenderer {
+    private readonly scenery = new Map<Node, number>()
+    addScenery(node: Node, order: number): void { this.scenery.set(node, order) }
     private readonly entities = new Map<number, Node>()
+    private readonly collectStarts = new Map<number, { x: number, y: number }>()
+    /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
+    sunBankOffset = (): number => 0
     private readonly projectileShadows = new Map<number, Node>()
     private readonly pending = new Set<number>()
     private readonly creationTasks = new Map<number, Promise<void>>()
     private readonly plantViews = new Map<number, PlantView>()
     private readonly zombies = new Map<number, ZombieViewInstance>()
     private readonly zombieTypes = new Map<number, string>()
+    /** Each plant's and zombie's attachment list. */
+    private readonly attachments = new Map<number, EntityAttachments>()
     /** Charred remains keep their zombie's layer and ordering identity after removal. */
     private readonly charred = new Map<Node, { order: number, entityId: number }>()
     private readonly mowerPlayersReady = new Set<number>()
@@ -87,7 +96,7 @@ export class LevelEntityRenderer {
         const cell = this.pointer && !snapshot.paused && snapshot.cursor.mode === 'tool'
             ? boardCell(this.content.definitions.boards[level.board], this.pointer.x, this.pointer.y) : undefined
         const highlighted = cell?.inBounds ? snapshot.plants.find(plant => plant.row === cell.row && plant.column === cell.column &&
-            this.content.definitions.plants[plant.typeId].occupiesCell !== false)?.entityId : undefined
+            this.content.definitions.plants[plant.typeId].occupiesCell !== false && !this.content.definitions.plants[plant.typeId].graveBuster)?.entityId : undefined
         for (const id of new Set([this.highlightedPlant, highlighted])) {
             if (id === undefined) continue
             const flash = snapshot.plants.find(plant => plant.entityId === id)?.eatenFlashCounter ?? 0
@@ -98,6 +107,16 @@ export class LevelEntityRenderer {
         this.highlightedPlant = highlighted
     }
 
+    /** The server flies sun to the layout's counter; ease toward the counter's actual position along the way. */
+    private collectOffset(item: ItemSnapshot): number {
+        const offset = this.sunBankOffset()
+        if (item.state !== 'collecting' || !offset) return 0
+        let start = this.collectStarts.get(item.entityId)
+        if (!start) this.collectStarts.set(item.entityId, start = { x: item.x, y: item.y })
+        const total = Math.hypot(start.x - SUN_BANK_TARGET.x, start.y - SUN_BANK_TARGET.y)
+        return total ? offset * (1 - Math.hypot(item.x - SUN_BANK_TARGET.x, item.y - SUN_BANK_TARGET.y) / total) : offset
+    }
+
     syncGameOverWinner(zombie: ZombieSnapshot, parent: Node, visible: boolean, ticks: number, y: number, approachTicks = 0): void {
         const node = this.entities.get(zombie.entityId)
         const view = this.zombies.get(zombie.entityId)
@@ -106,6 +125,11 @@ export class LevelEntityRenderer {
         if (view.shadowNode.parent !== parent) view.shadowNode.setParent(parent)
         node.active = view.shadowNode.active = visible
         view.syncGameOverWalk(zombie, ticks, y, approachTicks)
+    }
+
+    /** The original keeps updating the winner's attachments; its body follows the scripted walk instead. */
+    runsDuringGameOver(winnerId: number, component: Component): boolean {
+        return this.attachments.get(winnerId)?.has(component.node) ?? false
     }
 
     particleOwner(node: Node): Extract<LevelParticleOwnerSnapshot, { kind: 'entity' }> | null {
@@ -179,6 +203,7 @@ export class LevelEntityRenderer {
         for (const event of events) {
             if (event.type === 'zombieHelmDropped' && typeof event.data.entityId === 'number' && event.data.silent !== true) {
                 this.spawnHelm(event.data.entityId, snapshot)
+                this.zombies.get(event.data.entityId)?.helmDropped?.()
             }
             if (event.type !== 'zombiePartDropped') continue
             const entityId = event.data.entityId
@@ -211,13 +236,16 @@ export class LevelEntityRenderer {
             this.projectileShadows.get(projectile.entityId)?.setPosition(projectile.x + shadow.offset.x - WIDTH / 2,
                 HEIGHT / 2 - (board.origin.y + projectile.row * board.cell.height + shadow.offset.y))
         }
+        for (const id of this.collectStarts.keys()) {
+            if (!snapshot.items.some(item => item.entityId === id && item.state === 'collecting')) this.collectStarts.delete(id)
+        }
         for (const item of snapshot.items) {
             const node = this.entities.get(item.entityId)
             if (!node) continue
             const award = item.typeId === this.content.levels.levels[snapshot.levelId].award.id
             const size = levelAwardSize(this.content.levels.levels[snapshot.levelId].award)
             node.setPosition(
-                award ? item.x + size.width / 2 : item.x + 30,
+                award ? item.x + size.width / 2 : item.x + 30 + this.collectOffset(item),
                 award ? -(item.y + size.height / 2) : -(item.y + 30),
             )
             if (!award) node.setScale(item.scale, item.scale, 1)
@@ -252,6 +280,7 @@ export class LevelEntityRenderer {
         this.zombies.get(id)?.destroy()
         this.zombies.delete(id)
         this.zombieTypes.delete(id)
+        this.attachments.delete(id)
         this.mowerPlayersReady.delete(id)
         this.mowerStates.delete(id)
         this.entities.get(id)?.destroy()
@@ -283,6 +312,12 @@ export class LevelEntityRenderer {
             } else if (event.type === 'mineRising') {
                 const plant = snapshot.plants.find(candidate => candidate.entityId === event.data.entityId)
                 if (plant) this.spawnBoardParticle("pvz:potatominerise", plant.x + 40, plant.y + 40, plant.row * 10 + 0.5)
+            } else if (event.type === 'graveBusted') {
+                // Plant::UpdateGraveBuster in 1.0.0.1051 spawns PARTICLE_GRAVE_BUSTER_DIE at (mX + 40, mY + 80).
+                this.spawnBoardParticle('pvz:gravebusterdie', Number(event.data.x) + 40, Number(event.data.y) + 80, Number(event.data.row) * 10 + 4)
+            } else if (event.type === 'zombieRoseFromGrave') {
+                const zombie = snapshot.zombies.find(candidate => candidate.entityId === event.data.entityId)
+                if (zombie) this.spawnBoardParticle('pvz:zombierise', zombie.x + 60, zombie.y + 110, zombie.row * 10 + 2)
             } else if (event.type === 'zombieCharred') {
                 this.spawnCharred(event)
             }
@@ -344,7 +379,8 @@ export class LevelEntityRenderer {
         })
     }
 
-    private spawnBoardParticle(effect: string, x: number, y: number, renderOrder: number, tint?: Color): void {
+    /** Board coordinates; recycled under a shared holder per render order. */
+    spawnBoardParticle(effect: string, x: number, y: number, renderOrder: number, tint?: Color): void {
         let parent = this.particleHolders.get(renderOrder)
         if (!parent) {
             parent = uiNode({ name: `BoardParticles-${renderOrder}`, parent: this.entityLayer, layer: this.entityLayer.layer }).node
@@ -392,18 +428,23 @@ export class LevelEntityRenderer {
             } else if (snapshot.lawnMowers.some(value => value.entityId === id)) {
                 await this.createMower(id, node, snapshot)
             } else if (plant) {
-                const view = await this.content.plantViews.create({ node, content: this.content, animations: this.animations,
+                const attachments = new EntityAttachments()
+                const view = await this.content.plantViews.create({ node, attachments, content: this.content, animations: this.animations,
                     assets: { shadow: this.assets.mowerShadow, wallnutCracked: this.assets.wallnutCracked },
                     plant, tick: snapshot.gameplayTick })
-                if (node.isValid) this.plantViews.set(id, view)
-                else view.destroy?.()
+                if (node.isValid) {
+                    this.plantViews.set(id, view)
+                    this.attachments.set(id, attachments)
+                } else view.destroy?.()
             } else if (zombie) {
-                const view = await this.content.zombieViews.create({ node, content: this.content, animations: this.animations,
+                const attachments = new EntityAttachments()
+                const view = await this.content.zombieViews.create({ node, attachments, content: this.content, animations: this.animations,
                     shadowParent: this.entityLayer, assets: { shadow: this.assets.mowerShadow, sprites: this.assets.zombieSprites },
                     zombie, tick: snapshot.gameplayTick })
                 if (node.isValid) {
                     this.zombies.set(id, view)
                     this.zombieTypes.set(id, zombie.typeId)
+                    this.attachments.set(id, attachments)
                 } else view.destroy()
             } else if (isAward) {
                 await this.createAward(node, snapshot)
@@ -508,6 +549,10 @@ export class LevelEntityRenderer {
     /** Mods can append scenery to the same ordering pass as entities and particles. */
     private collectLayerEntries(snapshot: WorldSnapshot): { node: Node, order: number, entityId?: number }[] {
         const entries: { node: Node, order: number, entityId?: number }[] = []
+        for (const [node, order] of this.scenery) {
+            if (node.isValid) entries.push({ node, order })
+            else this.scenery.delete(node)
+        }
         const add = (entityId: number, order: number) => {
             const node = this.entities.get(entityId)
             if (node?.isValid) entries.push({ node, order, entityId })

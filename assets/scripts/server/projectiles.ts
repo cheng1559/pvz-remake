@@ -42,7 +42,8 @@ export class ProjectileSystem implements GameSystem {
         const definition = definitions.projectiles[projectile.typeId]
         position.x += definition.speedPerTick.x
         position.y += definition.speedPerTick.y
-        if (position.x > getBoardBounds(world).right) {
+        // Projectile::CheckForCollision: a spore reaching its age vanishes before it can hit.
+        if (projectile.ticksLeft !== undefined && --projectile.ticksLeft <= 0 || position.x > getBoardBounds(world).right) {
             commands.destroyEntity(entity)
             return
         }

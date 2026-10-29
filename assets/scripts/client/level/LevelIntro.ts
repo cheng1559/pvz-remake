@@ -4,6 +4,8 @@ import type { LevelIntroSnapshot, LevelParticleOwnerSnapshot } from './LevelPres
 export interface LevelIntro {
     readonly complete: boolean
     readonly elapsedTicks: number
+    /** When night graves start to rise; undefined without graves. */
+    readonly graveStartTick?: number
     update(dt: number, stopAtTick?: number): boolean
     sync(): void
     snapshot(): LevelIntroSnapshot

@@ -177,7 +177,7 @@ test('level seeds keep independent affordability and cooldowns, and placement us
     }, {
         introComplete: true, bindTools() { return [] }, board: { origin: { x: 12, y: 40 }, cell: { width: 20, height: 30 }, rows: 3, columns: 4 },
         audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer() {},
-        seedPacketAt: (snapshot: any, index: number) => bank.packetAt(snapshot, index),
+        pointerOffsetY: () => 0, seedPacketAt: (snapshot: any, index: number) => bank.packetAt(snapshot, index),
         bindSeedPackets: (select: (index: number) => void) => bank.bind(select),
         bindMenu: () => ({ isValid: true }),
     })
@@ -201,6 +201,9 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         world.availableSun = 300
         world.seedPackets[1].availability = {}
         bank.sync(world, [], true, null)
+        assert.deepEqual(flashes, [], 'a cleared recharge alone does not flash; the server decides readiness')
+        const seedId = world.seedPackets[1].seedId
+        bank.sync(world, [{ type: 'seedPacketFlashRequested', sequence: 0, data: { seedId, slot: 1 } }], true, null)
         assert.deepEqual(flashes, [bank.packets[1].view.node])
         const slot = bank.packets[0], node = slot.view.node, button = slot.button
         world.seedPackets[0].seedId = 'ice'
@@ -262,7 +265,7 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
             introComplete: true, bindTools() { return [] }, level: { award: { kind: 'seed' } },
             board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
             audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer(value: any) { pointer = value },
-            seedPacketAt: (world: any, index: number) => bank.packetAt(world, index),
+            pointerOffsetY: () => 0, seedPacketAt: (world: any, index: number) => bank.packetAt(world, index),
             bindSeedPackets: (select: (index: number) => void) => bank.bind(select), bindMenu: () => menu.button,
         })
         input.boardPixel = (event: any) => event.getUILocation()
@@ -316,7 +319,7 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
         items: [] as any[],
     }
     const commands: any[] = []
-    let pointer: any, menus = 0, blocked = false
+    let pointer: any, menus = 0, blocked = false, view: any
     const presenter = new LevelInputPresenter(ui.root, {
         definitions: { seeds: { pea: { sunCost: 100 }, sunflower: { sunCost: 50 } }, items: { sun: { width: 40, height: 40 } } },
         render: () => world,
@@ -327,10 +330,10 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
             for (const packet of world.seedPackets) packet.selected = packet.seedId === world.cursor.seedId
             if (command.type === 'collectItemAt') world.items.find(item => item.entityId === command.itemId).state = 'collecting'
         },
-    }, {
+    }, view = {
         introComplete: true, canOpenMenu: true, bindTools() { return [] }, level: { award: { kind: 'seed' } }, board: { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 }, rows: 5, columns: 9 },
         audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer(value?: any) { pointer = value },
-        seedPacketAt: (snapshot: any, index: number) => {
+        pointerOffsetY: () => 0, seedPacketAt: (snapshot: any, index: number) => {
             const packet = snapshot.seedPackets[index]
             return packet && { ...packet, availability: !packet.ready ? { reason: 'seed-not-ready' } : snapshot.availableSun >= (index === 0 ? 100 : 50) ? {} : { reason: 'not-enough-sun' }, command: { type: 'selectSeed', seedId: packet.seedId } }
         },
@@ -408,6 +411,8 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
         ui.dispatch(menu.node, e.TOUCH_START, 700)
         ui.dispatch(menu.node, e.TOUCH_END, 700)
         assert.equal(menus, 1, 'Menu retains normal button interaction')
+        view.canOpenMenu = false
+        assert.equal(menu.button.canInteract(), false, 'the menu shown after confirming seeds stays disabled until the intro ends')
     } finally { presenter.destroy(); ui.cleanup() }
 })
 

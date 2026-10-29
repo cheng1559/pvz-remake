@@ -69,8 +69,12 @@ export class GameApp extends Component {
             mask: Mask.Type.GRAPHICS_RECT,
         }).node.addComponent(MenuScreen)
         this.menu.onNavigate = action => this.navigate(action)
+        this.menu.isLevelIntro = () => this.controller?.isLevelIntro() ?? false
         this.controller = createLevelController(this.gameLayer, {
-            onMenu: () => this.navigate('gameOptions'),
+            onMenu: () => {
+                void SoundSystem.play(SoundEffect.Pause)
+                return this.navigate('gameOptions')
+            },
             onComplete: () => this.finish('award'),
             onGameOver: () => this.finish('gameOver'),
         })
@@ -141,7 +145,7 @@ export class GameApp extends Component {
                     }
                 }
                 controller.pause()
-                if (from === null && (target === 'pause' || target === 'gameOptions')) void SoundSystem.play(SoundEffect.Pause)
+                if (from === null && target === 'pause') void SoundSystem.play(SoundEffect.Pause)
                 if ((target === 'main' || target === 'pause') && controller.isRunning()) await controller.saveIfRunning()
                 const page = await menu.prepare(target)
                 return async () => {
@@ -356,7 +360,11 @@ export class GameApp extends Component {
             return
         }
         if (event.keyCode === KeyCode.ESCAPE) {
-            const action = this.currentPage ? MENU_PAGES[this.currentPage].back : this.controller?.canPause() ? 'pause' : null
+            if (!this.currentPage && this.controller?.cancelCursor()) {
+                event.propagationStopped = true
+                return
+            }
+            const action = this.currentPage ? MENU_PAGES[this.currentPage].back : this.controller?.canPause() ? 'gameOptions' : null
             if (action) void this.navigate(action)
         } else if (event.keyCode === KeyCode.KEY_R && (this.currentPage === 'award' || this.currentPage === 'gameOver')) {
             void this.navigate('restart')

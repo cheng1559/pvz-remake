@@ -17,6 +17,19 @@ import type { LevelDefinition } from '@/shared/content/gameplay'
 import { debugCondition, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
+/** A stored save that no longer matches the installed content or fails restore checks. */
+class IncompatibleSaveError extends Error {}
+
+/** Restore failures of a stored save become IncompatibleSaveError; other failures pass through. */
+async function restoring<T>(save: GameSave | undefined, task: () => T | Promise<T>): Promise<T> {
+    try {
+        return await task()
+    } catch (error) {
+        if (!save || error instanceof IncompatibleSaveError) throw error
+        throw new IncompatibleSaveError(error instanceof Error ? error.message : String(error))
+    }
+}
+
 export interface LevelController {
     show(): Promise<Node>
     play(options?: { forceNewGame?: boolean, levelId?: string, onRestore?: () => void }): Promise<Node>
@@ -24,6 +37,8 @@ export interface LevelController {
     isRunning(): boolean
     isPaused(): boolean
     canPause(): boolean
+    cancelCursor(): boolean
+    isLevelIntro(): boolean
     getLevelDefinition(): LevelDefinition | null
     isWon(): boolean
     countZombiesOnScreenForMusic(): number
@@ -92,11 +107,11 @@ export function createLevelController(
             }
             if (save) {
                 if (save.profileId !== await profileId()) throw new Error('GameSave belongs to another player profile')
-                if (!isCompatibleBaseContent(save.contentSet.base, base, content.saveCompatibleHashes)) {
-                    throw new Error('GameSave base content does not match the installed content')
+                if (!isCompatibleBaseContent(save.contentSet.base, base)) {
+                    throw new IncompatibleSaveError('GameSave base content does not match the installed content')
                 }
                 if (!sameMods(save.contentSet.mods, content.enabledMods)) {
-                    throw new Error('GameSave Mods do not match the installed gameplay Mods')
+                    throw new IncompatibleSaveError('GameSave Mods do not match the installed gameplay Mods')
                 }
             }
             if (!root.isValid) throw new Error('Level scene was closed while loading')
@@ -112,11 +127,11 @@ export function createLevelController(
                 save: save.server as unknown as JsonValue,
             } : { ...DEFAULT_START_OPTIONS, randomSeed: Math.floor(Math.random() * 0x100000000),
                 firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods }
-            game.start(startOptions)
+            await restoring(save, () => game.start(startOptions))
             const view = await LevelView.create(root, content, save?.levelId ?? levelId, playerName, game.render())
             scene = root.addComponent(LevelScene)
             scene.configure(game, view, startOptions, lifecycle)
-            if (save) await scene.restorePresentation(save.client)
+            if (save) await restoring(save, () => scene!.restorePresentation(save.client))
             if (!GameDebugSettings.rechargingEnabled) game.debugCommand('/cooldown false')
             if (!GameDebugSettings.sunCostEnabled) game.debugCommand('/suncost false')
             if (GameDebugSettings.plantInvincible) game.debugCommand('/plantinvincible true')
@@ -204,7 +219,16 @@ export function createLevelController(
             const stored = options.forceNewGame ? null : storeForProfile(await profileId()).load()
             const save = !requestedLevelId || stored?.levelId === requestedLevelId ? stored : null
             const levelId = requestedLevelId ?? save?.levelId ?? (await menuApi.getAdventure()).levelId
-            const root = await startLoading(save ?? undefined, levelId)
+            let root: Node
+            try {
+                root = await startLoading(save ?? undefined, levelId)
+            } catch (error) {
+                if (!save || !(error instanceof IncompatibleSaveError)) throw error
+                // AGENTS.md: dev saves only support the current format, so a mismatched save counts as no save.
+                console.warn(`[LevelController] Discarding incompatible save: ${error.message}`)
+                storeForProfile(await profileId()).delete()
+                return startLoading(undefined, requestedLevelId ?? (await menuApi.getAdventure()).levelId)
+            }
             if (save && current?.root.isValid) {
                 if (options.onRestore) {
                     current.scene.pause()
@@ -251,6 +275,18 @@ export function createLevelController(
             return current?.root.isValid === true && current.view.canOpenMenu &&
                 !current.scene.isPaused() && current.game.render().result === 'playing'
         },
+        cancelCursor() {
+            if (!current?.root.isValid) return false
+            const snapshot = current.game.render()
+            if (snapshot.paused || snapshot.result !== 'playing' || snapshot.cursor.mode === 'none') return false
+            current.game.command({ type: 'clearCursor' })
+            current.game.update(0)
+            current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())
+            return true
+        },
+        isLevelIntro() {
+            return current?.root.isValid === true && current.game.currentSnapshot?.phase === 'intro'
+        },
         pause() {
             if (current?.root.isValid) current.scene.pause()
         },
@@ -268,6 +304,7 @@ export function createLevelController(
         async saveIfRunning() {
             if (loading) await loading
             if (!current?.root.isValid || current.level.persistent === false || current.game.render().result === 'lost') return null
+            if (controller.isLevelIntro()) return null
             return save()
         },
         async deleteSave() {

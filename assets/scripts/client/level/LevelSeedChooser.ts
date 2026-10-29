@@ -6,6 +6,7 @@ import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
 import { uiNode } from '@/client/view/uiNode'
+import { fitViewport, uiAreaEdge, uiAreaInset } from '@/client/view/ClientViewport'
 import { easeInOut } from '@/client/view/GameScreenMath'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { GameCommand, WorldSnapshot } from '@/shared/protocol'
@@ -23,6 +24,9 @@ interface Choice {
     home: { x: number, y: number }
     slot: number
     motion?: { fromX: number, fromY: number, x: number, y: number, start: number, end: number }
+    /** SeedNotRecommendedToPick: grayed while it waits in the chooser. */
+    notRecommended: boolean
+    grayed?: boolean
 }
 
 /** Seed ownership/order comes from the server. Only card flights and panel motion live here. */
@@ -34,6 +38,7 @@ export class LevelSeedChooser {
     private introTick = 0
     private warningOpen = false
     private readonly panel: Node
+    private readonly edge: Node
     private readonly cards: Node
     private readonly flying: Node
     private readonly buttons: Node
@@ -41,27 +46,37 @@ export class LevelSeedChooser {
     private readonly start: UIButton
     private readonly emptySlots: Node[] = []
 
-    static async create(ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, inputRoot: Node): Promise<LevelSeedChooser> {
+    static async create(ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, inputRoot: Node,
+        notRecommended: (seedId: string) => string | undefined = () => undefined): Promise<LevelSeedChooser> {
         const [background, silhouette] = await Promise.all(['seedchooser_background', 'seedpacketsilhouette'].map(async id => {
             const sprite = await modResources.asset(id, SpriteFrame)
             if (!sprite) throw new Error(`Missing seed chooser sprite: ${id}`)
             return sprite
         }))
-        return new LevelSeedChooser(ui, content, parent, available, slots, background, silhouette, inputRoot)
+        return new LevelSeedChooser(ui, content, parent, available, slots, background, silhouette, inputRoot, notRecommended)
     }
 
-    private constructor(private readonly ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, background: SpriteFrame, silhouette: SpriteFrame, inputRoot: Node) {
+    private constructor(private readonly ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, background: SpriteFrame, silhouette: SpriteFrame, inputRoot: Node,
+        notRecommended: (seedId: string) => string | undefined = () => undefined) {
         const sprites = new SpriteRepository(content.registry, content.loader)
         this.previewTooltipSurface = uiNode({ name: 'ZombiePreviewTooltips', parent, active: false,
             position: { x: background.originalSize.width }, anchor: { x: 0, y: 1 },
             size: { width: 800 - background.originalSize.width, height: 600 } }).node
-        this.panel = uiNode({ name: 'SeedChooser', parent, active: false, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
+        fitViewport(this.previewTooltipSurface, size => {
+            // HUD's origin stays at (-400, 300); start at the left-anchored chooser edge and extend to the visible right edge.
+            const left = background.originalSize.width - uiAreaInset()
+            this.previewTooltipSurface.setPosition(left, size.height / 2 - 300)
+            this.previewTooltipSurface.getComponent(UITransform)!.setContentSize(Math.max(1, 400 + size.width / 2 - left), size.height)
+        })
+        // The chooser hugs the left screen edge together with the seed bank, keeping their relative position.
+        this.edge = uiAreaEdge(parent, 'left')
+        this.panel = uiNode({ name: 'SeedChooser', parent: this.edge, active: false, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
         ui.image(this.panel, background, { y: 87 })
         ui.label(this.panel, { text: ui.text('CHOOSE_YOUR_PLANTS'), font: 'yellow', color: Color.WHITE, x: 229, y: 110, baseline: true, align: 'center' })
         const shadows = uiNode({ name: 'ChooserShadows', parent: this.panel }).node
-        this.cards = uiNode({ name: 'ChooserCards', parent: parent, active: false }).node
-        this.flying = uiNode({ name: 'FlyingSeeds', parent: parent, active: false }).node
-        this.buttons = uiNode({ name: 'ChooserButtons', parent, active: false }).node
+        this.cards = uiNode({ name: 'ChooserCards', parent: this.edge, active: false }).node
+        this.flying = uiNode({ name: 'FlyingSeeds', parent: this.edge, active: false }).node
+        this.buttons = uiNode({ name: 'ChooserButtons', parent: this.edge, active: false }).node
         const grid = (index: number) => ({ x: index % 8 * 53 + 22, y: Math.floor(index / 8) * 73 + 128 })
         for (let index = available.length; index < 40; index++) ui.image(shadows, silhouette, grid(index))
         for (let index = 0; index < slots; index++) this.emptySlots.push(ui.image(this.cards, silhouette, { x: 85 + index * 59, y: 8 }).node)
@@ -78,12 +93,14 @@ export class LevelSeedChooser {
             const view = new SeedPacketView(args)
             view.node.setSiblingIndex(slots)
             const nameKey = visual.nameKey ?? String(visual.seedType).toUpperCase()
-            const tooltip = ui.tooltip(view.node, { title: ui.text(nameKey), text: ui.text(visual.tooltipKey ?? `${nameKey}_TOOLTIP`), gap: 0 })
+            const warning = notRecommended(id)
+            const tooltip = ui.tooltip(view.node, { title: ui.text(nameKey), text: ui.text(visual.tooltipKey ?? `${nameKey}_TOOLTIP`), gap: 0,
+                ...(warning ? { warning: ui.text(warning) } : {}) })
             const button = view.node.addComponent(UIButton)
             button.hapticsEnabled = false
             button.pressOnly = true
             button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= 425 && !this.warningOpen
-            const choice: Choice = { id, view, shadow, button, tooltip, home, slot: -1 }
+            const choice: Choice = { id, view, shadow, button, tooltip, home, slot: -1, notRecommended: warning !== undefined }
             button.onPress = () => {}
             button.onHoverChange = hovering => hovering && !this.inFlight ? tooltip.show() : tooltip.hide()
             this.choices.push(choice)
@@ -117,7 +134,7 @@ export class LevelSeedChooser {
     bind(send: (command: GameCommand) => void): void { this.send = send }
 
     placeBefore(node: Node): void {
-        for (const layer of [this.panel, this.cards, this.flying, this.buttons]) layer.setSiblingIndex(node.getSiblingIndex())
+        this.edge.setSiblingIndex(node.getSiblingIndex())
     }
 
     sync(snapshot: WorldSnapshot): void {
@@ -166,6 +183,12 @@ export class LevelSeedChooser {
         for (const choice of this.choices) {
             choice.view.node.active = this.panel.active && (choice.slot < 0 || this.choosing)
             if (choice.slot < 0 && !choice.motion) choice.view.node.setPosition(choice.home.x, y - choice.home.y)
+            // SeedChooserScreen::Draw grays not-recommended packets to 115 only while they sit in the chooser.
+            const grayed = choice.notRecommended && choice.slot < 0 && !choice.motion
+            if (grayed !== (choice.grayed ?? false)) {
+                choice.grayed = grayed
+                choice.view.applyColor(grayed ? new Color(115, 115, 115) : Color.WHITE)
+            }
         }
         this.syncPlaceholders()
         if (!this.panel.active) for (const choice of this.choices) choice.tooltip.hide()
@@ -212,7 +235,7 @@ export class LevelSeedChooser {
         const warning = this.snapshot?.seedChooser?.warning
         if (!warning) { this.send({ type: 'confirmSeeds' }); return }
         this.warningOpen = true
-        const dialog = this.ui.dialog(this.panel.parent!, { title: this.ui.text('DIALOG_WARNING'), message: this.ui.text(warning),
+        const dialog = this.ui.dialog(this.edge.parent!, { title: this.ui.text('DIALOG_WARNING'), message: this.ui.text(warning),
             confirmText: this.ui.text('DIALOG_BUTTON_YES'), cancelText: this.ui.text('REPICK_BUTTON') })
         void dialog.result.then(confirmed => {
             this.warningOpen = false

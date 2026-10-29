@@ -25,7 +25,7 @@ function snapshot(): any {
             widget: { message: 'Plant!', style: 'tutorial-level1', durationTicks: 100, pulseTick: 2 },
         },
         hud: {
-            sunFlashTicks: 0, previousPacketCooldown: null, progressWave: 1,
+            sunFlashTicks: 0, progressWave: 1,
             progressCountdownStart: 10, progressMeterWidth: 20, progressTick: 11,
         },
         audio: {
@@ -69,6 +69,7 @@ function snapshot(): any {
 
 test('Adventure 1-1 presentation snapshot round-trips every owned presentation section', () => {
     const value = snapshot()
+    value.intro.hasOpeningDialog = true
     assert.deepEqual(parseLevelPresentationSnapshot(JSON.parse(JSON.stringify(value))), value)
     const previous = JSON.parse(JSON.stringify(value))
     previous.particles[0].backend = 'v2'
@@ -84,6 +85,7 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
         return () => parseLevelPresentationSnapshot(value)
     }
     assert.throws(invalid(value => { value.extra = true }), /extra is not supported/)
+    assert.throws(invalid(value => { value.intro.hasOpeningDialog = 'yes' }), /hasOpeningDialog/)
     assert.throws(invalid(value => {
         value.intro.ticks = 854
         value.intro.previews = Array.from({ length: 5 }, (_, slot) => ({

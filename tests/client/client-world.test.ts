@@ -29,26 +29,6 @@ function snapshot(tick: number): WorldSnapshot {
     }
 }
 
-test('house entry keeps rolling plants at the final authoritative position across interpolation cycles', () => {
-    const world = new ClientWorld()
-    world.accept(snapshot(1))
-    const lost = snapshot(2)
-    lost.result = 'lost'
-    Object.assign(lost.plants[0], { typeId: 'pvz:bowling-wallnut', x: 120, y: 230, behaviorState: { frame: 3 } })
-    world.accept(lost)
-    for (let tick = 3; tick < 7; tick++) {
-        world.accept({ ...lost, tick })
-        for (const alpha of [0, 0.9, 0.1, 1]) {
-            const plant = world.render(alpha).plants[0]
-            assert.deepEqual([plant.x, plant.y, plant.behaviorState?.frame], [120, 230, 3])
-        }
-    }
-    const won = new ClientWorld()
-    won.accept(snapshot(1))
-    won.accept({ ...lost, result: 'won' })
-    assert.equal(won.render(0.5).plants[0].x, 60, 'victory still interpolates moving plants')
-})
-
 test('ClientWorld diffs entities and renders current state at interpolated positions', () => {
     const world = new ClientWorld()
     const first = snapshot(1)

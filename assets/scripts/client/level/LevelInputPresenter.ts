@@ -58,14 +58,15 @@ export class LevelInputPresenter {
         this.seedButtons = this.view.bindSeedPackets(index => this.selectSeedPacket(index))
         this.toolButtons = this.view.bindTools(id => this.selectTool(id))
         for (const button of [...this.seedButtons, ...this.toolButtons.map(entry => entry.button)]) button.hapticsEnabled = false
-        this.buttons.push(...this.seedButtons, ...this.toolButtons.map(entry => entry.button), this.view.bindMenu(() => {
+        const menu = this.view.bindMenu(() => {
             if (!this.enabled || !this.view.canOpenMenu) return
             if (this.game.render().cursor.mode !== 'none') this.cancelPlanting()
             else this.onMenu()
-        }))
+        })
+        this.buttons.push(...this.seedButtons, ...this.toolButtons.map(entry => entry.button), menu)
         for (const button of this.buttons) {
             button.canInteract = () => {
-                if (!this.enabled) return false
+                if (!this.enabled || button === menu && !this.view.canOpenMenu) return false
                 const snapshot = this.game.render()
                 return snapshot.result === 'playing' && snapshot.cursor.mode === 'none'
             }
@@ -254,8 +255,11 @@ export class LevelInputPresenter {
         } else this.placePlant(point)
     }
 
-    private placePlant({ x, y }: { x: number, y: number }): void {
+    private placePlant({ x, y: pointerY }: { x: number, y: number }): void {
         const board = this.view.board
+        const cursor = this.game.render().cursor
+        // Board::PlantingPixelToGridY picks some seeds' cells from below the pointer.
+        const y = pointerY + (cursor.mode === 'seed' ? this.view.pointerOffsetY(cursor.seedId) : 0)
         const { row, column } = boardCell(board, x, y)
         if (x < board.origin.x || y < board.origin.y) this.cancelPlanting()
         else this.game.command({

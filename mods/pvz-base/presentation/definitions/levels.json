@@ -120,5 +120,11 @@
       "choosing": "choose_seeds",
       "gameplay": "minigame"
     }
+  },
+  "pvz:adventure-2-1": {
+    "intro": {"previewCapacity": 10, "sod": "pvz:background2", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true},
+    "seedGuideSteps": [],
+    "lawnGuideSteps": [],
+    "advice": {}
   }
 }

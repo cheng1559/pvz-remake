@@ -386,7 +386,7 @@ test('startup repairs missing and corrupt records while leaving a usable manager
 
 
 test('Native installation, picker cleanup and on-demand installed reads share the Mod store', async () => {
-    const { manager, ModManager, fresh, modules, files, archive, jsb, load } = setup()
+    const { manager, ModManager, fresh, modules, files, archive, jsb } = setup()
     const directories = new Set<string>()
     let failCommit = false
     modules.cc.sys.isNative = true

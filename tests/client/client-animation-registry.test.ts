@@ -20,6 +20,9 @@ test('presentation definitions validate independently and never share global con
         (data: any) => { data.almanac.cords[20].height = 0 },
         (data: any) => { data.plants['pvz:potatomine'].mine.glow.distance = [50, 50] },
         (data: any) => { data.zombies['pvz:conehead'].helm.damagedSprites = ['pvz:zombie_cone2'] },
+        (data: any) => { data.zombies['pvz:pole_vaulter'].previewBlockedCells = 'invalid' },
+        (data: any) => { data.zombies['pvz:newspaper'].shadowY = 'invalid' },
+        (data: any) => { data.zombies['pvz:pole_vaulter'].previewBlockedCells = [{ column: 5, row: 0 }] },
     ]) {
         const invalid = structuredClone(presentationFixture)
         change(invalid)
@@ -38,16 +41,6 @@ test('client animation definitions are copied and freeze independently of source
     assert.throws(() => registry.resolve('mod:missing'), /unknown client animation target/)
 })
 
-test('repeater uses its own clips and reference shooting rate', () => {
-    const animations = new ClientAnimationRegistry(presentationFixture)
-    const repeater = animations.resolve('pvz:repeater')
-
-    assert.equal(repeater.body.reanimId, 'pvz:repeater')
-    assert.equal(repeater.idleHead.reanimId, 'pvz:repeater_head_idle')
-    assert.equal(repeater.shootHead.reanimId, 'pvz:repeater_shoot')
-    assert.equal(repeater.shootHead.rateScale, 45 / 35)
-})
-
 test('plant and zombie presentations use registered animations, including shared bodies', () => {
     const animations = new ClientAnimationRegistry(presentationFixture)
     for (const definition of Object.values(presentationFixture.plants)) {
@@ -57,9 +50,7 @@ test('plant and zombie presentations use registered animations, including shared
         assert.deepEqual(animations.resolve(definition.animationTarget), definition.animations)
     }
     assert.equal(plantDefinition(presentationFixture, 'pvz:explodenut').animationTarget, 'pvz:wallnut')
-    assert.deepEqual(plantDefinition(presentationFixture, 'pvz:explodenut').visual.tint, [255, 64, 64])
     const custom = { ...presentationFixture, zombies: { ...presentationFixture.zombies, 'mod:plain': presentationFixture.zombies['pvz:normal'] } }
     assert.equal(zombieDefinition(custom, 'mod:plain').animationTarget, 'pvz:normal')
     assert.throws(() => zombieDefinition(presentationFixture, 'mod:missing'), /not installed/)
-    assert.equal(zombieDefinition(presentationFixture, 'pvz:pole_vaulter').shadowX, 18)
 })

@@ -39,7 +39,8 @@ export class SunflowerView implements PlantView {
             this.blinkAtTick = tick + this.animations.nextPlantBlinkTicks()
         }
         const gray = Math.min(255, flash * 3)
-        for (const player of [this.body, this.blink]) player.setExtraAdditiveDraw(flash > 0, new Color(gray, gray, gray))
+        // The blink is attached to the body, so it takes the body's colors.
+        this.body.setExtraAdditiveDraw(flash > 0, new Color(gray, gray, gray))
     }
 
     snapshot(entityId: number): PlantViewSnapshot {

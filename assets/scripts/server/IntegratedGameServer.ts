@@ -8,7 +8,7 @@ import type {
 } from '@/shared/content/gameplay'
 import type { EnabledMod, ServerEvent, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import type { GameCommand, SeedAvailability } from '@/shared/protocol/index'
-import { jsonRoundTrip } from '@/shared/protocol/index'
+import { graveAt, jsonRoundTrip } from '@/shared/protocol/index'
 import { DeterministicRng } from './DeterministicRng'
 import { GameplayRegistry } from './GameplayRegistry'
 import {
@@ -67,6 +67,8 @@ export type CommandRejectionCode =
     | 'row-not-active'
     | 'column-out-of-range'
     | 'cell-occupied'
+    | 'cell-has-grave'
+    | 'cell-needs-grave'
     | 'item-not-found'
     | 'intro-not-complete'
     | 'intro-already-complete'
@@ -85,6 +87,8 @@ interface Session {
     mods: EnabledMod[]
     commands: Array<{ sequence: number, command: QueuedCommand }>
     commandResults: CommandResult[]
+    /** Grave advice on screen now; the next successful planting clears it once (Board::ClearAdvice). Not saved. */
+    graveAdvice?: string
 }
 
 export class IntegratedGameServer {
@@ -231,6 +235,8 @@ export class IntegratedGameServer {
             },
             wave: {
                 index: wave.index,
+                ...(wave.graves === undefined ? {} : { graves: wave.graves.map(grave => ({ ...grave })) }),
+                ...(wave.graveRiseAtTick === undefined ? {} : { graveRiseAtTick: wave.graveRiseAtTick }),
                 ...(wave.zombiesByWave === undefined ? {} : { zombiesByWave: wave.zombiesByWave.map(zombies => [...zombies]) }),
                 ...(wave.rowPicks === undefined ? {} : { rowPicks: wave.rowPicks.map(row => ({ ...row })) }),
                 ...(wave.hugeWaveAnnounced === undefined ? {} : { hugeWaveAnnounced: wave.hugeWaveAnnounced }),
@@ -274,6 +280,10 @@ export class IntegratedGameServer {
             save.wave.rowPicks.some(row => !definition.activeRows.includes(row.row)))) {
             throw new Error('Saved wave row history does not match the level')
         }
+        const board = this.definitions.boards[definition.board]
+        if (save.wave.graves?.some(grave => grave.row >= board.rows || grave.column >= board.columns)) {
+            throw new Error('Saved grave is outside the board')
+        }
         const slots = definition.conveyor ? 0 : definition.seedBankSlots ?? definition.seedPackets.length
         if (!!save.seedBank.conveyor !== !!definition.conveyor || save.seedBank.conveyor?.packets.some(packet => !definition.conveyor!.seeds.some(seed => seed.id === packet.seedId))) {
             throw new Error('Saved conveyor does not match the level')
@@ -283,14 +293,16 @@ export class IntegratedGameServer {
         if (save.seedBank.selection.mode === 'tool' && !definition.tools?.includes(save.seedBank.selection.toolId)) throw new Error('Saved tool is unavailable in this level')
         if (save.seedBank.choosing ? !definition.seedBankSlots || save.level.phase !== 'intro' || save.seedBank.packets.length > slots
             : save.seedBank.packets.length !== slots) throw new Error('Saved seed bank size does not match the level')
-        if (definition.seedBankSlots && (save.seedBank.choosing === undefined || save.seedBank.packets.some(packet => !availableSeeds(this.definitions, definition, save.tutorial.firstAdventure).includes(packet.seedId)))) {
+        // Only an open chooser is limited to unlocked seeds; /seed may put any installed seed in a confirmed bank.
+        if (definition.seedBankSlots && (save.seedBank.choosing === undefined || save.seedBank.choosing &&
+            save.seedBank.packets.some(packet => !availableSeeds(this.definitions, definition, save.tutorial.firstAdventure).includes(packet.seedId)))) {
             throw new Error('Saved seed choice does not match the level')
         }
         for (const packet of save.seedBank.packets) {
             if (!this.definitions.seeds[packet.seedId]) throw new Error(`Unknown saved seed: ${packet.seedId}`)
         }
         const selection = save.seedBank.selection
-        if (selection.mode === 'seed' && !save.seedBank.packets.some(packet => packet.seedId === selection.seedId) ||
+        if (selection.mode === 'seed' && !save.seedBank.packets[selection.slot] ||
             selection.mode === 'conveyor' && !save.seedBank.conveyor?.packets.some(packet => packet.id === selection.packetId)) {
             throw new Error('Saved selected seed is not in the seed bank')
         }
@@ -448,7 +460,7 @@ export class IntegratedGameServer {
                 bank.selection = { mode: 'conveyor', packetId: packet.id }
                 return
             }
-            case 'selectSeed': return this.selectSeed(session, command.seedId)
+            case 'selectSeed': return this.selectSeed(session, command.seedId, command.slot)
             case 'placePlant': return this.placePlant(session, command.row, command.column)
             case 'collectItemAt': return this.collectItem(session, command.itemId)
             default: return 'unsupported-command'
@@ -485,15 +497,15 @@ export class IntegratedGameServer {
         const seedBank = world.resources.get(SeedBankResource)
         const waves = world.resources.get(WaveResource)
         const tutorial = world.resources.get(TutorialResource)
-        const seedPackets = seedBank.packets.map(packet => {
+        const seedPackets = seedBank.packets.map((packet, slot) => {
             const cooldownRemaining = Math.max(0, packet.readyAtTick - gameplayTick)
-            const selected = seedBank.selection.mode === 'seed' && seedBank.selection.seedId === packet.seedId
+            const selected = seedBank.selection.mode === 'seed' && seedBank.selection.slot === slot
             return {
                 seedId: packet.seedId,
                 ready: cooldownRemaining === 0 && !selected,
                 selected,
                 cooldownRemaining,
-                availability: this.seedAvailability(session, packet.seedId),
+                availability: this.seedAvailability(session, packet.seedId, undefined, slot),
                 cooldownTotal: cooldownRemaining === 0
                     ? 0
                     : packet.cooldownTotal ?? this.definitions.seeds[packet.seedId].cooldownTicks,
@@ -506,6 +518,7 @@ export class IntegratedGameServer {
                 entityId: entity, ...plant, ...position,
                 ...(plant.ability ? { ability: { ...plant.ability } } : {}),
                 ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
+                ...(this.definitions.plants[plant.typeId].nocturnal && !level.board.night ? { asleep: true as const } : {}),
             }
         })
         const zombies = [...world.query(PositionComponent, ZombieComponent)].map(entity => {
@@ -526,9 +539,12 @@ export class IntegratedGameServer {
                 hasTongue: zombie.hasTongue,
                 hasArm: zombie.hasArm,
                 hitFlashCounter: zombie.hitFlashCounter,
+                ...(zombie.hitThroughShield ? { hitThroughShield: true as const } : {}),
                 helmHealth: zombie.helmHealth,
                 chilled: zombie.chilledTicks > 0,
                 hasPole: zombie.hasPole,
+                ...(zombie.riseTicks ? { riseTicks: zombie.riseTicks } : {}),
+                ...(this.definitions.zombies[zombie.typeId].enrage && zombie.helmHealth === 0 ? { enraged: true } : {}),
                 ...(zombie.behaviorState ? { behaviorState: jsonRoundTrip(zombie.behaviorState) } : {}),
                 ...position,
             }
@@ -580,6 +596,7 @@ export class IntegratedGameServer {
             ...(level.definition.seedBankSlots === undefined ? {} : { seedChooser: seedChooserSnapshot(world, this.definitions) }),
             conveyorPackets: seedBank.conveyor?.packets.map(packet => ({ ...packet, selected: seedBank.selection.mode === 'conveyor' && packet.id === seedBank.selection.packetId,
                 availability: this.seedAvailability(session, packet.seedId, packet.id) })) ?? [],
+            ...(waves.graves ? { graves: waves.graves.map(grave => ({ ...grave })) } : {}),
             plants,
             zombies,
             projectiles,
@@ -619,7 +636,7 @@ export class IntegratedGameServer {
             { phase: 'zombie', system: this.gameplay.zombieBehaviors.system(this.definitions) },
             { phase: 'projectile', system: createProjectileSystem(this.definitions) },
             { phase: 'mower', system: createMowerSystem(this.definitions) },
-            { phase: 'cleanup', system: createItemSystem() },
+            { phase: 'cleanup', system: createItemSystem(this.definitions) },
         ]
         for (const { phase, system } of systems) schedule.add(phase as Parameters<Schedule['add']>[0], system)
         return schedule
@@ -723,12 +740,13 @@ export class IntegratedGameServer {
         if (saved.item) world.add(saved.entityId, ItemComponent, { ...saved.item })
     }
 
-    private seedAvailability(session: Session, seedId: string, packetId?: number): SeedAvailability {
+    /** `slot` picks one bank packet; without it, the first packet holding `seedId` answers. */
+    private seedAvailability(session: Session, seedId: string, packetId?: number, slot?: number): SeedAvailability {
         const seedBank = session.world.resources.get(SeedBankResource)
         if (packetId !== undefined) return seedBank.conveyor?.packets.some(packet => packet.id === packetId && packet.seedId === seedId)
             ? {} : { reason: 'seed-not-available' }
-        const packet = seedBank.packets.find(packet => packet.seedId === seedId)
-        if (!packet) return { reason: 'seed-not-available' }
+        const packet = slot === undefined ? seedBank.packets.find(packet => packet.seedId === seedId) : seedBank.packets[slot]
+        if (packet?.seedId !== seedId) return { reason: 'seed-not-available' }
         if (getDebugRules(session.world).cooldown && packet.readyAtTick > session.gameplayTick) {
             return { reason: 'seed-not-ready', warningKey: 'WAITING_FOR_SEED' }
         }
@@ -746,16 +764,19 @@ export class IntegratedGameServer {
         return availability.reason
     }
 
-    private selectSeed(session: Session, seedId: string): CommandRejectionCode | undefined {
-        const availability = this.seedAvailability(session, seedId)
-        if (availability.reason) return this.rejectSeed(session, seedId, availability)
+    private selectSeed(session: Session, seedId: string, requestedSlot?: number): CommandRejectionCode | undefined {
         const seedBank = session.world.resources.get(SeedBankResource)
+        // Without a slot, prefer a ready copy of the seed so a recharging duplicate does not hide it.
+        const slots = seedBank.packets.flatMap((packet, slot) => packet.seedId === seedId ? [slot] : [])
+        const slot = requestedSlot ?? slots.find(slot => !this.seedAvailability(session, seedId, undefined, slot).reason) ?? slots[0]
+        const availability = this.seedAvailability(session, seedId, undefined, slot)
+        if (availability.reason) return this.rejectSeed(session, seedId, availability)
         if (session.world.resources.get(TutorialResource).cantAffordAdviceShown) {
             emitServerEvent(session.world.resources.get(EventQueueResource), 'adviceCleared', {
                 key: CANT_AFFORD_ADVICE,
             })
         }
-        seedBank.selection = { mode: 'seed', seedId }
+        seedBank.selection = { mode: 'seed', slot: slot! }
         getActiveTutorial(session.world)?.seedSelected?.(session.world, seedId)
     }
 
@@ -770,7 +791,7 @@ export class IntegratedGameServer {
         const seedId = selectedSeedId(seedBank)
         if (!seedId) return 'no-seed-selected'
 
-        const packet = seedBank.packets.find(packet => packet.seedId === seedId)
+        const packet = seedBank.selection.mode === 'seed' ? seedBank.packets[seedBank.selection.slot] : undefined
         const seed = this.definitions.seeds[seedId]
         const rules = getDebugRules(world)
         const sunCost = !seedBank.conveyor && rules.sunCost ? seed.sunCost : 0
@@ -789,6 +810,23 @@ export class IntegratedGameServer {
         if (!canPlantConveyorAt(world, column)) return 'column-out-of-range'
         const occupiedEntity = this.findPlantAt(world, row, column)
         if (occupiedEntity !== undefined) return 'cell-occupied'
+        // Board::CanPlantAt: graves block planting, except that a grave buster needs one.
+        const onGrave = !!graveAt(world.resources.get(WaveResource).graves, row, column)
+        if (onGrave !== (seed.placement === 'grave')) {
+            // Board::DisplayAdvice remembers the help index for the rest of this game.
+            const key = onGrave ? 'ADVICE_PLANT_NOT_ON_GRAVE' : 'ADVICE_GRAVEBUSTERS_ON_GRAVES'
+            const displayed = world.resources.get(TutorialResource).displayedAdvice ??= []
+            if (!displayed.includes(key)) {
+                displayed.push(key)
+                session.graveAdvice = key
+                emitServerEvent(world.resources.get(EventQueueResource), 'advice', { key, style: 'hint' })
+            }
+            return onGrave ? 'cell-has-grave' : 'cell-needs-grave'
+        }
+        if (session.graveAdvice) {
+            emitServerEvent(world.resources.get(EventQueueResource), 'adviceCleared', { key: session.graveAdvice })
+            session.graveAdvice = undefined
+        }
 
         const entity = this.createPlant(session, seedId, row, column)
         if (seedBank.conveyor) {
@@ -822,10 +860,11 @@ export class IntegratedGameServer {
         const plantedSeed = this.definitions.seeds[seedId]
         const definition = this.definitions.plants[plantedSeed.plant]
         const behaviorState = this.gameplay.plantBehaviors.createState(plantedSeed.plant, definition)
+        const offset = definition.plantingOffset, random = world.resources.get(RandomResource)
         const entity = world.createEntity()
         world.add(entity, PositionComponent, {
-            x: level.board.origin.x + column * level.board.cell.width,
-            y: level.board.origin.y + row * level.board.cell.height,
+            x: level.board.origin.x + column * level.board.cell.width + (offset ? random.integer(offset.min.x, offset.max.x) : 0),
+            y: level.board.origin.y + row * level.board.cell.height + (offset ? random.integer(offset.min.y, offset.max.y) : 0),
             row,
         })
         world.add(entity, PlantComponent, {
@@ -838,7 +877,7 @@ export class IntegratedGameServer {
             recentlyEatenCounter: 0,
             ...(behaviorState === undefined ? {} : { behaviorState }),
         })
-        const ability = initialPlantAbility(definition)
+        const ability = initialPlantAbility(definition, random)
         if (ability) world.get(entity, PlantComponent)!.ability = ability
         const delay = definition.shooter?.initialDelayTicks ?? definition.producer?.initialDelayTicks
         if (delay) world.add(entity, PlantAttackComponent, {
@@ -871,7 +910,9 @@ export class IntegratedGameServer {
         const { world } = session
         const bank = world.resources.get(SeedBankResource)
         if (bank.selection.mode !== 'tool' || bank.selection.toolId !== 'pvz:shovel') return 'unsupported-command'
-        const entity = this.findPlantAt(world, row, column)
+        // Board::ToolHitTestHelper: a grave buster cannot be dug up.
+        const found = this.findPlantAt(world, row, column)
+        const entity = found !== undefined && !this.definitions.plants[world.get(found, PlantComponent)!.typeId].graveBuster ? found : undefined
         bank.selection = { mode: 'none' }
         if (entity !== undefined) {
             world.destroyEntity(entity)
@@ -924,11 +965,11 @@ export class IntegratedGameServer {
         item.fadeTicks = 0
         const availableBefore = this.availableSun(world) - item.value
         const availableAfter = availableBefore + item.value
-        for (const packet of world.resources.get(SeedBankResource).packets) {
+        for (const [slot, packet] of world.resources.get(SeedBankResource).packets.entries()) {
             const seedCost = getDebugRules(world).sunCost ? this.definitions.seeds[packet.seedId].sunCost : 0
             const ready = packet.readyAtTick <= session.gameplayTick
             if (ready && availableBefore < seedCost && availableAfter >= seedCost) {
-                emitServerEvent(world.resources.get(EventQueueResource), 'seedPacketFlashRequested', { seedId: packet.seedId })
+                emitServerEvent(world.resources.get(EventQueueResource), 'seedPacketFlashRequested', { seedId: packet.seedId, slot })
                 getActiveTutorial(world)?.seedReady?.(world, session.gameplayTick, packet.seedId)
             }
             getActiveTutorial(world)?.sunCollected?.(world, session.gameplayTick, packet.seedId, ready && availableAfter >= seedCost)
@@ -959,6 +1000,8 @@ export class IntegratedGameServer {
 function abilityMatches(definition: GameplayDefinitions['plants'][string], state: string): boolean {
     if (definition.fuse) return state === 'fuse'
     if (definition.mine) return state === 'arming' || state === 'rising' || state === 'armed'
+    if (definition.producer?.growth) return state === 'small' || state === 'growing' || state === 'big'
+    if (definition.graveBuster) return state === 'landing' || state === 'eating'
     return state === 'ready' || state === 'biting' || state === 'got-one' || state === 'missed' ||
         state === 'digesting' || state === 'swallowing'
 }

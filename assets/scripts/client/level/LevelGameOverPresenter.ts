@@ -30,6 +30,7 @@ export class LevelGameOverPresenter {
     private black?: Graphics
 
     get active(): boolean { return this.ticks >= 0 }
+    get winnerId(): number | undefined { return this.winner?.entityId }
 
     static async loadAssets(presentation: BoardPresentation['gameOver']): Promise<SpriteFrame[]> {
         const [frames] = await Promise.all([

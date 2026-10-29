@@ -35,9 +35,9 @@ export class LevelBoardHud {
     private shovelHotkey?: UILabel
     private shovelX = 0
 
-    static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, plantCursor: Node, seedBank: LevelSeedBank): Promise<LevelBoardHud> {
+    static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, plantCursor: Node, seedBank: LevelSeedBank, playerName: string, tooltipSurface: Node): Promise<LevelBoardHud> {
         const root = uiNode({ name: 'BoardHud', parent, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
-        const result = new LevelBoardHud(root, content, ui)
+        const result = new LevelBoardHud(root, content, ui, playerName)
         const sprites = new SpriteRepository(content.registry, content.loader)
         const level = content.levels.levels[initial.levelId], board = content.definitions.boards[level.board]
         if (level.tools?.includes('pvz:shovel')) {
@@ -52,7 +52,7 @@ export class LevelBoardHud {
             })
             result.cursor = ui.image(root, shovelFrame).node
             result.cursor.active = false
-            result.tooltip = ui.tooltip(result.shovelBank, { text: ui.text('SHOVEL_TOOLTIP'), gap: 0, surface: parent })
+            result.tooltip = ui.tooltip(result.shovelBank, { text: ui.text('SHOVEL_TOOLTIP'), gap: 0, surface: tooltipSurface })
             result.shovelButton = result.shovelBank.addComponent(UIButton)
             result.shovelButton.rightClickTriggers = false
             result.shovelButton.touchSlide = false
@@ -76,14 +76,14 @@ export class LevelBoardHud {
             }).node
             result.stripe.setSiblingIndex(ground.getSiblingIndex() + 1)
         }
-        if (level.shovelTutorial) result.dave = await CrazyDaveView.create(root, content, ui)
+        if (level.shovelTutorial || level.introDialog && initial.tutorial.step !== 'complete') result.dave = await CrazyDaveView.create(root, content, ui)
         root.setSiblingIndex(plantCursor.getSiblingIndex())
         if (initial.tick > 0 || initial.phase === 'gameplay') result.delay = content.presentation.dave.delay
         result.sync(initial)
         return result
     }
 
-    private constructor(private root: Node, private content: LoadedContent, private ui: UI) {}
+    private constructor(private root: Node, private content: LoadedContent, private ui: UI, private playerName: string) {}
 
     get blocksIntro(): boolean { return !!this.dave && this.snapshot?.phase !== 'gameplay' && (this.snapshot?.tutorial.step !== 'complete' || this.dave.busy || this.delay < this.content.presentation.dave.delay) }
     get dialogReady(): boolean { return this.dave?.canAdvance ?? false }
@@ -100,12 +100,13 @@ export class LevelBoardHud {
         const dialog = snapshot.extensions['pvz:dialog'] as { index: number } | undefined
         if (this.dave && this.delay >= this.content.presentation.dave.delay && dialog?.index !== this.daveDialog) {
             this.daveDialog = dialog?.index
-            if (dialog) this.dave.say(this.ui.text(`CRAZY_DAVE_${dialog.index}`))
+            if (dialog) this.dave.say(this.ui.text(`CRAZY_DAVE_${dialog.index}`).replace(/\{PLAYER_NAME\}/g, this.playerName))
             else this.dave.leave()
         }
         if (this.shovelBank) {
             const layout = this.content.presentation.shovel
-            this.shovelBank.active = snapshot.result !== 'lost' && (!!this.dave || snapshot.phase === 'gameplay')
+            const level = this.content.levels.levels[snapshot.levelId]
+            this.shovelBank.active = snapshot.result !== 'lost' && (!!level.shovelTutorial || snapshot.phase === 'gameplay')
             this.shovelHotkey!.node.active = GameDebugSettings.hotkeysEnabled
             this.shovelButton!.interactable = (snapshot.extensions['pvz:tools'] as { available: string[] } | undefined)?.available.includes('pvz:shovel') === true
             if (snapshot.tutorial.step === 'shovel-pickup') {

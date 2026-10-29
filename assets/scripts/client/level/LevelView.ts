@@ -34,6 +34,8 @@ import { LevelGameOverPresenter } from './LevelGameOverPresenter'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { LevelSeedChooser } from './LevelSeedChooser'
 import { LevelBoardHud } from './LevelBoardHud'
+import { LevelGraves } from './LevelGraves'
+import { uiAreaEdge } from '@/client/view/ClientViewport'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -43,6 +45,7 @@ const PROGRESS_METER_HEIGHT = 27
 export type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 
 export class LevelView {
+    private graves?: LevelGraves
     private boardHud?: LevelBoardHud
     private hideConveyorBank = () => {}
     private seedChooser?: LevelSeedChooser
@@ -55,6 +58,8 @@ export class LevelView {
         return this.intro.complete
     }
     get canOpenMenu(): boolean { return this.introComplete || !!this.seedChooser?.active && this.seedChooser.choosing && this.intro.elapsedTicks >= 425 }
+    /** The chooser's menu button stays drawn, though disabled, from its arrival until the board's menu takes over. */
+    get menuVisible(): boolean { return this.introComplete || !!this.seedChooser && this.intro.elapsedTicks >= 425 }
 
     private constructor(
         private readonly root: Node,
@@ -79,7 +84,7 @@ export class LevelView {
         animations.freeze()
         const sprites = new SpriteRepository(content.registry, content.loader)
         const fonts = new FontRepository(content.registry, content.loader)
-        const helmSpriteIds = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => zombie.helm?.damagedSprites ?? []))]
+        const helmSpriteIds = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => [...(zombie.helm?.damagedSprites ?? []), ...[zombie.damagedArmSprite, zombie.enragedHeadSprite].filter((id): id is string => !!id)]))]
         const dropImages = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => Object.values(zombie.drops).flatMap(drop => drop?.image ? [drop.image] : [])))]
         const [
             background, seedbank, projectileEntries, projectileShadowEntries,
@@ -96,7 +101,7 @@ export class LevelView {
                 return [id, getAtlasFrame(atlas, shadow.cell, atlas.originalSize.width / shadow.columns, atlas.originalSize.height, shadow.columns)] as const
             })()] : [])),
             sprites.load('pvz:lawnmower_cached'),
-            sprites.load('pvz:plantshadow'),
+            sprites.load(boardDefinition.night ? 'pvz:plantshadow2' : 'pvz:plantshadow'),
             sprites.load('pvz:zombie_outerarm_upper2'),
             sprites.load('pvz:flagmeter'),
             sprites.load('pvz:flagmeterparts'),
@@ -135,13 +140,17 @@ export class LevelView {
             size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
         }).node
         bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
+        // The top bar keeps its original margins from the UI area's edges.
+        const bankLeft = uiAreaEdge(bankLayer, 'left'), bankRight = uiAreaEdge(bankLayer, 'right')
+        // Edge-anchored controls can sit outside the HUD's 800 width, so their tooltips clamp to the visible screen.
+        const tooltipSurface = uiNode({ name: 'TooltipSurface', parent: hud, position: { x: WIDTH / 2, y: -HEIGHT / 2 }, viewport: true }).node
         const mobileGridGuide = uiNode({
             name: 'MobilePlantGridGuide', parent: board, position: { x: -WIDTH / 2, y: HEIGHT / 2 },
             size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 }, graphics: true, active: false,
         }).node
         mobileGridGuide.setSiblingIndex(bankLayer.getSiblingIndex())
         const bank = uiNode({
-            node: slots.bank, parent: bankLayer, position: { x: 10, y: 0 }, anchor: { x: 0, y: 1 },
+            node: slots.bank, parent: bankLeft, position: { x: 10, y: 0 }, anchor: { x: 0, y: 1 },
             sprite: { frame: seedbank, sizeMode: Sprite.SizeMode.RAW, trim: false },
         }).node
         uiNode({ node: slots.seedPacket, position: { x: 85, y: -8 }, anchor: { x: 0, y: 1 } })
@@ -152,6 +161,11 @@ export class LevelView {
         const coinLayer = uiNode({
             node: slots.coinLayer, size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
         }).node
+        // The progress meter and level name keep their margin from the UI area's right edge, in the same draw order.
+        const hudRight = uiAreaEdge(hud, 'right')
+        hudRight.setSiblingIndex(slots.progressMeter.getSiblingIndex())
+        slots.progressMeter.setParent(hudRight)
+        slots.levelText.setParent(hudRight)
         const progressMeter = uiNode({
             node: slots.progressMeter, position: { x: 600, y: -575 },
             size: { width: PROGRESS_METER_WIDTH, height: PROGRESS_METER_HEIGHT }, anchor: { x: 0, y: 1 },
@@ -188,6 +202,8 @@ export class LevelView {
                 sprite: { frame: getAtlasFrame(flagMeterParts, 2, 25, 25, 3), sizeMode: Sprite.SizeMode.RAW, trim: false },
             })
         })
+        // Board::DrawProgressMeter draws the flags, then the "Level Progress" label, then the zombie head.
+        slots.progressTrack.setSiblingIndex(progressMeter.children.length - 1)
         progressHead.setSiblingIndex(progressMeter.children.length - 1)
         const levelText = ui.label(slots.levelText.parent!, {
             node: slots.levelText, text: '', font: houseOfTerror16, color: new Color(224, 187, 98, 255),
@@ -241,7 +257,13 @@ export class LevelView {
         levelCompleteFade.active = false
         const audio = new LevelAudioPresenter(presentation.board.music, content.presentation)
         const seedChooser = initial.seedChooser === undefined ? undefined
-            : await LevelSeedChooser.create(ui, content, hud, initial.seedChooser.availableSeeds, initial.seedChooser.slots, root)
+            : await LevelSeedChooser.create(ui, content, hud, initial.seedChooser.availableSeeds, initial.seedChooser.slots, root, seedId => {
+                // Board::SeedNotRecommendedForLevel: mushrooms by day, and grave busters without graves.
+                const seed = content.definitions.seeds[seedId]
+                if (content.definitions.plants[seed.plant].nocturnal && !boardDefinition.night) return 'NOCTURNAL_WARNING'
+                if (seed.placement === 'grave' && !level.graves?.length) return 'NOT_RECOMMENDED_FOR_LEVEL'
+                return undefined
+            })
         seedChooser?.placeBefore(cursorPreview)
         let view!: LevelView
         let entityRenderer!: LevelEntityRenderer
@@ -250,6 +272,7 @@ export class LevelView {
             previewTooltipSurface: seedChooser?.previewTooltipSurface,
             entityNodes: () => entityRenderer.nodes(),
             previewZombies: initial.wave.previewZombies ?? {},
+            hasOpeningDialog: initial.extensions['pvz:dialog'] !== undefined,
         })
         entityRenderer = new LevelEntityRenderer(
             root.layer, content, animations, {
@@ -273,7 +296,7 @@ export class LevelView {
         const hudPresenter = LevelHudPresenter.create({
             ui, content, level, seedChooser: initial.seedChooser, presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
             loadPacketSprite, packetCostFont: pico129,
-            adviceNode: slots.advice, adviceParent: hud, controlsParent: bankLayer, adviceFont: houseOfTerror28,
+            adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: bankRight, adviceFont: houseOfTerror28,
             tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
             cursorPlant, gridPlant,
             sunText, progressMeter, progressFillClip, progressFill, progressHead, levelText,
@@ -291,9 +314,12 @@ export class LevelView {
         )
         const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, gameOverFrames, presentation.board.gameOver)
         view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition)
+        entityRenderer.sunBankOffset = () => bankLeft.position.x
         view.seedChooser = seedChooser
-        if (level.tools?.length || level.conveyor || level.shovelTutorial || level.bowling) {
-            view.boardHud = await LevelBoardHud.create(hud, bankLayer, slots.sodClip, content, ui, initial, cursorPreview, hudPresenter.seedBank)
+        view.graves = await LevelGraves.create(entityLayer, entityRenderer, content, boardDefinition, initial.graves ?? [])
+        view.syncGraves(initial.phase === 'gameplay')
+        if (level.tools?.length || level.conveyor || level.shovelTutorial || level.introDialog || level.bowling) {
+            view.boardHud = await LevelBoardHud.create(hud, bankLeft, slots.sodClip, content, ui, initial, cursorPreview, hudPresenter.seedBank, playerName, tooltipSurface)
             if (level.conveyor) view.hideConveyorBank = () => { bank.active = false }
         }
         if (seedChooser) view.syncSeedChooserIntro = () => {
@@ -303,8 +329,8 @@ export class LevelView {
             const offset = intro.complete ? 0 : board.position.x
             hud.setPosition(-WIDTH / 2 - offset, HEIGHT / 2)
             bankLayer.setPosition(-WIDTH / 2 - offset, HEIGHT / 2)
-            // Board::Draw puts the bank above the board until CutScene::IsAfterSeedChooser, then below the entities.
-            const above = !intro.complete && tick <= 450
+            // Keep the bank above the entities until the return pan finishes at tick 600.
+            const above = !intro.complete && tick < 600
             if (above !== bankLayer.getSiblingIndex() > entityLayer.getSiblingIndex()) {
                 // The two layers are adjacent, so moving the bank to the entity layer's index swaps them.
                 bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
@@ -319,7 +345,13 @@ export class LevelView {
         return view
     }
 
+    /** Graves rise from the intro's grave tick; a level already in play shows them fully risen. */
+    private syncGraves(playing = false, effects = true): void {
+        this.graves?.sync(playing || this.intro.complete ? Infinity : this.intro.elapsedTicks - (this.intro.graveStartTick ?? 0), effects)
+    }
+
     updateIntro(dt: number): boolean {
+        this.syncGraves()
         if (this.boardHud) {
             this.boardHud.update(dt, this.intro.elapsedTicks)
             if (this.boardHud.blocksIntro) return false
@@ -332,6 +364,7 @@ export class LevelView {
     }
 
     bindSeedChooser(send: (command: GameCommand) => void): void { this.seedChooser?.bind(send) }
+    pointerOffsetY(seedId: string): number { return this.hud.pointerOffsetY(seedId) }
 
     setPointer(pointer?: { x: number, y: number }): void {
         this.boardHud?.setPointer(pointer)
@@ -369,7 +402,9 @@ export class LevelView {
         if (!paused && !this.presentationPaused) return
         this.presentationPaused = paused
         if (paused) {
+            const winnerId = this.gameOver.winnerId
             for (const component of this.root.getComponentsInChildren(Component)) {
+                if (winnerId !== undefined && this.entityRenderer.runsDuringGameOver(winnerId, component)) continue
                 if (component.enabled && (component instanceof ReanimPlayer || component instanceof ParticlePlayer)) {
                     this.pausedComponents.push(component)
                     component.enabled = false
@@ -391,6 +426,7 @@ export class LevelView {
         this.gameplayTick = snapshot.gameplayTick
         this.boardHud?.sync(snapshot)
         this.seedChooser?.sync(snapshot)
+        this.graves?.syncWorld(snapshot, typeId => this.definitions.plants[typeId]?.graveBuster?.eatTicks)
         this.entityRenderer.sync(snapshot, changes, events)
         this.hideConveyorBank()
         this.syncSeedChooserIntro()
@@ -398,13 +434,13 @@ export class LevelView {
         this.syncShake(snapshot.gameplayTick)
         this.end.sync(snapshot, events)
         for (const item of snapshot.items) this.end.syncAward(item, snapshot.levelId)
-        this.hud.sync(snapshot, events, this.introComplete, this.canOpenMenu)
+        this.hud.sync(snapshot, events, this.introComplete, this.menuVisible)
         for (const event of events) this.audio.play(event)
         this.syncHitboxes(snapshot)
         if (snapshot.result === 'lost') {
-            this.setPaused(true)
             this.end.cancelWarnings()
             this.gameOver.sync(snapshot, events)
+            this.setPaused(true)
         }
     }
 
@@ -479,9 +515,10 @@ export class LevelView {
 
     async restore(snapshot: LevelPresentationSnapshot): Promise<void> {
         await this.intro.restore(snapshot.intro)
+        this.syncGraves(false, false)
         this.hideConveyorBank()
         this.syncSeedChooserIntro()
-        this.hud.restore(snapshot.hud, snapshot.advice, this.introComplete)
+        this.hud.restore(snapshot.hud, snapshot.advice, this.introComplete, this.menuVisible)
         await this.entityRenderer.restore(snapshot.entities)
         await Promise.all([this.end.restore(snapshot.end), this.audio.restore(snapshot.audio)])
         await this.particles.restore(snapshot.particles)

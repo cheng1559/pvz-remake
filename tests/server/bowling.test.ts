@@ -96,7 +96,7 @@ test('seed and shovel selection are exclusive, including after save and on a non
     assert.equal(runCommand(normal, { type: 'selectTool', toolId: 'pvz:shovel' }), undefined)
     assert.equal(runCommand(normal, { type: 'selectSeed', seedId: 'pvz:peashooter' }), undefined)
     assert.equal(normal.snapshot().cursor.mode, 'seed')
-    assert.deepEqual(normal.save().seedBank.selection, { mode: 'seed', seedId: 'pvz:peashooter' })
+    assert.deepEqual(normal.save().seedBank.selection, { mode: 'seed', slot: 0 })
     runCommand(normal, { type: 'placePlant', row: 2, column: 0 })
     runCommand(normal, { type: 'selectTool', toolId: 'pvz:shovel' })
     assert.equal(runCommand(normal, { type: 'useToolAt', row: 2, column: 0 }), undefined)

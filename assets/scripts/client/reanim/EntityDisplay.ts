@@ -39,7 +39,7 @@ async function loadAssets() {
     } }
 }
 
-/** Use level clips and attachments; keep the catalog's UI placement and display-only poses. */
+/** Use level clips, attachments and shadows; keep the catalog's UI placement and display-only poses. */
 export function resolveEntityDisplay(kind: EntityKind, id: number, display: EntityDisplayLayout, animations: ClientAnimationRegistry): EntityDisplay {
     const target = display.animationTarget
     if (!target) {
@@ -53,8 +53,18 @@ export function resolveEntityDisplay(kind: EntityKind, id: number, display: Enti
     })
     let parts: DisplayPart[]
     let rate: readonly [number, number]
+    let drawOffset: [number, number]
+    let scale = 1
+    let shadowOffset: [number, number]
+    let shadowScale = 1
     if (kind === 'plants') {
         const body = 'body' in clips ? clips.body : 'armed' in clips ? clips.armed : clips.idle
+        const definition = animations.definitions.plants[target]
+        const { shadow } = definition
+        drawOffset = [body.x, -body.y]
+        scale = definition.scale
+        shadowOffset = [shadow.x, -shadow.y]
+        shadowScale = shadow.scale ?? 1
         parts = [part('body', body)]
         rate = 'idleHead' in clips ? animations.rates.shooterIdle : animations.rates.plantIdle
         if ('idleHead' in clips) parts.push(part('head', clips.idleHead, 'body'), part('face', clips.blink, 'head', true))
@@ -63,8 +73,14 @@ export function resolveEntityDisplay(kind: EntityKind, id: number, display: Enti
         } else if ('blink' in clips) parts.push(part('face', clips.blink, 'body', true))
         if ('armed' in clips) { parts[0].hiddenTracks = ['anim_glow']; rate = [12, 12] }
         parts[0].packetVisibleTracks = animations.definitions.plants[target]?.packetVisibleTracks
+        // The sun-shroom's packet shows the small one, while the almanac shows it grown.
+        if ('small' in clips) parts[0].packetId = clips.small.reanimId
     } else {
+        const definition = animations.definitions.zombies[target]
+        shadowOffset = [definition.shadowX, definition.shadowY ?? 92]
         if (!('idle' in clips)) throw new Error(`Missing zombie idle: ${target}`)
+        const [originX, originY] = animations.definitions.almanac.zombieOrigin.offset
+        drawOffset = [clips.idle.x - originX, originY - clips.idle.y]
         parts = [part('body', clips.idle)]
         rate = animations.rates.zombieIdle
         parts[0].hiddenTracks = ['anim_tongue']
@@ -82,7 +98,7 @@ export function resolveEntityDisplay(kind: EntityKind, id: number, display: Enti
         if (!shared) throw new Error(`Missing portrait part: ${target}.${part.name}`)
         return { ...shared, parent: undefined, track: undefined, behind: undefined, ...part }
     }) } : display.portrait
-    return { ...display, parts, rate, portrait: portrait as EntityDisplay['portrait'], nutBlink: 'blinkTwitch' in clips }
+    return { ...display, parts, rate, drawOffset, scale, shadowOffset, shadowScale, portrait: portrait as EntityDisplay['portrait'], nutBlink: 'blinkTwitch' in clips }
 }
 
 export function loadEntityDisplayAssets() {

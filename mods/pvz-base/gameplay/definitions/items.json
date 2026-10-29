@@ -1,1 +1,1 @@
-{"pvz:sun": {"value": 25, "width": 60, "height": 60}}
+{"pvz:sun": {"value": 25, "width": 60, "height": 60}, "pvz:smallsun": {"value": 15, "width": 60, "height": 60, "scale": 0.5}}

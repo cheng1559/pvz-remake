@@ -28,6 +28,8 @@ export interface ZombieHit {
     chillTicks?: number
     /** Potato mine kills leave no body, as DAMAGE_DOESNT_LEAVE_BODY does. */
     leaveBody?: boolean
+    /** Fume damage passes a shield (the newspaper) and still hits the body in full, as DAMAGE_HITS_SHIELD_AND_BODY does. */
+    hitsShieldAndBody?: boolean
 }
 
 /** Helm first, then body, following Zombie::TakeDamage. */
@@ -41,21 +43,41 @@ export function damageZombie(
 ): void {
     const zombie = world.get(entity, ZombieComponent)
     if (!zombie || isDeadOrDying(zombie) || damage <= 0) return
-    if (hit.flash !== false) zombie.hitFlashCounter = HIT_FLASH_TICKS
+    const shield = definitions.zombies[zombie.typeId].helm?.shield === true && zombie.helmHealth > 0
+    // While worn, the hit timer belongs to the shield. An exact break leaves no body hit to flash.
+    if (hit.flash !== false) zombie.hitFlashCounter = shield && damage === zombie.helmHealth && !hit.hitsShieldAndBody ? 0 : HIT_FLASH_TICKS
+    if (hit.flash !== false && shield) {
+        if (hit.hitsShieldAndBody) zombie.hitThroughShield = true
+        else delete zombie.hitThroughShield
+    }
     const events = world.resources.get(EventQueueResource)
-    if (hit.chillTicks !== undefined) chillZombie(world, entity, zombie, hit.chillTicks)
+    // A shield absorbs hits without chill, even when they exactly break it.
+    if (hit.chillTicks !== undefined &&
+        (!shield || damage > zombie.helmHealth)) {
+        chillZombie(world, entity, zombie, hit.chillTicks)
+    }
     let remaining = damage
     if (zombie.helmHealth > 0) {
         const absorbed = Math.min(zombie.helmHealth, remaining)
         zombie.helmHealth -= absorbed
         remaining -= absorbed
         if (zombie.helmHealth === 0) {
+            const enrage = definitions.zombies[zombie.typeId].enrage
+            if (enrage) {
+                zombie.enrageTicks = enrage.pauseTicks
+                zombie.state = 'walking'
+                zombie.animation = 'anim_gasp'
+                zombie.animationTime = 0
+                zombie.animationSpeed = 8 / ZOMBIE_ASSET_FPS
+                zombie.biteTicks = 0
+            }
             emitServerEvent(events, 'zombieHelmDropped', {
                 entityId: entity,
                 helm: definitions.zombies[zombie.typeId].helm?.type ?? 'cone',
                 ...(hit.leaveBody === false ? { silent: true } : {}),
             })
         }
+        if (shield && hit.hitsShieldAndBody) remaining = damage
     }
     if (remaining <= 0) return
     zombie.health = Math.max(0, zombie.health - remaining)
@@ -63,7 +85,8 @@ export function damageZombie(
         destroyZombie(world, definitions, entity, remover)
         return
     }
-    if (zombie.hasArm && zombie.health > 0 && zombie.health < zombie.maxHealth * 2 / 3) {
+    if (zombie.hasArm && !(definitions.zombies[zombie.typeId].helm?.shield === true && zombie.helmHealth > 0) &&
+        zombie.health > 0 && zombie.health < zombie.maxHealth * 2 / 3) {
         zombie.hasArm = false
         emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'arm' })
     }
@@ -127,5 +150,5 @@ function isDeadOrDying(zombie: Zombie): boolean {
 
 /** Standing zombies that ground weapons can hit; vaulting zombies are in the air. */
 export function isTargetableZombie(zombie: Zombie): boolean {
-    return zombie.health > 0 && (zombie.state === 'walking' || zombie.state === 'eating')
+    return zombie.health > 0 && !zombie.riseTicks && (zombie.state === 'walking' || zombie.state === 'eating')
 }

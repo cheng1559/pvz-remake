@@ -13,16 +13,22 @@ import {
     ZombieComponent,
 } from '../components'
 import { explode } from '../explosions'
+import { WaveResource } from '../levelState'
+import type { DeterministicRng } from '../DeterministicRng'
 import { destroyZombie, isTargetableZombie } from '../zombies/damage'
 
-export function initialPlantAbility(definition: PlantDefinition): PlantAbility | undefined {
+export function initialPlantAbility(definition: PlantDefinition, random?: DeterministicRng): PlantAbility | undefined {
     if (definition.fuse) return { state: 'fuse', ticks: definition.fuse.ticks }
     if (definition.mine) return { state: 'arming', ticks: definition.mine.armingTicks }
     if (definition.chomper) return { state: 'ready', ticks: 0 }
+    if (definition.producer?.growth) return { state: 'small', ticks: definition.producer.growth.ticks }
+    // The landing clip plays once at the body's random 10-15 fps.
+    const land = definition.graveBuster?.landTicks
+    if (land) return { state: 'landing', ticks: random ? random.integer(land.min, land.max) : land.min }
     return undefined
 }
 
-/** Fuse, mine and chomper plants, following Plant::UpdateAbilities. */
+/** Fuse, mine, chomper, sun-shroom and grave buster plants, following Plant::UpdateAbilities. */
 export function createPlantAbilitySystem(definitions: GameplayDefinitions): GameSystem {
     return {
         id: 'pvz:plant-abilities',
@@ -36,6 +42,8 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                 if (!ability) continue
                 const position = world.get(entity, PositionComponent)!
                 const definition = definitions.plants[plant.typeId]
+                // Plant::Update returns early while asleep, so a sleeping sun-shroom does not grow.
+                if (definition.nocturnal && !level.board.night) continue
                 const detonate = (explosion: ExplosionDefinition) => {
                     explode(world, definitions, position, explosion, commands)
                     emitServerEvent(events, 'plantExploded', {
@@ -94,6 +102,29 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                     case 'swallowing':
                         if (ability.ticks === 0) next('ready', 0)
                         break
+                    case 'small':
+                        // Plant::UpdateSunShroom: anim_grow, then the big sun-shroom.
+                        if (ability.ticks > 0) break
+                        next('growing', definition.producer!.growth!.growingTicks)
+                        emitServerEvent(events, 'plantGrew', { entityId: entity, typeId: plant.typeId })
+                        break
+                    case 'growing':
+                        if (ability.ticks === 0) next('big', 0)
+                        break
+                    case 'landing':
+                        if (ability.ticks === 0) next('eating', definition.graveBuster!.eatTicks)
+                        break
+                    case 'eating': {
+                        // Plant::UpdateGraveBuster: the grave and the buster disappear together.
+                        if (ability.ticks > 0) break
+                        const waves = world.resources.get(WaveResource)
+                        waves.graves = waves.graves?.filter(grave => grave.row !== position.row || grave.column !== plant.column)
+                        commands.destroyEntity(entity)
+                        emitServerEvent(events, 'graveBusted', {
+                            entityId: entity, row: position.row, column: plant.column, x: position.x, y: position.y,
+                        })
+                        break
+                    }
                 }
             }
         },

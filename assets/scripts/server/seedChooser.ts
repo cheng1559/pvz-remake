@@ -4,6 +4,7 @@ import type { GameCommand, WorldSnapshot } from '@/shared/protocol'
 import { LevelStateResource, SeedBankResource } from './components'
 import type { CommandRejectionCode } from './IntegratedGameServer'
 import { TutorialResource } from './levelState'
+import { getDebugRules } from './debug/DebugRules'
 
 /** Keep one catalog and its ordering; first-adventure unlocks belong to seed definitions. */
 export function availableSeeds(definitions: GameplayDefinitions, level: LevelDefinition, firstAdventure: boolean): string[] {
@@ -15,6 +16,7 @@ export function applySeedChoice(world: World, definitions: GameplayDefinitions, 
     const bank = world.resources.get(SeedBankResource)
     if (level.paused) return 'game-paused'
     if (level.phase !== 'intro' || !bank.choosing) return 'not-choosing-seeds'
+    if (world.resources.get(TutorialResource).dialogIndex !== undefined) return 'intro-not-complete'
     if (command.type === 'confirmSeeds') {
         if (bank.packets.length !== level.definition.seedBankSlots) return 'seed-choice-incomplete'
         bank.choosing = false
@@ -25,7 +27,8 @@ export function applySeedChoice(world: World, definitions: GameplayDefinitions, 
     if (index >= 0) bank.packets.splice(index, 1)
     else {
         if (bank.packets.length >= level.definition.seedBankSlots!) return 'seed-bank-full'
-        const cooldown = definitions.seeds[command.seedId].initialCooldownTicks ?? 0
+        // Like a planted packet's recharge, the opening recharge is skipped while `/cooldown false` is active.
+        const cooldown = getDebugRules(world).cooldown ? definitions.seeds[command.seedId].initialCooldownTicks ?? 0 : 0
         bank.packets.push({ seedId: command.seedId, readyAtTick: cooldown, cooldownTotal: cooldown })
     }
 }

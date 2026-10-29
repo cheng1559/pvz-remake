@@ -16,6 +16,7 @@ import type { MenuAction } from './MenuPages'
 import { formatMoney } from '@/client/ui/formatMoney'
 import { CrazyDaveView } from '@/client/characters/CrazyDaveView'
 import { loadClientContent } from '@/client/content/loadClientContent'
+import { uiAreaEdge } from '@/client/view/ClientViewport'
 
 const { ccclass } = _decorator
 const SPRITES = [
@@ -74,14 +75,20 @@ export class StoreScreen extends Component {
             position: { x: -42, y: -68 }, bubble: { sprite: 'pvz:store_speechbubble', x: 105, y: -58 }, clickToContinue: false,
         })
         this.dave.enter()
-        ui.image(this.node, this.sprites.coinbank, { x: 650, y: 559 })
-        this.money = ui.label(this.node, { text: '', font: 'money', color: new Color(180, 255, 90), x: 763, y: 583, baseline: true, align: 'right' })
+        // The money counter keeps its margin from the UI area's right edge.
+        const right = uiAreaEdge(this.node, 'right')
+        ui.image(right, this.sprites.coinbank, { x: 650, y: 559 })
+        this.money = ui.label(right, { text: '', font: 'money', color: new Color(180, 255, 90), x: 763, y: 583, baseline: true, align: 'right' })
         this.pageLabel = ui.label(this.node, { text: '', font: 'small', color: new Color(80, 80, 80), x: 470, y: 500, baseline: true, align: 'center' })
         this.arrows = ['prev', 'next'].map((name, index) => ui.button(this.node, {
             images: { normal: this.sprites[`store_${name}button`], hover: this.sprites[`store_${name}buttonhighlight`], disabled: this.sprites[`store_${name}buttondisabled`] },
             x: index ? 596 : 252, y: 402, pressOffset: [1, 1], releaseToNormalOnPressOut: true,
             pressSound: null, clickSound: SoundEffect.HatchbackClose, onClick: () => this.turnPage(index ? 1 : -1),
         }))
+        // The arrows are the car's taillights. The original draws them over Dave, so his entering arm
+        // passes behind a taillight; keep them below him instead.
+        const dave = this.node.getChildByName('CrazyDave')!
+        for (const arrow of this.arrows) arrow.node.setSiblingIndex(dave.getSiblingIndex())
         this.back = ui.button(this.node, {
             images: { normal: this.sprites.store_mainmenubutton, hover: this.sprites.store_mainmenubuttonhighlight, pressed: this.sprites.store_mainmenubuttondown },
             x: 366, y: 512, pressOffset: [1, 1], releaseToNormalOnPressOut: true, onClick: () => navigate('back'),

@@ -6,8 +6,8 @@
     "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
     "damagedArm": "damagedArm",
     "animations": {
-      "idle": {"reanimId": "pvz:zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "idle2": {"reanimId": "pvz:zombie_idle2", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+      "idle": {"reanimId": "pvz:zombie", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "idle2": {"reanimId": "pvz:zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk2": {"reanimId": "pvz:zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "eat": {"reanimId": "pvz:zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -41,7 +41,7 @@
     "damagedArm": "damagedArm",
     "flag": true,
     "animations": {
-      "idle": {"reanimId": "pvz:almanac_zombie_1_almanac1", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+      "idle": {"reanimId": "pvz:almanac_zombie_1_almanac1", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:flag_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk2": {"reanimId": "pvz:flag_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "eat": {"reanimId": "pvz:flag_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -76,7 +76,7 @@
     "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
     "damagedArm": "damagedArm",
     "animations": {
-      "idle": {"reanimId": "pvz:almanac_zombie_2_almanac2", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+      "idle": {"reanimId": "pvz:almanac_zombie_2_almanac2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:helm_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk2": {"reanimId": "pvz:helm_zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "eat": {"reanimId": "pvz:helm_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -117,7 +117,7 @@
     "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
     "damagedArm": "damagedArm",
     "animations": {
-      "idle": {"reanimId": "pvz:almanac_zombie_4_almanac4", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+      "idle": {"reanimId": "pvz:almanac_zombie_4_almanac4", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:helm_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk2": {"reanimId": "pvz:helm_zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "eat": {"reanimId": "pvz:helm_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -154,13 +154,17 @@
   "pvz:pole_vaulter": {
     "nameKey": "POLE_VAULTING_ZOMBIE",
     "animationTarget": "pvz:pole_vaulter",
-    "shadowX": 18,
+    "previewBlockedCells": [
+      {"column": 0, "row": 0}, {"column": 0, "row": 1}, {"column": 0, "row": 2},
+      {"column": 0, "row": 3}, {"column": 0, "row": 4}, {"column": 1, "row": 0}
+    ],
+    "shadowX": 30,
     "arm": {"lower": "Zombie_polevaulter_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_polevaulter_outerarm_upper"},
     "damagedArm": "poleVaulterDamagedArm",
     "vault": true,
     "heldTracks": ["Zombie_polevaulter_innerarm", "Zombie_polevaulter_innerhand", "Zombie_polevaulter_pole"],
     "animations": {
-      "idle": {"reanimId": "pvz:almanac_zombie_3_body", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+      "idle": {"reanimId": "pvz:almanac_zombie_3_body", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
       "walk": {"reanimId": "pvz:pole_vaulter_walk", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
       "walk2": {"reanimId": "pvz:pole_vaulter_walk", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
       "eat": {"reanimId": "pvz:pole_vaulter_eat", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
@@ -189,5 +193,40 @@
       }
     },
     "helmTracks": ["anim_cone", "anim_bucket"]
+  },
+  "pvz:newspaper": {
+    "nameKey": "NEWSPAPER_ZOMBIE",
+    "animationTarget": "pvz:newspaper",
+    "damagedArmSprite": "pvz:zombie_paper_leftarm_upper2",
+    "enragedHeadSprite": "pvz:zombie_paper_madhead",
+    "shadowX": 29,
+    "shadowY": 96,
+    "arm": {"lower": "Zombie_paper_leftarm_lower", "hand": "Zombie_paper_hands", "upper": "Zombie_paper_leftarm_upper"},
+    "damagedArm": "damagedArm",
+    "animations": {
+      "idle": {"reanimId": "pvz:newspaper_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:newspaper_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "walk2": {"reanimId": "pvz:newspaper_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:newspaper_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "gasp": {"reanimId": "pvz:newspaper_gasp", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "enragedWalk": {"reanimId": "pvz:newspaper_walk_nopaper", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "enragedEat": {"reanimId": "pvz:newspaper_eat_nopaper", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:newspaper_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "death2": {"reanimId": "pvz:newspaper_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
+    },
+    "drops": {
+      "head": {"track": "anim_head1", "effect": "pvz:zombienewspaperhead", "offset": [58, -30], "moweredEffect": "pvz:moweredzombiehead", "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]},
+      "arm": {"track": "Zombie_paper_leftarm_lower", "effect": "pvz:zombiearm", "offset": [25, -55], "moweredEffect": "pvz:moweredzombiearm", "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}], "image": "pvz:zombie_paper_leftarm_lower"}
+    },
+    "helmTracks": ["Zombie_paper_paper"],
+    "helm": {
+      "track": "Zombie_paper_paper",
+      "effect": "pvz:zombienewspaper",
+      "offset": [0, 0],
+      "impactSounds": [{"id": "splat", "foley": true, "pitchRange": 10}],
+      "damagedSprites": ["pvz:zombie_paper_paper2", "pvz:zombie_paper_paper3"], "showsHair": true,
+      "dropReanim": {"reanimId": "pvz:zombie_surprise", "offset": [-11, 0]}
+    }
   }
 }

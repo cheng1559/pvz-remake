@@ -123,6 +123,12 @@ export class LevelAudioPresenter {
             case 'plantExploded':
                 this.sounds(this.definitions.plants[String(event.data.typeId)]?.explosionSounds)
                 break
+            case 'plantAreaAttack':
+                // Plant::Fire plays the fume, and DoRowAreaDamage a splat for the zombies it hits.
+                this.sounds(this.definitions.plants[String(event.data.typeId)]?.fireSounds)
+                if (Number(event.data.hits) > 0) void SoundSystem.playFoley(SoundEffect.Splat)
+                break
+            case 'plantGrew': this.sounds([{ id: 'plantgrow', foley: true }]); break
             case 'mineRising': void SoundSystem.playFoley(SoundEffect.DirtRise); break
             case 'chomperBit': void SoundSystem.playFoley(SoundEffect.BigChomp); break
             case 'zombieChilled': void SoundSystem.playFoley(SoundEffect.Frozen); break
@@ -134,6 +140,11 @@ export class LevelAudioPresenter {
             case 'mowerActivated': void SoundSystem.playFoley(SoundEffect.Lawnmower); break
             case 'zombieMowered': void SoundSystem.playFoley(SoundEffect.Splat); break
             case 'plantEaten': void SoundSystem.play(SoundEffect.Gulp); break
+            case 'zombieHelmDropped':
+                if (event.data.helm === 'newspaper' && event.data.silent !== true) this.sounds([{ id: 'newspaper_rip', foley: true, pitchRange: -2 }])
+                break
+            case 'zombieEnraged': if (event.data.roar === true) this.sounds([{ id: Math.random() < 1 / 3 ? 'newspaper_rarrgh' : 'newspaper_rarrgh2', foley: true, pitchRange: -2 }]); break
+            case 'zombieRoseFromGrave': this.sounds([{ id: 'gravestone_rumble', foley: true, pitchRange: 10 }]); break
             case 'zombieDying': void SoundSystem.playFoley(SoundEffect.ZombieFalling1, 10); break
             case 'zombieGroaned': void SoundSystem.playFoley(SoundEffect.Groan); break
             case 'levelAwardDropped': void SoundSystem.playFoley(SoundEffect.Throw, 10); break

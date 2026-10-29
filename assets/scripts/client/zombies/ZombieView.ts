@@ -1,4 +1,4 @@
-import { Color, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
+import { Color, Mask, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { ClientContentLoader } from '@/client/content/ClientContentLoader'
@@ -8,6 +8,8 @@ import type { ZombieSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { LevelEntitySnapshot } from '@/client/level/LevelPresentationSnapshot'
 import type { ZombiePresentationDefinition } from '@/shared/content/presentation'
+import type { ZombieDefinition } from '@/shared/content/gameplay'
+import { EntityAttachments } from '@/client/view/EntityAttachments'
 
 type AnimationSlot = keyof (PoleVaulterAnimationDefinition & FlagZombieAnimationDefinition)
 const SLOTS: Record<ZombieSnapshot['animation'], AnimationSlot> = {
@@ -16,6 +18,7 @@ const SLOTS: Record<ZombieSnapshot['animation'], AnimationSlot> = {
     anim_run: 'run',
     anim_jump: 'jump',
     anim_eat: 'eat',
+    anim_gasp: 'gasp',
     anim_death: 'death',
     anim_death2: 'death2',
     mowered: 'mowered',
@@ -30,6 +33,8 @@ export interface ZombieViewSprites {
 
 export interface ZombieViewContext {
     node: Node
+    /** The zombie's attachment list: register flags, marks and other attached effects here. */
+    attachments: EntityAttachments
     shadowParent: Node
     content: Awaited<ReturnType<typeof loadIntegratedGameContent>>
     animations: ClientAnimationRegistry
@@ -45,6 +50,8 @@ export interface ZombieViewInstance {
     snapshot(entityId: number): ZombieViewSnapshot
     restore(snapshot: ZombieViewSnapshot): void | Promise<void>
     getTrackWorldPosition(trackId: string): Vec3 | null
+    /** The helm broke from a hit that leaves the body, so its drop effects play. */
+    helmDropped?(): void
     syncGameOverWalk(zombie: ZombieSnapshot, ticks: number, y: number, approachTicks?: number): void
     destroy(): void
 }
@@ -61,6 +68,7 @@ export class ZombieView implements ZombieViewInstance {
     private flag: ReanimPlayer | null = null
     private holdingFlag = false
     private latestZombie: ZombieSnapshot | null = null
+    private riseClip?: Node
 
     constructor(
         private readonly node: Node,
@@ -71,9 +79,10 @@ export class ZombieView implements ZombieViewInstance {
         shadow: SpriteFrame,
         private readonly sprites: ZombieViewSprites,
         private readonly presentation: ZombiePresentationDefinition,
-        private readonly helm?: { type: 'cone' | 'bucket', health: number },
+        private readonly helm?: ZombieDefinition['helm'],
         /** How far a vault lands ahead of the jump's last frame. */
         private readonly landingOffset = 0,
+        private readonly attachments = new EntityAttachments(),
     ) {
         this.shadowNode = uiNode({
             name: 'ZombieShadow', parent: shadowParent, anchor: { x: 0, y: 1 },
@@ -84,12 +93,25 @@ export class ZombieView implements ZombieViewInstance {
 
     sync(zombie: ZombieSnapshot): void {
         this.latestZombie = zombie
+        if (zombie.riseTicks && !this.riseClip) {
+            this.riseClip = uiNode({ name: 'GraveRiseClip', parent: this.node, position: { x: -50, y: 110 },
+                size: { width: 250, height: 220 }, anchor: { x: 0, y: 1 }, mask: Mask.Type.GRAPHICS_RECT }).node
+            // The mask stays above the ground; the body rises from below it.
+            this.riseClip.setPosition(-50, 110)
+        }
+        if (this.riseClip) {
+            this.riseClip.active = !!zombie.riseTicks
+            if (!zombie.riseTicks && this.player?.node.parent === this.riseClip) this.player.node.setParent(this.node)
+        }
+        // Zombie::PlayDeathAnim removes the surprise mark (AttachmentReanimTypeDie).
+        const dropReanim = this.presentation.helm?.dropReanim?.reanimId
+        if (dropReanim && (zombie.state === 'dying' || zombie.state === 'mowered')) this.attachments.remove(dropReanim)
         this.holdingFlag = this.presentation.flag === true && zombie.hasHead && zombie.state !== 'dying' && zombie.state !== 'mowered'
         uiNode({ node: this.node, opacity: zombie.alpha ?? 255 })
-        this.shadowNode.setPosition(this.node.position.x + this.shadowX, this.node.position.y - 92)
+        this.shadowNode.setPosition(this.node.position.x + this.shadowX, this.node.position.y - (this.presentation.shadowY ?? 92))
         // Zombie::HasShadow hides it while falling, burned, mowed or vaulting.
         this.shadowNode.active = zombie.state !== 'dying' && zombie.state !== 'mowered' && zombie.state !== 'burned' &&
-            zombie.state !== 'vaulting'
+            zombie.state !== 'vaulting' && !zombie.riseTicks
         this.applyHitFlash(zombie)
         this.applyColor(zombie)
         if (zombie.state === 'mowered') {
@@ -111,6 +133,34 @@ export class ZombieView implements ZombieViewInstance {
             this.applyParts(zombie)
             this.player?.seek(zombie.animationTime / 12 * this.definition(zombie.animation).rateScale)
         }
+        this.syncRise(zombie)
+    }
+
+    private syncRise(zombie: ZombieSnapshot): void {
+        // Only the grave-rise clip owns this offset; a pending landing keeps its jump-origin compensation.
+        if (!this.player || !this.riseClip) return
+        const clip = this.definition(zombie.animation)
+        if (zombie.riseTicks) {
+            this.player.node.setParent(this.riseClip)
+            this.player.node.setPosition(clip.x + 50, clip.y - 110 - Math.min(200, zombie.riseTicks * 4))
+        } else if (this.player.node.parent === this.node) this.player.node.setPosition(clip.x, clip.y)
+    }
+
+    helmDropped(): void {
+        const drop = this.presentation.helm?.dropReanim
+        if (!drop) return
+        // Zombie::AddAttachedReanim: follows the zombie and plays the whole clip once.
+        const node = uiNode({ name: 'HelmDrop', parent: this.node, position: { x: drop.offset[0], y: -drop.offset[1] } }).node
+        this.attachments.add(node, drop.reanimId)
+        const player = node.addComponent(ReanimPlayer)
+        const dispose = () => { if (node.isValid) node.destroy() }
+        void player.load(drop.reanimId, this.registry, this.loader).then(() => {
+            if (node.isValid) player.play({ loop: false, rate: 1, onFinish: dispose })
+            else dispose()
+        }, error => {
+            dispose()
+            if (this.node.isValid) console.error('[Level] Failed to load helm drop animation', error)
+        })
     }
 
     getTrackWorldPosition(trackId: string): Vec3 | null {
@@ -128,7 +178,7 @@ export class ZombieView implements ZombieViewInstance {
         const distance = (Math.floor(time / duration) - Math.floor(start / duration)) * cycleDistance
             + (player.sampleTrack('_ground', time % duration)?.x ?? 0) - (player.sampleTrack('_ground', start % duration)?.x ?? 0)
         this.node.setPosition(zombie.x - 400 - distance, 300 - y)
-        this.shadowNode.setPosition(this.node.position.x + this.shadowX, this.node.position.y - 92)
+        this.shadowNode.setPosition(this.node.position.x + this.shadowX, this.node.position.y - (this.presentation.shadowY ?? 92))
         player.seek(time % duration)
     }
 
@@ -264,6 +314,7 @@ export class ZombieView implements ZombieViewInstance {
             if (this.holdingFlag) {
                 const animation = this.definition('flag')
                 flag = uiNode({ name: 'Flag', parent: animationNode, position: animation }).node.addComponent(ReanimPlayer)
+                this.attachments.add(flag.node)
                 await flag.load(animation.reanimId, this.registry, this.loader)
                 if (!animationNode.isValid) return
                 this.attachFlag(flag, player, animation.attachmentTrackId ?? 'Zombie_flaghand')
@@ -301,6 +352,7 @@ export class ZombieView implements ZombieViewInstance {
                 previousPlayer.node.destroy()
             }
             animationNode.active = true
+            this.syncRise(zombie)
             if (latest.state === 'mowered') this.syncMowered(latest)
         } catch (error) {
             if (animationNode.isValid) animationNode.destroy()
@@ -331,7 +383,7 @@ export class ZombieView implements ZombieViewInstance {
         const arm = presentation.arm
         this.player.setTrackPrefixVisible('anim_head', zombie.hasHead)
         // Zombie::ZombieInitialize hides the hair under a helm until DropHelm shows it again.
-        this.player.setTrackPrefixVisible('anim_hair', zombie.hasHead && helmStage < 0)
+        this.player.setTrackPrefixVisible('anim_hair', zombie.hasHead && (helmStage < 0 || presentation.helm?.showsHair === true))
         this.player.setTrackPrefixVisible('anim_tongue', zombie.hasHead && zombie.hasTongue)
         // Zombie::DropPole: losing the head also drops the pole and the hand that holds it.
         for (const track of presentation.heldTracks ?? []) {
@@ -340,7 +392,8 @@ export class ZombieView implements ZombieViewInstance {
         this.player.setTrackPrefixVisible(arm.lower, zombie.hasArm)
         this.player.setTrackPrefixVisible(arm.hand, zombie.hasArm)
         this.player.setTrackSpriteOverride(arm.upper, zombie.hasArm ? null
-            : this.sprites[presentation.damagedArm])
+            : presentation.damagedArmSprite ? this.sprites.helms[presentation.damagedArmSprite] : this.sprites[presentation.damagedArm])
+        if (presentation.enragedHeadSprite) this.player.setTrackSpriteOverride('anim_head1', zombie.enraged && zombie.animation !== 'anim_gasp' ? this.sprites.helms[presentation.enragedHeadSprite] : null)
         const helm = presentation.helm
         for (const track of presentation.helmTracks) {
             const worn = helm?.track === track && helmStage >= 0
@@ -359,7 +412,7 @@ export class ZombieView implements ZombieViewInstance {
 
     private color: 'normal' | 'chilled' | 'burned' = 'normal'
 
-    /** Zombie::DrawShadow: the pole vaulter's shadow sits 5px further left. */
+    /** Zombie::DrawShadow offset in the original board coordinates. */
     private get shadowX(): number {
         return this.presentation.shadowX
     }
@@ -370,24 +423,41 @@ export class ZombieView implements ZombieViewInstance {
         if (!this.player || color === this.color && !force) return
         this.color = color
         const value = color === 'burned' ? new Color(0, 0, 0) : color === 'chilled' ? new Color(75, 75, 255) : Color.WHITE
+        // The flag is attached to the hand track, so it takes the body's colors.
         this.player.setColorOverride(value)
-        this.flag?.setColorOverride(value)
     }
 
     private applyHitFlash(zombie: ZombieSnapshot): void {
         const cold = zombie.chilled === true && zombie.state !== 'burned'
-        const grayness = Math.min(255, zombie.hitFlashCounter * 10)
+        const shield = this.helm?.shield === true && (zombie.helmHealth ?? 0) > 0 ? this.presentation.helm : undefined
+        // TakeShieldDamage flashes only the shield, unless the hit also reached the body (the Fume-shroom).
+        const through = zombie.hitThroughShield === true
+        const bodyFlash = shield && !through ? 0 : zombie.hitFlashCounter
+        const grayness = Math.min(255, bodyFlash * 10)
         // DrawReanim adds the cold tint and then adds the hit highlight on top of it.
         const color = new Color(Math.min(255, grayness + (cold ? 75 : 0)),
             Math.min(255, grayness + (cold ? 75 : 0)), cold ? 255 : grayness, 255)
-        const enabled = cold || zombie.hitFlashCounter > 0
-        this.flag?.setExtraAdditiveDraw(enabled, color)
+        const enabled = cold || bodyFlash > 0
         this.player?.setExtraAdditiveDraw(enabled, color)
+        if (shield && this.player) {
+            const flash = zombie.hitFlashCounter
+            const burned = zombie.state === 'burned'
+            const gray = Math.min(255, flash * 10)
+            this.player.setTrackRenderOverride(shield.track, {
+                color: burned ? Color.BLACK : flash > 0 ? new Color(gray, gray, gray) : Color.WHITE,
+                extraAdditive: !burned && flash > 0,
+                extraAdditiveColor: Color.WHITE,
+                // Shield flash lasts 25 ticks; recoil lasts the first 12 and starts 3px to the right.
+                offsetX: through ? 0 : Math.max(0, flash - 13) / 4,
+            })
+        }
     }
 
     private definition(animation: ZombieSnapshot['animation'] | AnimationSlot): ClientAnimationClip {
         const slot = animation in SLOTS ? SLOTS[animation as ZombieSnapshot['animation']] : animation as AnimationSlot
-        const clip = this.clips()[slot]
+        const enraged = this.latestZombie?.enraged
+        const clip = this.clips()[enraged && (slot === 'walk' || slot === 'walk2') ? 'enragedWalk'
+            : enraged && slot === 'eat' ? 'enragedEat' : slot]
         if (!clip) throw new Error(`${this.target} has no ${slot} animation`)
         return clip
     }

@@ -50810,7 +50810,9 @@
       "pvz:zombie_falling_1": "assets/audio/sfx/zombie_falling_1.mp3",
       "pvz:zombie_falling_2": "assets/audio/sfx/zombie_falling_2.mp3",
       "pvz:zombiesonyourlawn": "assets/audio/sfx/zombiesonyourlawn.mp3",
-      "pvz:zombiesplash": "assets/audio/sfx/zombiesplash.mp3"
+      "pvz:zombiesplash": "assets/audio/sfx/zombiesplash.mp3",
+      "pvz:night_moongrains_drums": "assets/audio/music/night_moongrains_drums.mp3",
+      "pvz:night_moongrains_main": "assets/audio/music/night_moongrains_main.mp3"
     },
     "json": {
       "pvz:almanac-animations": "assets/json/almanac-animations.json",
@@ -50926,7 +50928,9 @@
       "pvz:ui/strings": "presentation/ui-strings.json",
       "pvz:presentation/definitions": "assets/presentation.json",
       "pvz:gameplay/strings": "gameplay/strings.json",
-      "pvz:gameplay/store": "gameplay/store.json"
+      "pvz:gameplay/store": "gameplay/store.json",
+      "pvz:animations/zombie_surprise": "assets/json/animations/zombie_surprise.json",
+      "pvz:animations/z": "assets/json/animations/z.json"
     },
     "text": {
       "pvz:properties/resources": "assets/text/properties/resources.xml"
@@ -51043,7 +51047,6 @@
       "pvz:almanac_zombie_2_almanac2": "assets/reanim/almanac_zombie_2_almanac2.json",
       "pvz:almanac_zombie_3_body": "assets/reanim/almanac_zombie_3_body.json",
       "pvz:almanac_zombie_4_almanac4": "assets/reanim/almanac_zombie_4_almanac4.json",
-      "pvz:almanac_zombie_5_body": "assets/reanim/almanac_zombie_5_body.json",
       "pvz:almanac_zombie_6_almanac6": "assets/reanim/almanac_zombie_6_almanac6.json",
       "pvz:almanac_zombie_7_body": "assets/reanim/almanac_zombie_7_body.json",
       "pvz:almanac_zombie_8_body": "assets/reanim/almanac_zombie_8_body.json",
@@ -51135,7 +51138,32 @@
       "pvz:tree_cloud3": "assets/reanim/tree_cloud3.json",
       "pvz:tree_cloud4": "assets/reanim/tree_cloud4.json",
       "pvz:tree_cloud5": "assets/reanim/tree_cloud5.json",
-      "pvz:tree_cloud6": "assets/reanim/tree_cloud6.json"
+      "pvz:tree_cloud6": "assets/reanim/tree_cloud6.json",
+      "pvz:puffshroom": "assets/reanim/puffshroom.json",
+      "pvz:puffshroom_sleep": "assets/reanim/puffshroom_sleep.json",
+      "pvz:puffshroom_shoot": "assets/reanim/puffshroom_shoot.json",
+      "pvz:puffshroom_blink": "assets/reanim/puffshroom_blink.json",
+      "pvz:newspaper_walk": "assets/reanim/newspaper_walk.json",
+      "pvz:newspaper_walk_nopaper": "assets/reanim/newspaper_walk_nopaper.json",
+      "pvz:newspaper_eat": "assets/reanim/newspaper_eat.json",
+      "pvz:newspaper_eat_nopaper": "assets/reanim/newspaper_eat_nopaper.json",
+      "pvz:newspaper_gasp": "assets/reanim/newspaper_gasp.json",
+      "pvz:newspaper_death": "assets/reanim/newspaper_death.json",
+      "pvz:zombie_surprise": "assets/reanim/zombie_surprise.json",
+      "pvz:newspaper_idle": "assets/reanim/newspaper_idle.json",
+      "pvz:sunshroom": "assets/reanim/sunshroom.json",
+      "pvz:sunshroom_sleep": "assets/reanim/sunshroom_sleep.json",
+      "pvz:sunshroom_big": "assets/reanim/sunshroom_big.json",
+      "pvz:sunshroom_bigsleep": "assets/reanim/sunshroom_bigsleep.json",
+      "pvz:sunshroom_grow": "assets/reanim/sunshroom_grow.json",
+      "pvz:sunshroom_blink": "assets/reanim/sunshroom_blink.json",
+      "pvz:fumeshroom": "assets/reanim/fumeshroom.json",
+      "pvz:fumeshroom_sleep": "assets/reanim/fumeshroom_sleep.json",
+      "pvz:fumeshroom_shoot": "assets/reanim/fumeshroom_shoot.json",
+      "pvz:fumeshroom_blink": "assets/reanim/fumeshroom_blink.json",
+      "pvz:gravebuster_land": "assets/reanim/gravebuster_land.json",
+      "pvz:gravebuster": "assets/reanim/gravebuster.json",
+      "pvz:sleeping": "assets/reanim/sleeping.json"
     },
     "particles": {
       "pvz:artchallengeplant": "assets/particles/artchallengeplant.json",

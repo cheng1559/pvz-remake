@@ -24,6 +24,7 @@ import type {
 import type { Item, TutorialState, WaveState } from './levelState'
 import type { SavedComponents } from './JsonComponents'
 import { isQualifiedId } from '@/shared/mod'
+import { checkGraveRanges } from '@/shared/protocol'
 
 export interface SavedEntity {
     extensions?: SavedComponents
@@ -139,8 +140,8 @@ function parseSeedBank(value: unknown): SeedBankState {
     switch (selected.mode) {
         case 'none': exact(selected, ['mode'], 'selection'); selection = { mode: 'none' }; break
         case 'seed':
-            exact(selected, ['mode', 'seedId'], 'selection')
-            selection = { mode: 'seed', seedId: nonEmptyString(selected.seedId, 'selection.seedId') }; break
+            exact(selected, ['mode', 'slot'], 'selection')
+            selection = { mode: 'seed', slot: nonNegativeInteger(selected.slot, 'selection.slot') }; break
         case 'conveyor':
             exact(selected, ['mode', 'packetId'], 'selection')
             selection = { mode: 'conveyor', packetId: positiveInteger(selected.packetId, 'selection.packetId') }; break
@@ -158,9 +159,6 @@ function parseSeedBank(value: unknown): SeedBankState {
             ...(packet.cooldownTotal === undefined ? {} : { cooldownTotal: nonNegativeInteger(packet.cooldownTotal, `${name}.cooldownTotal`) }),
         }
     })
-    if (new Set(packets.map(packet => packet.seedId)).size !== packets.length) {
-        throw new TypeError('server save.seedBank.packets has duplicate seed IDs')
-    }
     let conveyor: SeedBankState['conveyor']
     if (source.conveyor !== undefined) {
         const data = optionalExact(source.conveyor, ['nextId', 'spawnAtTick', 'moveTicks', 'packets'], ['lastSeedId'], 'seedBank.conveyor')
@@ -232,10 +230,22 @@ function parseWave(value: unknown): WaveState {
     const source = optionalExact(
         value,
         ['index'],
-        ['nextWaveAtTick', 'accelerateAtTick', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced', 'rowPicks', 'zombiesByWave'],
+        ['nextWaveAtTick', 'accelerateAtTick', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced', 'rowPicks', 'zombiesByWave', 'graves', 'graveRiseAtTick'],
         'server save.wave',
     )
     const result: WaveState = { index: nonNegativeInteger(source.index, 'server save.wave.index') }
+    if (source.graveRiseAtTick !== undefined) result.graveRiseAtTick = nonNegativeInteger(source.graveRiseAtTick, 'wave.graveRiseAtTick')
+    if (source.graves !== undefined) {
+        result.graves = array(source.graves, 'wave.graves').map(value => {
+            const grave = exact(value, ['column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], 'grave')
+            const result = { column: nonNegativeInteger(grave.column, 'grave.column'), row: nonNegativeInteger(grave.row, 'grave.row'),
+                variant: integer(grave.variant, 'grave.variant'), riseDelay: integer(grave.riseDelay, 'grave.riseDelay'),
+                offsetX: integer(grave.offsetX, 'grave.offsetX'), offsetY: integer(grave.offsetY, 'grave.offsetY') }
+            checkGraveRanges(result, 'grave')
+            return result
+        })
+        if (new Set(result.graves.map(grave => `${grave.column}:${grave.row}`)).size !== result.graves.length) throw new TypeError('Duplicate graves')
+    }
     if (source.zombiesByWave !== undefined) result.zombiesByWave = array(source.zombiesByWave, 'server save.wave.zombiesByWave')
         .map((wave, index) => array(wave, `server save.wave.zombiesByWave[${index}]`).map(id => nonEmptyString(id, 'wave zombie ID')))
     if (source.nextWaveAtTick !== undefined) {
@@ -340,6 +350,7 @@ function parseMower(value: unknown, name: string): LawnMower {
 
 const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
     'fuse', 'arming', 'rising', 'armed', 'ready', 'biting', 'got-one', 'missed', 'digesting', 'swallowing',
+    'small', 'growing', 'big', 'landing', 'eating',
 ]
 
 function parsePlant(value: unknown, name: string): Plant {
@@ -378,7 +389,7 @@ function parsePlantAttack(value: unknown, name: string): PlantAttack {
 
 const ZOMBIE_STATES: readonly Zombie['state'][] = ['walking', 'eating', 'vaulting', 'dying', 'burned', 'mowered']
 const ZOMBIE_ANIMATIONS: readonly ZombieAnimation[] = [
-    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_death', 'anim_death2', 'mowered',
+    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_gasp', 'anim_death', 'anim_death2', 'mowered',
 ]
 
 function parseZombie(value: unknown, name: string): Zombie {
@@ -386,7 +397,7 @@ function parseZombie(value: unknown, name: string): Zombie {
         'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
         'moweredTicksRemaining', 'walkAnimation', 'animation', 'animationTime', 'animationSpeed', 'hasHead', 'hasArm',
         'hasTongue', 'hitFlashCounter', 'groanCounter', 'helmHealth', 'chilledTicks', 'hasPole',
-    ], ['behaviorState'], name)
+    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'hitThroughShield'], name)
     if (!ZOMBIE_STATES.includes(source.state as Zombie['state'])) throw new TypeError(`${name}.state is unknown`)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
@@ -421,14 +432,18 @@ function parseZombie(value: unknown, name: string): Zombie {
         helmHealth: nonNegativeInteger(source.helmHealth, `${name}.helmHealth`),
         chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
         hasPole: boolean(source.hasPole, `${name}.hasPole`),
+        ...(source.enrageTicks === undefined ? {} : { enrageTicks: nonNegativeFinite(source.enrageTicks, `${name}.enrageTicks`) }),
+        ...(source.riseTicks === undefined ? {} : { riseTicks: positiveInteger(source.riseTicks, `${name}.riseTicks`) }),
+        ...(source.hitThroughShield === undefined ? {} : { hitThroughShield: trueFlag(source.hitThroughShield, `${name}.hitThroughShield`) }),
         ...parseBehaviorState(source, name),
     }
 }
 
 function parseProjectile(value: unknown, name: string): Projectile {
-    const source = optionalExact(value, ['typeId'], ['sourcePlantId'], name)
+    const source = optionalExact(value, ['typeId'], ['sourcePlantId', 'ticksLeft'], name)
     return {
         typeId: nonEmptyString(source.typeId, `${name}.typeId`),
+        ...(source.ticksLeft === undefined ? {} : { ticksLeft: positiveInteger(source.ticksLeft, `${name}.ticksLeft`) }),
         ...(source.sourcePlantId === undefined ? {} : {
             sourcePlantId: positiveInteger(source.sourcePlantId, `${name}.sourcePlantId`),
         }),
@@ -500,6 +515,11 @@ function array(value: unknown, name: string): unknown[] {
 function nonEmptyString(value: unknown, name: string): string {
     if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${name} must be a non-empty string`)
     return value
+}
+
+function trueFlag(value: unknown, name: string): true {
+    if (value !== true) throw new TypeError(`${name} must be true`)
+    return true
 }
 
 function boolean(value: unknown, name: string): boolean {

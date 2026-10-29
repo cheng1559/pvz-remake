@@ -106,8 +106,14 @@ export interface PlantVisual {
 export interface PlantPresentationDefinition {
     readonly viewConfig?: Readonly<JsonObject>
     readonly rowOrder?: number
-    readonly shadow: { readonly x: number; readonly y: number }
+    readonly shadow: { readonly x: number; readonly y: number; readonly scale?: number }
     readonly scale: number
+    /** PlantDrawHeightOffset, in original Y-down pixels: the grid preview draws its cached image this far down. */
+    readonly drawHeightOffset?: number
+    /** Board::OffsetYForPlanting: the planted cell is picked this far below the pointer. */
+    readonly pointerOffsetY?: number
+    /** Plant::SetSleeping: extra offset of the Z animation from (50, 40), in original Y-down pixels. */
+    readonly sleepOffset?: readonly [number, number]
     readonly visual: PlantVisual
     readonly packetVisibleTracks?: readonly string[]
     readonly view?: PlantViewKind
@@ -117,6 +123,8 @@ export interface PlantPresentationDefinition {
     readonly explosion?: { readonly effect: string; readonly x: number; readonly rowOrder: boolean }
     readonly plantedSounds?: readonly PresentationSound[]
     readonly explosionSounds?: readonly PresentationSound[]
+    /** Played when an area shooter, like the Fume-shroom, fires. */
+    readonly fireSounds?: readonly PresentationSound[]
     readonly mine?: {
         readonly blinkTicks: readonly [number, number]
         readonly riseRate: number
@@ -177,14 +185,24 @@ export interface ZombiePresentationDefinition {
     readonly animationTarget: ClientAnimationTarget
     readonly animations: ClientAnimationDefinitions[ClientAnimationTarget]
     readonly shadowX: number
+    /** Original Y-down coordinates; defaults to 92. */
+    readonly shadowY?: number
     readonly arm: { readonly lower: string; readonly hand: string; readonly upper: string }
     readonly damagedArm: 'damagedArm' | 'poleVaulterDamagedArm'
+    readonly damagedArmSprite?: string
+    readonly enragedHeadSprite?: string
     readonly heldTracks?: readonly string[]
+    /** Unavailable cells in the 5x5 street-preview grid. */
+    readonly previewBlockedCells?: readonly { readonly column: number; readonly row: number }[]
     readonly flag?: boolean
     readonly vault?: boolean
     readonly drops: Readonly<Partial<Record<'head' | 'arm' | 'flag', ZombieDrop>>>
     readonly helmTracks: readonly string[]
-    readonly helm?: { readonly track: string; readonly damagedSprites: readonly [string, string]; readonly effect: string; readonly offset: readonly [number, number]; readonly impactSounds: readonly PresentationSound[]; readonly bowlingImpactSounds?: readonly PresentationSound[] }
+    readonly helm?: { readonly track: string; readonly damagedSprites: readonly [string, string]; readonly effect: string; readonly offset: readonly [number, number]; readonly impactSounds: readonly PresentationSound[]; readonly bowlingImpactSounds?: readonly PresentationSound[]
+        /** Cones and buckets hide the hair until dropped; a newspaper does not. */
+        readonly showsHair?: boolean
+        /** Plays once on the zombie when the helm breaks, like the newspaper's surprise mark. */
+        readonly dropReanim?: { readonly reanimId: string; readonly offset: readonly [number, number] } }
 }
 
 export type NutBlinkSlot = 'blinkTwitch' | 'blinkTwice' | 'blinkThrice'
@@ -219,6 +237,9 @@ export interface AwardPresentationDefinition {
     readonly pageImages?: readonly { readonly sprite: string; readonly x: number; readonly y: number; readonly width?: number; readonly height?: number }[]
 }
 const VIEW_SLOTS: Readonly<Record<string, readonly string[]>> = {
+    puffshroom: ['body', 'sleep', 'shoot', 'blink'],
+    sunshroom: ['body', 'small', 'sleep', 'bigSleep', 'grow', 'blink'],
+    gravebuster: ['body', 'land'],
     bowling: ['body', 'blinkTwitch', 'blinkTwice', 'blinkThrice'],
     shooter: ['body', 'idleHead', 'shootHead', 'blink'],
     sunflower: ['body', 'blink'],
@@ -368,8 +389,12 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (typeof visual.seedType !== 'string' && typeof visual.seedType !== 'number') throw new TypeError(id + '.seedType is invalid')
         if (visual.preview !== undefined && (!Number.isInteger(visual.preview) || (visual.preview as number) < 0)) throw new TypeError(id + '.preview is invalid')
         point(plant.shadow, id + '.shadow')
+        if ((plant.shadow as Record<string, unknown>).scale !== undefined) positive((plant.shadow as Record<string, unknown>).scale, id + '.shadow.scale')
         positive(plant.scale, id + '.scale')
         if (plant.rowOrder !== undefined) finite(plant.rowOrder, id + '.rowOrder')
+        if (plant.drawHeightOffset !== undefined) finite(plant.drawHeightOffset, id + '.drawHeightOffset')
+        if (plant.pointerOffsetY !== undefined) finite(plant.pointerOffsetY, id + '.pointerOffsetY')
+        if (plant.sleepOffset !== undefined) pair(plant.sleepOffset, id + '.sleepOffset')
         if (plant.packetVisibleTracks !== undefined) texts(plant.packetVisibleTracks, id + '.packetVisibleTracks')
         if (visual.nameKey !== undefined) text(visual.nameKey, id + '.visual.nameKey')
         if (visual.tooltipKey !== undefined) text(visual.tooltipKey, id + '.visual.tooltipKey')
@@ -378,6 +403,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (typeof plant.view === 'string' && VIEW_SLOTS[plant.view] && !plant.animationTarget) throw new TypeError(id + '.animationTarget is missing')
         sounds(plant.plantedSounds, id + '.plantedSounds')
         sounds(plant.explosionSounds, id + '.explosionSounds')
+        sounds(plant.fireSounds, id + '.fireSounds')
         if (plant.explosion !== undefined) {
             const explosion = object(plant.explosion, id + '.explosion')
             text(explosion.effect, id + '.explosion.effect'); finite(explosion.x, id + '.explosion.x')
@@ -398,8 +424,22 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     for (const [id, entry] of Object.entries(zombies)) {
         const zombie = object(entry, id), arm = object(zombie.arm, id + '.arm')
         if (zombie.nameKey !== undefined) text(zombie.nameKey, id + '.nameKey')
+        if (zombie.damagedArmSprite !== undefined) text(zombie.damagedArmSprite, id + '.damagedArmSprite')
+        if (zombie.enragedHeadSprite !== undefined) text(zombie.enragedHeadSprite, id + '.enragedHeadSprite')
         if (zombie.view !== undefined) text(zombie.view, id + '.view')
+        if (zombie.previewBlockedCells !== undefined) {
+            if (!Array.isArray(zombie.previewBlockedCells)) throw new TypeError(id + '.previewBlockedCells must be an array')
+            for (const value of zombie.previewBlockedCells) {
+                const cell = object(value, id + '.previewBlockedCells[]')
+                for (const key of ['column', 'row']) {
+                    if (!Number.isInteger(cell[key]) || (cell[key] as number) < 0 || (cell[key] as number) > 4) {
+                        throw new TypeError(id + '.previewBlockedCells[].' + key + ' must be an integer between 0 and 4')
+                    }
+                }
+            }
+        }
         if (typeof zombie.animationTarget !== 'string' || !Number.isFinite(zombie.shadowX)) throw new TypeError(id + ' has invalid presentation')
+        if (zombie.shadowY !== undefined) finite(zombie.shadowY, id + '.shadowY')
         for (const track of ['lower', 'upper', 'hand']) if (typeof arm[track] !== 'string') throw new TypeError(id + '.arm.' + track + ' is invalid')
         object(zombie.animations, id + '.animations')
         if (zombie.damagedArm !== 'damagedArm' && zombie.damagedArm !== 'poleVaulterDamagedArm') throw new TypeError(id + '.damagedArm is invalid')
@@ -419,6 +459,12 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             if ((helm.damagedSprites as string[]).length !== 2) throw new TypeError(id + '.helm.damagedSprites must have two entries')
             if (!(zombie.helmTracks as string[]).includes(helm.track as string)) throw new TypeError(id + '.helm.track is missing from helmTracks')
             pair(helm.offset, id + '.helm.offset')
+            if (helm.showsHair !== undefined && typeof helm.showsHair !== 'boolean') throw new TypeError(id + '.helm.showsHair must be boolean')
+            if (helm.dropReanim !== undefined) {
+                const reanim = object(helm.dropReanim, id + '.helm.dropReanim')
+                text(reanim.reanimId, id + '.helm.dropReanim.reanimId')
+                pair(reanim.offset, id + '.helm.dropReanim.offset')
+            }
             sounds(helm.impactSounds, id + '.helm.impactSounds', true)
             sounds(helm.bowlingImpactSounds, id + '.helm.bowlingImpactSounds')
         }

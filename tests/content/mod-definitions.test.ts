@@ -30,7 +30,6 @@ import { runCommand } from '../server/run-command'
 import { parseModContent, contentJson } from '@/shared/mod/content'
 import { getDebugCliCompletions, parseDebugCliCommand } from '@/shared/debug/DebugCli'
 
-const json = (path: string): any => JSON.parse(readFileSync(path, 'utf8'))
 const base = () => readBaseContent().gameplay
 const gameplay = () => ({ ownerId: 'example:showcase', data: readModContent('mods/example/content.json').gameplay })
 const presentation = () => ({ ownerId: 'example:showcase', data: readModContent('mods/example/content.json').presentation })

@@ -1,5 +1,5 @@
 import type { GameSystem, World } from '@/ecs/index'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { SUN_BANK_TARGET, type GameplayDefinitions } from '@/shared/content/gameplay'
 import {
     EconomyStateResource,
     LevelStateResource,
@@ -10,8 +10,7 @@ import {
 } from './components'
 import { ItemComponent, type Item } from './levelState'
 
-const SUN_BANK_X = 15
-const SUN_BANK_Y = 0
+const { x: SUN_BANK_X, y: SUN_BANK_Y } = SUN_BANK_TARGET
 
 export function getAvailableSun(world: World, definitions: GameplayDefinitions): number {
     const economy = world.resources.get(EconomyStateResource)
@@ -23,7 +22,7 @@ export function getAvailableSun(world: World, definitions: GameplayDefinitions):
     return sun
 }
 
-export function createItemSystem(): GameSystem {
+export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
     return {
         id: 'pvz:items',
         run({ world, commands }) {
@@ -57,7 +56,8 @@ export function createItemSystem(): GameSystem {
                         economy.sun = Math.min(MAX_SUN, economy.sun + item.value - spent)
                         commands.destroyEntity(entity)
                     } else {
-                        item.scale = Math.max(0.5, Math.min(1, distance * 0.05))
+                        // Coin::Update shrinks collected sun toward the counter, scaled like the small sun's 0.5.
+                        item.scale = Math.max(0.5, Math.min(1, distance * 0.05)) * (definitions.items[item.typeId]?.scale ?? 1)
                     }
                     continue
                 }
@@ -66,7 +66,7 @@ export function createItemSystem(): GameSystem {
                     if (item.fadeTicks <= 0) commands.destroyEntity(entity)
                     continue
                 }
-                if (item.accelerationY) item.scale = Math.min(1, item.scale + 0.02)
+                if (item.accelerationY) item.scale = Math.min(definitions.items[item.typeId]?.scale ?? 1, item.scale + 0.02)
                 if (position.y + item.velocityY < item.groundY) {
                     moveItemWithinHorizontalBounds(world, position, item)
                     position.y += item.velocityY

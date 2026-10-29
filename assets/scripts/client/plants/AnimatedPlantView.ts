@@ -18,6 +18,8 @@ export abstract class AnimatedPlantView implements PlantView {
     private blinking = false
     protected body: ReanimPlayer
     protected readonly extras = new Map<string, ReanimPlayer>()
+    /** The Z animation over a sleeping mushroom. */
+    private sleeping?: ReanimPlayer
     protected readonly node: Node
     protected readonly content: PlantViewContext['content']
     protected readonly animations: PlantViewContext['animations']
@@ -31,9 +33,17 @@ export abstract class AnimatedPlantView implements PlantView {
     }
 
     async initialize(): Promise<void> {
-        const shadow = this.shadow
-        uiNode({ name: 'PlantShadow', parent: this.node, position: { ...shadow, z: -1 }, anchor: { x: 0, y: 1 },
-            sprite: { frame: this.assets.shadow, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node.setSiblingIndex(0)
+        if (this.hasShadow) {
+            const shadow = this.shadow
+            const shadowScale = shadow.scale ?? 1, size = this.assets.shadow.originalSize
+            const shadowNode = uiNode({ name: 'PlantShadow', parent: this.node, position: {
+                x: shadow.x + size.width * (1 - shadowScale) / 2,
+                y: shadow.y - size.height * (1 - shadowScale) / 2, z: -1,
+            }, anchor: { x: 0, y: 1 },
+                sprite: { frame: this.assets.shadow, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node
+            shadowNode.setSiblingIndex(0)
+            shadowNode.setScale(shadowScale, shadowScale, 1)
+        }
         await this.loadAnimations()
         if (!this.node.isValid) return
         for (const [name, player] of this.extras) {
@@ -50,7 +60,9 @@ export abstract class AnimatedPlantView implements PlantView {
     }
 
     protected get isNut(): boolean { return false }
-    protected get shadow(): { x: number; y: number } { return plantDefinition(this.animations.definitions, this.context.plant.typeId).shadow }
+    /** Plant::DrawShadow skips a few plants, such as the grave buster. */
+    protected get hasShadow(): boolean { return true }
+    protected get shadow(): { x: number; y: number; scale?: number } { return plantDefinition(this.animations.definitions, this.context.plant.typeId).shadow }
     protected async loadAnimations(): Promise<void> {}
     protected startBody(): void {}
     protected onAbilityChanged(_state: string | undefined, _tick: number): void {}
@@ -78,9 +90,29 @@ export abstract class AnimatedPlantView implements PlantView {
     sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle): void {
         void this.syncAbility(plant.ability?.state, world.gameplayTick)
         const gray = Math.min(255, plant.eatenFlashCounter * 3)
-        for (const player of [this.body, ...this.extras.values()]) player.setExtraAdditiveDraw(plant.eatenFlashCounter > 0, new Color(gray, gray, gray))
+        // Extras attached to the body's tracks take its colors.
+        this.body.setExtraAdditiveDraw(plant.eatenFlashCounter > 0, new Color(gray, gray, gray))
         this.syncVisuals(plant, world, particle)
         this.syncBlink(world.gameplayTick)
+        this.syncSleeping(plant.asleep === true)
+    }
+
+    /** Plant::SetSleeping: a Z animation at (50, 40) loops at 6-8 fps from a random point while asleep. */
+    private syncSleeping(asleep: boolean): void {
+        if (!asleep) {
+            if (this.sleeping?.node.isValid) this.sleeping.node.destroy()
+            this.sleeping = undefined
+            return
+        }
+        if (this.sleeping) return
+        const [x, y] = plantDefinition(this.animations.definitions, this.context.plant.typeId).sleepOffset ?? [0, 0]
+        const node = uiNode({ name: 'Sleeping', parent: this.node, position: { x: 50 + x, y: -40 - y } }).node
+        const player = this.sleeping = node.addComponent(ReanimPlayer)
+        void player.load('pvz:sleeping', this.content.registry, this.content.loader).then(() => {
+            if (node.isValid) player.play({ loop: true, rate: (6 + Math.random() * 2) / 12, timeSeconds: Math.random() * 0.9 * player.durationSeconds })
+        }, error => {
+            if (node.isValid) console.error('[Plant] Failed to load the sleeping animation', error)
+        })
     }
 
     snapshot(entityId: number): PlantViewSnapshot {
@@ -121,7 +153,7 @@ export abstract class AnimatedPlantView implements PlantView {
     }
 
     /** Keep the outgoing player alive until its pose has been captured for blending. */
-    private async playBody(clip: ClientAnimationClip, loop: boolean, rate: number, blend: number): Promise<void> {
+    protected async playBody(clip: ClientAnimationClip, loop: boolean, rate: number, blend: number): Promise<void> {
         const version = ++this.bodyVersion
         const previous = this.body
         let player = previous

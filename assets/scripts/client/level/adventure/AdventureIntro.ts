@@ -38,6 +38,8 @@ const LAWN_MOWER_DURATION = 25
 const SEED_BANK_START = 600
 const SEED_BANK_DURATION = 25
 const HOUSE_NAME_DURATION = 250
+/** CutScene::mGraveStoneTime: night graves rise after the pan, delaying the mowers and Ready-Set-Plant. */
+const GRAVE_STONE_TICKS = 100
 
 /** CutScene::PlaceStreetZombies apportions the configured slots from the actual wave roster. */
 export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, definitions: PresentationDefinitions, capacity: number): string[] {
@@ -49,13 +51,14 @@ export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, 
 function applyPreviewParts(player: ReanimPlayer, typeId: string, definitions: PresentationDefinitions, hasTongue: boolean): void {
     const definition = definitions.zombies[typeId]
     for (const track of definition.helmTracks) player.setTrackPrefixVisible(track, definition.helm?.track === track)
-    player.setTrackPrefixVisible('anim_hair', !definition.helm)
+    player.setTrackPrefixVisible('anim_hair', !definition.helm || definition.helm.showsHair === true)
     player.setTrackPrefixVisible('anim_tongue', hasTongue)
 }
 
 export class AdventureIntro implements LevelIntro {
     private ticks = 0
     private destroyed = false
+    private hasOpeningDialog = false
     private readonly previewTooltips = new Map<Node, { hit: Node; tooltip: UITooltip }>()
     private previewTooltipContext?: { ui: UI; gameplay: GameplayDefinitions }
 
@@ -111,7 +114,12 @@ export class AdventureIntro implements LevelIntro {
             Array.from({ length: 5 }, (_, gridY) => ({ gridX, gridY })),
         ).flat().filter(({ gridX, gridY }) => gridX !== 4 || gridY !== 0)
         while (introPositions.length < types.length) {
-            const [{ gridX, gridY }] = introSpots.splice(Math.floor(Math.random() * introSpots.length), 1)
+            const blocked = content.presentation.zombies[types[introPositions.length]].previewBlockedCells ?? []
+            const spots = introSpots.filter(({ gridX, gridY }) => !blocked.some(cell => cell.column === gridX && cell.row === gridY))
+            const spot = spots[Math.floor(Math.random() * spots.length)]
+            if (!spot) throw new Error('No available preview slot')
+            const { gridX, gridY } = spot
+            introSpots.splice(introSpots.indexOf(spot), 1)
             introPositions.push({
                 x: 430 + gridX * 56 + Math.floor(Math.random() * 15),
                 y: 230 - gridY * 90 - (gridX % 2) * 30 - Math.floor(Math.random() * 15),
@@ -129,11 +137,11 @@ export class AdventureIntro implements LevelIntro {
                 size: { width: 120, height: 120 }, anchor: { x: 0, y: 1 },
             }).node
             uiNode({
-                name: 'ZombieShadow', parent: node, position: { x: 23, y: -92 }, anchor: { x: 0, y: 1 },
+                name: 'ZombieShadow', parent: node, position: { x: definition.shadowX, y: -(definition.shadowY ?? 92) }, anchor: { x: 0, y: 1 },
                 sprite: { frame: mowerShadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
             })
             const player = uiNode({
-                name: 'ZombieAnimation', parent: node, position: { x: 15 + clip.x, y: 8 + clip.y },
+                name: 'ZombieAnimation', parent: node, position: { x: clip.x, y: clip.y },
                 anchor: { x: 0, y: 1 },
             }).node.addComponent(ReanimPlayer)
             await player.load(clip.reanimId, content.registry, content.loader)
@@ -147,6 +155,8 @@ export class AdventureIntro implements LevelIntro {
         const intro = new AdventureIntro(board, sodClip, sodRolls, layout, ready, introZombies, previewTypes, content.presentation, bank, houseName,
             content.definitions.boards[level.board],
             entityNodes, audio, content.registry, content.loader, content.animations)
+        intro.graveTicks = level.graves?.length ? GRAVE_STONE_TICKS : 0
+        intro.hasOpeningDialog = context.hasOpeningDialog === true
         if (context.previewTooltipSurface) intro.installPreviewTooltips(context.ui, context.previewTooltipSurface, content.definitions)
         return intro
     }
@@ -201,8 +211,10 @@ export class AdventureIntro implements LevelIntro {
         return this.ticks >= this.endTick
     }
 
+    private graveTicks = 0
     private get sodTicks(): number { return this.layout.rolls.length ? ROLL_SOD_END - ROLL_SOD_START : 0 }
-    private get readyStart(): number { return INTRO_BASE_END + this.sodTicks }
+    private get readyStart(): number { return INTRO_BASE_END + this.sodTicks + this.graveTicks }
+    get graveStartTick(): number | undefined { return this.graveTicks ? PAN_LEFT_END + this.sodTicks : undefined }
     private get endTick(): number { return this.readyStart + (this.layout.readySetPlant ? READY_SET_PLANT_TICKS : 0) }
 
     get elapsedTicks(): number { return this.ticks }
@@ -224,6 +236,7 @@ export class AdventureIntro implements LevelIntro {
     snapshot(): LevelIntroSnapshot {
         return {
             ticks: this.ticks,
+            ...(this.hasOpeningDialog ? { hasOpeningDialog: true } : {}),
             previews: this.complete ? [] : this.introZombies.map((node, slot) => {
                 const player = node.getChildByName('ZombieAnimation')!.getComponent(ReanimPlayer)!
                 return {
@@ -244,6 +257,7 @@ export class AdventureIntro implements LevelIntro {
             throw new Error('Invalid adventure intro state')
         }
         this.ticks = snapshot.ticks
+        this.hasOpeningDialog = snapshot.hasOpeningDialog === true
         this.destroyed = this.complete
         if (this.complete) {
             for (const node of this.introZombies) if (node.isValid) node.destroy()
@@ -262,7 +276,7 @@ export class AdventureIntro implements LevelIntro {
                 if (!player || player.snapshot().id !== preview.reanim.id) {
                     if (animationNode?.isValid) animationNode.destroy()
                     animationNode = uiNode({
-                        name: 'ZombieAnimation', parent: node, position: { x: 15 + clip.x, y: 8 + clip.y },
+                        name: 'ZombieAnimation', parent: node, position: { x: clip.x, y: clip.y },
                         anchor: { x: 0, y: 1 },
                     }).node
                     player = animationNode.addComponent(ReanimPlayer)
@@ -322,7 +336,7 @@ export class AdventureIntro implements LevelIntro {
         }
 
         const houseNameTicks = Math.max(0, HOUSE_NAME_DURATION - tick)
-        this.houseName.active = !this.layout.stationary && houseNameTicks > 0
+        this.houseName.active = !this.hasOpeningDialog && !this.layout.stationary && houseNameTicks > 0
         uiNode({ node: this.houseName, opacity: Math.min(255, houseNameTicks * 15) })
 
         const bankHeight = uiNode({ node: this.bank }).transform.height || 87
@@ -336,7 +350,7 @@ export class AdventureIntro implements LevelIntro {
         for (const node of this.entityNodes()) {
             if (!node.getChildByName('CachedMower')) continue
             const row = Math.round((HEIGHT / 2 - node.position.y - this.geometry.origin.y - 23) / this.geometry.cell.height)
-            const start = LAWN_MOWER_START + this.sodTicks + (2 - row) * 5
+            const start = LAWN_MOWER_START + this.sodTicks + this.graveTicks + (2 - row) * 5
             node.active = tick > start || this.complete
             if (node.active && !this.complete) {
                 node.setPosition(

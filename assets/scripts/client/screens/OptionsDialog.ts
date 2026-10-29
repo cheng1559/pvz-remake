@@ -7,6 +7,7 @@ import { OptionsSettings } from '@/platform/OptionsSettings'
 
 export async function showOptionsDialog(parent: Node, ui: UI, options: {
     inGame: boolean
+    levelIntro?: boolean
     onClose: () => void
     onRestart: () => void
     onMainMenu: () => void
@@ -79,7 +80,7 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
     }
     dialog.onConfirm = dialog.onCancel = () => close(options.onClose)
     if (options.inGame) {
-        ui.button(content, {
+        if (!options.levelIntro) ui.button(content, {
             text: ui.text('RESTART_LEVEL_BUTTON'), x: 107, y: 284, width: 209, clickSound: null,
             onClick: () => confirmAction({
                 title: ui.text('RESTART_LEVEL_HEADER'), message: ui.text('RESTART_LEVEL_BODY'),
@@ -88,7 +89,7 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
         })
         ui.button(content, {
             text: ui.text('MAIN_MENU_BUTTON'), x: 107, y: 327, width: 209, clickSound: null,
-            onClick: () => confirmAction({
+            onClick: () => options.levelIntro ? close(options.onMainMenu) : confirmAction({
                 title: ui.text('LEAVE_GAME_HEADER'), message: ui.text('LEAVE_GAME'),
                 confirmText: ui.text('LEAVE_BUTTON'), cancelText: ui.text('DIALOG_BUTTON_CANCEL'), height: 350,
             }, options.onMainMenu),

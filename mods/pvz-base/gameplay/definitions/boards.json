@@ -1,1 +1,4 @@
-{"pvz:day": {"bounds": {"left": 0, "right": 800}, "rows": 5, "columns": 9, "origin": {"x": 40, "y": 80}, "cell": {"width": 80, "height": 100}}}
+{
+  "pvz:day": {"bounds": {"left": 0, "right": 800}, "rows": 5, "columns": 9, "origin": {"x": 40, "y": 80}, "cell": {"width": 80, "height": 100}},
+  "pvz:night": {"bounds": {"left": 0, "right": 800}, "rows": 5, "columns": 9, "origin": {"x": 40, "y": 80}, "cell": {"width": 80, "height": 100}, "night": true}
+}

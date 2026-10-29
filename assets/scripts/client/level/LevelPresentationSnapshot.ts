@@ -39,6 +39,8 @@ export interface LevelIntroPreviewSnapshot {
 
 export interface LevelIntroSnapshot {
     ticks: number
+    /** The intro began with dialogue, so the house name stays hidden after Dave leaves. */
+    hasOpeningDialog?: boolean
     previews: LevelIntroPreviewSnapshot[]
 }
 
@@ -57,7 +59,6 @@ export interface LevelAdviceSnapshot {
 
 export interface LevelHudSnapshot {
     sunFlashTicks: number
-    previousPacketCooldown: number | null
     progressWave: number
     progressCountdownStart: number
     progressMeterWidth: number
@@ -183,7 +184,7 @@ function parseFlow(value: unknown): LevelFlowSnapshot {
 }
 
 function parseIntro(value: unknown): LevelIntroSnapshot {
-    const source = exact(value, ['ticks', 'previews'], 'Level intro')
+    const source = exact(value, ['ticks', 'previews'], 'Level intro', ['hasOpeningDialog'])
     const previews = array(source.previews, 'Level intro.previews').map((value, index) => {
         const name = `Level intro.previews[${index}]`
         const preview = exact(value, ['slot', 'typeId', 'x', 'y', 'z', 'hasTongue', 'reanim'], name)
@@ -202,6 +203,7 @@ function parseIntro(value: unknown): LevelIntroSnapshot {
     const ticks = finiteInRange(source.ticks, 0, MAX_COORDINATE, 'Level intro.ticks')
     return {
         ticks,
+        ...(source.hasOpeningDialog === undefined ? {} : { hasOpeningDialog: boolean(source.hasOpeningDialog, 'Level intro.hasOpeningDialog') }),
         previews,
     }
 }
@@ -235,14 +237,11 @@ function parseAdvice(value: unknown): LevelAdviceSnapshot {
 
 function parseHud(value: unknown): LevelHudSnapshot {
     const source = exact(value, [
-        'sunFlashTicks', 'previousPacketCooldown', 'progressWave',
+        'sunFlashTicks', 'progressWave',
         'progressCountdownStart', 'progressMeterWidth', 'progressTick',
     ], 'Level HUD')
     return {
         sunFlashTicks: integerInRange(source.sunFlashTicks, 0, 70, 'Level HUD.sunFlashTicks'),
-        previousPacketCooldown: source.previousPacketCooldown === null
-            ? null
-            : nonNegativeInteger(source.previousPacketCooldown, 'Level HUD.previousPacketCooldown'),
         progressWave: nonNegativeInteger(source.progressWave, 'Level HUD.progressWave'),
         progressCountdownStart: nonNegativeInteger(
             source.progressCountdownStart,

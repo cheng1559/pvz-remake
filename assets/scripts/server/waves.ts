@@ -6,6 +6,7 @@ import { pickZombieSpawnX, spawnZombie } from './zombies/spawn'
 import { WaveResource, type WaveState } from './levelState'
 import { EventQueueResource, emitServerEvent } from './events'
 import { tryDropLevelAward } from './levelAward'
+import { updateGraveSpawns } from './graves'
 
 const NEXT_WAVE_DELAY_TICKS = 2500
 const NEXT_WAVE_DELAY_RANGE_TICKS = 600
@@ -38,6 +39,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
             if (level.result !== 'playing' || level.paused) return
 
             const waves = world.resources.get(WaveResource)
+            updateGraveSpawns(world, definitions, tick)
             if (waves.index >= level.definition.waves.length) {
                 tryDropLevelAward(world, definitions, commands)
                 return
@@ -92,6 +94,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
                 return entityId
             })
             waves.index++
+            if (waves.index === level.definition.waves.length && waves.graves?.length && level.definition.graveZombies?.length) waves.graveRiseAtTick = tick + 200
             waves.zombieIds = zombieIds
             const waveHealthStart = zombieIds.reduce(
                 (total, entity) => total + world.get(entity, ZombieComponent)!.health + world.get(entity, ZombieComponent)!.helmHealth,

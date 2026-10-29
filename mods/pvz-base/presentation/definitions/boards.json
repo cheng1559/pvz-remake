@@ -7,5 +7,18 @@
       "interior": {"x": -126, "y": 225}, "doorway": {"x": -130, "y": 202},
       "clipX": -123, "winnerY": 290, "panX": 220
     }
+  },
+  "pvz:night": {
+    "background": "pvz:background2",
+    "backgroundX": 80,
+    "music": {"choosing": "choose_seeds", "gameplay": "night_moongrains"},
+    "gameOver": {
+      "images": ["zombieswon", "background2_gameover_interior_overlay", "background2_gameover_mask"],
+      "interior": {"x": -126, "y": 225},
+      "doorway": {"x": -130, "y": 202},
+      "clipX": -123,
+      "winnerY": 290,
+      "panX": 220
+    }
   }
 }

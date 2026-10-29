@@ -6,6 +6,7 @@ export type MusicDrumsState = 'off' | 'on-queued' | 'on' | 'off-queued' | 'fadin
 
 export interface MusicPlaybackSnapshot {
     tuneId: MusicTuneId
+    drumsPhaseSec?: number
     timeSec: number
     paused: boolean
     mainVolume: number
@@ -24,7 +25,7 @@ export interface MusicPlaybackSnapshot {
 }
 
 const TUNES = new Set<MusicTuneId>([
-    'day_grasswalk', 'choose_seeds', 'title_theme', 'zen_garden',
+    'day_grasswalk', 'night_moongrains', 'choose_seeds', 'title_theme', 'zen_garden',
     'puzzle', 'minigame', 'conveyer', 'final_boss',
 ])
 const BURST_STATES = new Set<MusicBurstState>(['off', 'starting', 'on', 'finishing'])
@@ -57,6 +58,7 @@ export function parseMusicPlaybackSnapshot(value: unknown): MusicPlaybackSnapsho
     }
     return {
         tuneId,
+        ...(source.drumsPhaseSec === undefined ? {} : { drumsPhaseSec: nonNegative(source.drumsPhaseSec, 'drumsPhaseSec') }),
         timeSec: nonNegative(source.timeSec, 'timeSec'),
         paused: boolean(source.paused, 'paused'),
         mainVolume: volume(source.mainVolume, 'mainVolume'),
@@ -81,7 +83,7 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 function exactKeys(source: Record<string, unknown>) {
-    const allowed = new Set<string>(KEYS)
+    const allowed = new Set<string>([...KEYS, 'drumsPhaseSec'])
     for (const key of KEYS) if (!(key in source)) throw new TypeError(`music snapshot.${key} is required`)
     for (const key of Object.keys(source)) if (!allowed.has(key)) throw new TypeError(`music snapshot.${key} is not supported`)
 }

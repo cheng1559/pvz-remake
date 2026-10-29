@@ -228,7 +228,7 @@ test('winning advances the current profile once and exposes the next installed l
         const award = await api.completeLevel()
         assert.equal(award.kind, kind)
         assert.equal(award.seed, seed)
-        assert.equal(award.nextLevelId, index < 10 ? `pvz:adventure-1-${index + 1}` : null)
+        assert.equal(award.nextLevelId, index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1')
         const reconnected = new MenuApi(createLocalMenuTransport(storage))
         assert.equal((await reconnected.getCurrentUser())!.adventureLevel, index + 1)
         assert.deepEqual(await reconnected.getAdventure(), { levelId: index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1' })

@@ -108,18 +108,6 @@ export class SeedPacketView {
         this.cooldownClip.active = true
     }
 
-    rect() {
-        let x = this.node.position.x
-        let y = this.node.position.y
-        let parent = this.node.parent
-        while (parent && parent.name !== 'BoardContent' && parent.name !== 'HUD' && parent.name !== 'SeedBankLayer') {
-            x += parent.position.x
-            y += parent.position.y
-            parent = parent.parent
-        }
-        return { x, y: -y, width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT }
-    }
-
     destroy() {
         if (this.node.isValid) this.node.destroy()
     }

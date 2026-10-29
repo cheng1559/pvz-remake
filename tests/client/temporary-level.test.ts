@@ -8,6 +8,9 @@ test('temporary levels preserve the adventure save when entered, restarted and e
     const saved: any[] = []
     const debugCommands: string[] = []
     let deletions = 0
+    let phase = 'intro'
+    let cursor: any = { mode: 'none' }
+    const commands: string[] = []
     const levels = { normal: {}, stress: { persistent: false } }
     const store = { save(value: any) { saved.push(value); return value }, load: () => null, delete() { deletions++ } }
     class Scene {
@@ -16,9 +19,12 @@ test('temporary levels preserve the adventure save when entered, restarted and e
     }
     class Game {
         levelId = ''
+        get currentSnapshot() { return { phase } }
         start(options: any) { this.levelId = options.levelId }
         debugCommand(command: string) { debugCommands.push(command) }
-        render() { return { levelId: this.levelId } }
+        render() { return { levelId: this.levelId, paused: false, result: 'playing', cursor } }
+        command(command: { type: string }) { commands.push(command.type); cursor = { mode: 'none' } }
+        update() {}
         saveAtBoundary() { return { levelId: this.levelId, mods: [] } }
         drainChanges() { return [] } drainEvents() { return [] }
     }
@@ -48,6 +54,18 @@ test('temporary levels preserve the adventure save when entered, restarted and e
     runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id], Date, Math, Promise, Error })
     const controller = module.exports.createLevelController({})
     await controller.play({ levelId: 'normal' })
+    assert.equal(controller.isLevelIntro(), true)
+    assert.equal(await controller.saveIfRunning(), null, 'leaving seed selection does not create a battle save')
+    assert.equal(saved.length, 0)
+    phase = 'gameplay'
+    assert.equal(controller.isLevelIntro(), false)
+    assert.equal(controller.cancelCursor(), false)
+    for (const held of [{ mode: 'seed', seedId: 'pea' }, { mode: 'seed', seedId: 'nut', packetId: 17 }, { mode: 'tool', toolId: 'pvz:shovel' }]) {
+        cursor = held
+        assert.equal(controller.cancelCursor(), true)
+        assert.equal(cursor.mode, 'none')
+    }
+    assert.deepEqual(commands, ['clearCursor', 'clearCursor', 'clearCursor'])
     await controller.play({ forceNewGame: true, levelId: 'stress' })
     assert.deepEqual(debugCommands, ['/plantinvincible true', '/plantinvincible true'])
     assert.equal(saved.length, 1)

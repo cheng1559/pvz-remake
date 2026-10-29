@@ -28,9 +28,9 @@ export function createGameSave(input: GameSaveInput): GameSave {
     return parseGameSave({ schemaVersion: 2, ...input })
 }
 
-export function isCompatibleBaseContent(saved: EnabledMod, installed: EnabledMod, compatibleHashes: readonly string[] = []): boolean {
+export function isCompatibleBaseContent(saved: EnabledMod, installed: EnabledMod): boolean {
     return saved.id === installed.id && saved.version === installed.version
-        && (saved.contentHash === installed.contentHash || compatibleHashes.includes(saved.contentHash))
+        && saved.contentHash === installed.contentHash
 }
 
 export function parseGameSave(value: unknown): GameSave {

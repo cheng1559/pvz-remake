@@ -436,6 +436,7 @@
     }
   },
   "pvz:adventure-1-10": {
+    "nextLevel": "pvz:adventure-2-1",
     "adventureIndex": 10,
     "board": "pvz:day",
     "activeRows": [0, 1, 2, 3, 4],
@@ -560,5 +561,38 @@
       "id": "pvz:puffshroom",
       "packetCost": 0
     }
+  },
+  "pvz:adventure-2-1": {
+    "adventureIndex": 11,
+    "board": "pvz:night",
+    "activeRows": [0, 1, 2, 3, 4],
+    "startingSun": 50,
+    "seedBankSlots": 6,
+    "seedPackets": [],
+    "lawnMower": "pvz:standard",
+    "tools": ["pvz:shovel"],
+    "firstWaveTicks": 1800,
+    "graves": [{"column": 6, "count": 1}, {"column": 7, "count": 1}, {"column": 8, "count": 2}],
+    "graveZombies": [{"id": "pvz:normal", "weight": 4000}],
+    "introDialog": [201, 202, 203, 204, 205, 206, 207],
+    "tutorial": "pvz:intro-dialog",
+    "zombiePool": [
+      {"id": "pvz:normal", "points": 1, "weight": 4000},
+      {"id": "pvz:newspaper", "points": 2, "weight": 1000},
+      {"id": "pvz:flag", "points": 1, "weight": 0}
+    ],
+    "waves": [
+      {"zombies": [], "points": 1},
+      {"zombies": [], "points": 1},
+      {"zombies": [], "points": 1},
+      {"zombies": [], "points": 2},
+      {"zombies": [], "points": 2},
+      {"zombies": ["pvz:newspaper"], "points": 2},
+      {"zombies": [], "points": 3},
+      {"zombies": [], "points": 3},
+      {"zombies": [], "points": 3},
+      {"zombies": ["pvz:normal", "pvz:normal", "pvz:normal", "pvz:normal", "pvz:flag", "pvz:newspaper"], "points": 10, "flagWave": true}
+    ],
+    "award": {"kind": "seed", "id": "pvz:sunshroom", "packetCost": 25}
   }
 }

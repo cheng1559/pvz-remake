@@ -25,7 +25,7 @@ export function levelPresentation(current: WorldSnapshot): LevelPresentationSnap
         end: { ticks: current.result === 'won' ? 600 : -1, finalWave: null },
         advice: { lastStatusMessage: '', lastSyncedTick: current.gameplayTick, widget: null },
         hud: {
-            sunFlashTicks: 0, previousPacketCooldown: null,
+            sunFlashTicks: 0,
             progressWave: current.wave.index, progressCountdownStart: current.wave.countdown,
             progressMeterWidth: 0, progressTick: current.gameplayTick,
         },

@@ -77,10 +77,9 @@ export class ShooterView implements PlantView {
         const eatenFlashCounter = plant.eatenFlashCounter, tick = world.gameplayTick
         const grayness = Math.min(255, eatenFlashCounter * 3)
         const color = new Color(grayness, grayness, grayness, 255)
-        for (const player of [this.body, this.idleHead, this.shootHead, this.blink]) {
-            player.setColorOverride(upgradeTarget ? upgradeFlashColor(tick) : Color.WHITE)
-            player.setExtraAdditiveDraw(eatenFlashCounter > 0, color)
-        }
+        // The heads attach to the stem and the blink to the head, so the body's colors reach them all.
+        this.body.setColorOverride(upgradeTarget ? upgradeFlashColor(tick) : Color.WHITE)
+        this.body.setExtraAdditiveDraw(eatenFlashCounter > 0, color)
         if (tick >= this.blinkAtTick) {
             this.blinkAtTick = tick + this.context.animations.nextPlantBlinkTicks()
             if (!this.shootHead.snapshot().playing) this.blink.play({

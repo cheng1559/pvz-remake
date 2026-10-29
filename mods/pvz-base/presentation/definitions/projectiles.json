@@ -13,5 +13,12 @@
     "fireSounds": [{"id": "throw", "foley": true, "pitchRange": 10}, {"id": "snow_pea_sparkles", "foley": true}],
     "impactSounds": [{"id": "splat", "foley": true, "pitchRange": 10}],
     "sprite": "pvz:projectilesnowpea"
+  },
+  "pvz:spore": {
+    "sprite": "pvz:puffshroom_puff1",
+    "trail": {"id": "pvz:puffshroomtrail", "x": 13, "y": -13},
+    "impact": {"id": "pvz:puffsplat", "offset": [29, 12], "yRange": [20, 100]},
+    "fireSounds": [{"id": "puff", "foley": true}],
+    "impactSounds": [{"id": "splat", "foley": true, "pitchRange": 10}]
   }
 }

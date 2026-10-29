@@ -5,6 +5,7 @@ import { plantingTutorial } from './PlantingTutorial'
 import { sunflowerTutorial } from './SunflowerTutorial'
 import { moreSunTutorial } from './MoreSunTutorial'
 import { shovelTutorial } from './ShovelTutorial'
+import { introDialog } from './IntroDialog'
 
 export interface TutorialScript {
     readonly blocksStart?: boolean
@@ -31,6 +32,7 @@ export const TUTORIALS: Readonly<Record<string, TutorialScript>> = {
     'pvz:adventure-1-2': sunflowerTutorial,
     'pvz:more-sun': moreSunTutorial,
     'pvz:shovel': shovelTutorial,
+    'pvz:intro-dialog': introDialog,
 }
 
 export function getActiveTutorial(world: World): TutorialScript | undefined {

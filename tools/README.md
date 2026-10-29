@@ -7,14 +7,13 @@ tools/
 ├── mod/                    # Mod 初始化、打包、验证和配置读取
 │   ├── cli.ts
 │   ├── content.ts
-│   ├── test.ts
-│   └── package_resources.py # 本地 Python 生成器的打包接口
+│   └── test.ts
 ├── pvz/                    # 原版 PAK 导入、转换和 anim_defs.json
 ├── resources/              # 音频压缩、字体和图片超分辨率
 │   └── licenses/           # 资源处理工具的第三方许可
 ├── kernel/build.ts         # C++ 内核编译为 Wasm
 ├── profile/ios.ts          # iOS JS 性能采样
-└── local/                  # Git 忽略的本地资源包生成器
+└── local/                  # Git 忽略的本地资源包生成器及其打包接口 package_resources.py
 ```
 
 常用入口：
@@ -24,7 +23,6 @@ tools/
 | 从原版 PAK 导入基础资源并发布 ZIP | `npm run build:content -- --pak /path/to/main.pak` |
 | 初始化、打包、验证 Mod | `npm run mod:init`、`npm run mod:pack`、`npm run mod:test` |
 | 编译共享 C++ 内核的 Wasm | `npm run build:kernel` |
-| 旧 WAV 资源压缩 | `python3 -m tools.resources.compress_audio` |
 | 字体、图片超分辨率 | `python3 -m tools.resources.upscale_fonts`、`python3 -m tools.resources.upscale_ui` |
 | iOS JS 性能采样 | `npx tsx tools/profile/ios.ts ...` |
 
@@ -59,7 +57,7 @@ pvz/
 
 Node 工具统一使用 TypeScript，通过项目已有的 `tsx` 执行；Python 用于原版资源解码与转换。
 
-`mod/content.ts` 供 Mod 打包和无引擎测试读取作者配置；`mod/test.ts` 是 `mod:test` 的验证实现。`mod/package_resources.py` 供本地资源生成器登记资源后调用通用 Mod 打包器。
+`mod/content.ts` 供 Mod 打包和无引擎测试读取作者配置；`mod/test.ts` 是 `mod:test` 的验证实现。本地资源生成器登记资源后，通过同在 `local/` 的 `package_resources.py` 调用通用 Mod 打包器。
 
 PAK 只解包到临时目录，转换结果直接写入 `mods/pvz-base/assets/`。日常编辑现有资源后，只需：
 

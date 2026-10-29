@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import * as playback from '@/client/music/MusicPlaybackSnapshot'
 
 test('native music never ends by itself and jumps to its loop point, even when a check comes late', async () => {
     let time = 0, loop: boolean | undefined
@@ -39,4 +40,57 @@ test('native music never ends by itself and jumps to its loop point, even when a
     time = 0.2
     update()
     assert.ok(Math.abs(time - 3.89) < 1e-6, 'a wrapped stream skips the intro and keeps the time it played since the loop end')
+})
+
+test('night burst switches on the next order, crossfades the melody, and restores the separate drum phase', async () => {
+    const times = new Map<number, number>(), volumes = new Map<number, number>()
+    let nextId = 0
+    const engine = {
+        play2d: () => { const id = ++nextId; times.set(id, 0); return id },
+        setVolume: (id: number, value: number) => { volumes.set(id, value); return true },
+        pause() {}, resume() {}, stop() {},
+        setCurrentTime: (id: number, value: number) => { times.set(id, value); return true },
+        getCurrentTime: (id: number) => times.get(id),
+    }
+    const tune = { id: 'night_moongrains', durationSec: 112.008, loopStartSec: 0, loopEndSec: 112,
+        burstScheme: 'night', drumsLoopEndSec: 64, burstBoundariesSec: [4, 8, 12, 16],
+        burstDrumsOffsetsSec: [4, 0, 4, 0], stems: { main: 'pvz:main', drums: 'pvz:drums' } }
+    const modules: Record<string, unknown> = {
+        cc: { sys: { isNative: true } },
+        '@/client/content/ModResources': { modResources: {
+            asset: async (id: string) => id.endsWith('music_manifest') ? { json: { tunes: { night_moongrains: tune } } } : { nativeUrl: `${id}.mp3` },
+        } },
+        '@/client/sound/SoundSystem': { SoundSystem: { getMusicVolume: () => 1, onMusicVolumeChange: () => () => {} } },
+        './MusicPlaybackSnapshot': playback,
+    }
+    const exports: Record<string, any> = {}
+    runInNewContext(transpileModule(readFileSync('assets/scripts/client/music/MusicSystem.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+    }).outputText, { exports, require: (id: string) => modules[id] ?? {}, console, jsb: { AudioEngine: engine } })
+    const { MusicSystem } = exports
+    await MusicSystem.playTune('night_moongrains')
+    times.set(1, 9)
+    MusicSystem.startBurst()
+    MusicSystem.update(1, { zombiesOnScreen: 10 })
+    assert.equal(MusicSystem.capturePlaybackSnapshot().drumsState, 'on-queued')
+    assert.equal(volumes.get(2), 0)
+    times.set(1, 12.1)
+    MusicSystem.update(1, { zombiesOnScreen: 10 })
+    assert.ok(Math.abs(times.get(2)! - 4.1) < 1e-6, 'odd order enters drum order 77')
+    MusicSystem.update(400, { zombiesOnScreen: 10 })
+    assert.equal(volumes.get(1), 0)
+    assert.equal(volumes.get(2), 1)
+    MusicSystem.pause()
+    const saved = MusicSystem.capturePlaybackSnapshot()
+    await MusicSystem.restorePlaybackSnapshot(saved)
+    const mainId = nextId - 1, drumsId = nextId
+    assert.ok(Math.abs(times.get(drumsId)! - 4.1) < 1e-6)
+    MusicSystem.resume()
+    MusicSystem.update(800, { zombiesOnScreen: 0 })
+    MusicSystem.update(400, { zombiesOnScreen: 0 })
+    assert.equal(volumes.get(mainId), 0)
+    assert.equal(volumes.get(drumsId), 0.5)
+    MusicSystem.update(700, { zombiesOnScreen: 0 })
+    assert.equal(volumes.get(mainId), 1)
+    assert.equal(volumes.get(drumsId), 0)
 })

@@ -24,7 +24,7 @@ export class BowlingNutView extends AnimatedPlantView {
         this.body.play({ loop: true })
         this.body.pause()
         const tint = plantDefinition(this.animations.definitions, this.context.plant.typeId).visual.tint
-        if (tint) for (const player of [this.body, ...this.extras.values()]) player.setColorOverride(new Color(...tint))
+        if (tint) this.body.setColorOverride(new Color(...tint))
     }
 
     protected extraClip(name: string): ClientAnimationClip {

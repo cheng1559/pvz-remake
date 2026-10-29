@@ -11,11 +11,11 @@ const SKY_SUN_X_MAX = 649
 
 export function updateSkySun(world: World, commands: CommandBuffer, definitions: GameplayDefinitions, tick: number): boolean {
     const level = world.resources.get(LevelStateResource)
-    const state = world.resources.get(TutorialResource)
-    if (level.result !== 'playing' || level.paused || !getDebugRules(world).sunSpawning ||
+    const state = world.resources.get(TutorialResource), skySun = level.definition.skySun
+    if (!skySun || level.result !== 'playing' || level.paused || !getDebugRules(world).sunSpawning ||
         state.sunAtTick === undefined || tick < state.sunAtTick ||
         [...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === level.definition.award.id)) return false
-    spawnSkySun(world, commands, definitions, level.definition.skySun)
+    spawnSkySun(world, commands, definitions, skySun)
     const extra = Math.min(525, (state.sunsFallen = (state.sunsFallen ?? 0) + 1) * 10)
     state.sunAtTick = tick + world.resources.get(RandomResource).integer(425 + extra, 699 + extra)
     return true

@@ -1,5 +1,5 @@
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { Color, Graphics, isValid, Node } from 'cc'
+import { Color, Graphics, isValid, Node, Vec3 } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { FontRepository } from '@/client/content/ClientContentLoader'
 import { uiNode } from '@/client/view/uiNode'
@@ -11,12 +11,13 @@ import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { UIButton } from '@/client/ui/UIButton'
-import type { ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
+import { graveAt, type ServerEvent, type WorldSnapshot } from '@/shared/protocol/index'
 import { LevelSeedBank } from './LevelSeedBank'
 import { adventureLevelName, boardCell, levelAwardSize } from './LevelGeometry'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { LevelPresentation } from './LevelPresentation'
 import type { LevelAdviceSnapshot, LevelHudSnapshot } from './LevelPresentationSnapshot'
+import { plantDefinition } from '@/client/plants/definitions'
 
 const TUTORIAL_FLASH_TICKS = 75
 const PROGRESS_METER_WIDTH = 158
@@ -37,6 +38,8 @@ export interface LevelHudOptions {
     packetCostFont: FontAsset
     adviceNode: Node
     adviceParent: Node
+    /** Visible-screen surface for tooltips of clipped controls. */
+    tooltipSurface: Node
     controlsParent: Node
     adviceFont: FontAsset
     tutorialArrowLayer: Node
@@ -65,6 +68,7 @@ export class LevelHudPresenter {
     private progressTick = 0
     private lastSnapshot?: WorldSnapshot
     private lastIntroComplete = false
+    private lastMenuVisible = false
     private menuButton!: UIButton
     private mobileGridGuide!: Node
     private mobileGuideCell = -1
@@ -125,7 +129,6 @@ export class LevelHudPresenter {
         return {
             hud: {
                 sunFlashTicks: this.sunFlashTicks,
-                previousPacketCooldown: this.seedBank.previousCooldown,
                 progressWave: this.progressWave,
                 progressCountdownStart: this.progressCountdownStart,
                 progressMeterWidth: this.progressMeterWidth,
@@ -139,8 +142,9 @@ export class LevelHudPresenter {
         }
     }
 
-    restore(snapshot: LevelHudSnapshot, advice: LevelAdviceSnapshot, introComplete: boolean): void {
+    restore(snapshot: LevelHudSnapshot, advice: LevelAdviceSnapshot, introComplete: boolean, menuVisible = introComplete): void {
         this.lastIntroComplete = introComplete
+        this.lastMenuVisible = menuVisible
         this.sunFlashTicks = snapshot.sunFlashTicks
         this.progressWave = snapshot.progressWave
         this.progressCountdownStart = snapshot.progressCountdownStart
@@ -155,13 +159,12 @@ export class LevelHudPresenter {
         this.resetCursor()
         const world = this.lastSnapshot
         if (!world) return
-        this.syncMenu(world, this.lastIntroComplete)
+        this.syncMenu(world, this.lastMenuVisible)
         this.syncSun(world.sun)
         this.syncProgress(world, this.lastIntroComplete)
         this.syncPreviews(world)
         UIHoverManager.refreshHoverStates()
         this.syncSeedPacket(world, [], this.lastIntroComplete, false)
-        this.seedBank.restore(world, snapshot.previousPacketCooldown)
     }
 
     setPointer(pointer?: { x: number, y: number }): void {
@@ -182,10 +185,11 @@ export class LevelHudPresenter {
         return this.menuButton
     }
 
-    sync(snapshot: WorldSnapshot, events: ServerEvent[], introComplete: boolean, canOpenMenu = introComplete): void {
+    sync(snapshot: WorldSnapshot, events: ServerEvent[], introComplete: boolean, menuVisible = introComplete): void {
         this.lastSnapshot = snapshot
         this.lastIntroComplete = introComplete
-        this.syncMenu(snapshot, canOpenMenu)
+        this.lastMenuVisible = menuVisible
+        this.syncMenu(snapshot, menuVisible)
         const elapsedTicks = Math.max(0, snapshot.gameplayTick - this.adviceTick)
         this.sunFlashTicks = Math.max(0, this.sunFlashTicks - elapsedTicks)
         if (events.some(event => event.type === 'sunFlash')) this.sunFlashTicks = 70
@@ -198,8 +202,8 @@ export class LevelHudPresenter {
         this.adviceTick = snapshot.gameplayTick
     }
 
-    private syncMenu(snapshot: WorldSnapshot, introComplete: boolean): void {
-        this.menuButton.node.active = introComplete && snapshot.result !== 'lost'
+    private syncMenu(snapshot: WorldSnapshot, visible: boolean): void {
+        this.menuButton.node.active = visible && snapshot.result !== 'lost'
         this.menuButton.interactable = this.menuButton.node.active
     }
 
@@ -236,7 +240,7 @@ export class LevelHudPresenter {
                 const key = event.data.key
                 const style = event.data.style
                 if (typeof key === 'string') this.advice.show(contentText(this.content.strings.entries, key),
-                    style === 'tutorial-level2' || style === 'tutorial-later' || style === 'tutorial-later-stay' ? style : 'tutorial-level1')
+                    style === 'hint' || style === 'tutorial-level2' || style === 'tutorial-later' || style === 'tutorial-later-stay' ? style : 'tutorial-level1')
             } else if (event.type === 'adviceCleared') {
                 const key = event.data.key
                 if (typeof key === 'string' && this.advice.snapshot()?.message === contentText(this.content.strings.entries, key)) this.advice.clear()
@@ -301,24 +305,31 @@ export class LevelHudPresenter {
         const pointer = this.pointer
         const mobile = GameDebugSettings.isMobileMode()
         this.mobileGridGuide.active = false
-        const selected = snapshot.result === 'playing' && snapshot.cursor.mode === 'seed' && pointer !== undefined
-        this.cursorPreview.active = selected
-        if (!selected) {
+        const seed = snapshot.result === 'playing' && snapshot.cursor.mode === 'seed' && pointer !== undefined
+        this.cursorPreview.active = seed
+        if (!pointer || snapshot.result !== 'playing' || (!seed && !(mobile && snapshot.cursor.mode === 'tool'))) {
             this.gridPreview.active = false
             return
         }
-        this.cursorPreview.setPosition(pointer.x - 35, -pointer.y + 60)
         const board = this.content.definitions.boards[this.level.board]
-        const { row, column, inBounds } = boardCell(board, pointer.x, pointer.y)
-        const occupant = snapshot.plants.find(plant => this.content.definitions.plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column)
-        const seedId = snapshot.cursor.mode === 'seed' ? snapshot.cursor.seedId : undefined
-        const previewSeedId = seedId!
-        const plantId = this.content.definitions.seeds[previewSeedId].plant
-        this.cursorPlant.setPlant(plantId)
-        this.gridPlant.setPlant(plantId)
-        const valid = inBounds && this.level.activeRows.includes(row) && !occupant && (!this.level.bowling || column <= this.level.bowling.lineColumn)
-        this.gridPreview.active = valid && !mobile
-        if (valid && !mobile) this.gridPreview.setPosition(board.origin.x + column * board.cell.width, -(board.origin.y + row * board.cell.height))
+        const seedDefinition = snapshot.cursor.mode === 'seed' ? this.content.definitions.seeds[snapshot.cursor.seedId] : undefined
+        const plantId = seedDefinition?.plant
+        const presentation = plantId ? plantDefinition(this.content.presentation, plantId) : undefined
+        const { row, column, inBounds } = boardCell(board, pointer.x, pointer.y + (presentation?.pointerOffsetY ?? 0))
+        let valid = inBounds && this.level.activeRows.includes(row)
+        if (plantId) {
+            this.cursorPreview.setPosition(pointer.x - 35, -pointer.y + 60)
+            this.cursorPlant.setPlant(plantId)
+            this.gridPlant.setPlant(plantId)
+            const occupant = snapshot.plants.find(plant => this.content.definitions.plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column)
+            const grave = !!graveAt(snapshot.graves, row, column)
+            // Graves block planting, except for a grave buster, which needs one.
+            const needsGrave = seedDefinition!.placement === 'grave'
+            valid = valid && !occupant && grave === needsGrave && (!this.level.bowling || column <= this.level.bowling.lineColumn)
+            this.gridPreview.active = valid && !mobile
+            if (valid && !mobile) this.gridPreview.setPosition(board.origin.x + column * board.cell.width,
+                -(board.origin.y + row * board.cell.height + (presentation?.drawHeightOffset ?? 0)))
+        } else this.gridPreview.active = false
         if (valid && mobile) {
             this.mobileGridGuide.active = true
             const cell = row * board.columns + column
@@ -345,6 +356,11 @@ export class LevelHudPresenter {
         })
     }
 
+    /** Board::OffsetYForPlanting for the seed being planted. */
+    pointerOffsetY(seedId: string): number {
+        return plantDefinition(this.content.presentation, this.content.definitions.seeds[seedId].plant).pointerOffsetY ?? 0
+    }
+
     private syncSeedTutorialArrow(visible: boolean): void {
         // Restore recreates particle nodes, so reuse the live arrow instead of caching its component.
         const [arrow, ...duplicates] = this.tutorialArrowLayer.children.filter(node =>
@@ -355,12 +371,14 @@ export class LevelHudPresenter {
             arrow?.destroy()
             return
         }
-        const rect = this.seedBank.packets.find(packet => packet.seedId === (this.presentation.guideSeed ?? this.level.seedPackets[0]))!.view.rect()
+        const packet = this.seedBank.packets.find(packet => packet.seedId === (this.presentation.guideSeed ?? this.level.seedPackets[0]))!
+        // The bank may sit in an edge container, so place the arrow by the packet's world position.
+        const { x, y } = this.tutorialArrowLayer.inverseTransformPoint(new Vec3(), packet.view.node.worldPosition)
         if (arrow) {
-            arrow.setPosition(rect.x, -rect.y, 20)
+            arrow.setPosition(x, y, 20)
             return
         }
-        ParticlePlayer.spawn({ parent: this.tutorialArrowLayer, id: "pvz:seedpacketpick", x: rect.x, y: -rect.y, z: 20 })
+        ParticlePlayer.spawn({ parent: this.tutorialArrowLayer, id: "pvz:seedpacketpick", x, y, z: 20 })
     }
 
 }

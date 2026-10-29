@@ -2,6 +2,8 @@
   "schemaVersion": 2,
   "locale": "en-US",
   "entries": {
+    "ADVICE_PLANT_NOT_ON_GRAVE": "You can't plant on graves",
+    "ADVICE_GRAVEBUSTERS_ON_GRAVES": "Grave busters can only be planted on graves",
     "ADVICE_NOT_PASSED_LINE": "Place your wall-nut to the left of the bowling line",
     "ADVICE_CLICK_SHOVEL": "Click on the shovel to pick it up!",
     "ADVICE_CLICK_PLANT": "Click on a plant to remove it!",

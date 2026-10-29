@@ -45,6 +45,5 @@ export async function loadIntegratedGameContent() {
     return {
         definitions, presentation, levels, strings: gameStrings, levelPrefab, registry, loader,
         contentHash: manifest.contentHash, loadedMods, enabledMods, animations, plantViews, zombieViews,
-        saveCompatibleHashes: [],
     }
 }

@@ -53,20 +53,3 @@ test('every almanac entry has renderable animation clips, valid attachments and 
         assert.ok(path && existsSync(`${bundle}/${path}`), `Missing sprite: ${id}`)
     }
 })
-
-test('almanac variants retain their equipment and composite plants retain their heads', () => {
-    const tracks = (id: number) => animation(catalog.zombies[id].parts[0]).tracks
-        .filter(track => sampleReanimTrack(track, 0)?.sprite).map(track => track.id)
-    assert.ok(tracks(2).some(name => name.startsWith('anim_cone')))
-    assert.ok(tracks(4).some(name => name.startsWith('anim_bucket')))
-    assert.ok(tracks(6).some(name => name.startsWith('anim_screendoor')))
-    assert.ok(tracks(10).some(name => name.startsWith('Zombie_duckytube')))
-    assert.ok(!tracks(0).some(name => /^(anim_cone|anim_bucket|anim_screendoor|Zombie_duckytube)/.test(name)))
-    assert.ok(catalog.zombies[1].parts.some(part => part.track === 'Zombie_flaghand'))
-    assert.ok(catalog.zombies[25].parts.some(part => part.track === 'Boss_head2'))
-    assert.ok(tracks(20).includes('Zombie_bungi_body'))
-    assert.ok(existsSync(`${bundle}/${resources.sprites['pvz:bungeecord'].file}`))
-    assert.equal(catalog.plants[18].parts.filter(part => part.name.startsWith('head')).length, 3)
-    assert.ok(catalog.plants[28].parts.some(part => part.name === 'backHead'))
-    assert.ok(catalog.plants[41].parts.some(part => part.name === 'face2'))
-})

@@ -1,4 +1,5 @@
 import { defineComponent, defineResource } from '@/ecs/index'
+import type { GraveSnapshot } from '@/shared/protocol'
 
 export interface Item {
     typeId: string
@@ -33,6 +34,8 @@ export interface TutorialState {
 
 export interface WaveState {
     index: number
+    graves?: GraveSnapshot[]
+    graveRiseAtTick?: number
     zombiesByWave?: string[][]
     nextWaveAtTick?: number
     accelerateAtTick?: number

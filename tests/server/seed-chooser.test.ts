@@ -51,6 +51,53 @@ test('seed choice is authoritative, ordered, capacity checked and works at an in
     assert.equal(game.render().phase, 'gameplay')
 })
 
+test('with recharging disabled, chosen seeds skip their opening recharge too', () => {
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start(options)
+    game.debugCommand('/cooldown false')
+    command(game, { type: 'chooseSeed', seedId: 'pvz:cherrybomb' })
+    assert.equal(game.render().seedPackets[0].cooldownRemaining, 0)
+    game.debugCommand('/cooldown true')
+    command(game, { type: 'chooseSeed', seedId: 'pvz:wallnut' })
+    assert.equal(game.render().seedPackets[1].cooldownRemaining, definitions.seeds['pvz:wallnut'].initialCooldownTicks)
+})
+
+test('with recharging and sun costs disabled, every chosen packet flashes on the first gameplay tick', () => {
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start(options)
+    game.debugCommand('/cooldown false')
+    game.debugCommand('/suncost false')
+    const picks = ['pvz:cherrybomb', ...seeds.filter(id => id !== 'pvz:cherrybomb').slice(0, 5)]
+    for (const seedId of picks) command(game, { type: 'chooseSeed', seedId })
+    command(game, { type: 'confirmSeeds' })
+    command(game, { type: 'completeIntro' })
+    game.drainEvents()
+    while (game.render().gameplayTick < 1) game.update(definitions.tickSeconds)
+    const flashed = game.drainEvents().filter(event => event.type === 'seedPacketFlashRequested').map(event => event.data.seedId)
+    assert.deepEqual(flashed, picks, 'a 150-sun cherry bomb flashes with the rest despite the 50 starting sun')
+})
+
+test('a recharge that runs out flashes once, while one cleared by `/cooldown false` does not', () => {
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start(options)
+    const picks = ['pvz:wallnut', 'pvz:cherrybomb', ...seeds.filter(id => id !== 'pvz:wallnut' && id !== 'pvz:cherrybomb').slice(0, 4)]
+    for (const seedId of picks) command(game, { type: 'chooseSeed', seedId })
+    command(game, { type: 'confirmSeeds' })
+    command(game, { type: 'completeIntro' })
+    const flashes: string[] = []
+    const ready = definitions.seeds['pvz:wallnut'].initialCooldownTicks!
+    while (game.render().gameplayTick < ready) {
+        game.update(definitions.tickSeconds)
+        for (const event of game.drainEvents()) if (event.type === 'seedPacketFlashRequested') flashes.push(`${game.render().gameplayTick}:${event.data.seedId}`)
+    }
+    assert.ok(flashes.includes(`${ready}:pvz:wallnut`), 'the 50-sun wall-nut flashes as its opening recharge ends')
+    assert.equal(flashes.filter(flash => flash.endsWith(':pvz:wallnut')).length, 1)
+    game.debugCommand('/cooldown false')
+    for (let tick = 0; tick < 5; tick++) game.update(definitions.tickSeconds)
+    assert.ok(!game.drainEvents().some(event => event.type === 'seedPacketFlashRequested' && event.data.seedId === 'pvz:cherrybomb'),
+        'clearing the cherry bomb\'s recharge is not a recharge finishing')
+})
+
 test('chooser levels share the global seed catalog, including registered seeds, without a per-level pool', () => {
     const { definitions: expanded, levels: sharedLevels } = buildGameplayContent(
         readBaseContent().gameplay, [{

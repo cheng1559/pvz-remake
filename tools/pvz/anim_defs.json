@@ -218,12 +218,20 @@
         "anim_idle",
         "anim_sleep",
         "anim_shooting"
-      ]
+      ],
+      "exports": {
+        "anim_idle": "pvz:puffshroom",
+        "anim_sleep": "pvz:puffshroom_sleep",
+        "anim_shooting": "pvz:puffshroom_shoot"
+      }
     },
     "face": {
       "animations": [
         "anim_blink"
-      ]
+      ],
+      "exports": {
+        "anim_blink": "pvz:puffshroom_blink"
+      }
     }
   },
   "sunshroom": {
@@ -237,12 +245,22 @@
         "anim_bigidle",
         "anim_bigsleep",
         "anim_grow"
-      ]
+      ],
+      "exports": {
+        "anim_idle": "pvz:sunshroom",
+        "anim_sleep": "pvz:sunshroom_sleep",
+        "anim_bigidle": "pvz:sunshroom_big",
+        "anim_bigsleep": "pvz:sunshroom_bigsleep",
+        "anim_grow": "pvz:sunshroom_grow"
+      }
     },
     "face": {
       "animations": [
         "anim_blink"
-      ]
+      ],
+      "exports": {
+        "anim_blink": "pvz:sunshroom_blink"
+      }
     }
   },
   "fumeshroom": {
@@ -254,16 +272,33 @@
         "anim_idle",
         "anim_sleep",
         "anim_shooting"
-      ]
+      ],
+      "exports": {
+        "anim_idle": "pvz:fumeshroom",
+        "anim_sleep": "pvz:fumeshroom_sleep",
+        "anim_shooting": "pvz:fumeshroom_shoot"
+      }
     },
     "face": {
       "animations": [
         "anim_blink"
-      ]
+      ],
+      "exports": {
+        "anim_blink": "pvz:fumeshroom_blink"
+      }
     }
   },
   "gravebuster": {
-    "body": {}
+    "body": {
+      "animations": [
+        "anim_land",
+        "anim_idle"
+      ],
+      "exports": {
+        "anim_land": "pvz:gravebuster_land",
+        "anim_idle": "pvz:gravebuster"
+      }
+    }
   },
   "hypnoshroom": {
     "body": {}
@@ -1101,7 +1136,16 @@
         "anim_walk_nopaper",
         "anim_idle",
         "anim_gasp"
-      ]
+      ],
+      "exports": {
+        "anim_idle": "pvz:newspaper_idle",
+        "anim_walk": "pvz:newspaper_walk",
+        "anim_walk_nopaper": "pvz:newspaper_walk_nopaper",
+        "anim_eat": "pvz:newspaper_eat",
+        "anim_eat_nopaper": "pvz:newspaper_eat_nopaper",
+        "anim_gasp": "pvz:newspaper_gasp",
+        "anim_death": "pvz:newspaper_death"
+      }
     }
   },
   "zombie_hand": {
@@ -1494,6 +1538,20 @@
     "default": {
       "exports": {
         "default": "pvz:sun"
+      }
+    }
+  },
+  "zombie_surprise": {
+    "default": {
+      "exports": {
+        "default": "pvz:zombie_surprise"
+      }
+    }
+  },
+  "z": {
+    "default": {
+      "exports": {
+        "default": "pvz:sleeping"
       }
     }
   }

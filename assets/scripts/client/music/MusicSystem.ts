@@ -23,7 +23,9 @@ interface MusicTuneManifest {
     durationSec: number
     loopStartSec: number
     loopEndSec: number
-    burstScheme?: 'day'
+    burstScheme?: 'day' | 'night'
+    drumsLoopEndSec?: number
+    burstDrumsOffsetsSec?: number[]
     burstBoundariesSec?: number[]
     stems: Partial<Record<MusicStemName, string>>
 }
@@ -111,6 +113,8 @@ export class MusicSystem {
     private static _fadeOutCounter = 0
     private static _fadeOutDuration = 0
     private static _syncCounter = 0
+    /** How far the night drum stem runs ahead of the main stem, within its own loop. */
+    private static _drumsPhaseSec = 0
     /** The main stem's last observed time, to notice the backend wrapping past a missed loop end. */
     private static _lastMainTime = 0
     private static _burstState: MusicBurstState = 'off'
@@ -157,6 +161,7 @@ export class MusicSystem {
         this._fadeOutDuration = 0
         this._syncCounter = 0
         this._lastMainTime = 0
+        this._drumsPhaseSec = 0
 
         this._unsubscribeMusicVolume ??= SoundSystem.onMusicVolumeChange(() => this._applyVolumes())
         for (let i = 0; i < activeStems.length; i++) {
@@ -200,6 +205,7 @@ export class MusicSystem {
 
         return parseMusicPlaybackSnapshot({
             tuneId: this._currentTuneId,
+            ...(this._currentTune.burstScheme === 'night' ? { drumsPhaseSec: this._drumsPhaseSec } : {}),
             timeSec: this._paused ? this._pauseTime : this._mainTime(),
             paused: this._paused || this._pauseRequested,
             mainVolume: this._mainVolume,
@@ -238,6 +244,7 @@ export class MusicSystem {
         await this.playTune(snapshot.tuneId, true)
         if (!this._playing || this._currentTuneId !== snapshot.tuneId) return
 
+        this._drumsPhaseSec = snapshot.drumsPhaseSec ?? 0
         this._seekAll(snapshot.timeSec)
         this._mainVolume = snapshot.mainVolume
         this._drumsVolume = snapshot.drumsVolume
@@ -351,7 +358,7 @@ export class MusicSystem {
 
     static startBurst() {
         if (!this._playing || this._paused || !this._currentTune) return
-        if (this._currentTune.burstScheme !== 'day') return
+        if (!this._currentTune.burstScheme) return
         this._startBurst()
     }
 
@@ -470,22 +477,24 @@ export class MusicSystem {
         return this._mainSource()?.currentTime ?? 0
     }
 
-    private static _seekAll(time: number) {
+    private static _seekAll(time: number, stems: readonly MusicStemName[] = this._activeStemNames) {
         const tune = this._currentTune
         if (!tune) return
 
         const seekTime = this._wrapTime(time, tune)
         this._lastMainTime = seekTime
         for (const stem of this._activeStemNames) {
+            if (!stems.includes(stem)) continue
+            const stemTime = this._stemTime(stem, seekTime)
             const audioId = this._nativeAudioIds[stem]
             if (audioId !== undefined) {
-                this._nativePlayer()?.setCurrentTime(audioId, seekTime)
+                this._nativePlayer()?.setCurrentTime(audioId, stemTime)
                 continue
             }
 
             const source = this._sources[stem]
             if (!source?.clip) continue
-            source.currentTime = seekTime
+            source.currentTime = stemTime
         }
     }
 
@@ -502,6 +511,11 @@ export class MusicSystem {
 
         const overflow = wrapped ? mainTime + tune.durationSec - tune.loopEndSec : mainTime - tune.loopEndSec
         const target = this._wrapTime(tune.loopStartSec + overflow, tune)
+        if (tune.burstScheme === 'night') {
+            // Keep the drum phase in [0, drum loop) so it survives the snapshot's non-negative check.
+            const duration = tune.drumsLoopEndSec!
+            this._drumsPhaseSec = ((this._stemTime('drums', tune.loopEndSec) - tune.loopStartSec) % duration + duration) % duration
+        }
         this._seekAll(target)
         this._resumeSourcesAfterSeek()
         if (
@@ -536,6 +550,7 @@ export class MusicSystem {
     }
 
     private static _updateBurst(ticks: number, zombiesOnScreen: number) {
+        if (this._currentTune?.burstScheme === 'night') { this._updateNightBurst(ticks, zombiesOnScreen); return }
         if (this._currentTune?.burstScheme !== 'day') return
 
         this._decrementCounters(ticks)
@@ -576,6 +591,35 @@ export class MusicSystem {
         this._updateDrumsState()
     }
 
+    /** Music::UpdateMusicBurst scheme 2 replaces the main melody with the night drum stream. */
+    private static _updateNightBurst(ticks: number, zombies: number) {
+        this._decrementCounters(ticks)
+        switch (this._burstState) {
+            case 'off':
+                this._mainVolume = 1
+                if (zombies >= START_BURST_ZOMBIES) this._startBurst()
+                break
+            case 'starting':
+                if (this._drumsState === 'off') this._queueDrumsOn()
+                if (this._drumsState === 'on-queued') this._burstCounter = BURST_START_TICKS
+                this._mainVolume = clamp01(this._burstCounter / BURST_START_TICKS)
+                if (this._burstCounter === 0) { this._burstState = 'on'; this._burstCounter = BURST_ON_MIN_TICKS }
+                break
+            case 'on':
+                this._mainVolume = 0
+                if (this._burstCounter === 0 && zombies < FINISH_BURST_ZOMBIES) {
+                    this._burstState = 'finishing'; this._burstCounter = 1100
+                    this._drumsState = 'fading'; this._drumsCounter = 800
+                }
+                break
+            case 'finishing':
+                this._mainVolume = clamp01(1 - this._burstCounter / 400)
+                if (this._burstCounter === 0 && this._drumsState === 'off') this._burstState = 'off'
+                break
+        }
+        this._updateDrumsState()
+    }
+
     private static _decrementCounters(ticks: number) {
         if (this._burstCounter > 0) this._burstCounter = Math.max(0, this._burstCounter - ticks)
         if (this._drumsCounter > 0) this._drumsCounter = Math.max(0, this._drumsCounter - ticks)
@@ -606,6 +650,15 @@ export class MusicSystem {
             case 'on-queued':
                 this._drumsVolume = 0
                 if (this._hasReachedQueuedBoundary()) {
+                    if (this._currentTune?.burstScheme === 'night') {
+                        const boundary = this._queuedDrumsBoundarySec!
+                        const index = this._currentTune.burstBoundariesSec!.indexOf(boundary)
+                        const offset = this._currentTune.burstDrumsOffsetsSec?.[index] ?? 0
+                        const duration = this._currentTune.drumsLoopEndSec!
+                        this._drumsPhaseSec = ((offset - boundary) % duration + duration) % duration
+                        // Only the drum phase changed; seeking the melody too can click at every burst.
+                        this._seekAll(this._mainTime(), ['drums'])
+                    }
                     this._drumsState = 'on'
                     this._drumsVolume = 1
                     this._queuedDrumsBoundarySec = null
@@ -623,7 +676,7 @@ export class MusicSystem {
                 }
                 break
             case 'fading':
-                this._drumsVolume = clamp01(this._drumsCounter / DRUMS_FADE_TICKS)
+                this._drumsVolume = clamp01(this._drumsCounter / (this._currentTune?.burstScheme === 'night' ? 800 : DRUMS_FADE_TICKS))
                 if (this._drumsCounter <= 0) {
                     this._drumsState = 'off'
                     this._drumsVolume = 0
@@ -660,24 +713,31 @@ export class MusicSystem {
         return boundaries[0]
     }
 
+    private static _stemTime(stem: MusicStemName, time: number): number {
+        const duration = this._currentTune?.drumsLoopEndSec
+        return stem === 'drums' && this._currentTune?.burstScheme === 'night' && duration
+            ? ((time + this._drumsPhaseSec) % duration + duration) % duration : time
+    }
+
     private static _resyncStems() {
         const time = this._mainTime()
         for (const stem of ['drums', 'hihats'] as const) {
             if (!this._activeStemNames.includes(stem)) continue
+            const target = this._stemTime(stem, time)
             const audioId = this._nativeAudioIds[stem]
             if (audioId !== undefined) {
                 const player = this._nativePlayer()
                 const currentTime = player?.getCurrentTime(audioId)
-                if (typeof currentTime === 'number' && Math.abs(currentTime - time) > SYNC_DRIFT_SECONDS) {
-                    player?.setCurrentTime(audioId, time)
+                if (typeof currentTime === 'number' && Math.abs(currentTime - target) > SYNC_DRIFT_SECONDS) {
+                    player?.setCurrentTime(audioId, target)
                 }
                 continue
             }
 
             const source = this._sources[stem]
             if (!source?.clip) continue
-            if (Math.abs(source.currentTime - time) > SYNC_DRIFT_SECONDS) {
-                source.currentTime = time
+            if (Math.abs(source.currentTime - target) > SYNC_DRIFT_SECONDS) {
+                source.currentTime = target
             }
         }
     }

@@ -12,12 +12,13 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | --- | --- |
 | 页面跳转 | `/home`、`/help`、`/menu`、`/shop`、`/almanac`、`/zengarden` |
 | 关卡入口 | `/level 1-1`、`/restart`；跳过旧存档提示 |
-| 选卡测试 | `/level pvz:seed-chooser-test`，从已实现的 8 种植物中选择 6 张，确认后进入测试关卡 |
+| 选卡测试 | `/level pvz:seed-chooser-test`，从已实现的 9 种植物中选择 6 张，确认后进入测试关卡 |
 | 性能压测 | `/level pvz:stress-test` 进入临时关卡，不覆盖冒险存档；预放 40 株植物，12 秒后生成 160 只僵尸；`/nextwave` 可提前出怪。配合 `/perf plants false`、`/perf zombies false` 分别观察，改回 `true` 恢复 |
 | 应用 | `/reload`、`/quit` |
 | 倍速 | `/gamespeed {0-10}`，作用于统一游戏时钟 |
 | 胜负／波次 | `/win`、`/lose`、`/nextwave` |
 | 植物 | `/plant {plant_name} {row} {col}`、`/removeplant {row} {col}` |
+| 墓碑 | `/grave {row} {col}`，在指定空格生成墓碑；不能与已有植物或墓碑重叠，暂停时也可执行，随关卡存档保存 |
 | 替换种子包 | `/seed {槽位} {种子名}`，如 `/seed 1 snowpea` |
 | 僵尸 | `/zombie {zombie_name} [row] [col]`、`/damage {damage}`、`/kill` |
 | 掉落 | `/item {item_name} [row col]`，当前支持 `sun`、`award` |

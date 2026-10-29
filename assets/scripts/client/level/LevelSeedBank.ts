@@ -17,7 +17,6 @@ interface Packet {
     tooltip: UITooltip
     hotkey?: UILabel
     button?: UIButton
-    previousCooldown?: number
 }
 
 export interface LevelSeedPacket extends SeedPacketSnapshot {
@@ -63,7 +62,7 @@ export class LevelSeedBank {
                     ? options.ui.text(visual.nameKey ?? String(visual.seedType).toUpperCase())
                     : '',
                 gap: 0,
-                surface: options.level.conveyor ? options.adviceParent : undefined,
+                surface: options.level.conveyor ? options.tooltipSurface : undefined,
             })
             return { seedId, view, tooltip }
         })
@@ -98,28 +97,13 @@ export class LevelSeedBank {
             )
         }
         const packet = snapshot.seedPackets[index]
-        return packet && { ...packet, command: { type: 'selectSeed', seedId: packet.seedId } }
+        return packet && { ...packet, command: { type: 'selectSeed', seedId: packet.seedId, slot: index } }
     }
 
     attachConveyor(parent: Node): void {
         for (const packet of this.packets) {
             packet.view.node.setParent(parent)
             packet.view.node.setSiblingIndex(0)
-        }
-    }
-
-    // Preserve the first packet's  save field; the rest restore from their authoritative cooldowns.
-    get previousCooldown(): number | null {
-        return this.packets[0]?.previousCooldown ?? null
-    }
-
-    restore(snapshot: WorldSnapshot, firstCooldown: number | null): void {
-        for (const [index, packet] of this.packets.entries()) {
-            packet.previousCooldown =
-                index === 0
-                    ? (firstCooldown ?? undefined)
-                    : snapshot.seedPackets.find((value) => value.seedId === packet.seedId)
-                          ?.cooldownRemaining
         }
     }
 
@@ -149,7 +133,6 @@ export class LevelSeedBank {
                 entry.tooltip.text = this.options.ui.text(
                     visual.nameKey ?? String(visual.seedType).toUpperCase(),
                 )
-                entry.previousCooldown = undefined
             }
             if (packet.x !== undefined) {
                 const layout = this.options.content.presentation.conveyor
@@ -197,18 +180,12 @@ export class LevelSeedBank {
                 const text = String((index + 1) % 10)
                 if (entry.hotkey.text !== text) entry.hotkey.text = text
             } else if (entry.hotkey) entry.hotkey.node.active = false
-            const cooldownFinished =
-                entry.previousCooldown !== undefined &&
-                entry.previousCooldown > 0 &&
-                packet.cooldownRemaining === 0 &&
-                available
+            // The server decides when a packet is ready (FlashIfReady); a debug-cleared recharge does not flash.
+            // Duplicate seeds recharge separately, so the event names the slot.
             const flashRequested = events.some(
-                (event) =>
-                    event.type === 'seedPacketFlashRequested' && event.data.seedId === entry.seedId,
+                (event) => event.type === 'seedPacketFlashRequested' && event.data.slot === index,
             )
-            if (effects && available && (cooldownFinished || flashRequested))
-                this.flash(entry.view.node)
-            entry.previousCooldown = packet.cooldownRemaining
+            if (effects && available && flashRequested) this.flash(entry.view.node)
         }
     }
 

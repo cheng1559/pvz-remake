@@ -69,6 +69,12 @@ STATIC_TUNES = [
 ]
 
 
+# Music::PlayMusic(MUSIC_TUNE_NIGHT_MOONGRAINS) plays these orders from two streams of mainmusic.mo3; burst
+# scheme 2 jumps the drum stream to order 76 or 77 on the main stream's next order, by its parity.
+NIGHT_MAIN_ORDER = 0x30
+NIGHT_DRUMS_ORDER = 0x4C
+
+
 def resolve_ffmpeg(ffmpeg: str) -> str:
     resolved = shutil.which(ffmpeg)
     if resolved:
@@ -95,6 +101,7 @@ def render_stem_output(
     channels: tuple[int, ...] | None,
     start_order: int = 0,
     start_row: int = 0,
+    max_frames: int | None = None,
 ) -> int:
     if dst:
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -129,8 +136,9 @@ def render_stem_output(
             module.set_channel_mutes(set(channels))
         if start_order != 0 or start_row != 0:
             module.set_position_order_row(start_order, start_row)
-        while True:
-            chunk_frames = module.read_interleaved_stereo(SAMPLE_RATE, CHUNK_FRAMES, buffer)
+        while max_frames is None or frames < max_frames:
+            limit = CHUNK_FRAMES if max_frames is None else min(CHUNK_FRAMES, max_frames - frames)
+            chunk_frames = module.read_interleaved_stereo(SAMPLE_RATE, limit, buffer)
             if chunk_frames <= 0:
                 break
             data = bytes(buffer)[: chunk_frames * 2 * 2]
@@ -204,6 +212,38 @@ def build_day_manifest(
     }
 
 
+def build_night_manifest(library: OpenMptLibrary, ffmpeg_path: str, src_dir: Path, dst_dir: Path, overwrite: bool) -> dict:
+    with library.open_module(src_dir / "mainmusic.mo3") as module:
+        time = lambda order: float(library.lib.openmpt_module_get_time_at_position(module.module, order, 0))
+        order_seconds = time(NIGHT_DRUMS_ORDER + 1) - time(NIGHT_DRUMS_ORDER)
+        main_orders = [(order, time(order) - time(NIGHT_MAIN_ORDER)) for order in range(NIGHT_MAIN_ORDER + 1, NIGHT_DRUMS_ORDER)]
+    durations, loops = {}, {}
+    for stem, order in (("main", NIGHT_MAIN_ORDER), ("drums", NIGHT_DRUMS_ORDER)):
+        frames = render_stem_output(library, ffmpeg_path, src_dir / "mainmusic.mo3", None, None, order)
+        # Both sections are whole orders; anything after is the release tail of their last notes.
+        loops[stem] = round(frames / SAMPLE_RATE / order_seconds) * order_seconds
+        dst = dst_dir / f"night_moongrains_{stem}{OUTPUT_SUFFIX}"
+        if overwrite:
+            remove_old_audio_outputs(dst_dir, f"night_moongrains_{stem}")
+        # The drum stream loops by itself, so its file ends exactly on the loop; the main stem jumps at loopEndSec.
+        limit = round(loops[stem] * SAMPLE_RATE) if stem == "drums" else None
+        frames = render_stem_output(library, ffmpeg_path, src_dir / "mainmusic.mo3",
+                                    dst if overwrite or not dst.exists() else None, None, order, max_frames=limit)
+        durations[stem] = frames / SAMPLE_RATE
+    entries = [(order, seconds) for order, seconds in main_orders if 0 < seconds < loops["main"] - 0.05]
+    return {
+        "id": "night_moongrains",
+        "durationSec": round(durations["main"], 6),
+        "loopStartSec": 0,
+        "loopEndSec": round(loops["main"], 6),
+        "drumsLoopEndSec": round(loops["drums"], 6),
+        "burstScheme": "night",
+        "burstBoundariesSec": [round(seconds, 6) for _, seconds in entries],
+        "burstDrumsOffsetsSec": [round(order_seconds if order % 2 else 0, 6) for order, _ in entries],
+        "stems": {"main": "audio/music/night_moongrains_main", "drums": "audio/music/night_moongrains_drums"},
+    }
+
+
 def convert_music(
     src_dir: Path,
     dst_dir: Path,
@@ -241,6 +281,7 @@ def convert_music(
 
     tune_entries = {
         "day_grasswalk": build_day_manifest(library, src_dir, dst_dir, stem_frames),
+        "night_moongrains": build_night_manifest(library, ffmpeg_path, src_dir, dst_dir, overwrite),
     }
     static_count = 0
     for spec in STATIC_TUNES:
@@ -268,7 +309,7 @@ def convert_music(
     manifest_path = dst_dir / MANIFEST_NAME
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"[music] Wrote: {manifest_path}")
-    return len(DAY_GRASSWALK_STEMS) + static_count
+    return len(DAY_GRASSWALK_STEMS) + 2 + static_count
 
 
 def main() -> None:

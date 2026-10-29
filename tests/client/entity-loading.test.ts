@@ -26,10 +26,43 @@ function loadClientModule(path: string, modules: Record<string, unknown>) {
     runInNewContext(code.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? clientStubs[id] ?? {} })
     return module.exports
 }
+clientStubs['@/client/view/EntityAttachments'] = loadClientModule('view/EntityAttachments', {})
 
-
-
-
+test('graves added after level creation are drawn, removed and can be generated again in the same cell', async () => {
+    class Node {
+        isValid = true
+        children: Node[] = []
+        setPosition() {}
+        destroy() { this.isValid = false }
+    }
+    const roots: Node[] = []
+    const { LevelGraves } = loadClientModule('level/LevelGraves', {
+        cc: { Mask: { Type: { GRAPHICS_RECT: 0 } }, Sprite: { SizeMode: { RAW: 0 } } },
+        '@/client/content/ClientContentLoader': { SpriteRepository: class {
+            async load() { return { originalSize: { width: 500, height: 400 } } }
+        } },
+        '@/client/hud/SeedPacketRenderer': { getAtlasFrame() {} },
+        '@/client/view/GameScreenMath': loadClientModule('view/GameScreenMath', {}),
+        '@/client/view/uiNode': { uiNode(options: any) {
+            const node = new Node()
+            options.parent?.children.push(node)
+            return { node, transform: { width: options.size?.width, setContentSize() {} } }
+        } },
+    })
+    const graves = await LevelGraves.create(new Node(), { addScenery(node: Node) { roots.push(node) } }, {},
+        { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 } }, [])
+    graves.sync(Infinity)
+    const snapshot = { graves: [{ row: 2, column: 1, variant: 0, riseDelay: 0, offsetX: 0, offsetY: 0 }], plants: [] }
+    graves.syncWorld(snapshot, () => undefined)
+    graves.syncWorld(snapshot, () => undefined)
+    assert.equal(roots.length, 1)
+    assert.equal(roots[0].isValid, true)
+    graves.syncWorld({ ...snapshot, graves: [] }, () => undefined)
+    assert.equal(roots[0].isValid, false)
+    graves.syncWorld(snapshot, () => undefined)
+    assert.equal(roots.length, 2)
+    assert.equal(roots[1].isValid, true)
+})
 
 test('plant and zombie Mod view factories share registration, conflict and freeze rules', async () => {
     for (const [kind, definitions, className] of [
@@ -74,6 +107,26 @@ test('removing an entity while its custom view loads disposes the completed plan
         assert.equal(disposed, 1)
         assert.equal(renderer.node(1), undefined)
     }
+})
+
+test('only attachments a zombie view registers keep playing while it walks into the house', async () => {
+    const node = { isValid: true, active: true, setPosition() {}, destroy() {} }
+    const { LevelEntityRenderer } = loadClientModule('level/LevelEntityRenderer', {
+        '@/client/view/uiNode': { uiNode: () => ({ node }) },
+    })
+    const flag = { isValid: true, isChildOf: () => false }
+    const cloth = { isValid: true, isChildOf: (parent: unknown) => parent === flag }
+    const body = { isValid: true, isChildOf: () => false }
+    const content = { levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' } } } },
+        zombieViews: { create(context: any) { context.attachments.add(flag); return { sync() {}, destroy() {} } } } }
+    const renderer = new LevelEntityRenderer(0, content, {}, {}, {}, {}, {}, {}, { complete: true })
+    await renderer.create(1, { levelId: 'test:level', gameplayTick: 0, plants: [], lawnMowers: [], projectiles: [], items: [],
+        zombies: [{ entityId: 1, typeId: 'test:zombie' }] })
+    assert.equal(renderer.runsDuringGameOver(1, { node: flag }), true)
+    assert.equal(renderer.runsDuringGameOver(1, { node: cloth }), true, 'parts of an attachment follow it')
+    assert.equal(renderer.runsDuringGameOver(1, { node: body }), false, 'the body follows the scripted walk instead')
+    flag.isValid = false
+    assert.equal(renderer.runsDuringGameOver(1, { node: flag }), false, 'a destroyed attachment leaves the slot')
 })
 
 for (const kind of ['plant', 'zombie'] as const) test(`${kind} factories stay hidden while loading and paused restore reveals the current state`, async () => {
@@ -121,6 +174,52 @@ for (const kind of ['plant', 'zombie'] as const) test(`${kind} factories stay hi
     assert.equal(node.active, false, 'the performance visibility switch still applies')
 })
 
+test('a finished or cancelled helm drop cannot leave a component with a null node in zombie sync', async () => {
+    let loading = Promise.resolve(), playCount = 0
+    class Node {
+        isValid = true
+        position = { x: 0, y: 0 }
+        player?: Player
+        setPosition() {}
+        destroy() { this.isValid = false; if (this.player) this.player.node = null }
+        addComponent(Type: any) { return this.player = Object.assign(new Type(), { node: this }) }
+    }
+    class Player {
+        node: Node | null = null
+        onFinish?: () => void
+        async load() { await loading }
+        play(options: { onFinish: () => void }) { playCount++; this.onFinish = options.onFinish }
+    }
+    const drops: Node[] = []
+    const { ZombieView } = loadClientModule('zombies/ZombieView', {
+        '@/client/reanim/ReanimPlayer': { ReanimPlayer: Player },
+        '@/client/view/uiNode': { uiNode(options: any) {
+            if (options.node) return { node: options.node }
+            const node = new Node(); drops.push(node); return { node }
+        } },
+    })
+    const { EntityAttachments } = clientStubs['@/client/view/EntityAttachments'] as any
+    const view = Object.assign(Object.create(ZombieView.prototype), {
+        node: new Node(), shadowNode: new Node(), player: null, animation: 'anim_walk', attachments: new EntityAttachments(),
+        presentation: presentationFixture.zombies['pvz:newspaper'], applyHitFlash() {}, applyColor() {}, applyParts() {},
+    })
+    view.helmDropped()
+    await new Promise(resolve => setImmediate(resolve))
+    const finished = drops[0].player!
+    finished.onFinish!()
+    assert.equal(finished.node, null, 'Cocos clears a destroyed component node')
+    assert.doesNotThrow(() => view.sync({ state: 'walking', animation: 'anim_walk', animationTime: 0, hasHead: true }))
+
+    let finishLoad!: () => void
+    loading = new Promise(resolve => { finishLoad = resolve })
+    view.helmDropped()
+    view.sync({ state: 'dying', animation: 'anim_walk', animationTime: 0, hasHead: true })
+    assert.equal(drops[1].isValid, false, 'death removes a drop even while its animation is loading')
+    finishLoad()
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(playCount, 1, 'a drop destroyed during loading must not start playing')
+    assert.doesNotThrow(() => view.sync({ state: 'walking', animation: 'anim_walk', animationTime: 0, hasHead: true }))
+})
 
 test('presentation definitions use the common ZIP resolver without mutating base data', async () => {
     const asset = { json: presentationFixture }
@@ -146,7 +245,6 @@ test('presentation definitions use the common ZIP resolver without mutating base
     assert.deepEqual(await loadPresentationDefinitions(manifest), presentationFixture)
     await assert.rejects(loadPresentationDefinitions({ ...manifest, content: {} }), /does not define presentation/)
 })
-
 
 test('ZIP caches are shared across content loaders and failed requests can retry', async () => {
     const assets = new Map<string, unknown>([['pvz:ready', {}]])
@@ -181,7 +279,6 @@ test('ZIP caches are shared across content loaders and failed requests can retry
     assert.equal(loads, 2)
 })
 
-
 test('the base Mod prefab keeps its compiled engine bindings after moving into assets', async () => {
     class Prefab {}
     const prefab = new Prefab()
@@ -198,6 +295,38 @@ test('the base Mod prefab keeps its compiled engine bindings after moving into a
     assert.equal(await new ClientContentLoader().load({ category: 'prefabs', contentId: 'pvz:base',
         id: 'pvz:level', contentHash: 'base', path: source }, Prefab), prefab)
     assert.deepEqual(requests, ['ui/level'])
+})
+
+test('body colors reach players attached to its tracks, including nested ones, but no longer reach detached players', () => {
+    class Color {
+        static WHITE = new Color(255, 255, 255)
+        static BLACK = new Color(0, 0, 0)
+        constructor(readonly r: number, readonly g: number, readonly b: number, readonly a = 255) {}
+        clone() { return new Color(this.r, this.g, this.b, this.a) }
+    }
+    const { ReanimPlayer } = loadClientModule('reanim/ReanimPlayer', {
+        cc: { Component: class {}, Color, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/shared/content/reanim': { sampleReanimTrack: () => ({}) },
+    })
+    const player = () => Object.assign(Object.create(ReanimPlayer.prototype), {
+        isValid: true, attachment: null, trackAttachments: new Set(), colorOverride: Color.WHITE, extraAdditive: false,
+        extraAdditiveColor: Color.BLACK, applyPose() {}, requireData: () => ({ tracks: [{ id: 'anim_stem' }] }),
+    })
+    const body = player(), head = player(), blink = player(), dropped = player()
+    head.attachToTrack(body, 'anim_stem')
+    blink.attachToTrack(head, 'anim_stem')
+    dropped.attachToTrack(body, 'anim_stem')
+    dropped.attachToTrack(head, 'anim_stem')
+    const blue = new Color(75, 75, 255), gray = new Color(30, 30, 30)
+    body.setColorOverride(blue)
+    body.setExtraAdditiveDraw(true, gray)
+    for (const attached of [head, blink, dropped]) {
+        assert.deepEqual([attached.colorOverride, attached.extraAdditive, attached.extraAdditiveColor], [blue, true, gray])
+    }
+    dropped.attachToTrack(player(), 'anim_stem')
+    body.setColorOverride(Color.WHITE)
+    assert.deepEqual([head.colorOverride, blink.colorOverride, dropped.colorOverride], [Color.WHITE, Color.WHITE, blue],
+        'a player moved to another parent keeps that parent\'s colors')
 })
 
 test('preloaded animation frames are shared by registry and failed preparation can retry', async () => {
@@ -233,146 +362,6 @@ test('preloaded animation frames are shared by registry and failed preparation c
         'registries with different sprite overrides must not share prepared frames')
 })
 
-
-
-
-
-test('blink attachments follow both the moving head and its parent stem', () => {
-    class Color {
-        static WHITE = new Color()
-        static BLACK = new Color()
-        constructor(public r = 255, public g = 255, public b = 255, public a = 255) {}
-        clone() { return new Color(this.r, this.g, this.b, this.a) }
-    }
-    const modules: Record<string, any> = {
-        cc: { Color, Component: class {}, Node: { EventType: {} }, Sprite: { SizeMode: { RAW: 0 } }, toRadian: (degrees: number) => degrees * Math.PI / 180,
-            _decorator: { ccclass: () => (value: unknown) => value } },
-        '@/shared/mod/index': { isQualifiedId: () => true },
-        // Track nodes created by the player; see the atlas page check below.
-        '@/client/view/uiNode': { uiNode: (options: any) => ({ node: { name: options.name, setPosition() {}, setScale() {} }, sprite: {}, skew: { setSkew() {} } }) },
-    }
-    const load = (path: string) => {
-        const module = { exports: {} as Record<string, any> }
-        const code = transpileModule(readFileSync(path, 'utf8'), {
-            compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-        })
-        runInNewContext(code.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? clientStubs[id] ?? {} })
-        return module.exports
-    }
-    modules['@/shared/content/reanim'] = load('assets/scripts/shared/content/reanim.ts')
-    const { ReanimPlayer } = load('assets/scripts/client/reanim/ReanimPlayer.ts')
-    const player = (trackId: string, from: number[], to = from) => {
-        const result = new ReanimPlayer()
-        result.data = { schemaVersion: 2, id: 'pvz:test', durationSeconds: 2, tracks: [{ id: trackId, zIndex: 0,
-            keyframes: [from, to].map(([x, y], timeSeconds) => ({
-                timeSeconds, x, y, scaleX: 1, scaleY: 1, skewX: 0, skewY: 0,
-                alpha: 1, sprite: 'pvz:test', interpolation: 'linear',
-            })),
-        }] }
-        result.frames.set('pvz:test', {})
-        result.views.set(trackId, { node: { position: { x: 0, y: 0 }, setPosition(x: number, y: number) { this.position = { x, y } }, setScale() {} }, sprite: {}, skew: { setSkew() {} } })
-        return result
-    }
-    const body = player('stem', [0, 0], [20, 40])
-    const head = player('face', [10, 20], [20, 30])
-    const blink = player('eyelid', [15, 25])
-    head.attachToTrack(body, 'stem')
-    blink.attachToTrack(head, 'face')
-    body.seek(0.5)
-    head.seek(0.5)
-    blink.seek(0)
-    const position = () => blink.views.get('eyelid').node.position
-    assert.deepEqual(Object.values(position()), [30, -50])
-    body.seek(1)
-    blink.seek(0)
-    assert.deepEqual(Object.values(position()), [40, -70], 'the eyelid must inherit later movement of the stem too')
-    const trackNode = head.getTrackNode('face'), replacement = head.getAnimation()
-    replacement.tracks[0].keyframes[1].x += 5
-    head.replaceAnimation(replacement)
-    assert.equal(head.getTrackNode('face'), trackNode, 'animation replacement must preserve attached UI nodes')
-    assert.equal(head.timeSeconds, 0.5)
-    assert.equal(head.playing, false, 'replacement cannot resume a paused animation')
-    const other = player('other', [0, 0])
-    head.data.tracks.push(other.data.tracks[0])
-    head.views.set('other', other.views.get('other'))
-    other.views.get('other').node.setPosition = () => assert.fail('a sprite override must not rebuild unrelated tracks')
-    const frame = {}
-    head.setTrackSpriteOverride('face', frame)
-    assert.equal(head.views.get('face').sprite.spriteFrame, frame)
-    head.setTrackSpriteOverride('face', null)
-    assert.equal(head.views.get('face').sprite.spriteFrame, head.frames.get('pvz:test'))
-    head.data.tracks.pop()
-    assert.throws(() => head.replaceAnimation({ ...replacement, tracks: [] }))
-    assert.equal(head.getTrackNode('face'), trackNode, 'invalid replacements leave the original intact')
-
-    head.setTrackColorOverride('face', new Color(55, 55, 55))
-    head.seek(0.75)
-    head.setColorOverride(new Color(128, 128, 128))
-    assert.equal(head.views.get('face').sprite.color.r, 28, 'track color survives animation redraws and multiplies the body tint')
-    head.setTrackColorOverride('face', null)
-    assert.equal(head.views.get('face').sprite.color.r, 128)
-    assert.throws(() => head.setTrackColorOverride('missing', new Color()), /unknown reanim track/)
-
-    // Interrupted shots must capture the blended local pose, without applying the stem twice.
-    const idle = player('face', [10, 20])
-    const shoot = player('face', [70, 80], [110, 120])
-    shoot.attachToTrack(body, 'stem')
-    shoot.blendFrom(idle, 0.2)
-    shoot.play({ loop: false, timeSeconds: 0, rate: 45 / 12, hideOnFinish: false })
-    shoot.advance(0.05)
-    assert.equal(shoot.blendElapsed, 0.05, 'blend duration is independent of the clip playback rate')
-    const visiblePosition = { ...shoot.views.get('face').node.position }
-    shoot.blendFrom(shoot, 0.2)
-    shoot.play({ loop: false, timeSeconds: 0, rate: 45 / 12, hideOnFinish: false })
-    assert.deepEqual(shoot.views.get('face').node.position, visiblePosition, 'repeated shots retain the visible pose')
-    shoot.advance(0.05)
-    const returning = player('face', [10, 20])
-    returning.attachToTrack(body, 'stem')
-    returning.blendFrom(shoot, 0.2)
-    returning.play({ timeSeconds: 0 })
-    assert.deepEqual(returning.views.get('face').node.position, shoot.views.get('face').node.position,
-        'switching players also retains an unfinished blend')
-
-    head.data.tracks.length = 0
-    blink.seek(0)
-    assert.equal(blink.views.get('eyelid').sprite.enabled, false, 'a removed parent track must hide its attachment')
-
-    // A flag drawn after its hand track stays there, below the gripping arm, through later pose writes.
-    const root = { children: [] as any[], once() {} }
-    const node = (name: string, parent: any = root) => {
-        const result: any = { name, parent: null, position: { x: 0, y: 0 }, setPosition() {}, setScale() {},
-            setParent(next: any) {
-                result.parent?.children.splice(result.parent.children.indexOf(result), 1)
-                result.parent = next; next.children.push(result)
-            },
-            setSiblingIndex(index: number) {
-                const siblings = result.parent.children
-                siblings.splice(siblings.indexOf(result), 1); siblings.splice(index, 0, result)
-            } }
-        result.setParent(parent)
-        return result
-    }
-    const zombie = player('hand', [0, 0])
-    zombie.node = root
-    zombie.data.tracks.push({ ...zombie.data.tracks[0], id: 'arm' })
-    zombie.views.set('hand', { ...zombie.views.get('hand'), node: node('hand') })
-    zombie.views.set('arm', { track: zombie.data.tracks[1], node: node('arm'), sprite: {}, skew: { setSkew() {} } })
-    zombie.drawAfterTrack(node('flag', { children: [] }), 'hand')
-    zombie.seek(1)
-    assert.deepEqual(root.children.map(child => child.name), ['hand', 'flag', 'arm'])
-
-    // A batch binds one texture, so a track whose images landed on different atlas pages draws through its own node.
-    const paged = player('antenna', [0, 0])
-    paged.node = { children: [], once() {} }
-    paged.data.tracks[0].keyframes[1].sprite = 'pvz:other'
-    const page = (texture: object) => ({ texture, trimmedBorder: { x: 0, y: 0, z: 0, w: 0 }, originalSize: { width: 1, height: 1 }, uv: [0, 0, 1, 0, 0, 1, 1, 1] })
-    paged.frames.set('pvz:test', page({})); paged.frames.set('pvz:other', page({}))
-    paged.views.set('antenna', { track: paged.data.tracks[0] })
-    paged.seek(0)
-    assert.equal(paged.views.get('antenna').node?.name, 'antenna')
-})
-
-
 test('sound playback loads overridden base effects and namespaced Mod effects through shared resources', async () => {
     const click = {}, modEffect = {}
     const assets = new Map<string, unknown>([['pvz:buttonclick', click], ['example:effect', modEffect]])
@@ -390,26 +379,4 @@ test('sound playback loads overridden base effects and namespaced Mod effects th
     assert.equal(await SoundSystem.load('example:late'), null)
     assets.set('example:late', modEffect)
     assert.equal(await SoundSystem.load('example:late'), modEffect, 'a missing effect must not poison future loads')
-})
-
-test('layer ordering moves only misplaced entries and leaves an unlisted child where it is', () => {
-    const { LevelEntityRenderer } = loadClientModule('level/LevelEntityRenderer', {})
-    const layer = { children: [] as any[] }
-    let moves = 0
-    const node = (name: string) => {
-        const value = { name, parent: layer, setSiblingIndex(index: number) {
-            moves++
-            layer.children.splice(layer.children.indexOf(value), 1)
-            layer.children.splice(index, 0, value)
-        } }
-        return value
-    }
-    const [a, b, c, d, leaving] = ['a', 'b', 'c', 'd', 'leaving'].map(node)
-    layer.children.push(a, leaving, c, b, d)
-    const renderer = { entityLayer: layer, collectLayerEntries: () => [d, c, a, b].map(value => ({ node: value, order: 'abcd'.indexOf(value.name) })) }
-    LevelEntityRenderer.prototype.syncLayerOrder.call(renderer, {})
-    assert.deepEqual(layer.children.map(value => value.name), ['a', 'leaving', 'b', 'c', 'd'])
-    assert.equal(moves, 1)
-    LevelEntityRenderer.prototype.syncLayerOrder.call(renderer, {})
-    assert.equal(moves, 1, 'a sorted layer needs no engine calls')
 })

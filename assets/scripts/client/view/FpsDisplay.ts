@@ -2,6 +2,7 @@ import { Color, Director, director, type Node } from 'cc'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
 import { uiNode } from './uiNode'
+import { uiAreaEdge } from './ClientViewport'
 
 /** Counts completed draws against real time, independently of the game clock. */
 export class FpsDisplay {
@@ -12,7 +13,8 @@ export class FpsDisplay {
 
     constructor(parent: Node, ui: UI) {
         this.node = uiNode({ name: 'FpsDisplay', parent, active: false }).node
-        this.label = ui.label(this.node, { text: 'FPS: --', font: 'storeItem', color: Color.WHITE,
+        // Keep the original corner margin from the UI area's left edge.
+        this.label = ui.label(uiAreaEdge(this.node, 'left'), { text: 'FPS: --', font: 'storeItem', color: Color.WHITE,
             x: -392, y: 295, baseline: true })
         this.label.node.name = 'FpsLabel'
         director.on(Director.EVENT_AFTER_DRAW, this.afterDraw, this)

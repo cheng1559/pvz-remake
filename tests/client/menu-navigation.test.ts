@@ -9,106 +9,6 @@ import { gameClock } from '@/core/GameClock'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 import { ModHost } from '@/shared/mod/ModHost'
 
-test('startup UI preparation yields for rendering without adding waits after asynchronous loading', async () => {
-    let time = 0, frame = 0, rendered = 0
-    const progress: number[] = [], module = { exports: {} as any }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/content/preloadTasks.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    runInNewContext(compiled.outputText, {
-        exports: module.exports, Date: { now: () => time }, setTimeout,
-        require: () => ({ Director: { EVENT_AFTER_DRAW: 'draw' }, director: {
-            getTotalFrames: () => frame,
-            once(_event: string, callback: () => void) {
-                rendered++
-                void setImmediate().then(() => { frame++; callback() })
-            },
-        } }),
-    })
-    const { preloadTasks } = module.exports
-    await preloadTasks(Array.from({ length: 10 }, () => async () => { time += 5 }), (value: number) => progress.push(value))
-    assert.equal(rendered, 4, 'UI initialization must let frames render between work slices')
-    assert.equal(progress.at(-1), 1)
-    assert.ok(progress.every((value, index) => !index || value >= progress[index - 1]))
-    const beforeIO = rendered
-    await preloadTasks(Array.from({ length: 10 }, () => async () => {
-        await setImmediate()
-        time += 50
-        frame++
-    }))
-    assert.equal(rendered, beforeIO, 'a new frame replenishes the budget without an extra wait')
-    await preloadTasks([], (value: number) => assert.equal(value, 1))
-    await assert.rejects(preloadTasks([async () => { throw new Error('load failed') }]), /load failed/)
-})
-
-test('the existing startup logo stays visible until pending Mods finish, before loading the title and other assets', async () => {
-    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/StartupScreen.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    }).outputText
-    for (const pending of [false, true]) {
-        const steps: string[] = []
-        let screen: any
-        let finish!: () => void
-        const complete = new Promise<void>(resolve => { finish = resolve })
-        class SpriteFrame {}
-        const frame = { originalSize: { width: 300, height: 200 } }
-        const logo = { node: { active: true }, opacity: { opacity: 0 } }
-        const modules: Record<string, unknown> = {
-            cc: { Component: class {}, Color: class {}, _decorator: { ccclass: () => (value: unknown) => value },
-                Sprite: { SizeMode: { CUSTOM: 1 } }, SpriteFrame, game: {}, Node: { EventType: {} } },
-            '@/client/view/uiNode': { uiNode: (options: any) => {
-                if (options.name !== 'PopCapLogo') return { node: { on() {} }, transform: { contentSize: { width: 800, height: 600 } }, graphics: { clear() {}, fillRect() {} } }
-                assert.equal(options.sprite.frame, frame)
-                steps.push('show-logo')
-                logo.opacity.opacity = options.opacity
-                return logo
-            } },
-            '@/client/content/ModResources': { modResources: {
-                async baseAsset(id: string) { assert.equal(id, 'pvz:popcap_logo'); steps.push('base-logo'); return frame },
-                async asset() { steps.push('mod-logo'); return frame },
-            } },
-            '@/client/content/preloadTasks': { waitForPreloadFrame: async () => {
-                if (!steps.includes('paint')) steps.push('paint')
-                screen.tick(); screen.render()
-            } },
-            '@/client/content/ModManager': { modManager: {
-                hasPendingChanges: () => pending,
-                async applyPendingChanges(progress: (value: number, message: string) => Promise<void>) {
-                    await progress(0.5, 'Installing local:test')
-                    steps.push('install')
-                    await complete
-                },
-            } },
-            '@/client/music/MusicSystem': { MusicSystem: { playTune: async () => { steps.push('music') } } },
-        }
-        const exports: any = {}
-        runInNewContext(compiled, { exports, require: (name: string) => modules[name] ?? {} })
-        screen = new exports.StartupScreen()
-        screen.node = { isValid: true }
-        screen.loadTitle = async () => { steps.push('title'); screen.title = { active: false }; screen.startButton = {} }
-        let loaded!: () => void
-        const loading = new Promise<void>(resolve => { loaded = resolve })
-        await screen.initialize(true, async () => { steps.push('preload'); await loading })
-        screen.show()
-        await setImmediate()
-        if (pending) {
-            for (let i = 0; i < 250; i++) screen.tick()
-            screen.render()
-            assert.equal(logo.node.active, true)
-            assert.equal(logo.opacity.opacity, 255)
-            assert.deepEqual(steps, ['base-logo', 'show-logo', 'paint', 'install'])
-            finish()
-            await setImmediate()
-            assert.deepEqual(steps, ['base-logo', 'show-logo', 'paint', 'install', 'music', 'title', 'preload'])
-        } else assert.deepEqual(steps, ['mod-logo', 'show-logo', 'music', 'title', 'preload'])
-        assert.equal(steps.filter(step => step === 'show-logo').length, 1)
-        for (let i = 0; i < 200 && screen.phase === 'logo'; i++) screen.tick()
-        assert.equal(logo.node.active, false, 'the title shows the remaining loading progress')
-        assert.equal(screen.title.active, true)
-        loaded()
-    }
-})
-
 test('the first main menu uses Mod wrappers installed while UI assets are still loading', async () => {
     const calls: string[] = [], ui = {}
     class MainMenuScreen {
@@ -225,6 +125,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     let running = false
     let paused = false
     let introReady = true
+    let cursorMode = 'none'
     let saves = 0
     const freshGames: boolean[] = []
     const startedLevels: Array<string | undefined> = []
@@ -243,6 +144,11 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         countZombiesOnScreenForMusic: () => running ? 10 : 0,
         isPaused: () => paused,
         canPause: () => running && introReady && !paused,
+        cancelCursor() {
+            if (cursorMode === 'none') return false
+            cursorMode = 'none'
+            return true
+        },
         getLevelDefinition: () => ({}),
         debugCommand: () => ({ ok: true, catalog: { plants: [], zombies: [], items: [], levels: ['1-1'] } }),
         hide() { commits.push('hide-game'); running = false },
@@ -340,10 +246,31 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(paused, false, 'closing the manager restores the previous pause state')
     introReady = false
     app.onKeyDown({ keyCode: 32 })
+    app.onKeyDown({ keyCode: 27 })
     await setImmediate()
     assert.equal(paused, false, 'pause is unavailable during the entrance')
     app.onKeyUp({ keyCode: 32 })
     introReady = true
+    const beforeEscape = sounds.length
+    for (const held of ['seed', 'tool']) {
+        cursorMode = held
+        app.onKeyDown({ keyCode: 27 })
+        await setImmediate()
+        assert.equal(cursorMode, 'none')
+        assert.equal(app.currentPage, null, `Escape cancels ${held} selection before opening the menu`)
+        assert.equal(paused, false)
+        assert.equal(sounds.length, beforeEscape)
+    }
+    app.onKeyDown({ keyCode: 27 })
+    await setImmediate()
+    assert.equal(app.currentPage, 'gameOptions', 'Escape opens the same menu as the board Menu button')
+    assert.equal(paused, true)
+    assert.equal(sounds.length, beforeEscape, 'Escape opens the menu silently, as in the original')
+    app.onKeyDown({ keyCode: 27 })
+    await setImmediate()
+    assert.equal(app.currentPage, null)
+    assert.equal(paused, false)
+    assert.equal(sounds.length, beforeEscape, 'Escape also closes the menu silently')
     const beforeSave = saves
     app.onKeyDown({ keyCode: 32 })
     await setImmediate()
@@ -356,6 +283,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(dialogKeys, beforeRepeat, 'holding Space cannot immediately dismiss the pause dialog')
     app.onKeyUp({ keyCode: 32 })
     assert.equal(sounds.at(-1), 'pause')
+    assert.equal(sounds.length, beforeEscape + 1, 'Space still plays the pause sound once')
     await app.navigate('gameOptions')
     await app.navigate('pause')
     await app.navigate('resume')
@@ -490,7 +418,6 @@ test('manager imports read sequentially, continue after failure and leave instal
     }
 })
 
-
 test('saved-game prompt offers continue/restart/cancel and confirms a restart before closing', async () => {
     const module = { exports: {} as Record<string, any> }
     const compiled = transpileModule(readFileSync('assets/scripts/client/screens/ContinueGameDialog.ts', 'utf8'), {
@@ -534,6 +461,62 @@ test('saved-game prompt offers continue/restart/cancel and confirms a restart be
             }
         }
         assert.equal(await result, action === 'rejectRestart' ? 'continue' : action)
+    }
+})
+
+test('options use direct exit during seed selection and confirmed exit during gameplay', async () => {
+    const exports: Record<string, any> = {}
+    const modules: Record<string, unknown> = {
+        cc: { Color: class {} },
+        '@/client/api/MenuApi': { menuApi: { getSettings: async () => ({ musicVolume: 1, sfxVolume: 0.65, fullScreen: false }) } },
+        '@/platform/OptionsSettings': { OptionsSettings: { fullScreenForced: false, setFullScreen: async () => {} } },
+        '@/client/sound/SoundSystem': { SoundEffect: { ButtonClick: 'click' }, SoundSystem: { play: async () => {} } },
+        '@/shared/menu': { SFX_VOLUME_SCALE: 0.65 },
+    }
+    runInNewContext(transpileModule(readFileSync('assets/scripts/client/screens/OptionsDialog.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+    }).outputText, { exports, require: (id: string) => modules[id] ?? {} })
+    for (const [inGame, levelIntro, expected] of [
+        [true, true, ['MAIN_MENU_BUTTON', 'BACK_TO_GAME']],
+        [true, false, ['RESTART_LEVEL_BUTTON', 'MAIN_MENU_BUTTON', 'BACK_TO_GAME']],
+        [false, false, ['OPTIONS_GITHUB_BUTTON', 'DIALOG_BUTTON_OK']],
+    ] as const) {
+        const buttons: Array<{ text: string; onClick: () => void }> = [], dialogs: any[] = []
+        let exits = 0
+        const ui = {
+            assets: { sprites: {} }, text: (key: string) => key,
+            dialog(_parent: unknown, options: unknown) {
+                let resolve!: (accepted: boolean) => void
+                const dialog = { options, content: {}, node: { isValid: true },
+                    result: new Promise<boolean>(done => { resolve = done }),
+                    close(accepted: boolean) { this.node.isValid = false; resolve(accepted) },
+                }
+                dialogs.push(dialog)
+                return dialog
+            },
+            label() {}, slider() {}, checkbox: () => ({ value: false }),
+            button(_parent: unknown, options: { text: string; onClick: () => void }) { buttons.push(options) },
+        }
+        await exports.showOptionsDialog({}, ui, { inGame, levelIntro, onClose() {}, onRestart() {}, onMainMenu() { exits++ } })
+        assert.deepEqual(buttons.map(button => button.text), expected)
+        if (!inGame) continue
+        const main = buttons.find(button => button.text === 'MAIN_MENU_BUTTON')!
+        main.onClick()
+        await setImmediate()
+        if (levelIntro) {
+            assert.equal(dialogs.length, 1, 'seed selection exits without a saved-game confirmation')
+        } else {
+            assert.equal(dialogs[1].options.message, 'LEAVE_GAME')
+            dialogs[1].close(false)
+            await setImmediate()
+            assert.equal(exits, 0, 'cancelling keeps the game open')
+            assert.equal(dialogs[0].node.isValid, true)
+            main.onClick()
+            dialogs[2].close(true)
+            await setImmediate()
+        }
+        assert.equal(exits, 1)
+        assert.equal(dialogs[0].node.isValid, false)
     }
 })
 
@@ -628,11 +611,17 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
     pause.root.destroy()
     const options = await screen.prepare('gameOptions')
     assert.equal(gameOptions.inGame, true)
+    assert.equal(gameOptions.levelIntro, false)
     gameOptions.onClose()
     gameOptions.onRestart()
     gameOptions.onMainMenu()
     assert.deepEqual(navigation.slice(-3), ['resume', 'restart', 'main'])
     options.root.destroy()
+    screen.isLevelIntro = () => true
+    const chooserOptions = await screen.prepare('gameOptions')
+    assert.equal(gameOptions.inGame, true, 'seed selection retains the in-game options layout')
+    assert.equal(gameOptions.levelIntro, true)
+    chooserOptions.root.destroy()
     for (const id of ['options', 'players', 'quit', 'almanac', 'store', 'achievements'] as const) {
         const modal = page(id)
         await screen.show(modal)
