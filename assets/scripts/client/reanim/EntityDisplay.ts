@@ -9,8 +9,11 @@ export type EntityKind = 'plants' | 'zombies'
 export interface DisplayPart {
     name: string, id: string, fps: number, parent?: string, track?: string, behind?: string, blink?: boolean
     socket?: boolean, offset?: [number, number], scale?: number, rate?: number, packetId?: string, idle2Id?: string
+    /** Exact track IDs. */
     hiddenTracks?: string[]
     packetVisibleTracks?: readonly string[]
+    /** A blink part hides these exact tracks of its parent while it plays (Plant::DoBlink). */
+    eyeTracks?: readonly string[]
     rateScale?: number, idle2RateScale?: number
 }
 export interface EntityDisplay {
@@ -47,9 +50,10 @@ export function resolveEntityDisplay(kind: EntityKind, id: number, display: Enti
         return display as EntityDisplay
     }
     const clips = animations.resolve(target)
+    const eyeTracks = kind === 'plants' ? animations.definitions.plants[target]?.parts?.eyes : undefined
     const part = (name: string, clip: ClientAnimationClip, parent?: string, blink = false): DisplayPart => ({
         name, id: clip.reanimId, fps: clip.fps ?? 12, rateScale: clip.rateScale, parent, blink,
-        track: clip.attachmentTrackId,
+        track: clip.attachmentTrackId, ...(blink && eyeTracks ? { eyeTracks } : {}),
     })
     let parts: DisplayPart[]
     let rate: readonly [number, number]
@@ -71,8 +75,10 @@ export function resolveEntityDisplay(kind: EntityKind, id: number, display: Enti
         else if ('blinkTwitch' in clips) {
             for (const name of Object.keys(animations.nutBlinkWeights)) parts.push(part(name, clips[name as 'blinkTwitch' | 'blinkTwice' | 'blinkThrice'], 'body', true))
         } else if ('blink' in clips) parts.push(part('face', clips.blink, 'body', true))
-        if ('armed' in clips) { parts[0].hiddenTracks = ['anim_glow']; rate = [12, 12] }
-        parts[0].packetVisibleTracks = animations.definitions.plants[target]?.packetVisibleTracks
+        if ('armed' in clips) rate = [12, 12]
+        // Plant::DrawSeedPacket shows the potato mine's light; the almanac draws it unlit.
+        const glow = definition.parts?.glow
+        if (glow) { parts[0].hiddenTracks = [...glow]; parts[0].packetVisibleTracks = glow }
         // The sun-shroom's packet shows the small one, while the almanac shows it grown.
         if ('small' in clips) parts[0].packetId = clips.small.reanimId
     } else {
@@ -83,13 +89,13 @@ export function resolveEntityDisplay(kind: EntityKind, id: number, display: Enti
         drawOffset = [clips.idle.x - originX, originY - clips.idle.y]
         parts = [part('body', clips.idle)]
         rate = animations.rates.zombieIdle
-        parts[0].hiddenTracks = ['anim_tongue']
+        parts[0].hiddenTracks = [...definition.parts.tongue]
         if ('idle2' in clips) {
             parts[0].idle2Id = clips.idle2.reanimId
             parts[0].idle2RateScale = clips.idle2.rateScale
         }
         if ('flag' in clips) {
-            parts.push({ ...part('flag', clips.flag, 'body'), behind: 'Zombie_innerarm_screendoor' })
+            parts.push({ ...part('flag', clips.flag, 'body'), behind: definition.parts.flagArm!.front })
         }
     }
     // Portraits can have a different pose/order, but shared parts still resolve through the registry.
@@ -125,7 +131,7 @@ export async function loadDisplayParts(parent: Node, parts: DisplayPart[], conte
     for (const part of parts) {
         const player = players.get(part.name)!
         if (!part.parent && part.offset) player.node.setPosition(part.offset[0], -part.offset[1])
-        for (const track of part.hiddenTracks ?? []) player.setTrackPrefixVisible(track, false)
+        player.setTracksVisible(part.hiddenTracks ?? [], false)
         if (part.parent && part.track) {
             const body = players.get(part.parent)!
             if (part.socket) {

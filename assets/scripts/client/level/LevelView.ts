@@ -44,6 +44,9 @@ const PROGRESS_METER_HEIGHT = 27
 
 export type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 
+/** Profile values the level shows: the house name and Dave's quotes. */
+export interface LevelPlayer { name: string; upgradeCost: number }
+
 export class LevelView {
     private graves?: LevelGraves
     private boardHud?: LevelBoardHud
@@ -53,6 +56,9 @@ export class LevelView {
     private readonly pausedComponents: Component[] = []
     private presentationPaused = false
     private gameplayTick = 0
+    private money?: number
+    /** Called when the server's purse changes (collected money, `/money`); the app saves it to the profile. */
+    onMoneyChanged?: (money: number) => void
     private hitboxes: Graphics | null = null
     get introComplete(): boolean {
         return this.intro.complete
@@ -75,7 +81,8 @@ export class LevelView {
         readonly board: BoardDefinition,
     ) {}
 
-    static async create(root: Node, content: LoadedContent, levelId: string, playerName: string, initial: WorldSnapshot): Promise<LevelView> {
+    static async create(root: Node, content: LoadedContent, levelId: string, player: LevelPlayer, initial: WorldSnapshot): Promise<LevelView> {
+        const playerName = player.name
         const level = content.levels.levels[levelId]
         if (!level) throw new Error(`Level is not installed: ${levelId}`)
         const boardDefinition = content.definitions.boards[level.board]
@@ -84,7 +91,7 @@ export class LevelView {
         animations.freeze()
         const sprites = new SpriteRepository(content.registry, content.loader)
         const fonts = new FontRepository(content.registry, content.loader)
-        const helmSpriteIds = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => [...(zombie.helm?.damagedSprites ?? []), ...[zombie.damagedArmSprite, zombie.enragedHeadSprite].filter((id): id is string => !!id)]))]
+        const helmSpriteIds = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => [...(zombie.helm?.damagedSprites ?? []), ...[zombie.damagedArmSprite, zombie.enragedHead?.sprite].filter((id): id is string => !!id)]))]
         const dropImages = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => Object.values(zombie.drops).flatMap(drop => drop?.image ? [drop.image] : [])))]
         const [
             background, seedbank, projectileEntries, projectileShadowEntries,
@@ -161,6 +168,14 @@ export class LevelView {
         const coinLayer = uiNode({
             node: slots.coinLayer, size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
         }).node
+        // Board::DrawUICoinBank at (57, 599 - height); money flies to (39, 558) on the board.
+        const coinBankFrame = await sprites.load('pvz:coinbank')
+        const coinBankY = 599 - coinBankFrame.originalSize.height
+        const coinBank = uiNode({ name: 'CoinBank', parent: hud, anchor: { x: 0, y: 1 }, active: false }).node
+        // Board::AddUIRenderItems draws the bank at RENDER_LAYER_COIN_BANK; coins sit one above it, so money flies over the bank.
+        coinBank.setSiblingIndex(coinLayer.getSiblingIndex())
+        ui.image(coinBank, coinBankFrame, { x: 57, y: coinBankY })
+        const coinText = ui.label(coinBank, { text: '', font: 'money', color: new Color(180, 255, 90), x: 57 + 116, y: coinBankY + 24, baseline: true, align: 'right' })
         // The progress meter and level name keep their margin from the UI area's right edge, in the same draw order.
         const hudRight = uiAreaEdge(hud, 'right')
         hudRight.setSiblingIndex(slots.progressMeter.getSiblingIndex())
@@ -217,7 +232,7 @@ export class LevelView {
             size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 }, opacity: 255,
         }).node
         ui.label(houseName, {
-            node: slots.houseLabel, text: `${playerName}'s House`, font: houseOfTerror28,
+            node: slots.houseLabel, text: ui.text('PLAYERS_HOUSE').replace('{PLAYER}', playerName), font: houseOfTerror28,
             width: WIDTH, y: 550, align: 'center', baseline: true,
         })
         const loadPacketSprite = (name: string) => sprites.load(`pvz:${name}`)
@@ -299,7 +314,7 @@ export class LevelView {
             adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: bankRight, adviceFont: houseOfTerror28,
             tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
             cursorPlant, gridPlant,
-            sunText, progressMeter, progressFillClip, progressFill, progressHead, levelText,
+            sunText, progressMeter, progressFillClip, progressFill, progressHead, levelText, coinBank: { node: coinBank, text: coinText },
         })
         const particlePresenter = new LevelParticlePresenter(
             layout,
@@ -319,7 +334,7 @@ export class LevelView {
         view.graves = await LevelGraves.create(entityLayer, entityRenderer, content, boardDefinition, initial.graves ?? [])
         view.syncGraves(initial.phase === 'gameplay')
         if (level.tools?.length || level.conveyor || level.shovelTutorial || level.introDialog || level.bowling) {
-            view.boardHud = await LevelBoardHud.create(hud, bankLeft, slots.sodClip, content, ui, initial, cursorPreview, hudPresenter.seedBank, playerName, tooltipSurface)
+            view.boardHud = await LevelBoardHud.create(hud, bankLeft, slots.sodClip, content, ui, initial, cursorPreview, hudPresenter.seedBank, player, tooltipSurface)
             if (level.conveyor) view.hideConveyorBank = () => { bank.active = false }
         }
         if (seedChooser) view.syncSeedChooserIntro = () => {
@@ -424,6 +439,8 @@ export class LevelView {
 
     sync(snapshot: WorldSnapshot, changes: ClientWorldChanges, events: ServerEvent[]): void {
         this.gameplayTick = snapshot.gameplayTick
+        if (this.money !== undefined && snapshot.money !== this.money) this.onMoneyChanged?.(snapshot.money)
+        this.money = snapshot.money
         this.boardHud?.sync(snapshot)
         this.seedChooser?.sync(snapshot)
         this.graves?.syncWorld(snapshot, typeId => this.definitions.plants[typeId]?.graveBuster?.eatTicks)

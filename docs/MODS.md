@@ -8,7 +8,9 @@
 /mod
 ```
 
-`/mod` 是唯一管理命令，不接受子命令。窗口中点 Import 选择 ZIP，可一次选择多个包；勾选启用，箭头调整资源优先级，越靠上优先级越高。依赖先加载；同 ID 资源由后加载的 Mod 覆盖，游戏定义的重复 ID 会报错。`pvz:base` 是内置基础包的保留 ID，不允许导入。
+`/mod` 是唯一管理命令，不接受子命令。窗口中点 Import 选择 ZIP，可一次选择多个包；勾选启用，箭头调整资源优先级，越靠上优先级越高。依赖先加载；同 ID 资源由后加载的 Mod 覆盖，游戏定义的重复 ID 会报错（整体替换定义需显式写在 `overrides` 中）。`pvz` 是内置基础包的保留 ID，不允许导入。
+
+Mod 按玩家隔离：每个玩家有自己安装的 Mod、版本、启用状态和顺序，`/mod` 只显示和修改当前玩家的。ZIP 按“ID + 内容哈希”存一份，内容相同的 ZIP 在玩家间共用；没有玩家引用的 ZIP 在启动时清理，删除玩家时其 Mod 记录随档案一并删除。新建玩家时，若原玩家装有 Mod，会询问是否同步给新玩家（第一个玩家直接接手此前安装的 Mod）。切换玩家时，若对方启用的 Mod 或版本与正在运行的不同，提示重启后切换；取消则留在原玩家。旧版全设备共用的安装记录升级后直接丢弃。
 
 导入时校验 ZIP，将压缩文件原样写入独立暂存区，不覆盖已安装的 Mod；Cancel/ESC 会丢弃草稿并删除暂存文件，包括新包和已有 Mod 的更新。更新已有 Mod 保留原位置。
 
@@ -25,7 +27,7 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 ```json
 {
   "schemaVersion": 1,
-  "id": "example:showcase",
+  "id": "example",
   "version": "1.0.0",
   "apiVersion": 1,
   "contentHash": "generated-on-pack",
@@ -58,13 +60,17 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 
 定义索引的路径相对于根目录 `content.json`。`plants.json`、`seeds.json` 等是 ID 到配置的对象；`seed-catalog.json` 是有序种子 ID 数组，可引用本体或 Mod 中已注册的种子。配置按类别分文件，自定义视图参数放在相应植物、子弹定义的 `viewConfig` 中。
 
-植物的 `visual.nameKey`、`visual.tooltipKey` 分别指定名称和选卡说明的文本键，文本写在表现定义的 `strings` 表中。未指定 `tooltipKey` 时沿用原版的 `名称键_TOOLTIP` 约定。
+植物的 `visual.nameKey`、`visual.tooltipKey` 分别指定名称和选卡说明的文本键，文本写在 Mod 的 `pvz:strings` 资源里。未指定 `tooltipKey` 时沿用原版的 `名称键_TOOLTIP` 约定。
+
+所有文字只存在一张按键合并的文本表 `pvz:strings` 中：本体一层是原版文本（含关卡提示语；服务端只发送提示的键）加上本体新增的界面文本（手写在 `tools/pvz/ui-strings.json`，生成 pvz-base 时合并进来，键不得与原版重复）。Mod 在 `resources.json` 里登记自己的 `pvz:strings` 文件作为一层：新增的键必须带自己的命名空间（如 `example:menu`），已有的键（本体或任何 Mod 的）都可以改写，按启用优先级后面的生效，所以翻译包只需列出要改的条目，也能翻译其他 Mod 的文字；不符合规则的新键会被忽略并在控制台报错。字体只按 ID 覆盖，没有“只读本体”的特例：快捷键字母使用独立的 `pvz:hotkey`（与 `pvz:houseofterror16` 同一份文件），文字包只覆盖后者，快捷键保持原版字形；高清包需同时登记 `pvz:hotkey` 才会重绘它。`ui.text(key)` 只接受键，不带默认值；缺失的键显示键名并在控制台报错。翻译包在 `manifest.json` 的 `locale` 写明文字语言（如 `zh-CN`，最后一个声明了 locale 的已启用 Mod 生效，默认 en-US）；本体通过 `ui.locale` 提供该值，图片里带文字的素材据此选择版本（例如宽屏 Mod 的成就页顶部）。
 
 射手的 `shooter.initialDelayTicks` 和 `shooter.cadenceTicks` 均使用整数范围，例如初始等待 `{ "min": 0, "max": 150 }`、周期 `{ "min": 136, "max": 150 }`（周期最小值必须大于零）。服务端使用局内 RNG 抽取初始等待和每次周期；没有目标时也推进周期，当前时钟与 RNG 状态随存档保存。固定间隔使用相同的 `min`、`max`。
 
 弹丸表现可配置 `shadow`：`sprite`、单行图集的 `columns`/`cell`、`offset` 和 `scale`。影子独立绘制在地面层，X 跟随弹丸，Y 为行起点加 `offset.y`，通过同一资源加载器保留高清包的逻辑尺寸。页面动画写在表现定义的 `screens` 表中，以 `pvz:tree` 等页面 ID 索引有序图层；每层指定 `name`、`reanimId`、`x`、`y`、`rate` 和 `playback`（`loop` 或 `last`），可选 `visibleTracks` 前缀和循环的 `randomPhase`。它们复用 `ReanimPlayer`，不包含服务端养成逻辑。
 
-资源类别共用一套定义：`sprites`、`fonts`、`audio`、`json`、`text`、`reanim`、`particles`、`music`、`prefabs`。图片使用对象，其他类别使用 ID 到文件路径的映射；`audio` 支持 MP3/WAV。新动画、粒子、音乐配置使用对应类别，普通 JSON 使用 `json`。替换已有资源只需使用其原 ID；新增游戏定义使用 Mod 自身命名空间。
+资源类别共用一套定义：`sprites`、`fonts`、`audio`、`json`、`text`、`reanim`、`particles`、`music`、`prefabs`。图片使用对象，其他类别使用 ID 到文件路径的映射；`audio` 支持 MP3/WAV。新动画、粒子、音乐配置使用对应类别，普通 JSON 使用 `json`。替换已有资源只需使用其原 ID；新增游戏定义使用 Mod 自身命名空间。Mod ID 是不带冒号的名字（如 `widescreen`），它同时就是这个 Mod 的命名空间：自己新增的资源和定义都写作 `名字:…`，例如 `widescreen:background1`。两个 Mod 的 ID 不会相同，所以命名空间也不会重叠；以其他命名空间写的资源都算替换，不算自己的。内置本体的 ID 为 `pvz`。
+
+要整体替换已有定义（本体或其他 Mod 的），在 `gameplay` 或 `presentation` 下加 `"overrides": "assets/gameplay/overrides.json"`，文件按表分组写完整定义，例如 `{ "plants": { "pvz:peashooter": { ... } } }`。覆盖在所有 Mod 登记完后执行，可覆盖任意已存在的 ID，不受加载顺序影响；同一 ID 只能被一个 Mod 覆盖，否则报冲突；目标 ID 不存在时报错；覆盖后的定义照常校验引用。关卡也可覆盖，`levelPatches` 在覆盖之后按字段生效。覆盖只替换数据：按 ID 登记的代码行为（`plantBehaviors.register`）不会随定义转移，旧存档中实体状态与新定义不符时按不兼容存档处理。
 
 图片可通过 `alphaMode: "premultiplied"` 标记预乘透明度的源 PNG，未标记或 `"straight"` 时沿用普通 RGBA。该标记按 PNG 文件生效，共用同一文件的裁片不能声明冲突格式；`assets.sprite(path)` 原始路径也读取这份清单。本体加载器统一解码非交错 RGBA8 PNG、还原颜色并向紧邻的全透明像素延展边缘 RGB，避免线性采样产生黑边。Web 和 Native 使用同一路径，动画、淡入淡出及普通 Sprite 都保持默认混合，无需 Mod 单独设置混合因子。
 
@@ -93,7 +99,7 @@ export function register({ host, assets }) {
 }
 ```
 
-`ModAssets.json()` 读取归档配置；客户端 `assets.sprite()` 直接读取图片时也复用统一资源解码与缓存。纯资源、数据和脚本 Mod 使用同一个加载入口；注册失败会撤销该 Mod 的注册和方法包装，并跳过依赖它的 Mod。
+`ModAssets.json()` 读取归档配置；客户端 `assets.sprite(path)` 按路径直接读取本 Mod 的图片，复用统一资源解码与缓存，其他包无法替换；`assets.spriteResource(id)` 按资源 ID 读取，Mod 在自己的 `content.json` 登记 ID 后，优先级更高的包（如高清包）可用同一 ID 替换。纯资源、数据和脚本 Mod 使用同一个加载入口；注册失败会撤销该 Mod 的注册和方法包装，并跳过依赖它的 Mod。
 
 `mod:test` 校验已打包目录的真实服务端注册，不重新编译，不代替客户端或真机画面验收。修改后需要重新打包、安装并重启。
 
@@ -121,6 +127,8 @@ export function register({ host }) {
     })
 }
 ```
+
+`debugSuccess`、`debugSyntax` 的消息只输出到控制台，直接写文字。`debugCondition` 表示条件不满足：调试窗口关闭并以 advice 显示在屏幕上，所以它的第一个参数是文本键，其余参数按顺序填入文本里的 `%s`／`%d`（如 `"example:cli_need_level": "Start a playing level first"`，写在 Mod 表现定义的 `strings` 中）；客户端用 `ui.format(key, args)` 查表，翻译包和 Mod 文本都能覆盖，服务端无需访问文本表。
 
 `parameters` 是提示和参数数量上限，`minimum` 是数量下限；可选 `values: { 0: ['a', 'b'] }` 同时提供第一个参数的校验和补全。名称使用小写，可带 Mod 命名空间。使用原解析器可以保留引号参数等语法。
 

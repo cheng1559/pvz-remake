@@ -10,7 +10,6 @@
     "items": "gameplay/definitions/items.json",
     "lawnMowers": "gameplay/definitions/lawn-mowers.json",
     "levels": "gameplay/levels.json",
-    "strings": "gameplay/strings.json",
     "seedCatalog": "gameplay/seed-catalog.json"
   },
   "presentation": {
@@ -18,6 +17,7 @@
     "conveyor": "presentation/definitions/conveyor.json",
     "shovel": "presentation/definitions/shovel.json",
     "dave": "presentation/definitions/dave.json",
+    "mainMenu": "presentation/definitions/main-menu.json",
     "boards": "presentation/definitions/boards.json",
     "animation": "presentation/definitions/animation.json",
     "levels": "presentation/definitions/levels.json",
@@ -26,7 +26,8 @@
     "zombies": "presentation/definitions/zombies.json",
     "seedPackets": "presentation/definitions/seed-packets.json",
     "almanac": "presentation/definitions/almanac.json",
-    "projectiles": "presentation/definitions/projectiles.json"
+    "projectiles": "presentation/definitions/projectiles.json",
+    "items": "presentation/definitions/items.json"
   },
   "resources": {
     "sprites": {
@@ -50626,6 +50627,7 @@
       "pvz:dwarventodcraft36brightgreeninset": "assets/fonts/dwarventodcraft36brightgreeninset.json",
       "pvz:dwarventodcraft36greeninset": "assets/fonts/dwarventodcraft36greeninset.json",
       "pvz:houseofterror16": "assets/fonts/houseofterror16.json",
+      "pvz:hotkey": "assets/fonts/houseofterror16.json",
       "pvz:houseofterror20": "assets/fonts/houseofterror20.json",
       "pvz:houseofterror28": "assets/fonts/houseofterror28.json",
       "pvz:pico129": "assets/fonts/pico129.json",
@@ -50924,16 +50926,11 @@
       "pvz:fonts/houseofterror28": "assets/fonts/houseofterror28.json",
       "pvz:fonts/pico129": "assets/fonts/pico129.json",
       "pvz:fonts/pix118bold": "assets/fonts/pix118bold.json",
-      "pvz:properties/lawnstrings": "assets/json/properties/lawnstrings.json",
-      "pvz:ui/strings": "presentation/ui-strings.json",
+      "pvz:strings": "assets/json/strings.json",
       "pvz:presentation/definitions": "assets/presentation.json",
-      "pvz:gameplay/strings": "gameplay/strings.json",
       "pvz:gameplay/store": "gameplay/store.json",
       "pvz:animations/zombie_surprise": "assets/json/animations/zombie_surprise.json",
       "pvz:animations/z": "assets/json/animations/z.json"
-    },
-    "text": {
-      "pvz:properties/resources": "assets/text/properties/resources.xml"
     },
     "reanim": {
       "pvz:almanac_plant_10_body": "assets/reanim/almanac_plant_10_body.json",
@@ -51163,7 +51160,10 @@
       "pvz:fumeshroom_blink": "assets/reanim/fumeshroom_blink.json",
       "pvz:gravebuster_land": "assets/reanim/gravebuster_land.json",
       "pvz:gravebuster": "assets/reanim/gravebuster.json",
-      "pvz:sleeping": "assets/reanim/sleeping.json"
+      "pvz:sleeping": "assets/reanim/sleeping.json",
+      "pvz:coin_silver": "assets/reanim/coin_silver.json",
+      "pvz:coin_gold": "assets/reanim/coin_gold.json",
+      "pvz:diamond": "assets/reanim/diamond.json"
     },
     "particles": {
       "pvz:artchallengeplant": "assets/particles/artchallengeplant.json",

@@ -113,7 +113,7 @@ export class LevelEndPresenter {
         if (!this.hugeWave?.node.isValid) {
             const node = uiNode({ name: 'HugeWave', parent: this.overlayLayer, position: { x: 0, y: -57.5 } }).node
             this.hugeWave = this.ui.label(node, {
-                text: this.content.strings.entries.ADVICE_HUGE_WAVE, font: 'pageTitle', color: Color.RED,
+                text: this.ui.text('ADVICE_HUGE_WAVE'), font: 'pageTitle', color: Color.RED,
                 x: -380, y: -55.5, width: 760, align: 'center',
             })
         }

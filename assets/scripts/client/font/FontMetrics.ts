@@ -42,6 +42,14 @@ export class FontMetricsUtil {
         return width
     }
 
+    /** Whether the font has a glyph for this character, by the same lookup as measureTextWidth. */
+    static hasGlyph(fontConfig: JsonAsset | null, char: string): boolean {
+        const cfg = this._getConfig(fontConfig)
+        const layer = cfg?.layers?.[0]
+        if (!cfg || !layer || char.length !== 1) return false
+        return layer.chars?.[String(this._resolveChars(cfg, char)[0])] !== undefined
+    }
+
     static getMetrics(fontConfig: JsonAsset | null): FontMetrics {
         const layer = this._getConfig(fontConfig)?.layers?.[0]
         if (!layer) return { ascent: 0, ascentPadding: 0, height: 0, lineSpacing: 0 }

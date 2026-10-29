@@ -186,7 +186,7 @@ export class StartupScreen extends Component {
         this.startButton.onPress = () => { void SoundSystem.play(SoundEffect.ButtonClick) }
         this.startButton.onClick = () => this.tryStart(false)
         buttonNode.on(Button.EventType.CLICK, () => this.startButton.onClick())
-        this.label = ui.label(buttonNode, { text: ui.text('LOADING', 'Loading...'), font: 'profile', color: NORMAL_COLOR })
+        this.label = ui.label(buttonNode, { text: ui.text('LOADING'), font: 'profile', color: NORMAL_COLOR })
         this.startButton.onStateChange = state => {
             this.label.renderer.fontColor = state === 'hover' || state === 'pressed' ? HOVER_COLOR : NORMAL_COLOR
         }

@@ -69,6 +69,10 @@ test('every menu page is reachable and all navigation targets exist', () => {
         }
     }
     assert.equal(reached.size, Object.keys(MENU_PAGES).length)
+    const menu = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/main-menu.json', 'utf8'))
+    for (const { name, target } of menu.buttons) {
+        if (target !== undefined) assert.ok(target === 'play' || target in MENU_PAGES, `main menu ${name} opens an unknown page: ${target}`)
+    }
 })
 
 test('menu navigation preserves caller, pauses gameplay, and resumes without restarting', async () => {
@@ -124,7 +128,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     app.showAdvice = (message: string) => advice.push(message)
     let running = false
     let paused = false
-    let introReady = true
+    let introReady = true, levelIntro = false
     let cursorMode = 'none'
     let saves = 0
     const freshGames: boolean[] = []
@@ -144,6 +148,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         countZombiesOnScreenForMusic: () => running ? 10 : 0,
         isPaused: () => paused,
         canPause: () => running && introReady && !paused,
+        isLevelIntro: () => levelIntro,
         cancelCursor() {
             if (cursorMode === 'none') return false
             cursorMode = 'none'
@@ -244,6 +249,15 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(packageDialogs, 1)
     assert.equal(saves, savesBeforeManager, 'opening the manager does not write an unchanged level save')
     assert.equal(paused, false, 'closing the manager restores the previous pause state')
+    const almanac = app.showDebugCli()
+    await setImmediate()
+    closeCli({ ok: true, message: '', action: 'almanac' })
+    await almanac
+    await app.navigate('plants')
+    await app.navigate('almanac')
+    assert.equal(paused, true)
+    await app.navigate('back')
+    assert.deepEqual([app.currentPage, paused, running], [null, false, true], 'closing an almanac opened in a level returns to it')
     introReady = false
     app.onKeyDown({ keyCode: 32 })
     app.onKeyDown({ keyCode: 27 })
@@ -251,6 +265,12 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(paused, false, 'pause is unavailable during the entrance')
     app.onKeyUp({ keyCode: 32 })
     introReady = true
+    levelIntro = true
+    app.onKeyDown({ keyCode: 32 })
+    await setImmediate()
+    assert.deepEqual([app.currentPage, paused], [null, false], 'Space cannot pause the seed chooser, though Menu works there')
+    app.onKeyUp({ keyCode: 32 })
+    levelIntro = false
     const beforeEscape = sounds.length
     for (const held of ['seed', 'tool']) {
         cursorMode = held
@@ -367,7 +387,9 @@ test('manager imports read sequentially, continue after failure and leave instal
     for (const isNative of [false, true]) for (const names of [[], ['a'], ['bad'], ['a', 'bad', 'b']]) {
         const steps: string[] = []
         const module = { exports: {} as Record<string, any> }
+        const strings: Record<string, string> = JSON.parse(readFileSync('mods/pvz-base/assets/json/strings.json', 'utf8'))
         const ui = {
+            text: (key: string) => strings[key] ?? key,
             dialog(_parent: unknown, options: any) {
                 steps.push(options.title)
                 if (options.title === 'Importing...') {

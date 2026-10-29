@@ -22,7 +22,7 @@ import { ArchiveContentRegistry } from '@/client/content/ArchiveContentRegistry'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { CONTENT_CATEGORIES } from '@/shared/content'
 import * as modApi from '@/shared/mod'
-import { buildGameplayContent, buildModStrings, buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
+import { buildGameplayContent, buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { IntegratedGameServer } from '@/server/IntegratedGameServer'
 import { GameplayRegistry } from '@/server/GameplayRegistry'
@@ -31,8 +31,8 @@ import { parseModContent, contentJson } from '@/shared/mod/content'
 import { getDebugCliCompletions, parseDebugCliCommand } from '@/shared/debug/DebugCli'
 
 const base = () => readBaseContent().gameplay
-const gameplay = () => ({ ownerId: 'example:showcase', data: readModContent('mods/example/content.json').gameplay })
-const presentation = () => ({ ownerId: 'example:showcase', data: readModContent('mods/example/content.json').presentation })
+const gameplay = () => ({ ownerId: 'example', data: readModContent('mods/example/content.json').gameplay })
+const presentation = () => ({ ownerId: 'example', data: readModContent('mods/example/content.json').presentation })
 const build = (sources = [gameplay()]) => {
     return buildGameplayContent(base(), sources)
 }
@@ -62,7 +62,7 @@ test('Mod JSON decodes UTF-8 without package imports and uses the native single-
         require: (id: string) => assert.fail(`ModAssets must not import a runtime package: ${id}`) })
     const expected = { name: '玉米投手', description: 'Butter 🧈', damage: 20 }
     const files = { 'assets/test.json': new TextEncoder().encode(JSON.stringify(expected)) }
-    const assets = new exports.ModAssets(installed('test:utf8', () => {}).manifest, files)
+    const assets = new exports.ModAssets(installed('utf8', () => {}).manifest, files)
     assert.deepEqual(JSON.parse(JSON.stringify(assets.json('assets/test.json'))), expected)
     assert.equal(decodes, 1)
 })
@@ -83,7 +83,7 @@ test('Release preloading loads Mod archive assets without requesting a Cocos bun
         })
     }
     registry.registerEntry({ category: 'sprites', id: 'pvz:background', path: 'sprites/background',
-        bundle: 'pvz-base', contentId: 'pvz:base', contentVersion: '1', contentHash: 'base', schemaVersion: 2 })
+        bundle: 'pvz-base', contentId: 'pvz', contentVersion: '1', contentHash: 'base', schemaVersion: 2 })
     const loader = {
         async loadBundle(location: string) {
             assert.ok(!location.startsWith('pvzmod:///'), 'raw Mod archives have no config.json')
@@ -212,45 +212,45 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
 test('a failed Mod rolls back both entries and patches; dependants skip while independent Mods keep loading', async () => {
     const target = { value: () => 1 }, registrations: string[] = []
     let disposeHealthy!: () => void
-    const first = installed('ok:first', ({ host, assets }: any) => {
+    const first = installed('first', ({ host, assets }: any) => {
         registrations.push(assets.id)
         host.get('content/definitions').register(assets.id, { plants: {} })
         disposeHealthy = host.around(target, 'value', (next: any) => next() + 1)
     })
-    const old = installed('old:legacy', (api: any) => api.registerDefinitions('assets/gameplay.json'))
-    const dependent = installed('test:dependent', () => assert.fail('A dependant must not execute after its dependency fails'))
-    dependent.manifest.dependencies.push({ id: 'old:legacy', version: '1.0.0' })
-    const broken = installed('test:broken', ({ host, assets }: any) => {
+    const old = installed('legacy', (api: any) => api.registerDefinitions('assets/gameplay.json'))
+    const dependent = installed('dependent', () => assert.fail('A dependant must not execute after its dependency fails'))
+    dependent.manifest.dependencies.push({ id: 'legacy', version: '1.0.0' })
+    const broken = installed('broken', ({ host, assets }: any) => {
         const { specs } = host.get('shared/debug/DebugCli')
-        host.around(specs, 'list', (next: any) => [...next(), { name: 'test:leaked', parameters: [], minimum: 0 }])
+        host.around(specs, 'list', (next: any) => [...next(), { name: 'broken:leaked', parameters: [], minimum: 0 }])
         const { executor } = host.get('server/debug/DebugCommands')
         host.around(executor, 'execute', (next: any, ...args: any[]) =>
-            args[3].name === 'test:leaked' ? { ok: true, message: 'Leaked command' } : next(...args))
-        host.get('content/definitions').register(assets.id, { plants: { 'test:leaked': {} } })
+            args[3].name === 'broken:leaked' ? { ok: true, message: 'Leaked command' } : next(...args))
+        host.get('content/definitions').register(assets.id, { plants: { 'broken:leaked': {} } })
         const { registry } = host.get('server/GameplayRegistry')
         const behavior = { createState: () => ({}), tick() {} }
-        registry.plantBehaviors.register(assets.id, 'test:leaked', behavior)
-        registry.zombieBehaviors.register(assets.id, 'test:leaked', behavior)
-        registry.components.register(defineComponent('test:leaked-state'))
+        registry.plantBehaviors.register(assets.id, 'broken:leaked', behavior)
+        registry.zombieBehaviors.register(assets.id, 'broken:leaked', behavior)
+        registry.components.register(defineComponent('broken:leaked-state'))
         host.around(target, 'value', (next: any) => next() + 100)
     }, async ({ host, assets }: any) => {
-        host.get('content/definitions').register(assets.id, { strings: { 'test:leaked': 'Leaked' } })
-        host.get('content/resources').register(assets, { sprites: { 'test:leaked': 'sprite.png' } })
+        host.get('content/definitions').register(assets.id, { plants: { 'broken:leaked': {} } })
+        host.get('content/resources').register(assets, { sprites: { 'broken:leaked': 'sprite.png' } })
         const views = host.get('client/views')
         for (const registry of [views.plants, views.zombies]) {
-            registry.register('test:leaked', () => ({}))
+            registry.register('broken:leaked', () => ({}))
             registry.freeze()
         }
         host.around(target, 'value', (next: any) => next() * 10)
         await Promise.reject(new Error('client initialization failed'))
     })
-    const last = installed('ok:last', ({ assets }: any) => { registrations.push(assets.id) })
+    const last = installed('last', ({ assets }: any) => { registrations.push(assets.id) })
     const loader = modLoader([first, old, dependent, broken, last])
     try {
         const result = await loader.load()
         assert.equal(await loader.load(), result, 'a caught error must not leave a rejected startup promise or repeat registrations')
-        assert.deepEqual(registrations, ['ok:first', 'ok:last'])
-        assert.deepEqual(Array.from(result.manifests, (mod: any) => mod.id), ['ok:first', 'ok:last'])
+        assert.deepEqual(registrations, ['first', 'last'])
+        assert.deepEqual(Array.from(result.manifests, (mod: any) => mod.id), ['first', 'last'])
         assert.equal(target.value(), 2, 'only the healthy Mod patch remains')
         assert.deepEqual(getDebugCliCompletions('/test:leaked', undefined, true), [])
         assert.equal((parseDebugCliCommand('/test:leaked') as { failure: string }).failure, 'syntax')
@@ -259,19 +259,19 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         assert.equal([...result.clientContent.entries()].length, 0)
         assert.deepEqual(result.gameplay.components.snapshot(new World()), {})
         for (const views of [result.plantViews, result.zombieViews]) {
-            assert.equal(views.has('test:leaked'), false)
+            assert.equal(views.has('broken:leaked'), false)
             views.register('test:after', () => ({}))
         }
         result.gameplay.freeze(buildGameplayContent(base(), result.gameplayDefinitions).definitions)
-        assert.match(loader.failures.get('old:legacy')!, /registerDefinitions is not a function/)
-        assert.match(loader.failures.get('test:dependent')!, /Dependency failed to load: old:legacy/)
-        assert.match(loader.failures.get('test:broken')!, /client.js.*client initialization failed/)
+        assert.match(loader.failures.get('legacy')!, /registerDefinitions is not a function/)
+        assert.match(loader.failures.get('dependent')!, /Dependency failed to load: legacy/)
+        assert.match(loader.failures.get('broken')!, /client.js.*client initialization failed/)
         assert.equal(loader.errors.length, 3)
     } finally { disposeHealthy?.() }
 })
 
 test('import failures and enabled-list errors leave a usable base-game Mod state', async () => {
-    const bad = installed('test:bad-import', new Error('Module file is corrupt'))
+    const bad = installed('bad-import', new Error('Module file is corrupt'))
     for (const loader of [modLoader([bad]), modLoader([], async () => { throw new Error('Cannot read Mod archive') })]) {
         const result = await loader.load()
         assert.equal(result.manifests.length, 0)
@@ -282,41 +282,69 @@ test('import failures and enabled-list errors leave a usable base-game Mod state
 })
 
 test('invalid registered gameplay and presentation are rejected before UI startup, without rejecting other Mods', async () => {
-    const badGameplay = installed('test:bad-config', ({ host, assets }: any) => {
-        host.get('content/definitions').register(assets.id, { plants: { 'test:invalid': { maxHealth: -1 } } })
+    const badGameplay = installed('bad-config', ({ host, assets }: any) => {
+        host.get('content/definitions').register(assets.id, { plants: { 'bad-config:invalid': { maxHealth: -1 } } })
     })
-    const badPresentation = installed('test:bad-view', () => {}, ({ host, assets }: any) => {
-        host.get('content/definitions').register(assets.id, { plants: { 'test:invalid': { visual: {} } } })
+    const badPresentation = installed('bad-view', () => {}, ({ host, assets }: any) => {
+        host.get('content/definitions').register(assets.id, { plants: { 'bad-view:invalid': { visual: {} } } })
     })
-    const good = installed('test:good', () => {})
+    const good = installed('good', () => {})
     const loader = modLoader([badGameplay, badPresentation, good])
     const result = await loader.load()
-    assert.deepEqual(Array.from(result.manifests, (mod: any) => mod.id), ['test:good'])
+    assert.deepEqual(Array.from(result.manifests, (mod: any) => mod.id), ['good'])
     assert.equal(result.gameplayDefinitions.length, 0)
     assert.equal(result.presentationDefinitions.length, 0)
-    assert.match(loader.failures.get('test:bad-config')!, /definitions:/)
-    assert.match(loader.failures.get('test:bad-view')!, /definitions:/)
+    assert.match(loader.failures.get('bad-config')!, /definitions:/)
+    assert.match(loader.failures.get('bad-view')!, /definitions:/)
 })
 
 test('definition registries reject collisions, foreign namespaces, unresolved references and conflicting level patches', () => {
     assert.throws(() => build([gameplay(), gameplay()]), /duplicate registration/)
-    assert.throws(() => build([{ ...gameplay(), ownerId: 'other:mod' }]), /cannot register/)
+    assert.throws(() => build([{ ...gameplay(), ownerId: 'other' }]), /cannot register/)
     const missing = gameplay()
     missing.data.plants['example:rapid_pea'].shooter.projectile = 'example:missing'
     assert.throws(() => build([missing]), /unknown ID/)
-    const conflict = { ownerId: 'other:mod', data: { levelPatches: { 'pvz:adventure-1-1': { seedPackets: [] } } } }
+    const conflict = { ownerId: 'other', data: { levelPatches: { 'pvz:adventure-1-1': { seedPackets: [] } } } }
     assert.throws(() => build([gameplay(), conflict]), /Conflicting level patch/)
-    assert.throws(() => build([{ ownerId: 'other:mod', data: { levelPatches: { 'other:missing': {} } } }]), /unknown level/)
+    assert.throws(() => build([{ ownerId: 'other', data: { levelPatches: { 'other:missing': {} } } }]), /unknown level/)
 
     const source = readPresentationSource()
     const before = JSON.stringify(source)
     const installed = buildPresentationDefinitions(source, [presentation()])
     assert.equal(JSON.stringify(source), before, 'registration cannot change the base asset')
     assert.ok(Object.isFrozen(installed.plants['example:rapid_pea']))
-    assert.equal(buildModStrings([presentation()])['example:rapid_pea'], 'Rapid Pea')
     const invalid = presentation()
     delete invalid.data.plants['example:rapid_pea'].animations.blink
     assert.throws(() => buildPresentationDefinitions(source, [invalid]), /missing blink animation/)
+})
+
+test('overrides replace whole existing definitions by ID, one Mod per ID, before level patches apply', () => {
+    const basePlants = base().plants
+    const peashooter = { ...basePlants['pvz:peashooter'], maxHealth: 999 }
+    const level = build([]).levels.levels['pvz:adventure-1-1'] as any
+    const override = { ownerId: 'other', data: { overrides: {
+        plants: { 'pvz:peashooter': peashooter },
+        levels: { 'pvz:adventure-1-1': { ...level, seedPackets: ['pvz:sunflower'] } },
+    } } }
+    const result = build([override])
+    assert.equal(result.definitions.plants['pvz:peashooter'].maxHealth, 999, 'the base ID now resolves to the Mod definition')
+    assert.equal(base().plants['pvz:peashooter'].maxHealth, basePlants['pvz:peashooter'].maxHealth, 'the base asset is unchanged')
+    assert.deepEqual(result.levels.levels['pvz:adventure-1-1'].seedPackets, ['pvz:sunflower'])
+    const patch = { ownerId: 'third', data: { levelPatches: { 'pvz:adventure-1-1': { seedPackets: ['pvz:peashooter'] } } } }
+    assert.deepEqual(build([override, patch]).levels.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter'], 'level patches apply to the overridden level')
+    // Another Mod's IDs can be overridden too, whatever the load order.
+    const rapid = gameplay().data.plants['example:rapid_pea']
+    const late = { ownerId: 'other', data: { overrides: { plants: { 'example:rapid_pea': { ...rapid, maxHealth: 7 } } } } }
+    assert.equal(build([late, gameplay()]).definitions.plants['example:rapid_pea'].maxHealth, 7)
+    assert.throws(() => build([override, { ...override, ownerId: 'third' }]), /Conflicting override: plants\/pvz:peashooter/)
+    assert.throws(() => build([{ ownerId: 'other', data: { overrides: { plants: { 'pvz:missing': peashooter } } } }]), /overrides unknown plants/)
+    assert.throws(() => build([{ ownerId: 'other', data: { overrides: { plants: { 'pvz:peashooter': { ...peashooter, maxHealth: -1 } } } } }]), /maxHealth/,
+        'overridden definitions are validated like any other')
+
+    const source = readPresentationSource()
+    const view = { ...source.plants['pvz:sunflower'], animationTarget: source.plants['pvz:sunflower'].animationTarget }
+    const visuals = buildPresentationDefinitions(source, [{ ownerId: 'other', data: { overrides: { plants: { 'pvz:peashooter': view } } } }])
+    assert.deepEqual(visuals.plants['pvz:peashooter'], buildPresentationDefinitions(source).plants['pvz:sunflower'], 'presentation overrides work the same way')
 })
 
 test('a packed Mod registers both entity kinds, runs custom behaviors and restores without modifying base content', async () => {
@@ -344,11 +372,11 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         assert.deepEqual(Array.from(loaded.manifests, (entry: any) => entry.id), [manifest.id])
         assert.ok(loaded.plantViews.has('example:beacon'))
         assert.deepEqual(getDebugCliCompletions('/example:').sort(), ['/example:charge', '/example:hello'])
-        assert.equal((await client.executor.execute('/sun set 1', true, () => assert.fail())).message, 'delegated')
+        assert.deepEqual(await client.executor.execute('/sun set 1', true, () => assert.fail()), { ok: false, failure: 'condition', key: 'DEBUG_NO_ACTIVE_GAME' }, 'failed conditions name a string key')
         parseParticle(contentJson(files, 'assets/particles/sparks.json'))
         parseReanim(contentJson(files, 'assets/reanim/beacon.json'))
         const hello = await client.executor.execute('/example:hello', false, () => assert.fail('client command must not reach server'))
-        assert.match(hello.message, /Mod Lab/)
+        assert.match(hello.ok ? hello.message : '', /Mod Lab/)
         await new Promise(setImmediate)
         assert.equal(client.sounds[0].id, 'example:chime')
         const menu = new client.MainMenuScreen()

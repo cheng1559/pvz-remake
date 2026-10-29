@@ -1,5 +1,4 @@
-import { buildModStrings } from '@/shared/content/DefinitionRegistry'
-import { loadInstalledMods } from '@/app/ModLoader'
+import { mergeStringLayers } from '@/shared/content/strings'
 import { loadPresentationDefinitions } from '@/client/content/loadPresentationDefinitions'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
@@ -25,6 +24,8 @@ const FONT_NAMES = {
     tooltipTitle: 'pix118bold',
     money: 'continuumbold14',
     storeItem: 'houseofterror16',
+    // Hotkey letters have their own ID: text packs replace houseofterror16 for words, HD packs can still redraw this one.
+    hotkey: 'hotkey',
     achievement: 'dwarventodcraft12',
 } as const
 
@@ -49,6 +50,8 @@ export interface UIAssets {
     fonts: Record<UIFont, BitmapFontAssets>
     sprites: Record<typeof SPRITE_NAMES[number], SpriteFrame>
     strings: Readonly<Record<string, string>>
+    /** The installed text's language (BCP 47, e.g. en-US or zh-CN); text packs declare it as their manifest locale. */
+    locale: string
 }
 
 let pending: Promise<UIAssets> | undefined
@@ -65,16 +68,19 @@ export async function loadUIAssets(): Promise<UIAssets> {
             if (!frame) throw new Error(`Missing UI sprite: ${name}`)
             return [name, frame] as const
         })),
-        Promise.all(['ui/strings', 'properties/lawnstrings'].map(async path => {
-            const asset = await modResources.asset(`pvz:${path}`, JsonAsset)
-            if (!asset) throw new Error(`Missing UI strings: ${path}`)
-            return asset.json as Record<string, string>
-        })).then(tables => Object.assign({}, ...tables)),
-        loadInstalledMods().then(mods => buildModStrings(mods.presentationDefinitions)),
-    ]).then(([presentation, fonts, sprites, strings, modStrings]) => ({
+        // All text is one table merged by key: the base, then each running Mod's own keys and translations.
+        modResources.jsonLayers('pvz:strings').then(layers => {
+            if (!layers.length) throw new Error('Missing strings: pvz:strings')
+            const { strings, rejected } = mergeStringLayers(layers.map(({ owner, json }) => ({ owner, table: json })))
+            for (const entry of rejected) console.error(`[UI] A Mod may only add strings in its own namespace: ${entry}`)
+            return strings
+        }),
+        modResources.locale(),
+    ]).then(([presentation, fonts, sprites, strings, locale]) => ({
         presentation,
         fonts: Object.fromEntries(fonts) as UIAssets['fonts'],
         sprites: Object.fromEntries(sprites) as UIAssets['sprites'],
-        strings: { ...strings, ...modStrings },
+        strings,
+        locale,
     })).catch(error => { pending = undefined; throw error })
 }

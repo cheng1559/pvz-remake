@@ -37,7 +37,7 @@ export async function showChallengeScreen(
             imageBox: { x: -6, y: -2, width: window.originalSize.width, height: window.originalSize.height },
             pressOffset: [1, 1], releaseToNormalOnPressOut: true,
             onClick: () => ui.dialog(parent, {
-                title: ui.text('COMING_SOON', 'Coming Soon'), message: `${name}\nThis mode is not available yet.`,
+                title: ui.text('COMING_SOON'), message: `${name}\n${ui.text('CHALLENGE_UNAVAILABLE')}`,
                 width: 430,
             }),
         })
@@ -62,7 +62,7 @@ export async function showChallengeScreen(
     })
     // Keep the back button's margin from the UI area's left edge.
     ui.button(uiAreaEdge(parent, 'left'), {
-        skin: 'seedSmall', text: ui.text('BACK_TO_MENU', 'Back to Menu'),
+        skin: 'seedSmall', text: ui.text('BACK_TO_MENU'),
         x: 18, y: 568, width: 111, height: 26, onClick: onBack,
     })
 }

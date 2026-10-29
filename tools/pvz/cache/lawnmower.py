@@ -7,6 +7,7 @@ from .packets import (
     ANIMATION_DIR,
     TEXTURE_DIR,
     load_json,
+    new_canvas,
     load_texture,
     paste_transformed,
     render_frame_to_matrix,
@@ -61,7 +62,7 @@ def sample_lawnmower_tracks(animation_json: dict[str, Any]) -> list[dict[str, An
 def render_lawnmower_cache() -> Image.Image:
     animation_path = ANIMATION_DIR / "lawnmower.json"
     animation_json = load_json(animation_path)
-    canvas = Image.new("RGBA", (OUTPUT_WIDTH, OUTPUT_HEIGHT), (0, 0, 0, 0))
+    canvas = new_canvas(OUTPUT_WIDTH, OUTPUT_HEIGHT)
 
     for item in sample_lawnmower_tracks(animation_json):
         local = item["matrix"]
@@ -78,7 +79,8 @@ def render_lawnmower_cache() -> Image.Image:
     return canvas
 
 
-def generate() -> None:
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    render_lawnmower_cache().save(OUTPUT_PATH)
-    print(f"Wrote {OUTPUT_PATH}")
+def generate(output: Path | None = None) -> None:
+    output = output or OUTPUT_PATH
+    output.parent.mkdir(parents=True, exist_ok=True)
+    render_lawnmower_cache().save(output)
+    print(f"Wrote {output}")

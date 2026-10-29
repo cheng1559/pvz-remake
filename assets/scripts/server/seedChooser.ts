@@ -37,9 +37,15 @@ export function seedChooserSnapshot(world: World, definitions: GameplayDefinitio
     const level = world.resources.get(LevelStateResource).definition
     if (level.seedBankSlots === undefined) return
     const bank = world.resources.get(SeedBankResource)
-    return {
-        availableSeeds: availableSeeds(definitions, level, world.resources.get(TutorialResource).firstAdventure), slots: level.seedBankSlots, choosing: bank.choosing === true,
+    const firstAdventure = world.resources.get(TutorialResource).firstAdventure
+    const special = firstAdventure ? level.chooserWarnings : undefined
+    const warnings = [
+        ...(special?.seed && !bank.packets.some(packet => packet.seedId === special.seed!.id) ? [special.seed.warning] : []),
         ...(bank.packets.some(packet => definitions.plants[definitions.seeds[packet.seedId].plant].producer)
-            ? {} : { warning: 'SEED_CHOOSER_SUN_WARNING' }),
+            ? [] : [special?.sunWarning ?? 'SEED_CHOOSER_SUN_WARNING']),
+    ]
+    return {
+        availableSeeds: availableSeeds(definitions, level, firstAdventure), slots: level.seedBankSlots, choosing: bank.choosing === true,
+        ...(warnings.length ? { warnings } : {}),
     }
 }

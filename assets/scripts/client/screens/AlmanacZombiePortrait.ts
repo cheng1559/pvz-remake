@@ -20,7 +20,8 @@ export class AlmanacZombiePortrait extends Component {
     }
 
     protected update(): void {
-        const enabled = GameDebugSettings.hdSeedPacketsEnabled
+        // /seedstyle standard keeps the original cached portraits; the other styles render the Reanim pose.
+        const enabled = GameDebugSettings.seedPacketStyle !== 'standard'
         if (this.hd === enabled) return
         this.hd = enabled
         if (this.rendered) { this.rendered.active = false; this.rendered.destroy() }

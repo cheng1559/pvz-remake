@@ -15,6 +15,9 @@ import { UIScroll, type UIScrollOptions } from './UIScroll'
 import { UITooltip, type UITooltipOptions } from './UITooltip'
 
 interface Box { x?: number, y?: number, width?: number, height?: number }
+/** LawnDialog's mSpaceAfterHeader (1073 0x45a5be, 1096 0x45cd2e); Dialog itself uses 10. */
+const DIALOG_SPACE_AFTER_HEADER = 3
+
 export type UIButtonSkin = 'stone' | 'back' | 'seed' | 'seedSmall' | 'almanacIndex' | 'almanacClose' | 'image'
 export interface UIButtonImages {
     normal: SpriteFrame
@@ -30,7 +33,9 @@ export interface UIButtonOptions extends Box {
     /** Image bounds relative to the hit area; defaults to filling the button. */
     imageBox?: Box
     polygon?: UIButtonPolygon
-    font?: UIFont
+    /** A UI font name or loaded font; with hoverFont the stone and back skins' lit text can differ. */
+    font?: UIFont | BitmapFontAssets
+    hoverFont?: UIFont | BitmapFontAssets
     color?: Color
     enabled?: boolean
     rightClickTriggers?: boolean
@@ -56,8 +61,8 @@ export interface UIDialogOptions {
     extraHeight?: number
     tall?: boolean
     centerMessage?: boolean
-    messageOffsetY?: number
     contentInsetTopExtra?: number
+    /** LawnDialog sets 3 instead of Dialog's 10 (1073 and 1096). */
     spaceAfterHeader?: number
     background?: SpriteFrame
     footer?: boolean
@@ -78,7 +83,22 @@ export class UI {
 
     constructor(readonly assets: UIAssets) {}
 
-    text(key: string, fallback = key): string { return this.assets.strings[key] ?? fallback }
+    /** Every key lives in the string tables (base, text packs, Mods); a missing one shows the key and logs. */
+    text(key: string): string {
+        const value = this.assets.strings[key]
+        if (value !== undefined) return value
+        console.error(`[UI] Missing string: ${key}`)
+        return key
+    }
+
+    /** A table string with its %s/%d placeholders filled by args in order, like the original's StrFormat. */
+    format(key: string, args: readonly string[] = []): string {
+        let index = 0
+        return this.text(key).replace(/%[sd]/g, match => index < args.length ? args[index++] : match)
+    }
+
+    /** The installed text's language, for content such as images with words in them. */
+    get locale(): string { return this.assets.locale }
 
     label(parent: Node, options: UILabelOptions & { font?: UIFont | BitmapFontAssets }): UILabel {
         const font = typeof options.font === 'object' ? options.font : this.assets.fonts[options.font ?? 'label']
@@ -148,14 +168,14 @@ export class UI {
             this.stoneRow(down, imageBox.width, imageBox.height, true)
         } else image = this.image(visual, images!.normal, imageBox)
         const normalFont = options.font ?? (back ? 'large' : stone ? 'button' : skin === 'seedSmall' || footer ? 'small' : 'body')
-        const hoverFont = options.font ?? (back ? 'largeHover' : stone ? 'buttonHover' : normalFont)
+        const hoverFont = options.hoverFont ?? options.font ?? (back ? 'largeHover' : stone ? 'buttonHover' : normalFont)
         const fonts = normalFont === hoverFont ? [normalFont] : [normalFont, hoverFont]
         const color = options.color ?? (skin === 'seed' ? new Color(213, 159, 43)
             : skin === 'seedSmall' || footer ? new Color(42, 42, 90) : undefined)
         const textOffsetX = { stone: 1, back: -2, seed: 0, seedSmall: 0, almanacIndex: 8, almanacClose: -8, image: 0 }[skin]
         const textOffsetY = { stone: -4, back: -5, seed: -1, seedSmall: 1, almanacIndex: 1, almanacClose: 1, image: 0 }[skin]
         const labels = fonts.map(font => {
-            const ascent = FontMetricsUtil.getMetrics(this.assets.fonts[font].config).ascent
+            const ascent = FontMetricsUtil.getMetrics((typeof font === 'object' ? font : this.assets.fonts[font]).config).ascent
             const baseline = back
                 ? -5 + Math.trunc((height - Math.trunc(ascent / 6) + ascent - 1) / 2)
                 : (height - ascent / 6 - 1 + ascent) / 2 + textOffsetY
@@ -347,11 +367,12 @@ export class UI {
         dialog.clickSound = options.clickSound ?? null
         const textColor = new Color(0xe0, 0xbb, 0x62)
         let textTop = 80 + (options.contentInsetTopExtra ?? 0)
+        // Dialog::WriteCenteredLine: (mWidth - width) / 2 in integers.
         if (options.title) this.label(panel, {
-            text: options.title, font: 'title', x: width / 2, y: textTop - titleMetrics.ascentPadding,
-            align: 'center', color: textColor,
+            text: options.title, font: 'title', y: textTop - titleMetrics.ascentPadding, color: textColor,
+            x: Math.trunc((width - FontMetricsUtil.measureTextWidth(titleFont, options.title)) / 2),
         })
-        if (options.title) textTop += titleMetrics.height - titleMetrics.ascentPadding + (options.spaceAfterHeader ?? 10)
+        if (options.title) textTop += titleMetrics.height - titleMetrics.ascentPadding + (options.spaceAfterHeader ?? DIALOG_SPACE_AFTER_HEADER)
         if (options.message) {
             const textWidth = width - 86
             const textHeight = FontMetricsUtil.measureWordWrappedHeight(bodyFont, options.message, textWidth)
@@ -359,12 +380,12 @@ export class UI {
             this.label(panel, {
                 text: options.message, font: 'body', x: 38, width: textWidth, align: 'center', color: textColor,
                 y: textTop + (options.centerMessage === false ? 0 : Math.trunc((areaHeight - textHeight) / 2))
-                    - FontMetricsUtil.getMetrics(bodyFont).ascentPadding + (options.messageOffsetY ?? 0),
+                    - FontMetricsUtil.getMetrics(bodyFont).ascentPadding,
             })
         }
         if (options.footer !== false) {
             const buttons = options.buttons ?? [
-                { text: options.confirmText ?? 'OK', onClick: (dialog: UIDialog) => dialog.onConfirm() },
+                { text: options.confirmText ?? this.text('DIALOG_BUTTON_OK'), onClick: (dialog: UIDialog) => dialog.onConfirm() },
                 ...(options.cancelText ? [{ text: options.cancelText, onClick: (dialog: UIDialog) => dialog.onCancel() }] : []),
             ]
             const count = buttons.length
@@ -418,8 +439,9 @@ export class UI {
         const titleWidth = 82 + (options.extraWidth ?? 0) + FontMetricsUtil.measureTextWidth(title, options.title ?? '')
         const naturalWidth = topWidth + Math.max(1, Math.ceil((titleWidth - topWidth) / tileWidth)) * tileWidth + (options.message ? tileWidth : 0)
         const width = topWidth + Math.max(1, Math.ceil(((options.width ?? naturalWidth) - topWidth) / tileWidth)) * tileWidth
-        let contentHeight = 35 + 36 + 45 + 24 + (options.extraHeight ?? 0) + (options.contentInsetTopExtra ?? 0)
-        if (options.title) contentHeight += titleMetrics.height - titleMetrics.ascentPadding + (options.spaceAfterHeader ?? 10)
+        // LawnDialog::CalcSize adds the 24px button height plus 8 (1073 0x45a9ea, 1096 0x45d270).
+        let contentHeight = 35 + 36 + 45 + 24 + 8 + (options.extraHeight ?? 0) + (options.contentInsetTopExtra ?? 0)
+        if (options.title) contentHeight += titleMetrics.height - titleMetrics.ascentPadding + (options.spaceAfterHeader ?? DIALOG_SPACE_AFTER_HEADER)
         if (options.message) contentHeight += FontMetricsUtil.measureWordWrappedHeight(
             this.assets.fonts.body.config, options.message, width - 86,
         ) + 30

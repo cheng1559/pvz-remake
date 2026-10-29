@@ -4,7 +4,7 @@ import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { parseModManifest } from '@/shared/mod'
 import { parseModContent, type ContentArchive } from '@/shared/mod/content'
 
-function archive(id = 'pvz:base'): ContentArchive {
+function archive(id = 'pvz'): ContentArchive {
     const image = new Uint8Array(24), view = new DataView(image.buffer)
     view.setUint32(0, 0x89504e47); view.setUint32(12, 0x49484452)
     view.setUint32(16, 1); view.setUint32(20, 1)
@@ -14,13 +14,13 @@ function archive(id = 'pvz:base'): ContentArchive {
         manifest: parseModManifest({ schemaVersion: 1, id, version: '2.0.0', apiVersion: 1,
             contentHash: id + '@2', dependencies: [] }),
         content: parseModContent({ gameplay: 'gameplay.json', presentation: 'presentation.json',
-            resources: { sprites: { [id.split(':')[0] + ':sunflower']: { file: 'sprite.png', width: 1, height: 1 } } } }, files),
+            resources: { sprites: { [id + ':sunflower']: { file: 'sprite.png', width: 1, height: 1 } } } }, files),
         files,
     }
 }
 
 test('base and Mod archives use the same manifest, content parser and file validation', () => {
-    for (const id of ['pvz:base', 'example:showcase']) {
+    for (const id of ['pvz', 'example']) {
         const base = archive(id)
         assert.equal(base.manifest.schemaVersion, 1)
         assert.equal(base.content.presentation, 'presentation.json')
@@ -36,25 +36,28 @@ test('ContentRegistry resolves common archive resources by category, rejects dup
     const registry = new ContentRegistry()
     registry.register(base)
     assert.deepEqual(registry.resolve('sprites', 'pvz:sunflower'), {
-        category: 'sprites', id: 'pvz:sunflower', contentId: 'pvz:base', contentVersion: '2.0.0',
-        contentHash: 'pvz:base@2', bundle: 'pvzmod:///pvz%3Abase/', path: 'sprite.png', schemaVersion: 2,
+        category: 'sprites', id: 'pvz:sunflower', contentId: 'pvz', contentVersion: '2.0.0',
+        contentHash: 'pvz@2', bundle: 'pvzmod:///pvz/', path: 'sprite.png', schemaVersion: 2,
     })
     assert.equal(registry.resolve('sounds', 'pvz:sunflower'), undefined)
     const warmed = new ContentRegistry()
     warmed.register({ ...base, files: {} })
     assert.equal(warmed.resolve('sprites', 'pvz:sunflower')?.path, 'sprite.png', 'decoded Native image bytes are not needed for metadata')
     assert.throws(() => registry.register(base), /duplicate content manifest/)
-    assert.throws(() => registry.register(archive('pvz:addon')), /duplicate sprites content/)
+    // Each Mod owns its own namespace, so two archives never claim one ID; a direct entry still cannot repeat one.
+    assert.throws(() => registry.registerEntry({ ...registry.resolve('sprites', 'pvz:sunflower')!, contentId: 'addon' }), /duplicate sprites content/)
     assert.equal([...registry.entries('sprites')].length, 1)
 
-    const other = archive('pvz:addon')
+    const other = archive('addon')
     other.content.resources.sprites = {}
-    other.content.resources.audio['pvz:sunflower'] = 'hit.mp3'
+    other.content.resources.audio['addon:sunflower'] = 'hit.mp3'
+    other.content.resources.audio['pvz:chomp'] = 'hit.mp3'
     const files = { ...other.files, 'hit.mp3': new Uint8Array([1]) }
     const second = new ContentRegistry()
     second.register(base)
     second.register({ ...other, files })
-    assert.equal(second.resolve('sounds', 'pvz:sunflower')?.path, 'hit.mp3')
+    assert.equal(second.resolve('sounds', 'addon:sunflower')?.path, 'hit.mp3')
+    assert.equal(second.resolve('sounds', 'pvz:chomp'), undefined, 'a replacement of another namespace is not registered as the Mod\'s own')
     second.registerEntry({
         category: 'reanim', id: 'example:solar_peashooter', contentId: 'example:solar-mod',
         contentVersion: '1.0.0', contentHash: 'example-solar-mod@1',
@@ -67,4 +70,12 @@ test('ContentRegistry resolves common archive resources by category, rejects dup
     assert.throws(() => {
         ;(second.resolve('sprites', 'pvz:sunflower') as { path: string }).path = 'changed'
     }, TypeError)
+})
+
+test('a Mod manifest may name its author for the Mod list', () => {
+    const base = { schemaVersion: 1, id: 'example', version: '1.0.0', apiVersion: 1, contentHash: 'x', dependencies: [] }
+    assert.equal(parseModManifest({ ...base, author: '  Cheng ' }).author, 'Cheng')
+    assert.equal(parseModManifest(base).author, undefined)
+    assert.throws(() => parseModManifest({ ...base, author: '' }), /manifest.author/)
+    assert.throws(() => parseModManifest({ ...base, author: 7 }), /manifest.author/)
 })

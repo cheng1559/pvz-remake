@@ -9,15 +9,18 @@ import {
     type Position,
 } from './components'
 import { ItemComponent, type Item } from './levelState'
+import { emitServerEvent, EventQueueResource } from './events'
+import { MAX_MONEY, updateMowerCoins } from './loot'
 
-const { x: SUN_BANK_X, y: SUN_BANK_Y } = SUN_BANK_TARGET
+/** Coin::UpdateCollected: sun flies to the sun bank, money to the coin bank at the bottom left. */
+const COIN_BANK_TARGET = { x: 39, y: 558 }
 
 export function getAvailableSun(world: World, definitions: GameplayDefinitions): number {
     const economy = world.resources.get(EconomyStateResource)
     let sun = economy.sun - economy.pendingSunSpend
     for (const entity of world.query(ItemComponent)) {
         const item = world.get(entity, ItemComponent)!
-        if (item.state === 'collecting' && definitions.items[item.typeId]) sun += item.value
+        if (item.state === 'collecting' && definitions.items[item.typeId] && definitions.items[item.typeId].kind !== 'money') sun += item.value
     }
     return sun
 }
@@ -28,6 +31,7 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
         run({ world, commands }) {
             const level = world.resources.get(LevelStateResource)
             if ((level.result !== 'playing' && level.result !== 'won') || level.paused) return
+            if (level.result === 'won') updateMowerCoins(world, definitions, commands)
             for (const entity of world.query(PositionComponent, ItemComponent)) {
                 const position = world.get(entity, PositionComponent)!
                 const item = world.get(entity, ItemComponent)!
@@ -43,17 +47,22 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                     }
                     continue
                 }
+                const money = definitions.items[item.typeId]?.kind === 'money'
                 if (item.state === 'collecting') {
-                    const dx = Math.abs(position.x - SUN_BANK_X)
-                    const dy = Math.abs(position.y - SUN_BANK_Y)
-                    position.x += (SUN_BANK_X - position.x) / 21
-                    position.y += (SUN_BANK_Y - position.y) / 21
+                    const target = money ? COIN_BANK_TARGET : SUN_BANK_TARGET
+                    const dx = Math.abs(position.x - target.x)
+                    const dy = Math.abs(position.y - target.y)
+                    position.x += (target.x - position.x) / 21
+                    position.y += (target.y - position.y) / 21
                     const distance = Math.hypot(dx, dy)
-                    if (distance < 8) {
+                    if (distance < (money ? 12 : 8)) {
                         const economy = world.resources.get(EconomyStateResource)
-                        const spent = Math.min(economy.pendingSunSpend, item.value)
-                        economy.pendingSunSpend -= spent
-                        economy.sun = Math.min(MAX_SUN, economy.sun + item.value - spent)
+                        if (money) economy.money = Math.min(MAX_MONEY, economy.money + item.value)
+                        else {
+                            const spent = Math.min(economy.pendingSunSpend, item.value)
+                            economy.pendingSunSpend -= spent
+                            economy.sun = Math.min(MAX_SUN, economy.sun + item.value - spent)
+                        }
                         commands.destroyEntity(entity)
                     } else {
                         // Coin::Update shrinks collected sun toward the counter, scaled like the small sun's 0.5.
@@ -75,7 +84,12 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                 }
                 position.y = item.groundY
                 position.x = Math.round(position.x)
-                if (++item.disappearTicks >= 750) {
+                if (!item.landed) {
+                    item.landed = true
+                    emitServerEvent(world.resources.get(EventQueueResource), 'itemLanded', { entityId: entity, typeId: item.typeId })
+                }
+                // Coin::GetDisappearTime: a bouncy arrow doubles the usual 750 ticks.
+                if (++item.disappearTicks >= (item.arrow ? 1500 : definitions.items[item.typeId]?.lifetimeTicks ?? 750)) {
                     item.state = 'fading'
                     item.fadeTicks = 50
                 }

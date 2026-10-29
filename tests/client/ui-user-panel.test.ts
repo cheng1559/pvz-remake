@@ -97,7 +97,7 @@ function panelFixture() {
         '@/client/ui/UIButton': { UIButton: Button }, '@/client/view/uiNode': { uiNode },
     })
     const action = (dialog: any, name: string) => dialog.content.getComponentsInChildren().find((button: any) => button.text === name).onClick()
-    return { ProfileStore, data, dialogs, inputs, action, show: () => showUserDialog(new Node(), ui, () => {}, () => {}) }
+    return { ProfileStore, data, dialogs, inputs, action, show: (mods?: any) => showUserDialog(new Node(), ui, () => {}, () => {}, mods) }
 }
 
 test('user panel validates names, keeps rename IDs/saves, and confirms isolated profile deletion', async () => {
@@ -174,6 +174,42 @@ test('user selection is committed by confirmation or double click, while cancel 
     assert.equal(panel.node.active, false)
 })
 
+test('a new player may copy the previous Mods, and switching to other Mods asks to restart', async () => {
+    const fixture = panelFixture()
+    const { ProfileStore: store, dialogs, inputs } = fixture
+    const alice = store.createProfile('Alice'), bob = store.createProfile('Bob')
+    const copies: unknown[] = [], restarts: number[] = []
+    const mods = {
+        needsRestartFor: async (id: number) => id === alice.id,
+        hasMods: (id: number) => id === bob.id,
+        copyMods: (...args: unknown[]) => { copies.push(args) },
+        restart: () => { restarts.push(store.getCurrentProfile().id) },
+    }
+    let panel = await fixture.show(mods)
+    panel.content.getChildByName('UserList').children[2].button.onPress()
+    inputs.at(-1).value = 'Carol'
+    const creating = dialogs.at(-1).onConfirm()
+    await setImmediate()
+    assert.equal(dialogs.at(-1).options.title, 'PLAYER_MODS_COPY_HEADER', 'Bob has Mods, so the new player is offered them')
+    dialogs.at(-1).close(true)
+    await creating
+    const carol = store.getCurrentProfile().id
+    assert.deepEqual(copies, [[bob.id, carol]])
+    assert.deepEqual(restarts, [], 'the copied Mods match the running ones')
+    panel = await fixture.show(mods)
+    // The current player (Carol) is listed first, then Alice.
+    panel.content.getChildByName('UserList').children[1].button.onClick()
+    for (const accept of [false, true]) {
+        const switching = panel.onConfirm()
+        await setImmediate()
+        assert.equal(dialogs.at(-1).options.title, 'PLAYER_MODS_RESTART_HEADER')
+        dialogs.at(-1).close(accept)
+        await switching
+        assert.equal(store.getCurrentProfile().id, accept ? alice.id : carol, accept ? 'confirming switches, then restarts' : 'cancel keeps the current player')
+    }
+    assert.deepEqual(restarts, [alice.id])
+})
+
 test('input keeps programmatic values silent, filters pasted text, and releases modal keyboard focus', () => {
     const scope = { activeModalRoot: null as any, isInputBlocked: false }
     let canvasFocuses = 0
@@ -184,12 +220,15 @@ test('input keeps programmatic values silent, filters pasted text, and releases 
             game: { canvas: { focus(options: FocusOptions) { assert.equal(options.preventScroll, true); canvasFocuses++ } } },
         },
         '@/client/input/UIHoverManager': { UIHoverManager: scope },
+        // BrianneTod16 has no glyphs for backslash or the vertical bar.
+        '@/client/font': { FontMetricsUtil: { hasGlyph: (_: unknown, char: string) => char !== '|' && char !== '\\' } },
     })
     const field = new UIInput()
     field.enabledInHierarchy = true
     field.node = { activeInHierarchy: true, isChildOf: () => false }
     field.draw = () => {}
-    field.options = { maxLength: 12, filter: (value: string) => value.replace(/[^a-zA-Z0-9 ]/g, '') }
+    field.options = { maxLength: 12, filter: (value: string) => value.replace(/[^a-zA-Z0-9 |]/g, '') }
+    field.font = { config: null }
     let blurs = 0, changes = 0, submitted = '', focusOptions: FocusOptions | undefined
     const element = {
         value: '', selectionStart: 0, selectionEnd: 0, style: {},
@@ -201,8 +240,8 @@ test('input keeps programmatic values silent, filters pasted text, and releases 
     field.native = { string: '', focus() { element.focus() }, blur() { blurs++ }, _impl: { _edTxt: element } }
     field.onChange = () => { changes++ }
     field.onSubmit = (value: string) => { submitted = value }
-    field.value = 'Abc!?1234567890'
-    assert.equal(field.value, 'Abc123456789')
+    field.value = 'Abc!?|1234567890'
+    assert.equal(field.value, 'Abc123456789', 'characters without a glyph are dropped even when the filter allows them')
     assert.equal(changes, 0)
     field.focus()
     assert.equal(focusOptions?.preventScroll, true, 'opening the input must not scroll the game page')
@@ -242,8 +281,10 @@ test('native input keeps its caret and text through completion and repeated subm
     const { UIInput } = load('client/ui/UIInput', {
         cc: { Component: class {}, Color: class {}, KeyCode: { ENTER: 13 }, sys: { isNative: true, os: 'ios', OS: { IOS: 'ios' } }, _decorator: { ccclass: () => (value: unknown) => value } },
         '@/client/input/UIHoverManager': { UIHoverManager: { activeModalRoot: null, isInputBlocked: false } },
+        '@/client/font': { FontMetricsUtil: { hasGlyph: () => true } },
     }, { jsb: bridge })
     const field = new UIInput()
+    field.font = { config: null }
     field.enabledInHierarchy = true
     field.node = { activeInHierarchy: true }
     field.draw = () => {}
@@ -322,4 +363,27 @@ test('native input keeps its caret and text through completion and repeated subm
     bridge.showInputBox({ inputType: 'text' })
     assert.equal(shown.at(-1)!.inputType, 'text', 'other Cocos inputs retain their requested keyboard')
     assert.equal(shown.at(-1)!.autocorrect, undefined, 'other Cocos inputs retain system correction defaults')
+})
+
+test('dialogs and wrapped text follow LawnDialog: 3px after the header, button height plus 8, integer centering', () => {
+    const font = { height: 20, ascentPadding: 0, lineSpacing: 20 }
+    const { UI } = load('client/ui/UI', {
+        '@/client/font': { FontMetricsUtil: { getMetrics: () => font, measureTextWidth: () => 50, measureWordWrappedHeight: () => 40 } },
+    })
+    const size = (width: number, height: number) => ({ originalSize: { width, height } })
+    const ui = Object.assign(Object.create(UI.prototype), { assets: {
+        fonts: { title: { config: {} }, body: { config: {} } },
+        sprites: { dialog_topleft: size(10, 1), dialog_topright: size(10, 1), dialog_topmiddle: size(10, 1),
+            dialog_bottomleft: size(10, 1), dialog_centerleft: size(10, 1) },
+    } })
+    // 35 + 36 + 45 + 24 + 8, the header 20 + 3, the body 40 + 30; 1px center tiles leave it unrounded.
+    assert.equal(ui.dialogSize({ title: 'Title', message: 'Body' }).height, 148 + 23 + 70)
+    assert.equal(ui.dialogSize({ title: 'Title', message: 'Body', spaceAfterHeader: 155 }).height, 148 + 175 + 70)
+
+    // Bare class decorators keep the class; decorator factories return an identity decorator.
+    const decorator = (...args: unknown[]) => args.length === 1 && typeof args[0] === 'function' ? undefined : (value: unknown) => value
+    const { FontRenderer } = load('client/font/FontRenderer', { cc: { _decorator: new Proxy({}, { get: () => decorator }), Component: class {} } })
+    const offset = (align: number, line: number, width: number, scale = 1) => FontRenderer.prototype._getLineOffsetX.call({ _textAlign: align }, line, width, scale)
+    assert.deepEqual([offset(2, 7, 10), offset(2, 13, 10), offset(1, 7, 10, 2), offset(0, 7, 10)], [1, -1, 6, 0],
+        'Graphics::WriteString: (width - line) / 2 truncated, and a wider line extends past both sides')
 })

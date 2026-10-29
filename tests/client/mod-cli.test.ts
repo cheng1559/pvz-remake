@@ -117,7 +117,7 @@ test('client Mod commands reuse parsing and completion, and disappear when their
     try {
         assert.deepEqual(cli.getDebugCliCompletions('/test:h'), ['/test:hello'])
         assert.equal(cli.getDebugCliSuffix('/test:hello'), ' {value}')
-        assert.equal((await run('/TEST:HELLO "Pea Shooter"')).message, 'Hello Pea Shooter')
+        assert.deepEqual(await run('/TEST:HELLO "Pea Shooter"'), { ok: true, message: 'Hello Pea Shooter' })
         assert.equal((await run('/test:hello')).failure, 'syntax')
         assert.equal((await run('/test:hello a b')).failure, 'syntax')
         assert.equal(calls, 1)
@@ -157,7 +157,7 @@ test('Mod game commands cross the normal client/server boundary while paused and
         const game = setup(), tick = game.render().gameplayTick
         const run = (input: string) => execute(input, true, value => game.debugCommand(value))
         assert.equal((await run('/sun set 50')).ok, true, 'built-in commands retain their original dispatch')
-        assert.equal((await run(`/${name} 125`)).message, 'Sun: 175')
+        assert.deepEqual(await run(`/${name} 125`), { ok: true, message: 'Sun: 175' })
         assert.equal(game.render().sun, 175)
         assert.equal(game.render().paused, true)
         assert.equal(game.render().gameplayTick, tick)

@@ -8,6 +8,9 @@ from ..reanim import load_anim_xml, parse_track_data
 
 from .packets import (
     ANIMATION_DIR,
+    composite,
+    logical_height,
+    new_canvas,
     load_json,
     load_texture,
     paste_transformed,
@@ -116,17 +119,19 @@ def get_anim_node(animation_json: dict[str, Any], node_name: str | None = None) 
 
 
 def is_track_hidden(track_name: str, definition: dict[str, Any]) -> bool:
-    shown = set(definition.get("show", []))
-    hidden = set(definition.get("hide", []))
-    hidden_prefixes = tuple(definition.get("hidePrefix", []))
+    # Track lookups in Reanimation ignore case, as here.
+    name = track_name.lower()
+    shown = {track.lower() for track in definition.get("show", [])}
+    hidden = {track.lower() for track in definition.get("hide", [])}
+    hidden_prefixes = tuple(prefix.lower() for prefix in definition.get("hidePrefix", []))
 
-    if track_name in hidden:
+    if name in hidden:
         return True
-    if hidden_prefixes and track_name.startswith(hidden_prefixes):
+    if hidden_prefixes and name.startswith(hidden_prefixes):
         return True
-    if track_name in shown:
+    if name in shown:
         return False
-    return track_name in HIDDEN_BY_DEFAULT
+    return name in {track.lower() for track in HIDDEN_BY_DEFAULT}
 
 
 def sample_reanim_tracks(
@@ -187,7 +192,7 @@ def draw_reanim(
 
 
 def render_boss_cache(raw_root: Path) -> Image.Image:
-    cache = Image.new("RGBA", (CACHE_WIDTH, CACHE_HEIGHT), (0, 0, 0, 0))
+    cache = new_canvas(CACHE_WIDTH, CACHE_HEIGHT)
 
     def draw(animation: str, layer: str, x: float, y: float, hidden: tuple[str, ...] = ()) -> None:
         root = load_anim_xml(raw_root, animation)
@@ -196,7 +201,8 @@ def render_boss_cache(raw_root: Path) -> Image.Image:
         _, _, active_frames = parse_track_data(marker)
         start = active_frames[0]["frameIndex"]
         for name, _, frames in tracks:
-            if name in hidden:
+            # Reanimation::AssignRenderGroupToTrack matches names case-insensitively (Boss_neck, Boss_head2).
+            if name.lower() in hidden:
                 continue
             frame = sample_frames(frames, start)
             if not frame or not frame.get("image"):
@@ -218,7 +224,7 @@ def render_zombie_cache(zombie_id: int, raw_root: Path | None = None) -> Image.I
             raise ValueError('Zomboss preview requires the extracted Reanim directory')
         return render_boss_cache(raw_root)
     definition = ZOMBIE_DEFINITIONS.get(zombie_id)
-    cache = Image.new("RGBA", (CACHE_WIDTH, CACHE_HEIGHT), (0, 0, 0, 0))
+    cache = new_canvas(CACHE_WIDTH, CACHE_HEIGHT)
     if definition is None:
         return cache
 
@@ -241,11 +247,12 @@ def render_zombie_cache(zombie_id: int, raw_root: Path | None = None) -> Image.I
         start = node["animations"][definition["layer"]]["startFrame"]
         body = sample_frames(node["tracks"]["Zombie_bungi_body"]["frames"], start)
         cord = load_texture("bungeecord")
-        y = base_y + body["y"] - cord.height
-        while y > -cord.height:
+        cord_height = logical_height(cord)
+        y = base_y + body["y"] - cord_height
+        while y > -cord_height:
             # Same body-local X position as the rendered portrait.
             paste_transformed(cache, cord, (1, 0, 0, 1, base_x + 38, y), 1.0)
-            y -= cord.height
+            y -= cord_height
     draw_reanim(cache, animation_json, definition["layer"], base_x, base_y, definition)
     for extra_layer in definition.get("extraLayers", []):
         offset_x, offset_y = extra_layer.get("offset", (0.0, 0.0))
@@ -279,23 +286,22 @@ def zombie_preview_matrix(zombie_id: int) -> tuple[float, ...]:
 
 
 def render_zombie_preview(zombie_id: int, raw_root: Path | None = None) -> Image.Image:
-    cell = Image.new("RGBA", (CELL_WIDTH, CELL_HEIGHT), (0, 0, 0, 0))
+    cell = new_canvas(CELL_WIDTH, CELL_HEIGHT)
     if zombie_id not in ZOMBIE_DEFINITIONS and zombie_id != 25:
         return cell
     paste_transformed(cell, render_zombie_cache(zombie_id, raw_root), zombie_preview_matrix(zombie_id), 1.0)
     return cell
 
 
-def generate(raw_root: Path) -> None:
+def generate(raw_root: Path, output: Path | None = None) -> None:
+    output = output or OUTPUT_PATH
     rows = math.ceil(ZOMBIE_COUNT / ATLAS_COLUMNS)
-    atlas = Image.new("RGBA", (ATLAS_COLUMNS * CELL_WIDTH, rows * CELL_HEIGHT), (0, 0, 0, 0))
+    atlas = new_canvas(ATLAS_COLUMNS * CELL_WIDTH, rows * CELL_HEIGHT)
     for zombie_id in range(ZOMBIE_COUNT):
         cell = render_zombie_preview(zombie_id, raw_root)
-        x = zombie_id % ATLAS_COLUMNS * CELL_WIDTH
-        y = zombie_id // ATLAS_COLUMNS * CELL_HEIGHT
-        atlas.alpha_composite(cell, (x, y))
-    atlas.save(OUTPUT_PATH)
-    print(f"Wrote {OUTPUT_PATH}")
+        composite(atlas, cell, zombie_id % ATLAS_COLUMNS * CELL_WIDTH, zombie_id // ATLAS_COLUMNS * CELL_HEIGHT)
+    atlas.save(output)
+    print(f"Wrote {output}")
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import { BASE_MOD_ID } from '@/shared/mod'
 import { Asset, AudioClip, JsonAsset, Prefab, resources, SpriteFrame, Texture2D } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { parseFont } from '@/shared/content/font'
@@ -19,7 +20,7 @@ export class ClientContentLoader {
         const promise = (async () => {
             const assetType: AssetType<Asset> = type
             // Engine-imported prefabs retain their compiled script and dependency bindings.
-            if (assetType === Prefab && content.contentId === 'pvz:base') {
+            if (assetType === Prefab && content.contentId === BASE_MOD_ID) {
                 const path = content.path.replace(/^assets\/prefabs\//, '').replace(/\.prefab$/i, '')
                 return new Promise<T>((resolve, reject) => resources.load(path, type,
                     (error, asset) => error ? reject(error) : resolve(asset)))

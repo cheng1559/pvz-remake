@@ -1,6 +1,7 @@
 import { Color, type Node } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
 import type { UI } from '@/client/ui/UI'
+import type { ScrollbarColors } from '@/client/ui/UIScroll'
 import { uiNode } from '@/client/view/uiNode'
 
 interface Run { text: string, color: Color }
@@ -63,7 +64,7 @@ export function almanacLines(text: string, measure: (text: string) => number, wi
 }
 
 export function drawAlmanacText(parent: Node, ui: UI, text: string, box: {
-    x: number, y: number, width: number, height?: number, align?: 'left' | 'right',
+    x: number, y: number, width: number, height?: number, align?: 'left' | 'right', scrollColors?: ScrollbarColors,
 }): number {
     const font = ui.assets.fonts.small.config
     const metrics = FontMetricsUtil.getMetrics(font)
@@ -73,14 +74,17 @@ export function drawAlmanacText(parent: Node, ui: UI, text: string, box: {
     const textHeight = heightOf(lines)
     const scrolling = box.height !== undefined && textHeight > box.height
     const height = scrolling ? box.height! : textHeight
+    // Steam 1096 AlmanacDialog: the scrollbar runs over the text measured at the full width, with a page of 85% of
+    // the box (so the end usually leaves 15% blank) and 5% of that text per wheel step. The text is drawn 7px
+    // narrower; when that adds lines the 1096 range can hide the last one, so the range reaches it here.
     const scroll = scrolling ? ui.scroll(parent, {
         x: box.x, y: box.y, width: box.width, height, contentHeight: textHeight,
-        wheelStep: metrics.lineSpacing * 0.6, bottomPadding: metrics.lineSpacing * 0.6,
+        pageHeight: height * 0.85, wheelStep: textHeight * 0.05, colors: box.scrollColors,
     }) : null
     const width = scroll?.contentWidth ?? box.width
     if (scroll) {
         lines = almanacLines(text, measure, width)
-        scroll.setContentHeight(heightOf(lines))
+        scroll.setContentHeight(textHeight, heightOf(lines))
     }
     const content = scroll?.content ?? uiNode({
         name: 'Description', parent, position: { x: box.x, y: -box.y },

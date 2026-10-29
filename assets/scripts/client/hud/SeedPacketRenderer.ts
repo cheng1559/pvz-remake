@@ -61,17 +61,16 @@ async function loadPacketSprite(name: string): Promise<SpriteFrame> {
     return frame
 }
 
+/** SeedPacket DrawSeedPacket: drawn larger than 1x, any packet uses the 2x IMAGE_SEEDPACKET_LARGER instead of its IMAGE_SEEDS cel. */
 @_decorator.ccclass('SeedPacketBackground')
 class SeedPacketBackground extends Component {
-    private sprite!: Sprite
-    initialize(sprite: Sprite, args: SeedPacketRenderArgs): void {
-        this.sprite = sprite
+    initialize(sprite: Sprite, args: SeedPacketRenderArgs, scale: number): void {
         const { seedType, upgrade, loadSprite = loadPacketSprite } = args
-        void loadSprite('seeds').then(frame => {
-            if (!isValid(this.node, true)) return
-            this.sprite.spriteFrame = getAtlasFrame(frame,
-                seedType === 48 ? BACKGROUND_IMITATER : upgrade ? BACKGROUND_UPGRADE : BACKGROUND_NORMAL,
-                SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT, SEED_PACKET_ATLAS_COLUMNS)
+        const frame = scale > 1 ? loadSprite('seedpacket_larger') : loadSprite('seeds').then(frame => getAtlasFrame(frame,
+            seedType === 48 ? BACKGROUND_IMITATER : upgrade ? BACKGROUND_UPGRADE : BACKGROUND_NORMAL,
+            SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT, SEED_PACKET_ATLAS_COLUMNS))
+        void frame.then(frame => {
+            if (isValid(this.node, true)) sprite.spriteFrame = frame
         }).catch(error => {
             if (isValid(this.node, true)) console.error('[SeedPacket] Failed to load background', error)
         })
@@ -136,7 +135,7 @@ export class SeedPacketRenderer {
                 trim: false,
             },
         }).node
-        node.addComponent(SeedPacketBackground).initialize(node.getComponent(Sprite)!, args)
+        node.addComponent(SeedPacketBackground).initialize(node.getComponent(Sprite)!, args, scale)
     }
 
     private static _drawPlantIcon(root: Node, args: SeedPacketRenderArgs, scale: number) {

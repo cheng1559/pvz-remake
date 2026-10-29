@@ -26,14 +26,14 @@ export async function showMenuPageControls(
         // The top-right buttons keep their margin from the UI area's right edge.
         const right = uiAreaEdge(parent, 'right')
         ui.button(right, {
-            text: ui.text('MAIN_MENU_BUTTON', 'Main Menu'), x: 628, y: -10, width: 163, height: 46,
+            text: ui.text('MAIN_MENU_BUTTON'), x: 628, y: -10, width: 163, height: 46,
             rightClickTriggers: false, onClick: () => navigate('main'),
         })
         ui.button(right, {
             images: { normal: next }, x: 566, y: 0, pressSound: SoundEffect.Tap,
             releaseToNormalOnPressOut: true,
             // Previous garden tooltip: center x=599, top y=52 for the 60×60 button at (566, 0).
-            tooltip: { text: ui.text('NEXT_GARDEN_TOOLTIP', 'visit other garden'), offset: [3, -12] },
+            tooltip: { text: ui.text('NEXT_GARDEN_TOOLTIP'), offset: [3, -12] },
             onPress: () => navigate(GARDENS[(gardenIndex + 1) % GARDENS.length]),
         })
         ui.button(right, {

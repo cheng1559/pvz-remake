@@ -20,25 +20,28 @@ function manifest(id: string, version: string, dependencies: { id: string; versi
 
 test('manifests validate, sort deterministically, and register once before freeze', () => {
     const screenMod = parseModManifest({
-        schemaVersion: 1, id: 'local:widescreen', version: '0.1.0', apiVersion: 1,
+        schemaVersion: 1, id: 'widescreen', version: '0.1.0', apiVersion: 1,
         contentHash: 'widescreen-0.1.0', dependencies: [], client: { module: 'client/cocos/index.js' },
     })
     assert.deepEqual(screenMod.client, { module: 'client/cocos/index.js' })
-    const base = manifest('pvz:base', '2.1.0')
-    const independent = manifest('zzz:independent', '1.0.0')
-    const addon = manifest('author:addon', '1.0.0', [{ id: 'pvz:base', version: '>=2.0.0' }])
-    const exact = manifest('author:exact', '1.0.0', [{ id: 'author:addon', version: '1.0.0' }])
+    // A Mod ID is a bare name that doubles as its namespace; namespaced IDs are for resources and definitions.
+    assert.throws(() => manifest('author:addon', '1.0.0'), /Mod name/)
+    assert.throws(() => manifest('addon', '1.0.0', [{ id: 'pvz:base', version: '1.0.0' }]), /Mod ID/)
+    const base = manifest('pvz', '2.1.0')
+    const independent = manifest('zzz-independent', '1.0.0')
+    const addon = manifest('addon', '1.0.0', [{ id: 'pvz', version: '>=2.0.0' }])
+    const exact = manifest('exact', '1.0.0', [{ id: 'addon', version: '1.0.0' }])
 
     assert.deepEqual(sortModManifests([exact, addon, independent, base]).map(mod => mod.id), [
-        'zzz:independent',
-        'pvz:base',
-        'author:addon',
-        'author:exact',
+        'zzz-independent',
+        'pvz',
+        'addon',
+        'exact',
     ])
     assert.throws(() => parseModManifest({ schemaVersion: 1, id: 'bad', version: '1.0.0', client: { bundle: 'x' } }))
     assert.throws(() => parseModManifest({
         schemaVersion: 1,
-        id: 'author:escape',
+        id: 'escape',
         version: '1.0.0',
         apiVersion: 1,
         contentHash: 'escape',
@@ -47,21 +50,21 @@ test('manifests validate, sort deterministically, and register once before freez
     }), /relative path/)
     assert.throws(() => parseModManifest({
         schemaVersion: 1,
-        id: 'author:encoded-escape',
+        id: 'encoded-escape',
         version: '1.0.0',
         apiVersion: 1,
         contentHash: 'escape',
         dependencies: [],
         gameplay: { nodeModule: '%2e%2e/escape.js', cocosModule: 'gameplay/cocos/index.js' },
     }), /relative path/)
-    assert.throws(() => manifest('author:huge-version', '9007199254740992.0.0'), /safe integers/)
+    assert.throws(() => manifest('huge-version', '9007199254740992.0.0'), /safe integers/)
     assert.throws(() => sortModManifests([
         base,
-        manifest('author:bad-version', '1.0.0', [{ id: 'pvz:base', version: '3.0.0' }]),
-    ]), /requires pvz:base 3\.0\.0/)
+        manifest('bad-version', '1.0.0', [{ id: 'pvz', version: '3.0.0' }]),
+    ]), /requires pvz 3\.0\.0/)
     assert.throws(() => sortModManifests([
-        manifest('author:a', '1.0.0', [{ id: 'author:b', version: '1.0.0' }]),
-        manifest('author:b', '1.0.0', [{ id: 'author:a', version: '1.0.0' }]),
+        manifest('a', '1.0.0', [{ id: 'b', version: '1.0.0' }]),
+        manifest('b', '1.0.0', [{ id: 'a', version: '1.0.0' }]),
     ]), /cycle/)
 
     const definition = { kind: 'plant', costs: { sun: 50 } }

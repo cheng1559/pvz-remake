@@ -7,7 +7,7 @@ import type { ClientAnimationClip, ClientAnimationRegistry, ClientAnimationTarge
 import type { ZombieSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { LevelEntitySnapshot } from '@/client/level/LevelPresentationSnapshot'
-import type { ZombiePresentationDefinition } from '@/shared/content/presentation'
+import { attachmentTrack, type ZombiePresentationDefinition } from '@/shared/content/presentation'
 import type { ZombieDefinition } from '@/shared/content/gameplay'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 
@@ -164,7 +164,7 @@ export class ZombieView implements ZombieViewInstance {
     }
 
     getTrackWorldPosition(trackId: string): Vec3 | null {
-        return (trackId === 'Zombie_flag' ? this.flag : this.player)?.getTrackWorldPosition(trackId) ?? null
+        return (this.flag?.trackIds.includes(trackId) ? this.flag : this.player)?.getTrackWorldPosition(trackId) ?? null
     }
 
     syncGameOverWalk(zombie: ZombieSnapshot, ticks: number, y: number, approachTicks = 0): void {
@@ -174,9 +174,10 @@ export class ZombieView implements ZombieViewInstance {
         const rate = this.definition(zombie.animation).rateScale
         const start = zombie.animationTime / 12 * rate + approachTicks / 100 * zombie.animationSpeed * rate
         const time = start + ticks / 100 * zombie.animationSpeed * rate
-        const cycleDistance = (player.sampleTrack('_ground', duration)?.x ?? 0) - (player.sampleTrack('_ground', 0)?.x ?? 0)
+        const ground = this.presentation.parts.ground
+        const cycleDistance = (player.sampleTrack(ground, duration)?.x ?? 0) - (player.sampleTrack(ground, 0)?.x ?? 0)
         const distance = (Math.floor(time / duration) - Math.floor(start / duration)) * cycleDistance
-            + (player.sampleTrack('_ground', time % duration)?.x ?? 0) - (player.sampleTrack('_ground', start % duration)?.x ?? 0)
+            + (player.sampleTrack(ground, time % duration)?.x ?? 0) - (player.sampleTrack(ground, start % duration)?.x ?? 0)
         this.node.setPosition(zombie.x - 400 - distance, 300 - y)
         this.shadowNode.setPosition(this.node.position.x + this.shadowX, this.node.position.y - (this.presentation.shadowY ?? 92))
         player.seek(time % duration)
@@ -203,7 +204,7 @@ export class ZombieView implements ZombieViewInstance {
         this.mowerDriver = await this.restorePlayer(this.mowerDriver, 'MoweredDriver', snapshot.mowerDriver)
         this.flag = await this.restorePlayer(this.flag, 'Flag', snapshot.flag ?? null)
         if (this.flag && this.player) {
-            this.attachFlag(this.flag, this.player, snapshot.flag?.attachmentTrackId ?? 'Zombie_flaghand')
+            this.attachFlag(this.flag, this.player, snapshot.flag?.attachmentTrackId ?? attachmentTrack(this.definition('flag')))
         }
         if (snapshot.body?.attachmentTrackId && this.player && this.mowerDriver) {
             this.player.reattachAfterRestore(this.mowerDriver)
@@ -273,7 +274,7 @@ export class ZombieView implements ZombieViewInstance {
             if (!driver.node.isValid || zombie.state !== 'mowered') return
             this.mowerDriver = driver
             this.animation = 'mowered'
-            this.player?.attachToTrack(driver, animation.attachmentTrackId ?? 'locator')
+            this.player?.attachToTrack(driver, attachmentTrack(animation))
             driver.play({
                 loop: false, rate: zombie.animationSpeed * animation.rateScale,
                 timeSeconds: zombie.animationTime / 12 * animation.rateScale, hideOnFinish: false,
@@ -317,7 +318,7 @@ export class ZombieView implements ZombieViewInstance {
                 this.attachments.add(flag.node)
                 await flag.load(animation.reanimId, this.registry, this.loader)
                 if (!animationNode.isValid) return
-                this.attachFlag(flag, player, animation.attachmentTrackId ?? 'Zombie_flaghand')
+                this.attachFlag(flag, player, attachmentTrack(animation))
                 flag.play({ loop: true, rate: 15 / 12 * animation.rateScale })
             }
             if (version !== this.loadVersion) {
@@ -373,31 +374,27 @@ export class ZombieView implements ZombieViewInstance {
         const signature = `${zombie.hasHead ? 1 : 0}|${zombie.hasTongue ? 1 : 0}|${zombie.hasArm ? 1 : 0}|${this.holdingFlag ? 1 : 0}|${helmStage}`
         if (!this.player || signature === this.parts) return
         this.parts = signature
-        if (this.presentation.flag) {
-            this.player.setTrackPrefixVisible('anim_innerarm', !this.holdingFlag)
-            this.player.setTrackPrefixVisible('Zombie_flaghand', this.holdingFlag)
-            this.player.setTrackPrefixVisible('Zombie_innerarm_screendoor', this.holdingFlag)
+        const presentation = this.presentation, parts = presentation.parts
+        if (parts.flagArm) {
+            this.player.setTracksVisible(parts.flagArm.free, !this.holdingFlag)
+            this.player.setTracksVisible(parts.flagArm.holding, this.holdingFlag)
             if (!this.holdingFlag) this.flag?.hide()
         }
-        const presentation = this.presentation
-        const arm = presentation.arm
-        this.player.setTrackPrefixVisible('anim_head', zombie.hasHead)
+        this.player.setTracksVisible(parts.head, zombie.hasHead)
         // Zombie::ZombieInitialize hides the hair under a helm until DropHelm shows it again.
-        this.player.setTrackPrefixVisible('anim_hair', zombie.hasHead && (helmStage < 0 || presentation.helm?.showsHair === true))
-        this.player.setTrackPrefixVisible('anim_tongue', zombie.hasHead && zombie.hasTongue)
+        this.player.setTracksVisible(parts.hair, zombie.hasHead && (helmStage < 0 || presentation.helm?.showsHair === true))
+        this.player.setTracksVisible(parts.tongue, zombie.hasHead && zombie.hasTongue)
         // Zombie::DropPole: losing the head also drops the pole and the hand that holds it.
-        for (const track of presentation.heldTracks ?? []) {
-            this.player.setTrackPrefixVisible(track, zombie.hasHead)
-        }
-        this.player.setTrackPrefixVisible(arm.lower, zombie.hasArm)
-        this.player.setTrackPrefixVisible(arm.hand, zombie.hasArm)
-        this.player.setTrackSpriteOverride(arm.upper, zombie.hasArm ? null
+        this.player.setTracksVisible(parts.held ?? [], zombie.hasHead)
+        this.player.setTracksVisible(parts.arm, zombie.hasArm)
+        this.player.setTrackSpriteOverride(parts.upperArm, zombie.hasArm ? null
             : presentation.damagedArmSprite ? this.sprites.helms[presentation.damagedArmSprite] : this.sprites[presentation.damagedArm])
-        if (presentation.enragedHeadSprite) this.player.setTrackSpriteOverride('anim_head1', zombie.enraged && zombie.animation !== 'anim_gasp' ? this.sprites.helms[presentation.enragedHeadSprite] : null)
+        const enraged = presentation.enragedHead
+        if (enraged) this.player.setTrackSpriteOverride(enraged.track, zombie.enraged && zombie.animation !== 'anim_gasp' ? this.sprites.helms[enraged.sprite] : null)
         const helm = presentation.helm
-        for (const track of presentation.helmTracks) {
+        for (const track of parts.helms) {
             const worn = helm?.track === track && helmStage >= 0
-            this.player.setTrackPrefixVisible(track, worn)
+            this.player.setTracksVisible([track], worn)
             // Zombie::TakeHelmDamage swaps in the dented helm below 2/3 and 1/3 health.
             if (worn) this.player.setTrackSpriteOverride(track, helmStage === 0 ? null : this.sprites.helms[helm.damagedSprites[helmStage - 1]])
         }

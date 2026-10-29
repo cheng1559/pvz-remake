@@ -38,7 +38,7 @@ test('seed choice is authoritative, ordered, capacity checked and works at an in
     command(game, { type: 'chooseSeed', seedId: seeds[1] })
     command(game, { type: 'chooseSeed', seedId: seeds[6] })
     assert.deepEqual(chosen(game), [seeds[0], ...seeds.slice(2, 7)])
-    assert.equal(game.render().seedChooser?.warning, 'SEED_CHOOSER_SUN_WARNING')
+    assert.deepEqual(game.render().seedChooser?.warnings, ['SEED_CHOOSER_SUN_WARNING'])
     command(game, { type: 'pause' })
     command(game, { type: 'chooseSeed', seedId: seeds[0] })
     assert.equal(game.lastRejection?.code, 'game-paused')
@@ -101,7 +101,7 @@ test('a recharge that runs out flashes once, while one cleared by `/cooldown fal
 test('chooser levels share the global seed catalog, including registered seeds, without a per-level pool', () => {
     const { definitions: expanded, levels: sharedLevels } = buildGameplayContent(
         readBaseContent().gameplay, [{
-            ownerId: 'test:chooser', data: {
+            ownerId: 'test', data: {
                 seeds: { 'test:pea': { ...definitions.seeds['pvz:peashooter'] } },
                 seedCatalog: ['test:pea'],
                 levels: { 'test:chooser': { ...levels.levels[options.levelId], seedBankSlots: 4 } },
@@ -127,7 +127,7 @@ test('partial and confirmed seed choices survive saving without reselecting or l
     assert.equal(restored.render().seedChooser?.choosing, true)
     assert.deepEqual(chosen(restored), seeds.slice(0, 3))
     for (const seedId of seeds.slice(3, 6)) command(restored, { type: 'chooseSeed', seedId })
-    assert.equal(restored.render().seedChooser?.warning, undefined)
+    assert.equal(restored.render().seedChooser?.warnings, undefined)
     command(restored, { type: 'confirmSeeds' })
     const confirmed = setup(restored.saveAtBoundary())
     assert.equal(confirmed.render().seedChooser?.choosing, false)

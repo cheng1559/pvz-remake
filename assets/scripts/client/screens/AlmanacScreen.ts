@@ -4,6 +4,7 @@ import { getAtlasFrame, SeedPacketRenderer } from '@/client/hud/SeedPacketRender
 import { PlantPreview } from '@/client/hud/PlantPreview'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
+import { PLANT_SCROLLBAR_COLORS } from '@/client/ui/UIScroll'
 import { uiNode } from '@/client/view/uiNode'
 import { menuApi } from '@/client/api/MenuApi'
 import type { AlmanacPlantDefinition, AlmanacZombieDefinition } from '@/shared/menu'
@@ -51,9 +52,11 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                 ui.image(details, sprites[`almanac_ground${plant.ground}`], { x: 521, y: 107 })
                 AlmanacEntityView.create(details, 'plants', plant.id, 578, 140)
                 ui.image(details, sprites.almanac_plantcard, { x: 459, y: 86 })
-                ui.label(details, { text: ui.text(plant.key, plant.name), font: 'yellow', x: 617, y: 288, baseline: true, align: 'center' })
-                const header = drawAlmanacText(details, ui, ui.text(`${plant.key}_DESCRIPTION_HEADER`, ''), { x: 485, y: 309, width: 258 })
-                drawAlmanacText(details, ui, ui.text(`${plant.key}_DESCRIPTION`, ''), { x: 485, y: 309 + header, width: 258, height: Math.max(20, 210 - header) })
+                ui.label(details, { text: ui.text(plant.key), font: 'yellow', x: 617, y: 288, baseline: true, align: 'center' })
+                const header = drawAlmanacText(details, ui, ui.text(`${plant.key}_DESCRIPTION_HEADER`), { x: 485, y: 309, width: 258 })
+                drawAlmanacText(details, ui, ui.text(`${plant.key}_DESCRIPTION`), {
+                    x: 485, y: 309 + header, width: 258, height: Math.max(20, 210 - header), scrollColors: PLANT_SCROLLBAR_COLORS,
+                })
                 if (plant.id !== 48) {
                     drawAlmanacText(details, ui, `{KEYWORD}${ui.text('COST')}:{STAT} ${plant.cost}`, { x: 485, y: 520, width: 134 })
                     const wait = ui.text(plant.refreshTime === 750 ? 'WAIT_TIME_SHORT' : plant.refreshTime === 3000 ? 'WAIT_TIME_LONG' : 'WAIT_TIME_VERY_LONG')
@@ -65,8 +68,8 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                 AlmanacEntityView.create(details, 'zombies', zombie.id, 559, 175, { x: 517, y: 124, width: 197, height: 187 })
                 ui.image(details, sprites.almanac_zombiecard, { x: 455, y: 78 })
                 ui.label(details, { text: ui.text(zombie.key), font: 'button', color: new Color(190, 255, 235), x: 613, y: 362, baseline: true, align: 'center' })
-                const header = drawAlmanacText(details, ui, ui.text(`${zombie.key}_DESCRIPTION_HEADER`, ''), { x: 485, y: 377, width: 258 })
-                drawAlmanacText(details, ui, ui.text(`${zombie.key}_DESCRIPTION`, ''), { x: 485, y: 377 + header, width: 257, height: Math.max(20, 160 - header) })
+                const header = drawAlmanacText(details, ui, ui.text(`${zombie.key}_DESCRIPTION_HEADER`), { x: 485, y: 377, width: 258 })
+                drawAlmanacText(details, ui, ui.text(`${zombie.key}_DESCRIPTION`), { x: 485, y: 377 + header, width: 257, height: Math.max(20, 160 - header) })
             }
         }
         const choose = (entry: AlmanacPlantDefinition | AlmanacZombieDefinition) => {
@@ -134,7 +137,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
         // Footer buttons keep their margins from the UI area's edges.
         ui.button(uiAreaEdge(parent, 'left'), { skin: 'almanacIndex', text: ui.text('ALMANAC_INDEX'), x: 32, y: 567, rightClickPressesVisual: true, onClick: () => navigate('almanac') })
     }
-    ui.button(uiAreaEdge(parent, 'right'), { skin: 'almanacClose', text: ui.text('CLOSE_BUTTON'), x: 676, y: 567, rightClickPressesVisual: true, onClick: () => navigate('main') })
+    ui.button(uiAreaEdge(parent, 'right'), { skin: 'almanacClose', text: ui.text('CLOSE_BUTTON'), x: 676, y: 567, rightClickPressesVisual: true, onClick: () => navigate('back') })
     await Promise.all([
         ...parent.getComponentsInChildren(PlantPreview).map(view => view.ready),
         ...parent.getComponentsInChildren(AlmanacEntityView).map(view => view.ready),

@@ -13,7 +13,6 @@ type DebugSettings = {
     fpsVisible: boolean
     collectMode: DebugCollectMode
     hitboxesVisible: boolean
-    hdSeedPacketsEnabled: boolean
     seedPacketStyle: SeedPacketStyle
     mobileEnabled: boolean
     hotkeysEnabled: boolean
@@ -32,7 +31,6 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     fpsVisible: false,
     collectMode: 'click',
     hitboxesVisible: false,
-    hdSeedPacketsEnabled: false,
     seedPacketStyle: 'standard',
     mobileEnabled: sys.isMobile,
     hotkeysEnabled: false,
@@ -63,9 +61,8 @@ function loadDebugSettings(): DebugSettings {
             fpsVisible: typeof parsed.fpsVisible === 'boolean' ? parsed.fpsVisible : DEFAULT_DEBUG_SETTINGS.fpsVisible,
             collectMode: normalizeCollectMode(parsed.collectMode),
             hitboxesVisible: parsed.hitboxesVisible ?? DEFAULT_DEBUG_SETTINGS.hitboxesVisible,
-            hdSeedPacketsEnabled: parsed.hdSeedPacketsEnabled ?? DEFAULT_DEBUG_SETTINGS.hdSeedPacketsEnabled,
             seedPacketStyle: parsed.seedPacketStyle === 'standard' || parsed.seedPacketStyle === 'rendered' || parsed.seedPacketStyle === 'tilted'
-                ? parsed.seedPacketStyle : parsed.hdSeedPacketsEnabled ? 'rendered' : DEFAULT_DEBUG_SETTINGS.seedPacketStyle,
+                ? parsed.seedPacketStyle : DEFAULT_DEBUG_SETTINGS.seedPacketStyle,
             mobileEnabled: DEFAULT_DEBUG_SETTINGS.mobileEnabled,
             hotkeysEnabled: parsed.hotkeysEnabled ?? DEFAULT_DEBUG_SETTINGS.hotkeysEnabled,
             hapticsEnabled: parsed.hapticsEnabled ?? DEFAULT_DEBUG_SETTINGS.hapticsEnabled,
@@ -90,7 +87,26 @@ function saveDebugSettings(settings: DebugSettings) {
         perfLogicEnabled: _perfLogicEnabled,
         ...persistedSettings
     } = settings
-    sys.localStorage.setItem(DEBUG_SETTINGS_KEY, JSON.stringify(persistedSettings))
+    // Only the current fields are written, so retired ones (such as hdSeedPacketsEnabled) drop out of old saves.
+    const current = Object.fromEntries(Object.keys(DEFAULT_DEBUG_SETTINGS).filter(key => key in persistedSettings)
+        .map(key => [key, persistedSettings[key as keyof typeof persistedSettings]]))
+    sys.localStorage.setItem(DEBUG_SETTINGS_KEY, JSON.stringify(current))
+}
+
+/** Debug CLI commands, oldest first, kept on this device across restarts. */
+const CLI_HISTORY_KEY = 'pvz-remake:debug:cli-history'
+export const DEBUG_CLI_HISTORY_LIMIT = 64
+
+export function loadDebugCliHistory(): string[] {
+    try {
+        const saved: unknown = JSON.parse(sys.localStorage.getItem(CLI_HISTORY_KEY) ?? '[]')
+        return Array.isArray(saved) ? saved.filter((entry): entry is string => typeof entry === 'string').slice(-DEBUG_CLI_HISTORY_LIMIT) : []
+    } catch { return [] }
+}
+
+export function saveDebugCliHistory(history: readonly string[]): void {
+    try { sys.localStorage.setItem(CLI_HISTORY_KEY, JSON.stringify(history.slice(-DEBUG_CLI_HISTORY_LIMIT))) }
+    catch (error) { console.warn('[Debug CLI] Failed to save history', error) }
 }
 
 export const GameDebugSettings = {
@@ -130,13 +146,6 @@ export const GameDebugSettings = {
         this.hitboxesVisible = visible
         saveDebugSettings(this)
         return this.hitboxesVisible
-    },
-
-    setHDSeedPacketsEnabled(enabled: boolean) {
-        this.hdSeedPacketsEnabled = enabled
-        this.seedPacketStyle = enabled ? 'rendered' : 'standard'
-        saveDebugSettings(this)
-        return this.hdSeedPacketsEnabled
     },
 
     setSeedPacketStyle(style: SeedPacketStyle) {

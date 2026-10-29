@@ -35,6 +35,12 @@ def almanac_definitions(raw_root: Path, shared: list, configuration: dict, prese
             configs[source] = resolve_animation_config(configs[source], root)
         return configs[source]
 
+    def eye_tracks(source):
+        # Plant::DoBlink hides the body's tracks by the anim_eye prefix; the game shows and hides exact track IDs.
+        root = ElementTree.fromstring("<root>" + (raw_root / "reanim" / f"{source}.reanim").read_text() + "</root>")
+        names = (track.findtext("name") for track in root.findall("track"))
+        return list(dict.fromkeys(name for name in names if name and name.startswith("anim_eye")))
+
     def part(kind, entry_id, source, node, clip, content_name=None, **extra):
         source_config(source)
         shared = shared_clips.get((source, node, clip))
@@ -58,6 +64,10 @@ def almanac_definitions(raw_root: Path, shared: list, configuration: dict, prese
             if packet_clip:
                 value['packetId'] = part('plant', seed_id, source, node, packet_clip, content_name='packet_body')['id']
             parts.append(value)
+        eyes = eye_tracks(source)
+        for value in parts:
+            if value.get('blink') and eyes:
+                value['eyeTracks'] = eyes
         rate = [15, 20] if seed_id in (18, 28, 40) else [10, 15]
         if seed_id == 27:
             rate = [10, 10]

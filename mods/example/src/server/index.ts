@@ -89,7 +89,7 @@ export function register({ host, assets }: GameplayApi): void {
     host.around(executor, 'execute', function (next, world, definitions, tick, command, createPlant) {
         if (command.name !== spec.name) return next(world, definitions, tick, command, createPlant)
         const level = world.resources.get(Level)
-        if (level.phase !== 'gameplay' || level.result !== 'playing') return cli.debugCondition('Start a playing level first')
+        if (level.phase !== 'gameplay' || level.result !== 'playing') return cli.debugCondition('example:cli_need_level')
         const row = cli.debugInteger(command.args[0]), column = cli.debugInteger(command.args[1])
         if (row === null || column === null || row < 1 || row > level.board.rows || column < 1 || column > level.board.columns) {
             return cli.debugSyntax(`Use row 1-${level.board.rows} and col 1-${level.board.columns}`)
@@ -99,7 +99,7 @@ export function register({ host, assets }: GameplayApi): void {
             return ['example:rapid_pea', 'example:beacon'].includes(plant.typeId)
                 && plant.health > 0 && plant.column === column - 1 && position.row === row - 1
         })
-        if (entity === undefined) return cli.debugCondition('Place an example plant in that cell first')
+        if (entity === undefined) return cli.debugCondition('example:cli_need_plant')
         world.add(entity, Charge, { remainingTicks: settings.chargeTicks })
         return cli.debugSuccess(`Charged for ${settings.chargeTicks} ticks`)
     })

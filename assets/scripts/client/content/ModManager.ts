@@ -1,7 +1,7 @@
 import { sys } from 'cc'
-import { isQualifiedId, sortModManifests, type ModManifest } from '@/shared/mod'
+import { BASE_MOD_ID, isModId, parseModManifest, sortModManifests, type ModManifest } from '@/shared/mod'
 import { contentJson, parseContentArchive, type ContentArchive } from '@/shared/mod/content'
-import { listInstalledArchives, readInstalledArchive, readInstalledFiles, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveFiles } from './InstalledArchives'
+import { listInstalledArchives, readInstalledArchive, readInstalledFiles, readInstalledManifest, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveFiles } from './InstalledArchives'
 
 export interface InstalledMod extends ContentArchive {
     files: ArchiveFiles
@@ -15,6 +15,7 @@ interface ArchivedMod extends InstalledMod {
 export interface ModImport {
     id: string
     version: string
+    author?: string
     manifest: ModManifest
     stagingId: string
 }
@@ -26,10 +27,36 @@ export interface ModChanges {
     uninstalls: string[]
 }
 
-const storageKey = 'pvz-remake:active-mods'
-const orderStorageKey = 'pvz-remake:mod-order'
+/**
+ * Each player keeps their own installed Mods, versions, enabled list and order. ZIPs live once in a shared store under
+ * `id@content hash`, so players who install the same file share it; nothing a player references is ever replaced.
+ */
+interface ModSelection {
+    /** Mod ID -> stored archive key. */
+    installed: Record<string, string>
+    enabled: string[]
+    order: string[]
+}
+
+/** The profile store removes this prefix with the rest of a deleted player's data. */
+export const PLAYER_MODS_PREFIX = 'pvz-remake:player-mods:'
+const selectionKey = (profile: number | null) => `${PLAYER_MODS_PREFIX}${profile ?? 'none'}:state`
 const pendingStorageKey = 'pvz-remake:pending-mod-changes'
+// Mods used to be installed for the whole device; those settings and ZIPs are dropped.
+const legacyStorageKeys = ['pvz-remake:active-mods', 'pvz-remake:mod-order']
 let nextImport = 0
+
+/** Identifies identical ZIPs (two 32-bit FNV-style lanes plus the length); not a security check. */
+function archiveKey(id: string, data: Uint8Array): string {
+    let a = 0x811c9dc5, b = 0x9e3779b9 ^ data.length
+    for (let i = 0; i < data.length; i++) {
+        a = Math.imul(a ^ data[i], 0x01000193)
+        b = Math.imul(b ^ data[i], 0x5bd1e995)
+        b ^= b >>> 15
+    }
+    const hex = (value: number) => (value >>> 0).toString(16).padStart(8, '0')
+    return `${id}@${data.length.toString(36)}-${hex(a)}${hex(b)}`
+}
 
 /** Installed Mods were checked when installed, so a startup reads only their manifest and content index. */
 function parseInstalled(files: ArchiveFiles): InstalledMod {
@@ -40,7 +67,7 @@ function parseInstalled(files: ArchiveFiles): InstalledMod {
 function parseImport(archive: Uint8Array): ArchivedMod {
     const files = unpackArchive(archive, 'manifest.json')
     const { manifest, content } = parseContentArchive(files)
-    if (manifest.id === 'pvz:base') throw new Error('pvz:base is built in and cannot be imported')
+    if (manifest.id === BASE_MOD_ID) throw new Error(`${BASE_MOD_ID} is built in and cannot be imported`)
     for (const file of [manifest.gameplay?.cocosModule, manifest.client?.module]) {
         if (file && !files[file]) throw new Error(`Missing Mod module: ${file}`)
     }
@@ -57,12 +84,23 @@ function parseImport(archive: Uint8Array): ArchivedMod {
 export class ModManager {
     /** Failures in this session; installed archives and saved enable states stay intact. */
     readonly failures = new Map<string, string>()
+    /** By archive key: an archive's content never changes, so these stay valid across players and updates. */
     private readonly loaded = new Map<string, InstalledMod>()
+    /** Manifest versions and authors the Mod list read without loading the Mod, by archive key. */
+    private readonly versions = new Map<string, { version?: string, author?: string }>()
     private readonly reinstalled = new Set<string>()
     private initialization?: Promise<InstalledMod[]>
     private applying?: Promise<void>
     private startupGate?: Promise<void>
     private releaseStartup?: () => void
+    private currentProfile: () => number | null = () => null
+    /** The enabled Mods and archives this session loaded; switching to a player with another set needs a restart. */
+    private session?: string
+
+    /** Supplies the current player. A switch without a restart keeps the same Mods, so later edits follow the new player. */
+    useProfiles(current: () => number | null): void { this.currentProfile = current }
+
+    private get profile(): number | null { return this.currentProfile() }
 
     /** Let startup display its existing screen before any resource request starts applying changes. */
     deferPendingChanges(): void {
@@ -76,6 +114,8 @@ export class ModManager {
         return this.initialization ??= (async () => {
             await this.startupGate
             await this.applyPendingChanges()
+            for (const key of legacyStorageKeys) sys.localStorage.removeItem(key)
+            await this.collectGarbage()
             const ids = this.enabledIds(), installed: InstalledMod[] = []
             for (const id of ids) {
                 try {
@@ -104,6 +144,7 @@ export class ModManager {
             const ordered = sortModManifests(valid.map(mod => mod.manifest))
             const mods = ordered.map(manifest => byId.get(manifest.id)!)
             if (valid.length !== ids.length) this.saveEnabled(valid.map(mod => mod.manifest.id))
+            this.session = this.signature(this.profile)
             return mods
         })()
     }
@@ -113,12 +154,36 @@ export class ModManager {
         return this.enabledIds()
     }
 
+    /** Whether that player's enabled Mods or their versions differ from the ones running now. */
+    async needsRestartFor(profile: number | null): Promise<boolean> {
+        await this.ready()
+        return this.signature(profile) !== this.session
+    }
+
+    hasMods(profile: number | null): boolean {
+        return Object.keys(this.selection(profile).installed).length > 0
+    }
+
+    /**
+     * Gives a new player another player's Mods; both then share the same archives. The first player takes over
+     * (`move`) what was installed before any player existed.
+     */
+    copyMods(from: number | null, to: number, move = false): void {
+        this.writeSelection(to, this.selection(from))
+        if (move) sys.localStorage.removeItem(selectionKey(from))
+    }
+
+    private signature(profile: number | null): string {
+        const { installed, enabled } = this.selection(profile)
+        return JSON.stringify(enabled.map(id => [id, installed[id]]))
+    }
+
     /** Validate and stage the compressed ZIP separately; installed files and settings stay intact. */
     async prepareImport(archive: Uint8Array): Promise<ModImport> {
         const { manifest } = parseImport(archive)
         const stagingId = `${Date.now().toString(36)}-${++nextImport}`
         await saveInstalledArchive('mod-pending', stagingId, archive, {})
-        return { id: manifest.id, version: manifest.version, manifest, stagingId }
+        return { id: manifest.id, version: manifest.version, ...(manifest.author ? { author: manifest.author } : {}), manifest, stagingId }
     }
 
     async discardImports(imports: readonly ModImport[]): Promise<void> {
@@ -131,15 +196,16 @@ export class ModManager {
     async queueChanges(changes: ModChanges): Promise<void> {
         await this.ready()
         const imported = new Map(changes.imports.map(mod => [mod.id, mod.manifest]))
-        const manifests = changes.enabled.map(id => {
-            const manifest = imported.get(id) ?? this.loaded.get(id)?.manifest
+        // The list reads only manifests; a Mod enabled now is fully read and validated here instead.
+        const manifests = await Promise.all(changes.enabled.map(async id => {
+            const manifest = imported.get(id) ?? (await this.read(id).catch(() => undefined))?.manifest
             if (!manifest) throw new Error(this.failures.get(id) ?? `Mod is not ready: ${id}`)
             return manifest
-        })
+        }))
         sortModManifests(manifests)
-        const installed = [...new Set([...(await this.installedIds()), ...imported.keys()])]
+        const installed = [...new Set([...this.installedIds(), ...imported.keys()])]
         this.validateSelection(changes.enabled, changes.order, installed)
-        if (changes.imports.some(mod => mod.id === 'pvz:base' || mod.manifest.id !== mod.id)
+        if (changes.imports.some(mod => mod.id === BASE_MOD_ID || mod.manifest.id !== mod.id)
             || changes.uninstalls.some(id => !installed.includes(id) || changes.enabled.includes(id) || changes.order.includes(id))) {
             throw new Error('Invalid pending Mod changes')
         }
@@ -173,8 +239,7 @@ export class ModManager {
         for (const id of changes.uninstalls) {
             await progress(`Removing ${id}`)
             // Replaying a job after interruption must also accept removals already completed.
-            if ((await listInstalledArchives('mods')).includes(id)) await removeInstalledArchive('mods', id)
-            this.loaded.delete(id)
+            await this.removeInstalled(id)
         }
         sys.localStorage.removeItem(pendingStorageKey)
         await this.discardImports(changes.imports).catch(error => console.warn('[Mods] Failed to remove staging files', error))
@@ -194,27 +259,40 @@ export class ModManager {
      * this changes installed files at once; the game queues changes instead, since running Mods read them on demand.
      */
     async install(archive: Uint8Array, enable = true): Promise<string> {
-        const mod = parseImport(archive)
+        const mod: ArchivedMod = { ...parseImport(archive), archive }
         await this.ready()
         const enabled = this.enabledIds()
-        const order = await this.installedIds()
+        const order = this.installedIds()
         if (!order.includes(mod.manifest.id)) order.unshift(mod.manifest.id)
         const ids = enable ? order.filter(id => enabled.includes(id) || id === mod.manifest.id).reverse() : enabled
         if (ids.includes(mod.manifest.id)) await this.resolve(ids, [mod])
-        await saveInstalledArchive('mods', mod.manifest.id, archive, mod.files)
+        await this.store(mod)
         if (enable) this.saveEnabled(ids)
         this.saveOrder(order)
-        this.loaded.delete(mod.manifest.id)
-        this.reinstalled.add(mod.manifest.id)
         return mod.manifest.id
     }
 
     /** Installed Mods in display order (highest priority first), including disabled or damaged archives. */
-    async installed(): Promise<{ id: string, version?: string, error?: string }[]> {
-        const ids = await this.installedIds()
+    async installed(): Promise<{ id: string, version?: string, author?: string, error?: string }[]> {
+        await this.ready()
+        const ids = this.installedIds()
         // Session failures describe the old running code, not a ZIP imported for the next restart.
         return Promise.all(ids.map(async id => ({ id, ...(this.failures.has(id) && !this.reinstalled.has(id) ? { error: this.failures.get(id) } : {}),
-            version: await this.read(id).then(mod => mod.manifest.version, () => undefined) })))
+            ...await this.details(id).catch(() => ({})) })))
+    }
+
+    /** The list shows versions and authors, so a Mod not loaded this session reads just its manifest, once. */
+    private async details(id: string): Promise<{ version?: string, author?: string }> {
+        const key = this.selection(this.profile).installed[id]
+        if (!key) return {}
+        const loaded = this.loaded.get(key)?.manifest
+        const known = loaded ? { version: loaded.version, author: loaded.author } : this.versions.get(key)
+        if (known !== undefined) return known
+        const manifest = await readInstalledManifest('mods', key)
+        if (!manifest) return {}
+        const { version, author } = parseModManifest(contentJson({ 'manifest.json': manifest }, 'manifest.json'))
+        this.versions.set(key, { version, author })
+        return { version, author }
     }
 
     /** Mods used by this session, in load order. */
@@ -232,7 +310,7 @@ export class ModManager {
         beforeInstall: (id: string) => Promise<void> = async () => {}): Promise<boolean> {
         if (new Set(ids).size !== ids.length) throw new Error('Duplicate Mod ID')
         await this.resolve([...ids], replacements)
-        const installed = [...new Set([...(await this.installedIds()), ...replacements.map(mod => mod.manifest.id)])]
+        const installed = [...new Set([...this.installedIds(), ...replacements.map(mod => mod.manifest.id)])]
         this.validateSelection(ids, order, installed)
         const priority = [...ids].reverse()
         let index = 0
@@ -242,9 +320,7 @@ export class ModManager {
         const current = this.enabledIds()
         for (const mod of replacements) {
             await beforeInstall(mod.manifest.id)
-            await saveInstalledArchive('mods', mod.manifest.id, mod.archive, mod.files)
-            this.loaded.delete(mod.manifest.id)
-            this.reinstalled.add(mod.manifest.id)
+            await this.store(mod)
         }
         this.saveOrder(nextOrder)
         if (current.length === ids.length && current.every((id, index) => ids[index] === id)) return false
@@ -267,7 +343,7 @@ export class ModManager {
         await this.read(id)
         const ids = this.enabledIds()
         if (ids.includes(id)) return false
-        const order = await this.installedIds()
+        const order = this.installedIds()
         const next = order.filter(candidate => candidate === id || ids.includes(candidate)).reverse()
         await this.resolve(next)
         this.saveEnabled(next)
@@ -280,7 +356,7 @@ export class ModManager {
         if (id !== 'all') await this.read(id)
         const ids = this.enabledIds(), next = id === 'all' ? [] : ids.filter(candidate => candidate !== id)
         if (next.length === ids.length) return false
-        const order = await this.installedIds()
+        const order = this.installedIds()
         await this.resolve(next)
         this.saveEnabled(next)
         this.saveOrder(order)
@@ -289,14 +365,13 @@ export class ModManager {
 
     async uninstall(id: string): Promise<boolean> {
         await this.ready()
-        const order = await this.installedIds()
+        const order = this.installedIds()
         if (!order.includes(id)) throw new Error(`Mod is not installed: ${id}`)
         const ids = this.enabledIds(), next = ids.filter(candidate => candidate !== id)
         await this.resolve(next)
-        await removeInstalledArchive('mods', id)
         this.saveEnabled(next)
         this.saveOrder(order.filter(candidate => candidate !== id))
-        this.loaded.delete(id)
+        await this.removeInstalled(id)
         return ids.includes(id)
     }
 
@@ -310,41 +385,97 @@ export class ModManager {
     private read(id: string): Promise<InstalledMod>
     private read(id: string, allowMissing: true): Promise<InstalledMod | undefined>
     private async read(id: string, allowMissing = false): Promise<InstalledMod | undefined> {
-        if (!isQualifiedId(id)) throw new Error('Use an installed Mod ID; install ZIPs from /mod')
-        const cached = this.loaded.get(id)
+        if (!isModId(id)) throw new Error('Use an installed Mod ID; install ZIPs from /mod')
+        const key = this.selection(this.profile).installed[id]
+        const cached = key && this.loaded.get(key)
         if (cached) return cached
-        const archive = await readInstalledArchive('mods', id)
+        const archive = key && await readInstalledArchive('mods', key)
         if (!archive) {
             if (allowMissing) return undefined
             throw new Error(`Mod is not installed: ${id}. Open /mod to install it`)
         }
-        const mod = parseInstalled(readInstalledFiles('mods', id, archive) ?? unpackArchive(archive, 'manifest.json'))
+        const mod = parseInstalled(readInstalledFiles('mods', key, archive) ?? unpackArchive(archive, 'manifest.json'))
         if (mod.manifest.id !== id) throw new Error(`Installed Mod ID does not match: ${id}`)
-        this.loaded.set(id, mod)
+        this.loaded.set(key, mod)
         return mod
     }
 
-    private enabledIds(): string[] {
-        const ids: unknown = JSON.parse(sys.localStorage.getItem(storageKey) ?? '[]')
-        if (!Array.isArray(ids) || ids.some(id => !isQualifiedId(id)) || new Set(ids).size !== ids.length) {
-            throw new Error('Invalid saved Mods')
+    private selection(profile: number | null): ModSelection {
+        const raw = sys.localStorage.getItem(selectionKey(profile))
+        if (!raw) return { installed: {}, enabled: [], order: [] }
+        const value = JSON.parse(raw), ids = (list: unknown) => Array.isArray(list) && list.every(id => isModId(id)) && new Set(list).size === list.length
+        if (!value || typeof value !== 'object' || !ids(value.enabled) || !ids(value.order) || !value.installed || typeof value.installed !== 'object'
+            || Object.entries(value.installed).some(([id, key]) => !isModId(id) || typeof key !== 'string')) {
+            // Dev saves follow the current format only (e.g. Mod IDs before they became bare names): start without Mods.
+            console.warn(`[Mods] Ignoring saved Mods in an old format for player ${profile ?? 'none'}`)
+            return { installed: {}, enabled: [], order: [] }
         }
-        return ids
+        return { installed: { ...value.installed }, enabled: [...value.enabled], order: [...value.order] }
     }
 
-    private async installedIds(): Promise<string[]> {
-        const installed = await listInstalledArchives('mods')
-        const order: unknown = JSON.parse(sys.localStorage.getItem(orderStorageKey) ?? '[]')
-        if (!Array.isArray(order) || order.some(id => !isQualifiedId(id)) || new Set(order).size !== order.length) throw new Error('Invalid saved Mod order')
-        return [...new Set([...order, ...this.enabledIds().reverse(), ...installed])].filter(id => installed.includes(id))
+    private writeSelection(profile: number | null, selection: ModSelection): void {
+        sys.localStorage.setItem(selectionKey(profile), JSON.stringify(selection))
     }
 
-    private saveOrder(ids: readonly string[]): void {
-        sys.localStorage.setItem(orderStorageKey, JSON.stringify(ids))
+    private update(change: (selection: ModSelection) => void): void {
+        const selection = this.selection(this.profile)
+        change(selection)
+        this.writeSelection(this.profile, selection)
     }
 
-    private saveEnabled(ids: string[]): void {
-        sys.localStorage.setItem(storageKey, JSON.stringify(ids))
+    private enabledIds(): string[] { return this.selection(this.profile).enabled }
+
+    private installedIds(): string[] {
+        const { installed, enabled, order } = this.selection(this.profile)
+        return [...new Set([...order, ...[...enabled].reverse(), ...Object.keys(installed)])].filter(id => Object.hasOwn(installed, id))
+    }
+
+    private saveOrder(ids: readonly string[]): void { this.update(selection => { selection.order = [...ids] }) }
+
+    private saveEnabled(ids: string[]): void { this.update(selection => { selection.enabled = [...ids] }) }
+
+    /** Saves the ZIP once per content and points this player at it; the archive it replaces goes if nobody uses it. */
+    private async store(mod: ArchivedMod): Promise<void> {
+        const id = mod.manifest.id, key = archiveKey(id, mod.archive)
+        if (!(await listInstalledArchives('mods')).includes(key)) await saveInstalledArchive('mods', key, mod.archive, mod.files)
+        const previous = this.selection(this.profile).installed[id]
+        this.update(selection => { selection.installed[id] = key })
+        if (previous && previous !== key) await this.release(previous)
+        this.reinstalled.add(id)
+    }
+
+    private async removeInstalled(id: string): Promise<void> {
+        const key = this.selection(this.profile).installed[id]
+        this.update(selection => {
+            delete selection.installed[id]
+            selection.enabled = selection.enabled.filter(candidate => candidate !== id)
+            selection.order = selection.order.filter(candidate => candidate !== id)
+        })
+        if (key) await this.release(key)
+    }
+
+    private referencedArchives(): Set<string> {
+        const keys = new Set<string>(), storage = sys.localStorage
+        for (let index = 0; index < storage.length; index++) {
+            const name = storage.key(index)
+            if (!name?.startsWith(PLAYER_MODS_PREFIX)) continue
+            const profile = name.slice(PLAYER_MODS_PREFIX.length, -':state'.length)
+            try { for (const key of Object.values(this.selection(profile === 'none' ? null : Number(profile)).installed)) keys.add(key) }
+            catch (error) { console.warn(`[Mods] Ignoring invalid player Mods: ${name}`, error) }
+        }
+        return keys
+    }
+
+    private async release(key: string): Promise<void> {
+        if (!this.referencedArchives().has(key)) await removeInstalledArchive('mods', key)
+    }
+
+    /** Drops archives no player uses: deleted players, replaced versions and the old device-wide installs. */
+    private async collectGarbage(): Promise<void> {
+        const referenced = this.referencedArchives()
+        for (const key of await listInstalledArchives('mods')) {
+            if (!referenced.has(key)) await removeInstalledArchive('mods', key).catch(error => console.warn(`[Mods] Failed to remove ${key}`, error))
+        }
     }
 }
 

@@ -38,6 +38,7 @@ import {
 import { ItemComponent, TutorialResource, WaveResource } from './levelState'
 import { initializeLevel, createLevelProgressSystem } from './level'
 import { createItemSystem, getAvailableSun } from './items'
+import { canDropLoot } from './loot'
 import { createWaveSystem } from './waves'
 import { createZombieGroanSystem } from './zombieGroans'
 import { getActiveTutorial } from './tutorials'
@@ -106,7 +107,15 @@ export class IntegratedGameServer {
     }
 
     start(packet: StartSessionPacket): WorldSnapshot {
-        if (packet.save !== undefined) return this.restore(packet.save, packet.levelId, packet.mods)
+        if (packet.save !== undefined) {
+            this.restore(packet.save, packet.levelId, packet.mods)
+            // The purse lives in the profile and may have changed in the store since this save; take it from the session.
+            const economy = this.session!.world.resources.get(EconomyStateResource)
+            economy.money = packet.initialMoney
+            if (packet.packetUpgrades) economy.diamonds = true
+            else delete economy.diamonds
+            return this.snapshot()
+        }
         const level = this.levels.levels[packet.levelId]
         if (!level) throw new Error(`Unknown level: ${packet.levelId}`)
 
@@ -124,6 +133,7 @@ export class IntegratedGameServer {
             sun: Math.min(MAX_SUN, level.startingSun),
             money: packet.initialMoney,
             pendingSunSpend: 0,
+            ...(packet.packetUpgrades ? { diamonds: true as const } : {}),
         })
         world.resources.set(RandomResource, new DeterministicRng(packet.randomSeed))
         world.resources.set(SeedBankResource, {
@@ -570,6 +580,8 @@ export class IntegratedGameServer {
                 y: position.y,
                 scale: item.scale,
                 alpha: item.alpha,
+                ...(item.landed ? { landed: true as const } : {}),
+                ...(item.arrow ? { arrow: true as const } : {}),
             }
         })
 
@@ -955,6 +967,8 @@ export class IntegratedGameServer {
             }
             const bank = world.resources.get(SeedBankResource)
             bank.selection = { mode: 'none' }
+            // Board::FadeOutLevel: unused mowers start turning into gold 200 ticks after the award.
+            if (canDropLoot(world)) world.resources.get(EconomyStateResource).mowerCoinTicks = 200
             level.result = 'won'
             emitServerEvent(events, 'levelWon', {})
             return
@@ -963,6 +977,10 @@ export class IntegratedGameServer {
         item.state = 'collecting'
         item.disappearTicks = 0
         item.fadeTicks = 0
+        if (this.definitions.items[item.typeId]?.kind === 'money') {
+            emitServerEvent(world.resources.get(EventQueueResource), 'itemCollected', { entityId: itemId, typeId: item.typeId, value: item.value })
+            return
+        }
         const availableBefore = this.availableSun(world) - item.value
         const availableAfter = availableBefore + item.value
         for (const [slot, packet] of world.resources.get(SeedBankResource).packets.entries()) {

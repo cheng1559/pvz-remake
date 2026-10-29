@@ -1,5 +1,6 @@
 import { Color, Sprite } from 'cc'
 import { randomAnimationRate, type ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
+import { attachmentTrack } from '@/shared/content/presentation'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { PlantView, PlantViewContext, PlantViewSnapshot } from './PlantView'
@@ -26,7 +27,7 @@ export class SunflowerView implements PlantView {
         ])
         if (node.isValid) {
             body.play({ loop: true, rate: randomAnimationRate(animations.rates.plantIdle) / 12 * animation.body.rateScale })
-            blink.attachToTrack(body, animation.blink.attachmentTrackId ?? 'anim_idle')
+            blink.attachToTrack(body, attachmentTrack(animation.blink))
             blink.hide()
         }
         return new SunflowerView(body, blink, tick + animations.nextPlantBlinkTicks(), 15 / 12 * animation.blink.rateScale, animations)

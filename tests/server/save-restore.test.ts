@@ -45,11 +45,13 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
     assert.throws(() => parseServerSaveSnapshot({ ...saved, tick: -1 }), /tick/)
     assert.throws(() => parseServerSaveSnapshot({ ...saved, gameplayTick: -1 }), /gameplayTick/)
     assert.throws(() => parseServerSaveSnapshot({ ...saved, gameplayTick: saved.tick + 1 }), /must not exceed/)
+    // The purse belongs to the profile: a restore takes the session's money, not the save's.
+    const purse = new IntegratedGameServer(definitions, levels)
+    assert.equal(purse.start({ ...start, initialMoney: 999, save: saved as unknown as JsonValue }).money, 999)
     const restored = new IntegratedGameServer(definitions, levels)
     assert.deepEqual(restored.start({
         ...start,
         randomSeed: 999,
-        initialMoney: 999,
         save: saved as unknown as JsonValue,
     }), original.snapshot())
     assert.deepEqual(restored.drainEvents(), original.drainEvents())

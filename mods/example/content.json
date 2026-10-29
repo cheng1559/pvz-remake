@@ -10,7 +10,6 @@
   "presentation": {
     "plants": "assets/presentation/plants.json",
     "projectiles": "assets/presentation/projectiles.json",
-    "strings": "assets/presentation/strings.json",
     "zombies": "assets/presentation/zombies.json",
     "levels": "assets/presentation/levels.json"
   },
@@ -52,7 +51,8 @@
       "example:chime": "assets/audio/chime.wav"
     },
     "json": {
-      "example:settings": "assets/settings.json"
+      "example:settings": "assets/settings.json",
+      "pvz:strings": "assets/strings.json"
     },
     "text": {
       "example:help": "assets/help.txt"

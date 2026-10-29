@@ -10,6 +10,10 @@ export interface ModManifest {
     apiVersion: 1
     contentHash: string
     dependencies: ModDependency[]
+    /** The language of the text this Mod supplies (BCP 47, e.g. zh-CN); the last running Mod that declares one wins. */
+    locale?: string
+    /** Who made the Mod, shown in the Mod list. */
+    author?: string
     gameplay?: {
         nodeModule: string
         cocosModule: string
@@ -21,16 +25,30 @@ export interface ModManifest {
 }
 
 const qualifiedIdPattern = /^[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9/._-]*$/
+const modIdPattern = /^[a-z0-9][a-z0-9._-]*$/
 const versionPattern = /^(\d+)\.(\d+)\.(\d+)$/
+
+/** The built-in base game's Mod ID; its namespace holds every original resource and definition. */
+export const BASE_MOD_ID = 'pvz'
 
 export function isQualifiedId(value: unknown): value is string {
     return typeof value === 'string' && qualifiedIdPattern.test(value)
 }
 
+/** A Mod ID is a bare name, and that name is the Mod's namespace: `widescreen` owns `widescreen:...`. */
+export function isModId(value: unknown): value is string {
+    return typeof value === 'string' && modIdPattern.test(value)
+}
+
+/** Whether a qualified ID is in this Mod's own namespace (added by it, not a replacement of another's). */
+export function isOwnId(modId: string, id: string): boolean {
+    return id.startsWith(`${modId}:`)
+}
+
 export function parseModManifest(value: unknown): ModManifest {
     const manifest = object(value, 'manifest')
     if (manifest.schemaVersion !== 1) throw new Error('manifest.schemaVersion must be 1')
-    if (!isQualifiedId(manifest.id)) throw new Error('manifest.id must be a qualified ID')
+    if (!isModId(manifest.id)) throw new Error('manifest.id must be a Mod name such as widescreen (its namespace)')
 
     const version = semanticVersion(manifest.version, 'manifest.version')
     if (manifest.apiVersion !== 1) throw new Error('manifest.apiVersion must be 1')
@@ -39,8 +57,8 @@ export function parseModManifest(value: unknown): ModManifest {
     const dependencyIds = new Set<string>()
     const dependencies = array(manifest.dependencies, 'manifest.dependencies').map((entry, index) => {
             const dependency = object(entry, `manifest.dependencies[${index}]`)
-            if (!isQualifiedId(dependency.id)) {
-                throw new Error(`manifest.dependencies[${index}].id must be a qualified ID`)
+            if (!isModId(dependency.id)) {
+                throw new Error(`manifest.dependencies[${index}].id must be a Mod ID`)
             }
             if (dependencyIds.has(dependency.id)) throw new Error(`duplicate dependency: ${dependency.id}`)
             dependencyIds.add(dependency.id)
@@ -49,6 +67,12 @@ export function parseModManifest(value: unknown): ModManifest {
             return { id: dependency.id, version: range }
         })
 
+    if (manifest.locale !== undefined && (typeof manifest.locale !== 'string' || !/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(manifest.locale))) {
+        throw new Error('manifest.locale must be a language tag such as zh-CN')
+    }
+    if (manifest.author !== undefined && (typeof manifest.author !== 'string' || !manifest.author.trim() || manifest.author.length > 64)) {
+        throw new Error('manifest.author must be a non-empty name of at most 64 characters')
+    }
     const gameplay = manifest.gameplay === undefined ? undefined : parseGameplay(manifest.gameplay)
     const client = manifest.client === undefined ? undefined : parseClient(manifest.client)
 
@@ -59,6 +83,8 @@ export function parseModManifest(value: unknown): ModManifest {
         apiVersion: 1,
         contentHash,
         dependencies,
+        ...(manifest.locale === undefined ? {} : { locale: manifest.locale as string }),
+        ...(manifest.author === undefined ? {} : { author: (manifest.author as string).trim() }),
         gameplay,
         client,
     }

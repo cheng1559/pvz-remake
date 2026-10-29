@@ -90,7 +90,12 @@ export interface MenuEndpoints {
     getAdventure: { args: Record<string, never>, result: { levelId: string } }
     completeLevel: { args: Record<string, never>, result: AwardView }
     getAward: { args: Record<string, never>, result: AwardView }
+    /** Coins in original units, seed-slot upgrades bought, and the next upgrade's price (Dave quotes it in 2-2). */
+    getPurse: { args: Record<string, never>, result: PurseView }
+    /** A running level reports the purse after collecting money; the store re-reads it, so it stays the only spender. */
+    setCoins: { args: { coins: number }, result: PurseView }
 }
+export interface PurseView { coins: number, packetUpgrades: number, packetUpgradeCost: number }
 export type MenuMethod = keyof MenuEndpoints
 export type MenuRequest = { [K in MenuMethod]: { method: K, args: MenuEndpoints[K]['args'] } }[MenuMethod]
 export type MenuResponse = MenuEndpoints[MenuMethod]['result']

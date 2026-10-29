@@ -15,6 +15,7 @@ export function boardCell(board: BoardDefinition, x: number, y: number) {
     return { row, column, inBounds: column >= 0 && column < board.columns && row >= 0 && row < board.rows }
 }
 
-export function adventureLevelName(index: number): string {
-    return `Level ${Math.floor((index - 1) / 10) + 1}-${(index - 1) % 10 + 1}`
+/** LawnApp::GetStageString: the area-level number, shown after [LEVEL]. */
+export function adventureStage(index: number): string {
+    return `${Math.floor((index - 1) / 10) + 1}-${(index - 1) % 10 + 1}`
 }

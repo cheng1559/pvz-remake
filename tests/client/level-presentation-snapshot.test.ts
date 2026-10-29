@@ -7,7 +7,7 @@ function reanim(id: string) {
         id, timeSeconds: 0, playing: true, loop: true, rate: 1, visible: true,
         hideOnFinish: false, extraAdditive: false,
         extraAdditiveColor: { r: 0, g: 0, b: 0, a: 255 },
-        blend: null, attachmentTrackId: null,
+        blend: null, attachmentTrackId: null, attachmentBasePose: null,
     }
 }
 
@@ -25,7 +25,7 @@ function snapshot(): any {
             widget: { message: 'Plant!', style: 'tutorial-level1', durationTicks: 100, pulseTick: 2 },
         },
         hud: {
-            sunFlashTicks: 0, progressWave: 1,
+            sunFlashTicks: 0, coinBankTicks: 0, progressWave: 1,
             progressCountdownStart: 10, progressMeterWidth: 20, progressTick: 11,
         },
         audio: {

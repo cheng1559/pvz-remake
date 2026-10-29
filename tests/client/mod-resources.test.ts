@@ -91,7 +91,8 @@ function setup() {
         fflate: { default: { unzipSync, strFromU8 } },
         cc: { Asset, JsonAsset, TextAsset, AudioClip, Texture2D: Texture, SpriteFrame: Frame, Rect: Vector, Size: Vector, Vec2: Vector,
             dynamicAtlasManager: { enabled: true }, macro: {},
-            sys: { isNative: false, isBrowser: false, OS: { IOS: 'iOS' }, localStorage: { getItem: (key: string) => storage.get(key), setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) } },
+            sys: { isNative: false, isBrowser: false, OS: { IOS: 'iOS' }, localStorage: { getItem: (key: string) => storage.get(key), setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key),
+                key: (index: number) => [...storage.keys()][index] ?? null, get length() { return storage.size } } },
             assetManager: { loadRemote: (path: string, options: any, callback?: any) => {
                 const complete = callback ?? options
                 try {
@@ -145,7 +146,7 @@ function setup() {
         Texture, archive, archives: modArchives, pendingArchives, db: modDb, jsb, blobs, picker: () => picker }
 }
 
-function modFiles(id = 'local:screen', version = '1.0.0', dependencies: { id: string, version: string }[] = []) {
+function modFiles(id = 'screen', version = '1.0.0', dependencies: { id: string, version: string }[] = []) {
     return {
         'manifest.json': strToU8(JSON.stringify({ schemaVersion: 1, id, version, apiVersion: 1, contentHash: `${id}-${version}`, dependencies,
             client: { module: 'client/index.js' } })),
@@ -154,24 +155,29 @@ function modFiles(id = 'local:screen', version = '1.0.0', dependencies: { id: st
     }
 }
 
-function zipFiles(id = 'local:hd', tag = 'first', options: any = {}) {
+function zipFiles(id = 'hd', tag = 'first', options: any = {}) {
     const image = new Uint8Array(readFileSync(`mods/pvz-base/${readBaseContent().resources.sprites['pvz:seedpacket_larger'].file}`))
-    const resources = { sprites: { 'pvz:button': { file: 'button.png', width: 50, height: 70, scale: 2, ...options } },
+    const { locale, ...sprite } = options
+    const resources = { sprites: { 'pvz:button': { file: 'button.png', width: 50, height: 70, scale: 2, ...sprite } },
         fonts: { 'pvz:demo': 'fonts/demo.json' }, audio: { 'pvz:chomp': 'audio/chomp.mp3' },
         json: { 'pvz:config': 'config.json' }, text: { 'pvz:note': 'note.txt' } }
-    return { 'manifest.json': strToU8(JSON.stringify({ schemaVersion: 1, id, version: '1.0.0', apiVersion: 1, contentHash: tag, dependencies: [] })),
+    return { 'manifest.json': strToU8(JSON.stringify({ schemaVersion: 1, id, version: '1.0.0', apiVersion: 1, contentHash: tag, dependencies: [],
+            ...(locale ? { locale } : {}) })),
         'content.json': strToU8(JSON.stringify({ resources })), 'button.png': image,
         'fonts/demo.json': strToU8(JSON.stringify({ layers: [{ image: 'atlas', textureScale: 4 }] })), 'fonts/atlas.png': image,
         'audio/chomp.mp3': strToU8('ID3-' + tag), 'config.json': strToU8(JSON.stringify({ tag })), 'note.txt': strToU8(tag) }
 }
 
-const key = 'pvz-remake:active-mods'
+const key = 'pvz-remake:player-mods:none:state'
+/** The stored archive a player's Mod points at. */
+const archiveOf = (storage: Map<string, string>, id: string, profile: number | 'none' = 'none') =>
+    JSON.parse(storage.get(`pvz-remake:player-mods:${profile}:state`) ?? '{"installed":{}}').installed[id] as string | undefined
 
 
 test('bootstrap artwork loads from the base archive without waiting for Mod installation', async () => {
     const { ModResources, modules } = setup()
     let baseReads = 0, modReads = 0
-    const resources = new ModResources(async () => { baseReads++; return zipSync(zipFiles('pvz:base')) }, {
+    const resources = new ModResources(async () => { baseReads++; return zipSync(zipFiles('pvz')) }, {
         ready: async () => { modReads++; return [] },
     })
     const frame = await resources.baseAsset('pvz:button', modules.cc.SpriteFrame)
@@ -221,18 +227,21 @@ test('the builtin archive and resource-only Mods share validation and decoding',
 
 test('one saved order controls overrides, scoped sprites and restart-only activation', async () => {
     const { manager, fresh, ModManager, modules } = setup()
-    await manager.install(zipSync(zipFiles('local:first', 'first')))
-    await manager.install(zipSync(zipFiles('local:last', 'last', { animations: ['pvz:blink'] })))
+    await manager.install(zipSync(zipFiles('first', 'first', { locale: 'zh-CN' })))
+    await manager.install(zipSync(zipFiles('last', 'last', { animations: ['pvz:blink'] })))
     assert.equal((await manager.ready()).length, 0)
     const running = fresh()
     assert.equal((await running.asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'last')
+    assert.deepEqual(Array.from(await running.jsonLayers('pvz:config'), (layer: any) => layer.json.tag), ['first', 'last'],
+        'text tables merge every layer, lowest priority first')
+    assert.equal(await running.locale(), 'zh-CN', 'the text language comes from the last running Mod that declares one')
     assert.notEqual(await running.sprite('pvz:button'), await running.sprite('pvz:button', 'pvz:blink'))
-    assert.equal(await manager.setEnabled(['local:last', 'local:first']), true)
+    assert.equal(await manager.setEnabled(['last', 'first']), true)
     assert.equal((await running.asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'last')
     assert.equal((await fresh().asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'first')
-    assert.deepEqual(Array.from(await new ModManager().list()), ['local:last', 'local:first'])
-    await manager.install(zipSync(zipFiles('local:last', 'updated')))
-    assert.deepEqual(Array.from(await new ModManager().list()), ['local:last', 'local:first'], 'updating a Mod preserves its saved priority')
+    assert.deepEqual(Array.from(await new ModManager().list()), ['last', 'first'])
+    await manager.install(zipSync(zipFiles('last', 'updated')))
+    assert.deepEqual(Array.from(await new ModManager().list()), ['last', 'first'], 'updating a Mod preserves its saved priority')
     assert.equal((await fresh().asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'first')
     assert.equal(await manager.unload('all'), true)
     assert.equal(await fresh().asset('pvz:config', modules.cc.JsonAsset), undefined)
@@ -240,66 +249,95 @@ test('one saved order controls overrides, scoped sprites and restart-only activa
 
 test('disabled Mods retain their saved positions across restart, toggles and updates', async () => {
     const { manager, ModManager } = setup()
-    await manager.install(zipSync(zipFiles('local:first')))
-    await manager.install(zipSync(zipFiles('local:last')))
-    await manager.install(zipSync(zipFiles('local:disabled')), false)
-    const enabled = ['local:last', 'local:first']
-    await manager.setEnabled(enabled, ['local:first', 'local:disabled', 'local:last'])
-    const order = ['local:disabled', 'local:first', 'local:last']
+    await manager.install(zipSync(zipFiles('first')))
+    await manager.install(zipSync(zipFiles('last')))
+    await manager.install(zipSync(zipFiles('disabled')), false)
+    const enabled = ['last', 'first']
+    await manager.setEnabled(enabled, ['first', 'disabled', 'last'])
+    const order = ['disabled', 'first', 'last']
     assert.equal(await manager.setEnabled(enabled, order), false, 'moving only a disabled row does not require restarting')
     const restarted = new ModManager()
     const installed = async () => Array.from(await new ModManager().installed(), (entry: any) => entry.id)
     assert.deepEqual(await installed(), order)
     assert.deepEqual(Array.from(await restarted.list()), enabled)
-    await restarted.load('local:disabled')
-    assert.deepEqual(Array.from(await restarted.list()), ['local:last', 'local:first', 'local:disabled'])
-    await restarted.unload('local:disabled')
-    await restarted.install(zipSync(zipFiles('local:disabled', 'updated')), false)
+    await restarted.load('disabled')
+    assert.deepEqual(Array.from(await restarted.list()), ['last', 'first', 'disabled'])
+    await restarted.unload('disabled')
+    await restarted.install(zipSync(zipFiles('disabled', 'updated')), false)
     assert.deepEqual(await installed(), order)
-    await restarted.uninstall('local:disabled')
-    assert.deepEqual(await installed(), ['local:first', 'local:last'])
+    await restarted.uninstall('disabled')
+    assert.deepEqual(await installed(), ['first', 'last'])
 })
 
 test('updates, uninstalls and failed writes preserve running bytes', async () => {
-    const { manager, fresh, ModManager, archives, db, modules } = setup()
+    const { manager, fresh, ModManager, archives, db, modules, storage } = setup()
     const original = zipSync(zipFiles())
     await manager.install(original)
     const running = fresh()
     assert.equal((await running.asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'first')
-    const saved = archives.get('local:hd')
+    const stored = archiveOf(storage, 'hd')!, saved = archives.get(stored)
+    assert.ok(saved)
     db.failWrite = true
-    await assert.rejects(manager.install(zipSync(zipFiles('local:hd', 'second'))), /Storage full/)
-    assert.equal(archives.get('local:hd'), saved)
+    await assert.rejects(manager.install(zipSync(zipFiles('hd', 'second'))), /Storage full/)
+    assert.equal(archiveOf(storage, 'hd'), stored)
+    assert.equal(archives.get(stored), saved)
     db.failWrite = false
-    await manager.install(zipSync(zipFiles('local:hd', 'second')))
+    await manager.install(zipSync(zipFiles('hd', 'second')))
     assert.equal((await fresh().asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'second')
-    await manager.uninstall('local:hd')
+    assert.equal(archives.has(stored), false, 'the replaced version is removed once no player uses it')
+    await manager.uninstall('hd')
+    assert.equal(archives.size, 0)
     assert.equal((await running.asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'first')
     assert.equal((await new ModManager().ready()).length, 0)
 })
 
-test('importing pvz:base is rejected without changing installed archives or settings', async () => {
+test('importing pvz is rejected without changing installed archives or settings', async () => {
     const { manager, archives, storage } = setup()
-    await manager.install(zipSync(modFiles('local:existing')))
+    await manager.install(zipSync(modFiles('existing')))
     const beforeArchives = new Map(archives), beforeStorage = new Map(storage)
     for (const enable of [true, false]) {
-        await assert.rejects(manager.install(zipSync(modFiles('pvz:base')), enable), /pvz:base is built in and cannot be imported/)
+        await assert.rejects(manager.install(zipSync(modFiles('pvz')), enable), /pvz is built in and cannot be imported/)
         assert.deepEqual(archives, beforeArchives)
         assert.deepEqual(storage, beforeStorage)
     }
-    await assert.rejects(manager.prepareImport(zipSync(modFiles('pvz:base'))), /pvz:base is built in and cannot be imported/)
+    await assert.rejects(manager.prepareImport(zipSync(modFiles('pvz'))), /pvz is built in and cannot be imported/)
+})
+
+test('the Mod list reads only manifests of Mods not loaded this session, and enabling one validates it on Apply', async () => {
+    const { manager, ModManager, modules } = setup()
+    await manager.install(zipSync(modFiles('idle', '3.1.0')), false)
+    const manager2 = new ModManager()
+    const unzip = modules.fflate.default.unzipSync, inflated: string[] = []
+    modules.fflate.default.unzipSync = (data: Uint8Array, options?: { filter?: (entry: { name: string }) => boolean }) => {
+        const entries = unzip(data, options)
+        inflated.push(...Object.keys(entries))
+        return entries
+    }
+    const versions = await manager2.installed()
+    modules.fflate.default.unzipSync = unzip
+    assert.equal(versions.find((mod: any) => mod.id === 'idle').version, '3.1.0')
+    assert.deepEqual(inflated, ['manifest.json'], 'opening the list inflates only the manifest')
+    inflated.length = 0
+    modules.fflate.default.unzipSync = (...args: Parameters<typeof unzip>) => { inflated.push('read'); return unzip(...args) }
+    await manager2.installed()
+    modules.fflate.default.unzipSync = unzip
+    assert.deepEqual(inflated, [], 'reopening the list reuses the versions it read')
+    await manager2.install(zipSync(modFiles('idle', '3.2.0')), false)
+    assert.equal((await manager2.installed()).find((mod: any) => mod.id === 'idle').version, '3.2.0')
+    await manager2.queueChanges({ enabled: ['idle'], order: ['idle'], imports: [], uninstalls: [] })
+    assert.equal(manager2.hasPendingChanges(), true)
 })
 
 test('cancelled draft imports discard staged ZIPs and preserve installed archives and settings', async () => {
     const { manager, archives, pendingArchives, storage } = setup()
-    await manager.install(zipSync(modFiles('local:parent')))
+    await manager.install(zipSync(modFiles('parent')))
     await manager.installed()
     const beforeArchives = new Map(archives), beforeStorage = new Map(storage)
-    const child = await manager.prepareImport(zipSync(modFiles('local:child', '1.0.0', [{ id: 'local:parent', version: '>=2.0.0' }])))
-    const parent = await manager.prepareImport(zipSync(modFiles('local:parent', '2.0.0')))
+    const child = await manager.prepareImport(zipSync(modFiles('child', '1.0.0', [{ id: 'parent', version: '>=2.0.0' }])))
+    const parent = await manager.prepareImport(zipSync(modFiles('parent', '2.0.0')))
     assert.deepEqual(archives, beforeArchives, 'selecting an update does not replace the installed ZIP')
     assert.deepEqual(storage, beforeStorage, 'a cancelled draft has no persistent changes')
-    await assert.rejects(manager.queueChanges({ enabled: ['local:parent', 'local:child'], order: ['local:child', 'local:parent'], imports: [child], uninstalls: [] }), /requires local:parent/)
+    await assert.rejects(manager.queueChanges({ enabled: ['parent', 'child'], order: ['child', 'parent'], imports: [child], uninstalls: [] }), /requires parent/)
     assert.deepEqual(archives, beforeArchives, 'invalid dependencies are rejected before saving any imports')
     assert.deepEqual(storage, beforeStorage)
     await manager.discardImports([child, parent])
@@ -310,16 +348,16 @@ test('cancelled draft imports discard staged ZIPs and preserve installed archive
 
 test('Apply queues metadata without decoding ZIPs or changing installed Mods; startup applies and retries the job', async () => {
     const { manager, ModManager, archives, pendingArchives, storage, modules, db } = setup()
-    await manager.install(zipSync(modFiles('local:parent')))
-    await manager.install(zipSync(modFiles('local:remove')))
+    await manager.install(zipSync(modFiles('parent')))
+    await manager.install(zipSync(modFiles('remove')))
     await manager.installed()
-    const child = await manager.prepareImport(zipSync(modFiles('local:child', '1.0.0', [{ id: 'local:parent', version: '>=2.0.0' }])))
-    const parent = await manager.prepareImport(zipSync(modFiles('local:parent', '2.0.0')))
-    const before = new Map(archives), enabled = storage.get(key)
+    const child = await manager.prepareImport(zipSync(modFiles('child', '1.0.0', [{ id: 'parent', version: '>=2.0.0' }])))
+    const parent = await manager.prepareImport(zipSync(modFiles('parent', '2.0.0')))
+    const before = new Map(archives), enabled = storage.get(key), removed = archiveOf(storage, 'remove')!
     const unzip = modules.fflate.default.unzipSync
     modules.fflate.default.unzipSync = () => assert.fail('Apply must not decode ZIP files')
-    await manager.queueChanges({ enabled: ['local:parent', 'local:child'], order: ['local:child', 'local:parent'],
-        imports: [child, parent], uninstalls: ['local:remove'] })
+    await manager.queueChanges({ enabled: ['parent', 'child'], order: ['child', 'parent'],
+        imports: [child, parent], uninstalls: ['remove'] })
     modules.fflate.default.unzipSync = unzip
     assert.deepEqual(archives, before)
     assert.equal(storage.get(key), enabled)
@@ -344,24 +382,24 @@ test('Apply queues metadata without decoding ZIPs or changing installed Mods; st
     assert.equal(progress.at(-1), 1)
     assert.equal(boot.hasPendingChanges(), false)
     assert.equal(pendingArchives.size, 0)
-    assert.equal(archives.has('local:remove'), false)
+    assert.equal(archives.has(removed), false)
     assert.equal(archives.size, 2)
-    assert.deepEqual(Array.from(await boot.list()), ['local:parent', 'local:child'])
-    assert.equal((await boot.installed()).find((mod: any) => mod.id === 'local:parent').version, '2.0.0')
-    const cancelled = await boot.prepareImport(zipSync(modFiles('local:cancelled')))
+    assert.deepEqual(Array.from(await boot.list()), ['parent', 'child'])
+    assert.equal((await boot.installed()).find((mod: any) => mod.id === 'parent').version, '2.0.0')
+    const cancelled = await boot.prepareImport(zipSync(modFiles('cancelled')))
     await boot.discardImports([cancelled])
     assert.equal(pendingArchives.size, 0)
-    assert.equal(archives.has('local:cancelled'), false)
+    assert.equal(archives.has('cancelled'), false)
 })
 
 test('ZIP, geometry and dependency failures do not change installed state', async () => {
     const { manager, archives } = setup()
     await assert.rejects(manager.install(zipSync({ ...zipFiles(), '../escape.txt': strToU8('x') })), /Invalid ZIP path/)
-    await assert.rejects(manager.install(zipSync(zipFiles('local:bad', 'bad', { width: 49 }))), /dimensions/)
-    await assert.rejects(manager.install(zipSync(modFiles('local:child', '1.0.0', [{ id: 'local:parent', version: '>=1.0.0' }]))), /missing mod/)
-    await manager.install(zipSync(modFiles('local:parent')))
-    await manager.install(zipSync(modFiles('local:child', '1.0.0', [{ id: 'local:parent', version: '>=1.0.0' }])))
-    await assert.rejects(manager.unload('local:parent'), /missing mod/)
+    await assert.rejects(manager.install(zipSync(zipFiles('bad', 'bad', { width: 49 }))), /dimensions/)
+    await assert.rejects(manager.install(zipSync(modFiles('child', '1.0.0', [{ id: 'parent', version: '>=1.0.0' }]))), /missing mod/)
+    await manager.install(zipSync(modFiles('parent')))
+    await manager.install(zipSync(modFiles('child', '1.0.0', [{ id: 'parent', version: '>=1.0.0' }])))
+    await assert.rejects(manager.unload('parent'), /missing mod/)
     assert.equal(archives.size, 2)
     const broken = modFiles(); delete (broken as any)['client/index.js']
     await assert.rejects(manager.install(zipSync(broken)), /Missing Mod module/)
@@ -369,14 +407,19 @@ test('ZIP, geometry and dependency failures do not change installed state', asyn
 
 test('startup repairs missing and corrupt records while leaving a usable manager', async () => {
     const { manager, storage, archives } = setup()
-    storage.set(key, JSON.stringify(['local:missing', 'local:broken', 'local:hd']))
-    archives.set('local:broken', new Uint8Array([1, 2, 3]))
-    archives.set('local:hd', zipSync(zipFiles()))
-    assert.deepEqual(Array.from(await manager.running()), ['local:hd'])
-    assert.deepEqual(JSON.parse(storage.get(key)!), ['local:hd'])
-    assert.ok((await manager.installed()).find((entry: any) => entry.id === 'local:broken').error)
-    await manager.uninstall('local:broken')
-    assert.equal(archives.has('local:broken'), false)
+    const ids = ['missing', 'broken', 'hd']
+    storage.set(key, JSON.stringify({ installed: Object.fromEntries(ids.map(id => [id, `${id}@stored`])), enabled: ids, order: [] }))
+    archives.set('broken@stored', new Uint8Array([1, 2, 3]))
+    archives.set('hd@stored', zipSync(zipFiles()))
+    // Device-wide installs from before players had their own Mods are dropped.
+    storage.set('pvz-remake:active-mods', JSON.stringify(['old']))
+    archives.set('old', zipSync(zipFiles('old')))
+    assert.deepEqual(Array.from(await manager.running()), ['hd'])
+    assert.deepEqual(JSON.parse(storage.get(key)!).enabled, ['hd'])
+    assert.deepEqual([storage.has('pvz-remake:active-mods'), archives.has('old')], [false, false])
+    assert.ok((await manager.installed()).find((entry: any) => entry.id === 'broken').error)
+    await manager.uninstall('broken')
+    assert.equal(archives.has('broken@stored'), false)
 })
 
 
@@ -385,8 +428,39 @@ test('startup repairs missing and corrupt records while leaving a usable manager
 
 
 
+test('each player has their own Mods and versions; identical ZIPs are stored once and another set needs a restart', async () => {
+    const { ModManager, archives, storage } = setup()
+    const player = (id: number | null) => { const manager = new ModManager(); manager.useProfiles(() => id); return manager }
+    const v1 = zipSync(modFiles('shared', '1.0.0')), v2 = zipSync(modFiles('shared', '2.0.0'))
+    await player(1).install(v1)
+    assert.deepEqual(Array.from(await player(2).installed()), [], 'other players see none of them')
+    const running = player(1)
+    assert.deepEqual(Array.from(await running.running()), ['shared'])
+    assert.deepEqual([running.hasMods(1), running.hasMods(2)], [true, false])
+    assert.deepEqual([await running.needsRestartFor(1), await running.needsRestartFor(2)], [false, true])
+    running.copyMods(1, 2)
+    assert.equal(await running.needsRestartFor(2), false, 'a synced player runs the same Mods')
+    await player(3).install(v1)
+    assert.equal(archives.size, 1, 'synced players and identical ZIPs share one stored archive')
+    assert.equal(await running.needsRestartFor(3), false)
+    await player(2).install(v2)
+    assert.equal(archives.size, 2)
+    assert.equal((await player(1).installed())[0].version, '1.0.0', 'updating affects only that player')
+    assert.equal(await running.needsRestartFor(2), true, 'another version needs a restart')
+    // Deleting players removes their records with the profile; their archives go at the next startup.
+    storage.delete('pvz-remake:player-mods:1:state')
+    storage.delete('pvz-remake:player-mods:3:state')
+    await player(2).ready()
+    assert.equal(archives.size, 1)
+    // The first player takes over what was installed before any player existed.
+    await player(null).install(zipSync(modFiles('early')))
+    running.copyMods(null, 4, true)
+    assert.deepEqual(Array.from(await player(4).list()), ['early'])
+    assert.equal(storage.has(key), false)
+})
+
 test('Native installation, picker cleanup and on-demand installed reads share the Mod store', async () => {
-    const { manager, ModManager, fresh, modules, files, archive, jsb } = setup()
+    const { manager, ModManager, fresh, modules, files, archive, jsb, storage } = setup()
     const directories = new Set<string>()
     let failCommit = false
     modules.cc.sys.isNative = true
@@ -425,8 +499,8 @@ test('Native installation, picker cleanup and on-demand installed reads share th
     await manager.install(await selected.read())
     selected.dispose()
     assert.equal(files.has('/Imports/hd.zip'), false)
-    const installedFile = '/app/mods/local%3Ahd/.archive.zip'
-    assert.deepEqual(files.get(installedFile), data)
+    const installedRoot = `/app/mods/${encodeURIComponent(archiveOf(storage, 'hd')!)}/`
+    assert.deepEqual(files.get(installedRoot + '.archive.zip'), data)
     const unzip = modules.fflate.default.unzipSync
     modules.fflate.default.unzipSync = (bytes: Uint8Array, options: any) => unzip(bytes, { filter(entry: any) {
         const selected = options.filter(entry)
@@ -436,42 +510,42 @@ test('Native installation, picker cleanup and on-demand installed reads share th
     const getDataFromFile = modules.cc.native.fileUtils.getDataFromFile, reads: string[] = []
     modules.cc.native.fileUtils.getDataFromFile = (path: string) => { reads.push(path); return getDataFromFile(path) }
     const [reloaded] = await new ModManager().ready()
-    assert.deepEqual(reads.map(path => path.slice('/app/mods/local%3Ahd/'.length)).sort(), ['.archive.zip', 'content.json', 'manifest.json'],
+    assert.deepEqual(reads.map(path => path.slice(installedRoot.length)).sort(), ['.archive.zip', 'content.json', 'manifest.json'],
         'a restart reads only the index of an installed Mod')
     assert.equal(strFromU8(reloaded.files['.hidden']), 'hidden file')
     const running = fresh()
-    const frame = await running.file('local:hd', 'button.png', modules.cc.SpriteFrame)
-    assert.equal(await running.file('local:hd', 'button.png', modules.cc.SpriteFrame), frame)
+    const frame = await running.file('hd', 'button.png', modules.cc.SpriteFrame)
+    assert.equal(await running.file('hd', 'button.png', modules.cc.SpriteFrame), frame)
     const clip = await running.asset('pvz:chomp', modules.cc.AudioClip)
-    assert.equal(clip.nativeUrl, '/app/mods/local%3Ahd/audio/chomp.mp3', 'native loaders read installed files in place')
+    assert.equal(clip.nativeUrl, installedRoot + 'audio/chomp.mp3', 'native loaders read installed files in place')
     assert.ok(![...files.keys()].some(path => path.startsWith('/app/mod-resources/')))
     modules.cc.native.fileUtils.getDataFromFile = getDataFromFile
     modules.fflate.default.unzipSync = unzip
     failCommit = true
-    await assert.rejects(manager.install(zipSync(zipFiles('local:hd', 'second'))), /finish installing/)
-    assert.deepEqual(files.get(installedFile), data)
+    await assert.rejects(manager.install(zipSync(zipFiles('hd', 'second'))), /finish installing/)
+    assert.deepEqual(files.get(installedRoot + '.archive.zip'), data)
     failCommit = false
-    await manager.install(zipSync(zipFiles('local:hd', 'second')))
+    await manager.install(zipSync(zipFiles('hd', 'second')))
     const updated = await fresh().asset('pvz:chomp', modules.cc.AudioClip)
     assert.equal(strFromU8(files.get(updated.nativeUrl)), 'ID3-second')
-    await manager.uninstall('local:hd')
-    assert.equal(files.has(installedFile), false)
+    await manager.uninstall('hd')
+    assert.ok(![...files.keys()].some(path => path.startsWith('/app/mods/hd')), 'both versions are gone once nobody uses them')
     assert.equal((await new ModManager().list()).length, 0)
-    const base = fresh(async () => zipSync(zipFiles('pvz:base', 'base', { width: 100, height: 140, scale: 1 })))
+    const base = fresh(async () => zipSync(zipFiles('pvz', 'base', { width: 100, height: 140, scale: 1 })))
     modules['@/client/content/ModResources'] = { modResources: base }
     modules.cc.dynamicAtlasManager = { enabled: true }
     modules.cc.macro = {}
     const frameWithoutMods = await base.asset('pvz:button', modules.cc.SpriteFrame)
     assert.equal(frameWithoutMods.originalSize.width, 100)
     assert.equal(modules.cc.dynamicAtlasManager.enabled, false, 'native 1x sprites must not copy released CPU images into an atlas')
-    const pending = await manager.prepareImport(zipSync(modFiles('local:deferred')))
+    const pending = await manager.prepareImport(zipSync(modFiles('deferred')))
     const staging = `/app/mod-pending/${pending.stagingId}/`
     assert.deepEqual([...files.keys()].filter(path => path.startsWith(staging)), [staging + '.archive.zip'])
-    const deferredFile = '/app/mods/local%3Adeferred/.archive.zip'
-    await manager.queueChanges({ enabled: ['local:deferred'], order: ['local:deferred'], imports: [pending], uninstalls: [] })
-    assert.equal(files.has(deferredFile), false)
+    const deferred = () => [...files.keys()].filter(path => path.startsWith('/app/mods/deferred%40') && path.endsWith('/.archive.zip'))
+    await manager.queueChanges({ enabled: ['deferred'], order: ['deferred'], imports: [pending], uninstalls: [] })
+    assert.deepEqual(deferred(), [])
     await new ModManager().ready()
-    assert.equal(files.has(deferredFile), true)
+    assert.deepEqual(deferred(), [`/app/mods/${encodeURIComponent(archiveOf(storage, 'deferred')!)}/.archive.zip`])
     assert.equal(files.has(staging + '.archive.zip'), false)
     modules.cc.sys.isNative = false
     await fresh().ready()

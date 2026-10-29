@@ -1,6 +1,7 @@
 import { randomAnimationRate } from '@/client/content/ClientAnimationRegistry'
 import { plantDefinition } from './definitions'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
+import { attachmentTrack } from '@/shared/content/presentation'
 import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import { AnimatedPlantView, plantAnimation } from './AnimatedPlantView'
 
@@ -48,15 +49,16 @@ export class PotatoMineView extends AnimatedPlantView {
         // A potato mine shows its face and light only once armed; its blink and glow attach then.
         const scale = plantDefinition(this.animations.definitions, this.context.plant.typeId).scale
         const attach = clip.reanimId === this.clips.armed.reanimId
-        this.body.setTrackPrefixVisible('anim_glow', false)
+        const glow = this.parts.glow ?? []
+        this.body.setTracksVisible(glow, false)
         for (const [name, extra] of this.extras) {
             extra.node.setPosition(clip.x, clip.y)
             extra.node.setScale(scale, scale, 1)
             if (name === 'Glow') {
-                extra.setTrackPrefixVisible('', false)
-                extra.setTrackPrefixVisible('anim_glow', true)
+                extra.setTracksVisible(extra.trackIds, false)
+                extra.setTracksVisible(glow, true)
             }
-            if (attach) extra.attachToTrack(this.body, this.extraClip(name).attachmentTrackId ?? 'anim_face')
+            if (attach) extra.attachToTrack(this.body, attachmentTrack(this.extraClip(name)))
             else extra.hide()
         }
     }
@@ -87,6 +89,6 @@ export class PotatoMineView extends AnimatedPlantView {
         const phase = glow.snapshot().timeSeconds / glow.durationSeconds
         glow.play({ loop: true, rate: this.glowRate(frames), hideOnFinish: false })
         glow.node.active = true
-        glow.setTrackPrefixVisible('anim_glow', phase * (frames - 1) < 1)
+        glow.setTracksVisible(this.parts.glow ?? [], phase * (frames - 1) < 1)
     }
 }

@@ -50,9 +50,10 @@ export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, 
 
 function applyPreviewParts(player: ReanimPlayer, typeId: string, definitions: PresentationDefinitions, hasTongue: boolean): void {
     const definition = definitions.zombies[typeId]
-    for (const track of definition.helmTracks) player.setTrackPrefixVisible(track, definition.helm?.track === track)
-    player.setTrackPrefixVisible('anim_hair', !definition.helm || definition.helm.showsHair === true)
-    player.setTrackPrefixVisible('anim_tongue', hasTongue)
+    const parts = definition.parts
+    for (const track of parts.helms) player.setTracksVisible([track], definition.helm?.track === track)
+    player.setTracksVisible(parts.hair, !definition.helm || definition.helm.showsHair === true)
+    player.setTracksVisible(parts.tongue, hasTongue)
 }
 
 export class AdventureIntro implements LevelIntro {
@@ -245,7 +246,7 @@ export class AdventureIntro implements LevelIntro {
                     x: node.position.x,
                     y: node.position.y,
                     z: node.position.z,
-                    hasTongue: player.getTrackNode('anim_tongue')?.active ?? false,
+                    hasTongue: this.definitions.zombies[this.previewTypes.get(node)!].parts.tongue.some(track => player.isTrackVisible(track)),
                     reanim: player.snapshot(),
                 }
             }),

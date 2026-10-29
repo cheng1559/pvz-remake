@@ -12,6 +12,12 @@ export interface ClientAnimationClip {
 
 export interface AnimationDefinition { readonly [slot: string]: ClientAnimationClip }
 
+/** The parent track a head, blink or flag clip attaches to; the data must name it. */
+export function attachmentTrack(clip: ClientAnimationClip): string {
+    if (!clip.attachmentTrackId) throw new Error(`${clip.reanimId} needs an attachmentTrackId to attach`)
+    return clip.attachmentTrackId
+}
+
 export interface ShooterAnimationDefinition extends AnimationDefinition {
     readonly body: ClientAnimationClip
     readonly idleHead: ClientAnimationClip
@@ -103,6 +109,16 @@ export interface PlantVisual {
     readonly tint?: readonly [number, number, number]
 }
 
+/** Body tracks a plant view changes, by exact ID; the heads and blinks attach by their clips' attachmentTrackId. */
+export interface PlantParts {
+    /** Plant::DoBlink hides these while the blink plays (the original's anim_eye prefix). */
+    readonly eyes?: readonly string[]
+    /** Takes the cracked sprites as a nut is chewed (Plant::UpdateReanim). */
+    readonly face?: string
+    /** The potato mine's light: lit near zombies, hidden in the almanac, shown on the seed packet. */
+    readonly glow?: readonly string[]
+}
+
 export interface PlantPresentationDefinition {
     readonly viewConfig?: Readonly<JsonObject>
     readonly rowOrder?: number
@@ -115,7 +131,7 @@ export interface PlantPresentationDefinition {
     /** Plant::SetSleeping: extra offset of the Z animation from (50, 40), in original Y-down pixels. */
     readonly sleepOffset?: readonly [number, number]
     readonly visual: PlantVisual
-    readonly packetVisibleTracks?: readonly string[]
+    readonly parts?: PlantParts
     readonly view?: PlantViewKind
     readonly animationTarget?: ClientAnimationTarget
     readonly animations?: ClientAnimationDefinitions[ClientAnimationTarget]
@@ -165,6 +181,7 @@ export interface ScreenAnimationDefinition {
     readonly rate: number
     readonly playback: 'loop' | 'last'
     readonly randomPhase?: boolean
+    /** Exact tracks to show; the others are hidden. */
     readonly visibleTracks?: readonly string[]
 }
 
@@ -187,22 +204,45 @@ export interface ZombiePresentationDefinition {
     readonly shadowX: number
     /** Original Y-down coordinates; defaults to 92. */
     readonly shadowY?: number
-    readonly arm: { readonly lower: string; readonly hand: string; readonly upper: string }
+    readonly parts: ZombieParts
     readonly damagedArm: 'damagedArm' | 'poleVaulterDamagedArm'
     readonly damagedArmSprite?: string
-    readonly enragedHeadSprite?: string
-    readonly heldTracks?: readonly string[]
+    /** Zombie::UpdateZombieNewspaper: the head track takes this sprite while enraged. */
+    readonly enragedHead?: { readonly track: string; readonly sprite: string }
     /** Unavailable cells in the 5x5 street-preview grid. */
     readonly previewBlockedCells?: readonly { readonly column: number; readonly row: number }[]
     readonly flag?: boolean
     readonly vault?: boolean
     readonly drops: Readonly<Partial<Record<'head' | 'arm' | 'flag', ZombieDrop>>>
-    readonly helmTracks: readonly string[]
     readonly helm?: { readonly track: string; readonly damagedSprites: readonly [string, string]; readonly effect: string; readonly offset: readonly [number, number]; readonly impactSounds: readonly PresentationSound[]; readonly bowlingImpactSounds?: readonly PresentationSound[]
         /** Cones and buckets hide the hair until dropped; a newspaper does not. */
         readonly showsHair?: boolean
         /** Plays once on the zombie when the helm breaks, like the newspaper's surprise mark. */
         readonly dropReanim?: { readonly reanimId: string; readonly offset: readonly [number, number] } }
+}
+
+/**
+ * Every track of each body part, by exact ID, across all of the zombie's clips; a clip without a track skips it.
+ * The original shows and hides parts by track-name prefix, which can catch unrelated tracks (Zombie_paper_hands2).
+ */
+export interface ZombieParts {
+    /** Zombie::DropHead. */
+    readonly head: readonly string[]
+    /** Hidden with the head, and under a helm unless helm.showsHair (Zombie::ZombieInitialize). */
+    readonly hair: readonly string[]
+    readonly tongue: readonly string[]
+    /** Zombie::SetupReanimForLostArm hides these. */
+    readonly arm: readonly string[]
+    /** Takes the damaged arm sprite once the arm is lost. */
+    readonly upperArm: string
+    /** Every helm track in the clips; only the worn helm's track (helm.track) shows. */
+    readonly helms: readonly string[]
+    /** The walk's ground track: how far a cycle moves (the house-entry walk). */
+    readonly ground: string
+    /** Zombie::DropPole: dropped with the head. */
+    readonly held?: readonly string[]
+    /** The flag zombie's inner arm with and without the flag; the flag draws behind `front`, the arm gripping the pole. */
+    readonly flagArm?: { readonly holding: readonly string[]; readonly free: readonly string[]; readonly front: string }
 }
 
 export type NutBlinkSlot = 'blinkTwitch' | 'blinkTwice' | 'blinkThrice'
@@ -228,6 +268,23 @@ export interface LevelPresentationDefinition {
     readonly seedGuideSteps: readonly string[]
     readonly lawnGuideSteps: readonly string[]
 }
+/** Coin::CoinInitialize / Coin::Draw: how a sun or coin item looks; offsets are from the item's 60x60 top-left. */
+export interface ItemPresentationDefinition {
+    /** Looping animation; `rate` is a random speed range relative to the clip's fps. */
+    readonly reanim: string
+    readonly offset: readonly [number, number]
+    readonly rate: readonly [number, number]
+    /** Silver and gold coins show this flat image instead of the animation while in flight or being collected. */
+    readonly flight?: { readonly sprite: string; readonly offset: readonly [number, number] }
+    /** Drawn under the item at `offset` (the image's top-left); `inFlight` shows it only with the flat image. */
+    readonly glow?: { readonly sprite: string; readonly offset: readonly [number, number]; readonly inFlight?: boolean }
+    /** The arrow particle over an item that has a bouncy arrow, relative to the item's top-left. */
+    readonly arrow?: { readonly particle: string; readonly offset: readonly [number, number] }
+    readonly spawnSounds?: readonly PresentationSound[]
+    readonly landSounds?: readonly PresentationSound[]
+    readonly collectSounds?: readonly PresentationSound[]
+}
+
 export interface AwardPresentationDefinition {
     readonly sprite: string
     readonly scale: number
@@ -248,7 +305,49 @@ const VIEW_SLOTS: Readonly<Record<string, readonly string[]>> = {
     potatomine: ['buried', 'rise', 'armed', 'blink', 'glow'],
     chomper: ['idle', 'bite', 'chew', 'swallow'],
 }
+export interface MainMenuButtonDefinition {
+    readonly name: string
+    /** The menu action it opens; adventure and zombatar have their own handling. */
+    readonly target?: string
+    /** The selector track the button follows; `replace` hides that track's own drawing. */
+    readonly track: string
+    readonly image: string
+    readonly highlight: string
+    readonly replace?: boolean
+    /** A wood sign hanging from the top: no press offset, drawn with the signs. */
+    readonly sign?: boolean
+    /** A game-mode button: the grave press sound. */
+    readonly mode?: boolean
+    readonly x?: number; readonly y?: number; readonly width?: number; readonly height?: number
+    readonly imageX?: number; readonly imageY?: number
+    readonly polygon?: readonly (readonly [number, number])[]
+}
+
+/** GameSelector: the selector animation's buttons and the exact tracks the menu changes. */
+export interface MainMenuDefinition {
+    readonly buttons: readonly MainMenuButtonDefinition[]
+    /** Preloaded images besides the buttons'. */
+    readonly images: readonly string[]
+    readonly clouds: readonly string[]
+    readonly flowers: readonly { readonly x: number; readonly y: number }[]
+    readonly tracks: {
+        /** Hidden: the game draws the sky behind the moving foreground. */
+        readonly sky: string
+        /** The grass, flowers and level numbers follow this track. */
+        readonly anchor: string
+        /** Carries the player's name. */
+        readonly profileSign: string
+        /** Drawn by the game's own leaf and flower animations instead. */
+        readonly replaced: readonly string[]
+        /** The rocks the rising zombie hand pushes aside, drawn outside the hand's clip. */
+        readonly handRocks: readonly string[]
+    }
+    /** Replaces the adventure button before the first level; each shows its own shadow track. */
+    readonly startAdventure: { readonly track: string; readonly image: string; readonly highlight: string; readonly shadow: string; readonly adventureShadow: string }
+}
+
 export interface PresentationDefinitions {
+    readonly mainMenu: MainMenuDefinition
     readonly conveyor: {
         readonly x: number; readonly backdropX: number; readonly clipX: number; readonly width: number; readonly height: number
         readonly packetX: number; readonly packetY: number; readonly beltY: number; readonly beltWidth: number; readonly beltHeight: number
@@ -263,12 +362,15 @@ export interface PresentationDefinitions {
         readonly blinkSeconds: readonly [number, number]; readonly talkLengths: readonly [number, number]
         readonly bubble: { readonly sprite: string; readonly x: number; readonly y: number; readonly textX: number; readonly textY: number; readonly textWidth: number; readonly textHeight: number; readonly continueX: number; readonly continueY: number; readonly shake: number }
         readonly hand: { readonly reanim: string; readonly x: number; readonly y: number; readonly scale: number; readonly track: string }
+        /** Body tracks by exact ID: the mouth takes the mouth sprites, the eyes hide under the blink attached to the head. */
+        readonly parts: { readonly mouth: string; readonly eyes: readonly string[]; readonly head: string }
         readonly mouths: Readonly<Record<string, string>>
     }
     readonly boards?: Readonly<Record<string, BoardPresentation>>
     readonly screens?: Readonly<Record<string, readonly ScreenAnimationDefinition[]>>
     readonly levels?: Readonly<Record<string, LevelPresentationDefinition>>
     readonly awards?: Readonly<Record<string, AwardPresentationDefinition>>
+    readonly items: Readonly<Record<string, ItemPresentationDefinition>>
     readonly animation: {
         readonly rates: Readonly<Record<'plantIdle' | 'shooterIdle' | 'zombieIdle' | 'zombieIdle2', readonly [number, number]>>
         readonly zombieIdle2Chance: number
@@ -310,6 +412,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             if (layer.visibleTracks !== undefined) texts(layer.visibleTracks, id + '.visibleTracks')
         }
     }
+    parseMainMenu(object(data.mainMenu, 'mainMenu'))
     const conveyor = object(data.conveyor, 'conveyor')
     for (const key of ['x', 'backdropX', 'clipX', 'packetX', 'packetY', 'beltY', 'introStart']) finite(conveyor[key], 'conveyor.' + key)
     for (const key of ['width', 'height', 'beltWidth', 'beltHeight', 'frames', 'frameTicks', 'introDuration']) positive(conveyor[key], 'conveyor.' + key)
@@ -328,6 +431,8 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     positive(bubble.textWidth, 'dave.bubble.textWidth'); positive(bubble.textHeight, 'dave.bubble.textHeight')
     text(hand.reanim, 'dave.hand.reanim'); text(hand.track, 'dave.hand.track'); positive(hand.scale, 'dave.hand.scale')
     finite(hand.x, 'dave.hand.x'); finite(hand.y, 'dave.hand.y')
+    const daveParts = object(dave.parts, 'dave.parts')
+    text(daveParts.mouth, 'dave.parts.mouth'); texts(daveParts.eyes, 'dave.parts.eyes'); text(daveParts.head, 'dave.parts.head')
     for (const [key, value] of Object.entries(object(dave.mouths, 'dave.mouths'))) text(value, 'dave.mouths.' + key)
     for (const [id, entry] of Object.entries(object(data.boards ?? {}, 'presentation boards'))) {
         const board = object(entry, id), music = object(board.music, id + '.music'), over = object(board.gameOver, id + '.gameOver')
@@ -372,6 +477,18 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             }
         }
     }
+    for (const [id, entry] of Object.entries(object(data.items, 'presentation items'))) {
+        const item = object(entry, id)
+        text(item.reanim, id + '.reanim'); pair(item.offset, id + '.offset'); range(item.rate, id + '.rate', true)
+        if (item.flight !== undefined) { const flight = object(item.flight, id + '.flight'); text(flight.sprite, id + '.flight.sprite'); pair(flight.offset, id + '.flight.offset') }
+        if (item.glow !== undefined) {
+            const glow = object(item.glow, id + '.glow')
+            text(glow.sprite, id + '.glow.sprite'); pair(glow.offset, id + '.glow.offset')
+            if (glow.inFlight !== undefined && typeof glow.inFlight !== 'boolean') throw new TypeError(id + '.glow.inFlight must be boolean')
+        }
+        if (item.arrow !== undefined) { const arrow = object(item.arrow, id + '.arrow'); text(arrow.particle, id + '.arrow.particle'); pair(arrow.offset, id + '.arrow.offset') }
+        for (const field of ['spawnSounds', 'landSounds', 'collectSounds']) sounds(item[field], id + '.' + field)
+    }
     const animation = object(data.animation, 'presentation definitions.animation')
     const rates = object(animation.rates, 'animation.rates')
     for (const name of ['plantIdle', 'shooterIdle', 'zombieIdle', 'zombieIdle2']) range(rates[name], name, true)
@@ -395,7 +512,13 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (plant.drawHeightOffset !== undefined) finite(plant.drawHeightOffset, id + '.drawHeightOffset')
         if (plant.pointerOffsetY !== undefined) finite(plant.pointerOffsetY, id + '.pointerOffsetY')
         if (plant.sleepOffset !== undefined) pair(plant.sleepOffset, id + '.sleepOffset')
-        if (plant.packetVisibleTracks !== undefined) texts(plant.packetVisibleTracks, id + '.packetVisibleTracks')
+        if (plant.parts !== undefined) {
+            const parts = object(plant.parts, id + '.parts')
+            for (const key of Object.keys(parts)) if (!['eyes', 'face', 'glow'].includes(key)) throw new TypeError(id + '.parts.' + key + ' is not supported')
+            if (parts.eyes !== undefined) texts(parts.eyes, id + '.parts.eyes')
+            if (parts.face !== undefined) text(parts.face, id + '.parts.face')
+            if (parts.glow !== undefined) texts(parts.glow, id + '.parts.glow')
+        }
         if (visual.nameKey !== undefined) text(visual.nameKey, id + '.visual.nameKey')
         if (visual.tooltipKey !== undefined) text(visual.tooltipKey, id + '.visual.tooltipKey')
         if (plant.view !== undefined) text(plant.view, id + '.view')
@@ -422,10 +545,14 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         }
     }
     for (const [id, entry] of Object.entries(zombies)) {
-        const zombie = object(entry, id), arm = object(zombie.arm, id + '.arm')
+        const zombie = object(entry, id), parts = object(zombie.parts, id + '.parts')
         if (zombie.nameKey !== undefined) text(zombie.nameKey, id + '.nameKey')
         if (zombie.damagedArmSprite !== undefined) text(zombie.damagedArmSprite, id + '.damagedArmSprite')
-        if (zombie.enragedHeadSprite !== undefined) text(zombie.enragedHeadSprite, id + '.enragedHeadSprite')
+        if (zombie.enragedHead !== undefined) {
+            const head = object(zombie.enragedHead, id + '.enragedHead')
+            text(head.track, id + '.enragedHead.track')
+            text(head.sprite, id + '.enragedHead.sprite')
+        }
         if (zombie.view !== undefined) text(zombie.view, id + '.view')
         if (zombie.previewBlockedCells !== undefined) {
             if (!Array.isArray(zombie.previewBlockedCells)) throw new TypeError(id + '.previewBlockedCells must be an array')
@@ -440,10 +567,19 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         }
         if (typeof zombie.animationTarget !== 'string' || !Number.isFinite(zombie.shadowX)) throw new TypeError(id + ' has invalid presentation')
         if (zombie.shadowY !== undefined) finite(zombie.shadowY, id + '.shadowY')
-        for (const track of ['lower', 'upper', 'hand']) if (typeof arm[track] !== 'string') throw new TypeError(id + '.arm.' + track + ' is invalid')
+        for (const part of ['head', 'hair', 'tongue', 'arm', 'helms']) texts(parts[part], id + '.parts.' + part)
+        text(parts.upperArm, id + '.parts.upperArm')
+        text(parts.ground, id + '.parts.ground')
+        if (parts.held !== undefined) texts(parts.held, id + '.parts.held')
+        if (parts.flagArm !== undefined) {
+            const flagArm = object(parts.flagArm, id + '.parts.flagArm')
+            texts(flagArm.holding, id + '.parts.flagArm.holding')
+            texts(flagArm.free, id + '.parts.flagArm.free')
+            text(flagArm.front, id + '.parts.flagArm.front')
+        }
+        if (zombie.flag === true && parts.flagArm === undefined) throw new TypeError(id + '.parts.flagArm is required for a flag zombie')
         object(zombie.animations, id + '.animations')
         if (zombie.damagedArm !== 'damagedArm' && zombie.damagedArm !== 'poleVaulterDamagedArm') throw new TypeError(id + '.damagedArm is invalid')
-        texts(zombie.helmTracks, id + '.helmTracks')
         for (const [part, value] of Object.entries(object(zombie.drops, id + '.drops'))) {
             const drop = object(value, id + '.drops.' + part)
             text(drop.track, id + '.drops.' + part + '.track')
@@ -457,7 +593,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             text(helm.effect, id + '.helm.effect')
             texts(helm.damagedSprites, id + '.helm.damagedSprites')
             if ((helm.damagedSprites as string[]).length !== 2) throw new TypeError(id + '.helm.damagedSprites must have two entries')
-            if (!(zombie.helmTracks as string[]).includes(helm.track as string)) throw new TypeError(id + '.helm.track is missing from helmTracks')
+            if (!(parts.helms as string[]).includes(helm.track as string)) throw new TypeError(id + '.helm.track is missing from parts.helms')
             pair(helm.offset, id + '.helm.offset')
             if (helm.showsHair !== undefined && typeof helm.showsHair !== 'boolean') throw new TypeError(id + '.helm.showsHair must be boolean')
             if (helm.dropReanim !== undefined) {
@@ -543,6 +679,33 @@ function finite(value: unknown, name: string): void {
 
 function text(value: unknown, name: string): void {
     if (typeof value !== 'string' || value.length === 0) throw new TypeError(name + ' must be a non-empty string')
+}
+
+function parseMainMenu(menu: Record<string, unknown>): void {
+    if (!Array.isArray(menu.buttons) || menu.buttons.length === 0) throw new TypeError('mainMenu.buttons must be a non-empty array')
+    const names = new Set<string>()
+    for (const [index, entry] of menu.buttons.entries()) {
+        const name = 'mainMenu.buttons[' + index + ']', button = object(entry, name)
+        for (const key of ['name', 'track', 'image', 'highlight']) text(button[key], name + '.' + key)
+        if (names.has(button.name as string)) throw new TypeError(name + '.name is duplicated')
+        names.add(button.name as string)
+        if (button.target !== undefined) text(button.target, name + '.target')
+        for (const key of ['replace', 'sign', 'mode']) if (button[key] !== undefined && typeof button[key] !== 'boolean') throw new TypeError(name + '.' + key + ' must be a boolean')
+        for (const key of ['x', 'y', 'imageX', 'imageY']) if (button[key] !== undefined) finite(button[key], name + '.' + key)
+        for (const key of ['width', 'height']) if (button[key] !== undefined) positive(button[key], name + '.' + key)
+        if (button.polygon !== undefined) {
+            if (!Array.isArray(button.polygon) || button.polygon.length < 3) throw new TypeError(name + '.polygon needs three points')
+            button.polygon.forEach(point => pair(point, name + '.polygon[]'))
+        }
+    }
+    texts(menu.images, 'mainMenu.images'); texts(menu.clouds, 'mainMenu.clouds')
+    if (!Array.isArray(menu.flowers)) throw new TypeError('mainMenu.flowers must be an array')
+    menu.flowers.forEach(flower => point(object(flower, 'mainMenu.flowers[]'), 'mainMenu.flowers[]'))
+    const tracks = object(menu.tracks, 'mainMenu.tracks')
+    for (const key of ['sky', 'anchor', 'profileSign']) text(tracks[key], 'mainMenu.tracks.' + key)
+    texts(tracks.replaced, 'mainMenu.tracks.replaced'); texts(tracks.handRocks, 'mainMenu.tracks.handRocks')
+    const start = object(menu.startAdventure, 'mainMenu.startAdventure')
+    for (const key of ['track', 'image', 'highlight', 'shadow', 'adventureShadow']) text(start[key], 'mainMenu.startAdventure.' + key)
 }
 
 function texts(value: unknown, name: string): void {

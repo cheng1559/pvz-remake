@@ -23,6 +23,8 @@ export class MenuApi {
     getAdventure() { return this.request('getAdventure', {}) }
     completeLevel() { return this.request('completeLevel', {}) }
     getAward() { return this.request('getAward', {}) }
+    getPurse() { return this.request('getPurse', {}) }
+    setCoins(coins: number) { return this.request('setCoins', { coins }) }
 }
 
 let transport: MenuTransport | undefined

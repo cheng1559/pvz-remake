@@ -17,7 +17,7 @@ const definitions = parseGameplayDefinitions(source('definitions'), source('seed
 const levels = parseGameplayLevels(source('levels'), definitions)
 
 test('base save compatibility requires matching identity, version and content hash', () => {
-    const installed = { id: 'pvz:base', version: '2.0.0', contentHash: 'hash' }
+    const installed = { id: 'pvz', version: '2.0.0', contentHash: 'hash' }
     assert.equal(isCompatibleBaseContent(installed, installed), true)
     assert.equal(isCompatibleBaseContent({ ...installed, id: 'other:base' }, installed), false)
     assert.equal(isCompatibleBaseContent({ ...installed, version: '1.0.0' }, installed), false)
@@ -65,7 +65,7 @@ test('SaveCoordinator strictly composes matching server and client snapshots', (
         createdAt: 100,
         updatedAt: 200,
         contentSet: {
-            base: { id: 'pvz:base', version: '2.0.0', contentHash: 'hash' },
+            base: { id: 'pvz', version: '2.0.0', contentHash: 'hash' },
             mods: [],
         },
         server: game.lastSave as unknown as ServerSaveSnapshot,
@@ -140,7 +140,7 @@ test('a planted Sunflower survives the complete 1-2 save and restore pipeline', 
     })
     const saved = createGameSave({
         profileId: 1, mode: 'adventure', levelId: options.levelId, createdAt: 100, updatedAt: 200,
-        contentSet: { base: { id: 'pvz:base', version: '2.0.0', contentHash: 'hash' }, mods: [] },
+        contentSet: { base: { id: 'pvz', version: '2.0.0', contentHash: 'hash' }, mods: [] },
         server, client: game.snapshotPresentation(presentation),
     })
     const parsed = parseGameSave(JSON.parse(JSON.stringify(saved)))
@@ -219,4 +219,18 @@ test('LocalIntegratedGame advances every gameplay and session boundary before sa
 
     assert.deepEqual(save.seedBank.selection, { mode: 'seed', slot: 0 })
     assert.equal(save.level.paused, true)
+})
+
+test('a debug coin falls to the ground and its animation passes the pause-save frame check', () => {
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start({ levelId: 'pvz:adventure-1-2', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
+    game.command({ type: 'completeIntro' })
+    game.update(0)
+    assert.equal(game.debugCommand('/item coin_silver 3 5').ok, true)
+    for (let tick = 0; tick < 200; tick++) game.update(definitions.tickSeconds)
+    const coin = game.render().items.find(item => item.typeId === 'pvz:coin_silver')!
+    assert.equal(coin.landed, true, 'COIN_MOTION_COIN pulls the coin back down')
+    const presentation = levelPresentation(game.render())
+    presentation.entities.push({ kind: 'sun', entityId: coin.entityId, animation: reanim('pvz:coin_silver') })
+    assert.doesNotThrow(() => game.snapshotPresentation(presentation))
 })

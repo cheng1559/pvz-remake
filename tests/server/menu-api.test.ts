@@ -159,7 +159,7 @@ test('achievement entries preserve saved flag/icon order and expose only the act
     assert.equal(view.items[1].titleKey, 'ACHIEVEMENT_NOBEL_PEAS_PRIZE_TITLE')
     assert.equal(view.items[4].titleKey, 'ACHIEVEMENT_SPUDOW_TITLE')
     assert.deepEqual(view.items.filter(item => item.earned).map(item => item.id), [0, 4])
-    const strings = JSON.parse(readFileSync(`mods/pvz-base/${readBaseContent().resources.json['pvz:properties/lawnstrings']}`, 'utf8'))
+    const strings = JSON.parse(readFileSync(`mods/pvz-base/${readBaseContent().resources.json['pvz:strings']}`, 'utf8'))
     for (const [index, item] of view.items.entries()) {
         assert.equal(item.icon, index)
         assert.ok(strings[item.titleKey])

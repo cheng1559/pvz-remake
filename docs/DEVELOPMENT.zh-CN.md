@@ -8,7 +8,11 @@
 
 阳光菇、大喷菇和墓碑吞噬者已安装（分别从 2-2、2-3、2-4 开始解锁），图鉴改用它们的关卡动画。阳光菇 25 阳光，先产出半尺寸、价值 15 的小阳光；醒着累计 12000 tick 后播放 100 tick 的成长动画，期间不产出，之后产出普通阳光；白天睡眠时既不成长也不产出。大喷菇 75 阳光，每 136–150 tick 攻击一次，50 tick 前摇后对同行攻击起点前方 340px 内的全部僵尸各造成 20 伤害；伤害穿过报纸并完整作用于身体（`hitsShieldAndBody`），烟雾在攻击开始 35 tick 后出现。墓碑吞噬者 75 阳光，只能种在墓碑上，种错时显示原版提示；僵尸会啃食它，但铲子铲不掉。它先落地 47–70 tick（`anim_land` 按身体随机的 10–15 fps 播放），再啃食 400 tick，期间下沉 30px、墓碑从顶部被逐渐吃掉，最后连同墓碑一起消失。阳光菇成长和墓碑吞噬者进度属于植物能力状态，随存档保存。
 
-墓碑按关卡配置在第 7／8／9 列随机放置 1／1／2 座，阻挡普通种植并显示原版提示，墓碑格不显示落点预览或移动端辅助线。开场镜头移回草坪后墓碑升起，伴随泥土粒子和音效，割草机与 Ready-Set-Plant 相应顺延 100 tick。位置、外观、出土延迟与最终波后的 200 tick 出怪计时一起存档；每座墓碑按关卡 `graveZombies` 的权重生成一只僵尸，先经过 150 tick 出土；若奖励已在此前掉落，墓碑不再出怪。客户端 `LevelGraves` 使用原版墓碑／土堆图集绘制出土，`ZombieView` 裁剪钻出的身体。读档立即同步墓碑可见高度，暂停状态下也无需等待下一帧游戏推进。通关奖励为阳光菇；2-2 尚未安装。夜间音乐沿用同一 `MusicSystem`，按原版 scheme 2 在下一乐句切入鼓轨、淡出主旋律，并保存独立鼓轨相位。
+墓碑按关卡配置在第 7／8／9 列随机放置 1／1／2 座，阻挡普通种植并显示原版提示，墓碑格不显示落点预览或移动端辅助线。开场镜头移回草坪后墓碑升起，伴随泥土粒子和音效，割草机与 Ready-Set-Plant 相应顺延 100 tick。位置、外观、出土延迟与最终波后的 200 tick 出怪计时一起存档；每座墓碑按关卡 `graveZombies` 的权重生成一只僵尸，先经过 150 tick 出土；若奖励已在此前掉落，墓碑不再出怪。客户端 `LevelGraves` 使用原版墓碑／土堆图集绘制出土，`ZombieView` 裁剪钻出的身体。读档立即同步墓碑可见高度，暂停状态下也无需等待下一帧游戏推进。通关奖励为阳光菇，领取后进入 2-2。夜间音乐沿用同一 `MusicSystem`，按原版 scheme 2 在下一乐句切入鼓轨、淡出主旋律，并保存独立鼓轨相位。
+
+冒险 2-2 复用 2-1 的夜间流程：20 波（第 10、20 波为旗帜波），出现普通、路障、铁桶、读报和旗帜僵尸，墓碑布局同 2-1，最终波后墓碑按 4000:4000 出普通或路障僵尸；首次冒险播放戴夫 1401–1402 对话，`{MONEY}`、`{UPGRADE_COST}` 分别替换为当前金币和下一次卡槽升级价格。通关奖励为大喷菇；2-3 尚未安装。选卡警告按关卡 `chooserWarnings` 依次弹出：2-1 首次冒险未带小喷菇先提示，未带产阳光植物时使用夜间专用文案，任何一次选择重新挑选都会中止开始。
+
+金币沿用原版 `Board::DropLootPiece`：每只僵尸在掉头、被碾压、烧焦或被瞬杀时掷一次 0–29999，概率乘以僵尸分值（关卡 `zombiePool` 的 `points`），银币（价值 1，显示 $10）、金币（5）、钻石（100，买过第一次卡槽升级前改为金币）；奖励掉落后不再掉金币。重玩关卡始终掉落，首次冒险只在关卡 `loot.firstAdventure` 开启时掉落；2-1 的 `firstCoinAfterWave` 保证第 5 波后掉出带拾取箭头的第一枚金币，`savingsCap` 让金币（含剩余割草机的金币）够买卡槽升级前不再掉落。金币是 `kind: "money"` 的掉落物，落地后改为旋转动画，点击后飞向左下角钱袋，钱袋显示 1000 tick 并淡出，暂停时也显示。领奖 200 tick 后，剩余割草机每 40 tick 自下而上变成一枚金币，提示音逐个升调。金币以档案为准：开局和读档都从档案取当前金币和卡槽升级次数，关卡内金额变化（含 `/money`）立即写回档案；掉落物外观、动画和音效由表现定义 `items` 提供。
 
 普通种子栏的铲子基准位置为 x=456，十槽传送带为 x=609；选卡时隐藏，开场结束后出现。选卡僵尸预览复用 `UIButton` 悬停与 `UITooltip`，名称读取表现定义的 `nameKey`，提示限制在右侧预览区域；确认选卡、暂停或打开弹窗时隐藏。1-8／1-9 尚未获得原版图鉴，因此提示只显示名称。
 
@@ -32,7 +36,7 @@
 
 `app/LocalMenuApi.ts` 接入项目现有的进程内本地后端，`GameApp` 启动时注入 Cocos 存储适配器；后端不依赖 Cocos 或 client。用户、设置和各用户存档继续沿用原键名。贴图、位图字体、本地化文案、布局、音效和实际全屏操作由前端负责。以后可替换同一 `MenuTransport` 接入网络服务，目前使用本地传输。
 
-当前接通冒险 1-1 至 2-1。Debug 和 Release 构建均可按 `/` 打开调试 CLI；移动模式双击右下角打开，命令见 [Debug CLI](DEBUG_CLI.zh-CN.md)。主菜单已使用原版图片按钮和 Reanim 入场动画，Options 已接通设置与游戏内操作，图鉴和商店已接入内容与交互；2-2 起的后续关卡及其他模式玩法尚未实现。迁移行为时可参考工作区的 `pvz-remake` 仓库。
+当前接通冒险 1-1 至 2-2。Debug 和 Release 构建均可按 `/` 打开调试 CLI；移动模式双击右下角打开，命令见 [Debug CLI](DEBUG_CLI.zh-CN.md)。主菜单已使用原版图片按钮和 Reanim 入场动画，Options 已接通设置与游戏内操作，图鉴和商店已接入内容与交互；2-3 起的后续关卡及其他模式玩法尚未实现。迁移行为时可参考工作区的 `pvz-remake` 仓库。
 
 `StartupScreen` 自动播放 PopCap Logo 的 200 tick 淡入停留淡出，再进入标题／加载页：标题下落、草皮卷展开，在原版五个进度点播放新版 `ReanimPlayer` 小花／僵尸头动画和音效。计时使用全局时钟的 100Hz 游戏 tick。进度来自主菜单图片和动画的实际准备，预加载的主菜单保持隐藏，点击进入时复用并开始入场。资源全部就绪后，加载条内按按钮规则响应左右键，背景按下、触摸或任意键也可进入；返回标题页不重播 PopCap Logo。新增动画可用 `npm run build:content -- --pak /path/to/main.pak` 单独生成，再重新打包内置 ZIP。
 
@@ -42,7 +46,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 关卡触摸种植沿用旧版 `pvz-remake`：轻点种子包保留选中，拖出后显示植物预览和行列辅助线，松手提交种植；拖回原种子包或落点无效则取消，也可直接点选另一张可用卡。`LevelInputPresenter` 捕获同一根手指的完整操作，暂停时清理；滑动收集按每 24px 采样，选卡高亮复用 `SeedPacketView` 的移动模式，仍调用现有后端指令。
 
-页面不再显示临时黑色标题条。`MenuPages.heading` 声明原版标题的字体、基线和颜色，文案从 `lawnstrings` 读取；商店使用原版招牌。`ChallengeScreen` 绘制 Mini-games／Puzzle／Survival 的 20／20／11 个缩略图按钮和档案奖杯计数，复用 `UI.button` 的捕获、hover 与按下状态，点击尚未接通的模式显示未开放提示。`MenuPageControls` 提供花园切换／商店入口和成就返回按钮；领奖页使用原版按钮贴图，目前仍提供重玩 1-1。
+页面不再显示临时黑色标题条。`MenuPages.heading` 声明原版标题的字体、基线和颜色，文案从 `pvz:strings` 读取；商店使用原版招牌。`ChallengeScreen` 绘制 Mini-games／Puzzle／Survival 的 20／20／11 个缩略图按钮和档案奖杯计数，复用 `UI.button` 的捕获、hover 与按下状态，点击尚未接通的模式显示未开放提示。`MenuPageControls` 提供花园切换／商店入口和成就返回按钮；领奖页使用原版按钮贴图，目前仍提供重玩 1-1。
 
 `AlmanacScreen` 提供植物种子包、僵尸静态缩略图、条目选择、详情卡、费用、冷却说明和彩色位图介绍。`AlmanacEntityView` 播放 49 种植物和 26 种僵尸的详情动画，不创建战斗实体；部件组装通过 `EntityDisplay` 与种子包静态姿态复用。绘制偏移、缩放和阴影对应原版 `Plant::UpdateReanim`／`Zombie::GetDrawPos`；蹦极绳索使用原贴图随身体挂点移动，计时接全局时钟。资源用 `npm run build:content -- --pak /path/to/main.pak` 生成。`AlmanacText` 保留原文格式标签，在 `UI.scroll` 的内容容器中排版；通用的 `UIScroll` 和 `ScrollGesture` 复用上一版 `pvz-remake` TypeScript 的滚轮、滑块拖动和移动端触摸滚动，惯性使用全局时钟。`StoreScreen` 提供汽车、招牌入场、四页货架、悬停说明、金币和 0.5 秒车门翻页，动画使用全局时钟。`server/menu/StoreCatalog` 根据当前档案的进度和购买槽位计算开放条件、价格、库存和确认购买，金币沿用原版单位（存档的 1 金币显示为 $10）；API 确认时重新读取档案后扣款，在后端保存。戴夫动画暂不创建；购买道具在战斗内的具体效果由对应系统接入。
 
@@ -74,7 +78,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 `LevelGameOverPresenter` 使用失败后的前 150 tick，让获胜僵尸保持可见并从当前行走到门口，再衔接进屋行走和镜头移动。靠近门口时保留在门框前方的普通实体层，进入门口后才转入遮挡层；撑杆僵尸等越界位置已在门后方的对象，会在靠近过程中平滑移动到门口裁剪边缘再进入。`ZombieView` 连续推进两段动作的步态，不重新开始动画；服务端快照保持冻结。场上其余动画暂停，获胜僵尸挂件清单 `EntityAttachments`（对应原版 `mAttachmentID`）中的旗帜、惊叹号等继续播放。植物和僵尸外观都从上下文的 `attachments.add(node, type?)` 登记挂件，可按种类移除（如死亡时移除惊叹号）。挂在身体轨道上的动画（`attachToTrack`）自动继承身体的颜色和受击闪光，对应原版 `PropogateColorToAttachments`；清单挂件不继承颜色。失败演出仍持续 1100 tick，音效时序沿用原流程。
 
-`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`mods/pvz-base/presentation/definitions/` 按类别维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，根目录 `mods/pvz-base/content.json` 和 Mod 使用相同的分类索引，打包时合并生成归档内的 `assets/presentation.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前安装了 1-1 至 2-1 内容。
+`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`mods/pvz-base/presentation/definitions/` 按类别维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，根目录 `mods/pvz-base/content.json` 和 Mod 使用相同的分类索引，打包时合并生成归档内的 `assets/presentation.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前安装了 1-1 至 2-2 内容。
 
 客户端存档统一写入 `level` 字段，读取时兼容原 `adventure11` 字段；开场专属的状态校验放在各自的实现中。共用关卡布局为 `assets/resources/ui/level.prefab`，资源 ID 为 `pvz:level`，保留原 Prefab 和脚本 UUID。`client/showcase` 仅保留独立资源预览探针。
 
@@ -195,7 +199,7 @@ Debug 构建保留 `pvzPhase4` 关卡调试入口；Mod 开发和安装见 [Mod 
 
 玩法配置和表现配置分别命名为 `GameplayDefinitions` 和 `PresentationDefinitions`，均按“加载 → 校验 → 返回对象 → 注入使用方”流转。`loadIntegratedGameContent` 返回 `definitions` 与 `presentation`；UI 通过 `UIAssets.presentation` 持有自己的表现定义。`ClientAnimationRegistry` 显式接收表现定义，视图与种子包通过构造参数或上下文使用配置，不设置全局配置单例。
 
-`shared/content/DefinitionRegistry` 使用现有通用 `Registry` 登记基础内容与 Mod JSON，登记结束后统一校验引用并冻结。服务端入口注册玩法表、关卡和显式关卡补丁，客户端入口注册表现表与名称文本；新的植物 ID、动画目标和视图工厂都经过注册表进入实际运行流程。UI 与战斗读取同一组 Mod 表现定义。新增植物示例及 API 见 [Mod 文档](MODS.md#新增植物与内容注册)。
+`shared/content/DefinitionRegistry` 使用现有通用 `Registry` 登记基础内容与 Mod JSON，登记结束后统一校验引用并冻结。服务端入口注册玩法表、关卡、显式关卡补丁和整体覆盖 `overrides`（任意已有 ID，同一 ID 仅限一个 Mod，在全部登记后、关卡补丁前生效），客户端入口注册表现表与名称文本；新的植物 ID、动画目标和视图工厂都经过注册表进入实际运行流程。UI 与战斗读取同一组 Mod 表现定义。新增植物示例及 API 见 [Mod 文档](MODS.md#新增植物与内容注册)。
 
 僵尸通过 `gait` 引用玩法定义中的 `zombieGaits`，`tongueChance` 和 `walk2Chance` 独立声明动画变体；不能从是否配置步态推断其他能力。植物能力的 `targeting` 声明范围、持杆目标过滤和交互修正键，僵尸的 `targetingInsets` 提供对应修正；撑杆落地后的攻击框使用 `vault.landedAttack`。客户端土豆雷的距离计算直接读取玩法攻击框和僵尸身体框。
 

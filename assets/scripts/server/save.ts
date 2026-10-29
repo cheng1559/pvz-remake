@@ -85,11 +85,14 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         paused: boolean(levelSource.paused, 'server save.level.paused'),
     }
 
-    const economySource = exact(save.economy, ['sun', 'money', 'pendingSunSpend'], 'server save.economy')
+    const economySource = optionalExact(save.economy, ['sun', 'money', 'pendingSunSpend'], ['firstCoinDropped', 'mowerCoinTicks', 'diamonds'], 'server save.economy')
     const economy = {
         sun: integer(economySource.sun, 'server save.economy.sun'),
         money: integer(economySource.money, 'server save.economy.money'),
         pendingSunSpend: integer(economySource.pendingSunSpend, 'server save.economy.pendingSunSpend'),
+        ...(economySource.firstCoinDropped === undefined ? {} : { firstCoinDropped: trueFlag(economySource.firstCoinDropped, 'server save.economy.firstCoinDropped') }),
+        ...(economySource.diamonds === undefined ? {} : { diamonds: trueFlag(economySource.diamonds, 'server save.economy.diamonds') }),
+        ...(economySource.mowerCoinTicks === undefined ? {} : { mowerCoinTicks: nonNegativeInteger(economySource.mowerCoinTicks, 'server save.economy.mowerCoinTicks') }),
     }
     const seedBank = parseSeedBank(save.seedBank)
     const tutorial = parseTutorial(save.tutorial)
@@ -397,7 +400,7 @@ function parseZombie(value: unknown, name: string): Zombie {
         'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
         'moweredTicksRemaining', 'walkAnimation', 'animation', 'animationTime', 'animationSpeed', 'hasHead', 'hasArm',
         'hasTongue', 'hitFlashCounter', 'groanCounter', 'helmHealth', 'chilledTicks', 'hasPole',
-    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'hitThroughShield'], name)
+    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'hitThroughShield', 'droppedLoot'], name)
     if (!ZOMBIE_STATES.includes(source.state as Zombie['state'])) throw new TypeError(`${name}.state is unknown`)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
@@ -435,6 +438,7 @@ function parseZombie(value: unknown, name: string): Zombie {
         ...(source.enrageTicks === undefined ? {} : { enrageTicks: nonNegativeFinite(source.enrageTicks, `${name}.enrageTicks`) }),
         ...(source.riseTicks === undefined ? {} : { riseTicks: positiveInteger(source.riseTicks, `${name}.riseTicks`) }),
         ...(source.hitThroughShield === undefined ? {} : { hitThroughShield: trueFlag(source.hitThroughShield, `${name}.hitThroughShield`) }),
+        ...(source.droppedLoot === undefined ? {} : { droppedLoot: trueFlag(source.droppedLoot, `${name}.droppedLoot`) }),
         ...parseBehaviorState(source, name),
     }
 }
@@ -453,7 +457,7 @@ function parseProjectile(value: unknown, name: string): Projectile {
 function parseItem(value: unknown, name: string): Item {
     const source = optionalExact(value, [
         'typeId', 'value', 'state', 'velocityX', 'velocityY', 'groundY', 'disappearTicks', 'fadeTicks', 'scale', 'alpha',
-    ], ['accelerationY', 'width'], name)
+    ], ['accelerationY', 'width', 'landed', 'arrow'], name)
     if (source.state !== 'available' && source.state !== 'collecting' && source.state !== 'fading') {
         throw new TypeError(`${name}.state is unknown`)
     }
@@ -476,6 +480,8 @@ function parseItem(value: unknown, name: string): Item {
         fadeTicks: nonNegativeInteger(source.fadeTicks, `${name}.fadeTicks`),
         scale: nonNegativeFinite(source.scale, `${name}.scale`),
         alpha,
+        ...(source.landed === undefined ? {} : { landed: trueFlag(source.landed, `${name}.landed`) }),
+        ...(source.arrow === undefined ? {} : { arrow: trueFlag(source.arrow, `${name}.arrow`) }),
     }
 }
 

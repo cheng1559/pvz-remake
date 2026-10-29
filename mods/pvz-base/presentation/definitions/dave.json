@@ -4,5 +4,6 @@
   "idleBlend": 0.2, "talkBlend": 0.5, "delay": 2, "blinkSeconds": [4, 8], "talkLengths": [23, 52],
   "bubble": {"sprite": "pvz:store_speechbubble2", "x": 285, "y": 20, "textX": 25, "textY": 6, "textWidth": 233, "textHeight": 144, "continueX": 139, "continueY": 140, "shake": 2},
   "hand": {"reanim": "pvz:wallnut", "x": 100, "y": -393, "scale": 1.2, "track": "Dave_handinghand"},
+  "parts": {"mouth": "Dave_mouths", "eyes": ["Dave_eye"], "head": "Dave_head"},
   "mouths": {"MOUTH_BIG_SMILE": "pvz:crazydave_mouth1", "MOUTH_SMALL_SMILE": "pvz:crazydave_mouth5", "MOUTH_SMALL_OH": "pvz:crazydave_mouth6"}
 }

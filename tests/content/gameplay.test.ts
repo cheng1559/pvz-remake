@@ -5,15 +5,13 @@ import test from 'node:test'
 import {
     parseGameplayDefinitions,
     parseGameplayLevels,
-    parseGameplayStrings,
 } from '@/shared/content/gameplay'
 
 const source = readGameplaySource
 
-test('Gameplay parses the 1-1 definitions, level, and strings headlessly', () => {
+test('Gameplay parses the 1-1 definitions and level headlessly', () => {
     const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
     const levels = parseGameplayLevels(source('levels'), definitions)
-    const strings = parseGameplayStrings(source('strings'))
 
     assert.equal(definitions.seeds['pvz:peashooter'].plant, 'pvz:peashooter')
     assert.equal(definitions.seeds['pvz:repeater'].sunCost, 200)
@@ -24,7 +22,6 @@ test('Gameplay parses the 1-1 definitions, level, and strings headlessly', () =>
     assert.deepEqual(definitions.zombies['pvz:normal'].spawn, { minX: 780, maxX: 819, flagWaveOffset: 40 })
     assert.deepEqual(definitions.zombies['pvz:pole_vaulter'].spawn, { minX: 870, maxX: 879, flagWaveOffset: 0 })
     assert.deepEqual(levels.levels['pvz:adventure-1-1'].activeRows, [2])
-    assert.match(strings.entries.ADVICE_CLICK_ON_GRASS, /grass/)
 })
 
 test('Gameplay definitions reject unsupported, unsafe, and unresolved data', () => {
@@ -70,13 +67,4 @@ test('Gameplay levels validate all 1-1 references, active rows, and waves', () =
     assert.throws(invalid(level => { level.activeRows = [5] }), /outside the board/)
     assert.throws(invalid(level => { level.waves = [] }), /must not be empty/)
     assert.doesNotThrow(invalid(level => { level.award.id = 'pvz:not-defined-yet' }))
-})
-
-test('Gameplay strings require exact fields and non-empty string entries', () => {
-    const value = source('strings')
-    value.entries.BAD = ''
-    assert.throws(() => parseGameplayStrings(value), /non-empty string/)
-    delete value.entries.BAD
-    value.extra = true
-    assert.throws(() => parseGameplayStrings(value), /not supported/)
 })

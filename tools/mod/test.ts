@@ -24,7 +24,7 @@ async function main() {
     const host = createServerModHost(manifest.id, registry, definitions)
     try {
         const gameplay = packagedContent.gameplay ? contentJson(files, packagedContent.gameplay) : undefined
-        const builtin = manifest.id === 'pvz:base'
+        const builtin = manifest.id === 'pvz'
         if (builtin && !gameplay) throw new Error('Base content does not define gameplay')
         if (gameplay && !builtin) definitions.register(manifest.id, gameplay)
         if (manifest.gameplay) {

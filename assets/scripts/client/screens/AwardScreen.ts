@@ -37,7 +37,7 @@ export async function showAwardScreen(parent: Node, ui: UI): Promise<AwardView> 
         ui.image(parent, frame, { x: 400 - frame.originalSize.width / 2, y: visual.pageY })
     }
     ui.label(parent, {
-        text: ui.text(award.nameKey, award.kind === 'seed' ? award.name : undefined), font: 'yellow', x: 400, y: 326,
+        text: ui.text(award.nameKey), font: 'yellow', x: 400, y: 326,
         baseline: true, align: 'center',
     })
     const description = ui.label(parent, {

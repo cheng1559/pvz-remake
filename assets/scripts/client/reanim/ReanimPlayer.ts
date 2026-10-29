@@ -172,6 +172,7 @@ export class ReanimPlayer extends Component {
     /** Players attached to this one's tracks; stale entries are skipped and pruned. */
     private readonly trackAttachments = new Set<ReanimPlayer>()
     private restoredAttachmentTrackId: string | null = null
+    private restoredAttachmentBasePose: ReanimKeyframe | null = null
     private extraAdditive = false
     private extraAdditiveColor = Color.BLACK.clone()
     private colorOverride = Color.WHITE.clone()
@@ -265,16 +266,27 @@ export class ReanimPlayer extends Component {
         this.applyPose()
     }
 
-    attachToTrack(parent: ReanimPlayer, trackId: string): void {
+    /** `basePose` defaults to the parent clip's first frame, like a reanim's first attachment. */
+    attachToTrack(parent: ReanimPlayer, trackId: string, basePose?: ReanimKeyframe): void {
         this.requireData()
         const track = parent.requireData().tracks.find(candidate => candidate.id === trackId)
         if (!track) throw new Error(`unknown parent reanim track: ${trackId}`)
-        const basePose = sampleReanimTrack(track, 0)
+        basePose ??= sampleReanimTrack(track, 0) ?? undefined
         if (!basePose) throw new Error(`parent reanim track has no base pose: ${trackId}`)
         this.attachment = { parent, trackId, basePose }
         parent.trackAttachments.add(this)
         this.restoredAttachmentTrackId = null
+        this.restoredAttachmentBasePose = null
         this.applyPose()
+    }
+
+    get attachmentTrackId(): string | null {
+        return this.attachment?.trackId ?? this.restoredAttachmentTrackId
+    }
+
+    /** The parent track's pose this attachment is relative to. */
+    get attachmentBasePose(): ReanimKeyframe | null {
+        return this.attachment?.basePose ?? this.restoredAttachmentBasePose
     }
 
     /** Reanimation::PropogateColorToAttachments: track attachments take this player's colors. */
@@ -289,7 +301,7 @@ export class ReanimPlayer extends Component {
 
     reattachAfterRestore(parent: ReanimPlayer): void {
         if (!this.restoredAttachmentTrackId) throw new Error('reanim snapshot has no attachment to restore')
-        this.attachToTrack(parent, this.restoredAttachmentTrackId)
+        this.attachToTrack(parent, this.restoredAttachmentTrackId, this.restoredAttachmentBasePose ?? undefined)
     }
 
     blendFrom(previous: ReanimPlayer, durationSeconds: number): void {
@@ -340,9 +352,19 @@ export class ReanimPlayer extends Component {
         this.applyPose()
     }
 
-    setTrackPrefixVisible(prefix: string, visible: boolean): void {
+    /** Every track ID of the loaded clip. */
+    get trackIds(): string[] {
+        return [...this.views.keys()]
+    }
+
+    isTrackVisible(trackId: string): boolean {
+        return this.views.get(trackId)?.visible === true
+    }
+
+    /** Exact track IDs; ones this clip lacks are skipped. */
+    setTracksVisible(trackIds: readonly string[], visible: boolean): void {
         let changed = false
-        for (const [id, view] of this.views) if (id.startsWith(prefix) && view.visible !== visible) {
+        for (const [id, view] of this.views) if (trackIds.includes(id) && view.visible !== visible) {
             view.visible = visible
             if (view.node) view.node.active = visible
             changed = true
@@ -489,6 +511,7 @@ export class ReanimPlayer extends Component {
                 fromPoses: [...this.blendFromPoses].map(([trackId, pose]) => ({ trackId, pose: { ...pose } })),
             } : null,
             attachmentTrackId: this.attachment?.trackId ?? this.restoredAttachmentTrackId,
+            attachmentBasePose: this.attachmentBasePose ? { ...this.attachmentBasePose } : null,
         }
     }
 
@@ -517,6 +540,7 @@ export class ReanimPlayer extends Component {
         this.drawingStale = true
         this.attachment = null
         this.restoredAttachmentTrackId = snapshot.attachmentTrackId
+        this.restoredAttachmentBasePose = snapshot.attachmentBasePose
         this.applyPose()
     }
 

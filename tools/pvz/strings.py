@@ -95,6 +95,18 @@ def convert_lawnstrings(src_path: Path, dst_path: Path, default_xml_path: Path |
     return len(strings)
 
 
+def merge_project_strings(dst_path: Path, project_path: Path) -> int:
+    """Add the project's own UI text to a lawnstrings table so the game reads one table; keys must not collide."""
+    strings = json.loads(dst_path.read_text(encoding='utf-8'))
+    project = json.loads(project_path.read_text(encoding='utf-8'))
+    duplicates = sorted(set(strings) & set(project))
+    if duplicates:
+        raise ValueError(f'{project_path} repeats lawnstrings keys: {", ".join(duplicates)}')
+    strings.update(project)
+    dst_path.write_text(json.dumps(strings, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    return len(project)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Convert PvZ LawnStrings.txt to JSON.')
     parser.add_argument(
@@ -106,7 +118,7 @@ def main():
     parser.add_argument(
         '--output',
         type=Path,
-        default=Path('./mods/pvz-base/assets/json/properties/lawnstrings.json'),
+        default=Path('./mods/pvz-base/assets/json/strings.json'),
         help='Destination JSON resource path.',
     )
     parser.add_argument(

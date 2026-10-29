@@ -1,5 +1,5 @@
 import { CONTENT_CATEGORIES, type ContentCategory } from '@/shared/content'
-import { Registry } from '@/shared/mod'
+import { isOwnId, Registry } from '@/shared/mod'
 import type { ModAssets } from '@/shared/mod/ModAssets'
 import type { ResourceManifest } from '@/shared/mod/content'
 
@@ -19,7 +19,7 @@ export function* archiveEntries(assets: ModAssets, tables: ResourceManifest): It
         const kind = resourceKind === 'audio' ? 'sounds' : resourceKind
         if (!CONTENT_CATEGORIES.includes(kind as ContentCategory)) continue
         for (const [id, value] of Object.entries(entries)) {
-            if (!id.startsWith(assets.id.split(':')[0] + ':')) continue
+            if (!isOwnId(assets.id, id)) continue
             const path = typeof value === 'string' ? value : value.file
             yield { id, kind: kind as ContentCategory, path, bundle: assets.baseUrl,
                 ownerId: assets.id, ownerVersion: assets.manifest.version, contentHash: assets.manifest.contentHash }

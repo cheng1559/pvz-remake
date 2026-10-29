@@ -1,6 +1,8 @@
+import { BASE_MOD_ID } from '@/shared/mod'
 import { Button, Color, director, Director, KeyCode, Node, UITransform } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
 import { modManager, type ModImport } from '@/client/content/ModManager'
+import { modResources } from '@/client/content/ModResources'
 import { waitForPreloadFrame } from '@/client/content/preloadTasks'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
@@ -28,7 +30,7 @@ export interface PackageDialogOptions {
     restart: () => Promise<void>
 }
 
-interface Entry { id: string, version?: string, error?: string, builtin?: boolean }
+interface Entry { id: string, version?: string, author?: string, error?: string, builtin?: boolean }
 
 /**
  * Imports, enabled states and uninstalls stay in the draft until Apply; Cancel discards them.
@@ -37,9 +39,9 @@ interface Entry { id: string, version?: string, error?: string, builtin?: boolea
  */
 export async function showPackageDialog(parent: Node, ui: UI, options: PackageDialogOptions): Promise<UIDialog> {
     const dialog = ui.dialog(parent, {
-        title: ui.text('PACKAGE_MODS_TITLE', 'Mods'),
-        width: 640, extraHeight: 270, tall: true,
-        confirmText: ui.text('PACKAGE_APPLY', 'Apply'), cancelText: ui.text('BUTTON_CANCEL'),
+        title: ui.text('PACKAGE_MODS_TITLE'),
+        width: 530, extraHeight: 270, tall: true,
+        confirmText: ui.text('PACKAGE_APPLY'), cancelText: ui.text('BUTTON_CANCEL'),
     })
     dialog.onConfirm = () => {}
     dialog.onKeyDown = event => event.keyCode === KeyCode.SPACE
@@ -47,7 +49,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     const footer = panel.getComponentsInChildren(UIButton)
     const left = footer[0].node, right = footer[1].node
     const importButton = ui.button(panel, {
-        text: ui.text('PACKAGE_IMPORT', 'Import'), x: left.position.x, y: -left.position.y - 46,
+        text: ui.text('PACKAGE_IMPORT'), x: left.position.x, y: -left.position.y - 46,
         width: right.position.x + right.getComponent(UITransform)!.width - left.position.x,
     })
     const width = panel.getComponent(UITransform)!.width - 142
@@ -72,10 +74,13 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
     if (!dialog.node.isValid || !dialog.node.activeInHierarchy) return dialog
     const manager = modManager
-    let initial: string[], installedEntries: Entry[]
+    let initial: string[], installedEntries: Entry[], baseEntry: Entry = { id: BASE_MOD_ID, builtin: true }
     try {
         initial = await manager.list()
         installedEntries = await manager.installed()
+        // The built-in base row shows its own version (and author) like the installed Mods.
+        const base = await modResources?.baseContent?.().then(archive => archive.manifest).catch(() => undefined)
+        baseEntry = { id: BASE_MOD_ID, builtin: true, ...(base ? { version: base.version, ...(base.author ? { author: base.author } : {}) } : {}) }
     } catch (error) {
         dialog.close(false)
         throw error
@@ -96,7 +101,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     let restarting = false
 
     const fail = (error: unknown) => {
-        if (dialog.node.isValid) ui.dialog(dialog.node, { title: 'Error', message: error instanceof Error ? error.message : String(error) })
+        if (dialog.node.isValid) ui.dialog(dialog.node, { title: ui.text('ERROR_HEADER'), message: error instanceof Error ? error.message : String(error) })
     }
     const scroll = ui.scroll(panel, { x: 66, y: 138, width, height: LIST_HEIGHT, contentHeight: 0, wheelStep: ROW_HEIGHT })
     const textY = Math.floor((ROW_HEIGHT - metrics.height) / 2) - metrics.ascentPadding
@@ -108,17 +113,17 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         try { await operation() } catch (error) { fail(error) } finally { busy = false }
     }
 
-    async function refresh(installed?: Entry[]): Promise<void> {
-        installed ??= await manager.installed()
+    // Imports and uninstalls stay in the draft until Apply, so the installed list read on opening is still current.
+    async function refresh(installed: Entry[] = installedEntries): Promise<void> {
         if (!dialog.node.isValid) return
         const merged = new Map(installed.map(entry => [entry.id, entry]))
-        for (const { id, version } of pendingImports.values()) merged.set(id, { id, version })
+        for (const { id, version, author } of pendingImports.values()) merged.set(id, { id, version, author })
         installed = [...merged.values()]
         const ids = installed.filter(entry => !pendingUninstalls.has(entry.id)).map(entry => entry.id)
         order = [...order, ...ids].filter((id, index, all) => all.indexOf(id) === index && ids.includes(id))
         for (const id of checked) if (!order.includes(id)) checked.delete(id)
         entries = order.map(id => installed.find(entry => entry.id === id)!)
-        entries.push({ id: 'pvz:base', builtin: true })
+        entries.push(baseEntry)
         render()
     }
 
@@ -127,43 +132,58 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         for (const child of [...scroll.content.children]) { child.active = false; child.destroy() }
         scroll.setContentHeight(entries.length * ROW_HEIGHT)
         if (!entries.length) {
-            const text = ui.text('PACKAGE_NO_MODS', 'No Mods installed')
+            const text = ui.text('PACKAGE_NO_MODS')
             ui.label(scroll.content, {
                 text, font: 'profile', color: DIM_COLOR, y: textY,
                 x: Math.max(0, Math.floor((width - FontMetricsUtil.measureTextWidth(font, text)) / 2)),
             })
         }
-        entries.forEach((entry, index) => renderRow(entry, index, scroll.contentWidth))
+        const columns = layoutColumns(scroll.contentWidth)
+        entries.forEach((entry, index) => renderRow(entry, index, scroll.contentWidth, columns))
         scroll.offset = offset
     }
 
-    function renderRow(entry: Entry, index: number, rowWidth: number): void {
+    const measure = (text: string) => FontMetricsUtil.measureTextWidth(font, text)
+
+    /** Versions share one column, so they line up down the list; names get the space before it. */
+    function layoutColumns(rowWidth: number): { nameWidth: number, versionX: number, right: number } {
+        const right = rowWidth - measure(ui.text('PACKAGE_UNINSTALL')) - 8 - 2 * ARROW_WIDTH - 14
+        // A fixed share of the row, unless the widest version would run past the arrows.
+        const versionX = Math.min(46 + Math.round((right - 46) * 0.8), right - Math.max(0, ...entries.map(entry => measure(entry.version ?? ''))))
+        return { nameWidth: Math.max(0, versionX - measure('    ') - 46), versionX, right }
+    }
+
+    function renderRow(entry: Entry, index: number, rowWidth: number, columns: ReturnType<typeof layoutColumns>): void {
         const row = uiNode({
             name: `Package-${index}`, parent: scroll.content, active: false, position: { y: -index * ROW_HEIGHT },
             size: { width: rowWidth, height: ROW_HEIGHT }, anchor: { x: 0, y: 1 },
         }).node
         const toggle = (value: boolean) => { if (value) checked.add(entry.id); else checked.delete(entry.id) }
+        // The base game stays on: its box and name answer clicks with a note, as the options' 3D acceleration box does.
+        const locked = entry.builtin ? () => {
+            ui.dialog(dialog.node, { title: ui.text('PACKAGE_BASE_REQUIRED_HEADER'), message: ui.text('PACKAGE_BASE_REQUIRED_BODY') })
+        } : undefined
         const checkbox = ui.checkbox(row, {
-            x: 6, y: Math.ceil(ROW_HEIGHT / 2 - CHECKBOX_CENTER_Y * CHECKBOX_SCALE), value: entry.builtin || checked.has(entry.id), onChange: toggle,
+            x: 6, y: Math.ceil(ROW_HEIGHT / 2 - CHECKBOX_CENTER_Y * CHECKBOX_SCALE), value: entry.builtin || checked.has(entry.id), onChange: toggle, locked,
         })
         checkbox.node.setScale(CHECKBOX_SCALE, CHECKBOX_SCALE)
-        const text = ui.text('PACKAGE_UNINSTALL', 'Uninstall')
+        const text = ui.text('PACKAGE_UNINSTALL')
         const textWidth = FontMetricsUtil.measureTextWidth(font, text)
         const uninstallX = rowWidth - textWidth - 8
-        const nameRight = entry.builtin ? rowWidth - 8 : uninstallX - 2 * ARROW_WIDTH - 14
+        const nameRight = entry.builtin ? rowWidth - 8 : columns.right
         const nameWidth = Math.max(0, nameRight - 46)
-        const suffix = `${entry.version ? `  ${entry.version}` : ''}${entry.error ? ' [Error]' : ''}`
+        const suffix = entry.error ? ' [Error]' : ''
         let id = entry.id
-        if (FontMetricsUtil.measureTextWidth(font, id + suffix) > nameWidth) {
-            while (id.length && FontMetricsUtil.measureTextWidth(font, id + '...' + suffix) > nameWidth) id = id.slice(0, -1)
+        if (measure(id + suffix) > columns.nameWidth) {
+            while (id.length && measure(id + '...' + suffix) > columns.nameWidth) id = id.slice(0, -1)
             id += '...'
         }
-        const name = id + suffix
         const nameColor = entry.error ? LINK_COLOR : TEXT_COLOR
-        const nameLabel = ui.label(row, { text: name, font: 'profile', color: nameColor, x: 46, y: textY })
+        const labels = [ui.label(row, { text: id + suffix, font: 'profile', color: nameColor, x: 46, y: textY })]
+        if (entry.version) labels.push(ui.label(row, { text: entry.version, font: 'profile', color: nameColor, x: columns.versionX, y: textY }))
         if (entry.error) ui.tooltip(row, { text: entry.error })
-        if (entry.builtin) {
-            checkbox.button.interactable = false
+        if (locked) {
+            rowButton(row, 46, nameWidth, nameColor, true, locked, color => { for (const label of labels) label.renderer.fontColor = color })
             row.active = true
             return
         }
@@ -175,7 +195,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         rowButton(row, 46, nameWidth, nameColor, true, () => {
             checkbox.value = !checkbox.value
             toggle(checkbox.value)
-        }, color => { nameLabel.renderer.fontColor = color })
+        }, color => { for (const label of labels) label.renderer.fontColor = color })
         {
             arrowButton(row, uninstallX - 2 * ARROW_WIDTH - 10, true, index > 0, () => move(index, -1))
             arrowButton(row, uninstallX - ARROW_WIDTH - 6, false, index < order.length - 1, () => move(index, 1))
@@ -251,7 +271,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
 
     async function uninstallEntry(id: string): Promise<void> {
         const confirmed = await ui.dialog(dialog.node, {
-            title: ui.text('ARE_YOU_SURE'), message: ui.text('PACKAGE_UNINSTALL_WARNING', 'Uninstall %s?').replace('%s', id),
+            title: ui.text('ARE_YOU_SURE'), message: ui.text('PACKAGE_UNINSTALL_WARNING').replace('%s', id),
             confirmText: ui.text('BUTTON_YES'), cancelText: ui.text('BUTTON_NO'),
         }).result
         if (!confirmed || !dialog.node.isValid) return
@@ -270,14 +290,14 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         const restart = !same || pendingImports.size > 0 || pendingUninstalls.size > 0
         if (restart) {
             const confirmed = await ui.dialog(dialog.node, {
-                title: ui.text('PACKAGE_RESTART_HEADER', 'Restart Game?'),
-                message: ui.text('PACKAGE_RESTART_BODY', 'Restart now to apply the changes? The current level will be saved.'),
+                title: ui.text('PACKAGE_RESTART_HEADER'),
+                message: ui.text('PACKAGE_RESTART_BODY'),
                 confirmText: ui.text('BUTTON_OK'), cancelText: ui.text('BUTTON_CANCEL'),
             }).result
             if (!confirmed || !dialog.node.isValid) return
         }
         if (restart) {
-            const progress = ui.dialog(dialog.node, { title: 'Restarting...', footer: false, clickSound: null })
+            const progress = ui.dialog(dialog.node, { title: ui.text('PACKAGE_RESTARTING'), footer: false, clickSound: null })
             progress.onConfirm = progress.onCancel = () => {}
             await waitForPreloadFrame()
             try {
@@ -302,7 +322,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         if (pendingImports.size || pendingUninstalls.size || draft() !== initialDraft) {
             const discard = await ui.dialog(dialog.node, {
                 title: ui.text('ARE_YOU_SURE'),
-                message: ui.text('PACKAGE_DISCARD_WARNING', 'Unapplied changes will not be saved. Discard them?'),
+                message: ui.text('PACKAGE_DISCARD_WARNING'),
                 confirmText: ui.text('BUTTON_YES'), cancelText: ui.text('BUTTON_NO'),
             }).result
             if (!discard || !dialog.node.isValid) return

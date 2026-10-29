@@ -71,6 +71,8 @@ export interface Zombie extends EntityBehaviorState {
     hitFlashCounter: number
     /** The last hit passed the shield into the body (DAMAGE_HITS_SHIELD_AND_BODY): both flash and the shield does not recoil. */
     hitThroughShield?: true
+    /** Zombie::mDroppedLoot: the one loot roll has happened. */
+    droppedLoot?: true
     groanCounter: number
     helmHealth: number
     chilledTicks: number
@@ -103,8 +105,15 @@ export const MAX_SUN = 9990
 
 export interface EconomyState {
     sun: number
+    /** The player's coins, from the profile at start or restore; collected money adds to it. */
     money: number
     pendingSunSpend: number
+    /** Board::mDroppedFirstCoin. */
+    firstCoinDropped?: true
+    /** Diamonds drop only after the first seed-slot upgrade; before it they become gold. From the profile, like money. */
+    diamonds?: true
+    /** Board::mScoreNextMowerCounter: after the award, ticks until the next unused mower becomes a gold coin. */
+    mowerCoinTicks?: number
 }
 
 export interface LevelState {

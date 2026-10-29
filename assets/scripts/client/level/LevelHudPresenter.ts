@@ -3,6 +3,7 @@ import { Color, Graphics, isValid, Node, Vec3 } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { FontRepository } from '@/client/content/ClientContentLoader'
 import { uiNode } from '@/client/view/uiNode'
+import { formatMoney } from '@/client/ui/formatMoney'
 import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
 import type { UI } from '@/client/ui/UI'
@@ -13,7 +14,7 @@ import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManag
 import { UIButton } from '@/client/ui/UIButton'
 import { graveAt, type ServerEvent, type WorldSnapshot } from '@/shared/protocol/index'
 import { LevelSeedBank } from './LevelSeedBank'
-import { adventureLevelName, boardCell, levelAwardSize } from './LevelGeometry'
+import { adventureStage, boardCell, levelAwardSize } from './LevelGeometry'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { LevelPresentation } from './LevelPresentation'
 import type { LevelAdviceSnapshot, LevelHudSnapshot } from './LevelPresentationSnapshot'
@@ -55,12 +56,21 @@ export interface LevelHudOptions {
     progressFill: Node
     progressHead: Node
     levelText: UILabel
+    coinBank: { node: Node, text: UILabel }
 }
+
+/** Board::ShowCoinBank's default duration; the bank fades out over its last 15 ticks. */
+const COIN_BANK_TICKS = 1000
 
 export class LevelHudPresenter {
     private adviceMessage = ''
     private adviceTick = 0
     private sunFlashTicks = 0
+    private coinBankTicks = 0
+    private coinBankTick = 0
+    private coinBankPaused = false
+    private coinBank!: LevelHudOptions['coinBank']
+    private ui!: UI
     private pointer?: { x: number, y: number }
     private progressWave = 0
     private progressCountdownStart = 0
@@ -95,6 +105,8 @@ export class LevelHudPresenter {
         })
         presenter.menuButton.node.name = 'MenuButton'
         presenter.mobileGridGuide = options.mobileGridGuide
+        presenter.coinBank = options.coinBank
+        presenter.ui = options.ui
         presenter.menuButton.node.active = false
         return presenter
     }
@@ -129,6 +141,7 @@ export class LevelHudPresenter {
         return {
             hud: {
                 sunFlashTicks: this.sunFlashTicks,
+                coinBankTicks: this.coinBankTicks,
                 progressWave: this.progressWave,
                 progressCountdownStart: this.progressCountdownStart,
                 progressMeterWidth: this.progressMeterWidth,
@@ -146,6 +159,7 @@ export class LevelHudPresenter {
         this.lastIntroComplete = introComplete
         this.lastMenuVisible = menuVisible
         this.sunFlashTicks = snapshot.sunFlashTicks
+        this.coinBankTicks = snapshot.coinBankTicks
         this.progressWave = snapshot.progressWave
         this.progressCountdownStart = snapshot.progressCountdownStart
         this.progressMeterWidth = snapshot.progressMeterWidth
@@ -161,10 +175,28 @@ export class LevelHudPresenter {
         if (!world) return
         this.syncMenu(world, this.lastMenuVisible)
         this.syncSun(world.sun)
+        this.coinBankTick = world.gameplayTick
+        this.coinBankPaused = world.paused
+        this.syncCoinBank(world, [])
         this.syncProgress(world, this.lastIntroComplete)
         this.syncPreviews(world)
         UIHoverManager.refreshHoverStates()
         this.syncSeedPacket(world, [], this.lastIntroComplete, false)
+    }
+
+    /** Board::DrawUICoinBank: shown while collecting money, and when a game with coins is paused (Board::Pause). */
+    private syncCoinBank(snapshot: WorldSnapshot, events: ServerEvent[]): void {
+        // The count only runs with the game, so a pause holds the bank on screen.
+        this.coinBankTicks = Math.max(0, this.coinBankTicks - Math.max(0, snapshot.gameplayTick - this.coinBankTick))
+        this.coinBankTick = snapshot.gameplayTick
+        if (events.some(event => event.type === 'itemCollected' && this.content.definitions.items[String(event.data.typeId)]?.kind === 'money') ||
+            snapshot.paused && !this.coinBankPaused && snapshot.money > 0) this.coinBankTicks = COIN_BANK_TICKS
+        this.coinBankPaused = snapshot.paused
+        this.coinBank.node.active = this.coinBankTicks > 0
+        if (!this.coinBank.node.active) return
+        uiNode({ node: this.coinBank.node, opacity: Math.min(255, Math.round(255 * this.coinBankTicks / 15)) })
+        const text = formatMoney(snapshot.money)
+        if (this.coinBank.text.text !== text) this.coinBank.text.text = text
     }
 
     setPointer(pointer?: { x: number, y: number }): void {
@@ -194,6 +226,7 @@ export class LevelHudPresenter {
         this.sunFlashTicks = Math.max(0, this.sunFlashTicks - elapsedTicks)
         if (events.some(event => event.type === 'sunFlash')) this.sunFlashTicks = 70
         this.syncSun(snapshot.sun)
+        this.syncCoinBank(snapshot, events)
         this.syncProgress(snapshot, introComplete)
         this.syncPreviews(snapshot)
         this.syncSeedPacket(snapshot, events, introComplete)
@@ -223,11 +256,14 @@ export class LevelHudPresenter {
         if (showLawnGuide) uiNode({ node: this.tutorialLawnFlash, sprite: {} }).sprite!.color = tutorialFlashColor(snapshot.gameplayTick)
     }
 
+    /** Level advice names pvz:strings keys; the server only sends keys. */
+    private adviceText(key: string): string { return key ? this.ui.text(key) : '' }
+
     private syncAdvice(snapshot: WorldSnapshot, events: ServerEvent[], elapsedTicks: number, introComplete: boolean): void {
         if (snapshot.result === 'lost') { this.advice.clear(); return }
         if (snapshot.result === 'won') this.advice.clear()
         if (introComplete || this.presentation.adviceDuringIntro) {
-            const message = contentText(this.content.strings.entries, this.presentation.advice[snapshot.tutorial.step] ?? '')
+            const message = this.adviceText(this.presentation.advice[snapshot.tutorial.step] ?? '')
             if (message !== this.adviceMessage) {
                 this.adviceMessage = message
                 if (message) this.advice.show(message, this.presentation.adviceStyle ?? (snapshot.tutorial.step === 'complete' ? 'tutorial-level1' : 'tutorial-level1-stay'))
@@ -239,11 +275,11 @@ export class LevelHudPresenter {
             else if (event.type === 'advice') {
                 const key = event.data.key
                 const style = event.data.style
-                if (typeof key === 'string') this.advice.show(contentText(this.content.strings.entries, key),
+                if (typeof key === 'string') this.advice.show(this.adviceText(key),
                     style === 'hint' || style === 'tutorial-level2' || style === 'tutorial-later' || style === 'tutorial-later-stay' ? style : 'tutorial-level1')
             } else if (event.type === 'adviceCleared') {
                 const key = event.data.key
-                if (typeof key === 'string' && this.advice.snapshot()?.message === contentText(this.content.strings.entries, key)) this.advice.clear()
+                if (typeof key === 'string' && this.advice.snapshot()?.message === this.adviceText(key)) this.advice.clear()
             }
         }
         this.advice.update(elapsedTicks, snapshot.gameplayTick)
@@ -274,7 +310,8 @@ export class LevelHudPresenter {
         this.levelText.node.active = visible
         this.progressMeter.active = visible && progress > 0
         if (!visible) return
-        const level = adventureLevelName(this.level.adventureIndex)
+        // Board::DrawLevel: [LEVEL] followed by the stage.
+        const level = `${this.ui.text('LEVEL')} ${adventureStage(this.level.adventureIndex)}`
         if (this.levelText.text !== level) this.levelText.text = level
         this.levelText.setPosition(progress > 0 ? 593 : 780, 595)
         if (progress <= 0) return
@@ -383,12 +420,6 @@ export class LevelHudPresenter {
 
 }
 
-function contentText(strings: Record<string, string>, key: string): string {
-    if (!key) return ''
-    const value = strings[key]
-    if (!value) throw new Error(`Missing gameplay string: ${key}`)
-    return value
-}
 
 function tutorialFlashColor(tick: number): Color {
     const age = tick % TUTORIAL_FLASH_TICKS

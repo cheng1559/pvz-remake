@@ -17,12 +17,14 @@ export interface ReanimPlaybackSnapshot {
         fromPoses: Array<{ trackId: string, pose: ReanimKeyframe }>
     } | null
     attachmentTrackId: string | null
+    /** The parent track's pose the attachment is relative to (Reanimation::mFrameBasePose). */
+    attachmentBasePose: ReanimKeyframe | null
 }
 
 export function parseReanimPlaybackSnapshot(value: unknown): ReanimPlaybackSnapshot {
     const source = exactObject(value, [
         'id', 'timeSeconds', 'playing', 'loop', 'rate', 'visible', 'hideOnFinish',
-        'extraAdditive', 'extraAdditiveColor', 'blend', 'attachmentTrackId',
+        'extraAdditive', 'extraAdditiveColor', 'blend', 'attachmentTrackId', 'attachmentBasePose',
     ], 'reanim snapshot')
     if (!isQualifiedId(source.id)) throw new Error('reanim snapshot.id must be a qualified ID')
 
@@ -75,6 +77,12 @@ export function parseReanimPlaybackSnapshot(value: unknown): ReanimPlaybackSnaps
     const attachmentTrackId = source.attachmentTrackId === null
         ? null
         : nonEmptyString(source.attachmentTrackId, 'reanim snapshot.attachmentTrackId')
+    const attachmentBasePose = source.attachmentBasePose === null
+        ? null
+        : parsePose(source.attachmentBasePose, 'reanim snapshot.attachmentBasePose')
+    if ((attachmentTrackId === null) !== (attachmentBasePose === null)) {
+        throw new Error('reanim snapshot.attachmentBasePose must be set exactly when attached')
+    }
     return {
         id: source.id,
         timeSeconds,
@@ -87,6 +95,7 @@ export function parseReanimPlaybackSnapshot(value: unknown): ReanimPlaybackSnaps
         extraAdditiveColor,
         blend,
         attachmentTrackId,
+        attachmentBasePose,
     }
 }
 

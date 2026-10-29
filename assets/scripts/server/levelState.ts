@@ -14,6 +14,10 @@ export interface Item {
     fadeTicks: number
     scale: number
     alpha: number
+    /** Coin::mHitGround. */
+    landed?: true
+    /** Coin::mNeedsBouncyArrow: a pickup arrow appears on landing and the item stays twice as long. */
+    arrow?: true
 }
 
 export interface TutorialState {

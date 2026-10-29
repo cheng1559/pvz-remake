@@ -232,14 +232,18 @@ export class LevelSeedChooser {
     private confirm(): void {
         if (!this.start.interactable || this.warningOpen) return
         for (const choice of this.choices) { this.land(choice); choice.tooltip.hide() }
-        const warning = this.snapshot?.seedChooser?.warning
-        if (!warning) { this.send({ type: 'confirmSeeds' }); return }
+        const warnings = this.snapshot?.seedChooser?.warnings ?? []
+        if (!warnings.length) { this.send({ type: 'confirmSeeds' }); return }
         this.warningOpen = true
-        const dialog = this.ui.dialog(this.edge.parent!, { title: this.ui.text('DIALOG_WARNING'), message: this.ui.text(warning),
-            confirmText: this.ui.text('DIALOG_BUTTON_YES'), cancelText: this.ui.text('REPICK_BUTTON') })
-        void dialog.result.then(confirmed => {
+        // DisplayRepickWarningDialog: each warning in turn; any repick stops the start.
+        void (async () => {
+            for (const warning of warnings) {
+                const confirmed = await this.ui.dialog(this.edge.parent!, { title: this.ui.text('DIALOG_WARNING'), message: this.ui.text(warning),
+                    confirmText: this.ui.text('DIALOG_BUTTON_YES'), cancelText: this.ui.text('REPICK_BUTTON') }).result
+                if (!confirmed || !this.panel.isValid) { this.warningOpen = false; return }
+            }
             this.warningOpen = false
-            if (confirmed && this.panel.isValid) this.send({ type: 'confirmSeeds' })
-        })
+            this.send({ type: 'confirmSeeds' })
+        })()
     }
 }

@@ -1486,13 +1486,25 @@
     }
   },
   "coin_silver": {
-    "default": {}
+    "default": {
+      "exports": {
+        "default": "pvz:coin_silver"
+      }
+    }
   },
   "coin_gold": {
-    "default": {}
+    "default": {
+      "exports": {
+        "default": "pvz:coin_gold"
+      }
+    }
   },
   "diamond": {
-    "default": {}
+    "default": {
+      "exports": {
+        "default": "pvz:diamond"
+      }
+    }
   },
   "crazydave": {
     "body": {

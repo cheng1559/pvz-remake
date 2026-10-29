@@ -22,7 +22,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 替换种子包 | `/seed {槽位} {种子名}`，如 `/seed 1 snowpea` |
 | 僵尸 | `/zombie {zombie_name} [row] [col]`、`/damage {damage}`、`/kill` |
 | 掉落 | `/item {item_name} [row col]`，当前支持 `sun`、`award` |
-| 数值 | `/sun {add|set} {number}`、`/money {add|set} {number}` |
+| 数值 | `/sun {add|set} {number}`、`/money {add|set} {number}`（金币单位为原版 1 枚＝$10，同步写入档案） |
 | 小推车 | `/lawnmower {trigger|reset} [row]` |
 | 规则 | `/cooldown {true|false}`、`/suncost {true|false}`、`/sunspawning {true|false}`、`/plantinvincible {true|false}` |
 | 收集 | `/collect {auto|click|move}`，自动／移动收集仅处理普通掉落 |
@@ -42,7 +42,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 
 `/fps true` 在原始 800×600 游戏区域的左下角显示白色帧率，`/fps false` 隐藏；宽屏扩展不会改变该位置。默认关闭，设置保存在本机。帧率按实际绘制帧和真实时间计算，暂停或游戏倍速不改变统计方式。
 
-`/seedstyle standard|rendered|tilted` 单独切换种子包风格并保存到本地：`standard` 为标准缓存图，`rendered` 为原比例实际渲染，`tilted` 在实际渲染基础上放大并顺时针旋转。植物仅按内部图片区的左侧和底部内边框裁剪，上方与右侧允许溢出。背景、费用和点击区域保持原尺寸；实际渲染与右倾风格之间切换时复用已加载的植物。此命令不影响图鉴僵尸头像和手持／落点预览。
+`/seedstyle standard|rendered|tilted` 单独切换种子包风格并保存到本地：`standard` 为标准缓存图，`rendered` 为原比例实际渲染，`tilted` 在实际渲染基础上放大并顺时针旋转。植物仅按内部图片区的左侧和底部内边框裁剪，上方与右侧允许溢出。背景、费用和点击区域保持原尺寸；实际渲染与右倾风格之间切换时复用已加载的植物。图鉴僵尸头像和手持／落点预览同样跟随此设置：`standard` 用原版缓存图，其余两种用实际渲染（预览不倾斜）。
 
 `/mod` 是唯一管理入口，不接受子命令。窗口中点 Import 选择本机 ZIP，安装弹窗标题为 `Installing...`。勾选启用、调整优先级或卸载后，Apply 保存；Cancel 丢弃未应用的改动。启用状态或正在使用的资源改变时提示重启，确认后先保存关卡，再重启游戏；运行中的代码和资源保留到重启。安装结果保存在本机，不依赖原 ZIP。资源包只通过 ZIP 安装，游戏不内置 HD 素材；同 ID 资源由高优先级包覆盖，包内没有该 ID 时使用原资源，已声明资源加载失败不回退。原 `/hdfont` 已移除；`Pico129`、`Pix118Bold` 不在 HD 包中。包格式与安装方式见[材质包说明](RESOURCE_PACKS.md)。
 

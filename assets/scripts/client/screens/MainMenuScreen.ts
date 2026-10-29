@@ -13,14 +13,14 @@ import { UIButton } from '@/client/ui/UIButton'
 import type { UILabel } from '@/client/ui/UILabel'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
-import { MAIN_MENU_BUTTONS, MAIN_MENU_CLOUDS, MAIN_MENU_EXTRA_IMAGES, MAIN_MENU_FLOWERS, type MainMenuButton } from './MainMenuConfig'
+import type { MainMenuButtonDefinition, MainMenuDefinition } from '@/shared/content/presentation'
 import type { MenuAction } from './MenuPages'
 
 const { ccclass } = _decorator
 const random = (minimum: number, maximum: number) => minimum + Math.random() * (maximum - minimum)
 
 interface TrackedButton {
-    config: MainMenuButton
+    config: MainMenuButtonDefinition
     button: UIButton
     pressed: boolean
 }
@@ -53,14 +53,18 @@ export class MainMenuScreen extends Component {
     private grassDelay = 0.5
     private startingSeconds: number | null = null
     private laughPlayed = false
+    private menu!: MainMenuDefinition
 
     async initialize(ui: UI, onProgress: (progress: number) => void = () => {}): Promise<void> {
         this.ui = ui
-        const { content: { registry, loader } } = await loadEntityDisplayAssets()
+        const { content: game } = await loadEntityDisplayAssets()
+        const { registry, loader } = game
+        const menu = this.menu = game.presentation.mainMenu
         const imageNames = new Set([
-            ...MAIN_MENU_BUTTONS.flatMap(button => [button.image, button.highlight]), ...MAIN_MENU_EXTRA_IMAGES,
+            ...menu.buttons.flatMap(button => [button.image, button.highlight]), ...menu.images,
+            menu.startAdventure.image, menu.startAdventure.highlight,
         ])
-        const total = imageNames.size + MAIN_MENU_CLOUDS.length + MAIN_MENU_FLOWERS.length + 5
+        const total = imageNames.size + menu.clouds.length + menu.flowers.length + 5
         let completed = 0
         const report = () => onProgress(++completed / total)
         await Promise.all([...imageNames].map(async name => {
@@ -78,11 +82,11 @@ export class MainMenuScreen extends Component {
             pending.push(() => animation.load(`pvz:selector_${name}`, registry, loader).then(report))
             return animation
         }
-        this.clouds = MAIN_MENU_CLOUDS.map(name => ({ player: player(name), delay: 0 }))
+        this.clouds = menu.clouds.map(name => ({ player: player(name), delay: 0 }))
         this.open = player('open')
         this.sign = player('sign')
         this.grass = player('grass')
-        this.flowers = MAIN_MENU_FLOWERS.map((_, index) => player(`flower${index + 1}`))
+        this.flowers = menu.flowers.map((_, index) => player(`flower${index + 1}`))
         const clip = uiNode({ name: 'HandClip', parent: content, anchor: { x: 0, y: 1 }, size: { width: 800, height: 560 }, mask: Mask.Type.GRAPHICS_RECT }).node
         this.hand = [player('zombie_hand', clip), player('zombie_hand')]
         await preloadTasks(pending)
@@ -90,25 +94,20 @@ export class MainMenuScreen extends Component {
         this.current = this.open
         this.sign.node.active = false
         for (const animation of [this.open, this.sign]) {
-            animation.setTrackPrefixVisible('SelectorScreen_BG', false)
-            // Only the sky is separate; the moving foreground stays in its original track order.
-            for (const name of ['SelectorScreen_BG_Center', 'SelectorScreen_BG_Left', 'SelectorScreen_BG_Right']) {
-                animation.setTrackPrefixVisible(name, true)
-            }
-            animation.setTrackPrefixVisible('leaf', false)
-            animation.setTrackPrefixVisible('flower', false)
-            for (const button of MAIN_MENU_BUTTONS) if (button.replace) animation.setTrackPrefixVisible(button.track, false)
-            animation.setTrackPrefixVisible('SelectorScreen_StartAdventure_button', false)
+            // Only the sky is separate; the moving foreground (SelectorScreen_BG_Center/Left/Right) stays in its original track order.
+            animation.setTracksVisible([menu.tracks.sky, ...menu.tracks.replaced], false)
+            animation.setTracksVisible(menu.buttons.filter(button => button.replace).map(button => button.track), false)
+            animation.setTracksVisible([menu.startAdventure.track], false)
         }
         this.hand.forEach((animation, index) => {
             animation.node.setPosition(-70, -10)
-            for (const track of animation.node.children) {
-                if (track.name.startsWith('rock') !== (index === 1)) animation.setTrackPrefixVisible(track.name, false)
-            }
+            // The clipped hand draws everything but the rocks; the second player draws only the rocks.
+            const rocks = menu.tracks.handRocks
+            animation.setTracksVisible(index === 1 ? animation.trackIds.filter(id => !rocks.includes(id)) : rocks, false)
             animation.hide()
         })
         this.signsRoot = uiNode({ name: 'Signs', parent: content, anchor: { x: 0, y: 1 }, active: false }).node
-        const signTrack = this.sign.getTrackNode('woodsign1')!
+        const signTrack = this.sign.getTrackNode(menu.tracks.profileSign)!
         signTrack.parent = this.signsRoot
         this.profileLabel = ui.label(signTrack, {
             text: '', font: 'profile', color: new Color(255, 245, 200), align: 'center', baseline: true,
@@ -195,26 +194,25 @@ export class MainMenuScreen extends Component {
         this.flowerButtons = []
         const profile = this.user
         // The original DrawOverlay skips grass and flowers until a player exists; their clocks still run.
-        for (const animation of [this.grass, ...this.flowers]) animation.setTrackPrefixVisible('', profile !== null)
+        for (const animation of [this.grass, ...this.flowers]) animation.setTracksVisible(animation.trackIds, profile !== null)
         const level = profile?.adventureLevel ?? 1
         this.startAdventure = level <= 1 && (profile?.finishedAdventure ?? 0) === 0
         this.profileLabel.text = profile ? `${profile.name}!` : ''
         for (const animation of [this.open, this.sign]) {
-            animation.setTrackPrefixVisible('SelectorScreen_Adventure_shadow', !this.startAdventure)
-            animation.setTrackPrefixVisible('SelectorScreen_StartAdventure_shadow', this.startAdventure)
+            animation.setTracksVisible([this.menu.startAdventure.adventureShadow], !this.startAdventure)
+            animation.setTracksVisible([this.menu.startAdventure.shadow], this.startAdventure)
         }
-        for (const original of MAIN_MENU_BUTTONS) {
-            const config = original.name === 'adventure' && this.startAdventure ? {
-                ...original, track: 'SelectorScreen_StartAdventure_button',
-                image: 'selectorscreen_startadventure_button1', highlight: 'selectorscreen_startadventure_highlight',
-            } : original
+        const start = this.menu.startAdventure
+        for (const original of this.menu.buttons) {
+            const config = original.name === 'adventure' && this.startAdventure
+                ? { ...original, track: start.track, image: start.image, highlight: start.highlight } : original
             const normal = this.frames.get(config.image)!
             const hover = this.frames.get(config.highlight)!
-            const parent = config.track.startsWith('woodsign') ? this.signsRoot : this.buttonsRoot
+            const parent = config.sign ? this.signsRoot : this.buttonsRoot
             const button = this.ui.button(parent, {
                 images: { normal, hover }, width: config.width, height: config.height,
                 imageBox: { x: config.imageX, y: config.imageY, width: normal.originalSize.width, height: normal.originalSize.height },
-                polygon: config.polygon, pressOffset: config.track.startsWith('woodsign') ? [0, 0] : [1, 1],
+                polygon: config.polygon, pressOffset: config.sign ? [0, 0] : [1, 1],
                 refreshHoverOnEnable: false,
                 pressSound: config.mode ? SoundEffect.GraveButton : SoundEffect.Tap, hoverSound: SoundEffect.Bleep,
                 onClick: () => this.activate(config),
@@ -225,7 +223,7 @@ export class MainMenuScreen extends Component {
             button.onStateChange = state => { tracked.pressed = state === 'pressed'; changeState(state) }
             this.buttons.push(tracked)
         }
-        MAIN_MENU_FLOWERS.forEach((center, index) => {
+        this.menu.flowers.forEach((center, index) => {
             const node = uiNode({ name: `Flower-${index + 1}`, parent: this.buttonsRoot, anchor: { x: 0, y: 1 }, size: { width: 40, height: 40 }, position: { x: center.x - 20, y: 20 - center.y } }).node
             node.active = false
             const button = node.addComponent(UIButton)
@@ -271,13 +269,13 @@ export class MainMenuScreen extends Component {
             button.node.active = !!track?.getComponent(Sprite)?.enabled
             if (track) button.node.setPosition(track.position.x + (config.x ?? 0), track.position.y - (config.y ?? 0))
         }
-        const right = this.current.getTrackNode('SelectorScreen_BG_Right')!
+        const right = this.current.getTrackNode(this.menu.tracks.anchor)!
         for (const animation of [this.grass, ...this.flowers]) animation.node.setPosition(right.position.x - 71, right.position.y + 41)
         const offset = this.buttons.find(view => view.config.name === 'adventure')?.pressed ? 1 : 0
         this.numbersRoot.setPosition(right.position.x + offset, right.position.y - offset)
     }
 
-    private activate(config: MainMenuButton): void {
+    private activate(config: MainMenuButtonDefinition): void {
         if (config.name === 'adventure') {
             if (this.startingSeconds !== null) return
             this.setButtonsEnabled(false)
@@ -288,8 +286,8 @@ export class MainMenuScreen extends Component {
             void SoundSystem.playSfx(SoundEffect.LoseMusic)
             void SoundSystem.playFoley(SoundEffect.DirtRise)
             for (const hand of this.hand) hand.play({ loop: false, timeSeconds: 0, hideOnFinish: false })
-        } else if (config.target) void this.onNavigate(config.target)
-        else this.ui.dialog(this.node, { title: 'Zombatar', message: 'Zombatar is not available yet.' })
+        } else if (config.target) void this.onNavigate(config.target as MenuAction)
+        else this.ui.dialog(this.node, { title: this.ui.text('ZOMBATAR_UNAVAILABLE_HEADER'), message: this.ui.text('ZOMBATAR_UNAVAILABLE_BODY') })
     }
 
     private playCloud(cloud: { player: ReanimPlayer, delay: number }, timeSeconds = 0): void {

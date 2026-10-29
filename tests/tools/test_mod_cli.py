@@ -25,7 +25,7 @@ class ModCliTests(unittest.TestCase):
             self.assertTrue((mod / "src" / "server" / "index.ts").is_file())
             self.assertFalse((mod / "assets/gameplay.json").exists())
             content = json.loads((mod / "content.json").read_text())
-            content['resources'] = {'json': {'local:definitions': 'assets/gameplay.json'}}
+            content['resources'] = {'json': {'sample:definitions': 'assets/gameplay.json'}}
             (mod / "content.json").write_text(json.dumps(content))
             content_index = (mod / "content.json").read_bytes()
             seeds = (mod / "assets/gameplay/seeds.json").read_bytes()
@@ -37,12 +37,12 @@ class ModCliTests(unittest.TestCase):
             self.assertFalse((mod / "gameplay" / "node").exists())
             self.assertFalse((mod / "gameplay" / "cocos").exists())
             manifest = json.loads((packed / "manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["id"], "local:sample")
+            self.assertEqual(manifest["id"], "sample")
             self.assertTrue((packed / "gameplay" / "node" / "index.js").is_file())
             self.assertTrue((packed / "gameplay" / "cocos" / "index.js").is_file())
             self.assertFalse((packed / "src").exists())
             with zipfile.ZipFile(packed.with_suffix(".zip")) as archive:
-                self.assertEqual(json.loads(archive.read("packed/manifest.json"))["id"], "local:sample")
+                self.assertEqual(json.loads(archive.read("packed/manifest.json"))["id"], "sample")
                 self.assertIn("packed/gameplay/cocos/index.js", archive.namelist())
                 self.assertFalse(any(name.endswith(".ts") for name in archive.namelist()))
                 self.assertEqual(json.loads(archive.read("packed/assets/gameplay.json")), {
@@ -71,7 +71,7 @@ class ModCliTests(unittest.TestCase):
             for path in [source, images, bundle]:
                 path.mkdir(parents=True)
             (mod / "manifest.json").write_text(json.dumps({
-                "schemaVersion": 1, "apiVersion": 1, "id": "local:client-mod",
+                "schemaVersion": 1, "apiVersion": 1, "id": "client-mod",
                 "client": {"module": "client/index.js", "bundle": "assets/bundles/demo"},
             }))
             (source / "index.ts").write_text("export { value } from './appearance.js'\n")
@@ -103,7 +103,7 @@ class ModCliTests(unittest.TestCase):
             before = json.loads((first / "manifest.json").read_text())["contentHash"]
             self.assertEqual(before, json.loads((second / "manifest.json").read_text())["contentHash"])
             self.assertEqual(len(before), 64)
-            (mod / "assets" / "gameplay" / "seeds.json").write_text('{"local:seed":{"plant":"local:plant"}}')
+            (mod / "assets" / "gameplay" / "seeds.json").write_text('{"sample:seed":{"plant":"sample:plant"}}')
             self.run_cli("pack", str(mod), "--out", str(first))
             self.assertNotEqual(before, json.loads((first / "manifest.json").read_text())["contentHash"])
             self.assertEqual(source_manifest, (mod / "manifest.json").read_bytes())

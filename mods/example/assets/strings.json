@@ -1,0 +1,8 @@
+{
+  "example:rapid_pea": "Rapid Pea",
+  "example:beacon": "Pulse Beacon",
+  "example:menu": "Mod Lab",
+  "example:title": "Example Mod Lab",
+  "example:cli_need_level": "Start a playing level first",
+  "example:cli_need_plant": "Place an example plant in that cell first"
+}

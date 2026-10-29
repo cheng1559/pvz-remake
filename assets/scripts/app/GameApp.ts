@@ -23,6 +23,7 @@ import {
 } from './LevelController'
 import { menuApi } from '@/client/api/MenuApi'
 import { connectLocalMenuApi } from './LocalMenuApi'
+import { createProfileStore } from '@/server/menu/ProfileStore'
 import { createStoreCatalog } from '@/server/menu/StoreCatalog'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { showDebugCliDialog } from '@/client/screens/DebugCliDialog'
@@ -36,6 +37,7 @@ import { modManager, type ModImport } from '@/client/content/ModManager'
 import { selectZips, type SelectedZip } from '@/client/content/InstalledArchives'
 
 const { ccclass } = _decorator
+const ALMANAC_PAGES = new Set<MenuPageId>(['almanac', 'plants', 'zombies'])
 
 @ccclass('GameApp')
 export class GameApp extends Component {
@@ -57,6 +59,9 @@ export class GameApp extends Component {
     start(): void {
         game.frameRate = Infinity
         uiNode({ node: this.node, viewport: true })
+        // Mods load for the current player, read straight from the profile store (menu requests wait for the store
+        // catalog, which is itself built from Mod content).
+        modManager.useProfiles(() => createProfileStore(sys.localStorage).getCurrentProfile()?.id ?? null)
         modManager.deferPendingChanges()
         connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false,
             modResources.baseJson('pvz:gameplay/store').then(createStoreCatalog))
@@ -70,6 +75,7 @@ export class GameApp extends Component {
         }).node.addComponent(MenuScreen)
         this.menu.onNavigate = action => this.navigate(action)
         this.menu.isLevelIntro = () => this.controller?.isLevelIntro() ?? false
+        this.menu.restartGame = () => this.restartGame()
         this.controller = createLevelController(this.gameLayer, {
             onMenu: () => {
                 void SoundSystem.play(SoundEffect.Pause)
@@ -106,15 +112,17 @@ export class GameApp extends Component {
             if (!this.nextLevelId) {
                 const ui = await UI.load()
                 if (this.node?.isValid) ui.dialog(this.node, {
-                    title: 'Next Level', message: 'The next level is not available yet.',
-                    confirmText: ui.text('AWARD_MAIN_MENU_BUTTON', 'Main Menu'),
+                    title: ui.text('NEXT_LEVEL_UNAVAILABLE_HEADER'), message: ui.text('NEXT_LEVEL_UNAVAILABLE_BODY'),
+                    confirmText: ui.text('AWARD_MAIN_MENU_BUTTON'),
                     onClose: () => { void this.navigate('main') },
                 })
                 return
             }
             levelId = this.nextLevelId
         }
-        const target = action === 'nextLevel' ? 'restart' : action === 'back' ? this.history[this.history.length - 1] ?? 'main' : action
+        // Pages opened from a running level (debug CLI) have no history and go back to the level.
+        const previous = this.history[this.history.length - 1] ?? (controller.isRunning() ? 'resume' : 'main')
+        const target = action === 'nextLevel' ? 'restart' : action === 'back' ? previous : action
         if (target === this.currentPage) return
         if (target === 'resume' && !controller.isRunning()) return
         const from = this.currentPage
@@ -154,7 +162,8 @@ export class GameApp extends Component {
                     await menu.show(page, slide ? (previous, next) => transitions.slide(previous, next, slide) : undefined)
                     if (!this.node?.isValid) return
                     if (action === 'back') this.history.pop()
-                    else if (this.currentPage) this.history.push(this.currentPage)
+                    // The almanac index, plants and zombies pages count as one page, so Close leaves all of them.
+                    else if (this.currentPage && !(ALMANAC_PAGES.has(this.currentPage) && ALMANAC_PAGES.has(target))) this.history.push(this.currentPage)
                     if (target === 'main' || target === 'title') this.history.length = 0
                     this.currentPage = target
                     gameLayer.active = MENU_PAGES[target].overlay === true && controller.isRunning()
@@ -240,7 +249,7 @@ export class GameApp extends Component {
             if (!result?.action && this.node?.isValid && running && !wasPaused && this.currentPage === page) controller.resume()
         }
         if (!this.node?.isValid || !result) return
-        if (!result.ok) { this.showAdvice(result.message); return }
+        if (!result.ok) { this.showAdvice('key' in result ? (await UI.load()).format(result.key, result.args) : result.message); return }
         switch (result.action) {
             case 'manageMods':
                 this.debugCliOpen = true
@@ -294,7 +303,7 @@ export class GameApp extends Component {
             files = await selectZips()
             if (!files.length || !this.node?.isValid) return []
             progress = ui.dialog(this.node, {
-                title: 'Importing...', footer: false, clickSound: null,
+                title: ui.text('PACKAGE_IMPORTING'), footer: false, clickSound: null,
             })
             progress.onConfirm = progress.onCancel = () => {}
             // Paint the dialog before ZIP validation occupies the main thread.
@@ -315,7 +324,7 @@ export class GameApp extends Component {
             for (const file of files) file.dispose?.()
         }
         if (errors.length && this.node?.isValid) await ui.dialog(this.node, {
-            title: 'Import Failed', message: errors.join('\n'), confirmText: 'OK',
+            title: ui.text('PACKAGE_IMPORT_FAILED'), message: errors.join('\n'), confirmText: ui.text('DIALOG_BUTTON_OK'),
         }).result
         return [...imports.values()]
     }
@@ -349,7 +358,8 @@ export class GameApp extends Component {
             return
         }
         if (UIDialog.handleKey(event)) return
-        if (!this.currentPage && this.controller?.canPause() && event.keyCode === KeyCode.SPACE) {
+        // Board::KeyDown hands Space to the cutscene during SCENE_LEVEL_INTRO (seed chooser included); only play pauses.
+        if (!this.currentPage && this.controller?.canPause() && !this.controller.isLevelIntro() && event.keyCode === KeyCode.SPACE) {
             event.propagationStopped = true
             void this.navigate('pause')
             return

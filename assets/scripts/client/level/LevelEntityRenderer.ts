@@ -20,6 +20,7 @@ import type { PlantView } from '@/client/plants/PlantView'
 import type { LevelEntitySnapshot, LevelParticleOwnerSnapshot } from './LevelPresentationSnapshot'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { boardCell, levelAwardSize } from './LevelGeometry'
+import { LevelItemView } from './LevelItemView'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -64,6 +65,7 @@ export class LevelEntityRenderer {
     private highlightedPlant?: number
     /** Board particles share one node per drawing order, so a new one is appended rather than moved. */
     private readonly particleHolders = new Map<number, Node>()
+    private readonly itemViews = new Map<number, LevelItemView>()
 
     constructor(
         private readonly rootLayer: number,
@@ -171,7 +173,7 @@ export class LevelEntityRenderer {
             const mower = node.getChildByName('MowerAnimation')?.getComponent(ReanimPlayer)
             if (mower) result.push({ kind: 'mower', entityId, animation: mower.snapshot() })
             else {
-                const animation = node.getComponent(ReanimPlayer)
+                const animation = node.getChildByName(LevelItemView.ANIMATION)?.getComponent(ReanimPlayer)
                 if (animation) result.push({ kind: 'sun', entityId, animation: animation.snapshot() })
             }
         }
@@ -188,9 +190,7 @@ export class LevelEntityRenderer {
                 if (view) await view.restore(snapshot)
             } else {
                 const node = this.entities.get(snapshot.entityId)
-                const player = snapshot.kind === 'mower'
-                    ? node?.getChildByName('MowerAnimation')?.getComponent(ReanimPlayer)
-                    : node?.getComponent(ReanimPlayer)
+                const player = node?.getChildByName(snapshot.kind === 'mower' ? 'MowerAnimation' : LevelItemView.ANIMATION)?.getComponent(ReanimPlayer)
                 if (player && snapshot.animation) player.restore(snapshot.animation)
             }
         }
@@ -244,12 +244,15 @@ export class LevelEntityRenderer {
             if (!node) continue
             const award = item.typeId === this.content.levels.levels[snapshot.levelId].award.id
             const size = levelAwardSize(this.content.levels.levels[snapshot.levelId].award)
+            // Only sun flies to the (possibly edge-pinned) sun counter.
+            const sun = this.content.definitions.items[item.typeId]?.kind !== 'money'
             node.setPosition(
-                award ? item.x + size.width / 2 : item.x + 30 + this.collectOffset(item),
+                award ? item.x + size.width / 2 : item.x + 30 + (sun ? this.collectOffset(item) : 0),
                 award ? -(item.y + size.height / 2) : -(item.y + 30),
             )
             if (!award) node.setScale(item.scale, item.scale, 1)
             uiNode({ node, opacity: item.alpha })
+            this.itemViews.get(item.entityId)?.sync(item)
         }
         for (const mower of snapshot.lawnMowers) this.syncMower(mower)
         const particle = (effect: string, x: number, y: number, tint?: Color) => ParticlePlayer.spawn({
@@ -283,6 +286,7 @@ export class LevelEntityRenderer {
         this.attachments.delete(id)
         this.mowerPlayersReady.delete(id)
         this.mowerStates.delete(id)
+        this.itemViews.delete(id)
         this.entities.get(id)?.destroy()
         this.entities.delete(id)
         this.projectileShadows.get(id)?.destroy()
@@ -449,9 +453,10 @@ export class LevelEntityRenderer {
             } else if (isAward) {
                 await this.createAward(node, snapshot)
             } else {
-                const player = node.addComponent(ReanimPlayer)
-                await player.load('pvz:sun', this.content.registry, this.content.loader)
-                if (node.isValid) player.play({ loop: true, rate: 0.5 })
+                const definition = this.content.presentation.items[item!.typeId]
+                if (!definition) throw new Error(`Item presentation is not installed: ${item!.typeId}`)
+                const view = await LevelItemView.create(node, definition, this.content)
+                if (node.isValid) { this.itemViews.set(id, view); view.sync(item!) }
             }
         } catch (error) {
             if (node.isValid) node.destroy()

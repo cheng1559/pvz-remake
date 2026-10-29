@@ -14,7 +14,7 @@ from .images import convert_images
 from .reanim import build_reanim_clip, get_anim_nodes, load_anim_xml, load_animation_config
 from .fonts import convert_font
 from .particles import convert_directory as convert_particles
-from .strings import convert_lawnstrings
+from .strings import convert_lawnstrings, merge_project_strings
 from .audio import copy_sounds
 from .music.convert import convert_music
 
@@ -67,11 +67,7 @@ def import_assets(raw: Path) -> None:
     for image in outputs:
         register_sprite(image)
 
-    source = raw / 'properties/resources.xml'
-    file = assets / 'text/properties/resources.xml'
-    file.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source, file)
-    register('text', 'pvz:properties/resources', file)
+    # resources.xml only guides conversion (alpha companions, particle grids); the game never reads it, so it is not copied.
 
     print('[content] Bitmap fonts', flush=True)
     for source in sorted((raw / 'data').glob('*.txt')):
@@ -123,9 +119,12 @@ def import_assets(raw: Path) -> None:
         particle['emitters'] = [emitter for emitter in particle['emitters'] if emitter['sprite'] in resources['sprites']]
         write_json(file, particle)
         register('particles', particle['id'], file)
-    file = assets / 'json/properties/lawnstrings.json'
+    # All game text: the original LawnStrings plus the project's own UI text.
+    file = assets / 'json/strings.json'
     convert_lawnstrings(raw / 'properties/lawnstrings.txt', file, raw / 'properties/default.xml')
-    register('json', 'pvz:properties/lawnstrings', file)
+    # The project's own UI text (hand-written in tools/pvz/ui-strings.json) joins the original table.
+    merge_project_strings(file, Path(__file__).with_name('ui-strings.json'))
+    register('json', 'pvz:strings', file)
 
     print('[content] Sound effects and music stems', flush=True)
     copy_sounds(raw / 'sounds', assets / 'audio/sfx', overwrite=True)
@@ -164,6 +163,8 @@ def import_assets(raw: Path) -> None:
             file = entry['file'] if kind == 'sprites' else entry
             if file not in ('assets/gameplay.json', 'assets/presentation.json') and not (mod / file).is_file():
                 raise ValueError(f'Missing {kind} resource: {id} -> {file}')
+    # Resource categories are optional; leave out the ones the base does not use.
+    index['resources'] = {kind: entries for kind, entries in resources.items() if entries}
     index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2) + '\n')
 
 

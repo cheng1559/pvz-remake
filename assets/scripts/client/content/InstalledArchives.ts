@@ -56,6 +56,19 @@ export async function readInstalledArchive(kind: ArchiveKind, id: string): Promi
     })
 }
 
+/** Just the archive's manifest.json: native reads the extracted file, the web inflates only that ZIP entry. */
+export async function readInstalledManifest(kind: ArchiveKind, id: string): Promise<Uint8Array | undefined> {
+    if (sys.isNative) {
+        const path = `${installedArchiveRoot(kind, id)}/manifest.json`
+        return native.fileUtils.isFileExist(path) ? new Uint8Array(native.fileUtils.getDataFromFile(path)) : undefined
+    }
+    const archive = await readInstalledArchive(kind, id)
+    if (!archive) return undefined
+    const entries = fflate.unzipSync(archive, { filter: entry => /(?:^|[\\/])manifest\.json$/.test(entry.name) })
+    const [path] = archivePaths(Object.keys(entries), 'manifest.json').find(([, name]) => name === 'manifest.json') ?? []
+    return path === undefined ? undefined : entries[path]
+}
+
 const installedRoots = new WeakMap<ArchiveFiles, string>()
 
 /**

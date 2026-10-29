@@ -12,10 +12,43 @@ const TEXT_COLOR = new Color(235, 225, 180)
 const SELECT_COLOR = new Color(20, 180, 15)
 const MAX_USERS = 8
 
-export async function showUserDialog(parent: Node, ui: UI, onClose: () => void, onChanged: () => void | Promise<void>): Promise<UIDialog> {
+/** Each player has their own installed Mods; loaded Mods cannot be unloaded, so another set needs a restart. */
+export interface PlayerMods {
+    needsRestartFor(profile: number | null): Promise<boolean>
+    hasMods(profile: number | null): boolean
+    copyMods(from: number | null, to: number, move?: boolean): void
+    restart(): void
+}
+
+/** Asks before switching to a player whose Mods differ; leaving a deleted player cannot be cancelled. */
+async function modRestart(parent: Node, ui: UI, mods: PlayerMods | undefined, profile: number | null, cancellable: boolean): Promise<'same' | 'restart' | 'cancel'> {
+    if (!mods || !await mods.needsRestartFor(profile)) return 'same'
+    const accepted = await ui.dialog(parent, {
+        title: ui.text('PLAYER_MODS_RESTART_HEADER'),
+        message: ui.text('PLAYER_MODS_RESTART_BODY'),
+        confirmText: ui.text('BUTTON_OK'), ...(cancellable ? { cancelText: ui.text('BUTTON_CANCEL') } : {}),
+    }).result
+    return accepted || !cancellable ? 'restart' : 'cancel'
+}
+
+/** A new player can start with the previous player's Mods; the first player keeps what was installed before. */
+async function setUpNewPlayer(parent: Node, ui: UI, mods: PlayerMods | undefined, previous: number | null, created: number): Promise<boolean> {
+    if (!mods) return false
+    if (previous === null) mods.copyMods(null, created, true)
+    else if (mods.hasMods(previous) && await ui.dialog(parent, {
+        title: ui.text('PLAYER_MODS_COPY_HEADER'),
+        message: ui.text('PLAYER_MODS_COPY_BODY'),
+        confirmText: ui.text('BUTTON_YES'), cancelText: ui.text('BUTTON_NO'),
+    }).result) mods.copyMods(previous, created)
+    if (await modRestart(parent, ui, mods, created, false) !== 'restart') return false
+    mods.restart()
+    return true
+}
+
+export async function showUserDialog(parent: Node, ui: UI, onClose: () => void, onChanged: () => void | Promise<void>, mods?: PlayerMods): Promise<UIDialog> {
     const current = await menuApi.getCurrentUser()
     if (!parent.isValid) throw new Error('User dialog was closed while loading')
-    if (!current) return showNameDialog(parent, ui, async () => { await onChanged(); onClose() })
+    if (!current) return showNameDialog(parent, ui, async () => { await onChanged(); onClose() }, undefined, undefined, mods)
     let entries: UserSummary[] = []
     let selected = 0
     let list: Node | null = null
@@ -25,7 +58,7 @@ export async function showUserDialog(parent: Node, ui: UI, onClose: () => void, 
         title: ui.text('WHO_ARE_YOU'), extraWidth: 210, extraHeight: 270, tall: true,
         confirmText: ui.text('BUTTON_OK'), cancelText: ui.text('BUTTON_CANCEL'), onClose,
     })
-    const fail = (error: unknown) => { if (dialog.node.isValid) ui.dialog(dialog.node, { title: 'Error', message: String(error) }) }
+    const fail = (error: unknown) => { if (dialog.node.isValid) ui.dialog(dialog.node, { title: ui.text('ERROR_HEADER'), message: String(error) }) }
     let selecting = false
     const panel = dialog.content
     const size = panel.getComponent(UITransform)!
@@ -106,8 +139,11 @@ export async function showUserDialog(parent: Node, ui: UI, onClose: () => void, 
         if (!profile) { editName(); return }
         selecting = true
         try {
+            const restart = await modRestart(dialog.node, ui, mods, profile.id, true)
+            if (restart === 'cancel' || !dialog.node.activeInHierarchy) return
             const result = await menuApi.selectUser(profile.id)
             if (!result.ok || !dialog.node.activeInHierarchy) return
+            if (restart === 'restart') { mods!.restart(); return }
             await onChanged()
             dialog.close(true)
         } finally { selecting = false }
@@ -120,7 +156,7 @@ export async function showUserDialog(parent: Node, ui: UI, onClose: () => void, 
             await onChanged()
             if (profile) await refresh(profile.id)
             else dialog.close(true)
-        }, profile, () => { child = null })
+        }, profile, () => { child = null }, mods)
     }
 
     function deleteSelected(): void {
@@ -138,7 +174,10 @@ export async function showUserDialog(parent: Node, ui: UI, onClose: () => void, 
             if (!(await menuApi.deleteUser(profile.id)).ok) return
             const nextId = entries[Math.max(0, selected - 1)]?.id
             await refresh(nextId)
-            if (deletingCurrent && entries[selected]) await menuApi.selectUser(entries[selected].id)
+            if (deletingCurrent && entries[selected]) {
+                await menuApi.selectUser(entries[selected].id)
+                if (await modRestart(dialog.node, ui, mods, entries[selected].id, false) === 'restart') { mods!.restart(); return }
+            }
             await onChanged()
             if (!entries.length) editName()
         }).catch(fail)
@@ -162,10 +201,10 @@ export async function showUserDialog(parent: Node, ui: UI, onClose: () => void, 
     return dialog
 }
 
-function showNameDialog(parent: Node, ui: UI, onSaved: () => void | Promise<void>, profile?: UserSummary, onCancel?: () => void): UIDialog {
+function showNameDialog(parent: Node, ui: UI, onSaved: () => void | Promise<void>, profile?: UserSummary, onCancel?: () => void, mods?: PlayerMods): UIDialog {
     const dialog = ui.dialog(parent, {
         title: ui.text(profile ? 'RENAME_USER' : 'NEW_USER'), message: ui.text('PLEASE_ENTER_NAME'),
-        extraWidth: 110, extraHeight: 40, centerMessage: false, messageOffsetY: -5,
+        extraWidth: 110, extraHeight: 40, centerMessage: false,
         confirmText: ui.text('BUTTON_OK'), cancelText: ui.text('BUTTON_CANCEL'),
     })
     const size = dialog.content.getComponent(UITransform)!
@@ -184,6 +223,7 @@ function showNameDialog(parent: Node, ui: UI, onSaved: () => void | Promise<void
         if (submitting || !dialog.node.activeInHierarchy) return
         submitting = true
         try {
+            const previous = profile ? undefined : (await menuApi.getCurrentUser())?.id ?? null
             const result = profile ? await menuApi.renameUser(profile.id, input.value) : await menuApi.createUser(input.value)
             if (!dialog.node.activeInHierarchy) return
             if (result.ok === false) {
@@ -193,9 +233,10 @@ function showNameDialog(parent: Node, ui: UI, onSaved: () => void | Promise<void
                 return
             }
             dialog.close(true)
+            if (previous !== undefined && result.user && await setUpNewPlayer(parent, ui, mods, previous, result.user.id)) return
             await onSaved()
         } catch (error) {
-            if (dialog.node.isValid) ui.dialog(dialog.node, { title: 'Error', message: String(error) })
+            if (dialog.node.isValid) ui.dialog(dialog.node, { title: ui.text('ERROR_HEADER'), message: String(error) })
         } finally { submitting = false }
     }
     async function cancel(): Promise<void> {

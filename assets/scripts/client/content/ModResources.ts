@@ -11,6 +11,7 @@ import { contentJson, relativeFile, parseContentArchive, type ContentArchive, ty
 
 type PackManifest = { id: string } & ResourceManifest
 interface LoadedPack {
+    locale?: string
     files: ArchiveFiles
     manifest: PackManifest
     textures: Map<string, Promise<Texture2D>>
@@ -40,12 +41,12 @@ function archiveFile(files: ArchiveFiles, file: string): Uint8Array {
 
 const archiveJson = contentJson
 
-function createPack(files: ArchiveFiles, id: string, content: ModContent): LoadedPack {
+function createPack(files: ArchiveFiles, id: string, content: ModContent, locale?: string): LoadedPack {
     const { resources } = content
     const manifest: PackManifest = { id, ...resources,
         json: { ...resources.json, ...resources.reanim, ...resources.particles, ...resources.music } }
     const premultiplied = new Set(Object.values(resources.sprites).filter(sprite => sprite.alphaMode === 'premultiplied').map(sprite => sprite.file))
-    return { manifest, files, premultiplied, textures: new Map(), sprites: new Map(), fonts: new Map(), assets: new Map(), urls: new Map() }
+    return { locale, manifest, files, premultiplied, textures: new Map(), sprites: new Map(), fonts: new Map(), assets: new Map(), urls: new Map() }
 }
 
 function fileUrl(pack: LoadedPack, file: string, mime: string): string {
@@ -150,7 +151,7 @@ export class ModResources {
             }
             if (this.loadBase) {
                 this.baseArchive = parseContentArchive(unpackArchive(await this.loadBase(), 'manifest.json'))
-                this.base = createPack(this.baseArchive.files, this.baseArchive.manifest.id, this.baseArchive.content)
+                this.base = createPack(this.baseArchive.files, this.baseArchive.manifest.id, this.baseArchive.content, this.baseArchive.manifest.locale)
             }
         })()
     }
@@ -158,7 +159,7 @@ export class ModResources {
     ready(): Promise<void> {
         return this.initialization ??= (async () => {
             await this.readyBase()
-            this.active = (await this.manager.ready()).map(mod => createPack(mod.files, mod.manifest.id, mod.content))
+            this.active = (await this.manager.ready()).map(mod => createPack(mod.files, mod.manifest.id, mod.content, mod.manifest.locale))
         })()
     }
 
@@ -218,6 +219,22 @@ export class ModResources {
         const asset = await this.resolveAsset(id, JsonAsset, undefined, true)
         if (!asset) throw new Error(`Missing base JSON: ${id}`)
         return asset.json as T
+    }
+
+    /** The text language: the last running Mod's manifest locale, else the base's. */
+    async locale(): Promise<string> {
+        await this.ready()
+        const packs = [...(this.base ? [this.base] : []), ...this.active]
+            .filter(pack => pack === this.base || !this.manager.failures.has(pack.manifest.id))
+        return packs.reverse().find(pack => pack.locale)?.locale ?? 'en-US'
+    }
+
+    /** Every running layer of a JSON resource, base first and the highest-priority Mod last, for tables merged by key. */
+    async jsonLayers(id: string): Promise<{ owner: string, json: unknown }[]> {
+        await this.ready()
+        const packs = [...(this.base ? [this.base] : []), ...this.active]
+            .filter(pack => (pack === this.base || !this.manager.failures.has(pack.manifest.id)) && pack.manifest.json[id])
+        return packs.map(pack => ({ owner: pack.manifest.id, json: archiveJson(pack.files, pack.manifest.json[id]) }))
     }
 
     async ids(type: AssetType<Asset>, prefix = ''): Promise<string[]> {

@@ -229,7 +229,10 @@ export class UIInput extends Component {
 
     private sanitize(value: string): string {
         const line = value.split(/[\r\n]/, 1)[0]
-        return Array.from(this.options.filter?.(line) ?? line).slice(0, this.options.maxLength ?? 65535).join('')
+        // Characters the bitmap font cannot draw are dropped, whatever the caller's filter allows.
+        return Array.from(this.options.filter?.(line) ?? line)
+            .filter(char => FontMetricsUtil.hasGlyph(this.font.config, char))
+            .slice(0, this.options.maxLength ?? 65535).join('')
     }
 
     private changed(): void {

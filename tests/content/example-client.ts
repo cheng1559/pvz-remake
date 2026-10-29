@@ -47,7 +47,7 @@ export function exampleClient() {
         registry: { resolve: (category: string, id: string) => ({ category, id }) },
         loader: { async load(content: any) { return content } },
     }
-    const executor = { execute: async (_input: string, _running: boolean, _run: (input: string) => any) => cli.debugCondition('delegated') }
+    const executor = { execute: async (_input: string, _running: boolean, _run: (input: string) => any) => cli.debugCondition('DEBUG_NO_ACTIVE_GAME') }
     return { MainMenuScreen, buttons, dialogs, sounds, executor, Node, game, modules: {
         'cc': { Node, Color, AudioClip: class {} },
         'shared/debug/DebugCli': cli,

@@ -1,3 +1,4 @@
+import { BASE_MOD_ID } from '@/shared/mod'
 import {
     parseClientPresentationSnapshot,
     type ClientPresentationSnapshot,
@@ -82,7 +83,7 @@ export function parseGameSave(value: unknown): GameSave {
 function parseContentSet(value: unknown): ContentSetSnapshot {
     const source = exact(value, ['base', 'mods'], 'game save.contentSet')
     const base = parseContent(source.base, 'game save.contentSet.base')
-    if (base.id !== 'pvz:base') throw new TypeError('game save.contentSet.base.id must be pvz:base')
+    if (base.id !== BASE_MOD_ID) throw new TypeError(`game save.contentSet.base.id must be ${BASE_MOD_ID}`)
     const mods = array(source.mods, 'game save.contentSet.mods').map((entry, index) =>
         parseContent(entry, `game save.contentSet.mods[${index}]`))
     const ids = [base.id, ...mods.map(mod => mod.id)]

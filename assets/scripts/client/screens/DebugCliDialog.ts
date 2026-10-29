@@ -4,15 +4,17 @@ import type { UI } from '@/client/ui/UI'
 import type { UIDialog } from '@/client/ui/UIDialog'
 import type { UIInput } from '@/client/ui/UIInput'
 import { getDebugCliCompletions, getDebugCliSuffix, type DebugCliCatalog, type DebugCliResult } from '@/shared/debug/DebugCli'
+import { DEBUG_CLI_HISTORY_LIMIT, loadDebugCliHistory, saveDebugCliHistory } from '@/platform/debug/GameDebugSettings'
 
 const { ccclass } = _decorator
 const COMMAND_COLOR = new Color(240, 240, 255)
 
 @ccclass('DebugCliDialog')
 class DebugCliDialog extends Component {
-    private static readonly history: string[] = []
+    private static history?: string[]
     private field!: UIInput
     private dialog!: UIDialog
+    private ui!: UI
     private historyIndex = -1
     private draft = ''
     private candidates: string[] = []
@@ -25,6 +27,7 @@ class DebugCliDialog extends Component {
 
     initialize(dialog: UIDialog, ui: UI, execute: (command: string) => Promise<DebugCliResult>, catalog?: DebugCliCatalog): void {
         this.dialog = dialog
+        this.ui = ui
         this.execute = execute
         this.catalog = catalog
         const { width, height } = dialog.content.getComponent(UITransform)!
@@ -63,7 +66,7 @@ class DebugCliDialog extends Component {
             return true
         }
         if (key !== 'ArrowUp' && key !== 'ArrowDown') return false
-        const history = DebugCliDialog.history
+        const history = DebugCliDialog.history ??= loadDebugCliHistory()
         if (!history.length || key === 'ArrowDown' && this.historyIndex < 0) return true
         if (key === 'ArrowUp' && history.length) {
             if (this.historyIndex < 0) { this.draft = value; this.historyIndex = history.length }
@@ -76,18 +79,19 @@ class DebugCliDialog extends Component {
     private async submit(): Promise<void> {
         if (this.busy) return
         const command = this.field.value.trim()
-        const history = DebugCliDialog.history
+        const history = DebugCliDialog.history ??= loadDebugCliHistory()
         if (command) {
             const duplicate = history.indexOf(command)
             if (duplicate >= 0) history.splice(duplicate, 1)
             history.push(command)
-            if (history.length > 64) history.shift()
+            if (history.length > DEBUG_CLI_HISTORY_LIMIT) history.shift()
+            saveDebugCliHistory(history)
         }
         this.busy = true
         try {
             const result = await this.execute(command)
             if (!this.node.isValid) return
-            console[result.ok ? 'info' : 'warn'](`[Debug CLI] ${result.message}`)
+            console[result.ok ? 'info' : 'warn'](`[Debug CLI] ${'key' in result ? this.ui.format(result.key, result.args) : result.message}`)
             if (!result.ok && result.failure !== 'condition') {
                 this.flash = 0.7
                 this.field.focus()
@@ -112,8 +116,8 @@ class DebugCliDialog extends Component {
 
 export function showDebugCliDialog(parent: Node, ui: UI, execute: (command: string) => Promise<DebugCliResult>, catalog?: DebugCliCatalog): Promise<DebugCliResult | null> {
     const dialog = ui.dialog(parent, {
-        title: 'DEBUG CLI', message: 'Enter debug command:', extraWidth: 110, extraHeight: 40,
-        centerMessage: false, messageOffsetY: -8, confirmText: 'OK', cancelText: 'Cancel', clickSound: null,
+        title: ui.text('DEBUG_CLI_HEADER'), message: ui.text('DEBUG_CLI_PROMPT'), extraWidth: 110, extraHeight: 40,
+        centerMessage: false, confirmText: ui.text('DIALOG_BUTTON_OK'), cancelText: ui.text('DIALOG_BUTTON_CANCEL'), clickSound: null,
     })
     const cli = dialog.node.addComponent(DebugCliDialog)
     cli.initialize(dialog, ui, execute, catalog)

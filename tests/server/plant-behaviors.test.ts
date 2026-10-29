@@ -32,11 +32,11 @@ const behavior: PlantBehavior<State> = {
 const start = {
     protocolVersion: 1 as const, type: 'startSession' as const, sequence: 1,
     levelId: 'pvz:adventure-1-1', randomSeed: 42, initialMoney: 0, firstAdventure: false,
-    mods: [{ id: 'test:mod', version: '0.1.0', contentHash: 'behavior-test' }],
+    mods: [{ id: 'test', version: '0.1.0', contentHash: 'behavior-test' }],
 }
 function setup() {
     const mods = new GameplayRegistry()
-    mods.plantBehaviors.register('test:mod', 'test:plant', behavior)
+    mods.plantBehaviors.register('test', 'test:plant', behavior)
     const server = new IntegratedGameServer(definitions, levels, mods)
     server.start(start)
     runCommand(server, { type: 'completeIntro' })
@@ -50,16 +50,16 @@ function plant(server: IntegratedGameServer, seed: string, column: number) {
 
 test('plant behavior registration rejects conflicts, unknown targets, missing handlers and non-JSON state', () => {
     const mods = new GameplayRegistry()
-    mods.plantBehaviors.register('test:mod', 'test:plant', behavior)
-    assert.throws(() => mods.plantBehaviors.register('other:mod', 'test:plant', behavior), /already registered by test:mod/)
+    mods.plantBehaviors.register('test', 'test:plant', behavior)
+    assert.throws(() => mods.plantBehaviors.register('other', 'test:plant', behavior), /already registered by test/)
     new IntegratedGameServer(definitions, levels, mods)
-    assert.throws(() => mods.plantBehaviors.register('test:mod', 'test:plant', behavior), /frozen/)
+    assert.throws(() => mods.plantBehaviors.register('test', 'test:plant', behavior), /frozen/)
     const unknown = new GameplayRegistry()
-    unknown.plantBehaviors.register('test:mod', 'test:missing', behavior)
+    unknown.plantBehaviors.register('test', 'test:missing', behavior)
     assert.throws(() => new IntegratedGameServer(definitions, levels, unknown), /unknown plant/)
     assert.throws(() => new IntegratedGameServer(definitions, levels), /not installed: test:plant/)
     const invalid = new GameplayRegistry()
-    invalid.plantBehaviors.register('test:mod', 'test:plant', { createState: () => ({ ticks: NaN }), tick() {} })
+    invalid.plantBehaviors.register('test', 'test:plant', { createState: () => ({ ticks: NaN }), tick() {} })
     new IntegratedGameServer(definitions, levels, invalid)
     assert.throws(() => invalid.plantBehaviors.createState('test:plant', definitions.plants['test:plant']), /finite numbers/)
 })

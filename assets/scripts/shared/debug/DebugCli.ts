@@ -1,12 +1,17 @@
 export interface DebugCliCatalog { plants: string[], zombies: string[], items: string[], levels: string[] }
-export interface DebugCliResult {
-    ok: boolean
-    message: string
-    failure?: 'syntax' | 'condition'
+interface DebugCliOutcome {
     action?: 'restart' | 'reload' | 'manageMods' | 'home' | 'quit' | 'help' | 'menu' | 'shop' | 'almanac' | 'zengarden' | 'level'
     levelId?: string
     catalog?: DebugCliCatalog
 }
+/**
+ * Success and syntax messages only reach the console. A failed condition closes the CLI and shows as advice, so it names
+ * a string table key (Mods use their own qualified keys) whose %s/%d the client fills with args in order.
+ */
+export type DebugCliResult = DebugCliOutcome & (
+    | { ok: true, message: string, failure?: undefined }
+    | { ok: false, failure: 'syntax', message: string }
+    | { ok: false, failure: 'condition', key: string, args?: string[] })
 export interface DebugCliCommand { name: string, args: string[] }
 export interface CommandSpec { name: string, parameters: string[], minimum: number, values?: Record<number, readonly string[]> }
 const bool = ['true', 'false']
@@ -35,7 +40,8 @@ const builtins: CommandSpec[] = [
 export const specs = { list: (): readonly CommandSpec[] => builtins }
 
 export const debugSyntax = (message: string): DebugCliResult => ({ ok: false, message, failure: 'syntax' })
-export const debugCondition = (message: string): DebugCliResult => ({ ok: false, message, failure: 'condition' })
+export const debugCondition = (key: string, ...args: (string | number | boolean)[]): DebugCliResult =>
+    ({ ok: false, failure: 'condition', key, ...(args.length ? { args: args.map(String) } : {}) })
 export const debugSuccess = (message: string): DebugCliResult => ({ ok: true, message })
 export const normalizeDebugName = (name: string) => name.toLowerCase().replace(/^pvz:/, '').replace(/[\s_-]+/g, '')
 export const debugInteger = (value: string | undefined): number | null =>
@@ -67,7 +73,8 @@ export function getDebugCliCompletions(value: string, catalog?: DebugCliCatalog,
     const name = tokens[0][0].replace(/^\//, '').toLowerCase()
     const commands = specs.list()
     if (index === 0) {
-        if (!allowEmpty && commands.some(spec => spec.name === name)) return []
+        // A bare "/" names no command yet, so nothing is completed, not even on Tab.
+        if (!name || !allowEmpty && commands.some(spec => spec.name === name)) return []
         return commands.filter(spec => spec.name.startsWith(name)).map(spec => value.slice(0, start) + (token.startsWith('/') ? '/' : '') + spec.name)
     }
     if (!token && !allowEmpty) return []

@@ -10,6 +10,6 @@ The built-in base package is authored and packed as a Mod. `content.json` declar
 - `npm run mod:pack -- pvz-base --publish assets/resources/base.zip` packs the same source and publishes the completed ZIP as `assets/resources/base.zip` for the game.
 - `npm run build:content -- --pak /path/to/main.pak` imports the original PAK, converts directly to Mod assets, and packs/publishes the built-in ZIP. With no argument, the input defaults to `tools/main.pak`. Requires Python 3.10+, Pillow, ffmpeg and libopenmpt.
 
-The importer preserves authored gameplay/presentation tables and existing custom Mod assets that are not supplied by the PAK. `presentation/ui-strings.json` contains authored UI text.
+The importer preserves authored gameplay/presentation tables and existing custom Mod assets that are not supplied by the PAK. The authored UI text lives in `tools/pvz/ui-strings.json` and is merged into `pvz:strings` on import.
 
 Packing reads the declared resources; it does not discover assets or regenerate source mappings. Like other Mods, references use qualified IDs such as `pvz:peasplat`. The runtime loads this package first as the required base content.

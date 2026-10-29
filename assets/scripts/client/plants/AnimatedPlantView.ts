@@ -3,6 +3,8 @@ import { Color, Node, Sprite } from 'cc'
 import { type ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
+import type { ReanimKeyframe } from '@/shared/content/reanim'
+import { attachmentTrack, type PlantParts } from '@/shared/content/presentation'
 import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import type { PlantParticle, PlantView, PlantViewContext, PlantViewSnapshot } from './PlantView'
 
@@ -18,6 +20,11 @@ export abstract class AnimatedPlantView implements PlantView {
     private blinking = false
     protected body: ReanimPlayer
     protected readonly extras = new Map<string, ReanimPlayer>()
+    /**
+     * Reanimation::mFrameBasePose: the body fixes a track's base pose at the first blink, and later body animations
+     * keep it, so a grown sun-shroom's blink still scales from the small face.
+     */
+    private readonly attachmentBases = new Map<string, ReanimKeyframe>()
     /** The Z animation over a sleeping mushroom. */
     private sleeping?: ReanimPlayer
     protected readonly node: Node
@@ -47,7 +54,7 @@ export abstract class AnimatedPlantView implements PlantView {
         await this.loadAnimations()
         if (!this.node.isValid) return
         for (const [name, player] of this.extras) {
-            if (this.body.loadedId) player.attachToTrack(this.body, this.extraClip(name).attachmentTrackId ?? 'anim_face')
+            if (this.body.loadedId) this.attachExtra(name, player)
             player.hide()
         }
         this.startBody()
@@ -60,6 +67,10 @@ export abstract class AnimatedPlantView implements PlantView {
     }
 
     protected get isNut(): boolean { return false }
+    protected get parts(): PlantParts {
+        return plantDefinition(this.animations.definitions, this.context.plant.typeId).parts ?? {}
+    }
+    private get eyeTracks(): readonly string[] { return this.parts.eyes ?? [] }
     /** Plant::DrawShadow skips a few plants, such as the grave buster. */
     protected get hasShadow(): boolean { return true }
     protected get shadow(): { x: number; y: number; scale?: number } { return plantDefinition(this.animations.definitions, this.context.plant.typeId).shadow }
@@ -84,7 +95,17 @@ export abstract class AnimatedPlantView implements PlantView {
     }
 
     protected attachExtras(_clip: ClientAnimationClip): void {
-        for (const [name, extra] of this.extras) extra.attachToTrack(this.body, this.extraClip(name).attachmentTrackId ?? 'anim_face')
+        for (const [name, extra] of this.extras) this.attachExtra(name, extra)
+    }
+
+    private attachExtra(name: string, extra: ReanimPlayer): void {
+        const trackId = attachmentTrack(this.extraClip(name))
+        extra.attachToTrack(this.body, trackId, this.attachmentBases.get(trackId))
+    }
+
+    private keepAttachmentBase(player: ReanimPlayer): void {
+        const trackId = player.attachmentTrackId, pose = player.attachmentBasePose
+        if (trackId && pose && !this.attachmentBases.has(trackId)) this.attachmentBases.set(trackId, pose)
     }
 
     sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle): void {
@@ -131,12 +152,13 @@ export abstract class AnimatedPlantView implements PlantView {
             if (!saved) continue
             player.restore(saved)
             player.reattachAfterRestore(this.body)
+            this.keepAttachmentBase(player)
             if (name.startsWith('Blink') && saved.visible && saved.playing) {
                 this.blinking = true
                 player.setOnFinish(() => this.endBlink())
             }
         }
-        this.body.setTrackPrefixVisible('anim_eye', !this.blinking)
+        this.body.setTracksVisible(this.eyeTracks, !this.blinking)
         if (snapshot.blinkAtTick !== undefined) this.blinkAtTick = snapshot.blinkAtTick
         this.afterRestore()
     }
@@ -191,7 +213,8 @@ export abstract class AnimatedPlantView implements PlantView {
         const blink = this.blinkPlayer()
         if (!blink) return
         this.blinking = true
-        this.body.setTrackPrefixVisible('anim_eye', false)
+        this.keepAttachmentBase(blink)
+        this.body.setTracksVisible(this.eyeTracks, false)
         blink.play({
             loop: false, rate: 15 / 12, timeSeconds: 0,
             onFinish: () => this.endBlink(),
@@ -200,6 +223,6 @@ export abstract class AnimatedPlantView implements PlantView {
 
     private endBlink(): void {
         this.blinking = false
-        if (this.body.node.isValid) this.body.setTrackPrefixVisible('anim_eye', true)
+        if (this.body.node.isValid) this.body.setTracksVisible(this.eyeTracks, true)
     }
 }

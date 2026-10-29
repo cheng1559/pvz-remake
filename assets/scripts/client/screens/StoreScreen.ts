@@ -169,7 +169,7 @@ export class StoreScreen extends Component {
 
     private showDescription(item: StoreItemView): void {
         const message = item.message
-        this.dave!.say(this.ui.text(`CRAZY_DAVE_${message}`, '').replace(/\{MONEY\}/g, formatMoney(this.data.coins))
+        this.dave!.say(this.ui.text(`CRAZY_DAVE_${message}`).replace(/\{MONEY\}/g, formatMoney(this.data.coins))
             .replace(/\{UPGRADE_COST\}/g, formatMoney(item.cost)).replace(/\{PLAYER_NAME\}/g, this.data.playerName))
         this.bubbleTimer = this.data.speech.descriptionDuration
     }
@@ -220,7 +220,7 @@ export class StoreScreen extends Component {
                 if (visit && this.node.isValid) this.navigate('tree')
             }
         } catch (error) {
-            if (this.node.isValid) await this.ui.dialog(this.node, { title: 'Error', message: String(error) }).result
+            if (this.node.isValid) await this.ui.dialog(this.node, { title: this.ui.text('ERROR_HEADER'), message: String(error) }).result
         } finally {
             if (this.node.isValid) { this.waiting = false; this.refreshEnabled() }
         }

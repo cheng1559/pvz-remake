@@ -8,7 +8,7 @@ tools/
 │   ├── cli.ts
 │   ├── content.ts
 │   └── test.ts
-├── pvz/                    # 原版 PAK 导入、转换和 anim_defs.json
+├── pvz/                    # 原版 PAK 导入、转换、anim-defs.json 和 ui-strings.json
 ├── resources/              # 音频压缩、字体和图片超分辨率
 │   └── licenses/           # 资源处理工具的第三方许可
 ├── kernel/build.ts         # C++ 内核编译为 Wasm
@@ -31,7 +31,8 @@ Python 命令在项目根目录执行。`npm run build:content` 调用 `python3 
 ```text
 pvz/
 ├── __main__.py             # PAK 导入命令入口
-├── anim_defs.json          # 原版动画转换规则
+├── anim-defs.json          # 原版动画转换规则
+├── ui-strings.json         # 本项目新增的界面文本，导入时并入 pvz:strings（键不得与原版重复）
 ├── importer.py              # 导入流程和资源清单
 ├── pak.py                   # PAK 解包、文件名规范化、临时目录
 ├── images.py                # 图片及透明通道合并
@@ -47,7 +48,7 @@ pvz/
 └── almanac.py               # 图鉴部件配置
 ```
 
-原版资源转换规则在 `tools/pvz/anim_defs.json`：
+原版资源转换规则在 `tools/pvz/anim-defs.json`：
 
 - 省略 `animations` 时自动读取 Reanim 的 `anim_*` 标记；显式列表用于选取部分片段。没有标记时使用完整的 `default` 动画。
 - `slots` 配置部件挂点；`hiddenTrackPrefixes` 过滤不需要的装备轨道。

@@ -31,7 +31,7 @@ const behavior: ZombieBehavior<State> = {
 const start = {
     protocolVersion: 1 as const, type: 'startSession' as const, sequence: 1,
     levelId: 'pvz:adventure-1-1', randomSeed: 42, initialMoney: 0, firstAdventure: false,
-    mods: [{ id: 'test:mod', version: '0.1.0', contentHash: 'behavior-test' }],
+    mods: [{ id: 'test', version: '0.1.0', contentHash: 'behavior-test' }],
 }
 function debug(server: IntegratedGameServer, command: string) {
     server.enqueueDebugCommand(1000, command)
@@ -41,19 +41,19 @@ function debug(server: IntegratedGameServer, command: string) {
 
 test('zombie behaviors use the same conflict, target, state and freeze rules as plants', () => {
     const mods = new GameplayRegistry()
-    mods.zombieBehaviors.register('test:mod', 'test:zombie', behavior)
-    assert.throws(() => mods.zombieBehaviors.register('other:mod', 'test:zombie', behavior), /already registered by test:mod/)
+    mods.zombieBehaviors.register('test', 'test:zombie', behavior)
+    assert.throws(() => mods.zombieBehaviors.register('other', 'test:zombie', behavior), /already registered by test/)
     new IntegratedGameServer(definitions, levels, mods)
-    assert.throws(() => mods.zombieBehaviors.register('test:mod', 'test:zombie', behavior), /frozen/)
+    assert.throws(() => mods.zombieBehaviors.register('test', 'test:zombie', behavior), /frozen/)
     assert.throws(() => new IntegratedGameServer(definitions, levels), /not installed: test:zombie/)
     const unknown = new GameplayRegistry()
-    unknown.zombieBehaviors.register('test:mod', 'test:missing', behavior)
+    unknown.zombieBehaviors.register('test', 'test:missing', behavior)
     assert.throws(() => new IntegratedGameServer(definitions, levels, unknown), /unknown zombie/)
 })
 
 test('CLI and wave zombies have isolated persisted state that stops during pause and after death', () => {
     const mods = new GameplayRegistry()
-    mods.zombieBehaviors.register('test:mod', 'test:zombie', behavior)
+    mods.zombieBehaviors.register('test', 'test:zombie', behavior)
     const server = new IntegratedGameServer(definitions, levels, mods)
     server.start(start)
     runCommand(server, { type: 'completeIntro' })

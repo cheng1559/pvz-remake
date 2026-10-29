@@ -1,3 +1,4 @@
+import { BASE_MOD_ID } from '@/shared/mod'
 import { JsonComponents } from './JsonComponents'
 import { PlantBehaviorRegistry } from './plants/behaviors'
 import { ZombieBehaviorRegistry } from './zombies/behaviors'
@@ -12,7 +13,7 @@ export class GameplayRegistry {
         const behaviors = new Map([['bowling', bowlingBehavior]])
         for (const [id, definition] of Object.entries(definitions.plants)) {
             const behavior = behaviors.get(String(definition.behavior?.kind))
-            if (behavior && !this.plantBehaviors.has(id)) this.plantBehaviors.register('pvz:base', id, behavior)
+            if (behavior && !this.plantBehaviors.has(id)) this.plantBehaviors.register(BASE_MOD_ID, id, behavior)
         }
     }
     checkpoint(): () => void {

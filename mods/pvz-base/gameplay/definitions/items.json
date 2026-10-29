@@ -1,1 +1,3 @@
-{"pvz:sun": {"value": 25, "width": 60, "height": 60}, "pvz:smallsun": {"value": 15, "width": 60, "height": 60, "scale": 0.5}}
+{"pvz:sun": {"value": 25, "width": 60, "height": 60}, "pvz:smallsun": {"value": 15, "width": 60, "height": 60, "scale": 0.5},
+"pvz:coin_silver": {"kind": "money", "value": 1, "width": 60, "height": 60}, "pvz:coin_gold": {"kind": "money", "value": 5, "width": 60, "height": 60},
+"pvz:diamond": {"kind": "money", "value": 100, "width": 60, "height": 60, "lifetimeTicks": 1500}}

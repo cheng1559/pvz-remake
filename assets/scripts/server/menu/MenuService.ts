@@ -86,6 +86,16 @@ export class MenuService {
                 return award
             }
             case 'getAward': return this.award()
+            case 'getPurse': return this.purse()
+            case 'setCoins': {
+                const profile = this.profiles.getCurrentProfile()
+                if (!profile) throw new Error('Coins require a player profile')
+                const coins = request.args.coins
+                if (!Number.isSafeInteger(coins) || coins < 0 || coins > 99999) throw new Error('Invalid coins')
+                profile.coins = coins
+                this.profiles.saveProfile(profile)
+                return this.purse()
+            }
             default: throw new Error('Unknown menu API method')
         }
     }
@@ -124,6 +134,14 @@ export class MenuService {
         }
         const user = this.profiles.createProfile(name)
         return user ? { ok: true, user: userView(user) } : { ok: false, code: 'duplicateName' }
+    }
+
+    private purse() {
+        const profile = this.profiles.getCurrentProfile()
+        if (!profile) throw new Error('Coins require a player profile')
+        const upgrade = this.storeCatalog.STORE_PAGES.flat().find(item => item.effect === 'seedSlots')
+        if (!upgrade) throw new Error('Store has no seed-slot upgrade')
+        return { coins: profile.coins, packetUpgrades: profile.purchases[upgrade.id] ?? 0, packetUpgradeCost: this.storeCatalog.itemCost(upgrade, profile) }
     }
 
     private store(): StoreView {

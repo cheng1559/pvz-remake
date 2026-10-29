@@ -11,7 +11,7 @@ import { EventQueueResource, emitServerEvent } from '../events'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { World } from '@/ecs/index'
 import { dropZombieFlag } from './flag'
-import { tryDropLevelAward } from '../levelAward'
+import { dropZombieLoot } from '../loot'
 
 export const HIT_FLASH_TICKS = 25
 
@@ -94,13 +94,15 @@ export function damageZombie(
         dropZombieFlag(world, definitions, entity)
         zombie.hasHead = false
         emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'head' })
+        // Zombie::UpdateDamageStates: losing the head is when the zombie drops its loot.
+        dropZombieLoot(world, definitions, entity, remover)
     }
     if (zombie.health === 0) startZombieDeath(world, definitions, entity, zombie)
 }
 
-/** Instant kills still drop loot at the zombie's position, before removing its components. */
+/** Instant kills still drop loot at the zombie's position, before removing its components (Zombie::DieWithLoot). */
 export function destroyZombie(world: World, definitions: GameplayDefinitions, entity: number, remover: EntityRemover): void {
-    tryDropLevelAward(world, definitions, remover, entity)
+    dropZombieLoot(world, definitions, entity, remover)
     remover.destroyEntity(entity)
 }
 

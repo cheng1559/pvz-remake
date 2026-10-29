@@ -17,6 +17,7 @@ import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { ItemComponent, TutorialResource, WaveResource } from '../levelState'
 import { createWaveSystem } from '../waves'
 import { createGrave } from '../graves'
+import { MAX_MONEY, spawnLoot } from '../loot'
 import { graveAt } from '@/shared/protocol/index'
 import { emitServerEvent, EventQueueResource } from '../events'
 import { DebugRulesResource, getDebugRules } from './DebugRules'
@@ -34,7 +35,7 @@ function executeCommand(
     const { name, args } = command
     const level = world.resources.get(LevelStateResource)
     const preference = ['cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'collect'].includes(name)
-    if (!preference && name !== 'plant' && (level.phase !== 'gameplay' || level.result !== 'playing')) return debugCondition(`/${name} requires an active level`)
+    if (!preference && name !== 'plant' && (level.phase !== 'gameplay' || level.result !== 'playing')) return debugCondition('DEBUG_REQUIRES_LEVEL', name)
     const economy = world.resources.get(EconomyStateResource)
     const events = world.resources.get(EventQueueResource)
     const findType = (entries: Record<string, unknown>, value: string) => Object.keys(entries).find(id => normalizeDebugName(id) === normalizeDebugName(value))
@@ -53,13 +54,13 @@ function executeCommand(
             if (amount === null) return debugSyntax('Amount must be an integer')
             const next = (args[0].toLowerCase() === 'add' ? economy[name] : 0) + amount
             if (!Number.isSafeInteger(next)) return debugSyntax('Amount is too large')
-            economy[name] = Math.max(0, name === 'sun' ? Math.min(MAX_SUN, next) : next)
+            economy[name] = Math.max(0, Math.min(name === 'sun' ? MAX_SUN : MAX_MONEY, next))
             if (name === 'sun') economy.pendingSunSpend = 0
             return debugSuccess(`${name}: ${economy[name]}`)
         }
         case 'plant': {
             const seedId = findType(definitions.seeds, args[0])
-            if (!seedId) return debugCondition(`Plant is not installed: ${args[0]}`)
+            if (!seedId) return debugCondition('DEBUG_PLANT_NOT_INSTALLED', args[0])
             const grid = position(args[1], args[2])
             if (!grid) return invalidPosition()
             const entityId = createPlant(seedId, grid.row, grid.column!)
@@ -69,13 +70,13 @@ function executeCommand(
         }
         case 'seed': {
             const bank = world.resources.get(SeedBankResource)
-            if (bank.choosing) return debugCondition('Finish choosing seeds first')
+            if (bank.choosing) return debugCondition('DEBUG_FINISH_CHOOSING')
             const slot = debugInteger(args[0])
             if (slot === null || slot < 1 || slot > bank.packets.length) {
                 return debugSyntax(`Use slot 1-${bank.packets.length}`)
             }
             const seedId = findType(definitions.seeds, args[1])
-            if (!seedId) return debugCondition(`Seed is not installed: ${args[1]}`)
+            if (!seedId) return debugCondition('DEBUG_SEED_NOT_INSTALLED', args[1])
             // A bank may hold the same seed twice; each slot keeps its own recharge.
             const packet = bank.packets[slot - 1]
             if (bank.selection.mode === 'seed' && bank.selection.slot === slot - 1) bank.selection = { mode: 'none' }
@@ -88,7 +89,7 @@ function executeCommand(
             if (!grid) return invalidPosition()
             const entity = [...world.query(PositionComponent, PlantComponent)].find(entity =>
                 world.get(entity, PositionComponent)!.row === grid.row && world.get(entity, PlantComponent)!.column === grid.column)
-            if (entity === undefined) return debugCondition('No plant at that position')
+            if (entity === undefined) return debugCondition('DEBUG_NO_PLANT_THERE')
             world.destroyEntity(entity)
             return debugSuccess('Plant removed')
         }
@@ -97,11 +98,11 @@ function executeCommand(
             if (!grid) return invalidPosition()
             const wave = world.resources.get(WaveResource)
             if (graveAt(wave.graves, grid.row, grid.column!)) {
-                return debugCondition('A grave already exists at that position')
+                return debugCondition('DEBUG_GRAVE_EXISTS')
             }
             if ([...world.query(PositionComponent, PlantComponent)].some(entity =>
                 world.get(entity, PositionComponent)!.row === grid.row && world.get(entity, PlantComponent)!.column === grid.column)) {
-                return debugCondition('A plant occupies that position')
+                return debugCondition('DEBUG_PLANT_OCCUPIES')
             }
             wave.graves ??= []
             wave.graves.push(createGrave(world, grid.row, grid.column!))
@@ -109,7 +110,7 @@ function executeCommand(
         }
         case 'zombie': {
             const typeId = findType(definitions.zombies, args[0])
-            if (!typeId) return debugCondition(`Zombie is not installed: ${args[0]}`)
+            if (!typeId) return debugCondition('DEBUG_ZOMBIE_NOT_INSTALLED', args[0])
             const grid = position(args[1], args[2])
             if (!grid) return invalidPosition()
             const entityId = spawnZombie(world, definitions, typeId, grid.row,
@@ -142,7 +143,7 @@ function executeCommand(
             const index = name === 'nextflag'
                 ? level.definition.waves.findIndex((entry, index) => index >= wave.index && entry.flagWave)
                 : wave.index
-            if (index < 0 || index >= level.definition.waves.length) return debugCondition(name === 'nextflag' ? 'No remaining flag waves' : 'No remaining zombie waves')
+            if (index < 0 || index >= level.definition.waves.length) return debugCondition(name === 'nextflag' ? 'DEBUG_NO_FLAG_WAVES' : 'DEBUG_NO_WAVES')
             wave.index = index
             wave.nextWaveAtTick = tick
             if (level.definition.waves[index].flagWave) {
@@ -178,7 +179,7 @@ function executeCommand(
                 }
                 changed++
             }
-            return changed ? debugSuccess(`Changed ${changed} lawn mower(s)`) : debugCondition('No lawn mowers could be changed')
+            return changed ? debugSuccess(`Changed ${changed} lawn mower(s)`) : debugCondition('DEBUG_NO_MOWERS')
         }
         case 'cooldown':
         case 'suncost':
@@ -201,27 +202,30 @@ function executeCommand(
         case 'item': {
             const award = ['award', 'levelaward', 'finalseedpacket'].includes(normalizeDebugName(args[0]))
             const typeId = award ? level.definition.award.id : findType(definitions.items, args[0])
-            if (!typeId) return debugCondition(`Item is not installed: ${args[0]}`)
-            if (award && [...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === typeId)) return debugCondition('The level award already exists')
+            if (!typeId) return debugCondition('DEBUG_ITEM_NOT_INSTALLED', args[0])
+            if (award && [...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === typeId)) return debugCondition('DEBUG_AWARD_EXISTS')
             const grid = args.length === 3 ? position(args[1], args[2]) : undefined
             if (grid === null) return invalidPosition()
             const x = grid ? level.board.origin.x + grid.column! * level.board.cell.width : 400
             const y = grid ? level.board.origin.y + grid.row * level.board.cell.height : 280
+            if (!award) {
+                // Board::AddCoin with COIN_MOTION_COIN, like a zombie's loot.
+                spawnLoot(world, definitions, world, typeId, x, y)
+                return debugSuccess(`Spawned ${args[0]}`)
+            }
             const entityId = world.createEntity()
             world.add(entityId, PositionComponent, { x, y, row: -1 })
             world.add(entityId, ItemComponent, {
-                typeId, value: award ? 1 : definitions.items[typeId].value, state: 'available',
+                typeId, value: 1, state: 'available',
                 velocityX: 0, velocityY: -3, groundY: y + 45, disappearTicks: 0, fadeTicks: 0,
-                width: award ? 50 : definitions.items[typeId].width, scale: 1, alpha: 255,
+                width: 50, scale: 1, alpha: 255,
             })
-            if (award) {
-                world.resources.get(WaveResource).index = level.definition.waves.length
-                world.resources.get(TutorialResource).step = 'complete'
-                for (const entity of [...world.query(ZombieComponent)]) world.destroyEntity(entity)
-            }
-            emitServerEvent(events, award ? 'levelAwardDropped' : 'itemSpawned', { entityId, typeId })
+            world.resources.get(WaveResource).index = level.definition.waves.length
+            world.resources.get(TutorialResource).step = 'complete'
+            for (const entity of [...world.query(ZombieComponent)]) world.destroyEntity(entity)
+            emitServerEvent(events, 'levelAwardDropped', { entityId, typeId })
             return debugSuccess(`Spawned ${args[0]}`)
         }
-        default: return debugCondition(`/${name} is unavailable in this version`)
+        default: return debugCondition('DEBUG_UNAVAILABLE', name)
     }
 }

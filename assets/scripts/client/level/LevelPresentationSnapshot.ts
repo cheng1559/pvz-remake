@@ -59,6 +59,8 @@ export interface LevelAdviceSnapshot {
 
 export interface LevelHudSnapshot {
     sunFlashTicks: number
+    /** Board::mCoinBankFadeCount. */
+    coinBankTicks: number
     progressWave: number
     progressCountdownStart: number
     progressMeterWidth: number
@@ -237,11 +239,12 @@ function parseAdvice(value: unknown): LevelAdviceSnapshot {
 
 function parseHud(value: unknown): LevelHudSnapshot {
     const source = exact(value, [
-        'sunFlashTicks', 'progressWave',
+        'sunFlashTicks', 'coinBankTicks', 'progressWave',
         'progressCountdownStart', 'progressMeterWidth', 'progressTick',
     ], 'Level HUD')
     return {
         sunFlashTicks: integerInRange(source.sunFlashTicks, 0, 70, 'Level HUD.sunFlashTicks'),
+        coinBankTicks: integerInRange(source.coinBankTicks, 0, 1000, 'Level HUD.coinBankTicks'),
         progressWave: nonNegativeInteger(source.progressWave, 'Level HUD.progressWave'),
         progressCountdownStart: nonNegativeInteger(
             source.progressCountdownStart,

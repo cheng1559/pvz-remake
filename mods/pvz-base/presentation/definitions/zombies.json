@@ -3,7 +3,7 @@
     "nameKey": "ZOMBIE",
     "animationTarget": "pvz:normal",
     "shadowX": 23,
-    "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
+    "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": []},
     "damagedArm": "damagedArm",
     "animations": {
       "idle": {"reanimId": "pvz:zombie", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -30,14 +30,13 @@
         "moweredEffect": "pvz:moweredzombiearm",
         "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
       }
-    },
-    "helmTracks": ["anim_cone", "anim_bucket"]
+    }
   },
   "pvz:flag": {
     "nameKey": "FLAG_ZOMBIE",
     "animationTarget": "pvz:flag",
     "shadowX": 23,
-    "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
+    "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": [], "flagArm": {"holding": ["Zombie_flaghand", "Zombie_innerarm_screendoor"], "free": ["anim_innerarm3", "anim_innerarm2", "anim_innerarm1"], "front": "Zombie_innerarm_screendoor"}},
     "damagedArm": "damagedArm",
     "flag": true,
     "animations": {
@@ -66,14 +65,13 @@
         "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
       },
       "flag": {"track": "Zombie_flag", "effect": "pvz:zombieflag", "offset": [18, -42]}
-    },
-    "helmTracks": ["anim_cone", "anim_bucket"]
+    }
   },
   "pvz:conehead": {
     "nameKey": "CONEHEAD_ZOMBIE",
     "animationTarget": "pvz:conehead",
     "shadowX": 23,
-    "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
+    "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": ["anim_cone", "anim_bucket"]},
     "damagedArm": "damagedArm",
     "animations": {
       "idle": {"reanimId": "pvz:almanac_zombie_2_almanac2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -107,14 +105,13 @@
       "impactSounds": [{"id": "plastichit", "foley": true}, {"id": "splat", "foley": true, "pitchRange": 10}],
       "bowlingImpactSounds": [{"id": "plastichit", "foley": true}],
       "damagedSprites": ["pvz:zombie_cone2", "pvz:zombie_cone3"]
-    },
-    "helmTracks": ["anim_cone", "anim_bucket"]
+    }
   },
   "pvz:buckethead": {
     "nameKey": "BUCKETHEAD_ZOMBIE",
     "animationTarget": "pvz:buckethead",
     "shadowX": 23,
-    "arm": {"lower": "Zombie_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_outerarm_upper"},
+    "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": ["anim_cone", "anim_bucket"]},
     "damagedArm": "damagedArm",
     "animations": {
       "idle": {"reanimId": "pvz:almanac_zombie_4_almanac4", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -148,8 +145,7 @@
       "impactSounds": [{"id": "shieldhit", "foley": true}],
       "bowlingImpactSounds": [{"id": "shieldhit", "foley": true}],
       "damagedSprites": ["pvz:zombie_bucket2", "pvz:zombie_bucket3"]
-    },
-    "helmTracks": ["anim_cone", "anim_bucket"]
+    }
   },
   "pvz:pole_vaulter": {
     "nameKey": "POLE_VAULTING_ZOMBIE",
@@ -159,10 +155,9 @@
       {"column": 0, "row": 3}, {"column": 0, "row": 4}, {"column": 1, "row": 0}
     ],
     "shadowX": 30,
-    "arm": {"lower": "Zombie_polevaulter_outerarm_lower", "hand": "Zombie_outerarm_hand", "upper": "Zombie_polevaulter_outerarm_upper"},
+    "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": [], "arm": ["Zombie_polevaulter_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_polevaulter_outerarm_upper", "ground": "_ground", "helms": [], "held": ["Zombie_polevaulter_innerarm_upper", "Zombie_polevaulter_innerarm_lower", "Zombie_polevaulter_innerhand", "Zombie_polevaulter_pole2", "Zombie_polevaulter_pole"]},
     "damagedArm": "poleVaulterDamagedArm",
     "vault": true,
-    "heldTracks": ["Zombie_polevaulter_innerarm", "Zombie_polevaulter_innerhand", "Zombie_polevaulter_pole"],
     "animations": {
       "idle": {"reanimId": "pvz:almanac_zombie_3_body", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
       "walk": {"reanimId": "pvz:pole_vaulter_walk", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
@@ -191,17 +186,16 @@
         "image": "pvz:zombie_outerarm_hand",
         "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
       }
-    },
-    "helmTracks": ["anim_cone", "anim_bucket"]
+    }
   },
   "pvz:newspaper": {
     "nameKey": "NEWSPAPER_ZOMBIE",
     "animationTarget": "pvz:newspaper",
     "damagedArmSprite": "pvz:zombie_paper_leftarm_upper2",
-    "enragedHeadSprite": "pvz:zombie_paper_madhead",
+    "enragedHead": {"track": "anim_head1", "sprite": "pvz:zombie_paper_madhead"},
     "shadowX": 29,
     "shadowY": 96,
-    "arm": {"lower": "Zombie_paper_leftarm_lower", "hand": "Zombie_paper_hands", "upper": "Zombie_paper_leftarm_upper"},
+    "parts": {"head": ["anim_head1", "anim_head_jaw", "anim_head_glasses", "anim_head_look", "anim_head_pupils"], "hair": ["anim_hair", "anim_hairpiece"], "tongue": [], "arm": ["Zombie_paper_leftarm_lower", "Zombie_paper_hands"], "upperArm": "Zombie_paper_leftarm_upper", "ground": "_ground", "helms": ["Zombie_paper_paper"]},
     "damagedArm": "damagedArm",
     "animations": {
       "idle": {"reanimId": "pvz:newspaper_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -219,7 +213,6 @@
       "head": {"track": "anim_head1", "effect": "pvz:zombienewspaperhead", "offset": [58, -30], "moweredEffect": "pvz:moweredzombiehead", "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]},
       "arm": {"track": "Zombie_paper_leftarm_lower", "effect": "pvz:zombiearm", "offset": [25, -55], "moweredEffect": "pvz:moweredzombiearm", "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}], "image": "pvz:zombie_paper_leftarm_lower"}
     },
-    "helmTracks": ["Zombie_paper_paper"],
     "helm": {
       "track": "Zombie_paper_paper",
       "effect": "pvz:zombienewspaper",

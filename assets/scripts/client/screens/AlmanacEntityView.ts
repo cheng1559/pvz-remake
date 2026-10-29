@@ -12,7 +12,7 @@ const { ccclass } = _decorator
 @ccclass('AlmanacEntityView')
 export class AlmanacEntityView extends Component {
     ready: Promise<void> = Promise.resolve()
-    private readonly blinks: Array<{ slot: string, player: ReanimPlayer, parent?: ReanimPlayer, rate: number }> = []
+    private readonly blinks: Array<{ slot: string, player: ReanimPlayer, parent?: ReanimPlayer, rate: number, eyeTracks: readonly string[] }> = []
     private nutBlink = false
     private animations!: ClientAnimationRegistry
     private blinkCountdown = 0
@@ -80,7 +80,7 @@ export class AlmanacEntityView extends Component {
                 this.sockets.push({ node: player.node, sprite })
             }
             if (part.blink) {
-                this.blinks.push({ slot: part.name, player, parent: players.get(part.parent!), rate: 15 / part.fps * (part.rateScale ?? 1) })
+                this.blinks.push({ slot: part.name, player, parent: players.get(part.parent!), rate: 15 / part.fps * (part.rateScale ?? 1), eyeTracks: part.eyeTracks ?? [] })
             } else if (definition.motion === 'pogo' && part.name === 'body') {
                 // ZombieInitialize holds the last pose until the first landing animation.
                 player.pause()
@@ -135,9 +135,9 @@ export class AlmanacEntityView extends Component {
         if (this.blinks.length && (this.blinkCountdown -= delta) <= 0) {
             const slot = this.nutBlink ? this.animations.pickNutBlinkSlot() : null
             const blink = slot ? this.blinks.find(blink => blink.slot === slot)! : this.blinks[Math.floor(Math.random() * this.blinks.length)]
-            blink.parent?.setTrackPrefixVisible('anim_eye', false)
+            blink.parent?.setTracksVisible(blink.eyeTracks, false)
             blink.player.play({ loop: false, rate: blink.rate, timeSeconds: 0,
-                onFinish: () => blink.parent?.setTrackPrefixVisible('anim_eye', true) })
+                onFinish: () => blink.parent?.setTracksVisible(blink.eyeTracks, true) })
             this.blinkCountdown = this.animations.nextPlantBlinkTicks(this.nutBlink) / 100
         }
     }

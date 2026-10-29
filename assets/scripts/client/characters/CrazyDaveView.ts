@@ -131,7 +131,7 @@ export class CrazyDaveView {
         this.play(animation, false, this.config.talkFps, () => {
             this.play(handing ? 'idle_handing' : 'idle', true, this.config.talkFps)
             const mouth = [...this.mouths.keys()].find(token => raw.includes(`{${token}}`))
-            this.current?.setTrackSpriteOverride('Dave_mouths', mouth ? this.mouths.get(mouth)! : null)
+            this.current?.setTrackSpriteOverride(this.config.parts.mouth, mouth ? this.mouths.get(mouth)! : null)
         })
         const effect = raw.includes('{SHAKE}') ? SoundEffect.CrazyDaveCrazy : handing || raw.includes('{SCREAM2}') ? SoundEffect.CrazyDaveScream2
             : raw.includes('{SCREAM}') ? SoundEffect.CrazyDaveScream : text.length < this.config.talkLengths[0] ? SoundEffect.CrazyDaveShort1
@@ -152,12 +152,12 @@ export class CrazyDaveView {
         if (this.current && this.current !== next) this.current.node.active = false
         this.current = next
         next.node.active = true
-        next.setTrackSpriteOverride('Dave_mouths', null)
-        next.setTrackPrefixVisible('Dave_blink', false)
+        const parts = this.config.parts
+        next.setTrackSpriteOverride(parts.mouth, null)
         const blink = this.players.get('blink')!
-        next.getTrackNode('Dave_eye')!.active = !blink.node.active
+        next.setTracksVisible(parts.eyes, !blink.node.active)
         next.play({ loop, rate: fps / this.config.sourceFps, timeSeconds: 0, hideOnFinish: false, onFinish })
-        if (blink.node.active) blink.attachToTrack(next, 'Dave_head')
+        if (blink.node.active) blink.attachToTrack(next, parts.head)
         if (this.hand.node.active) this.hand.node.setParent(next.getTrackNode(this.config.hand.track)!)
     }
 
@@ -171,12 +171,13 @@ export class CrazyDaveView {
         if (!this.entering && !this.leaving && (this.blinkSeconds -= dt) <= 0 && this.current) {
             const [min, max] = this.config.blinkSeconds
             this.blinkSeconds = min + Math.random() * (max - min)
-            blink.attachToTrack(this.current, 'Dave_head')
+            const parts = this.config.parts
+            blink.attachToTrack(this.current, parts.head)
             blink.node.active = true
-            this.current.getTrackNode('Dave_eye')!.active = false
+            this.current.setTracksVisible(parts.eyes, false)
             blink.play({ loop: false, rate: this.config.blinkFps / this.config.sourceFps, timeSeconds: 0, onFinish: () => {
                 blink.node.active = false
-                if (this.current) this.current.getTrackNode('Dave_eye')!.active = true
+                this.current?.setTracksVisible(parts.eyes, true)
             } })
         }
         if (blink.node.active) blink.advance(dt)

@@ -23,11 +23,6 @@ export interface GameplayLevels {
     levels: Record<string, LevelDefinition>
 }
 
-export interface GameplayStrings {
-    schemaVersion: 2
-    locale: string
-    entries: Record<string, string>
-}
 
 export interface BoardDefinition {
     /** Nocturnal plants sleep on boards that are not at night. */
@@ -160,11 +155,15 @@ export interface ProjectileDefinition {
 }
 
 export interface ItemDefinition {
+    /** Sun goes to the sun bank; money (Coin::IsMoney) goes to the player's coins, in original coin units. */
+    kind?: 'sun' | 'money'
     value: number
     width: number
     height: number
     /** Coin::GetSunScale: drawn and collected at this scale, like the small sun's 0.5. */
     scale?: number
+    /** Coin::GetDisappearTime: ticks on the ground before fading; 750 when omitted. */
+    lifetimeTicks?: number
 }
 
 export interface LawnMowerDefinition {
@@ -191,6 +190,17 @@ export interface LevelDefinition {
     graveZombies?: Array<{ id: string; weight: number }>
     /** Crazy Dave's lines before the seed chooser, on the first adventure only. */
     introDialog?: number[]
+    /**
+     * Board::CanDropLoot: zombies drop money on replays, and on the first adventure only with `firstAdventure`.
+     * `firstCoinAfterWave` and `savingsCap` are 2-1's first-adventure rules: a guaranteed first coin once that many
+     * waves have spawned, and no drop that would bring the money (with the mowers' coins) to the cap.
+     */
+    loot?: { firstAdventure?: boolean; firstCoinAfterWave?: number; savingsCap?: number }
+    /**
+     * SeedChooserScreen::OnStartButton on the first adventure: warn first when `seed` is not picked,
+     * and use `sunWarning` instead of SEED_CHOOSER_SUN_WARNING when no sun producer is.
+     */
+    chooserWarnings?: { seed?: { id: string; warning: string }; sunWarning?: string }
     waves: Array<{ zombies: string[]; flagWave?: boolean; points?: number }>
     zombiePool?: Array<{ id: string; points: number; weight: number; firstWave?: number }>
     firstWaveTicks?: number
@@ -272,22 +282,6 @@ export function parseGameplayLevels(
         if (level.nextLevel) reference(level.nextLevel, levels, `levels.${id}.nextLevel`)
     }
     return { schemaVersion: 2, levels }
-}
-
-export function parseGameplayStrings(value: unknown): GameplayStrings {
-    const source = exactObject(value, ['schemaVersion', 'locale', 'entries'], 'gameplay strings')
-    if (source.schemaVersion !== 2) throw new Error('gameplay strings.schemaVersion must be 2')
-    const entriesSource = object(source.entries, 'gameplay strings.entries')
-    const entries: Record<string, string> = {}
-    for (const [key, entry] of Object.entries(entriesSource)) {
-        if (key.length === 0) throw new Error('gameplay strings entry key must be non-empty')
-        entries[key] = string(entry, `gameplay strings.entries.${key}`)
-    }
-    return {
-        schemaVersion: 2,
-        locale: string(source.locale, 'gameplay strings.locale'),
-        entries,
-    }
 }
 
 function parseBoard(value: unknown, name: string): BoardDefinition {
@@ -602,8 +596,11 @@ function parseProjectile(value: unknown, name: string): ProjectileDefinition {
 }
 
 function parseItem(value: unknown, name: string): ItemDefinition {
-    const source = exactObject(value, ['value', 'width', 'height'], name, ['scale'])
+    const source = exactObject(value, ['value', 'width', 'height'], name, ['kind', 'scale', 'lifetimeTicks'])
+    if (source.kind !== undefined && source.kind !== 'sun' && source.kind !== 'money') throw new Error(`${name}.kind must be sun or money`)
     return {
+        ...(source.kind === undefined ? {} : { kind: source.kind as 'sun' | 'money' }),
+        ...(source.lifetimeTicks === undefined ? {} : { lifetimeTicks: positiveInteger(source.lifetimeTicks, `${name}.lifetimeTicks`) }),
         value: positiveInteger(source.value, `${name}.value`),
         width: positiveFinite(source.width, `${name}.width`),
         height: positiveFinite(source.height, `${name}.height`),
@@ -624,7 +621,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         'adventureIndex', 'board', 'activeRows', 'startingSun',
         'lawnMower', 'waves', 'tutorial', 'award',
     ], name, ['nextLevel', 'seedPackets', 'seedBankSlots', 'firstWaveTicks', 'zombiePool', 'bowling', 'conveyor', 'tools', 'shovelTutorial', 'initialPlants', 'persistent',
-        'skySun', 'graves', 'graveZombies', 'introDialog'])
+        'skySun', 'graves', 'graveZombies', 'introDialog', 'loot', 'chooserWarnings'])
     if (source.persistent !== undefined && typeof source.persistent !== 'boolean') throw new Error(`${name}.persistent must be a boolean`)
     const boardId = qualifiedId(source.board, `${name}.board`)
     const board = reference(boardId, definitions.boards, `${name}.board`)
@@ -756,6 +753,26 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const introDialog = source.introDialog === undefined ? undefined
         : array(source.introDialog, `${name}.introDialog`).map(value => nonNegativeInteger(value, `${name}.introDialog`))
     if (introDialog && (!introDialog.length || new Set(introDialog).size !== introDialog.length)) throw new Error(`${name}.introDialog must contain unique dialogue IDs`)
+    let loot: LevelDefinition['loot']
+    if (source.loot !== undefined) {
+        const entry = exactObject(source.loot, [], `${name}.loot`, ['firstAdventure', 'firstCoinAfterWave', 'savingsCap'])
+        if (entry.firstAdventure !== undefined && entry.firstAdventure !== true) throw new Error(`${name}.loot.firstAdventure must be true`)
+        loot = {
+            ...(entry.firstAdventure === undefined ? {} : { firstAdventure: true }),
+            ...(entry.firstCoinAfterWave === undefined ? {} : { firstCoinAfterWave: positiveInteger(entry.firstCoinAfterWave, `${name}.loot.firstCoinAfterWave`) }),
+            ...(entry.savingsCap === undefined ? {} : { savingsCap: positiveInteger(entry.savingsCap, `${name}.loot.savingsCap`) }),
+        }
+    }
+    let chooserWarnings: LevelDefinition['chooserWarnings']
+    if (source.chooserWarnings !== undefined) {
+        const entry = exactObject(source.chooserWarnings, [], `${name}.chooserWarnings`, ['seed', 'sunWarning'])
+        const seed = entry.seed === undefined ? undefined : exactObject(entry.seed, ['id', 'warning'], `${name}.chooserWarnings.seed`)
+        if (seed) reference(qualifiedId(seed.id, `${name}.chooserWarnings.seed.id`), definitions.seeds, `${name}.chooserWarnings.seed.id`)
+        chooserWarnings = {
+            ...(seed ? { seed: { id: seed.id as string, warning: string(seed.warning, `${name}.chooserWarnings.seed.warning`) } } : {}),
+            ...(entry.sunWarning === undefined ? {} : { sunWarning: string(entry.sunWarning, `${name}.chooserWarnings.sunWarning`) }),
+        }
+    }
     const award = object(source.award, `${name}.award`)
     let parsedAward: LevelDefinition['award']
     if (award.kind === 'seed') {
@@ -792,6 +809,8 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         ...(graves === undefined ? {} : { graves }),
         ...(graveZombies === undefined ? {} : { graveZombies }),
         ...(introDialog === undefined ? {} : { introDialog }),
+        ...(loot === undefined ? {} : { loot }),
+        ...(chooserWarnings === undefined ? {} : { chooserWarnings }),
         waves,
         ...(zombiePool === undefined ? {} : { zombiePool }),
         ...(source.firstWaveTicks === undefined ? {} : { firstWaveTicks: positiveInteger(source.firstWaveTicks, `${name}.firstWaveTicks`) }),

@@ -14,8 +14,8 @@ export async function showScreenAnimations(parent: Node, layers: readonly Screen
         await player.load(layer.reanimId, registry, loader)
         if (!isValid(node, true)) return
         if (layer.visibleTracks) {
-            player.setTrackPrefixVisible('', false)
-            for (const prefix of layer.visibleTracks) player.setTrackPrefixVisible(prefix, true)
+            player.setTracksVisible(player.trackIds, false)
+            player.setTracksVisible(layer.visibleTracks, true)
         }
         const last = layer.playback === 'last'
         player.play({ loop: !last, hideOnFinish: false, rate: layer.rate,

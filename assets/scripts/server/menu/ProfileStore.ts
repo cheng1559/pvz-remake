@@ -81,7 +81,8 @@ export interface ProfileRegistry {
 export function createProfileStore(storage: MenuStorage) {
     const getStorage = () => storage
     const deleteProfileSaves = (profileId: number) => {
-        const prefixes = [`pvz-remake:saves:${profileId}:`, `pvz-remake:game-save-v2:${profileId}:`]
+        // The client's per-player Mod list (ModManager's PLAYER_MODS_PREFIX) goes too; unused archives are removed at startup.
+        const prefixes = [`pvz-remake:saves:${profileId}:`, `pvz-remake:game-save-v2:${profileId}:`, `pvz-remake:player-mods:${profileId}:`]
         for (let i = storage.length - 1; i >= 0; i--) {
             const key = storage.key(i)
             if (key && prefixes.some(prefix => key.startsWith(prefix))) storage.removeItem(key)

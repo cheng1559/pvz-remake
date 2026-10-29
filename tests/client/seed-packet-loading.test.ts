@@ -48,7 +48,7 @@ test('namespaced Mod packets keep their ID and render their registered animation
     plant.animationTarget = 'example:rapid_pea'
     plant.visual.seedType = 'example:rapid_pea'
     plant.animations.body.reanimId = 'example:body'
-    const definitions = buildPresentationDefinitions(presentationFixture, [{ ownerId: 'example:showcase', data: { plants: { 'example:rapid_pea': plant } } }])
+    const definitions = buildPresentationDefinitions(presentationFixture, [{ ownerId: 'example', data: { plants: { 'example:rapid_pea': plant } } }])
     const animations = new ClientAnimationRegistry(definitions)
     const { resolveEntityDisplay } = load('reanim/EntityDisplay')
     const layout = resolveEntityDisplay('plants', 0, { animationTarget: 'pvz:peashooter', offset: [0, 0], shadow: false }, animations)
@@ -58,7 +58,7 @@ test('namespaced Mod packets keep their ID and render their registered animation
         loadEntityDisplayAssets: async () => ({ content: { animations }, catalog: { plants: [layout] } }),
         loadDisplayParts: async (_node: Node, parts: any[]) => {
             selected = parts
-            return new Map(parts.map(part => [part.name, { lastFrameTimeSeconds: 1, seek() {} }]))
+            return new Map(parts.map(part => [part.name, { lastFrameTimeSeconds: 1, seek() {}, setTracksVisible() {} }]))
         },
     })
     const preview = new classes.PlantPreview(), root = new Node()
@@ -71,4 +71,17 @@ test('namespaced Mod packets keep their ID and render their registered animation
     modules['./PlantPreview'].PlantPreview = class { initialize(_definitions: unknown, plantId: unknown) { id = plantId } }
     renderer._drawPlantIcon(new Node(), { definitions, seedType: 'example:rapid_pea' }, 1)
     assert.equal(id, 'example:rapid_pea')
+})
+
+test('a packet drawn above 1x uses the larger background, as DrawSeedPacket does', async () => {
+    const { classes } = setup()
+    for (const [scale, upgrade, expected] of [[2, false, 'seedpacket_larger'], [2, true, 'seedpacket_larger'], [1, false, 'seeds']] as const) {
+        const loaded: string[] = [], sprite: { spriteFrame?: unknown } = {}
+        const background = new classes.SeedPacketBackground()
+        background.node = new Node()
+        background.initialize(sprite, { seedType: 0, upgrade, loadSprite: async (name: string) => { loaded.push(name); return { name } } }, scale)
+        await new Promise(setImmediate)
+        assert.deepEqual(loaded, [expected], `scale ${scale}${upgrade ? ' upgrade' : ''}`)
+        if (scale > 1) assert.deepEqual(sprite.spriteFrame, { name: 'seedpacket_larger' })
+    }
 })

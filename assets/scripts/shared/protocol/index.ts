@@ -62,7 +62,10 @@ export interface StartSessionPacket extends ClientPacketBase {
     type: 'startSession'
     levelId: string
     randomSeed: number
+    /** The player's coins, in original coin units. */
     initialMoney: number
+    /** Seed-slot upgrades bought in the store; diamonds drop only after the first. */
+    packetUpgrades?: number
     firstAdventure: boolean
     mods: EnabledMod[]
     save?: JsonValue
@@ -136,7 +139,8 @@ export interface WorldSnapshot {
     wave: WaveSnapshot
     cursor: CursorSnapshot
     seedPackets: SeedPacketSnapshot[]
-    seedChooser?: { availableSeeds: string[], slots: number, choosing: boolean, warning?: string }
+    /** `warnings` are shown one after another on confirm; each can be dismissed to repick. */
+    seedChooser?: { availableSeeds: string[], slots: number, choosing: boolean, warnings?: string[] }
     conveyorPackets: Array<{ id: number; seedId: string; x: number; selected: boolean; availability: SeedAvailability }>
     graves?: GraveSnapshot[]
     plants: PlantSnapshot[]
@@ -243,6 +247,10 @@ export interface ItemSnapshot {
     y: number
     scale: number
     alpha: number
+    /** On the ground at least once: silver and gold coins switch from the flat dollar to the spinning coin. */
+    landed?: true
+    /** Shows the bouncy pickup arrow once landed (2-1's first coin). */
+    arrow?: true
 }
 
 export interface WaveSnapshot {
@@ -335,6 +343,7 @@ export function parseClientPacket(value: unknown): ClientPacket {
             nonEmptyString(packet.levelId, 'startSession.levelId')
             uint32(packet.randomSeed, 'startSession.randomSeed')
             integer(packet.initialMoney, 'startSession.initialMoney')
+            if (packet.packetUpgrades !== undefined) integer(packet.packetUpgrades, 'startSession.packetUpgrades')
             boolean(packet.firstAdventure, 'startSession.firstAdventure')
             array(packet.mods, 'startSession.mods').forEach((value, index) => validateEnabledMod(value, index))
             break
@@ -390,8 +399,13 @@ export function validateServerPacket(value: unknown): ServerPacket {
             integer(packet.sequence, 'debugResult.sequence')
             const result = record(packet.result, 'debugResult.result')
             boolean(result.ok, 'debugResult.result.ok')
-            nonEmptyString(result.message, 'debugResult.result.message')
             if (result.failure !== undefined && result.failure !== 'syntax' && result.failure !== 'condition') throw new TypeError('Unknown debug failure')
+            if (result.failure === 'condition') {
+                nonEmptyString(result.key, 'debugResult.result.key')
+                if (result.args !== undefined) array(result.args, 'debugResult.result.args').forEach(value => {
+                    if (typeof value !== 'string') throw new TypeError('debugResult.result.args entries must be strings')
+                })
+            } else nonEmptyString(result.message, 'debugResult.result.message')
             if (result.catalog !== undefined) {
                 const catalog = record(result.catalog, 'debugResult.result.catalog')
                 for (const kind of ['plants', 'zombies', 'items', 'levels']) {
@@ -665,7 +679,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         boolean(chooser.choosing, 'snapshot.seedChooser.choosing')
         if (slots < 1 || slots > 10 || slots > available.length || new Set(available).size !== available.length ||
             seedPackets.length > slots || chooser.choosing && seedPackets.some(packet => !available.includes(packet.seedId))) throw new TypeError('Invalid seed chooser bank')
-        if (chooser.warning !== undefined) nonEmptyString(chooser.warning, 'snapshot.seedChooser.warning')
+        if (chooser.warnings !== undefined) array(chooser.warnings, 'snapshot.seedChooser.warnings').forEach(value => nonEmptyString(value, 'snapshot.seedChooser.warnings[]'))
     }
     if (snapshot.graves !== undefined) array(snapshot.graves, 'snapshot.graves').forEach((value, index) => {
         const name = `snapshot.graves[${index}]`, grave = record(value, name)
@@ -764,6 +778,8 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         finite(item.x, `${name}.x`)
         finite(item.y, `${name}.y`)
         finite(item.scale, `${name}.scale`)
+        if (item.landed !== undefined && item.landed !== true) throw new TypeError(`${name}.landed must be true`)
+        if (item.arrow !== undefined && item.arrow !== true) throw new TypeError(`${name}.arrow must be true`)
         if ((item.scale as number) < 0) throw new TypeError(`${name}.scale must not be negative`)
         integer(item.alpha, `${name}.alpha`)
         if ((item.alpha as number) > 255) throw new TypeError(`${name}.alpha must not exceed 255`)

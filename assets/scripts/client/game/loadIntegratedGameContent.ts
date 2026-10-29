@@ -16,12 +16,11 @@ export async function loadIntegratedGameContent() {
     const gameplay = contentJson(base.files, base.content.gameplay)
     const prefab = registry.resolve('prefabs', LEVEL_PREFAB_ID)
     if (!prefab) throw new Error(`Base content does not define prefab ${LEVEL_PREFAB_ID}`)
-    const [strings, levelPrefab, presentation] = await Promise.all([
-        modResources.asset('pvz:gameplay/strings', JsonAsset).then(asset => asset?.json ?? gameplay.strings),
+    const [levelPrefab, presentation] = await Promise.all([
         loader.load(prefab, Prefab),
         loadPresentationDefinitions(base),
     ])
-    const { definitions, levels, strings: gameStrings } = buildGameplayContent({ ...gameplay, strings }, loadedMods.gameplayDefinitions)
+    const { definitions, levels } = buildGameplayContent(gameplay, loadedMods.gameplayDefinitions)
     const animations = new ClientAnimationRegistry(presentation)
     animations.freeze()
     const plantViews = loadedMods.plantViews
@@ -43,7 +42,7 @@ export async function loadIntegratedGameContent() {
         .filter(mod => mod.gameplay !== undefined || loadedMods.gameplayDefinitions.some(source => source.ownerId === mod.id))
         .map(mod => ({ id: mod.id, version: mod.version, contentHash: mod.contentHash }))
     return {
-        definitions, presentation, levels, strings: gameStrings, levelPrefab, registry, loader,
+        definitions, presentation, levels, levelPrefab, registry, loader,
         contentHash: manifest.contentHash, loadedMods, enabledMods, animations, plantViews, zombieViews,
     }
 }

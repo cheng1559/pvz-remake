@@ -16,6 +16,7 @@ import { showChallengeScreen } from './ChallengeScreen'
 import { showMenuPageControls } from './MenuPageControls'
 import { StartupScreen } from './StartupScreen'
 import { showUserDialog } from './UserDialog'
+import { modManager } from '@/client/content/ModManager'
 import { showAlmanacScreen, type AlmanacSelection } from './AlmanacScreen'
 import { StoreScreen } from './StoreScreen'
 import { AchievementScreen } from './AchievementScreen'
@@ -36,6 +37,7 @@ export interface PreparedMenuPage {
 export class MenuScreen extends Component {
     onNavigate: (action: MenuAction) => void | Promise<void> = () => {}
     isLevelIntro: () => boolean = () => false
+    restartGame: () => void = () => {}
     private page: PreparedMenuPage | null = null
     private retainedPage: PreparedMenuPage | null = null
     private mainMenu: MainMenuScreen | null = null
@@ -180,7 +182,7 @@ export class MenuScreen extends Component {
             if (page.heading && id !== 'award') {
                 const { key, font, y, color } = page.heading
                 ui.label(controls, {
-                    text: ui.text(key, page.title), font, x: 400, y, color: new Color(...color),
+                    text: ui.text(key), font, x: 400, y, color: new Color(...color),
                     baseline: true, align: 'center',
                 })
             }
@@ -188,7 +190,12 @@ export class MenuScreen extends Component {
                 ...options, onClick: () => this.onNavigate(target),
             })
             if (id === 'players') {
-                await showUserDialog(root.node, ui, () => { void this.onNavigate('main') }, () => this.mainMenu?.refreshProfile())
+                await showUserDialog(root.node, ui, () => { void this.onNavigate('main') }, () => this.mainMenu?.refreshProfile(), {
+                    needsRestartFor: profile => modManager.needsRestartFor(profile),
+                    hasMods: profile => modManager.hasMods(profile),
+                    copyMods: (from, to, move) => modManager.copyMods(from, to, move),
+                    restart: () => this.restartGame(),
+                })
             } else if (id === 'quit') {
                 ui.dialog(root.node, {
                     title: ui.text('QUIT_HEADER'), message: ui.text('QUIT_MESSAGE'),
@@ -210,7 +217,7 @@ export class MenuScreen extends Component {
                     await controls.addComponent(AchievementScreen).initialize(ui, () => { void this.onNavigate('main') })
                 } catch (error) { root.node.destroy(); throw error }
             } else if (id === 'help') {
-                navigateButton('main', { skin: 'seed', text: 'Main Menu', x: 324, y: 520, rightClickTriggers: false })
+                navigateButton('main', { skin: 'seed', text: ui.text('MAIN_MENU_BUTTON'), x: 324, y: 520, rightClickTriggers: false })
             } else if (id === 'almanac' || id === 'plants' || id === 'zombies') {
                 try {
                     if (!this.page || !['almanac', 'plants', 'zombies'].includes(this.page.id)) this.almanacSelection = { plant: 0, zombie: 0 }
@@ -226,11 +233,11 @@ export class MenuScreen extends Component {
                     const award = await showAwardScreen(controls, ui)
                     paperAward = award.kind === 'note'
                     navigateButton('nextLevel', {
-                        skin: 'seed', text: ui.text('NEXT_LEVEL_BUTTON', 'NEXT LEVEL!'), x: 324, y: paperAward ? 520 : 500,
+                        skin: 'seed', text: ui.text('NEXT_LEVEL_BUTTON'), x: 324, y: paperAward ? 520 : 500,
                         pressOffset: [0, 0], rightClickTriggers: false,
                     })
                     if (award.showMainMenu) navigateButton('main', {
-                        skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON', 'Main Menu'), x: 677, y: 16,
+                        skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON'), x: 677, y: 16,
                         rightClickTriggers: false,
                     })
                 } catch (error) { root.node.destroy(); throw error }
@@ -238,17 +245,8 @@ export class MenuScreen extends Component {
                 root.node.destroy()
                 throw error
             })) {
-                const buttons = [...page.buttons]
-                if (page.back) buttons.push({ label: page.back === 'resume' ? 'Resume' : 'Back', target: page.back })
-                const rows = Math.ceil(buttons.length / 4)
-                buttons.forEach((button, index) => {
-                    const count = Math.min(4, buttons.length - Math.floor(index / 4) * 4)
-                    const x = (index % 4 - (count - 1) / 2) * 190
-                    const y = -258 + (rows - 1 - Math.floor(index / 4)) * 44
-                    navigateButton(button.target, {
-                        text: button.label, x: x + 310, y: 282 - y, width: 180, height: 36,
-                    })
-                })
+                root.node.destroy()
+                throw new Error(`Menu page has no screen: ${id}`)
             }
         }
         if (id === 'help' || id === 'award') PageFade.create(root.node, id === 'help' || paperAward ? Color.BLACK : Color.WHITE)

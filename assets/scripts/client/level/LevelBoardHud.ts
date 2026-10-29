@@ -7,7 +7,8 @@ import { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { CrazyDaveView } from '@/client/characters/CrazyDaveView'
-import type { LoadedContent } from './LevelView'
+import type { LevelPlayer, LoadedContent } from './LevelView'
+import { formatMoney } from '@/client/ui/formatMoney'
 import type { LevelSeedBank } from './LevelSeedBank'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UILabel } from '@/client/ui/UILabel'
@@ -35,9 +36,9 @@ export class LevelBoardHud {
     private shovelHotkey?: UILabel
     private shovelX = 0
 
-    static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, plantCursor: Node, seedBank: LevelSeedBank, playerName: string, tooltipSurface: Node): Promise<LevelBoardHud> {
+    static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, plantCursor: Node, seedBank: LevelSeedBank, player: LevelPlayer, tooltipSurface: Node): Promise<LevelBoardHud> {
         const root = uiNode({ name: 'BoardHud', parent, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
-        const result = new LevelBoardHud(root, content, ui, playerName)
+        const result = new LevelBoardHud(root, content, ui, player)
         const sprites = new SpriteRepository(content.registry, content.loader)
         const level = content.levels.levels[initial.levelId], board = content.definitions.boards[level.board]
         if (level.tools?.includes('pvz:shovel')) {
@@ -47,7 +48,7 @@ export class LevelBoardHud {
             result.shovelBank = ui.image(bankLayer, bankFrame, { x: result.shovelX, y: 0 }).node
             result.shovel = ui.image(result.shovelBank, shovelFrame, { x: layout.imageOffset[0], y: layout.imageOffset[1] }).node
             result.shovelHotkey = ui.label(result.shovelBank, {
-                text: 'F', font: 'storeItem', fontSize: 16, color: new Color(213, 159, 43),
+                text: 'F', font: 'hotkey', fontSize: 16, color: new Color(213, 159, 43),
                 x: bankFrame.originalSize.width - 4, y: -4, align: 'right',
             })
             result.cursor = ui.image(root, shovelFrame).node
@@ -83,7 +84,7 @@ export class LevelBoardHud {
         return result
     }
 
-    private constructor(private root: Node, private content: LoadedContent, private ui: UI, private playerName: string) {}
+    private constructor(private root: Node, private content: LoadedContent, private ui: UI, private player: LevelPlayer) {}
 
     get blocksIntro(): boolean { return !!this.dave && this.snapshot?.phase !== 'gameplay' && (this.snapshot?.tutorial.step !== 'complete' || this.dave.busy || this.delay < this.content.presentation.dave.delay) }
     get dialogReady(): boolean { return this.dave?.canAdvance ?? false }
@@ -100,7 +101,8 @@ export class LevelBoardHud {
         const dialog = snapshot.extensions['pvz:dialog'] as { index: number } | undefined
         if (this.dave && this.delay >= this.content.presentation.dave.delay && dialog?.index !== this.daveDialog) {
             this.daveDialog = dialog?.index
-            if (dialog) this.dave.say(this.ui.text(`CRAZY_DAVE_${dialog.index}`).replace(/\{PLAYER_NAME\}/g, this.playerName))
+            if (dialog) this.dave.say(this.ui.text(`CRAZY_DAVE_${dialog.index}`).replace(/\{PLAYER_NAME\}/g, this.player.name)
+                .replace(/\{MONEY\}/g, formatMoney(snapshot.money)).replace(/\{UPGRADE_COST\}/g, formatMoney(this.player.upgradeCost)))
             else this.dave.leave()
         }
         if (this.shovelBank) {

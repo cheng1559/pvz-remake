@@ -41,7 +41,9 @@ export class WallNutView extends AnimatedPlantView {
     protected syncVisuals(plant: PlantSnapshot, _world: WorldSnapshot, particle: PlantParticle): void {
         const stage = plant.health < plant.maxHealth / 3 ? 2 : plant.health < plant.maxHealth * 2 / 3 ? 1 : 0
         if (stage !== this.crackStage) {
-            this.body.setTrackSpriteOverride('anim_face', stage === 0 ? null : this.assets.wallnutCracked[stage - 1])
+            const face = this.parts.face
+            if (!face) throw new Error(`${this.context.plant.typeId} needs parts.face for its cracked sprites`)
+            this.body.setTrackSpriteOverride(face, stage === 0 ? null : this.assets.wallnutCracked[stage - 1])
             if (this.crackStage >= 0 && stage > this.crackStage) {
                 particle("pvz:wallnuteatlarge", plant.x + 40, plant.y + 10, this.tint)
             }

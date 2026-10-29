@@ -67,8 +67,9 @@ export class PlantPreview extends Component {
 
     private refresh(): void {
         if (this.plantId === undefined) return
-        const style = this.packetScale !== undefined ? GameDebugSettings.seedPacketStyle
-            : GameDebugSettings.hdSeedPacketsEnabled ? 'rendered' : 'standard'
+        // Held and grid previews follow /seedstyle too, without the packets' tilt.
+        const packetStyle = GameDebugSettings.seedPacketStyle
+        const style = this.packetScale !== undefined || packetStyle === 'standard' ? packetStyle : 'rendered'
         if (this.style === style && this.rendering !== undefined) return
         this.style = style
         this.updatePacketClip(style)
@@ -174,9 +175,7 @@ export class PlantPreview extends Component {
         const players = await loadDisplayParts(pose, parts, content)
         if (!players || root !== this.rendered) return
         for (const player of players.values()) player.seek(player.lastFrameTimeSeconds * (definition.packetTimeRatio ?? 0))
-        for (const part of parts) for (const track of part.packetVisibleTracks ?? []) {
-            players.get(part.name)!.setTrackPrefixVisible(track, true)
-        }
+        for (const part of parts) players.get(part.name)!.setTracksVisible(part.packetVisibleTracks ?? [], true)
         this.players.push(...players.values())
     }
 

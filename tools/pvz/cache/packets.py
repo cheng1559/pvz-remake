@@ -70,6 +70,34 @@ ANIMATION_NAMES: dict[int, str] = {
     48: "imitater",
 }
 
+# Output density: 1 draws the base atlases; hd() raises it and supplies HD part images (logical coordinates are unchanged).
+SCALE = 1
+TEXTURE_SCALE = 1
+TEXTURE_PATHS: dict[str, Path] = {}
+
+
+def hd(scale: int, textures: dict[str, Path], texture_scale: int) -> None:
+    """Draws at `scale` using these part images (name -> PNG at `texture_scale`); other parts fall back to the base."""
+    global SCALE, TEXTURE_SCALE, TEXTURE_PATHS
+    SCALE, TEXTURE_SCALE, TEXTURE_PATHS = scale, texture_scale, textures
+    load_texture.cache_clear()
+
+
+def new_canvas(width: float, height: float) -> Image.Image:
+    """A transparent canvas of this logical size at the output density."""
+    image = Image.new("RGBA", (round(width * SCALE), round(height * SCALE)), (0, 0, 0, 0))
+    image.info["density"] = SCALE
+    return image
+
+
+def composite(target: Image.Image, source: Image.Image, x: float, y: float) -> None:
+    target.alpha_composite(source, (round(x * SCALE), round(y * SCALE)))
+
+
+def logical_height(image: Image.Image) -> float:
+    return image.height / image.info.get("density", 1)
+
+
 DEFAULT_STYLE = {"x": 5.0, "y": -9.0, "scale": 0.5, "timeRatio": 0.0}
 STYLES: dict[int, dict[str, float]] = {
     1: {"timeRatio": 0.15},
@@ -386,20 +414,26 @@ def sand_alpha_edges(image: Image.Image) -> Image.Image:
 
 @lru_cache(maxsize=None)
 def load_texture(name: str) -> Image.Image:
-    path = TEXTURE_DIR / f"{name}.png"
+    path = TEXTURE_PATHS.get(name)
+    density = TEXTURE_SCALE if path else 1
+    path = path or TEXTURE_DIR / f"{name}.png"
     if not path.exists():
         raise FileNotFoundError(path)
-    return sand_alpha_edges(Image.open(path))
+    image = sand_alpha_edges(Image.open(path))
+    image.info["density"] = density
+    return image
 
 
 def paste_transformed(canvas: Image.Image, source: Image.Image, matrix: tuple[float, float, float, float, float, float], alpha: float):
+    # The matrix maps logical source pixels to logical canvas pixels; convert it for both images' densities.
+    target, ratio = canvas.info.get("density", 1), canvas.info.get("density", 1) / source.info.get("density", 1)
     sampled_matrix = (
-        matrix[0],
-        matrix[1],
-        matrix[2],
-        matrix[3],
-        matrix[4] - 0.5,
-        matrix[5] - 0.5,
+        matrix[0] * ratio,
+        matrix[1] * ratio,
+        matrix[2] * ratio,
+        matrix[3] * ratio,
+        (matrix[4] - 0.5) * target,
+        (matrix[5] - 0.5) * target,
     )
     inv = invert_matrix(sampled_matrix)
     transformed = source.transform(
@@ -444,7 +478,7 @@ def get_cache_render_params(seed_id: int, offset_x: int, offset_y: int) -> tuple
 def render_plant_cache(seed_id: int, animation_json: dict[str, Any], style: dict[str, float]) -> tuple[Image.Image, int, int]:
     offset_x, offset_y, width, height = get_plant_image_size(seed_id)
     base_x, base_y, render_scale = get_cache_render_params(seed_id, offset_x, offset_y)
-    cache = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    cache = new_canvas(width, height)
 
     for item in sample_tracks(animation_json, seed_id, style):
         local = item["matrix"]
@@ -465,7 +499,7 @@ def render_seed(seed_id: int) -> Image.Image:
     animation_name = ANIMATION_NAMES[seed_id]
     animation_json = load_json(ANIMATION_DIR / f"{animation_name}.json")
     style = style_for(seed_id)
-    canvas = Image.new("RGBA", (PACKET_WIDTH, PACKET_HEIGHT), (0, 0, 0, 0))
+    canvas = new_canvas(PACKET_WIDTH, PACKET_HEIGHT)
     cache, offset_x, offset_y = render_plant_cache(seed_id, animation_json, style)
     scale = style["scale"]
     matrix = (
@@ -481,13 +515,12 @@ def render_seed(seed_id: int) -> Image.Image:
     return canvas
 
 
-def generate():
+def generate(output: Path | None = None):
+    output = output or OUTPUT_PATH
     rows = math.ceil(SEED_COUNT / ATLAS_COLUMNS)
-    atlas = Image.new("RGBA", (ATLAS_COLUMNS * PACKET_WIDTH, rows * PACKET_HEIGHT), (0, 0, 0, 0))
+    atlas = new_canvas(ATLAS_COLUMNS * PACKET_WIDTH, rows * PACKET_HEIGHT)
     for seed_id in range(SEED_COUNT):
         cel = render_seed(seed_id)
-        x = seed_id % ATLAS_COLUMNS * PACKET_WIDTH
-        y = seed_id // ATLAS_COLUMNS * PACKET_HEIGHT
-        atlas.alpha_composite(cel, (x, y))
-    atlas.save(OUTPUT_PATH)
-    print(f"Wrote {OUTPUT_PATH}")
+        composite(atlas, cel, seed_id % ATLAS_COLUMNS * PACKET_WIDTH, seed_id // ATLAS_COLUMNS * PACKET_HEIGHT)
+    atlas.save(output)
+    print(f"Wrote {output}")

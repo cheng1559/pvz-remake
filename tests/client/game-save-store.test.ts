@@ -50,7 +50,7 @@ function gameSave(updatedAt: number): GameSave {
         createdAt: 100,
         updatedAt,
         contentSet: {
-            base: { id: 'pvz:base', version: '2.0.0', contentHash: 'hash' },
+            base: { id: 'pvz', version: '2.0.0', contentHash: 'hash' },
             mods: [],
         },
         server: game.lastSave as unknown as ServerSaveSnapshot,

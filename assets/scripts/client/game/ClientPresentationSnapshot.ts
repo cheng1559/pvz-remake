@@ -74,21 +74,16 @@ function validateLevel(snapshot: LevelPresentationSnapshot, current: WorldSnapsh
         throw new TypeError('client presentation Level progress wave must match the current wave')
     }
 
-    const kinds = new Map<number, LevelPresentationSnapshot['entities'][number]['kind']>()
-    for (const plant of current.plants) kinds.set(plant.entityId, 'plant')
-    for (const zombie of current.zombies) kinds.set(zombie.entityId, 'zombie')
-    for (const mower of current.lawnMowers) kinds.set(mower.entityId, 'mower')
-    for (const item of current.items) if (item.typeId === 'pvz:sun') kinds.set(item.entityId, 'sun')
-    for (const entity of snapshot.entities) {
-        if (kinds.get(entity.entityId) !== entity.kind) {
-            throw new TypeError(`client presentation Level ${entity.kind} ${entity.entityId} is not in the current frame`)
-        }
-    }
-
+    // Both halves of a save must describe the same frame: every presentation entry needs its entity in it.
     const worldIds = new Set([
         ...current.plants, ...current.zombies, ...current.projectiles,
         ...current.items, ...current.lawnMowers,
     ].map(entity => entity.entityId))
+    for (const entity of snapshot.entities) {
+        if (!worldIds.has(entity.entityId)) {
+            throw new TypeError(`client presentation Level ${entity.kind} ${entity.entityId} is not in the current frame`)
+        }
+    }
     for (const particle of snapshot.particles) {
         if (particle.owner.kind === 'entity' && !worldIds.has(particle.owner.entityId)) {
             throw new TypeError(`client presentation Level particle owner ${particle.owner.entityId} is not in the current frame`)

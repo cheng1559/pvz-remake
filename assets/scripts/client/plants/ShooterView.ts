@@ -1,5 +1,6 @@
 import { Color, Sprite } from 'cc'
 import { randomAnimationRate } from '@/client/content/ClientAnimationRegistry'
+import { attachmentTrack } from '@/shared/content/presentation'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
@@ -41,9 +42,9 @@ export class ShooterView implements PlantView {
             blink.load(animations.blink.reanimId, content.registry, content.loader),
         ])
         if (!node.isValid) return new ShooterView(context, animationTarget, body, idleHead, shootHead, blink, 1, tick)
-        idleHead.attachToTrack(body, animations.idleHead.attachmentTrackId ?? 'anim_stem')
-        shootHead.attachToTrack(body, animations.shootHead.attachmentTrackId ?? 'anim_stem')
-        blink.attachToTrack(idleHead, animations.blink.attachmentTrackId ?? 'anim_face')
+        idleHead.attachToTrack(body, attachmentTrack(animations.idleHead))
+        shootHead.attachToTrack(body, attachmentTrack(animations.shootHead))
+        blink.attachToTrack(idleHead, attachmentTrack(animations.blink))
         const idleRate = randomAnimationRate(registry.rates.shooterIdle) / 12
         body.play({ loop: true, rate: idleRate * animations.body.rateScale })
         idleHead.play({ loop: true, rate: idleRate * animations.idleHead.rateScale })

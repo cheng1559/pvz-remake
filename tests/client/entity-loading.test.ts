@@ -3,6 +3,7 @@ import * as plantDefinitions from '@/client/plants/definitions'
 import * as zombieDefinitions from '@/client/zombies/definitions'
 import { buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
 import { contentJson } from '@/shared/mod/content'
+import * as modApi from '@/shared/mod'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -14,6 +15,7 @@ import { readBaseContent } from '../../tools/mod/content'
 
 // Rendering helpers that need the engine; animation frames pass through unchanged.
 const clientStubs: Record<string, unknown> = {
+    '@/shared/mod': modApi,
     '@/client/render/AnimationAtlas': { animationFrame: (frame: unknown) => frame, animationFrames: (frames: unknown[]) => frames },
     '@/shared/kernel/index': kernelModule,
 }
@@ -292,7 +294,7 @@ test('the base Mod prefab keeps its compiled engine bindings after moving into a
             complete(null, prefab)
         } } },
     })
-    assert.equal(await new ClientContentLoader().load({ category: 'prefabs', contentId: 'pvz:base',
+    assert.equal(await new ClientContentLoader().load({ category: 'prefabs', contentId: 'pvz',
         id: 'pvz:level', contentHash: 'base', path: source }, Prefab), prefab)
     assert.deepEqual(requests, ['ui/level'])
 })
@@ -327,6 +329,87 @@ test('body colors reach players attached to its tracks, including nested ones, b
     body.setColorOverride(Color.WHITE)
     assert.deepEqual([head.colorOverride, blink.colorOverride, dropped.colorOverride], [Color.WHITE, Color.WHITE, blue],
         'a player moved to another parent keeps that parent\'s colors')
+})
+
+test('presentation track lists name exact tracks that exist in their clips; losing the newspaper arm keeps the other hand', () => {
+    const zombies = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/zombies.json', 'utf8'))
+    const content = readBaseContent()
+    const trackIds = (reanimId: string): string[] => JSON.parse(readFileSync(`mods/pvz-base/${content.resources.reanim[reanimId]}`, 'utf8'))
+        .tracks.map((track: { id: string }) => track.id)
+    for (const [id, zombie] of Object.entries<any>(zombies)) {
+        const tracks = new Set(Object.values<any>(zombie.animations).flatMap(clip => trackIds(clip.reanimId)))
+        const { flagArm, upperArm, ...lists } = zombie.parts
+        const flag = flagArm ? [...flagArm.holding, ...flagArm.free, flagArm.front] : []
+        for (const track of [upperArm, ...Object.values<string[]>(lists).flat(), ...flag, ...zombie.enragedHead ? [zombie.enragedHead.track] : []]) {
+            assert.ok(tracks.has(track), `${id} lists ${track}, which none of its clips has`)
+        }
+    }
+    const plants = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/plants.json', 'utf8'))
+    for (const [id, plant] of Object.entries<any>(plants)) {
+        // A plant without its own clips (the explode-o-nut) draws those of its animationTarget.
+        const clips = plant.animations ?? plants[plant.animationTarget]?.animations ?? {}
+        const tracks = new Set(Object.values<any>(clips).flatMap(clip => trackIds(clip.reanimId)))
+        const { eyes = [], glow = [], face } = plant.parts ?? {}
+        for (const track of [...eyes, ...glow, ...face ? [face] : []]) assert.ok(tracks.has(track), `${id} lists ${track}`)
+    }
+    const dave = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/dave.json', 'utf8'))
+    const daveTracks = new Set(Object.entries<string>(dave.clips).filter(([name]) => name !== 'blink').flatMap(([, id]) => trackIds(id)))
+    for (const track of [dave.parts.mouth, dave.parts.head, ...dave.parts.eyes, dave.hand.track]) assert.ok(daveTracks.has(track), `Dave lists ${track}`)
+    const menu = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/main-menu.json', 'utf8'))
+    const selector = new Set(['pvz:selector_open', 'pvz:selector_sign'].flatMap(trackIds))
+    const { tracks: menuTracks, startAdventure } = menu
+    for (const track of [...menu.buttons.map((button: { track: string }) => button.track), menuTracks.sky, menuTracks.anchor, menuTracks.profileSign,
+        ...menuTracks.replaced, startAdventure.track, startAdventure.shadow, startAdventure.adventureShadow]) {
+        assert.ok(selector.has(track), `the main menu lists ${track}`)
+    }
+    const hand = new Set(trackIds('pvz:selector_zombie_hand'))
+    for (const track of menuTracks.handRocks) assert.ok(hand.has(track), `the zombie hand lists ${track}`)
+    const screens = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/screens.json', 'utf8'))
+    const layers = (value: unknown): any[] => Array.isArray(value) ? value.flatMap(layers)
+        : value && typeof value === 'object' ? 'visibleTracks' in value ? [value] : Object.values(value).flatMap(layers) : []
+    for (const layer of layers(screens)) {
+        const tracks = new Set(trackIds(layer.reanimId))
+        for (const track of layer.visibleTracks) assert.ok(tracks.has(track), `${layer.name} lists ${track}`)
+    }
+    // The no-paper clips add Zombie_paper_hands2, the other hand, which the old prefix also hid.
+    assert.deepEqual(zombies['pvz:newspaper'].parts.arm, ['Zombie_paper_leftarm_lower', 'Zombie_paper_hands'])
+    const { ReanimPlayer } = loadClientModule('reanim/ReanimPlayer', {
+        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
+    })
+    const views = new Map(['Zombie_paper_hands', 'Zombie_paper_hands2', 'Zombie_paper_leftarm_lower'].map(id => [id, { visible: true }]))
+    const player = Object.assign(Object.create(ReanimPlayer.prototype), { views, applyPose() {} })
+    player.setTracksVisible(zombies['pvz:newspaper'].parts.arm, false)
+    assert.deepEqual([...views.values()].map(view => view.visible), [false, true, false])
+})
+
+test('a plant blink keeps the base pose from its first blink when the body animation changes', () => {
+    const { AnimatedPlantView } = loadClientModule('plants/AnimatedPlantView', {
+        cc: { Color: class { constructor(readonly r = 0, readonly g = 0, readonly b = 0) {} } },
+        './definitions': { plantDefinition: () => ({}) },
+        '@/shared/content/presentation': { attachmentTrack: (clip: { attachmentTrackId: string }) => clip.attachmentTrackId },
+    })
+    // Sun-shroom faces: small (0.36) before anim_grow, big (0.54) after it.
+    const small = { scaleX: 0.36 }, big = { scaleX: 0.54 }
+    const body = (face: object) => ({ face, setTracksVisible() {} })
+    const blink = {
+        attachmentTrackId: null as string | null, attachmentBasePose: null as object | null,
+        attachToTrack(parent: { face: object }, trackId: string, base?: object) {
+            this.attachmentTrackId = trackId
+            this.attachmentBasePose = base ?? parent.face
+        },
+        play() {},
+    }
+    const view = Object.assign(Object.create(AnimatedPlantView.prototype), {
+        extras: new Map([['Blink', blink]]), attachmentBases: new Map(), blinking: false, blinkAtTick: 0,
+        animations: { nextPlantBlinkTicks: () => 400 }, extraClip: () => ({ attachmentTrackId: 'anim_face' }),
+        blinkPlayer: () => blink, body: body(small), context: { plant: { typeId: 'pvz:sunshroom' } },
+    })
+    view.attachExtras()
+    view.syncBlink(0)
+    view.blinking = false
+    view.body = body(big)
+    view.attachExtras()
+    assert.equal(blink.attachmentBasePose, small, 'the grown sun-shroom blink still scales from the small face')
 })
 
 test('preloaded animation frames are shared by registry and failed preparation can retry', async () => {

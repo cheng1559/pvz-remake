@@ -25,6 +25,8 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     assert.deepEqual(parseDebugCliCommand('/mod'), { name: 'mod', args: [] })
     assert.deepEqual(getDebugCliCompletions('/mod ', undefined, true), [])
     assert.equal(getDebugCliSuffix('/mod'), '')
+    assert.equal(getDebugCliSuffix('/'), '', 'a bare slash suggests nothing until a letter is typed')
+    assert.deepEqual(getDebugCliCompletions('/', undefined, true), [], 'nor does Tab')
     assert.equal(getDebugCliSuffix('/mod ins'), '')
     for (const args of ['install', 'load local:widescreen', 'unload all', 'uninstall local:hd', 'list']) {
         assert.equal((parseDebugCliCommand('/mod ' + args) as { failure: string }).failure, 'syntax')

@@ -170,7 +170,7 @@ export class LevelSeedBank {
             if (GameDebugSettings.hotkeysEnabled && index < 10) {
                 entry.hotkey ??= this.options.ui.label(entry.view.node, {
                     text: String((index + 1) % 10),
-                    font: 'storeItem',
+                    font: 'hotkey',
                     fontSize: 16,
                     color: new Color(213, 159, 43),
                     x: 1,

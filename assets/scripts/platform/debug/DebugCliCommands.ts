@@ -24,12 +24,12 @@ async function executeCommand(
     if (!('name' in parsed)) return parsed
     const { name, args } = parsed
     switch (name) {
-        case 'restart': return running ? { ...debugSuccess('Restarting level'), action: 'restart' } : debugCondition('No level to restart')
+        case 'restart': return running ? { ...debugSuccess('Restarting level'), action: 'restart' } : debugCondition('DEBUG_NO_LEVEL_TO_RESTART')
         case 'home': case 'reload': case 'quit': case 'help': case 'menu': case 'shop': case 'almanac': case 'zengarden':
             return { ...debugSuccess(`Opening ${name}`), action: name }
         case 'level': {
             const id = args[0].toLowerCase().replace(/^(?:pvz:)?adventure-/, '')
-            if (catalog && !catalog.levels.includes(id)) return debugCondition(`Level is not installed: ${args[0]}`)
+            if (catalog && !catalog.levels.includes(id)) return debugCondition('DEBUG_LEVEL_NOT_INSTALLED', args[0])
             return { ...debugSuccess(`Loading level ${id}`), action: 'level', levelId: id.includes(':') ? id : `pvz:adventure-${id}` }
         }
         case 'gamespeed': {
@@ -48,8 +48,8 @@ async function executeCommand(
         }
         case 'fullscreen': {
             const enabled = args[0].toLowerCase() === 'true'
-            if (sys.isNative && sys.isMobile && !enabled) return debugCondition('Windowed mode is unavailable on mobile')
-            if (!OptionsSettings.fullScreenForced && !screen.supportsFullScreen) return debugCondition('Full screen is unavailable')
+            if (sys.isNative && sys.isMobile && !enabled) return debugCondition('DEBUG_WINDOWED_UNAVAILABLE')
+            if (!OptionsSettings.fullScreenForced && !screen.supportsFullScreen) return debugCondition('DEBUG_FULLSCREEN_UNAVAILABLE')
             await OptionsSettings.setFullScreen(enabled)
             return debugSuccess(`Fullscreen: ${enabled}`)
         }
@@ -61,9 +61,9 @@ async function executeCommand(
         case 'seedstyle': GameDebugSettings.setSeedPacketStyle(args[0].toLowerCase() as SeedPacketStyle); break
         case 'mod': return { ...debugSuccess('Opening Mod manager'), action: 'manageMods' }
         case 'perf': GameDebugSettings.setPerfToggle(args[0].toLowerCase() as DebugPerfToggle, args[1].toLowerCase() === 'true'); break
-        case 'background': return debugCondition('Widescreen backgrounds are not implemented in this version')
+        case 'background': return debugCondition('DEBUG_BACKGROUND_UNAVAILABLE')
         default: {
-            if (!running) return debugCondition(`/${name} requires an active level`)
+            if (!running) return debugCondition('DEBUG_REQUIRES_LEVEL', name)
             const result = runGameCommand(command)
             if (result.ok) {
                 if (name === 'cooldown') GameDebugSettings.setRechargingEnabled(args[0].toLowerCase() === 'true')

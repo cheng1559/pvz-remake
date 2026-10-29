@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { zipSync, type Zippable } from 'fflate'
 import { createHash, randomUUID } from 'node:crypto'
 import { readModContent, type SourceContent } from './content'
-import type { ModManifest } from '../../assets/scripts/shared/mod'
+import { isModId, type ModManifest } from '../../assets/scripts/shared/mod'
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const tsc = join(projectRoot, 'node_modules', 'typescript', 'bin', 'tsc')
@@ -37,7 +37,8 @@ async function init(name: string, output?: string) {
     await writeJson(join(root, 'assets', 'gameplay', 'seed-catalog.json'), [])
     await writeJson(join(root, 'manifest.json'), {
         schemaVersion: 1,
-        id: `local:${name}`,
+        // The Mod ID is its namespace: its own resources and definitions are name:...
+        id: name,
         version: '0.1.0',
         apiVersion: 1,
         contentHash: `${name}-dev`,
@@ -201,7 +202,7 @@ async function modRoot(input: string) {
 async function manifestAt(root: string): Promise<ModManifest> {
     const manifest = JSON.parse(await readFile(join(root, 'manifest.json'), 'utf8'))
     if (manifest?.schemaVersion !== 1 || manifest.apiVersion !== 1 ||
-        typeof manifest.id !== 'string' || !/^[a-z0-9][a-z0-9._-]*:[a-z0-9][a-z0-9/._-]*$/.test(manifest.id)) {
+        !isModId(manifest.id)) {
         throw new Error('Invalid manifest.json')
     }
     return manifest

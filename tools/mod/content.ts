@@ -36,10 +36,9 @@ export function readBaseContent(directory = 'mods/pvz-base') {
 /** Headless tools and tests read the same authoring files as the pack builder. */
 export function readGameplaySource(name: string, directory = 'mods/pvz-base/gameplay'): any {
     const content = readBaseContent(dirname(directory))
-    const { settings, levels, strings, seedCatalog, ...definitions } = content.gameplay
+    const { settings, levels, seedCatalog, ...definitions } = content.gameplay
     if (name === 'definitions') return { ...settings, ...definitions }
     if (name === 'levels') return { schemaVersion: settings.schemaVersion, levels }
-    if (name === 'strings') return strings
     if (name === 'seed-catalog') return seedCatalog
     const file = content.resources.json?.[`pvz:gameplay/${name}`]
     if (!file) throw new Error(`Unknown gameplay source: ${name}`)

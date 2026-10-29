@@ -492,12 +492,13 @@ export class FontRenderer extends Component {
         }
     }
 
+    /** Graphics::WriteString: integer (width - line) / 2 for centered lines, and a wider line extends past both sides. */
     private _getLineOffsetX(lineWidth: number, wrapWidth: number, scale: number): number {
         if (wrapWidth <= 0 || this._textAlign === 0) return 0
 
-        const spare = Math.max(0, wrapWidth - lineWidth)
+        const spare = wrapWidth - lineWidth
         if (this._textAlign === 1) return spare * scale
-        if (this._textAlign === 2) return (spare / 2) * scale
+        if (this._textAlign === 2) return Math.trunc(spare / 2) * scale
         return 0
     }
 

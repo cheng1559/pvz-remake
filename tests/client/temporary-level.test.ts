@@ -47,7 +47,7 @@ test('temporary levels preserve the adventure save when entered, restarted and e
         '@/client/view/uiNode': { uiNode: () => ({ node: {
             isValid: true, active: true, addComponent(type: any) { return new type() }, destroy() { this.isValid = false },
         } }) },
-        '@/client/api/MenuApi': { menuApi: { async getCurrentUser() { return { id: 1, name: 'Player' } }, async getAdventure() { return { levelId: 'normal' } } } },
+        '@/client/api/MenuApi': { menuApi: { async getCurrentUser() { return { id: 1, name: 'Player' } }, async getAdventure() { return { levelId: 'normal' } }, async getPurse() { return { coins: 0, packetUpgrades: 0, packetUpgradeCost: 75 } }, async setCoins() {} } },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { rechargingEnabled: true, sunCostEnabled: true, plantInvincible: true, collectMode: 'click' } },
         '@/shared/debug/DebugCli': {},
     }

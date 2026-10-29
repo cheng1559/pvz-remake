@@ -135,7 +135,11 @@ export class LevelAudioPresenter {
             case 'zombieVaultSound':
                 void SoundSystem.playFoley(event.data.sound === 'polevault' ? SoundEffect.PoleVault : SoundEffect.Grassstep)
                 break
-            case 'itemCollected': void SoundSystem.playFoley(SoundEffect.Points, 10); break
+            case 'itemCollected': if (event.data.silent !== true) this.sounds(this.definitions.items[String(event.data.typeId)]?.collectSounds); break
+            case 'itemSpawned': this.sounds(this.definitions.items[String(event.data.typeId)]?.spawnSounds); break
+            case 'itemLanded': this.sounds(this.definitions.items[String(event.data.typeId)]?.landSounds); break
+            // Board::UpdateLevelEndSequence raises the pitch by one step for each mower already scored.
+            case 'mowerScored': void SoundSystem.playWithPitch(SoundEffect.Points, Math.max(0, Math.min(6, 6 - Number(event.data.remaining)))); break
             case 'sunFlash': void SoundSystem.play(SoundEffect.Buzzer); break
             case 'mowerActivated': void SoundSystem.playFoley(SoundEffect.Lawnmower); break
             case 'zombieMowered': void SoundSystem.playFoley(SoundEffect.Splat); break

@@ -92,7 +92,9 @@ export function createLevelController(
             name: 'Level', parent, viewport: true,
             mask: Mask.Type.GRAPHICS_RECT,
         }).node
-        root.active = save === undefined
+        // Built hidden, like a restore; commit shows it in the same frame it removes the previous level, so starting a
+        // level (/level, Restart) never shows an empty or half-built screen.
+        root.active = false
         root.addComponent(BlockInputEvents)
         let scene: LevelScene | undefined
         try {
@@ -117,18 +119,21 @@ export function createLevelController(
             if (!root.isValid) throw new Error('Level scene was closed while loading')
             const gameplay = content.loadedMods.gameplay
             const profile = await menuApi.getCurrentUser()
+            const purse = profile ? await menuApi.getPurse() : { coins: 0, packetUpgrades: 0, packetUpgradeCost: 0 }
             const playerName = profile?.name || 'Player'
             const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true)
             const startOptions = save ? {
-                ...DEFAULT_START_OPTIONS,
+                ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades,
                 randomSeed: save.server.random.state,
                 levelId: save.levelId,
                 mods: save.contentSet.mods,
                 save: save.server as unknown as JsonValue,
-            } : { ...DEFAULT_START_OPTIONS, randomSeed: Math.floor(Math.random() * 0x100000000),
+            } : { ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, randomSeed: Math.floor(Math.random() * 0x100000000),
                 firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods }
             await restoring(save, () => game.start(startOptions))
-            const view = await LevelView.create(root, content, save?.levelId ?? levelId, playerName, game.render())
+            const view = await LevelView.create(root, content, save?.levelId ?? levelId, { name: playerName, upgradeCost: purse.packetUpgradeCost }, game.render())
+            // The profile owns the purse; a level only reports what it collected.
+            if (profile) view.onMoneyChanged = money => { void menuApi.setCoins(money).catch(error => console.error('[LevelController] Saving coins failed', error)) }
             scene = root.addComponent(LevelScene)
             scene.configure(game, view, startOptions, lifecycle)
             if (save) await restoring(save, () => scene!.restorePresentation(save.client))
@@ -211,7 +216,7 @@ export function createLevelController(
                     ? current.level : requestedLevelId ? (await loadIntegratedGameContent()).levels.levels[requestedLevelId] : undefined
                 const temporary = targetLevel?.persistent === false
                 if (temporary) await controller.saveIfRunning()
-                controller.hide()
+                // The running level stays on screen until the new one replaces it in commit.
                 if (!temporary) storeForProfile(await profileId()).delete()
             } else if (current?.root.isValid && (!requestedLevelId || requestedLevelId === current.game.render().levelId)) {
                 return current.root
@@ -263,7 +268,7 @@ export function createLevelController(
             return current?.root.isValid ? current.level : null
         },
         debugCommand(command) {
-            if (!current?.root.isValid) return debugCondition('No active game')
+            if (!current?.root.isValid) return debugCondition('DEBUG_NO_ACTIVE_GAME')
             const result = current.game.debugCommand(command)
             current.view.sync(current.game.render(), current.game.drainChanges(), current.game.drainEvents())
             return result

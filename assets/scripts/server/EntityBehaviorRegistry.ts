@@ -1,6 +1,6 @@
 import type { Component, EntityId, GameSystem, SystemContext } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { isQualifiedId } from '@/shared/mod'
+import { isModId, isQualifiedId } from '@/shared/mod'
 import { assertJsonValue, jsonRoundTrip, type JsonObject, type EntityBehaviorState } from '@/shared/protocol'
 import { LevelStateResource, PositionComponent, type Position } from './components'
 
@@ -38,7 +38,7 @@ export class EntityBehaviorRegistry<Key extends string, Data extends BehaviorEnt
 
     register<State extends JsonObject>(ownerId: string, typeId: string, behavior: EntityBehavior<Key, Data, Definition, State>): void {
         if (this.frozen) throw new Error(`${this.kind} behaviors are frozen`)
-        if (!isQualifiedId(ownerId) || !isQualifiedId(typeId) || !behavior ||
+        if (!isModId(ownerId) || !isQualifiedId(typeId) || !behavior ||
             typeof behavior.createState !== 'function' || typeof behavior.tick !== 'function' ||
             behavior.validateState !== undefined && typeof behavior.validateState !== 'function') {
             throw new Error(`Invalid ${this.kind} behavior: ${typeId}`)

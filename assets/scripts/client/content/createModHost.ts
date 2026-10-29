@@ -27,9 +27,17 @@ import * as debugSettings from '@/platform/debug/GameDebugSettings'
 import * as debugCli from '@/shared/debug/DebugCli'
 import * as debugCommands from '@/platform/debug/DebugCliCommands'
 import * as haptics from '@/platform/Haptics'
+import * as clock from '@/core/GameClock'
 
 export class ClientModAssets extends ModAssets {
+    /** An image file in this Mod's archive, read as is. */
     sprite(path: string) { return modResources.file(this.id, path, engine.SpriteFrame) }
+    /** An image by resource ID: the Mod's own registration, unless a pack with higher priority replaces it (e.g. HD). */
+    async spriteResource(id: string) {
+        const frame = await modResources.sprite(id)
+        if (!frame) throw new Error(`Sprite is not installed: ${id}`)
+        return frame
+    }
 }
 
 export function createClientModHost(ownerId: string, definitions: DefinitionSources, resources: ArchiveContentRegistry,
@@ -59,5 +67,6 @@ export function createClientModHost(ownerId: string, definitions: DefinitionSour
         'shared/debug/DebugCli': debugCli,
         'platform/debug/DebugCliCommands': debugCommands,
         'platform/Haptics': haptics,
+        'core/GameClock': clock,
     })
 }
