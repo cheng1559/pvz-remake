@@ -1,4 +1,9 @@
 {
     "debug": true,
-    "useSplashScreen": false
+    "useSplashScreen": false,
+    "packages": {
+        "web-mobile": {
+            "orientation": "landscape"
+        }
+    }
 }
