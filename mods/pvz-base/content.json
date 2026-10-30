@@ -50905,7 +50905,6 @@
       "pvz:animations/zombie_snorkle": "assets/json/animations/zombie_snorkle.json",
       "pvz:animations/zombie_yeti": "assets/json/animations/zombie_yeti.json",
       "pvz:animations/zombie_zamboni": "assets/json/animations/zombie_zamboni.json",
-      "pvz:audio/music/music_manifest": "assets/json/audio/music/music_manifest.json",
       "pvz:fonts/briannetod12": "assets/fonts/briannetod12.json",
       "pvz:fonts/briannetod16": "assets/fonts/briannetod16.json",
       "pvz:fonts/briannetod32": "assets/fonts/briannetod32.json",
@@ -51280,7 +51279,15 @@
       "pvz:zombietrafficcone": "assets/particles/zombietrafficcone.json"
     },
     "music": {
-      "pvz:title_theme": "assets/music/title_theme.json"
+      "pvz:day_grasswalk": "assets/music/day_grasswalk.json",
+      "pvz:night_moongrains": "assets/music/night_moongrains.json",
+      "pvz:choose_seeds": "assets/music/choose_seeds.json",
+      "pvz:title_theme": "assets/music/title_theme.json",
+      "pvz:zen_garden": "assets/music/zen_garden.json",
+      "pvz:puzzle": "assets/music/puzzle.json",
+      "pvz:minigame": "assets/music/minigame.json",
+      "pvz:conveyer": "assets/music/conveyer.json",
+      "pvz:final_boss": "assets/music/final_boss.json"
     },
     "prefabs": {
       "pvz:level": "assets/prefabs/ui/level.prefab"

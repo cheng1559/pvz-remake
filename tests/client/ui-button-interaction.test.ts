@@ -310,7 +310,7 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
 test('mobile planting keeps tap selection, aims while held, and resolves only the owning finger on release', () => {
     const ui = setup(), e = ui.events
     ui.setMobile()
-    const pea = ui.makeButton(0), sunflower = ui.makeButton(120), menu = ui.makeButton(680)
+    const pea = ui.makeButton(0), sunflower = ui.makeButton(120), menu = ui.makeButton(680), modButton = ui.makeButton(560)
     const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
     const world = {
         phase: 'gameplay', result: 'playing', paused: false, availableSun: 100, extensions: {},
@@ -411,6 +411,11 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
         ui.dispatch(menu.node, e.TOUCH_START, 700)
         ui.dispatch(menu.node, e.TOUCH_END, 700)
         assert.equal(menus, 1, 'Menu retains normal button interaction')
+        const issued = commands.length
+        ui.dispatch(modButton.node, e.TOUCH_START, 560)
+        ui.dispatch(modButton.node, e.TOUCH_END, 560)
+        assert.equal(modButton.clicks, 1, 'any other button, such as a Mod\'s, also keeps normal touch interaction')
+        assert.equal(commands.length, issued, 'and the tap is not taken as a lawn touch')
         view.canOpenMenu = false
         assert.equal(menu.button.canInteract(), false, 'the menu shown after confirming seeds stays disabled until the intro ends')
     } finally { presenter.destroy(); ui.cleanup() }

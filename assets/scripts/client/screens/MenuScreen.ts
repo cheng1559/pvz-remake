@@ -4,6 +4,7 @@ import { DEBUG } from 'cc/env'
 import { preloadAssets } from '@/client/content/PreloadAssets'
 import { waitForPreloadFrame } from '@/client/content/preloadTasks'
 import { uiNode } from '@/client/view/uiNode'
+import { uiAreaEdge } from '@/client/view/ClientViewport'
 import { UI, type UIButtonOptions } from '@/client/ui/UI'
 import { MENU_PAGES, type MenuAction, type MenuPageId } from './MenuPages'
 import { showOptionsDialog } from './OptionsDialog'
@@ -236,9 +237,10 @@ export class MenuScreen extends Component {
                         skin: 'seed', text: ui.text('NEXT_LEVEL_BUTTON'), x: 324, y: paperAward ? 520 : 500,
                         pressOffset: [0, 0], rightClickTriggers: false,
                     })
-                    if (award.showMainMenu) navigateButton('main', {
+                    // Keeps its margin from the UI area's right edge, like Ultimate's top-right menu button.
+                    if (award.showMainMenu) ui.button(uiAreaEdge(controls, 'right'), {
                         skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON'), x: 677, y: 16,
-                        rightClickTriggers: false,
+                        rightClickTriggers: false, onClick: () => this.onNavigate('main'),
                     })
                 } catch (error) { root.node.destroy(); throw error }
             } else if (!await showMenuPageControls(controls, ui, id, action => { void this.onNavigate(action) }).catch(error => {

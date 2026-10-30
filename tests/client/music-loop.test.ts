@@ -4,6 +4,7 @@ import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import * as playback from '@/client/music/MusicPlaybackSnapshot'
+import * as musicContent from '@/shared/content/music'
 
 test('native music never ends by itself and jumps to its loop point, even when a check comes late', async () => {
     let time = 0, loop: boolean | undefined
@@ -13,13 +14,15 @@ test('native music never ends by itself and jumps to its loop point, even when a
         setCurrentTime: (_id: number, value: number) => { time = value; return true },
         getCurrentTime: () => time,
     }
-    const tune = { id: 'choose_seeds', durationSec: 21.69, loopStartSec: 3.6, loopEndSec: 21.6, stems: { main: 'pvz:choose' } }
+    const tune = { schemaVersion: 3, id: 'pvz:choose_seeds', durationSec: 21.69, loopStartSec: 3.6, loopEndSec: 21.6, stems: { main: 'pvz:choose' } }
     const modules: Record<string, unknown> = {
         cc: { sys: { isNative: true } },
         '@/client/content/ModResources': { modResources: {
-            asset: async (id: string) => id.endsWith('music_manifest') ? { json: { tunes: { choose_seeds: tune } } } : { nativeUrl: `${id}.mp3` },
+            asset: async (id: string, _type: unknown, _animation: unknown, category?: string) =>
+                category === 'music' ? (id === 'pvz:choose_seeds' ? { json: tune } : undefined) : { nativeUrl: `${id}.mp3` },
         } },
         '@/client/sound/SoundSystem': { SoundSystem: { getMusicVolume: () => 1, onMusicVolumeChange: () => () => {} } },
+        '@/shared/content/music': musicContent,
     }
     const exports: Record<string, any> = {}
     const code = transpileModule(readFileSync('assets/scripts/client/music/MusicSystem.ts', 'utf8'), {
@@ -52,15 +55,17 @@ test('night burst switches on the next order, crossfades the melody, and restore
         setCurrentTime: (id: number, value: number) => { times.set(id, value); return true },
         getCurrentTime: (id: number) => times.get(id),
     }
-    const tune = { id: 'night_moongrains', durationSec: 112.008, loopStartSec: 0, loopEndSec: 112,
+    const tune = { schemaVersion: 3, id: 'pvz:night_moongrains', durationSec: 112.008, loopStartSec: 0, loopEndSec: 112,
         burstScheme: 'night', drumsLoopEndSec: 64, burstBoundariesSec: [4, 8, 12, 16],
         burstDrumsOffsetsSec: [4, 0, 4, 0], stems: { main: 'pvz:main', drums: 'pvz:drums' } }
     const modules: Record<string, unknown> = {
         cc: { sys: { isNative: true } },
         '@/client/content/ModResources': { modResources: {
-            asset: async (id: string) => id.endsWith('music_manifest') ? { json: { tunes: { night_moongrains: tune } } } : { nativeUrl: `${id}.mp3` },
+            asset: async (id: string, _type: unknown, _animation: unknown, category?: string) =>
+                category === 'music' ? (id === 'pvz:night_moongrains' ? { json: tune } : undefined) : { nativeUrl: `${id}.mp3` },
         } },
         '@/client/sound/SoundSystem': { SoundSystem: { getMusicVolume: () => 1, onMusicVolumeChange: () => () => {} } },
+        '@/shared/content/music': musicContent,
         './MusicPlaybackSnapshot': playback,
     }
     const exports: Record<string, any> = {}
@@ -93,4 +98,14 @@ test('night burst switches on the next order, crossfades the melody, and restore
     MusicSystem.update(700, { zombiesOnScreen: 0 })
     assert.equal(volumes.get(mainId), 1)
     assert.equal(volumes.get(drumsId), 0)
+})
+
+test('each tune is its own music resource, checked when loaded', async () => {
+    const { parseMusic, musicResourceId } = await import('@/shared/content/music')
+    assert.equal(musicResourceId('night_moongrains'), 'pvz:night_moongrains', 'a Mod replaces a tune by registering this ID')
+    const base = { schemaVersion: 3, id: 'pvz:night_moongrains', durationSec: 112, loopStartSec: 0, loopEndSec: 112, stems: { main: 'hd-bgm:night' } }
+    assert.deepEqual(parseMusic(base).stems, { main: 'hd-bgm:night' }, 'a complete mix needs only its main stem')
+    assert.throws(() => parseMusic({ ...base, burstScheme: 'night', burstBoundariesSec: [4] }), /needs music.stems.drums/)
+    assert.throws(() => parseMusic({ ...base, stems: { main: 'audio/music/night' } }), /audio resource ID/)
+    assert.throws(() => parseMusic({ ...base, loopEndSec: 120 }), /loop must satisfy/)
 })

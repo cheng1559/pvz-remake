@@ -1,4 +1,4 @@
-import { _decorator, Button, Component, EventMouse, input, Input, Node, UITransform, Vec3, type EventTouch } from 'cc'
+import { _decorator, Button, Component, EventMouse, input, Input, Node, UITransform, Vec3, type EventTouch, type Vec2 } from 'cc'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
@@ -121,7 +121,12 @@ export class UIButton extends Component {
         return !!top?.interactable && top.changeCursor
     }
 
-    private static topButton(pointer: UIHoverPointer, modal: Node | null): UIButton | null {
+    /** The topmost available button under a screen point, as touches resolve it. */
+    static at(location: Vec2, windowId: number): UIButton | null {
+        return this.topButton({ location, windowId }, UIHoverManager.activeModalRoot)
+    }
+
+    private static topButton(pointer: Pick<UIHoverPointer, 'location' | 'windowId'>, modal: Node | null): UIButton | null {
         let top: UIButton | null = null
         for (const button of this.instances) {
             if (button.available(modal, false) && button.hit(pointer) && (!top || this.above(button.node, top.node))) top = button

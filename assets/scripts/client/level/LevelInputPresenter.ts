@@ -6,7 +6,7 @@ import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { boardCell, levelAwardSize } from './LevelGeometry'
 import type { LevelGame } from './LevelGame'
 import { LevelView } from './LevelView'
-import type { UIButton } from '@/client/ui/UIButton'
+import { UIButton } from '@/client/ui/UIButton'
 import type { WorldSnapshot } from '@/shared/protocol'
 
 const WIDTH = 800
@@ -134,8 +134,8 @@ export class LevelInputPresenter {
         if (!tool && !this.canUseCursor(snapshot)) return
         const packet = this.view.seedPacketAt(snapshot, index)
         const held = snapshot.cursor.mode !== 'none'
-        // Let Menu keep its normal button capture when no plant is held.
-        if (!held && !tool && index < 0 && hit(this.buttons[this.buttons.length - 1])) return
+        // Other buttons (Menu, a Mod's controls) keep their normal capture when no plant is held.
+        if (!held && !tool && index < 0 && UIButton.at(location, event.windowId)?.interactable) return
         const pickable = packet && !packet.selected && packet.ready && !packet.availability.reason
         if (packet && (!held || pickable)) {
             // Selection replaces the server's held packet atomically; a queued clear is not visible here yet.

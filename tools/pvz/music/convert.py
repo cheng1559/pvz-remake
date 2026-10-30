@@ -312,6 +312,31 @@ def convert_music(
     return len(DAY_GRASSWALK_STEMS) + 2 + static_count
 
 
+PLAYBACK_FIELDS = ("durationSec", "loopStartSec", "loopEndSec", "burstScheme", "burstBoundariesSec", "burstDrumsOffsetsSec", "drumsLoopEndSec")
+
+
+def split_manifest(manifest_path: Path, out_dir: Path, namespace: str = "pvz") -> dict[str, Path]:
+    """Writes each tune of a converter manifest as its own music resource (`pvz:<tune>`, schema 3).
+
+    Stems become audio resource IDs; converter notes (MO3 order, channels, original length) move under `source`.
+    """
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    files = {}
+    for tune_id, tune in manifest["tunes"].items():
+        music = {"schemaVersion": 3, "id": f"{namespace}:{tune_id}"}
+        music.update({key: tune[key] for key in PLAYBACK_FIELDS[:3]})
+        music["stems"] = {stem: f"{namespace}:{Path(path).name}" for stem, path in tune["stems"].items()}
+        music.update({key: tune[key] for key in PLAYBACK_FIELDS[3:] if key in tune})
+        notes = {key: value for key, value in tune.items() if key not in PLAYBACK_FIELDS and key not in ("id", "stems")}
+        if notes:
+            music["source"] = notes
+        path = out_dir / f"{tune_id}.json"
+        path.write_text(json.dumps(music, indent=2) + "\n", encoding="utf-8")
+        files[tune_id] = path
+    return files
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(

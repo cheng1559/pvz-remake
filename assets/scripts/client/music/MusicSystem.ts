@@ -1,5 +1,6 @@
 import { modResources } from '@/client/content/ModResources'
 import { AudioClip, AudioSource, director, JsonAsset, Node, sys } from 'cc'
+import { MUSIC_TUNE_IDS, musicResourceId, parseMusic, type Music, type MusicStemName } from '@/shared/content/music'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import {
     parseMusicPlaybackSnapshot,
@@ -16,25 +17,7 @@ export type {
     MusicTuneId,
 } from './MusicPlaybackSnapshot'
 
-type MusicStemName = 'main' | 'drums' | 'hihats'
-
-interface MusicTuneManifest {
-    id: MusicTuneId
-    durationSec: number
-    loopStartSec: number
-    loopEndSec: number
-    burstScheme?: 'day' | 'night'
-    drumsLoopEndSec?: number
-    burstDrumsOffsetsSec?: number[]
-    burstBoundariesSec?: number[]
-    stems: Partial<Record<MusicStemName, string>>
-}
-
-interface MusicManifest {
-    version: number
-    sampleRate: number
-    tunes: Partial<Record<MusicTuneId, MusicTuneManifest>>
-}
+type MusicTuneManifest = Music
 
 type NativeAudioEngine = {
     play2d?: (url: string, loop: boolean, volume: number) => number
@@ -66,7 +49,6 @@ export interface MusicRuntimeContext {
     zombiesOnScreen: number
 }
 
-const MANIFEST_PATH = 'audio/music/music_manifest'
 const STEMS: MusicStemName[] = ['main', 'drums', 'hihats']
 const START_BURST_ZOMBIES = 10
 const FINISH_BURST_ZOMBIES = 4
@@ -96,8 +78,8 @@ export class MusicSystem {
     private static _overlayNativeAudioIds: Partial<Record<MusicStemName, number>> = {}
     private static _overlayActiveStemNames: MusicStemName[] = []
     private static _overlayPlayToken = 0
-    private static _manifest: MusicManifest | null = null
-    private static _manifestLoading: Promise<MusicManifest | null> | null = null
+    /** Each tune is its own music resource, so a Mod replaces a tune by ID like any other asset. */
+    private static _tunes: Map<MusicTuneId, Promise<Music | null>> = new Map()
     private static _clipLoading: Map<string, Promise<AudioClip | null>> = new Map()
     private static _currentTune: MusicTuneManifest | null = null
     private static _currentTuneId: MusicTuneId | null = null
@@ -131,12 +113,10 @@ export class MusicSystem {
 
         this.stop()
         const token = ++this._playToken
-        const manifest = await this._loadManifest()
-        if (token !== this._playToken || !manifest) return
-
-        const tune = manifest.tunes[tuneId] ?? null
+        const tune = await this._loadTune(tuneId)
+        if (token !== this._playToken) return
         if (!tune) {
-            console.warn(`[MusicSystem] Missing music tune in manifest: ${tuneId}`)
+            console.warn(`[MusicSystem] Missing music tune: ${tuneId}`)
             return
         }
 
@@ -185,19 +165,14 @@ export class MusicSystem {
     }
 
     static async preloadTune(tuneId: MusicTuneId) {
-        const manifest = await this._loadManifest()
-        const tune = manifest?.tunes[tuneId] ?? null
+        const tune = await this._loadTune(tuneId)
         if (!tune) return
 
         await Promise.all(this._activeStems(tune).map((stem) => this._loadClip(tune.stems[stem]!)))
     }
 
     static async preloadAllTunes() {
-        const manifest = await this._loadManifest()
-        if (!manifest) return
-
-        const tuneIds = Object.keys(manifest.tunes) as MusicTuneId[]
-        await Promise.all(tuneIds.map((tuneId) => this.preloadTune(tuneId)))
+        await Promise.all(MUSIC_TUNE_IDS.map((tuneId) => this.preloadTune(tuneId)))
     }
 
     static capturePlaybackSnapshot(): MusicPlaybackSnapshot | null {
@@ -228,8 +203,7 @@ export class MusicSystem {
         const snapshot = parseMusicPlaybackSnapshot(value)
         if (snapshot === null) return
 
-        const manifest = await this._loadManifest()
-        const tune = manifest?.tunes[snapshot.tuneId] ?? null
+        const tune = await this._loadTune(snapshot.tuneId)
         if (!tune) throw new TypeError(`music snapshot tune is unavailable: ${snapshot.tuneId}`)
         for (const [name, time] of [
             ['timeSec', snapshot.timeSec],
@@ -273,12 +247,10 @@ export class MusicSystem {
     static async playOverlayTune(tuneId: MusicTuneId) {
         this.stopOverlayTune()
         const token = ++this._overlayPlayToken
-        const manifest = await this._loadManifest()
-        if (token !== this._overlayPlayToken || !manifest) return
-
-        const tune = manifest.tunes[tuneId] ?? null
+        const tune = await this._loadTune(tuneId)
+        if (token !== this._overlayPlayToken) return
         if (!tune) {
-            console.warn(`[MusicSystem] Missing overlay music tune in manifest: ${tuneId}`)
+            console.warn(`[MusicSystem] Missing overlay music tune: ${tuneId}`)
             return
         }
 
@@ -406,16 +378,20 @@ export class MusicSystem {
         this._applyVolumes()
     }
 
-    private static async _loadManifest() {
-        if (this._manifest) return this._manifest
-        if (this._manifestLoading) return this._manifestLoading
-
-        this._manifestLoading = modResources.asset(`pvz:${MANIFEST_PATH}`, JsonAsset)
-            .then((asset) => {
-                this._manifest = (asset?.json as MusicManifest | undefined) ?? null
-                return this._manifest
-            }).finally(() => { this._manifestLoading = null })
-        return this._manifestLoading
+    /** The highest-priority `pvz:<tune>` music resource; an invalid one is reported and treated as missing. */
+    private static _loadTune(tuneId: MusicTuneId): Promise<Music | null> {
+        let loading = this._tunes.get(tuneId)
+        if (!loading) {
+            loading = modResources.asset(musicResourceId(tuneId), JsonAsset, undefined, 'music')
+                .then(asset => asset ? parseMusic(asset.json) : null)
+                .catch(error => {
+                    console.error(`[MusicSystem] Invalid music tune: ${tuneId}`, error)
+                    this._tunes.delete(tuneId)
+                    return null
+                })
+            this._tunes.set(tuneId, loading)
+        }
+        return loading
     }
 
     private static _loadClip(path: string) {

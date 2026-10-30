@@ -16,7 +16,7 @@ from .fonts import convert_font
 from .particles import convert_directory as convert_particles
 from .strings import convert_lawnstrings, merge_project_strings
 from .audio import copy_sounds
-from .music.convert import convert_music
+from .music.convert import convert_music, split_manifest
 
 from . import ROOT, BASE_MOD as MOD
 from .pak import extracted_pak
@@ -131,17 +131,11 @@ def import_assets(raw: Path) -> None:
     convert_music(raw / 'sounds', assets / 'audio/music', overwrite=True)
     for file in sorted((assets / 'audio').rglob('*.mp3')):
         register('audio', f'pvz:{file.stem}', file)
+    # Each tune is its own music resource (pvz:<tune>), so a Mod replaces one tune by registering the same ID.
     music = assets / 'audio/music/music_manifest.json'
-    file = assets / 'json/audio/music/music_manifest.json'
-    file.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(music, file)
-    register('json', 'pvz:audio/music/music_manifest', file)
-    tune = json.loads(file.read_text())['tunes']['title_theme']
-    title = assets / 'music/title_theme.json'
-    write_json(title, {'schemaVersion': 2, 'id': 'pvz:title_theme', 'durationSeconds': tune['durationSec'],
-        'loopStartSeconds': tune['loopStartSec'], 'loopEndSeconds': tune['loopEndSec'],
-        'stems': {stem: tune['stems'].get(stem) for stem in ('main', 'drums', 'hihats')}})
-    register('music', 'pvz:title_theme', title)
+    for tune, file in split_manifest(music, assets / 'music').items():
+        register('music', f'pvz:{tune}', file)
+    music.unlink()
 
     print('[content] Cached portraits and packet atlas', flush=True)
     from .cache.packets import generate as packet_cache
