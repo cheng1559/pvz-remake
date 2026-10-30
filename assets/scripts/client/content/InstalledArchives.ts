@@ -93,6 +93,38 @@ export function readInstalledFiles(kind: ArchiveKind, id: string, archive: Uint8
     return files
 }
 
+/**
+ * Native: the extracted files of an installed archive, listed from disk, so a startup never reads the whole ZIP into
+ * memory (HD packs run to hundreds of MB). Undefined when the archive was not extracted (older installs).
+ */
+export function readExtractedFiles(kind: ArchiveKind, id: string): ArchiveFiles | undefined {
+    if (!sys.isNative) return undefined
+    const fs = native.fileUtils, root = `${installedArchiveRoot(kind, id)}/`
+    if (!fs.isFileExist(`${root}manifest.json`)) return undefined
+    const names: string[] = []
+    const walk = (directory: string) => {
+        for (const entry of fs.listFiles(directory)) {
+            const path = entry.replace(/\\/g, '/').replace(/\/$/, '')
+            // Some platforms also list '.' and '..'; only entries inside this directory count.
+            if (!path.startsWith(directory) || path.length === directory.length) continue
+            if (fs.isDirectoryExist(path)) walk(`${path}/`)
+            else names.push(path.slice(root.length))
+        }
+    }
+    walk(root)
+    const files: ArchiveFiles = Object.create(null)
+    for (const name of names) {
+        if (name === '.archive.zip') continue
+        Object.defineProperty(files, name, { enumerable: true, configurable: true, get() {
+            const data = fs.getDataFromFile(`${root}${name}`)
+            if (!data) throw new Error(`Failed to read installed archive file: ${name}`)
+            return new Uint8Array(data)
+        } })
+    }
+    installedRoots.set(files, root)
+    return files
+}
+
 /** The file's installed path, for native loaders that read files themselves; undefined for files held in memory. */
 export function installedFilePath(files: ArchiveFiles, name: string): string | undefined {
     const root = installedRoots.get(files)
@@ -128,7 +160,9 @@ export async function saveInstalledArchive(kind: ArchiveKind, id: string, data: 
             for (const [name, bytes] of Object.entries({ ...files, '.archive.zip': data })) {
                 const path = `${staging}/${name}`
                 fs.createDirectory(path.slice(0, path.lastIndexOf('/')))
-                if (!fs.writeDataToFile(bytes.slice().buffer, path)) throw new Error(`Failed to install archive file: ${name}`)
+                // Copy only views into a larger buffer (stored ZIP entries); inflated files are written as they are.
+                const buffer = bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes.buffer as ArrayBuffer : bytes.slice().buffer
+                if (!fs.writeDataToFile(buffer, path)) throw new Error(`Failed to install archive file: ${name}`)
             }
             fs.removeDirectory(backup)
             if (fs.isDirectoryExist(root) && !fs.renameFile(root, backup)) throw new Error('Failed to replace installed archive')

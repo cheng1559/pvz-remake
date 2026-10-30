@@ -53,5 +53,5 @@
   "DEBUG_AWARD_EXISTS": "The level award already exists",
   "DEBUG_UNAVAILABLE": "/%s is unavailable in this version",
   "PACKAGE_BASE_REQUIRED_HEADER": "Can't Disable",
-  "PACKAGE_BASE_REQUIRED_BODY": "The base game is always on and can't be disabled."
+  "PACKAGE_BASE_REQUIRED_BODY": "You can't disable the base game."
 }

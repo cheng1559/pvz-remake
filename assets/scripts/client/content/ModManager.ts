@@ -1,7 +1,7 @@
 import { sys } from 'cc'
 import { BASE_MOD_ID, isModId, parseModManifest, sortModManifests, type ModManifest } from '@/shared/mod'
 import { contentJson, parseContentArchive, type ContentArchive } from '@/shared/mod/content'
-import { listInstalledArchives, readInstalledArchive, readInstalledFiles, readInstalledManifest, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveFiles } from './InstalledArchives'
+import { listInstalledArchives, readExtractedFiles, readInstalledArchive, readInstalledFiles, readInstalledManifest, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveFiles } from './InstalledArchives'
 
 export interface InstalledMod extends ContentArchive {
     files: ArchiveFiles
@@ -229,13 +229,19 @@ export class ModManager {
         const total = changes.imports.length * 2 + changes.uninstalls.length + 1
         let completed = 0
         const progress = async (message: string) => { await onProgress(completed++ / total, message) }
+        // Every import is checked before anything is installed, but only one is held unpacked at a time: the checks
+        // keep just each manifest and index, and installing reads its ZIP again (HD packs run to hundreds of MB).
         const replacements: ArchivedMod[] = []
+        const staged = new Map<string, ModImport>()
         for (const mod of changes.imports) {
             await progress(`Checking ${mod.id}`)
-            replacements.push(await this.readImport(mod))
+            const { manifest, content } = await this.readImport(mod)
+            replacements.push({ manifest, content, files: Object.create(null), archive: new Uint8Array() })
+            staged.set(manifest.id, mod)
         }
         await progress('Checking Mod dependencies')
-        await this.saveSelection(changes.enabled, changes.order, replacements, id => progress(`Installing ${id}`))
+        await this.saveSelection(changes.enabled, changes.order, replacements, id => progress(`Installing ${id}`),
+            mod => this.readImport(staged.get(mod.manifest.id)!))
         for (const id of changes.uninstalls) {
             await progress(`Removing ${id}`)
             // Replaying a job after interruption must also accept removals already completed.
@@ -307,7 +313,7 @@ export class ModManager {
     }
 
     private async saveSelection(ids: readonly string[], order: readonly string[] | undefined, replacements: readonly ArchivedMod[],
-        beforeInstall: (id: string) => Promise<void> = async () => {}): Promise<boolean> {
+        beforeInstall: (id: string) => Promise<void> = async () => {}, load?: (mod: ArchivedMod) => Promise<ArchivedMod>): Promise<boolean> {
         if (new Set(ids).size !== ids.length) throw new Error('Duplicate Mod ID')
         await this.resolve([...ids], replacements)
         const installed = [...new Set([...this.installedIds(), ...replacements.map(mod => mod.manifest.id)])]
@@ -320,7 +326,7 @@ export class ModManager {
         const current = this.enabledIds()
         for (const mod of replacements) {
             await beforeInstall(mod.manifest.id)
-            await this.store(mod)
+            await this.store(load ? await load(mod) : mod)
         }
         this.saveOrder(nextOrder)
         if (current.length === ids.length && current.every((id, index) => ids[index] === id)) return false
@@ -389,6 +395,14 @@ export class ModManager {
         const key = this.selection(this.profile).installed[id]
         const cached = key && this.loaded.get(key)
         if (cached) return cached
+        // Native installs are extracted on disk; reading their file list there avoids loading the whole ZIP.
+        const extracted = key ? readExtractedFiles('mods', key) : undefined
+        if (extracted) {
+            const mod = parseInstalled(extracted)
+            if (mod.manifest.id !== id) throw new Error(`Installed Mod ID does not match: ${id}`)
+            this.loaded.set(key, mod)
+            return mod
+        }
         const archive = key && await readInstalledArchive('mods', key)
         if (!archive) {
             if (allowMissing) return undefined

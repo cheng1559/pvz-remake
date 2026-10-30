@@ -481,7 +481,9 @@ test('Native installation, picker cleanup and on-demand installed reads share th
             return true
         },
         getDataFromFile: (path: string) => files.get(path).slice().buffer,
-        listFiles: (path: string) => ['.', '..', ...directories].filter(name => name.slice(0, name.lastIndexOf('/')) === path).map(name => `${name}/`),
+        // Like Cocos: subdirectories (with a trailing slash) and files directly inside the path.
+        listFiles: (path: string) => ['.', '..', ...[...directories].filter(name => name.slice(0, name.lastIndexOf('/')) === path.replace(/\/$/, '')).map(name => `${name}/`),
+            ...[...files.keys()].filter(name => name.slice(0, name.lastIndexOf('/')) === path.replace(/\/$/, ''))],
         removeFile: (path: string) => files.delete(path),
         writeDataToFile(buffer: ArrayBuffer, path: string) { files.set(path, new Uint8Array(buffer)); return true },
         renameFile(from: string, to: string) {
@@ -510,8 +512,8 @@ test('Native installation, picker cleanup and on-demand installed reads share th
     const getDataFromFile = modules.cc.native.fileUtils.getDataFromFile, reads: string[] = []
     modules.cc.native.fileUtils.getDataFromFile = (path: string) => { reads.push(path); return getDataFromFile(path) }
     const [reloaded] = await new ModManager().ready()
-    assert.deepEqual(reads.map(path => path.slice(installedRoot.length)).sort(), ['.archive.zip', 'content.json', 'manifest.json'],
-        'a restart reads only the index of an installed Mod')
+    assert.deepEqual(reads.map(path => path.slice(installedRoot.length)).sort(), ['content.json', 'manifest.json'],
+        'a restart reads only the index of an installed Mod, listing its extracted files instead of loading the ZIP')
     assert.equal(strFromU8(reloaded.files['.hidden']), 'hidden file')
     const running = fresh()
     const frame = await running.file('hd', 'button.png', modules.cc.SpriteFrame)
