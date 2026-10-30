@@ -1,7 +1,7 @@
 import { sys } from 'cc'
 import { BASE_MOD_ID, isModId, parseModManifest, sortModManifests, type ModManifest } from '@/shared/mod'
 import { contentJson, parseContentArchive, type ContentArchive } from '@/shared/mod/content'
-import { listInstalledArchives, readExtractedFiles, readInstalledArchive, readInstalledFiles, readInstalledManifest, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveFiles } from './InstalledArchives'
+import { archiveHeads, listInstalledArchives, openArchive, readExtractedFiles, readInstalledArchive, readInstalledFiles, readInstalledManifest, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveData, type ArchiveFiles } from './InstalledArchives'
 
 export interface InstalledMod extends ContentArchive {
     files: ArchiveFiles
@@ -9,7 +9,7 @@ export interface InstalledMod extends ContentArchive {
 
 /** A Mod read from a new ZIP, kept whole until it is installed. */
 interface ArchivedMod extends InstalledMod {
-    archive: Uint8Array
+    archive: ArchiveData
 }
 
 export interface ModImport {
@@ -46,16 +46,23 @@ const pendingStorageKey = 'pvz-remake:pending-mod-changes'
 const legacyStorageKeys = ['pvz-remake:active-mods', 'pvz-remake:mod-order']
 let nextImport = 0
 
-/** Identifies identical ZIPs (two 32-bit FNV-style lanes plus the length); not a security check. */
-function archiveKey(id: string, data: Uint8Array): string {
-    let a = 0x811c9dc5, b = 0x9e3779b9 ^ data.length
-    for (let i = 0; i < data.length; i++) {
-        a = Math.imul(a ^ data[i], 0x01000193)
-        b = Math.imul(b ^ data[i], 0x5bd1e995)
-        b ^= b >>> 15
+const HASH_CHUNK = 4 << 20
+
+/** Identifies identical ZIPs (two 32-bit FNV-style lanes plus the length); not a security check. A Blob is read in chunks. */
+async function archiveKey(id: string, data: ArchiveData): Promise<string> {
+    const length = data instanceof Uint8Array ? data.length : data.size
+    let a = 0x811c9dc5, b = 0x9e3779b9 ^ length
+    for (let start = 0; start < length; start += HASH_CHUNK) {
+        const chunk = data instanceof Uint8Array ? data.subarray(start, start + HASH_CHUNK)
+            : new Uint8Array(await data.slice(start, start + HASH_CHUNK).arrayBuffer())
+        for (let i = 0; i < chunk.length; i++) {
+            a = Math.imul(a ^ chunk[i], 0x01000193)
+            b = Math.imul(b ^ chunk[i], 0x5bd1e995)
+            b ^= b >>> 15
+        }
     }
     const hex = (value: number) => (value >>> 0).toString(16).padStart(8, '0')
-    return `${id}@${data.length.toString(36)}-${hex(a)}${hex(b)}`
+    return `${id}@${length.toString(36)}-${hex(a)}${hex(b)}`
 }
 
 /** Installed Mods were checked when installed, so a startup reads only their manifest and content index. */
@@ -64,9 +71,11 @@ function parseInstalled(files: ArchiveFiles): InstalledMod {
     return { manifest, content, files }
 }
 
-function parseImport(archive: Uint8Array): ArchivedMod {
-    const files = unpackArchive(archive, 'manifest.json')
-    const { manifest, content } = parseContentArchive(files)
+/** The web keeps imports as Blobs, checked and stored without reading them whole; native unpacks them in memory. */
+async function parseImport(data: ArchiveData): Promise<ArchivedMod> {
+    const archive = sys.isNative || !(data instanceof Uint8Array) ? data : new Blob([data.slice().buffer])
+    const files = archive instanceof Uint8Array ? unpackArchive(archive, 'manifest.json') : await openArchive(archive)
+    const { manifest, content } = parseContentArchive(await archiveHeads(files))
     if (manifest.id === BASE_MOD_ID) throw new Error(`${BASE_MOD_ID} is built in and cannot be imported`)
     for (const file of [manifest.gameplay?.cocosModule, manifest.client?.module]) {
         if (file && !files[file]) throw new Error(`Missing Mod module: ${file}`)
@@ -179,8 +188,8 @@ export class ModManager {
     }
 
     /** Validate and stage the compressed ZIP separately; installed files and settings stay intact. */
-    async prepareImport(archive: Uint8Array): Promise<ModImport> {
-        const { manifest } = parseImport(archive)
+    async prepareImport(data: ArchiveData): Promise<ModImport> {
+        const { manifest, archive } = await parseImport(data)
         const stagingId = `${Date.now().toString(36)}-${++nextImport}`
         await saveInstalledArchive('mod-pending', stagingId, archive, {})
         return { id: manifest.id, version: manifest.version, ...(manifest.author ? { author: manifest.author } : {}), manifest, stagingId }
@@ -255,7 +264,7 @@ export class ModManager {
     private async readImport(mod: ModImport): Promise<ArchivedMod> {
         const archive = await readInstalledArchive('mod-pending', mod.stagingId)
         if (!archive) throw new Error(`Missing staged Mod: ${mod.id}`)
-        const imported = parseImport(archive)
+        const imported = await parseImport(archive)
         if (imported.manifest.id !== mod.id) throw new Error(`Staged Mod ID does not match: ${mod.id}`)
         return imported
     }
@@ -264,8 +273,8 @@ export class ModManager {
      * Saves the ZIP; without `enable`, dependencies are checked only when it replaces an enabled Mod. Like uninstall,
      * this changes installed files at once; the game queues changes instead, since running Mods read them on demand.
      */
-    async install(archive: Uint8Array, enable = true): Promise<string> {
-        const mod: ArchivedMod = { ...parseImport(archive), archive }
+    async install(archive: ArchiveData, enable = true): Promise<string> {
+        const mod = await parseImport(archive)
         await this.ready()
         const enabled = this.enabledIds()
         const order = this.installedIds()
@@ -408,7 +417,8 @@ export class ModManager {
             if (allowMissing) return undefined
             throw new Error(`Mod is not installed: ${id}. Open /mod to install it`)
         }
-        const mod = parseInstalled(readInstalledFiles('mods', key, archive) ?? unpackArchive(archive, 'manifest.json'))
+        // The web reads the stored Blob's index and text files; media stay in storage until used.
+        const mod = parseInstalled(readInstalledFiles('mods', key, archive) ?? await openArchive(archive))
         if (mod.manifest.id !== id) throw new Error(`Installed Mod ID does not match: ${id}`)
         this.loaded.set(key, mod)
         return mod
@@ -450,7 +460,7 @@ export class ModManager {
 
     /** Saves the ZIP once per content and points this player at it; the archive it replaces goes if nobody uses it. */
     private async store(mod: ArchivedMod): Promise<void> {
-        const id = mod.manifest.id, key = archiveKey(id, mod.archive)
+        const id = mod.manifest.id, key = await archiveKey(id, mod.archive)
         if (!(await listInstalledArchives('mods')).includes(key)) await saveInstalledArchive('mods', key, mod.archive, mod.files)
         const previous = this.selection(this.profile).installed[id]
         this.update(selection => { selection.installed[id] = key })

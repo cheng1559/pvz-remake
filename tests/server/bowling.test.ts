@@ -1,6 +1,6 @@
 import { type World } from '@/ecs'
-import { ZombieComponent } from '@/server/components'
-import { IntegratedGameServer } from '@/server/IntegratedGameServer'
+import { ZombieComponent } from '@/server/state/components'
+import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
 import { parseServerPacket,type JsonValue,type StartSessionPacket } from '@/shared/protocol'

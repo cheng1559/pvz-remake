@@ -1,4 +1,4 @@
-import { IntegratedGameServer } from '@/server/IntegratedGameServer'
+import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue,StartSessionPacket } from '@/shared/protocol'
 import assert from 'node:assert/strict'

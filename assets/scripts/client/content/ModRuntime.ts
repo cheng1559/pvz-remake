@@ -1,6 +1,6 @@
 import { assetManager } from 'cc'
 import { contentJson } from '@/shared/mod/content'
-import { installedFilePath } from './InstalledArchives'
+import { installedFilePath, readArchiveBlob } from './InstalledArchives'
 import type { InstalledMod } from './ModManager'
 
 type Registration = [string[], (...args: any[]) => any]
@@ -74,7 +74,8 @@ function initialize(): void {
             let location = installedFilePath(mod.files, file)
             if (!location) {
                 const cached = mod.urls.get(file)
-                location = cached ?? URL.createObjectURL(new Blob([bytes(mod, file).slice().buffer]))
+                if (!cached && !Object.hasOwn(mod.files, file)) throw new Error(`Missing Mod file: ${mod.manifest.id}/${file}`)
+                location = cached ?? URL.createObjectURL(await readArchiveBlob(mod.files, file))
                 if (!cached) mod.urls.set(file, location)
             }
             return new Promise<unknown>((resolve, reject) => {

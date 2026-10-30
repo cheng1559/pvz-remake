@@ -1,8 +1,8 @@
-import { type EntityRemover, type Plant, PlantComponent, PositionComponent } from '../components'
-import { EventQueueResource, emitServerEvent } from '../events'
+import { type EntityRemover, type Plant, PlantComponent, PositionComponent } from '../state/components'
+import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { World } from '@/ecs/index'
-import { explode } from '../explosions'
+import { explode } from '../combat/explosions'
 
 export const RECENTLY_EATEN_TICKS = 50
 

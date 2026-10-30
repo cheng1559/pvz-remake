@@ -5,7 +5,7 @@ import test from 'node:test'
 import { GameSaveStore, type StorageLike } from '@/app/GameSaveStore'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { createGameSave, type GameSave } from '@/app/SaveCoordinator'
-import type { ServerSaveSnapshot } from '@/server/save'
+import type { ServerSaveSnapshot } from '@/server/session/save'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { levelPresentation } from './level-test-snapshot'
 

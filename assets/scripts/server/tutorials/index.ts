@@ -1,11 +1,11 @@
 import type { World } from '@/ecs/index'
-import { LevelStateResource } from '../components'
-import { TutorialResource } from '../levelState'
-import { plantingTutorial } from './PlantingTutorial'
-import { sunflowerTutorial } from './SunflowerTutorial'
-import { moreSunTutorial } from './MoreSunTutorial'
-import { shovelTutorial } from './ShovelTutorial'
-import { introDialog } from './IntroDialog'
+import { LevelStateResource } from '../state/components'
+import { TutorialResource } from '../state/levelState'
+import { plantingTutorial } from './plantingTutorial'
+import { sunflowerTutorial } from './sunflowerTutorial'
+import { moreSunTutorial } from './moreSunTutorial'
+import { shovelTutorial } from './shovelTutorial'
+import { introDialog } from './introDialog'
 
 export interface TutorialScript {
     readonly blocksStart?: boolean

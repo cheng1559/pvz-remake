@@ -1,15 +1,15 @@
 import type { GameSystem } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { EventQueueResource, emitServerEvent } from '../events'
+import { EventQueueResource, emitServerEvent } from '../state/events'
 import {
     LevelStateResource,
     PlantAttackComponent,
     PlantComponent,
     PositionComponent,
     RandomResource,
-} from '../components'
-import { ItemComponent } from '../levelState'
-import { getDebugRules } from '../debug/DebugRules'
+} from '../state/components'
+import { ItemComponent } from '../state/levelState'
+import { getDebugRules } from '../debug/debugRules'
 
 export function createProductionSystem(definitions: GameplayDefinitions): GameSystem {
     return {

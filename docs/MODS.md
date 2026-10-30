@@ -103,6 +103,27 @@ export function register({ host, assets }) {
 
 `mod:test` 校验已打包目录的真实服务端注册，不重新编译，不代替客户端或真机画面验收。修改后需要重新打包、安装并重启。
 
+## 修改服务端规则
+
+服务端规则按职责导出为对象，函数第一个参数都是本局 `session`（含 `world`、`definitions`、`gameplayTick` 等）。宿主内部也经由这些对象互相调用，包装后对内部调用同样生效：
+
+| 模块 | 对象与方法 |
+| --- | --- |
+| `server/planting` | `planting.seedAvailability`、`rejectSeed`、`selectSeed`、`selectConveyorPacket`、`placePlant`、`createPlant`、`findPlantAt` |
+| `server/tools` | `tools.available`、`select`、`use` |
+| `server/items` | `items.collect` |
+| `server/commands` | `commands.execute`，处理 Mod 自己的 `mod` 指令 |
+| `server/snapshot` | `snapshot.build`，向 `extensions` 加入 Mod 状态 |
+
+```ts
+const { planting } = host.get('server/planting')
+host.around(planting, 'seedAvailability', function (next, session, seedId, ...rest) {
+    const availability = next(session, seedId, ...rest)
+    return availability.reason || seedId !== 'my-mod:plant' || ready(session.world)
+        ? availability : { reason: 'seed-not-available', warningKey: 'my-mod:not_ready' }
+})
+```
+
 ## 扩展 CLI 命令
 
 复用 `host.around` 包装现有命令对象，不需要另外的命令注册 API。两端都能访问 `shared/debug/DebugCli`；解析、命令名补全、参数提示和静态参数值补全均读取其中的 `specs.list()`。

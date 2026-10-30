@@ -26,7 +26,7 @@ function profiles() {
         key: (index: number) => [...data.keys()][index] ?? null,
         get length() { return data.size },
     }
-    const { createProfileStore } = load('server/menu/ProfileStore', {})
+    const { createProfileStore } = load('server/menu/profileStore', {})
     const ProfileStore = createProfileStore(storage)
     return { ProfileStore, data, menuApi: new MenuApi(createLocalMenuTransport(storage)) }
 }

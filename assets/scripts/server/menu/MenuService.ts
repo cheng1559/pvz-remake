@@ -1,11 +1,11 @@
 import type { AwardView, MenuRequest, MenuResponse, MenuStorage, StoreItemView, StoreView, UserResult, UserView } from '@/shared/menu'
 import type { LevelDefinition } from '@/shared/content/gameplay'
-import { ALMANAC_PLANTS, ALMANAC_ZOMBIES } from './AlmanacCatalog'
-import { ACHIEVEMENT_DEFINITIONS } from './AchievementCatalog'
-import { CHALLENGES } from './ChallengeCatalog'
-import { createGameSettingsStore } from './GameSettingsStore'
-import { createProfileStore, type PlayerProfile } from './ProfileStore'
-import type { StoreCatalog } from './StoreCatalog'
+import { ALMANAC_PLANTS, ALMANAC_ZOMBIES } from './almanacCatalog'
+import { ACHIEVEMENT_DEFINITIONS } from './achievementCatalog'
+import { CHALLENGES } from './challengeCatalog'
+import { createGameSettingsStore } from './gameSettingsStore'
+import { createProfileStore, type PlayerProfile } from './profileStore'
+import type { StoreCatalog } from './storeCatalog'
 
 function userView(profile: PlayerProfile | null): UserView | null {
     return profile && { id: profile.id, name: profile.name, adventureLevel: profile.adventureLevel, finishedAdventure: profile.finishedAdventure }

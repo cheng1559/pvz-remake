@@ -1,5 +1,5 @@
-import { getBoardBounds } from '../collision'
-import { EventQueueResource, emitServerEvent } from '../events'
+import { getBoardBounds } from '../combat/collision'
+import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import {
@@ -12,7 +12,7 @@ import {
     ProjectileComponent,
     RandomResource,
     ZombieComponent,
-} from '../components'
+} from '../state/components'
 import { damageZombie, isTargetableZombie } from '../zombies/damage'
 
 export function createPeashooterSystem(definitions: GameplayDefinitions): GameSystem {

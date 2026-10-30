@@ -26,8 +26,8 @@ function fixture() {
         key: (index: number) => [...data.keys()][index] ?? null,
         get length() { return data.size },
     }
-    const ProfileStore = load('server/menu/ProfileStore').createProfileStore(storage)
-    const sourceCatalog = load('server/menu/StoreCatalog').createStoreCatalog(readGameplaySource('store'))
+    const ProfileStore = load('server/menu/profileStore').createProfileStore(storage)
+    const sourceCatalog = load('server/menu/storeCatalog').createStoreCatalog(readGameplaySource('store'))
     // VM-created objects cross into the host-realm transport used by this fixture.
     const catalog = { ...sourceCatalog, speech: (profile: unknown) => JSON.parse(JSON.stringify(sourceCatalog.speech(profile))) }
     const store = { ...catalog, ...load('client/ui/formatMoney') }

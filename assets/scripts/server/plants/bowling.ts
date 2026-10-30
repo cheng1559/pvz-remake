@@ -1,9 +1,9 @@
 import type { PlantBehavior } from './behaviors'
-import { LevelStateResource, PositionComponent, RandomResource, ZombieComponent } from '../components'
-import { EventQueueResource, emitServerEvent } from '../events'
+import { LevelStateResource, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { EventQueueResource, emitServerEvent } from '../state/events'
 import { damageZombie, isTargetableZombie } from '../zombies/damage'
-import { explode } from '../explosions'
-import { rectOverlap } from '../collision'
+import { explode } from '../combat/explosions'
+import { rectOverlap } from '../combat/collision'
 
 interface State { [key: string]: number; direction: number; rate: number; frame: number }
 interface Rules { rateMin: number; rateMax: number; groundDeltas: number[]; bounceSpeed: number; damage: number; helmDamage: number }

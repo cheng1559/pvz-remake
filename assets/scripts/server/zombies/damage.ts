@@ -6,12 +6,12 @@ import {
     ZOMBIE_MOWERED_TICKS,
     zombieGait,
 } from './animation'
-import { type EntityRemover, RandomResource, type Zombie, ZombieComponent } from '../components'
-import { EventQueueResource, emitServerEvent } from '../events'
+import { type EntityRemover, RandomResource, type Zombie, ZombieComponent } from '../state/components'
+import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { World } from '@/ecs/index'
 import { dropZombieFlag } from './flag'
-import { dropZombieLoot } from '../loot'
+import { dropZombieLoot } from '../level/loot'
 
 export const HIT_FLASH_TICKS = 25
 

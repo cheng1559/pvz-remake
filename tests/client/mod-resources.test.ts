@@ -1,5 +1,5 @@
 import { decodePremultipliedPng } from '@/client/content/PremultipliedPng'
-import { strFromU8,strToU8,unzipSync,zipSync } from 'fflate'
+import { inflateSync,strFromU8,strToU8,unzipSync,zipSync } from 'fflate'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
@@ -88,7 +88,7 @@ function setup() {
         return value
     }
     const modules: Record<string, any> = {
-        fflate: { default: { unzipSync, strFromU8 } },
+        fflate: { default: { unzipSync, inflateSync, strFromU8 } },
         cc: { Asset, JsonAsset, TextAsset, AudioClip, Texture2D: Texture, SpriteFrame: Frame, Rect: Vector, Size: Vector, Vec2: Vector,
             dynamicAtlasManager: { enabled: true }, macro: {},
             sys: { isNative: false, isBrowser: false, OS: { IOS: 'iOS' }, localStorage: { getItem: (key: string) => storage.get(key), setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key),
@@ -307,20 +307,14 @@ test('the Mod list reads only manifests of Mods not loaded this session, and ena
     const { manager, ModManager, modules } = setup()
     await manager.install(zipSync(modFiles('idle', '3.1.0')), false)
     const manager2 = new ModManager()
-    const unzip = modules.fflate.default.unzipSync, inflated: string[] = []
-    modules.fflate.default.unzipSync = (data: Uint8Array, options?: { filter?: (entry: { name: string }) => boolean }) => {
-        const entries = unzip(data, options)
-        inflated.push(...Object.keys(entries))
-        return entries
-    }
+    const inflate = modules.fflate.default.inflateSync, inflated: string[] = []
+    modules.fflate.default.inflateSync = (data: Uint8Array) => { const bytes = inflate(data); inflated.push(strFromU8(bytes)); return bytes }
     const versions = await manager2.installed()
-    modules.fflate.default.unzipSync = unzip
     assert.equal(versions.find((mod: any) => mod.id === 'idle').version, '3.1.0')
-    assert.deepEqual(inflated, ['manifest.json'], 'opening the list inflates only the manifest')
+    assert.deepEqual(inflated.map(text => JSON.parse(text).id), ['idle'], 'opening the list inflates only the manifest')
     inflated.length = 0
-    modules.fflate.default.unzipSync = (...args: Parameters<typeof unzip>) => { inflated.push('read'); return unzip(...args) }
     await manager2.installed()
-    modules.fflate.default.unzipSync = unzip
+    modules.fflate.default.inflateSync = inflate
     assert.deepEqual(inflated, [], 'reopening the list reuses the versions it read')
     await manager2.install(zipSync(modFiles('idle', '3.2.0')), false)
     assert.equal((await manager2.installed()).find((mod: any) => mod.id === 'idle').version, '3.2.0')
@@ -552,4 +546,30 @@ test('Native installation, picker cleanup and on-demand installed reads share th
     modules.cc.sys.isNative = false
     await fresh().ready()
     assert.equal(modules.cc.dynamicAtlasManager.enabled, true, 'Web retains source images and can still batch sprites')
+})
+
+test('the web imports, installs and loads a large ZIP in slices without reading it whole', async () => {
+    const { ModManager, manager, fresh, modules, archive, picker, blobs } = setup()
+    const source = zipFiles('big'), image = new Uint8Array(6 << 20)
+    image.set(source['button.png'].subarray(0, 24))
+    const reads: number[] = []
+    // Records every read of the picked File and the Blobs stored from it.
+    const tracked = (blob: Blob): Blob => new Proxy(blob, { get: (target: any, key) => key === 'slice'
+        ? (...args: any[]) => tracked(target.slice(...args))
+        : key === 'arrayBuffer' ? () => { reads.push(target.size); return target.arrayBuffer() }
+        : typeof target[key] === 'function' ? target[key].bind(target) : target[key] })
+    const file = tracked(new Blob([zipSync({ ...source, 'button.png': [image, { level: 0 }] })]))
+    modules.cc.sys.isBrowser = true
+    const selecting = archive.selectZips()
+    Object.assign(picker(), { files: [file] }).onchange()
+    const [selected] = await selecting
+    assert.equal(await selected.read(), file, 'the picked File stays a handle')
+    const pending = await manager.prepareImport(await selected.read())
+    await manager.queueChanges({ enabled: ['big'], order: ['big'], imports: [pending], uninstalls: [] })
+    assert.deepEqual(Array.from(await new ModManager().running()), ['big'])
+    const resources = fresh()
+    assert.equal((await resources.sprite('pvz:button')).originalSize.width, 50)
+    assert.equal((await resources.asset('pvz:note', modules.cc.TextAsset)).text, 'first')
+    assert.ok([...blobs.values()].some(blob => blob.size === image.length), 'the image URL is a slice of the stored ZIP')
+    assert.ok(Math.max(...reads) < image.length, `largest read ${Math.max(...reads)} of a ${file.size}-byte ZIP`)
 })

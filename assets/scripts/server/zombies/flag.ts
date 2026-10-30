@@ -1,6 +1,6 @@
-import { EventQueueResource, emitServerEvent } from '../events'
+import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { World } from '@/ecs/index'
-import { ZombieComponent } from '../components'
+import { ZombieComponent } from '../state/components'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 
 export function dropZombieFlag(world: World, definitions: GameplayDefinitions, entity: number): void {

@@ -10,10 +10,10 @@ PlantComponent,
 PositionComponent,
 ProjectileComponent,
 ZombieComponent
-} from '@/server/components'
-import { DeterministicRng } from '@/server/DeterministicRng'
-import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { ItemComponent,TutorialResource } from '@/server/levelState'
+} from '@/server/state/components'
+import { DeterministicRng } from '@/server/state/DeterministicRng'
+import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
+import { ItemComponent,TutorialResource } from '@/server/state/levelState'
 import { damageZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 import {

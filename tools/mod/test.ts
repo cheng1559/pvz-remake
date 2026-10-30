@@ -5,8 +5,8 @@ import { pathToFileURL } from 'node:url'
 import { ModAssets } from '@/shared/mod/ModAssets'
 import { contentJson, parseContentArchive } from '@/shared/mod/content'
 import { DefinitionSources, buildGameplayContent } from '@/shared/content/DefinitionRegistry'
-import { GameplayRegistry } from '@/server/GameplayRegistry'
-import { createServerModHost } from '@/server/createModHost'
+import { GameplayRegistry } from '@/server/registry/GameplayRegistry'
+import { createServerModHost } from '@/server/session/createModHost'
 
 const root = process.argv[2]
 const files: Record<string, Uint8Array> = {}

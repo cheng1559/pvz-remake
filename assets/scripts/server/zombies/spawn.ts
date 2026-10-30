@@ -1,6 +1,6 @@
-import type { DeterministicRng } from '../DeterministicRng'
+import type { DeterministicRng } from '../state/DeterministicRng'
 import type { GameplayDefinitions, ZombieDefinition } from '@/shared/content/gameplay'
-import { PositionComponent, RandomResource, ZombieComponent } from '../components'
+import { PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import type { World } from '@/ecs/index'
 import { walkAnimationSpeed, zombieGait } from './animation'
 import { ZombieBehaviorsResource } from './behaviors'

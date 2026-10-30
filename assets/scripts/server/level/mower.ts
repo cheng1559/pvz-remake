@@ -1,0 +1,94 @@
+import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import type { GameSystem } from '@/ecs/index'
+import { LawnMowerComponent, LevelStateResource, type Position, PositionComponent, type Zombie, ZombieComponent } from '../state/components'
+import { mowZombie } from '../zombies/damage'
+import { dropZombieLoot } from './loot'
+import { dropZombieFlag } from '../zombies/flag'
+import { WaveResource } from '../state/levelState'
+import { EventQueueResource, emitServerEvent } from '../state/events'
+
+const READY_X = -21
+const ROW_Y_OFFSET = 23
+const CHOMP_READY_TICKS = 25
+const CHOMP_ACTIVE_TICKS = 50
+
+export function createMowerSystem(definitions: GameplayDefinitions): GameSystem {
+    return {
+        id: 'pvz:mower',
+        run({ world }) {
+            const level = world.resources.get(LevelStateResource)
+            if (level.result === 'lost' || level.paused) return
+
+            let zombies: Array<{ entity: number, position: Position, zombie: Zombie }> | undefined
+            for (const entity of world.query(PositionComponent, LawnMowerComponent)) {
+                const position = world.get(entity, PositionComponent)!
+                const mower = world.get(entity, LawnMowerComponent)!
+                if (mower.state === 'spent') continue
+                if (mower.state === 'ready') {
+                    position.x = READY_X
+                    position.y = level.board.origin.y + position.row * level.board.cell.height + ROW_Y_OFFSET
+                }
+
+                const definition = definitions.lawnMowers[mower.typeId]
+                // Collected once per run; positions and components are not replaced during it.
+                zombies ??= [...world.query(PositionComponent, ZombieComponent)].map(zombieEntity => ({
+                    entity: zombieEntity, position: world.get(zombieEntity, PositionComponent)!, zombie: world.get(zombieEntity, ZombieComponent)!,
+                }))
+                for (const { entity: zombieEntity, position: zombiePosition, zombie } of zombies) {
+                    if (zombiePosition.row !== position.row || zombie.state === 'dying' || zombie.state === 'mowered') continue
+                    if (!world.hasEntity(zombieEntity)) continue
+                    if (mower.state === 'ready' && !zombie.hasHead) continue
+                    const body = definitions.zombies[zombie.typeId].body
+                    if (!overlaps(position.x + definition.attack.x, definition.attack.width,
+                        zombiePosition.x + body.x, body.width)) continue
+                    if (mower.state === 'ready') {
+                        if (world.resources.has(WaveResource)) {
+                            const wave = world.resources.get(WaveResource)
+                            const row = wave.rowPicks?.find(state => state.row === position.row)
+                            if (row) row.mowedAtWave = wave.index
+                        }
+                        emitServerEvent(world.resources.get(EventQueueResource), 'mowerActivated', {
+                            entityId: entity,
+                            row: position.row,
+                        })
+                        mower.chompCounter = CHOMP_READY_TICKS
+                    } else {
+                        mower.chompCounter = CHOMP_ACTIVE_TICKS
+                    }
+                    mower.state = 'active'
+                    dropZombieFlag(world, definitions, zombieEntity)
+                    mowZombie(zombie)
+                    // Zombie::MowDown drops loot like any other death.
+                    dropZombieLoot(world, definitions, zombieEntity, world)
+                    emitServerEvent(world.resources.get(EventQueueResource), 'zombieMowered', {
+                        mowerId: entity,
+                        zombieId: zombieEntity,
+                    })
+                }
+
+                if (mower.state !== 'active') continue
+                let speed = definition.speedPerTick
+                if (mower.chompCounter > 0) {
+                    mower.chompCounter--
+                    speed = bounceSlowMiddle(
+                        CHOMP_ACTIVE_TICKS, 0, mower.chompCounter, definition.speedPerTick, 1,
+                    )
+                }
+                position.x += speed
+                if (position.x > level.board.bounds.right) mower.state = 'spent'
+            }
+        },
+    }
+}
+
+function bounceSlowMiddle(timeStart: number, timeEnd: number, age: number, start: number, end: number): number {
+    const warpedAge = (age - timeStart) / (timeEnd - timeStart)
+    if (warpedAge <= 0 || warpedAge >= 1) return start
+    const bounce = 1 - Math.abs(2 * warpedAge - 1)
+    const invQuad = 2 * bounce - bounce * bounce
+    return (end - start) * invQuad + start
+}
+
+function overlaps(leftA: number, widthA: number, leftB: number, widthB: number): boolean {
+    return Math.min(leftA + widthA, leftB + widthB) > Math.max(leftA, leftB)
+}

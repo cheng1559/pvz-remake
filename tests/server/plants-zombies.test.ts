@@ -4,9 +4,9 @@ import test from 'node:test'
 
 import { Schedule, World } from '@/ecs/index'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
-import { DeterministicRng } from '@/server/DeterministicRng'
-import { EventQueueResource, createEventQueue } from '@/server/events'
-import { IntegratedGameServer } from '@/server/IntegratedGameServer'
+import { DeterministicRng } from '@/server/state/DeterministicRng'
+import { EventQueueResource, createEventQueue } from '@/server/state/events'
+import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import {
     LevelStateResource,
     PlantAttackComponent,
@@ -15,10 +15,10 @@ import {
     ProjectileComponent,
     RandomResource,
     ZombieComponent,
-} from '@/server/components'
+} from '@/server/state/components'
 import { createPeashooterSystem } from '@/server/plants/shooter'
 import { createPlantAbilitySystem, initialPlantAbility } from '@/server/plants/abilities'
-import { createProjectileSystem } from '@/server/projectiles'
+import { createProjectileSystem } from '@/server/combat/projectiles'
 import { createZombieSystem } from '@/server/zombies/system'
 import { damageZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'

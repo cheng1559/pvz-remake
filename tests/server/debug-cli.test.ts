@@ -2,7 +2,7 @@ import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
-import { IntegratedGameServer } from '@/server/IntegratedGameServer'
+import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { getDebugCliCompletions, getDebugCliSuffix, parseDebugCliCommand } from '@/shared/debug/DebugCli'
 

@@ -8,14 +8,14 @@ import {
     walkZombie,
     zombieGait,
 } from './animation'
-import { EventQueueResource, emitServerEvent } from '../events'
+import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, SystemContext, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { HIT_FLASH_TICKS, damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
-import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, RandomResource, ZombieComponent } from '../components'
+import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { startPostVaultWalk, startVault, updateVault } from './poleVault'
 import { RECENTLY_EATEN_TICKS, destroyEatenPlant, isPlantInedible } from '../plants/damage'
-import { getDebugRules } from '../debug/DebugRules'
+import { getDebugRules } from '../debug/debugRules'
 
 const CHILLED_BITE_CADENCE_FACTOR = 2
 /** A plant's body span on its row; plants do not move during a run. Cell-less plants are never bitten. */

@@ -1,7 +1,7 @@
 import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { IntegratedGameServer } from '@/server/IntegratedGameServer'
+import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from './run-command'

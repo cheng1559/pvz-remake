@@ -5,7 +5,7 @@ import type { FontConfig } from '@/client/font/FontRenderer.d'
 import { applySpriteDensity, setSpriteDensity } from './SpriteDensity'
 import { decodePremultipliedPng } from './PremultipliedPng'
 import { loadKernel } from '@/shared/kernel/index'
-import { installedArchiveRoot, installedFilePath, unpackArchive, type ArchiveFiles } from './InstalledArchives'
+import { installedArchiveRoot, installedFilePath, readArchiveBlob, readArchiveFile, unpackArchive, type ArchiveFiles } from './InstalledArchives'
 import { modManager, type ModManager } from './ModManager'
 import { contentJson, relativeFile, parseContentArchive, type ContentArchive, type ModContent, type ResourceManifest, type ResourceSprite as PackSprite } from '@/shared/mod/content'
 
@@ -31,12 +31,10 @@ const MAX_NATIVE_TEXTURE_LOADS = 4
 let nativeTextureLoads = 0
 const nativeTextureWaiters: (() => void)[] = []
 
-function archiveFile(files: ArchiveFiles, file: string): Uint8Array {
+function archiveFile(files: ArchiveFiles, file: string): Promise<Uint8Array> {
     relativeFile(file)
-    // Installed native files are read from disk on each access.
-    const bytes = files[file]
-    if (!bytes) throw new Error(`Missing ZIP file: ${file}`)
-    return bytes
+    // Installed native files are read from disk on each access; web media from the stored ZIP.
+    return readArchiveFile(files, file)
 }
 
 const archiveJson = contentJson
@@ -49,7 +47,7 @@ function createPack(files: ArchiveFiles, id: string, content: ModContent, locale
     return { locale, manifest, files, premultiplied, textures: new Map(), sprites: new Map(), fonts: new Map(), assets: new Map(), urls: new Map() }
 }
 
-function fileUrl(pack: LoadedPack, file: string, mime: string): string {
+async function fileUrl(pack: LoadedPack, file: string, mime: string): Promise<string> {
     const cached = pack.urls.get(file)
     if (cached) return cached
     let url = installedFilePath(pack.files, file)
@@ -57,22 +55,26 @@ function fileUrl(pack: LoadedPack, file: string, mime: string): string {
         pack.urls.set(file, url)
         return url
     }
-    const bytes = archiveFile(pack.files, file)
     if (sys.isNative) {
+        const bytes = await archiveFile(pack.files, file)
         pack.runtimeRoot ??= installedArchiveRoot('mod-resources', `${pack.manifest.id}-${++nativeRuntimeId}`)
         url = `${pack.runtimeRoot}/${file}`
         native.fileUtils.createDirectory(url.slice(0, url.lastIndexOf('/')))
         if (!native.fileUtils.writeDataToFile(bytes.slice().buffer, url)) throw new Error(`Failed to prepare Mod resource: ${file}`)
     } else {
+        relativeFile(file)
         // Audio URLs stay alive for playback, seeking and the SFX pitch decoder until restart.
-        url = URL.createObjectURL(new Blob([bytes.slice().buffer], { type: mime }))
+        url = URL.createObjectURL(await readArchiveBlob(pack.files, file, mime))
+        const raced = pack.urls.get(file)
+        if (raced) { URL.revokeObjectURL(url); return raced }
     }
     pack.urls.set(file, url)
     return url
 }
 
-function remote<T extends Asset>(pack: LoadedPack, file: string, ext: string, mime: string): Promise<T> {
-    return new Promise((resolve, reject) => assetManager.loadRemote<T>(fileUrl(pack, file, mime), { ext, reloadAsset: true },
+async function remote<T extends Asset>(pack: LoadedPack, file: string, ext: string, mime: string): Promise<T> {
+    const url = await fileUrl(pack, file, mime)
+    return new Promise((resolve, reject) => assetManager.loadRemote<T>(url, { ext, reloadAsset: true },
         (error, asset) => error ? reject(error) : resolve(asset)))
 }
 
@@ -88,7 +90,7 @@ async function texture(pack: LoadedPack, file: string, scale = 1): Promise<Textu
         let image: ImageAsset | undefined
         try {
             // The web may still be compiling the kernel that decodes premultiplied images.
-            const decoded = pack.premultiplied.has(file) ? decodePremultipliedPng(archiveFile(pack.files, file), await loadKernel()) : undefined
+            const decoded = pack.premultiplied.has(file) ? decodePremultipliedPng(await archiveFile(pack.files, file), await loadKernel()) : undefined
             if (!decoded) image = await remote<ImageAsset>(pack, file, '.png', 'image/png')
             const result = new Texture2D()
             if (decoded) {
@@ -287,7 +289,7 @@ export class ModResources {
             const asset = assetType === JsonAsset ? new JsonAsset() : new TextAsset()
             asset.name = file.slice(file.lastIndexOf('/') + 1)
             if (asset instanceof JsonAsset) asset.json = archiveJson(pack.files, file)
-            else asset.text = new TextDecoder('utf-8').decode(archiveFile(pack.files, file))
+            else asset.text = new TextDecoder('utf-8').decode(await archiveFile(pack.files, file))
             return asset
         })().catch(error => { pack.assets.delete(key); throw error })
         pack.assets.set(key, pending)

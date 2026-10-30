@@ -1,4 +1,4 @@
-import type { Position, Zombie, ZombieAnimation } from '../components'
+import type { Position, Zombie, ZombieAnimation } from '../state/components'
 import type { GameplayDefinitions, ZombieDefinition, ZombieGait } from '@/shared/content/gameplay'
 
 export const ZOMBIE_ASSET_FPS = 12

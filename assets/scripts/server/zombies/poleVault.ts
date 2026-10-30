@@ -1,6 +1,6 @@
-import { EventQueueResource, emitServerEvent } from '../events'
+import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameplayDefinitions, ZombieDefinition } from '@/shared/content/gameplay'
-import { type Position, RandomResource, type Zombie } from '../components'
+import { type Position, RandomResource, type Zombie } from '../state/components'
 import { TICKS_PER_SECOND, ZOMBIE_ASSET_FPS, walkAnimationSpeed, zombieGait } from './animation'
 import type { World } from '@/ecs/index'
 

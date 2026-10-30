@@ -26,9 +26,12 @@ test('2-1 guarantees a first coin with a pickup arrow after wave 5; collected mo
     const [first] = money(game).filter(item => item.arrow)
     assert.equal(first?.typeId, 'pvz:coin_silver', 'Board::DropLootPiece forces the roll to 1000 for the first coin')
     const before = game.render().money
+    game.drainEvents()
     game.command({ type: 'collectItemAt', itemId: first.entityId })
     for (let tick = 0; tick < 300 && game.render().items.some(item => item.entityId === first.entityId); tick++) game.update(definitions.tickSeconds)
     assert.equal(game.render().money, before + 1)
+    const advice = game.drainEvents().filter(event => event.type === 'advice').map(event => event.data.key)
+    assert.deepEqual(advice, ['ADVICE_CLICKED_ON_COIN'], 'Coin::Collect explains money on the first 2-1')
 })
 
 test('2-1 drops nothing that would bring the purse and the mowers\' gold to the seed-slot price', () => {

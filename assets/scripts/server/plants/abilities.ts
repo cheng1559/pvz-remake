@@ -1,5 +1,5 @@
-import { getBoardBounds, rectOverlap } from '../collision'
-import { EventQueueResource, emitServerEvent } from '../events'
+import { getBoardBounds, rectOverlap } from '../combat/collision'
+import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { ExplosionDefinition, GameplayDefinitions, PlantDefinition, PlantTargeting } from '@/shared/content/gameplay'
 import type { GameSystem, World } from '@/ecs/index'
 import {
@@ -11,10 +11,10 @@ import {
     type Position,
     PositionComponent,
     ZombieComponent,
-} from '../components'
-import { explode } from '../explosions'
-import { WaveResource } from '../levelState'
-import type { DeterministicRng } from '../DeterministicRng'
+} from '../state/components'
+import { explode } from '../combat/explosions'
+import { WaveResource } from '../state/levelState'
+import type { DeterministicRng } from '../state/DeterministicRng'
 import { destroyZombie, isTargetableZombie } from '../zombies/damage'
 
 export function initialPlantAbility(definition: PlantDefinition, random?: DeterministicRng): PlantAbility | undefined {

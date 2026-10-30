@@ -9,9 +9,9 @@ PlantComponent,
 PositionComponent,
 RandomResource,
 ZombieComponent,
-} from '@/server/components'
-import { DeterministicRng } from '@/server/DeterministicRng'
-import { EventQueueResource,createEventQueue } from '@/server/events'
+} from '@/server/state/components'
+import { DeterministicRng } from '@/server/state/DeterministicRng'
+import { EventQueueResource,createEventQueue } from '@/server/state/events'
 import { damageZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { createZombieSystem } from '@/server/zombies/system'

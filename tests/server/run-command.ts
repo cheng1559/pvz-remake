@@ -1,4 +1,4 @@
-import type { IntegratedGameServer, CommandRejectionCode } from '@/server/IntegratedGameServer'
+import type { IntegratedGameServer, CommandRejectionCode } from '@/server/session/IntegratedGameServer'
 import type { GameCommand } from '@/shared/protocol/index'
 
 let sequence = 0

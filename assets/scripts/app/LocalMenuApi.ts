@@ -3,7 +3,7 @@ import { MenuService } from '@/server/menu/MenuService'
 import { jsonRoundTrip } from '@/shared/protocol'
 import type { MenuStorage, MenuTransport } from '@/shared/menu'
 import type { LevelDefinition } from '@/shared/content/gameplay'
-import type { StoreCatalog } from '@/server/menu/StoreCatalog'
+import type { StoreCatalog } from '@/server/menu/storeCatalog'
 
 export function createLocalMenuTransport(storage: MenuStorage, getLevel?: () => LevelDefinition | null, canCompleteLevel?: () => boolean, catalog?: StoreCatalog): MenuTransport {
     const service = new MenuService(storage, Date.now, getLevel, canCompleteLevel, catalog)

@@ -12,7 +12,7 @@ import {
 import { uiNode } from '@/client/view/uiNode'
 import { menuApi } from '@/client/api/MenuApi'
 import type { EnabledMod, JsonValue } from '@/shared/protocol/index'
-import type { ServerSaveSnapshot } from '@/server/save'
+import type { ServerSaveSnapshot } from '@/server/session/save'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import { debugCondition, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'

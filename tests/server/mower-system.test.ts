@@ -10,11 +10,11 @@ import {
     PositionComponent,
     RandomResource,
     ZombieComponent,
-} from '@/server/components'
+} from '@/server/state/components'
 import { createZombieSystem } from '@/server/zombies/system'
-import { createMowerSystem } from '@/server/mower'
-import { EventQueueResource, createEventQueue } from '@/server/events'
-import { DeterministicRng } from '@/server/DeterministicRng'
+import { createMowerSystem } from '@/server/level/mower'
+import { EventQueueResource, createEventQueue } from '@/server/state/events'
+import { DeterministicRng } from '@/server/state/DeterministicRng'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
 const board = definitions.boards['pvz:day']

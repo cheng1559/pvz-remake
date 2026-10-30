@@ -66,11 +66,28 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 ## 服务端关卡结构
 
-`server/level.ts` 负责通用关卡初始化和进度更新。`components.ts` 定义战斗实体、经济与关卡状态，`levelState.ts` 定义掉落物、波次与教程状态。天空阳光、掉落物、波次与奖励、僵尸呻吟分别由 `sun.ts`、`items.ts`、`waves.ts`、`zombieGroans.ts` 处理，所有关卡共用。波次和呻吟系统的 Mod ID 分别为 `pvz:waves`、`pvz:zombie-groans`，关卡进度系统为 `pvz:level-progress`。
+`server/` 按职责分目录，根目录不放文件：
 
-战斗逻辑按职责组织：`plants/shooter.ts` 处理射击，`plants/production.ts` 处理植物产出，`plants/abilities.ts` 推进特殊能力，`plants/damage.ts` 处理植物被吃与死亡爆炸；`zombies/system.ts` 调度僵尸生命周期，`animation.ts` 计算地面轨迹与动画时间，`damage.ts` 处理受伤与死亡，`poleVault.ts` 实现撑杆跳，`flag.ts` 处理旗帜掉落，`spawn.ts` 共用出生规则。`projectiles.ts` 处理子弹，`explosions.ts` 处理范围爆炸，`collision.ts` 只提供几何计算。模块直接导入各自依赖，不保留统一转发入口；tick 阶段、系统 ID 和 Mod 调度仍由 `IntegratedGameServer` 管理；`GameplayRegistry` 只保留行为注册表和 JSON 组件存档。
+| 目录 | 内容 |
+| --- | --- |
+| `session/` | 一局游戏的生命周期：`IntegratedGameServer`、`IntegratedGameHost`、`session`、`commands`、`snapshot`、`persistence`、`save`、`createModHost` |
+| `state/` | 组件与资源定义（`components`、`levelState`）、事件队列 `events`、随机数 `DeterministicRng` |
+| `registry/` | Mod 注册入口：`GameplayRegistry`、`EntityBehaviorRegistry`、`JsonComponents` |
+| `level/` | 关卡流程：`level`、`levelAward`、`waves`、`graves`、`conveyor`、`mower`、`loot`、`sun`、`items` |
+| `seeds/` | 种子栏与手持物：`seedBank`、`seedChooser`、`planting`、`tools` |
+| `combat/` | `projectiles`、`explosions`、`collision` |
+| `plants/`、`zombies/` | 植物、僵尸各自的行为 |
+| `tutorials/`、`debug/`、`menu/` | 教程、调试指令、菜单后端 |
 
-`server/tutorials/index.ts` 按关卡定义的 `tutorial` ID 选择脚本，统一接收选种、取消、种植、冷却完成和收集阳光回调；`PlantingTutorial.ts` 与 `SunflowerTutorial.ts` 只保留对应的特殊引导。没有教程脚本的关卡直接使用通用流程。普通关卡通过 `mods/pvz-base/gameplay/levels.json` 配置行数、初始阳光、种子、波次和奖励，无需新增按关卡编号命名的服务端文件。新增特殊教程时只登记教程脚本，主服务器不增加关卡分支。
+Mod 通过 `host.get('server/components')` 等固定名称取用模块，名称不随目录变化。
+
+`level/level.ts` 负责通用关卡初始化和进度更新。`state/components.ts` 定义战斗实体、经济与关卡状态，`state/levelState.ts` 定义掉落物、波次与教程状态。天空阳光、掉落物、波次与奖励、僵尸呻吟分别由 `level/sun.ts`、`level/items.ts`、`level/waves.ts`、`zombies/groans.ts` 处理，所有关卡共用。波次和呻吟系统的 Mod ID 分别为 `pvz:waves`、`pvz:zombie-groans`，关卡进度系统为 `pvz:level-progress`。
+
+战斗逻辑按职责组织：`plants/shooter.ts` 处理射击，`plants/production.ts` 处理植物产出，`plants/abilities.ts` 推进特殊能力，`plants/damage.ts` 处理植物被吃与死亡爆炸；`zombies/system.ts` 调度僵尸生命周期，`animation.ts` 计算地面轨迹与动画时间，`damage.ts` 处理受伤与死亡，`poleVault.ts` 实现撑杆跳，`flag.ts` 处理旗帜掉落，`spawn.ts` 共用出生规则。`combat/projectiles.ts` 处理子弹，`combat/explosions.ts` 处理范围爆炸，`combat/collision.ts` 只提供几何计算。模块直接导入各自依赖，不保留统一转发入口；`GameplayRegistry` 只保留行为注册表和 JSON 组件存档。
+
+一局游戏是 `session/session.ts` 中的 `Session`：世界、时钟、指令队列和本局内容定义，`createSession` 同时排好 tick 阶段和系统顺序，`startSession` 开新局。`IntegratedGameServer` 只做调度：开局／读档、排队指令、推进 tick、输出快照与事件。玩家操作规则按职责拆开：`seeds/planting.ts`（选卡可用性、选卡、种植、生成植物、按格查植物）、`seeds/tools.ts`（铲子等工具）、`level/items.ts`（捡阳光、钱币和关卡奖励）、`session/commands.ts`（逐条分发指令，以及哪些指令在 tick 之间执行）、`session/snapshot.ts`（生成 `WorldSnapshot`）、`session/persistence.ts`（世界与存档互转；存档格式与校验在 `session/save.ts`）。规则函数都以 `Session` 为第一个参数，并经由导出的对象（`planting`、`tools`、`items`、`commands`、`snapshot`）互相调用，Mod 用 `host.around` 包装这些对象的方法即可同时影响内部调用。
+
+`server/tutorials/index.ts` 按关卡定义的 `tutorial` ID 选择脚本，统一接收选种、取消、种植、冷却完成和收集阳光回调；`plantingTutorial.ts` 与 `sunflowerTutorial.ts` 只保留对应的特殊引导。没有教程脚本的关卡直接使用通用流程。普通关卡通过 `mods/pvz-base/gameplay/levels.json` 配置行数、初始阳光、种子、波次和奖励，无需新增按关卡编号命名的服务端文件。新增特殊教程时只登记教程脚本，主服务器不增加关卡分支。
 
 ## 关卡展示结构
 
@@ -207,7 +224,7 @@ Debug 构建保留 `pvzPhase4` 关卡调试入口；Mod 开发和安装见 [Mod 
 
 普通与传送带种子包共用 `LevelSeedBank` 的视图、按钮、tooltip，以及 `LevelInputPresenter` 的鼠标、触摸和快捷键流程。选卡以当前槽位索引读取状态：普通卡发送 `selectSeed`，传送带卡发送 `selectConveyorPacket`，后者保留每张卡的独立 ID。`LevelBoardHud` 负责可选工具、戴夫和传送带布局，不另做种子包命中检测。
 
-种子包快照的 `availability` 由服务端 `seedAvailability` 计算，携带拒绝原因与 `warningKey`，普通卡与传送带选卡命令会调用同一方法重新验证。客户端直接读取结果显示置灰、tooltip、cursor 和选卡音效；Mod 扩展这一个计算方法即可，额外拒绝提示通过 `rejectSeed` 发出，状态查询不产生音效或 advice。Corn 不再挂钩客户端选卡和置灰逻辑。
+种子包快照的 `availability` 由服务端 `planting.seedAvailability` 计算，携带拒绝原因与 `warningKey`，普通卡与传送带选卡命令会调用同一方法重新验证。客户端直接读取结果显示置灰、tooltip、cursor 和选卡音效；Mod 扩展这一个计算方法即可，额外拒绝提示通过 `planting.rejectSeed` 发出，状态查询不产生音效或 advice。Corn 不再挂钩客户端选卡和置灰逻辑。
 
 铲子也使用 `UIButton` 和同一触摸流程：按下拿起，拖动瞄准，松手执行，拖回来源按钮取消。教程阶段允许此流程；暂停会结束手势。服务端 `SeedBankState.selection` 只有未选择、普通卡、传送带卡、工具四种互斥状态；传送带只保存卡片 ID，通过 `server/seedBank.selectedSeedId` 查询其种子。存档使用同一结构，旧并列字段格式直接判为不兼容。
 

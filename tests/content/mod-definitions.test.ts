@@ -17,15 +17,15 @@ import { ModHost } from '@/shared/mod/ModHost'
 import { EntityViewRegistry } from '@/client/content/EntityViewRegistry'
 import { defineComponent, World } from '@/ecs'
 import { DefinitionSources } from '@/shared/content/DefinitionRegistry'
-import { createServerModHost } from '@/server/createModHost'
+import { createServerModHost } from '@/server/session/createModHost'
 import { ArchiveContentRegistry } from '@/client/content/ArchiveContentRegistry'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { CONTENT_CATEGORIES } from '@/shared/content'
 import * as modApi from '@/shared/mod'
 import { buildGameplayContent, buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
-import { IntegratedGameServer } from '@/server/IntegratedGameServer'
-import { GameplayRegistry } from '@/server/GameplayRegistry'
+import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
+import { GameplayRegistry } from '@/server/registry/GameplayRegistry'
 import { runCommand } from '../server/run-command'
 import { parseModContent, contentJson } from '@/shared/mod/content'
 import { getDebugCliCompletions, parseDebugCliCommand } from '@/shared/debug/DebugCli'
@@ -157,8 +157,8 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
         } },
         '@/shared/content/DefinitionRegistry': { DefinitionSources, buildGameplayContent, buildPresentationDefinitions },
         '@/shared/mod/ModAssets': { ModAssets },
-        '@/server/GameplayRegistry': { GameplayRegistry },
-        '@/server/createModHost': { createServerModHost: (...args: Parameters<typeof createServerModHost>) => keep(createServerModHost(...args)) },
+        '@/server/registry/GameplayRegistry': { GameplayRegistry },
+        '@/server/session/createModHost': { createServerModHost: (...args: Parameters<typeof createServerModHost>) => keep(createServerModHost(...args)) },
         '@/client/plants/PlantViewRegistry': { PlantViewRegistry: Views },
         '@/client/zombies/ZombieViewRegistry': { ZombieViewRegistry: Views },
         '@/client/content/ArchiveContentRegistry': { ArchiveContentRegistry },

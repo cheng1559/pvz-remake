@@ -167,6 +167,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         prepare: (id: MenuPageId) => prepare(id),
         async show(id: MenuPageId) { commits.push(`show-${id}`); shown = id },
         hide() { this.node.active = false },
+        mainMenuOpened: () => true,
     }
     app.transitions = {
         async run(prepare: () => Promise<() => Promise<void>>) { await (await prepare())() },

@@ -3,7 +3,7 @@ import {
     parseClientPresentationSnapshot,
     type ClientPresentationSnapshot,
 } from '@/client/game/ClientPresentationSnapshot'
-import { parseServerSaveSnapshot, type ServerSaveSnapshot } from '@/server/save'
+import { parseServerSaveSnapshot, type ServerSaveSnapshot } from '@/server/session/save'
 import { jsonRoundTrip, type EnabledMod } from '@/shared/protocol/index'
 
 export interface ContentSetSnapshot {

@@ -1,8 +1,8 @@
 import { defineResource } from '@/ecs/index'
 import type { ZombieDefinition } from '@/shared/content/gameplay'
 import type { JsonObject } from '@/shared/protocol'
-import { EntityBehaviorRegistry, type EntityBehavior, type EntityBehaviorContext } from '../EntityBehaviorRegistry'
-import { ZombieComponent, type Zombie } from '../components'
+import { EntityBehaviorRegistry, type EntityBehavior, type EntityBehaviorContext } from '../registry/EntityBehaviorRegistry'
+import { ZombieComponent, type Zombie } from '../state/components'
 
 export type ZombieBehavior<State extends JsonObject = JsonObject> = EntityBehavior<'zombie', Zombie, ZombieDefinition, State>
 export type ZombieBehaviorContext<State extends JsonObject = JsonObject> = EntityBehaviorContext<'zombie', Zombie, ZombieDefinition, State>
