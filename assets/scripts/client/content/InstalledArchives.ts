@@ -218,7 +218,8 @@ export async function selectZips(): Promise<SelectedZip[]> {
                 if (!data) throw new Error('Could not read the selected ZIP')
                 return new Uint8Array(data)
             },
-            dispose: () => { if (sys.os === sys.OS.IOS) native.fileUtils.removeFile(path) },
+            // iOS and Android pickers return temporary copies.
+            dispose: () => { if (sys.os === sys.OS.IOS || sys.os === sys.OS.ANDROID) native.fileUtils.removeFile(path) },
         }))
     }
     if (!sys.isBrowser) throw new Error('File selection is unavailable on this platform')

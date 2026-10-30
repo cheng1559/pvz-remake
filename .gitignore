@@ -44,10 +44,12 @@ native/engine/android/src/com/*
 native/engine/android/src/com/cocos/*
 !native/engine/android/src/com/cocos/game/
 native/engine/android/src/com/cocos/game/*
+!native/engine/android/src/com/cocos/game/Haptics.java
 !native/engine/android/app/
 native/engine/android/app/*
 !native/engine/android/app/build.gradle
 !native/engine/android/app/proguard-rules.pro
+!native/engine/android/app/AndroidManifest.xml
 !native/engine/android/instantapp/
 native/engine/android/instantapp/*
 !native/engine/android/instantapp/proguard-rules.pro

@@ -100,6 +100,10 @@ android {
             debuggable true
             jniDebuggable true
             renderscriptDebuggable true
+            // Share the release key so debug and release builds can replace each other on a device.
+            if (project.hasProperty("RELEASE_STORE_FILE") && !RELEASE_STORE_FILE.isEmpty()) {
+                signingConfig signingConfigs.release
+            }
             // resValue  "string", "app_name", "${PROP_APP_NAME}-dbg"
             // applicationIdSuffix ".debug"
         }
