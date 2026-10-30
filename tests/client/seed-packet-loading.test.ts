@@ -85,3 +85,24 @@ test('a packet drawn above 1x uses the larger background, as DrawSeedPacket does
         if (scale > 1) assert.deepEqual(sprite.spriteFrame, { name: 'seedpacket_larger' })
     }
 })
+
+test('a scaled packet cost reads HD font glyphs at their texture scale and skips other pages', () => {
+    const { modules, renderer } = setup()
+    const frames: any[] = [], nodes: any[] = []
+    class SpriteFrame { reset(options: any) { frames.push(options) } }
+    Object.assign(modules.cc, {
+        SpriteFrame, Sprite: { SizeMode: { CUSTOM: 0, RAW: 2 } },
+        Rect: class { constructor(...v: number[]) { Object.assign(this, { v }) } },
+        Size: class { constructor(...v: number[]) { Object.assign(this, { v }) } },
+        Vec2: class {},
+    })
+    modules['@/client/view/uiNode'].uiNode = (options: any) => { nodes.push(options); return { node: Object.assign(new Node(), { getComponent: () => null }) } }
+    const glyph = (rect: number[]) => ({ rect, offset: [0, 0], width: 5, order: 0, kerning: {} })
+    const layer = (name: string, chars: Record<string, unknown>) => ({ name, textureScale: 4, ascent: 9, offset: [0, 0], spacing: 0,
+        baseOrder: 0, colorMult: [255, 255, 255, 255], colorAdd: [0, 0, 0, 0], chars })
+    // '7' lives on page 0, '5' on page 1; each page lists the other's glyph with an empty rect.
+    const config = { charMap: {}, layers: [layer('Main_0', { 55: glyph([10, 2, 4, 9]), 53: glyph([0, 0, 0, 0]) }), layer('Main_1', { 55: glyph([0, 0, 0, 0]), 53: glyph([1, 1, 4, 9]) })] }
+    renderer._drawScaledCostMatrix(new Node(), 75, { config: { json: config }, textures: [{}, {}] }, undefined, 2)
+    assert.deepEqual(frames.map(frame => frame.rect.v), [[40, 8, 16, 36], [4, 4, 16, 36]], 'texture pixels = logical rect x textureScale')
+    assert.deepEqual(nodes.filter(node => node.sprite).map(node => [node.size.width, node.size.height]), [[8, 18], [8, 18]], 'drawn at logical size x packet scale')
+})

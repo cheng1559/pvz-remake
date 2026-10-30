@@ -274,15 +274,22 @@ export class SeedPacketRenderer {
                 const fontLayer = config.layers[layerIndex]
                 const texture = fontAssets.textures[layerIndex]
                 const charInfo = fontLayer.chars[String(charCode)]
-                if (!texture || !charInfo) continue
+                if (!charInfo) continue
+                const advance = charInfo.width + this._getMatrixSpacing(fontLayer, charInfo.kerning, nextCode)
+                if (maxX < cursorX + advance) maxX = cursorX + advance
+                // Paged HD fonts leave a glyph's rect empty on every page but its own.
+                if (!texture || charInfo.rect[2] <= 0 || charInfo.rect[3] <= 0) continue
 
                 const imageX = charInfo.offset[0] + fontLayer.offset[0] + cursorX
                 const imageY = charInfo.offset[1] + fontLayer.offset[1] - fontLayer.ascent
+                // Rects are logical pixels; HD atlases hold textureScale texture pixels per logical pixel, as FontRenderer reads them.
+                const textureScale = fontLayer.textureScale ?? 1
+                const [rx, ry, rw, rh] = charInfo.rect
                 const spriteFrame = new SpriteFrame()
                 spriteFrame.reset({
                     texture,
-                    rect: new Rect(...charInfo.rect),
-                    originalSize: new Size(charInfo.rect[2], charInfo.rect[3]),
+                    rect: new Rect(rx * textureScale, ry * textureScale, rw * textureScale, rh * textureScale),
+                    originalSize: new Size(rw * textureScale, rh * textureScale),
                     offset: new Vec2(0, 0),
                     isRotate: false,
                 })
@@ -298,15 +305,12 @@ export class SeedPacketRenderer {
                     },
                     size: { width: charInfo.rect[2] * scale, height: charInfo.rect[3] * scale },
                     anchor: { x: 0, y: 1 },
-                    sprite: { frame: spriteFrame, sizeMode: Sprite.SizeMode.RAW, trim: false },
+                    sprite: { frame: spriteFrame, sizeMode: Sprite.SizeMode.CUSTOM, trim: false },
                 }).node
                 const sprite = charNode.getComponent(Sprite)
                 if (sprite) {
                     sprite.color = this._resolveFontLayerColor(fontLayer, Color.BLACK)
                 }
-
-                const advance = charInfo.width + this._getMatrixSpacing(fontLayer, charInfo.kerning, nextCode)
-                if (maxX < cursorX + advance) maxX = cursorX + advance
             }
 
             cursorX = maxX
