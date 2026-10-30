@@ -87,10 +87,11 @@ function setup() {
         if (value === undefined) throw new Error(`Missing ${path}`)
         return value
     }
+    const densities = new WeakMap<object, number>()
     const modules: Record<string, any> = {
         fflate: { default: { unzipSync, inflateSync, strFromU8 } },
         cc: { Asset, JsonAsset, TextAsset, AudioClip, Texture2D: Texture, SpriteFrame: Frame, Rect: Vector, Size: Vector, Vec2: Vector,
-            dynamicAtlasManager: { enabled: true }, macro: {},
+            dynamicAtlasManager: { enabled: true }, macro: {}, director: { root: { device: { capabilities: { maxTextureSize: 16384 } } } },
             sys: { isNative: false, isBrowser: false, OS: { IOS: 'iOS' }, localStorage: { getItem: (key: string) => storage.get(key), setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key),
                 key: (index: number) => [...storage.keys()][index] ?? null, get length() { return storage.size } } },
             assetManager: { loadRemote: (path: string, options: any, callback?: any) => {
@@ -105,7 +106,8 @@ function setup() {
                     complete(null, /\.(mp3|wav)$/.test(options.ext ?? '') ? Object.assign(new AudioClip(), { nativeUrl: path }) : value)
                 } catch (error) { complete(error) }
             }, releaseAsset() {} } },
-        './SpriteDensity': { setSpriteDensity() {}, applySpriteDensity(frame: any) { frame.normalized = true } },
+        './SpriteDensity': { setSpriteDensity(texture: object, scale: number) { densities.set(texture, scale) },
+            getTextureDensity: (texture: object) => densities.get(texture) ?? 1, applySpriteDensity(frame: any) { frame.normalized = true } },
         './PremultipliedPng': { decodePremultipliedPng },
     }
     const blobs = new Map<string, Blob>()
@@ -127,7 +129,9 @@ function setup() {
                 queueMicrotask(() => { request.onupgradeneeded(); request.onsuccess() })
                 return request
             } },
-            document: { body: { appendChild() {} }, createElement: () => picker = { click() {}, remove() {}, addEventListener(name: string, callback: unknown) { this[name] = callback } } },
+            document: { body: { appendChild() {} }, createElement: (tag: string) => tag === 'canvas'
+                ? { width: 0, height: 0, getContext: () => ({ drawImage() {}, getImageData: (_x: number, _y: number, width: number, height: number) => ({ data: new Uint8ClampedArray(width * height * 4) }) }) }
+                : picker = { click() {}, remove() {}, addEventListener(name: string, callback: unknown) { this[name] = callback } } },
         })
         return module.exports
     }
@@ -135,14 +139,16 @@ function setup() {
     modules['./InstalledArchives'] = modules['@/client/content/InstalledArchives'] = archive
     modules['@/shared/mod'] = modules['@/shared/mod/index'] = load('assets/scripts/shared/mod/index.ts')
     modules['@/shared/mod/content'] = load('assets/scripts/shared/mod/content.ts')
-    const { ModManager } = load('assets/scripts/client/content/ModManager.ts')
+    const { ModManager: StartupModManager } = load('assets/scripts/client/content/ModManager.ts')
+    // Each manager stands for a startup; unless a test says otherwise, the one before it reached the main menu.
+    class ModManager extends StartupModManager { constructor() { storage.delete('pvz-remake:mods-starting'); super() } }
     const manager = new ModManager()
     modules['./ModManager'] = modules['@/client/content/ModManager'] = { modManager: manager }
     const { ModResources } = load('assets/scripts/client/content/ModResources.ts')
     const fresh = (base?: () => Promise<Uint8Array>) => new ModResources(base, new ModManager())
     const resources = new ModResources(undefined, manager)
     modules['./ModResources'] = modules['@/client/content/ModResources'] = { modResources: resources }
-    return { manager, ModManager, ModResources, fresh, resources, files, storage, requests, modules, load,
+    return { manager, ModManager, StartupModManager, ModResources, fresh, resources, files, storage, requests, modules, load,
         Texture, archive, archives: modArchives, pendingArchives, db: modDb, jsb, blobs, picker: () => picker }
 }
 
@@ -544,8 +550,9 @@ test('Native installation, picker cleanup and on-demand installed reads share th
     assert.deepEqual(deferred(), [`/app/mods/${encodeURIComponent(archiveOf(storage, 'deferred')!)}/.archive.zip`])
     assert.equal(files.has(staging + '.archive.zip'), false)
     modules.cc.sys.isNative = false
+    modules.cc.dynamicAtlasManager.enabled = true
     await fresh().ready()
-    assert.equal(modules.cc.dynamicAtlasManager.enabled, true, 'Web retains source images and can still batch sprites')
+    assert.equal(modules.cc.dynamicAtlasManager.enabled, false, 'the web releases CPU images as well, so nothing can be packed later')
 })
 
 test('the web imports, installs and loads a large ZIP in slices without reading it whole', async () => {
@@ -573,3 +580,16 @@ test('the web imports, installs and loads a large ZIP in slices without reading 
     assert.ok([...blobs.values()].some(blob => blob.size === image.length), 'the image URL is a slice of the stored ZIP')
     assert.ok(Math.max(...reads) < image.length, `largest read ${Math.max(...reads)} of a ${file.size}-byte ZIP`)
 })
+
+test('the web keeps only the GPU copy of Mod images, like native builds, and packs none into dynamic atlases', async () => {
+    const { manager, fresh, modules } = setup()
+    const released: unknown[] = []
+    modules.cc.assetManager.releaseAsset = (asset: unknown) => { released.push(asset) }
+    await manager.install(zipSync(zipFiles()))
+    const frame = await fresh().sprite('pvz:button')
+    assert.equal(frame.originalSize.width, 50)
+    assert.equal(frame.texture.pixels.length, 100 * 140 * 4, 'the texture is uploaded from pixels, not kept as an image')
+    assert.equal(released.length, 1, 'the decoded image is released once uploaded')
+    assert.equal(modules.cc.dynamicAtlasManager.enabled, false)
+})
+

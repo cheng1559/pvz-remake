@@ -15,7 +15,7 @@ function load(file: string, modules: Record<string, unknown>, globals = {}) {
 
 test('haptics uses the iOS and Android bridges, coalesces requests by real time and delays explosions by game time', () => {
     let now = 0
-    const calls: unknown[][] = []
+    const calls: unknown[][] = [], vibrations: number[] = []
     const timers: { callback: () => void, delay: number }[] = []
     const stored = new Map<string, string>()
     const sys = { isNative: false, os: 'ios', OS: { IOS: 'ios', ANDROID: 'android' }, localStorage: {
@@ -30,7 +30,7 @@ test('haptics uses the iOS and Android bridges, coalesces requests by real time 
         '@/core/GameClock': { gameClock },
         './debug/GameDebugSettings': { GameDebugSettings },
     }, {
-        performance: { now: () => now },
+        performance: { now: () => now }, navigator: { vibrate: (ms: number) => vibrations.push(ms) },
         setTimeout: (callback: () => void, delay: number) => { const timer = { callback, delay }; timers.push(timer); return timer },
         clearTimeout: (timer: { callback: () => void, delay: number }) => { const index = timers.indexOf(timer); if (index >= 0) timers.splice(index, 1) },
     })
@@ -78,6 +78,17 @@ test('haptics uses the iOS and Android bridges, coalesces requests by real time 
     now = 600
     Haptics.play('medium')
     assert.deepEqual(calls[5], ['com/cocos/game/Haptics', 'play', '(Ljava/lang/String;)V', 'medium'])
+    // Android browsers vibrate through the web API; other browsers have no motor to drive.
+    sys.isNative = false
+    now = 700
+    Haptics.play('heavy')
+    assert.deepEqual(vibrations, [35])
+    sys.os = 'ios'
+    now = 800
+    Haptics.play('heavy')
+    assert.deepEqual(vibrations, [35])
+    sys.isNative = true
+    sys.os = 'android'
     // 2x speed halves the delay; a paused clock holds it and resuming keeps the remaining game time.
     now = 1000
     gameClock.setSpeed(2)

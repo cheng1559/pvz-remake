@@ -165,12 +165,14 @@ export class UIInput extends Component {
             const box = nativeInputBox()
             if (box && 'onInputBoxKey' in box) box.onInputBoxKey = this.nativeKey
             const show = box?.showInputBox
-            if (box && show && sys.isNative && sys.os === sys.OS.IOS) {
+            if (box && show && sys.isNative && (sys.os === sys.OS.IOS || sys.os === sys.OS.ANDROID)) {
                 // Scope traits to this focus call, as with the DOM focus options above.
                 box.showInputBox = options => show.call(box, {
                     ...options,
                     inputType: this.options.keyboardType === 'default' ? 'text' : this.options.keyboardType ?? 'ascii',
                     autocorrect: this.options.autocorrect ?? false,
+                    // Android: a hidden editor in the game's own screen, instead of an input bar over it.
+                    inputOnly: sys.os === sys.OS.ANDROID,
                 })
                 try { this.native.focus() } finally { box.showInputBox = show }
             } else this.native.focus()

@@ -8,7 +8,11 @@ export function setSpriteDensity(texture: SpriteFrame['texture'], scale: number)
 }
 
 export function getSpriteDensity(frame: SpriteFrame): number {
-    return densities.get(frame.texture) ?? 1
+    return getTextureDensity(frame.texture)
+}
+
+export function getTextureDensity(texture: SpriteFrame['texture']): number {
+    return densities.get(texture) ?? 1
 }
 
 /** Call after reset or changing slice borders, before assigning to a Sprite. */

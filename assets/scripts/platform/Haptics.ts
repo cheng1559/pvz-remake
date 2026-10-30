@@ -4,7 +4,11 @@ import { GameDebugSettings } from './debug/GameDebugSettings'
 
 export type HapticStyle = 'light' | 'medium' | 'heavy' | 'explosion'
 const EXPLOSION_DELAY_MS = 40
-const supported = () => sys.isNative && (sys.os === sys.OS.IOS || sys.os === sys.OS.ANDROID)
+/** Android browsers vibrate for these durations, the fallback the native Android bridge uses without predefined effects. */
+const WEB_VIBRATION_MS: Record<HapticStyle, number> = { light: 10, medium: 20, heavy: 35, explosion: 120 }
+// iOS browsers have no vibration API; desktop Chrome has the method but no motor.
+const webVibration = () => !sys.isNative && sys.os === sys.OS.ANDROID && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'
+const supported = () => (sys.isNative && (sys.os === sys.OS.IOS || sys.os === sys.OS.ANDROID)) || webVibration()
 
 /** Runs callback after ms of game time: follows speed changes and waits while the clock is paused. */
 function afterGameTime(ms: number, callback: () => void): void {
@@ -53,7 +57,8 @@ export class Haptics {
         this.lastPlayedAt = now
         this.lastStyle = style
         if (style === 'explosion') this.explosionUntil = now + 280
-        if (sys.os === sys.OS.IOS) native.reflection.callStaticMethod('ViewController', 'playHapticFeedback:', style)
+        if (!sys.isNative) navigator.vibrate(WEB_VIBRATION_MS[style])
+        else if (sys.os === sys.OS.IOS) native.reflection.callStaticMethod('ViewController', 'playHapticFeedback:', style)
         else native.reflection.callStaticMethod('com/cocos/game/Haptics', 'play', '(Ljava/lang/String;)V', style)
     }
 }

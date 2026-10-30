@@ -1,8 +1,8 @@
-import { Asset, assetManager, AudioClip, dynamicAtlasManager, ImageAsset, macro, JsonAsset, native, Rect, resources, Size, SpriteFrame, sys, TextAsset, Texture2D, Vec2 } from 'cc'
+import { Asset, assetManager, AudioClip, director, dynamicAtlasManager, ImageAsset, macro, JsonAsset, native, Rect, resources, Size, SpriteFrame, sys, TextAsset, Texture2D, Vec2 } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import type { ContentCategory } from '@/shared/content'
 import type { FontConfig } from '@/client/font/FontRenderer.d'
-import { applySpriteDensity, setSpriteDensity } from './SpriteDensity'
+import { applySpriteDensity, getTextureDensity, setSpriteDensity } from './SpriteDensity'
 import { decodePremultipliedPng } from './PremultipliedPng'
 import { loadKernel } from '@/shared/kernel/index'
 import { installedArchiveRoot, installedFilePath, readArchiveBlob, readArchiveFile, unpackArchive, type ArchiveFiles } from './InstalledArchives'
@@ -78,6 +78,24 @@ async function remote<T extends Asset>(pack: LoadedPack, file: string, ext: stri
         (error, asset) => error ? reject(error) : resolve(asset)))
 }
 
+/** Many mobile browsers cap WebGL textures at 4096 pixels; a larger image would sample as opaque black. */
+function webTextureLimit(): number {
+    return sys.isNative ? Infinity : director.root?.device.capabilities.maxTextureSize || Infinity
+}
+
+/** Halves premultiplied RGBA with a box filter (exact for premultiplied colors). */
+function halveRgba({ width, height, rgba }: { width: number, height: number, rgba: Uint8Array }) {
+    const w = Math.ceil(width / 2), h = Math.ceil(height / 2), out = new Uint8Array(w * h * 4)
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const x1 = Math.min(x * 2 + 1, width - 1), y1 = Math.min(y * 2 + 1, height - 1)
+        for (let c = 0; c < 4; c++) {
+            const at = (px: number, py: number) => rgba[(py * width + px) * 4 + c]
+            out[(y * w + x) * 4 + c] = (at(x * 2, y * 2) + at(x1, y * 2) + at(x * 2, y1) + at(x1, y1) + 2) >> 2
+        }
+    }
+    return { width: w, height: h, rgba: out }
+}
+
 async function texture(pack: LoadedPack, file: string, scale = 1): Promise<Texture2D> {
     const cached = pack.textures.get(file)
     if (cached) return cached
@@ -90,38 +108,40 @@ async function texture(pack: LoadedPack, file: string, scale = 1): Promise<Textu
         let image: ImageAsset | undefined
         try {
             // The web may still be compiling the kernel that decodes premultiplied images.
-            const decoded = pack.premultiplied.has(file) ? decodePremultipliedPng(await archiveFile(pack.files, file), await loadKernel()) : undefined
+            let decoded = pack.premultiplied.has(file) ? decodePremultipliedPng(await archiveFile(pack.files, file), await loadKernel()) : undefined
             if (!decoded) image = await remote<ImageAsset>(pack, file, '.png', 'image/png')
             const result = new Texture2D()
+            // Images past the GPU's size limit are halved until they fit, at a lower density.
+            const limit = webTextureLimit(), source = decoded ?? image!
+            let reduction = 1
+            while (Math.max(source.width, source.height) / reduction > limit) reduction *= 2
             if (decoded) {
+                for (let step = 1; step < reduction; step *= 2) decoded = halveRgba(decoded)
                 result.reset({ width: decoded.width, height: decoded.height, format: Texture2D.PixelFormat.RGBA8888 })
                 result.uploadData(decoded.rgba)
+            } else if (!isNative) {
+                // Every build keeps only the GPU copy. The web uploads pixels, so the texture holds no decoded image.
+                const canvas = document.createElement('canvas')
+                canvas.width = Math.ceil(image!.width / reduction)
+                canvas.height = Math.ceil(image!.height / reduction)
+                const context = canvas.getContext('2d')!
+                context.drawImage(image!.data as CanvasImageSource, 0, 0, canvas.width, canvas.height)
+                const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data
+                result.reset({ width: canvas.width, height: canvas.height, format: Texture2D.PixelFormat.RGBA8888 })
+                result.uploadData(new Uint8Array(rgba.buffer, rgba.byteOffset, rgba.byteLength))
             } else {
                 result.image = image!
             }
-            // Preserve the decoded RGBA upload used by the existing HD images and fonts.
-            const pixels = result.image?.data
-            if (sys.isBrowser && pixels && !ArrayBuffer.isView(pixels)) {
-                const canvas = document.createElement('canvas')
-                canvas.width = result.width
-                canvas.height = result.height
-                const context = canvas.getContext('2d')!
-                context.drawImage(pixels, 0, 0)
-                const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data
-                result.uploadData(new Uint8Array(rgba.buffer, rgba.byteOffset, rgba.byteLength))
-            }
             result.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE)
             result.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.LINEAR)
-            setSpriteDensity(result, scale)
+            setSpriteDensity(result, scale / reduction)
             return result
         } finally {
+            // Remote images have no Cocos dependency edge, so automatic image cleanup misses them.
+            if (image) assetManager.releaseAsset(image)
             if (isNative) {
-                // Remote images have no Cocos dependency edge, so automatic image cleanup misses them.
-                if (image) {
-                    assetManager.releaseAsset(image)
-                    // Each texture loads once; drop bytes held in memory (installed files are read on demand).
-                    delete pack.files[file]
-                }
+                // Each texture loads once; drop bytes held in memory (installed files are read on demand).
+                if (image) delete pack.files[file]
                 const next = nativeTextureWaiters.shift()
                 if (next) next()
                 else nativeTextureLoads--
@@ -145,8 +165,8 @@ export class ModResources {
     private readyBase(): Promise<void> {
         return this.baseInitialization ??= (async () => {
             macro.CLEANUP_IMAGE_CACHE = false
-            // Native uploads release CPU images; atlas packing would copy freed data.
-            dynamicAtlasManager.enabled = !sys.isNative
+            // CPU images are released once uploaded; atlas packing would copy freed data.
+            dynamicAtlasManager.enabled = false
             if (sys.isNative && !nativeRuntimeReady) {
                 native.fileUtils.removeDirectory(installedArchiveRoot('mod-resources', ''))
                 nativeRuntimeReady = true
@@ -208,7 +228,8 @@ export class ModResources {
         const scale = Object.values(pack.manifest.sprites).find(entry => entry.file === file)?.scale ?? 1
         if (assetType === SpriteFrame) {
             const image = await texture(pack, file, scale)
-            const asset: Asset = await this.spriteFrom(pack, `file:${file}`, { file, width: image.width / scale, height: image.height / scale, scale })
+            const density = getTextureDensity(image)
+            const asset: Asset = await this.spriteFrom(pack, `file:${file}`, { file, width: image.width / density, height: image.height / density, scale })
             return asset as T
         }
         if (assetType === Texture2D) { const asset: Asset = await texture(pack, file, scale); return asset as T }
@@ -318,7 +339,9 @@ export class ModResources {
         const cached = pack.sprites.get(id)
         if (cached) return cached
         const pending = texture(pack, entry.file, entry.scale ?? 1).then(texture => {
-            if (texture.width !== entry.width * (entry.scale ?? 1) || texture.height !== entry.height * (entry.scale ?? 1)) {
+            // A texture halved to fit the GPU keeps its logical size through its density.
+            const density = getTextureDensity(texture)
+            if (Math.round(texture.width / density) !== entry.width || Math.round(texture.height / density) !== entry.height) {
                 throw new Error(`Mod sprite dimensions do not match: ${id}`)
             }
             const [x, y, width, height] = entry.rect ?? [0, 0, entry.width, entry.height]
