@@ -183,7 +183,7 @@ export class GameApp extends Component {
         } finally {
             this.loading = false
         }
-        if (target === 'main' && this.currentPage === 'main' && !await menuApi.getCurrentUser()) await this.navigate('players')
+        if (target === 'main' && this.currentPage === 'main' && this.menu?.mainMenuOpened() && !await menuApi.getCurrentUser()) await this.navigate('players')
     }
 
     private async finish(page: 'award' | 'gameOver'): Promise<void> {

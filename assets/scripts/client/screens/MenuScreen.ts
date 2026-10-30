@@ -46,6 +46,11 @@ export class MenuScreen extends Component {
     private achievementPreparation: Promise<PreparedMenuPage> | null = null
     private almanacSelection: AlmanacSelection = { plant: 0, zombie: 0 }
 
+    /** The main menu asks for the create-user dialog itself until its entrance finishes. */
+    mainMenuOpened(): boolean {
+        return !!this.mainMenu?.node.isValid && this.mainMenu.isOpened
+    }
+
     async prepare(id: MenuPageId): Promise<PreparedMenuPage> {
         if (id === 'achievements') {
             const page = await this.prepareAchievements()

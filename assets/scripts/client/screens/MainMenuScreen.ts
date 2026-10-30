@@ -48,6 +48,7 @@ export class MainMenuScreen extends Component {
     private ready = false
     private background!: Sprite
     private opened = false
+    private signShown = false
     private entrancePending = true
     private startAdventure = true
     private grassDelay = 0.5
@@ -137,6 +138,8 @@ export class MainMenuScreen extends Component {
         if (this.opened) {
             this.setButtonsEnabled(true)
             this.setAdventureShade(255)
+            // SELECTOR_NEW_USER: the sign drops once the create-user dialog has closed with a player.
+            if (!this.signShown) void menuApi.getCurrentUser().then(user => { if (user && this.node?.isValid) this.showSign() })
             this.syncPositions()
             return
         }
@@ -165,14 +168,27 @@ export class MainMenuScreen extends Component {
         }
         this.open.play({ loop: false, rate: 30 / 20, hideOnFinish: false, timeSeconds: 0, onFinish: () => {
             this.opened = true
-            this.open.node.active = false
-            this.sign.node.active = true
-            this.signsRoot.active = true
-            this.current = this.sign
-            this.sign.play({ loop: false, rate: 30 / 20, hideOnFinish: false, timeSeconds: 0 })
             this.setButtonsEnabled(true)
+            // GameSelector::Update: once open, a player gets the sign; without one the create-user dialog comes first.
+            if (this.user) this.showSign()
+            else void this.onNavigate('players')
             this.syncPositions()
         } })
+    }
+
+    /** Whether the entrance has finished, so the create-user dialog may open over it. */
+    get isOpened(): boolean {
+        return this.opened
+    }
+
+    private showSign(): void {
+        if (this.signShown) return
+        this.signShown = true
+        this.open.node.active = false
+        this.sign.node.active = true
+        this.signsRoot.active = true
+        this.current = this.sign
+        this.sign.play({ loop: false, rate: 30 / 20, hideOnFinish: false, timeSeconds: 0 })
     }
 
     async refreshProfile(): Promise<void> {
@@ -193,8 +209,9 @@ export class MainMenuScreen extends Component {
         this.buttons = []
         this.flowerButtons = []
         const profile = this.user
-        // The original DrawOverlay skips grass and flowers until a player exists; their clocks still run.
-        for (const animation of [this.grass, ...this.flowers]) animation.setTracksVisible(animation.trackIds, profile !== null)
+        // The original DrawOverlay skips the grass until a player exists; its clock still runs. The flowers are
+        // attached to SelectorScreen_BG_Right, so the background draws them, and MouseDown pops them, without one.
+        this.grass.setTracksVisible(this.grass.trackIds, profile !== null)
         const level = profile?.adventureLevel ?? 1
         this.startAdventure = level <= 1 && (profile?.finishedAdventure ?? 0) === 0
         this.profileLabel.text = profile ? `${profile.name}!` : ''
@@ -242,7 +259,7 @@ export class MainMenuScreen extends Component {
                 flower.play({ loop: false, rate: 24 / 20, timeSeconds: 0, hideOnFinish: false })
             }
             this.flowerButtons.push(button)
-            node.active = profile !== null
+            node.active = true
         })
         if (!this.startAdventure) {
             const stage = Math.min(6, Math.floor((level - 1) / 10) + 1)
