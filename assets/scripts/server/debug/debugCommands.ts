@@ -144,9 +144,12 @@ function executeCommand(
                 ? level.definition.waves.findIndex((entry, index) => index >= wave.index && entry.flagWave)
                 : wave.index
             if (index < 0 || index >= level.definition.waves.length) return debugCondition(name === 'nextflag' ? 'DEBUG_NO_FLAG_WAVES' : 'DEBUG_NO_WAVES')
+            // Board::KeyChar('/'): a running huge wave countdown ends now. Otherwise /nextflag starts the flag wave's
+            // 750-tick countdown through the wave system below, and /nextwave spawns at once.
+            const countdown = name === 'nextflag' && !wave.hugeWaveAnnounced
             wave.index = index
             wave.nextWaveAtTick = tick
-            if (level.definition.waves[index].flagWave) {
+            if (name === 'nextwave' && level.definition.waves[index].flagWave && !wave.hugeWaveAnnounced) {
                 wave.hugeWaveAnnounced = true
                 emitServerEvent(events, 'hugeWave', {})
                 emitServerEvent(events, 'hugeWaveSound', {})
@@ -158,7 +161,7 @@ function executeCommand(
                 schedule.add('spawn', createWaveSystem(definitions))
                 schedule.run(world, tick)
             } finally { level.paused = paused }
-            return debugSuccess(name === 'nextflag' ? 'Spawned next flag wave' : 'Spawned next zombie wave')
+            return debugSuccess(countdown ? 'Huge wave approaching' : name === 'nextflag' ? 'Spawned next flag wave' : 'Spawned next zombie wave')
         }
         case 'lawnmower': {
             const row = args[1] === undefined ? undefined : position(args[1])?.row

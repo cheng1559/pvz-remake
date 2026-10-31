@@ -56,6 +56,38 @@ test('1-2 starts with three rows and Sunflower teaching, and production resumes 
 
 
 
+test('/nextflag announces the flag wave 750 ticks ahead; repeating it ends the countdown', () => {
+    const debug = (server: IntegratedGameServer, command: string) => {
+        server.enqueueDebugCommand(1, command)
+        server.processBoundaryCommands()
+        return server.drainCommandResults()[0].debug
+    }
+    const server = game()
+    server.drainEvents()
+    assert.equal(debug(server, '/nextflag')?.ok, true)
+    assert.deepEqual(server.drainEvents().map(event => event.type), ['hugeWave'])
+    assert.equal(server.snapshot().zombies.length, 0)
+    // The previous wave is gone and due for an early wave, which must not cut the countdown short.
+    const save = server.save()
+    Object.assign(save.wave, { zombieIds: [], accelerateAtTick: save.gameplayTick })
+    server.start({ ...start, save: save as unknown as JsonValue })
+    server.drainEvents()
+    const timeline = new Map<string, number>()
+    for (let tick = 1; !server.snapshot().zombies.length; tick++) {
+        server.tick()
+        for (const event of server.drainEvents()) if (!timeline.has(event.type)) timeline.set(event.type, tick)
+    }
+    assert.deepEqual([timeline.get('hugeWaveSound'), timeline.get('musicBurst'), timeline.get('finalWave'), timeline.get('zombieSpawned')], [25, 350, 750, 751])
+
+    const skipped = game()
+    debug(skipped, '/nextflag')
+    for (let tick = 0; tick < 100; tick++) skipped.tick()
+    skipped.drainEvents()
+    assert.equal(debug(skipped, '/nextflag')?.ok, true)
+    assert.equal(skipped.snapshot().zombies.length, 5, 'Board::KeyChar ends a running huge wave countdown')
+    assert.ok(skipped.drainEvents().some(event => event.type === 'finalWave'))
+})
+
 test('1-2 runs six waves, saves the huge-wave countdown and awards Cherry Bomb', () => {
     const server = game()
     const rows = new Set<number>()

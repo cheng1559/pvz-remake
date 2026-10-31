@@ -33,9 +33,9 @@ export function tryDropLevelAward(world: World, definitions: GameplayDefinitions
         disappearTicks: 0, fadeTicks: 0, scale: 1, alpha: 255,
     })
     emitServerEvent(world.resources.get(EventQueueResource), 'levelAwardDropped', { entityId: entity, typeId: level.definition.award.id })
+    // Board::RemoveAllZombies: every zombie that is not dead or dying vanishes, the one that dropped the award included.
     for (const zombieEntity of zombies) {
-        if (zombieEntity === defeated) continue
         const zombie = world.get(zombieEntity, ZombieComponent)!
-        if (zombie.state !== 'dying' && zombie.state !== 'mowered') remover.destroyEntity(zombieEntity)
+        if (zombie.state !== 'dying' && zombie.state !== 'mowered' && zombie.state !== 'burned') remover.destroyEntity(zombieEntity)
     }
 }

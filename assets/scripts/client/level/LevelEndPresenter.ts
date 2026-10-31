@@ -77,7 +77,12 @@ export class LevelEndPresenter {
             if (event.type === 'levelWon') this.start()
             else if (event.type === 'levelAwardCollected') this.playAwardCollected(event)
             else if (event.type === 'hugeWave') { this.hugeWaveTicks = 750; this.syncHugeWave() }
-            else if (event.type === 'finalWave') void this.createFinalWave()
+            else if (event.type === 'finalWave') {
+                // Board::UpdateZombieSpawning clears the huge wave advice before NextWaveComing shows the final wave.
+                this.hugeWaveTicks = 0
+                this.syncHugeWave()
+                void this.createFinalWave()
+            }
         }
     }
 

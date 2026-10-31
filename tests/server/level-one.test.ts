@@ -18,7 +18,7 @@ import { createItemSystem } from '@/server/level/items'
 import { createLevelProgressSystem,initializeLevel } from '@/server/level/level'
 import { ItemComponent,TutorialResource,WaveResource } from '@/server/state/levelState'
 import { createWaveSystem } from '@/server/level/waves'
-import { mowZombie } from '@/server/zombies/damage'
+import { damageZombie, mowZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { createZombieSystem } from '@/server/zombies/system'
 import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
@@ -115,4 +115,18 @@ test('level one drops its award from the last effective zombie before its corpse
     assert.ok(award.velocityY >= -4.85 && award.velocityY < -2.85)
     assert.ok(award.groundY >= 352.5 && award.groundY <= 371.5)
     assert.equal(world.resources.get(LevelStateResource).result, 'playing')
+})
+
+test('the last zombie vanishes when losing its head drops the award, while burned corpses stay', () => {
+    const { world } = setup()
+    world.resources.get(WaveResource).index = levels.levels['pvz:adventure-1-1'].waves.length
+    const last = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
+    const burned = spawnZombie(world, definitions, 'pvz:normal', 1, 400, 250)
+    Object.assign(world.get(burned, ZombieComponent)!, { hasHead: false, state: 'burned', deathTicksRemaining: 100 })
+
+    damageZombie(world, definitions, last, world.get(last, ZombieComponent)!.health - 1)
+
+    assert.equal([...world.query(ItemComponent)].length, 1)
+    assert.equal(world.hasEntity(last), false, 'Board::RemoveAllZombies also removes the zombie that dropped the award')
+    assert.equal(world.get(burned, ZombieComponent)!.state, 'burned', 'award drop preserves burned animation')
 })

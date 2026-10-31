@@ -97,7 +97,8 @@ export function damageZombie(
         // Zombie::UpdateDamageStates: losing the head is when the zombie drops its loot.
         dropZombieLoot(world, definitions, entity, remover)
     }
-    if (zombie.health === 0) startZombieDeath(world, definitions, entity, zombie)
+    // The award drop may already have removed this zombie.
+    if (zombie.health === 0 && world.hasEntity(entity)) startZombieDeath(world, definitions, entity, zombie)
 }
 
 /** Instant kills still drop loot at the zombie's position, before removing its components (Zombie::DieWithLoot). */

@@ -51,7 +51,8 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
                 return total + (zombie?.state === 'walking' || zombie?.state === 'eating' || zombie?.state === 'vaulting'
                     ? zombie.health + zombie.helmHealth : 0)
             }, 0)
-            if (waves.accelerateAtTick !== undefined && tick >= waves.accelerateAtTick &&
+            // Board::UpdateZombieSpawning returns during the huge wave countdown, so it cannot be shortened.
+            if (!waves.hugeWaveAnnounced && waves.accelerateAtTick !== undefined && tick >= waves.accelerateAtTick &&
                 (!nextIsFlag && waveHealth <= (waves.healthToNextWave ?? 0) || waveHealth <= 0)) {
                 waves.nextWaveAtTick = Math.min(waves.nextWaveAtTick, tick + EARLY_WAVE_DELAY_TICKS)
                 waves.accelerateAtTick = undefined
