@@ -81,7 +81,7 @@ def write_mac(image: Image.Image) -> None:
 
 def write_windows(source: Path) -> None:
     # The window title bar uses the ICO's own 16x16 frame, as in the original game.
-    target = NATIVE / "windows/res/game.ico"
+    target = NATIVE / "win64/res/game.ico"
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, target)
 

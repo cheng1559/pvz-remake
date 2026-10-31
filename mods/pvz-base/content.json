@@ -50934,9 +50934,6 @@
       "pvz:animations/zombie_boss_driver": "assets/json/animations/zombie_boss_driver.json"
     },
     "reanim": {
-      "pvz:almanac_plant_10_body": "assets/reanim/almanac_plant_10_body.json",
-      "pvz:almanac_plant_10_face": "assets/reanim/almanac_plant_10_face.json",
-      "pvz:almanac_plant_11_body": "assets/reanim/almanac_plant_11_body.json",
       "pvz:almanac_plant_12_body": "assets/reanim/almanac_plant_12_body.json",
       "pvz:almanac_plant_13_body": "assets/reanim/almanac_plant_13_body.json",
       "pvz:almanac_plant_13_face": "assets/reanim/almanac_plant_13_face.json",
@@ -51017,11 +51014,6 @@
       "pvz:almanac_plant_47_face": "assets/reanim/almanac_plant_47_face.json",
       "pvz:almanac_plant_48_body": "assets/reanim/almanac_plant_48_body.json",
       "pvz:almanac_plant_48_face": "assets/reanim/almanac_plant_48_face.json",
-      "pvz:almanac_plant_8_body": "assets/reanim/almanac_plant_8_body.json",
-      "pvz:almanac_plant_8_face": "assets/reanim/almanac_plant_8_face.json",
-      "pvz:almanac_plant_9_body": "assets/reanim/almanac_plant_9_body.json",
-      "pvz:almanac_plant_9_face": "assets/reanim/almanac_plant_9_face.json",
-      "pvz:almanac_plant_9_packet_body": "assets/reanim/almanac_plant_9_packet_body.json",
       "pvz:almanac_zombie_10_almanac10": "assets/reanim/almanac_zombie_10_almanac10.json",
       "pvz:almanac_zombie_11_body": "assets/reanim/almanac_zombie_11_body.json",
       "pvz:almanac_zombie_12_body": "assets/reanim/almanac_zombie_12_body.json",

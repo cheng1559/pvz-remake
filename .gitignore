@@ -39,8 +39,8 @@ native/engine/ios/Images.xcassets/AppIcon.appiconset/*.png
 !native/engine/ios/Base.lproj/
 native/engine/ios/Base.lproj/*
 !native/engine/ios/Base.lproj/LaunchScreen.storyboard
-!native/engine/windows/
-native/engine/windows/res/game.ico
+!native/engine/win64/
+native/engine/win64/res/game.ico
 !native/engine/android/
 native/engine/android/*
 !native/engine/android/CMakeLists.txt

@@ -15,5 +15,3 @@ add_executable(${EXECUTABLE_NAME}
     ${CC_ALL_SOURCES}
 )
 cc_windows_after_target(${EXECUTABLE_NAME})
-# Explorer, the taskbar and shortcuts show the executable name.
-set_target_properties(${EXECUTABLE_NAME} PROPERTIES OUTPUT_NAME "Plants vs. Zombies")
