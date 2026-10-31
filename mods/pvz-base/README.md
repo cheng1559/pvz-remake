@@ -8,7 +8,7 @@ The built-in base package is authored and packed as a Mod. `content.json` declar
 - `npm run mod:pack -- pvz-base` uses the standard Mod packer and writes `dist/mods/pvz-base.zip`.
 - `npm run mod:test -- dist/mods/pvz-base` validates the packed content.
 - `npm run mod:pack -- pvz-base --publish assets/resources/base.zip` packs the same source and publishes the completed ZIP as `assets/resources/base.zip` for the game.
-- `npm run build:content -- --pak /path/to/main.pak` imports the original PAK, converts directly to Mod assets, and packs/publishes the built-in ZIP. With no argument, the input defaults to `tools/main.pak`. Requires Python 3.10+, Pillow, ffmpeg and libopenmpt.
+- `npm run build:content -- --pak /path/to/main.pak` imports the original PAK, converts directly to Mod assets, and packs/publishes the built-in ZIP. It also extracts the mouse cursors from the original executable (`--exe`). With no arguments, the inputs default to `tools/main.pak` and `tools/PlantsVsZombies.exe`. Requires Python 3.10+, Pillow, ffmpeg and libopenmpt.
 
 The importer preserves authored gameplay/presentation tables and existing custom Mod assets that are not supplied by the PAK. The authored UI text lives in `tools/pvz/ui-strings.json` and is merged into `pvz:strings` on import.
 

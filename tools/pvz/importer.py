@@ -1,4 +1,4 @@
-"""Import a PvZ PAK directly into the base Mod, then use the shared Mod packer."""
+"""Import a PvZ PAK and the game executable directly into the base Mod, then use the shared Mod packer."""
 from __future__ import annotations
 
 import argparse
@@ -16,6 +16,7 @@ from .fonts import convert_font
 from .particles import convert_directory as convert_particles
 from .strings import convert_lawnstrings, merge_project_strings
 from .audio import copy_sounds
+from .cursors import extract_cursors
 from .music.convert import convert_music, split_manifest
 
 from . import ROOT, BASE_MOD as MOD
@@ -38,8 +39,8 @@ def write_json(path: Path, value) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
 
 
-def import_assets(raw: Path) -> None:
-    """Convert extracted PAK assets into the Mod's declared runtime resources."""
+def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
+    """Convert extracted PAK assets and the executable's cursors into the Mod's declared runtime resources."""
     mod = MOD
     index_path = mod / 'content.json'
     index = json.loads(index_path.read_text())
@@ -66,6 +67,11 @@ def import_assets(raw: Path) -> None:
     outputs += convert_images(raw / 'particles', assets / 'images/particles')
     for image in outputs:
         register_sprite(image)
+    # The mouse cursors are only in the executable: pvz:cursor_pointer, pvz:cursor_hand, pvz:cursor_dragging.
+    for name, image in cursors.items():
+        file = assets / f'images/cursor_{name}.png'
+        image.save(file)
+        register_sprite(file)
 
     # resources.xml only guides conversion (alpha companions, particle grids); the game never reads it, so it is not copied.
 
@@ -165,12 +171,17 @@ def import_assets(raw: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pak', type=Path, default=ROOT / 'tools/main.pak', help='Original main.pak to import')
+    parser.add_argument('--exe', type=Path, default=ROOT / 'tools/PlantsVsZombies.exe', help='Original game executable (mouse cursors)')
     args = parser.parse_args()
     if not args.pak.is_file():
         parser.error(f'PAK not found: {args.pak}; supply --pak /path/to/main.pak')
+    if not args.exe.is_file():
+        parser.error(f'Executable not found: {args.exe}; supply --exe /path/to/PlantsVsZombies.exe')
+    # Checked before the long PAK conversion, so a wrong executable fails at once.
+    cursors = extract_cursors(args.exe.read_bytes())
     with extracted_pak(args.pak) as raw:
         decompile(raw)
-        import_assets(raw)
+        import_assets(raw, cursors)
     print('[content] Converted Mod assets; packing the base archive', flush=True)
     subprocess.run(['node', str(ROOT / 'node_modules/tsx/dist/cli.mjs'), str(ROOT / 'tools/mod/cli.ts'), 'pack', 'pvz-base',
                     '--publish', str(ROOT / 'assets/resources/base.zip')], cwd=ROOT, check=True)

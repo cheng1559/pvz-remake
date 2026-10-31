@@ -1,5 +1,6 @@
 import { screen, sys } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
+import { CursorManager } from '@/client/input/CursorManager'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import { gameClock } from '@/core/GameClock'
 import { debugCondition, debugInteger, debugSuccess, debugSyntax, parseDebugCliCommand, type DebugCliCatalog, type DebugCliResult } from '@/shared/debug/DebugCli'
@@ -56,6 +57,7 @@ async function executeCommand(
         case 'mobile': GameDebugSettings.setMobileEnabled(args[0].toLowerCase() === 'true'); break
         case 'hotkeys': GameDebugSettings.setHotkeysEnabled(args[0].toLowerCase() === 'true'); break
         case 'haptics': GameDebugSettings.setHapticsEnabled(args[0].toLowerCase() === 'true'); break
+        case 'cursor': GameDebugSettings.setOriginalCursorsEnabled(args[0].toLowerCase() === 'true'); CursorManager.refresh(); break
         case 'fps': GameDebugSettings.setFpsVisible(args[0].toLowerCase() === 'true'); break
         case 'hitboxes': GameDebugSettings.setHitboxesVisible(args[0].toLowerCase() === 'true'); break
         case 'seedstyle': GameDebugSettings.setSeedPacketStyle(args[0].toLowerCase() as SeedPacketStyle); break

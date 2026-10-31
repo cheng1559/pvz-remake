@@ -336,6 +336,15 @@ export class ModResources {
         return this.spriteFrom(pack, id)
     }
 
+    /** A sprite's image file for the platform to read itself (mouse cursors): a file path on native, a Blob URL on the web. */
+    async spriteUrl(id: string): Promise<{ url: string, scale: number } | undefined> {
+        await this.ready()
+        const pack = this.find('sprites', id)
+        if (!pack) return undefined
+        const entry = pack.manifest.sprites[id]
+        return { url: await fileUrl(pack, entry.file, 'image/png'), scale: entry.scale ?? 1 }
+    }
+
     private spriteFrom(pack: LoadedPack, id: string, entry = pack.manifest.sprites[id]): Promise<SpriteFrame> {
         const cached = pack.sprites.get(id)
         if (cached) return cached

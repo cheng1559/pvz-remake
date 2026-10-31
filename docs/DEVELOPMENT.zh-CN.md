@@ -168,15 +168,17 @@ Options 保留旧版位置和操作：音量实时保存（音效上限为 0.65�
 
 `npm run build:content -- --pak /path/to/main.pak` 将原版 PAK 解包到临时目录，资源按 `images`、`fonts`、`audio`、`reanim`、`particles`、`music`、`json`、`text`、`prefabs` 直接转换到 `mods/pvz-base/assets/`，更新 `content.json` 的显式索引，再调用通用 Mod 打包器。转换资源由 Git 忽略；手工维护的玩法和表现配置保持不变。临时解包目录在成功或失败后都会清理，不再生成旧 Bundle 或持久化的 raw/generated 目录。引导场景、编译 Prefab 和 shader 继续由引擎管理。
 
-将自己游戏副本的 `main.pak` 放到 `tools/main.pak`，在项目根目录执行：
+将自己游戏副本的 `main.pak` 和 `PlantsVsZombies.exe` 放到 `tools/` 下，在项目根目录执行：
 
 ```sh
 npm run build:content -- --pak /path/to/main.pak
 ```
 
-完整导入需要 Python 3.10+、Pillow、ffmpeg 和 libopenmpt。`npm run build:content -- --pak /path/to/main.pak` 从原版 PAK 转换并发布内置 ZIP；省略 `--pak` 时默认读取 `tools/main.pak`。日常修改现有 Mod 资源或配置后，执行 `npm run mod:pack -- pvz-base --publish assets/resources/base.zip` 即可，无需重复转换。
+完整导入需要 Python 3.10+、Pillow、ffmpeg 和 libopenmpt。`npm run build:content -- --pak /path/to/main.pak --exe /path/to/PlantsVsZombies.exe` 从原版 PAK 和程序转换并发布内置 ZIP；省略 `--pak`／`--exe` 时默认读取 `tools/main.pak`、`tools/PlantsVsZombies.exe`，缺少任一文件即报错。日常修改现有 Mod 资源或配置后，执行 `npm run mod:pack -- pvz-base --publish assets/resources/base.zip` 即可，无需重复转换。
 
 应用图标来自原版游戏图标，同样不纳入 Git。`npm run build:icons -- --ico /path/to/game.ico` 生成 `build-templates/web-mobile/` 下的网页图标（`game.ico`、`icon-256.png`、`apple-touch-icon.png`），以及 `native/engine/` 下 macOS、iOS、Android、Windows 的图标，输出均由 Git 忽略；省略 `--ico` 时默认读取 `tools/game.ico`。图标即原版 `PlantsVsZombies.exe` 中的 `IDI_MAIN_ICON` 图标组，其中 16×16 一帧是窗口标题栏上的小花。
+
+鼠标指针只存在于原版程序中，`main.pak` 里没有。转换开始前先从 exe 提取原版 `LawnApp::EnforceCursor` 使用的大箭头（程序的光标资源）和 SexyAppFramework 的手形、拖动手形（`CreateCursor` 的 32×32 遮罩），按内容哈希定位，不依赖资源编号或文件偏移；结果作为 `pvz:cursor_pointer`、`pvz:cursor_hand`、`pvz:cursor_dragging` 图片登记到 `content.json`，随内置 ZIP 发布，资源包可用同名 ID 替换。`CursorManager` 把 `default`／`pointer`／`grabbing` 分别对应到这三张图和原版热点（高密度替换图按 `scale` 放大热点），网页使用 CSS 光标，Windows 和 macOS 原生端通过引擎的 `jsb.setCursorImage` 创建 SDL 彩色光标；`/cursor false` 或图片加载失败时使用系统光标。
 
 
 存档继续检查基础内容 ID、版本、哈希和玩法 Mod。ZIP 和 Mod 共用 `manifest.json`、`content.json`，玩法与表现定义直接由统一索引引用，哈希覆盖默认文件和资源映射；外部表现覆盖不会修改服务端玩法 JSON。

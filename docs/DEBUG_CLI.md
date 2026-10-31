@@ -15,6 +15,7 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /seedstyle tilted
 /level pvz:seed-chooser-test
 /haptics false
+/cursor false
 /fps true
 /plantinvincible true
 /seed 1 snowpea
@@ -28,6 +29,8 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 ```
 
 `/haptics true|false` toggles all haptic feedback immediately and saves the preference locally. Enabled by default.
+
+`/cursor true|false` switches between the original mouse cursors and the system ones: the original big arrow, a pointing hand over clickable objects and an open hand while dragging a dialog; text fields keep the system I-beam. Enabled by default and saved locally. `npm run build:content` extracts the images from the original executable into the base content; resource packs may replace them by ID.
 
 `/fps true|false` shows or hides a white frame-rate counter at the bottom left of the original 800×600 game area; widescreen expansion does not move it. It is off by default and persists locally. The counter measures drawn frames against real time, independent of game pause or speed.
 

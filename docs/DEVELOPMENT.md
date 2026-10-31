@@ -137,15 +137,17 @@ Options preserves immediate volume updates, the 0.65 sound-effect scale, fullscr
 
 `npm run build:content -- --pak /path/to/main.pak` extracts the PAK into a temporary directory and converts resources directly into `mods/pvz-base/assets/`, grouped as `images`, `fonts`, `audio`, `reanim`, `particles`, `music`, `json`, `text` and `prefabs`. It updates the explicit mappings in `content.json`, then invokes the ordinary Mod packer. Converted assets are ignored by Git; authored gameplay/presentation tables remain unchanged. Only the bootstrap scene, compiled layout prefab and shader remain engine-managed resources.
 
-Place your game's `main.pak` at `tools/main.pak`, then run from the project root:
+Place your game's `main.pak` and `PlantsVsZombies.exe` in `tools/`, then run from the project root:
 
 ```sh
 npm run build:content -- --pak /path/to/main.pak
 ```
 
-The pipeline requires Python 3.10+, Pillow, ffmpeg and libopenmpt. `npm run build:content -- --pak /path/to/main.pak` imports and publishes the base package; without `--pak` the source defaults to `tools/main.pak`. After editing existing Mod assets or definitions, use `npm run mod:pack -- pvz-base --publish assets/resources/base.zip` without reconversion.
+The pipeline requires Python 3.10+, Pillow, ffmpeg and libopenmpt. `npm run build:content -- --pak /path/to/main.pak --exe /path/to/PlantsVsZombies.exe` imports and publishes the base package; without `--pak` or `--exe` the sources default to `tools/main.pak` and `tools/PlantsVsZombies.exe`, and a missing file is an error. After editing existing Mod assets or definitions, use `npm run mod:pack -- pvz-base --publish assets/resources/base.zip` without reconversion.
 
 App icons come from the original game icon, which is not kept in Git either. `npm run build:icons -- --ico /path/to/game.ico` writes the web icons (`game.ico`, `icon-256.png`, `apple-touch-icon.png`) under `build-templates/web-mobile/` and the macOS, iOS, Android and Windows icons under `native/engine/`; all outputs are ignored by Git. Without `--ico` the source defaults to `tools/game.ico`. The icon is the `IDI_MAIN_ICON` group in the original `PlantsVsZombies.exe`; its 16×16 frame is the window title-bar flower.
+
+The mouse cursors exist only in the original program, not in `main.pak`. Before converting, the importer extracts the big arrow (the program's cursor resource) and SexyAppFramework's pointing and dragging hands (32×32 `CreateCursor` masks) that the original `LawnApp::EnforceCursor` shows, finding them by content hash rather than resource IDs or file offsets. They are registered in `content.json` as the sprites `pvz:cursor_pointer`, `pvz:cursor_hand` and `pvz:cursor_dragging`, ship in the built-in ZIP, and resource packs may replace them by ID. `CursorManager` maps `default`, `pointer` and `grabbing` to these images at their original hotspots (scaled by `scale` for higher-density replacements): CSS cursors on the web, SDL colour cursors through the engine's `jsb.setCursorImage` on native Windows and macOS. `/cursor false`, or images that fail to load, leave the system cursors.
 
 
 Save loading still checks the base content ID, version, hash and gameplay Mods. The builtin ZIP uses the same `manifest.json` and `content.json` as Mods, with gameplay and presentation definitions referenced directly from the common index; its hash covers every default file and resource mapping. Presentation overrides do not modify authoritative gameplay JSON.

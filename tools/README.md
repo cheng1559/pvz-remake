@@ -20,7 +20,7 @@ tools/
 
 | 用途 | 命令 |
 | --- | --- |
-| 从原版 PAK 导入基础资源并发布 ZIP | `npm run build:content -- --pak /path/to/main.pak` |
+| 从原版 PAK 和程序导入基础资源并发布 ZIP | `npm run build:content -- --pak /path/to/main.pak --exe /path/to/PlantsVsZombies.exe` |
 | 初始化、打包、验证 Mod | `npm run mod:init`、`npm run mod:pack`、`npm run mod:test` |
 | 编译共享 C++ 内核的 Wasm | `npm run build:kernel` |
 | 从原版图标生成网页和原生应用图标 | `npm run build:icons -- --ico /path/to/game.ico` |
@@ -42,6 +42,7 @@ pvz/
 ├── particles.py             # 粒子 XML 转换
 ├── compiled_particles.py    # 原版编译粒子解码
 ├── fonts.py                 # 位图字体
+├── cursors.py               # 从原版程序提取鼠标指针
 ├── strings.py               # 原版文本
 ├── audio.py                 # 音效转换
 ├── music/                   # 音乐转换及 libopenmpt 绑定

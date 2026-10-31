@@ -17,6 +17,7 @@ type DebugSettings = {
     mobileEnabled: boolean
     hotkeysEnabled: boolean
     hapticsEnabled: boolean
+    originalCursorsEnabled: boolean
     perfPlantsVisible: boolean
     perfZombiesVisible: boolean
     perfParticlesEnabled: boolean
@@ -35,6 +36,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     mobileEnabled: sys.isMobile,
     hotkeysEnabled: false,
     hapticsEnabled: true,
+    originalCursorsEnabled: true,
     perfPlantsVisible: true,
     perfZombiesVisible: true,
     perfParticlesEnabled: true,
@@ -66,6 +68,7 @@ function loadDebugSettings(): DebugSettings {
             mobileEnabled: DEFAULT_DEBUG_SETTINGS.mobileEnabled,
             hotkeysEnabled: parsed.hotkeysEnabled ?? DEFAULT_DEBUG_SETTINGS.hotkeysEnabled,
             hapticsEnabled: parsed.hapticsEnabled ?? DEFAULT_DEBUG_SETTINGS.hapticsEnabled,
+            originalCursorsEnabled: parsed.originalCursorsEnabled ?? DEFAULT_DEBUG_SETTINGS.originalCursorsEnabled,
             perfPlantsVisible: DEFAULT_DEBUG_SETTINGS.perfPlantsVisible,
             perfZombiesVisible: DEFAULT_DEBUG_SETTINGS.perfZombiesVisible,
             perfParticlesEnabled: DEFAULT_DEBUG_SETTINGS.perfParticlesEnabled,
@@ -169,6 +172,12 @@ export const GameDebugSettings = {
         this.hapticsEnabled = enabled
         saveDebugSettings(this)
         return this.hapticsEnabled
+    },
+
+    setOriginalCursorsEnabled(enabled: boolean) {
+        this.originalCursorsEnabled = enabled
+        saveDebugSettings(this)
+        return this.originalCursorsEnabled
     },
 
     setPerfToggle(toggle: DebugPerfToggle, enabled: boolean) {

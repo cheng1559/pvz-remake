@@ -71,7 +71,7 @@ test('plant invincibility is saved only after a successful server command', asyn
     assert.equal(settings().plantInvincible, false)
 })
 
-test('FPS command persists its setting and works without an active level', async () => {
+test('FPS and cursor commands persist their settings and work without an active level', async () => {
     const storage = new Map<string, string>()
     const sys = { isMobile: false, localStorage: {
         getItem: (key: string) => storage.get(key) ?? null,
@@ -87,10 +87,13 @@ test('FPS command persists its setting and works without an active level', async
     }
     const settings = () => load('platform/debug/GameDebugSettings', { cc: { sys } }).GameDebugSettings
     const GameDebugSettings = settings()
+    let cursorRefreshes = 0
     const { executeDebugCliCommand } = load('platform/debug/DebugCliCommands', {
         cc: { sys }, '@/shared/debug/DebugCli': cli, './GameDebugSettings': { GameDebugSettings },
+        '@/client/input/CursorManager': { CursorManager: { refresh: () => cursorRefreshes++ } },
     })
     assert.equal(GameDebugSettings.fpsVisible, false)
+    assert.equal(GameDebugSettings.originalCursorsEnabled, true)
     assert.deepEqual(cli.getDebugCliCompletions('/fps ', undefined, true), ['/fps true', '/fps false'])
     const run = (command: string) => executeDebugCliCommand(command, false, () => assert.fail('FPS is a client setting'))
     assert.equal((await run('/fps true')).ok, true)
@@ -99,6 +102,9 @@ test('FPS command persists its setting and works without an active level', async
     assert.equal(settings().fpsVisible, true)
     assert.equal((await run('/fps false')).ok, true)
     assert.equal(settings().fpsVisible, false)
+    assert.equal((await run('/cursor false')).ok, true)
+    assert.equal(settings().originalCursorsEnabled, false)
+    assert.equal(cursorRefreshes, 1)
 })
 
 test('client Mod commands reuse parsing and completion, and disappear when their host is disposed', async () => {
