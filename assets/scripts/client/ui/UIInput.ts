@@ -147,7 +147,7 @@ export class UIInput extends Component {
     onCancel: () => void = () => this.blur()
 
     static handleKey(event: EventKeyboard): boolean {
-        // AppKit can submit and close the input before SDL delivers the same key to the next dialog.
+        // macOS and Windows input boxes handle a key before SDL delivers it to the game, possibly to the next dialog.
         if (this.nativeHandledKeys.has(event.keyCode)) { event.propagationStopped = true; return true }
         const active = this.active
         if (!active?.available()) return false
