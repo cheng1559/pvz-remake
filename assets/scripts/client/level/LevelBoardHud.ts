@@ -1,5 +1,5 @@
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { Color, Mask, Node, Sprite } from 'cc'
+import { Color, Mask, Node, Sprite, Vec3 } from 'cc'
 import type { WorldSnapshot } from '@/shared/protocol'
 import { SpriteRepository } from '@/client/content/ClientContentLoader'
 import { uiNode } from '@/client/view/uiNode'
@@ -113,7 +113,11 @@ export class LevelBoardHud {
             this.shovelButton!.interactable = (snapshot.extensions['pvz:tools'] as { available: string[] } | undefined)?.available.includes('pvz:shovel') === true
             if (snapshot.tutorial.step === 'shovel-pickup') {
                 const size = uiNode({ node: this.shovelBank }).transform
-                if (!this.shovelArrow?.isValid) this.shovelArrow = ParticlePlayer.spawn({ parent: this.root, id: "pvz:seedpacketpick", x: this.shovelX + size.width / 2 + layout.arrowOffset[0], y: -size.height + layout.arrowOffset[1], z: 20 }).node
+                // The bank sits in an edge container that the camera may shift, so follow its world position, as the seed arrow does.
+                const bank = this.root.inverseTransformPoint(new Vec3(), this.shovelBank.worldPosition)
+                const x = bank.x + size.width / 2 + layout.arrowOffset[0], y = bank.y - size.height + layout.arrowOffset[1]
+                if (this.shovelArrow?.isValid) this.shovelArrow.setPosition(x, y, 20)
+                else this.shovelArrow = ParticlePlayer.spawn({ parent: this.root, id: "pvz:seedpacketpick", x, y, z: 20 }).node
             } else if (this.shovelArrow?.isValid) { this.shovelArrow.destroy(); this.shovelArrow = undefined }
             const held = snapshot.cursor.mode === 'tool'
             this.shovel!.active = !held
