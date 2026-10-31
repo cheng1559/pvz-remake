@@ -21,6 +21,7 @@
   "PLAYER_MODS_RESTART_BODY": "This player uses different Mods. The game will restart to load them.",
   "PLAYER_MODS_COPY_HEADER": "Copy Mods?",
   "PLAYER_MODS_COPY_BODY": "Do you want the new player to use the same Mods as the previous player?",
+  "PLAYER_MODS_COPY_RESTART_BODY": "Do you want the new player to use the same Mods as the previous player? Choosing No will restart the game.",
   "ERROR_HEADER": "Error",
   "PACKAGE_IMPORTING": "Importing...",
   "PACKAGE_IMPORT_FAILED": "Import Failed",

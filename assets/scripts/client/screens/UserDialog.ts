@@ -35,9 +35,10 @@ async function modRestart(parent: Node, ui: UI, mods: PlayerMods | undefined, pr
 async function setUpNewPlayer(parent: Node, ui: UI, mods: PlayerMods | undefined, previous: number | null, created: number): Promise<boolean> {
     if (!mods) return false
     if (previous === null) mods.copyMods(null, created, true)
+    // The new player starts without Mods; say so when declining would then restart the game.
     else if (mods.hasMods(previous) && await ui.dialog(parent, {
         title: ui.text('PLAYER_MODS_COPY_HEADER'),
-        message: ui.text('PLAYER_MODS_COPY_BODY'),
+        message: ui.text(await mods.needsRestartFor(created) ? 'PLAYER_MODS_COPY_RESTART_BODY' : 'PLAYER_MODS_COPY_BODY'),
         confirmText: ui.text('BUTTON_YES'), cancelText: ui.text('BUTTON_NO'),
     }).result) mods.copyMods(previous, created)
     if (await modRestart(parent, ui, mods, created, false) !== 'restart') return false
