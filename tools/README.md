@@ -9,7 +9,7 @@ tools/
 │   ├── content.ts
 │   └── test.ts
 ├── pvz/                    # 原版 PAK 导入、转换、anim-defs.json 和 ui-strings.json
-├── resources/              # 音频压缩、字体和图片超分辨率
+├── resources/              # 音频压缩、字体和图片超分辨率、应用图标
 │   └── licenses/           # 资源处理工具的第三方许可
 ├── kernel/build.ts         # C++ 内核编译为 Wasm
 ├── profile/ios.ts          # iOS JS 性能采样
@@ -23,6 +23,7 @@ tools/
 | 从原版 PAK 导入基础资源并发布 ZIP | `npm run build:content -- --pak /path/to/main.pak` |
 | 初始化、打包、验证 Mod | `npm run mod:init`、`npm run mod:pack`、`npm run mod:test` |
 | 编译共享 C++ 内核的 Wasm | `npm run build:kernel` |
+| 从原版图标生成网页和原生应用图标 | `npm run build:icons -- --ico /path/to/game.ico` |
 | 字体、图片超分辨率 | `python3 -m tools.resources.upscale_fonts`、`python3 -m tools.resources.upscale_ui` |
 | iOS JS 性能采样 | `npx tsx tools/profile/ios.ts ...` |
 

@@ -28,10 +28,6 @@
 
 bool registerPvzKernel(se::Object* global);
 
-#ifndef GAME_NAME
-#define GAME_NAME "CocosGame";
-#endif
-
 #ifndef SCRIPT_XXTEAKEY
 #define SCRIPT_XXTEAKEY "";
 #endif
@@ -39,7 +35,7 @@ bool registerPvzKernel(se::Object* global);
 Game::Game() = default;
 
 int Game::init() {
-  _windowInfo.title = GAME_NAME;
+  _windowInfo.title = "Plants vs. Zombies";
   // configurate window size
   // _windowInfo.height = 600;
   // _windowInfo.width  = 800;

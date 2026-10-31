@@ -9,7 +9,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleDisplayName</key>
-	<string>${PRODUCT_NAME}</string>
+	<string>Plants vs. Zombies</string>
 	<key>CFBundleExecutable</key>
 	<string>${CC_EXECUTABLE_NAME}</string>
 	<key>CFBundleIcons~ipad</key>

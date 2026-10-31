@@ -9,7 +9,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="@string/app_name"
+        android:label="Plants vs. Zombies"
         android:usesCleartextTraffic="true"
         android:icon="@mipmap/ic_launcher">
 
@@ -21,7 +21,7 @@
             android:name="com.cocos.game.AppActivity"
             android:screenOrientation="landscape"
             android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|smallestScreenSize"
-            android:label="@string/app_name"
+            android:label="Plants vs. Zombies"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:launchMode="singleTask"
             android:exported="true">

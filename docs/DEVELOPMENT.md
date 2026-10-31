@@ -145,6 +145,8 @@ npm run build:content -- --pak /path/to/main.pak
 
 The pipeline requires Python 3.10+, Pillow, ffmpeg and libopenmpt. `npm run build:content -- --pak /path/to/main.pak` imports and publishes the base package; without `--pak` the source defaults to `tools/main.pak`. After editing existing Mod assets or definitions, use `npm run mod:pack -- pvz-base --publish assets/resources/base.zip` without reconversion.
 
+App icons come from the original game icon, which is not kept in Git either. `npm run build:icons -- --ico /path/to/game.ico` writes the web icons (`game.ico`, `icon-256.png`, `apple-touch-icon.png`) under `build-templates/web-mobile/` and the macOS, iOS, Android and Windows icons under `native/engine/`; all outputs are ignored by Git. Without `--ico` the source defaults to `tools/game.ico`. The icon is the `IDI_MAIN_ICON` group in the original `PlantsVsZombies.exe`; its 16×16 frame is the window title-bar flower.
+
 
 Save loading still checks the base content ID, version, hash and gameplay Mods. The builtin ZIP uses the same `manifest.json` and `content.json` as Mods, with gameplay and presentation definitions referenced directly from the common index; its hash covers every default file and resource mapping. Presentation overrides do not modify authoritative gameplay JSON.
 

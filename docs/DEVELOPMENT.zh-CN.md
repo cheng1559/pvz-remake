@@ -176,6 +176,8 @@ npm run build:content -- --pak /path/to/main.pak
 
 完整导入需要 Python 3.10+、Pillow、ffmpeg 和 libopenmpt。`npm run build:content -- --pak /path/to/main.pak` 从原版 PAK 转换并发布内置 ZIP；省略 `--pak` 时默认读取 `tools/main.pak`。日常修改现有 Mod 资源或配置后，执行 `npm run mod:pack -- pvz-base --publish assets/resources/base.zip` 即可，无需重复转换。
 
+应用图标来自原版游戏图标，同样不纳入 Git。`npm run build:icons -- --ico /path/to/game.ico` 生成 `build-templates/web-mobile/` 下的网页图标（`game.ico`、`icon-256.png`、`apple-touch-icon.png`），以及 `native/engine/` 下 macOS、iOS、Android、Windows 的图标，输出均由 Git 忽略；省略 `--ico` 时默认读取 `tools/game.ico`。图标即原版 `PlantsVsZombies.exe` 中的 `IDI_MAIN_ICON` 图标组，其中 16×16 一帧是窗口标题栏上的小花。
+
 
 存档继续检查基础内容 ID、版本、哈希和玩法 Mod。ZIP 和 Mod 共用 `manifest.json`、`content.json`，玩法与表现定义直接由统一索引引用，哈希覆盖默认文件和资源映射；外部表现覆盖不会修改服务端玩法 JSON。
 
