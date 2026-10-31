@@ -236,8 +236,9 @@ export class MusicSystem {
         this._applyVolumes()
 
         if (snapshot.paused) {
-            this._pauseTime = snapshot.timeSec
             this.pause()
+            // pause() reads the playback time, which a native stream still loading reports as 0.
+            this._pauseTime = snapshot.timeSec
             return
         }
 
