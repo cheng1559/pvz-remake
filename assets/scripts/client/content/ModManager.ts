@@ -1,4 +1,4 @@
-import { sys } from 'cc'
+import { Game, game, sys } from 'cc'
 import { BASE_MOD_ID, isModId, parseModManifest, sortModManifests, type ModManifest } from '@/shared/mod'
 import { contentJson, parseContentArchive, type ContentArchive } from '@/shared/mod/content'
 import { archiveHeads, listInstalledArchives, openArchive, readExtractedFiles, readInstalledArchive, readInstalledFiles, readInstalledManifest, removeInstalledArchive, saveInstalledArchive, unpackArchive, type ArchiveData, type ArchiveFiles } from './InstalledArchives'
@@ -42,6 +42,8 @@ interface ModSelection {
 export const PLAYER_MODS_PREFIX = 'pvz-remake:player-mods:'
 const selectionKey = (profile: number | null) => `${PLAYER_MODS_PREFIX}${profile ?? 'none'}:state`
 const pendingStorageKey = 'pvz-remake:pending-mod-changes'
+/** Set while a startup loads Mods and cleared at the main menu; still set means that startup ended (e.g. crashed) on the way. */
+const startingStorageKey = 'pvz-remake:mods-starting'
 // Mods used to be installed for the whole device; those settings and ZIPs are dropped.
 const legacyStorageKeys = ['pvz-remake:active-mods', 'pvz-remake:mod-order']
 let nextImport = 0
@@ -99,6 +101,10 @@ export class ModManager {
     private readonly versions = new Map<string, { version?: string, author?: string }>()
     private readonly reinstalled = new Set<string>()
     private initialization?: Promise<InstalledMod[]>
+    private startedWithoutMods = false
+    /** Leaving the page on purpose (reload, closing it, switching away) is not a failed startup. */
+    private readonly onStartupHidden = () => sys.localStorage.removeItem(startingStorageKey)
+    private readonly onStartupShown = () => sys.localStorage.setItem(startingStorageKey, '1')
     private applying?: Promise<void>
     private startupGate?: Promise<void>
     private releaseStartup?: () => void
@@ -126,6 +132,20 @@ export class ModManager {
             for (const key of legacyStorageKeys) sys.localStorage.removeItem(key)
             await this.collectGarbage()
             const ids = this.enabledIds(), installed: InstalledMod[] = []
+            // The last startup ended while its Mods loaded (on iOS, the page is ended once it outgrows its memory), so this
+            // one runs without them. The saved choices stay for the Mod manager, and the next startup loads them again.
+            if (ids.length && sys.localStorage.getItem(startingStorageKey)) {
+                this.startedWithoutMods = true
+                this.session = JSON.stringify([])
+                return []
+            }
+            if (ids.length) {
+                // A crash (iOS ending the page for memory) sends no events and leaves the marker set.
+                this.onStartupShown()
+                game.on(Game.EVENT_HIDE, this.onStartupHidden)
+                game.on(Game.EVENT_SHOW, this.onStartupShown)
+                if (typeof window !== 'undefined') window.addEventListener('pagehide', this.onStartupHidden)
+            }
             for (const id of ids) {
                 try {
                     const mod = await this.read(id, true)
@@ -156,6 +176,17 @@ export class ModManager {
             this.session = this.signature(this.profile)
             return mods
         })()
+    }
+
+    /** The startup reached the main menu. True, once, when this session started without its Mods. */
+    finishStartup(): boolean {
+        this.onStartupHidden()
+        game.off(Game.EVENT_HIDE, this.onStartupHidden)
+        game.off(Game.EVENT_SHOW, this.onStartupShown)
+        if (typeof window !== 'undefined') window.removeEventListener('pagehide', this.onStartupHidden)
+        const skipped = this.startedWithoutMods
+        this.startedWithoutMods = false
+        return skipped
     }
 
     async list(): Promise<string[]> {

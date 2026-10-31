@@ -1,6 +1,7 @@
 import { decodePremultipliedPng } from '@/client/content/PremultipliedPng'
 import { inflateSync,strFromU8,strToU8,unzipSync,zipSync } from 'fflate'
 import assert from 'node:assert/strict'
+import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
@@ -88,9 +89,12 @@ function setup() {
         return value
     }
     const densities = new WeakMap<object, number>()
+    const gameEvents = Object.assign(new EventEmitter(), { on(name: string, listener: () => void) { EventEmitter.prototype.on.call(this, name, listener) },
+        off(name: string, listener: () => void) { EventEmitter.prototype.off.call(this, name, listener) } })
     const modules: Record<string, any> = {
         fflate: { default: { unzipSync, inflateSync, strFromU8 } },
         cc: { Asset, JsonAsset, TextAsset, AudioClip, Texture2D: Texture, SpriteFrame: Frame, Rect: Vector, Size: Vector, Vec2: Vector,
+            game: gameEvents, Game: { EVENT_HIDE: 'hide', EVENT_SHOW: 'show' },
             dynamicAtlasManager: { enabled: true }, macro: {}, director: { root: { device: { capabilities: { maxTextureSize: 16384 } } } },
             sys: { isNative: false, isBrowser: false, OS: { IOS: 'iOS' }, localStorage: { getItem: (key: string) => storage.get(key), setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key),
                 key: (index: number) => [...storage.keys()][index] ?? null, get length() { return storage.size } } },
@@ -148,7 +152,7 @@ function setup() {
     const fresh = (base?: () => Promise<Uint8Array>) => new ModResources(base, new ModManager())
     const resources = new ModResources(undefined, manager)
     modules['./ModResources'] = modules['@/client/content/ModResources'] = { modResources: resources }
-    return { manager, ModManager, StartupModManager, ModResources, fresh, resources, files, storage, requests, modules, load,
+    return { manager, ModManager, StartupModManager, gameEvents, ModResources, fresh, resources, files, storage, requests, modules, load,
         Texture, archive, archives: modArchives, pendingArchives, db: modDb, jsb, blobs, picker: () => picker }
 }
 
@@ -593,3 +597,30 @@ test('the web keeps only the GPU copy of Mod images, like native builds, and pac
     assert.equal(modules.cc.dynamicAtlasManager.enabled, false)
 })
 
+test('a startup that ended while loading Mods makes the next one start without them, keeping the saved choices', async () => {
+    const { manager, StartupModManager: ModManager, storage, gameEvents } = setup()
+    await manager.install(zipSync(modFiles('heavy')))
+    // The first startup loads the Mod but never reaches the main menu (the page was ended).
+    assert.deepEqual(Array.from(await new ModManager().running()), ['heavy'])
+    const recovery = new ModManager()
+    assert.deepEqual(Array.from(await recovery.running()), [], 'the next startup runs without its Mods')
+    assert.deepEqual(JSON.parse(storage.get(key)!).enabled, ['heavy'], 'the saved choice stays for the Mod manager')
+    assert.equal(await recovery.needsRestartFor(null), true)
+    assert.equal(recovery.finishStartup(), true, 'the main menu tells the player once')
+    assert.equal(recovery.finishStartup(), false)
+    const next = new ModManager()
+    assert.deepEqual(Array.from(await next.running()), ['heavy'], 'a startup that reached the main menu lets the next one load them again')
+    assert.equal(next.finishStartup(), false)
+    // Reloading or switching away while loading is not a failure; returning re-arms the marker until the main menu.
+    const reloaded = new ModManager()
+    await reloaded.running()
+    gameEvents.emit('hide')
+    const afterReload = new ModManager()
+    assert.deepEqual(Array.from(await afterReload.running()), ['heavy'], 'a startup the player left on purpose keeps its Mods next time')
+    afterReload.finishStartup()
+    const resumed = new ModManager()
+    await resumed.running()
+    gameEvents.emit('hide')
+    gameEvents.emit('show')
+    assert.deepEqual(Array.from(await new ModManager().running()), [], 'a startup that came back and then ended still counts')
+})

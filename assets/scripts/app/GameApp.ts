@@ -167,6 +167,7 @@ export class GameApp extends Component {
                     if (target === 'main' || target === 'title') this.history.length = 0
                     this.currentPage = target
                     gameLayer.active = MENU_PAGES[target].overlay === true && controller.isRunning()
+                    if (target === 'main' && modManager.finishStartup()) void this.showModsSkipped()
                 }
             })
             if (restoredGame && this.node?.isValid) {
@@ -293,6 +294,14 @@ export class GameApp extends Component {
     }
 
     /** Validate selected ZIPs sequentially; the dialog keeps them in its draft until Apply. */
+    private async showModsSkipped(): Promise<void> {
+        const ui = await UI.load()
+        if (!this.node?.isValid) return
+        await ui.dialog(this.node, {
+            title: ui.text('MODS_STARTUP_FAILED_HEADER'), message: ui.text('MODS_STARTUP_FAILED_BODY'), confirmText: ui.text('DIALOG_BUTTON_OK'),
+        }).result
+    }
+
     private async importPackage(): Promise<ModImport[]> {
         const ui = await UI.load()
         let progress: UIDialog | undefined
