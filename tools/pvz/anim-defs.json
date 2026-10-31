@@ -1566,5 +1566,22 @@
         "default": "pvz:sleeping"
       }
     }
+  },
+  "zombie_boss": {
+    "body": {
+      "slots": [
+        "Boss_head2"
+      ],
+      "animations": [
+        "anim_head_idle"
+      ]
+    }
+  },
+  "zombie_boss_driver": {
+    "driver": {
+      "animations": [
+        "anim_idle"
+      ]
+    }
   }
 }

@@ -97,9 +97,6 @@ def almanac_definitions(raw_root: Path, shared: list, configuration: dict, prese
             hidden = (set(HIDDEN_BY_DEFAULT) - shown) | set(definition.get("hide", []))
             config["hiddenTrackPrefixes"] = sorted(hidden) + definition.get("hidePrefix", [])
             configs[source][node] = config
-        if source == "zombie_boss":
-            configs[source] = {"body": {"slots": ["Boss_head2"], "animations": ["anim_head_idle"]}}
-            configs["zombie_boss_driver"] = {"driver": {"slots": [], "animations": ["anim_idle"]}}
         clip = "anim_armraise" if zombie_id in (8, 9) else "anim_drop" if zombie_id == 20 else definition["layer"]
         parts = [part("zombie", zombie_id, source, node, clip)]
         if zombie_id == 0:

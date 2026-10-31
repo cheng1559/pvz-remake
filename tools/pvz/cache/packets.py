@@ -72,14 +72,13 @@ ANIMATION_NAMES: dict[int, str] = {
 
 # Output density: 1 draws the base atlases; hd() raises it and supplies HD part images (logical coordinates are unchanged).
 SCALE = 1
-TEXTURE_SCALE = 1
-TEXTURE_PATHS: dict[str, Path] = {}
+TEXTURE_PATHS: dict[str, tuple[Path, int]] = {}
 
 
-def hd(scale: int, textures: dict[str, Path], texture_scale: int) -> None:
-    """Draws at `scale` using these part images (name -> PNG at `texture_scale`); other parts fall back to the base."""
-    global SCALE, TEXTURE_SCALE, TEXTURE_PATHS
-    SCALE, TEXTURE_SCALE, TEXTURE_PATHS = scale, texture_scale, textures
+def hd(scale: int, textures: dict[str, tuple[Path, int]]) -> None:
+    """Draws at `scale` using only these part images (name -> PNG and its density)."""
+    global SCALE, TEXTURE_PATHS
+    SCALE, TEXTURE_PATHS = scale, textures
     load_texture.cache_clear()
 
 
@@ -414,9 +413,12 @@ def sand_alpha_edges(image: Image.Image) -> Image.Image:
 
 @lru_cache(maxsize=None)
 def load_texture(name: str) -> Image.Image:
-    path = TEXTURE_PATHS.get(name)
-    density = TEXTURE_SCALE if path else 1
-    path = path or TEXTURE_DIR / f"{name}.png"
+    if TEXTURE_PATHS:
+        if name not in TEXTURE_PATHS:
+            raise KeyError(f"HD pack has no image for part {name}")
+        path, density = TEXTURE_PATHS[name]
+    else:
+        path, density = TEXTURE_DIR / f"{name}.png", 1
     if not path.exists():
         raise FileNotFoundError(path)
     image = sand_alpha_edges(Image.open(path))

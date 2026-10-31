@@ -144,7 +144,7 @@ def import_assets(raw: Path) -> None:
     from .cache.lawnmower import generate as mower_cache
     packet_cache()
     plant_cache()
-    zombie_cache(raw / 'reanim')
+    zombie_cache()
     mower_cache()
     for name in ('packet_plants_cached', 'plant_previews_cached', 'zombie_previews_cached', 'lawnmower_cached'):
         register_sprite(assets / f'images/{name}.png')

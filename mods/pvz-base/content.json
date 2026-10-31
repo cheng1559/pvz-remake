@@ -50929,7 +50929,9 @@
       "pvz:presentation/definitions": "assets/presentation.json",
       "pvz:gameplay/store": "gameplay/store.json",
       "pvz:animations/zombie_surprise": "assets/json/animations/zombie_surprise.json",
-      "pvz:animations/z": "assets/json/animations/z.json"
+      "pvz:animations/z": "assets/json/animations/z.json",
+      "pvz:animations/zombie_boss": "assets/json/animations/zombie_boss.json",
+      "pvz:animations/zombie_boss_driver": "assets/json/animations/zombie_boss_driver.json"
     },
     "reanim": {
       "pvz:almanac_plant_10_body": "assets/reanim/almanac_plant_10_body.json",

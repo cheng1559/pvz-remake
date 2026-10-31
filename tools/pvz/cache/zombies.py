@@ -1,10 +1,8 @@
-import argparse
 import math
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
-from ..reanim import load_anim_xml, parse_track_data
 
 from .packets import (
     ANIMATION_DIR,
@@ -191,38 +189,20 @@ def draw_reanim(
         paste_transformed(canvas, load_texture(item["image"]), matrix, item["alpha"])
 
 
-def render_boss_cache(raw_root: Path) -> Image.Image:
+def render_boss_cache() -> Image.Image:
     cache = new_canvas(CACHE_WIDTH, CACHE_HEIGHT)
-
-    def draw(animation: str, layer: str, x: float, y: float, hidden: tuple[str, ...] = ()) -> None:
-        root = load_anim_xml(raw_root, animation)
-        tracks = [parse_track_data(track, include_inactive=True) for track in root.findall("track")]
-        marker = next(track for track in root.findall("track") if track.findtext("name") == layer)
-        _, _, active_frames = parse_track_data(marker)
-        start = active_frames[0]["frameIndex"]
-        for name, _, frames in tracks:
-            # Reanimation::AssignRenderGroupToTrack matches names case-insensitively (Boss_neck, Boss_head2).
-            if name.lower() in hidden:
-                continue
-            frame = sample_frames(frames, start)
-            if not frame or not frame.get("image"):
-                continue
-            matrix = render_frame_to_matrix(frame)
-            matrix = (*matrix[:4], matrix[4] + x, matrix[5] + y)
-            paste_transformed(cache, load_texture(frame["image"]), matrix, frame["alpha"])
-
+    boss = load_json(ANIMATION_DIR / "zombie_boss.json")
     # ReanimatorCache::MakeCachedZombieFrame draws the driver between the rear and front robot layers.
-    draw("zombie_boss", "anim_head_idle", -524.0, -88.0)
-    draw("zombie_boss_driver", "anim_idle", 46.0, 22.0)
-    draw("zombie_boss", "anim_head_idle", -524.0, -88.0, ("boss_body1", "boss_neck", "boss_head2"))
+    draw_reanim(cache, boss, "anim_head_idle", -524.0, -88.0, {})
+    draw_reanim(cache, load_json(ANIMATION_DIR / "zombie_boss_driver.json"), "anim_idle", 46.0, 22.0, {})
+    # Reanimation::AssignRenderGroupToTrack matches names case-insensitively (Boss_neck, Boss_head2), as is_track_hidden does.
+    draw_reanim(cache, boss, "anim_head_idle", -524.0, -88.0, {"hide": ["boss_body1", "boss_neck", "boss_head2"]})
     return cache
 
 
-def render_zombie_cache(zombie_id: int, raw_root: Path | None = None) -> Image.Image:
+def render_zombie_cache(zombie_id: int) -> Image.Image:
     if zombie_id == 25:
-        if raw_root is None:
-            raise ValueError('Zomboss preview requires the extracted Reanim directory')
-        return render_boss_cache(raw_root)
+        return render_boss_cache()
     definition = ZOMBIE_DEFINITIONS.get(zombie_id)
     cache = new_canvas(CACHE_WIDTH, CACHE_HEIGHT)
     if definition is None:
@@ -285,26 +265,24 @@ def zombie_preview_matrix(zombie_id: int) -> tuple[float, ...]:
     )
 
 
-def render_zombie_preview(zombie_id: int, raw_root: Path | None = None) -> Image.Image:
+def render_zombie_preview(zombie_id: int) -> Image.Image:
     cell = new_canvas(CELL_WIDTH, CELL_HEIGHT)
     if zombie_id not in ZOMBIE_DEFINITIONS and zombie_id != 25:
         return cell
-    paste_transformed(cell, render_zombie_cache(zombie_id, raw_root), zombie_preview_matrix(zombie_id), 1.0)
+    paste_transformed(cell, render_zombie_cache(zombie_id), zombie_preview_matrix(zombie_id), 1.0)
     return cell
 
 
-def generate(raw_root: Path, output: Path | None = None) -> None:
+def generate(output: Path | None = None) -> None:
     output = output or OUTPUT_PATH
     rows = math.ceil(ZOMBIE_COUNT / ATLAS_COLUMNS)
     atlas = new_canvas(ATLAS_COLUMNS * CELL_WIDTH, rows * CELL_HEIGHT)
     for zombie_id in range(ZOMBIE_COUNT):
-        cell = render_zombie_preview(zombie_id, raw_root)
+        cell = render_zombie_preview(zombie_id)
         composite(atlas, cell, zombie_id % ATLAS_COLUMNS * CELL_WIDTH, zombie_id // ATLAS_COLUMNS * CELL_HEIGHT)
     atlas.save(output)
     print(f"Wrote {output}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Build static almanac zombie portraits.")
-    parser.add_argument('--raw-root', type=Path, required=True)
-    generate(parser.parse_args().raw_root)
+    generate()
