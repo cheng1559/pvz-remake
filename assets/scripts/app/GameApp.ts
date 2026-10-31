@@ -92,6 +92,8 @@ export class GameApp extends Component {
             installLevelProbe(this.controller)
         }
         game.on(Game.EVENT_HIDE, this.save, this)
+        // LawnApp::Shutdown saves the level when the window closes (close button, Alt+F4, Cmd+Q).
+        game.on(Game.EVENT_CLOSE, this.save, this)
         input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this)
         input.on(Input.EventType.KEY_UP, this.onKeyUp, this)
         this.node.on(Input.EventType.TOUCH_START, this.onDebugTouch, this, true)
@@ -414,6 +416,7 @@ export class GameApp extends Component {
         this.transitions?.dispose()
         this.save()
         game.off(Game.EVENT_HIDE, this.save, this)
+        game.off(Game.EVENT_CLOSE, this.save, this)
         input.off(Input.EventType.KEY_DOWN, this.onKeyDown, this)
         input.off(Input.EventType.KEY_UP, this.onKeyUp, this)
         this.node.off(Input.EventType.TOUCH_START, this.onDebugTouch, this, true)

@@ -36,6 +36,7 @@
 class Game : public cc::BaseGame {
 public:
   Game();
+  ~Game() override;
   int init() override;
   // bool init() override;
   void onPause() override;

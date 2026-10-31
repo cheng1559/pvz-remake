@@ -140,9 +140,11 @@ export class ModManager {
                 return []
             }
             if (ids.length) {
-                // A crash (iOS ending the page for memory) sends no events and leaves the marker set.
+                // A crash (iOS ending the page for memory) sends no events and leaves the marker set; closing
+                // the desktop window during startup is a normal exit, like hiding the app.
                 this.onStartupShown()
                 game.on(Game.EVENT_HIDE, this.onStartupHidden)
+                game.on(Game.EVENT_CLOSE, this.onStartupHidden)
                 game.on(Game.EVENT_SHOW, this.onStartupShown)
                 if (typeof window !== 'undefined') window.addEventListener('pagehide', this.onStartupHidden)
             }
@@ -182,6 +184,7 @@ export class ModManager {
     finishStartup(): boolean {
         this.onStartupHidden()
         game.off(Game.EVENT_HIDE, this.onStartupHidden)
+        game.off(Game.EVENT_CLOSE, this.onStartupHidden)
         game.off(Game.EVENT_SHOW, this.onStartupShown)
         if (typeof window !== 'undefined') window.removeEventListener('pagehide', this.onStartupHidden)
         const skipped = this.startedWithoutMods

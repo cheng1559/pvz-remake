@@ -131,7 +131,7 @@ Help uses the `seed` return button, and the Almanac footer uses its dedicated in
 
 `polygon` uses local pixels from the button's top-left corner, with x right and y down, within its `width`/`height`. Three or more vertices enable polygon hit testing; otherwise the rectangle is used. Edges and concave polygons are supported, including node scaling and rotation. Hover, left/right mouse input, touch, and release outside share the same hit area; points outside pass through to controls below. Press offsets move only the visual.
 
-Options preserves immediate volume updates, the 0.65 sound-effect scale, fullscreen submission on close, required 3D acceleration, and forced fullscreen on native mobile. Restart and return-to-menu actions require confirmation; returning saves the level. Settings retain the `pvz-remake:settings:options` storage key.
+Options preserves immediate volume updates, the 0.65 sound-effect scale, fullscreen submission on close, required 3D acceleration, and forced fullscreen on native mobile. Restart and return-to-menu actions require confirmation; returning saves the level. Settings retain the `pvz-remake:settings:options` storage key. Native Windows and macOS remember the window like the original's `PreferredX`/`PreferredY`: `Game.cpp` follows the normal (not fullscreen, maximized or minimized) window's position and size, writes them to `window.txt` in the writable path on exit, and reads them before creating the next window, falling back to the centred 800×600 window when the position is no longer on any display.
 
 ## Resources
 

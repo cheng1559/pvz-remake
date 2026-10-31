@@ -94,7 +94,7 @@ function setup() {
     const modules: Record<string, any> = {
         fflate: { default: { unzipSync, inflateSync, strFromU8 } },
         cc: { Asset, JsonAsset, TextAsset, AudioClip, Texture2D: Texture, SpriteFrame: Frame, Rect: Vector, Size: Vector, Vec2: Vector,
-            game: gameEvents, Game: { EVENT_HIDE: 'hide', EVENT_SHOW: 'show' },
+            game: gameEvents, Game: { EVENT_HIDE: 'hide', EVENT_SHOW: 'show', EVENT_CLOSE: 'close' },
             dynamicAtlasManager: { enabled: true }, macro: {}, director: { root: { device: { capabilities: { maxTextureSize: 16384 } } } },
             sys: { isNative: false, isBrowser: false, OS: { IOS: 'iOS' }, localStorage: { getItem: (key: string) => storage.get(key), setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key),
                 key: (index: number) => [...storage.keys()][index] ?? null, get length() { return storage.size } } },
@@ -621,6 +621,12 @@ test('a startup that ended while loading Mods makes the next one start without t
     const afterReload = new ModManager()
     assert.deepEqual(Array.from(await afterReload.running()), ['heavy'], 'a startup the player left on purpose keeps its Mods next time')
     afterReload.finishStartup()
+    const closed = new ModManager()
+    await closed.running()
+    gameEvents.emit('close')
+    const afterClose = new ModManager()
+    assert.deepEqual(Array.from(await afterClose.running()), ['heavy'], 'closing the desktop window during startup is not a failure')
+    afterClose.finishStartup()
     const resumed = new ModManager()
     await resumed.running()
     gameEvents.emit('hide')
