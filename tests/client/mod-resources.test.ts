@@ -113,6 +113,7 @@ function setup() {
         './SpriteDensity': { setSpriteDensity(texture: object, scale: number) { densities.set(texture, scale) },
             getTextureDensity: (texture: object) => densities.get(texture) ?? 1, applySpriteDensity(frame: any) { frame.normalized = true } },
         './PremultipliedPng': { decodePremultipliedPng },
+        '@/client/font/FontAreaMaterial': { fontAreaMaterial: async (texture: object) => ({ areaSampled: texture }) },
     }
     const blobs = new Map<string, Blob>()
     class TestURL extends URL {
@@ -220,6 +221,7 @@ test('the builtin archive and resource-only Mods share validation and decoding',
     const font = await base.font('pvz:briannetod12')
     assert.ok(font.textures.length > 0)
     for (const texture of font.textures) assert.deepEqual(texture.filters, [1, 0], 'base fonts blend thin strokes when shrinking and retain nearest magnification')
+    assert.deepEqual(font.materials.map((material: any) => material.areaSampled), font.textures, 'base font glyphs average the atlas pixels under each screen pixel')
     assert.ok((await base.ids(modules.cc.JsonAsset)).includes('pvz:selector_open'))
     await manager.install(zipSync(zipFiles()))
     const resources = fresh()
@@ -230,6 +232,7 @@ test('the builtin archive and resource-only Mods share validation and decoding',
     const modFont = await resources.font('pvz:demo')
     assert.equal(modFont.config.json.layers[0].textureScale, 4)
     for (const texture of modFont.textures) assert.deepEqual(texture.filters, [1, 1], 'Mod fonts keep their existing linear sampling')
+    assert.equal(modFont.materials, undefined, 'Mod fonts keep the default sprite material')
     assert.equal((await resources.asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'first')
     assert.equal((await resources.asset('pvz:note', modules.cc.TextAsset)).text, 'first')
     assert.ok(await resources.asset('pvz:chomp', modules.cc.AudioClip))

@@ -1,5 +1,6 @@
 import {
     _decorator,
+    Canvas,
     Component,
     Node,
     Sprite,
@@ -9,6 +10,8 @@ import {
     Color,
     Rect,
     JsonAsset,
+    type Material,
+    Vec3,
 } from 'cc'
 
 import { uiNode } from '@/client/view/uiNode'
@@ -17,6 +20,8 @@ import { FontMetricsUtil } from './FontMetrics'
 import type { FontConfig, RenderCmd } from './FontRenderer.d'
 
 const { ccclass, property, executeInEditMode } = _decorator
+const NO_MATERIALS: Material[] = []
+const screenOrigin = new Vec3(), screenUnit = new Vec3(), worldUnit = new Vec3()
 
 @ccclass('FontRenderer')
 @executeInEditMode(true)
@@ -24,6 +29,8 @@ export class FontRenderer extends Component {
     fontConfigJson: JsonAsset | null = null
 
     layerTextures: Texture2D[] = []
+
+    layerMaterials: Material[] = NO_MATERIALS
 
     @property
     get string(): string {
@@ -135,9 +142,41 @@ export class FontRenderer extends Component {
     }
 
     onEnable() {
+        this._canvas = null
         if (this._dirty) {
             this._rebuild()
         }
+    }
+
+    /** Area-sampled glyphs start on a whole screen pixel, so whole-number zoom keeps pixel fonts sharp. */
+    lateUpdate() {
+        if (!this.layerMaterials.length || !this._charNodes.length) return
+        this._canvas ??= this._findCanvas()
+        const camera = this._canvas?.cameraComponent
+        if (!camera) return
+        const world = this.node.worldPosition
+        camera.worldToScreen(world, screenOrigin)
+        camera.worldToScreen(worldUnit.set(world.x + 1, world.y + 1, world.z), screenUnit)
+        const scale = this.node.worldScale
+        const pixelsX = (screenUnit.x - screenOrigin.x) * scale.x, pixelsY = (screenUnit.y - screenOrigin.y) * scale.y
+        if (!pixelsX || !pixelsY) return
+        const x = (Math.round(screenOrigin.x) - screenOrigin.x) / pixelsX
+        const y = (Math.round(screenOrigin.y) - screenOrigin.y) / pixelsY
+        const dx = x - this._pixelOffset.x, dy = y - this._pixelOffset.y
+        if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) return
+        for (const glyph of this._charNodes) glyph.setPosition(glyph.position.x + dx, glyph.position.y + dy)
+        this._pixelOffset.set(x, y)
+    }
+
+    private _canvas: Canvas | null = null
+    private readonly _pixelOffset = new Vec3()
+
+    private _findCanvas(): Canvas | null {
+        for (let node = this.node.parent; node; node = node.parent) {
+            const canvas = node.getComponent(Canvas)
+            if (canvas) return canvas
+        }
+        return null
     }
 
     // Public API.
@@ -153,12 +192,14 @@ export class FontRenderer extends Component {
     }
 
     setFontAssets(assets: BitmapFontAssets) {
-        if (this.fontConfigJson === assets.config && this.layerTextures === assets.textures) return
+        const materials = assets.materials ?? NO_MATERIALS
+        if (this.fontConfigJson === assets.config && this.layerTextures === assets.textures && this.layerMaterials === materials) return
         this._clearCharNodes()
         for (const frame of this._spriteFrameCache.values()) frame.destroy()
         this._spriteFrameCache.clear()
         this.fontConfigJson = assets.config
         this.layerTextures = assets.textures
+        this.layerMaterials = materials
         this.forceRebuild()
     }
 
@@ -466,6 +507,8 @@ export class FontRenderer extends Component {
             })
             const sprite = glyph.sprite!
             sprite.type = Sprite.Type.SIMPLE
+            const material = this.layerMaterials[cmd.layerIdx]
+            if (material) sprite.customMaterial = material
 
             // PvZ formula: finalColor = min(inputColor * layerColorMult / 255 + layerColorAdd, 255).
             // colorMult[3] is alpha. PvZ Color(int) treats zero alpha bits as 255.
@@ -549,6 +592,7 @@ export class FontRenderer extends Component {
 
     /** Clears all glyph child nodes. */
     private _clearCharNodes() {
+        this._pixelOffset.set(0, 0, 0)
         for (const n of this._charNodes) {
             if (n.isValid) {
                 n.removeFromParent()

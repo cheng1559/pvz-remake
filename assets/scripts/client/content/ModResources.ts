@@ -2,6 +2,7 @@ import { Asset, assetManager, AudioClip, director, dynamicAtlasManager, ImageAss
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import type { ContentCategory } from '@/shared/content'
 import type { FontConfig } from '@/client/font/FontRenderer.d'
+import { fontAreaMaterial } from '@/client/font/FontAreaMaterial'
 import { applySpriteDensity, getTextureDensity, setSpriteDensity } from './SpriteDensity'
 import { decodePremultipliedPng } from './PremultipliedPng'
 import { loadKernel } from '@/shared/kernel/index'
@@ -374,9 +375,11 @@ export class ModResources {
                 relativeFile(layer.image)
                 return texture(pack, `${directory}${layer.image}.png`)
             }))
-            // Linear minification preserves one-pixel strokes when the window shrinks.
-            if (pack === this.base) for (const atlas of textures) atlas.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.NEAREST)
-            return { config, textures }
+            if (pack !== this.base) return { config, textures }
+            // Linear minification preserves one-pixel strokes when the window shrinks; seed packet costs draw these atlases directly.
+            for (const atlas of textures) atlas.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.NEAREST)
+            // Pixel fonts such as Pix118Bold need area sampling to keep even strokes at non-integer scales.
+            return { config, textures, materials: await Promise.all(textures.map(fontAreaMaterial)) }
         })().catch(error => { pack.fonts.delete(id); throw error })
         pack.fonts.set(id, pending)
         return pending

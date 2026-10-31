@@ -1,0 +1,77 @@
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: font-vs:vert
+      frag: font-fs:frag
+      depthStencilState: { depthTest: false, depthWrite: false }
+      rasterizerState: { cullMode: none }
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: one
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: one
+          blendDstAlpha: one_minus_src_alpha
+      properties:
+        atlasSize: { value: [1, 1, 1, 1] }
+}%
+
+CCProgram font-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+  out vec2 uv;
+  out vec4 color;
+  vec4 vert () {
+    uv = a_texCoord;
+    color = a_color;
+    return cc_matViewProj * vec4(a_position, 1.0);
+  }
+}%
+
+CCProgram font-fs %{
+  #pragma extension([GL_OES_standard_derivatives, __VERSION__ < 300])
+  precision highp float;
+  #pragma builtin(local)
+  layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
+  uniform FontAtlas {
+    vec4 atlasSize; // width, height, 1 / width, 1 / height
+  };
+  in vec2 uv;
+  in vec4 color;
+
+  // How much of [lo, lo + width] each of the four texels from first covers, as a share of width.
+  vec4 coverage (float lo, float width, float first) {
+    vec4 start = first + vec4(0.0, 1.0, 2.0, 3.0);
+    return clamp(min(vec4(lo + width), start + 1.0) - max(vec4(lo), start), 0.0, 1.0) / width;
+  }
+
+  // Averages the texels under the screen pixel, so pixel strokes keep even widths at any scale down to 1/3.
+  vec4 frag () {
+    vec2 texel = uv * atlasSize.xy;
+    #if __VERSION__ < 300
+      #ifdef GL_OES_standard_derivatives
+        vec2 footprint = clamp(fwidth(texel), 0.001, 3.0);
+      #else
+        vec2 footprint = vec2(1.0);
+      #endif
+    #else
+      vec2 footprint = clamp(fwidth(texel), 0.001, 3.0);
+    #endif
+    vec2 lo = texel - footprint * 0.5;
+    vec2 first = floor(lo);
+    vec4 wx = coverage(lo.x, footprint.x, first.x);
+    vec4 wy = coverage(lo.y, footprint.y, first.y);
+    vec4 sum = vec4(0.0);
+    for (int y = 0; y < 4; y++) {
+      for (int x = 0; x < 4; x++) {
+        // Texel centers read the same value under nearest and linear filtering.
+        vec4 pixel = texture(cc_spriteTexture, (first + vec2(float(x), float(y)) + 0.5) * atlasSize.zw);
+        sum += wx[x] * wy[y] * vec4(pixel.rgb * pixel.a, pixel.a);
+      }
+    }
+    return sum * vec4(color.rgb * color.a, color.a);
+  }
+}%

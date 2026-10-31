@@ -1,8 +1,6 @@
-import { BASE_MOD_ID } from '@/shared/mod'
 import { Color, director, Director, KeyCode, Node, UITransform } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
 import { modManager, type ModImport } from '@/client/content/ModManager'
-import { modResources } from '@/client/content/ModResources'
 import { SoundEffect } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
@@ -30,7 +28,7 @@ export interface PackageDialogOptions {
     restart: () => Promise<void>
 }
 
-interface Entry { id: string, version?: string, author?: string, error?: string, builtin?: boolean }
+interface Entry { id: string, version?: string, author?: string, error?: string }
 
 /**
  * Imports, enabled states and uninstalls stay in the draft until Apply; Cancel discards them.
@@ -66,21 +64,20 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     background.stroke()
     const font = ui.assets.fonts.profile.config
     const metrics = FontMetricsUtil.getMetrics(font)
-    const loading = ui.label(list.node, {
-        text: 'Loading...', font: 'profile', color: TEXT_COLOR, width, align: 'center',
+    /** Loading and the empty list share one centered line. */
+    const notice = (parent: Node, text: string) => ui.label(parent, {
+        text, font: 'profile', color: TEXT_COLOR, width, align: 'center',
         y: Math.floor((LIST_HEIGHT - metrics.height) / 2) - metrics.ascentPadding,
     })
+    const loading = notice(list.node, 'Loading...')
     // Paint Loading before reading and unpacking installed Mods.
     await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
     if (!dialog.node.isValid || !dialog.node.activeInHierarchy) return dialog
     const manager = modManager
-    let initial: string[], installedEntries: Entry[], baseEntry: Entry = { id: BASE_MOD_ID, builtin: true }
+    let initial: string[], installedEntries: Entry[]
     try {
         initial = await manager.list()
         installedEntries = await manager.installed()
-        // The built-in base row shows its own version (and author) like the installed Mods.
-        const base = await modResources?.baseContent?.().then(archive => archive.manifest).catch(() => undefined)
-        baseEntry = { id: BASE_MOD_ID, builtin: true, ...(base ? { version: base.version, ...(base.author ? { author: base.author } : {}) } : {}) }
     } catch (error) {
         dialog.close(false)
         throw error
@@ -123,7 +120,6 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         order = [...order, ...ids].filter((id, index, all) => all.indexOf(id) === index && ids.includes(id))
         for (const id of checked) if (!order.includes(id)) checked.delete(id)
         entries = order.map(id => installed.find(entry => entry.id === id)!)
-        entries.push(baseEntry)
         render()
     }
 
@@ -131,13 +127,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         const offset = scroll.offset
         for (const child of [...scroll.content.children]) { child.active = false; child.destroy() }
         scroll.setContentHeight(entries.length * ROW_HEIGHT)
-        if (!entries.length) {
-            const text = ui.text('PACKAGE_NO_MODS')
-            ui.label(scroll.content, {
-                text, font: 'profile', color: DIM_COLOR, y: textY,
-                x: Math.max(0, Math.floor((width - FontMetricsUtil.measureTextWidth(font, text)) / 2)),
-            })
-        }
+        if (!entries.length) notice(scroll.content, ui.text('PACKAGE_NO_MODS'))
         const columns = layoutColumns(scroll.contentWidth)
         entries.forEach((entry, index) => renderRow(entry, index, scroll.contentWidth, columns))
         scroll.offset = offset
@@ -159,19 +149,14 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
             size: { width: rowWidth, height: ROW_HEIGHT }, anchor: { x: 0, y: 1 },
         }).node
         const toggle = (value: boolean) => { if (value) checked.add(entry.id); else checked.delete(entry.id) }
-        // The base game stays on: its box and name answer clicks with a note, as the options' 3D acceleration box does.
-        const locked = entry.builtin ? () => {
-            ui.dialog(dialog.node, { title: ui.text('PACKAGE_BASE_REQUIRED_HEADER'), message: ui.text('PACKAGE_BASE_REQUIRED_BODY') })
-        } : undefined
         const checkbox = ui.checkbox(row, {
-            x: 6, y: Math.ceil(ROW_HEIGHT / 2 - CHECKBOX_CENTER_Y * CHECKBOX_SCALE), value: entry.builtin || checked.has(entry.id), onChange: toggle, locked,
+            x: 6, y: Math.ceil(ROW_HEIGHT / 2 - CHECKBOX_CENTER_Y * CHECKBOX_SCALE), value: checked.has(entry.id), onChange: toggle,
         })
         checkbox.node.setScale(CHECKBOX_SCALE, CHECKBOX_SCALE)
         const text = ui.text('PACKAGE_UNINSTALL')
         const textWidth = FontMetricsUtil.measureTextWidth(font, text)
         const uninstallX = rowWidth - textWidth - 8
-        const nameRight = entry.builtin ? rowWidth - 8 : columns.right
-        const nameWidth = Math.max(0, nameRight - 46)
+        const nameWidth = Math.max(0, columns.right - 46)
         const suffix = entry.error ? ' [Error]' : ''
         let id = entry.id
         if (measure(id + suffix) > columns.nameWidth) {
@@ -182,12 +167,6 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         const labels = [ui.label(row, { text: id + suffix, font: 'profile', color: nameColor, x: 46, y: textY })]
         if (entry.version) labels.push(ui.label(row, { text: entry.version, font: 'profile', color: nameColor, x: columns.versionX, y: textY }))
         if (entry.error) ui.tooltip(row, { text: entry.error })
-        if (locked) {
-            rowButton(row, 46, nameWidth, nameColor, true, locked, color => { for (const label of labels) label.renderer.fontColor = color })
-            row.active = true
-            return
-        }
-
         const label = ui.label(row, { text, font: 'profile', color: LINK_COLOR, x: uninstallX, y: textY })
         rowButton(row, uninstallX, textWidth, LINK_COLOR, true, () => { void run(() => uninstallEntry(entry.id)) },
             color => { label.renderer.fontColor = color })

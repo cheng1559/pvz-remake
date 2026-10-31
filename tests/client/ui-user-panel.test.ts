@@ -400,7 +400,7 @@ test('dialogs and wrapped text follow LawnDialog: 3px after the header, button h
 
     // Bare class decorators keep the class; decorator factories return an identity decorator.
     const decorator = (...args: unknown[]) => args.length === 1 && typeof args[0] === 'function' ? undefined : (value: unknown) => value
-    const { FontRenderer } = load('client/font/FontRenderer', { cc: { _decorator: new Proxy({}, { get: () => decorator }), Component: class {} } })
+    const { FontRenderer } = load('client/font/FontRenderer', { cc: { _decorator: new Proxy({}, { get: () => decorator }), Component: class {}, Vec3: class {} } })
     const offset = (align: number, line: number, width: number, scale = 1) => FontRenderer.prototype._getLineOffsetX.call({ _textAlign: align }, line, width, scale)
     assert.deepEqual([offset(2, 7, 10), offset(2, 13, 10), offset(1, 7, 10, 2), offset(0, 7, 10)], [1, -1, 6, 0],
         'Graphics::WriteString: (width - line) / 2 truncated, and a wider line extends past both sides')

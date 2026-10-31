@@ -54,7 +54,5 @@
   "DEBUG_NO_MOWERS": "No lawn mowers could be changed",
   "DEBUG_ITEM_NOT_INSTALLED": "Item is not installed: %s",
   "DEBUG_AWARD_EXISTS": "The level award already exists",
-  "DEBUG_UNAVAILABLE": "/%s is unavailable in this version",
-  "PACKAGE_BASE_REQUIRED_HEADER": "Can't Disable",
-  "PACKAGE_BASE_REQUIRED_BODY": "You can't disable the base game."
+  "DEBUG_UNAVAILABLE": "/%s is unavailable in this version"
 }
