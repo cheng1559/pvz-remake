@@ -107,6 +107,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
             return { result: Promise.resolve() }
         } },
         '@/client/screens/MenuPages': { MENU_PAGES },
+        '@/client/content/ModManager': { modManager: { finishStartup: () => false } },
         '@/client/ui/UIDialog': { UIDialog: { handleKey: () => { dialogKeys++; return false } } },
         '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1 }), completeLevel: async () => ({ nextLevelId: 'pvz:adventure-1-2' }) } },
         '@/client/ui/UI': { UI: { load: async () => ({}) } },
@@ -560,7 +561,7 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
         exports: module.exports,
         require: () => ({
             Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
-            DEBUG: false, preloadAssets: async (progress: (value: number) => void) => progress(1),
+            DEBUG: false, sys: { isBrowser: false, os: 'mac', OS: { IOS: 'ios' } }, preloadAssets: async (progress: (value: number) => void) => progress(1),
             waitForPreloadFrame: async () => { preparationYields++ },
             Director: { EVENT_AFTER_DRAW: 'draw' }, director: { once(_event: string, callback: () => void) {
                 assert.equal(achievementRoot.active, true, 'the loading screen warms the cached components before opening them')

@@ -37,20 +37,63 @@
         <!--<meta name="browsermode" content="application">-->
         <meta name="x5-page-mode" content="app" />
 
-        <!--<link rel="apple-touch-icon" href=".png" />-->
-        <!--<link rel="apple-touch-icon-precomposed" href=".png" />-->
+        <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 
         <link rel="stylesheet" type="text/css" href="style.css" />
         <style>
             html, body {
                 overflow: hidden;
+                /* Unlike hidden, clip cannot be scrolled even by the browser: while Cocos rotates the frame, its
+                   layout box overflows sideways and iOS would scroll it the first time the keyboard opens. */
+                overflow: clip;
                 overscroll-behavior: none;
             }
 
             #GameCanvas {
                 touch-action: none;
             }
+
+            /* iOS home screen apps with a translucent status bar size the page without it, leaving a gap at the bottom. */
+            @media (display-mode: standalone), (display-mode: fullscreen) {
+                html, body {
+                    height: var(--app-height, 100%);
+                }
+            }
         </style>
+        <script>
+            // The same iOS bug shortens innerHeight by the status bar, which Cocos sizes its canvas from (the game's
+            // right edge while the frame is rotated). The app covers the whole screen, so report the screen's height.
+            (function () {
+                // iOS scrolls the page, or the body itself while Cocos rotates the frame, to show a focused input and
+                // leaves it there after the keyboard closes. The game draws its own text field, so nothing may scroll.
+                var ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+                if (ios) {
+                    var unscroll = function () {
+                        if (window.scrollX || window.scrollY) window.scrollTo(0, 0)
+                        for (var element of [document.documentElement, document.body]) {
+                            if (element && (element.scrollTop || element.scrollLeft)) { element.scrollTop = 0; element.scrollLeft = 0 }
+                        }
+                    }
+                    window.addEventListener('scroll', unscroll)
+                    document.addEventListener('scroll', unscroll, true)
+                }
+            })();
+            (function () {
+                var descriptor = Object.getOwnPropertyDescriptor(window, 'innerHeight')
+                if (!navigator.standalone || !descriptor || !descriptor.get) return
+                var innerHeight = descriptor.get
+                var portrait = window.matchMedia('(orientation: portrait)')
+                Object.defineProperty(window, 'innerHeight', { configurable: true, get: function () {
+                    var height = innerHeight.call(window)
+                    var screenHeight = portrait.matches ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height)
+                    return Math.max(height, screenHeight)
+                } })
+                // The page box is shortened the same way, in either orientation; size it to the screen too.
+                var fit = function () { document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px') }
+                fit()
+                window.addEventListener('resize', fit)
+            })()
+        </script>
     </head>
     <body>
         <div id="GameDiv" cc_exact_fit_screen="true">

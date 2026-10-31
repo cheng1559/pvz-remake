@@ -107,3 +107,27 @@ test('viewport expands from 4:3 to 21:9, then letterboxes outside the range with
     assert.deepEqual(view.eventNames(), [])
 })
 
+
+test('iOS web restages the viewport once the keyboard has shown or hidden, as a rotation would', () => {
+    const view = new EventEmitter(), visual = new EventTarget(), timers: Array<() => void> = [], events: string[] = []
+    const sys = { isNative: false, os: 'ios', OS: { OSX: 'mac', WINDOWS: 'windows', IOS: 'ios' } }
+    Object.assign(view, { getDesignResolutionSize: () => ({ width: 800, height: 600 }) })
+    view.on('canvas-resize', () => events.push('stage'))
+    const exports: any = {}
+    const code = transpileModule(readFileSync('assets/scripts/client/view/ClientViewport.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+    })
+    runInNewContext(code.outputText, { exports, Event, visualViewport: visual,
+        setTimeout: (callback: () => void) => timers.push(callback), clearTimeout: () => { timers.length = 0 },
+        window: { scrollTo: (x: number, y: number) => events.push(`scroll ${x},${y}`), dispatchEvent: (event: Event) => events.push(event.type) },
+        require: () => ({ Node: class {}, view, screen: {}, sys, ResolutionPolicy: {} }),
+    })
+    exports.initializeViewport()
+    exports.initializeViewport()
+    visual.dispatchEvent(new Event('resize'))
+    visual.dispatchEvent(new Event('resize'))
+    assert.deepEqual(events, [], 'nothing happens while the keyboard is still moving')
+    assert.equal(timers.length, 1)
+    timers[0]()
+    assert.deepEqual(events, ['scroll 0,0', 'resize', 'stage'])
+})

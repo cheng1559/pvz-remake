@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, EditBox, EventMouse, game, Graphics, input, Input, KeyCode, Mask, Node, sys, UITransform, Vec3, type EventKeyboard, type EventTouch } from 'cc'
+import { _decorator, Color, Component, EditBox, EventMouse, game, Graphics, input, Input, KeyCode, Mask, Node, screen as ccScreen, sys, UITransform, Vec2, Vec3, type EventKeyboard, type EventTouch } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil } from '@/client/font'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
@@ -18,6 +18,24 @@ type NativeInputBox = {
     hideInputBoxAccessory?: () => boolean
 }
 const nativeInputBox = () => (globalThis as { jsb?: NativeInputBox }).jsb
+type WebEditBox = { _edTxt?: InputElement, _updateMatrix?: () => void }
+const pinnedEditBoxes = new WeakSet<WebEditBox>()
+
+/**
+ * iOS web pans the page up so a focused input sits above the keyboard. The game draws its own text, so the hidden
+ * DOM input stays at the container's top-left corner, the top of the screen whether or not Cocos rotates the frame.
+ * Desktop browsers keep the input in place for their IME candidate windows.
+ */
+function pinToTop(editBox: WebEditBox): void {
+    if (sys.isNative || sys.os !== sys.OS.IOS || pinnedEditBoxes.has(editBox)) return
+    pinnedEditBoxes.add(editBox)
+    editBox._updateMatrix = () => {
+        const style = editBox._edTxt?.style
+        if (!style) return
+        Object.assign(style, { top: '0px', left: '0px', bottom: 'auto', width: '1px', height: '1px', transform: 'none', '-webkit-transform': 'none' })
+    }
+    editBox._updateMatrix()
+}
 
 export interface UIInputOptions {
     value?: string
@@ -43,6 +61,59 @@ export class UIInput extends Component {
     private static readonly instances = new Set<UIInput>()
     private static readonly nativeHandledKeys = new Set<number>()
     static get hasFocusedInput(): boolean { return !!this.active?.available() }
+    private static nativeTapsInstalled = false
+    /** The field a tap landed on while the keyboard was down; it takes focus on the tap's click. */
+    private static tapTarget: UIInput | null = null
+    private static tapClickUntil = 0
+
+    /**
+     * iOS web: Cocos cancels every canvas touch, so WebKit never sees a tap, and once the keyboard has been dismissed
+     * the page cannot take keyboard focus back (Chrome until the tab is switched, Safari after its address bar was
+     * used). While the keyboard is down, a tap on a text field reaches WebKit as an ordinary tap and the field takes
+     * focus on its click, once WebKit has handed keyboard focus back. The mouse events WebKit synthesizes are kept
+     * from Cocos, whose mouse down would focus the canvas. Taps while the keyboard is up stay with Cocos: WebKit
+     * would blur the field and close the keyboard.
+     */
+    private static installNativeTaps(): void {
+        if (this.nativeTapsInstalled || sys.isNative || sys.os !== sys.OS.IOS || typeof window === 'undefined') return
+        this.nativeTapsInstalled = true
+        const allowDefault = (event: Event) => { event.preventDefault = () => {} }
+        window.addEventListener('touchstart', event => {
+            const visual = (globalThis as { visualViewport?: { height: number } }).visualViewport
+            const keyboardUp = !!UIInput.active && !!visual && visual.height < window.innerHeight * 0.85
+            this.tapTarget = keyboardUp ? null : this.fieldAt(event.changedTouches[0])
+            if (this.tapTarget) allowDefault(event)
+        }, { capture: true })
+        window.addEventListener('touchend', event => {
+            if (!this.tapTarget) return
+            allowDefault(event)
+            this.tapClickUntil = performance.now() + 800
+        }, { capture: true })
+        for (const type of ['mousedown', 'mousemove', 'mouseup', 'click']) {
+            window.addEventListener(type, event => {
+                if (performance.now() > this.tapClickUntil) return
+                event.stopPropagation()
+                if (type === 'mousedown') event.preventDefault()
+                if (type !== 'click') return
+                const field = this.tapTarget
+                this.tapTarget = null
+                if (field?.node?.isValid) field.focus()
+            }, { capture: true })
+        }
+    }
+
+    /** The available text field a DOM touch lands on, located as Cocos locates touches. */
+    private static fieldAt(touch: Touch | undefined): UIInput | null {
+        const canvas = game.canvas
+        if (!touch || !canvas) return null
+        const rect = canvas.getBoundingClientRect()
+        let x = touch.clientX - rect.x, y = rect.y + rect.height - touch.clientY
+        // While Cocos rotates the frame, the landscape canvas sits in a portrait box.
+        if (rect.width < rect.height && canvas.width > canvas.height) [x, y] = [rect.height - y, x]
+        const location = new Vec2(x * ccScreen.devicePixelRatio, y * ccScreen.devicePixelRatio)
+        return [...this.instances].find(field => field.available() && field.node.getComponent(UITransform)!.hitTest(location, 0)) ?? null
+    }
+
     private static readonly hoverClient = {
         cursor: 'text' as const,
         clearHover: () => { if (UIInput.active && !UIInput.active.available()) UIInput.active.blur() },
@@ -149,14 +220,21 @@ export class UIInput extends Component {
         UIInput.active = this
         this.focused = true
         this.blink = 0
-        this.element = (this.native._impl as { _edTxt?: InputElement } | null)?._edTxt ?? null
+        const editBox = this.native._impl as WebEditBox | null
+        this.element = editBox?._edTxt ?? null
         if (this.element) {
+            pinToTop(editBox)
             const element = this.element
             element.style.opacity = '0'
             element.style.pointerEvents = 'none'
             element.autocomplete = 'off'
             element.spellcheck = false
+            // Safari's corrections and suggestion bar follow these, like the iOS keyboard traits of native builds.
+            const autocorrect = this.options.autocorrect ? 'on' : 'off'
+            element.setAttribute('autocorrect', autocorrect)
+            element.setAttribute('autocapitalize', autocorrect === 'on' ? 'sentences' : 'off')
             element.addEventListener('keydown', this.domKey, true)
+            element.addEventListener('input', this.domInput)
             // EditBox calls DOM focus() without options; keep its editing lifecycle without scrolling the page.
             const focus = element.focus
             element.focus = options => focus.call(element, { ...options, preventScroll: true })
@@ -185,6 +263,7 @@ export class UIInput extends Component {
     blur(): void {
         const restoreGameFocus = this.focused && this.element !== null
         this.element?.removeEventListener('keydown', this.domKey, true)
+        this.element?.removeEventListener('input', this.domInput)
         this.element = null
         this.ended()
         this.native?.blur()
@@ -194,6 +273,7 @@ export class UIInput extends Component {
     selectAll(): void { this.anchor = 0; this.caret = this.content.length; this.syncSelection(); this.draw() }
 
     onEnable(): void {
+        UIInput.installNativeTaps()
         UIInput.instances.add(this)
         UIHoverManager.registerClient(UIInput.hoverClient)
         for (let node: Node | null = this.node; node; node = node.parent) if (node.getComponent(UITransform)) this.captureRoot = node
@@ -237,8 +317,19 @@ export class UIInput extends Component {
             .slice(0, this.options.maxLength ?? 65535).join('')
     }
 
-    private changed(): void {
-        const raw = this.native.string
+    /**
+     * Android keyboards compose even English words, and the EditBox reports their text only once the composition ends
+     * (often at a space). Show the composing text as it is typed; the EditBox's own change then filters it.
+     */
+    private readonly domInput = (event: Event): void => {
+        if ((event as InputEvent).isComposing) this.changed(true)
+    }
+
+    // TEXT_CHANGED passes the EditBox as the first argument, so only an explicit true means composing.
+    private changed(composingArg: unknown = false): void {
+        const composing = composingArg === true && this.element !== null
+        // Writing back mid-composition would end it, so the composing text is only drawn.
+        const raw = composing ? this.element!.value : this.native.string
         const range = !this.element ? nativeInputBox()?.getInputBoxSelection?.() : null
         const from = this.element?.selectionStart ?? range?.start ?? raw.length
         const to = this.element?.selectionEnd ?? range?.end ?? raw.length
@@ -247,7 +338,7 @@ export class UIInput extends Component {
         this.caret = this.sanitize(raw.slice(0, to)).length
         const changed = next !== this.content
         this.content = next
-        if (raw !== next) {
+        if (raw !== next && !composing) {
             this.native.string = next
             if (this.element) this.element.value = next
             this.syncSelection()
@@ -317,7 +408,8 @@ export class UIInput extends Component {
     private press(event: PointerEvent): void {
         if (!this.available()) return
         event.propagationStopped = true
-        this.focus()
+        // A tap that WebKit handles focuses the field on its click (see installNativeTaps).
+        if (UIInput.tapTarget !== this || !('touch' in event)) this.focus()
         const point = event.getUILocation(), now = Date.now()
         const double = this.anchor === this.caret && now - this.lastPress.time <= 500
             && (point.x - this.lastPress.x) ** 2 + (point.y - this.lastPress.y) ** 2 <= 36

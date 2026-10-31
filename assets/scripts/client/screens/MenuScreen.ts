@@ -1,5 +1,5 @@
 import { modResources } from '@/client/content/ModResources'
-import { _decorator, BlockInputEvents, Color, Component, director, Director, game, isValid, Node, Sprite, SpriteFrame } from 'cc'
+import { _decorator, BlockInputEvents, Color, Component, director, Director, game, isValid, Node, Sprite, SpriteFrame, sys } from 'cc'
 import { DEBUG } from 'cc/env'
 import { preloadAssets } from '@/client/content/PreloadAssets'
 import { waitForPreloadFrame } from '@/client/content/preloadTasks'
@@ -68,10 +68,12 @@ export class MenuScreen extends Component {
             const startup = root.addComponent(StartupScreen)
             startup.onStart = () => { void this.onNavigate('main') }
             try {
+                // iOS browsers load images when used, as Debug does: HD packs decode to over 1 GB, past the page's memory limit.
+                const preloadAll = !DEBUG && !(sys.isBrowser && sys.os === sys.OS.IOS)
                 await startup.initialize(id === 'splash', async progress => {
-                    if (!DEBUG) await preloadAssets(value => progress(value * 0.95))
+                    if (preloadAll) await preloadAssets(value => progress(value * 0.95))
                     await waitForPreloadFrame()
-                    await this.prepareMain(value => progress(DEBUG ? value * 0.9 : 0.95 + value * 0.04))
+                    await this.prepareMain(value => progress(preloadAll ? 0.95 + value * 0.04 : value * 0.9))
                     await waitForPreloadFrame()
                     const achievements = await this.prepareAchievements(true)
                     // Initialize components and render data behind the loading screen once.

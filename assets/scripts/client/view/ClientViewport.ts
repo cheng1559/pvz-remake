@@ -1,9 +1,32 @@
 import { Node, ResolutionPolicy, screen, sys, UITransform, view, type Size } from 'cc'
 
 let restore: (() => void) | undefined
+let followingKeyboard = false
+const KEYBOARD_SETTLE_MS = 300
+
+/**
+ * iOS web: showing and hiding the keyboard can leave the stage sized for the shortened window (letterboxed and
+ * clipped) until the next rotation. Once the visible area settles, redo what a rotation does.
+ */
+function followIosKeyboard(): void {
+    const visual = (globalThis as { visualViewport?: EventTarget }).visualViewport
+    if (followingKeyboard || sys.isNative || sys.os !== sys.OS.IOS || !visual) return
+    followingKeyboard = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    visual.addEventListener('resize', () => {
+        clearTimeout(timer)
+        timer = setTimeout(() => {
+            window.scrollTo(0, 0)
+            window.dispatchEvent(new Event('resize'))
+            // The frame may already match the window, so recompute the stage even if Cocos skips its own resize.
+            view.emit('canvas-resize')
+        }, KEYBOARD_SETTLE_MS)
+    })
+}
 
 /** Apply the default window constraint after Mods have had a chance to expand the viewport. */
 export function initializeViewport(): void {
+    followIosKeyboard()
     if (restore) return
     const { width, height } = view.getDesignResolutionSize()
     constrainNativeWindow(width / height, width / height)

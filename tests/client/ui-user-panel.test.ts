@@ -191,6 +191,7 @@ test('a new player may copy the previous Mods, and switching to other Mods asks 
     const creating = dialogs.at(-1).onConfirm()
     await setImmediate()
     assert.equal(dialogs.at(-1).options.title, 'PLAYER_MODS_COPY_HEADER', 'Bob has Mods, so the new player is offered them')
+    assert.equal(dialogs.at(-1).options.message, 'PLAYER_MODS_COPY_BODY', 'declining would not restart here, so no warning')
     dialogs.at(-1).close(true)
     await creating
     const carol = store.getCurrentProfile().id
@@ -216,7 +217,7 @@ test('input keeps programmatic values silent, filters pasted text, and releases 
     const { UIInput } = load('client/ui/UIInput', {
         cc: {
             Component: class {}, Color: class {}, KeyCode: { SPACE: 32, ENTER: 13, ESCAPE: 27 },
-            _decorator: { ccclass: () => (value: unknown) => value },
+            _decorator: { ccclass: () => (value: unknown) => value }, sys: { isNative: false, os: 'ios', OS: { IOS: 'ios' } },
             game: { canvas: { focus(options: FocusOptions) { assert.equal(options.preventScroll, true); canvasFocuses++ } } },
         },
         '@/client/input/UIHoverManager': { UIHoverManager: scope },
@@ -231,7 +232,8 @@ test('input keeps programmatic values silent, filters pasted text, and releases 
     field.font = { config: null }
     let blurs = 0, changes = 0, submitted = '', focusOptions: FocusOptions | undefined
     const element = {
-        value: '', selectionStart: 0, selectionEnd: 0, style: {},
+        value: '', selectionStart: 0, selectionEnd: 0, style: {} as Record<string, string>, attributes: {} as Record<string, string>,
+        setAttribute(name: string, value: string) { this.attributes[name] = value },
         addEventListener() {}, removeEventListener() {},
         focus(options?: FocusOptions) { focusOptions = options },
         setSelectionRange(start: number, end: number) { this.selectionStart = start; this.selectionEnd = end },
@@ -246,14 +248,28 @@ test('input keeps programmatic values silent, filters pasted text, and releases 
     field.focus()
     assert.equal(focusOptions?.preventScroll, true, 'opening the input must not scroll the game page')
     assert.equal(element.focus, domFocus, 'the DOM override is scoped to the EditBox focus call')
+    assert.deepEqual(element.attributes, { autocorrect: 'off', autocapitalize: 'off' }, 'Safari offers no corrections or suggestions by default')
+    field.native._impl._updateMatrix()
+    assert.deepEqual([element.style.top, element.style.bottom, element.style.transform], ['0px', 'auto', 'none'],
+        'iOS web keeps the hidden input at the top of the screen, so the keyboard does not pan the page')
     field.selectAll()
     assert.deepEqual([element.selectionStart, element.selectionEnd], [0, 12])
     field.native.string = 'New!! Name\nOther'
     element.selectionStart = element.selectionEnd = 10
-    field.changed()
+    field.changed(field.native)
     assert.equal(field.value, 'New Name')
     assert.equal(element.value, 'New Name')
     assert.equal(changes, 1)
+    // Android keyboards compose words; the composing text shows at once and is not written back mid-composition.
+    element.value = 'New Name|x'
+    element.selectionStart = element.selectionEnd = 10
+    field.domInput({ isComposing: true })
+    assert.equal(field.value, 'New Namex')
+    assert.equal(element.value, 'New Name|x')
+    field.domInput({ isComposing: false })
+    assert.equal(field.value, 'New Namex', 'the EditBox reports a finished composition itself')
+    field.native.string = element.value = 'New Name'
+    field.changed()
     assert.equal(UIInput.handleKey({ keyCode: 32 }), true)
     field.domKey({ key: 'Enter', preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {} })
     assert.equal(submitted, 'New Name')
@@ -305,7 +321,8 @@ test('native input keeps its caret and text through completion and repeated subm
         text = text.slice(0, start) + value + text.slice(end)
         start += value.length; end = start
         field.native.string = text
-        field.changed()
+        // EditBox events pass the EditBox itself as the first argument.
+        field.changed(field.native)
     }
     type('sp')
     assert.equal(field.value, '/sp')
