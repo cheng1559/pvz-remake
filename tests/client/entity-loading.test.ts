@@ -390,9 +390,11 @@ test('a plant blink keeps the base pose from its first blink when the body anima
     })
     // Sun-shroom faces: small (0.36) before anim_grow, big (0.54) after it.
     const small = { scaleX: 0.36 }, big = { scaleX: 0.54 }
-    const body = (face: object) => ({ face, setTracksVisible() {} })
+    // The puff-shroom's body sits 5px down; its blink follows the body's offset.
+    const body = (face: object) => ({ face, setTracksVisible() {}, node: { position: { x: 0, y: -5 }, scale: { x: 1, y: 1, z: 1 } } })
     const blink = {
         attachmentTrackId: null as string | null, attachmentBasePose: null as object | null,
+        node: { position: null as object | null, setPosition(position: object) { this.position = position }, setScale() {} },
         attachToTrack(parent: { face: object }, trackId: string, base?: object) {
             this.attachmentTrackId = trackId
             this.attachmentBasePose = base ?? parent.face
@@ -410,6 +412,7 @@ test('a plant blink keeps the base pose from its first blink when the body anima
     view.body = body(big)
     view.attachExtras()
     assert.equal(blink.attachmentBasePose, small, 'the grown sun-shroom blink still scales from the small face')
+    assert.deepEqual(blink.node.position, { x: 0, y: -5 }, 'an attachment sits where the body is drawn')
 })
 
 test('preloaded animation frames are shared by registry and failed preparation can retry', async () => {

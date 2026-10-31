@@ -99,6 +99,10 @@ export abstract class AnimatedPlantView implements PlantView {
     }
 
     private attachExtra(name: string, extra: ReanimPlayer): void {
+        // The track pose is in the body's space: the body sits at its clip's offset (the puff-shroom's 5px) and at
+        // the plant's scale (the potato mine's 0.8).
+        extra.node.setPosition(this.body.node.position)
+        extra.node.setScale(this.body.node.scale)
         const trackId = attachmentTrack(this.extraClip(name))
         extra.attachToTrack(this.body, trackId, this.attachmentBases.get(trackId))
     }

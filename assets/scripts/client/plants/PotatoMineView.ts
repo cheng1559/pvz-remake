@@ -1,7 +1,6 @@
 import { randomAnimationRate } from '@/client/content/ClientAnimationRegistry'
 import { plantDefinition } from './definitions'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
-import { attachmentTrack } from '@/shared/content/presentation'
 import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import { AnimatedPlantView, plantAnimation } from './AnimatedPlantView'
 
@@ -46,21 +45,15 @@ export class PotatoMineView extends AnimatedPlantView {
     }
 
     protected attachExtras(clip: ClientAnimationClip): void {
-        // A potato mine shows its face and light only once armed; its blink and glow attach then.
-        const scale = plantDefinition(this.animations.definitions, this.context.plant.typeId).scale
-        const attach = clip.reanimId === this.clips.armed.reanimId
+        // The light draws from its own player, so the body hides it and the glow shows only the light.
         const glow = this.parts.glow ?? []
         this.body.setTracksVisible(glow, false)
-        for (const [name, extra] of this.extras) {
-            extra.node.setPosition(clip.x, clip.y)
-            extra.node.setScale(scale, scale, 1)
-            if (name === 'Glow') {
-                extra.setTracksVisible(extra.trackIds, false)
-                extra.setTracksVisible(glow, true)
-            }
-            if (attach) extra.attachToTrack(this.body, attachmentTrack(this.extraClip(name)))
-            else extra.hide()
-        }
+        const light = this.extras.get('Glow')
+        light?.setTracksVisible(light.trackIds, false)
+        light?.setTracksVisible(glow, true)
+        // A potato mine shows its face and light only once armed; its blink and glow attach then.
+        if (clip.reanimId === this.clips.armed.reanimId) super.attachExtras(clip)
+        else for (const extra of this.extras.values()) extra.hide()
     }
 
     protected blinkPlayer() { return this.abilityState === 'armed' ? this.extras.get('Blink') : undefined }
