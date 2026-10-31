@@ -31,6 +31,7 @@
         "build:windows:release": "cocos build --project . --platform windows --build-config build-configs/release.json --no-interactive",
         "compile:windows:debug": "npm run build:windows:debug && cocos make --platform windows --dest build/windows",
         "compile:windows:release": "npm run build:windows:release && cocos make --platform windows --dest build/windows",
+        "package:windows": "tsx tools/installer/package-windows.ts",
         "build:android:arm64:debug": "cocos build --project . --platform android --build-config build-configs/android-arm64-debug.json --no-interactive",
         "build:android:arm64:release": "cocos build --project . --platform android --build-config build-configs/android-arm64-release.json --no-interactive",
         "compile:android:arm64:debug": "npm run build:android:arm64:debug && cocos make --platform android --dest build/android-arm64-debug",
