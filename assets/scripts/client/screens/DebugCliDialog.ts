@@ -116,7 +116,7 @@ class DebugCliDialog extends Component {
 
 export function showDebugCliDialog(parent: Node, ui: UI, execute: (command: string) => Promise<DebugCliResult>, catalog?: DebugCliCatalog): Promise<DebugCliResult | null> {
     const dialog = ui.dialog(parent, {
-        title: ui.text('DEBUG_CLI_HEADER'), message: ui.text('DEBUG_CLI_PROMPT'), extraWidth: 110, extraHeight: 40,
+        title: ui.text('DEBUG_CLI_HEADER'), message: ui.text('DEBUG_CLI_PROMPT'), width: 500, extraHeight: 40,
         centerMessage: false, confirmText: ui.text('DIALOG_BUTTON_OK'), cancelText: ui.text('DIALOG_BUTTON_CANCEL'), clickSound: null,
     })
     const cli = dialog.node.addComponent(DebugCliDialog)
