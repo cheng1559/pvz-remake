@@ -8,10 +8,10 @@ import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { UILabel } from '@/client/ui/UILabel'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
-import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { MenuAction } from './MenuPages'
 import { formatMoney } from '@/client/ui/formatMoney'
 import { CrazyDaveView } from '@/client/characters/CrazyDaveView'
@@ -128,7 +128,7 @@ export class StoreScreen extends Component {
         const button = this.ui.button(this.items, {
             images: { normal: this.sprites['particles/seedpacketflash'] }, x, y, width: 50, height: 87,
             imageBox: { width: 50, height: 70 }, pressOffset: [0, 0], enabled: state === 'available',
-            pressSound: null, clickSound: null, releaseToNormalOnPressOut: true, refreshHoverOnEnable: false,
+            pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), releaseToNormalOnPressOut: true, refreshHoverOnEnable: false,
         })
         button.node.name = `StoreItemView-${item.id}`
         const visual = button.node.getChildByName('Visual')!
@@ -157,9 +157,8 @@ export class StoreScreen extends Component {
             else if (this.hoveredItem === item) this.hoveredItem = null
         }
         button.onStateChange(state === 'available' ? 'normal' : 'disabled')
-        // Desktop store purchases begin on press; touch mode waits for release, as in the reference UI.
-        button.onPress = () => { if (!GameDebugSettings.isMobileMode()) void this.buy(item) }
-        button.onClick = () => { if (GameDebugSettings.isMobileMode()) void this.buy(item) }
+        // Desktop purchases begin on press; touch mode waits for release, as in the reference UI, so holding shows the description.
+        button.onClick = () => { void this.buy(item) }
     }
 
     private centerText(parent: Node, text: string, font: 'storeItem', x: number, y: number, width: number, height: number, color = Color.WHITE): void {

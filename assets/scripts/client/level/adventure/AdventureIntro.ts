@@ -20,7 +20,6 @@ import { randomAnimationRate, type ClientAnimationRegistry } from '@/client/cont
 import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
-import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 
 const WIDTH = 800
@@ -171,8 +170,7 @@ export class AdventureIntro implements LevelIntro {
             button.changeCursor = false
             button.hapticsEnabled = false
             button.rightClickTriggers = false
-            button.onPress = () => {}
-            button.canInteract = () => surface.activeInHierarchy && this.ticks === 425 && !GameDebugSettings.isMobileMode()
+            button.canInteract = () => surface.activeInHierarchy && this.ticks === 425
             button.onHoverChange = hovering => hovering ? tooltip.show() : tooltip.hide()
             this.previewTooltips.set(node, { hit, tooltip })
             this.syncPreviewTooltip(node)

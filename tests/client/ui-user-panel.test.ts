@@ -167,9 +167,8 @@ test('user selection is committed by confirmation or double click, while cancel 
     assert.equal(fixture.ProfileStore.getCurrentProfile().id, bob.id)
     panel = await fixture.show()
     const aliceRow = panel.content.getChildByName('UserList').children[1].button
-    aliceRow.onPress()
     aliceRow.onClick()
-    aliceRow.onPress()
+    aliceRow.onClick()
     await setImmediate()
     assert.equal(fixture.ProfileStore.getCurrentProfile().id, alice.id)
     assert.equal(panel.node.active, false)
@@ -187,7 +186,7 @@ test('a new player may copy the previous Mods, and switching to other Mods asks 
         restart: () => { restarts.push(store.getCurrentProfile().id) },
     }
     let panel = await fixture.show(mods)
-    panel.content.getChildByName('UserList').children[2].button.onPress()
+    panel.content.getChildByName('UserList').children[2].button.onClick()
     inputs.at(-1).value = 'Carol'
     const creating = dialogs.at(-1).onConfirm()
     await setImmediate()

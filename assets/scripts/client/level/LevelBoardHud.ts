@@ -59,7 +59,7 @@ export class LevelBoardHud {
             result.shovelButton = result.shovelBank.addComponent(UIButton)
             result.shovelButton.rightClickTriggers = false
             result.shovelButton.touchSlide = false
-            result.shovelButton.releaseToNormalOnPressOut = true
+            result.shovelButton.clickOnPress = true
             result.shovelButton.onHoverChange = hovering => hovering ? result.tooltip!.show() : result.tooltip!.hide()
         }
         if (level.conveyor) {
@@ -140,7 +140,7 @@ export class LevelBoardHud {
 
     bindTools(select: (toolId: string) => void): Array<{ toolId: string; button: UIButton }> {
         if (!this.shovelButton) return []
-        this.shovelButton.onPress = () => select('pvz:shovel')
+        this.shovelButton.onClick = () => select('pvz:shovel')
         return [{ toolId: 'pvz:shovel', button: this.shovelButton }]
     }
 }

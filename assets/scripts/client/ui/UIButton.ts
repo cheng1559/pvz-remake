@@ -25,8 +25,10 @@ export class UIButton extends Component {
         handleTouch: (event: EventTouch) => UIButton.handleTouch(event),
     }
 
+    /** The action: on release inside, or on press with clickOnPress. */
     onClick: () => void = () => {}
-    onPress: () => void = () => { void SoundSystem.play(SoundEffect.GraveButton) }
+    /** Played when the button is pressed, before its action. */
+    pressSound: SoundEffect | null = null
     onHoverEnter?: () => void
     onHoverChange?: (hovering: boolean) => void
     onStateChange?: (state: UIButtonState) => void
@@ -35,8 +37,8 @@ export class UIButton extends Component {
     rightClickPressesVisual = true
     releaseToNormalOnPressOut = false
     refreshHoverOnEnable = true
-    /** Select immediately without capturing the pointer or emitting a release click. */
-    pressOnly = false
+    /** Click on mouse or touch press, without capturing the pointer or emitting a release click. */
+    clickOnPress = false
     /** Follow the finger and activate on release; disable for controls with their own drag gesture. */
     touchSlide = true
     changeCursor = true
@@ -100,7 +102,7 @@ export class UIButton extends Component {
     private static refreshHover(pointer: UIHoverPointer, modal: Node | null, initialTouch = false): boolean {
         if (this.mobileSlide) {
             const top = this.topButton(this.mobileSlide.pointer, modal)
-            const target = top?.interactable && top.touchSlide && !top.pressOnly ? top : null
+            const target = top?.interactable && top.touchSlide && !top.clickOnPress ? top : null
             if (this.active !== target) {
                 this.active?.cancelPress()
                 target?.beginPress(true, !initialTouch)
@@ -156,7 +158,7 @@ export class UIButton extends Component {
         const released = event.type === Node.EventType.TOUCH_END || event.getEventCode() === Node.EventType.TOUCH_END
         const button = this.topButton(pointer, modal)
         this.mobileSlide = null
-        if (released && button?.available() && button.touchSlide && !button.pressOnly) {
+        if (released && button?.available() && button.touchSlide && !button.clickOnPress) {
             if (this.active === button) button.finishPress(true, event, false)
         } else this.active?.cancelPress()
         UIHoverManager.refreshHoverStates()
@@ -206,7 +208,7 @@ export class UIButton extends Component {
         UIButton.active = this
         this.setHover(true, sliding)
         this.applyState(visual ? 'pressed' : 'hover')
-        if (!sliding) this.onPress()
+        if (!sliding) this.playPressSound()
         UIHoverManager.refreshHoverStates()
     }
 
@@ -231,8 +233,17 @@ export class UIButton extends Component {
         this.cancelPress(false)
         this.setHover(canHover && inside, false)
         event.propagationStopped = true
-        if (inside && this.available()) this.node.emit(Button.EventType.CLICK, this, event)
+        if (inside && this.available()) this.click(event)
         UIHoverManager.refreshHoverStates()
+    }
+
+    private playPressSound(): void {
+        if (this.pressSound !== null) void SoundSystem.play(this.pressSound)
+    }
+
+    private click(event: EventMouse | EventTouch): void {
+        this.node.emit(Button.EventType.CLICK, this, event)
+        this.onClick()
     }
 
     private mouseDown(event: EventMouse): void {
@@ -240,7 +251,7 @@ export class UIButton extends Component {
         if (!this.rightClickTriggers && event.getButton() !== EventMouse.BUTTON_LEFT) return
         event.propagationStopped = true
         UIHoverManager.rememberMouseEvent(event, false)
-        if (this.pressOnly) { this.setHover(true, false); this.onPress(); return }
+        if (this.clickOnPress) { this.setHover(true, false); this.playPressSound(); this.click(event); return }
         this.mouseButton = event.getButton()
         this.beginPress(this.mouseButton === EventMouse.BUTTON_LEFT || this.rightClickPressesVisual)
         if (UIButton.active === this) UIButton.capture(true)
@@ -284,9 +295,11 @@ export class UIButton extends Component {
     private touchStart(event: EventTouch): void {
         if (!GameDebugSettings.isMobileMode() || !this.available() || UIButton.hasActivePress) return
         event.propagationStopped = true
-        if (this.pressOnly) {
+        if (this.clickOnPress) {
+            // The touch is not tracked, so nothing would clear a hover that outlived the press.
             this.setHover(true, false)
-            this.onPress()
+            this.playPressSound()
+            this.click(event)
             this.setHover(false, false)
             return
         }

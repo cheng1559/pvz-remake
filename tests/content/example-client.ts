@@ -19,7 +19,7 @@ export function exampleClient() {
     const ui = {
         text: (key: string) => key,
         button(parent: Node, options: any) {
-            const button = { node: child(parent), onPress() {}, options }
+            const button = { node: child(parent), onClick: options.onClick, options }
             buttons.push(button)
             return button
         },

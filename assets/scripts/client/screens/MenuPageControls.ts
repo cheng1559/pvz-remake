@@ -30,11 +30,10 @@ export async function showMenuPageControls(
             rightClickTriggers: false, onClick: () => navigate('main'),
         })
         ui.button(right, {
-            images: { normal: next }, x: 566, y: 0, pressSound: SoundEffect.Tap,
-            releaseToNormalOnPressOut: true,
+            images: { normal: next }, x: 566, y: 0, pressSound: SoundEffect.Tap, clickOnPress: true,
             // Previous garden tooltip: center x=599, top y=52 for the 60×60 button at (566, 0).
             tooltip: { text: ui.text('NEXT_GARDEN_TOOLTIP'), offset: [3, -12] },
-            onPress: () => navigate(GARDENS[(gardenIndex + 1) % GARDENS.length]),
+            onClick: () => navigate(GARDENS[(gardenIndex + 1) % GARDENS.length]),
         })
         ui.button(right, {
             images: { normal: shop, hover: shopHighlight }, x: 678, y: 33, height: 40,

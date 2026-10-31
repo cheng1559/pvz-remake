@@ -119,13 +119,12 @@ function setup() {
         const button = new Button(), node = new FakeNode(x)
         parent.addChild(node); button.node = node
         button.releaseToNormalOnPressOut = true
-        let presses = 0, clicks = 0, enters = 0, state = 'normal'
-        button.onPress = () => { presses++ }
+        let clicks = 0, enters = 0, state = 'normal'
         button.onHoverEnter = () => { enters++ }
         button.onStateChange = (value: string) => { state = value }
         node.on('click', () => { clicks++ })
         button.onEnable(); buttons.push(button)
-        return { button, node, get presses() { return presses }, get clicks() { return clicks },
+        return { button, node, get clicks() { return clicks },
             get enters() { return enters }, get state() { return state } }
     }
     const dispatch = (target: FakeNode | null, type: string, x: number, key = 0, touchId = 1, y = 20, originalType = type) => {
@@ -191,7 +190,7 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         bank.sync(world, [], true, null, false)
         assert.equal(bank.packets[0].view.options.mobile, true)
         ui.setMobile(false)
-        bank.packets[1].button.onPress()
+        bank.packets[1].button.onClick()
         assert.equal(commands.at(-1).seedId, 'double')
         const flashes: unknown[] = []
         bank.flash = (node: unknown) => flashes.push(node)
@@ -212,7 +211,7 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         assert.equal(slot.button, button, 'replacement preserves the input presenter’s button reference')
         assert.deepEqual({ ...slot.view.replacement }, { seedType: 'snowpea', cost: 175 })
         assert.equal(slot.tooltip.text, 'SNOW_PEA')
-        slot.button.onPress()
+        slot.button.onClick()
         assert.equal(commands.at(-1).seedId, 'ice')
         world.cursor.mode = 'seed'
         presenter.boardPixel = () => ({ x: 52, y: 115 })
@@ -338,8 +337,8 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
             return packet && { ...packet, availability: !packet.ready ? { reason: 'seed-not-ready' } : snapshot.availableSun >= (index === 0 ? 100 : 50) ? {} : { reason: 'not-enough-sun' }, command: { type: 'selectSeed', seedId: packet.seedId } }
         },
         bindSeedPackets(select: (index: number) => void) {
-            pea.button.onPress = () => select(0)
-            sunflower.button.onPress = () => select(1)
+            pea.button.onClick = () => select(0)
+            sunflower.button.onClick = () => select(1)
             return [pea.button, sunflower.button]
         },
         bindMenu(open: () => void) { menu.node.on('click', open); return menu.button },

@@ -138,7 +138,6 @@ export class MainMenuScreen extends Component {
         hover.changeCursor = false
         hover.touchSlide = false
         hover.hapticsEnabled = false
-        hover.onPress = () => {}
         const tooltipAnchor = uiNode({ name: 'TrophyTooltip', parent: this.trophyRoot, anchor: { x: 0, y: 1 } }).node
         this.trophyTooltip = ui.tooltip(tooltipAnchor, { text: '', fixed: true })
         hover.onHoverChange = hovering => hovering ? this.trophyTooltip.show() : this.trophyTooltip.hide()
@@ -293,7 +292,8 @@ export class MainMenuScreen extends Component {
                 const angle = point * Math.PI / 6
                 return [20 + Math.cos(angle) * 20, 20 + Math.sin(angle) * 20] as const
             })
-            button.onPress = () => {
+            button.clickOnPress = true
+            button.onClick = () => {
                 this.playedFlowers.add(flower)
                 void SoundSystem.playFoley(SoundEffect.LimbsPop, 10)
                 flower.play({ loop: false, rate: 24 / 20, timeSeconds: 0, hideOnFinish: false })

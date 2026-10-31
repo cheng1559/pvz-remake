@@ -98,10 +98,9 @@ export class LevelSeedChooser {
                 ...(warning ? { warning: ui.text(warning) } : {}) })
             const button = view.node.addComponent(UIButton)
             button.hapticsEnabled = false
-            button.pressOnly = true
+            button.clickOnPress = true
             button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= 425 && !this.warningOpen
             const choice: Choice = { id, view, shadow, button, tooltip, home, slot: -1, notRecommended: warning !== undefined }
-            button.onPress = () => {}
             button.onHoverChange = hovering => hovering && !this.inFlight ? tooltip.show() : tooltip.hide()
             this.choices.push(choice)
         }

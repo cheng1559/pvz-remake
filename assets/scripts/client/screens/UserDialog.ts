@@ -1,4 +1,4 @@
-import { Button, Color, KeyCode, Node, UITransform } from 'cc'
+import { Color, KeyCode, Node, UITransform } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { UserSummary } from '@/shared/menu'
 import { FontMetricsUtil } from '@/client/font'
@@ -117,16 +117,17 @@ export async function showUserDialog(parent: Node, ui: UI, onClose: () => void, 
             })
             const button = row.addComponent(UIButton)
             button.refreshHoverOnEnable = false
+            button.clickOnPress = true
             button.releaseToNormalOnPressOut = true
-            button.onPress = () => {
+            button.onClick = () => {
                 const profile = entries[index]
                 if (!profile) { editName(); return }
+                selected = index
+                updateSelection()
                 const now = Date.now()
-                if (lastPress.id === profile.id && now - lastPress.time <= 500) { selected = index; void confirm().catch(fail) }
+                if (lastPress.id === profile.id && now - lastPress.time <= 500) void confirm().catch(fail)
                 lastPress = { id: profile.id, time: now }
             }
-            button.onClick = () => { if (entries[index]) { selected = index; updateSelection() } }
-            row.on(Button.EventType.CLICK, () => button.onClick())
             button.onStateChange = state => { label.renderer.fontColor = state === 'hover' || state === 'pressed' ? Color.WHITE : TEXT_COLOR }
             row.active = true
         })

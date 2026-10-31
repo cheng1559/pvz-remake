@@ -59,6 +59,7 @@ test('Mod dialog keeps new imports and updates in its draft until Apply, includi
                 setEnabled: async () => { assert.fail('installation must wait for the next startup') },
             } },
             '@/client/content/preloadTasks': { waitForPreloadFrame: async () => { steps.push('paint') } },
+            '@/client/sound/SoundSystem': { SoundEffect: { ButtonClick: 'buttonclick' }, SoundSystem: { play: async () => {} } },
             '@/client/view/uiNode': { uiNode: (options: any) => ({ node: makeNode(options.parent), graphics }) },
         }
         const restarting: any = {}

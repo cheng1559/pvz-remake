@@ -1,9 +1,9 @@
 import { BASE_MOD_ID } from '@/shared/mod'
-import { Button, Color, director, Director, KeyCode, Node, UITransform } from 'cc'
+import { Color, director, Director, KeyCode, Node, UITransform } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
 import { modManager, type ModImport } from '@/client/content/ModManager'
 import { modResources } from '@/client/content/ModResources'
-import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { SoundEffect } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UIDialog } from '@/client/ui/UIDialog'
@@ -214,11 +214,11 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
         paint(normal)
         const button = node.addComponent(UIButton)
         button.refreshHoverOnEnable = false
+        button.clickOnPress = true
         button.releaseToNormalOnPressOut = true
-        button.onPress = () => { void SoundSystem.play(SoundEffect.ButtonClick) }
+        button.pressSound = SoundEffect.ButtonClick
         button.onClick = onClick
         button.onStateChange = state => paint(state === 'hover' || state === 'pressed' ? Color.WHITE : normal)
-        node.on(Button.EventType.CLICK, () => button.onClick())
         button.interactable = available
         node.active = true
     }

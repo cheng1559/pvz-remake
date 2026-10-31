@@ -4,7 +4,7 @@ import { menuApi } from '@/client/api/MenuApi'
 import { preloadTasks } from '@/client/content/preloadTasks'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
-import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { SoundEffect } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
 import type { UIButton } from '@/client/ui/UIButton'
 import type { UIScroll } from '@/client/ui/UIScroll'
@@ -98,13 +98,15 @@ export class AchievementScreen extends Component {
             releaseToNormalOnPressOut: true, pressSound: null,
             onClick: () => {
                 this.showingTop = !this.showingTop
+                // Only scrolling down to the rest of the list plays the rock sound.
+                more.pressSound = this.showingTop ? null : SoundEffect.GraveButton
                 this.keySpeed = 0
                 more.onStateChange?.(more.isHovering ? 'hover' : 'normal')
                 this.scroll.scrollTo(this.scroll.offset + (this.showingTop ? 230 : -230), 0.25)
             },
         })
         more.changeCursor = false
-        more.onPress = () => { if (!this.showingTop) void SoundSystem.play(SoundEffect.GraveButton) }
+        more.pressSound = SoundEffect.GraveButton
         const update = more.onStateChange!
         const image = more.node.getChildByName('Visual')!.getChildByName('Image')!.getComponent(Sprite)!
         more.onStateChange = state => {
@@ -124,6 +126,7 @@ export class AchievementScreen extends Component {
         this.scroll.offset = 0
         this.keySpeed = 0
         this.showingTop = false
+        this.more.pressSound = SoundEffect.GraveButton
         this.more.onStateChange?.('normal')
     }
 

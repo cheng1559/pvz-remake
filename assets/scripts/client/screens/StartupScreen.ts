@@ -1,7 +1,7 @@
 import { modResources } from '@/client/content/ModResources'
 import { modManager } from '@/client/content/ModManager'
 import { waitForPreloadFrame } from '@/client/content/preloadTasks'
-import { _decorator, Button, Color, Component, input, Input, Mask, Node, Sprite, UITransform, type EventKeyboard, type EventMouse, type EventTouch, type UIOpacity, SpriteFrame } from 'cc'
+import { _decorator, Color, Component, input, Input, Mask, Node, Sprite, UITransform, type EventKeyboard, type EventMouse, type EventTouch, type UIOpacity, SpriteFrame } from 'cc'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { FontMetricsUtil } from '@/client/font'
@@ -183,9 +183,8 @@ export class StartupScreen extends Component {
         this.startButton = buttonNode.addComponent(UIButton)
         this.startButton.interactable = false
         this.startButton.releaseToNormalOnPressOut = true
-        this.startButton.onPress = () => { void SoundSystem.play(SoundEffect.ButtonClick) }
+        this.startButton.pressSound = SoundEffect.ButtonClick
         this.startButton.onClick = () => this.tryStart(false)
-        buttonNode.on(Button.EventType.CLICK, () => this.startButton.onClick())
         this.label = ui.label(buttonNode, { text: ui.text('LOADING'), font: 'profile', color: NORMAL_COLOR })
         this.startButton.onStateChange = state => {
             this.label.renderer.fontColor = state === 'hover' || state === 'pressed' ? HOVER_COLOR : NORMAL_COLOR

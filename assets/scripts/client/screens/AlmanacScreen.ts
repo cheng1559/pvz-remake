@@ -12,8 +12,8 @@ import { drawAlmanacText } from './AlmanacText'
 import type { MenuAction } from './MenuPages'
 import { AlmanacEntityView } from './AlmanacEntityView'
 import { AlmanacZombiePortrait } from './AlmanacZombiePortrait'
-import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { Haptics } from '@/platform/Haptics'
+import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { uiAreaEdge } from '@/client/view/ClientViewport'
 
 export interface AlmanacSelection { plant: number, zombie: number }
@@ -37,18 +37,12 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
         if (!parent.isValid) throw new Error('Almanac was destroyed while loading')
         const sprites = Object.fromEntries(frames)
         let details: Node | null = null
-        let plantHighlight: Node | null = null
         const plantPosition = (id: number) => ({ x: id === 48 ? 20 : id % 8 * 52 + 26, y: id === 48 ? 23 : Math.floor(id / 8) * 78 + 92 })
         const select = (entry: AlmanacPlantDefinition | AlmanacZombieDefinition) => {
             if (details) { details.active = false; details.destroy() }
             details = uiNode({ name: `${entry.key}Details`, parent, anchor: { x: 0, y: 1 } }).node
             if (page === 'plants') {
                 const plant = entry as AlmanacPlantDefinition
-                const { x, y } = plantPosition(plant.id)
-                if (plantHighlight) {
-                    plantHighlight.active = plant.id !== 48
-                    plantHighlight.setPosition(x, -y)
-                }
                 ui.image(details, sprites[`almanac_ground${plant.ground}`], { x: 521, y: 107 })
                 AlmanacEntityView.create(details, 'plants', plant.id, 578, 140)
                 ui.image(details, sprites.almanac_plantcard, { x: 459, y: 86 })
@@ -89,15 +83,15 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     images: { normal: plant.id === 48 ? sprites.almanac_imitater : sprites['particles/seedpacketflash'] },
                     x, y, width: plant.id === 48 ? 34 : 50, height: plant.id === 48 ? 46 : 70,
                     imageBox: plant.id === 48 ? { width: 34, height: sprites.almanac_imitater.originalSize.height } : undefined,
-                    pressSound: null, clickSound: null, pressOnly: true, pressOffset: [0, 0],
-                    onPress: () => choose(plant),
+                    pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), pressOffset: [0, 0],
+                    onClick: () => choose(plant),
                 })
                 button.hapticsEnabled = false
                 button.node.name = plant.key
                 if (plant.id === 48) {
                     const overlay = ui.image(button.node, sprites.almanac_imitater).node
                     const update = button.onStateChange!
-                    button.onStateChange = state => { update(state); overlay.active = state === 'hover' }
+                    button.onStateChange = state => { update(state); overlay.active = state === 'hover' || state === 'pressed' }
                     button.onStateChange(button.isHovering ? 'hover' : 'normal')
                 } else {
                     const packet = SeedPacketRenderer.drawSeedPacket({ definitions: ui.assets.presentation, parent: button.node, x: 0, y: 0, seedType: plant.id, cost: plant.cost, upgrade: plant.upgrade, costFont: ui.assets.fonts.packetCost })
@@ -108,12 +102,11 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     button.onStateChange(button.isHovering ? 'hover' : 'normal')
                 }
             }
-            if (GameDebugSettings.isMobileMode()) plantHighlight = SeedPacketRenderer.drawSelectionFrame(parent, ui.assets.presentation)
             select(plants.find(plant => plant.id === selection.plant) ?? plants[0])
         } else {
             for (const zombie of zombies) {
                 const index = zombie.id === 25 ? 27 : zombie.id
-                const button = ui.button(parent, { images: { normal: sprites.almanac_zombiewindow }, x: index % 5 * 85 + 22, y: Math.floor(index / 5) * 80 + 86, width: 76, height: 76, pressOffset: [0, 0], pressSound: null, clickSound: null, pressOnly: true, onPress: () => choose(zombie) })
+                const button = ui.button(parent, { images: { normal: sprites.almanac_zombiewindow }, x: index % 5 * 85 + 22, y: Math.floor(index / 5) * 80 + 86, width: 76, height: 76, pressOffset: [0, 0], pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), onClick: () => choose(zombie) })
                 button.hapticsEnabled = false
                 button.node.name = zombie.key
                 const underlay = ui.additiveImage(button.node, sprites.almanac_zombiewindow, {}, 48)

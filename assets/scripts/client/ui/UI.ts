@@ -42,14 +42,13 @@ export interface UIButtonOptions extends Box {
     rightClickPressesVisual?: boolean
     releaseToNormalOnPressOut?: boolean
     refreshHoverOnEnable?: boolean
-    pressOnly?: boolean
+    clickOnPress?: boolean
     /** Visual offset on press, in pixels: x right, y down. Hit area stays fixed. */
     pressOffset?: readonly [number, number]
     pressSound?: SoundEffect | null
     clickSound?: SoundEffect | null
     hoverSound?: SoundEffect | null
     tooltip?: string | UITooltipOptions
-    onPress?: () => void
     onClick?: () => void
 }
 export interface UIDialogOptions {
@@ -199,16 +198,13 @@ export class UI {
         button.rightClickPressesVisual = options.rightClickPressesVisual ?? !footer
         button.releaseToNormalOnPressOut = options.releaseToNormalOnPressOut ?? skin !== 'image'
         button.refreshHoverOnEnable = options.refreshHoverOnEnable ?? true
-        button.pressOnly = options.pressOnly ?? false
+        button.clickOnPress = options.clickOnPress ?? false
         button.onHoverEnter = () => { if (options.hoverSound) void SoundSystem.play(options.hoverSound) }
         if (options.tooltip) {
             const tooltip = this.tooltip(node, options.tooltip)
             button.onHoverChange = hovering => hovering ? tooltip.show() : tooltip.hide()
         }
-        button.onPress = () => {
-            if (pressSound !== null) void SoundSystem.play(pressSound)
-            options.onPress?.()
-        }
+        button.pressSound = pressSound
         button.onClick = options.onClick ?? (() => {})
         button.setText = text => {
             for (const label of labels) label.text = text
@@ -235,10 +231,7 @@ export class UI {
         }
         button.onStateChange('normal')
         button.interactable = options.enabled ?? true
-        node.on(Button.EventType.CLICK, () => {
-            if (clickSound !== null) void SoundSystem.play(clickSound)
-            button.onClick()
-        })
+        if (clickSound !== null) node.on(Button.EventType.CLICK, () => { void SoundSystem.play(clickSound) })
         node.active = true
         return button
     }
@@ -270,8 +263,9 @@ export class UI {
         }
         const button = node.addComponent(UIButton)
         button.touchSlide = false
-        button.onPress = () => {
-            void SoundSystem.play(SoundEffect.ButtonClick)
+        button.clickOnPress = true
+        button.pressSound = SoundEffect.ButtonClick
+        button.onClick = () => {
             if (options.locked) options.locked()
             else { setValue(!value); options.onChange?.(value) }
         }

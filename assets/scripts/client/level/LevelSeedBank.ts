@@ -73,8 +73,8 @@ export class LevelSeedBank {
             const button = (packet.button ??= packet.view.node.addComponent(UIButton))
             button.rightClickTriggers = false
             button.touchSlide = false
-            button.releaseToNormalOnPressOut = true
-            button.onPress = () => select(this.packets.indexOf(packet))
+            button.clickOnPress = true
+            button.onClick = () => select(this.packets.indexOf(packet))
             button.onHoverChange = (hovering) =>
                 hovering ? packet.tooltip.show() : packet.tooltip.hide()
             button.interactable = false

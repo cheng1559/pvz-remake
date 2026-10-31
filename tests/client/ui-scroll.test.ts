@@ -13,6 +13,7 @@ test('cached achievements refresh earned flags for the active profile and reset 
     runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => ({
         cc: { Component: class {}, Color: class { constructor(public r: number, public g: number, public b: number, public a: number) {} },
             _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/sound/SoundSystem': { SoundEffect: { GraveButton: 'gravebutton' } },
         '@/client/api/MenuApi': { menuApi: { getAchievements: async () => {
             requests++
             return { items: [{ id: 3, earned }, { id: 8, earned: !earned }] }
@@ -29,7 +30,7 @@ test('cached achievements refresh earned flags for the active profile and reset 
     screen.more = { onStateChange: (state: string) => { image = `${screen.showingTop ? 'top' : 'more'}:${state}` } }
     screen.initialize = () => assert.fail('refresh cannot recreate text or background nodes')
     await screen.refresh()
-    assert.deepEqual([first.color.a, second.color.a, screen.scroll.offset, image], [255, 32, 0, 'more:normal'])
+    assert.deepEqual([first.color.a, second.color.a, screen.scroll.offset, image, screen.more.pressSound], [255, 32, 0, 'more:normal', 'gravebutton'])
     earned = false
     await screen.refresh()
     assert.deepEqual([first.color.a, second.color.a], [32, 255], 'switching profile cannot reuse stale achievement flags')

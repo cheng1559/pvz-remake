@@ -25,9 +25,9 @@ export async function installMenu({ host, assets }: Context, help: string, playC
                 dialog.node.once(Node.EventType.NODE_DESTROYED, () => owned.delete(dialog.node))
             },
         })
-        // Replace a real callback on this one button, leaving all other buttons alone.
-        const restorePress = host.replace(button, 'onPress', playChime)
-        root.once(Node.EventType.NODE_DESTROYED, restorePress)
+        // Wrap a real callback on this one button, leaving all other buttons alone.
+        const restoreClick = host.around(button, 'onClick', function (next) { playChime(); return next() })
+        root.once(Node.EventType.NODE_DESTROYED, restoreClick)
     })
     // ModHost owns method patches. Also dispose nodes that this Mod created in live screens.
     host.around(host, 'dispose', function (next) {
