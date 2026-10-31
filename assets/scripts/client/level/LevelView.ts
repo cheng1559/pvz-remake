@@ -63,6 +63,8 @@ export class LevelView {
     private money?: number
     /** Called when the server's purse changes (collected money, `/money`); the app saves it to the profile. */
     onMoneyChanged?: (money: number) => void
+    /** The lawn node: it carries the wide-viewport shift, the seed chooser pan and board shakes. */
+    private lawn!: Node
     private hitboxes: Graphics | null = null
     get introComplete(): boolean {
         return this.intro.complete
@@ -369,6 +371,7 @@ export class LevelView {
             bank.setPosition(bank.position.x, easeInOut(400, 425, tick, 87, 0))
         }
         view.shakeTarget = { node: board, x: board.position.x, y: board.position.y }
+        view.lawn = board
         intro.sync()
         view.pinScreen()
         view.hideConveyorBank()
@@ -495,7 +498,7 @@ export class LevelView {
 
     private syncHitboxes(snapshot: WorldSnapshot): void {
         if (!GameDebugSettings.hitboxesVisible) { this.hitboxes?.clear(); return }
-        const graphics = this.hitboxes ??= uiNode({ name: 'Hitboxes', parent: this.root, graphics: true }).graphics!
+        const graphics = this.hitboxes ??= uiNode({ name: 'Hitboxes', parent: this.lawn, graphics: true }).graphics!
         graphics.clear()
         graphics.lineWidth = 1
         const draw = (entity: { x: number, y: number }, rect: { x: number, y: number, width: number, height: number }, color: Color) => {
