@@ -21,7 +21,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 墓碑 | `/grave {row} {col}`，在指定空格生成墓碑；不能与已有植物或墓碑重叠，暂停时也可执行，随关卡存档保存 |
 | 替换种子包 | `/seed {槽位} {种子名}`，如 `/seed 1 snowpea` |
 | 僵尸 | `/zombie {zombie_name} [row] [col]`、`/damage {damage}`、`/kill` |
-| 掉落 | `/item {item_name} [row col]`，当前支持 `sun`、`award` |
+| 掉落 | `/item {item_name} [row col]`，当前支持 `sun`、`award`；`award` 不像正常掉落那样清除场上僵尸 |
 | 数值 | `/sun {add|set} {number}`、`/money {add|set} {number}`（金币单位为原版 1 枚＝$10，同步写入档案） |
 | 小推车 | `/lawnmower {trigger|reset} [row]` |
 | 规则 | `/cooldown {true|false}`、`/suncost {true|false}`、`/sunspawning {true|false}`、`/plantinvincible {true|false}` |

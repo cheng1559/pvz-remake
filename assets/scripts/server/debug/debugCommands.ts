@@ -225,7 +225,7 @@ function executeCommand(
             })
             world.resources.get(WaveResource).index = level.definition.waves.length
             world.resources.get(TutorialResource).step = 'complete'
-            for (const entity of [...world.query(ZombieComponent)]) world.destroyEntity(entity)
+            // Unlike Zombie::TrySpawnLevelAward, the debug award leaves the zombies on the board.
             emitServerEvent(events, 'levelAwardDropped', { entityId, typeId })
             return debugSuccess(`Spawned ${args[0]}`)
         }
