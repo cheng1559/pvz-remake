@@ -1,16 +1,18 @@
 import { modResources } from '@/client/content/ModResources'
 import { _decorator, Color, Component, director, Director, Mask, Node, Sprite, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
-import type { UserView } from '@/shared/menu'
+import type { MainMenuUnlocks, UserView } from '@/shared/menu'
 import { loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
 import { preloadTasks } from '@/client/content/preloadTasks'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { MusicSystem } from '@/client/music/MusicSystem'
+import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UILabel } from '@/client/ui/UILabel'
+import type { UITooltip } from '@/client/ui/UITooltip'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
 import type { MainMenuButtonDefinition, MainMenuDefinition } from '@/shared/content/presentation'
@@ -18,6 +20,12 @@ import type { MenuAction } from './MenuPages'
 
 const { ccclass } = _decorator
 const random = (minimum: number, maximum: number) => minimum + Math.random() * (maximum - minimum)
+/** GameSelector::SyncButtons: mode buttons that stay grey until unlocked, and menu items hidden until reached. */
+const LOCKED_MESSAGES: Readonly<Record<string, string>> = {
+    minigames: 'MINIGAME_LOCKED_MESSAGE', puzzle: 'PUZZLE_LOCKED_MESSAGE', survival: 'SURVIVAL_LOCKED_MESSAGE',
+}
+const HIDDEN_UNTIL_UNLOCKED = new Set(['almanac', 'store', 'garden'])
+const LOCKED_SHADE = new Color(128, 128, 128)
 
 interface TrackedButton {
     config: MainMenuButtonDefinition
@@ -39,6 +47,10 @@ export class MainMenuScreen extends Component {
     private hand: ReanimPlayer[] = []
     private buttonsRoot!: Node
     private numbersRoot!: Node
+    private trophyRoot!: Node
+    private trophy!: Sprite
+    private trophyTooltip!: UITooltip
+    private trophySparkle: ParticlePlayer | null = null
     private signsRoot!: Node
     private profileLabel!: UILabel
     private buttons: TrackedButton[] = []
@@ -64,6 +76,7 @@ export class MainMenuScreen extends Component {
         const imageNames = new Set([
             ...menu.buttons.flatMap(button => [button.image, button.highlight]), ...menu.images,
             menu.startAdventure.image, menu.startAdventure.highlight,
+            menu.keyShadow.almanac, menu.keyShadow.store, menu.trophy.image,
         ])
         const total = imageNames.size + menu.clouds.length + menu.flowers.length + 5
         let completed = 0
@@ -116,10 +129,23 @@ export class MainMenuScreen extends Component {
         })
         this.buttonsRoot = uiNode({ name: 'Buttons', parent: content, anchor: { x: 0, y: 1 } }).node
         this.numbersRoot = uiNode({ name: 'LevelNumbers', parent: content, anchor: { x: 0, y: 1 } }).node
+        this.trophyRoot = uiNode({ name: 'Trophy', parent: content, anchor: { x: 0, y: 1 }, active: false }).node
+        const trophyFrame = this.frames.get(menu.trophy.image)!
+        this.trophy = ui.image(this.trophyRoot, trophyFrame, { width: trophyFrame.originalSize.width / 2 })
+        // GameSelector::UpdateTooltip (1073): the pointer over (50, 250)-(135, 475) shows it at a fixed place.
+        const trophyArea = uiNode({ name: 'TrophyArea', parent: this.trophyRoot, anchor: { x: 0, y: 1 }, position: { x: 50, y: -250 }, size: { width: 85, height: 225 } }).node
+        const hover = trophyArea.addComponent(UIButton)
+        hover.changeCursor = false
+        hover.touchSlide = false
+        hover.hapticsEnabled = false
+        hover.onPress = () => {}
+        const tooltipAnchor = uiNode({ name: 'TrophyTooltip', parent: this.trophyRoot, anchor: { x: 0, y: 1 } }).node
+        this.trophyTooltip = ui.tooltip(tooltipAnchor, { text: '', fixed: true })
+        hover.onHoverChange = hovering => hovering ? this.trophyTooltip.show() : this.trophyTooltip.hide()
         // Match the original draw order; flower clips 1/2/3 contain tracks 3/2/1.
         const layers = [
             ...this.clouds.map(cloud => cloud.player.node), this.open.node, this.sign.node,
-            this.buttonsRoot, clip, this.hand[1].node, this.numbersRoot, this.grass.node,
+            this.buttonsRoot, clip, this.hand[1].node, this.numbersRoot, this.trophyRoot, this.grass.node,
             ...[...this.flowers].reverse().map(flower => flower.node), this.signsRoot,
         ]
         layers.forEach((layer, index) => layer.setSiblingIndex(index + 1))
@@ -169,6 +195,7 @@ export class MainMenuScreen extends Component {
         this.open.play({ loop: false, rate: 30 / 20, hideOnFinish: false, timeSeconds: 0, onFinish: () => {
             this.opened = true
             this.setButtonsEnabled(true)
+            this.addTrophySparkle()
             // GameSelector::Update: once open, a player gets the sign; without one the create-user dialog comes first.
             if (this.user) this.showSign()
             else void this.onNavigate('players')
@@ -215,26 +242,39 @@ export class MainMenuScreen extends Component {
         const level = profile?.adventureLevel ?? 1
         this.startAdventure = level <= 1 && (profile?.finishedAdventure ?? 0) === 0
         this.profileLabel.text = profile ? `${profile.name}!` : ''
+        // Without a player every mode is locked and the almanac, store and garden are hidden.
+        const unlocks: Partial<MainMenuUnlocks> = profile?.unlocks ?? {}
+        const unlocked = (name: string) => unlocks[name as keyof MainMenuUnlocks] === true
+        const { keyShadow } = this.menu
+        for (const animation of [this.open, this.sign]) {
+            animation.setTracksVisible([keyShadow.track], !!unlocks.almanac || !!unlocks.store)
+            animation.setTrackSpriteOverride(keyShadow.track, unlocks.almanac && unlocks.store ? null
+                : this.frames.get(unlocks.almanac ? keyShadow.almanac : keyShadow.store)!)
+        }
         for (const animation of [this.open, this.sign]) {
             animation.setTracksVisible([this.menu.startAdventure.adventureShadow], !this.startAdventure)
             animation.setTracksVisible([this.menu.startAdventure.shadow], this.startAdventure)
         }
         const start = this.menu.startAdventure
         for (const original of this.menu.buttons) {
+            if (HIDDEN_UNTIL_UNLOCKED.has(original.name) && !unlocked(original.name)) continue
+            const locked = original.name in LOCKED_MESSAGES && !unlocked(original.name)
             const config = original.name === 'adventure' && this.startAdventure
                 ? { ...original, track: start.track, image: start.image, highlight: start.highlight } : original
             const normal = this.frames.get(config.image)!
-            const hover = this.frames.get(config.highlight)!
+            // A locked mode keeps its normal image under the pointer, and stays silent.
+            const hover = locked ? normal : this.frames.get(config.highlight)!
             const parent = config.sign ? this.signsRoot : this.buttonsRoot
             const button = this.ui.button(parent, {
                 images: { normal, hover }, width: config.width, height: config.height,
                 imageBox: { x: config.imageX, y: config.imageY, width: normal.originalSize.width, height: normal.originalSize.height },
                 polygon: config.polygon, pressOffset: config.sign ? [0, 0] : [1, 1],
                 refreshHoverOnEnable: false,
-                pressSound: config.mode ? SoundEffect.GraveButton : SoundEffect.Tap, hoverSound: SoundEffect.Bleep,
-                onClick: () => this.activate(config),
+                pressSound: config.mode ? SoundEffect.GraveButton : SoundEffect.Tap, hoverSound: locked ? null : SoundEffect.Bleep,
+                onClick: () => locked ? this.showLocked(config.name) : this.activate(config),
             })
             button.node.name = config.name
+            if (locked) for (const sprite of button.node.getComponentsInChildren(Sprite)) sprite.color = LOCKED_SHADE
             const tracked = { config, button, pressed: false }
             const changeState = button.onStateChange!
             button.onStateChange = state => { tracked.pressed = state === 'pressed'; changeState(state) }
@@ -270,8 +310,37 @@ export class MainMenuScreen extends Component {
             digit(sub === 10 ? 1 : sub, 509 + (sub === 3 ? -1 : 0), 50)
             if (sub === 10) digit(0, 518, 51)
         }
+        this.refreshTrophy(profile)
         this.setButtonsEnabled(this.opened)
         this.syncPositions()
+    }
+
+    private showLocked(name: string): void {
+        this.ui.dialog(this.node, { title: this.ui.text('MODE_LOCKED'), message: this.ui.text(LOCKED_MESSAGES[name]) })
+    }
+
+    /** GameSelector: a finished Adventure earns the sunflower trophy, gold once every challenge trophy is won. */
+    private refreshTrophy(profile: UserView | null): void {
+        const finished = profile?.finishedAdventure ?? 0
+        const gold = finished > 0 && profile!.allTrophies
+        this.trophyRoot.active = finished > 0
+        const frame = this.frames.get(this.menu.trophy.image)!
+        this.trophy.spriteFrame = getAtlasFrame(frame, gold ? 1 : 0, frame.originalSize.width / 2, frame.originalSize.height, 2)
+        this.trophyTooltip.text = !gold ? this.ui.text('SILVER_SUNFLOWER_TOOLTIP')
+            : finished === 1 ? this.ui.text('GOLD_SUNFLOWER_TOOLTIP')
+                : this.ui.text('GOLD_SUNFLOWER_TOOLTIP_PLURAL').replace('{COUNT}', String(finished))
+        this.trophyTooltip.node.setPosition(gold ? 32 : 20, gold ? -510 : -495)
+        // SyncProfile replaces the sparkle; during the entrance it waits for the selector to open.
+        if (this.trophySparkle?.isValid) this.trophySparkle.node.destroy()
+        this.trophySparkle = null
+        if (this.opened) this.addTrophySparkle()
+    }
+
+    private addTrophySparkle(): void {
+        if (!this.trophyRoot.active || this.trophySparkle?.isValid) return
+        // AddTrophySparkle: (85, 380) on screen. 1073 writes (885, 380) because its selector sits at x = -800 with
+        // everything inside shifted 800 right for the Zombatar screen; it stays put while the trophy rose 45 above the pedestal.
+        this.trophySparkle = ParticlePlayer.spawn({ parent: this.trophyRoot, id: this.menu.trophy.particle, x: 85, y: -380 })
     }
 
     private setButtonsEnabled(enabled: boolean): void {
@@ -286,6 +355,8 @@ export class MainMenuScreen extends Component {
             button.node.active = !!track?.getComponent(Sprite)?.enabled
             if (track) button.node.setPosition(track.position.x + (config.x ?? 0), track.position.y - (config.y ?? 0))
         }
+        const left = this.current.getTrackNode(this.menu.trophy.track)
+        if (left) this.trophy.node.setPosition(left.position.x + 12, left.position.y - 345)
         const right = this.current.getTrackNode(this.menu.tracks.anchor)!
         for (const animation of [this.grass, ...this.flowers]) animation.node.setPosition(right.position.x - 71, right.position.y + 41)
         const offset = this.buttons.find(view => view.config.name === 'adventure')?.pressed ? 1 : 0

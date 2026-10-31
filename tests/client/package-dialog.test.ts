@@ -61,6 +61,11 @@ test('Mod dialog keeps new imports and updates in its draft until Apply, includi
             '@/client/content/preloadTasks': { waitForPreloadFrame: async () => { steps.push('paint') } },
             '@/client/view/uiNode': { uiNode: (options: any) => ({ node: makeNode(options.parent), graphics }) },
         }
+        const restarting: any = {}
+        runInNewContext(transpileModule(readFileSync('assets/scripts/client/screens/RestartingDialog.ts', 'utf8'), {
+            compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+        }).outputText, { exports: restarting, require: (name: string) => modules[name] ?? {} })
+        modules['./RestartingDialog'] = restarting
         const exports: any = {}
         runInNewContext(compiled, { exports, require: (name: string) => modules[name] ?? {}, setTimeout })
         await exports.showPackageDialog(makeNode(), ui, { import: async () => [imported],

@@ -53,6 +53,10 @@ export class LevelView {
     private hideConveyorBank = () => {}
     private seedChooser?: LevelSeedChooser
     private syncSeedChooserIntro = () => {}
+    private pinScreen = () => {}
+    /** How far the lawn sits right of its original gameplay position (wide viewports); the screen UI stays put. */
+    private lawnShift = 0
+    get worldShift(): number { return this.lawnShift }
     private readonly pausedComponents: Component[] = []
     private presentationPaused = false
     private gameplayTick = 0
@@ -258,6 +262,10 @@ export class LevelView {
         gridPlant.setColor(new Color(255, 255, 255, 100))
         cursorPreview.active = false
         gridPreview.active = false
+        // The plant and tool cursors follow the pointer over the lawn.
+        const cursorLayer = uiNode({ name: 'CursorLayer', parent: hud }).node
+        cursorLayer.setSiblingIndex(cursorPreview.getSiblingIndex())
+        cursorPreview.setParent(cursorLayer)
         const awardLayer = uiNode({
             node: slots.awardLayer, size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
         }).node
@@ -279,7 +287,7 @@ export class LevelView {
                 if (seed.placement === 'grave' && !level.graves?.length) return 'NOT_RECOMMENDED_FOR_LEVEL'
                 return undefined
             })
-        seedChooser?.placeBefore(cursorPreview)
+        seedChooser?.placeBefore(cursorLayer)
         let view!: LevelView
         let entityRenderer!: LevelEntityRenderer
         const intro = await presentation.createIntro({
@@ -334,16 +342,22 @@ export class LevelView {
         view.graves = await LevelGraves.create(entityLayer, entityRenderer, content, boardDefinition, initial.graves ?? [])
         view.syncGraves(initial.phase === 'gameplay')
         if (level.tools?.length || level.conveyor || level.shovelTutorial || level.introDialog || level.bowling) {
-            view.boardHud = await LevelBoardHud.create(hud, bankLeft, slots.sodClip, content, ui, initial, cursorPreview, hudPresenter.seedBank, player, tooltipSurface)
+            view.boardHud = await LevelBoardHud.create(hud, bankLeft, slots.sodClip, content, ui, initial, cursorLayer, hudPresenter.seedBank, player, tooltipSurface)
             if (level.conveyor) view.hideConveyorBank = () => { bank.active = false }
+        }
+        // The HUD and the seed bank layer are screen UI under the board. They cancel the lawn's shift, and the seed
+        // chooser holds them through its whole camera pan; restoring a completed intro clears that hold. The HUD's lawn
+        // layers (items, awards, cursors) undo the pin, so anything else added to the HUD stays on screen.
+        view.pinScreen = () => {
+            const pin = seedChooser && !intro.complete ? board.position.x : view.lawnShift
+            hud.setPosition(-WIDTH / 2 - pin, HEIGHT / 2)
+            bankLayer.setPosition(-WIDTH / 2 - pin, HEIGHT / 2)
+            for (const layer of [coinLayer, awardLayer, cursorLayer]) layer.setPosition(pin, 0)
         }
         if (seedChooser) view.syncSeedChooserIntro = () => {
             const tick = intro.elapsedTicks
             seedChooser.syncIntro(tick)
-            // Restoring a completed intro skips the camera pan; clear its temporary UI offset too.
-            const offset = intro.complete ? 0 : board.position.x
-            hud.setPosition(-WIDTH / 2 - offset, HEIGHT / 2)
-            bankLayer.setPosition(-WIDTH / 2 - offset, HEIGHT / 2)
+            view.pinScreen()
             // Keep the bank above the entities until the return pan finishes at tick 600.
             const above = !intro.complete && tick < 600
             if (above !== bankLayer.getSiblingIndex() > entityLayer.getSiblingIndex()) {
@@ -356,8 +370,15 @@ export class LevelView {
         }
         view.shakeTarget = { node: board, x: board.position.x, y: board.position.y }
         intro.sync()
+        view.pinScreen()
         view.hideConveyorBank()
         return view
+    }
+
+    /** Mods that move the lawn sideways report the shift; the screen UI cancels it and input maps onto the moved lawn. */
+    setWorldShift(shift: number): void {
+        this.lawnShift = shift
+        this.pinScreen()
     }
 
     /** Graves rise from the intro's grave tick; a level already in play shows them fully risen. */

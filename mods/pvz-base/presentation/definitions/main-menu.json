@@ -18,5 +18,7 @@
   "clouds": ["cloud1", "cloud2", "cloud4", "cloud5", "cloud6", "cloud7"],
   "flowers": [{"x": 765, "y": 483},{"x": 663, "y": 455},{"x": 701, "y": 439}],
   "tracks": {"sky": "SelectorScreen_BG", "anchor": "SelectorScreen_BG_Right", "profileSign": "woodsign1", "replaced": ["leaf1", "leaf2", "leaf22", "leaf3", "leaf4", "leaf5", "leaf_SelectorScreen_Leaves", "flower1", "flower2", "flower3"], "handRocks": ["rock1", "rock2", "rock2.2", "rock3", "rock4", "rock4.2", "rock5", "rock5.2", "rock5.3", "rock5.4", "rock5.5", "rock6", "rock6.2", "rock6.2_2"]},
+  "keyShadow": {"track": "almanac_key_shadow", "almanac": "selectorscreen_almanac_shadow", "store": "selectorscreen_key_shadow"},
+  "trophy": {"track": "SelectorScreen_BG_Left", "image": "sunflower_trophy", "particle": "pvz:trophysparkle"},
   "startAdventure": {"track": "SelectorScreen_StartAdventure_button", "image": "selectorscreen_startadventure_button1", "highlight": "selectorscreen_startadventure_highlight", "shadow": "SelectorScreen_StartAdventure_shadow", "adventureShadow": "SelectorScreen_Adventure_shadow"}
 }

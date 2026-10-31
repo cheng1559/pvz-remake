@@ -6,6 +6,7 @@ import type { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UIDialog } from '@/client/ui/UIDialog'
 import { uiNode } from '@/client/view/uiNode'
+import { restartWithProgress } from './RestartingDialog'
 
 const LIST_COLOR = new Color(23, 24, 35)
 const TEXT_COLOR = new Color(235, 225, 180)
@@ -19,6 +20,9 @@ export interface PlayerMods {
     copyMods(from: number | null, to: number, move?: boolean): void
     restart(): void
 }
+
+/** Like the Mod manager's Apply, the restart shows "Restarting..." until the game reloads. */
+const restartGame = (parent: Node, ui: UI, mods: PlayerMods) => restartWithProgress(parent, ui, () => mods.restart())
 
 /** Asks before switching to a player whose Mods differ; leaving a deleted player cannot be cancelled. */
 async function modRestart(parent: Node, ui: UI, mods: PlayerMods | undefined, profile: number | null, cancellable: boolean): Promise<'same' | 'restart' | 'cancel'> {
@@ -42,7 +46,7 @@ async function setUpNewPlayer(parent: Node, ui: UI, mods: PlayerMods | undefined
         confirmText: ui.text('BUTTON_YES'), cancelText: ui.text('BUTTON_NO'),
     }).result) mods.copyMods(previous, created)
     if (await modRestart(parent, ui, mods, created, false) !== 'restart') return false
-    mods.restart()
+    await restartGame(parent, ui, mods)
     return true
 }
 
@@ -144,7 +148,7 @@ export async function showUserDialog(parent: Node, ui: UI, onClose: () => void, 
             if (restart === 'cancel' || !dialog.node.activeInHierarchy) return
             const result = await menuApi.selectUser(profile.id)
             if (!result.ok || !dialog.node.activeInHierarchy) return
-            if (restart === 'restart') { mods!.restart(); return }
+            if (restart === 'restart') { await restartGame(dialog.node, ui, mods!); return }
             await onChanged()
             dialog.close(true)
         } finally { selecting = false }
@@ -177,7 +181,7 @@ export async function showUserDialog(parent: Node, ui: UI, onClose: () => void, 
             await refresh(nextId)
             if (deletingCurrent && entries[selected]) {
                 await menuApi.selectUser(entries[selected].id)
-                if (await modRestart(dialog.node, ui, mods, entries[selected].id, false) === 'restart') { mods!.restart(); return }
+                if (await modRestart(dialog.node, ui, mods, entries[selected].id, false) === 'restart') { await restartGame(dialog.node, ui, mods!); return }
             }
             await onChanged()
             if (!entries.length) editName()

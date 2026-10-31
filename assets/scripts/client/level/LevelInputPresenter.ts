@@ -326,6 +326,6 @@ export class LevelInputPresenter {
     private boardPixel(event: EventTouch | EventMouse): { x: number, y: number } {
         const ui = event.getUILocation()
         const local = uiNode({ node: this.node }).transform.convertToNodeSpaceAR(new Vec3(ui.x, ui.y))
-        return { x: local.x + WIDTH / 2, y: HEIGHT / 2 - local.y }
+        return { x: local.x + WIDTH / 2 - this.view.worldShift, y: HEIGHT / 2 - local.y }
     }
 }

@@ -3,12 +3,12 @@ import { Button, Color, director, Director, KeyCode, Node, UITransform } from 'c
 import { FontMetricsUtil } from '@/client/font'
 import { modManager, type ModImport } from '@/client/content/ModManager'
 import { modResources } from '@/client/content/ModResources'
-import { waitForPreloadFrame } from '@/client/content/preloadTasks'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UIDialog } from '@/client/ui/UIDialog'
 import { uiNode } from '@/client/view/uiNode'
+import { restartWithProgress } from './RestartingDialog'
 
 const LIST_COLOR = new Color(23, 24, 35)
 const TEXT_COLOR = new Color(235, 225, 180)
@@ -297,16 +297,13 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
             if (!confirmed || !dialog.node.isValid) return
         }
         if (restart) {
-            const progress = ui.dialog(dialog.node, { title: ui.text('PACKAGE_RESTARTING'), footer: false, clickSound: null })
-            progress.onConfirm = progress.onCancel = () => {}
-            await waitForPreloadFrame()
-            try {
+            await restartWithProgress(dialog.node, ui, async () => {
                 await options.save()
                 await manager.queueChanges({ enabled, order, imports: [...pendingImports.values()], uninstalls: [...pendingUninstalls] })
                 pendingImports.clear()
                 restarting = true
                 await options.restart()
-            } catch (error) { progress.close(); throw error }
+            })
         } else {
             await manager.setEnabled(enabled, order)
             dialog.close(true)

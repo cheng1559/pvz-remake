@@ -342,6 +342,10 @@ export interface MainMenuDefinition {
         /** The rocks the rising zombie hand pushes aside, drawn outside the hand's clip. */
         readonly handRocks: readonly string[]
     }
+    /** Drawn under the almanac and the store key; with only one of them, that one's own shadow, and none without either. */
+    readonly keyShadow: { readonly track: string; readonly almanac: string; readonly store: string }
+    /** The sunflower trophy (silver and gold cels) follows `track`; it and its sparkle appear once Adventure is finished. */
+    readonly trophy: { readonly track: string; readonly image: string; readonly particle: string }
     /** Replaces the adventure button before the first level; each shows its own shadow track. */
     readonly startAdventure: { readonly track: string; readonly image: string; readonly highlight: string; readonly shadow: string; readonly adventureShadow: string }
 }
@@ -704,6 +708,10 @@ function parseMainMenu(menu: Record<string, unknown>): void {
     const tracks = object(menu.tracks, 'mainMenu.tracks')
     for (const key of ['sky', 'anchor', 'profileSign']) text(tracks[key], 'mainMenu.tracks.' + key)
     texts(tracks.replaced, 'mainMenu.tracks.replaced'); texts(tracks.handRocks, 'mainMenu.tracks.handRocks')
+    const keyShadow = object(menu.keyShadow, 'mainMenu.keyShadow')
+    for (const key of ['track', 'almanac', 'store']) text(keyShadow[key], 'mainMenu.keyShadow.' + key)
+    const trophy = object(menu.trophy, 'mainMenu.trophy')
+    for (const key of ['track', 'image', 'particle']) text(trophy[key], 'mainMenu.trophy.' + key)
     const start = object(menu.startAdventure, 'mainMenu.startAdventure')
     for (const key of ['track', 'image', 'highlight', 'shadow', 'adventureShadow']) text(start[key], 'mainMenu.startAdventure.' + key)
 }

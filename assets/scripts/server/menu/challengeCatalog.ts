@@ -34,3 +34,12 @@ export const CHALLENGES: Record<ChallengePageId, Challenge[]> = {
     ],
 }
 
+
+export function challengeCompleted(challenge: Challenge, records: readonly number[]): boolean {
+    return !challenge.endless && (records[challenge.record] ?? 0) >= (challenge.required ?? 1)
+}
+
+/** TrophiesNeedForGoldSunflower: all 48 trophies of the three challenge pages. */
+export function hasAllTrophies(records: readonly number[]): boolean {
+    return Object.values(CHALLENGES).every(page => page.every(item => item.endless || challengeCompleted(item, records)))
+}

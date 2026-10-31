@@ -7,7 +7,15 @@ export interface MenuStorage {
 }
 
 export interface UserSummary { id: number, name: string }
-export interface UserView extends UserSummary { adventureLevel: number, finishedAdventure: number }
+/** GameSelector: the locked mode buttons and the menu items the player has reached. */
+export interface MainMenuUnlocks { minigames: boolean, puzzle: boolean, survival: boolean, almanac: boolean, store: boolean, garden: boolean }
+export interface UserView extends UserSummary {
+    adventureLevel: number
+    finishedAdventure: number
+    unlocks: MainMenuUnlocks
+    /** Every mini-game, puzzle and survival trophy; with a finished Adventure, the sunflower trophy turns gold. */
+    allTrophies: boolean
+}
 export interface UserList { current: UserView | null, users: UserSummary[] }
 export type UserResult = { ok: true, user: UserView | null } | {
     ok: false, code: 'emptyName' | 'invalidName' | 'duplicateName' | 'notFound',

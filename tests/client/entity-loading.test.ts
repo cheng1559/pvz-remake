@@ -359,7 +359,7 @@ test('presentation track lists name exact tracks that exist in their clips; losi
     const selector = new Set(['pvz:selector_open', 'pvz:selector_sign'].flatMap(trackIds))
     const { tracks: menuTracks, startAdventure } = menu
     for (const track of [...menu.buttons.map((button: { track: string }) => button.track), menuTracks.sky, menuTracks.anchor, menuTracks.profileSign,
-        ...menuTracks.replaced, startAdventure.track, startAdventure.shadow, startAdventure.adventureShadow]) {
+        ...menuTracks.replaced, startAdventure.track, startAdventure.shadow, startAdventure.adventureShadow, menu.keyShadow.track, menu.trophy.track]) {
         assert.ok(selector.has(track), `the main menu lists ${track}`)
     }
     const hand = new Set(trackIds('pvz:selector_zombie_hand'))

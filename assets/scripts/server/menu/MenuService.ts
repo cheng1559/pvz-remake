@@ -2,13 +2,28 @@ import type { AwardView, MenuRequest, MenuResponse, MenuStorage, StoreItemView, 
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import { ALMANAC_PLANTS, ALMANAC_ZOMBIES } from './almanacCatalog'
 import { ACHIEVEMENT_DEFINITIONS } from './achievementCatalog'
-import { CHALLENGES } from './challengeCatalog'
+import { CHALLENGES, challengeCompleted, hasAllTrophies } from './challengeCatalog'
 import { createGameSettingsStore } from './gameSettingsStore'
 import { createProfileStore, type PlayerProfile } from './profileStore'
 import type { StoreCatalog } from './storeCatalog'
 
 function userView(profile: PlayerProfile | null): UserView | null {
-    return profile && { id: profile.id, name: profile.name, adventureLevel: profile.adventureLevel, finishedAdventure: profile.finishedAdventure }
+    if (!profile) return null
+    const finished = profile.finishedAdventure > 0
+    const level = profile.adventureLevel
+    return {
+        id: profile.id, name: profile.name, adventureLevel: level, finishedAdventure: profile.finishedAdventure,
+        // GameSelector::SyncProfile and LawnApp::CanShowAlmanac/CanShowStore/CanShowZenGarden.
+        unlocks: {
+            minigames: finished || profile.hasUnlockedMinigames,
+            puzzle: finished || profile.hasUnlockedPuzzleMode,
+            survival: finished || profile.hasUnlockedSurvivalMode,
+            almanac: finished || level >= 15,
+            store: finished || profile.hasSeenUpsell || level >= 25,
+            garden: finished || level >= 45,
+        },
+        allTrophies: hasAllTrophies(profile.challengeRecords),
+    }
 }
 
 export class MenuService {
@@ -60,7 +75,7 @@ export class MenuService {
                 const items = definitions.map(item => ({
                     key: item.key, icon: item.icon, ...(item.endless !== undefined && { endless: item.endless }),
                     record: records[item.record] ?? 0,
-                    completed: !item.endless && (records[item.record] ?? 0) >= (item.required ?? 1),
+                    completed: challengeCompleted(item, records),
                 }))
                 return { items, total: items.filter(item => !item.endless).length, completed: items.filter(item => item.completed).length }
             }

@@ -17,6 +17,8 @@ export interface UITooltipOptions {
     offset?: readonly [number, number]
     /** Optional popup surface outside a clipped control, while retaining the control as its anchor. */
     surface?: Node
+    /** Puts the popup's top-left corner at the anchor's, like a ToolTipWidget placed at a fixed mX/mY. */
+    fixed?: boolean
 }
 
 interface Bounds { left: number, right: number, top: number, bottom: number }
@@ -111,10 +113,15 @@ export class UITooltip extends Component {
         ].map(([x, y]) => surface.convertToNodeSpaceAR(anchor.convertToWorldSpaceAR(new Vec3(
             x - anchor.anchorX * anchor.width, y - anchor.anchorY * anchor.height,
         ))))
-        const position = tooltipPosition({
+        const box = {
             left: Math.min(...points.map(p => p.x)), right: Math.max(...points.map(p => p.x)),
             bottom: Math.min(...points.map(p => p.y)), top: Math.max(...points.map(p => p.y)),
-        }, popup.transform.width, popup.transform.height, bounds, this.options.gap ?? 4, this.options.offset)
+        }
+        const { width, height } = popup.transform
+        const position = this.options.fixed ? {
+            x: Math.max(bounds.left, Math.min(bounds.right - width, box.left)),
+            y: Math.max(bounds.bottom + height, Math.min(bounds.top, box.top)),
+        } : tooltipPosition(box, width, height, bounds, this.options.gap ?? 4, this.options.offset)
         popup.node.setPosition(position.x, position.y)
         popup.node.setSiblingIndex(surface.node.children.length - 1)
         popup.node.active = true

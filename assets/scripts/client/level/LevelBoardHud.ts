@@ -36,7 +36,7 @@ export class LevelBoardHud {
     private shovelHotkey?: UILabel
     private shovelX = 0
 
-    static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, plantCursor: Node, seedBank: LevelSeedBank, player: LevelPlayer, tooltipSurface: Node): Promise<LevelBoardHud> {
+    static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, cursorLayer: Node, seedBank: LevelSeedBank, player: LevelPlayer, tooltipSurface: Node): Promise<LevelBoardHud> {
         const root = uiNode({ name: 'BoardHud', parent, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
         const result = new LevelBoardHud(root, content, ui, player)
         const sprites = new SpriteRepository(content.registry, content.loader)
@@ -51,7 +51,9 @@ export class LevelBoardHud {
                 text: 'F', font: 'hotkey', fontSize: 16, color: new Color(213, 159, 43),
                 x: bankFrame.originalSize.width - 4, y: -4, align: 'right',
             })
-            result.cursor = ui.image(root, shovelFrame).node
+            // The held shovel follows the pointer over the lawn, under the plant cursor.
+            result.cursor = ui.image(cursorLayer, shovelFrame).node
+            result.cursor.setSiblingIndex(0)
             result.cursor.active = false
             result.tooltip = ui.tooltip(result.shovelBank, { text: ui.text('SHOVEL_TOOLTIP'), gap: 0, surface: tooltipSurface })
             result.shovelButton = result.shovelBank.addComponent(UIButton)
@@ -78,7 +80,7 @@ export class LevelBoardHud {
             result.stripe.setSiblingIndex(ground.getSiblingIndex() + 1)
         }
         if (level.shovelTutorial || level.introDialog && initial.tutorial.step !== 'complete') result.dave = await CrazyDaveView.create(root, content, ui)
-        root.setSiblingIndex(plantCursor.getSiblingIndex())
+        root.setSiblingIndex(cursorLayer.getSiblingIndex())
         if (initial.tick > 0 || initial.phase === 'gameplay') result.delay = content.presentation.dave.delay
         result.sync(initial)
         return result
@@ -113,7 +115,7 @@ export class LevelBoardHud {
             this.shovelButton!.interactable = (snapshot.extensions['pvz:tools'] as { available: string[] } | undefined)?.available.includes('pvz:shovel') === true
             if (snapshot.tutorial.step === 'shovel-pickup') {
                 const size = uiNode({ node: this.shovelBank }).transform
-                // The bank sits in an edge container that the camera may shift, so follow its world position, as the seed arrow does.
+                // The bank sits in the UI area's edge container, so follow its world position, as the seed arrow does.
                 const bank = this.root.inverseTransformPoint(new Vec3(), this.shovelBank.worldPosition)
                 const x = bank.x + size.width / 2 + layout.arrowOffset[0], y = bank.y - size.height + layout.arrowOffset[1]
                 if (this.shovelArrow?.isValid) this.shovelArrow.setPosition(x, y, 20)

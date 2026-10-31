@@ -247,3 +247,24 @@ test('menu data and business rules stay behind the API without Cocos or frontend
         assert.doesNotMatch(source, /localStorage|from ['"][^'"]*(?:server\/|persistence\/|StoreCatalog|AlmanacCatalog)/, file)
     }
 })
+
+test('the main menu unlocks modes, the almanac, store and garden, and the gold trophy from the player’s progress', async () => {
+    const { api, profiles } = fixture()
+    const profile = profiles.createProfile('Alice')!
+    profile.adventureLevel = 25
+    profile.hasUnlockedPuzzleMode = true
+    profiles.saveProfile(profile)
+    assert.deepEqual((await api.getCurrentUser())!.unlocks,
+        { minigames: false, puzzle: true, survival: false, almanac: true, store: true, garden: false })
+    profile.finishedAdventure = 1
+    profiles.saveProfile(profile)
+    const finished = (await api.getCurrentUser())!
+    assert.ok(Object.values(finished.unlocks).every(Boolean), 'a finished Adventure unlocks everything')
+    assert.equal(finished.allTrophies, false)
+    // 20 mini-games, 18 puzzles (not the endless ones) and 10 survivals: 5 flags on normal, 10 on hard.
+    for (let record = 0; record < 10; record++) profile.challengeRecords[record] = record < 5 ? 5 : 10
+    for (let record = 15; record < 35; record++) profile.challengeRecords[record] = 1
+    for (let record = 50; record < 70; record++) if (record % 10 !== 9) profile.challengeRecords[record] = 1
+    profiles.saveProfile(profile)
+    assert.equal((await api.getCurrentUser())!.allTrophies, true)
+})

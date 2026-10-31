@@ -95,6 +95,7 @@ function panelFixture() {
         '@/client/api/MenuApi': { menuApi },
         '@/client/font': { FontMetricsUtil: { getMetrics: () => ({ height: 20, ascentPadding: 0 }), measureTextWidth: () => 50 } },
         '@/client/ui/UIButton': { UIButton: Button }, '@/client/view/uiNode': { uiNode },
+        './RestartingDialog': load('client/screens/RestartingDialog', { '@/client/content/preloadTasks': { waitForPreloadFrame: async () => {} } }),
     })
     const action = (dialog: any, name: string) => dialog.content.getComponentsInChildren().find((button: any) => button.text === name).onClick()
     return { ProfileStore, data, dialogs, inputs, action, show: (mods?: any) => showUserDialog(new Node(), ui, () => {}, () => {}, mods) }
@@ -209,6 +210,7 @@ test('a new player may copy the previous Mods, and switching to other Mods asks 
         assert.equal(store.getCurrentProfile().id, accept ? alice.id : carol, accept ? 'confirming switches, then restarts' : 'cancel keeps the current player')
     }
     assert.deepEqual(restarts, [alice.id])
+    assert.equal(dialogs.at(-1).options.title, 'PACKAGE_RESTARTING', 'the restart says so, like applying Mods')
 })
 
 test('input keeps programmatic values silent, filters pasted text, and releases modal keyboard focus', () => {
