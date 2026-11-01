@@ -369,7 +369,7 @@ export class LevelView {
         view.graves = await LevelGraves.create(entityLayer, entityRenderer, content, boardDefinition, initial.graves ?? [])
         view.syncGraves(initial.phase === 'gameplay')
         if (ownedTools(initial).length || level.conveyor || initial.tutorial.dave || level.bowling) {
-            view.boardHud = await LevelBoardHud.create(hud, bankLeft, slots.sodClip, content, ui, initial, cursorLayer, hudPresenter.seedBank, player, tooltipSurface)
+            view.boardHud = await LevelBoardHud.create(hud, bankLeft, slots.sodClip, content, ui, initial, cursorLayer, hudPresenter.seedBank, player, tooltipSurface, overlayLayer)
             if (level.conveyor) view.hideConveyorBank = () => { bank.active = false }
         }
         // The HUD and the seed bank layer are screen UI under the board. They cancel the lawn's shift, and the seed

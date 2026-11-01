@@ -41,7 +41,7 @@ export class LevelBoardHud {
     private shovelHotkey?: UILabel
     private shovelX = 0
 
-    static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, cursorLayer: Node, seedBank: LevelSeedBank, player: LevelPlayer, tooltipSurface: Node): Promise<LevelBoardHud> {
+    static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, cursorLayer: Node, seedBank: LevelSeedBank, player: LevelPlayer, tooltipSurface: Node, daveLayer: Node): Promise<LevelBoardHud> {
         const root = uiNode({ name: 'BoardHud', parent, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
         const result = new LevelBoardHud(root, content, ui, player)
         const sprites = new SpriteRepository(content.registry, content.loader)
@@ -84,9 +84,11 @@ export class LevelBoardHud {
             }).node
             result.stripe.setSiblingIndex(ground.getSiblingIndex() + 1)
         }
-        // Dave comes for scripted dialogue.
+        // Dave comes for scripted dialogue. He stands on a screen layer outside the board, so neither the lawn's shift
+        // nor the intro camera moves him.
         if (initial.tutorial.dave && initial.tutorial.step !== 'complete') {
-            result.dave = await CrazyDaveView.create(root, content, ui)
+            const stage = uiNode({ name: 'DaveStage', parent: daveLayer, position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
+            result.dave = await CrazyDaveView.create(stage, content, ui)
         }
         root.setSiblingIndex(cursorLayer.getSiblingIndex())
         if (initial.tick > 0 || initial.phase === 'gameplay') result.delay = content.presentation.dave.delay
