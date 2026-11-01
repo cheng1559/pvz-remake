@@ -21,6 +21,7 @@ const SLOTS: Record<ZombieSnapshot['animation'], AnimationSlot> = {
     anim_gasp: 'gasp',
     anim_death: 'death',
     anim_death2: 'death2',
+    anim_superlongdeath: 'superLongDeath',
     mowered: 'mowered',
 }
 
@@ -460,8 +461,10 @@ export class ZombieView implements ZombieViewInstance {
     private definition(animation: ZombieSnapshot['animation'] | AnimationSlot): ClientAnimationClip {
         const slot = animation in SLOTS ? SLOTS[animation as ZombieSnapshot['animation']] : animation as AnimationSlot
         const enraged = this.latestZombie?.enraged
-        const clip = this.clips()[enraged && (slot === 'walk' || slot === 'walk2') ? 'enragedWalk'
-            : enraged && slot === 'eat' ? 'enragedEat' : slot]
+        const clips = this.clips()
+        // A zombie drawn without `superLongDeath` (anim_superlongdeath) falls with its `death`.
+        const clip = clips[enraged && (slot === 'walk' || slot === 'walk2') ? 'enragedWalk'
+            : enraged && slot === 'eat' ? 'enragedEat' : slot] ?? (slot === 'superLongDeath' ? clips.death : undefined)
         if (!clip) throw new Error(`${this.target} has no ${slot} animation`)
         return clip
     }

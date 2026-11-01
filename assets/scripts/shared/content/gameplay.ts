@@ -146,7 +146,8 @@ export interface ZombieDefinition {
 export interface ZombieGait {
     walkGround: number[]
     eat: { frames: number; rate: number; chewTimes: number[] }
-    deaths: Array<{ animation: 'anim_death' | 'anim_death2'; frames: number; fallTime: number }>
+    /** `rate` fixes the animation rate, as Zombie::PlayDeathAnim does for anim_superlongdeath (14). */
+    deaths: Array<{ animation: 'anim_death' | 'anim_death2' | 'anim_superlongdeath'; frames: number; fallTime: number; rate?: number }>
 }
 
 export interface ProjectileDefinition {
@@ -554,19 +555,21 @@ function parseZombieGait(value: unknown, name: string): ZombieGait {
         fraction(time, `${name}.eat.chewTimes[${index}]`))
     if (!chewTimes.length) throw new Error(`${name}.eat.chewTimes must not be empty`)
     const deaths = array(gait.deaths, `${name}.deaths`).map((entry, index) => {
-        const death = exactObject(entry, ['animation', 'frames', 'fallTime'], `${name}.deaths[${index}]`)
-        if (death.animation !== 'anim_death' && death.animation !== 'anim_death2') {
-            throw new Error(`${name}.deaths[${index}].animation must be anim_death or anim_death2`)
+        const death = exactObject(entry, ['animation', 'frames', 'fallTime'], `${name}.deaths[${index}]`, ['rate'])
+        if (death.animation !== 'anim_death' && death.animation !== 'anim_death2' && death.animation !== 'anim_superlongdeath') {
+            throw new Error(`${name}.deaths[${index}].animation must be anim_death, anim_death2 or anim_superlongdeath`)
         }
         return {
-            animation: death.animation as 'anim_death' | 'anim_death2',
+            animation: death.animation as 'anim_death' | 'anim_death2' | 'anim_superlongdeath',
             frames: frameCount(death.frames, `${name}.deaths[${index}].frames`),
             fallTime: fraction(death.fallTime, `${name}.deaths[${index}].fallTime`),
+            ...(death.rate === undefined ? {} : { rate: positiveFinite(death.rate, `${name}.deaths[${index}].rate`) }),
         }
     })
     if (deaths.length === 0 || deaths[0].animation !== 'anim_death') {
         throw new Error(`${name}.deaths must start with anim_death`)
     }
+    if (new Set(deaths.map(death => death.animation)).size !== deaths.length) throw new Error(`${name}.deaths repeats an animation`)
     return {
         walkGround: groundTrack(gait.walkGround, `${name}.walkGround`),
         eat: {

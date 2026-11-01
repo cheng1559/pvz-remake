@@ -403,7 +403,7 @@ function parsePlantAttack(value: unknown, name: string): PlantAttack {
 
 const ZOMBIE_STATES: readonly Zombie['state'][] = ['walking', 'eating', 'vaulting', 'dying', 'burned', 'mowered']
 const ZOMBIE_ANIMATIONS: readonly ZombieAnimation[] = [
-    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_gasp', 'anim_death', 'anim_death2', 'mowered',
+    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_gasp', 'anim_death', 'anim_death2', 'anim_superlongdeath', 'mowered',
 ]
 
 function parseZombie(value: unknown, name: string): Zombie {

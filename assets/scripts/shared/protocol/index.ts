@@ -10,7 +10,7 @@ const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
 ]
 const ZOMBIE_STATES: readonly ZombieState[] = ['walking', 'eating', 'vaulting', 'dying', 'burned', 'mowered']
 const ZOMBIE_ANIMATIONS: readonly ZombieAnimationName[] = [
-    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_gasp', 'anim_death', 'anim_death2', 'mowered',
+    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_gasp', 'anim_death', 'anim_death2', 'anim_superlongdeath', 'mowered',
 ]
 
 /** A burned zombie keeps the frame it was standing in. */
@@ -19,8 +19,8 @@ export function zombieAnimationMatchesState(state: ZombieState, animation: Zombi
         case 'walking': return animation === 'anim_walk' || animation === 'anim_walk2' || animation === 'anim_run' || animation === 'anim_gasp'
         case 'eating': return animation === 'anim_eat'
         case 'vaulting': return animation === 'anim_jump'
-        case 'dying': return animation === 'anim_death' || animation === 'anim_death2'
-        case 'burned': return animation !== 'mowered' && animation !== 'anim_death' && animation !== 'anim_death2'
+        case 'dying': return animation === 'anim_death' || animation === 'anim_death2' || animation === 'anim_superlongdeath'
+        case 'burned': return animation !== 'mowered' && animation !== 'anim_death' && animation !== 'anim_death2' && animation !== 'anim_superlongdeath'
         case 'mowered': return animation === 'mowered'
     }
 }
@@ -220,7 +220,7 @@ export type PlantAbilityState =
 
 export type ZombieState = 'walking' | 'eating' | 'vaulting' | 'dying' | 'burned' | 'mowered'
 export type ZombieAnimationName =
-    | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_gasp' | 'anim_death' | 'anim_death2' | 'mowered'
+    | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_gasp' | 'anim_death' | 'anim_death2' | 'anim_superlongdeath' | 'mowered'
 
 export interface ZombieSnapshot extends EntityBehaviorState {
     entityId: EntityId

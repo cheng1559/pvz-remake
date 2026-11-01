@@ -6,7 +6,8 @@ import {
     ZOMBIE_MOWERED_TICKS,
     zombieGait,
 } from './animation'
-import { type EntityRemover, RandomResource, type Zombie, ZombieComponent } from '../state/components'
+import { type EntityRemover, LevelStateResource, RandomResource, type Zombie, ZombieComponent } from '../state/components'
+import { TutorialResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { World } from '@/ecs/index'
@@ -135,6 +136,22 @@ export function dropZombieHelm(world: World, definitions: GameplayDefinitions, e
     emitServerEvent(world.resources.get(EventQueueResource), 'zombieHelmDropped', { entityId: entity, helm: helm.type, ...(bypassed ? { bypassed: true } : {}) })
 }
 
+/** LawnApp::HasFinishedAdventure || mLevel > 5. */
+function canDoSuperLongDeath(world: World): boolean {
+    if (!world.resources.has(TutorialResource) || !world.resources.has(LevelStateResource)) return false
+    return !world.resources.get(TutorialResource).firstAdventure || world.resources.get(LevelStateResource).definition.adventureIndex > 5
+}
+
+/** Board::CountZombiesOnScreen: zombies with their heads that are not dying, other than `except`. */
+function countZombiesOnScreen(world: World, except: number): number {
+    let count = 0
+    for (const entity of world.query(ZombieComponent)) {
+        const zombie = world.get(entity, ZombieComponent)!
+        if (entity !== except && zombie.hasHead && zombie.state !== 'dying' && zombie.state !== 'burned' && zombie.state !== 'mowered') count++
+    }
+    return count
+}
+
 export function startZombieDeath(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie): void {
     if (zombie.state === 'dying') return
     dropZombieFlag(world, definitions, entity)
@@ -142,13 +159,20 @@ export function startZombieDeath(world: World, definitions: GameplayDefinitions,
     if (definitions.zombies[zombie.typeId].helm?.shield) dropZombieHelm(world, definitions, entity, zombie, true)
     const random = world.resources.get(RandomResource)
     const deaths = zombieGait(definitions.zombies[zombie.typeId], definitions).deaths
-    const death = random.integer(0, 99) >= 51 && deaths[1] ? deaths[1] : deaths[0]
+    const roll = random.integer(0, 99)
+    const superLong = deaths.find(death => death.animation === 'anim_superlongdeath')
+    const death2 = deaths.find(death => death.animation === 'anim_death2')
+    // Zombie::PlayDeathAnim: a 99 plays the super long death from level 6 (or after the adventure), unchilled, with at
+    // most five zombies on screen; above 50 is anim_death2.
+    const death = roll === 99 && superLong && canDoSuperLongDeath(world) && zombie.chilledTicks === 0 && countZombiesOnScreen(world, entity) <= 5
+        ? superLong : roll > 50 && death2 ? death2 : deaths[0]
     zombie.state = 'dying'
     zombie.animation = death.animation
     zombie.animationTime = 0
     // A chilled zombie keeps its slowed animation while falling.
-    const rate = (ZOMBIE_DEATH_RATE_MIN + random.nextFloat() * (ZOMBIE_DEATH_RATE_MAX - ZOMBIE_DEATH_RATE_MIN)) *
+    const randomRate = (ZOMBIE_DEATH_RATE_MIN + random.nextFloat() * (ZOMBIE_DEATH_RATE_MAX - ZOMBIE_DEATH_RATE_MIN)) *
         (zombie.chilledTicks > 0 ? CHILLED_ANIMATION_FACTOR : 1)
+    const rate = death.rate ?? randomRate
     zombie.animationSpeed = rate / ZOMBIE_ASSET_FPS
     zombie.deathTicksRemaining = Math.ceil(death.frames / rate * TICKS_PER_SECOND) + ZOMBIE_DEATH_HOLD_TICKS
 }

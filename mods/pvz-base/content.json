@@ -51135,6 +51135,7 @@
       "pvz:zombie_eat": "assets/reanim/zombie_eat.json",
       "pvz:zombie_flag": "assets/reanim/zombie_flag.json",
       "pvz:zombie_idle2": "assets/reanim/zombie_idle2.json",
+      "pvz:zombie_superlongdeath": "assets/reanim/zombie_superlongdeath.json",
       "pvz:zombie_walk": "assets/reanim/zombie_walk.json",
       "pvz:zombie_walk2": "assets/reanim/zombie_walk2.json",
       "pvz:tree_grow50": "assets/reanim/tree_grow50.json",

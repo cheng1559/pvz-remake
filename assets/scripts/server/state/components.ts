@@ -47,7 +47,7 @@ export interface PlantAttack {
 }
 
 export type ZombieAnimation =
-    | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_gasp' | 'anim_death' | 'anim_death2' | 'mowered'
+    | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_gasp' | 'anim_death' | 'anim_death2' | 'anim_superlongdeath' | 'mowered'
 
 export interface Zombie extends EntityBehaviorState {
     typeId: string

@@ -1056,7 +1056,8 @@
         "anim_walk2": "pvz:zombie_walk2",
         "anim_eat": "pvz:zombie_eat",
         "anim_death": "pvz:zombie_death",
-        "anim_death2": "pvz:zombie_death2"
+        "anim_death2": "pvz:zombie_death2",
+        "anim_superlongdeath": "pvz:zombie_superlongdeath"
       }
     },
     "helmbody": {

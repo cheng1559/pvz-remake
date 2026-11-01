@@ -13,6 +13,7 @@
       "eat": {"reanimId": "pvz:zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {
@@ -46,6 +47,7 @@
       "eat": {"reanimId": "pvz:flag_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"},
       "flag": {"reanimId": "pvz:zombie_flag", "rateScale": 1, "fps": 12, "x": 15, "y": 8, "attachmentTrackId": "Zombie_flaghand"}
     },
@@ -80,6 +82,7 @@
       "eat": {"reanimId": "pvz:helm_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {
@@ -120,6 +123,7 @@
       "eat": {"reanimId": "pvz:helm_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {
@@ -244,6 +248,7 @@
       "eat": {"reanimId": "pvz:door_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {

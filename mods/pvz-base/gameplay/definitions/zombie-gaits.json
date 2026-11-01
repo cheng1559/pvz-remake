@@ -7,7 +7,10 @@
       34.6, 35.9, 37.0, 38.2, 39.4, 39.5, 39.6, 39.7, 39.8, 39.9, 40.0
     ],
     "eat": {"frames": 40, "rate": 36, "chewTimes": [0.14, 0.68]},
-    "deaths": [{"animation": "anim_death", "frames": 39, "fallTime": 0.77}, {"animation": "anim_death2", "frames": 33, "fallTime": 0.71}]
+    "deaths": [
+      {"animation": "anim_death", "frames": 39, "fallTime": 0.77}, {"animation": "anim_death2", "frames": 33, "fallTime": 0.71},
+      {"animation": "anim_superlongdeath", "frames": 137, "fallTime": 0.788, "rate": 14}
+    ]
   },
   "pvz:pole_vaulter": {
     "walkGround": [
