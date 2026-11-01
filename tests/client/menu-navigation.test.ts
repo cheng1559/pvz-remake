@@ -84,6 +84,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     let prompts = 0
     let packageDialogs = 0
     const managerPaused: boolean[] = []
+    const purseSyncs: boolean[] = []
     let chooseContinue!: (action: 'continue' | 'restart' | 'cancel') => void
     let closeCli!: (result: DebugCliResult | null) => void
     const sounds: string[] = []
@@ -157,6 +158,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
             if (restoreOnPlay && !options.forceNewGame) { paused = true; options.onRestore?.() }
         },
         resume() { paused = false },
+        async syncPurse() { purseSyncs.push(paused) },
         pause() { if (running) paused = true },
         isRunning: () => running,
         countZombiesOnScreenForMusic: () => running ? 10 : 0,
@@ -271,8 +273,10 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     await app.navigate('plants')
     await app.navigate('almanac')
     assert.equal(paused, true)
+    const syncsBefore = purseSyncs.length
     await app.navigate('back')
     assert.deepEqual([app.currentPage, paused, running], [null, false, true], 'closing an almanac opened in a level returns to it')
+    assert.deepEqual(purseSyncs.slice(syncsBefore), [true], 'a page over the level hands back the purse before the level resumes')
     introReady = false
     app.onKeyDown({ keyCode: 32 })
     app.onKeyDown({ keyCode: 27 })

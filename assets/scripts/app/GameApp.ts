@@ -154,7 +154,10 @@ export class GameApp extends Component {
             await transitions.run(async () => {
                 if (target === 'play' || target === 'restart' || target === 'resume') {
                     return async () => {
-                        if (target !== 'resume') {
+                        if (target === 'resume') {
+                            // A page over the level (the store) may have changed the purse it plays with.
+                            await controller.syncPurse()
+                        } else {
                             const profile = await menuApi.getCurrentUser()
                             if (!profile) throw new Error('Could not create a player profile')
                             await controller.play({
@@ -162,8 +165,8 @@ export class GameApp extends Component {
                                 levelId,
                                 onRestore: () => { restoredGame = true },
                             })
-                            if (!this.node?.isValid) return
                         }
+                        if (!this.node?.isValid) return
                         if (!restoredGame && !reopen) controller.resume()
                         gameLayer.active = true
                         menu.hide()

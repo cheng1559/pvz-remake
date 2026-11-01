@@ -1,6 +1,7 @@
 import type { GameCommand } from '@/shared/protocol/index'
 import { debugSuccess, parseDebugCliCommand } from '@/shared/debug/DebugCli'
-import { LevelStateResource, SeedBankResource } from '../state/components'
+import { EconomyStateResource, LevelStateResource, SeedBankResource } from '../state/components'
+import { MAX_MONEY } from '@/shared/menu'
 import { startConveyor } from '../level/conveyor'
 import { executeDebugGameCommand } from '../debug/debugCommands'
 import { items } from '../level/items'
@@ -16,7 +17,7 @@ export const commands = {
     execute(session: Session, command: GameCommand): CommandRejectionCode | undefined {
         const { world } = session
         const level = world.resources.get(LevelStateResource)
-        if (level.result !== 'playing' && command.type !== 'pause' && command.type !== 'resume') return 'game-not-playing'
+        if (level.result !== 'playing' && command.type !== 'pause' && command.type !== 'resume' && command.type !== 'syncPurse') return 'game-not-playing'
         if (command.type === 'completeIntro') {
             if (level.phase !== 'intro') return 'intro-already-complete'
             if (world.resources.get(SeedBankResource).choosing) return 'seed-choice-incomplete'
@@ -31,6 +32,18 @@ export const commands = {
         }
         if (command.type === 'resume') {
             level.paused = false
+            return
+        }
+        if (command.type === 'syncPurse') {
+            // StoreScreen::PurchaseItem: a slot bought while a level is up widens an open chooser at once
+            // (SeedBank::UpdateWidth); a bank already in play keeps its size until the next level.
+            const economy = world.resources.get(EconomyStateResource)
+            economy.money = Math.min(MAX_MONEY, command.money)
+            if (command.packetUpgrades > 0) economy.diamonds = true
+            else delete economy.diamonds
+            if (world.resources.get(SeedBankResource).choosing === true && command.packetUpgrades > (economy.packetUpgrades ?? 0)) {
+                economy.packetUpgrades = command.packetUpgrades
+            }
             return
         }
         if (command.type === 'chooseSeed' || command.type === 'confirmSeeds') {
@@ -135,7 +148,7 @@ function processNextCommand(session: Session): CommandRejectionCode | undefined 
 /** Commands that change the session rather than the board; they run between ticks even mid-game. */
 function isSessionCommand(command: QueuedCommand): boolean {
     if (command.type === 'debug') return true
-    return command.type === 'pause' || command.type === 'resume' || command.type === 'completeIntro'
+    return command.type === 'pause' || command.type === 'resume' || command.type === 'completeIntro' || command.type === 'syncPurse'
         || command.type === 'advanceDialog' || command.type === 'answerDialog'
         || command.type === 'chooseSeed' || command.type === 'confirmSeeds'
 }

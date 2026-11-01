@@ -54,6 +54,8 @@ export type GameCommand =
     /** Answers the Yes/No question a dialogue line asks ({NO_CLICK}); only the active script decides what it means. */
     | { type: 'answerDialog'; accept: boolean }
     | { type: 'completeIntro' }
+    /** The profile's purse after a store visit from the level (the profile owns the coins and seed-slot upgrades). */
+    | { type: 'syncPurse'; money: number; packetUpgrades: number }
 
 export interface ClientPacketBase {
     protocolVersion: 1
@@ -624,6 +626,10 @@ const validateGameCommand = (value: unknown): void => {
             return
         case 'collectItemAt': integer(command.itemId, 'collectItemAt.itemId'); return
         case 'answerDialog': boolean(command.accept, 'answerDialog.accept'); return
+        case 'syncPurse':
+            integer(command.money, 'syncPurse.money')
+            integer(command.packetUpgrades, 'syncPurse.packetUpgrades')
+            return
         case 'clearCursor':
         case 'pause':
         case 'resume':

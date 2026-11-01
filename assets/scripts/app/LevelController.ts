@@ -46,6 +46,8 @@ export interface LevelController {
     /** `quiet`: a debug pause (the CLI) that the board does not show, unlike Board::Pause's coin bank. */
     pause(quiet?: boolean): void
     resume(): void
+    /** Gives the level the profile's purse, which a store page opened over it may have changed. */
+    syncPurse(): Promise<void>
     snapshot(): Promise<GameSave>
     restore(save?: unknown): Promise<Node>
     save(): Promise<GameSave>
@@ -304,6 +306,15 @@ export function createLevelController(
         },
         resume() {
             if (current?.root.isValid) current.scene.resume()
+        },
+        async syncPurse() {
+            const level = current
+            if (!level?.root.isValid || !await menuApi.getCurrentUser()) return
+            const purse = await menuApi.getPurse()
+            if (current !== level || !level.root.isValid) return
+            level.game.command({ type: 'syncPurse', money: purse.coins, packetUpgrades: purse.packetUpgrades })
+            level.game.update(0)
+            level.view.sync(level.game.render(), level.game.drainChanges(), level.game.drainEvents())
         },
         snapshot,
         async restore(value?: unknown) {

@@ -176,3 +176,19 @@ test('a game saved during the seed-slot pitch can still sell it after a restore'
     assert.equal(restored.snapshot().money, 0)
     assert.equal(restored.snapshot().seedChooser!.slots, 7)
 })
+
+test('a slot bought in the store while the level is up widens an open chooser; a bank in play keeps its size', () => {
+    // StoreScreen::PurchaseItem calls SeedBank::UpdateWidth when a board is up; the store opens from the chooser.
+    const choosing = start({ initialMoney: 100 })
+    assert.equal(runCommand(choosing, { type: 'pause' }), undefined)
+    assert.equal(runCommand(choosing, { type: 'syncPurse', money: 25, packetUpgrades: 1 }), undefined, 'the level is paused under the store')
+    assert.equal(runCommand(choosing, { type: 'resume' }), undefined)
+    assert.deepEqual([choosing.snapshot().seedChooser!.slots, choosing.snapshot().money], [7, 25])
+    play(choosing, 7)
+    assert.equal(choosing.snapshot().seedPackets.length, 7)
+
+    const playing = start({ initialMoney: 100 })
+    play(playing, 6)
+    assert.equal(runCommand(playing, { type: 'syncPurse', money: 25, packetUpgrades: 1 }), undefined)
+    assert.deepEqual([playing.snapshot().seedPackets.length, playing.snapshot().money], [6, 25], 'the coins follow the profile, the bank waits for the next level')
+})
