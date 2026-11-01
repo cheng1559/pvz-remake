@@ -273,7 +273,7 @@ export class GameApp extends Component {
         }
     }
 
-    /** The options' Mods button: the Mod manager takes the dialog's place, and closing it returns to the options. */
+    /** The options' Mods button: the options close and the Mod manager takes their place until it closes. */
     private async manageModsFrom(id: MenuDialogId): Promise<void> {
         const entry: NonNullable<GameApp['dialog']> = { id }
         this.dialog = entry
@@ -285,7 +285,6 @@ export class GameApp extends Component {
         } finally {
             if (this.dialog === entry) this.dialog = null
         }
-        if (this.node?.isValid && !this.dialog && this.currentPage === 'main') await this.openDialog(id)
     }
 
     /** The Mod manager, from `/mod` or the main menu's options. */

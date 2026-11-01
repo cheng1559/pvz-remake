@@ -13,7 +13,7 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
     onMainMenu: () => void
     /** NewOptionsDialog::mAlmanacButton, offered in a level once the almanac is unlocked and the intro is over. */
     onAlmanac?: () => void
-    /** The main menu's options open the Mod manager. */
+    /** The main menu's options close and open the Mod manager. */
     onMods?: () => void
 }) {
     const settings = await menuApi.getSettings()

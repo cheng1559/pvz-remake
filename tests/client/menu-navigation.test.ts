@@ -435,7 +435,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     await setImmediate()
     assert.deepEqual([app.dialog, app.currentPage, commits.length], [null, 'garden', shownBefore], 'OK leaves the garden as it was')
 
-    // The main menu's options open the Mod manager, and closing it returns to the options.
+    // The main menu's options close and open the Mod manager; closing it leaves the main menu without the options.
     await app.navigate('main')
     await app.openDialog('options')
     const optionsShown = opened.length
@@ -443,10 +443,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     await setImmediate()
     await setImmediate()
     assert.equal(packageDialogs, 2)
-    assert.deepEqual([app.dialog?.id, opened.length, opened.at(-1)!.id], ['options', optionsShown + 1, 'options'], 'the options come back')
-    opened.at(-1)!.act('back')
-    await setImmediate()
-    assert.equal(app.dialog, null)
+    assert.deepEqual([app.dialog, opened.length, app.currentPage], [null, optionsShown, 'main'], 'the options do not come back')
 })
 
 test('manager imports read sequentially, continue after failure and leave installation to the next startup', async () => {
