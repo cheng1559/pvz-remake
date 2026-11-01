@@ -105,7 +105,8 @@ export class AdventureIntro implements LevelIntro {
 
         let ready: ReanimPlayer | null = null
         if (layout.readySetPlant) {
-            const node = uiNode({ name: 'ReadySetPlant', parent: board, position: { x: 0, y: -24 }, active: false }).node
+            // Screen text: it stays centered when a wide viewport shifts the lawn.
+            const node = uiNode({ name: 'ReadySetPlant', parent: slots.overlayLayer, position: { x: 0, y: -24 }, active: false }).node
             ready = node.addComponent(ReanimPlayer)
             await ready.load('pvz:readysetplant', content.registry, content.loader)
             ready.play({ loop: false, rate: 1, hideOnFinish: false })
