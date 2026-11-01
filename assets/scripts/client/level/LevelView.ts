@@ -407,9 +407,10 @@ export class LevelView {
             seedChooser?.setSlots(count)
             view.boardHud?.setSeedBankSlots(count)
         }
-        if (initial.seedChooser) {
-            view.seedBankSlots = initial.seedChooser.slots
-            view.applySeedBankSlots(initial.seedChooser.slots)
+        // SeedBank::UpdateWidth: any bank but the conveyor widens for its slots, chosen or filled.
+        if (!level.conveyor) {
+            view.seedBankSlots = initial.seedChooser?.slots ?? initial.seedPackets.length
+            view.applySeedBankSlots(view.seedBankSlots)
         }
         if (view.boardHud) view.boardHud.onQuestion = question => view.askDialogQuestion(ui, question)
         intro.sync()
