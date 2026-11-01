@@ -3,8 +3,8 @@ import { menuApi } from '@/client/api/MenuApi'
 import { CursorManager } from '@/client/input/CursorManager'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import { gameClock } from '@/core/GameClock'
-import { debugCondition, debugInteger, debugSuccess, debugSyntax, parseDebugCliCommand, type DebugCliCatalog, type DebugCliResult } from '@/shared/debug/DebugCli'
-import { SFX_VOLUME_SCALE } from '@/shared/menu'
+import { debugAmount, debugCondition, debugInteger, debugSuccess, debugSyntax, parseDebugCliCommand, type DebugCliCatalog, type DebugCliResult, type DebugGotoPage } from '@/shared/debug/DebugCli'
+import { MAX_MONEY, SFX_VOLUME_SCALE } from '@/shared/menu'
 import { OptionsSettings } from '@/platform/OptionsSettings'
 import { GameDebugSettings, type DebugPerfToggle, type SeedPacketStyle } from './GameDebugSettings'
 
@@ -26,8 +26,13 @@ async function executeCommand(
     const { name, args } = parsed
     switch (name) {
         case 'restart': return running ? { ...debugSuccess('Restarting level'), action: 'restart' } : debugCondition('DEBUG_NO_LEVEL_TO_RESTART')
-        case 'home': case 'reload': case 'quit': case 'help': case 'menu': case 'shop': case 'almanac': case 'zengarden':
+        case 'reload': case 'quit':
             return { ...debugSuccess(`Opening ${name}`), action: name }
+        case 'goto': {
+            // The parser only lets DEBUG_GOTO_PAGES through.
+            const page = args[0].toLowerCase() as DebugGotoPage
+            return { ...debugSuccess(`Opening ${page}`), action: 'goto', page }
+        }
         case 'level': {
             const id = args[0].toLowerCase().replace(/^(?:pvz:)?adventure-/, '')
             if (catalog && !catalog.levels.includes(id)) return debugCondition('DEBUG_LEVEL_NOT_INSTALLED', args[0])
@@ -64,6 +69,16 @@ async function executeCommand(
         case 'mod': return { ...debugSuccess('Opening Mod manager'), action: 'manageMods' }
         case 'perf': GameDebugSettings.setPerfToggle(args[0].toLowerCase() as DebugPerfToggle, args[1].toLowerCase() === 'true'); break
         case 'background': return debugCondition('DEBUG_BACKGROUND_UNAVAILABLE')
+        case 'money': {
+            if (running) return runGameCommand(command)
+            // Outside a level the purse is the profile's (PlayerInfo::mCoins).
+            if (debugInteger(args[1]) === null) return debugSyntax('Amount must be an integer')
+            if (!await menuApi.getCurrentUser()) return debugCondition('DEBUG_REQUIRES_PLAYER', name)
+            const next = debugAmount(args, (await menuApi.getPurse()).coins, MAX_MONEY)
+            if (typeof next !== 'number') return next
+            const purse = await menuApi.setCoins(next)
+            return debugSuccess(`money: ${purse.coins}`)
+        }
         default: {
             if (!running) return debugCondition('DEBUG_REQUIRES_LEVEL', name)
             const result = runGameCommand(command)

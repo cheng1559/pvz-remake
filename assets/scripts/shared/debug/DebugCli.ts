@@ -1,7 +1,9 @@
 export interface DebugCliCatalog { plants: string[], zombies: string[], items: string[], levels: string[] }
 interface DebugCliOutcome {
-    action?: 'restart' | 'reload' | 'manageMods' | 'home' | 'quit' | 'help' | 'menu' | 'shop' | 'almanac' | 'zengarden' | 'level'
+    action?: 'restart' | 'reload' | 'manageMods' | 'quit' | 'goto' | 'level'
     levelId?: string
+    /** For `goto`. */
+    page?: DebugGotoPage
     catalog?: DebugCliCatalog
 }
 /**
@@ -15,8 +17,13 @@ export type DebugCliResult = DebugCliOutcome & (
 export interface DebugCliCommand { name: string, args: string[] }
 export interface CommandSpec { name: string, parameters: string[], minimum: number, values?: Record<number, readonly string[]> }
 const bool = ['true', 'false']
+/** The menu pages /goto opens (MenuPageId); the splash, title and award screens only come in their own order. */
+export const DEBUG_GOTO_PAGES = ['main', 'minigames', 'puzzle', 'survival', 'almanac', 'plants', 'zombies', 'store',
+    'garden', 'mushroom', 'aquarium', 'tree', 'achievements', 'help'] as const
+export type DebugGotoPage = (typeof DEBUG_GOTO_PAGES)[number]
 const builtins: CommandSpec[] = [
-    ...['win', 'lose', 'nextflag', 'nextwave', 'kill', 'restart', 'reload', 'home', 'quit', 'help', 'menu', 'shop', 'almanac', 'zengarden'].map(name => ({ name, parameters: [], minimum: 0 })),
+    ...['win', 'lose', 'nextflag', 'nextwave', 'kill', 'restart', 'reload', 'quit'].map(name => ({ name, parameters: [], minimum: 0 })),
+    { name: 'goto', parameters: ['{page}'], minimum: 1, values: { 0: DEBUG_GOTO_PAGES } },
     { name: 'plant', parameters: ['{plant_name}', '{row}', '{col}'], minimum: 3 },
     { name: 'seed', parameters: ['{slot}', '{seed_name}'], minimum: 2 },
     { name: 'removeplant', parameters: ['{row}', '{col}'], minimum: 2 },
@@ -46,6 +53,15 @@ export const debugSuccess = (message: string): DebugCliResult => ({ ok: true, me
 export const normalizeDebugName = (name: string) => name.toLowerCase().replace(/^pvz:/, '').replace(/[\s_-]+/g, '')
 export const debugInteger = (value: string | undefined): number | null =>
     value !== undefined && /^-?\d+$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null
+
+/** `/sun` and `/money {add|set} {amount}`: the new amount, kept within 0..max, or the syntax failure. */
+export function debugAmount(args: readonly string[], current: number, max: number): number | DebugCliResult {
+    const amount = debugInteger(args[1])
+    if (amount === null) return debugSyntax('Amount must be an integer')
+    const next = (args[0].toLowerCase() === 'add' ? current : 0) + amount
+    if (!Number.isSafeInteger(next)) return debugSyntax('Amount is too large')
+    return Math.max(0, Math.min(max, next))
+}
 
 export function parseDebugCliCommand(value: string): DebugCliCommand | DebugCliResult {
     const tokens = [...value.trim().matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map(match => match[1] ?? match[2] ?? match[3])

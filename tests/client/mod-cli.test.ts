@@ -1,9 +1,11 @@
+import { withFixedBanks } from '../fixedBankLevels'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import * as cli from '@/shared/debug/DebugCli'
+import * as menu from '@/shared/menu'
 import { ModHost } from '@/shared/mod/ModHost'
 import { DefinitionSources } from '@/shared/content/DefinitionRegistry'
 import { createServerModHost } from '@/server/session/createModHost'
@@ -127,7 +129,11 @@ test('client Mod commands reuse parsing and completion, and disappear when their
         assert.equal((await run('/test:hello')).failure, 'syntax')
         assert.equal((await run('/test:hello a b')).failure, 'syntax')
         assert.equal(calls, 1)
-        assert.equal((await run('/home')).action, 'home')
+        const goto = await run('/goto MINIGAMES')
+        assert.deepEqual([goto.action, goto.page], ['goto', 'minigames'], '/goto opens any menu page')
+        assert.equal((await run('/goto award')).failure, 'syntax', 'only pages the menu can open directly')
+        assert.equal((await run('/home')).failure, 'syntax', 'the old page commands are gone')
+        assert.deepEqual(cli.getDebugCliCompletions('/goto mi'), ['/goto minigames'])
     } finally { host.dispose() }
     assert.deepEqual(cli.getDebugCliCompletions('/test:h'), [])
     assert.equal((await run('/test:hello world')).failure, 'syntax')
@@ -149,7 +155,7 @@ test('Mod game commands cross the normal client/server boundary while paused and
         return cli.debugSuccess(`Sun: ${economy.sun}`)
     })
     const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
-    const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
+    const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
     const setup = (debugEnabled = true) => {
         const game = new LocalIntegratedGame(definitions, levels, undefined, debugEnabled)
         game.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
@@ -177,4 +183,31 @@ test('Mod game commands cross the normal client/server boundary while paused and
     } finally { serverHost.dispose(); host.dispose() }
     assert.equal(cli.getDebugCliSuffix(`/${name}`), '')
     assert.equal((cli.parseDebugCliCommand(`/${name} 1`) as cli.DebugCliResult).failure, 'syntax')
+})
+
+test('/money sets the profile purse outside a level and runs on the board inside one', async () => {
+    let coins = 120, player: object | null = null
+    const menuApi = {
+        async getCurrentUser() { return player },
+        async getPurse() { return { coins } },
+        async setCoins(value: number) { coins = value; return { coins } },
+    }
+    const exports: any = {}
+    const code = transpileModule(readFileSync('assets/scripts/platform/debug/DebugCliCommands.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+    })
+    const modules: Record<string, unknown> = { '@/shared/debug/DebugCli': cli, '@/shared/menu': menu, '@/client/api/MenuApi': { menuApi }, './GameDebugSettings': { GameDebugSettings: {} } }
+    runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
+    const run = (command: string, running = false) => exports.executeDebugCliCommand(command, running, () => cli.debugSuccess('board'))
+    const noPlayer = await run('/money set 5')
+    assert.deepEqual([noPlayer.ok, noPlayer.key], [false, 'DEBUG_REQUIRES_PLAYER'])
+    player = { id: 1 }
+    assert.equal((await run('/money add 30')).ok, true)
+    assert.equal(coins, 150)
+    await run('/money set 200000')
+    assert.equal(coins, 99999, 'PlayerInfo::AddCoins caps the purse')
+    await run('/money add -999999')
+    assert.equal(coins, 0)
+    assert.equal((await run('/money add 1', true)).message, 'board', 'a running level owns the purse')
+    assert.equal(coins, 0)
 })

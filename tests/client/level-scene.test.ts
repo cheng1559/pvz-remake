@@ -24,7 +24,7 @@ test('a level scene runs an injected intro and level through clock scaling, paus
     })
     const scene = new module.exports.LevelScene()
     let destroyed = false, complete = 0, introTicks = 0, choosing = 0, gameplay = 0
-    let presentationPaused = false, musicPaused = false
+    let presentationPaused = false, musicPaused = false, coinBanks = 0
     const commands: string[] = [], deltas: number[] = []
     const world = { levelId: 'example:second-level', phase: 'intro', result: 'playing', paused: false }
     const start = { levelId: world.levelId, randomSeed: 5, mods: [], initialMoney: 0 }
@@ -45,7 +45,7 @@ test('a level scene runs an injected intro and level through clock scaling, paus
         update(dt: number) { deltas.push(dt) }, drainEvents: () => [], drainChanges: () => ({}),
         snapshotPresentation: (snapshot: unknown) => snapshot,
     }, {
-        audio, sync() {}, bindSeedChooser() {}, setPaused(value: boolean) { presentationPaused = value },
+        audio, sync() {}, bindSeedChooser() {}, bindDialogAnswer() {}, setPaused(value: boolean) { presentationPaused = value }, showPauseCoinBank() { coinBanks++ },
         updateIntro(dt: number) { introTicks += dt; return introTicks >= 1 },
         updateLevelComplete: () => world.result === 'won',
         snapshot: async (flow: unknown) => ({ flow }),
@@ -57,12 +57,16 @@ test('a level scene runs an injected intro and level through clock scaling, paus
         assert.equal(gameplay, 1)
         assert.equal(deltas[0], 1)
         scene.pause()
+        assert.equal(coinBanks, 1, 'Board::Pause shows the coin bank')
         scene.update(1)
         assert.equal(presentationPaused, true)
         assert.equal(musicPaused, true)
         assert.equal(suspended, true)
         assert.equal(deltas.length, 2, 'paused frames cannot advance the world')
         scene.resume()
+        scene.pause(true)
+        scene.resume()
+        assert.equal(coinBanks, 1, 'a debug pause does not')
         const snapshot = await scene.snapshotPresentation()
         assert.equal(snapshot.flow.introCompletionSent, true)
         assert.equal(snapshot.flow.completionStarted, false)

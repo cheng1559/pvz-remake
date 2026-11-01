@@ -44,6 +44,7 @@ export class LevelScene extends Component {
         this.lifecycle = lifecycle
         this.input.start()
         view.bindSeedChooser(command => { game.command(command); game.update(0); view.sync(game.render(), game.drainChanges(), game.drainEvents()) })
+        view.bindDialogAnswer(accept => { game.command({ type: 'answerDialog', accept }); game.update(0); view.sync(game.render(), game.drainChanges(), game.drainEvents()) })
         if (startOptions.save === undefined) this.audio.startChoosing()
         view.sync(game.render(), game.drainChanges(), game.drainEvents())
     }
@@ -52,8 +53,11 @@ export class LevelScene extends Component {
         return this.game?.render().paused ?? false
     }
 
-    pause(): void {
+    pause(quiet = false): void {
+        if (!this.view || this.game?.render().paused) return
         this.setPaused(true)
+        // Board::Pause shows the coin bank; a debug pause (the CLI) is not one.
+        if (!quiet) this.view.showPauseCoinBank()
     }
 
     resume(): void {
