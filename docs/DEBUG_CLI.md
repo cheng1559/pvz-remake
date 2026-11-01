@@ -25,7 +25,7 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /zombie normal 3 9
 /item award
 /win
-/home
+/goto main
 ```
 
 `/haptics true|false` toggles all haptic feedback immediately and saves the preference locally. Enabled by default.
@@ -46,6 +46,6 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 
 The manager shows `Loading...` until the installed Mod list is ready. See [Mod installation](MODS.md).
 
-The current package provides Adventure 1-1 through 1-10; plants Peashooter, Sunflower, Repeater, Cherry Bomb, Wall-nut, Potato Mine, Snow Pea, Chomper and Explode-o-nut (`explodenut`, debug only); zombies normal, flag, Conehead (`conehead`), Buckethead (`buckethead`) and Pole Vaulting (`pole_vaulter`); sun and level awards. Completions use installed backend content. Wave commands report a condition failure when no matching waves remain; `/background` and unmigrated content remain unavailable. Main-menu widescreen support is an optional Mod.
+The current package provides Adventure 1-1 through 2-3; plants Peashooter, Sunflower, Cherry Bomb, Wall-nut, Potato Mine, Snow Pea, Chomper, Repeater, Puff-shroom, Sun-shroom, Fume-shroom, Grave Buster and Explode-o-nut (`explodenut`, debug only); zombies normal, flag, Conehead (`conehead`), Buckethead (`buckethead`), Pole Vaulting (`pole_vaulter`), Newspaper (`newspaper`) and Screen Door (`screendoor`); sun and level awards. Completions use installed backend content. Wave commands report a condition failure when no matching waves remain; `/background` and unmigrated content remain unavailable. Main-menu widescreen support is an optional Mod.
 
 The dialog reuses `UI.dialog` and `UI.input`. Gameplay commands use the existing `debugCommand` channel and receive a `debugResult`; the backend validates and mutates the authoritative world. Audio/fullscreen settings use the menu API. Cooldown, sun-cost, plant invincibility and collection preferences are reapplied to new sessions.

@@ -10,7 +10,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 
 | 用途 | 命令 |
 | --- | --- |
-| 页面跳转 | `/home`、`/help`、`/menu`、`/shop`、`/almanac`、`/zengarden` |
+| 页面跳转 | `/goto {page}`：`main`、`minigames`、`puzzle`、`survival`、`almanac`、`plants`、`zombies`、`store`、`garden`、`mushroom`、`aquarium`、`tree`、`achievements`、`help` |
 | 关卡入口 | `/level 1-1`、`/restart`；跳过旧存档提示 |
 | 选卡测试 | `/level pvz:seed-chooser-test`，从已实现的 9 种植物中选择 6 张，确认后进入测试关卡 |
 | 性能压测 | `/level pvz:stress-test` 进入临时关卡，不覆盖冒险存档；预放 40 株植物，12 秒后生成 160 只僵尸；`/nextwave` 可提前出怪。配合 `/perf plants false`、`/perf zombies false` 分别观察，改回 `true` 恢复 |
@@ -18,15 +18,15 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 倍速 | `/gamespeed {0-10}`，作用于统一游戏时钟 |
 | 胜负／波次 | `/win`、`/lose`、`/nextwave` |
 | 植物 | `/plant {plant_name} {row} {col}`、`/removeplant {row} {col}` |
-| 墓碑 | `/grave {row} {col}`，在指定空格生成墓碑；不能与已有植物或墓碑重叠，暂停时也可执行，随关卡存档保存 |
+| 墓碑 | `/grave {row} {col}`，在指定格子生成墓碑并播放出土动画（随机延迟、土块粒子和音效，按游戏时间升起，暂停时等恢复后才升）；格子上的植物会被移除（同原版墓碑危机），同一格已有墓碑时替换并重新升起，随关卡存档保存 |
 | 替换种子包 | `/seed {槽位} {种子名}`，如 `/seed 1 snowpea` |
 | 僵尸 | `/zombie {zombie_name} [row] [col]`、`/damage {damage}`、`/kill` |
 | 掉落 | `/item {item_name} [row col]`，当前支持 `sun`、`award`；`award` 不像正常掉落那样清除场上僵尸 |
-| 数值 | `/sun {add|set} {number}`、`/money {add|set} {number}`（金币单位为原版 1 枚＝$10，同步写入档案） |
+| 数值 | `/sun {add|set} {number}`、`/money {add|set} {number}`（金币单位为原版 1 枚＝$10，同步写入档案；关卡外直接改档案，关卡内开场阶段也可用；改动后像拾取金币一样显示金币栏，开场阶段只在戴夫出场时显示） |
 | 小推车 | `/lawnmower {trigger|reset} [row]` |
 | 规则 | `/cooldown {true|false}`、`/suncost {true|false}`、`/sunspawning {true|false}`、`/plantinvincible {true|false}` |
 | 收集 | `/collect {auto|click|move}`，自动／移动收集仅处理普通掉落 |
-| 快捷键 | `/hotkeys {true|false}`；`1`–`9`、`0` 选择普通种子栏或传送带对应槽位，`F` 拿起／取消铲子（手持植物时先取消选择），`D` 切换 0 倍速 |
+| 快捷键 | `/hotkeys {true|false}`；`1`–`9`、`0` 选择普通种子栏或传送带对应槽位，`F` 拿起／放回铲子（手持植物时直接换成铲子，与数字键一致），`D` 切换 0 倍速 |
 | 震动 | `/haptics {true|false}`，默认开启，立即生效并保存到本地 |
 | 原版光标 | `/cursor {true|false}`，默认开启，立即生效并保存到本地 |
 | 帧率 | `/fps {true|false}`，在原始 800×600 游戏区域左下角显示或隐藏实时帧率 |
@@ -51,6 +51,6 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 
 窗口先显示 `Loading...`，读取完成后显示列表。主界面宽屏可通过独立 Mod 启用，见 [Mod 安装与管理](MODS.md)。
 
-当前内容包提供 1-1 至 1-10，植物有豌豆射手、向日葵、双发射手、樱桃炸弹、坚果墙、土豆雷、寒冰射手、大嘴花和爆炸坚果（`explodenut`，仅调试种植），僵尸有普通、旗帜、路障（`conehead`）、铁桶（`buckethead`）和撑杆（`pole_vaulter`）僵尸；植物、僵尸、物品、关卡补全来自后端已安装内容。`/background` 及尚未迁移的实体和关卡会提示不可用。
+当前内容包提供 1-1 至 2-3，植物有豌豆射手、向日葵、樱桃炸弹、坚果墙、土豆雷、寒冰射手、大嘴花、双发射手、小喷菇、阳光菇、大喷菇、墓碑吞噬者和爆炸坚果（`explodenut`，仅调试种植），僵尸有普通、旗帜、路障（`conehead`）、铁桶（`buckethead`）、撑杆（`pole_vaulter`）、读报（`newspaper`）和铁栅门（`screendoor`）僵尸；植物、僵尸、物品、关卡补全来自后端已安装内容。`/background` 及尚未迁移的实体和关卡会提示不可用。
 
 窗口复用 `UI.dialog`、`UI.input`；关卡修改通过 `debugCommand`／`debugResult` 通道执行，由后端验证并返回结果，不直接修改前端快照。规则开关作用于后端会话；冷却、阳光消耗、植物无敌、收集方式同时保存调试偏好，在新会话中重新应用。

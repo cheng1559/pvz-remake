@@ -1,6 +1,6 @@
 # 开发说明
 
-冒险日间关卡已接通至 1-10，关卡数据对照 `PvZ-Portable` 的 `Challenge.h`、`Board::PickZombieWaves`、`Challenge::UpdateConveyorBelt` 和 `LawnApp::GetAwardSeedForLevel`：1-6／1-7／1-8／1-9／1-10 分别为 10／20／10／20／20 波，每 10 波一面旗帜。1-6 引入撑杆；1-8 引入铁桶且不出现撑杆；最终波包含当前关卡全部普通出怪类型。1-6、1-7 使用固定 5、6 张卡，1-8、1-9 从同一选卡目录选择 6 张；种子的 `unlockAdventureIndex` 只限制首次冒险，服务端统一校验选卡与存档。
+冒险日间关卡已接通至 1-10，关卡数据对照 `PvZ-Portable` 的 `Challenge.h`、`Board::PickZombieWaves`、`Challenge::UpdateConveyorBelt` 和 `LawnApp::GetAwardSeedForLevel`：1-6／1-7／1-8／1-9／1-10 分别为 10／20／10／20／20 波，每 10 波一面旗帜。1-6 引入撑杆；1-8 引入铁桶且不出现撑杆；最终波包含当前关卡全部普通出怪类型。1-6、1-7 带上全部可用种子（5、6 张，种子栏放得下），1-8、1-9 从同一选卡目录选择 6 张；首次冒险的可用种子是此前关卡奖励过的种子，加上没有关卡奖励的种子（如豌豆射手）（`LawnApp::HasSeedType`），选卡和存档中未确认的选卡只接受这些，已确认的种子栏可以是任意已安装种子（`/seed`），服务端统一校验选卡与存档；奖励卡显示的价格就是种子本身的价格。
 
 1-6 至 1-8 的奖励依次为寒冰射手、大嘴花、双发射手。1-9 使用独立的 `note` 奖励：原版小纸条掉落、原地淡出、500 tick 黑色转场，以及来信贴图和翻纸音效；奖励表现的 `pageImages` 负责页面排布。1-10 不选卡、不掉落天空阳光，100 tick 出第一波，200 tick 后开始七种植物的免费传送带；供卡重复降权和上一张卡片随存档恢复，通关奖励为小喷菇。领取奖励后进入 2-1。
 
@@ -10,17 +10,19 @@
 
 墓碑按关卡配置在第 7／8／9 列随机放置 1／1／2 座，阻挡普通种植并显示原版提示，墓碑格不显示落点预览或移动端辅助线。开场镜头移回草坪后墓碑升起，伴随泥土粒子和音效，割草机与 Ready-Set-Plant 相应顺延 100 tick。位置、外观、出土延迟与最终波后的 200 tick 出怪计时一起存档；每座墓碑按关卡 `graveZombies` 的权重生成一只僵尸，先经过 150 tick 出土；若奖励已在此前掉落，墓碑不再出怪。客户端 `LevelGraves` 使用原版墓碑／土堆图集绘制出土，`ZombieView` 裁剪钻出的身体。读档立即同步墓碑可见高度，暂停状态下也无需等待下一帧游戏推进。通关奖励为阳光菇，领取后进入 2-2。夜间音乐沿用同一 `MusicSystem`，按原版 scheme 2 在下一乐句切入鼓轨、淡出主旋律，并保存独立鼓轨相位。
 
-冒险 2-2 复用 2-1 的夜间流程：20 波（第 10、20 波为旗帜波），出现普通、路障、铁桶、读报和旗帜僵尸，墓碑布局同 2-1，最终波后墓碑按 4000:4000 出普通或路障僵尸；首次冒险播放戴夫 1401–1402 对话，`{MONEY}`、`{UPGRADE_COST}` 分别替换为当前金币和下一次卡槽升级价格。通关奖励为大喷菇；2-3 尚未安装。选卡警告按关卡 `chooserWarnings` 依次弹出：2-1 首次冒险未带小喷菇先提示，未带产阳光植物时使用夜间专用文案，任何一次选择重新挑选都会中止开始。
+冒险 2-2 复用 2-1 的夜间流程：20 波（第 10、20 波为旗帜波），出现普通、路障、铁桶、读报和旗帜僵尸，墓碑布局同 2-1，最终波后墓碑按 4000:4000 出普通或路障僵尸；首次冒险播放戴夫 1401–1402 对话，`{MONEY}`、`{UPGRADE_COST}` 分别替换为当前金币和下一次卡槽升级价格。通关奖励为大喷菇，领取后进入 2-3。选卡警告按关卡脚本的 `chooserWarnings` 依次弹出：2-1 首次冒险未带小喷菇先提示，未带产阳光植物时使用夜间专用文案，任何一次选择重新挑选都会中止开始。
 
-金币沿用原版 `Board::DropLootPiece`：每只僵尸在掉头、被碾压、烧焦或被瞬杀时掷一次 0–29999，概率乘以僵尸分值（关卡 `zombiePool` 的 `points`），银币（价值 1，显示 $10）、金币（5）、钻石（100，买过第一次卡槽升级前改为金币）；奖励掉落后不再掉金币。重玩关卡始终掉落，首次冒险只在关卡 `loot.firstAdventure` 开启时掉落；2-1 的 `firstCoinAfterWave` 保证第 5 波后掉出带拾取箭头的第一枚金币，`savingsCap` 让金币（含剩余割草机的金币）够买卡槽升级前不再掉落。金币是 `kind: "money"` 的掉落物，落地后改为旋转动画，点击后飞向左下角钱袋，钱袋显示 1000 tick 并淡出，暂停时也显示。领奖 200 tick 后，剩余割草机每 40 tick 自下而上变成一枚金币，提示音逐个升调。金币以档案为准：开局和读档都从档案取当前金币和卡槽升级次数，关卡内金额变化（含 `/money`）立即写回档案；掉落物外观、动画和音效由表现定义 `items` 提供。
+冒险 2-3 沿用夜间流程和墓碑，10 波，出现普通、路障和铁栅门僵尸。铁栅门僵尸（`pvz:screendoor`）的门有 1100 耐久，出怪点数 4、权重 3500、第 5 波起出现，在第 6 波和最后一波固定出现。门是盾牌：`Board::TotalZombiesHealthInWave` 按 0.2f 计入，僵尸死亡时门掉落但不播放撕报纸声（`DropShield(1U)`），被割草机碾压时先掉落头盔和盾牌（`Zombie::MowDown`）。首次冒险时，若金币够买第一次卡槽升级、还没买过、拒绝不到两次（`CutScene::CanGetPacketUpgrade`），戴夫说 1501–1503 推销；1503 在 `pvz:dialog` 中带有 `question`（价格和升级后的格数），由“是/否”对话框回答：选“是”扣钱、这一关的选卡立即多一格，接着说 1510–1511；选“否”接着说 1520。回答和回答后的金币通过一次 `recordPacketUpgradeOffer` 写入档案，推销状态随存档保存。通关奖励为墓碑吞噬者。
 
-普通种子栏的铲子基准位置为 x=456，十槽传送带为 x=609；选卡时隐藏，开场结束后出现。选卡僵尸预览复用 `UIButton` 悬停与 `UITooltip`，名称读取表现定义的 `nameKey`，提示限制在右侧预览区域；确认选卡、暂停或打开弹窗时隐藏。1-8／1-9 尚未获得原版图鉴，因此提示只显示名称。
+金币沿用原版 `Board::DropLootPiece`：每只僵尸在掉头、被碾压、烧焦或被瞬杀时掷一次 0–29999，概率乘以僵尸分值（关卡 `zombiePool` 的 `points`，未写时取僵尸的 `wave.points`），银币（价值 1，显示 $10）、金币（5）、钻石（100，买过第一次卡槽升级前改为金币）；奖励掉落后不再掉金币。重玩关卡始终掉落，首次冒险从第 11 关（2-1）起掉落，无需逐关配置；2-1 脚本的 `loot.firstCoinAfterWave` 保证第 5 波后掉出带拾取箭头的第一枚金币，`loot.savingsCap` 让金币（含剩余割草机的金币）够买卡槽升级前不再掉落。金币是 `kind: "money"` 的掉落物，落地后改为旋转动画，点击后飞向左下角钱袋，钱袋显示 1000 tick 并淡出，游戏暂停时也显示（调试 CLI 的暂停除外）。领奖 200 tick 后，剩余割草机每 40 tick 自下而上变成一枚金币，提示音逐个升调。金币以档案为准：开局和读档都从档案取当前金币和卡槽升级次数，关卡内金额变化（含 `/money`）立即写回档案；掉落物外观、动画和音效由表现定义 `items` 提供。
+
+铲子随种子栏宽度右移（`Board::GetSeedBankExtraWidth`）：6 格以内 x=456，10 格 x=609；选卡时隐藏，开场结束后出现。选卡僵尸预览复用 `UIButton` 悬停与 `UITooltip`，名称读取表现定义的 `nameKey`，提示限制在右侧预览区域；确认选卡、暂停或打开弹窗时隐藏。1-8／1-9 尚未获得原版图鉴，因此提示只显示名称。
 
 冒险 1-5 使用 `ShovelTutorial` 保存戴夫两段对话和三株豌豆射手的铲除进度，客户端 `CrazyDaveView` 只播放动画、显示原版文案并发出交互指令。教程结束后进入 8 波坚果保龄球，传送带按 85:15 提供普通／爆炸保龄球，通关奖励为土豆雷。
 
 `pvz:bowling-wallnut`、`pvz:bowling-explodenut` 是独立植物和种子定义，配置放在 gameplay／presentation JSON。服务端通过现有 `PlantBehaviorRegistry` 注册 `bowling` 行为，状态存入 `behaviorState`；客户端通过 `PlantViewRegistry` 注册 `BowlingNutView`。只复用坚果的美术资源，普通坚果不参与保龄球判断。`occupiesCell: false` 声明移动植物不占格、不作为啃食目标；`rowOrder` 控制行内表现顺序。
 
-选卡目录全局共用：独立的 `gameplay/seed-catalog.json` 按数组顺序列出种子 ID，种子定义不再包含目录属性；保龄球等特殊种子不在目录中。Mod 注册的玩法数据可通过顶层 `seedCatalog` 数组追加自身命名空间的种子 ID。关卡通过 `seedBankSlots` 开启选卡并指定携带数量，不再配置候选池；未开启选卡时，`seedPackets` 仍表示固定种子栏。`server/seedChooser.ts` 统一生成目录并校验选择、移除和确认，顺序与初始冷却随服务端存档保存。`LevelSeedChooser` 按服务端目录顺序排卡，不使用预览图编号决定位置，只负责卡片飞行、补位、面板和提示；演出与全局时钟一致。测试入口为 `/level pvz:seed-chooser-test`。
+选卡目录全局共用：独立的 `gameplay/seed-catalog.json` 按数组顺序列出种子 ID，种子定义不再包含目录属性；保龄球等特殊种子不在目录中。Mod 注册的玩法数据可通过顶层 `seedCatalog` 数组追加自身命名空间的种子 ID。关卡的 `conveyor` 表示传送带，`seedPackets` 表示固定种子栏；其余关卡按原版 `Board::InitLevel`：可用种子放得下时全部带上，多于槽位时打开选卡。槽位数为 `settings.seedBank.baseSlots`（6）加已买的卡槽升级数，不超过 `maxSlots`（10）和可用种子数（`Board::GetNumSeedsInBank`）；关卡不写槽位数和候选池。客户端一开始就建好 `maxSlots` 个卡片，开场买的槽位只是多显示一张。`server/seeds/seedChooser.ts` 统一生成目录并校验选择、移除和确认，顺序与初始冷却随服务端存档保存。`LevelSeedChooser` 按服务端目录顺序排卡，不使用预览图编号决定位置，只负责卡片飞行、补位、面板和提示；演出与全局时钟一致。测试入口为 `/level pvz:seed-chooser-test`。
 
 图鉴首页和详情已接入全部 49 种植物、26 种僵尸的 Reanim 展示动画，包含独立头部、眨眼、旗帜、装备及僵尸博士驾驶员；左侧缩略图沿用原版静态展示。`AlmanacEntityView` 只负责动画播放和裁剪，不创建后端实体，不实现攻击、产出、移动或受伤逻辑。全部动画使用全局时钟。资源配置由 `npm run build:content -- --pak /path/to/main.pak` 生成，完整构建也会包含这些资源。
 
@@ -36,7 +38,7 @@
 
 `app/LocalMenuApi.ts` 接入项目现有的进程内本地后端，`GameApp` 启动时注入 Cocos 存储适配器；后端不依赖 Cocos 或 client。用户、设置和各用户存档继续沿用原键名。贴图、位图字体、本地化文案、布局、音效和实际全屏操作由前端负责。以后可替换同一 `MenuTransport` 接入网络服务，目前使用本地传输。
 
-当前接通冒险 1-1 至 2-2。Debug 和 Release 构建均可按 `/` 打开调试 CLI；移动模式双击右下角打开，命令见 [Debug CLI](DEBUG_CLI.zh-CN.md)。主菜单已使用原版图片按钮和 Reanim 入场动画，Options 已接通设置与游戏内操作，图鉴和商店已接入内容与交互；2-3 起的后续关卡及其他模式玩法尚未实现。迁移行为时可参考工作区的 `pvz-remake` 仓库。
+当前接通冒险 1-1 至 2-3。Debug 和 Release 构建均可按 `/` 打开调试 CLI；移动模式双击右下角打开，命令见 [Debug CLI](DEBUG_CLI.zh-CN.md)。主菜单已使用原版图片按钮和 Reanim 入场动画，Options 已接通设置与游戏内操作，图鉴和商店已接入内容与交互；2-4 起的后续关卡及其他模式玩法尚未实现。迁移行为时可参考工作区的 `pvz-remake` 仓库。
 
 `StartupScreen` 自动播放 PopCap Logo 的 200 tick 淡入停留淡出，再进入标题／加载页：标题下落、草皮卷展开，在原版五个进度点播放新版 `ReanimPlayer` 小花／僵尸头动画和音效。计时使用全局时钟的 100Hz 游戏 tick。进度来自主菜单图片和动画的实际准备，预加载的主菜单保持隐藏，点击进入时复用并开始入场。资源全部就绪后，加载条内按按钮规则响应左右键，背景按下、触摸或任意键也可进入；返回标题页不重播 PopCap Logo。新增动画可用 `npm run build:content -- --pak /path/to/main.pak` 单独生成，再重新打包内置 ZIP。
 
@@ -52,17 +54,17 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 `AchievementScreen` 进入时通过 `getAchievements()` 一次读取 21 条定义和当前用户的存档解锁标记，`server/menu/AchievementCatalog` 保留上一版标记／图标的索引顺序。页面沿用两列坐标、70px 图集单元的 0.8 倍图标、绿色标题、位图换行说明，以及已解锁／未解锁图标的 255／32 透明度。复用 `UIScroll` 实现原滚轮每步 435px／0.35 秒、More／Top 每次 230px、触摸惯性，滚动动画接全局时钟。方向键按 GOTY：每次按下把速度设为 30，每 10ms 减 1 并移动对应像素，单次约 435px，连发只重置速度、不叠加。地下平铺背景和返回按钮随内容移动；滚动不请求数据，页面也不授予成就。
 
-主菜单由 `MainMenuScreen` 组合新版 `ReanimPlayer`，`MainMenuConfig` 保留原版按钮贴图、轨道偏移和多边形区域。入场按 `open → sign` 播放并停在末帧，另有独立云层、草和可点击的花。设置、用户、退出确认、商店、图鉴和成就保留调用页面，关闭后不重播主菜单入场；进入帮助、挑战、花园、标题或战斗会销毁原菜单，返回时创建新实例并重新入场。`MenuPages.retainPrevious` 显式声明保留调用页面的入口，商店从花园打开时也保留原花园。Options 等弹层使用同一个动态菜单背景并阻断下层输入。冒险入口根据当前档案切换开始／继续贴图和关卡数字，点击后播放 4.5 秒闪烁、僵尸手和音效，再进入已有 1-1。人物形象编辑入口目前显示未开放提示。
+主菜单由 `MainMenuScreen` 组合新版 `ReanimPlayer`，`MainMenuConfig` 保留原版按钮贴图、轨道偏移和多边形区域。入场按 `open → sign` 播放并停在末帧，另有独立云层、草和可点击的花。商店、图鉴和成就保留调用页面，关闭后不重播主菜单入场；进入帮助、挑战、花园、标题或战斗会销毁原菜单，返回时创建新实例并重新入场。`MenuPages.retainPrevious` 显式声明保留调用页面的入口，商店从花园打开时也保留原花园。设置、玩家列表、退出确认、暂停、失败和局内设置不是页面，而是菜单弹窗（`client/dialogs/MenuDialog`），对应原版的 Dialog：`GameApp.openDialog` 一次只打开一个，盖在当前页面或已暂停的关卡上，下层保持不变，关闭前不接收输入。主菜单按钮用同一个 `target` 指定页面或弹窗。冒险入口根据当前档案切换开始／继续贴图和关卡数字，点击后播放 4.5 秒闪烁、僵尸手和音效，再进入已有 1-1。人物形象编辑入口目前显示未开放提示。
 
-页面由 `MenuScreen.prepare()` 在后台准备，再通过 `ScreenTransition` 切换。主菜单与成就页沿用旧版 0.75 秒上下滑动和双 S 曲线，主菜单在滑动后继续保留于屏幕外。`PageFade` 跟随页面激活和销毁：普通领奖从白色渐显，帮助从黑色渐显，按原版 180 个 10ms 游戏 tick 递减 alpha（1 倍速为 1.8 秒）。渐变节点只绘图，不阻断鼠标、触摸或键盘；页面渐变开始后立即释放导航锁，可中途返回，帮助页的 Enter／Space／Escape 均返回主菜单。仅资源准备、页面提交和成就滑动期间阻止重复操作。其余页面和弹层直接切换，不额外添加通用淡入淡出；加载失败保留原页面和返回历史。
+页面由 `MenuScreen.prepare()` 在后台准备，再通过 `ScreenTransition` 切换。主菜单与成就页沿用旧版 0.75 秒上下滑动和双 S 曲线，主菜单在滑动后继续保留于屏幕外。`PageFade` 跟随页面激活和销毁：普通领奖从白色渐显，帮助从黑色渐显，按原版 180 个 10ms 游戏 tick 递减 alpha（1 倍速为 1.8 秒）。渐变节点只绘图，不阻断鼠标、触摸或键盘；页面渐变开始后立即释放导航锁，可中途返回，帮助页的 Enter／Space／Escape 均返回主菜单。仅资源准备、页面提交和成就滑动期间阻止重复操作。其余页面和弹窗直接切换，不额外添加通用淡入淡出；加载失败保留原页面和返回历史。
 
-`core/GameClock.ts` 提供统一的 `gameClock`。转场、主菜单计时、Reanim、粒子和本地战斗入口共同应用其倍率；`startGameTween()` 复用 Cocos Tween 并同步运行期间的倍率变化，完成或所属节点销毁后取消订阅。只在帧时间入口缩放一次，服务端固定步长仍为 0.01 秒，显式 `advance()`／存档恢复使用传入的游戏时间。Debug 预览可调用 `pvzTime.setSpeed(2)` 设置 2 倍速，`setSpeed(1)` 恢复，`setSpeed(0)` 冻结游戏时间。Options 的战斗暂停独立于全局时钟，菜单和转场仍可正常操作；音频播放速率保持原样。
+`core/GameClock.ts` 提供统一的 `gameClock`。转场、主菜单计时、Reanim、粒子和本地战斗入口共同应用其倍率；`startGameTween()` 复用 Cocos Tween 并同步运行期间的倍率变化，完成或所属节点销毁后取消订阅。只在帧时间入口缩放一次，服务端固定步长仍为 0.01 秒，显式 `advance()`／存档恢复使用传入的游戏时间。Debug 预览可调用 `pvzTime.setSpeed(2)` 设置 2 倍速，`setSpeed(1)` 恢复，`setSpeed(0)` 冻结游戏时间。Options 的战斗暂停独立于全局时钟，菜单和转场仍可正常操作；音频播放速率保持原样。计划中的战斗回退与单步见[回退 tick](TICK_REWIND.zh-CN.md)。
 
 ## 植物与僵尸
 
 玩法配置按类别拆分在 `mods/pvz-base/gameplay/definitions/`：`plants.json`、`zombies.json`、`seeds.json` 等；`gameplay/settings.json` 保存全局默认参数，根目录 `content.json` 索引所有分类文件；打包时和 Mod 一样合并为 `assets/gameplay.json`，不增加资源请求。植物和僵尸的数值与 PvZ-Portable 和上一版一致。植物最多带一种能力：`shooter`（射手）、`producer`（向日葵）、`fuse`（樱桃炸弹，100 tick 后 3x3 烧焦）、`mine`（土豆雷，1500 tick 出土、106 tick 升起，炸 1800 且不留尸体）、`chomper`（大嘴花，70 tick 咬合、吞下后消化 4000 tick），没有能力的植物只阻挡（坚果墙）；`deathExplosion` 让爆炸坚果被吃掉时爆炸。`server/plants/abilities.ts` 的 `pvz:plant-abilities` 系统按 `Plant.ability` 状态推进，客户端 `client/plants` 下的视图按该状态切换动画，并负责眨眼、裂纹和土豆雷红灯。
 
-僵尸的 `helm` 先吸收伤害（路障 370、铁桶 1100），耗尽时发出 `zombieHelmDropped`；`gait` 引用共用步态表，提供走路地面轨迹、啃食与死亡帧数；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `npm run build:content -- --pak /path/to/main.pak` 合并进现有转换输出，同步玩法数据并重新打包内置 ZIP。
+僵尸的 `helm` 先吸收伤害（路障 370、铁桶 1100），耗尽时发出 `zombieHelmDropped`；被割草机碾压时，戴着的头盔和盾牌先掉落（`Zombie::MowDown`）；`gait` 引用共用步态表，提供走路地面轨迹、啃食与死亡帧数；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `npm run build:content -- --pak /path/to/main.pak` 合并进现有转换输出，同步玩法数据并重新打包内置 ZIP。
 
 ## 服务端关卡结构
 
@@ -73,7 +75,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 | `session/` | 一局游戏的生命周期：`IntegratedGameServer`、`IntegratedGameHost`、`session`、`commands`、`snapshot`、`persistence`、`save`、`createModHost` |
 | `state/` | 组件与资源定义（`components`、`levelState`）、事件队列 `events`、随机数 `DeterministicRng` |
 | `registry/` | Mod 注册入口：`GameplayRegistry`、`EntityBehaviorRegistry`、`JsonComponents` |
-| `level/` | 关卡流程：`level`、`levelAward`、`waves`、`graves`、`conveyor`、`mower`、`loot`、`sun`、`items` |
+| `level/` | 关卡流程：`level`、`levelAward`、`waves`、`waveRules`（出怪规则注册与 `pvz:adventure`）、`graves`、`conveyor`、`mower`、`loot`、`sun`、`items` |
 | `seeds/` | 种子栏与手持物：`seedBank`、`seedChooser`、`planting`、`tools` |
 | `combat/` | `projectiles`、`explosions`、`collision` |
 | `plants/`、`zombies/` | 植物、僵尸各自的行为 |
@@ -95,7 +97,7 @@ Mod 通过 `host.get('server/components')` 等固定名称取用模块，名称�
 
 `LevelGameOverPresenter` 使用失败后的前 150 tick，让获胜僵尸保持可见并从当前行走到门口，再衔接进屋行走和镜头移动。靠近门口时保留在门框前方的普通实体层，进入门口后才转入遮挡层；撑杆僵尸等越界位置已在门后方的对象，会在靠近过程中平滑移动到门口裁剪边缘再进入。`ZombieView` 连续推进两段动作的步态，不重新开始动画；服务端快照保持冻结。场上其余动画暂停，获胜僵尸挂件清单 `EntityAttachments`（对应原版 `mAttachmentID`）中的旗帜、惊叹号等继续播放。植物和僵尸外观都从上下文的 `attachments.add(node, type?)` 登记挂件，可按种类移除（如死亡时移除惊叹号）。挂在身体轨道上的动画（`attachToTrack`）自动继承身体的颜色和受击闪光，对应原版 `PropogateColorToAttachments`；清单挂件不继承颜色。失败演出仍持续 1100 tick，音效时序沿用原流程。
 
-`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`mods/pvz-base/presentation/definitions/` 按类别维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，根目录 `mods/pvz-base/content.json` 和 Mod 使用相同的分类索引，打包时合并生成归档内的 `assets/presentation.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前安装了 1-1 至 2-2 内容。
+`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`mods/pvz-base/presentation/definitions/` 按类别维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，根目录 `mods/pvz-base/content.json` 和 Mod 使用相同的分类索引，打包时合并生成归档内的 `assets/presentation.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前安装了 1-1 至 2-3 内容。
 
 客户端存档统一写入 `level` 字段，读取时兼容原 `adventure11` 字段；开场专属的状态校验放在各自的实现中。共用关卡布局为 `assets/resources/ui/level.prefab`，资源 ID 为 `pvz:level`，保留原 Prefab 和脚本 UUID。`client/showcase` 仅保留独立资源预览探针。
 
@@ -124,7 +126,7 @@ label 通过 `text`／`color` 和 `setPosition(x, y)` 更新；button 提供 `se
 
 `UIInput` 提供 `value`、`interactable`、`focus()`、`blur()`、`selectAll()`，以及 `onChange`／`onSubmit`／`onCancel`；`filter` 过滤用户输入，`maxLength` 限制长度。Cocos `EditBox` 负责键盘、输入法和剪贴板，画面仍由原版位图字体、编辑框贴图、选区和光标绘制；Web 只在组件内部读取输入元素的选区。鼠标可定位和拖选、双击全选，输入框使用 I 型光标。聚焦时空格作为输入，不触发对话框确认；打开上层弹窗会释放焦点，校验提示关闭后恢复。
 
-`screens/UserDialog.ts` 通过 `MenuApi` 完成用户选择、新建、重命名和删除，由后端校验并保存。列表最多显示 8 个用户，当前用户置顶；单击选择、双击或 OK 提交，取消不更换当前用户。命名规则沿用原版的最多 12 个英文字母／数字／空格，提交时折叠多余空格，并提示空名和不区分大小写的重名。删除必须确认，同时清理该用户的旧存档与主／临时存档；删除最后一个用户或首次启动时要求创建用户。主菜单保留原实例并刷新姓名、冒险入口和关卡数字。用户对话框复用 `dialog` 的原版加高底部、额外尺寸和顶部正文布局。
+`dialogs/UserDialog.ts` 通过 `MenuApi` 完成用户选择、新建、重命名和删除，由后端校验并保存。列表最多显示 8 个用户，当前用户置顶；单击选择、双击或 OK 提交，取消不更换当前用户。命名规则沿用原版的最多 12 个英文字母／数字／空格，提交时折叠多余空格，并提示空名和不区分大小写的重名。删除必须确认，同时清理该用户的旧存档与主／临时存档；删除最后一个用户或首次启动时要求创建用户。主菜单保留原实例并刷新姓名、冒险入口和关卡数字。用户对话框复用 `dialog` 的原版加高底部、额外尺寸和顶部正文布局。
 
 按钮的动作写在 `onClick`，默认在按钮内松开时执行；设置 `clickOnPress` 后鼠标或触摸按下即执行。`pressSound` 在按下时播放，`clickSound` 随动作播放。花园切换使用 `clickOnPress`。配置 `tooltip: '提示文字'` 或 `tooltip: { text, font?, maxWidth?, gap?, offset? }` 即可显示上一版 Pico129 字体、浅黄底黑边的提示。`offset: [x, y]` 按 x 向右、y 向下微调，花园提示对齐上一版中心 x=599、顶部 y=52。提示跟随真实 hover，默认在按钮下方，底部空间不足时翻到上方，长文字换行并限制在所属视口／Canvas 内。也可用 `ui.tooltip(anchor, options)` 手动调用 `show()`／`hide()`；锚点禁用或销毁时自动隐藏和清理。
 
@@ -224,7 +226,7 @@ Debug 构建保留 `pvzPhase4` 关卡调试入口；Mod 开发和安装见 [Mod 
 
 僵尸通过 `gait` 引用玩法定义中的 `zombieGaits`，`tongueChance` 和 `walk2Chance` 独立声明动画变体；不能从是否配置步态推断其他能力。植物能力的 `targeting` 声明范围、持杆目标过滤和交互修正键，僵尸的 `targetingInsets` 提供对应修正；撑杆落地后的攻击框使用 `vault.landedAttack`。客户端土豆雷的距离计算直接读取玩法攻击框和僵尸身体框。
 
-表现定义中的 `projectiles`、僵尸 `helm`/`drops` 声明图片、轨道、特效、偏移和音效；音效的 `pitchRange` 是音高随机范围。`seedPackets` 保存图集格子和布局，`almanac` 保存绳索和浮动动画参数。新增同类内容应补定义，通用渲染器不按具体 ID 或数字编号分支。工厂按视图类型分派、专属技能状态机和单位换算常量仍保留在代码中。
+表现定义中的 `projectiles`、僵尸 `helm`/`drops` 声明图片、轨道、特效、偏移和音效；音效的 `pitchRange` 是音高随机范围（负值表示降调，如撕报纸声的 -2）。头盔的 `dropSounds` 在头盔破碎时和 `dropReanim` 一起播放，绕过盾牌的伤害两者都不播放。`seedPackets` 保存图集格子和布局，`almanac` 保存绳索和浮动动画参数。新增同类内容应补定义，通用渲染器不按具体 ID 或数字编号分支。工厂按视图类型分派、专属技能状态机和单位换算常量仍保留在代码中。
 
 普通与传送带种子包共用 `LevelSeedBank` 的视图、按钮、tooltip，以及 `LevelInputPresenter` 的鼠标、触摸和快捷键流程。选卡以当前槽位索引读取状态：普通卡发送 `selectSeed`，传送带卡发送 `selectConveyorPacket`，后者保留每张卡的独立 ID。`LevelBoardHud` 负责可选工具、戴夫和传送带布局，不另做种子包命中检测。
 
@@ -232,7 +234,9 @@ Debug 构建保留 `pvzPhase4` 关卡调试入口；Mod 开发和安装见 [Mod 
 
 铲子也使用 `UIButton` 和同一触摸流程：按下拿起，拖动瞄准，松手执行，拖回来源按钮取消。教程阶段允许此流程；暂停会结束手势。服务端 `SeedBankState.selection` 只有未选择、普通卡、传送带卡、工具四种互斥状态；传送带只保存卡片 ID，通过 `server/seedBank.selectedSeedId` 查询其种子。存档使用同一结构，旧并列字段格式直接判为不兼容。
 
-关卡玩法配置中，`tools` 声明可用工具；`conveyor` 声明容量、间距、移动周期、供卡权重和分档生成间隔；`bowling` 只声明种植线；`shovelTutorial` 声明初始植物与首次、重玩、铲除后的对话序列。教程的 `blocksIntro` 阻止入场结束，`blocksStart` 阻止出怪，二者独立。表现配置 `conveyor`、`shovel`、`dave` 保存布局、动画资源、速率和对话表现参数。
+关卡玩法配置中，`conveyor` 声明容量、间距、移动周期、供卡权重和分档生成间隔；`bowling` 只声明种植线。可用工具按原版推算：某关奖励的工具，首次冒险从下一关起可用，重玩时每关可用。只属于某一关的流程（Dave 对话、铲子教学的初始植物、2-1 的首枚金币和存钱上限、选卡提醒、卡槽升级推销）写在该关的教程脚本里（`server/tutorials`），关卡的 `tutorial` 只填脚本 ID。脚本的 `dave` 让戴夫出场，`dialogQuestion` 把当前台词标为“是/否”提问，由客户端通过 `answerDialog` 回答。教程的 `blocksIntro` 阻止入场结束，`blocksStart` 阻止出怪，二者独立。表现配置 `conveyor`、`shovel`、`dave` 保存布局、动画资源、速率和对话表现参数。
+
+关卡波次可以逐波列出（`waves: [{ zombies, flagWave?, points? }]`，如 `mods/example`），也可以由已注册的出怪规则生成：`waves: { kind, count, ...settings }`。内置的 `pvz:adventure` 按原版首次冒险的 `Board::PickZombieWaves`：每波点数、旗帜波的普通僵尸和旗帜僵尸、可选的点数倍率 `pointsScale`（坚果保龄球为 4，1-10 为 3）、在随机挑选前放入的 `fixedZombies`（本关引入的僵尸，放在第 count/2+1 波和最终波），以及最终波按僵尸池顺序补齐还没出现的有权重类型（`PutInMissingZombies`）。规则自己校验参数。`zombiePool` 的条目可以只写僵尸 ID，`points`、`weight`、`firstWave` 取僵尸的 `wave`，也可以写对象覆盖。整局出怪计划在开局时生成并随存档保存。Mod 通过 `GameplayRegistry.waveRules.register(owner, kind, { validate, draft })` 注册新规则。
 
 玩法 `boards.*.bounds` 决定场地水平边界，僵尸 `dropsFlag` 决定掉旗能力；表现 `boards` 保存背景、音乐和失败场景坐标。粒子的可选剩余时长随快照保存，种子闪光读取 `seedPackets.flash`，恢复不再按特效 ID 分支。商店数据位于 `mods/pvz-base/gameplay/store.json`，价格档位、购买条件、库存规则和购买结果均由服务端目录实例执行；应用只负责加载 JSON 并注入后端。
 
