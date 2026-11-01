@@ -4,9 +4,9 @@ import test from 'node:test'
 import { setImmediate } from 'node:timers/promises'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
-import { MENU_PAGES, type MenuAction, type MenuPageId } from '@/client/screens/MenuPages'
+import { isMenuDialog, LEVEL_DIALOGS, MENU_PAGES, type MenuAction, type MenuPageId } from '@/client/screens/MenuPages'
 import { gameClock } from '@/core/GameClock'
-import type { DebugCliResult } from '@/shared/debug/DebugCli'
+import { DEBUG_GOTO_PAGES, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { ModHost } from '@/shared/mod/ModHost'
 
 test('the first main menu uses Mod wrappers installed while UI assets are still loading', async () => {
@@ -61,7 +61,7 @@ test('every menu page is reachable and all navigation targets exist', () => {
         const actions: MenuAction[] = page.buttons.map(button => button.target)
         if (page.back) actions.push(page.back)
         for (const action of actions) {
-            if (action === 'play' || action === 'restart' || action === 'nextLevel') pending.push('pause', 'gameOptions', 'award', 'gameOver')
+            if (action === 'play' || action === 'restart' || action === 'nextLevel') pending.push('award')
             else if (action !== 'back' && action !== 'resume') {
                 assert.ok(MENU_PAGES[action], `invalid target ${action} from ${id}`)
                 pending.push(action)
@@ -69,9 +69,11 @@ test('every menu page is reachable and all navigation targets exist', () => {
         }
     }
     assert.equal(reached.size, Object.keys(MENU_PAGES).length)
+    // /goto opens every menu page but the ones that only come in their own order.
+    assert.deepEqual([...DEBUG_GOTO_PAGES].sort(), Object.keys(MENU_PAGES).filter(page => !['splash', 'title', 'award'].includes(page)).sort())
     const menu = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/main-menu.json', 'utf8'))
     for (const { name, target } of menu.buttons) {
-        if (target !== undefined) assert.ok(target === 'play' || target in MENU_PAGES, `main menu ${name} opens an unknown page: ${target}`)
+        if (target !== undefined) assert.ok(target === 'play' || target in MENU_PAGES || isMenuDialog(target), `main menu ${name} opens an unknown page or dialog: ${target}`)
     }
 })
 
@@ -84,6 +86,8 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     let chooseContinue!: (action: 'continue' | 'restart' | 'cancel') => void
     let closeCli!: (result: DebugCliResult | null) => void
     const sounds: string[] = []
+    const opened: Array<{ id: string, act: (action: string) => void, dialog: { node: { isValid: boolean } } }> = []
+    let dialogFails = false
     const musicFrames: Array<{ ticks: number; zombies: number }> = []
     const module = { exports: {} as Record<string, any> }
     const compiled = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
@@ -100,19 +104,27 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         '@/client/music/MusicSystem': { MusicSystem: { update(ticks: number, context: { zombiesOnScreen: number }) {
             musicFrames.push({ ticks, zombies: context.zombiesOnScreen })
         } } },
-        '@/client/screens/DebugCliDialog': { showDebugCliDialog: () => new Promise(resolve => { closeCli = resolve }) },
-        '@/client/screens/PackageDialog': { showPackageDialog: async () => {
+        '@/client/dialogs/DebugCliDialog': { showDebugCliDialog: () => new Promise(resolve => { closeCli = resolve }) },
+        '@/client/dialogs/PackageDialog': { showPackageDialog: async () => {
             assert.equal(paused, true)
             packageDialogs++
             return { result: Promise.resolve() }
         } },
-        '@/client/screens/MenuPages': { MENU_PAGES },
+        '@/client/screens/MenuPages': { MENU_PAGES, isMenuDialog, LEVEL_DIALOGS },
+        '@/client/dialogs/MenuDialog': {
+            async showMenuDialog(_parent: unknown, _ui: unknown, id: string, options: { act: (action: string) => void }) {
+                if (dialogFails) throw new Error('missing game menu')
+                const dialog = { node: { isValid: true, destroy() { this.isValid = false } } }
+                opened.push({ id, act: options.act, dialog })
+                return dialog
+            },
+        },
         '@/client/content/ModManager': { modManager: { finishStartup: () => false } },
         '@/client/ui/UIDialog': { UIDialog: { handleKey: () => { dialogKeys++; return false } } },
-        '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1 }), completeLevel: async () => ({ nextLevelId: 'pvz:adventure-1-2' }) } },
+        '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1, unlocks: { almanac: true } }), completeLevel: async () => ({ nextLevelId: 'pvz:adventure-1-2' }) } },
         '@/client/ui/UI': { UI: { load: async () => ({}) } },
         '@/client/ui/UIInput': { UIInput: { handleKeyUp() {} } },
-        '@/client/screens/ContinueGameDialog': {
+        '@/client/dialogs/ContinueGameDialog': {
             showContinueGameDialog: () => {
                 prompts++
                 return new Promise(resolve => { chooseContinue = resolve })
@@ -253,7 +265,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(paused, false, 'closing the manager restores the previous pause state')
     const almanac = app.showDebugCli()
     await setImmediate()
-    closeCli({ ok: true, message: '', action: 'almanac' })
+    closeCli({ ok: true, message: '', action: 'goto', page: 'almanac' })
     await almanac
     await app.navigate('plants')
     await app.navigate('almanac')
@@ -285,18 +297,21 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     }
     app.onKeyDown({ keyCode: 27 })
     await setImmediate()
-    assert.equal(app.currentPage, 'gameOptions', 'Escape opens the same menu as the board Menu button')
+    assert.equal(app.dialog?.id, 'gameOptions', 'Escape opens the same menu as the board Menu button')
+    assert.equal(app.currentPage, null, 'the menu is a dialog over the board, not a page')
     assert.equal(paused, true)
     assert.equal(sounds.length, beforeEscape, 'Escape opens the menu silently, as in the original')
     app.onKeyDown({ keyCode: 27 })
+    assert.equal(app.dialog?.id, 'gameOptions', 'the open dialog answers its own keys')
+    opened.at(-1)!.act('resume')
     await setImmediate()
-    assert.equal(app.currentPage, null)
+    assert.equal(app.dialog, null)
     assert.equal(paused, false)
-    assert.equal(sounds.length, beforeEscape, 'Escape also closes the menu silently')
+    assert.equal(sounds.length, beforeEscape, 'closing the menu is silent too')
     const beforeSave = saves
     app.onKeyDown({ keyCode: 32 })
     await setImmediate()
-    assert.equal(app.currentPage, 'pause')
+    assert.equal(app.dialog?.id, 'pause')
     assert.equal(saves, beforeSave + 1, 'the pause shortcut saves the current game')
     assert.equal(paused, true)
     assert.equal(app.gameLayer.active, true)
@@ -306,15 +321,36 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     app.onKeyUp({ keyCode: 32 })
     assert.equal(sounds.at(-1), 'pause')
     assert.equal(sounds.length, beforeEscape + 1, 'Space still plays the pause sound once')
-    await app.navigate('gameOptions')
-    await app.navigate('pause')
+    await app.openDialog('gameOptions')
+    assert.equal(app.dialog?.id, 'pause', 'one dialog at a time')
+    opened.at(-1)!.act('resume')
+    await setImmediate()
+    assert.deepEqual([paused, app.dialog], [false, null], 'Resume closes the pause dialog and the game goes on')
+    await app.openDialog('gameOptions')
     await app.navigate('resume')
+    assert.deepEqual([paused, app.dialog, opened.at(-1)!.dialog.node.isValid], [false, null, false],
+        'going back to the board (or to a page) closes the dialog')
+    await app.openDialog('gameOptions')
+    opened.at(-1)!.act('almanac')
+    await setImmediate()
+    assert.deepEqual([app.dialog, app.currentPage, paused], [null, 'almanac', true], 'View Almanac leaves the options for the almanac')
+    await app.navigate('back')
+    assert.deepEqual([app.currentPage, app.dialog?.id, paused], [null, 'gameOptions', true], 'closing it brings the options back')
+    opened.at(-1)!.act('resume')
+    await setImmediate()
     assert.equal(paused, false)
-    prepare = async () => { throw new Error('missing game menu') }
-    await app.navigate('gameOptions')
+    await app.openDialog('gameOptions')
+    opened.at(-1)!.act('almanac')
+    await setImmediate()
+    dialogFails = true
+    await app.navigate('back')
+    dialogFails = false
+    assert.deepEqual([app.currentPage, app.dialog, paused], [null, null, false], 'options that fail to come back leave the board running')
+    dialogFails = true
+    await app.openDialog('gameOptions')
+    dialogFails = false
     assert.equal(paused, false, 'a failed menu load restores the running game')
-    assert.equal(app.currentPage, null)
-    prepare = async id => id
+    assert.deepEqual([app.currentPage, app.dialog], [null, null])
     assert.deepEqual(freshGames, [false])
     await app.navigate('main')
     assert.equal(paused, true)
@@ -374,12 +410,25 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.equal(clearedAdvice, 2, 'reload clears transient advice from the previous UI')
     await app.navigate('play')
     await app.finish('gameOver')
+    assert.equal(app.dialog?.id, 'gameOver')
     assert.equal(running, true, 'the failure dialog keeps the real board mounted')
     assert.equal(app.gameLayer.active, true)
     assert.equal(paused, true)
-    await app.navigate('restart')
+    opened.at(-1)!.act('restart')
+    await setImmediate()
     assert.equal(paused, false)
+    assert.equal(app.dialog, null)
     assert.equal(freshGames.at(-1), true)
+
+    // The title screen's options open over the page that opened them, which stays (the Zen Garden, the store).
+    await app.navigate('main')
+    await app.navigate('garden')
+    const shownBefore = commits.length
+    await app.openDialog('options')
+    assert.deepEqual([app.dialog?.id, app.currentPage, commits.length], ['options', 'garden', shownBefore], 'no page change')
+    opened.at(-1)!.act('back')
+    await setImmediate()
+    assert.deepEqual([app.dialog, app.currentPage, commits.length], [null, 'garden', shownBefore], 'OK leaves the garden as it was')
 })
 
 test('manager imports read sequentially, continue after failure and leave installation to the next startup', async () => {
@@ -444,7 +493,7 @@ test('manager imports read sequentially, continue after failure and leave instal
 
 test('saved-game prompt offers continue/restart/cancel and confirms a restart before closing', async () => {
     const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/ContinueGameDialog.ts', 'utf8'), {
+    const compiled = transpileModule(readFileSync('assets/scripts/client/dialogs/ContinueGameDialog.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
     })
     runInNewContext(compiled.outputText, { exports: module.exports })
@@ -497,12 +546,12 @@ test('options use direct exit during seed selection and confirmed exit during ga
         '@/client/sound/SoundSystem': { SoundEffect: { ButtonClick: 'click' }, SoundSystem: { play: async () => {} } },
         '@/shared/menu': { SFX_VOLUME_SCALE: 0.65 },
     }
-    runInNewContext(transpileModule(readFileSync('assets/scripts/client/screens/OptionsDialog.ts', 'utf8'), {
+    runInNewContext(transpileModule(readFileSync('assets/scripts/client/dialogs/OptionsDialog.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
     }).outputText, { exports, require: (id: string) => modules[id] ?? {} })
     for (const [inGame, levelIntro, expected] of [
         [true, true, ['MAIN_MENU_BUTTON', 'BACK_TO_GAME']],
-        [true, false, ['RESTART_LEVEL_BUTTON', 'MAIN_MENU_BUTTON', 'BACK_TO_GAME']],
+        [true, false, ['VIEW_ALMANAC_BUTTON', 'RESTART_LEVEL_BUTTON', 'MAIN_MENU_BUTTON', 'BACK_TO_GAME']],
         [false, false, ['OPTIONS_GITHUB_BUTTON', 'DIALOG_BUTTON_OK']],
     ] as const) {
         const buttons: Array<{ text: string; onClick: () => void }> = [], dialogs: any[] = []
@@ -521,7 +570,8 @@ test('options use direct exit during seed selection and confirmed exit during ga
             label() {}, slider() {}, checkbox: () => ({ value: false }),
             button(_parent: unknown, options: { text: string; onClick: () => void }) { buttons.push(options) },
         }
-        await exports.showOptionsDialog({}, ui, { inGame, levelIntro, onClose() {}, onRestart() {}, onMainMenu() { exits++ } })
+        // The almanac is offered in a level, but not during its intro (NewOptionsDialog hides mAlmanacButton then).
+        await exports.showOptionsDialog({}, ui, { inGame, levelIntro, onClose() {}, onRestart() {}, onMainMenu() { exits++ }, onAlmanac() {} })
         assert.deepEqual(buttons.map(button => button.text), expected)
         if (!inGame) continue
         const main = buttons.find(button => button.text === 'MAIN_MENU_BUTTON')!
@@ -544,12 +594,58 @@ test('options use direct exit during seed selection and confirmed exit during ga
     }
 })
 
+test('menu opened answer with the action their buttons stand for', async () => {
+    const exports: Record<string, any> = {}
+    let options: any, dialogOptions: any
+    const node = () => ({ isValid: true, once() {}, destroy() { this.isValid = false } })
+    let quits = 0, userClose: (() => void) | undefined
+    const modules: Record<string, unknown> = {
+        cc: { isValid: () => false, game: { end() { quits++ } } },
+        './UserDialog': { showUserDialog: async (_parent: unknown, _ui: unknown, onClose: () => void) => { userClose = onClose; return { node: node() } } },
+        '@/client/reanim/EntityDisplay': { loadEntityDisplayAssets: () => new Promise(() => {}) },
+        '@/client/view/uiNode': { uiNode: () => ({ node: node() }) },
+        './OptionsDialog': { showOptionsDialog: async (_parent: unknown, _ui: unknown, value: unknown) => { options = value; return { node: node() } } },
+    }
+    runInNewContext(transpileModule(readFileSync('assets/scripts/client/dialogs/MenuDialog.ts', 'utf8'), {
+        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
+    }).outputText, { exports, require: (id: string) => modules[id] ?? {} })
+    const ui = {
+        text: (key: string) => key,
+        dialog: (_parent: unknown, value: unknown) => { dialogOptions = value; return { node: node(), content: {}, close() {} } },
+        button: () => ({}),
+    }
+    const actions: string[] = []
+    const act = (action: string) => { actions.push(action) }
+    await exports.showMenuDialog({}, ui, 'pause', { levelIntro: false, act })
+    assert.deepEqual([dialogOptions.title, dialogOptions.message, dialogOptions.confirmText], ['GAME_PAUSED', 'CLICK_TO_RESUME', 'RESUME_GAME'])
+    assert.deepEqual([dialogOptions.spaceAfterHeader, dialogOptions.clickSound], [155, null])
+    dialogOptions.onClose(true)
+    await exports.showMenuDialog({}, ui, 'gameOver', { levelIntro: false, act })
+    dialogOptions.onClose(true)
+    dialogOptions.onClose(false)
+    await exports.showMenuDialog({}, ui, 'gameOptions', { levelIntro: true, act })
+    assert.deepEqual([options.inGame, options.levelIntro], [true, true], 'seed selection keeps the in-game options layout')
+    options.onClose(); options.onRestart(); options.onMainMenu()
+    await exports.showMenuDialog({}, ui, 'options', { levelIntro: true, act })
+    assert.deepEqual([options.inGame, options.levelIntro], [false, false])
+    options.onClose()
+    assert.deepEqual(actions, ['resume', 'restart', 'main', 'resume', 'restart', 'main', 'back'])
+    for (const confirmed of [false, true]) {
+        await exports.showMenuDialog({}, ui, 'quit', { levelIntro: false, act })
+        assert.deepEqual([dialogOptions.title, dialogOptions.message, dialogOptions.confirmText, dialogOptions.cancelText],
+            ['QUIT_HEADER', 'QUIT_MESSAGE', 'QUIT_BUTTON', 'DIALOG_BUTTON_CANCEL'])
+        dialogOptions.onClose(confirmed)
+        assert.equal(quits, Number(confirmed), 'cancel never ends the game; confirmation ends it once')
+        assert.equal(actions.at(-1), 'back')
+    }
+    await exports.showMenuDialog({}, ui, 'players', { levelIntro: false, act })
+    userClose!()
+    assert.equal(actions.at(-1), 'back', 'the player list closes over the main menu')
+})
+
 test('modal pages retain their caller, full pages destroy it, and achievements stay cached through gameplay', async () => {
     const music: string[] = []
     const navigation: string[] = []
-    let quitOptions: any
-    let gameOptions: any
-    let quits = 0
     let achievementInitializations = 0, achievementRefreshes = 0, warmDraws = 0, preparationYields = 0
     let achievementRoot: any, achievementView: any
     let preload!: (progress: (value: number) => void) => Promise<void>
@@ -569,14 +665,12 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
                 callback()
             } },
             UIHoverManager: { beginModalBlock() {}, endModalBlock() {} },
+            Color: class {}, Node: { EventType: { SIZE_CHANGED: 'size-changed' } },
             isValid: () => false, loadEntityDisplayAssets: async () => ({}),
             MENU_PAGES, MusicSystem: { playTune: async (tune: string) => { music.push(tune) } },
-            game: { end() { quits++ } },
-            showOptionsDialog: async (_parent: unknown, _ui: unknown, options: unknown) => { gameOptions = options },
             UI: { load: async () => ({
                 assets: { presentation: { screens: {} } },
                 text: (key: string) => key,
-                dialog: (_parent: unknown, options: unknown) => { quitOptions = options; return { content: {} } },
             }) },
             uiNode: (options: any) => {
                 const node = {
@@ -597,11 +691,13 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
                     getComponentInChildren: () => achievementView,
                     setPosition(x: number, y: number) { (this as any).position = { x, y } },
                     setSiblingIndex(index: number) { (this as any).siblingIndex = index },
+                    on() {},
                     destroy() { this.isValid = false },
                 }
                 options.parent?.children?.push(node)
                 if (options.name === 'achievements') achievementRoot = node
-                return { node }
+                return { node, transform: { contentSize: { width: 800, height: 600 } },
+                    graphics: options.graphics ? { clear() {}, fillRect() {} } : undefined }
             },
         }),
     })
@@ -615,38 +711,7 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
     screen.mainMenu = { node: main.root }
     screen.onNavigate = (action: string) => { navigation.push(action) }
     await screen.show(main)
-    for (const confirmed of [false, true]) {
-        const quit = await screen.prepare('quit')
-        await screen.show(quit)
-        assert.deepEqual([quitOptions.title, quitOptions.message, quitOptions.confirmText, quitOptions.cancelText],
-            ['QUIT_HEADER', 'QUIT_MESSAGE', 'QUIT_BUTTON', 'DIALOG_BUTTON_CANCEL'])
-        quitOptions.onClose(confirmed)
-        assert.equal(quits, Number(confirmed), 'cancel never ends the game; confirmation ends it once')
-        assert.equal(navigation.at(-1), 'main')
-        await screen.show(main)
-        assert.equal(main.root.isValid, true)
-    }
-    const pause = await screen.prepare('pause')
-    assert.deepEqual([quitOptions.title, quitOptions.message, quitOptions.confirmText], ['GAME_PAUSED', 'CLICK_TO_RESUME', 'RESUME_GAME'])
-    assert.equal(quitOptions.spaceAfterHeader, 155)
-    assert.equal(quitOptions.clickSound, null)
-    quitOptions.onClose(true)
-    assert.equal(navigation.at(-1), 'resume')
-    pause.root.destroy()
-    const options = await screen.prepare('gameOptions')
-    assert.equal(gameOptions.inGame, true)
-    assert.equal(gameOptions.levelIntro, false)
-    gameOptions.onClose()
-    gameOptions.onRestart()
-    gameOptions.onMainMenu()
-    assert.deepEqual(navigation.slice(-3), ['resume', 'restart', 'main'])
-    options.root.destroy()
-    screen.isLevelIntro = () => true
-    const chooserOptions = await screen.prepare('gameOptions')
-    assert.equal(gameOptions.inGame, true, 'seed selection retains the in-game options layout')
-    assert.equal(gameOptions.levelIntro, true)
-    chooserOptions.root.destroy()
-    for (const id of ['options', 'players', 'quit', 'almanac', 'store', 'achievements'] as const) {
+    for (const id of ['almanac', 'store', 'achievements'] as const) {
         const modal = page(id)
         await screen.show(modal)
         assert.equal(main.root.isValid, true, `${id} preserves the menu instance`)

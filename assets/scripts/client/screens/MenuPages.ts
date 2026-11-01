@@ -4,9 +4,21 @@ export type MenuPageId =
     | 'splash' | 'title' | 'main' | 'minigames' | 'puzzle' | 'survival'
     | 'almanac' | 'plants' | 'zombies' | 'store'
     | 'garden' | 'mushroom' | 'aquarium' | 'tree' | 'achievements'
-    | 'help' | 'options' | 'players' | 'quit'
-    | 'pause' | 'gameOptions' | 'award' | 'gameOver'
+    | 'help'
+    | 'award'
 
+/**
+ * Menu dialogs over whatever is on screen, as the original's Dialogs (see MenuDialog): the options (NewOptionsDialog, from the
+ * title screen or a level), the pause and failure dialogs, the player list and the quit confirmation. They are not pages, so
+ * opening one leaves the page or level under it.
+ */
+export type MenuDialogId = 'options' | 'gameOptions' | 'pause' | 'gameOver' | 'players' | 'quit'
+export const MENU_DIALOGS: readonly MenuDialogId[] = ['options', 'gameOptions', 'pause', 'gameOver', 'players', 'quit']
+/** The menu dialogs over a level, which pause it. */
+export const LEVEL_DIALOGS: readonly MenuDialogId[] = ['gameOptions', 'pause', 'gameOver']
+export const isMenuDialog = (id: string): id is MenuDialogId => (MENU_DIALOGS as readonly string[]).includes(id)
+
+/** Where navigate() goes: a page, the board (play, resume, restart, the next level) or back. Dialogs open with openDialog(). */
 export type MenuAction = MenuPageId | 'play' | 'resume' | 'restart' | 'nextLevel' | 'back'
 
 export interface MenuBackground {
@@ -29,7 +41,6 @@ export interface MenuPage {
     /** Where the page's own buttons lead; each page's screen draws them with original text. */
     buttons: readonly { target: MenuAction }[]
     back?: MenuAction
-    overlay?: boolean
     retainPrevious?: boolean
 }
 
@@ -39,7 +50,6 @@ const MAIN_BACKGROUND: MenuBackground[] = [
     { image: 'selectorscreen_bg_left', y: -79.8 },
     { image: 'selectorscreen_bg_right', x: 71, y: 41 },
 ]
-const OPTIONS_BACKGROUND: MenuBackground = { image: 'options_menuback', x: 188.5, y: 51 }
 const CHALLENGE_BUTTONS = [
     { target: 'minigames' },
     { target: 'puzzle' },
@@ -71,10 +81,7 @@ export const MENU_PAGES: Record<MenuPageId, MenuPage> = {
             { target: 'store' },
             { target: 'garden' },
             { target: 'achievements' },
-            { target: 'options' },
             { target: 'help' },
-            { target: 'players' },
-            { target: 'quit' },
         ],
     },
     minigames: {
@@ -137,31 +144,9 @@ export const MENU_PAGES: Record<MenuPageId, MenuPage> = {
             { image: 'zombie_note_help', x: 131, y: 132 },
         ], buttons: [], back: 'main',
     },
-    options: {
-        retainPrevious: true,
-        backgrounds: [...MAIN_BACKGROUND, OPTIONS_BACKGROUND], buttons: [], back: 'back',
-    },
-    players: {
-        retainPrevious: true,
-        backgrounds: MAIN_BACKGROUND, buttons: [], back: 'main',
-    },
-    quit: {
-        retainPrevious: true,
-        backgrounds: MAIN_BACKGROUND, buttons: [], back: 'main',
-    },
-    pause: {
-        backgrounds: [], overlay: true, buttons: [], back: 'resume',
-    },
-    gameOptions: {
-        backgrounds: [OPTIONS_BACKGROUND], overlay: true, buttons: [], back: 'resume',
-    },
     award: {
         backgrounds: [{ image: 'awardscreen_back' }],
         heading: { key: 'NEW_PLANT', font: 'title', y: 58, color: [213, 159, 43] },
         buttons: [{ target: 'nextLevel' }], back: 'main',
-    },
-    gameOver: {
-        backgrounds: [], overlay: true,
-        buttons: [{ target: 'restart' }], back: 'main',
     },
 }

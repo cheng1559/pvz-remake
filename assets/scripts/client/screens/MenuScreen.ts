@@ -1,13 +1,12 @@
 import { modResources } from '@/client/content/ModResources'
-import { _decorator, BlockInputEvents, Color, Component, director, Director, game, isValid, Node, Sprite, SpriteFrame, sys } from 'cc'
+import { _decorator, BlockInputEvents, Color, Component, director, Director, Node, Sprite, SpriteFrame, sys } from 'cc'
 import { DEBUG } from 'cc/env'
 import { preloadAssets } from '@/client/content/PreloadAssets'
 import { waitForPreloadFrame } from '@/client/content/preloadTasks'
 import { uiNode } from '@/client/view/uiNode'
 import { uiAreaEdge } from '@/client/view/ClientViewport'
 import { UI, type UIButtonOptions } from '@/client/ui/UI'
-import { MENU_PAGES, type MenuAction, type MenuPageId } from './MenuPages'
-import { showOptionsDialog } from './OptionsDialog'
+import { MENU_PAGES, type MenuAction, type MenuDialogId, type MenuPageId } from './MenuPages'
 import { MainMenuScreen } from './MainMenuScreen'
 import { PageFade } from './PageFade'
 import { MusicSystem } from '@/client/music/MusicSystem'
@@ -16,13 +15,10 @@ import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { showChallengeScreen } from './ChallengeScreen'
 import { showMenuPageControls } from './MenuPageControls'
 import { StartupScreen } from './StartupScreen'
-import { showUserDialog } from './UserDialog'
-import { modManager } from '@/client/content/ModManager'
 import { showAlmanacScreen, type AlmanacSelection } from './AlmanacScreen'
 import { StoreScreen } from './StoreScreen'
 import { AchievementScreen } from './AchievementScreen'
 import { showAwardScreen } from './AwardScreen'
-import { loadDisplayParts, loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
 import { showScreenAnimations } from './ScreenAnimations'
 
 const { ccclass } = _decorator
@@ -37,14 +33,16 @@ export interface PreparedMenuPage {
 @ccclass('MenuScreen')
 export class MenuScreen extends Component {
     onNavigate: (action: MenuAction) => void | Promise<void> = () => {}
-    isLevelIntro: () => boolean = () => false
-    restartGame: () => void = () => {}
+    onOpenDialog: (id: MenuDialogId) => void | Promise<void> = () => {}
     private page: PreparedMenuPage | null = null
     private retainedPage: PreparedMenuPage | null = null
     private mainMenu: MainMenuScreen | null = null
     private mainPreparation: Promise<PreparedMenuPage> | null = null
     private achievementPreparation: Promise<PreparedMenuPage> | null = null
     private almanacSelection: AlmanacSelection = { plant: 0, zombie: 0 }
+
+    /** The player list changed the current player; the main menu's sign and buttons follow. */
+    async refreshProfile(): Promise<void> { await this.mainMenu?.refreshProfile() }
 
     /** The main menu asks for the create-user dialog itself until its entrance finishes. */
     mainMenuOpened(): boolean {
@@ -95,21 +93,14 @@ export class MenuScreen extends Component {
     private async createPage(id: MenuPageId, prewarm = false): Promise<PreparedMenuPage> {
         let paperAward = false
         const page = MENU_PAGES[id]
-        const optionsPage = id === 'options' || id === 'gameOptions'
-        const overMain = !!this.mainMenu?.node.isValid && (id === 'options' || id === 'players' || id === 'quit')
-        const backgrounds = page.backgrounds.filter(background =>
-            !(optionsPage && background.image === 'options_menuback')
-            && !(overMain && MENU_PAGES.main.backgrounds.some(main => main.image === background.image)),
-        )
-        const [ui, frames] = await Promise.all([UI.load(), Promise.all(backgrounds.map(async background => {
+        const [ui, frames] = await Promise.all([UI.load(), Promise.all(page.backgrounds.map(async background => {
             const frame = await modResources.asset(background.image, SpriteFrame)
             if (!frame) throw new Error(`Missing menu background: ${background.image}`)
             return frame
         }))])
         if (!this.node?.isValid) throw new Error('Menu was destroyed while loading')
         const root = uiNode({
-            name: id, parent: this.node, viewport: true, active: false,
-            graphics: !optionsPage && id !== 'pause' && id !== 'gameOver' && !overMain,
+            name: id, parent: this.node, viewport: true, active: false, graphics: true,
         })
         if (prewarm) {
             // Initialize and draw new components incrementally behind the loading page.
@@ -117,17 +108,15 @@ export class MenuScreen extends Component {
             root.node.active = true
         }
         if (page.retainPrevious) root.node.addComponent(BlockInputEvents)
-        if (root.graphics) {
-            const draw = () => {
-                const { width, height } = root.transform.contentSize
-                root.graphics!.clear()
-                root.graphics!.fillColor = new Color(0, 0, 0, page.overlay ? 160 : 255)
-                root.graphics!.fillRect(-width / 2, -height / 2, width, height)
-            }
-            root.node.on(Node.EventType.SIZE_CHANGED, draw)
-            draw()
+        const draw = () => {
+            const { width, height } = root.transform.contentSize
+            root.graphics!.clear()
+            root.graphics!.fillColor = new Color(0, 0, 0, 255)
+            root.graphics!.fillRect(-width / 2, -height / 2, width, height)
         }
-        backgrounds.forEach((background, index) => {
+        root.node.on(Node.EventType.SIZE_CHANGED, draw)
+        draw()
+        page.backgrounds.forEach((background, index) => {
             const frame = frames[index]
             uiNode({
                 name: background.image, parent: root.node,
@@ -142,121 +131,62 @@ export class MenuScreen extends Component {
             try { await showScreenAnimations(root.node, animations) }
             catch (error) { root.node.destroy(); throw error }
         }
-        if (optionsPage) {
-            const inGame = id !== 'options'
-            await showOptionsDialog(root.node, ui, {
-                inGame,
-                levelIntro: inGame && this.isLevelIntro(),
-                onClose: () => this.onNavigate(inGame ? 'resume' : 'back'),
-                onRestart: () => this.onNavigate('restart'),
-                onMainMenu: () => this.onNavigate('main'),
+        const controls = uiNode({
+            name: 'Controls', parent: root.node, position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 },
+        }).node
+        if (page.heading && id !== 'award') {
+            const { key, font, y, color } = page.heading
+            ui.label(controls, {
+                text: ui.text(key), font, x: 400, y, color: new Color(...color),
+                baseline: true, align: 'center',
             })
-        } else if (id === 'gameOver') {
-            const dialog = ui.dialog(root.node, {
-                title: ui.text('GAME_OVER'), contentInsetTopExtra: 15,
-                confirmText: ui.text('TRY_AGAIN'),
-                onClose: retry => { void this.onNavigate(retry ? 'restart' : 'main') },
-            })
-            const mainMenu = ui.button(dialog.node, {
-                text: ui.text('MAIN_MENU_BUTTON'), x: 235, y: -310, width: 163, height: 46,
-                onClick: () => dialog.close(false),
-            })
-            mainMenu.canInteract = () => !dialog.isDragging
-        } else if (id === 'pause') {
-            const dialog = ui.dialog(root.node, {
-                title: ui.text('GAME_PAUSED'), message: ui.text('CLICK_TO_RESUME'),
-                confirmText: ui.text('RESUME_GAME'), spaceAfterHeader: 155, extraHeight: 10,
-                clickSound: null,
-                onClose: () => { void this.onNavigate('resume') },
-            })
-            // Original widget (72, 42) + reanim (72, 42) + dialog header (0, 45).
-            const zombie = uiNode({
-                name: 'NewspaperZombie', parent: dialog.content, position: { x: 144, y: -129 }, active: false,
-            }).node
-            void loadEntityDisplayAssets().then(async ({ content, catalog }) => {
-                if (!isValid(zombie, true)) return
-                const parts = catalog.zombies[5].parts
-                const players = await loadDisplayParts(zombie, parts, content)
-                if (!players) return
-                for (const part of parts) players.get(part.name)!.play({ loop: true, rate: 12 / part.fps * (part.rateScale ?? 1) })
-                zombie.active = true
-            }).catch(error => {
-                if (isValid(zombie, true)) console.error('[PauseDialog] Failed to load newspaper zombie', error)
-            })
-        } else {
-            const controls = uiNode({
-                name: 'Controls', parent: root.node, position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 },
-            }).node
-            if (page.heading && id !== 'award') {
-                const { key, font, y, color } = page.heading
-                ui.label(controls, {
-                    text: ui.text(key), font, x: 400, y, color: new Color(...color),
-                    baseline: true, align: 'center',
-                })
-            }
-            const navigateButton = (target: MenuAction, options: UIButtonOptions) => ui.button(controls, {
-                ...options, onClick: () => this.onNavigate(target),
-            })
-            if (id === 'players') {
-                await showUserDialog(root.node, ui, () => { void this.onNavigate('main') }, () => this.mainMenu?.refreshProfile(), {
-                    needsRestartFor: profile => modManager.needsRestartFor(profile),
-                    hasMods: profile => modManager.hasMods(profile),
-                    copyMods: (from, to, move) => modManager.copyMods(from, to, move),
-                    restart: () => this.restartGame(),
-                })
-            } else if (id === 'quit') {
-                ui.dialog(root.node, {
-                    title: ui.text('QUIT_HEADER'), message: ui.text('QUIT_MESSAGE'),
-                    confirmText: ui.text('QUIT_BUTTON'), cancelText: ui.text('DIALOG_BUTTON_CANCEL'),
-                    onClose: confirmed => {
-                        void this.onNavigate('main')
-                        if (confirmed) game.end()
-                    },
-                })
-            } else if (id === 'minigames' || id === 'puzzle' || id === 'survival') {
-                try {
-                    await showChallengeScreen(controls, ui, id, () => { void this.onNavigate('main') })
-                } catch (error) {
-                    root.node.destroy()
-                    throw error
-                }
-            } else if (id === 'achievements') {
-                try {
-                    await controls.addComponent(AchievementScreen).initialize(ui, () => { void this.onNavigate('main') })
-                } catch (error) { root.node.destroy(); throw error }
-            } else if (id === 'help') {
-                navigateButton('main', { skin: 'seed', text: ui.text('MAIN_MENU_BUTTON'), x: 324, y: 520, rightClickTriggers: false })
-            } else if (id === 'almanac' || id === 'plants' || id === 'zombies') {
-                try {
-                    if (!this.page || !['almanac', 'plants', 'zombies'].includes(this.page.id)) this.almanacSelection = { plant: 0, zombie: 0 }
-                    await showAlmanacScreen(controls, ui, id, action => { void this.onNavigate(action) }, this.almanacSelection)
-                } catch (error) { root.node.destroy(); throw error }
-            } else if (id === 'store') {
-                try {
-                    const fromGarden = this.page && ['garden', 'mushroom', 'aquarium', 'tree'].includes(this.page.id)
-                    await controls.addComponent(StoreScreen).initialize(ui, action => { void this.onNavigate(action) }, ui.text(fromGarden ? 'STORE_BACK_TO_GAME' : 'STORE_MAIN_MENU_BUTTON'))
-                } catch (error) { root.node.destroy(); throw error }
-            } else if (id === 'award') {
-                try {
-                    const award = await showAwardScreen(controls, ui)
-                    paperAward = award.kind === 'note'
-                    navigateButton('nextLevel', {
-                        skin: 'seed', text: ui.text('NEXT_LEVEL_BUTTON'), x: 324, y: paperAward ? 520 : 500,
-                        pressOffset: [0, 0], rightClickTriggers: false,
-                    })
-                    // Keeps its margin from the UI area's right edge, like Ultimate's top-right menu button.
-                    if (award.showMainMenu) ui.button(uiAreaEdge(controls, 'right'), {
-                        skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON'), x: 677, y: 16,
-                        rightClickTriggers: false, onClick: () => this.onNavigate('main'),
-                    })
-                } catch (error) { root.node.destroy(); throw error }
-            } else if (!await showMenuPageControls(controls, ui, id, action => { void this.onNavigate(action) }).catch(error => {
+        }
+        const navigateButton = (target: MenuAction, options: UIButtonOptions) => ui.button(controls, {
+            ...options, onClick: () => this.onNavigate(target),
+        })
+        if (id === 'minigames' || id === 'puzzle' || id === 'survival') {
+            try {
+                await showChallengeScreen(controls, ui, id, () => { void this.onNavigate('main') })
+            } catch (error) {
                 root.node.destroy()
                 throw error
-            })) {
-                root.node.destroy()
-                throw new Error(`Menu page has no screen: ${id}`)
             }
+        } else if (id === 'achievements') {
+            try {
+                await controls.addComponent(AchievementScreen).initialize(ui, () => { void this.onNavigate('main') })
+            } catch (error) { root.node.destroy(); throw error }
+        } else if (id === 'help') {
+            navigateButton('main', { skin: 'seed', text: ui.text('MAIN_MENU_BUTTON'), x: 324, y: 520, rightClickTriggers: false })
+        } else if (id === 'almanac' || id === 'plants' || id === 'zombies') {
+            try {
+                if (!this.page || !['almanac', 'plants', 'zombies'].includes(this.page.id)) this.almanacSelection = { plant: 0, zombie: 0 }
+                await showAlmanacScreen(controls, ui, id, action => { void this.onNavigate(action) }, this.almanacSelection)
+            } catch (error) { root.node.destroy(); throw error }
+        } else if (id === 'store') {
+            try {
+                const fromGarden = this.page && ['garden', 'mushroom', 'aquarium', 'tree'].includes(this.page.id)
+                await controls.addComponent(StoreScreen).initialize(ui, action => { void this.onNavigate(action) }, ui.text(fromGarden ? 'STORE_BACK_TO_GAME' : 'STORE_MAIN_MENU_BUTTON'))
+            } catch (error) { root.node.destroy(); throw error }
+        } else if (id === 'award') {
+            try {
+                const award = await showAwardScreen(controls, ui)
+                paperAward = award.kind === 'note'
+                navigateButton('nextLevel', {
+                    skin: 'seed', text: ui.text('NEXT_LEVEL_BUTTON'), x: 324, y: paperAward ? 520 : 500,
+                    pressOffset: [0, 0], rightClickTriggers: false,
+                })
+                // Keeps its margin from the UI area's right edge, like Ultimate's top-right menu button.
+                if (award.showMainMenu) ui.button(uiAreaEdge(controls, 'right'), {
+                    skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON'), x: 677, y: 16,
+                    rightClickTriggers: false, onClick: () => this.onNavigate('main'),
+                })
+            } catch (error) { root.node.destroy(); throw error }
+        } else if (!await showMenuPageControls(controls, ui, id, action => { void this.onNavigate(action) }).catch(error => {
+            root.node.destroy()
+            throw error
+        })) {
+            root.node.destroy()
+            throw new Error(`Menu page has no screen: ${id}`)
         }
         if (id === 'help' || id === 'award') PageFade.create(root.node, id === 'help' || paperAward ? Color.BLACK : Color.WHITE)
         return {
@@ -335,6 +265,7 @@ export class MenuScreen extends Component {
         const menu = root.addComponent(MainMenuScreen)
         this.mainMenu = menu
         menu.onNavigate = action => this.onNavigate(action)
+        menu.onOpenDialog = id => this.onOpenDialog(id)
         try {
             // UI loading installs Mod wrappers; resolve initialize only after that finishes.
             const ui = await UI.load()

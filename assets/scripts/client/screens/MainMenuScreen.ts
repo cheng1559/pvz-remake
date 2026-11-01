@@ -16,7 +16,7 @@ import type { UITooltip } from '@/client/ui/UITooltip'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
 import type { MainMenuButtonDefinition, MainMenuDefinition } from '@/shared/content/presentation'
-import type { MenuAction } from './MenuPages'
+import { isMenuDialog, type MenuAction, type MenuDialogId } from './MenuPages'
 
 const { ccclass } = _decorator
 const random = (minimum: number, maximum: number) => minimum + Math.random() * (maximum - minimum)
@@ -36,6 +36,7 @@ interface TrackedButton {
 @ccclass('MainMenuScreen')
 export class MainMenuScreen extends Component {
     onNavigate: (action: MenuAction) => void | Promise<void> = () => {}
+    onOpenDialog: (id: MenuDialogId) => void | Promise<void> = () => {}
     private ui!: UI
     private frames = new Map<string, SpriteFrame>()
     private open!: ReanimPlayer
@@ -197,7 +198,7 @@ export class MainMenuScreen extends Component {
             this.addTrophySparkle()
             // GameSelector::Update: once open, a player gets the sign; without one the create-user dialog comes first.
             if (this.user) this.showSign()
-            else void this.onNavigate('players')
+            else void this.onOpenDialog('players')
             this.syncPositions()
         } })
     }
@@ -374,7 +375,8 @@ export class MainMenuScreen extends Component {
             void SoundSystem.playSfx(SoundEffect.LoseMusic)
             void SoundSystem.playFoley(SoundEffect.DirtRise)
             for (const hand of this.hand) hand.play({ loop: false, timeSeconds: 0, hideOnFinish: false })
-        } else if (config.target) void this.onNavigate(config.target as MenuAction)
+        } else if (config.target && isMenuDialog(config.target)) void this.onOpenDialog(config.target)
+        else if (config.target) void this.onNavigate(config.target as MenuAction)
         else this.ui.dialog(this.node, { title: this.ui.text('ZOMBATAR_UNAVAILABLE_HEADER'), message: this.ui.text('ZOMBATAR_UNAVAILABLE_BODY') })
     }
 

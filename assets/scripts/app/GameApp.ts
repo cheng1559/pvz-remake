@@ -11,12 +11,13 @@ import { CursorManager } from '@/client/input/CursorManager'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { MenuScreen } from '@/client/screens/MenuScreen'
 import { ScreenTransition } from '@/client/screens/ScreenTransition'
-import { showContinueGameDialog } from '@/client/screens/ContinueGameDialog'
+import { showContinueGameDialog } from '@/client/dialogs/ContinueGameDialog'
 import { UI } from '@/client/ui/UI'
 import { UIDialog } from '@/client/ui/UIDialog'
 import { UIInput } from '@/client/ui/UIInput'
 import { OptionsSettings } from '@/platform/OptionsSettings'
-import { MENU_PAGES, type MenuAction, type MenuPageId } from '@/client/screens/MenuPages'
+import { LEVEL_DIALOGS, MENU_PAGES, type MenuAction, type MenuPageId, type MenuDialogId } from '@/client/screens/MenuPages'
+import { showMenuDialog } from '@/client/dialogs/MenuDialog'
 import {
     createLevelController,
     installLevelProbe,
@@ -27,8 +28,8 @@ import { connectLocalMenuApi } from './LocalMenuApi'
 import { createProfileStore } from '@/server/menu/profileStore'
 import { createStoreCatalog } from '@/server/menu/storeCatalog'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
-import { showDebugCliDialog } from '@/client/screens/DebugCliDialog'
-import { showPackageDialog } from '@/client/screens/PackageDialog'
+import { showDebugCliDialog } from '@/client/dialogs/DebugCliDialog'
+import { showPackageDialog } from '@/client/dialogs/PackageDialog'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
@@ -47,6 +48,10 @@ export class GameApp extends Component {
     private gameLayer: Node | null = null
     private transitions: ScreenTransition | null = null
     private currentPage: MenuPageId | null = null
+    /** The menu dialog over the page or level; navigating to a page, the board or another level closes it silently. */
+    private dialog: { id: MenuDialogId, node?: Node } | null = null
+    /** The dialog the almanac was opened from; closing the almanac back to the board reopens it. */
+    private returnDialog: MenuDialogId | null = null
     private readonly history: MenuPageId[] = []
     private loading = false
     private spacePressed = false
@@ -77,12 +82,11 @@ export class GameApp extends Component {
             mask: Mask.Type.GRAPHICS_RECT,
         }).node.addComponent(MenuScreen)
         this.menu.onNavigate = action => this.navigate(action)
-        this.menu.isLevelIntro = () => this.controller?.isLevelIntro() ?? false
-        this.menu.restartGame = () => this.restartGame()
+        this.menu.onOpenDialog = id => this.openDialog(id)
         this.controller = createLevelController(this.gameLayer, {
             onMenu: () => {
                 void SoundSystem.play(SoundEffect.Pause)
-                return this.navigate('gameOptions')
+                return this.openDialog('gameOptions')
             },
             onComplete: () => this.finish('award'),
             onGameOver: () => this.finish('gameOver'),
@@ -125,9 +129,19 @@ export class GameApp extends Component {
             }
             levelId = this.nextLevelId
         }
+        // Anything else replaces the dialog: a page, the board (resume) or another level.
+        this.closeDialog()
         // Pages opened from a running level (debug CLI) have no history and go back to the level.
         const previous = this.history[this.history.length - 1] ?? (controller.isRunning() ? 'resume' : 'main')
         const target = action === 'nextLevel' ? 'restart' : action === 'back' ? previous : action
+        // Leaving the almanac for the board brings back the options it was opened from; going anywhere else forgets them.
+        const reopen = target === 'resume' ? this.returnDialog : null
+        if (!ALMANAC_PAGES.has(target as MenuPageId)) this.returnDialog = null
+        // Back to the board from a dialog over it: the level only needs to resume.
+        if (target === 'resume' && this.currentPage === null) {
+            if (controller.isRunning()) controller.resume()
+            return
+        }
         if (target === this.currentPage) return
         if (target === 'resume' && !controller.isRunning()) return
         const from = this.currentPage
@@ -150,7 +164,7 @@ export class GameApp extends Component {
                             })
                             if (!this.node?.isValid) return
                         }
-                        if (!restoredGame) controller.resume()
+                        if (!restoredGame && !reopen) controller.resume()
                         gameLayer.active = true
                         menu.hide()
                         this.currentPage = null
@@ -158,8 +172,7 @@ export class GameApp extends Component {
                     }
                 }
                 controller.pause()
-                if (from === null && target === 'pause') void SoundSystem.play(SoundEffect.Pause)
-                if ((target === 'main' || target === 'pause') && controller.isRunning()) await controller.saveIfRunning()
+                if (target === 'main' && controller.isRunning()) await controller.saveIfRunning()
                 const page = await menu.prepare(target)
                 return async () => {
                     if (target === 'main') controller.hide()
@@ -171,7 +184,7 @@ export class GameApp extends Component {
                     else if (this.currentPage && !(ALMANAC_PAGES.has(this.currentPage) && ALMANAC_PAGES.has(target))) this.history.push(this.currentPage)
                     if (target === 'main' || target === 'title') this.history.length = 0
                     this.currentPage = target
-                    gameLayer.active = MENU_PAGES[target].overlay === true && controller.isRunning()
+                    gameLayer.active = false
                     if (target === 'main' && modManager.finishStartup()) void this.showModsSkipped()
                 }
             })
@@ -189,7 +202,71 @@ export class GameApp extends Component {
         } finally {
             this.loading = false
         }
-        if (target === 'main' && this.currentPage === 'main' && this.menu?.mainMenuOpened() && !await menuApi.getCurrentUser()) await this.navigate('players')
+        if (reopen && controller.isRunning() && this.currentPage === null) {
+            await this.openDialog(reopen)
+            // The board stayed paused for the options; if they failed to open, it goes on.
+            if (!this.dialog && controller.isRunning() && this.currentPage === null) controller.resume()
+        }
+        if (target === 'main') await this.requirePlayer()
+    }
+
+    /** GameSelector: an opened main menu without a player keeps asking for one. */
+    private async requirePlayer(): Promise<void> {
+        if (this.currentPage === 'main' && !this.dialog && this.menu?.mainMenuOpened() && !await menuApi.getCurrentUser()) await this.openDialog('players')
+    }
+
+    /**
+     * Opens a menu dialog over the current page or level, which stays mounted and, for a level, paused. One is open at
+     * a time: while it is, the board and the page under it take no input.
+     */
+    private async openDialog(id: MenuDialogId): Promise<void> {
+        const { controller } = this
+        if (!controller || this.dialog || this.loading) return
+        const inLevel = LEVEL_DIALOGS.includes(id)
+        if (inLevel && !controller.isRunning()) return
+        const wasPaused = controller.isPaused()
+        if (inLevel) controller.pause()
+        if (id === 'pause' && this.currentPage === null) void SoundSystem.play(SoundEffect.Pause)
+        const levelIntro = controller.isLevelIntro()
+        const entry: NonNullable<GameApp['dialog']> = { id }
+        this.dialog = entry
+        this.loading = true
+        try {
+            if (id === 'pause' && controller.isRunning()) await controller.saveIfRunning()
+            // LawnApp::CanShowAlmanac: only the in-game options offer it (OptionsDialog hides it during the intro).
+            const almanac = id === 'gameOptions' && (await menuApi.getCurrentUser())?.unlocks.almanac === true
+            const ui = await UI.load()
+            if (!this.node?.isValid || this.dialog !== entry) return
+            entry.node = (await showMenuDialog(this.node, ui, id, {
+                levelIntro, almanac,
+                profileChanged: () => this.menu?.refreshProfile(),
+                restartGame: () => this.restartGame(),
+                act: action => {
+                    if (this.dialog !== entry) return
+                    this.dialog = null
+                    if (action === 'almanac') {
+                        // NewOptionsDialog_Almanac: the almanac returns to these options.
+                        this.returnDialog = id
+                        void this.navigate('almanac')
+                    } else if (action !== 'back') void this.navigate(action)
+                    else if (id === 'players') void this.requirePlayer()
+                },
+            })).node
+        } catch (error) {
+            if (this.dialog === entry) this.dialog = null
+            if (inLevel && !wasPaused && controller.isRunning() && this.currentPage === null) controller.resume()
+            console.error('[GameApp] Failed to open a menu dialog', error)
+            this.showAdvice(error instanceof Error ? error.message : String(error))
+        } finally {
+            this.loading = false
+        }
+    }
+
+    /** Removes the menu dialog without acting on it. */
+    private closeDialog(): void {
+        const entry = this.dialog
+        this.dialog = null
+        if (entry?.node?.isValid) entry.node.destroy()
     }
 
     private async finish(page: 'award' | 'gameOver'): Promise<void> {
@@ -200,8 +277,11 @@ export class GameApp extends Component {
             }
             if (page === 'award') this.nextLevelId = (await menuApi.completeLevel()).nextLevelId
             await this.controller?.deleteSave()
-            await this.navigate(page)
-            if (page === 'award' && this.currentPage === page) this.controller?.hide()
+            if (page === 'gameOver') await this.openDialog('gameOver')
+            else {
+                await this.navigate('award')
+                if (this.currentPage === 'award') this.controller?.hide()
+            }
         } catch (error) {
             console.error('[GameApp] Failed to finish level', error)
             this.showAdvice(error instanceof Error ? error.message : String(error))
@@ -237,7 +317,8 @@ export class GameApp extends Component {
         this.debugCliOpen = true
         const controller = this.controller
         const running = controller.isRunning(), wasPaused = controller.isPaused(), page = this.currentPage
-        if (running && !wasPaused) controller.pause()
+        // The CLI is not the game's own pause, so it leaves the coin bank hidden.
+        if (running && !wasPaused) controller.pause(true)
         const releaseClock = gameClock.pause()
         let result: DebugCliResult | null = null
         try {
@@ -277,12 +358,7 @@ export class GameApp extends Component {
                 break
             case 'restart': await this.navigate('restart'); break
             case 'level': await this.navigate('restart', result.levelId); break
-            case 'home': await this.navigate('main'); break
-            case 'help': await this.navigate('help'); break
-            case 'menu': await this.navigate(running ? 'gameOptions' : 'options'); break
-            case 'shop': await this.navigate('store'); break
-            case 'almanac': await this.navigate('almanac'); break
-            case 'zengarden': await this.navigate('garden'); break
+            case 'goto': await this.navigate(result.page!); break
             case 'reload':
                 await controller.saveIfRunning()
                 controller.hide()
@@ -373,9 +449,9 @@ export class GameApp extends Component {
         }
         if (UIDialog.handleKey(event)) return
         // Board::KeyDown hands Space to the cutscene during SCENE_LEVEL_INTRO (seed chooser included); only play pauses.
-        if (!this.currentPage && this.controller?.canPause() && !this.controller.isLevelIntro() && event.keyCode === KeyCode.SPACE) {
+        if (!this.currentPage && !this.dialog && this.controller?.canPause() && !this.controller.isLevelIntro() && event.keyCode === KeyCode.SPACE) {
             event.propagationStopped = true
-            void this.navigate('pause')
+            void this.openDialog('pause')
             return
         }
         if ((event.keyCode === KeyCode.ENTER || event.keyCode === KeyCode.SPACE)
@@ -383,14 +459,18 @@ export class GameApp extends Component {
             void this.navigate(this.currentPage === 'help' ? 'main' : MENU_PAGES.award.buttons[0].target)
             return
         }
+        // An open dialog takes its own keys (UIDialog.handleKey above).
+        if (this.dialog) return
         if (event.keyCode === KeyCode.ESCAPE) {
             if (!this.currentPage && this.controller?.cancelCursor()) {
                 event.propagationStopped = true
                 return
             }
-            const action = this.currentPage ? MENU_PAGES[this.currentPage].back : this.controller?.canPause() ? 'gameOptions' : null
-            if (action) void this.navigate(action)
-        } else if (event.keyCode === KeyCode.KEY_R && (this.currentPage === 'award' || this.currentPage === 'gameOver')) {
+            if (this.currentPage) {
+                const back = MENU_PAGES[this.currentPage].back
+                if (back) void this.navigate(back)
+            } else if (this.controller?.canPause()) void this.openDialog('gameOptions')
+        } else if (event.keyCode === KeyCode.KEY_R && this.currentPage === 'award') {
             void this.navigate('restart')
         }
     }

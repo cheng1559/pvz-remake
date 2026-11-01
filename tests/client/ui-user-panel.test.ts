@@ -90,12 +90,12 @@ function panelFixture() {
             return field
         },
     }
-    const { showUserDialog } = load('client/screens/UserDialog', {
+    const { showUserDialog } = load('client/dialogs/UserDialog', {
         cc: { Node, Color: class {}, UITransform: class {}, Button: { EventType: { CLICK: 'click' } }, KeyCode: {} },
         '@/client/api/MenuApi': { menuApi },
         '@/client/font': { FontMetricsUtil: { getMetrics: () => ({ height: 20, ascentPadding: 0 }), measureTextWidth: () => 50 } },
         '@/client/ui/UIButton': { UIButton: Button }, '@/client/view/uiNode': { uiNode },
-        './RestartingDialog': load('client/screens/RestartingDialog', { '@/client/content/preloadTasks': { waitForPreloadFrame: async () => {} } }),
+        './RestartingDialog': load('client/dialogs/RestartingDialog', { '@/client/content/preloadTasks': { waitForPreloadFrame: async () => {} } }),
     })
     const action = (dialog: any, name: string) => dialog.content.getComponentsInChildren().find((button: any) => button.text === name).onClick()
     return { ProfileStore, data, dialogs, inputs, action, show: (mods?: any) => showUserDialog(new Node(), ui, () => {}, () => {}, mods) }

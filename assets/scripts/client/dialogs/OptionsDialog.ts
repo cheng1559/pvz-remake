@@ -11,6 +11,8 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
     onClose: () => void
     onRestart: () => void
     onMainMenu: () => void
+    /** NewOptionsDialog::mAlmanacButton, offered in a level once the almanac is unlocked and the intro is over. */
+    onAlmanac?: () => void
 }) {
     const settings = await menuApi.getSettings()
     const dialog = ui.dialog(parent, {
@@ -80,6 +82,11 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
     }
     dialog.onConfirm = dialog.onCancel = () => close(options.onClose)
     if (options.inGame) {
+        const almanac = options.onAlmanac
+        if (almanac && !options.levelIntro) ui.button(content, {
+            text: ui.text('VIEW_ALMANAC_BUTTON'), x: 107, y: 241, width: 209,
+            onClick: () => close(almanac),
+        })
         if (!options.levelIntro) ui.button(content, {
             text: ui.text('RESTART_LEVEL_BUTTON'), x: 107, y: 284, width: 209, clickSound: null,
             onClick: () => confirmAction({

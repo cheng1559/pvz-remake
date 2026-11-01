@@ -7,7 +7,7 @@ const strings: Record<string, string> = JSON.parse(readFileSync('mods/pvz-base/a
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 
 test('Mod dialog keeps new imports and updates in its draft until Apply, including rejected restart confirmation', async () => {
-    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/PackageDialog.ts', 'utf8'), {
+    const compiled = transpileModule(readFileSync('assets/scripts/client/dialogs/PackageDialog.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
     }).outputText
     for (const id of ['new', 'existing']) for (const action of ['cancel', 'apply', 'rejectRestart']) {
@@ -63,7 +63,7 @@ test('Mod dialog keeps new imports and updates in its draft until Apply, includi
             '@/client/view/uiNode': { uiNode: (options: any) => ({ node: makeNode(options.parent), graphics }) },
         }
         const restarting: any = {}
-        runInNewContext(transpileModule(readFileSync('assets/scripts/client/screens/RestartingDialog.ts', 'utf8'), {
+        runInNewContext(transpileModule(readFileSync('assets/scripts/client/dialogs/RestartingDialog.ts', 'utf8'), {
             compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
         }).outputText, { exports: restarting, require: (name: string) => modules[name] ?? {} })
         modules['./RestartingDialog'] = restarting
