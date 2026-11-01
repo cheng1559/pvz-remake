@@ -234,9 +234,11 @@ export class LevelInputPresenter {
         else this.collectAt(x, y)
     }
 
-    private selectTool(toolId: string): void {
+    /** Like the number keys, a replacing selection swaps a held plant for the tool; the same tool again puts it back. */
+    private selectTool(toolId: string, replace = false): void {
         if (!this.enabled) return
-        if (this.game.render().cursor.mode !== 'none') { this.cancelPlanting(); return }
+        const cursor = this.game.render().cursor
+        if (cursor.mode !== 'none' && (!replace || cursor.mode === 'tool' && cursor.toolId === toolId)) { this.cancelPlanting(); return }
         this.game.command({ type: 'selectTool', toolId })
         // A touch move can arrive before the next frame; confirm selection at the input boundary.
         this.game.update(0)
@@ -301,7 +303,7 @@ export class LevelInputPresenter {
         if (!GameDebugSettings.hotkeysEnabled) return
         if (event.keyCode === KeyCode.KEY_F) {
             const shovel = this.toolButtons.find(entry => entry.toolId === 'pvz:shovel')
-            if (shovel?.button.node.activeInHierarchy && shovel.button.interactable) this.selectTool(shovel.toolId)
+            if (shovel?.button.node.activeInHierarchy && shovel.button.interactable) this.selectTool(shovel.toolId, true)
             return
         }
         if (!this.view.introComplete) return

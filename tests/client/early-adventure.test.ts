@@ -54,6 +54,10 @@ test('conveyor keyboard selection uses packet identity and respects page and dia
     snapshot.cursor = { mode: 'tool', toolId: 'pvz:shovel' }
     input.onKeyDown({ keyCode: 70 })
     assert.equal(commands.pop().type, 'clearCursor')
+    snapshot.cursor = { mode: 'seed', seedId: 'nut', packetId: 17 }
+    input.onKeyDown({ keyCode: 70 })
+    assert.deepEqual({ ...commands.pop() }, { type: 'selectTool', toolId: 'pvz:shovel' }, 'F replaces a held plant like the number keys')
+    assert.equal(commands.length, 0)
     shovel.button.interactable = false
     input.onKeyDown({ keyCode: 70 })
     assert.equal(commands.length, 0, 'unavailable tools cannot be picked by keyboard')
