@@ -18,6 +18,8 @@ type DebugSettings = {
     hotkeysEnabled: boolean
     hapticsEnabled: boolean
     originalCursorsEnabled: boolean
+    /** How crisp magnified pixel fonts are: 0 averages the atlas pixels (even strokes), 1 picks the nearest. */
+    fontSharpness: number
     perfPlantsVisible: boolean
     perfZombiesVisible: boolean
     perfParticlesEnabled: boolean
@@ -37,6 +39,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     hotkeysEnabled: false,
     hapticsEnabled: true,
     originalCursorsEnabled: true,
+    fontSharpness: 0.5,
     perfPlantsVisible: true,
     perfZombiesVisible: true,
     perfParticlesEnabled: true,
@@ -69,6 +72,8 @@ function loadDebugSettings(): DebugSettings {
             hotkeysEnabled: parsed.hotkeysEnabled ?? DEFAULT_DEBUG_SETTINGS.hotkeysEnabled,
             hapticsEnabled: parsed.hapticsEnabled ?? DEFAULT_DEBUG_SETTINGS.hapticsEnabled,
             originalCursorsEnabled: parsed.originalCursorsEnabled ?? DEFAULT_DEBUG_SETTINGS.originalCursorsEnabled,
+            fontSharpness: typeof parsed.fontSharpness === 'number' && parsed.fontSharpness >= 0 && parsed.fontSharpness <= 1
+                ? parsed.fontSharpness : DEFAULT_DEBUG_SETTINGS.fontSharpness,
             perfPlantsVisible: DEFAULT_DEBUG_SETTINGS.perfPlantsVisible,
             perfZombiesVisible: DEFAULT_DEBUG_SETTINGS.perfZombiesVisible,
             perfParticlesEnabled: DEFAULT_DEBUG_SETTINGS.perfParticlesEnabled,
@@ -178,6 +183,12 @@ export const GameDebugSettings = {
         this.originalCursorsEnabled = enabled
         saveDebugSettings(this)
         return this.originalCursorsEnabled
+    },
+
+    setFontSharpness(sharpness: number) {
+        this.fontSharpness = sharpness
+        saveDebugSettings(this)
+        return this.fontSharpness
     },
 
     setPerfToggle(toggle: DebugPerfToggle, enabled: boolean) {

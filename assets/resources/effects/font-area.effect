@@ -14,6 +14,7 @@ CCEffect %{
           blendDstAlpha: one_minus_src_alpha
       properties:
         atlasSize: { value: [1, 1, 1, 1] }
+        fontParams: { value: [0.5, 0, 0, 0] }
 }%
 
 CCProgram font-vs %{
@@ -38,6 +39,7 @@ CCProgram font-fs %{
   layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
   uniform FontAtlas {
     vec4 atlasSize; // width, height, 1 / width, 1 / height
+    vec4 fontParams; // x: sharpness when magnified, 0 (area) to 1 (nearest)
   };
   in vec2 uv;
   in vec4 color;
@@ -60,6 +62,9 @@ CCProgram font-fs %{
     #else
       vec2 footprint = clamp(fwidth(texel), 0.001, 3.0);
     #endif
+    // Magnified, an edge between two atlas pixels blends over 1 - sharpness screen pixels instead of a whole one:
+    // crisper at non-integer scales, at the cost of strokes differing by up to that much.
+    footprint = mix(footprint, max(footprint * (1.0 - fontParams.x), vec2(0.001)), step(footprint, vec2(1.0)));
     vec2 lo = texel - footprint * 0.5;
     vec2 first = floor(lo);
     vec4 wx = coverage(lo.x, footprint.x, first.x);

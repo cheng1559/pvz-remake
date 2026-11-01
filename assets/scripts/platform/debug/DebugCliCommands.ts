@@ -1,6 +1,7 @@
 import { screen, sys } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import { CursorManager } from '@/client/input/CursorManager'
+import { setFontSharpness } from '@/client/font/FontAreaMaterial'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import { gameClock } from '@/core/GameClock'
 import { debugAmount, debugCondition, debugInteger, debugSuccess, debugSyntax, parseDebugCliCommand, type DebugCliCatalog, type DebugCliResult, type DebugGotoPage } from '@/shared/debug/DebugCli'
@@ -66,6 +67,12 @@ async function executeCommand(
         case 'fps': GameDebugSettings.setFpsVisible(args[0].toLowerCase() === 'true'); break
         case 'hitboxes': GameDebugSettings.setHitboxesVisible(args[0].toLowerCase() === 'true'); break
         case 'seedstyle': GameDebugSettings.setSeedPacketStyle(args[0].toLowerCase() as SeedPacketStyle); break
+        case 'fontsharpness': {
+            const sharpness = Number(args[0])
+            if (!Number.isFinite(sharpness) || sharpness < 0 || sharpness > 1) return debugSyntax('Font sharpness must be between 0 and 1')
+            setFontSharpness(GameDebugSettings.setFontSharpness(sharpness))
+            return debugSuccess(`Font sharpness: ${sharpness}`)
+        }
         case 'mod': return { ...debugSuccess('Opening Mod manager'), action: 'manageMods' }
         case 'perf': GameDebugSettings.setPerfToggle(args[0].toLowerCase() as DebugPerfToggle, args[1].toLowerCase() === 'true'); break
         case 'background': return debugCondition('DEBUG_BACKGROUND_UNAVAILABLE')
