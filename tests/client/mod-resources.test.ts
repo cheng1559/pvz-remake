@@ -633,3 +633,13 @@ test('a startup that ended while loading Mods makes the next one start without t
     gameEvents.emit('show')
     assert.deepEqual(Array.from(await new ModManager().running()), [], 'a startup that came back and then ended still counts')
 })
+
+test('the main menu names each Mod that failed to load once', () => {
+    const { manager } = setup()
+    manager.failures.set('broken', 'client/index.js: boom')
+    manager.failures.set('missing-dependency', 'needs other')
+    assert.deepEqual(Array.from(manager.takeUnreportedFailures()), ['broken', 'missing-dependency'])
+    assert.deepEqual(Array.from(manager.takeUnreportedFailures()), [], 'a later visit to the main menu says nothing more')
+    manager.failures.set('late', 'register: boom')
+    assert.deepEqual(Array.from(manager.takeUnreportedFailures()), ['late'])
+})

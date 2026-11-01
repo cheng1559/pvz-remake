@@ -95,6 +95,8 @@ async function parseImport(data: ArchiveData): Promise<ArchivedMod> {
 export class ModManager {
     /** Failures in this session; installed archives and saved enable states stay intact. */
     readonly failures = new Map<string, string>()
+    /** Failures the player has been told about. */
+    private readonly reportedFailures = new Set<string>()
     /** By archive key: an archive's content never changes, so these stay valid across players and updates. */
     private readonly loaded = new Map<string, InstalledMod>()
     /** Manifest versions and authors the Mod list read without loading the Mod, by archive key. */
@@ -190,6 +192,13 @@ export class ModManager {
         const skipped = this.startedWithoutMods
         this.startedWithoutMods = false
         return skipped
+    }
+
+    /** The IDs of Mods that failed to load and that no notice has named yet, in the order they failed. */
+    takeUnreportedFailures(): string[] {
+        const ids = [...this.failures.keys()].filter(id => !this.reportedFailures.has(id))
+        for (const id of ids) this.reportedFailures.add(id)
+        return ids
     }
 
     async list(): Promise<string[]> {

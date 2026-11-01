@@ -185,7 +185,14 @@ export class GameApp extends Component {
                     if (target === 'main' || target === 'title') this.history.length = 0
                     this.currentPage = target
                     gameLayer.active = false
-                    if (target === 'main' && modManager.finishStartup()) void this.showModsSkipped()
+                    if (target === 'main') {
+                        // A start without Mods says so; otherwise each Mod that failed to load is named once, one per line.
+                        if (modManager.finishStartup()) void this.showModNotice('MODS_STARTUP_FAILED_HEADER', 'MODS_STARTUP_FAILED_BODY')
+                        else {
+                            const failed = modManager.takeUnreportedFailures()
+                            if (failed.length) void this.showModNotice('MODS_LOAD_FAILED_HEADER', 'MODS_LOAD_FAILED_BODY', failed.join('\n'))
+                        }
+                    }
                 }
             })
             if (restoredGame && this.node?.isValid) {
@@ -248,7 +255,8 @@ export class GameApp extends Component {
                         // NewOptionsDialog_Almanac: the almanac returns to these options.
                         this.returnDialog = id
                         void this.navigate('almanac')
-                    } else if (action !== 'back') void this.navigate(action)
+                    } else if (action === 'mods') void this.manageModsFrom(id)
+                    else if (action !== 'back') void this.navigate(action)
                     else if (id === 'players') void this.requirePlayer()
                 },
             })).node
@@ -260,6 +268,33 @@ export class GameApp extends Component {
         } finally {
             this.loading = false
         }
+    }
+
+    /** The options' Mods button: the Mod manager takes the dialog's place, and closing it returns to the options. */
+    private async manageModsFrom(id: MenuDialogId): Promise<void> {
+        const entry: NonNullable<GameApp['dialog']> = { id }
+        this.dialog = entry
+        try {
+            await this.showModManager()
+        } catch (error) {
+            console.error('[Packages]', error)
+            this.showAdvice(String(error))
+        } finally {
+            if (this.dialog === entry) this.dialog = null
+        }
+        if (this.node?.isValid && !this.dialog && this.currentPage === 'main') await this.openDialog(id)
+    }
+
+    /** The Mod manager, from `/mod` or the main menu's options. */
+    private async showModManager(): Promise<void> {
+        const ui = await UI.load()
+        if (!this.node?.isValid || !this.controller) return
+        const controller = this.controller
+        await (await showPackageDialog(this.node, ui, {
+            import: () => this.importPackage(),
+            save: () => controller.saveIfRunning(),
+            restart: async () => { this.restartGame() },
+        })).result
     }
 
     /** Removes the menu dialog without acting on it. */
@@ -341,13 +376,7 @@ export class GameApp extends Component {
             case 'manageMods':
                 this.debugCliOpen = true
                 try {
-                    const ui = await UI.load()
-                    if (!this.node?.isValid) return
-                    await (await showPackageDialog(this.node, ui, {
-                        import: () => this.importPackage(),
-                        save: () => controller.saveIfRunning(),
-                        restart: async () => { this.restartGame() },
-                    })).result
+                    await this.showModManager()
                 } catch (error) {
                     console.error('[Packages]', error)
                     this.showAdvice(String(error))
@@ -375,11 +404,12 @@ export class GameApp extends Component {
     }
 
     /** Validate selected ZIPs sequentially; the dialog keeps them in its draft until Apply. */
-    private async showModsSkipped(): Promise<void> {
+    /** A Mod notice on the main menu; `%s` in the body takes `detail`. */
+    private async showModNotice(header: string, body: string, detail = ''): Promise<void> {
         const ui = await UI.load()
         if (!this.node?.isValid) return
         await ui.dialog(this.node, {
-            title: ui.text('MODS_STARTUP_FAILED_HEADER'), message: ui.text('MODS_STARTUP_FAILED_BODY'), confirmText: ui.text('DIALOG_BUTTON_OK'),
+            title: ui.text(header), message: ui.text(body).replace('%s', detail), confirmText: ui.text('DIALOG_BUTTON_OK'),
         }).result
     }
 

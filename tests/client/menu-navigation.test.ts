@@ -83,6 +83,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     let restoreOnPlay = false
     let prompts = 0
     let packageDialogs = 0
+    const managerPaused: boolean[] = []
     let chooseContinue!: (action: 'continue' | 'restart' | 'cancel') => void
     let closeCli!: (result: DebugCliResult | null) => void
     const sounds: string[] = []
@@ -106,7 +107,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         } } },
         '@/client/dialogs/DebugCliDialog': { showDebugCliDialog: () => new Promise(resolve => { closeCli = resolve }) },
         '@/client/dialogs/PackageDialog': { showPackageDialog: async () => {
-            assert.equal(paused, true)
+            managerPaused.push(paused)
             packageDialogs++
             return { result: Promise.resolve() }
         } },
@@ -119,7 +120,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
                 return dialog
             },
         },
-        '@/client/content/ModManager': { modManager: { finishStartup: () => false } },
+        '@/client/content/ModManager': { modManager: { finishStartup: () => false, takeUnreportedFailures: () => [] } },
         '@/client/ui/UIDialog': { UIDialog: { handleKey: () => { dialogKeys++; return false } } },
         '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1, unlocks: { almanac: true } }), completeLevel: async () => ({ nextLevelId: 'pvz:adventure-1-2' }) } },
         '@/client/ui/UI': { UI: { load: async () => ({}) } },
@@ -260,7 +261,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     await setImmediate()
     closeCli({ ok: true, message: '', action: 'manageMods' })
     await manager
-    assert.equal(packageDialogs, 1)
+    assert.deepEqual([packageDialogs, managerPaused], [1, [true]], 'the CLI opens the manager over the paused level')
     assert.equal(saves, savesBeforeManager, 'opening the manager does not write an unchanged level save')
     assert.equal(paused, false, 'closing the manager restores the previous pause state')
     const almanac = app.showDebugCli()
@@ -429,6 +430,19 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     opened.at(-1)!.act('back')
     await setImmediate()
     assert.deepEqual([app.dialog, app.currentPage, commits.length], [null, 'garden', shownBefore], 'OK leaves the garden as it was')
+
+    // The main menu's options open the Mod manager, and closing it returns to the options.
+    await app.navigate('main')
+    await app.openDialog('options')
+    const optionsShown = opened.length
+    opened.at(-1)!.act('mods')
+    await setImmediate()
+    await setImmediate()
+    assert.equal(packageDialogs, 2)
+    assert.deepEqual([app.dialog?.id, opened.length, opened.at(-1)!.id], ['options', optionsShown + 1, 'options'], 'the options come back')
+    opened.at(-1)!.act('back')
+    await setImmediate()
+    assert.equal(app.dialog, null)
 })
 
 test('manager imports read sequentially, continue after failure and leave installation to the next startup', async () => {
@@ -552,7 +566,7 @@ test('options use direct exit during seed selection and confirmed exit during ga
     for (const [inGame, levelIntro, expected] of [
         [true, true, ['MAIN_MENU_BUTTON', 'BACK_TO_GAME']],
         [true, false, ['VIEW_ALMANAC_BUTTON', 'RESTART_LEVEL_BUTTON', 'MAIN_MENU_BUTTON', 'BACK_TO_GAME']],
-        [false, false, ['OPTIONS_GITHUB_BUTTON', 'DIALOG_BUTTON_OK']],
+        [false, false, ['OPTIONS_GITHUB_BUTTON', 'OPTIONS_MODS_BUTTON', 'DIALOG_BUTTON_OK']],
     ] as const) {
         const buttons: Array<{ text: string; onClick: () => void }> = [], dialogs: any[] = []
         let exits = 0
@@ -571,7 +585,7 @@ test('options use direct exit during seed selection and confirmed exit during ga
             button(_parent: unknown, options: { text: string; onClick: () => void }) { buttons.push(options) },
         }
         // The almanac is offered in a level, but not during its intro (NewOptionsDialog hides mAlmanacButton then).
-        await exports.showOptionsDialog({}, ui, { inGame, levelIntro, onClose() {}, onRestart() {}, onMainMenu() { exits++ }, onAlmanac() {} })
+        await exports.showOptionsDialog({}, ui, { inGame, levelIntro, onClose() {}, onRestart() {}, onMainMenu() { exits++ }, onAlmanac() {}, onMods() {} })
         assert.deepEqual(buttons.map(button => button.text), expected)
         if (!inGame) continue
         const main = buttons.find(button => button.text === 'MAIN_MENU_BUTTON')!

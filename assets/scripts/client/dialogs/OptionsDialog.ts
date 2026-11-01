@@ -13,6 +13,8 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
     onMainMenu: () => void
     /** NewOptionsDialog::mAlmanacButton, offered in a level once the almanac is unlocked and the intro is over. */
     onAlmanac?: () => void
+    /** The main menu's options open the Mod manager. */
+    onMods?: () => void
 }) {
     const settings = await menuApi.getSettings()
     const dialog = ui.dialog(parent, {
@@ -101,10 +103,17 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
                 confirmText: ui.text('LEAVE_BUTTON'), cancelText: ui.text('DIALOG_BUTTON_CANCEL'), height: 350,
             }, options.onMainMenu),
         })
-    } else ui.button(content, {
-        text: ui.text('OPTIONS_GITHUB_BUTTON'), x: 107, y: 327, width: 209, clickSound: null,
-        onClick: () => sys.openURL('https://github.com/cheng1559/pvz-remake'),
-    })
+    } else {
+        ui.button(content, {
+            text: ui.text('OPTIONS_GITHUB_BUTTON'), x: 107, y: 284, width: 209, clickSound: null,
+            onClick: () => sys.openURL('https://github.com/cheng1559/pvz-remake'),
+        })
+        const mods = options.onMods
+        if (mods) ui.button(content, {
+            text: ui.text('OPTIONS_MODS_BUTTON'), x: 107, y: 327, width: 209,
+            onClick: () => close(mods),
+        })
+    }
     ui.button(content, {
         text: ui.text(options.inGame ? 'BACK_TO_GAME' : 'DIALOG_BUTTON_OK'), skin: 'back', x: 30, y: 381,
         onClick: () => close(options.onClose),

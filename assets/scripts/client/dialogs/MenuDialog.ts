@@ -9,7 +9,7 @@ import { showOptionsDialog } from './OptionsDialog'
 import { showUserDialog } from './UserDialog'
 
 /** What a menu dialog's buttons ask for; `back` just closes it. */
-export type MenuDialogAction = 'resume' | 'back' | 'restart' | 'main' | 'almanac'
+export type MenuDialogAction = 'resume' | 'back' | 'restart' | 'main' | 'almanac' | 'mods'
 
 /** Opens the dialog straight on `parent` (the app's node), as the debug CLI's dialog is. */
 export async function showMenuDialog(parent: Node, ui: UI, id: MenuDialogId, { levelIntro, almanac, act, profileChanged, restartGame }: {
@@ -49,6 +49,7 @@ export async function showMenuDialog(parent: Node, ui: UI, id: MenuDialogId, { l
             onRestart: () => act('restart'),
             onMainMenu: () => act('main'),
             ...(almanac ? { onAlmanac: () => act('almanac') } : {}),
+            ...(inGame ? {} : { onMods: () => act('mods') }),
         })
     }
     if (id === 'gameOver') {
