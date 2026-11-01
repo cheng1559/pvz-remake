@@ -90,6 +90,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     const sounds: string[] = []
     const opened: Array<{ id: string, act: (action: string) => void, dialog: { node: { isValid: boolean } } }> = []
     let dialogFails = false
+    let awardOpens: Record<string, unknown> = {}
     const musicFrames: Array<{ ticks: number; zombies: number }> = []
     const module = { exports: {} as Record<string, any> }
     const compiled = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
@@ -123,7 +124,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         },
         '@/client/content/ModManager': { modManager: { finishStartup: () => false, takeUnreportedFailures: () => [] } },
         '@/client/ui/UIDialog': { UIDialog: { handleKey: () => { dialogKeys++; return false } } },
-        '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1, unlocks: { almanac: true } }), completeLevel: async () => ({ nextLevelId: 'pvz:adventure-1-2' }) } },
+        '@/client/api/MenuApi': { menuApi: { getCurrentUser: async () => ({ id: 1, unlocks: { almanac: true } }), completeLevel: async () => ({ nextLevelId: 'pvz:adventure-1-2', ...awardOpens }) } },
         '@/client/ui/UI': { UI: { load: async () => ({}) } },
         '@/client/ui/UIInput': { UIInput: { handleKeyUp() {} } },
         '@/client/dialogs/ContinueGameDialog': {
@@ -372,6 +373,18 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.deepEqual(freshGames, [false, true])
     assert.equal(startedLevels.at(-1), 'pvz:adventure-1-2')
     assert.equal(prompts, 0, 'fresh levels and explicit restarts skip the save prompt')
+    // AwardScreen::StartButtonPressed: the almanac opened from the award page goes on to the next level when it closes.
+    await app.navigate('main')
+    awardOpens = { opens: { page: 'almanac', buttonKey: 'VIEW_ALMANAC_BUTTON' } }
+    await app.finish('award')
+    app.onKeyDown({ keyCode: 13 })
+    await setImmediate()
+    assert.equal(app.currentPage, 'almanac', 'Enter presses the award button, which opens the almanac first')
+    awardOpens = {}
+    await app.navigate('zombies')
+    assert.equal(running, false)
+    await app.navigate('back')
+    assert.deepEqual([app.currentPage, running, startedLevels.at(-1)], [null, true, 'pvz:adventure-1-2'])
     for (const action of ['continue', 'restart', 'cancel'] as const) {
         await app.navigate('main')
         restoreOnPlay = true

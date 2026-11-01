@@ -116,7 +116,10 @@ test('level one drops its award from the last effective zombie before its corpse
     assert.equal(award.width, 50)
     assert.ok(award.velocityX >= -0.8 && award.velocityX <= -0.4)
     assert.ok(award.velocityY >= -4.85 && award.velocityY < -2.85)
-    assert.ok(award.groundY >= 352.5 && award.groundY <= 371.5)
+    assert.ok(award.groundY >= 322.5 && award.groundY <= 341.5, 'awards land 30 above the coin ground')
+    assert.equal(award.landed, undefined, 'the pickup arrow waits for the award to land')
+    for (let tick = 3; tick < 200 && !award.landed; tick++) schedule.run(world, tick)
+    assert.deepEqual([award.landed, awardPosition.y], [true, award.groundY])
     assert.equal(world.resources.get(LevelStateResource).result, 'playing')
 })
 

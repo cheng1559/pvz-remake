@@ -67,7 +67,9 @@ export const TUTORIALS: Readonly<Record<string, TutorialScript>> = {
     'pvz:adventure-2-1': { ...introDialog(201, 207), loot: { firstCoinAfterWave: 5, savingsCap: 75 }, moneyCollected: coinAdvice,
         chooserWarnings: { seed: { id: 'pvz:puffshroom', warning: 'SEED_CHOOSER_PUFFSHROOM_WARNING' }, sunWarning: 'SEED_CHOOSER_NIGHT_SUN_WARNING' } },
     'pvz:adventure-2-2': introDialog(1401, 1402),
+    // CutScene::StartLevelIntro offers the first seed-slot upgrade on levels 13-24 except 15, 20 and 21.
     'pvz:adventure-2-3': packetUpgradeOffer,
+    'pvz:adventure-2-4': packetUpgradeOffer,
 }
 
 export function getActiveTutorial(world: World): TutorialScript | undefined {

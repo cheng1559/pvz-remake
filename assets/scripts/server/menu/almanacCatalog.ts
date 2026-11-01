@@ -1,116 +1,77 @@
-import type { AlmanacPlantDefinition, AlmanacZombieDefinition } from '@/shared/menu'
+import type { AlmanacPlantDefinition, AlmanacView, AlmanacZombieDefinition } from '@/shared/menu'
+import type { PlayerProfile } from './profileStore'
 
-export const ALMANAC_PLANTS: AlmanacPlantDefinition[] = [
-    { id: 0, key: 'PEASHOOTER', name: 'Peashooter', cost: 100, refreshTime: 750 },
-    { id: 1, key: 'SUNFLOWER', name: 'Sunflower', cost: 50, refreshTime: 750 },
-    { id: 2, key: 'CHERRY_BOMB', name: 'Cherry Bomb', cost: 150, refreshTime: 5000 },
-    { id: 3, key: 'WALL_NUT', name: 'Wall-nut', cost: 50, refreshTime: 3000 },
-    { id: 4, key: 'POTATO_MINE', name: 'Potato Mine', cost: 25, refreshTime: 3000 },
-    { id: 5, key: 'SNOW_PEA', name: 'Snow Pea', cost: 175, refreshTime: 750 },
-    { id: 6, key: 'CHOMPER', name: 'Chomper', cost: 150, refreshTime: 750 },
-    { id: 7, key: 'REPEATER', name: 'Repeater', cost: 200, refreshTime: 750 },
-    { id: 8, key: 'PUFF_SHROOM', name: 'Puff-shroom', cost: 0, refreshTime: 750 },
-    { id: 9, key: 'SUN_SHROOM', name: 'Sun-shroom', cost: 25, refreshTime: 750 },
-    { id: 10, key: 'FUME_SHROOM', name: 'Fume-shroom', cost: 75, refreshTime: 750 },
-    { id: 11, key: 'GRAVE_BUSTER', name: 'Grave Buster', cost: 75, refreshTime: 750 },
-    { id: 12, key: 'HYPNO_SHROOM', name: 'Hypno-shroom', cost: 75, refreshTime: 3000 },
-    { id: 13, key: 'SCAREDY_SHROOM', name: 'Scaredy-shroom', cost: 25, refreshTime: 750 },
-    { id: 14, key: 'ICE_SHROOM', name: 'Ice-shroom', cost: 75, refreshTime: 5000 },
-    { id: 15, key: 'DOOM_SHROOM', name: 'Doom-shroom', cost: 125, refreshTime: 5000 },
-    { id: 16, key: 'LILY_PAD', name: 'Lily Pad', cost: 25, refreshTime: 750 },
-    { id: 17, key: 'SQUASH', name: 'Squash', cost: 50, refreshTime: 3000 },
-    { id: 18, key: 'THREEPEATER', name: 'Threepeater', cost: 325, refreshTime: 750 },
-    { id: 19, key: 'TANGLE_KELP', name: 'Tangle Kelp', cost: 25, refreshTime: 3000 },
-    { id: 20, key: 'JALAPENO', name: 'Jalapeno', cost: 125, refreshTime: 5000 },
-    { id: 21, key: 'SPIKEWEED', name: 'Spikeweed', cost: 100, refreshTime: 750 },
-    { id: 22, key: 'TORCHWOOD', name: 'Torchwood', cost: 175, refreshTime: 750 },
-    { id: 23, key: 'TALL_NUT', name: 'Tall-nut', cost: 125, refreshTime: 3000 },
-    { id: 24, key: 'SEA_SHROOM', name: 'Sea-shroom', cost: 0, refreshTime: 3000 },
-    { id: 25, key: 'PLANTERN', name: 'Plantern', cost: 25, refreshTime: 3000 },
-    { id: 26, key: 'CACTUS', name: 'Cactus', cost: 125, refreshTime: 750 },
-    { id: 27, key: 'BLOVER', name: 'Blover', cost: 100, refreshTime: 750 },
-    { id: 28, key: 'SPLIT_PEA', name: 'Split Pea', cost: 125, refreshTime: 750 },
-    { id: 29, key: 'STARFRUIT', name: 'Starfruit', cost: 125, refreshTime: 750 },
-    { id: 30, key: 'PUMPKIN', name: 'Pumpkin', cost: 125, refreshTime: 3000 },
-    { id: 31, key: 'MAGNET_SHROOM', name: 'Magnet-shroom', cost: 100, refreshTime: 750 },
-    { id: 32, key: 'CABBAGE_PULT', name: 'Cabbage-pult', cost: 100, refreshTime: 750 },
-    { id: 33, key: 'FLOWER_POT', name: 'Flower Pot', cost: 25, refreshTime: 750 },
-    { id: 34, key: 'KERNEL_PULT', name: 'Kernel-pult', cost: 100, refreshTime: 750 },
-    { id: 35, key: 'COFFEE_BEAN', name: 'Coffee Bean', cost: 75, refreshTime: 750 },
-    { id: 36, key: 'GARLIC', name: 'Garlic', cost: 50, refreshTime: 750 },
-    { id: 37, key: 'UMBRELLA_LEAF', name: 'Umbrella Leaf', cost: 100, refreshTime: 750 },
-    { id: 38, key: 'MARIGOLD', name: 'Marigold', cost: 50, refreshTime: 3000 },
-    { id: 39, key: 'MELON_PULT', name: 'Melon-pult', cost: 300, refreshTime: 750 },
-    {
-        id: 40,
-        key: 'GATLING_PEA',
-        name: 'Gatling Pea',
-        cost: 250,
-        refreshTime: 5000,
-        upgrade: true,
-    },
-    {
-        id: 41,
-        key: 'TWIN_SUNFLOWER',
-        name: 'Twin Sunflower',
-        cost: 150,
-        refreshTime: 5000,
-        upgrade: true,
-    },
-    {
-        id: 42,
-        key: 'GLOOM_SHROOM',
-        name: 'Gloom-shroom',
-        cost: 150,
-        refreshTime: 5000,
-        upgrade: true,
-    },
-    { id: 43, key: 'CATTAIL', name: 'Cattail', cost: 225, refreshTime: 5000, upgrade: true },
-    {
-        id: 44,
-        key: 'WINTER_MELON',
-        name: 'Winter Melon',
-        cost: 200,
-        refreshTime: 5000,
-        upgrade: true,
-    },
-    { id: 45, key: 'GOLD_MAGNET', name: 'Gold Magnet', cost: 50, refreshTime: 5000, upgrade: true },
-    { id: 46, key: 'SPIKEROCK', name: 'Spikerock', cost: 125, refreshTime: 5000, upgrade: true },
-    { id: 47, key: 'COB_CANNON', name: 'Cob Cannon', cost: 500, refreshTime: 5000, upgrade: true },
-    { id: 48, key: 'IMITATER', name: 'Imitater', cost: 0, refreshTime: 750 },
-].map((plant): AlmanacPlantDefinition => ({
-    ...plant,
-    // AlmanacDialog::DrawPlants and Plant::IsNocturnal; Gold Magnet is diurnal.
-    ground: [16, 19, 43].includes(plant.id) ? 'pool' : plant.id === 24 ? 'nightpool'
-        : plant.id === 33 ? 'roof' : plant.id >= 8 && plant.id <= 15 || [25, 31, 42].includes(plant.id) ? 'night' : 'day',
-}))
+/** `purchase` is the store item that unlocks the plant (STORE_ITEM_PLANT_GATLINGPEA ... STORE_ITEM_PLANT_IMITATER). */
+type AlmanacPlant = AlmanacPlantDefinition & { purchase?: number }
+/**
+ * gZombieDefs' mStartingLevel; `spawnedOnly` is Board::IsZombieTypeSpawnedOnly; `afterAdventure` zombies only come
+ * once the adventure is finished (LawnApp::CanSpawnYetis).
+ */
+type AlmanacZombie = AlmanacZombieDefinition & { startingLevel: number, spawnedOnly?: boolean, afterAdventure?: boolean }
+interface AlmanacDefinition { plants: AlmanacPlant[], zombies: AlmanacZombie[] }
 
-export const ALMANAC_ZOMBIES: AlmanacZombieDefinition[] = [
-    { id: 0, key: 'ZOMBIE' },
-    { id: 1, key: 'FLAG_ZOMBIE' },
-    { id: 2, key: 'CONEHEAD_ZOMBIE' },
-    { id: 3, key: 'POLE_VAULTING_ZOMBIE' },
-    { id: 4, key: 'BUCKETHEAD_ZOMBIE' },
-    { id: 5, key: 'NEWSPAPER_ZOMBIE' },
-    { id: 6, key: 'SCREEN_DOOR_ZOMBIE' },
-    { id: 7, key: 'FOOTBALL_ZOMBIE' },
-    { id: 8, key: 'DANCING_ZOMBIE' },
-    { id: 9, key: 'BACKUP_DANCER' },
-    { id: 10, key: 'DUCKY_TUBE_ZOMBIE' },
-    { id: 11, key: 'SNORKEL_ZOMBIE' },
-    { id: 12, key: 'ZOMBONI', iceGround: true },
-    { id: 13, key: 'ZOMBIE_BOBSLED_TEAM', iceGround: true },
-    { id: 14, key: 'DOLPHIN_RIDER_ZOMBIE' },
-    { id: 15, key: 'JACK_IN_THE_BOX_ZOMBIE' },
-    { id: 16, key: 'BALLOON_ZOMBIE' },
-    { id: 17, key: 'DIGGER_ZOMBIE' },
-    { id: 18, key: 'POGO_ZOMBIE' },
-    { id: 19, key: 'ZOMBIE_YETI' },
-    { id: 20, key: 'BUNGEE_ZOMBIE' },
-    { id: 21, key: 'LADDER_ZOMBIE' },
-    { id: 22, key: 'CATAPULT_ZOMBIE' },
-    { id: 23, key: 'GARGANTUAR' },
-    { id: 24, key: 'IMP' },
-    { id: 25, key: 'BOSS' },
-]
+const GROUNDS = new Set(['day', 'night', 'pool', 'nightpool', 'roof'])
+const SEEDS_IN_CHOOSER = 49
 
+/** LawnApp::GetAwardSeedForLevel: each area awards eight plants, less the levels that award something else. */
+function awardSeedForLevel(level: number): number {
+    const sub = (level - 1) % 10 + 1
+    return Math.min(40, Math.floor((level - 1) / 10) * 8 + sub - (sub >= 10 ? 2 : sub >= 5 ? 1 : 0))
+}
+
+/** The almanac entries come from `pvz:gameplay/almanac`; only the unlock rules live here. */
+export function createAlmanacCatalog(value: unknown) {
+    validateAlmanac(value)
+    const { plants, zombies } = value
+
+    /**
+     * The current player's almanac: LawnApp::HasSeedType for plants, AlmanacDialog::ZombieIsShown and
+     * ZombieHasDescription for zombies. A zombie that debuts on the player's current level is not described yet;
+     * the original also describes it once it has been defeated since the player was selected, which is not tracked.
+     * The Yeti's silhouette before it can spawn is not drawn, so it stays hidden until then.
+     */
+    function view(profile: PlayerProfile | null): AlmanacView {
+        const level = profile?.adventureLevel ?? 1, finishedTimes = profile?.finishedAdventure ?? 0, finished = finishedTimes > 0
+        const seedsAvailable = finished || level > 50 ? SEEDS_IN_CHOOSER : Math.min(SEEDS_IN_CHOOSER, awardSeedForLevel(level))
+        return {
+            plants: plants.filter(plant => plant.purchase !== undefined
+                ? (profile?.purchases[plant.purchase] ?? 0) > 0 : plant.id < seedsAvailable)
+                .map(({ purchase: _purchase, ...plant }) => plant),
+            zombies: zombies.map(({ startingLevel, spawnedOnly, afterAdventure, ...zombie }) => {
+                if (afterAdventure) {
+                    const spawns = finished && (finishedTimes >= 2 || level >= startingLevel)
+                    return { ...zombie, shown: spawns, described: spawns && (finishedTimes >= 2 || startingLevel < level) }
+                }
+                return { ...zombie,
+                    shown: finished || startingLevel < level || startingLevel === level && !spawnedOnly,
+                    described: finished || startingLevel < level }
+            }),
+        }
+    }
+
+    return { view, plants: plants as readonly AlmanacPlant[] }
+}
+
+export type AlmanacCatalog = ReturnType<typeof createAlmanacCatalog>
+
+function validateAlmanac(value: unknown): asserts value is AlmanacDefinition {
+    const data = value as AlmanacDefinition
+    if (!data || !Array.isArray(data.plants) || !Array.isArray(data.zombies)) throw new Error('Invalid almanac definition')
+    const plants = new Set<number>(), purchases = new Set<number>()
+    for (const plant of data.plants) {
+        if (!Number.isInteger(plant.id) || plant.id < 0 || plants.has(plant.id) || typeof plant.key !== 'string' || typeof plant.name !== 'string' ||
+            !Number.isInteger(plant.cost) || plant.cost < 0 || !Number.isInteger(plant.refreshTime) || plant.refreshTime <= 0 ||
+            !GROUNDS.has(plant.ground)) throw new Error(`Invalid or duplicate almanac plant: ${plant.id}`)
+        if (plant.purchase !== undefined && (!Number.isInteger(plant.purchase) || plant.purchase < 0 || purchases.has(plant.purchase))) {
+            throw new Error(`Invalid almanac plant purchase: ${plant.id}`)
+        }
+        plants.add(plant.id)
+        if (plant.purchase !== undefined) purchases.add(plant.purchase)
+    }
+    const zombies = new Set<number>()
+    for (const zombie of data.zombies) {
+        if (!Number.isInteger(zombie.id) || zombie.id < 0 || zombies.has(zombie.id) || typeof zombie.key !== 'string' ||
+            !Number.isInteger(zombie.startingLevel) || zombie.startingLevel < 1) throw new Error(`Invalid or duplicate almanac zombie: ${zombie.id}`)
+        zombies.add(zombie.id)
+    }
+}

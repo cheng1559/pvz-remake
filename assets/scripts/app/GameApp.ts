@@ -26,6 +26,7 @@ import {
 import { menuApi } from '@/client/api/MenuApi'
 import { connectLocalMenuApi } from './LocalMenuApi'
 import { createProfileStore } from '@/server/menu/profileStore'
+import { createAlmanacCatalog } from '@/server/menu/almanacCatalog'
 import { createStoreCatalog } from '@/server/menu/storeCatalog'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { showDebugCliDialog } from '@/client/dialogs/DebugCliDialog'
@@ -60,6 +61,8 @@ export class GameApp extends Component {
     private advice: AdviceWidget | null = null
     private adviceTick = 0
     private nextLevelId: string | null = null
+    /** The award page button's target: the next level, or a page such as the almanac first (AwardScreen::StartButtonPressed). */
+    private awardStart: MenuAction = 'nextLevel'
     private fpsDisplay: FpsDisplay | null = null
 
     start(): void {
@@ -70,7 +73,8 @@ export class GameApp extends Component {
         modManager.useProfiles(() => createProfileStore(sys.localStorage).getCurrentProfile()?.id ?? null)
         modManager.deferPendingChanges()
         connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false,
-            modResources.baseJson('pvz:gameplay/store').then(createStoreCatalog))
+            Promise.all([modResources.baseJson('pvz:gameplay/store').then(createStoreCatalog),
+                modResources.baseJson('pvz:gameplay/almanac').then(createAlmanacCatalog)]))
         UIHoverManager.start(this.node)
         // Load the original arrow now rather than on the first mouse move.
         CursorManager.refresh()
@@ -117,6 +121,8 @@ export class GameApp extends Component {
     private async navigate(action: MenuAction, levelId?: string): Promise<void> {
         const { controller, menu, gameLayer, transitions } = this
         if (this.loading || !controller || !menu || !gameLayer || !transitions) return
+        // AwardScreen::StartButtonPressed: closing an almanac opened from the award page continues to the next level.
+        if (action === 'back' && this.currentPage && ALMANAC_PAGES.has(this.currentPage) && this.history.at(-1) === 'award') action = 'nextLevel'
         if (action === 'nextLevel') {
             if (!this.nextLevelId) {
                 const ui = await UI.load()
@@ -312,7 +318,11 @@ export class GameApp extends Component {
                 await this.navigate('main')
                 return
             }
-            if (page === 'award') this.nextLevelId = (await menuApi.completeLevel()).nextLevelId
+            if (page === 'award') {
+                const award = await menuApi.completeLevel()
+                this.nextLevelId = award.nextLevelId
+                this.awardStart = award.opens?.page ?? 'nextLevel'
+            }
             await this.controller?.deleteSave()
             if (page === 'gameOver') await this.openDialog('gameOver')
             else {
@@ -488,7 +498,7 @@ export class GameApp extends Component {
         }
         if ((event.keyCode === KeyCode.ENTER || event.keyCode === KeyCode.SPACE)
             && (this.currentPage === 'help' || this.currentPage === 'award')) {
-            void this.navigate(this.currentPage === 'help' ? 'main' : MENU_PAGES.award.buttons[0].target)
+            void this.navigate(this.currentPage === 'help' ? 'main' : this.awardStart)
             return
         }
         // An open dialog takes its own keys (UIDialog.handleKey above).

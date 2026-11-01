@@ -1,4 +1,4 @@
-import { readGameplaySource } from '../../tools/mod/content'
+import { readGameplaySource, readPresentationSource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
@@ -70,4 +70,9 @@ test('Gameplay levels validate all 1-1 references, active rows, and waves', () =
     assert.throws(invalid(level => { level.zombiePool = [] }), /one-point zombie/)
     assert.throws(invalid(level => { level.graveZombies = [{ id: 'pvz:no_such', weight: 100 }] }), /unknown ID/, 'a weighted grave zombie is still looked up')
     assert.doesNotThrow(invalid(level => { level.award.id = 'pvz:not-defined-yet' }))
+})
+
+test('every base gameplay level has a level presentation', () => {
+    const presentation = readPresentationSource().levels
+    for (const id of Object.keys(source('levels').levels)) assert.ok(presentation[id], `${id} has no presentation level`)
 })

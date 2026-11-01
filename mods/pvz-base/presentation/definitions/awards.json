@@ -6,6 +6,13 @@
     "y": -20,
     "pageY": 137
   },
+  "pvz:almanac": {
+    "sprite": "pvz:almanac",
+    "scale": 1,
+    "x": 0,
+    "y": 0,
+    "pageY": 160
+  },
   "pvz:zombie-note-1": {
     "sprite": "pvz:zombienotesmall",
     "scale": 1,

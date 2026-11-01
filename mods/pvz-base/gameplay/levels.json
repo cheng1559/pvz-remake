@@ -293,6 +293,7 @@
   },
   "pvz:adventure-2-3": {
     "adventureIndex": 13,
+    "nextLevel": "pvz:adventure-2-4",
     "board": "pvz:night",
     "lawnMower": "pvz:standard",
     "activeRows": [0, 1, 2, 3, 4],
@@ -304,5 +305,20 @@
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:screendoor"],
     "waves": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:screendoor", "waves": [6, 10]}]},
     "award": {"kind": "seed", "id": "pvz:gravebuster"}
+  },
+  "pvz:adventure-2-4": {
+    "adventureIndex": 14,
+    "board": "pvz:night",
+    "lawnMower": "pvz:standard",
+    "activeRows": [0, 1, 2, 3, 4],
+    "startingSun": 50,
+    "firstWaveTicks": 1800,
+    "graves": [{"column": 5, "count": 1}, {"column": 6, "count": 1}, {"column": 7, "count": 2}, {"column": 8, "count": 3}],
+    "graveZombies": ["pvz:normal", "pvz:conehead"],
+    "tutorial": "pvz:adventure-2-4",
+    "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:pole_vaulter", "pvz:screendoor"],
+    "waves": {"kind": "pvz:adventure", "count": 20},
+    "award": {"kind": "unlock", "id": "pvz:almanac", "titleKey": "FOUND_SUBURBAN_ALMANAC", "nameKey": "SUBURBAN_ALMANAC", "descriptionKey": "SUBURBAN_ALMANAC_DESCRIPTION", "width": 80, "height": 80,
+      "opens": {"page": "almanac", "buttonKey": "VIEW_ALMANAC_BUTTON"}}
   }
 }

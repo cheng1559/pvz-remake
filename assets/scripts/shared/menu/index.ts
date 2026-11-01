@@ -66,7 +66,10 @@ export interface AlmanacPlantDefinition {
     ground: 'day' | 'night' | 'pool' | 'nightpool' | 'roof',
 }
 export interface AlmanacZombieDefinition { id: number, key: string, iceGround?: boolean }
-export interface AlmanacView { plants: AlmanacPlantDefinition[], zombies: AlmanacZombieDefinition[] }
+/** `shown` is AlmanacDialog::ZombieIsShown and `described` ZombieHasDescription for the current player. */
+export interface AlmanacZombieView extends AlmanacZombieDefinition { shown: boolean, described: boolean }
+/** The plants are only the ones the current player has (LawnApp::HasSeedType); every zombie keeps its window. */
+export interface AlmanacView { plants: AlmanacPlantDefinition[], zombies: AlmanacZombieView[] }
 export interface AchievementView {
     completed: number
     total: number
@@ -76,10 +79,12 @@ interface AwardDetails {
     nextLevelId: string | null
     showMainMenu: boolean
     titleKey: string
+    /** The award page button opens this page first, and closing it continues to the next level. */
+    opens?: { page: 'almanac', buttonKey: string }
 }
 export type AwardView = AwardDetails & (
     { kind: 'seed'; seed: number; cost: number; name: string; nameKey: string; descriptionKey: string }
-    | { kind: 'tool'; id: string; seed?: never; cost?: never; name?: never; nameKey: string; descriptionKey: string }
+    | { kind: 'tool' | 'unlock'; id: string; seed?: never; cost?: never; name?: never; nameKey: string; descriptionKey: string }
     | { kind: 'note'; id: string; seed?: never; cost?: never; name?: never }
 )
 

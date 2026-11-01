@@ -6,6 +6,7 @@ import test from 'node:test'
 import { MenuApi } from '@/client/api/MenuApi'
 import { createLocalMenuTransport } from '@/app/LocalMenuApi'
 import { createProfileStore } from '@/server/menu/profileStore'
+import { createAlmanacCatalog } from '@/server/menu/almanacCatalog'
 import { createStoreCatalog } from '@/server/menu/storeCatalog'
 import { SFX_VOLUME_SCALE, type MenuStorage } from '@/shared/menu'
 import type { GameplayLevels, LevelDefinition } from '@/shared/content/gameplay'
@@ -21,7 +22,7 @@ function fixture(getLevel?: () => LevelDefinition | null, canCompleteLevel?: () 
     }
     const profiles = createProfileStore(storage)
     const catalog = createStoreCatalog(readGameplaySource('store'))
-    const api = new MenuApi(createLocalMenuTransport(storage, getLevel, canCompleteLevel, catalog))
+    const api = new MenuApi(createLocalMenuTransport(storage, getLevel, canCompleteLevel, catalog, createAlmanacCatalog(readGameplaySource('almanac'))))
     return { data, storage, profiles, api }
 }
 
@@ -139,9 +140,36 @@ test('settings, challenge progress and almanac data are supplied by the backend 
     assert.equal(challenges.total, 20)
     assert.equal(challenges.items[0].completed, true)
     const almanac = await api.getAlmanac()
-    assert.equal(almanac.plants.length, 49)
+    assert.deepEqual(almanac.plants.map(plant => plant.key), ['PEASHOOTER'], 'a new player has only the peashooter')
     almanac.plants[0].cost = -100
     assert.equal((await api.getAlmanac()).plants[0].cost, 100)
+})
+
+test('the almanac shows the plants the player has and the zombies met so far', async () => {
+    const { api, profiles } = fixture()
+    const profile = profiles.createProfile('Alice')!
+    const almanac = async (changes: { adventureLevel?: number, finishedAdventure?: number, purchases?: number[] }) => {
+        profiles.saveProfile({ ...profile, ...changes })
+        const view = await api.getAlmanac()
+        const zombie = (key: string) => view.zombies.find(zombie => zombie.key === key)!
+        return { plants: view.plants.map(plant => plant.id), zombie: (key: string) => [zombie(key).shown, zombie(key).described] }
+    }
+    // After 2-4 the player has the plants through the Grave Buster and has met every zombie up to the screen door.
+    const level15 = await almanac({ adventureLevel: 15 })
+    assert.deepEqual(level15.plants, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+    assert.deepEqual(level15.zombie('SCREEN_DOOR_ZOMBIE'), [true, true])
+    assert.deepEqual(level15.zombie('FOOTBALL_ZOMBIE'), [false, false])
+    // A zombie shows on its debut level but is described only after it; spawned-only zombies wait for that too.
+    assert.deepEqual((await almanac({ adventureLevel: 16 })).zombie('FOOTBALL_ZOMBIE'), [true, false])
+    const level18 = await almanac({ adventureLevel: 18 })
+    assert.deepEqual([level18.zombie('DANCING_ZOMBIE'), level18.zombie('BACKUP_DANCER')], [[true, false], [false, false]])
+    // Store plants follow their purchases; the Yeti only comes once it can spawn.
+    const purchases = [...profile.purchases]; purchases[8] = 1
+    const finished = await almanac({ adventureLevel: 1, finishedAdventure: 1, purchases })
+    assert.equal(finished.plants.length, 41)
+    assert.ok(finished.plants.includes(48) && !finished.plants.includes(40))
+    assert.deepEqual([finished.zombie('BOSS'), finished.zombie('ZOMBIE_YETI')], [[true, true], [false, false]])
+    assert.deepEqual((await almanac({ adventureLevel: 1, finishedAdventure: 2 })).zombie('ZOMBIE_YETI'), [true, true])
 })
 
 test('achievement entries preserve saved flag/icon order and expose only the active user’s unlocks', async () => {
@@ -189,6 +217,12 @@ test('award API resolves the loaded level reward and packet cost instead of choo
         nextLevelId: 'pvz:adventure-1-2', showMainMenu: false,
         seed: 22, cost: 175, name: 'Torchwood', nameKey: 'TORCHWOOD', descriptionKey: 'TORCHWOOD_TOOLTIP',
     })
+    level = levels.levels['pvz:adventure-2-4']
+    assert.deepEqual(await api.getAward(), {
+        kind: 'unlock', id: 'pvz:almanac', nextLevelId: null, showMainMenu: true,
+        titleKey: 'FOUND_SUBURBAN_ALMANAC', nameKey: 'SUBURBAN_ALMANAC', descriptionKey: 'SUBURBAN_ALMANAC_DESCRIPTION',
+        opens: { page: 'almanac', buttonKey: 'VIEW_ALMANAC_BUTTON' },
+    })
     level = null
     await assert.rejects(api.getAward(), /loaded level/)
 })
@@ -212,12 +246,14 @@ test('winning advances the current profile once and exposes the next installed l
     assert.equal(award.seed, 2)
     assert.equal(award.nameKey, 'CHERRY_BOMB')
     assert.equal(award.nextLevelId, 'pvz:adventure-1-3')
+    assert.equal(award.showMainMenu, false, 'AwardScreen hides the menu button up to player level 3')
     assert.equal((await api.getCurrentUser())!.adventureLevel, 3)
     level = levels.levels['pvz:adventure-1-3']
     const nut = await api.completeLevel()
     assert.equal(nut.kind, 'seed')
     assert.equal(nut.seed, 3)
     assert.equal(nut.nextLevelId, 'pvz:adventure-1-4')
+    assert.equal(nut.showMainMenu, true, 'after 1-3 the player is on level 4, so the menu button shows')
     level = levels.levels['pvz:adventure-1-4']
     const shovel = await api.completeLevel()
     assert.deepEqual(shovel, { kind: 'tool', id: 'pvz:shovel', titleKey: 'GOT_SHOVEL', nameKey: 'SHOVEL',
@@ -233,10 +269,11 @@ test('winning advances the current profile once and exposes the next installed l
         assert.equal((await reconnected.getCurrentUser())!.adventureLevel, index + 1)
         assert.deepEqual(await reconnected.getAdventure(), { levelId: index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1' })
     }
-    for (const [index, seed, next] of [[1, 9, 'pvz:adventure-2-2'], [2, 10, 'pvz:adventure-2-3'], [3, 11, null]] as const) {
+    for (const [index, kind, seed, next] of [[1, 'seed', 9, 'pvz:adventure-2-2'], [2, 'seed', 10, 'pvz:adventure-2-3'],
+        [3, 'seed', 11, 'pvz:adventure-2-4'], [4, 'unlock', undefined, null]] as const) {
         level = levels.levels[`pvz:adventure-2-${index}`]
         const award = await api.completeLevel()
-        assert.deepEqual([award.kind, award.seed, award.nextLevelId], ['seed', seed, next])
+        assert.deepEqual([award.kind, award.seed, award.nextLevelId], [kind, seed, next])
         assert.equal((await api.getCurrentUser())!.adventureLevel, 11 + index)
     }
 })

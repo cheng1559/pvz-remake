@@ -1,9 +1,8 @@
-import { readBaseContent } from '../../tools/mod/content'
+import { readBaseContent, readGameplaySource } from '../../tools/mod/content'
 import { presentationFixture } from '../client/presentationFixture'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
-import { ALMANAC_PLANTS, ALMANAC_ZOMBIES } from '@/server/menu/almanacCatalog'
 import { parseReanim, sampleReanimTrack } from '@/shared/content/reanim'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
@@ -28,7 +27,8 @@ const animation = (part: Part) => parseReanim(json(`${bundle}/${resources.reanim
 
 test('every almanac entry has renderable animation clips, valid attachments and installed sprites', () => {
     const sprites = new Set<string>()
-    for (const [kind, entries] of [['plants', ALMANAC_PLANTS], ['zombies', ALMANAC_ZOMBIES]] as const) {
+    const almanac = readGameplaySource('almanac') as Record<'plants' | 'zombies', Array<{ id: number, key: string }>>
+    for (const [kind, entries] of [['plants', almanac.plants], ['zombies', almanac.zombies]] as const) {
         assert.equal(catalog[kind].length, entries.length)
         for (const entry of entries) {
             const parts = catalog[kind][entry.id].parts

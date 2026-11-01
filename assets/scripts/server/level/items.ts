@@ -49,6 +49,8 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                     } else {
                         position.y = item.groundY
                         position.x = Math.round(position.x)
+                        // The client adds the award's pickup arrow or seed packet glow once it has landed.
+                        item.landed = true
                     }
                     continue
                 }

@@ -7,8 +7,8 @@ import type { UI } from '@/client/ui/UI'
 import { PLANT_SCROLLBAR_COLORS } from '@/client/ui/UIScroll'
 import { uiNode } from '@/client/view/uiNode'
 import { menuApi } from '@/client/api/MenuApi'
-import type { AlmanacPlantDefinition, AlmanacZombieDefinition } from '@/shared/menu'
-import { drawAlmanacText } from './AlmanacText'
+import type { AlmanacPlantDefinition, AlmanacZombieView } from '@/shared/menu'
+import { almanacTextHeight, drawAlmanacText } from './AlmanacText'
 import type { MenuAction } from './MenuPages'
 import { AlmanacEntityView } from './AlmanacEntityView'
 import { AlmanacZombiePortrait } from './AlmanacZombiePortrait'
@@ -28,7 +28,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
         const { plants, zombies } = await menuApi.getAlmanac()
         const names = page === 'plants'
             ? ['almanac_imitater', 'particles/seedpacketflash', 'almanac_plantcard', 'almanac_groundday', 'almanac_groundnight', 'almanac_groundpool', 'almanac_groundnightpool', 'almanac_groundroof']
-            : ['almanac_zombiewindow', 'almanac_zombiewindow2', 'almanac_zombiecard', 'almanac_groundday', 'almanac_groundice']
+            : ['almanac_zombiewindow', 'almanac_zombiewindow2', 'almanac_zombieblank', 'almanac_zombiecard', 'almanac_groundday', 'almanac_groundice']
         const frames = await Promise.all(names.map(async name => {
             const frame = await modResources.asset(name, SpriteFrame)
             if (!frame) throw new Error(`Missing almanac image: ${name}`)
@@ -38,7 +38,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
         const sprites = Object.fromEntries(frames)
         let details: Node | null = null
         const plantPosition = (id: number) => ({ x: id === 48 ? 20 : id % 8 * 52 + 26, y: id === 48 ? 23 : Math.floor(id / 8) * 78 + 92 })
-        const select = (entry: AlmanacPlantDefinition | AlmanacZombieDefinition) => {
+        const select = (entry: AlmanacPlantDefinition | AlmanacZombieView) => {
             if (details) { details.active = false; details.destroy() }
             details = uiNode({ name: `${entry.key}Details`, parent, anchor: { x: 0, y: 1 } }).node
             if (page === 'plants') {
@@ -57,16 +57,22 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     drawAlmanacText(details, ui, `{KEYWORD}${ui.text('WAIT_TIME')}: {STAT}${wait}`, { x: 600, y: 520, width: 139, align: 'right' })
                 }
             } else {
-                const zombie = entry as AlmanacZombieDefinition
+                const zombie = entry as AlmanacZombieView
                 ui.image(details, sprites[zombie.iceGround ? 'almanac_groundice' : 'almanac_groundday'], { x: 518, y: 110 })
                 AlmanacEntityView.create(details, 'zombies', zombie.id, 559, 175, { x: 517, y: 124, width: 197, height: 187 })
                 ui.image(details, sprites.almanac_zombiecard, { x: 455, y: 78 })
                 ui.label(details, { text: ui.text(zombie.key), font: 'button', color: new Color(190, 255, 235), x: 613, y: 362, baseline: true, align: 'center' })
-                const header = drawAlmanacText(details, ui, ui.text(`${zombie.key}_DESCRIPTION_HEADER`), { x: 485, y: 377, width: 258 })
-                drawAlmanacText(details, ui, ui.text(`${zombie.key}_DESCRIPTION`), { x: 485, y: 377 + header, width: 257, height: Math.max(20, 160 - header) })
+                if (zombie.described) {
+                    const header = drawAlmanacText(details, ui, ui.text(`${zombie.key}_DESCRIPTION_HEADER`), { x: 485, y: 377, width: 258 })
+                    drawAlmanacText(details, ui, ui.text(`${zombie.key}_DESCRIPTION`), { x: 485, y: 377 + header, width: 257, height: Math.max(20, 160 - header) })
+                } else {
+                    // AlmanacDialog::DrawZombies: [NOT_ENCOUNTERED_YET] in the middle of the 258x170 description box.
+                    const text = ui.text('NOT_ENCOUNTERED_YET')
+                    drawAlmanacText(details, ui, text, { x: 484, y: 377 + (170 - almanacTextHeight(ui, text, 258)) / 2, width: 258, align: 'center' })
+                }
             }
         }
-        const choose = (entry: AlmanacPlantDefinition | AlmanacZombieDefinition) => {
+        const choose = (entry: AlmanacPlantDefinition | AlmanacZombieView) => {
             const key = page === 'plants' ? 'plant' : 'zombie'
             if (selection[key] === entry.id) return
             selection[key] = entry.id
@@ -106,7 +112,9 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
         } else {
             for (const zombie of zombies) {
                 const index = zombie.id === 25 ? 27 : zombie.id
-                const button = ui.button(parent, { images: { normal: sprites.almanac_zombiewindow }, x: index % 5 * 85 + 22, y: Math.floor(index / 5) * 80 + 86, width: 76, height: 76, pressOffset: [0, 0], pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), onClick: () => choose(zombie) })
+                const x = index % 5 * 85 + 22, y = Math.floor(index / 5) * 80 + 86
+                if (!zombie.shown) { ui.image(parent, sprites.almanac_zombieblank, { x, y }); continue }
+                const button = ui.button(parent, { images: { normal: sprites.almanac_zombiewindow }, x, y, width: 76, height: 76, pressOffset: [0, 0], pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), onClick: () => choose(zombie) })
                 button.hapticsEnabled = false
                 button.node.name = zombie.key
                 const underlay = ui.additiveImage(button.node, sprites.almanac_zombiewindow, {}, 48)
@@ -125,7 +133,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                 button.onStateChange = state => { update(state); underlay.node.active = glow.node.active = state === 'hover' || state === 'pressed' }
                 button.onStateChange(button.isHovering ? 'hover' : 'normal')
             }
-            select(zombies.find(zombie => zombie.id === selection.zombie) ?? zombies[0])
+            select(zombies.find(zombie => zombie.shown && zombie.id === selection.zombie) ?? zombies[0])
         }
         // Footer buttons keep their margins from the UI area's edges.
         ui.button(uiAreaEdge(parent, 'left'), { skin: 'almanacIndex', text: ui.text('ALMANAC_INDEX'), x: 32, y: 567, rightClickPressesVisual: true, onClick: () => navigate('almanac') })

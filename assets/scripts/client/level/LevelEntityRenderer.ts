@@ -250,6 +250,7 @@ export class LevelEntityRenderer {
                 award ? -(item.y + size.height / 2) : -(item.y + 30),
             )
             if (!award) node.setScale(item.scale, item.scale, 1)
+            else this.syncAwardEffect(node, item, this.content.levels.levels[snapshot.levelId].award.kind)
             uiNode({ node, opacity: item.alpha })
             this.itemViews.get(item.entityId)?.sync(item)
         }
@@ -472,12 +473,25 @@ export class LevelEntityRenderer {
         }
     }
 
+    /**
+     * Coin::Update adds the bouncy arrow once an award lands (CoinInitialize only sets mNeedsBouncyArrow):
+     * the seed packet glow for seed packets (PARTICLE_SEED_PACKET), the pickup arrow for every other award.
+     * Collecting removes it (LevelEndPresenter); a restored game brings back its saved one.
+     */
+    private syncAwardEffect(node: Node, item: ItemSnapshot, kind: string): void {
+        const back = node.getChildByName('AwardBackEffects')
+        if (!back || !item.landed || item.state !== 'available') return
+        const id = kind === 'seed' ? 'pvz:seedpacket' : 'pvz:awardpickuparrow'
+        if (back.children.some(child => child.getComponent(ParticlePlayer)?.id === id)) return
+        ParticlePlayer.spawn({ parent: back, id, x: 0, y: 60, z: -1 })
+    }
+
     private async createAward(node: Node, snapshot: WorldSnapshot): Promise<void> {
         const award = this.content.levels.levels[snapshot.levelId].award
         const size = levelAwardSize(award)
         uiNode({ node, size, anchor: { x: 0.5, y: 0.5 } })
-        const backEffects = uiNode({ name: 'AwardBackEffects', parent: node }).node
-        ParticlePlayer.spawn({ parent: backEffects, id: award.kind === 'note' ? "pvz:awardpickuparrow" : "pvz:seedpacket", x: 0, y: 60, z: -1 })
+        // The pickup arrow or seed packet glow is added here once the award lands (syncAwardEffect).
+        uiNode({ name: 'AwardBackEffects', parent: node })
         if (award.kind !== 'seed') {
             const visual = this.content.presentation.awards?.[award.id]
             if (!visual) throw new Error(`Award presentation is not installed: ${award.id}`)

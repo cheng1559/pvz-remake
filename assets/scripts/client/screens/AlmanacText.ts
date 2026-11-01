@@ -63,8 +63,15 @@ export function almanacLines(text: string, measure: (text: string) => number, wi
     return wrapped
 }
 
+export function almanacTextHeight(ui: UI, text: string, width: number): number {
+    const font = ui.assets.fonts.small.config
+    const lineSpacing = FontMetricsUtil.getMetrics(font).lineSpacing
+    return almanacLines(text, value => FontMetricsUtil.measureTextWidth(font, value), width)
+        .reduce((sum, line) => sum + lineSpacing + line.spacing, 0)
+}
+
 export function drawAlmanacText(parent: Node, ui: UI, text: string, box: {
-    x: number, y: number, width: number, height?: number, align?: 'left' | 'right', scrollColors?: ScrollbarColors,
+    x: number, y: number, width: number, height?: number, align?: 'left' | 'center' | 'right', scrollColors?: ScrollbarColors,
 }): number {
     const font = ui.assets.fonts.small.config
     const metrics = FontMetricsUtil.getMetrics(font)
@@ -92,7 +99,8 @@ export function drawAlmanacText(parent: Node, ui: UI, text: string, box: {
     }).node
     let y = 0
     for (const line of lines) {
-        let x = box.align === 'right' ? width - line.runs.reduce((sum, run) => sum + measure(run.text), 0) : 0
+        const free = width - line.runs.reduce((sum, run) => sum + measure(run.text), 0)
+        let x = box.align === 'right' ? free : box.align === 'center' ? Math.round(free / 2) : 0
         for (const run of line.runs) {
             ui.label(content, { text: run.text, font: 'small', color: run.color, x, y })
             x += measure(run.text)

@@ -1,6 +1,6 @@
 import { MAX_MONEY, type AwardView, type MenuRequest, type MenuResponse, type MenuStorage, type PurseView, type StoreItemView, type StoreView, type UserResult, type UserView } from '@/shared/menu'
 import type { LevelDefinition } from '@/shared/content/gameplay'
-import { ALMANAC_PLANTS, ALMANAC_ZOMBIES } from './almanacCatalog'
+import type { AlmanacCatalog } from './almanacCatalog'
 import { ACHIEVEMENT_DEFINITIONS } from './achievementCatalog'
 import { CHALLENGES, challengeCompleted, hasAllTrophies } from './challengeCatalog'
 import { createGameSettingsStore } from './gameSettingsStore'
@@ -41,6 +41,7 @@ export class MenuService {
         private readonly getLevel: () => LevelDefinition | null = () => null,
         private readonly canCompleteLevel: () => boolean = () => false,
         private readonly catalog?: StoreCatalog,
+        private readonly almanac?: AlmanacCatalog,
     ) {
         this.profiles = createProfileStore(storage)
         this.settings = createGameSettingsStore(storage)
@@ -84,7 +85,7 @@ export class MenuService {
                 }))
                 return { items, total: items.filter(item => !item.endless).length, completed: items.filter(item => item.completed).length }
             }
-            case 'getAlmanac': return { plants: ALMANAC_PLANTS, zombies: ALMANAC_ZOMBIES }
+            case 'getAlmanac': return this.almanacCatalog.view(this.profiles.getCurrentProfile())
             case 'getAchievements': {
                 const earned = this.profiles.getCurrentProfile()?.earnedAchievements ?? []
                 const items = ACHIEVEMENT_DEFINITIONS.map(item => ({ ...item, earned: earned[item.id] === true }))
@@ -133,21 +134,23 @@ export class MenuService {
     }
 
     private award(): AwardView {
+        // AwardScreen hides the main menu button while the player's level, already advanced past this one, is at most 3.
         const level = this.getLevel()
         if (!level) throw new Error('Award requires a loaded level')
         if (level.award.kind === 'note') return {
             kind: 'note', id: level.award.id, titleKey: level.award.titleKey,
             nextLevelId: level.nextLevel ?? null, showMainMenu: true,
         }
-        if (level.award.kind === 'tool') return {
-            kind: 'tool', id: level.award.id, nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex > 3,
+        if (level.award.kind === 'tool' || level.award.kind === 'unlock') return {
+            kind: level.award.kind, id: level.award.id, nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex >= 3,
             titleKey: level.award.titleKey, nameKey: level.award.nameKey, descriptionKey: level.award.descriptionKey,
+            ...level.award.kind === 'unlock' && level.award.opens && { opens: { ...level.award.opens } },
         }
-        const plant = ALMANAC_PLANTS.find(plant => `pvz:${plant.key.replace(/_/g, '').toLowerCase()}` === level.award.id)
+        const plant = this.almanacCatalog.plants.find(plant => `pvz:${plant.key.replace(/_/g, '').toLowerCase()}` === level.award.id)
         if (!plant) throw new Error(`Unknown plant award: ${level.award.id}`)
         return {
             kind: 'seed', titleKey: 'NEW_PLANT',
-            nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex > 3,
+            nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex >= 3,
             seed: plant.id, cost: plant.cost, name: plant.name,
             nameKey: plant.key, descriptionKey: `${plant.key}_TOOLTIP`,
         }
@@ -221,6 +224,11 @@ export class MenuService {
             ok: true as const, store: this.store(),
             ...purchaseEffect(item, profile),
         }
+    }
+
+    private get almanacCatalog(): AlmanacCatalog {
+        if (!this.almanac) throw new Error('Almanac catalog is not loaded')
+        return this.almanac
     }
 
     private get storeCatalog(): StoreCatalog {

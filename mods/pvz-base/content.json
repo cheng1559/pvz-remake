@@ -50943,6 +50943,7 @@
       "pvz:strings": "assets/json/strings.json",
       "pvz:presentation/definitions": "assets/presentation.json",
       "pvz:gameplay/store": "gameplay/store.json",
+      "pvz:gameplay/almanac": "gameplay/almanac.json",
       "pvz:animations/zombie_surprise": "assets/json/animations/zombie_surprise.json",
       "pvz:animations/z": "assets/json/animations/z.json",
       "pvz:animations/zombie_boss": "assets/json/animations/zombie_boss.json",

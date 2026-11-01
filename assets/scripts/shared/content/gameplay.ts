@@ -222,8 +222,13 @@ export interface LevelDefinition {
     bowling?: { lineColumn: number }
     nextLevel?: string
     tutorial: string
+    /**
+     * `tool` also becomes usable in later levels (the shovel); `unlock` is only collected and shown (the almanac), and
+     * its award page button can open the page it unlocks before the next level (AwardScreen::StartButtonPressed).
+     */
     award: { kind: 'seed'; id: string }
         | { kind: 'tool'; id: string; titleKey: string; nameKey: string; descriptionKey: string; width: number; height: number }
+        | { kind: 'unlock'; id: string; titleKey: string; nameKey: string; descriptionKey: string; width: number; height: number; opens?: AwardOpens }
         | { kind: 'note'; id: string; titleKey: string; width: number; height: number }
 }
 
@@ -288,6 +293,8 @@ export function parseGameplayLevels(
  * The tools a game has: the ones levels award (the 1-4 shovel), from the level after on a first adventure and on
  * every level of a replay (CutScene::ShowShovel).
  */
+export interface AwardOpens { page: 'almanac'; buttonKey: string }
+
 export function levelTools(levels: GameplayLevels, level: LevelDefinition, firstAdventure: boolean): string[] {
     const awards = Object.values(levels.levels).flatMap(entry => entry.award.kind === 'tool' ? [entry] : [])
         .sort((a, b) => a.adventureIndex - b.adventureIndex)
@@ -803,17 +810,24 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     if (award.kind === 'seed') {
         exactObject(award, ['kind', 'id'], `${name}.award`)
         parsedAward = { kind: 'seed', id: qualifiedId(award.id, `${name}.award.id`) }
-    } else if (award.kind === 'tool') {
-        exactObject(award, ['kind', 'id', 'titleKey', 'nameKey', 'descriptionKey', 'width', 'height'], `${name}.award`)
-        parsedAward = { kind: 'tool', id: qualifiedId(award.id, `${name}.award.id`),
+    } else if (award.kind === 'tool' || award.kind === 'unlock') {
+        exactObject(award, ['kind', 'id', 'titleKey', 'nameKey', 'descriptionKey', 'width', 'height'], `${name}.award`,
+            award.kind === 'unlock' ? ['opens'] : [])
+        const fields = { id: qualifiedId(award.id, `${name}.award.id`),
             titleKey: string(award.titleKey, `${name}.award.titleKey`), nameKey: string(award.nameKey, `${name}.award.nameKey`),
             descriptionKey: string(award.descriptionKey, `${name}.award.descriptionKey`),
             width: positiveInteger(award.width, `${name}.award.width`), height: positiveInteger(award.height, `${name}.award.height`) }
+        if (award.kind === 'tool' || award.opens === undefined) parsedAward = { kind: award.kind, ...fields }
+        else {
+            const opens = exactObject(award.opens, ['page', 'buttonKey'], `${name}.award.opens`)
+            if (opens.page !== 'almanac') throw new Error(`${name}.award.opens.page must be almanac`)
+            parsedAward = { kind: 'unlock', ...fields, opens: { page: opens.page, buttonKey: string(opens.buttonKey, `${name}.award.opens.buttonKey`) } }
+        }
     } else if (award.kind === 'note') {
         exactObject(award, ['kind', 'id', 'titleKey', 'width', 'height'], `${name}.award`)
         parsedAward = { kind: 'note', id: qualifiedId(award.id, `${name}.award.id`), titleKey: string(award.titleKey, `${name}.award.titleKey`),
             width: positiveInteger(award.width, `${name}.award.width`), height: positiveInteger(award.height, `${name}.award.height`) }
-    } else throw new Error(`${name}.award.kind must be seed, tool or note`)
+    } else throw new Error(`${name}.award.kind must be seed, tool, unlock or note`)
 
     return {
         adventureIndex: positiveInteger(source.adventureIndex, `${name}.adventureIndex`),

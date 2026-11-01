@@ -29,7 +29,8 @@ export function tryDropLevelAward(world: World, definitions: GameplayDefinitions
         typeId: level.definition.award.id, value: 1, state: 'available',
         velocityX: -0.5 + random.nextFloat(), velocityY: -3 - random.nextFloat() * 2,
         width: level.definition.award.kind === 'seed' ? 50 : level.definition.award.width,
-        groundY: Math.max(80, Math.min(521, y + 45 + random.integer(0, 19))),
+        // Coin::CoinInitialize (COIN_MOTION_COIN): level awards land 30 higher than the clamped coin ground.
+        groundY: Math.max(80, Math.min(521, y + 45 + random.integer(0, 19))) - 30,
         disappearTicks: 0, fadeTicks: 0, scale: 1, alpha: 255,
     })
     emitServerEvent(world.resources.get(EventQueueResource), 'levelAwardDropped', { entityId: entity, typeId: level.definition.award.id })
