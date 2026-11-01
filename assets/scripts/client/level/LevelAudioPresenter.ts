@@ -144,9 +144,6 @@ export class LevelAudioPresenter {
             case 'mowerActivated': void SoundSystem.playFoley(SoundEffect.Lawnmower); break
             case 'zombieMowered': void SoundSystem.playFoley(SoundEffect.Splat); break
             case 'plantEaten': void SoundSystem.play(SoundEffect.Gulp); break
-            case 'zombieHelmDropped':
-                if (event.data.helm === 'newspaper' && event.data.silent !== true) this.sounds([{ id: 'newspaper_rip', foley: true, pitchRange: -2 }])
-                break
             case 'zombieEnraged': if (event.data.roar === true) this.sounds([{ id: Math.random() < 1 / 3 ? 'newspaper_rarrgh' : 'newspaper_rarrgh2', foley: true, pitchRange: -2 }]); break
             case 'zombieRoseFromGrave': this.sounds([{ id: 'gravestone_rumble', foley: true, pitchRange: 10 }]); break
             case 'zombieDying': void SoundSystem.playFoley(SoundEffect.ZombieFalling1, 10); break

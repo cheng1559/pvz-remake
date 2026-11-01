@@ -371,7 +371,9 @@ export class ZombieView implements ZombieViewInstance {
 
     private applyParts(zombie: ZombieSnapshot): void {
         const helmStage = this.helmStage(zombie)
-        const signature = `${zombie.hasHead ? 1 : 0}|${zombie.hasTongue ? 1 : 0}|${zombie.hasArm ? 1 : 0}|${this.holdingFlag ? 1 : 0}|${helmStage}`
+        // Zombie::ShowDoorArms: an eating zombie lowers the shield arms; a dropped shield takes them away for good.
+        const holdingShield = helmStage >= 0 && zombie.state !== 'eating'
+        const signature = `${zombie.hasHead ? 1 : 0}|${zombie.hasTongue ? 1 : 0}|${zombie.hasArm ? 1 : 0}|${this.holdingFlag ? 1 : 0}|${helmStage}|${holdingShield ? 1 : 0}`
         if (!this.player || signature === this.parts) return
         this.parts = signature
         const presentation = this.presentation, parts = presentation.parts
@@ -386,7 +388,12 @@ export class ZombieView implements ZombieViewInstance {
         this.player.setTracksVisible(parts.tongue, zombie.hasHead && zombie.hasTongue)
         // Zombie::DropPole: losing the head also drops the pole and the hand that holds it.
         this.player.setTracksVisible(parts.held ?? [], zombie.hasHead)
-        this.player.setTracksVisible(parts.arm, zombie.hasArm)
+        if (parts.shieldArms) {
+            this.player.setTracksVisible(parts.shieldArms.holding, holdingShield)
+            this.player.setTracksVisible(parts.shieldArms.free, !holdingShield)
+        }
+        // A lost arm stays hidden whichever arms are up (ShowDoorArms re-hides the lower arm and hand).
+        this.player.setTracksVisible(parts.arm, zombie.hasArm && !(parts.shieldArms && holdingShield))
         this.player.setTrackSpriteOverride(parts.upperArm, zombie.hasArm ? null
             : presentation.damagedArmSprite ? this.sprites.helms[presentation.damagedArmSprite] : this.sprites[presentation.damagedArm])
         const enraged = presentation.enragedHead

@@ -16,6 +16,8 @@ export interface GameplayDefinitions {
     projectiles: Record<string, ProjectileDefinition>
     items: Record<string, ItemDefinition>
     lawnMowers: Record<string, LawnMowerDefinition>
+    /** Board::GetNumSeedsInBank: `baseSlots` plus one per seed-slot upgrade, at most `maxSlots` (SEEDBANK_MAX). */
+    seedBank: { baseSlots: number; maxSlots: number }
 }
 
 export interface GameplayLevels {
@@ -39,8 +41,6 @@ export interface SeedDefinition {
     sunCost: number
     cooldownTicks: number
     initialCooldownTicks?: number
-    /** First adventure level where this seed is available; omitted for unrestricted content. */
-    unlockAdventureIndex?: number
     /** `grave`: only on a grave, like the Grave Buster (PLANTING_ONLY_ON_GRAVES). */
     placement: 'ground' | 'grave'
 }
@@ -116,8 +116,8 @@ export interface ZombieDefinition {
     attack: Rect
     bite: { damage: number; cadenceTicks: number }
     /** Absorbs damage before the body; drops when depleted. A newspaper also keeps the arm on. */
-    /** A shield (the newspaper) absorbs hits without chill, keeps the arm on and flashes alone. */
-    helm?: { type: 'cone' | 'bucket' | 'newspaper'; health: number; shield?: boolean }
+    /** A shield (newspaper, screen door) absorbs hits without chill, keeps the arm on and flashes alone. */
+    helm?: { type: 'cone' | 'bucket' | 'newspaper' | 'door'; health: number; shield?: boolean }
     /** After losing the helm: stands still for pauseTicks, then walks at the new speed. */
     enrage?: { pauseTicks: number; speedPerTick: { min: number; max: number } }
     /** Explicit animation profile and variants; equipment does not imply animation support. */
@@ -125,6 +125,11 @@ export interface ZombieDefinition {
     tongueChance: number
     walk2Chance: number
     targetingInsets?: Record<string, number>
+    /** ZombieDefinition: mZombieValue, mPickWeight and mFirstAllowedWave, the defaults of a level's zombiePool entry. */
+    wave?: { points: number; weight: number; firstWave?: number }
+    /** Board::PickGraveRisingZombieType: rises with its wave weight from the graves of levels that allow it; levels
+     *  with their own graves name their zombies instead. */
+    graveRise?: boolean
     /** Runs at the first plant and vaults over it once. */
     vault?: {
         runSpeedPerTick: { min: number; max: number }
@@ -171,40 +176,36 @@ export interface LawnMowerDefinition {
     attack: Rect
 }
 
+/** `points` is the wave's whole budget: the listed zombies spend it first, the rest is picked from the zombie pool. */
+export interface LevelWave { zombies: string[]; flagWave?: boolean; points?: number }
+/** A wave rule registered under `kind` builds `count` waves; the other keys are its own settings. */
+export interface WaveRule { kind: string; count: number; settings: JsonObject }
+export function isWaveRule(waves: LevelDefinition['waves']): waves is WaveRule { return !Array.isArray(waves) }
+
 export interface LevelDefinition {
     adventureIndex: number
     persistent?: boolean
     board: string
     activeRows: number[]
     startingSun: number
-    seedPackets: string[]
+    /**
+     * A fixed bank. Without it and a conveyor, the bank follows the original: the available seeds fill it when they
+     * fit (the first adventure's first seven levels), and the seed chooser opens when there are more.
+     */
+    seedPackets?: string[]
     initialPlants?: Array<{ seedId: string; row: number; column: number }>
-    /** Enables the shared chooser and sets its carrying capacity; seedPackets is only for a fixed bank. */
-    seedBankSlots?: number
     lawnMower: string
-    /** Omitted at night: no sun falls from the sky. */
+    /** The sun that falls from the sky; omitted at night (Board::UpdateSunSpawning). */
     skySun?: string
     /** Board::AddGraveStones: per column, graves on random free rows. */
     graves?: Array<{ column: number; count: number }>
-    /** Board::PickGraveRisingZombieType: one per grave after the final wave, by weight. Required with graves. */
+    /** Board::PickGraveRisingZombieType: one per grave after the final wave, by weight. Omitted in the source, it comes
+     *  from the zombies' `graveRise`; a lawn with graves must end up with some. */
     graveZombies?: Array<{ id: string; weight: number }>
-    /** Crazy Dave's lines before the seed chooser, on the first adventure only. */
-    introDialog?: number[]
-    /**
-     * Board::CanDropLoot: zombies drop money on replays, and on the first adventure only with `firstAdventure`.
-     * `firstCoinAfterWave` and `savingsCap` are 2-1's first-adventure rules: a guaranteed first coin once that many
-     * waves have spawned, and no drop that would bring the money (with the mowers' coins) to the cap.
-     */
-    loot?: { firstAdventure?: boolean; firstCoinAfterWave?: number; savingsCap?: number }
-    /**
-     * SeedChooserScreen::OnStartButton on the first adventure: warn first when `seed` is not picked,
-     * and use `sunWarning` instead of SEED_CHOOSER_SUN_WARNING when no sun producer is.
-     */
-    chooserWarnings?: { seed?: { id: string; warning: string }; sunWarning?: string }
-    waves: Array<{ zombies: string[]; flagWave?: boolean; points?: number }>
+    /** The waves as listed, or a registered wave rule that builds them when the level starts. */
+    waves: LevelWave[] | WaveRule
     zombiePool?: Array<{ id: string; points: number; weight: number; firstWave?: number }>
     firstWaveTicks?: number
-    tools?: string[]
     conveyor?: {
         initialSeed?: string
         initialDelayTicks?: number
@@ -218,15 +219,9 @@ export interface LevelDefinition {
         removalGap: number
     }
     bowling?: { lineColumn: number }
-    shovelTutorial?: {
-        opening: number[]
-        repeat: number[]
-        afterDig: number[]
-        introPlants: Array<{ seedId: string; row: number; column: number }>
-    }
     nextLevel?: string
     tutorial: string
-    award: { kind: 'seed'; id: string; packetCost: number }
+    award: { kind: 'seed'; id: string }
         | { kind: 'tool'; id: string; titleKey: string; nameKey: string; descriptionKey: string; width: number; height: number }
         | { kind: 'note'; id: string; titleKey: string; width: number; height: number }
 }
@@ -237,8 +232,9 @@ interface Rect extends Point { width: number; height: number }
 export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): GameplayDefinitions {
     const source = exactObject(value, [
         'schemaVersion', 'tickSeconds', 'boards', 'seeds', 'plants', 'zombies',
-        'projectiles', 'items', 'lawnMowers', 'zombieGaits',
+        'projectiles', 'items', 'lawnMowers', 'zombieGaits', 'seedBank',
     ], 'gameplay definitions')
+    const seedBank = exactObject(source.seedBank, ['baseSlots', 'maxSlots'], 'gameplay definitions.seedBank')
     if (source.schemaVersion !== 2) throw new Error('gameplay definitions.schemaVersion must be 2')
 
     const definitions: GameplayDefinitions = {
@@ -253,7 +249,9 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
         projectiles: mapped(source.projectiles, 'projectiles', parseProjectile),
         items: mapped(source.items, 'items', parseItem),
         lawnMowers: mapped(source.lawnMowers, 'lawnMowers', parseLawnMower),
+        seedBank: { baseSlots: positiveInteger(seedBank.baseSlots, 'seedBank.baseSlots'), maxSlots: positiveInteger(seedBank.maxSlots, 'seedBank.maxSlots') },
     }
+    if (definitions.seedBank.baseSlots > definitions.seedBank.maxSlots) throw new Error('seedBank.baseSlots exceeds maxSlots')
 
     if (new Set(definitions.seedCatalog).size !== definitions.seedCatalog.length) throw new Error('seed catalog must not contain duplicates')
     for (const id of definitions.seedCatalog) reference(id, definitions.seeds, 'seed catalog')
@@ -278,10 +276,31 @@ export function parseGameplayLevels(
     const source = exactObject(value, ['schemaVersion', 'levels'], 'gameplay levels')
     if (source.schemaVersion !== 2) throw new Error('gameplay levels.schemaVersion must be 2')
     const levels = mapped(source.levels, 'levels', (entry, name) => parseLevel(entry, name, definitions))
+    const result: GameplayLevels = { schemaVersion: 2, levels }
     for (const [id, level] of Object.entries(levels)) {
         if (level.nextLevel) reference(level.nextLevel, levels, `levels.${id}.nextLevel`)
     }
-    return { schemaVersion: 2, levels }
+    return result
+}
+
+/**
+ * The tools a game has: the ones levels award (the 1-4 shovel), from the level after on a first adventure and on
+ * every level of a replay (CutScene::ShowShovel).
+ */
+export function levelTools(levels: GameplayLevels, level: LevelDefinition, firstAdventure: boolean): string[] {
+    const awards = Object.values(levels.levels).flatMap(entry => entry.award.kind === 'tool' ? [entry] : [])
+        .sort((a, b) => a.adventureIndex - b.adventureIndex)
+    return [...new Set(awards.filter(entry => !firstAdventure || entry.adventureIndex < level.adventureIndex).map(entry => entry.award.id))]
+}
+
+/**
+ * LawnApp::HasSeedType on a first adventure: the seeds before the level's award seed, that is, a seed a level awards
+ * is there from the level after, and a seed no level awards (the peashooter) from the start. Replays have them all.
+ */
+export function seedUnlocked(levels: GameplayLevels, seedId: string, level: LevelDefinition, firstAdventure: boolean): boolean {
+    if (!firstAdventure) return true
+    const awarded = Object.values(levels.levels).flatMap(entry => entry.award.kind === 'seed' && entry.award.id === seedId ? [entry.adventureIndex] : [])
+    return !awarded.length || Math.min(...awarded) < level.adventureIndex
 }
 
 function parseBoard(value: unknown, name: string): BoardDefinition {
@@ -305,14 +324,13 @@ function parseBoard(value: unknown, name: string): BoardDefinition {
 }
 
 function parseSeed(value: unknown, name: string): SeedDefinition {
-    const source = exactObject(value, ['plant', 'sunCost', 'cooldownTicks', 'placement'], name, ['initialCooldownTicks', 'unlockAdventureIndex'])
+    const source = exactObject(value, ['plant', 'sunCost', 'cooldownTicks', 'placement'], name, ['initialCooldownTicks'])
     if (source.placement !== 'ground' && source.placement !== 'grave') throw new Error(`${name}.placement must be ground or grave`)
     return {
         plant: qualifiedId(source.plant, `${name}.plant`),
         sunCost: nonNegativeInteger(source.sunCost, `${name}.sunCost`),
         cooldownTicks: nonNegativeInteger(source.cooldownTicks, `${name}.cooldownTicks`),
         ...(source.initialCooldownTicks === undefined ? {} : { initialCooldownTicks: nonNegativeInteger(source.initialCooldownTicks, `${name}.initialCooldownTicks`) }),
-        ...(source.unlockAdventureIndex === undefined ? {} : { unlockAdventureIndex: positiveInteger(source.unlockAdventureIndex, `${name}.unlockAdventureIndex`) }),
         placement: source.placement,
     }
 }
@@ -445,7 +463,7 @@ function explosion(value: unknown, name: string): ExplosionDefinition {
 }
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'enrage', 'vault', 'targetingInsets', 'behavior', 'dropsFlag'])
+    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'enrage', 'vault', 'targetingInsets', 'behavior', 'dropsFlag', 'wave', 'graveRise'])
     const spawn = exactObject(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -473,12 +491,24 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
         result.dropsFlag = source.dropsFlag
     }
     if (source.behavior !== undefined) result.behavior = jsonRoundTrip(object(source.behavior, `${name}.behavior`)) as JsonObject
+    if (source.wave !== undefined) {
+        const wave = exactObject(source.wave, ['points', 'weight'], `${name}.wave`, ['firstWave'])
+        result.wave = { points: positiveInteger(wave.points, `${name}.wave.points`), weight: nonNegativeInteger(wave.weight, `${name}.wave.weight`),
+            ...(wave.firstWave === undefined ? {} : { firstWave: positiveInteger(wave.firstWave, `${name}.wave.firstWave`) }) }
+    }
+    if (source.graveRise !== undefined) {
+        if (typeof source.graveRise !== 'boolean') throw new Error(`${name}.graveRise must be boolean`)
+        if (source.graveRise && !result.wave?.weight) throw new Error(`${name}.graveRise needs a weighted wave`)
+        result.graveRise = source.graveRise
+    }
     if (source.targetingInsets !== undefined) {
         result.targetingInsets = mapped(source.targetingInsets, `${name}.targetingInsets`, nonNegativeFinite)
     }
     if (source.helm !== undefined) {
         const helm = exactObject(source.helm, ['type', 'health'], `${name}.helm`, ['shield'])
-        if (helm.type !== 'cone' && helm.type !== 'bucket' && helm.type !== 'newspaper') throw new Error(`${name}.helm.type must be cone, bucket or newspaper`)
+        if (helm.type !== 'cone' && helm.type !== 'bucket' && helm.type !== 'newspaper' && helm.type !== 'door') {
+            throw new Error(`${name}.helm.type must be cone, bucket, newspaper or door`)
+        }
         result.helm = { type: helm.type, health: positiveInteger(helm.health, `${name}.helm.health`) }
         if (helm.shield !== undefined) {
             if (typeof helm.shield !== 'boolean') throw new Error(`${name}.helm.shield must be boolean`)
@@ -616,12 +646,55 @@ function parseLawnMower(value: unknown, name: string): LawnMowerDefinition {
     }
 }
 
+function parseLevelWaves(value: unknown[], name: string, definitions: GameplayDefinitions): LevelWave[] {
+    if (value.length === 0) throw new Error(`${name}.waves must not be empty`)
+    return value.map((wave, waveIndex) => {
+        const waveName = `${name}.waves[${waveIndex}]`
+        const record = exactObject(wave, ['zombies'], waveName, ['flagWave', 'points'])
+        if (record.flagWave !== undefined && typeof record.flagWave !== 'boolean') throw new Error(`${waveName}.flagWave must be boolean`)
+        const zombies = qualifiedIdArray(record.zombies, `${waveName}.zombies`)
+        zombies.forEach((id, index) => reference(id, definitions.zombies, `${waveName}.zombies[${index}]`))
+        return { zombies, ...(record.flagWave === undefined ? {} : { flagWave: record.flagWave as boolean }),
+            ...(record.points === undefined ? {} : { points: positiveInteger(record.points, `${waveName}.points`) }) }
+    })
+}
+
+function parseWaveRule(value: unknown, name: string): WaveRule {
+    const { kind, count, ...settings } = object(value, name)
+    return { kind: qualifiedId(kind, `${name}.kind`), count: positiveInteger(count, `${name}.count`), settings: jsonRoundTrip(settings) as JsonObject }
+}
+
+/** An entry is a zombie id taking its wave fields, or {id, ...} overriding some of them. */
+function parseZombiePool(value: unknown, name: string, definitions: GameplayDefinitions): NonNullable<LevelDefinition['zombiePool']> {
+    return array(value, `${name}.zombiePool`).map((value, index) => {
+        const entryName = `${name}.zombiePool[${index}]`
+        const entry = typeof value === 'string' ? { id: value } as Record<string, unknown> : exactObject(value, ['id'], entryName, ['points', 'weight', 'firstWave'])
+        const id = qualifiedId(entry.id, `${entryName}.id`)
+        const wave = reference(id, definitions.zombies, `${entryName}.id`).wave
+        const points = entry.points ?? wave?.points, weight = entry.weight ?? wave?.weight, firstWave = entry.firstWave ?? wave?.firstWave
+        if (points === undefined || weight === undefined) throw new Error(`${entryName} needs points and weight, from the zombie's wave or the entry`)
+        return { id, points: positiveInteger(points, `${entryName}.points`), weight: nonNegativeInteger(weight, `${entryName}.weight`),
+            ...(firstWave === undefined ? {} : { firstWave: positiveInteger(firstWave, `${entryName}.firstWave`) }) }
+    })
+}
+
+/**
+ * Board::PickGraveRisingZombieType for a level without graves of its own (they come from /grave): the zombies with
+ * `graveRise` that the level allows (mZombieAllowed), in definition order.
+ */
+function defaultGraveZombies(definitions: GameplayDefinitions, waves: LevelDefinition['waves'],
+    zombiePool: Array<{ id: string }> | undefined): LevelDefinition['graveZombies'] {
+    const allowed = new Set([...zombiePool?.map(entry => entry.id) ?? [], ...isWaveRule(waves) ? [] : waves.flatMap(wave => wave.zombies)])
+    const picks = Object.entries(definitions.zombies).flatMap(([id, { graveRise, wave }]) =>
+        graveRise && allowed.has(id) ? [{ id, weight: wave!.weight }] : [])
+    return picks.length ? picks : undefined
+}
+
 function parseLevel(value: unknown, name: string, definitions: GameplayDefinitions): LevelDefinition {
     const source = exactObject(value, [
-        'adventureIndex', 'board', 'activeRows', 'startingSun',
-        'lawnMower', 'waves', 'tutorial', 'award',
-    ], name, ['nextLevel', 'seedPackets', 'seedBankSlots', 'firstWaveTicks', 'zombiePool', 'bowling', 'conveyor', 'tools', 'shovelTutorial', 'initialPlants', 'persistent',
-        'skySun', 'graves', 'graveZombies', 'introDialog', 'loot', 'chooserWarnings'])
+        'adventureIndex', 'board', 'lawnMower', 'activeRows', 'startingSun', 'waves', 'tutorial', 'award',
+    ], name, ['nextLevel', 'seedPackets', 'firstWaveTicks', 'zombiePool', 'bowling', 'conveyor', 'initialPlants', 'persistent',
+        'skySun', 'graves', 'graveZombies'])
     if (source.persistent !== undefined && typeof source.persistent !== 'boolean') throw new Error(`${name}.persistent must be a boolean`)
     const boardId = qualifiedId(source.board, `${name}.board`)
     const board = reference(boardId, definitions.boards, `${name}.board`)
@@ -633,9 +706,9 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     if (activeRows.length === 0) throw new Error(`${name}.activeRows must not be empty`)
     if (new Set(activeRows).size !== activeRows.length) throw new Error(`${name}.activeRows must not contain duplicates`)
 
-    const seedPackets = source.seedPackets === undefined && source.seedBankSlots !== undefined
-        ? [] : qualifiedIdArray(source.seedPackets, `${name}.seedPackets`)
-    seedPackets.forEach((id, index) => reference(id, definitions.seeds, `${name}.seedPackets[${index}]`))
+    const seedPackets = source.seedPackets === undefined ? undefined : qualifiedIdArray(source.seedPackets, `${name}.seedPackets`)
+    seedPackets?.forEach((id, index) => reference(id, definitions.seeds, `${name}.seedPackets[${index}]`))
+    if (seedPackets && seedPackets.length > definitions.seedBank.maxSlots) throw new Error(`${name}.seedPackets exceeds the bank`)
     let bowling: LevelDefinition['bowling']
     if (source.bowling !== undefined) {
         const data = exactObject(source.bowling, ['lineColumn'], `${name}.bowling`)
@@ -680,49 +753,15 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         return { seedId, row, column }
     })
     const initialPlants = source.initialPlants === undefined ? undefined : plantPositions(source.initialPlants, `${name}.initialPlants`)
-    let shovelTutorial: LevelDefinition['shovelTutorial']
-    if (source.shovelTutorial !== undefined) {
-        const data = exactObject(source.shovelTutorial, ['opening', 'repeat', 'afterDig', 'introPlants'], `${name}.shovelTutorial`)
-        const dialogue = (key: string) => {
-            const result = array(data[key], `${name}.shovelTutorial.${key}`).map(value => nonNegativeInteger(value, `${name}.shovelTutorial.${key}`))
-            if (!result.length || new Set(result).size !== result.length) throw new Error(`${name}.shovelTutorial.${key} must contain unique dialogue IDs`)
-            return result
-        }
-        shovelTutorial = {
-            opening: dialogue('opening'), repeat: dialogue('repeat'), afterDig: dialogue('afterDig'),
-            introPlants: plantPositions(data.introPlants, `${name}.shovelTutorial.introPlants`),
-        }
-    }
-    const tools = source.tools === undefined ? undefined : qualifiedIdArray(source.tools, `${name}.tools`)
-    if (source.tutorial === 'pvz:shovel' && (!shovelTutorial || !tools?.includes('pvz:shovel'))) throw new Error(`${name} shovel tutorial requires dialogue and shovel`)
-    const seedBankSlots = source.seedBankSlots === undefined ? undefined : positiveInteger(source.seedBankSlots, `${name}.seedBankSlots`)
-    if (seedBankSlots !== undefined && (seedBankSlots > 10 || seedBankSlots > definitions.seedCatalog.length)) throw new Error(`${name}.seedBankSlots exceeds the shared chooser or bank capacity`)
-    if (seedBankSlots !== undefined && seedPackets.length) throw new Error(`${name}.seedPackets is only for a fixed bank`)
-    if (seedBankSlots !== undefined && conveyor) throw new Error(`${name} cannot combine a conveyor and seed chooser`)
-    const wavesSource = array(source.waves, `${name}.waves`)
-    if (wavesSource.length === 0) throw new Error(`${name}.waves must not be empty`)
-    const waves = wavesSource.map((wave, waveIndex) => {
-        const waveName = `${name}.waves[${waveIndex}]`
-        const record = exactObject(wave, ['zombies'], waveName, ['flagWave', 'points'])
-        if (record.flagWave !== undefined && typeof record.flagWave !== 'boolean') throw new Error(`${waveName}.flagWave must be boolean`)
-        const zombies = qualifiedIdArray(record.zombies, `${waveName}.zombies`)
-        zombies.forEach((id, index) => reference(id, definitions.zombies, `${waveName}.zombies[${index}]`))
-        return { zombies, ...(record.flagWave === undefined ? {} : { flagWave: record.flagWave as boolean }),
-            ...(record.points === undefined ? {} : { points: positiveInteger(record.points, `${waveName}.points`) }) }
-    })
-    const zombiePool = source.zombiePool === undefined ? undefined : array(source.zombiePool, `${name}.zombiePool`).map((value, index) => {
-        const entryName = `${name}.zombiePool[${index}]`
-        const entry = exactObject(value, ['id', 'points', 'weight'], entryName, ['firstWave'])
-        const id = qualifiedId(entry.id, `${entryName}.id`)
-        reference(id, definitions.zombies, `${entryName}.id`)
-        return { id, points: positiveInteger(entry.points, `${entryName}.points`), weight: nonNegativeInteger(entry.weight, `${entryName}.weight`),
-            ...(entry.firstWave === undefined ? {} : { firstWave: positiveInteger(entry.firstWave, `${entryName}.firstWave`) }) }
-    })
-    if (waves.some(wave => wave.points !== undefined) && !zombiePool?.some(entry => entry.weight > 0 && entry.points === 1 && (entry.firstWave ?? 1) === 1)) {
+    if (seedPackets && conveyor) throw new Error(`${name} cannot combine a conveyor and fixed seed packets`)
+    const waves: LevelWave[] | WaveRule = Array.isArray(source.waves) ? parseLevelWaves(source.waves, name, definitions) : parseWaveRule(source.waves, `${name}.waves`)
+    const zombiePool = source.zombiePool === undefined ? undefined : parseZombiePool(source.zombiePool, name, definitions)
+    if (zombiePool && new Set(zombiePool.map(entry => entry.id)).size !== zombiePool.length) throw new Error(`${name}.zombiePool contains duplicate IDs`)
+    const fills = isWaveRule(waves) || waves.some(wave => wave.points !== undefined)
+    if (fills && !zombiePool?.some(entry => entry.weight > 0 && entry.points === 1 && (entry.firstWave ?? 1) === 1)) {
         throw new Error(`${name}.zombiePool must include a weighted one-point zombie`)
     }
-    if (zombiePool && new Set(zombiePool.map(entry => entry.id)).size !== zombiePool.length) throw new Error(`${name}.zombiePool contains duplicate IDs`)
-    for (const wave of waves) if (wave.points !== undefined) {
+    if (!isWaveRule(waves)) for (const wave of waves) if (wave.points !== undefined) {
         let spent = 0
         for (const id of wave.zombies) {
             const entry = zombiePool!.find(entry => entry.id === id)
@@ -743,41 +782,24 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         return { column, count }
     })
     if (graves && new Set(graves.map(grave => grave.column)).size !== graves.length) throw new Error(`${name}.graves must contain unique columns`)
-    const graveZombies = source.graveZombies === undefined ? undefined : array(source.graveZombies, `${name}.graveZombies`).map((value, index) => {
-        const entry = exactObject(value, ['id', 'weight'], `${name}.graveZombies[${index}]`)
-        const id = qualifiedId(entry.id, `${name}.graveZombies[${index}].id`)
-        reference(id, definitions.zombies, `${name}.graveZombies[${index}].id`)
-        return { id, weight: positiveInteger(entry.weight, `${name}.graveZombies[${index}].weight`) }
-    })
-    if (!!graves?.length !== !!graveZombies?.length) throw new Error(`${name}.graves and graveZombies go together`)
-    const introDialog = source.introDialog === undefined ? undefined
-        : array(source.introDialog, `${name}.introDialog`).map(value => nonNegativeInteger(value, `${name}.introDialog`))
-    if (introDialog && (!introDialog.length || new Set(introDialog).size !== introDialog.length)) throw new Error(`${name}.introDialog must contain unique dialogue IDs`)
-    let loot: LevelDefinition['loot']
-    if (source.loot !== undefined) {
-        const entry = exactObject(source.loot, [], `${name}.loot`, ['firstAdventure', 'firstCoinAfterWave', 'savingsCap'])
-        if (entry.firstAdventure !== undefined && entry.firstAdventure !== true) throw new Error(`${name}.loot.firstAdventure must be true`)
-        loot = {
-            ...(entry.firstAdventure === undefined ? {} : { firstAdventure: true }),
-            ...(entry.firstCoinAfterWave === undefined ? {} : { firstCoinAfterWave: positiveInteger(entry.firstCoinAfterWave, `${name}.loot.firstCoinAfterWave`) }),
-            ...(entry.savingsCap === undefined ? {} : { savingsCap: positiveInteger(entry.savingsCap, `${name}.loot.savingsCap`) }),
-        }
-    }
-    let chooserWarnings: LevelDefinition['chooserWarnings']
-    if (source.chooserWarnings !== undefined) {
-        const entry = exactObject(source.chooserWarnings, [], `${name}.chooserWarnings`, ['seed', 'sunWarning'])
-        const seed = entry.seed === undefined ? undefined : exactObject(entry.seed, ['id', 'warning'], `${name}.chooserWarnings.seed`)
-        if (seed) reference(qualifiedId(seed.id, `${name}.chooserWarnings.seed.id`), definitions.seeds, `${name}.chooserWarnings.seed.id`)
-        chooserWarnings = {
-            ...(seed ? { seed: { id: seed.id as string, warning: string(seed.warning, `${name}.chooserWarnings.seed.warning`) } } : {}),
-            ...(entry.sunWarning === undefined ? {} : { sunWarning: string(entry.sunWarning, `${name}.chooserWarnings.sunWarning`) }),
-        }
-    }
+    if (graves?.length && source.graveZombies === undefined) throw new Error(`${name}.graves need graveZombies`)
+    // An entry is a zombie id taking its wave weight, or {id, weight}.
+    const graveZombies = source.graveZombies === undefined ? defaultGraveZombies(definitions, waves, zombiePool)
+        : array(source.graveZombies, `${name}.graveZombies`).map((value, index) => {
+            const entryName = `${name}.graveZombies[${index}]`
+            const entry = typeof value === 'string' ? { id: value } as Record<string, unknown> : exactObject(value, ['id'], entryName, ['weight'])
+            const id = qualifiedId(entry.id, `${entryName}.id`)
+            const zombie = reference(id, definitions.zombies, `${entryName}.id`)
+            const weight = entry.weight ?? zombie.wave?.weight
+            if (weight === undefined) throw new Error(`${entryName} needs a weight, from the zombie's wave or the entry`)
+            return { id, weight: positiveInteger(weight, `${entryName}.weight`) }
+        })
+    if (source.graveZombies !== undefined && !graveZombies?.length) throw new Error(`${name}.graveZombies must not be empty`)
     const award = object(source.award, `${name}.award`)
     let parsedAward: LevelDefinition['award']
     if (award.kind === 'seed') {
-        exactObject(award, ['kind', 'id', 'packetCost'], `${name}.award`)
-        parsedAward = { kind: 'seed', id: qualifiedId(award.id, `${name}.award.id`), packetCost: nonNegativeInteger(award.packetCost, `${name}.award.packetCost`) }
+        exactObject(award, ['kind', 'id'], `${name}.award`)
+        parsedAward = { kind: 'seed', id: qualifiedId(award.id, `${name}.award.id`) }
     } else if (award.kind === 'tool') {
         exactObject(award, ['kind', 'id', 'titleKey', 'nameKey', 'descriptionKey', 'width', 'height'], `${name}.award`)
         parsedAward = { kind: 'tool', id: qualifiedId(award.id, `${name}.award.id`),
@@ -797,20 +819,14 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         board: boardId,
         activeRows,
         startingSun: nonNegativeInteger(source.startingSun, `${name}.startingSun`),
-        seedPackets,
+        ...(seedPackets === undefined ? {} : { seedPackets }),
         ...(initialPlants === undefined ? {} : { initialPlants }),
-        ...(seedBankSlots === undefined ? {} : { seedBankSlots }),
         ...(bowling === undefined ? {} : { bowling }),
         ...(conveyor === undefined ? {} : { conveyor }),
-        ...(tools === undefined ? {} : { tools }),
-        ...(shovelTutorial === undefined ? {} : { shovelTutorial }),
         lawnMower,
         ...(skySun === undefined ? {} : { skySun }),
         ...(graves === undefined ? {} : { graves }),
         ...(graveZombies === undefined ? {} : { graveZombies }),
-        ...(introDialog === undefined ? {} : { introDialog }),
-        ...(loot === undefined ? {} : { loot }),
-        ...(chooserWarnings === undefined ? {} : { chooserWarnings }),
         waves,
         ...(zombiePool === undefined ? {} : { zombiePool }),
         ...(source.firstWaveTicks === undefined ? {} : { firstWaveTicks: positiveInteger(source.firstWaveTicks, `${name}.firstWaveTicks`) }),

@@ -1,6 +1,6 @@
 import { Schedule, type World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { debugCondition, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
+import { debugAmount, debugCondition, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
 import {
     EconomyStateResource,
@@ -17,8 +17,8 @@ import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { createWaveSystem } from '../level/waves'
 import { createGrave } from '../level/graves'
-import { MAX_MONEY, spawnLoot } from '../level/loot'
-import { graveAt } from '@/shared/protocol/index'
+import { spawnLoot } from '../level/loot'
+import { MAX_MONEY } from '@/shared/menu'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
 
@@ -35,7 +35,9 @@ function executeCommand(
     const { name, args } = command
     const level = world.resources.get(LevelStateResource)
     const preference = ['cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'collect'].includes(name)
-    if (!preference && name !== 'plant' && (level.phase !== 'gameplay' || level.result !== 'playing')) return debugCondition('DEBUG_REQUIRES_LEVEL', name)
+    // The purse is no board state, so /money also works in the intro (Crazy Dave's offer checks it there).
+    const anyPhase = name === 'money'
+    if (!preference && name !== 'plant' && (level.phase !== 'gameplay' && !anyPhase || level.result !== 'playing')) return debugCondition('DEBUG_REQUIRES_LEVEL', name)
     const economy = world.resources.get(EconomyStateResource)
     const events = world.resources.get(EventQueueResource)
     const findType = (entries: Record<string, unknown>, value: string) => Object.keys(entries).find(id => normalizeDebugName(id) === normalizeDebugName(value))
@@ -50,12 +52,12 @@ function executeCommand(
     switch (name) {
         case 'sun':
         case 'money': {
-            const amount = debugInteger(args[1])
-            if (amount === null) return debugSyntax('Amount must be an integer')
-            const next = (args[0].toLowerCase() === 'add' ? economy[name] : 0) + amount
-            if (!Number.isSafeInteger(next)) return debugSyntax('Amount is too large')
-            economy[name] = Math.max(0, Math.min(name === 'sun' ? MAX_SUN : MAX_MONEY, next))
+            const next = debugAmount(args, economy[name], name === 'sun' ? MAX_SUN : MAX_MONEY)
+            if (typeof next !== 'number') return next
+            economy[name] = next
             if (name === 'sun') economy.pendingSunSpend = 0
+            // The client shows the coin bank, as when money is collected.
+            else emitServerEvent(events, 'moneyChanged', { money: economy.money })
             return debugSuccess(`${name}: ${economy[name]}`)
         }
         case 'plant': {
@@ -96,16 +98,17 @@ function executeCommand(
         case 'grave': {
             const grid = position(args[0], args[1])
             if (!grid) return invalidPosition()
+            // Challenge::GraveDangerSpawnGraveAt: every plant in the cell dies (Plant::Die, silently). A grave already there
+            // is replaced and rises again, which the original's CanAddGraveStoneAt would not pick. Rolling nuts keep the
+            // column they were planted in but hold no cell (planting.findPlantAt), so they roll on.
+            for (const entity of [...world.query(PositionComponent, PlantComponent)]) {
+                const plant = world.get(entity, PlantComponent)!
+                if (definitions.plants[plant.typeId].occupiesCell !== false && world.get(entity, PositionComponent)!.row === grid.row
+                    && plant.column === grid.column) world.destroyEntity(entity)
+            }
             const wave = world.resources.get(WaveResource)
-            if (graveAt(wave.graves, grid.row, grid.column!)) {
-                return debugCondition('DEBUG_GRAVE_EXISTS')
-            }
-            if ([...world.query(PositionComponent, PlantComponent)].some(entity =>
-                world.get(entity, PositionComponent)!.row === grid.row && world.get(entity, PlantComponent)!.column === grid.column)) {
-                return debugCondition('DEBUG_PLANT_OCCUPIES')
-            }
-            wave.graves ??= []
-            wave.graves.push(createGrave(world, grid.row, grid.column!))
+            wave.graves = (wave.graves ?? []).filter(grave => grave.row !== grid.row || grave.column !== grid.column)
+            wave.graves.push({ ...createGrave(world, grid.row, grid.column!), riseAtTick: tick })
             return debugSuccess(`Spawned grave at ${args[0]}, ${args[1]}`)
         }
         case 'zombie': {
@@ -141,15 +144,15 @@ function executeCommand(
         case 'nextflag': {
             const wave = world.resources.get(WaveResource)
             const index = name === 'nextflag'
-                ? level.definition.waves.findIndex((entry, index) => index >= wave.index && entry.flagWave)
+                ? wave.plan.findIndex((entry, index) => index >= wave.index && entry.flagWave)
                 : wave.index
-            if (index < 0 || index >= level.definition.waves.length) return debugCondition(name === 'nextflag' ? 'DEBUG_NO_FLAG_WAVES' : 'DEBUG_NO_WAVES')
+            if (index < 0 || index >= wave.plan.length) return debugCondition(name === 'nextflag' ? 'DEBUG_NO_FLAG_WAVES' : 'DEBUG_NO_WAVES')
             // Board::KeyChar('/'): a running huge wave countdown ends now. Otherwise /nextflag starts the flag wave's
             // 750-tick countdown through the wave system below, and /nextwave spawns at once.
             const countdown = name === 'nextflag' && !wave.hugeWaveAnnounced
             wave.index = index
             wave.nextWaveAtTick = tick
-            if (name === 'nextwave' && level.definition.waves[index].flagWave && !wave.hugeWaveAnnounced) {
+            if (name === 'nextwave' && wave.plan[index].flagWave && !wave.hugeWaveAnnounced) {
                 wave.hugeWaveAnnounced = true
                 emitServerEvent(events, 'hugeWave', {})
                 emitServerEvent(events, 'hugeWaveSound', {})
@@ -223,7 +226,7 @@ function executeCommand(
                 velocityX: 0, velocityY: -3, groundY: y + 45, disappearTicks: 0, fadeTicks: 0,
                 width: 50, scale: 1, alpha: 255,
             })
-            world.resources.get(WaveResource).index = level.definition.waves.length
+            world.resources.get(WaveResource).index = world.resources.get(WaveResource).plan.length
             world.resources.get(TutorialResource).step = 'complete'
             // Unlike Zombie::TrySpawnLevelAward, the debug award leaves the zombies on the board.
             emitServerEvent(events, 'levelAwardDropped', { entityId, typeId })

@@ -61,10 +61,13 @@ test('Gameplay levels validate all 1-1 references, active rows, and waves', () =
     for (const field of ['board', 'lawnMower', 'skySun'] as const) {
         assert.throws(invalid(level => { level[field] = 'pvz:missing' }), /unknown ID/)
     }
-    assert.throws(invalid(level => { level.seedPackets[0] = 'pvz:missing' }), /unknown ID/)
-    assert.throws(invalid(level => { level.waves[0].zombies[0] = 'pvz:missing' }), /unknown ID/)
+    assert.throws(invalid(level => { level.seedPackets = ['pvz:missing'] }), /unknown ID/)
+    assert.throws(invalid(level => { level.waves = [{ zombies: ['pvz:missing'] }] }), /unknown ID/)
     assert.throws(invalid(level => { level.activeRows = [2, 2] }), /duplicates/)
     assert.throws(invalid(level => { level.activeRows = [5] }), /outside the board/)
     assert.throws(invalid(level => { level.waves = [] }), /must not be empty/)
+    assert.throws(invalid(level => { level.waves.count = 0 }), /count/)
+    assert.throws(invalid(level => { level.zombiePool = [] }), /one-point zombie/)
+    assert.throws(invalid(level => { level.graveZombies = [{ id: 'pvz:no_such', weight: 100 }] }), /unknown ID/, 'a weighted grave zombie is still looked up')
     assert.doesNotThrow(invalid(level => { level.award.id = 'pvz:not-defined-yet' }))
 })

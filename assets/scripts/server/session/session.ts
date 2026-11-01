@@ -5,11 +5,13 @@ import type { EnabledMod, GameCommand, StartSessionPacket } from '@/shared/proto
 import { DeterministicRng } from '../state/DeterministicRng'
 import type { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processCommandPhase } from './commands'
-import { EconomyStateResource, LawnMowerComponent, LevelStateResource, MAX_SUN, PositionComponent, RandomResource, SeedBankResource } from '../state/components'
+import { EconomyStateResource, LawnMowerComponent, LevelStateResource, MAX_SUN, PacketUpgradeOfferResource, PositionComponent, RandomResource, SeedBankResource } from '../state/components'
 import { createConveyorSystem } from '../level/conveyor'
 import { EventQueueResource, createEventQueue } from '../state/events'
 import { createItemSystem } from '../level/items'
 import { createLevelProgressSystem, initializeLevel } from '../level/level'
+import { seedBankStart } from '../seeds/seedChooser'
+import { TUTORIALS } from '../tutorials'
 import { TutorialResource } from '../state/levelState'
 import { createMowerSystem } from '../level/mower'
 import { planting } from '../seeds/planting'
@@ -124,18 +126,20 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         sun: Math.min(MAX_SUN, level.startingSun),
         money: packet.initialMoney,
         pendingSunSpend: 0,
-        ...(packet.packetUpgrades ? { diamonds: true as const } : {}),
+        ...(packet.packetUpgrades ? { diamonds: true as const, packetUpgrades: packet.packetUpgrades } : {}),
     })
+    if (packet.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...packet.packetUpgradeOffer })
     world.resources.set(RandomResource, new DeterministicRng(packet.randomSeed))
+    const bank = seedBankStart(definitions, content.levels, level, packet.firstAdventure, packet.packetUpgrades)
     world.resources.set(SeedBankResource, {
         selection: { mode: 'none' },
-        packets: level.seedBankSlots === undefined ? level.seedPackets.map(seedId => ({ seedId,
+        packets: 'seeds' in bank ? bank.seeds.map(seedId => ({ seedId,
             readyAtTick: definitions.seeds[seedId].initialCooldownTicks ?? 0,
             cooldownTotal: definitions.seeds[seedId].initialCooldownTicks ?? 0 })) : [],
-        ...(level.seedBankSlots === undefined ? {} : { choosing: true }),
+        ...('chooser' in bank ? { choosing: true } : {}),
     })
     world.resources.set(EventQueueResource, createEventQueue())
-    initializeLevel(world, packet.firstAdventure)
+    initializeLevel(world, packet.firstAdventure, definitions, content.gameplay.waveRules)
 
     for (const row of level.activeRows) {
         const entity = world.createEntity()
@@ -154,6 +158,6 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         world.resources.get(TutorialResource).sunAtTick = undefined
     }
     for (const plant of level.initialPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column)
-    if (packet.firstAdventure) for (const plant of level.shovelTutorial?.introPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column)
+    if (packet.firstAdventure) for (const plant of TUTORIALS[level.tutorial]?.introPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column)
     return session
 }

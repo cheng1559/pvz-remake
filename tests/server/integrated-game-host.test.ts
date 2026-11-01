@@ -1,3 +1,4 @@
+import { withFixedBanks } from '../fixedBankLevels'
 import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
@@ -10,7 +11,7 @@ import type { ClientPacket, StartSessionPacket } from '@/shared/protocol/index'
 
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
-const levels = parseGameplayLevels(source('levels'), definitions)
+const levels = parseGameplayLevels(withFixedBanks(source('levels')), definitions)
 const startPacket: StartSessionPacket = {
     protocolVersion: 1,
     sequence: 1,

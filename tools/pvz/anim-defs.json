@@ -1084,6 +1084,36 @@
         "anim_eat": "pvz:helm_zombie_eat"
       }
     },
+    "doorbody": {
+      "slots": [
+        "Zombie_flaghand"
+      ],
+      "hiddenTrackPrefixes": [
+        "anim_cone",
+        "anim_bucket",
+        "Zombie_flaghand",
+        "Zombie_duckytube",
+        "Zombie_mustache"
+      ],
+      "drawLastTracks": [
+        "anim_screendoor",
+        "Zombie_outerarm_screendoor"
+      ],
+      "animations": [
+        "anim_idle",
+        "anim_walk",
+        "anim_walk2",
+        "anim_eat",
+        "anim_death",
+        "anim_death2"
+      ],
+      "exports": {
+        "anim_idle": "pvz:door_zombie_idle",
+        "anim_walk": "pvz:door_zombie_walk",
+        "anim_walk2": "pvz:door_zombie_walk2",
+        "anim_eat": "pvz:door_zombie_eat"
+      }
+    },
     "flagbody": {
       "slots": [
         "Zombie_flaghand"

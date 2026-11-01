@@ -1,7 +1,7 @@
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { GameSystem } from '@/ecs/index'
 import { LawnMowerComponent, LevelStateResource, type Position, PositionComponent, type Zombie, ZombieComponent } from '../state/components'
-import { mowZombie } from '../zombies/damage'
+import { dropZombieHelm, mowZombie } from '../zombies/damage'
 import { dropZombieLoot } from './loot'
 import { dropZombieFlag } from '../zombies/flag'
 import { WaveResource } from '../state/levelState'
@@ -56,6 +56,8 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
                         mower.chompCounter = CHOMP_ACTIVE_TICKS
                     }
                     mower.state = 'active'
+                    // Zombie::MowDown: DropShield(0U) and DropHelm(0U), then the flag.
+                    dropZombieHelm(world, definitions, zombieEntity, zombie)
                     dropZombieFlag(world, definitions, zombieEntity)
                     mowZombie(zombie)
                     // Zombie::MowDown drops loot like any other death.

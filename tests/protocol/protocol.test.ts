@@ -107,7 +107,7 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
     const snapshot = {
         levelId: 'pvz:adventure-1-1', tick: 0, gameplayTick: 0, phase: 'gameplay', result: 'playing', paused: false,
         sun: 50, availableSun: 50, money: 0,
-        wave: { index: 0, total: 4, countdown: 0 },
+        wave: { index: 0, total: 4, flagWaves: [], countdown: 0 },
         cursor: { mode: 'seed', seedId: 'pvz:peashooter' },
         seedPackets: [{
             seedId: 'pvz:peashooter', ready: false, selected: true,

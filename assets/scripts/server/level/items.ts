@@ -10,9 +10,10 @@ import {
     type Position,
 } from '../state/components'
 import { getDebugRules } from '../debug/debugRules'
-import { ItemComponent, TutorialResource, type Item } from '../state/levelState'
+import { ItemComponent, type Item } from '../state/levelState'
 import { emitServerEvent, EventQueueResource } from '../state/events'
-import { canDropLoot, MAX_MONEY, updateMowerCoins } from './loot'
+import { canDropLoot, updateMowerCoins } from './loot'
+import { MAX_MONEY } from '@/shared/menu'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 
@@ -159,15 +160,7 @@ export const items = {
         item.fadeTicks = 0
         if (definitions.items[item.typeId]?.kind === 'money') {
             emitServerEvent(events, 'itemCollected', { entityId: itemId, typeId: item.typeId, value: item.value })
-            // Coin::Collect: the first Adventure explains silver and gold coins on 2-1, once per game.
-            const tutorial = world.resources.get(TutorialResource)
-            if (tutorial.firstAdventure && level.definition.adventureIndex === 11 && (item.typeId === 'pvz:coin_silver' || item.typeId === 'pvz:coin_gold')) {
-                const displayed = tutorial.displayedAdvice ??= []
-                if (!displayed.includes('ADVICE_CLICKED_ON_COIN')) {
-                    displayed.push('ADVICE_CLICKED_ON_COIN')
-                    emitServerEvent(events, 'advice', { key: 'ADVICE_CLICKED_ON_COIN', style: 'hint' })
-                }
-            }
+            getActiveTutorial(world)?.moneyCollected?.(world, item.typeId)
             return
         }
         const availableBefore = getAvailableSun(world, definitions) - item.value

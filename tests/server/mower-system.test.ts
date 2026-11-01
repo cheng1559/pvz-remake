@@ -106,3 +106,33 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
     assert.equal(world.hasEntity(mowerEntity), true)
     assert.equal(world.get(mowerEntity, PositionComponent)!.x, 802.33)
 })
+
+test('Zombie::MowDown drops a worn helm or shield before the mowed animation', () => {
+    const world = new World()
+    world.resources.set(LevelStateResource, { id: 'pvz:test', definition: {} as never, board, phase: 'gameplay', result: 'playing', paused: false })
+    world.resources.set(EventQueueResource, createEventQueue())
+    world.resources.set(RandomResource, new DeterministicRng(1))
+    const mower = world.createEntity()
+    world.add(mower, PositionComponent, { x: -21, y: 303, row: 2 })
+    world.add(mower, LawnMowerComponent, { typeId: 'pvz:standard', state: 'ready', chompCounter: 0 })
+    const zombies = ['pvz:conehead', 'pvz:screendoor'].map(typeId => {
+        const entity = world.createEntity()
+        world.add(entity, PositionComponent, { x: -10, y: 280, row: 2 })
+        world.add(entity, ZombieComponent, {
+            typeId, health: 270, maxHealth: 270, state: 'walking', speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
+            moweredTicksRemaining: 0, walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
+            hasHead: true, hasTongue: false, hasArm: true, hitFlashCounter: 0, groanCounter: 300,
+            helmHealth: definitions.zombies[typeId].helm!.health, chilledTicks: 0, hasPole: false,
+        })
+        return entity
+    })
+    const schedule = new Schedule()
+    schedule.add('mower', createMowerSystem(definitions))
+    schedule.run(world, 1)
+    for (const entity of zombies) {
+        assert.equal(world.get(entity, ZombieComponent)!.state, 'mowered')
+        assert.equal(world.get(entity, ZombieComponent)!.helmHealth, 0)
+    }
+    assert.deepEqual(world.resources.get(EventQueueResource).events.filter(event => event.type === 'zombieHelmDropped').map(event => event.data),
+        [{ entityId: zombies[0], helm: 'cone' }, { entityId: zombies[1], helm: 'door' }], 'DropHelm(0U) and DropShield(0U) do not bypass')
+})

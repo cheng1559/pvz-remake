@@ -183,7 +183,7 @@ test('award API resolves the loaded level reward and packet cost instead of choo
     })
     award.seed = 22
     assert.equal((await api.getAward()).seed, 1, 'the returned view cannot change the reward')
-    level = { ...level, award: { kind: 'seed', id: 'pvz:torchwood', packetCost: 175 } }
+    level = { ...level, award: { kind: 'seed', id: 'pvz:torchwood' } }
     assert.deepEqual(await api.getAward(), {
         kind: 'seed', titleKey: 'NEW_PLANT',
         nextLevelId: 'pvz:adventure-1-2', showMainMenu: false,
@@ -233,6 +233,36 @@ test('winning advances the current profile once and exposes the next installed l
         assert.equal((await reconnected.getCurrentUser())!.adventureLevel, index + 1)
         assert.deepEqual(await reconnected.getAdventure(), { levelId: index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1' })
     }
+    for (const [index, seed, next] of [[1, 9, 'pvz:adventure-2-2'], [2, 10, 'pvz:adventure-2-3'], [3, 11, null]] as const) {
+        level = levels.levels[`pvz:adventure-2-${index}`]
+        const award = await api.completeLevel()
+        assert.deepEqual([award.kind, award.seed, award.nextLevelId], ['seed', seed, next])
+        assert.equal((await api.getCurrentUser())!.adventureLevel, 11 + index)
+    }
+})
+
+test("Crazy Dave's seed-slot offer saves the upgrade or a refusal together with the level's coins", async () => {
+    const { api, profiles } = fixture()
+    await api.createUser('Alice')
+    await api.setCoins(80)
+    assert.deepEqual(await api.getPurse(), { coins: 80, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 0 })
+    assert.deepEqual(await api.recordPacketUpgradeOffer(false, 81), { coins: 81, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 1 })
+    assert.equal(profiles.getCurrentProfile()!.declinedPacketUpgrades, 1, 'the refusal count is saved')
+    await assert.rejects(api.recordPacketUpgradeOffer(true, 81), /not paid for/, 'a purchase must take the price')
+    assert.equal((await api.getPurse()).packetUpgrades, 0)
+    const bought = await api.recordPacketUpgradeOffer(true, 6)
+    assert.deepEqual([bought.coins, bought.packetUpgrades, bought.packetUpgradeCost, bought.nextPacketUpgradeCost], [6, 1, 500, 2000])
+    assert.equal(profiles.getCurrentProfile()!.coins, 6, 'the coins and the upgrade are saved at once')
+    assert.equal((await api.setCoins(5)).coins, 5)
+    // An open store re-reads the purse once it changes.
+    const seen: number[] = []
+    const stop = api.onPurseChanged(() => { void api.getPurse().then(purse => seen.push(purse.coins)) })
+    await api.setCoins(42)
+    await api.recordPacketUpgradeOffer(false, 42)
+    stop()
+    await api.setCoins(7)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    assert.deepEqual(seen, [42, 42])
 })
 
 test('menu data and business rules stay behind the API without Cocos or frontend imports', () => {

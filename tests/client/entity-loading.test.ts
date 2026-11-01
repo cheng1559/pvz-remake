@@ -11,6 +11,7 @@ import { runInNewContext } from 'node:vm'
 import { ModuleKind,ScriptTarget,transpileModule } from 'typescript'
 import { presentationFixture } from './presentationFixture'
 import * as kernelModule from '@/shared/kernel/index'
+import * as protocolModule from '@/shared/protocol'
 import { readBaseContent } from '../../tools/mod/content'
 
 // Rendering helpers that need the engine; animation frames pass through unchanged.
@@ -18,6 +19,7 @@ const clientStubs: Record<string, unknown> = {
     '@/shared/mod': modApi,
     '@/client/render/AnimationAtlas': { animationFrame: (frame: unknown) => frame, animationFrames: (frames: unknown[]) => frames },
     '@/shared/kernel/index': kernelModule,
+    '@/shared/protocol': protocolModule,
 }
 
 function loadClientModule(path: string, modules: Record<string, unknown>) {
@@ -64,6 +66,87 @@ test('graves added after level creation are drawn, removed and can be generated 
     graves.syncWorld(snapshot, () => undefined)
     assert.equal(roots.length, 2)
     assert.equal(roots[1].isValid, true)
+})
+
+test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one counted tick early, the special stone from row 0', async () => {
+    class Node {
+        isValid = true
+        name = ''
+        children: Node[] = []
+        position = { x: 0, y: 0 }
+        setPosition(x: number, y: number) { this.position = { x, y } }
+        destroy() { this.isValid = false }
+    }
+    const cells: number[] = [], heights = new Map<Node, number>()
+    const { LevelGraves } = loadClientModule('level/LevelGraves', {
+        cc: { Mask: { Type: { GRAPHICS_RECT: 0 } }, Sprite: { SizeMode: { RAW: 0 } } },
+        '@/client/content/ClientContentLoader': { SpriteRepository: class {
+            async load() { return { originalSize: { width: 500, height: 400 } } }
+        } },
+        '@/client/hud/SeedPacketRenderer': { getAtlasFrame(_atlas: unknown, cell: number) { cells.push(cell) } },
+        '@/client/sound/SoundSystem': { SoundEffect: { DirtRise: 'dirt_rise' }, SoundSystem: { playFoley: async () => {} } },
+        '@/client/view/GameScreenMath': loadClientModule('view/GameScreenMath', {}),
+        '@/client/view/uiNode': { uiNode(options: any) {
+            const node = new Node()
+            node.name = options.name ?? ''
+            options.parent?.children.push(node)
+            return { node, transform: { width: options.size?.width, setContentSize(_width: number, height: number) { heights.set(node, height) } } }
+        } },
+    })
+    const graves = [
+        { row: 2, column: 1, variant: 7, riseDelay: 0, offsetX: 0, offsetY: 0, special: true },
+        { row: 3, column: 1, variant: 7, riseDelay: 30, offsetX: 0, offsetY: 0 },
+        { row: 0, column: 2, variant: 7, riseDelay: 0, offsetX: 0, offsetY: 0, special: true },
+    ]
+    const roots: Node[] = []
+    const view = await LevelGraves.create(new Node(), { addScenery(node: Node) { roots.push(node) }, spawnBoardParticle() {} }, {},
+        { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 } }, graves)
+    // Stone and dirt per grave: the special stone uses row 0, the others row 2 + look % 2, and the first lawn row row 1.
+    assert.deepEqual(cells, [2, 2, 17, 17, 7, 7])
+    const stone = (index: number) => heights.get(roots[index].children.find(child => child.name === 'Stone')!)!
+    for (let tick = -2; tick < 140; tick += 0.37) {
+        view.sync(tick)
+        for (const index of [0, 1]) assert.ok(Number.isInteger(stone(index)), `whole pixels at tick ${tick}`)
+    }
+    // GridItem::DrawGraveStone at whole ticks, with mGridItemCounter = ticks + 1 - delay.
+    const { easeInOut } = loadClientModule('view/GameScreenMath', {})
+    const round = (value: number) => Math.trunc(value + 0.5)
+    const expected = (counter: number) => {
+        const position = round(easeInOut(0, 100, counter, 1000, 0))
+        // A negative source height draws nothing, as an empty clip does.
+        return Math.max(0, round(easeInOut(0, 1000, position, 100, 0)) - round(easeInOut(0, 50, position, 0, 14)))
+    }
+    for (let tick = -1; tick <= 100; tick++) {
+        view.sync(tick)
+        assert.equal(stone(0), expected(tick + 1), `the first grave at tick ${tick}`)
+        assert.equal(stone(1), expected(tick + 1 - 30), `the delayed grave at tick ${tick}`)
+    }
+    view.sync(-1)
+    assert.equal(stone(0), 0, 'nothing shows before the rise')
+    view.sync(99)
+    assert.equal(stone(0), 100, 'counter 100 shows the whole cel')
+
+    // /grave: a grave added in play rises from its gameplay tick, with the intro's dirt, once.
+    let particles = 0
+    const playing = await LevelGraves.create(new Node(), { addScenery(node: Node) { roots.push(node) }, spawnBoardParticle() { particles++ } }, {},
+        { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 } }, [])
+    playing.sync(Infinity)
+    const added = { row: 1, column: 3, variant: 4, riseDelay: 0, offsetX: 0, offsetY: 0, riseAtTick: 500 }
+    const world = (gameplayTick: number, graves: object[]) => playing.syncWorld({ gameplayTick, graves, plants: [] }, () => undefined)
+    world(500, [added])
+    const root = roots.at(-1)!
+    const height = () => heights.get(root.children.find(child => child.name === 'Stone')!)!
+    assert.equal(particles, 1)
+    for (let tick = 500; tick <= 600; tick++) {
+        world(tick, [added])
+        assert.equal(height(), expected(tick - 500), `the added grave at tick ${tick}, counting from the tick after`)
+    }
+    assert.equal(particles, 1, 'the dirt shows once')
+    world(700, [{ ...added, variant: 9, riseAtTick: 700 }])
+    assert.equal(root.isValid, false, 'a grave replaced in its cell gets a new view')
+    assert.equal(particles, 2)
+    world(900, [{ ...added, riseAtTick: 100 }])
+    assert.equal(particles, 2, 'a grave that shows up past its rise tick spawns no dirt')
 })
 
 test('plant and zombie Mod view factories share registration, conflict and freeze rules', async () => {
@@ -338,8 +421,8 @@ test('presentation track lists name exact tracks that exist in their clips; losi
         .tracks.map((track: { id: string }) => track.id)
     for (const [id, zombie] of Object.entries<any>(zombies)) {
         const tracks = new Set(Object.values<any>(zombie.animations).flatMap(clip => trackIds(clip.reanimId)))
-        const { flagArm, upperArm, ...lists } = zombie.parts
-        const flag = flagArm ? [...flagArm.holding, ...flagArm.free, flagArm.front] : []
+        const { flagArm, shieldArms, upperArm, ...lists } = zombie.parts
+        const flag = [...flagArm ? [...flagArm.holding, ...flagArm.free, flagArm.front] : [], ...shieldArms ? [...shieldArms.holding, ...shieldArms.free] : []]
         for (const track of [upperArm, ...Object.values<string[]>(lists).flat(), ...flag, ...zombie.enragedHead ? [zombie.enragedHead.track] : []]) {
             assert.ok(tracks.has(track), `${id} lists ${track}, which none of its clips has`)
         }
@@ -380,6 +463,27 @@ test('presentation track lists name exact tracks that exist in their clips; losi
     const player = Object.assign(Object.create(ReanimPlayer.prototype), { views, applyPose() {} })
     player.setTracksVisible(zombies['pvz:newspaper'].parts.arm, false)
     assert.deepEqual([...views.values()].map(view => view.visible), [false, true, false])
+})
+
+test('a screen door zombie holds its door with the door arms, lowers them to eat, and keeps a lost arm hidden', () => {
+    const { ZombieView } = loadClientModule('zombies/ZombieView', {})
+    const presentation = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/zombies.json', 'utf8'))['pvz:screendoor']
+    const shown = new Map<string, boolean>()
+    const player = { setTracksVisible(tracks: string[], visible: boolean) { for (const track of tracks) shown.set(track, visible) }, setTrackSpriteOverride() {} }
+    const view = Object.assign(Object.create(ZombieView.prototype), {
+        player, presentation, parts: '', holdingFlag: false, helm: { type: 'door', health: 1100, shield: true }, sprites: { helms: {}, damagedArm: {} },
+    })
+    const zombie = { hasHead: true, hasTongue: false, hasArm: true, helmHealth: 1100, state: 'walking', animation: 'anim_walk' }
+    const visible = (...tracks: string[]) => tracks.map(track => shown.get(track))
+    view.applyParts(zombie)
+    assert.deepEqual(visible('anim_screendoor', 'Zombie_outerarm_screendoor', 'Zombie_innerarm_screendoor_hand', 'Zombie_outerarm_hand', 'anim_innerarm1', 'Zombie_outerarm_upper'),
+        [true, true, true, false, false, false], 'Zombie::SetupDoorArms(true)')
+    view.applyParts({ ...zombie, state: 'eating', animation: 'anim_eat' })
+    assert.deepEqual(visible('anim_screendoor', 'Zombie_outerarm_screendoor', 'Zombie_outerarm_hand', 'anim_innerarm1'), [true, false, true, true],
+        'StartEating shows the free arms behind the door')
+    view.applyParts({ ...zombie, helmHealth: 0, hasArm: false })
+    assert.deepEqual(visible('anim_screendoor', 'Zombie_innerarm_screendoor', 'Zombie_outerarm_hand', 'Zombie_outerarm_lower', 'Zombie_outerarm_upper', 'anim_innerarm2'),
+        [false, false, false, false, true, true], 'DetachShield restores the arms, except the lost lower arm and hand')
 })
 
 test('a plant blink keeps the base pose from its first blink when the body animation changes', () => {

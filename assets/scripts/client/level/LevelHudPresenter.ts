@@ -32,6 +32,8 @@ export interface LevelHudOptions {
     content: LoadedContent
     level: LevelDefinition
     seedChooser?: WorldSnapshot['seedChooser']
+    /** The packets the bank starts with; the server builds a fixed bank from the level or the available seeds. */
+    initialSeeds: string[]
     presentation: LevelPresentation
     seedPacketSlot: Node
     rootLayer: number
@@ -68,7 +70,8 @@ export class LevelHudPresenter {
     private sunFlashTicks = 0
     private coinBankTicks = 0
     private coinBankTick = 0
-    private coinBankPaused = false
+    /** LawnApp::mCrazyDaveState is not CRAZY_DAVE_OFF. */
+    private daveOut = false
     private coinBank!: LevelHudOptions['coinBank']
     private ui!: UI
     private pointer?: { x: number, y: number }
@@ -176,7 +179,6 @@ export class LevelHudPresenter {
         this.syncMenu(world, this.lastMenuVisible)
         this.syncSun(world.sun)
         this.coinBankTick = world.gameplayTick
-        this.coinBankPaused = world.paused
         this.syncCoinBank(world, [])
         this.syncProgress(world, this.lastIntroComplete)
         this.syncPreviews(world)
@@ -184,15 +186,47 @@ export class LevelHudPresenter {
         this.syncSeedPacket(world, [], this.lastIntroComplete, false)
     }
 
+    /** Board::ShowCoinBank: shows the purse for a while (Crazy Dave's seed-slot offer uses 100 ticks). */
+    showCoinBank(ticks = COIN_BANK_TICKS): void {
+        this.coinBankTicks = ticks
+        if (this.lastSnapshot) this.syncCoinBank(this.lastSnapshot, [])
+    }
+
+    /** Board::Pause: a paused game with coins shows the coin bank. */
+    showPauseCoinBank(): void {
+        if (this.lastSnapshot && this.lastSnapshot.money > 0) this.showCoinBank()
+    }
+
+    /**
+     * Board::Update counts the coin bank down in the intro too, except while the seed-slot purchase dialog is open;
+     * the gameplay tick only counts it during play.
+     */
+    advanceCoinBank(ticks: number): void {
+        if (this.coinBankTicks <= 0) return
+        this.coinBankTicks = Math.max(0, this.coinBankTicks - ticks)
+        if (this.lastSnapshot) this.syncCoinBank(this.lastSnapshot, [])
+    }
+
+    /** Board::DrawUICoinBank draws the bank at x = 450 on screen while Crazy Dave is out, and at 57 otherwise. */
+    setCoinBankBesideDave(beside: boolean): void {
+        if (this.daveOut === beside) return
+        this.daveOut = beside
+        const x = beside ? 450 - 57 : 0
+        if (this.coinBank.node.position.x !== x) this.coinBank.node.setPosition(x, this.coinBank.node.position.y)
+        if (this.lastSnapshot) this.syncCoinBank(this.lastSnapshot, [])
+    }
+
     /** Board::DrawUICoinBank: shown while collecting money, and when a game with coins is paused (Board::Pause). */
     private syncCoinBank(snapshot: WorldSnapshot, events: ServerEvent[]): void {
         // The count only runs with the game, so a pause holds the bank on screen.
         this.coinBankTicks = Math.max(0, this.coinBankTicks - Math.max(0, snapshot.gameplayTick - this.coinBankTick))
         this.coinBankTick = snapshot.gameplayTick
-        if (events.some(event => event.type === 'itemCollected' && this.content.definitions.items[String(event.data.typeId)]?.kind === 'money') ||
-            snapshot.paused && !this.coinBankPaused && snapshot.money > 0) this.coinBankTicks = COIN_BANK_TICKS
-        this.coinBankPaused = snapshot.paused
-        this.coinBank.node.active = this.coinBankTicks > 0
+        // `moneyChanged`: the server changed the money other than by a pickup (/money, or a Mod), shown like one.
+        if (events.some(event => event.type === 'itemCollected' && this.content.definitions.items[String(event.data.typeId)]?.kind === 'money'
+            || event.type === 'moneyChanged')) this.coinBankTicks = COIN_BANK_TICKS
+        // DrawUICoinBank draws only in SCENE_PLAYING (not the intro, nor once the zombies got in), unless Crazy Dave is out.
+        const playing = snapshot.phase === 'gameplay' && snapshot.result !== 'lost'
+        this.coinBank.node.active = this.coinBankTicks > 0 && (playing || this.daveOut)
         if (!this.coinBank.node.active) return
         uiNode({ node: this.coinBank.node, opacity: Math.min(255, Math.round(255 * this.coinBankTicks / 15)) })
         const text = formatMoney(snapshot.money)
@@ -248,7 +282,7 @@ export class LevelHudPresenter {
     ): void {
         const showSeedGuide = introComplete && snapshot.result === 'playing' && this.presentation.seedGuideSteps.includes(snapshot.tutorial.step)
         this.seedBank.sync(snapshot, events, introComplete, showSeedGuide ? tutorialFlashColor(snapshot.gameplayTick) : null, allowTransientEffects)
-        const packet = snapshot.seedPackets.find(packet => packet.seedId === (this.presentation.guideSeed ?? this.level.seedPackets[0]))
+        const packet = snapshot.seedPackets.find(packet => packet.seedId === (this.presentation.guideSeed ?? snapshot.seedPackets[0]?.seedId))
         this.syncSeedTutorialArrow(!!(showSeedGuide && packet?.ready && !packet.availability.reason))
         const showLawnGuide = introComplete && snapshot.result === 'playing' && snapshot.cursor.mode === 'seed' &&
             this.presentation.lawnGuideSteps.includes(snapshot.tutorial.step)
@@ -291,8 +325,8 @@ export class LevelHudPresenter {
             this.progressCountdownStart = snapshot.wave.countdown
         } else this.progressCountdownStart = Math.max(this.progressCountdownStart, snapshot.wave.countdown)
         const denominator = Math.max(1, snapshot.wave.total - 1)
-        const flagCount = this.level.waves.filter(wave => wave.flagWave).length
-        const passedFlags = this.level.waves.filter((wave, index) => wave.flagWave && index < snapshot.wave.index).length
+        const flagCount = snapshot.wave.flagWaves.length
+        const passedFlags = snapshot.wave.flagWaves.filter(index => index < snapshot.wave.index).length
         const meterWidth = 150 - flagCount * 12
         const waveStart = ((snapshot.wave.index - 1) * meterWidth / denominator + passedFlags * 12) / 150
         const waveEnd = (snapshot.wave.index * meterWidth / denominator + passedFlags * 12) / 150
@@ -315,14 +349,12 @@ export class LevelHudPresenter {
         if (this.levelText.text !== level) this.levelText.text = level
         this.levelText.setPosition(progress > 0 ? 593 : 780, 595)
         if (progress <= 0) return
-        this.level.waves.forEach((wave, index) => {
-            if (wave.flagWave) {
-                const flag = this.progressMeter.getChildByName(`ProgressFlag-${index}`)
-                const raised = snapshot.wave.index > index + 1 ? 1 : snapshot.wave.index === index + 1
-                    ? Math.min(1, (this.progressCountdownStart - snapshot.wave.countdown) / 100) : 0
-                if (flag) flag.setPosition(flag.position.x, 3 + Math.round(14 * raised), 2)
-            }
-        })
+        for (const index of snapshot.wave.flagWaves) {
+            const flag = this.progressMeter.getChildByName(`ProgressFlag-${index}`)
+            const raised = snapshot.wave.index > index + 1 ? 1 : snapshot.wave.index === index + 1
+                ? Math.min(1, (this.progressCountdownStart - snapshot.wave.countdown) / 100) : 0
+            if (flag) flag.setPosition(flag.position.x, 3 + Math.round(14 * raised), 2)
+        }
         const fillWidth = Math.max(1, Math.round(PROGRESS_FILL_WIDTH * progress))
         const fillX = PROGRESS_METER_WIDTH - fillWidth - 7
         uiNode({ node: this.progressFillClip }).transform.setContentSize(fillWidth, PROGRESS_METER_HEIGHT)
@@ -408,7 +440,7 @@ export class LevelHudPresenter {
             arrow?.destroy()
             return
         }
-        const packet = this.seedBank.packets.find(packet => packet.seedId === (this.presentation.guideSeed ?? this.level.seedPackets[0]))!
+        const packet = this.seedBank.packets.find(packet => packet.seedId === (this.presentation.guideSeed ?? this.seedBank.packets[0]?.seedId))!
         // The bank may sit in an edge container, so place the arrow by the packet's world position.
         const { x, y } = this.tutorialArrowLayer.inverseTransformPoint(new Vec3(), packet.view.node.worldPosition)
         if (arrow) {

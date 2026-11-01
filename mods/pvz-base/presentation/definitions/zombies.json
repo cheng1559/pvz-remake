@@ -219,7 +219,55 @@
       "offset": [0, 0],
       "impactSounds": [{"id": "splat", "foley": true, "pitchRange": 10}],
       "damagedSprites": ["pvz:zombie_paper_paper2", "pvz:zombie_paper_paper3"], "showsHair": true,
-      "dropReanim": {"reanimId": "pvz:zombie_surprise", "offset": [-11, 0]}
+      "dropReanim": {"reanimId": "pvz:zombie_surprise", "offset": [-11, 0]},
+      "dropSounds": [{"id": "newspaper_rip", "foley": true, "pitchRange": -2}]
+    }
+  },
+  "pvz:screendoor": {
+    "nameKey": "SCREEN_DOOR_ZOMBIE",
+    "animationTarget": "pvz:screendoor",
+    "shadowX": 23,
+    "parts": {
+      "head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"],
+      "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground",
+      "helms": ["anim_screendoor"],
+      "shieldArms": {
+        "holding": ["Zombie_outerarm_screendoor", "Zombie_innerarm_screendoor", "Zombie_innerarm_screendoor_hand"],
+        "free": ["Zombie_outerarm_hand", "Zombie_outerarm_lower", "Zombie_outerarm_upper", "anim_innerarm1", "anim_innerarm2", "anim_innerarm3"]
+      }
+    },
+    "damagedArm": "damagedArm",
+    "animations": {
+      "idle": {"reanimId": "pvz:door_zombie_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:door_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "walk2": {"reanimId": "pvz:door_zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:door_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
+      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
+    },
+    "drops": {
+      "head": {
+        "track": "anim_head1",
+        "effect": "pvz:zombiehead",
+        "offset": [58, -30],
+        "moweredEffect": "pvz:moweredzombiehead",
+        "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+      },
+      "arm": {
+        "track": "Zombie_outerarm_lower",
+        "effect": "pvz:zombiearm",
+        "offset": [25, -55],
+        "moweredEffect": "pvz:moweredzombiearm",
+        "sounds": [{"id": "limbs_pop", "foley": true, "pitchRange": 10}]
+      }
+    },
+    "helm": {
+      "track": "anim_screendoor",
+      "effect": "pvz:zombiedoor",
+      "offset": [46, -71],
+      "impactSounds": [{"id": "splat", "foley": true, "pitchRange": 10}, {"id": "shieldhit", "foley": true}],
+      "damagedSprites": ["pvz:zombie_screendoor2", "pvz:zombie_screendoor3"], "showsHair": true
     }
   }
 }

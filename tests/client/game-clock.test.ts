@@ -1,3 +1,4 @@
+import { withFixedBanks } from '../fixedBankLevels'
 import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
@@ -84,7 +85,7 @@ test('adventure pause freezes scene animation, particles and tweens without chan
 
 test('one clock scales fixed-tick gameplay across frame rates, live speed changes, and freezing', () => {
     const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
-    const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
+    const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
     for (const fps of [30, 60, 144]) {
         const clock = new GameClock()
         const game = new LocalIntegratedGame(definitions, levels, undefined, true)

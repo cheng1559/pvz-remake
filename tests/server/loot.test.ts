@@ -43,7 +43,7 @@ test('2-1 drops nothing that would bring the purse and the mowers\' gold to the 
 
 test('after the award, each unused mower turns into five coins of gold, 200 ticks then every 40', () => {
     const game = play21(0, false)
-    for (let wave = 0; wave < levels.levels['pvz:adventure-2-1'].waves.length; wave++) game.debugCommand('/nextwave')
+    for (let wave = 0; wave < game.render().wave.total; wave++) game.debugCommand('/nextwave')
     game.debugCommand('/damage 5000')
     const award = game.render().items.find(item => item.typeId === 'pvz:sunshroom')!
     game.command({ type: 'collectItemAt', itemId: award.entityId })
@@ -58,4 +58,31 @@ test('after the award, each unused mower turns into five coins of gold, 200 tick
     assert.deepEqual(scored, [200, 240, 280, 320, 360])
     assert.equal(game.render().lawnMowers.length, 0)
     assert.equal(game.render().money, purse + 25)
+})
+
+test('a first adventure drops money from level 11 on, also on levels without a script', () => {
+    // Mower gold after the award follows Board::CanDropLoot, so it shows the rule without depending on zombie rolls.
+    const mowerGold = (adventureIndex: number) => {
+        const level = { ...levels.levels['pvz:adventure-2-2'], adventureIndex, tutorial: 'test:unscripted' }
+        const game = new LocalIntegratedGame(definitions, { ...levels, levels: { ...levels.levels, 'test:level': level } }, undefined, true)
+        game.start({ levelId: 'test:level', randomSeed: 3, initialMoney: 0, firstAdventure: true, mods: [] })
+        for (const seedId of game.render().seedChooser?.availableSeeds.slice(0, game.render().seedChooser!.slots) ?? []) game.command({ type: 'chooseSeed', seedId })
+        game.command({ type: 'confirmSeeds' })
+        game.command({ type: 'completeIntro' })
+        game.update(0)
+        for (let wave = 0; wave < game.render().wave.total; wave++) game.debugCommand('/nextwave')
+        game.debugCommand('/damage 5000')
+        const award = game.render().items.find(item => item.typeId === level.award.id)!
+        game.command({ type: 'collectItemAt', itemId: award.entityId })
+        game.update(0)
+        game.drainEvents()
+        let scored = 0
+        for (let tick = 1; tick <= 600; tick++) {
+            game.update(definitions.tickSeconds)
+            scored += game.drainEvents().filter(event => event.type === 'mowerScored').length
+        }
+        return scored
+    }
+    assert.equal(mowerGold(10), 0, 'no money before 2-1')
+    assert.equal(mowerGold(14), 5, 'a level after 2-3 needs no script to drop money')
 })

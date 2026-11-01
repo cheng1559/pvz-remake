@@ -1,4 +1,4 @@
-import type { WorldSnapshot } from '@/shared/protocol/index'
+import type { JsonObject, WorldSnapshot } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
 import { EconomyStateResource, LawnMowerComponent, LevelStateResource, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent } from '../state/components'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
@@ -9,6 +9,7 @@ import { selectedSeedId } from '../seeds/seedBank'
 import { seedChooserSnapshot } from '../seeds/seedChooser'
 import type { Session } from './session'
 import { tools } from '../seeds/tools'
+import { getActiveTutorial } from '../tutorials'
 
 /** What the client draws each frame. Mods add their state through `host.around(snapshot, 'build', ...)`. */
 export const snapshot = {
@@ -97,6 +98,9 @@ export const snapshot = {
             }
         })
 
+        const owned = tools.owned(session), script = getActiveTutorial(world)
+        const question = tutorial.dialogIndex === undefined ? undefined : script?.dialogQuestion?.(world, definitions)
+        const dialog: JsonObject | undefined = tutorial.dialogIndex === undefined ? undefined : { index: tutorial.dialogIndex, ...(question ? { question } : {}) }
         return {
             levelId: level.id,
             tick,
@@ -109,15 +113,16 @@ export const snapshot = {
             money: economy.money,
             wave: {
                 index: waves.index,
-                total: level.definition.waves.length,
+                total: waves.plan.length,
+                flagWaves: waves.plan.flatMap((wave, index) => wave.flagWave ? [index] : []),
                 countdown: Math.max(0, (waves.nextWaveAtTick ?? gameplayTick) - gameplayTick),
-                ...(level.phase === 'intro' ? { previewZombies: (waves.zombiesByWave ?? level.definition.waves.map(wave => wave.zombies))
-                    .flat().reduce<Record<string, number>>((counts, id) => { counts[id] = (counts[id] ?? 0) + 1; return counts }, {}) } : {}),
+                ...(level.phase === 'intro' ? { previewZombies: waves.plan.flatMap(wave => wave.zombies).reduce<Record<string, number>>((counts, id) => { counts[id] = (counts[id] ?? 0) + 1; return counts }, {}) } : {}),
             },
             cursor: seedBank.selection.mode === 'tool' ? { ...seedBank.selection } : selectedSeedId(seedBank)
                 ? { mode: 'seed', seedId: selectedSeedId(seedBank)! } : { mode: 'none' },
             seedPackets,
-            ...(level.definition.seedBankSlots === undefined ? {} : { seedChooser: seedChooserSnapshot(world, definitions) }),
+            // A game that opened the chooser keeps `choosing`, also once confirmed.
+            ...(seedBank.choosing === undefined ? {} : { seedChooser: seedChooserSnapshot(world, definitions, session.levels) }),
             conveyorPackets: seedBank.conveyor?.packets.map(packet => ({ ...packet, selected: seedBank.selection.mode === 'conveyor' && packet.id === seedBank.selection.packetId,
                 availability: planting.seedAvailability(session, packet.seedId, packet.id) })) ?? [],
             ...(waves.graves ? { graves: waves.graves.map(grave => ({ ...grave })) } : {}),
@@ -126,11 +131,11 @@ export const snapshot = {
             projectiles,
             items,
             lawnMowers,
-            tutorial: { id: level.definition.tutorial, step: tutorial.step },
+            tutorial: { id: level.definition.tutorial, step: tutorial.step, ...(script?.dave ? { dave: true } : {}), ...(script?.toolsInIntro ? { toolsInIntro: true } : {}) },
             extensions: { ...gameplay.components.snapshot(world),
-                ...(level.definition.tools ? { 'pvz:tools': { available: level.definition.tools.filter(id => tools.available(session, id)) } } : {}),
+                ...(owned.length ? { 'pvz:tools': { owned, available: owned.filter(id => tools.available(session, id)) } } : {}),
                 ...(seedBank.conveyor ? { 'pvz:conveyor': { ticks: seedBank.conveyor.moveTicks } } : {}),
-                ...(tutorial.dialogIndex === undefined ? {} : { 'pvz:dialog': { index: tutorial.dialogIndex } }),
+                ...(dialog ? { 'pvz:dialog': dialog } : {}),
                 ...(world.resources.has(DebugRulesResource) ? { 'pvz:debug': { ...getDebugRules(world) } } : {}) },
         }
     },

@@ -479,6 +479,15 @@ def build_reanim_clip(
 
     if missing_sprites:
         raise ValueError(f"missing sprite references: {', '.join(sorted(missing_sprites))}")
+    # Reanimation::DrawRenderGroup draws the shield and over-shield groups after every normal track, in this order.
+    # A clip without frames on one of these tracks (the eat clip's door arm) simply leaves it out.
+    draw_last = [track for track_id in anim_info[node_id].get("drawLastTracks", [])
+                 for track in tracks if track["id"] == track_id]
+    if draw_last:
+        top = max(track["zIndex"] for track in tracks)
+        for offset, track in enumerate(draw_last, start=1):
+            track["zIndex"] = top + offset
+        tracks.sort(key=lambda track: (track["zIndex"], track["id"]))
     return {
         "schemaVersion": 2,
         "id": content_id,

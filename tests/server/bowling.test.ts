@@ -1,3 +1,4 @@
+import { withFixedBanks } from '../fixedBankLevels'
 import { type World } from '@/ecs'
 import { ZombieComponent } from '@/server/state/components'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
@@ -88,8 +89,8 @@ test('seed and shovel selection are exclusive, including after save and on a non
     assert.equal(server.snapshot().cursor.mode, 'tool')
     assert.deepEqual(server.save().seedBank.selection, { mode: 'tool', toolId: 'pvz:shovel' })
 
-    const config = source('levels')
-    config.levels['pvz:adventure-1-1'].tools = ['pvz:shovel']
+    // A replay has the shovel on every level (CutScene::ShowShovel).
+    const config = withFixedBanks(source('levels'))
     const normal = new IntegratedGameServer(definitions, parseGameplayLevels(config, definitions))
     normal.start({ ...options, levelId: 'pvz:adventure-1-1', firstAdventure: false })
     runCommand(normal, { type: 'completeIntro' })

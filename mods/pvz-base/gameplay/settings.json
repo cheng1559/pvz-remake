@@ -1,4 +1,8 @@
 {
   "schemaVersion": 2,
-  "tickSeconds": 0.01
+  "tickSeconds": 0.01,
+  "seedBank": {
+    "baseSlots": 6,
+    "maxSlots": 10
+  }
 }

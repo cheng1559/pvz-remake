@@ -405,7 +405,7 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         assert.ok(Object.isFrozen(definitions.plants['example:rapid_pea']))
         assert.ok(visuals.levels?.['example:testing'], 'custom levels must include registered client presentation')
         assert.deepEqual(levels.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter', 'example:rapid_pea', 'example:beacon'])
-        assert.deepEqual(baseGameplay.levels['pvz:adventure-1-1'].seedPackets, ['pvz:peashooter'])
+        assert.equal(baseGameplay.levels['pvz:adventure-1-1'].seedPackets, undefined, 'the base 1-1 bank comes from the available seeds')
         const animations = new ClientAnimationRegistry(visuals)
         assert.equal(animations.resolve('example:rapid_pea').shootHead.rateScale, 1)
         assert.equal(animations.resolve('pvz:peashooter').shootHead.rateScale, 1)

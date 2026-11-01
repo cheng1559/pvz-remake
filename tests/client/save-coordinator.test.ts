@@ -1,3 +1,4 @@
+import { withFixedBanks } from '../fixedBankLevels'
 import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
@@ -14,7 +15,7 @@ import { levelPresentation, reanim } from './level-test-snapshot'
 
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
-const levels = parseGameplayLevels(source('levels'), definitions)
+const levels = parseGameplayLevels(withFixedBanks(source('levels')), definitions)
 
 test('base save compatibility requires matching identity, version and content hash', () => {
     const installed = { id: 'pvz', version: '2.0.0', contentHash: 'hash' }

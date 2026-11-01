@@ -14,6 +14,7 @@ import {
 } from '../state/components'
 import { explode } from '../combat/explosions'
 import { WaveResource } from '../state/levelState'
+import { dropGraveLoot } from '../level/loot'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import { destroyZombie, isTargetableZombie } from '../zombies/damage'
 
@@ -123,6 +124,7 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                         emitServerEvent(events, 'graveBusted', {
                             entityId: entity, row: position.row, column: plant.column, x: position.x, y: position.y,
                         })
+                        dropGraveLoot(world, definitions, position.x, position.y)
                         break
                     }
                 }

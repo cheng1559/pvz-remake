@@ -1,3 +1,4 @@
+import { withFixedBanks } from '../fixedBankLevels'
 import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
@@ -9,7 +10,7 @@ import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/
 
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
-const levels = parseGameplayLevels(source('levels'), definitions)
+const levels = parseGameplayLevels(withFixedBanks(source('levels')), definitions)
 
 test('integrated client hides channel packets behind start, command, update, and render', () => {
     const game = new LocalIntegratedGame(definitions, levels)

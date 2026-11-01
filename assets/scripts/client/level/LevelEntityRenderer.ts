@@ -202,8 +202,7 @@ export class LevelEntityRenderer {
         this.lastSnapshot = snapshot
         for (const event of events) {
             if (event.type === 'zombieHelmDropped' && typeof event.data.entityId === 'number' && event.data.silent !== true) {
-                this.spawnHelm(event.data.entityId, snapshot)
-                this.zombies.get(event.data.entityId)?.helmDropped?.()
+                this.dropHelm(event.data.entityId, snapshot, event.data.bypassed === true)
             }
             if (event.type !== 'zombiePartDropped') continue
             const entityId = event.data.entityId
@@ -368,12 +367,16 @@ export class LevelEntityRenderer {
         })
     }
 
-    private spawnHelm(entityId: number, snapshot: WorldSnapshot): void {
+    private dropHelm(entityId: number, snapshot: WorldSnapshot, bypassed: boolean): void {
         const node = this.entities.get(entityId)
         const zombie = snapshot.zombies.find(candidate => candidate.entityId === entityId)
         const typeId = zombie?.typeId ?? this.zombieTypes.get(entityId)
         const helm = typeId ? this.content.presentation.zombies[typeId]?.helm : undefined
         if (!node || !helm) return
+        if (!bypassed) {
+            this.zombies.get(entityId)?.helmDropped?.()
+            this.audio.sounds(helm.dropSounds)
+        }
         const track = this.zombies.get(entityId)?.getTrackWorldPosition(helm.track)
         const local = track ? uiNode({ node: this.entityLayer }).transform.convertToNodeSpaceAR(track) : null
         ParticlePlayer.spawn({
@@ -487,7 +490,7 @@ export class LevelEntityRenderer {
                 .node.setScale(visual.scale, visual.scale, 1)
             return
         }
-        const cost = award.packetCost
+        const cost = this.content.definitions.seeds[award.id].sunCost
         const seedType = plantDefinition(this.content.presentation, award.id).visual.seedType
         SeedPacketRenderer.drawSeedPacket({
             definitions: this.content.presentation,

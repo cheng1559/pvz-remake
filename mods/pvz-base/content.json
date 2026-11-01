@@ -51171,7 +51171,11 @@
       "pvz:sleeping": "assets/reanim/sleeping.json",
       "pvz:coin_silver": "assets/reanim/coin_silver.json",
       "pvz:coin_gold": "assets/reanim/coin_gold.json",
-      "pvz:diamond": "assets/reanim/diamond.json"
+      "pvz:diamond": "assets/reanim/diamond.json",
+      "pvz:door_zombie_idle": "assets/reanim/door_zombie_idle.json",
+      "pvz:door_zombie_walk": "assets/reanim/door_zombie_walk.json",
+      "pvz:door_zombie_walk2": "assets/reanim/door_zombie_walk2.json",
+      "pvz:door_zombie_eat": "assets/reanim/door_zombie_eat.json"
     },
     "particles": {
       "pvz:artchallengeplant": "assets/particles/artchallengeplant.json",

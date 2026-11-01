@@ -51,6 +51,8 @@ export type GameCommand =
     | { type: 'pause' }
     | { type: 'resume' }
     | { type: 'advanceDialog' }
+    /** Answers the Yes/No question a dialogue line asks ({NO_CLICK}); only the active script decides what it means. */
+    | { type: 'answerDialog'; accept: boolean }
     | { type: 'completeIntro' }
 
 export interface ClientPacketBase {
@@ -64,8 +66,13 @@ export interface StartSessionPacket extends ClientPacketBase {
     randomSeed: number
     /** The player's coins, in original coin units. */
     initialMoney: number
-    /** Seed-slot upgrades bought in the store; diamonds drop only after the first. */
+    /** Seed-slot upgrades bought in the store; diamonds drop only after the first, and each adds a chooser slot. */
     packetUpgrades?: number
+    /**
+     * Crazy Dave may sell the next seed-slot upgrade during the intro (CutScene::CanGetPacketUpgrade); the client sends
+     * it while the player has not declined twice.
+     */
+    packetUpgradeOffer?: { cost: number }
     firstAdventure: boolean
     mods: EnabledMod[]
     save?: JsonValue
@@ -110,11 +117,23 @@ export interface GraveSnapshot {
     riseDelay: number
     offsetX: number
     offsetY: number
+    /** Board::PickSpecialGraveStone: one grave of a level draws the first stone row (GRIDITEM_STATE_GRAVESTONE_SPECIAL). */
+    special?: true
+    /** A grave added during play (/grave) rises from this gameplay tick; the level's own graves rise in the intro. */
+    riseAtTick?: number
 }
 
 /** Board::AddAGraveStone: 20 stone looks and a rise delay of 0-49 ticks. */
 export const GRAVE_VARIANTS = 20
 export const GRAVE_MAX_RISE_DELAY = 49
+/** mGridItemCounter at which a grave has fully risen and can raise zombies (Board::SpawnZombiesFromGraves). */
+export const GRAVE_RISEN_COUNTER = 100
+
+/** mGridItemCounter of a grave added in play: -delay when placed, then Board::UpdateGridItems adds one each later tick.
+ *  Undefined for the level's own graves, which rise in the intro. */
+export function graveRiseCounter(grave: GraveSnapshot, gameplayTick: number): number | undefined {
+    return grave.riseAtTick === undefined ? undefined : Math.min(GRAVE_RISEN_COUNTER, gameplayTick - grave.riseAtTick - grave.riseDelay)
+}
 
 export function graveAt(graves: readonly GraveSnapshot[] | undefined, row: number, column: number): GraveSnapshot | undefined {
     return graves?.find(grave => grave.row === row && grave.column === column)
@@ -256,6 +275,8 @@ export interface ItemSnapshot {
 export interface WaveSnapshot {
     index: number
     total: number
+    /** Indexes (from 0) of the flag waves. */
+    flagWaves: number[]
     countdown: number
     previewZombies?: Record<string, number>
 }
@@ -263,6 +284,10 @@ export interface WaveSnapshot {
 export interface TutorialSnapshot {
     id: string
     step: string
+    /** The level's script brings Crazy Dave for the intro. */
+    dave?: true
+    /** The level's script shows the shovel during the intro. */
+    toolsInIntro?: true
 }
 
 export interface LawnMowerSnapshot {
@@ -344,6 +369,10 @@ export function parseClientPacket(value: unknown): ClientPacket {
             uint32(packet.randomSeed, 'startSession.randomSeed')
             integer(packet.initialMoney, 'startSession.initialMoney')
             if (packet.packetUpgrades !== undefined) integer(packet.packetUpgrades, 'startSession.packetUpgrades')
+            if (packet.packetUpgradeOffer !== undefined) {
+                const offer = record(packet.packetUpgradeOffer, 'startSession.packetUpgradeOffer')
+                integer(offer.cost, 'startSession.packetUpgradeOffer.cost')
+            }
             boolean(packet.firstAdventure, 'startSession.firstAdventure')
             array(packet.mods, 'startSession.mods').forEach((value, index) => validateEnabledMod(value, index))
             break
@@ -594,6 +623,7 @@ const validateGameCommand = (value: unknown): void => {
             integer(command.column, 'useToolAt.column')
             return
         case 'collectItemAt': integer(command.itemId, 'collectItemAt.itemId'); return
+        case 'answerDialog': boolean(command.accept, 'answerDialog.accept'); return
         case 'clearCursor':
         case 'pause':
         case 'resume':
@@ -630,6 +660,9 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
     const wave = record(snapshot.wave, 'snapshot.wave')
     integer(wave.index, 'snapshot.wave.index')
     integer(wave.total, 'snapshot.wave.total')
+    array(wave.flagWaves, 'snapshot.wave.flagWaves').forEach(index => {
+        if (!Number.isInteger(index) || (index as number) < 0 || (index as number) >= (wave.total as number)) throw new TypeError('snapshot.wave.flagWaves holds a wave outside the level')
+    })
     integer(wave.countdown, 'snapshot.wave.countdown')
     if (wave.previewZombies !== undefined) for (const count of Object.values(record(wave.previewZombies, 'snapshot.wave.previewZombies'))) {
         integer(count, 'snapshot.wave.previewZombies count')
@@ -640,6 +673,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
     const tutorial = record(snapshot.tutorial, 'snapshot.tutorial')
     nonEmptyString(tutorial.id, 'snapshot.tutorial.id')
     nonEmptyString(tutorial.step, 'snapshot.tutorial.step')
+    for (const key of ['dave', 'toolsInIntro']) if (tutorial[key] !== undefined && tutorial[key] !== true) throw new TypeError(`snapshot.tutorial.${key} must be true`)
     record(snapshot.extensions, 'snapshot.extensions')
     const cursor = record(snapshot.cursor, 'snapshot.cursor')
     if (cursor.mode === 'seed') nonEmptyString(cursor.seedId, 'snapshot.cursor.seedId')
@@ -686,6 +720,8 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         for (const key of ['column', 'row', 'variant', 'riseDelay']) integer(grave[key], `${name}.${key}`)
         checkGraveRanges(grave as unknown as GraveSnapshot, name)
         finite(grave.offsetX, `${name}.offsetX`); finite(grave.offsetY, `${name}.offsetY`)
+        if (grave.special !== undefined && grave.special !== true) throw new TypeError(`${name}.special must be true`)
+        if (grave.riseAtTick !== undefined) integer(grave.riseAtTick, `${name}.riseAtTick`)
     })
     array(snapshot.plants, 'snapshot.plants').forEach((entry, index) => {
         const name = `snapshot.plants[${index}]`

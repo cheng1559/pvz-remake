@@ -24,8 +24,7 @@
     "tutorial": "example:testing",
     "award": {
       "kind": "seed",
-      "id": "pvz:sunflower",
-      "packetCost": 50
+      "id": "pvz:sunflower"
     }
   }
 }

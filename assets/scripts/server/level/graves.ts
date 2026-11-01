@@ -1,6 +1,6 @@
 import type { World } from '@/ecs'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { GRAVE_MAX_RISE_DELAY, GRAVE_VARIANTS, type GraveSnapshot } from '@/shared/protocol'
+import { GRAVE_MAX_RISE_DELAY, GRAVE_RISEN_COUNTER, GRAVE_VARIANTS, graveRiseCounter, type GraveSnapshot } from '@/shared/protocol'
 import { LevelStateResource, RandomResource, ZombieComponent } from '../state/components'
 import { ItemComponent, WaveResource } from '../state/levelState'
 import { spawnZombie } from '../zombies/spawn'
@@ -23,6 +23,8 @@ export function createGraves(world: World): GraveSnapshot[] {
             graves.push(createGrave(world, row, column))
         }
     }
+    // Board::PickSpecialGraveStone, right after placing them: one stone looks different.
+    if (graves.length) graves[random.integer(0, graves.length - 1)].special = true
     return graves
 }
 
@@ -36,6 +38,9 @@ export function updateGraveSpawns(world: World, definitions: GameplayDefinitions
     if ([...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === definition.award.id)) return
     const choices = definition.graveZombies!, random = world.resources.get(RandomResource)
     for (const grave of waves.graves ?? []) {
+        // Board::SpawnZombiesFromGraves skips a grave still rising, before picking its zombie. The level's own graves
+        // rose in the intro.
+        if ((graveRiseCounter(grave, tick) ?? GRAVE_RISEN_COUNTER) < GRAVE_RISEN_COUNTER) continue
         let roll = random.integer(0, choices.reduce((sum, entry) => sum + entry.weight, 0) - 1)
         const typeId = choices.find(entry => (roll -= entry.weight) < 0)!.id
         const entityId = spawnZombie(world, definitions, typeId, grave.row,

@@ -1,3 +1,4 @@
+import { withFixedBanks } from '../fixedBankLevels'
 import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
@@ -12,7 +13,7 @@ const source = json('definitions')
 source.plants['test:plant'] = { maxHealth: 300, body: source.plants['pvz:peashooter'].body, behavior: { intervalTicks: 10 } }
 source.seeds['test:plant'] = { plant: 'test:plant', sunCost: 0, cooldownTicks: 1, placement: 'ground' }
 const definitions = parseGameplayDefinitions(source, json('seed-catalog'))
-const levelSource = json('levels')
+const levelSource = withFixedBanks(json('levels'))
 levelSource.levels['pvz:adventure-1-1'].seedPackets.push('test:plant')
 const levels = parseGameplayLevels(levelSource, definitions)
 type State = { ticks: number, history: { heals: number } }

@@ -27,6 +27,7 @@ export class IntegratedGameServer {
             throw new Error('IntegratedGameServer requires a 0.01 second fixed tick')
         }
         gameplay.freeze(definitions)
+        gameplay.validateLevels(levels)
         this.content = { definitions, levels, gameplay }
     }
 

@@ -1,5 +1,5 @@
 import type { World } from '@/ecs/index'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { isWaveRule, levelTools, type GameplayDefinitions } from '@/shared/content/gameplay'
 import type { EnabledMod } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
@@ -8,6 +8,7 @@ import {
     LawnMowerComponent,
     LevelStateResource,
     MAX_SUN,
+    PacketUpgradeOfferResource,
     PlantAttackComponent,
     PlantComponent,
     PositionComponent,
@@ -20,7 +21,7 @@ import { EventQueueResource } from '../state/events'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { initialPlantAbility } from '../plants/abilities'
 import { parseServerSaveSnapshot, type SavedEntity, type ServerSaveSnapshot } from './save'
-import { availableSeeds } from '../seeds/seedChooser'
+import { availableSeeds, bankSlots, seedBankStart } from '../seeds/seedChooser'
 import { createSession, createWorld, type ServerContent, type Session } from './session'
 
 /** Captures a session as a save; `save.ts` defines and validates the format. */
@@ -70,6 +71,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         random: world.resources.get(RandomResource).snapshot(),
         level: { phase: level.phase, result: level.result, paused: level.paused },
         economy: { ...world.resources.get(EconomyStateResource) },
+        ...(world.resources.has(PacketUpgradeOfferResource) ? { packetUpgradeOffer: { ...world.resources.get(PacketUpgradeOfferResource) } } : {}),
         seedBank: {
             selection: { ...seedBank.selection },
             ...(seedBank.conveyor === undefined ? {} : { conveyor: jsonRoundTrip(seedBank.conveyor) }),
@@ -96,7 +98,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
             index: wave.index,
             ...(wave.graves === undefined ? {} : { graves: wave.graves.map(grave => ({ ...grave })) }),
             ...(wave.graveRiseAtTick === undefined ? {} : { graveRiseAtTick: wave.graveRiseAtTick }),
-            ...(wave.zombiesByWave === undefined ? {} : { zombiesByWave: wave.zombiesByWave.map(zombies => [...zombies]) }),
+            plan: wave.plan.map(entry => ({ zombies: [...entry.zombies], ...(entry.flagWave ? { flagWave: true as const } : {}) })),
             ...(wave.rowPicks === undefined ? {} : { rowPicks: wave.rowPicks.map(row => ({ ...row })) }),
             ...(wave.hugeWaveAnnounced === undefined ? {} : { hugeWaveAnnounced: wave.hugeWaveAnnounced }),
             ...(wave.nextWaveAtTick === undefined ? {} : { nextWaveAtTick: wave.nextWaveAtTick }),
@@ -132,11 +134,11 @@ export function restoreSession(
     }
     const definition = content.levels.levels[save.levelId]
     if (!definition) throw new Error(`Unknown saved level: ${save.levelId}`)
-    if (save.wave.index > definition.waves.length) throw new Error('Saved wave index is outside the level')
-    if (definition.zombiePool && (!save.wave.zombiesByWave || save.wave.zombiesByWave.length !== definition.waves.length ||
-        save.wave.zombiesByWave.some(wave => wave.some(id => !definitions.zombies[id])))) {
+    if (save.wave.plan.length !== (isWaveRule(definition.waves) ? definition.waves.count : definition.waves.length) ||
+        save.wave.plan.some(wave => wave.zombies.some(id => !definitions.zombies[id]))) {
         throw new Error('Saved zombie waves do not match the level')
     }
+    if (save.wave.index > save.wave.plan.length) throw new Error('Saved wave index is outside the level')
     if (definition.activeRows.length > 1 && (!save.wave.rowPicks ||
         save.wave.rowPicks.length !== definition.activeRows.length ||
         save.wave.rowPicks.some(row => !definition.activeRows.includes(row.row)))) {
@@ -146,18 +148,22 @@ export function restoreSession(
     if (save.wave.graves?.some(grave => grave.row >= board.rows || grave.column >= board.columns)) {
         throw new Error('Saved grave is outside the board')
     }
-    const slots = definition.conveyor ? 0 : definition.seedBankSlots ?? definition.seedPackets.length
+    // A game that opened the chooser keeps `choosing`; a later upgrade only adds slots to it.
+    const start = seedBankStart(definitions, content.levels, definition, save.tutorial.firstAdventure, save.economy.packetUpgrades)
+    const chooser = save.seedBank.choosing !== undefined
+    const slots = chooser ? bankSlots(definitions, content.levels, definition, save.tutorial.firstAdventure, save.economy.packetUpgrades)
+        : 'seeds' in start ? start.seeds.length : 0
     if (!!save.seedBank.conveyor !== !!definition.conveyor || save.seedBank.conveyor?.packets.some(packet => !definition.conveyor!.seeds.some(seed => seed.id === packet.seedId))) {
         throw new Error('Saved conveyor does not match the level')
     }
     if (save.seedBank.conveyor && save.seedBank.conveyor.packets.length > definition.conveyor!.capacity) throw new Error('Saved conveyor exceeds capacity')
     if (save.seedBank.conveyor?.lastSeedId && !definition.conveyor!.seeds.some(seed => seed.id === save.seedBank.conveyor!.lastSeedId)) throw new Error('Saved conveyor last seed is not in the supply')
-    if (save.seedBank.selection.mode === 'tool' && !definition.tools?.includes(save.seedBank.selection.toolId)) throw new Error('Saved tool is unavailable in this level')
-    if (save.seedBank.choosing ? !definition.seedBankSlots || save.level.phase !== 'intro' || save.seedBank.packets.length > slots
+    if (save.seedBank.selection.mode === 'tool' && !levelTools(content.levels, definition, save.tutorial.firstAdventure).includes(save.seedBank.selection.toolId)) throw new Error('Saved tool is unavailable in this level')
+    if (chooser && ('conveyor' in start || definition.seedPackets)) throw new Error('Saved seed choice does not match the level')
+    if (save.seedBank.choosing ? save.level.phase !== 'intro' || save.seedBank.packets.length > slots
         : save.seedBank.packets.length !== slots) throw new Error('Saved seed bank size does not match the level')
     // Only an open chooser is limited to unlocked seeds; /seed may put any installed seed in a confirmed bank.
-    if (definition.seedBankSlots && (save.seedBank.choosing === undefined || save.seedBank.choosing &&
-        save.seedBank.packets.some(packet => !availableSeeds(definitions, definition, save.tutorial.firstAdventure).includes(packet.seedId)))) {
+    if (save.seedBank.choosing && save.seedBank.packets.some(packet => !availableSeeds(definitions, content.levels, definition, save.tutorial.firstAdventure).includes(packet.seedId))) {
         throw new Error('Saved seed choice does not match the level')
     }
     for (const packet of save.seedBank.packets) {
@@ -177,6 +183,7 @@ export function restoreSession(
         ...save.level,
     })
     world.resources.set(EconomyStateResource, { ...save.economy, sun: Math.min(MAX_SUN, save.economy.sun) })
+    if (save.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...save.packetUpgradeOffer })
     world.resources.set(RandomResource, DeterministicRng.restore(save.random))
     world.resources.set(SeedBankResource, {
         selection: { ...save.seedBank.selection },

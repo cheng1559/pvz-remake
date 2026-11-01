@@ -6,16 +6,20 @@ import {
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { tryDropLevelAward } from './levelAward'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
+import { getActiveTutorial } from '../tutorials'
+import { MAX_MONEY } from '@/shared/menu'
 
 const SILVER = 'pvz:coin_silver', GOLD = 'pvz:coin_gold', DIAMOND = 'pvz:diamond'
-/** PlayerInfo::AddCoins caps the purse at 99999 coins ($999,990). */
-export const MAX_MONEY = 99999
 
-/** Board::CanDropLoot: replays always drop money; the first adventure only from levels that opt in. */
+/** Board::CanDropLoot: the first adventure drops money from level 11 (2-1) on. */
+const FIRST_LOOT_LEVEL = 11
+
+/** Board::CanDropLoot: replays always drop money; the first adventure from FIRST_LOOT_LEVEL on. */
 export function canDropLoot(world: World): boolean {
     // Bare system worlds (tests, previews) have no level progress and no loot.
     if (!world.resources.has(TutorialResource)) return false
-    return !world.resources.get(TutorialResource).firstAdventure || world.resources.get(LevelStateResource).definition.loot?.firstAdventure === true
+    return !world.resources.get(TutorialResource).firstAdventure ||
+        world.resources.get(LevelStateResource).definition.adventureIndex >= FIRST_LOOT_LEVEL
 }
 
 /** Zombie::DropLoot: the award check comes first, then one roll per zombie. */
@@ -34,11 +38,21 @@ export function dropZombieLoot(world: World, definitions: GameplayDefinitions, e
     dropLootPiece(world, definitions, position.x + body.x + body.width / 2, position.y + body.y + body.height / 4, value)
 }
 
+/**
+ * Plant::UpdateGraveBuster: an eaten grave drops loot at 12 times a plain zombie's odds. It calls Board::DropLootPiece
+ * directly, without the zombies' Board::CanDropLoot (graves only appear from 2-1 on, where that allows it anyway).
+ */
+export function dropGraveLoot(world: World, definitions: GameplayDefinitions, x: number, y: number): void {
+    // Bare system worlds (tests, previews) have no level progress and no loot.
+    if (!world.resources.has(TutorialResource)) return
+    dropLootPiece(world, definitions, x + 40, y, 12)
+}
+
 /** Board::DropLootPiece. Presents and chocolate need the Zen Garden and are not installed, so their ranges stay empty. */
 function dropLootPiece(world: World, definitions: GameplayDefinitions, x: number, y: number, factor: number): void {
     const level = world.resources.get(LevelStateResource).definition
     const economy = world.resources.get(EconomyStateResource)
-    const rules = world.resources.get(TutorialResource).firstAdventure ? level.loot : undefined
+    const rules = world.resources.get(TutorialResource).firstAdventure ? getActiveTutorial(world)?.loot : undefined
     let roll = world.resources.get(RandomResource).integer(0, 29999)
     if (rules?.firstCoinAfterWave !== undefined && !economy.firstCoinDropped && world.resources.get(WaveResource).index > rules.firstCoinAfterWave) roll = 1000
     const typeId = roll < 14 * factor ? (economy.diamonds ? DIAMOND : GOLD) : roll < 250 * factor ? GOLD : roll < 2500 * factor ? SILVER : undefined

@@ -53,6 +53,11 @@ function applyPreviewParts(player: ReanimPlayer, typeId: string, definitions: Pr
     for (const track of parts.helms) player.setTracksVisible([track], definition.helm?.track === track)
     player.setTracksVisible(parts.hair, !definition.helm || definition.helm.showsHair === true)
     player.setTracksVisible(parts.tongue, hasTongue)
+    // Street zombies stand holding their shield (Zombie::AttachShield).
+    if (parts.shieldArms) {
+        player.setTracksVisible(parts.shieldArms.free, false)
+        player.setTracksVisible(parts.shieldArms.holding, true)
+    }
 }
 
 export class AdventureIntro implements LevelIntro {

@@ -8,7 +8,7 @@ import { ItemComponent, WaveResource } from '../state/levelState'
 export function tryDropLevelAward(world: World, definitions: GameplayDefinitions, remover: EntityRemover, defeated?: number): void {
     if (!world.resources.has(WaveResource)) return
     const level = world.resources.get(LevelStateResource)
-    if (level.result !== 'playing' || level.paused || world.resources.get(WaveResource).index < level.definition.waves.length) return
+    if (level.result !== 'playing' || level.paused || world.resources.get(WaveResource).index < world.resources.get(WaveResource).plan.length) return
     if ([...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === level.definition.award.id)) return
     const zombies = [...world.query(PositionComponent, ZombieComponent)]
     if (zombies.some(entity => {

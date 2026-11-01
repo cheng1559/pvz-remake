@@ -19,6 +19,30 @@ const setup = (save?: JsonValue) => {
 const command = (game: LocalIntegratedGame, value: GameCommand) => { game.command(value); game.update(0) }
 const chosen = (game: LocalIntegratedGame) => game.render().seedPackets.map(packet => packet.seedId)
 
+test('the bank fills with the available seeds while they fit and opens the chooser once there are more', () => {
+    const start = (levelId: string, firstAdventure: boolean, packetUpgrades = 0) => {
+        const game = new LocalIntegratedGame(definitions, levels)
+        game.start({ ...options, levelId, firstAdventure, ...(packetUpgrades ? { packetUpgrades } : {}) })
+        return game.render()
+    }
+    // Board::InitLevel: a first adventure's bank holds every unlocked seed, in order, up to level 7.
+    const firstSeven = ['pvz:peashooter', 'pvz:sunflower', 'pvz:cherrybomb', 'pvz:wallnut', 'pvz:potatomine', 'pvz:snowpea']
+    for (const [levelId, count] of [['1-1', 1], ['1-2', 2], ['1-3', 3], ['1-4', 4], ['1-6', 5], ['1-7', 6]] as const) {
+        const snapshot = start(`pvz:adventure-${levelId}`, true)
+        assert.deepEqual([snapshot.seedPackets.map(packet => packet.seedId), snapshot.seedChooser], [firstSeven.slice(0, count), undefined], levelId)
+    }
+    // Board::ChooseSeedsOnCurrentLevel: 1-8 is the first with more seeds (7) than slots (6), and every replay chooses.
+    assert.equal(start('pvz:adventure-1-8', true).seedChooser?.slots, 6)
+    assert.equal(start('pvz:adventure-1-1', false).seedChooser?.slots, 6)
+    // Board::GetNumSeedsInBank: 6 plus the upgrades, never more than the seeds there are.
+    assert.equal(start('pvz:adventure-1-8', true, 3).seedChooser, undefined, 'nine slots take all seven seeds, so nothing is chosen')
+    assert.equal(start('pvz:adventure-1-8', false, 3).seedChooser?.slots, 9)
+    assert.equal(start('pvz:adventure-1-5', true).seedPackets.length, 0, 'a conveyor level starts with an empty bank')
+    // CutScene::ShowShovel: the 1-4 award, from 1-5 on a first adventure and on every replay.
+    const owned = (levelId: string, firstAdventure: boolean) => (start(levelId, firstAdventure).extensions['pvz:tools'] as { owned: string[] } | undefined)?.owned
+    assert.deepEqual([owned('pvz:adventure-1-4', true), owned('pvz:adventure-1-5', true), owned('pvz:adventure-1-1', false)], [undefined, ['pvz:shovel'], ['pvz:shovel']])
+})
+
 test('seed choice is authoritative, ordered, capacity checked and works at an input-only boundary', () => {
     const game = setup()
     assert.equal(game.render().seedChooser?.slots, 6)
@@ -104,7 +128,7 @@ test('chooser levels share the global seed catalog, including registered seeds, 
             ownerId: 'test', data: {
                 seeds: { 'test:pea': { ...definitions.seeds['pvz:peashooter'] } },
                 seedCatalog: ['test:pea'],
-                levels: { 'test:chooser': { ...levels.levels[options.levelId], seedBankSlots: 4 } },
+                levels: { 'test:chooser': { ...levels.levels[options.levelId] } },
             },
         }],
     )

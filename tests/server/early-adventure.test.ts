@@ -26,7 +26,8 @@ test('1-3 and 1-4 start on three/five rows, wait 18 seconds and use the original
         const initial = server.snapshot()
         assert.equal(initial.sun, 50)
         assert.equal(initial.lawnMowers.length, index === 3 ? 3 : 5)
-        assert.deepEqual(initial.seedPackets.map(packet => packet.seedId), levels.levels[initial.levelId].seedPackets)
+        assert.deepEqual(initial.seedPackets.map(packet => packet.seedId), ['pvz:peashooter', 'pvz:sunflower', 'pvz:cherrybomb', ...index === 4 ? ['pvz:wallnut'] : []],
+            'Board::InitLevel fills the bank with the available seeds in order')
         assert.equal(initial.wave.countdown, 1800)
         assert.ok(initial.wave.previewZombies!['pvz:conehead'] > 0)
         for (const [seedId, ticks] of [['pvz:cherrybomb', 3500], ...(index === 4 ? [['pvz:wallnut', 2000]] : [])] as [string, number][]) {
@@ -51,11 +52,13 @@ test('1-3 and 1-4 start on three/five rows, wait 18 seconds and use the original
 test('early adventure wave plans obey points, reserve conehead introductions and survive save/restore', () => {
     for (const index of [3, 4]) {
         const server = game(index)
-        const plan = server.save().wave.zombiesByWave!
+        const plan = server.save().wave.plan.map(wave => wave.zombies)
         const level = levels.levels[options(index).levelId]
         assert.equal(plan.length, index === 3 ? 8 : 10)
         for (let wave = 0; wave < plan.length; wave++) {
-            assert.equal(plan[wave].reduce((sum, id) => sum + level.zombiePool!.find(entry => entry.id === id)!.points, 0), level.waves[wave].points)
+            // Board::PickZombieWaves: wave / 3 + 1 points, times 2.5 on the flag wave.
+            const points = Math.trunc(wave / 3) + 1
+            assert.equal(plan[wave].reduce((sum, id) => sum + definitions.zombies[id].wave!.points, 0), wave === plan.length - 1 ? Math.trunc(points * 2.5) : points)
             assert.equal(plan[wave].filter(id => id === 'pvz:flag').length, wave === plan.length - 1 ? 1 : 0)
         }
         if (index === 3) assert.deepEqual(plan[4], ['pvz:conehead'])

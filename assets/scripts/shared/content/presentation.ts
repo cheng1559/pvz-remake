@@ -218,7 +218,9 @@ export interface ZombiePresentationDefinition {
         /** Cones and buckets hide the hair until dropped; a newspaper does not. */
         readonly showsHair?: boolean
         /** Plays once on the zombie when the helm breaks, like the newspaper's surprise mark. */
-        readonly dropReanim?: { readonly reanimId: string; readonly offset: readonly [number, number] } }
+        readonly dropReanim?: { readonly reanimId: string; readonly offset: readonly [number, number] }
+        /** Play with dropReanim, like the newspaper's rip; neither plays when the hit bypasses the shield (Zombie::DropShield). */
+        readonly dropSounds?: readonly PresentationSound[] }
 }
 
 /**
@@ -243,6 +245,11 @@ export interface ZombieParts {
     readonly held?: readonly string[]
     /** The flag zombie's inner arm with and without the flag; the flag draws behind `front`, the arm gripping the pole. */
     readonly flagArm?: { readonly holding: readonly string[]; readonly free: readonly string[]; readonly front: string }
+    /**
+     * Zombie::SetupDoorArms: the arms holding a shield replace the free arms while the shield is worn and the zombie
+     * is not eating (StartEating and DetachShield bring the free arms back).
+     */
+    readonly shieldArms?: { readonly holding: readonly string[]; readonly free: readonly string[] }
 }
 
 export type NutBlinkSlot = 'blinkTwitch' | 'blinkTwice' | 'blinkThrice'
@@ -307,7 +314,7 @@ const VIEW_SLOTS: Readonly<Record<string, readonly string[]>> = {
 }
 export interface MainMenuButtonDefinition {
     readonly name: string
-    /** The menu action it opens; adventure and zombatar have their own handling. */
+    /** The menu page, action or dialog (players, options, quit) it opens; adventure and zombatar have their own handling. */
     readonly target?: string
     /** The selector track the button follows; `replace` hides that track's own drawing. */
     readonly track: string
@@ -581,6 +588,12 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             texts(flagArm.free, id + '.parts.flagArm.free')
             text(flagArm.front, id + '.parts.flagArm.front')
         }
+        if (parts.shieldArms !== undefined) {
+            const shieldArms = object(parts.shieldArms, id + '.parts.shieldArms')
+            texts(shieldArms.holding, id + '.parts.shieldArms.holding')
+            texts(shieldArms.free, id + '.parts.shieldArms.free')
+            if (zombie.helm === undefined) throw new TypeError(id + '.parts.shieldArms requires a helm')
+        }
         if (zombie.flag === true && parts.flagArm === undefined) throw new TypeError(id + '.parts.flagArm is required for a flag zombie')
         object(zombie.animations, id + '.animations')
         if (zombie.damagedArm !== 'damagedArm' && zombie.damagedArm !== 'poleVaulterDamagedArm') throw new TypeError(id + '.damagedArm is invalid')
@@ -607,6 +620,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             }
             sounds(helm.impactSounds, id + '.helm.impactSounds', true)
             sounds(helm.bowlingImpactSounds, id + '.helm.bowlingImpactSounds')
+            sounds(helm.dropSounds, id + '.helm.dropSounds')
         }
     }
     if (!zombies['pvz:normal']) throw new TypeError('Missing normal zombie presentation')
@@ -746,10 +760,8 @@ function sounds(value: unknown, name: string, required = false): void {
         const sound = object(entry, name)
         text(sound.id, name + '.id')
         if (typeof sound.foley !== 'boolean') throw new TypeError(name + '.foley must be boolean')
-        if (sound.pitchRange !== undefined) {
-            finite(sound.pitchRange, name + '.pitchRange')
-            if ((sound.pitchRange as number) < 0) throw new TypeError(name + '.pitchRange must be non-negative')
-        }
+        // A negative range lowers the pitch, like FOLEY_NEWSPAPER_RIP's -2 (TodFoley).
+        if (sound.pitchRange !== undefined) finite(sound.pitchRange, name + '.pitchRange')
     }
 }
 

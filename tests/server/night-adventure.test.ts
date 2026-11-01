@@ -29,12 +29,23 @@ function restore(save: ReturnType<IntegratedGameServer['save']>) {
     return server
 }
 
+test('grave zombies default to Board::PickGraveRisingZombieType over the zombies each level allows, and lawns with graves name theirs', () => {
+    const picks = (id: string) => levels.levels[`pvz:adventure-${id}`].graveZombies!.map(entry => `${entry.id.slice(4)}:${entry.weight}`)
+    assert.deepEqual(picks('1-1'), ['normal:4000'], '1-1 allows only normal zombies')
+    assert.deepEqual(picks('1-3'), ['normal:4000', 'conehead:4000'])
+    assert.deepEqual(picks('1-8'), ['normal:4000', 'conehead:4000', 'buckethead:3000'])
+    assert.deepEqual(picks('2-1'), ['normal:4000'])
+    assert.deepEqual(picks('2-2'), ['normal:4000', 'conehead:4000'], '2-2 names no bucketheads for its own graves')
+})
+
 test('2-1 runs Dave before choosing, blocks graves, has no sky sun, and restores the delayed final-wave emergence', () => {
     const server = new IntegratedGameServer(definitions, levels)
     const initial = server.start(options)
     assert.equal(initial.wave.total, 10)
     assert.deepEqual(initial.graves!.map(grave => grave.column), [6, 7, 8, 8])
     assert.equal(new Set(initial.graves!.map(grave => `${grave.row}:${grave.column}`)).size, 4)
+    assert.equal(initial.graves!.filter(grave => grave.special).length, 1, 'Board::PickSpecialGraveStone marks one stone')
+    assert.deepEqual(restore(server.save()).snapshot().graves, initial.graves, 'the special stone survives a save')
     assert.equal(runCommand(server, { type: 'chooseSeed', seedId: 'pvz:puffshroom' }), 'intro-not-complete')
     for (let index = 201; index <= 207; index++) {
         assert.deepEqual(server.snapshot().extensions['pvz:dialog'], { index })
@@ -273,6 +284,10 @@ test('grave busters only go on graves, cannot be dug up, then eat the grave and 
     assert.ok(!game.render().plants.some(value => value.entityId === buster.entityId))
     assert.ok(!game.render().graves!.some(value => value.row === grave.row && value.column === grave.column))
     assert.equal(game.render().graves!.length, 3)
+    // Plant::UpdateGraveBuster drops loot at factor 12, which always reaches at least a silver coin (2500 * 12 >= 30000).
+    const loot = game.render().items.filter(item => definitions.items[item.typeId]?.kind === 'money')
+    assert.equal(loot.length, 1, 'an eaten grave leaves a coin')
+    assert.ok(Math.abs(loot[0].x - (buster.x - 10)) <= 30, 'dropped where the grave buster stood')
     const restored = new LocalIntegratedGame(definitions, levels, undefined, true)
     restored.start({ ...options, firstAdventure: false, save: game.saveAtBoundary() })
     assert.deepEqual(restored.render().graves, game.render().graves)

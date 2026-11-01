@@ -1,3 +1,4 @@
+import { withFixedBanks } from '../fixedBankLevels'
 import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
@@ -25,7 +26,7 @@ import { spawnZombie } from '@/server/zombies/spawn'
 import type { JsonValue } from '@/shared/protocol/index'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
-const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
+const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
 const board = definitions.boards['pvz:day']
 
 function game(config = definitions) {

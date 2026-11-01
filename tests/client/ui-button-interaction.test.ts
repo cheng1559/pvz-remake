@@ -163,7 +163,7 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         ice: { plant: 'pvz:snowpea', sunCost: 175 },
     } }
     const bank = new LevelSeedBank({
-        content: { definitions, presentation: presentationFixture }, level: { seedPackets: ['pea', 'double'] }, seedPacketSlot: ui.root, presentation: {},
+        content: { definitions, presentation: presentationFixture }, level: {}, initialSeeds: ['pea', 'double'], seedPacketSlot: ui.root, presentation: {},
         ui: { text: (key: string) => key, tooltip: () => ({ warning: '', show() {}, hide() {} }) },
     })
     const world = {
@@ -230,7 +230,7 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
         const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
         const definitions = { seeds: { pea: { plant: 'pvz:peashooter', sunCost: 100 }, sunflower: { plant: 'pvz:sunflower', sunCost: 50 } }, items: {} }
         const bank = new LevelSeedBank({
-            level: { seedPackets: ['pea', 'sunflower'], ...(conveyor ? { conveyor: { capacity: 2, seeds: [{ id: 'pea' }] } } : {}) },
+            level: conveyor ? { conveyor: { capacity: 2, seeds: [{ id: 'pea' }] } } : {}, initialSeeds: conveyor ? [] : ['pea', 'sunflower'],
             content: { definitions, presentation: presentationFixture }, seedPacketSlot: ui.root, presentation: {},
             ui: { text: (key: string) => key, tooltip: () => ({ show() {}, hide() {} }) },
         })

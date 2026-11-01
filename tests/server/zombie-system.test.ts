@@ -36,7 +36,7 @@ function game(content = definitions) {
             skySun: 'pvz:sun',
             waves: [{ zombies: ['pvz:normal'] }],
             tutorial: 'pvz:test',
-            award: { kind: 'seed' as const, id: 'pvz:test', packetCost: 0 },
+            award: { kind: 'seed' as const, id: 'pvz:test' },
         },
         board,
         phase: 'gameplay',

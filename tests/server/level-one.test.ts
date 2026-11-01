@@ -3,6 +3,7 @@ import test from 'node:test'
 import { readGameplaySource } from '../../tools/mod/content'
 
 import { Schedule,World } from '@/ecs/index'
+import { GameplayRegistry } from '@/server/registry/GameplayRegistry'
 import {
 EconomyStateResource,
 LevelStateResource,
@@ -41,8 +42,10 @@ function setup() {
     world.resources.set(RandomResource, new DeterministicRng(1))
     world.resources.set(EventQueueResource, createEventQueue())
     world.resources.set(EconomyStateResource, { sun: definition.startingSun, money: 0, pendingSunSpend: 0 })
-    world.resources.set(SeedBankResource, { selection: { mode: 'none' }, packets: definition.seedPackets.map(seedId => ({ seedId, readyAtTick: 0 })) })
-    initializeLevel(world, true)
+    world.resources.set(SeedBankResource, { selection: { mode: 'none' }, packets: [{ seedId: 'pvz:peashooter', readyAtTick: 0 }] })
+    const gameplay = new GameplayRegistry()
+    gameplay.freeze(definitions)
+    initializeLevel(world, true, definitions, gameplay.waveRules)
     const schedule = new Schedule()
     schedule.add('tutorial', createLevelProgressSystem(definitions))
     schedule.add('spawn', createWaveSystem(definitions))
@@ -86,7 +89,7 @@ test('level one schedules tutorial sun and the first wave from planted Peashoote
 
 test('level one drops its award from the last effective zombie before its corpse disappears', () => {
     const { world } = setup()
-    world.resources.get(WaveResource).index = levels.levels['pvz:adventure-1-1'].waves.length
+    world.resources.get(WaveResource).index = world.resources.get(WaveResource).plan.length
     const zombieId = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
     world.get(zombieId, ZombieComponent)!.health = 0
     const headless = spawnZombie(world, definitions, 'pvz:normal', 2, 100, 250)
@@ -119,7 +122,7 @@ test('level one drops its award from the last effective zombie before its corpse
 
 test('the last zombie vanishes when losing its head drops the award, while burned corpses stay', () => {
     const { world } = setup()
-    world.resources.get(WaveResource).index = levels.levels['pvz:adventure-1-1'].waves.length
+    world.resources.get(WaveResource).index = world.resources.get(WaveResource).plan.length
     const last = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
     const burned = spawnZombie(world, definitions, 'pvz:normal', 1, 400, 250)
     Object.assign(world.get(burned, ZombieComponent)!, { hasHead: false, state: 'burned', deathTicksRemaining: 100 })

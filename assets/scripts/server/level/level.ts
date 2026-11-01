@@ -6,12 +6,13 @@ import { updateSkySun } from './sun'
 import { getAvailableSun } from './items'
 import { getActiveTutorial, TUTORIALS } from '../tutorials'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { planWaves } from './waves'
+import { planWaves } from './waveRules'
+import type { WaveRuleRegistry } from './waveRules'
 import { selectedSeedId } from '../seeds/seedBank'
 import { createGraves } from './graves'
 import { getDebugRules } from '../debug/debugRules'
 
-export function initializeLevel(world: World, firstAdventure: boolean): void {
+export function initializeLevel(world: World, firstAdventure: boolean, definitions: GameplayDefinitions, waveRules: WaveRuleRegistry): void {
     const level = world.resources.get(LevelStateResource).definition
     const script = TUTORIALS[level.tutorial]
     const blocked = firstAdventure && script?.blocksStart
@@ -24,7 +25,7 @@ export function initializeLevel(world: World, firstAdventure: boolean): void {
         index: 0,
         ...(level.graves ? { graves: createGraves(world) } : {}),
         nextWaveAtTick: blocked ? undefined : level.firstWaveTicks ?? 1,
-        ...(level.zombiePool ? { zombiesByWave: planWaves(level, world.resources.get(RandomResource)) } : {}),
+        plan: planWaves(waveRules.draft(level, definitions), level, world.resources.get(RandomResource)),
         ...(level.activeRows.length > 1 ? {
             rowPicks: level.activeRows.map(row => ({ row, lastPicked: 0, secondLastPicked: 0 })),
         } : {}),

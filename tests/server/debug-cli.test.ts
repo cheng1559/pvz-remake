@@ -1,3 +1,4 @@
+import { withFixedBanks } from '../fixedBankLevels'
 import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import test from 'node:test'
@@ -7,7 +8,7 @@ import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/
 import { getDebugCliCompletions, getDebugCliSuffix, parseDebugCliCommand } from '@/shared/debug/DebugCli'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
-const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
+const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
 function setup(debug = true, levelId = 'pvz:adventure-1-1', content = definitions) {
     const game = new LocalIntegratedGame(content, levels, undefined, debug)
     game.start({ levelId, randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
@@ -39,7 +40,7 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     const game = setup()
     const catalog = game.debugCommand('catalog').catalog!
     assert.deepEqual(catalog.plants, ['bowling-wallnut', 'bowling-explodenut', 'sunflower', 'peashooter', 'repeater', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'explodenut', 'puffshroom', 'sunshroom', 'fumeshroom', 'gravebuster'])
-    assert.deepEqual(catalog.zombies, ['flag', 'normal', 'conehead', 'buckethead', 'pole_vaulter', 'newspaper'])
+    assert.deepEqual(catalog.zombies, ['flag', 'normal', 'conehead', 'buckethead', 'pole_vaulter', 'newspaper', 'screendoor'])
     assert.deepEqual(getDebugCliCompletions('/plant re', catalog), ['/plant repeater'])
     assert.deepEqual(getDebugCliCompletions('/seed 1 sn', catalog), ['/seed 1 snowpea'])
     assert.deepEqual(getDebugCliCompletions('/collect ', catalog, true), ['/collect auto', '/collect click', '/collect move'])
@@ -49,7 +50,7 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     assert.throws(() => setup(false).debugCommand('/sun set 999'), /unsupported-command/)
 })
 
-test('CLI graves appear while paused, block planting and survive saves outside the authored layout', () => {
+test('CLI graves rise from where they are told, replace a grave in their cell, block planting, survive saves and open after the last wave', () => {
     const game = setup()
     const tick = game.render().gameplayTick
     for (const command of ['/grave 0 1', '/grave 6 1', '/grave 1 10', '/grave nope 1']) {
@@ -57,14 +58,19 @@ test('CLI graves appear while paused, block planting and survive saves outside t
     }
     assert.equal(game.debugCommand('/grave 3 2').ok, true)
     assert.equal(game.debugCommand('/grave 1 9').ok, true, 'debug commands can use inactive board rows')
-    const graves = game.render().graves!
-    assert.deepEqual(graves.map(({ row, column }) => [row, column]), [[2, 1], [0, 8]])
+    assert.deepEqual(game.render().graves!.map(({ row, column, riseAtTick }) => [row, column, riseAtTick]), [[2, 1, tick], [0, 8, tick]],
+        'they rise from the current gameplay tick')
     assert.equal(game.render().paused, true)
     assert.equal(game.render().gameplayTick, tick)
-    assert.equal(game.debugCommand('/grave 3 2').failure, 'condition')
+    assert.equal(game.debugCommand('/grave 3 2').ok, true, 'a grave in the cell is replaced')
     assert.equal(game.debugCommand('/plant wallnut 3 3').ok, true)
-    assert.equal(game.debugCommand('/grave 3 3').failure, 'condition')
-    assert.deepEqual(game.render().graves, graves)
+    assert.equal(game.debugCommand('/grave 3 3').ok, true, 'plants do not stop a debug grave')
+    assert.ok(!game.render().plants.some(plant => plant.row === 2 && plant.column === 2), 'Challenge::GraveDangerSpawnGraveAt kills the plants in the cell')
+    assert.equal(game.debugCommand('/plant bowling-wallnut 2 3').ok, true)
+    assert.equal(game.debugCommand('/grave 2 3').ok, true)
+    assert.ok(game.render().plants.some(plant => plant.typeId === 'pvz:bowling-wallnut'), 'a bowling nut holds no cell, so it rolls on')
+    const graves = game.render().graves!
+    assert.deepEqual(graves.map(({ row, column }) => [row, column]), [[0, 8], [2, 1], [2, 2], [1, 2]])
     const save = game.saveAtBoundary()
     const restored = new LocalIntegratedGame(definitions, levels, undefined, true)
     restored.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save })
@@ -76,15 +82,28 @@ test('CLI graves appear while paused, block planting and survive saves outside t
     assert.equal(game.lastRejection?.code, 'cell-has-grave')
 
     const finalSave = JSON.parse(JSON.stringify(save))
-    finalSave.wave.index = levels.levels['pvz:adventure-1-1'].waves.length - 1
+    finalSave.wave.index = finalSave.wave.plan.length - 1
     finalSave.wave.nextWaveAtTick = finalSave.gameplayTick + 1
     finalSave.wave.hugeWaveAnnounced = true
     finalSave.level.paused = false
     const final = new IntegratedGameServer(definitions, levels)
     final.restore(finalSave)
     for (let tick = 0; tick < 300; tick++) final.tick()
-    assert.equal(final.snapshot().wave.index, levels.levels['pvz:adventure-1-1'].waves.length)
-    assert.deepEqual(final.snapshot().graves, graves, 'day levels keep graves without scheduling unsupported grave zombies')
+    assert.equal(final.snapshot().wave.index, final.snapshot().wave.total)
+    assert.deepEqual(final.snapshot().graves, graves)
+    const risen = final.snapshot().zombies.filter(zombie => zombie.riseTicks !== undefined)
+    assert.deepEqual(risen.map(zombie => [zombie.row, zombie.typeId]).sort(), graves.map(grave => [grave.row, 'pvz:normal']).sort(),
+        'Board::SpawnZombieWave opens every grave after the last wave, on a day lawn too')
+
+    // Board::SpawnZombiesFromGraves skips a grave whose mGridItemCounter is still below 100 when they open.
+    const opensAt = finalSave.gameplayTick + 1 + 200
+    const rising = JSON.parse(JSON.stringify(finalSave))
+    rising.wave.graves = graves.slice(0, 2).map((grave, index) => ({ ...grave, riseAtTick: opensAt - grave.riseDelay - 99 - index }))
+    const partial = new IntegratedGameServer(definitions, levels)
+    partial.restore(rising)
+    for (let tick = 0; tick < 300; tick++) partial.tick()
+    assert.deepEqual(partial.snapshot().zombies.filter(zombie => zombie.riseTicks !== undefined).map(zombie => zombie.row), [graves[1].row],
+        'only the grave at counter 100 raises a zombie')
 })
 
 test('plant invincibility blocks bites until disabled and does not prevent removal', () => {

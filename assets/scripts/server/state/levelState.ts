@@ -1,5 +1,6 @@
 import { defineComponent, defineResource } from '@/ecs/index'
 import type { GraveSnapshot } from '@/shared/protocol'
+import type { WavePlan } from '../level/waveRules'
 
 export interface Item {
     typeId: string
@@ -40,7 +41,8 @@ export interface WaveState {
     index: number
     graves?: GraveSnapshot[]
     graveRiseAtTick?: number
-    zombiesByWave?: string[][]
+    /** Every wave of this game, built when it starts and kept by saves. */
+    plan: WavePlan[]
     nextWaveAtTick?: number
     accelerateAtTick?: number
     zombieIds?: number[]

@@ -124,9 +124,22 @@ function chillZombie(world: World, entity: number, zombie: Zombie, ticks: number
     zombie.chilledTicks = Math.max(zombie.chilledTicks, ticks)
 }
 
+/**
+ * Zombie::DropHelm and DropShield: a helm or shield still worn falls off. `bypassed` (DAMAGE_BYPASSES_SHIELD) skips
+ * the newspaper's rip and surprise.
+ */
+export function dropZombieHelm(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie, bypassed = false): void {
+    const helm = definitions.zombies[zombie.typeId].helm
+    if (!helm || zombie.helmHealth <= 0) return
+    zombie.helmHealth = 0
+    emitServerEvent(world.resources.get(EventQueueResource), 'zombieHelmDropped', { entityId: entity, helm: helm.type, ...(bypassed ? { bypassed: true } : {}) })
+}
+
 export function startZombieDeath(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie): void {
     if (zombie.state === 'dying') return
     dropZombieFlag(world, definitions, entity)
+    // Zombie::PlayDeathAnim drops a shield still held with DropShield(1U).
+    if (definitions.zombies[zombie.typeId].helm?.shield) dropZombieHelm(world, definitions, entity, zombie, true)
     const random = world.resources.get(RandomResource)
     const deaths = zombieGait(definitions.zombies[zombie.typeId], definitions).deaths
     const death = random.integer(0, 99) >= 51 && deaths[1] ? deaths[1] : deaths[0]

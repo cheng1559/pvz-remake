@@ -7,7 +7,7 @@ import type { ServerFramePacket, SessionStartedPacket, WorldSnapshot } from '@/s
 function snapshot(tick: number): WorldSnapshot {
     return {
         levelId: 'pvz:adventure-1-1', tick, gameplayTick: tick, phase: 'gameplay', result: 'playing', paused: false,
-        sun: 50, availableSun: 50, money: 0, wave: { index: 0, total: 4, countdown: 10 },
+        sun: 50, availableSun: 50, money: 0, wave: { index: 0, total: 4, flagWaves: [], countdown: 10 },
         cursor: { mode: 'none' }, seedPackets: [], conveyorPackets: [],
         plants: [{
             entityId: 1, typeId: 'pvz:peashooter', seedId: 'pvz:peashooter',

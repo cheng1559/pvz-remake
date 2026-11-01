@@ -59,9 +59,9 @@ test('day wave plans match original counts, flags, introduction waves and zombie
         for (let randomSeed = 1; randomSeed <= 20; randomSeed++) {
             const game = start(index)
             game.start({ ...options(index), randomSeed })
-            const plan = game.save().wave.zombiesByWave!
+            const waves = game.save().wave.plan, plan = waves.map(wave => wave.zombies)
             assert.equal(plan.length, count)
-            assert.deepEqual(levels.levels[options(index).levelId].waves.flatMap((wave, i) => wave.flagWave ? [i + 1] : []), count === 10 ? [10] : [10, 20])
+            assert.deepEqual(waves.flatMap((wave, i) => wave.flagWave ? [i + 1] : []), count === 10 ? [10] : [10, 20])
             for (let wave = 0; wave < count; wave++) {
                 assert.equal(plan[wave].includes('pvz:flag'), wave % 10 === 9)
                 if (wave < 4 || index === 8) assert.equal(plan[wave].includes('pvz:pole_vaulter'), false)
@@ -71,7 +71,7 @@ test('day wave plans match original counts, flags, introduction waves and zombie
                 const budget = wave % 10 === 9 ? Math.floor(base * 2.5) : base
                 const expected = index === 10 ? fixedFlag + (budget - fixedFlag) * 3
                     : index === 8 && wave === 5 ? 4 : index === 8 && wave === 9 ? 11 : budget
-                assert.equal(plan[wave].reduce((sum, id) => sum + levels.levels[options(index).levelId].zombiePool!.find(entry => entry.id === id)!.points, 0), expected)
+                assert.equal(plan[wave].reduce((sum, id) => sum + definitions.zombies[id].wave!.points, 0), expected)
             }
             for (const id of levels.levels[options(index).levelId].zombiePool!.filter(entry => entry.weight).map(entry => entry.id)) assert.ok(plan.at(-1)!.includes(id))
             if (index === 6) assert.ok(plan[5].includes('pvz:pole_vaulter'))
@@ -118,7 +118,7 @@ test('each day level runs both flag warnings, restores the planned waves and col
         const game = start(index)
         choose(game)
         runCommand(game, { type: 'completeIntro' })
-        const plan = game.save().wave.zombiesByWave!
+        const plan = game.save().wave.plan.map(wave => wave.zombies)
         let flags = 0
         for (let wave = 0; wave < plan.length; wave++) {
             const saved = game.save()

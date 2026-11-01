@@ -1,5 +1,6 @@
 {
   "pvz:flag": {
+    "wave": {"points": 1, "weight": 0},
     "dropsFlag": true,
     "maxHealth": 270,
     "boardEdgeX": -100,
@@ -13,6 +14,7 @@
     "walk2Chance": 0.5
   },
   "pvz:normal": {
+    "wave": {"points": 1, "weight": 4000},
     "maxHealth": 270,
     "boardEdgeX": -100,
     "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
@@ -22,9 +24,11 @@
     "bite": {"damage": 4, "cadenceTicks": 4},
     "gait": "pvz:normal",
     "tongueChance": 0.2,
-    "walk2Chance": 0.5
+    "walk2Chance": 0.5,
+    "graveRise": true
   },
   "pvz:conehead": {
+    "wave": {"points": 2, "weight": 4000},
     "maxHealth": 270,
     "boardEdgeX": -100,
     "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
@@ -35,9 +39,11 @@
     "helm": {"type": "cone", "health": 370},
     "gait": "pvz:normal",
     "tongueChance": 0.2,
-    "walk2Chance": 0.5
+    "walk2Chance": 0.5,
+    "graveRise": true
   },
   "pvz:buckethead": {
+    "wave": {"points": 4, "weight": 3000},
     "maxHealth": 270,
     "boardEdgeX": -100,
     "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
@@ -48,9 +54,11 @@
     "helm": {"type": "bucket", "health": 1100},
     "gait": "pvz:normal",
     "tongueChance": 0.2,
-    "walk2Chance": 0.5
+    "walk2Chance": 0.5,
+    "graveRise": true
   },
   "pvz:pole_vaulter": {
+    "wave": {"points": 2, "weight": 2000, "firstWave": 5},
     "maxHealth": 500,
     "boardEdgeX": -150,
     "spawn": {"minX": 870, "maxX": 879, "flagWaveOffset": 0},
@@ -78,6 +86,7 @@
     "targetingInsets": {"pvz:mine": 40}
   },
   "pvz:newspaper": {
+    "wave": {"points": 2, "weight": 1000},
     "maxHealth": 270,
     "boardEdgeX": -100,
     "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
@@ -90,5 +99,19 @@
     "walk2Chance": 0,
     "helm": {"type": "newspaper", "health": 150, "shield": true},
     "enrage": {"pauseTicks": 163, "speedPerTick": {"min": 0.89, "max": 0.91}}
+  },
+  "pvz:screendoor": {
+    "wave": {"points": 4, "weight": 3500, "firstWave": 5},
+    "maxHealth": 270,
+    "boardEdgeX": -100,
+    "spawn": {"minX": 780, "maxX": 819, "flagWaveOffset": 40},
+    "speedPerTick": {"min": 0.23, "max": 0.37},
+    "body": {"x": 36, "y": 0, "width": 42, "height": 115},
+    "attack": {"x": 20, "y": 0, "width": 50, "height": 115},
+    "bite": {"damage": 4, "cadenceTicks": 4},
+    "helm": {"type": "door", "health": 1100, "shield": true},
+    "gait": "pvz:normal",
+    "tongueChance": 0.2,
+    "walk2Chance": 0.5
   }
 }

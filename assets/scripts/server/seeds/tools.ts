@@ -3,12 +3,19 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
 import { planting } from './planting'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
+import { TutorialResource } from '../state/levelState'
+import { levelTools } from '@/shared/content/gameplay'
 
 /** Cursor tools such as the shovel. Mods wrap these through `host.around(tools, name, ...)`. */
 export const tools = {
+    /** The tools this game has, whether usable now or not. */
+    owned(session: Session): string[] {
+        return levelTools(session.levels, session.world.resources.get(LevelStateResource).definition, session.world.resources.get(TutorialResource).firstAdventure)
+    },
+
     available(session: Session, toolId: string): boolean {
         const level = session.world.resources.get(LevelStateResource)
-        return toolId === 'pvz:shovel' && level.definition.tools?.includes(toolId) === true && !level.paused && level.result === 'playing' &&
+        return toolId === 'pvz:shovel' && tools.owned(session).includes(toolId) && !level.paused && level.result === 'playing' &&
             (level.phase === 'gameplay' || getActiveTutorial(session.world)?.canSelectTool?.(session.world, toolId) === true)
     },
 
