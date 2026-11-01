@@ -1,6 +1,6 @@
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { Color, Mask, Node, Sprite, Vec3 } from 'cc'
-import type { WorldSnapshot } from '@/shared/protocol'
+import type { JsonObject, WorldSnapshot } from '@/shared/protocol'
 import { SpriteRepository } from '@/client/content/ClientContentLoader'
 import { uiNode } from '@/client/view/uiNode'
 import { UI } from '@/client/ui/UI'
@@ -14,6 +14,11 @@ import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UILabel } from '@/client/ui/UILabel'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { seedBankExtraWidth } from './LevelGeometry'
+
+/** The tools the server gives this game; a level does not list them. */
+export function ownedTools(snapshot: WorldSnapshot): string[] {
+    return (snapshot.extensions['pvz:tools'] as { owned: string[] } | undefined)?.owned ?? []
+}
 
 /** Optional board tools, opening dialogue and conveyor layout. Packet input belongs to LevelSeedBank. */
 export class LevelBoardHud {
@@ -41,10 +46,10 @@ export class LevelBoardHud {
         const result = new LevelBoardHud(root, content, ui, player)
         const sprites = new SpriteRepository(content.registry, content.loader)
         const level = content.levels.levels[initial.levelId], board = content.definitions.boards[level.board]
-        if (level.tools?.includes('pvz:shovel')) {
+        if (ownedTools(initial).includes('pvz:shovel')) {
             const [bankFrame, shovelFrame] = await Promise.all(['shovelbank', 'shovel'].map(id => sprites.load(`pvz:${id}`)))
             const layout = content.presentation.shovel
-            result.shovelX = layout.x + seedBankExtraWidth(level.conveyor?.capacity ?? level.seedBankSlots ?? level.seedPackets.length)
+            result.shovelX = layout.x + seedBankExtraWidth(level.conveyor?.capacity ?? initial.seedChooser?.slots ?? initial.seedPackets.length)
             result.shovelBank = ui.image(bankLayer, bankFrame, { x: result.shovelX, y: 0 }).node
             result.shovel = ui.image(result.shovelBank, shovelFrame, { x: layout.imageOffset[0], y: layout.imageOffset[1] }).node
             result.shovelHotkey = ui.label(result.shovelBank, {
@@ -79,7 +84,10 @@ export class LevelBoardHud {
             }).node
             result.stripe.setSiblingIndex(ground.getSiblingIndex() + 1)
         }
-        if (level.shovelTutorial || level.introDialog && initial.tutorial.step !== 'complete') result.dave = await CrazyDaveView.create(root, content, ui)
+        // Dave comes for scripted dialogue.
+        if (initial.tutorial.dave && initial.tutorial.step !== 'complete') {
+            result.dave = await CrazyDaveView.create(root, content, ui)
+        }
         root.setSiblingIndex(cursorLayer.getSiblingIndex())
         if (initial.tick > 0 || initial.phase === 'gameplay') result.delay = content.presentation.dave.delay
         result.sync(initial)
@@ -88,8 +96,20 @@ export class LevelBoardHud {
 
     private constructor(private root: Node, private content: LoadedContent, private ui: UI, private player: LevelPlayer) {}
 
+    /** The line asks a Yes/No question (`pvz:dialog`'s `question`); the level answers it (CutScene::CrazyDaveDialogDone). */
+    onQuestion?: (question: JsonObject) => void
+
+    /** Board::GetSeedBankExtraWidth: the shovel bank moves right as the seed bank widens. */
+    setSeedBankSlots(slots: number): void {
+        if (!this.shovelBank) return
+        this.shovelX = this.content.presentation.shovel.x + seedBankExtraWidth(slots)
+        this.shovelBank.setPosition(this.shovelX, this.shovelBank.position.y)
+    }
+
     get blocksIntro(): boolean { return !!this.dave && this.snapshot?.phase !== 'gameplay' && (this.snapshot?.tutorial.step !== 'complete' || this.dave.busy || this.delay < this.content.presentation.dave.delay) }
     get dialogReady(): boolean { return this.dave?.canAdvance ?? false }
+    /** LawnApp::mCrazyDaveState is not CRAZY_DAVE_OFF: Dave is entering, talking or leaving. */
+    get daveOut(): boolean { return this.dave?.busy ?? false }
 
     update(dt: number, introTicks: number): void {
         this.introTicks = introTicks
@@ -100,17 +120,18 @@ export class LevelBoardHud {
 
     sync(snapshot: WorldSnapshot): void {
         this.snapshot = snapshot
-        const dialog = snapshot.extensions['pvz:dialog'] as { index: number } | undefined
+        const dialog = snapshot.extensions['pvz:dialog'] as { index: number; question?: JsonObject } | undefined
         if (this.dave && this.delay >= this.content.presentation.dave.delay && dialog?.index !== this.daveDialog) {
             this.daveDialog = dialog?.index
-            if (dialog) this.dave.say(this.ui.text(`CRAZY_DAVE_${dialog.index}`).replace(/\{PLAYER_NAME\}/g, this.player.name)
+            const line = dialog && this.ui.text(`CRAZY_DAVE_${dialog.index}`)
+            if (dialog) this.dave.say(line!.replace(/\{PLAYER_NAME\}/g, this.player.name)
                 .replace(/\{MONEY\}/g, formatMoney(snapshot.money)).replace(/\{UPGRADE_COST\}/g, formatMoney(this.player.upgradeCost)))
             else this.dave.leave()
+            if (dialog?.question) this.onQuestion?.(dialog.question)
         }
         if (this.shovelBank) {
             const layout = this.content.presentation.shovel
-            const level = this.content.levels.levels[snapshot.levelId]
-            this.shovelBank.active = snapshot.result !== 'lost' && (!!level.shovelTutorial || snapshot.phase === 'gameplay')
+            this.shovelBank.active = snapshot.result !== 'lost' && (!!snapshot.tutorial.toolsInIntro || snapshot.phase === 'gameplay')
             this.shovelHotkey!.node.active = GameDebugSettings.hotkeysEnabled
             this.shovelButton!.interactable = (snapshot.extensions['pvz:tools'] as { available: string[] } | undefined)?.available.includes('pvz:shovel') === true
             if (snapshot.tutorial.step === 'shovel-pickup') {

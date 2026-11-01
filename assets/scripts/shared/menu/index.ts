@@ -22,6 +22,8 @@ export type UserResult = { ok: true, user: UserView | null } | {
 }
 export interface MenuSettings { version: number, musicVolume: number, sfxVolume: number, fullScreen: boolean }
 export const SFX_VOLUME_SCALE = 0.65
+/** PlayerInfo::AddCoins caps the purse at 99999 coins ($999,990). */
+export const MAX_MONEY = 99999
 export type StoreItemHighlight = { type: 'none' | 'seedPacket' } | { type: 'additive', opacity: number }
 export interface StoreItemView {
     id: number
@@ -100,10 +102,18 @@ export interface MenuEndpoints {
     getAward: { args: Record<string, never>, result: AwardView }
     /** Coins in original units, seed-slot upgrades bought, and the next upgrade's price (Dave quotes it in 2-2). */
     getPurse: { args: Record<string, never>, result: PurseView }
-    /** A running level reports the purse after collecting money; the store re-reads it, so it stays the only spender. */
+    /** A running level reports the purse after collecting money or paying Crazy Dave; the store re-reads it. */
     setCoins: { args: { coins: number }, result: PurseView }
+    /** Crazy Dave's in-level seed-slot offer: Yes adds the upgrade (the level reports its coins), No counts a refusal. */
+    /** Crazy Dave's seed-slot offer: the answer and the level's coins after it, saved together. */
+    recordPacketUpgradeOffer: { args: { accepted: boolean; coins: number }, result: PurseView }
 }
-export interface PurseView { coins: number, packetUpgrades: number, packetUpgradeCost: number }
+export interface PurseView {
+    coins: number, packetUpgrades: number, packetUpgradeCost: number
+    /** The price after one more upgrade, which Dave quotes once the first is bought (CRAZY_DAVE_1510). */
+    nextPacketUpgradeCost: number
+    declinedPacketUpgrades: number
+}
 export type MenuMethod = keyof MenuEndpoints
 export type MenuRequest = { [K in MenuMethod]: { method: K, args: MenuEndpoints[K]['args'] } }[MenuMethod]
 export type MenuResponse = MenuEndpoints[MenuMethod]['result']

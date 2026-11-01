@@ -1,4 +1,4 @@
-import type { AwardView, MenuRequest, MenuResponse, MenuStorage, StoreItemView, StoreView, UserResult, UserView } from '@/shared/menu'
+import { MAX_MONEY, type AwardView, type MenuRequest, type MenuResponse, type MenuStorage, type PurseView, type StoreItemView, type StoreView, type UserResult, type UserView } from '@/shared/menu'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import { ALMANAC_PLANTS, ALMANAC_ZOMBIES } from './almanacCatalog'
 import { ACHIEVEMENT_DEFINITIONS } from './achievementCatalog'
@@ -24,6 +24,11 @@ function userView(profile: PlayerProfile | null): UserView | null {
         },
         allTrophies: hasAllTrophies(profile.challengeRecords),
     }
+}
+
+function validCoins(coins: number): number {
+    if (!Number.isSafeInteger(coins) || coins < 0 || coins > MAX_MONEY) throw new Error('Invalid coins')
+    return coins
 }
 
 export class MenuService {
@@ -105,8 +110,20 @@ export class MenuService {
             case 'setCoins': {
                 const profile = this.profiles.getCurrentProfile()
                 if (!profile) throw new Error('Coins require a player profile')
-                const coins = request.args.coins
-                if (!Number.isSafeInteger(coins) || coins < 0 || coins > 99999) throw new Error('Invalid coins')
+                profile.coins = validCoins(request.args.coins)
+                this.profiles.saveProfile(profile)
+                return this.purse()
+            }
+            case 'recordPacketUpgradeOffer': {
+                // CutScene::CrazyDaveDialogDone: the price, the purchase or refusal and the save happen together.
+                const profile = this.profiles.getCurrentProfile()
+                if (!profile) throw new Error('Seed-slot upgrades require a player profile')
+                const upgrade = this.packetUpgrade, coins = validCoins(request.args.coins)
+                if (request.args.accepted) {
+                    if (this.storeCatalog.itemState(upgrade, profile, this.now()) !== 'available') throw new Error('The seed-slot upgrade is not for sale')
+                    if (coins !== profile.coins - this.storeCatalog.itemCost(upgrade, profile)) throw new Error('The seed-slot upgrade was not paid for')
+                    profile.purchases[upgrade.id] = (profile.purchases[upgrade.id] ?? 0) + 1
+                } else profile.declinedPacketUpgrades++
                 profile.coins = coins
                 this.profiles.saveProfile(profile)
                 return this.purse()
@@ -131,7 +148,7 @@ export class MenuService {
         return {
             kind: 'seed', titleKey: 'NEW_PLANT',
             nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex > 3,
-            seed: plant.id, cost: level.award.packetCost, name: plant.name,
+            seed: plant.id, cost: plant.cost, name: plant.name,
             nameKey: plant.key, descriptionKey: `${plant.key}_TOOLTIP`,
         }
     }
@@ -151,12 +168,23 @@ export class MenuService {
         return user ? { ok: true, user: userView(user) } : { ok: false, code: 'duplicateName' }
     }
 
-    private purse() {
-        const profile = this.profiles.getCurrentProfile()
-        if (!profile) throw new Error('Coins require a player profile')
+    private get packetUpgrade() {
         const upgrade = this.storeCatalog.STORE_PAGES.flat().find(item => item.effect === 'seedSlots')
         if (!upgrade) throw new Error('Store has no seed-slot upgrade')
-        return { coins: profile.coins, packetUpgrades: profile.purchases[upgrade.id] ?? 0, packetUpgradeCost: this.storeCatalog.itemCost(upgrade, profile) }
+        return upgrade
+    }
+
+    private purse(): PurseView {
+        const profile = this.profiles.getCurrentProfile()
+        if (!profile) throw new Error('Coins require a player profile')
+        const upgrade = this.packetUpgrade, owned = profile.purchases[upgrade.id] ?? 0
+        const purchases = [...profile.purchases]
+        purchases[upgrade.id] = owned + 1
+        const next = { ...profile, purchases }
+        return {
+            coins: profile.coins, packetUpgrades: owned, packetUpgradeCost: this.storeCatalog.itemCost(upgrade, profile),
+            nextPacketUpgradeCost: this.storeCatalog.itemCost(upgrade, next), declinedPacketUpgrades: profile.declinedPacketUpgrades,
+        }
     }
 
     private store(): StoreView {

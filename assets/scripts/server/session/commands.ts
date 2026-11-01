@@ -34,12 +34,17 @@ export const commands = {
             return
         }
         if (command.type === 'chooseSeed' || command.type === 'confirmSeeds') {
-            return applySeedChoice(world, session.definitions, command)
+            return applySeedChoice(world, session.definitions, session.levels, command)
         }
         if (level.paused) return 'game-paused'
         if (command.type === 'advanceDialog') {
             if (level.phase !== 'intro') return 'unsupported-command'
             getActiveTutorial(world)?.advanceDialog?.(world)
+            return
+        }
+        if (command.type === 'answerDialog') {
+            if (level.phase !== 'intro') return 'unsupported-command'
+            getActiveTutorial(world)?.answerDialog?.(world, command.accept)
             return
         }
         if (command.type === 'selectTool') return tools.select(session, command.toolId)
@@ -82,7 +87,7 @@ export function processBoundaryCommands(session: Session, processInput: boolean)
         const previousPhase = level.phase
         const previousPaused = level.paused
         const rejection = processNextCommand(session)
-        const introInput = previousPhase === 'intro' && (command.type === 'advanceDialog' || command.type === 'selectTool' || command.type === 'useToolAt' || command.type === 'clearCursor')
+        const introInput = previousPhase === 'intro' && (command.type === 'advanceDialog' || command.type === 'answerDialog' || command.type === 'selectTool' || command.type === 'useToolAt' || command.type === 'clearCursor')
         if (inputCommand || (rejection === undefined && (introInput || isSessionCommand(command)
             && (command.type === 'debug' || command.type === 'chooseSeed' || command.type === 'confirmSeeds' || level.phase !== previousPhase || level.paused !== previousPaused)))) {
             session.tick++
@@ -130,6 +135,6 @@ function processNextCommand(session: Session): CommandRejectionCode | undefined 
 function isSessionCommand(command: QueuedCommand): boolean {
     if (command.type === 'debug') return true
     return command.type === 'pause' || command.type === 'resume' || command.type === 'completeIntro'
-        || command.type === 'advanceDialog'
+        || command.type === 'advanceDialog' || command.type === 'answerDialog'
         || command.type === 'chooseSeed' || command.type === 'confirmSeeds'
 }

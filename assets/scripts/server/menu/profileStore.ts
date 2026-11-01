@@ -40,7 +40,8 @@ export interface PlayerProfile {
     playTimeInactivePlayer: number
     hasUsedCheatKeys: boolean
     hasWokenStinky: boolean
-    didNotPurchasePacketUpgrade: boolean
+    /** PlayerInfo::mDidntPurchasePacketUpgrade: Crazy Dave stops offering the seed-slot upgrade after two refusals. */
+    declinedPacketUpgrades: number
     lastStinkyChocolateTime: number
     stinkyPosX: number
     stinkyPosY: number
@@ -130,7 +131,7 @@ export function createProfileStore(storage: MenuStorage) {
             playTimeInactivePlayer: 0,
             hasUsedCheatKeys: false,
             hasWokenStinky: false,
-            didNotPurchasePacketUpgrade: false,
+            declinedPacketUpgrades: 0,
             lastStinkyChocolateTime: 0,
             stinkyPosX: 0,
             stinkyPosY: 0,
@@ -172,7 +173,7 @@ export function createProfileStore(storage: MenuStorage) {
         profile.playTimeInactivePlayer = Number(raw.playTimeInactivePlayer ?? 0) || 0
         profile.hasUsedCheatKeys = !!raw.hasUsedCheatKeys
         profile.hasWokenStinky = !!raw.hasWokenStinky
-        profile.didNotPurchasePacketUpgrade = !!raw.didNotPurchasePacketUpgrade
+        profile.declinedPacketUpgrades = Number.isSafeInteger(raw.declinedPacketUpgrades) && Number(raw.declinedPacketUpgrades) > 0 ? Number(raw.declinedPacketUpgrades) : 0
         profile.lastStinkyChocolateTime = Number(raw.lastStinkyChocolateTime ?? 0) || 0
         profile.stinkyPosX = Number(raw.stinkyPosX ?? 0) || 0
         profile.stinkyPosY = Number(raw.stinkyPosY ?? 0) || 0

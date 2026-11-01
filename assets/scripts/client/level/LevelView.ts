@@ -10,12 +10,14 @@ import { easeInOut } from '@/client/view/GameScreenMath'
 import { LevelSlots } from './LevelSlots'
 import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
 import { UI } from '@/client/ui/UI'
+import { formatMoney } from '@/client/ui/formatMoney'
+import { seedBankExtraWidth } from './LevelGeometry'
 import type { UIButton } from '@/client/ui/UIButton'
 import { plantDefinition } from '@/client/plants/definitions'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
-import type { GameCommand, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
+import type { GameCommand, JsonObject, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
 import { getLevelPresentation } from './LevelPresentation'
@@ -33,7 +35,7 @@ import { LevelParticlePresenter } from './LevelParticlePresenter'
 import { LevelGameOverPresenter } from './LevelGameOverPresenter'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { LevelSeedChooser } from './LevelSeedChooser'
-import { LevelBoardHud } from './LevelBoardHud'
+import { LevelBoardHud, ownedTools } from './LevelBoardHud'
 import { LevelGraves } from './LevelGraves'
 import { uiAreaEdge } from '@/client/view/ClientViewport'
 
@@ -45,7 +47,10 @@ const PROGRESS_METER_HEIGHT = 27
 export type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 
 /** Profile values the level shows: the house name and Dave's quotes. */
-export interface LevelPlayer { name: string; upgradeCost: number }
+/** `upgradeCost` is the seed-slot price Dave quotes; `nextUpgradeCost` replaces it once the offer is bought. */
+export interface LevelPlayer { name: string; upgradeCost: number; nextUpgradeCost: number }
+
+/** CRAZY_DAVE_1503 ({NO_CLICK} "How's that sound?") asks to buy the seed-slot upgrade it just quoted. */
 
 export class LevelView {
     private graves?: LevelGraves
@@ -63,6 +68,18 @@ export class LevelView {
     private money?: number
     /** Called when the server's purse changes (collected money, `/money`); the app saves it to the profile. */
     onMoneyChanged?: (money: number) => void
+    /** Crazy Dave's seed-slot offer was answered; the app records the upgrade or the refusal in the profile. */
+    /** With the level's coins after the answer, so the profile saves both at once. */
+    onPacketUpgradeAnswered?: (accepted: boolean, coins: number) => void
+    private player!: LevelPlayer
+    private answerDialog: (accept: boolean) => void = () => {}
+    private seedBankSlots = 0
+    private applySeedBankSlots: (slots: number) => void = () => {}
+    private lastSnapshot?: WorldSnapshot
+    /** Board::Pause's coin bank. */
+    showPauseCoinBank(): void { this.hud.showPauseCoinBank() }
+    /** The seed-slot purchase dialog holds the coin bank on screen. */
+    private questionOpen = false
     /** The lawn node: it carries the wide-viewport shift, the seed chooser pan and board shakes. */
     private lawn!: Node
     private hitboxes: Graphics | null = null
@@ -166,6 +183,14 @@ export class LevelView {
             node: slots.bank, parent: bankLeft, position: { x: 10, y: 0 }, anchor: { x: 0, y: 1 },
             sprite: { frame: seedbank, sizeMode: Sprite.SizeMode.RAW, trim: false },
         }).node
+        // SeedBank::Draw: past six slots the bank repeats its own right end, read from (width - extra - 12), at width - 12.
+        const bankWidth = seedbank.originalSize.width, bankHeight = seedbank.originalSize.height
+        const bankExtension = uiNode({
+            name: 'SeedBankExtension', parent: bank, position: { x: bankWidth - 12, y: 0 }, anchor: { x: 0, y: 1 },
+            size: { width: 12, height: bankHeight }, mask: Mask.Type.GRAPHICS_RECT, active: false,
+        }).node
+        bankExtension.setSiblingIndex(0)
+        const bankExtensionImage = ui.image(bankExtension, seedbank).node
         uiNode({ node: slots.seedPacket, position: { x: 85, y: -8 }, anchor: { x: 0, y: 1 } })
         const sunText = ui.label(slots.sunText.parent!, {
             node: slots.sunText, text: '', font: sunFont, color: Color.BLACK,
@@ -211,9 +236,9 @@ export class LevelView {
             node: slots.progressHead, position: { x: 138, y: 3, z: 3 }, anchor: { x: 0, y: 1 },
             sprite: { frame: getAtlasFrame(flagMeterParts, 0, 25, 25, 3), sizeMode: Sprite.SizeMode.RAW, trim: false },
         }).node
-        level.waves.forEach((wave, index) => {
-            if (!wave.flagWave) return
-            const x = 148 - 142 * (index + 1) / level.waves.length
+        // A wave rule builds the waves per game, so the flags come with the snapshot.
+        for (const index of initial.wave.flagWaves) {
+            const x = 148 - 142 * (index + 1) / initial.wave.total
             uiNode({
                 name: `ProgressFlagPole-${index}`, parent: progressMeter, position: { x, y: 4, z: 2 }, anchor: { x: 0, y: 1 },
                 sprite: { frame: getAtlasFrame(flagMeterParts, 1, 25, 25, 3), sizeMode: Sprite.SizeMode.RAW, trim: false },
@@ -222,7 +247,7 @@ export class LevelView {
                 name: `ProgressFlag-${index}`, parent: progressMeter, position: { x, y: 3, z: 2 }, anchor: { x: 0, y: 1 },
                 sprite: { frame: getAtlasFrame(flagMeterParts, 2, 25, 25, 3), sizeMode: Sprite.SizeMode.RAW, trim: false },
             })
-        })
+        }
         // Board::DrawProgressMeter draws the flags, then the "Level Progress" label, then the zombie head.
         slots.progressTrack.setSiblingIndex(progressMeter.children.length - 1)
         progressHead.setSiblingIndex(progressMeter.children.length - 1)
@@ -319,7 +344,7 @@ export class LevelView {
             id => entityRenderer.node(id), audio, ui,
         )
         const hudPresenter = LevelHudPresenter.create({
-            ui, content, level, seedChooser: initial.seedChooser, presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
+            ui, content, level, seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
             loadPacketSprite, packetCostFont: pico129,
             adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: bankRight, adviceFont: houseOfTerror28,
             tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
@@ -343,7 +368,7 @@ export class LevelView {
         view.seedChooser = seedChooser
         view.graves = await LevelGraves.create(entityLayer, entityRenderer, content, boardDefinition, initial.graves ?? [])
         view.syncGraves(initial.phase === 'gameplay')
-        if (level.tools?.length || level.conveyor || level.shovelTutorial || level.introDialog || level.bowling) {
+        if (ownedTools(initial).length || level.conveyor || initial.tutorial.dave || level.bowling) {
             view.boardHud = await LevelBoardHud.create(hud, bankLeft, slots.sodClip, content, ui, initial, cursorLayer, hudPresenter.seedBank, player, tooltipSurface)
             if (level.conveyor) view.hideConveyorBank = () => { bank.active = false }
         }
@@ -372,6 +397,21 @@ export class LevelView {
         }
         view.shakeTarget = { node: board, x: board.position.x, y: board.position.y }
         view.lawn = board
+        view.player = player
+        view.applySeedBankSlots = count => {
+            const extra = seedBankExtraWidth(count)
+            bankExtension.active = extra > 0
+            uiNode({ node: bankExtension, size: { width: extra + 12, height: bankHeight } })
+            bankExtensionImage.setPosition(extra - (bankWidth - 12), 0)
+            hudPresenter.seedBank.setSlots(count)
+            seedChooser?.setSlots(count)
+            view.boardHud?.setSeedBankSlots(count)
+        }
+        if (initial.seedChooser) {
+            view.seedBankSlots = initial.seedChooser.slots
+            view.applySeedBankSlots(initial.seedChooser.slots)
+        }
+        if (view.boardHud) view.boardHud.onQuestion = question => view.askDialogQuestion(ui, question)
         intro.sync()
         view.pinScreen()
         view.hideConveyorBank()
@@ -391,6 +431,9 @@ export class LevelView {
 
     updateIntro(dt: number): boolean {
         this.syncGraves()
+        // Play counts the coin bank in gameplay ticks; before that the intro's time does.
+        if (!this.introComplete && !this.questionOpen) this.hud.advanceCoinBank(dt * 100)
+        this.hud.setCoinBankBesideDave(this.boardHud?.daveOut ?? false)
         if (this.boardHud) {
             this.boardHud.update(dt, this.intro.elapsedTicks)
             if (this.boardHud.blocksIntro) return false
@@ -403,6 +446,27 @@ export class LevelView {
     }
 
     bindSeedChooser(send: (command: GameCommand) => void): void { this.seedChooser?.bind(send) }
+    /** Sends the player's Yes/No to a dialogue question (`answerDialog`). */
+    bindDialogAnswer(send: (accept: boolean) => void): void { this.answerDialog = send }
+
+    /** CutScene's DIALOG_PURCHASE_PACKET_SLOT: the price, the slot count, and the purse beside it. */
+    private askDialogQuestion(ui: UI, question: JsonObject): void {
+        if (question.kind !== 'pvz:packetUpgrade') return
+        this.hud.showCoinBank(100)
+        const dialog = ui.dialog(this.root, {
+            title: formatMoney(Number(question.cost)),
+            message: ui.text('UPGRADE_DIALOG_BODY').replace(/\{SLOTS\}/g, String(question.slots)),
+            confirmText: ui.text('DIALOG_BUTTON_YES'), cancelText: ui.text('DIALOG_BUTTON_NO'),
+        })
+        // aDialog->mX += 120, mY += 130.
+        dialog.node.setPosition(dialog.node.position.x + 120, dialog.node.position.y - 130)
+        this.questionOpen = true
+        this.hud.setCoinBankBesideDave(true)
+        void dialog.result.then(accept => {
+            this.questionOpen = false
+            if (this.root.isValid) this.answerDialog(accept)
+        })
+    }
     pointerOffsetY(seedId: string): number { return this.hud.pointerOffsetY(seedId) }
 
     setPointer(pointer?: { x: number, y: number }): void {
@@ -462,7 +526,18 @@ export class LevelView {
     }
 
     sync(snapshot: WorldSnapshot, changes: ClientWorldChanges, events: ServerEvent[]): void {
+        this.lastSnapshot = snapshot
         this.gameplayTick = snapshot.gameplayTick
+        for (const event of events) {
+            if (event.type !== 'packetUpgradePurchased' && event.type !== 'packetUpgradeDeclined') continue
+            // CRAZY_DAVE_1510 quotes the next upgrade's price.
+            if (event.type === 'packetUpgradePurchased') this.player.upgradeCost = this.player.nextUpgradeCost
+            this.onPacketUpgradeAnswered?.(event.type === 'packetUpgradePurchased', snapshot.money)
+            // The answer saved the coins; no separate onMoneyChanged.
+            this.money = snapshot.money
+        }
+        const slots = snapshot.seedChooser?.slots ?? 0
+        if (slots > this.seedBankSlots) { this.seedBankSlots = slots; this.applySeedBankSlots(slots) }
         if (this.money !== undefined && snapshot.money !== this.money) this.onMoneyChanged?.(snapshot.money)
         this.money = snapshot.money
         this.boardHud?.sync(snapshot)

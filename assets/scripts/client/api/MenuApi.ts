@@ -1,7 +1,21 @@
 import type { MenuEndpoints, MenuMethod, MenuRequest, MenuSettings, MenuTransport } from '@/shared/menu'
 
 export class MenuApi {
+    private readonly purseListeners = new Set<() => void>()
+
     constructor(private readonly transport: MenuTransport) {}
+
+    /** Called after a level or the debug CLI changes the purse, so open screens (the store) can re-read it. */
+    onPurseChanged(listener: () => void): () => void {
+        this.purseListeners.add(listener)
+        return () => { this.purseListeners.delete(listener) }
+    }
+
+    private async changePurse<T>(request: Promise<T>): Promise<T> {
+        const result = await request
+        for (const listener of [...this.purseListeners]) listener()
+        return result
+    }
 
     private request<K extends MenuMethod>(method: K, args: MenuEndpoints[K]['args']): Promise<MenuEndpoints[K]['result']> {
         return this.transport({ method, args } as MenuRequest) as Promise<MenuEndpoints[K]['result']>
@@ -24,7 +38,8 @@ export class MenuApi {
     completeLevel() { return this.request('completeLevel', {}) }
     getAward() { return this.request('getAward', {}) }
     getPurse() { return this.request('getPurse', {}) }
-    setCoins(coins: number) { return this.request('setCoins', { coins }) }
+    setCoins(coins: number) { return this.changePurse(this.request('setCoins', { coins })) }
+    recordPacketUpgradeOffer(accepted: boolean, coins: number) { return this.changePurse(this.request('recordPacketUpgradeOffer', { accepted, coins })) }
 }
 
 let transport: MenuTransport | undefined

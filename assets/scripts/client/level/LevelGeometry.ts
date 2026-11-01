@@ -5,6 +5,11 @@ export function seedBankExtraWidth(slots: number): number {
     return slots <= 6 ? 0 : slots === 7 ? 60 : slots === 8 ? 76 : slots === 9 ? 112 : 153
 }
 
+/** Board::GetSeedPacketPositionX: packets in the seed bank, from its left edge; more slots squeeze them closer. */
+export function seedPacketX(index: number, slots: number): number {
+    return slots <= 7 ? index * 59 + 85 : slots === 8 ? index * 54 + 81 : slots === 9 ? index * 52 + 80 : index * 51 + 79
+}
+
 export function levelAwardSize(award: LevelDefinition['award']): { width: number; height: number } {
     return award.kind === 'seed' ? { width: 50, height: 70 } : award
 }

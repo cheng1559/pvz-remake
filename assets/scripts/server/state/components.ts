@@ -112,6 +112,11 @@ export interface EconomyState {
     firstCoinDropped?: true
     /** Diamonds drop only after the first seed-slot upgrade; before it they become gold. From the profile, like money. */
     diamonds?: true
+    /**
+     * Seed-slot upgrades owned (PlayerInfo::mPurchases); the chooser adds a slot for each (Board::GetNumSeedsInBank).
+     * From the profile at start; a save keeps the count its bank was chosen with.
+     */
+    packetUpgrades?: number
     /** Board::mScoreNextMowerCounter: after the award, ticks until the next unused mower becomes a gold coin. */
     mowerCoinTicks?: number
 }
@@ -144,6 +149,10 @@ export const EconomyStateResource = defineResource<EconomyState>('pvz:economy-st
 export const RandomResource = defineResource<DeterministicRng>('pvz:random-state')
 
 export const SeedBankResource = defineResource<SeedBankState>('pvz:seed-bank')
+
+/** The seed-slot upgrade Crazy Dave may sell in this intro (see StartSessionPacket); intros are never saved, nor is this. */
+export interface PacketUpgradeOffer { cost: number }
+export const PacketUpgradeOfferResource = defineResource<PacketUpgradeOffer>('pvz:packet-upgrade-offer')
 
 /** Removes entities; systems pass their command buffer so queries stay consistent. */
 export interface EntityRemover { destroyEntity(entity: number): unknown }

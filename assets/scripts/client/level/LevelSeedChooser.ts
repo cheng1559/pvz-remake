@@ -11,6 +11,7 @@ import { easeInOut } from '@/client/view/GameScreenMath'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { GameCommand, WorldSnapshot } from '@/shared/protocol'
 import type { LoadedContent } from './LevelView'
+import { seedPacketX } from './LevelGeometry'
 import { SpriteRepository } from '@/client/content/ClientContentLoader'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
@@ -45,6 +46,8 @@ export class LevelSeedChooser {
     private readonly choices: Choice[] = []
     private readonly start: UIButton
     private readonly emptySlots: Node[] = []
+    private slots: number
+    private readonly silhouette: SpriteFrame
 
     static async create(ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, inputRoot: Node,
         notRecommended: (seedId: string) => string | undefined = () => undefined): Promise<LevelSeedChooser> {
@@ -59,6 +62,8 @@ export class LevelSeedChooser {
     private constructor(private readonly ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, background: SpriteFrame, silhouette: SpriteFrame, inputRoot: Node,
         notRecommended: (seedId: string) => string | undefined = () => undefined) {
         const sprites = new SpriteRepository(content.registry, content.loader)
+        this.slots = slots
+        this.silhouette = silhouette
         this.previewTooltipSurface = uiNode({ name: 'ZombiePreviewTooltips', parent, active: false,
             position: { x: background.originalSize.width }, anchor: { x: 0, y: 1 },
             size: { width: 800 - background.originalSize.width, height: 600 } }).node
@@ -79,7 +84,7 @@ export class LevelSeedChooser {
         this.buttons = uiNode({ name: 'ChooserButtons', parent: this.edge, active: false }).node
         const grid = (index: number) => ({ x: index % 8 * 53 + 22, y: Math.floor(index / 8) * 73 + 128 })
         for (let index = available.length; index < 40; index++) ui.image(shadows, silhouette, grid(index))
-        for (let index = 0; index < slots; index++) this.emptySlots.push(ui.image(this.cards, silhouette, { x: 85 + index * 59, y: 8 }).node)
+        this.addEmptySlots()
         for (const [index, id] of available.entries()) {
             const seed = content.definitions.seeds[id]
             const visual = plantDefinition(content.presentation, seed.plant).visual
@@ -132,6 +137,32 @@ export class LevelSeedChooser {
 
     bind(send: (command: GameCommand) => void): void { this.send = send }
 
+    /** A seed-slot upgrade bought in the intro adds an empty slot; the bank squeezes its packets to fit. */
+    setSlots(slots: number): void {
+        if (slots <= this.slots) return
+        this.slots = slots
+        this.addEmptySlots()
+        for (const choice of this.choices) if (choice.slot >= 0 && !choice.motion) {
+            const destination = this.slotPosition(choice.slot)
+            choice.view.node.setPosition(destination.x, -destination.y)
+        }
+    }
+
+    private addEmptySlots(): void {
+        for (let index = this.emptySlots.length; index < this.slots; index++) {
+            const node = this.ui.image(this.cards, this.silhouette).node
+            // Empty slots stay under the cards, in slot order.
+            node.setSiblingIndex(index)
+            this.emptySlots.push(node)
+        }
+        this.emptySlots.forEach((node, index) => { const { x, y } = this.slotPosition(index); node.setPosition(x, -y) })
+    }
+
+    /** Board::GetSeedPacketPositionX, 8px below the bank's top. */
+    private slotPosition(slot: number): { x: number, y: number } {
+        return { x: seedPacketX(slot, this.slots), y: 8 }
+    }
+
     placeBefore(node: Node): void {
         this.edge.setSiblingIndex(node.getSiblingIndex())
     }
@@ -144,7 +175,7 @@ export class LevelSeedChooser {
             if (slot !== choice.slot) {
                 const oldSlot = choice.slot
                 choice.slot = slot
-                const destination = slot < 0 ? choice.home : { x: 85 + slot * 59, y: 8 }
+                const destination = slot < 0 ? choice.home : this.slotPosition(slot)
                 if (before && this.introTick >= 425 && snapshot.seedChooser?.choosing) {
                     this.move(choice, destination, slot >= 0 && oldSlot >= 0 ? 15 : 25)
                 } else choice.view.node.setPosition(destination.x, -destination.y)

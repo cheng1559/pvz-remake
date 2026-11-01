@@ -9,6 +9,7 @@ import type { GameCommand, SeedPacketSnapshot, ServerEvent, WorldSnapshot } from
 import type { LevelHudOptions } from './LevelHudPresenter'
 import { plantDefinition } from '@/client/plants/definitions'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { seedPacketX } from './LevelGeometry'
 
 interface Packet {
     conveyorId?: number
@@ -27,45 +28,60 @@ export interface LevelSeedPacket extends SeedPacketSnapshot {
 export class LevelSeedBank {
     readonly packets: Packet[]
     private buttons?: UIButton[]
+    private slots: number
 
     constructor(private readonly options: LevelHudOptions) {
         const seeds = options.level.conveyor
             ? Array<string | undefined>(options.level.conveyor.capacity).fill(undefined)
             : options.seedChooser
-              ? options.seedChooser.availableSeeds.slice(0, options.seedChooser.slots)
-              : options.level.seedPackets
-        this.packets = seeds.map((seedId, index) => {
-            const seed =
-                seedId === undefined ? undefined : options.content.definitions.seeds[seedId]
-            const visual =
-                seedId === undefined
-                    ? undefined
-                    : plantDefinition(options.content.presentation, seed!.plant).visual
-            const view = new SeedPacketView({
-                definitions: options.content.presentation,
-                name: `SeedPacket-${index}`,
-                parent: options.seedPacketSlot,
-                layer: options.rootLayer,
-                x: index * 59,
-                y: 0,
-                seedType: visual?.seedType,
-                cost: seed?.sunCost,
-                drawCost: !options.level.conveyor,
-                loadSprite: options.loadPacketSprite,
-                costFont: options.packetCostFont,
-            })
-            // Left packets draw last so their plants can overlap the packets to their right.
-            view.node.setSiblingIndex(0)
-            if (seedId === undefined || options.seedChooser) view.node.active = false
-            const tooltip = options.ui.tooltip(view.node, {
-                text: visual
-                    ? options.ui.text(visual.nameKey ?? String(visual.seedType).toUpperCase())
-                    : '',
-                gap: 0,
-                surface: options.level.conveyor ? options.tooltipSurface : undefined,
-            })
-            return { seedId, view, tooltip }
+              // Like SeedBank::mSeedPackets[SEEDBANK_MAX] (seedBank.maxSlots), a chosen bank has every packet up front;
+              // a seed-slot upgrade only reveals more of them, and packets without a server slot stay hidden.
+              ? Array.from({ length: options.content.definitions.seedBank.maxSlots }, (_, index) => options.seedChooser!.availableSeeds[index])
+              : options.initialSeeds
+        this.packets = seeds.map((seedId, index) => this.createPacket(seedId, index))
+        this.slots = options.seedChooser?.slots ?? seeds.length
+        this.layout()
+    }
+
+    /** A seed-slot upgrade bought in the intro (SeedBank::UpdateWidth): the packets are packed by Board::GetSeedPacketPositionX. */
+    setSlots(slots: number): void {
+        if (this.options.level.conveyor || slots <= this.slots) return
+        this.slots = Math.min(slots, this.packets.length)
+        this.layout()
+    }
+
+    private layout(): void {
+        if (this.options.level.conveyor) return
+        // The packet slot sits at the first packet's position (85).
+        for (const [index, packet] of this.packets.entries()) packet.view.node.setPosition(seedPacketX(index, this.slots) - seedPacketX(0, 1), 0)
+    }
+
+    private createPacket(seedId: string | undefined, index: number): Packet {
+        const options = this.options
+        const seed = seedId === undefined ? undefined : options.content.definitions.seeds[seedId]
+        const visual = seedId === undefined ? undefined : plantDefinition(options.content.presentation, seed!.plant).visual
+        const view = new SeedPacketView({
+            definitions: options.content.presentation,
+            name: `SeedPacket-${index}`,
+            parent: options.seedPacketSlot,
+            layer: options.rootLayer,
+            x: index * 59,
+            y: 0,
+            seedType: visual?.seedType,
+            cost: seed?.sunCost,
+            drawCost: !options.level.conveyor,
+            loadSprite: options.loadPacketSprite,
+            costFont: options.packetCostFont,
         })
+        // Left packets draw last so their plants can overlap the packets to their right.
+        view.node.setSiblingIndex(0)
+        if (seedId === undefined || options.seedChooser) view.node.active = false
+        const tooltip = options.ui.tooltip(view.node, {
+            text: visual ? options.ui.text(visual.nameKey ?? String(visual.seedType).toUpperCase()) : '',
+            gap: 0,
+            surface: options.level.conveyor ? options.tooltipSurface : undefined,
+        })
+        return { seedId, view, tooltip }
     }
 
     bind(select: (index: number) => void): UIButton[] {

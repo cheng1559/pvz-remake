@@ -106,6 +106,18 @@ export class StoreScreen extends Component {
             label.node.setPosition(origin.x + (state === 'pressed' ? 2 : 0), origin.y - (state === 'pressed' ? 1 : 0))
         }
         this.renderItems()
+        // `/money` can change the purse while the store is open; prices and affordability follow it.
+        const unsubscribe = menuApi.onPurseChanged(() => { void this.reloadStore() })
+        this.node.once(Node.EventType.NODE_DESTROYED, unsubscribe)
+    }
+
+    private async reloadStore(): Promise<void> {
+        // A purchase in progress re-reads the store itself.
+        if (this.waiting) return
+        const data = await menuApi.getStore()
+        if (!this.node.isValid || this.waiting) return
+        this.data = data
+        this.renderItems()
     }
 
     private renderItems(): void {

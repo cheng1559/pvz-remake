@@ -43,7 +43,8 @@ export interface LevelController {
     isWon(): boolean
     countZombiesOnScreenForMusic(): number
     debugCommand(command: string): DebugCliResult
-    pause(): void
+    /** `quiet`: a debug pause (the CLI) that the board does not show, unlike Board::Pause's coin bank. */
+    pause(quiet?: boolean): void
     resume(): void
     snapshot(): Promise<GameSave>
     restore(save?: unknown): Promise<Node>
@@ -119,7 +120,8 @@ export function createLevelController(
             if (!root.isValid) throw new Error('Level scene was closed while loading')
             const gameplay = content.loadedMods.gameplay
             const profile = await menuApi.getCurrentUser()
-            const purse = profile ? await menuApi.getPurse() : { coins: 0, packetUpgrades: 0, packetUpgradeCost: 0 }
+            const purse = profile ? await menuApi.getPurse()
+                : { coins: 0, packetUpgrades: 0, packetUpgradeCost: 0, nextPacketUpgradeCost: 0, declinedPacketUpgrades: 2 }
             const playerName = profile?.name || 'Player'
             const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true)
             const startOptions = save ? {
@@ -129,11 +131,16 @@ export function createLevelController(
                 mods: save.contentSet.mods,
                 save: save.server as unknown as JsonValue,
             } : { ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, randomSeed: Math.floor(Math.random() * 0x100000000),
-                firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods }
+                firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods,
+                // CutScene::CanGetPacketUpgrade's mDidntPurchasePacketUpgrade < 2; the level checks the rest.
+                ...(purse.declinedPacketUpgrades < 2 ? { packetUpgradeOffer: { cost: purse.packetUpgradeCost } } : {}) }
             await restoring(save, () => game.start(startOptions))
-            const view = await LevelView.create(root, content, save?.levelId ?? levelId, { name: playerName, upgradeCost: purse.packetUpgradeCost }, game.render())
+            const view = await LevelView.create(root, content, save?.levelId ?? levelId, { name: playerName, upgradeCost: purse.packetUpgradeCost, nextUpgradeCost: purse.nextPacketUpgradeCost }, game.render())
             // The profile owns the purse; a level only reports what it collected.
             if (profile) view.onMoneyChanged = money => { void menuApi.setCoins(money).catch(error => console.error('[LevelController] Saving coins failed', error)) }
+            if (profile) view.onPacketUpgradeAnswered = (accepted, coins) => {
+                void menuApi.recordPacketUpgradeOffer(accepted, coins).catch(error => console.error('[LevelController] Saving the seed-slot upgrade failed', error))
+            }
             scene = root.addComponent(LevelScene)
             scene.configure(game, view, startOptions, lifecycle)
             if (save) await restoring(save, () => scene!.restorePresentation(save.client))
@@ -292,8 +299,8 @@ export function createLevelController(
         isLevelIntro() {
             return current?.root.isValid === true && current.game.currentSnapshot?.phase === 'intro'
         },
-        pause() {
-            if (current?.root.isValid) current.scene.pause()
+        pause(quiet = false) {
+            if (current?.root.isValid) current.scene.pause(quiet)
         },
         resume() {
             if (current?.root.isValid) current.scene.resume()

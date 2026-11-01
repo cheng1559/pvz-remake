@@ -47,7 +47,9 @@ export interface ServerSaveSnapshot {
     allocator: EntityAllocatorSnapshot
     random: DeterministicRngState
     level: { phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean }
-    economy: { sun: number, money: number, pendingSunSpend: number }
+    economy: { sun: number, money: number, pendingSunSpend: number, packetUpgrades?: number }
+    /** Crazy Dave's seed-slot offer of a game started with one, so a restored intro can still sell it. */
+    packetUpgradeOffer?: { cost: number }
     seedBank: SeedBankState
     tutorial: TutorialState
     wave: WaveState
@@ -57,10 +59,10 @@ export interface ServerSaveSnapshot {
 
 export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     assertJsonValue(value)
-    const save = exact(value, [
+    const save = optionalExact(value, [
         'schemaVersion', 'levelId', 'mods', 'tick', 'gameplayTick', 'allocator', 'random', 'level', 'economy',
         'seedBank', 'tutorial', 'wave', 'eventQueue', 'entities',
-    ], 'server save')
+    ], ['packetUpgradeOffer'], 'server save')
     if (save.schemaVersion !== 2) throw new TypeError('server save.schemaVersion must be 2')
 
     const allocatorSource = exact(save.allocator, ['nextEntity'], 'server save.allocator')
@@ -85,7 +87,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         paused: boolean(levelSource.paused, 'server save.level.paused'),
     }
 
-    const economySource = optionalExact(save.economy, ['sun', 'money', 'pendingSunSpend'], ['firstCoinDropped', 'mowerCoinTicks', 'diamonds'], 'server save.economy')
+    const economySource = optionalExact(save.economy, ['sun', 'money', 'pendingSunSpend'], ['firstCoinDropped', 'mowerCoinTicks', 'diamonds', 'packetUpgrades'], 'server save.economy')
     const economy = {
         sun: integer(economySource.sun, 'server save.economy.sun'),
         money: integer(economySource.money, 'server save.economy.money'),
@@ -93,6 +95,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         ...(economySource.firstCoinDropped === undefined ? {} : { firstCoinDropped: trueFlag(economySource.firstCoinDropped, 'server save.economy.firstCoinDropped') }),
         ...(economySource.diamonds === undefined ? {} : { diamonds: trueFlag(economySource.diamonds, 'server save.economy.diamonds') }),
         ...(economySource.mowerCoinTicks === undefined ? {} : { mowerCoinTicks: nonNegativeInteger(economySource.mowerCoinTicks, 'server save.economy.mowerCoinTicks') }),
+        ...(economySource.packetUpgrades === undefined ? {} : { packetUpgrades: nonNegativeInteger(economySource.packetUpgrades, 'server save.economy.packetUpgrades') }),
     }
     const seedBank = parseSeedBank(save.seedBank)
     const tutorial = parseTutorial(save.tutorial)
@@ -128,6 +131,9 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         random,
         level,
         economy,
+        ...(save.packetUpgradeOffer === undefined ? {} : {
+            packetUpgradeOffer: { cost: nonNegativeInteger(exact(save.packetUpgradeOffer, ['cost'], 'server save.packetUpgradeOffer').cost, 'server save.packetUpgradeOffer.cost') },
+        }),
         seedBank,
         tutorial,
         wave,
@@ -232,25 +238,30 @@ function parseTutorial(value: unknown): TutorialState {
 function parseWave(value: unknown): WaveState {
     const source = optionalExact(
         value,
-        ['index'],
-        ['nextWaveAtTick', 'accelerateAtTick', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced', 'rowPicks', 'zombiesByWave', 'graves', 'graveRiseAtTick'],
+        ['index', 'plan'],
+        ['nextWaveAtTick', 'accelerateAtTick', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced', 'rowPicks', 'graves', 'graveRiseAtTick'],
         'server save.wave',
     )
-    const result: WaveState = { index: nonNegativeInteger(source.index, 'server save.wave.index') }
+    const plan = array(source.plan, 'server save.wave.plan').map((value, index) => {
+        const wave = optionalExact(value, ['zombies'], ['flagWave'], `server save.wave.plan[${index}]`)
+        return { zombies: array(wave.zombies, `server save.wave.plan[${index}].zombies`).map(id => nonEmptyString(id, 'wave zombie ID')),
+            ...(wave.flagWave === undefined ? {} : { flagWave: trueFlag(wave.flagWave, `server save.wave.plan[${index}].flagWave`) }) }
+    })
+    const result: WaveState = { index: nonNegativeInteger(source.index, 'server save.wave.index'), plan }
     if (source.graveRiseAtTick !== undefined) result.graveRiseAtTick = nonNegativeInteger(source.graveRiseAtTick, 'wave.graveRiseAtTick')
     if (source.graves !== undefined) {
         result.graves = array(source.graves, 'wave.graves').map(value => {
-            const grave = exact(value, ['column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], 'grave')
+            const grave = optionalExact(value, ['column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], ['special', 'riseAtTick'], 'grave')
             const result = { column: nonNegativeInteger(grave.column, 'grave.column'), row: nonNegativeInteger(grave.row, 'grave.row'),
                 variant: integer(grave.variant, 'grave.variant'), riseDelay: integer(grave.riseDelay, 'grave.riseDelay'),
-                offsetX: integer(grave.offsetX, 'grave.offsetX'), offsetY: integer(grave.offsetY, 'grave.offsetY') }
+                offsetX: integer(grave.offsetX, 'grave.offsetX'), offsetY: integer(grave.offsetY, 'grave.offsetY'),
+                ...(grave.special === undefined ? {} : { special: trueFlag(grave.special, 'grave.special') }),
+                ...(grave.riseAtTick === undefined ? {} : { riseAtTick: nonNegativeInteger(grave.riseAtTick, 'grave.riseAtTick') }) }
             checkGraveRanges(result, 'grave')
             return result
         })
         if (new Set(result.graves.map(grave => `${grave.column}:${grave.row}`)).size !== result.graves.length) throw new TypeError('Duplicate graves')
     }
-    if (source.zombiesByWave !== undefined) result.zombiesByWave = array(source.zombiesByWave, 'server save.wave.zombiesByWave')
-        .map((wave, index) => array(wave, `server save.wave.zombiesByWave[${index}]`).map(id => nonEmptyString(id, 'wave zombie ID')))
     if (source.nextWaveAtTick !== undefined) {
         result.nextWaveAtTick = nonNegativeInteger(source.nextWaveAtTick, 'server save.wave.nextWaveAtTick')
     }
