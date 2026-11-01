@@ -80,6 +80,7 @@ export function processBoundaryCommands(session: Session, processInput: boolean)
         const inputCommand = processInput && playing && (
             command.type === 'selectSeed' || command.type === 'clearCursor' || command.type === 'placePlant' || command.type === 'mod'
             || command.type === 'selectConveyorPacket' || command.type === 'selectTool' || command.type === 'useToolAt'
+            || command.type === 'collectItemAt'
         )
         if (!isSessionCommand(command) && !inputCommand && playing) {
             break

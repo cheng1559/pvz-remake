@@ -83,6 +83,27 @@ test('adventure pause freezes scene animation, particles and tweens without chan
     assert.equal(gameClock.speed, speed)
 })
 
+test('collecting sun while battle time is frozen does not hold back the next seed selection', () => {
+    const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+    const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
+    game.command({ type: 'completeIntro' })
+    game.update(0)
+    for (let frame = 0; frame < 1000 && !game.render().items.length; frame++) game.update(0.01)
+    const sun = game.render().items[0]
+    assert.ok(sun, 'the sky drops a sun')
+    // The D key freezes the clock: the level then only updates with a zero delta.
+    const tick = game.render().gameplayTick
+    game.command({ type: 'collectItemAt', itemId: sun.entityId })
+    game.update(0)
+    assert.equal(game.render().items[0].state, 'collecting')
+    game.command({ type: 'selectSeed', seedId: 'pvz:peashooter' })
+    game.update(0)
+    assert.deepEqual(game.render().cursor, { mode: 'seed', seedId: 'pvz:peashooter' })
+    assert.equal(game.render().gameplayTick, tick)
+})
+
 test('one clock scales fixed-tick gameplay across frame rates, live speed changes, and freezing', () => {
     const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
     const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
