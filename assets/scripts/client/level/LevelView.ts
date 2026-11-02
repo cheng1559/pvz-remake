@@ -337,6 +337,7 @@ export class LevelView {
             content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow, ui,
             previewTooltipSurface: seedChooser?.previewTooltipSurface,
             almanacZombies: player.almanacZombies, openAlmanacZombie: nameKey => view.onOpenAlmanac?.(nameKey),
+            chooserPages: player.almanacZombies !== undefined || player.store === true,
             entityNodes: () => entityRenderer.nodes(),
             previewZombies: initial.wave.previewZombies ?? {},
             hasOpeningDialog: initial.extensions['pvz:dialog'] !== undefined,

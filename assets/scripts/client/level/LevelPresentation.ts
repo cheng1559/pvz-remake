@@ -18,6 +18,8 @@ export interface LevelIntroContext {
      */
     almanacZombies?: readonly string[]
     openAlmanacZombie?: (nameKey: string) => void
+    /** LawnApp::CanShowAlmanac || CanShowStore: the chooser shows its Almanac or Store button. */
+    chooserPages?: boolean
     content: LoadedContent
     level: LevelDefinition
     slots: LevelSlots

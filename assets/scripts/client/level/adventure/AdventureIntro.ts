@@ -127,9 +127,11 @@ export class AdventureIntro implements LevelIntro {
             if (!spot) throw new Error('No available preview slot')
             const { gridX, gridY } = spot
             introSpots.splice(introSpots.indexOf(spot), 1)
+            // CutScene::PlaceAZombie: with the chooser's Almanac or Store button showing, the last row only shifts sideways.
+            const fixedY = gridY === 4 && context.chooserPages === true
             introPositions.push({
                 x: 430 + gridX * 56 + Math.floor(Math.random() * 15),
-                y: 230 - gridY * 90 - (gridX % 2) * 30 - Math.floor(Math.random() * 15),
+                y: 230 - gridY * 90 - (gridX % 2) * 30 - (fixedY ? 0 : Math.floor(Math.random() * 15)),
                 z: 100 + gridY * 4 + (gridX % 2) * 2,
             })
         }
