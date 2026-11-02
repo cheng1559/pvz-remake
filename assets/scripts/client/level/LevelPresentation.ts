@@ -12,6 +12,12 @@ import type { UI } from '@/client/ui/UI'
 export interface LevelIntroContext {
     ui: UI
     previewTooltipSurface?: Node
+    /**
+     * Board::UpdateToolTip and SeedChooserScreen::MouseDown: once the almanac is unlocked, the zombies it lists (by
+     * `nameKey`) say "click to view" and open it on a click.
+     */
+    almanacZombies?: readonly string[]
+    openAlmanacZombie?: (nameKey: string) => void
     content: LoadedContent
     level: LevelDefinition
     slots: LevelSlots

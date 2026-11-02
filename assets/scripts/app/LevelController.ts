@@ -141,7 +141,14 @@ export function createLevelController(
                 // CutScene::CanGetPacketUpgrade's mDidntPurchasePacketUpgrade < 2; the level checks the rest.
                 ...(purse.declinedPacketUpgrades < 2 ? { packetUpgradeOffer: { cost: purse.packetUpgradeCost } } : {}) }
             await restoring(save, () => game.start(startOptions))
-            const view = await LevelView.create(root, content, save?.levelId ?? levelId, { name: playerName, upgradeCost: purse.packetUpgradeCost, nextUpgradeCost: purse.nextPacketUpgradeCost }, game.render())
+            // LawnApp::CanShowAlmanac and CanShowStore: the seed chooser's links to them.
+            const almanacZombies = profile?.unlocks.almanac ? (await menuApi.getAlmanac()).zombies.map(zombie => zombie.key) : undefined
+            const view = await LevelView.create(root, content, save?.levelId ?? levelId, {
+                name: playerName, upgradeCost: purse.packetUpgradeCost, nextUpgradeCost: purse.nextPacketUpgradeCost,
+                ...(almanacZombies ? { almanacZombies } : {}), store: profile?.unlocks.store === true,
+            }, game.render())
+            view.onOpenAlmanac = nameKey => { void lifecycle.onAlmanac?.(nameKey) }
+            view.onOpenStore = () => { void lifecycle.onStore?.() }
             // The profile owns the purse; a level only reports what it collected.
             if (profile) view.onMoneyChanged = money => { void menuApi.setCoins(money).catch(error => console.error('[LevelController] Saving coins failed', error)) }
             if (profile) view.onAchievementEarned = (id, shown) => {

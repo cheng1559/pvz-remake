@@ -33,6 +33,9 @@ interface Choice {
 /** Seed ownership/order comes from the server. Only card flights and panel motion live here. */
 export class LevelSeedChooser {
     readonly previewTooltipSurface: Node
+    /** SeedChooserScreen's Almanac and Store buttons; the app opens the page over the paused level. */
+    onAlmanac: () => void = () => {}
+    onStore: () => void = () => {}
     private snapshot?: WorldSnapshot
     private send: (command: GameCommand) => void = () => {}
     private age = 0
@@ -50,17 +53,18 @@ export class LevelSeedChooser {
     private readonly silhouette: SpriteFrame
 
     static async create(ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, inputRoot: Node,
-        notRecommended: (seedId: string) => string | undefined = () => undefined): Promise<LevelSeedChooser> {
+        notRecommended: (seedId: string) => string | undefined = () => undefined,
+        pages: { almanac?: boolean, store?: boolean } = {}): Promise<LevelSeedChooser> {
         const [background, silhouette] = await Promise.all(['seedchooser_background', 'seedpacketsilhouette'].map(async id => {
             const sprite = await modResources.asset(id, SpriteFrame)
             if (!sprite) throw new Error(`Missing seed chooser sprite: ${id}`)
             return sprite
         }))
-        return new LevelSeedChooser(ui, content, parent, available, slots, background, silhouette, inputRoot, notRecommended)
+        return new LevelSeedChooser(ui, content, parent, available, slots, background, silhouette, inputRoot, notRecommended, pages)
     }
 
     private constructor(private readonly ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, background: SpriteFrame, silhouette: SpriteFrame, inputRoot: Node,
-        notRecommended: (seedId: string) => string | undefined = () => undefined) {
+        notRecommended: (seedId: string) => string | undefined = () => undefined, pages: { almanac?: boolean, store?: boolean } = {}) {
         const sprites = new SpriteRepository(content.registry, content.loader)
         this.slots = slots
         this.silhouette = silhouette
@@ -112,6 +116,13 @@ export class LevelSeedChooser {
         this.start = ui.button(this.buttons, { text: ui.text('LETS_ROCK_BUTTON'), skin: 'seed', font: 'yellow',
             color: Color.WHITE, disabledColor: new Color(64, 64, 64), x: 154, y: 545, width: 156, height: 42, pressOffset: [0, 0],
             rightClickTriggers: false, enabled: false, onClick: () => this.confirm() })
+        // LawnApp::CanShowAlmanac and CanShowStore show them; SeedChooserScreen::ButtonDepress ignores them while seeds fly.
+        for (const [shown, key, x, open] of [[pages.almanac, 'ALMANAC_BUTTON', 560, () => this.onAlmanac()],
+            [pages.store, 'SHOP_BUTTON', 680, () => this.onStore()]] as const) {
+            if (!shown) continue
+            const button = ui.button(this.buttons, { text: ui.text(key), skin: 'seedSmall', x, y: 572, rightClickTriggers: false, onClick: open })
+            button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= 425 && !this.warningOpen && !this.inFlight
+        }
         const pointerDown = (event: EventMouse | EventTouch) => {
             if (!this.panel.active || !this.choosing || this.introTick < 425 || this.snapshot?.paused || UIHoverManager.isModalBlocked) return
             if (event instanceof EventMouse && (GameDebugSettings.isMobileMode() || ![0, 2].includes(event.getButton()))) return

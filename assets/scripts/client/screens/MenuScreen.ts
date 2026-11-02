@@ -41,6 +41,8 @@ export class MenuScreen extends Component {
     private mainPreparation: Promise<PreparedMenuPage> | null = null
     private achievementPreparation: Promise<PreparedMenuPage> | null = null
     private almanacSelection: AlmanacSelection = { plant: 0, zombie: 0 }
+    /** The entry the next almanac page opens on, instead of the first (AlmanacDialog::ShowZombie). */
+    private almanacPreset: AlmanacSelection | null = null
 
     /** The player list changed the current player; the main menu's sign and buttons follow. */
     async refreshProfile(): Promise<void> { await this.mainMenu?.refreshProfile() }
@@ -49,6 +51,9 @@ export class MenuScreen extends Component {
     mainMenuOpened(): boolean {
         return !!this.mainMenu?.node.isValid && this.mainMenu.isOpened
     }
+
+    /** The next almanac page opens on this entry (the seed chooser's preview zombies). */
+    presetAlmanac(selection: AlmanacSelection): void { this.almanacPreset = { ...selection } }
 
     async prepare(id: MenuPageId): Promise<PreparedMenuPage> {
         if (id === 'achievements') {
@@ -160,13 +165,16 @@ export class MenuScreen extends Component {
             navigateButton('main', { skin: 'seed', text: ui.text('MAIN_MENU_BUTTON'), x: 324, y: 520, rightClickTriggers: false })
         } else if (id === 'almanac' || id === 'plants' || id === 'zombies') {
             try {
-                if (!this.page || !['almanac', 'plants', 'zombies'].includes(this.page.id)) this.almanacSelection = { plant: 0, zombie: 0 }
+                if (this.almanacPreset) this.almanacSelection = this.almanacPreset
+                else if (!this.page || !['almanac', 'plants', 'zombies'].includes(this.page.id)) this.almanacSelection = { plant: 0, zombie: 0 }
+                this.almanacPreset = null
                 await showAlmanacScreen(controls, ui, id, action => { void this.onNavigate(action) }, this.almanacSelection)
             } catch (error) { root.node.destroy(); throw error }
         } else if (id === 'store') {
             try {
-                const fromGarden = this.page && ['garden', 'mushroom', 'aquarium', 'tree'].includes(this.page.id)
-                await controls.addComponent(StoreScreen).initialize(ui, action => { void this.onNavigate(action) }, ui.text(fromGarden ? 'STORE_BACK_TO_GAME' : 'STORE_MAIN_MENU_BUTTON'))
+                // Opened from a garden, or over the level (SeedChooserScreen's Store), it goes back to the game.
+                const backToGame = !this.page || ['garden', 'mushroom', 'aquarium', 'tree'].includes(this.page.id)
+                await controls.addComponent(StoreScreen).initialize(ui, action => { void this.onNavigate(action) }, ui.text(backToGame ? 'STORE_BACK_TO_GAME' : 'STORE_MAIN_MENU_BUTTON'))
             } catch (error) { root.node.destroy(); throw error }
         } else if (id === 'award') {
             try {

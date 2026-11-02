@@ -21,6 +21,7 @@ import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -65,7 +66,7 @@ export class AdventureIntro implements LevelIntro {
     private destroyed = false
     private hasOpeningDialog = false
     private readonly previewTooltips = new Map<Node, { hit: Node; tooltip: UITooltip }>()
-    private previewTooltipContext?: { ui: UI; gameplay: GameplayDefinitions }
+    private previewTooltipContext?: { ui: UI; gameplay: GameplayDefinitions; almanacZombies: readonly string[] }
 
     static async create(context: LevelIntroContext, layout: AdventureIntroLayout): Promise<AdventureIntro> {
         const { content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow, entityNodes, previewZombies } = context
@@ -163,12 +164,15 @@ export class AdventureIntro implements LevelIntro {
             entityNodes, audio, content.registry, content.loader, content.animations)
         intro.graveTicks = level.graves?.length ? GRAVE_STONE_TICKS : 0
         intro.hasOpeningDialog = context.hasOpeningDialog === true
-        if (context.previewTooltipSurface) intro.installPreviewTooltips(context.ui, context.previewTooltipSurface, content.definitions)
+        if (context.previewTooltipSurface) {
+            intro.installPreviewTooltips(context.ui, context.previewTooltipSurface, content.definitions, context.almanacZombies ?? [], context.openAlmanacZombie)
+        }
         return intro
     }
 
-    private installPreviewTooltips(ui: UI, surface: Node, gameplay: GameplayDefinitions): void {
-        this.previewTooltipContext = { ui, gameplay }
+    private installPreviewTooltips(ui: UI, surface: Node, gameplay: GameplayDefinitions, almanacZombies: readonly string[],
+        openAlmanacZombie?: (nameKey: string) => void): void {
+        this.previewTooltipContext = { ui, gameplay, almanacZombies }
         for (const node of this.introZombies) {
             const hit = uiNode({ name: 'ZombieHitArea', parent: node, active: false, anchor: { x: 0, y: 1 } }).node
             const tooltip = ui.tooltip(hit, { text: '', gap: -10, offset: [5, 0], surface })
@@ -178,6 +182,16 @@ export class AdventureIntro implements LevelIntro {
             button.rightClickTriggers = false
             button.canInteract = () => surface.activeInHierarchy && this.ticks === 425
             button.onHoverChange = hovering => hovering ? tooltip.show() : tooltip.hide()
+            // The arrow stays (SeedChooserScreen::UpdateCursor); a click opens the almanac on this zombie.
+            button.pressSound = null
+            button.clickOnPress = true
+            button.onClick = () => {
+                const nameKey = this.previewNameKey(node)
+                if (!openAlmanacZombie || !almanacZombies.includes(nameKey)) return
+                tooltip.hide()
+                void SoundSystem.play(SoundEffect.Tap)
+                openAlmanacZombie(nameKey)
+            }
             this.previewTooltips.set(node, { hit, tooltip })
             this.syncPreviewTooltip(node)
         }
@@ -186,11 +200,18 @@ export class AdventureIntro implements LevelIntro {
     private syncPreviewTooltip(node: Node): void {
         const preview = this.previewTooltips.get(node)
         if (!preview) return
-        const { ui, gameplay } = this.previewTooltipContext!
+        const { ui, gameplay, almanacZombies } = this.previewTooltipContext!
         const typeId = this.previewTypes.get(node)!
         const body = gameplay.zombies[typeId].body
         uiNode({ node: preview.hit, position: { x: body.x, y: -body.y }, size: body })
-        preview.tooltip.title = ui.text(this.definitions.zombies[typeId].nameKey ?? typeId)
+        const nameKey = this.previewNameKey(node)
+        preview.tooltip.title = ui.text(nameKey)
+        preview.tooltip.text = almanacZombies.includes(nameKey) ? ui.text('CLICK_TO_VIEW') : ''
+    }
+
+    private previewNameKey(node: Node): string {
+        const typeId = this.previewTypes.get(node)!
+        return this.definitions.zombies[typeId].nameKey ?? typeId
     }
 
     constructor(

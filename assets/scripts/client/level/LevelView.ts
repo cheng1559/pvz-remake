@@ -49,7 +49,11 @@ export type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>
 
 /** Profile values the level shows: the house name and Dave's quotes. */
 /** `upgradeCost` is the seed-slot price Dave quotes; `nextUpgradeCost` replaces it once the offer is bought. */
-export interface LevelPlayer { name: string; upgradeCost: number; nextUpgradeCost: number }
+/**
+ * `almanacZombies`: the almanac's zombies (by `nameKey`) once the player has the almanac (LawnApp::CanShowAlmanac);
+ * `store`: the player has the store (LawnApp::CanShowStore).
+ */
+export interface LevelPlayer { name: string; upgradeCost: number; nextUpgradeCost: number; almanacZombies?: string[]; store?: boolean }
 
 /** CRAZY_DAVE_1503 ({NO_CLICK} "How's that sound?") asks to buy the seed-slot upgrade it just quoted. */
 
@@ -78,6 +82,9 @@ export class LevelView {
     onPacketUpgradeAnswered?: (accepted: boolean, coins: number) => void
     /** The level granted an achievement the player did not have; `shown` when it was announced in the level. */
     onAchievementEarned?: (id: string, shown: boolean) => void
+    /** The seed chooser opens the almanac, on a preview zombie's entry when it has its `nameKey`, or the store. */
+    onOpenAlmanac?: (zombieNameKey?: string) => void
+    onOpenStore?: () => void
     private player!: LevelPlayer
     private answerDialog: (accept: boolean) => void = () => {}
     private seedBankSlots = 0
@@ -322,13 +329,14 @@ export class LevelView {
                 if (content.definitions.plants[seed.plant].nocturnal && !boardDefinition.night) return 'NOCTURNAL_WARNING'
                 if (seed.placement === 'grave' && !level.graves?.length) return 'NOT_RECOMMENDED_FOR_LEVEL'
                 return undefined
-            })
+            }, { almanac: player.almanacZombies !== undefined, store: player.store })
         seedChooser?.placeBefore(cursorLayer)
         let view!: LevelView
         let entityRenderer!: LevelEntityRenderer
         const intro = await presentation.createIntro({
             content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow, ui,
             previewTooltipSurface: seedChooser?.previewTooltipSurface,
+            almanacZombies: player.almanacZombies, openAlmanacZombie: nameKey => view.onOpenAlmanac?.(nameKey),
             entityNodes: () => entityRenderer.nodes(),
             previewZombies: initial.wave.previewZombies ?? {},
             hasOpeningDialog: initial.extensions['pvz:dialog'] !== undefined,
@@ -373,6 +381,10 @@ export class LevelView {
         )
         const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, gameOverFrames, presentation.board.gameOver)
         view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition)
+        if (seedChooser) {
+            seedChooser.onAlmanac = () => view.onOpenAlmanac?.()
+            seedChooser.onStore = () => view.onOpenStore?.()
+        }
         entityRenderer.sunBankOffset = () => bankLeft.position.x
         view.seedChooser = seedChooser
         view.graves = await LevelGraves.create(entityLayer, entityRenderer, content, boardDefinition, initial.graves ?? [])

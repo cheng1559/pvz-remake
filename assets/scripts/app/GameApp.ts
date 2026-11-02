@@ -94,6 +94,9 @@ export class GameApp extends Component {
                 void SoundSystem.play(SoundEffect.Pause)
                 return this.openDialog('gameOptions')
             },
+            // SeedChooserScreen: the almanac (on a preview zombie's entry) and the store open over the paused level.
+            onAlmanac: nameKey => this.openAlmanacFromLevel(nameKey),
+            onStore: () => this.navigate('store'),
             onComplete: () => this.finish('award'),
             onGameOver: () => this.finish('gameOver'),
         })
@@ -125,6 +128,15 @@ export class GameApp extends Component {
             initializeViewport()
             this.fpsDisplay = new FpsDisplay(this.node, ui)
         }).catch(error => console.error('[GameApp] Failed to initialize UI', error))
+    }
+
+    /** SeedChooserScreen::MouseDown: AlmanacDialog::ShowZombie opens the zombie list on the clicked preview zombie. */
+    private async openAlmanacFromLevel(zombieNameKey?: string): Promise<void> {
+        if (zombieNameKey === undefined) return this.navigate('almanac')
+        const zombie = (await menuApi.getAlmanac()).zombies.find(entry => entry.key === zombieNameKey)
+        if (!zombie || !this.menu) return
+        this.menu.presetAlmanac({ plant: 0, zombie: zombie.id })
+        return this.navigate('zombies')
     }
 
     private async navigate(action: MenuAction, levelId?: string): Promise<void> {

@@ -12,6 +12,8 @@
 
 冒险 2-2 复用 2-1 的夜间流程：20 波（第 10、20 波为旗帜波），出现普通、路障、铁桶、读报和旗帜僵尸，墓碑布局同 2-1，最终波后墓碑按 4000:4000 出普通或路障僵尸；首次冒险播放戴夫 1401–1402 对话，`{MONEY}`、`{UPGRADE_COST}` 分别替换为当前金币和下一次卡槽升级价格。通关奖励为大喷菇，领取后进入 2-3。选卡警告按关卡脚本的 `chooserWarnings` 依次弹出：2-1 首次冒险未带小喷菇先提示，未带产阳光植物时使用夜间专用文案，任何一次选择重新挑选都会中止开始。
 
+选卡阶段鼠标移到预览僵尸上显示名字提示框，光标保持箭头。玩家有了图鉴（档案 `unlocks.almanac`）后，图鉴里有的僵尸（按 `nameKey` 对应）提示框多一行“click to view”，点击播放点击音效并在暂停的关卡上打开僵尸页、定位到它，关闭后回到选卡（`SeedChooserScreen::MouseDown`、`AlmanacDialog::ShowZombie`）。选卡面板在 (560, 572)、(680, 572) 显示原版的“图鉴”“商店”按钮，分别在图鉴、商店解锁后出现；从这里打开的商店返回按钮显示“回到游戏”。
+
 冒险 2-3 沿用夜间流程和墓碑，10 波，出现普通、路障和铁栅门僵尸。铁栅门僵尸（`pvz:screendoor`）的门有 1100 耐久，出怪点数 4、权重 3500、第 5 波起出现，在第 6 波和最后一波固定出现。门是盾牌：`Board::TotalZombiesHealthInWave` 按 0.2f 计入，僵尸死亡时门掉落但不播放撕报纸声（`DropShield(1U)`），被割草机碾压时先掉落头盔和盾牌（`Zombie::MowDown`）。首次冒险时，若金币够买第一次卡槽升级、还没买过、拒绝不到两次（`CutScene::CanGetPacketUpgrade`），戴夫说 1501–1503 推销；1503 在 `pvz:dialog` 中带有 `question`（价格和升级后的格数），由“是/否”对话框回答：选“是”扣钱、这一关的选卡立即多一格，接着说 1510–1511；选“否”接着说 1520。回答和回答后的金币通过一次 `recordPacketUpgradeOffer` 写入档案，推销状态随存档保存。通关奖励为墓碑吞噬者。
 
 冒险 2-4 沿用夜间流程，20 波（第 10、20 波为旗帜波），出现普通、路障、撑杆和铁栅门僵尸（`gZombieAllowedLevels`），没有新引入的僵尸。墓碑按 `Board::InitLevel` 在第 5／6／7／8 列放置 1／1／2／3 座。卡槽升级推销与 2-3 共用 `packetUpgradeOffer` 脚本（原版在 13–24 关推销，第 15、20、21 关除外）。通关奖励是图鉴（`COIN_ALMANAC`），使用 `unlock` 奖励：掉落、拾取箭头和领奖页与工具奖励相同，但不加入关卡工具。奖励的 `unlocks: "almanac"` 在通关时把图鉴记入档案的 `unlocks`，此后主菜单和游戏内选项显示图鉴入口（对应原版第 15 关，`LawnApp::CanShowAlmanac`）；商店和禅境花园同理，使用 `"store"`、`"garden"`（对应 3-4 的车钥匙和 5-4 的水壶，尚未实现）；通关冒险后三者全部开放。奖励的 `opens` 让领奖页按钮显示 `VIEW_ALMANAC_BUTTON` 并打开图鉴，从领奖页打开的图鉴关闭后直接进入下一关（`AwardScreen::StartButtonPressed`）。关闭图鉴后进入 2-5。
@@ -211,6 +213,17 @@ npm run build:web:debug
 - 自动测试、构建和实际运行验证分别报告。画面、交互或平台问题需要时在对应环境检查；原生构建成功不等于已完成真机验证。除非需要验证实际画面或交互，避免使用浏览器自动化。
 
 Windows 和 Android 构建命令仍然保留；Web 验证不代表已通过原生编译或真机检查。
+
+### 预览的模块映射
+
+Cocos 预览把每个脚本编译成 SystemJS 模块，导入写成 `__unresolved_N` 这样的占位名，再由 `temp/programming/packer-driver/targets/preview/import-map.json` 逐个模块对应到文件。修改被很多文件引用的模块（例如 `shared/protocol`）后，个别模块的编译代码和映射可能对不上，导入会悄悄取自别的模块。运行时表现为莫名的 `undefined`，例如 `Cannot read properties of undefined (reading 'name')`，而 Node 测试一切正常。
+
+```sh
+npm run check:preview            # 检查，并 touch 映射错位的源文件让预览重新编译
+npm run check:preview -- --dry-run   # 只检查，不改文件
+```
+
+脚本（`tools/preview/check-imports.ts`）对每个模块导入的每个名字，检查映射指向的源文件是否确实导出了它，列出错位的导入。touch 之后等预览重新编译完再刷新页面。预览没有运行过时没有可检查的内容，脚本直接退出。预览模式下 `Error` 带着调用栈转发到 `temp/logs/cocos.log`，服务端出错时 `IntegratedGameHost` 也会打印原始错误，可以从那里看到出错位置。
 
 ### iOS 性能分析
 
