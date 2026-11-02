@@ -175,24 +175,22 @@ test('the almanac shows the plants the player has and the zombies met so far', a
     assert.deepEqual((await almanac({ adventureLevel: 1, finishedAdventure: 2 })).zombie('ZOMBIE_YETI'), [true, true])
 })
 
-test('achievement entries preserve saved flag/icon order and expose only the active user’s unlocks', async () => {
+test('achievement entries keep the original order and expose only the active user’s unlocks', async () => {
     const { api, profiles } = fixture()
     const empty = await api.getAchievements()
     assert.equal(empty.total, 21)
     assert.equal(empty.completed, 0)
     const profile = profiles.createProfile('Alice')!
-    profile.finishedAdventure = 1
-    profile.earnedAchievements[4] = true
+    profile.earnedAchievements.push('pvz:spudow')
     profiles.saveProfile(profile)
     const view = await api.getAchievements()
-    assert.equal(view.completed, 2)
+    assert.equal(view.completed, 1)
     assert.equal(view.items[0].titleKey, 'ACHIEVEMENT_HOME_SECURITY_TITLE')
-    assert.equal(view.items[1].titleKey, 'ACHIEVEMENT_NOBEL_PEAS_PRIZE_TITLE')
-    assert.equal(view.items[4].titleKey, 'ACHIEVEMENT_SPUDOW_TITLE')
-    assert.deepEqual(view.items.filter(item => item.earned).map(item => item.id), [0, 4])
+    assert.equal(view.items[20].titleKey, 'ACHIEVEMENT_DISCO_IS_UNDEAD_TITLE')
+    assert.deepEqual(view.items.filter(item => item.earned).map(item => item.id), ['pvz:spudow'])
     const strings = JSON.parse(readFileSync(`mods/pvz-base/${readBaseContent().resources.json['pvz:strings']}`, 'utf8'))
     for (const [index, item] of view.items.entries()) {
-        assert.equal(item.icon, index)
+        assert.deepEqual(item.icon, { sprite: 'pvz:acheesements_icons', index })
         assert.ok(strings[item.titleKey])
         assert.ok(strings[item.descriptionKey])
     }
@@ -202,6 +200,26 @@ test('achievement entries preserve saved flag/icon order and expose only the act
     assert.equal((await api.getAchievements()).completed, 0)
 })
 
+test('earned achievements are saved once and the next award page lists the unshown ones', async () => {
+    const levels = readGameplaySource('levels') as GameplayLevels
+    const { api, profiles } = fixture(() => levels.levels['pvz:adventure-1-1'], () => true)
+    await api.createUser('Alice')
+    assert.deepEqual(await api.earnAchievement('pvz:sunny-days', true), { earned: true })
+    assert.deepEqual(await api.earnAchievement('pvz:sunny-days', false), { earned: false })
+    await api.earnAchievement('pvz:good-morning', false)
+    await api.earnAchievement('pvz:home-security', false)
+    await assert.rejects(api.earnAchievement('pvz:unknown', false), /Unknown achievement/)
+    // Announced in the level, so only the other two wait for the award page, in screen order.
+    const award = await api.completeLevel()
+    assert.deepEqual(award.achievements.map(entry => entry.id), ['pvz:home-security', 'pvz:good-morning'])
+    assert.deepEqual((await api.getAward()).achievements, award.achievements, 'the award page reads the same list')
+    assert.deepEqual((await api.completeLevel()).achievements, [], 'each achievement is listed once')
+    assert.deepEqual(profiles.getCurrentProfile()!.shownAchievements.sort(), ['pvz:good-morning', 'pvz:home-security', 'pvz:sunny-days'])
+    assert.equal((await api.resetAchievements('pvz:good-morning')).completed, 2)
+    assert.equal((await api.resetAchievements()).completed, 0)
+    assert.deepEqual(profiles.getCurrentProfile()!.shownAchievements, [])
+})
+
 test('award API resolves the loaded level reward and packet cost instead of choosing a plant in the UI', async () => {
     const levels = readGameplaySource('levels') as GameplayLevels
     let level: LevelDefinition | null = levels.levels['pvz:adventure-1-1']
@@ -209,7 +227,7 @@ test('award API resolves the loaded level reward and packet cost instead of choo
     const award = await api.getAward()
     assert.deepEqual(award, {
         kind: 'seed', titleKey: 'NEW_PLANT',
-        nextLevelId: 'pvz:adventure-1-2', showMainMenu: false,
+        nextLevelId: 'pvz:adventure-1-2', showMainMenu: false, achievements: [],
         seed: 1, cost: 50, nameKey: 'SUNFLOWER', descriptionKey: 'SUNFLOWER_TOOLTIP',
     })
     award.seed = 22
@@ -218,14 +236,14 @@ test('award API resolves the loaded level reward and packet cost instead of choo
     level = { ...level, award: { kind: 'seed', id: 'pvz:hypnoshroom' } }
     assert.deepEqual(await api.getAward(), {
         kind: 'seed', titleKey: 'NEW_PLANT',
-        nextLevelId: 'pvz:adventure-1-2', showMainMenu: false,
+        nextLevelId: 'pvz:adventure-1-2', showMainMenu: false, achievements: [],
         seed: 12, cost: 75, nameKey: 'HYPNO_SHROOM', descriptionKey: 'HYPNO_SHROOM_TOOLTIP',
     })
     level = { ...level, award: { kind: 'seed', id: 'pvz:torchwood' } }
     await assert.rejects(api.getAward(), /Unknown plant award/)
     level = levels.levels['pvz:adventure-2-4']
     assert.deepEqual(await api.getAward(), {
-        kind: 'unlock', id: 'pvz:almanac', nextLevelId: 'pvz:adventure-2-5', showMainMenu: true,
+        kind: 'unlock', id: 'pvz:almanac', nextLevelId: 'pvz:adventure-2-5', showMainMenu: true, achievements: [],
         titleKey: 'FOUND_SUBURBAN_ALMANAC', nameKey: 'SUBURBAN_ALMANAC', descriptionKey: 'SUBURBAN_ALMANAC_DESCRIPTION',
         opens: { page: 'almanac', buttonKey: 'VIEW_ALMANAC_BUTTON' },
     })
@@ -263,7 +281,7 @@ test('winning advances the current profile once and exposes the next installed l
     level = levels.levels['pvz:adventure-1-4']
     const shovel = await api.completeLevel()
     assert.deepEqual(shovel, { kind: 'tool', id: 'pvz:shovel', titleKey: 'GOT_SHOVEL', nameKey: 'SHOVEL',
-        descriptionKey: 'SHOVEL_DESCRIPTION', nextLevelId: 'pvz:adventure-1-5', showMainMenu: true })
+        descriptionKey: 'SHOVEL_DESCRIPTION', nextLevelId: 'pvz:adventure-1-5', showMainMenu: true, achievements: [] })
     assert.equal((await api.getCurrentUser())!.adventureLevel, 5)
     for (const [index, kind, seed] of [[5, 'seed', 4], [6, 'seed', 5], [7, 'seed', 6], [8, 'seed', 7], [9, 'note', undefined], [10, 'seed', 8]] as const) {
         level = levels.levels[`pvz:adventure-1-${index}`]

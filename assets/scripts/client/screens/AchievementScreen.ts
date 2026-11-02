@@ -16,7 +16,7 @@ const { ccclass } = _decorator
 const SPRITES = [
     'selectorscreen_achievements_bg', 'acheesements_hole_tile', 'acheesements_china',
     'acheesements_bookworm', 'acheesements_bejeweled', 'acheesements_chuzzle',
-    'acheesements_peggle', 'acheesements_pipe', 'acheesements_zuma', 'acheesements_icons',
+    'acheesements_peggle', 'acheesements_pipe', 'acheesements_zuma',
     'acheesements_more_rock', 'acheesements_more_button', 'acheesements_more_button_highlight',
     'acheesements_top_button', 'acheesements_top_button_highlight',
 ]
@@ -26,7 +26,7 @@ export class AchievementScreen extends Component {
     private scroll!: UIScroll
     private more!: UIButton
     private showingTop = false
-    private readonly icons = new Map<number, Sprite>()
+    private readonly icons = new Map<string, Sprite>()
     /** AchievementsWidget::KeyDown speed: each arrow press sets it to 30, then it drops by 1 every 10ms. */
     private keySpeed = 0
     private keyDirection = 0
@@ -41,6 +41,12 @@ export class AchievementScreen extends Component {
                 return [name, frame] as const
             })),
         ])
+        const iconSprites = [...new Set(data.items.map(item => item.icon.sprite))]
+        const iconFrames = new Map(await Promise.all(iconSprites.map(async id => {
+            const frame = await modResources.asset(id, SpriteFrame)
+            if (!frame) throw new Error(`Missing achievement icon: ${id}`)
+            return [id, frame] as const
+        })))
         if (!this.node.isValid) throw new Error('Achievement screen was destroyed while loading')
         const sprites = Object.fromEntries(frames)
         // GOTY AchievementsWidget: height = china + background + 15700, and it scrolls until 50px of it remain hidden.
@@ -69,7 +75,7 @@ export class AchievementScreen extends Component {
         await preloadTasks(data.items.map((item, index) => async () => {
             if (!this.node.isValid) throw new Error('Achievement screen was destroyed while loading')
             const x = 190 + index % 2 * 290, y = 178 + Math.floor(index / 2) * 57
-            const icon = ui.image(content, getAtlasFrame(sprites.acheesements_icons, item.icon, 70, 70, 7), {
+            const icon = ui.image(content, getAtlasFrame(iconFrames.get(item.icon.sprite)!, item.icon.index, 70, 70, 7), {
                 x: x - 70, y, width: 56, height: 56,
             })
             icon.node.name = `Achievement-${item.id}`

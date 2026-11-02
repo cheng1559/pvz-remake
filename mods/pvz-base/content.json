@@ -9,6 +9,7 @@
     "projectiles": "gameplay/definitions/projectiles.json",
     "items": "gameplay/definitions/items.json",
     "lawnMowers": "gameplay/definitions/lawn-mowers.json",
+    "achievements": "gameplay/definitions/achievements.json",
     "levels": "gameplay/levels.json",
     "seedCatalog": "gameplay/seed-catalog.json"
   },

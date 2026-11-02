@@ -7,6 +7,7 @@ export type AdviceWidgetStyle =
     | 'tutorial-level2'
     | 'tutorial-later'
     | 'tutorial-later-stay'
+    | 'achievement'
 
 export interface AdviceWidgetSnapshot {
     message: string
@@ -24,6 +25,7 @@ const STYLES = new Set<AdviceWidgetStyle>([
     'tutorial-level2',
     'tutorial-later',
     'tutorial-later-stay',
+    'achievement',
 ])
 
 export function parseAdviceWidgetSnapshot(value: unknown): AdviceWidgetSnapshot | null {

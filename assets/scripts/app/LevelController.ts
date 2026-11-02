@@ -125,14 +125,16 @@ export function createLevelController(
             const purse = profile ? await menuApi.getPurse()
                 : { coins: 0, packetUpgrades: 0, packetUpgradeCost: 0, nextPacketUpgradeCost: 0, declinedPacketUpgrades: 2 }
             const playerName = profile?.name || 'Player'
+            const earnedAchievements = profile ? (await menuApi.getAchievements()).items.filter(item => item.earned).map(item => item.id) : undefined
             const game = new LocalIntegratedGame(content.definitions, content.levels, gameplay, true)
             const startOptions = save ? {
-                ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades,
+                ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements,
                 randomSeed: save.server.random.state,
                 levelId: save.levelId,
                 mods: save.contentSet.mods,
                 save: save.server as unknown as JsonValue,
-            } : { ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, randomSeed: Math.floor(Math.random() * 0x100000000),
+            } : { ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, earnedAchievements,
+                randomSeed: Math.floor(Math.random() * 0x100000000),
                 firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods,
                 // Without a player every seed is there, as on a replay.
                 ...(profile && 'ownedSeeds' in purse ? { ownedSeeds: purse.ownedSeeds } : {}),
@@ -142,6 +144,9 @@ export function createLevelController(
             const view = await LevelView.create(root, content, save?.levelId ?? levelId, { name: playerName, upgradeCost: purse.packetUpgradeCost, nextUpgradeCost: purse.nextPacketUpgradeCost }, game.render())
             // The profile owns the purse; a level only reports what it collected.
             if (profile) view.onMoneyChanged = money => { void menuApi.setCoins(money).catch(error => console.error('[LevelController] Saving coins failed', error)) }
+            if (profile) view.onAchievementEarned = (id, shown) => {
+                void menuApi.earnAchievement(id, shown).catch(error => console.error('[LevelController] Saving an achievement failed', error))
+            }
             if (profile) view.onPacketUpgradeAnswered = (accepted, coins) => {
                 void menuApi.recordPacketUpgradeOffer(accepted, coins).catch(error => console.error('[LevelController] Saving the seed-slot upgrade failed', error))
             }

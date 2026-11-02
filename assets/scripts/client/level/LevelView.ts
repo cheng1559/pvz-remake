@@ -76,6 +76,8 @@ export class LevelView {
     /** Crazy Dave's seed-slot offer was answered; the app records the upgrade or the refusal in the profile. */
     /** With the level's coins after the answer, so the profile saves both at once. */
     onPacketUpgradeAnswered?: (accepted: boolean, coins: number) => void
+    /** The level granted an achievement the player did not have; `shown` when it was announced in the level. */
+    onAchievementEarned?: (id: string, shown: boolean) => void
     private player!: LevelPlayer
     private answerDialog: (accept: boolean) => void = () => {}
     private seedBankSlots = 0
@@ -543,6 +545,7 @@ export class LevelView {
         this.lastSnapshot = snapshot
         this.gameplayTick = snapshot.gameplayTick
         for (const event of events) {
+            if (event.type === 'achievementEarned' && typeof event.data.id === 'string') this.onAchievementEarned?.(event.data.id, event.data.announce === true)
             if (event.type !== 'packetUpgradePurchased' && event.type !== 'packetUpgradeDeclined') continue
             // CRAZY_DAVE_1510 quotes the next upgrade's price.
             if (event.type === 'packetUpgradePurchased') this.player.upgradeCost = this.player.nextUpgradeCost

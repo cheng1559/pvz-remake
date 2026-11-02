@@ -132,11 +132,38 @@ test('a bowling plant hits, ricochets and resumes the same motion after save; an
             assert.equal(world.get(id, ZombieComponent)!.health, 0)
             assert.notEqual(server.snapshot().plants[0].row, 2)
             assert.deepEqual(events.find(event => event.type === 'bowlingImpact')!.data, {
-                entityId: id, typeId: 'pvz:normal', helm: false,
+                entityId: id, typeId: 'pvz:normal', helm: false, plantId: plant.entityId, plantTypeId: 'pvz:bowling-wallnut', hits: 1,
             })
         }
         const restored = new IntegratedGameServer(definitions, levels)
         restored.start({ ...options, save: server.save() as unknown as JsonValue })
         for (let tick = 0; tick < 40; tick++) assert.deepEqual(restored.tick(), server.tick())
+    }
+})
+
+test('one wall-nut hitting five zombies grants Roll Some Heads, except on a first Adventure', () => {
+    for (const firstAdventure of [false, true]) {
+        const server = begin()
+        const saved = server.save()
+        saved.tutorial.firstAdventure = firstAdventure
+        server.start({ ...options, save: saved as unknown as JsonValue })
+        runCommand(server, { type: 'selectConveyorPacket', packetId: 1 })
+        runCommand(server, { type: 'placePlant', row: 2, column: 1 })
+        const world = (server as unknown as { session: { world: World } }).session.world
+        const events = server.drainEvents()
+        for (let hit = 0; hit < 5; hit++) {
+            const plant = server.snapshot().plants[0]
+            // Ahead of the nut in the row it is heading for, where it lines up with the row again.
+            spawnZombie(world, definitions, 'pvz:normal', plant.row, plant.x + 80, plant.y - 30)
+            let impacts = events.filter(event => event.type === 'bowlingImpact').length
+            for (let tick = 0; tick < 200 && impacts === hit; tick++) {
+                server.tick()
+                events.push(...server.drainEvents())
+                impacts = events.filter(event => event.type === 'bowlingImpact').length
+            }
+            assert.equal(impacts, hit + 1)
+        }
+        assert.deepEqual(events.filter(event => event.type === 'achievementEarned').map(event => event.data.id),
+            firstAdventure ? [] : ['pvz:roll-some-heads'])
     }
 })

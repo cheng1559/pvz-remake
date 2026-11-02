@@ -15,9 +15,9 @@ export function destroyEatenPlant(world: World, definitions: GameplayDefinitions
     const explosion = definitions.plants[world.get(entity, PlantComponent)!.typeId].deathExplosion
     const position = world.get(entity, PositionComponent)!
     if (explosion) {
-        explode(world, definitions, position, explosion, remover)
+        const kills = explode(world, definitions, position, explosion, remover)
         emitServerEvent(world.resources.get(EventQueueResource), 'plantExploded', {
-            entityId: entity, typeId: world.get(entity, PlantComponent)!.typeId, row: position.row,
+            entityId: entity, typeId: world.get(entity, PlantComponent)!.typeId, row: position.row, kills,
             x: position.x + explosion.offset.x, y: position.y + explosion.offset.y,
         })
     }

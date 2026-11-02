@@ -17,6 +17,7 @@ import {
     ZombieComponent,
 } from '../state/components'
 import { EventQueueResource } from '../state/events'
+import { AchievementsResource } from '../achievements/achievements'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { initialPlantAbility } from '../plants/abilities'
 import { parseServerSaveSnapshot, type SavedEntity, type ServerSaveSnapshot } from './save'
@@ -114,6 +115,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
             nextEventId: eventQueue.nextEventId,
             events: eventQueue.events.map(event => ({ ...event, data: { ...event.data } })),
         },
+        achievementProgress: jsonRoundTrip(world.resources.get(AchievementsResource).progress),
         entities,
     })
 }
@@ -200,6 +202,7 @@ export function restoreSession(
     })
     world.resources.set(TutorialResource, { ...save.tutorial })
     world.resources.set(WaveResource, { ...save.wave })
+    world.resources.get(AchievementsResource).progress = jsonRoundTrip(save.achievementProgress)
     world.resources.set(EventQueueResource, {
         nextEventId: save.eventQueue.nextEventId,
         events: save.eventQueue.events.map(event => ({ ...event, data: { ...event.data } })),

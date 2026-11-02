@@ -34,6 +34,8 @@ export class MenuApi {
     getChallenges(page: MenuEndpoints['getChallenges']['args']['page']) { return this.request('getChallenges', { page }) }
     getAlmanac() { return this.request('getAlmanac', {}) }
     getAchievements() { return this.request('getAchievements', {}) }
+    earnAchievement(id: string, shown: boolean) { return this.request('earnAchievement', { id, shown }) }
+    resetAchievements(id?: string) { return this.request('resetAchievements', id === undefined ? {} : { id }) }
     getAdventure() { return this.request('getAdventure', {}) }
     completeLevel() { return this.request('completeLevel', {}) }
     getAward() { return this.request('getAward', {}) }

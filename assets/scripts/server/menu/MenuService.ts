@@ -1,7 +1,6 @@
-import { type AwardView, type MenuRequest, type MenuResponse, type MenuStorage, type PurseView, type StoreItemView, type StoreView, type UserResult, type UserView } from '@/shared/menu'
+import { type AchievementEntry, type AchievementView, type AwardView, type MenuRequest, type MenuResponse, type MenuStorage, type PurseView, type StoreItemView, type StoreView, type UserResult, type UserView } from '@/shared/menu'
 import type { GameplayDefinitions, LevelDefinition, UnlockedEntry } from '@/shared/content/gameplay'
 import type { AlmanacCatalog } from './almanacCatalog'
-import { ACHIEVEMENT_DEFINITIONS } from './achievementCatalog'
 import { CHALLENGES, challengeCompleted, hasAllTrophies } from './challengeCatalog'
 import { createGameSettingsStore } from './gameSettingsStore'
 import { createProfileStore, type PlayerProfile } from './profileStore'
@@ -28,12 +27,14 @@ function userView(profile: PlayerProfile | null): UserView | null {
     }
 }
 
-/** The gameplay data the menu applies: the starting seeds, the coin cap and the seeds' costs and recharges. */
-export type MenuGameplaySettings = Pick<GameplayDefinitions, 'seedBank' | 'economy' | 'seeds'>
+/** The gameplay data the menu applies: the starting seeds, the coin cap, the seeds' costs and recharges, and the achievements. */
+export type MenuGameplaySettings = Pick<GameplayDefinitions, 'seedBank' | 'economy' | 'seeds' | 'achievements'>
 
 export class MenuService {
     private readonly profiles
     private readonly settings
+    /** The achievements the last completed level's award page lists (AwardScreen::mAchievementItems). */
+    private awardAchievements: AchievementEntry[] = []
 
     constructor(
         storage: MenuStorage,
@@ -90,10 +91,29 @@ export class MenuService {
                 const profile = this.profiles.getCurrentProfile()
                 return this.almanacCatalog.view(profile, this.ownedSeeds(profile), this.gameplaySettings.seeds)
             }
-            case 'getAchievements': {
-                const earned = this.profiles.getCurrentProfile()?.earnedAchievements ?? []
-                const items = ACHIEVEMENT_DEFINITIONS.map(item => ({ ...item, earned: earned[item.id] === true }))
-                return { items, total: items.length, completed: items.filter(item => item.earned).length }
+            case 'getAchievements': return this.achievements()
+            case 'earnAchievement': {
+                // ReportAchievement::GiveAchievement: earned once; shown only when the level announced it.
+                const profile = this.profiles.getCurrentProfile()
+                if (!profile) throw new Error('Achievements require a player profile')
+                const { id, shown } = request.args
+                if (!Object.hasOwn(this.gameplaySettings.achievements, id)) throw new Error(`Unknown achievement: ${id}`)
+                if (profile.earnedAchievements.includes(id)) return { earned: false }
+                profile.earnedAchievements.push(id)
+                if (shown) profile.shownAchievements.push(id)
+                this.profiles.saveProfile(profile)
+                return { earned: true }
+            }
+            case 'resetAchievements': {
+                const profile = this.profiles.getCurrentProfile()
+                if (!profile) throw new Error('Achievements require a player profile')
+                const { id } = request.args
+                if (id !== undefined && !Object.hasOwn(this.gameplaySettings.achievements, id)) throw new Error(`Unknown achievement: ${id}`)
+                const kept = (ids: string[]) => id === undefined ? [] : ids.filter(entry => entry !== id)
+                profile.earnedAchievements = kept(profile.earnedAchievements)
+                profile.shownAchievements = kept(profile.shownAchievements)
+                this.profiles.saveProfile(profile)
+                return this.achievements()
             }
             case 'getAdventure': {
                 const profile = this.profiles.loadCurrentProfile()
@@ -103,7 +123,8 @@ export class MenuService {
             }
             case 'completeLevel': {
                 if (!this.canCompleteLevel()) throw new Error('Cannot complete a level before winning')
-                const award = this.award()
+                // Checks the award before the profile changes.
+                this.award()
                 const profile = this.profiles.loadCurrentProfile()
                 if (!profile) throw new Error('Level completion requires a player profile')
                 const level = this.getLevel()!
@@ -111,8 +132,12 @@ export class MenuService {
                 // The award seed is the player's from now on (the seed packet the level dropped).
                 if (level.award.kind === 'seed' && !profile.seeds.includes(level.award.id)) profile.seeds.push(level.award.id)
                 if (level.award.kind === 'unlock' && level.award.unlocks && !profile.unlocks.includes(level.award.unlocks)) profile.unlocks.push(level.award.unlocks)
+                // AwardScreen::AwardScreen lists every earned achievement not shown yet and marks them shown.
+                const unshown = profile.earnedAchievements.filter(id => !profile.shownAchievements.includes(id))
+                profile.shownAchievements.push(...unshown)
+                this.awardAchievements = this.achievementEntries().filter(entry => unshown.includes(entry.id))
                 this.profiles.saveProfile(profile)
-                return award
+                return this.award()
             }
             case 'getAward': return this.award()
             case 'getPurse': return this.purse()
@@ -141,16 +166,29 @@ export class MenuService {
         }
     }
 
+    private achievementEntries(): AchievementEntry[] {
+        return Object.entries(this.gameplaySettings.achievements).map(([id, { titleKey, descriptionKey, icon }]) => ({
+            id, titleKey, descriptionKey, icon: { ...icon },
+        }))
+    }
+
+    private achievements(): AchievementView {
+        const earned = this.profiles.getCurrentProfile()?.earnedAchievements ?? []
+        const items = this.achievementEntries().map(entry => ({ ...entry, earned: earned.includes(entry.id) }))
+        return { items, total: items.length, completed: items.filter(item => item.earned).length }
+    }
+
     private award(): AwardView {
         // AwardScreen hides the main menu button while the player's level, already advanced past this one, is at most 3.
         const level = this.getLevel()
         if (!level) throw new Error('Award requires a loaded level')
         if (level.award.kind === 'note') return {
             kind: 'note', id: level.award.id, titleKey: level.award.titleKey,
-            nextLevelId: level.nextLevel ?? null, showMainMenu: true,
+            nextLevelId: level.nextLevel ?? null, showMainMenu: true, achievements: this.awardAchievements,
         }
         if (level.award.kind === 'tool' || level.award.kind === 'unlock') return {
             kind: level.award.kind, id: level.award.id, nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex >= 3,
+            achievements: this.awardAchievements,
             titleKey: level.award.titleKey, nameKey: level.award.nameKey, descriptionKey: level.award.descriptionKey,
             ...level.award.kind === 'unlock' && level.award.opens && { opens: { ...level.award.opens } },
         }
@@ -159,7 +197,7 @@ export class MenuService {
         if (!plant || !seed) throw new Error(`Unknown plant award: ${level.award.id}`)
         return {
             kind: 'seed', titleKey: 'NEW_PLANT',
-            nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex >= 3,
+            nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex >= 3, achievements: this.awardAchievements,
             seed: plant.id, cost: seed.sunCost,
             nameKey: plant.key, descriptionKey: `${plant.key}_TOOLTIP`,
         }

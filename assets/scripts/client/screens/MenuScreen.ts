@@ -19,6 +19,7 @@ import { showAlmanacScreen, type AlmanacSelection } from './AlmanacScreen'
 import { StoreScreen } from './StoreScreen'
 import { AchievementScreen } from './AchievementScreen'
 import { showAwardScreen } from './AwardScreen'
+import { AwardAchievements } from './AwardAchievements'
 import { showScreenAnimations } from './ScreenAnimations'
 
 const { ccclass } = _decorator
@@ -180,6 +181,11 @@ export class MenuScreen extends Component {
                     skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON'), x: 677, y: 16,
                     rightClickTriggers: false, onClick: () => this.onNavigate('main'),
                 })
+                // AwardScreen shows the new achievements first; Continue brings the award and its buttons back.
+                if (award.achievements.length) {
+                    controls.active = false
+                    await AwardAchievements.create(root.node, ui, award.achievements, () => { controls.active = true })
+                }
             } catch (error) { root.node.destroy(); throw error }
         } else if (!await showMenuPageControls(controls, ui, id, action => { void this.onNavigate(action) }).catch(error => {
             root.node.destroy()

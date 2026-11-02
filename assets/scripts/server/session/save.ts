@@ -54,6 +54,8 @@ export interface ServerSaveSnapshot {
     tutorial: TutorialState
     wave: WaveState
     eventQueue: EventQueue
+    /** Each achievement's trigger state in the level (AchievementState.progress). */
+    achievementProgress: Record<string, JsonObject>
     entities: SavedEntity[]
 }
 
@@ -61,7 +63,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     assertJsonValue(value)
     const save = optionalExact(value, [
         'schemaVersion', 'levelId', 'mods', 'tick', 'gameplayTick', 'allocator', 'random', 'level', 'economy',
-        'seedBank', 'tutorial', 'wave', 'eventQueue', 'entities',
+        'seedBank', 'tutorial', 'wave', 'eventQueue', 'achievementProgress', 'entities',
     ], ['packetUpgradeOffer'], 'server save')
     if (save.schemaVersion !== 2) throw new TypeError('server save.schemaVersion must be 2')
 
@@ -101,6 +103,8 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     const tutorial = parseTutorial(save.tutorial)
     const wave = parseWave(save.wave)
     const eventQueue = parseEventQueue(save.eventQueue)
+    const achievementProgress = Object.fromEntries(Object.entries(record(save.achievementProgress, 'server save.achievementProgress'))
+        .map(([id, state]) => [nonEmptyString(id, 'server save.achievementProgress key'), record(state, `server save.achievementProgress.${id}`) as JsonObject]))
     const entities = array(save.entities, 'server save.entities').map((entity, index) =>
         parseEntity(entity, index, allocator.nextEntity))
     const entityIds = entities.map(entity => entity.entityId)
@@ -138,6 +142,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         tutorial,
         wave,
         eventQueue,
+        achievementProgress,
         entities,
     }
 }

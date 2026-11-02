@@ -19,7 +19,7 @@ export class DefinitionSources {
     }
 }
 
-const GAMEPLAY_TABLES = ['boards', 'seeds', 'plants', 'zombies', 'zombieGaits', 'projectiles', 'items', 'lawnMowers'] as const
+const GAMEPLAY_TABLES = ['boards', 'seeds', 'plants', 'zombies', 'zombieGaits', 'projectiles', 'items', 'lawnMowers', 'achievements'] as const
 
 /**
  * Base content and Mods register into the same tables before references are checked. A Mod registers new IDs only in

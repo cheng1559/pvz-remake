@@ -118,6 +118,8 @@ export class LevelAudioPresenter {
             case 'musicBurst': MusicSystem.startBurst(); break
             case 'sunProduced': void SoundSystem.playFoley(SoundEffect.Throw, 10); break
             case 'hugeWaveSound': void SoundSystem.play(SoundEffect.HugeWave); break
+            // ReportAchievement::GiveAchievement plays it with the message, even when the message waits its turn.
+            case 'achievementEarned': if (event.data.announce === true) void SoundSystem.play(SoundEffect.Achievement); break
             case 'projectileFired':
                 this.sounds(this.definitions.projectiles[String(event.data.typeId)]?.fireSounds)
                 break

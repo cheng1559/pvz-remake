@@ -20,7 +20,8 @@ const CHARRED_RATE_MAX = 1.1
 
 /**
  * Board::KillAllZombiesInRadius. Burning explosions also reach dying and vaulting zombies;
- * plain blasts, like the potato mine, only hit zombies on the ground.
+ * plain blasts, like the potato mine, only hit zombies on the ground. Returns the zombies it took out: every one it
+ * burned, and every one left dead or dying (so a burning blast counts dying zombies again, as the original does).
  */
 export function explode(
     world: World,
@@ -28,7 +29,8 @@ export function explode(
     origin: Position,
     explosion: ExplosionDefinition,
     remover: EntityRemover,
-): void {
+): number {
+    let kills = 0
     const x = origin.x + explosion.offset.x
     const y = origin.y + explosion.offset.y
     for (const entity of world.query(PositionComponent, ZombieComponent)) {
@@ -40,9 +42,13 @@ export function explode(
         const body = definitions.zombies[zombie.typeId].body
         const rect = { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height }
         if (rect.x > getBoardBounds(world).right || !circleRectOverlap(x, y, explosion.radius, rect)) continue
-        if (explosion.burn && zombie.health < explosion.damage) burnZombie(world, definitions, entity, zombie, position, remover)
+        // Zombie::ApplyBurn chars a zombie whose body has less health than the blast; a tougher one only takes the damage.
+        const burned = explosion.burn && zombie.health < explosion.damage
+        if (burned) burnZombie(world, definitions, entity, zombie, position, remover)
         else damageZombie(world, definitions, entity, explosion.damage, { leaveBody: false }, remover)
+        if (burned || zombie.health === 0 || zombie.state === 'dying' || zombie.state === 'mowered') kills++
     }
+    return kills
 }
 
 function burnZombie(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie, position: Position, remover: EntityRemover): void {

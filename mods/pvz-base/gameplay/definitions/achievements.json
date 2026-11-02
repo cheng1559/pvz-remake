@@ -1,0 +1,230 @@
+{
+  "pvz:home-security": {
+    "titleKey": "ACHIEVEMENT_HOME_SECURITY_TITLE",
+    "descriptionKey": "ACHIEVEMENT_HOME_SECURITY_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 0
+    }
+  },
+  "pvz:nobel-peas-prize": {
+    "titleKey": "ACHIEVEMENT_NOBEL_PEAS_PRIZE_TITLE",
+    "descriptionKey": "ACHIEVEMENT_NOBEL_PEAS_PRIZE_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 1
+    }
+  },
+  "pvz:better-off-dead": {
+    "titleKey": "ACHIEVEMENT_BETTER_OFF_DEAD_TITLE",
+    "descriptionKey": "ACHIEVEMENT_BETTER_OFF_DEAD_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 2
+    }
+  },
+  "pvz:china-shop": {
+    "titleKey": "ACHIEVEMENT_CHINA_SHOP_TITLE",
+    "descriptionKey": "ACHIEVEMENT_CHINA_SHOP_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 3
+    }
+  },
+  "pvz:spudow": {
+    "titleKey": "ACHIEVEMENT_SPUDOW_TITLE",
+    "descriptionKey": "ACHIEVEMENT_SPUDOW_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 4
+    },
+    "trigger": {
+      "kind": "pvz:blast",
+      "plants": [
+        "pvz:potatomine"
+      ],
+      "kills": 1
+    }
+  },
+  "pvz:explodonator": {
+    "titleKey": "ACHIEVEMENT_EXPLODONATOR_TITLE",
+    "descriptionKey": "ACHIEVEMENT_EXPLODONATOR_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 5
+    },
+    "trigger": {
+      "kind": "pvz:blast",
+      "plants": [
+        "pvz:cherrybomb"
+      ],
+      "kills": 10
+    }
+  },
+  "pvz:morticulturalist": {
+    "titleKey": "ACHIEVEMENT_MORTICULTURALIST_TITLE",
+    "descriptionKey": "ACHIEVEMENT_MORTICULTURALIST_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 6
+    }
+  },
+  "pvz:dont-pea-in-pool": {
+    "titleKey": "ACHIEVEMENT_DONT_PEA_IN_POOL_TITLE",
+    "descriptionKey": "ACHIEVEMENT_DONT_PEA_IN_POOL_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 7
+    }
+  },
+  "pvz:roll-some-heads": {
+    "titleKey": "ACHIEVEMENT_ROLL_SOME_HEADS_TITLE",
+    "descriptionKey": "ACHIEVEMENT_ROLL_SOME_HEADS_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 8
+    },
+    "trigger": {
+      "kind": "pvz:bowling",
+      "plants": [
+        "pvz:bowling-wallnut"
+      ],
+      "hits": 5
+    }
+  },
+  "pvz:grounded": {
+    "titleKey": "ACHIEVEMENT_GROUNDED_TITLE",
+    "descriptionKey": "ACHIEVEMENT_GROUNDED_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 9
+    }
+  },
+  "pvz:zombologist": {
+    "titleKey": "ACHIEVEMENT_ZOMBOLOGIST_TITLE",
+    "descriptionKey": "ACHIEVEMENT_ZOMBOLOGIST_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 10
+    }
+  },
+  "pvz:penny-pincher": {
+    "titleKey": "ACHIEVEMENT_PENNY_PINCHER_TITLE",
+    "descriptionKey": "ACHIEVEMENT_PENNY_PINCHER_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 11
+    },
+    "trigger": {
+      "kind": "pvz:coin-streak",
+      "items": [
+        "pvz:coin_silver",
+        "pvz:coin_gold"
+      ],
+      "coins": 30
+    }
+  },
+  "pvz:sunny-days": {
+    "titleKey": "ACHIEVEMENT_SUNNY_DAYS_TITLE",
+    "descriptionKey": "ACHIEVEMENT_SUNNY_DAYS_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 12
+    },
+    "trigger": {
+      "kind": "pvz:sun-held",
+      "sun": 8000
+    }
+  },
+  "pvz:popcorn-party": {
+    "titleKey": "ACHIEVEMENT_POPCORN_PARTY_TITLE",
+    "descriptionKey": "ACHIEVEMENT_POPCORN_PARTY_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 13
+    }
+  },
+  "pvz:good-morning": {
+    "titleKey": "ACHIEVEMENT_GOOD_MORNING_TITLE",
+    "descriptionKey": "ACHIEVEMENT_GOOD_MORNING_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 14
+    },
+    "trigger": {
+      "kind": "pvz:win-planting",
+      "boards": [
+        "pvz:day"
+      ],
+      "skipRules": [
+        "pvz:bowling",
+        "pvz:whack-a-zombie"
+      ],
+      "only": {
+        "nocturnal": true,
+        "plants": []
+      }
+    }
+  },
+  "pvz:no-fungus-among-us": {
+    "titleKey": "ACHIEVEMENT_NO_FUNGUS_AMONG_US_TITLE",
+    "descriptionKey": "ACHIEVEMENT_NO_FUNGUS_AMONG_US_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 15
+    },
+    "trigger": {
+      "kind": "pvz:win-planting",
+      "boards": [
+        "pvz:night"
+      ],
+      "skipRules": [
+        "pvz:bowling",
+        "pvz:whack-a-zombie"
+      ],
+      "never": {
+        "nocturnal": true
+      }
+    }
+  },
+  "pvz:beyond-the-grave": {
+    "titleKey": "ACHIEVEMENT_BEYOND_THE_GRAVE_TITLE",
+    "descriptionKey": "ACHIEVEMENT_BEYOND_THE_GRAVE_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 16
+    }
+  },
+  "pvz:immortal": {
+    "titleKey": "ACHIEVEMENT_IMMORTAL_TITLE",
+    "descriptionKey": "ACHIEVEMENT_IMMORTAL_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 17
+    }
+  },
+  "pvz:towering-wisdom": {
+    "titleKey": "ACHIEVEMENT_TOWERING_WISDOM_TITLE",
+    "descriptionKey": "ACHIEVEMENT_TOWERING_WISDOM_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 18
+    }
+  },
+  "pvz:mustache-mode": {
+    "titleKey": "ACHIEVEMENT_MUSTACHE_MODE_TITLE",
+    "descriptionKey": "ACHIEVEMENT_MUSTACHE_MODE_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 19
+    }
+  },
+  "pvz:disco-is-undead": {
+    "titleKey": "ACHIEVEMENT_DISCO_IS_UNDEAD_TITLE",
+    "descriptionKey": "ACHIEVEMENT_DISCO_IS_UNDEAD_DESCRIPTION",
+    "icon": {
+      "sprite": "pvz:acheesements_icons",
+      "index": 20
+    }
+  }
+}

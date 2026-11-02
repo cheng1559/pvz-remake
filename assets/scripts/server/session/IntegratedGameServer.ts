@@ -11,6 +11,7 @@ import { restoreSession, saveSession } from './persistence'
 import type { ServerSaveSnapshot } from './save'
 import { startSession, type CommandResult, type ServerContent, type Session } from './session'
 import { snapshot } from './snapshot'
+import { AchievementsResource } from '../achievements/achievements'
 
 export type { CommandRejectionCode } from './session'
 
@@ -25,15 +26,16 @@ export class IntegratedGameServer {
     constructor(definitions: GameplayDefinitions, levels: GameplayLevels, gameplay = new GameplayRegistry()) {
         gameplay.freeze(definitions)
         gameplay.validateLevels(levels, definitions)
+        gameplay.achievementTriggers.validate(definitions)
         this.content = { definitions, levels, gameplay }
     }
 
     start(packet: StartSessionPacket): WorldSnapshot {
-        if (packet.save === undefined) {
-            this.session = startSession(this.content, packet)
-            return this.snapshot()
-        }
-        this.session = restoreSession(this.content, packet.save, packet.levelId, packet.mods)
+        this.session = packet.save === undefined ? startSession(this.content, packet)
+            : restoreSession(this.content, packet.save, packet.levelId, packet.mods)
+        // The profile owns the achievements, so a save does not keep them.
+        this.session.world.resources.get(AchievementsResource).earned = new Set(packet.earnedAchievements)
+        if (packet.save === undefined) return this.snapshot()
         // The purse lives in the profile and may have changed in the store since this save; take it from the session.
         const economy = this.session.world.resources.get(EconomyStateResource)
         economy.money = packet.initialMoney
@@ -47,7 +49,9 @@ export class IntegratedGameServer {
     }
 
     restore(value: unknown, expectedLevelId?: string, expectedMods?: readonly EnabledMod[]): WorldSnapshot {
+        const earned = this.session?.world.resources.get(AchievementsResource).earned
         this.session = restoreSession(this.content, value, expectedLevelId, expectedMods)
+        if (earned) this.session.world.resources.get(AchievementsResource).earned = earned
         return this.snapshot()
     }
 

@@ -7,7 +7,6 @@ const DEFAULT_PROFILE_NAME = 'Player'
 const MAX_PROFILES = 200
 const CHALLENGE_RECORD_COUNT = 100
 const PURCHASE_COUNT = 80
-const ACHIEVEMENT_COUNT = 21
 
 export interface PersistedPottedPlant {
     seedType: string
@@ -66,8 +65,9 @@ export interface PlayerProfile {
     placeholderPlayerStats: number
     numPottedPlants: number
     pottedPlants: PersistedPottedPlant[]
-    earnedAchievements: boolean[]
-    shownAchievements: boolean[]
+    /** The achievements earned, and those of them already shown (in the level or an award list), by ID. */
+    earnedAchievements: string[]
+    shownAchievements: string[]
 }
 
 export interface PlayerProfileSummary {
@@ -102,6 +102,10 @@ export function createProfileStore(storage: MenuStorage) {
 
     function createArray<T>(length: number, value: T): T[] {
         return Array.from({ length }, () => value)
+    }
+
+    function ids(value: unknown): string[] {
+        return Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === 'string' && id.length > 0))] : []
     }
 
     function cloneProfile(profile: PlayerProfile): PlayerProfile {
@@ -160,8 +164,8 @@ export function createProfileStore(storage: MenuStorage) {
             placeholderPlayerStats: 0,
             numPottedPlants: 0,
             pottedPlants: [],
-            earnedAchievements: createArray(ACHIEVEMENT_COUNT, false),
-            shownAchievements: createArray(ACHIEVEMENT_COUNT, false),
+            earnedAchievements: [],
+            shownAchievements: [],
         }
     }
 
@@ -180,10 +184,8 @@ export function createProfileStore(storage: MenuStorage) {
         profile.purchases = [
             ...createArray(PURCHASE_COUNT, 0).map((_, index) => Number(raw.purchases?.[index] ?? 0) || 0),
         ]
-        profile.seeds = Array.isArray(raw.seeds)
-            ? [...new Set(raw.seeds.filter((id): id is string => typeof id === 'string' && id.length > 0))] : []
-        profile.unlocks = Array.isArray(raw.unlocks)
-            ? [...new Set(raw.unlocks.filter((id): id is string => typeof id === 'string' && id.length > 0))] : []
+        profile.seeds = ids(raw.seeds)
+        profile.unlocks = ids(raw.unlocks)
         profile.playTimeActivePlayer = Number(raw.playTimeActivePlayer ?? 0) || 0
         profile.playTimeInactivePlayer = Number(raw.playTimeInactivePlayer ?? 0) || 0
         profile.hasUsedCheatKeys = !!raw.hasUsedCheatKeys
@@ -223,15 +225,8 @@ export function createProfileStore(storage: MenuStorage) {
                 lastChocolateTime: Number(plant?.lastChocolateTime ?? 0) || 0,
             }))
             : []
-        profile.earnedAchievements = [
-            ...createArray(ACHIEVEMENT_COUNT, false).map((_, index) => !!raw.earnedAchievements?.[index]),
-        ]
-        profile.shownAchievements = [
-            ...createArray(ACHIEVEMENT_COUNT, false).map((_, index) => !!raw.shownAchievements?.[index]),
-        ]
-        if (profile.finishedAdventure > 0) {
-            profile.earnedAchievements[0] = true
-        }
+        profile.earnedAchievements = ids(raw.earnedAchievements)
+        profile.shownAchievements = ids(raw.shownAchievements).filter(id => profile.earnedAchievements.includes(id))
         return profile
     }
 

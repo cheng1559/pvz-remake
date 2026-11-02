@@ -4,7 +4,7 @@ import { CursorManager } from '@/client/input/CursorManager'
 import { setFontSharpness } from '@/client/font/FontAreaMaterial'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import { gameClock } from '@/core/GameClock'
-import { debugAmount, debugCondition, debugInteger, debugSuccess, debugSyntax, parseDebugCliCommand, type DebugCliCatalog, type DebugCliResult, type DebugGotoPage } from '@/shared/debug/DebugCli'
+import { debugAmount, debugCondition, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, parseDebugCliCommand, type DebugCliCatalog, type DebugCliResult, type DebugGotoPage } from '@/shared/debug/DebugCli'
 import { SFX_VOLUME_SCALE } from '@/shared/menu'
 import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
 import { OptionsSettings } from '@/platform/OptionsSettings'
@@ -86,6 +86,23 @@ async function executeCommand(
             if (typeof next !== 'number') return next
             const purse = await menuApi.setCoins(next)
             return debugSuccess(`money: ${purse.coins}`)
+        }
+        case 'achievement': {
+            if (!await menuApi.getCurrentUser()) return debugCondition('DEBUG_REQUIRES_PLAYER', name)
+            const ids = Object.keys((await loadGameplayContent()).definitions.achievements)
+            const id = args[1] === undefined ? undefined : ids.find(id => normalizeDebugName(id) === normalizeDebugName(args[1]))
+            if (args[1] !== undefined && !id) return debugCondition('DEBUG_ACHIEVEMENT_NOT_INSTALLED', args[1])
+            if (args[0].toLowerCase() === 'reset') {
+                await menuApi.resetAchievements(id)
+                // The level forgets it too, so it can be granted again.
+                if (running) runGameCommand(command)
+                return debugSuccess(`Reset ${id ?? 'every achievement'}`)
+            }
+            if (!id) return debugSyntax('Usage: /achievement give {achievement}')
+            // In a level the level grants it, announcing it like a real one; elsewhere it waits for the next award page.
+            if (running) return runGameCommand(command)
+            if (!(await menuApi.earnAchievement(id, false)).earned) return debugCondition('DEBUG_ACHIEVEMENT_EARNED', args[1])
+            return debugSuccess(`Granted ${id}`)
         }
         default: {
             if (!running) return debugCondition('DEBUG_REQUIRES_LEVEL', name)

@@ -21,6 +21,8 @@ const ADVICE_TUTORIAL_LEVEL2_Y = 476
 const ADVICE_TUTORIAL_LEVEL2_HEIGHT = 100
 const ADVICE_WIDTH = 800
 const ADVICE_DURATION_FAST = 500
+/** MessageWidget::SetLabel, MESSAGE_STYLE_ACHIEVEMENT. */
+const ADVICE_DURATION_ACHIEVEMENT = 250
 const ADVICE_DURATION_LONG = 1500
 const ADVICE_DURATION_STAY = 10000
 const PVZ_NATIVE_FONT_SIZE = 0
@@ -189,9 +191,11 @@ export class AdviceWidget {
                     lineHeight: 0,
                     backdropAlpha: 128,
                 }
+            // MessageWidget::Draw draws MESSAGE_STYLE_ACHIEVEMENT like the later tutorials.
             case 'tutorial-level2':
             case 'tutorial-later':
             case 'tutorial-later-stay':
+            case 'achievement':
                 return {
                     y: ADVICE_TUTORIAL_LEVEL2_Y,
                     height: ADVICE_TUTORIAL_LEVEL2_HEIGHT,
@@ -254,6 +258,8 @@ export class AdviceWidget {
             case 'tutorial-level1-stay':
             case 'tutorial-later-stay':
                 return ADVICE_DURATION_STAY
+            case 'achievement':
+                return ADVICE_DURATION_ACHIEVEMENT
             case 'tutorial-level1':
             case 'tutorial-level2':
             case 'tutorial-later':

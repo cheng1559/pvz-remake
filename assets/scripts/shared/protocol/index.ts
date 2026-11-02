@@ -79,6 +79,8 @@ export interface StartSessionPacket extends ClientPacketBase {
     packetUpgradeOffer?: { cost: number }
     /** The seeds the player owns (the profile's awards and purchases); without it every catalog seed is available. */
     ownedSeeds?: string[]
+    /** The achievements the player has; the level reports only new ones. */
+    earnedAchievements?: string[]
     firstAdventure: boolean
     mods: EnabledMod[]
     save?: JsonValue
@@ -384,6 +386,10 @@ export function parseClientPacket(value: unknown): ClientPacket {
             }
             if (packet.ownedSeeds !== undefined) {
                 array(packet.ownedSeeds, 'startSession.ownedSeeds').forEach((id, index) => nonEmptyString(id, `startSession.ownedSeeds[${index}]`))
+            }
+            if (packet.earnedAchievements !== undefined) {
+                array(packet.earnedAchievements, 'startSession.earnedAchievements')
+                    .forEach((id, index) => nonEmptyString(id, `startSession.earnedAchievements[${index}]`))
             }
             boolean(packet.firstAdventure, 'startSession.firstAdventure')
             array(packet.mods, 'startSession.mods').forEach((value, index) => validateEnabledMod(value, index))

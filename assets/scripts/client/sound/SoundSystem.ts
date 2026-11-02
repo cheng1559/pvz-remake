@@ -22,6 +22,7 @@ const DEFAULT_SFX_VOLUME = 0.5525
 
 /** The base game's sounds by their resource IDs; a Mod's sounds are named `owner:id` the same way. */
 export const SoundEffect = {
+    Achievement: 'pvz:achievement',
     Awooga: 'pvz:awooga',
     Bleep: 'pvz:bleep',
     BigChomp: 'pvz:bigchomp',

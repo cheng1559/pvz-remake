@@ -63,11 +63,16 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                     const distance = Math.hypot(dx, dy)
                     if (distance < (money ? 12 : 8)) {
                         const economy = world.resources.get(EconomyStateResource)
+                        const events = world.resources.get(EventQueueResource)
+                        // Coin::ScoreCoin, when the item reaches its bank.
+                        emitServerEvent(events, 'itemScored', { entityId: entity, typeId: item.typeId })
                         if (money) economy.money = Math.min(definitions.economy.maxMoney, economy.money + item.value)
                         else {
                             const spent = Math.min(economy.pendingSunSpend, item.value)
                             economy.pendingSunSpend -= spent
                             economy.sun = Math.min(definitions.economy.maxSun, economy.sun + item.value - spent)
+                            // Board::AddSun: the bank afterwards.
+                            emitServerEvent(events, 'sunAdded', { sun: economy.sun })
                         }
                         commands.destroyEntity(entity)
                     } else {
@@ -78,7 +83,11 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                 }
                 if (item.state === 'fading') {
                     item.alpha = Math.max(0, Math.round(255 * (--item.fadeTicks / 50)))
-                    if (item.fadeTicks <= 0) commands.destroyEntity(entity)
+                    if (item.fadeTicks <= 0) {
+                        // Coin::UpdateFade: it faded away uncollected.
+                        emitServerEvent(world.resources.get(EventQueueResource), 'itemExpired', { entityId: entity, typeId: item.typeId })
+                        commands.destroyEntity(entity)
+                    }
                     continue
                 }
                 if (item.accelerationY) item.scale = Math.min(definitions.items[item.typeId]?.scale ?? 1, item.scale + 0.02)

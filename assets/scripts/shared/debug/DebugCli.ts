@@ -42,6 +42,7 @@ const builtins: CommandSpec[] = [
     { name: 'lawnmower', parameters: ['{trigger|reset}', '[row]'], minimum: 1, values: { 0: ['trigger', 'reset'] } },
     ...['sun', 'money'].map(name => ({ name, parameters: ['{add|set}', '{number}'], minimum: 2, values: { 0: ['add', 'set'] } })),
     { name: 'collect', parameters: ['{auto|click|move}'], minimum: 1, values: { 0: ['auto', 'click', 'move'] } },
+    { name: 'achievement', parameters: ['{give|reset}', '[achievement]'], minimum: 1, values: { 0: ['give', 'reset'] } },
 ]
 
 // Wrap the read instead of mutating the table so host.dispose() also removes Mod syntax.

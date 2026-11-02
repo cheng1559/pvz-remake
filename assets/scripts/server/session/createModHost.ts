@@ -14,6 +14,7 @@ import * as zombies from '../zombies/system'
 import * as damage from '../zombies/damage'
 import * as collision from '../combat/collision'
 import * as events from '../state/events'
+import * as achievements from '../achievements/achievements'
 import * as explosions from '../combat/explosions'
 import * as debugRules from '../debug/debugRules'
 import * as debugCli from '@/shared/debug/DebugCli'
@@ -46,6 +47,7 @@ export function createServerModHost(ownerId: string, registry: gameplay.Gameplay
         'server/zombies/damage': damage,
         'server/collision': collision,
         'server/events': events,
+        'server/achievements': achievements,
         'server/explosions': explosions,
         'server/debug/DebugRules': debugRules,
         'shared/debug/DebugCli': debugCli,

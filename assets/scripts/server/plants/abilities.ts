@@ -46,9 +46,10 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                 // Plant::Update returns early while asleep, so a sleeping sun-shroom does not grow.
                 if (definition.nocturnal && !level.board.night) continue
                 const detonate = (explosion: ExplosionDefinition) => {
-                    explode(world, definitions, position, explosion, commands)
+                    // `kills`: what Board::KillAllZombiesInRadius returns, which Plant::DoSpecial checks for achievements.
+                    const kills = explode(world, definitions, position, explosion, commands)
                     emitServerEvent(events, 'plantExploded', {
-                        entityId: entity, typeId: plant.typeId, row: position.row,
+                        entityId: entity, typeId: plant.typeId, row: position.row, kills,
                         x: position.x + explosion.offset.x, y: position.y + explosion.offset.y,
                     })
                     commands.destroyEntity(entity)

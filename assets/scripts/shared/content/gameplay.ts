@@ -17,6 +17,8 @@ export interface GameplayDefinitions {
     projectiles: Record<string, ProjectileDefinition>
     items: Record<string, ItemDefinition>
     lawnMowers: Record<string, LawnMowerDefinition>
+    /** The achievements, in their screen order (base first, then each Mod's). */
+    achievements: Record<string, AchievementDefinition>
     /** Board::GetNumSeedsInBank: `baseSlots` plus one per seed-slot upgrade, at most `maxSlots` (SEEDBANK_MAX). */
     /**
      * `startingSeeds` are every player's without being awarded or bought (the Peashooter: LawnApp::HasSeedType with
@@ -192,6 +194,20 @@ export interface LawnMowerDefinition {
     attack: Rect
 }
 
+/**
+ * `icon`: cell `index` of a sprite cut into 70×70 cells, seven to a row (IMAGE_ACHEESEMENTS_ICONS). `trigger`: how a
+ * level grants it, `{kind, ...settings}` for the trigger registered under `kind` (the server's AchievementTriggerRegistry);
+ * without one, nothing grants it yet.
+ */
+export interface AchievementDefinition {
+    titleKey: string
+    descriptionKey: string
+    icon: { sprite: string; index: number }
+    trigger?: AchievementTrigger
+}
+
+export interface AchievementTrigger { kind: string; settings: JsonObject }
+
 /** `points` is the wave's whole budget: the listed zombies spend it first, the rest is picked from the zombie pool. */
 export interface LevelWave { zombies: string[]; flagWave?: boolean; points?: number }
 /**
@@ -206,6 +222,8 @@ export function levelWaveCount(level: LevelDefinition): number { return level.ru
 export interface LevelDefinition {
     adventureIndex: number
     persistent?: boolean
+    /** False: the level grants no achievements (debug and test levels). */
+    achievements?: boolean
     board: string
     activeRows: number[]
     startingSun: number
@@ -268,7 +286,7 @@ interface Rect extends Point { width: number; height: number }
 export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): GameplayDefinitions {
     const source = exactObject(value, [
         'schemaVersion', 'economy', 'boards', 'seeds', 'plants', 'zombies',
-        'projectiles', 'items', 'lawnMowers', 'zombieGaits', 'seedBank',
+        'projectiles', 'items', 'lawnMowers', 'achievements', 'zombieGaits', 'seedBank',
     ], 'gameplay definitions')
     const economy = exactObject(source.economy, ['maxSun', 'maxMoney'], 'gameplay definitions.economy')
     const seedBank = exactObject(source.seedBank, ['baseSlots', 'maxSlots', 'startingSeeds'], 'gameplay definitions.seedBank')
@@ -286,6 +304,7 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
         projectiles: mapped(source.projectiles, 'projectiles', parseProjectile),
         items: mapped(source.items, 'items', parseItem),
         lawnMowers: mapped(source.lawnMowers, 'lawnMowers', parseLawnMower),
+        achievements: mapped(source.achievements, 'achievements', parseAchievement),
         seedBank: { baseSlots: positiveInteger(seedBank.baseSlots, 'seedBank.baseSlots'), maxSlots: positiveInteger(seedBank.maxSlots, 'seedBank.maxSlots'),
             startingSeeds: qualifiedIdArray(seedBank.startingSeeds, 'seedBank.startingSeeds') },
     }
@@ -305,6 +324,7 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
     for (const [id, zombie] of Object.entries(definitions.zombies)) {
         reference(zombie.gait, definitions.zombieGaits, `zombies.${id}.gait`)
     }
+
     return definitions
 }
 
@@ -678,6 +698,22 @@ function parseLawnMower(value: unknown, name: string): LawnMowerDefinition {
     }
 }
 
+function parseAchievement(value: unknown, name: string): AchievementDefinition {
+    const source = exactObject(value, ['titleKey', 'descriptionKey', 'icon'], name, ['trigger'])
+    const icon = exactObject(source.icon, ['sprite', 'index'], `${name}.icon`)
+    let trigger: AchievementTrigger | undefined
+    if (source.trigger !== undefined) {
+        const { kind, ...settings } = object(source.trigger, `${name}.trigger`)
+        trigger = { kind: qualifiedId(kind, `${name}.trigger.kind`), settings: jsonRoundTrip(settings) as JsonObject }
+    }
+    return {
+        titleKey: string(source.titleKey, `${name}.titleKey`),
+        descriptionKey: string(source.descriptionKey, `${name}.descriptionKey`),
+        icon: { sprite: qualifiedId(icon.sprite, `${name}.icon.sprite`), index: nonNegativeInteger(icon.index, `${name}.icon.index`) },
+        ...(trigger ? { trigger } : {}),
+    }
+}
+
 function parseLevelWaves(value: unknown[], name: string, definitions: GameplayDefinitions): LevelWave[] {
     if (value.length === 0) throw new Error(`${name}.waves must not be empty`)
     return value.map((wave, waveIndex) => {
@@ -726,8 +762,9 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const source = exactObject(value, [
         'adventureIndex', 'board', 'lawnMower', 'activeRows', 'startingSun', 'tutorial', 'award',
     ], name, ['waves', 'rules', 'nextLevel', 'seedPackets', 'firstWaveTicks', 'zombiePool', 'conveyor', 'initialPlants', 'persistent',
-        'skySun', 'graves', 'graveZombies', 'openingRecharge', 'tools'])
+        'achievements', 'skySun', 'graves', 'graveZombies', 'openingRecharge', 'tools'])
     if (source.persistent !== undefined && typeof source.persistent !== 'boolean') throw new Error(`${name}.persistent must be a boolean`)
+    if (source.achievements !== undefined && typeof source.achievements !== 'boolean') throw new Error(`${name}.achievements must be a boolean`)
     const boardId = qualifiedId(source.board, `${name}.board`)
     const board = reference(boardId, definitions.boards, `${name}.board`)
     const activeRows = array(source.activeRows, `${name}.activeRows`).map((row, index) => {
@@ -862,6 +899,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     return {
         adventureIndex: positiveInteger(source.adventureIndex, `${name}.adventureIndex`),
         ...(source.persistent === undefined ? {} : { persistent: source.persistent as boolean }),
+        ...(source.achievements === undefined ? {} : { achievements: source.achievements as boolean }),
         ...(source.nextLevel === undefined ? {} : { nextLevel: qualifiedId(source.nextLevel, `${name}.nextLevel`) }),
         board: boardId,
         activeRows,

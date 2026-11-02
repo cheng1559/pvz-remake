@@ -8,6 +8,8 @@ import {
 export interface EventQueue {
     nextEventId: number
     events: ServerEvent[]
+    /** Sees each event as it is emitted, such as the achievements (the session sets it; not saved). */
+    observer?: (event: ServerEvent) => void
 }
 
 export const EventQueueResource = defineResource<EventQueue>('pvz:event-queue')
@@ -26,6 +28,7 @@ export function emitServerEvent(queue: EventQueue, type: string, data: JsonObjec
 
     const event = { eventId: queue.nextEventId++, type, data }
     queue.events.push(event)
+    queue.observer?.(event)
     return event
 }
 

@@ -19,6 +19,7 @@ import { createGrave } from '../level/graves'
 import { spawnLoot } from '../level/loot'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
+import { AchievementsResource, grantAchievement } from '../achievements/achievements'
 
 export const executor = { execute: executeCommand }
 
@@ -33,8 +34,9 @@ function executeCommand(
     const { name, args } = command
     const level = world.resources.get(LevelStateResource)
     const preference = ['cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'collect'].includes(name)
-    // The purse is no board state, so /money also works in the intro (Crazy Dave's offer checks it there).
-    const anyPhase = name === 'money'
+    // The purse and the achievements are no board state, so /money and /achievement also work in the intro (Crazy
+    // Dave's offer checks the purse there).
+    const anyPhase = name === 'money' || name === 'achievement'
     if (!preference && name !== 'plant' && (level.phase !== 'gameplay' && !anyPhase || level.result !== 'playing')) return debugCondition('DEBUG_REQUIRES_LEVEL', name)
     const economy = world.resources.get(EconomyStateResource)
     const events = world.resources.get(EventQueueResource)
@@ -64,8 +66,9 @@ function executeCommand(
             const grid = position(args[1], args[2])
             if (!grid) return invalidPosition()
             const entityId = createPlant(seedId, grid.row, grid.column!)
+            // `debug`: not the player's planting (Board::AddPlant), which the planting achievements check.
             emitServerEvent(events, 'plantPlaced', { entityId, typeId: definitions.seeds[seedId].plant,
-                row: grid.row, column: grid.column! })
+                row: grid.row, column: grid.column!, debug: true })
             return debugSuccess(`Planted ${args[0]}`)
         }
         case 'seed': {
@@ -228,6 +231,21 @@ function executeCommand(
             // Unlike Zombie::TrySpawnLevelAward, the debug award leaves the zombies on the board.
             emitServerEvent(events, 'levelAwardDropped', { entityId, typeId })
             return debugSuccess(`Spawned ${args[0]}`)
+        }
+        case 'achievement': {
+            // The client saves the profile; the level only needs to know what the player has.
+            const achievements = world.resources.get(AchievementsResource)
+            const id = args[1] === undefined ? undefined : findType(achievements.definitions, args[1])
+            if (args[1] !== undefined && !id) return debugCondition('DEBUG_ACHIEVEMENT_NOT_INSTALLED', args[1])
+            if (args[0].toLowerCase() === 'reset') {
+                if (id) achievements.earned.delete(id)
+                else achievements.earned.clear()
+                return debugSuccess(`Reset ${id ?? 'every achievement'}`)
+            }
+            if (!id) return debugSyntax('Usage: /achievement give {achievement}')
+            if (level.definition.achievements === false) return debugCondition('DEBUG_ACHIEVEMENTS_OFF')
+            if (!grantAchievement(world, id)) return debugCondition('DEBUG_ACHIEVEMENT_EARNED', args[1])
+            return debugSuccess(`Granted ${id}`)
         }
         default: return debugCondition('DEBUG_UNAVAILABLE', name)
     }

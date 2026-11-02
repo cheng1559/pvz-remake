@@ -69,13 +69,19 @@ export interface AlmanacZombieDefinition { id: number, key: string, iceGround?: 
 export interface AlmanacZombieView extends AlmanacZombieDefinition { shown: boolean, described: boolean }
 /** The plants are only the ones the current player has (LawnApp::HasSeedType); every zombie keeps its window. */
 export interface AlmanacView { plants: AlmanacPlantDefinition[], zombies: AlmanacZombieView[] }
+export interface AchievementEntry { id: string, titleKey: string, descriptionKey: string, icon: { sprite: string, index: number } }
 export interface AchievementView {
     completed: number
     total: number
-    items: { id: number, icon: number, titleKey: string, descriptionKey: string, earned: boolean }[]
+    items: (AchievementEntry & { earned: boolean })[]
 }
 interface AwardDetails {
     nextLevelId: string | null
+    /**
+     * AwardScreen lists every earned achievement not shown yet before the award itself; completing the level marks
+     * them shown.
+     */
+    achievements: AchievementEntry[]
     showMainMenu: boolean
     titleKey: string
     /** The award page button opens this page first, and closing it continues to the next level. */
@@ -101,6 +107,13 @@ export interface MenuEndpoints {
     getChallenges: { args: { page: ChallengePageId }, result: ChallengeView }
     getAlmanac: { args: Record<string, never>, result: AlmanacView }
     getAchievements: { args: Record<string, never>, result: AchievementView }
+    /**
+     * ReportAchievement::GiveAchievement: a level reports what it granted; `shown` when the level announced it.
+     * `earned` is false when the player already had it.
+     */
+    earnAchievement: { args: { id: string, shown: boolean }, result: { earned: boolean } }
+    /** Debug: forget one achievement, or every one without an ID. */
+    resetAchievements: { args: { id?: string }, result: AchievementView }
     getAdventure: { args: Record<string, never>, result: { levelId: string } }
     completeLevel: { args: Record<string, never>, result: AwardView }
     getAward: { args: Record<string, never>, result: AwardView }

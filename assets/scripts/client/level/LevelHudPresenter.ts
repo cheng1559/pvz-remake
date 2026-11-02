@@ -299,8 +299,9 @@ export class LevelHudPresenter {
     private adviceText(key: string): string { return key ? this.ui.text(key) : '' }
 
     private syncAdvice(snapshot: WorldSnapshot, events: ServerEvent[], elapsedTicks: number, introComplete: boolean): void {
+        // Board::ZombiesWon clears the advice; a win does not (Board::FadeOutLevel), so messages, such as achievements
+        // earned from the sun and coins collected after the award, show through the fade.
         if (snapshot.result === 'lost') { this.advice.clear(); return }
-        if (snapshot.result === 'won') this.advice.clear()
         if (introComplete || this.presentation.adviceDuringIntro) {
             const message = this.adviceText(this.presentation.advice[snapshot.tutorial.step] ?? '')
             if (message !== this.adviceMessage) {
@@ -310,12 +311,13 @@ export class LevelHudPresenter {
             }
         }
         for (const event of events) {
-            if (event.type === 'levelWon') this.advice.clear()
-            else if (event.type === 'advice') {
+            if (event.type === 'advice') {
                 const key = event.data.key
                 const style = event.data.style
                 if (typeof key === 'string') this.advice.show(this.adviceText(key),
                     style === 'hint' || style === 'tutorial-level2' || style === 'tutorial-later' || style === 'tutorial-later-stay' ? style : 'tutorial-level1')
+            } else if (event.type === 'achievementEarned' && event.data.announce === true && typeof event.data.titleKey === 'string') {
+                this.advice.show(this.ui.text('ACHIEVEMENT_ACHIEVED').replace('{ACHIEVEMENT}', this.ui.text(event.data.titleKey)), 'achievement')
             } else if (event.type === 'adviceCleared') {
                 const key = event.data.key
                 if (typeof key === 'string' && this.advice.snapshot()?.message === this.adviceText(key)) this.advice.clear()

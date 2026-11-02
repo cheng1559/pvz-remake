@@ -23,6 +23,7 @@ import { createWaveSystem } from '../level/waves'
 import { LevelRuleResource } from '../rules/registry'
 import { createZombieGroanSystem } from '../zombies/groans'
 import { ZombieBehaviorsResource } from '../zombies/behaviors'
+import { AchievementsResource, observeAchievements } from '../achievements/achievements'
 import { createZombieSystem } from '../zombies/system'
 
 export type CommandRejectionCode =
@@ -71,6 +72,9 @@ export interface Session extends ServerContent {
 export function createWorld(content: ServerContent): World {
     const world = new World()
     world.resources.set(ZombieBehaviorsResource, content.gameplay.zombieBehaviors)
+    world.resources.set(AchievementsResource, {
+        definitions: content.definitions.achievements, earned: new Set<string>(), progress: {},
+    })
     return world
 }
 
@@ -87,6 +91,8 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         commandResults: [],
     }
     const { definitions, gameplay } = content
+    // The achievements see every event as it is emitted; the gameplay only reports what happens.
+    world.resources.get(EventQueueResource).observer = event => observeAchievements(world, definitions, gameplay.achievementTriggers, event)
     // The level's rules hook in wherever they take part; their systems run after the wave system.
     const rule = gameplay.levelRules.get(world.resources.get(LevelStateResource).definition)
     world.resources.set(LevelRuleResource, rule)
