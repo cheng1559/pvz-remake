@@ -189,3 +189,33 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
     assert.equal(parent.children.length, 1)
     assert.equal(spawn() === first, false, 'a playing particle is not reused')
 })
+
+test('particle frames follow AnimationRate and Animated as in TodParticleEmitter', async () => {
+    const { KernelParticles, packParticleEmitters } = await import('@/shared/kernel/particles')
+    const constant = (value: number) => ({ nodes: [{ time: 0, low: value, high: value }] })
+    // Cell n starts at x = n, so a quad's first corner shows which frame it draws.
+    const STRIDE = 9
+    const geometry = new Float64Array(Array.from({ length: 4 }, (_, cell) => [cell, cell + 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1]).flat())
+    const frame = (system: InstanceType<typeof KernelParticles>) => {
+        const positions = new Float32Array(4 * STRIDE), vertices = new Float32Array(4 * STRIDE)
+        assert.equal(system.write(0, geometry, new Float64Array([255, 255, 255, 255, 1, 0, 0, 1 / 255, STRIDE, 1]), positions, vertices), 1)
+        return positions[0]
+    }
+    const emitter = { sprite: 'pvz:test', columns: 4, frameCount: 4, systemDuration: constant(50),
+        spawnMinActive: constant(1), spawnMaxLaunched: constant(1) }
+    // AnimationRate 25: a quarter of the frames per tick, wrapping at the end.
+    const looping = new KernelParticles(packParticleEmitters(parseDefinition({ emitters: [{
+        ...emitter, particleDuration: constant(20), animationRate: constant(25) }] }).emitters), 7, 1)
+    // Animated: the frames once over the particle's life (age / (duration - 1)).
+    const once = new KernelParticles(packParticleEmitters(parseDefinition({ emitters: [{
+        ...emitter, particleDuration: constant(5), animated: true }] }).emitters), 7, 1)
+    try {
+        const loopFrames = [], onceFrames = []
+        for (let tick = 0; tick < 5; tick++) {
+            looping.step(); once.step()
+            loopFrames.push(frame(looping)); onceFrames.push(frame(once))
+        }
+        assert.deepEqual(loopFrames, [1, 2, 3, 0, 1])
+        assert.deepEqual(onceFrames, [0, 1, 2, 3, 3])
+    } finally { looping.dispose(); once.dispose() }
+})

@@ -41,6 +41,7 @@ TRACK_FIELDS = {
     "ParticleStretch": "particleStretch",
     "CollisionReflect": "collisionReflect",
     "CollisionSpin": "collisionSpin",
+    "AnimationRate": "animationRate",
 }
 
 FLAG_FIELDS = {
@@ -51,6 +52,7 @@ FLAG_FIELDS = {
     "RandomStartTime": "randomStartTime",
     "ParticlesDontFollow": "particlesDontFollow",
     "Additive": "additive",
+    "Animated": "animated",
 }
 
 FIELD_TYPES = {

@@ -19,7 +19,7 @@ size_t liveParticles = 0;
 enum TrackId {
     Duration, Rate, MinActive, MaxActive, MaxLaunched, OffsetX, OffsetY, Radius, BoxX, BoxY, SkewX, SkewY, Path,
     Life, Speed, Angle, SysRed, SysGreen, SysBlue, SysAlpha, SysBrightness,
-    Red, Green, Blue, Alpha, Brightness, SpinAngle, SpinSpeed, Scale, Stretch, Reflect, CollisionSpin, TrackCount
+    Red, Green, Blue, Alpha, Brightness, SpinAngle, SpinSpeed, Scale, Stretch, Reflect, CollisionSpin, AnimationRate, TrackCount
 };
 double warp(double value, int curve) {
     if (curve == 1) return value * value;
@@ -54,6 +54,8 @@ struct Field { int type; Track x, y; };
 struct Particle {
     int age = 0, duration = 1, frame = 0;
     double x = 0, y = 0, vx = 0, vy = 0, spin = 0, spinVelocity = 0, lastTime = -1;
+    // TodParticle::mAnimationTimeValue and its track interpolation (drawn only when the emitter has a rate).
+    double animation = 0, animationRandom = 0;
     std::array<double, 11> interpolation{}; // red through collisionSpin
     std::array<std::array<double, 2>, MAX_FIELDS> fieldRandom{}, fieldLast{};
 };
@@ -67,7 +69,15 @@ struct Emitter {
     std::vector<std::array<double, 2>> systemRandom, systemLast;
     std::vector<Particle> particles;
 };
-enum Flags { RandomSpin = 1, AlignSpin = 2, ParticleLoop = 4, SystemLoop = 8, RandomStart = 16, DontFollow = 32 };
+enum Flags { RandomSpin = 1, AlignSpin = 2, ParticleLoop = 4, SystemLoop = 8, RandomStart = 16, DontFollow = 32, Animated = 64 };
+// TodParticleEmitter: a set AnimationRate loops the frames; Animated plays them once over the particle's life.
+bool animates(const Emitter &e) { return !e.tracks[AnimationRate].nodes.empty() || (e.flags & Animated); }
+int frameOf(const Emitter &e, const Particle &p) {
+    if (!animates(e)) return p.frame;
+    const double time = e.tracks[AnimationRate].nodes.empty() ? p.lastTime : p.animation;
+    const int cell = std::clamp(static_cast<int>(time * e.frames), 0, e.frames - 1);
+    return std::clamp(e.row, 0, e.rows - 1) * e.columns + std::clamp(e.col + cell, 0, e.columns - 1);
+}
 struct Reader {
     const double *data; int length, offset = 0; bool valid = true;
     double next() {
@@ -141,6 +151,10 @@ struct System {
         const double previous = p.lastTime < 0 ? 0 : e.tracks[SpinAngle].at(p.lastTime, p.interpolation[5]);
         p.spin += (e.tracks[SpinSpeed].at(time, p.interpolation[6]) * .01 +
                    e.tracks[SpinAngle].at(time, p.interpolation[5]) - previous) * RAD + p.spinVelocity;
+        if (!e.tracks[AnimationRate].nodes.empty()) {
+            p.animation += e.tracks[AnimationRate].at(time, p.animationRandom) * .01;
+            p.animation -= std::floor(p.animation);
+        }
         ++p.age; p.lastTime = time;
         return true;
     }
@@ -154,11 +168,12 @@ struct System {
         else if (e.type == 2) angle = PI * 2 * index / count + angle * RAD;
         else if (e.tracks[Angle].constant(0)) angle = random() * PI * 2;
         else angle *= RAD;
-        const int cell = (e.frames != 1 || e.columns != 1 || e.rows != 1) ? static_cast<int>(std::floor(random() * e.frames)) : 0;
+        const int cell = !animates(e) && (e.frames != 1 || e.columns != 1 || e.rows != 1) ? static_cast<int>(std::floor(random() * e.frames)) : 0;
         p.frame = std::clamp(e.row, 0, e.rows - 1) * e.columns + std::clamp(e.col + cell, 0, e.columns - 1);
         p.spin = e.flags & RandomSpin ? random() * PI * 2 : e.flags & AlignSpin ? angle : 0;
         for (double &v : p.interpolation) v = random();
         for (size_t i = 0; i < e.fields.size(); ++i) p.fieldRandom[i] = {random(), random()};
+        if (!e.tracks[AnimationRate].nodes.empty()) p.animationRandom = random();
         double x, y;
         if (e.type == 3 || e.type == 4) { x = sample(e, BoxX, time); y = sample(e, BoxY, time); }
         else { const double radius = sample(e, Radius, time); x = std::sin(angle) * radius; y = std::cos(angle) * radius; }
@@ -230,7 +245,7 @@ int32_t pvz_particles_create(const double *definition, int32_t length, uint32_t 
     int count = r.integer(128);
     for (int i = 0; i < count && r.valid; ++i) {
         Emitter e;
-        e.type = r.integer(4); e.flags = r.integer(63); e.frames = r.integer(4096);
+        e.type = r.integer(4); e.flags = r.integer(127); e.frames = r.integer(4096);
         e.columns = r.integer(4096); e.rows = r.integer(4096); e.col = r.integer(4096); e.row = r.integer(4096);
         if (!e.frames || !e.columns || !e.rows || e.columns * e.rows > 4096) return 0;
         for (auto &track : e.tracks) track = r.track();
@@ -291,8 +306,9 @@ int32_t pvz_particles_write(int32_t handle, int32_t emitter, const double *geome
     // TodParticleEmitter adds particles at the head of its list and draws from the head: newest first.
     for (auto it = e.particles.rbegin(); it != e.particles.rend(); ++it) {
         const auto &p = *it;
-        if (p.frame < 0 || static_cast<int64_t>(p.frame + 1) * PVZ_IMAGE > geometryLength) return -1;
-        const double *image = geometry + p.frame * PVZ_IMAGE;
+        const int frame = frameOf(e, p);
+        if (frame < 0 || static_cast<int64_t>(frame + 1) * PVZ_IMAGE > geometryLength) return -1;
+        const double *image = geometry + frame * PVZ_IMAGE;
         const double scale = e.tracks[Scale].at(p.lastTime, p.interpolation[7]) * options[PVZ_PARTICLE_SCALE];
         const double stretch = e.tracks[Stretch].at(p.lastTime, p.interpolation[8]);
         const double c = std::cos(p.spin), sn = std::sin(p.spin);

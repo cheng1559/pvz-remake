@@ -51,7 +51,11 @@ export interface ParticleEmitter {
     systemLoops: boolean
     randomStartTime: boolean
     particlesDontFollow: boolean
+    /** TodEmitterDefinition::mAnimated: the frames play once over each particle's life. */
+    animated: boolean
     systemDuration?: ParticleTrack
+    /** Frames per 100 ticks of a looping frame animation (TodParticle mAnimationTimeValue); overrides `animated`. */
+    animationRate?: ParticleTrack
     spawnRate: ParticleTrack
     spawnMinActive: ParticleTrack
     spawnMaxActive: ParticleTrack
@@ -110,6 +114,7 @@ const DEFAULT_EMITTER: Omit<ParticleEmitter, 'sprite'> = {
     systemLoops: false,
     randomStartTime: false,
     particlesDontFollow: false,
+    animated: false,
     spawnRate: constant(0),
     spawnMinActive: constant(-1),
     spawnMaxActive: constant(-1),
@@ -161,7 +166,7 @@ export function parseParticle(value: unknown): Particle {
 
 function parseEmitter(value: unknown, index: number): ParticleEmitter {
     const name = `particle.emitters[${index}]`
-    const source = object(value, ['sprite', ...Object.keys(DEFAULT_EMITTER), 'name', 'systemDuration'], name, ['sprite'])
+    const source = object(value, ['sprite', ...Object.keys(DEFAULT_EMITTER), 'name', 'systemDuration', 'animationRate'], name, ['sprite'])
     if (!isQualifiedId(source.sprite)) throw new Error(`${name}.sprite must be a qualified ID`)
     const emitter = { ...DEFAULT_EMITTER, sprite: source.sprite } as ParticleEmitter
     if (source.name !== undefined) {
@@ -189,6 +194,7 @@ function parseEmitter(value: unknown, index: number): ParticleEmitter {
         }
     }
     emitter.systemDuration = source.systemDuration === undefined ? emitter.particleDuration : parseTrack(source.systemDuration, `${name}.systemDuration`)
+    if (source.animationRate !== undefined) emitter.animationRate = parseTrack(source.animationRate, `${name}.animationRate`)
     emitter.fields = parseFields(source.fields ?? [], `${name}.fields`)
     emitter.systemFields = parseFields(source.systemFields ?? [], `${name}.systemFields`)
     return emitter

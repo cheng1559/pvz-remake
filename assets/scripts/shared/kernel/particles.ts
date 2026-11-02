@@ -10,16 +10,17 @@ export const PARTICLE_TRACKS = [
     'systemRed', 'systemGreen', 'systemBlue', 'systemAlpha', 'systemBrightness',
     'particleRed', 'particleGreen', 'particleBlue', 'particleAlpha', 'particleBrightness',
     'particleSpinAngle', 'particleSpinSpeed', 'particleScale', 'particleStretch', 'collisionReflect', 'collisionSpin',
+    'animationRate',
 ] as const
-const FLAGS = ['randomLaunchSpin', 'alignLaunchSpin', 'particleLoops', 'systemLoops', 'randomStartTime', 'particlesDontFollow'] as const
+const FLAGS = ['randomLaunchSpin', 'alignLaunchSpin', 'particleLoops', 'systemLoops', 'randomStartTime', 'particlesDontFollow', 'animated'] as const
 const TYPES = ['circle', 'circlepath', 'circleevenspacing', 'box', 'boxpath']
 const FIELDS = ['friction', 'acceleration', 'attractor', 'max-velocity', 'velocity', 'position', 'system-position', 'ground-constraint', 'shake', 'circle', 'away', 'unknown']
 const CURVES = ['linear', 'ease-in', 'ease-out', 'ease-in-out', 'fast-in-out', 'bounce']
 
 export function packParticleEmitters(emitters: readonly ParticleEmitter[]): Float64Array {
     const data: number[] = [emitters.length]
-    const track = (value: ParticleEmitter['particleDuration']) => {
-        const nodes = value.nodes
+    const track = (value: ParticleEmitter['particleDuration'] | undefined) => {
+        const nodes = value?.nodes ?? []
         data.push(nodes.length)
         for (const node of nodes) data.push(node.time, node.low, node.high, Math.max(0, CURVES.indexOf(node.curve ?? 'linear')) + 16 * Math.max(0, CURVES.indexOf(node.distribution ?? 'linear')))
     }
@@ -34,7 +35,8 @@ export function packParticleEmitters(emitters: readonly ParticleEmitter[]): Floa
         data.push(Math.max(0, TYPES.indexOf(emitter.emitterType ?? 'circle')),
             FLAGS.reduce((flags, key, index) => flags | (emitter[key] ? 1 << index : 0), 0),
             emitter.frameCount, emitter.columns, emitter.rows, emitter.firstFrame % emitter.columns, Math.floor(emitter.firstFrame / emitter.columns))
-        for (const name of PARTICLE_TRACKS) track(emitter[name] ?? emitter.particleDuration)
+        // An unset animation rate stays empty (FloatTrackIsSet); a missing system duration is the particle duration.
+        for (const name of PARTICLE_TRACKS) track(name === 'animationRate' ? emitter.animationRate : emitter[name] ?? emitter.particleDuration)
         fields(emitter.fields); fields(emitter.systemFields)
     }
     return Float64Array.from(data)
