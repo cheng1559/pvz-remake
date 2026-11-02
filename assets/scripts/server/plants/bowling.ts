@@ -56,8 +56,9 @@ export const bowlingBehavior: PlantBehavior<State> = {
                 return
             }
             const zombie = world.get(target, ZombieComponent)!
-            const helm = zombie.helmHealth > 0
-            damageZombie(world, definitions, target, zombie.helmHealth > 0 ? Math.min(zombie.helmHealth, rules.helmDamage) : rules.damage)
+            // Plant::UpdateBowling: a helm without a shield in front takes the helm blow alone (TakeHelmDamage).
+            const helm = zombie.helmHealth > 0 && zombie.shieldHealth === 0
+            damageZombie(world, definitions, target, helm ? rules.helmDamage : rules.damage, helm ? { helmOnly: true } : {})
             emitServerEvent(world.resources.get(EventQueueResource), 'bowlingImpact', { entityId: target, typeId: zombie.typeId, helm })
             direction = position.row === board.rows - 1 || state.direction > 0 ? -1
                 : position.row === 0 || state.direction < 0 ? 1 : random.integer(0, 1) ? -1 : 1

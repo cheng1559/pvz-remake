@@ -47,6 +47,8 @@ export type GameCommand =
     | { type: 'placePlant'; row: number; column: number }
     | { type: 'useToolAt'; row: number; column: number }
     | { type: 'collectItemAt'; itemId: EntityId }
+    /** Challenge::MouseDown: a click on the board that hit nothing else, for the level's rules (the Whack-a-Zombie mallet). */
+    | { type: 'boardClick'; x: number; y: number }
     | { type: 'clearCursor' }
     | { type: 'pause' }
     | { type: 'resume' }
@@ -202,13 +204,14 @@ export interface PlantSnapshot extends EntityBehaviorState {
     column: number
     health: number
     maxHealth: number
-    eatenFlashCounter: number
     /** Omitted by older snapshots; wall-nuts freeze while it is positive. */
     recentlyEatenCounter?: number
     /** Fuse, mine or chomper progress; drives the plant animation. */
     ability?: { state: PlantAbilityState, ticks: number }
     /** A nocturnal plant on a day board. */
     asleep?: true
+    /** A producer's ticks until its next sun (Plant::mLaunchCounter); held while production is paused. */
+    produceTicks?: number
 }
 
 export type PlantAbilityState =
@@ -240,11 +243,10 @@ export interface ZombieSnapshot extends EntityBehaviorState {
     hasHead: boolean
     hasTongue: boolean
     hasArm: boolean
-    hitFlashCounter: number
-    /** The last hit went through the newspaper into the body (Fume-shroom): no recoil, and the body flashes too. */
-    hitThroughShield?: true
     /** Remaining helm health; 0 once the helm drops. Omitted by older snapshots. */
     helmHealth?: number
+    /** Remaining shield health; 0 once the shield drops. Omitted by older snapshots. */
+    shieldHealth?: number
     chilled?: boolean
     /** A pole vaulter still carrying the pole. */
     hasPole?: boolean
@@ -625,6 +627,10 @@ const validateGameCommand = (value: unknown): void => {
             integer(command.column, 'useToolAt.column')
             return
         case 'collectItemAt': integer(command.itemId, 'collectItemAt.itemId'); return
+        case 'boardClick':
+            integer(command.x, 'boardClick.x')
+            integer(command.y, 'boardClick.y')
+            return
         case 'answerDialog': boolean(command.accept, 'answerDialog.accept'); return
         case 'syncPurse':
             integer(command.money, 'syncPurse.money')
@@ -741,13 +747,12 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         integer(plant.column, `${name}.column`)
         integer(plant.health, `${name}.health`)
         integer(plant.maxHealth, `${name}.maxHealth`)
-        integer(plant.eatenFlashCounter, `${name}.eatenFlashCounter`)
         if ((plant.maxHealth as number) === 0 || (plant.health as number) > (plant.maxHealth as number)) {
             throw new TypeError(`${name}.health must not exceed a positive maxHealth`)
         }
-        if ((plant.eatenFlashCounter as number) < 0) throw new TypeError(`${name}.eatenFlashCounter must be non-negative`)
         if (plant.recentlyEatenCounter !== undefined) integer(plant.recentlyEatenCounter, `${name}.recentlyEatenCounter`)
         if (plant.asleep !== undefined && plant.asleep !== true) throw new TypeError(`${name}.asleep must be true when present`)
+        if (plant.produceTicks !== undefined) integer(plant.produceTicks, `${name}.produceTicks`)
         if (plant.behaviorState !== undefined) record(plant.behaviorState, `${name}.behaviorState`)
         if (plant.ability !== undefined) {
             const ability = record(plant.ability, `${name}.ability`)
@@ -782,15 +787,13 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         boolean(zombie.hasHead, `${name}.hasHead`)
         boolean(zombie.hasTongue, `${name}.hasTongue`)
         boolean(zombie.hasArm, `${name}.hasArm`)
-        integer(zombie.hitFlashCounter, `${name}.hitFlashCounter`)
-        if ((zombie.hitFlashCounter as number) < 0) throw new TypeError(`${name}.hitFlashCounter must be non-negative`)
-        if (zombie.helmHealth !== undefined) {
-            integer(zombie.helmHealth, `${name}.helmHealth`)
-            if ((zombie.helmHealth as number) < 0) throw new TypeError(`${name}.helmHealth must be non-negative`)
+        for (const key of ['helmHealth', 'shieldHealth'] as const) {
+            if (zombie[key] === undefined) continue
+            integer(zombie[key], `${name}.${key}`)
+            if ((zombie[key] as number) < 0) throw new TypeError(`${name}.${key} must be non-negative`)
         }
         if (zombie.chilled !== undefined) boolean(zombie.chilled, `${name}.chilled`)
         if (zombie.enraged !== undefined) boolean(zombie.enraged, `${name}.enraged`)
-        if (zombie.hitThroughShield !== undefined && zombie.hitThroughShield !== true) throw new TypeError(`${name}.hitThroughShield must be true`)
         if (zombie.riseTicks !== undefined) integer(zombie.riseTicks, `${name}.riseTicks`)
         if (zombie.hasPole !== undefined) boolean(zombie.hasPole, `${name}.hasPole`)
     })

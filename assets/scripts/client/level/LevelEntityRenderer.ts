@@ -21,6 +21,7 @@ import type { LevelEntitySnapshot, LevelParticleOwnerSnapshot } from './LevelPre
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { boardCell, levelAwardSize } from './LevelGeometry'
 import { LevelItemView } from './LevelItemView'
+import { EntityFlashes } from './EntityFlashes'
 
 const WIDTH = 800
 const HEIGHT = 600
@@ -54,6 +55,9 @@ export class LevelEntityRenderer {
     private readonly plantViews = new Map<number, PlantView>()
     private readonly zombies = new Map<number, ZombieViewInstance>()
     private readonly zombieTypes = new Map<number, string>()
+    private readonly flashes = new EntityFlashes()
+    /** This frame's plant glows, by entity, for the shovel highlight between frames. */
+    private plantFlashes = new Map<number, number>()
     /** Each plant's and zombie's attachment list. */
     private readonly attachments = new Map<number, EntityAttachments>()
     /** Charred remains keep their zombie's layer and ordering identity after removal. */
@@ -77,6 +81,8 @@ export class LevelEntityRenderer {
         private readonly awardLayer: Node,
         private readonly audio: LevelAudioPresenter,
         private readonly intro: LevelIntro,
+        /** Zombie::RiseFromGrave: the level rule's `graveRise` or the presentation's `graves.rise`. */
+        private readonly riseParticle: string,
     ) {}
 
     node(id: number): Node | undefined {
@@ -101,7 +107,7 @@ export class LevelEntityRenderer {
             this.content.definitions.plants[plant.typeId].occupiesCell !== false && !this.content.definitions.plants[plant.typeId].graveBuster)?.entityId : undefined
         for (const id of new Set([this.highlightedPlant, highlighted])) {
             if (id === undefined) continue
-            const flash = snapshot.plants.find(plant => plant.entityId === id)?.eatenFlashCounter ?? 0
+            const flash = this.plantFlashes.get(id) ?? 0
             const gray = Math.min(255, flash * 3)
             const color = id === highlighted ? new Color(255, 255, 255, 196) : new Color(gray, gray, gray)
             for (const player of this.entities.get(id)?.getComponentsInChildren(ReanimPlayer) ?? []) player.setExtraAdditiveDraw(id === highlighted || flash > 0, color)
@@ -166,8 +172,14 @@ export class LevelEntityRenderer {
     async snapshot(): Promise<LevelEntitySnapshot[]> {
         await Promise.all(this.creationTasks.values())
         const result: LevelEntitySnapshot[] = []
-        for (const [entityId, view] of this.plantViews) result.push(view.snapshot(entityId))
-        for (const [entityId, view] of this.zombies) result.push(view.snapshot(entityId))
+        for (const [entityId, view] of this.plantViews) {
+            const flash = this.flashes.snapshot(entityId)
+            result.push({ ...view.snapshot(entityId), ...(flash ? { flash } : {}) })
+        }
+        for (const [entityId, view] of this.zombies) {
+            const flash = this.flashes.snapshot(entityId)
+            result.push({ ...view.snapshot(entityId), ...(flash ? { flash } : {}) })
+        }
         for (const [entityId, node] of this.entities) {
             if (this.plantViews.has(entityId) || this.zombies.has(entityId)) continue
             const mower = node.getChildByName('MowerAnimation')?.getComponent(ReanimPlayer)
@@ -183,6 +195,7 @@ export class LevelEntityRenderer {
     async restore(snapshots: LevelEntitySnapshot[]): Promise<void> {
         await Promise.all(this.creationTasks.values())
         for (const snapshot of snapshots) {
+            if (snapshot.kind === 'plant' || snapshot.kind === 'zombie') this.flashes.restore(snapshot.entityId, snapshot.flash)
             if (snapshot.kind === 'plant') {
                 await this.plantViews.get(snapshot.entityId)?.restore(snapshot)
             } else if (snapshot.kind === 'zombie') {
@@ -200,9 +213,11 @@ export class LevelEntityRenderer {
 
     sync(snapshot: WorldSnapshot, changes: ClientWorldChanges, events: ServerEvent[]): void {
         this.lastSnapshot = snapshot
+        this.flashes.applyEvents(events, snapshot.gameplayTick)
         for (const event of events) {
-            if (event.type === 'zombieHelmDropped' && typeof event.data.entityId === 'number' && event.data.silent !== true) {
-                this.dropHelm(event.data.entityId, snapshot, event.data.bypassed === true)
+            const armor = event.type === 'zombieHelmDropped' ? 'helm' : event.type === 'zombieShieldDropped' ? 'shield' : undefined
+            if (armor && typeof event.data.entityId === 'number' && event.data.silent !== true) {
+                this.dropArmor(event.data.entityId, snapshot, armor, event.data.bypassed === true)
             }
             if (event.type !== 'zombiePartDropped') continue
             const entityId = event.data.entityId
@@ -212,7 +227,7 @@ export class LevelEntityRenderer {
             const node = this.entities.get(entityId)
             if (zombie && node) {
                 node.setPosition(zombie.x - WIDTH / 2, HEIGHT / 2 - zombie.y)
-                this.zombies.get(entityId)?.sync(zombie, snapshot)
+                this.zombies.get(entityId)?.sync(zombie, snapshot, this.flashes.zombie(entityId, snapshot.gameplayTick))
             }
             const row = zombie?.row ?? (typeof event.data.row === 'number' ? event.data.row : 0)
             this.spawnZombiePart(entityId, part, event.data.mowered === true, row, zombie?.chilled === true)
@@ -258,11 +273,14 @@ export class LevelEntityRenderer {
         const particle = (effect: string, x: number, y: number, tint?: Color) => ParticlePlayer.spawn({
             parent: this.entityLayer, id: effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder: 10000,  tint,
         })
+        this.plantFlashes = new Map(snapshot.plants.map(plant => [plant.entityId, this.flashes.plant(plant, snapshot.gameplayTick)]))
         for (const plant of snapshot.plants) {
-            this.plantViews.get(plant.entityId)?.sync(plant, snapshot, particle, false)
+            this.plantViews.get(plant.entityId)?.sync(plant, snapshot, particle, false, this.plantFlashes.get(plant.entityId)!)
         }
         this.syncPlantHighlight(snapshot)
-        for (const zombie of snapshot.zombies) this.zombies.get(zombie.entityId)?.sync(zombie, snapshot)
+        for (const zombie of snapshot.zombies) {
+            this.zombies.get(zombie.entityId)?.sync(zombie, snapshot, this.flashes.zombie(zombie.entityId, snapshot.gameplayTick))
+        }
         for (const plant of snapshot.plants) {
             const node = this.entities.get(plant.entityId)
             if (node) node.active = this.plantViews.has(plant.entityId) && GameDebugSettings.perfPlantsVisible
@@ -283,6 +301,7 @@ export class LevelEntityRenderer {
         this.zombies.get(id)?.destroy()
         this.zombies.delete(id)
         this.zombieTypes.delete(id)
+        this.flashes.remove(id)
         this.attachments.delete(id)
         this.mowerPlayersReady.delete(id)
         this.mowerStates.delete(id)
@@ -306,8 +325,10 @@ export class LevelEntityRenderer {
                 if (typeof id === 'number') this.entities.get(id)?.destroy()
                 const projectile = this.content.presentation.projectiles[String(event.data.typeId)]
                 const targetType = event.data.targetTypeId
-                const helm = event.data.helm && typeof targetType === 'string' ? this.content.presentation.zombies[targetType]?.helm : undefined
-                this.audio.sounds(helm?.impactSounds ?? projectile?.impactSounds)
+                // The armor worn before the hit takes the projectile's sound; the shield is hit first.
+                const target = typeof targetType === 'string' ? this.content.presentation.zombies[targetType] : undefined
+                const armor = event.data.shield ? target?.shield : event.data.helm ? target?.helm : undefined
+                this.audio.sounds(armor?.impactSounds ?? projectile?.impactSounds)
                 if (projectile?.impact) this.spawnProjectileImpact(snapshot, event, projectile.impact)
             } else if (event.type === 'zombieChewedPlant') {
                 this.playChew(snapshot, event)
@@ -321,7 +342,7 @@ export class LevelEntityRenderer {
                 this.spawnBoardParticle('pvz:gravebusterdie', Number(event.data.x) + 40, Number(event.data.y) + 80, Number(event.data.row) * 10 + 4)
             } else if (event.type === 'zombieRoseFromGrave') {
                 const zombie = snapshot.zombies.find(candidate => candidate.entityId === event.data.entityId)
-                if (zombie) this.spawnBoardParticle('pvz:zombierise', zombie.x + 60, zombie.y + 110, zombie.row * 10 + 2)
+                if (zombie) this.spawnBoardParticle(this.riseParticle, zombie.x + 60, zombie.y + 110, zombie.row * 10 + 2)
             } else if (event.type === 'zombieCharred') {
                 this.spawnCharred(event)
             }
@@ -368,14 +389,15 @@ export class LevelEntityRenderer {
         })
     }
 
-    private dropHelm(entityId: number, snapshot: WorldSnapshot, bypassed: boolean): void {
+    /** Zombie::DropHelm and DropShield: the armor falls as its effect, with its sound and reanim unless bypassed. */
+    private dropArmor(entityId: number, snapshot: WorldSnapshot, slot: 'helm' | 'shield', bypassed: boolean): void {
         const node = this.entities.get(entityId)
         const zombie = snapshot.zombies.find(candidate => candidate.entityId === entityId)
         const typeId = zombie?.typeId ?? this.zombieTypes.get(entityId)
-        const helm = typeId ? this.content.presentation.zombies[typeId]?.helm : undefined
+        const helm = typeId ? this.content.presentation.zombies[typeId]?.[slot] : undefined
         if (!node || !helm) return
         if (!bypassed) {
-            this.zombies.get(entityId)?.helmDropped?.()
+            this.zombies.get(entityId)?.armorDropped?.(slot)
             this.audio.sounds(helm.dropSounds)
         }
         const track = this.zombies.get(entityId)?.getTrackWorldPosition(helm.track)

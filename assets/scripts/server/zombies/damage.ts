@@ -14,8 +14,6 @@ import type { World } from '@/ecs/index'
 import { dropZombieFlag } from './flag'
 import { dropZombieLoot } from '../level/loot'
 
-export const HIT_FLASH_TICKS = 25
-
 const ZOMBIE_DEATH_RATE_MIN = 24
 
 const ZOMBIE_DEATH_RATE_MAX = 30
@@ -31,9 +29,11 @@ export interface ZombieHit {
     leaveBody?: boolean
     /** Fume damage passes a shield (the newspaper) and still hits the body in full, as DAMAGE_HITS_SHIELD_AND_BODY does. */
     hitsShieldAndBody?: boolean
+    /** Only the helm takes it, as Zombie::TakeHelmDamage does for the Whack-a-Zombie mallet and a bowled nut. */
+    helmOnly?: boolean
 }
 
-/** Helm first, then body, following Zombie::TakeDamage. */
+/** Shield first, then helm, then body, following Zombie::TakeDamage. */
 export function damageZombie(
     world: World,
     definitions: GameplayDefinitions,
@@ -44,26 +44,26 @@ export function damageZombie(
 ): void {
     const zombie = world.get(entity, ZombieComponent)
     if (!zombie || isDeadOrDying(zombie) || damage <= 0) return
-    const shield = definitions.zombies[zombie.typeId].helm?.shield === true && zombie.helmHealth > 0
-    // While worn, the hit timer belongs to the shield. An exact break leaves no body hit to flash.
-    if (hit.flash !== false) zombie.hitFlashCounter = shield && damage === zombie.helmHealth && !hit.hitsShieldAndBody ? 0 : HIT_FLASH_TICKS
-    if (hit.flash !== false && shield) {
-        if (hit.hitsShieldAndBody) zombie.hitThroughShield = true
-        else delete zombie.hitThroughShield
-    }
+    const definition = definitions.zombies[zombie.typeId]
+    const shield = !hit.helmOnly && zombie.shieldHealth > 0
     const events = world.resources.get(EventQueueResource)
+    // The client flashes the zombie. While worn, the hit timer belongs to the shield; an exact break leaves no body hit
+    // to flash and stops the flash (`flash: false`). A hit that also reaches the body (`through`) flashes both.
+    if (hit.flash !== false) emitServerEvent(events, 'zombieHit', {
+        entityId: entity,
+        ...(shield && damage === zombie.shieldHealth && !hit.hitsShieldAndBody ? { flash: false } : {}),
+        ...(shield && hit.hitsShieldAndBody ? { through: true } : {}),
+    })
     // A shield absorbs hits without chill, even when they exactly break it.
-    if (hit.chillTicks !== undefined &&
-        (!shield || damage > zombie.helmHealth)) {
-        chillZombie(world, entity, zombie, hit.chillTicks)
-    }
+    if (hit.chillTicks !== undefined && (!shield || damage > zombie.shieldHealth)) chillZombie(world, entity, zombie, hit.chillTicks)
     let remaining = damage
-    if (zombie.helmHealth > 0) {
-        const absorbed = Math.min(zombie.helmHealth, remaining)
-        zombie.helmHealth -= absorbed
+    if (shield) {
+        const absorbed = Math.min(zombie.shieldHealth, remaining)
+        zombie.shieldHealth -= absorbed
         remaining -= absorbed
-        if (zombie.helmHealth === 0) {
-            const enrage = definitions.zombies[zombie.typeId].enrage
+        if (zombie.shieldHealth === 0) {
+            // Zombie::UpdateZombieNewspaper: losing the paper enrages the zombie.
+            const enrage = definition.enrage
             if (enrage) {
                 zombie.enrageTicks = enrage.pauseTicks
                 zombie.state = 'walking'
@@ -72,21 +72,29 @@ export function damageZombie(
                 zombie.animationSpeed = 8 / ZOMBIE_ASSET_FPS
                 zombie.biteTicks = 0
             }
-            emitServerEvent(events, 'zombieHelmDropped', {
-                entityId: entity,
-                helm: definitions.zombies[zombie.typeId].helm?.type ?? 'cone',
-                ...(hit.leaveBody === false ? { silent: true } : {}),
+            emitServerEvent(events, 'zombieShieldDropped', {
+                entityId: entity, shield: definition.shield!.type, ...(hit.leaveBody === false ? { silent: true } : {}),
             })
         }
-        if (shield && hit.hitsShieldAndBody) remaining = damage
+        if (hit.hitsShieldAndBody) remaining = damage
     }
-    if (remaining <= 0) return
+    if (remaining > 0 && zombie.helmHealth > 0) {
+        const absorbed = Math.min(zombie.helmHealth, remaining)
+        zombie.helmHealth -= absorbed
+        remaining -= absorbed
+        if (zombie.helmHealth === 0) {
+            emitServerEvent(events, 'zombieHelmDropped', {
+                entityId: entity, helm: definition.helm!.type, ...(hit.leaveBody === false ? { silent: true } : {}),
+            })
+        }
+    }
+    if (remaining <= 0 || hit.helmOnly) return
     zombie.health = Math.max(0, zombie.health - remaining)
     if (zombie.health === 0 && hit.leaveBody === false) {
         destroyZombie(world, definitions, entity, remover)
         return
     }
-    if (zombie.hasArm && !(definitions.zombies[zombie.typeId].helm?.shield === true && zombie.helmHealth > 0) &&
+    if (zombie.hasArm && zombie.shieldHealth === 0 &&
         zombie.health > 0 && zombie.health < zombie.maxHealth * 2 / 3) {
         zombie.hasArm = false
         emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'arm' })
@@ -125,15 +133,23 @@ function chillZombie(world: World, entity: number, zombie: Zombie, ticks: number
     zombie.chilledTicks = Math.max(zombie.chilledTicks, ticks)
 }
 
-/**
- * Zombie::DropHelm and DropShield: a helm or shield still worn falls off. `bypassed` (DAMAGE_BYPASSES_SHIELD) skips
- * the newspaper's rip and surprise.
- */
-export function dropZombieHelm(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie, bypassed = false): void {
+/** Zombie::DropHelm: a helm still worn falls off. */
+export function dropZombieHelm(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie): void {
     const helm = definitions.zombies[zombie.typeId].helm
     if (!helm || zombie.helmHealth <= 0) return
     zombie.helmHealth = 0
-    emitServerEvent(world.resources.get(EventQueueResource), 'zombieHelmDropped', { entityId: entity, helm: helm.type, ...(bypassed ? { bypassed: true } : {}) })
+    emitServerEvent(world.resources.get(EventQueueResource), 'zombieHelmDropped', { entityId: entity, helm: helm.type })
+}
+
+/**
+ * Zombie::DropShield: a shield still held falls off. `bypassed` (DAMAGE_BYPASSES_SHIELD) skips the newspaper's rip
+ * and surprise.
+ */
+export function dropZombieShield(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie, bypassed = false): void {
+    const shield = definitions.zombies[zombie.typeId].shield
+    if (!shield || zombie.shieldHealth <= 0) return
+    zombie.shieldHealth = 0
+    emitServerEvent(world.resources.get(EventQueueResource), 'zombieShieldDropped', { entityId: entity, shield: shield.type, ...(bypassed ? { bypassed: true } : {}) })
 }
 
 /** LawnApp::HasFinishedAdventure || mLevel > 5. */
@@ -156,7 +172,7 @@ export function startZombieDeath(world: World, definitions: GameplayDefinitions,
     if (zombie.state === 'dying') return
     dropZombieFlag(world, definitions, entity)
     // Zombie::PlayDeathAnim drops a shield still held with DropShield(1U).
-    if (definitions.zombies[zombie.typeId].helm?.shield) dropZombieHelm(world, definitions, entity, zombie, true)
+    dropZombieShield(world, definitions, entity, zombie, true)
     const random = world.resources.get(RandomResource)
     const deaths = zombieGait(definitions.zombies[zombie.typeId], definitions).deaths
     const roll = random.integer(0, 99)

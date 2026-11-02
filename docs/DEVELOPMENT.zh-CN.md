@@ -70,7 +70,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 玩法配置按类别拆分在 `mods/pvz-base/gameplay/definitions/`：`plants.json`、`zombies.json`、`seeds.json` 等；`gameplay/settings.json` 保存全局默认参数，根目录 `content.json` 索引所有分类文件；打包时和 Mod 一样合并为 `assets/gameplay.json`，不增加资源请求。植物和僵尸的数值与 PvZ-Portable 和上一版一致。植物最多带一种能力：`shooter`（射手）、`producer`（向日葵）、`fuse`（樱桃炸弹，100 tick 后 3x3 烧焦）、`mine`（土豆雷，1500 tick 出土、106 tick 升起，炸 1800 且不留尸体）、`chomper`（大嘴花，70 tick 咬合、吞下后消化 4000 tick），没有能力的植物只阻挡（坚果墙）；`deathExplosion` 让爆炸坚果被吃掉时爆炸。`server/plants/abilities.ts` 的 `pvz:plant-abilities` 系统按 `Plant.ability` 状态推进，客户端 `client/plants` 下的视图按该状态切换动画，并负责眨眼、裂纹和土豆雷红灯。
 
-僵尸的 `helm` 先吸收伤害（路障 370、铁桶 1100），耗尽时发出 `zombieHelmDropped`；被割草机碾压时，戴着的头盔和盾牌先掉落（`Zombie::MowDown`）；`gait` 引用共用步态表，提供走路地面轨迹、啃食与死亡帧数；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `npm run build:content -- --pak /path/to/main.pak` 合并进现有转换输出，同步玩法数据并重新打包内置 ZIP。
+僵尸有两个防具位，与原版一致：一类防具 `helm`（`mHelmType`：路障 370、铁桶 1100）和二类防具 `shield`（`mShieldType`：报纸 150、铁栅门 1100），都写作 `{type, health}`，可以同时装备。伤害按 `Zombie::TakeDamage` 先打盾、再打头盔、最后打本体；盾不吃减速、算波次血量时按 0.2 计入，大喷菇穿过盾同时打本体；头盔、盾耗尽时分别发出 `zombieHelmDropped`、`zombieShieldDropped`；被割草机碾压时，戴着的头盔和盾牌先掉落（`Zombie::MowDown`）；`gait` 引用共用步态表，提供走路地面轨迹、啃食与死亡帧数；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `npm run build:content -- --pak /path/to/main.pak` 合并进现有转换输出，同步玩法数据并重新打包内置 ZIP。
 
 ## 服务端关卡结构
 
@@ -233,7 +233,7 @@ Debug 构建保留 `pvzPhase4` 关卡调试入口；Mod 开发和安装见 [Mod 
 
 僵尸通过 `gait` 引用玩法定义中的 `zombieGaits`，`tongueChance` 和 `walk2Chance` 独立声明动画变体；不能从是否配置步态推断其他能力。植物能力的 `targeting` 声明范围、持杆目标过滤和交互修正键，僵尸的 `targetingInsets` 提供对应修正；撑杆落地后的攻击框使用 `vault.landedAttack`。客户端土豆雷的距离计算直接读取玩法攻击框和僵尸身体框。
 
-表现定义中的 `projectiles`、僵尸 `helm`/`drops` 声明图片、轨道、特效、偏移和音效；音效的 `pitchRange` 是音高随机范围（负值表示降调，如撕报纸声的 -2）。头盔的 `dropSounds` 在头盔破碎时和 `dropReanim` 一起播放，绕过盾牌的伤害两者都不播放。`seedPackets` 保存图集格子和布局，`almanac` 保存绳索和浮动动画参数。新增同类内容应补定义，通用渲染器不按具体 ID 或数字编号分支。工厂按视图类型分派、专属技能状态机和单位换算常量仍保留在代码中。
+表现定义中的 `projectiles`、僵尸 `helm`/`shield`/`drops` 声明图片、轨道、特效、偏移和音效；音效的 `pitchRange` 是音高随机范围（负值表示降调，如撕报纸声的 -2）。防具的 `dropSounds` 在破碎时和 `dropReanim` 一起播放，绕过盾牌的伤害两者都不播放。`seedPackets` 保存图集格子和布局，`almanac` 保存绳索和浮动动画参数。新增同类内容应补定义，通用渲染器不按具体 ID 或数字编号分支。工厂按视图类型分派、专属技能状态机和单位换算常量仍保留在代码中。
 
 普通与传送带种子包共用 `LevelSeedBank` 的视图、按钮、tooltip，以及 `LevelInputPresenter` 的鼠标、触摸和快捷键流程。选卡以当前槽位索引读取状态：普通卡发送 `selectSeed`，传送带卡发送 `selectConveyorPacket`，后者保留每张卡的独立 ID。`LevelBoardHud` 负责可选工具、戴夫和传送带布局，不另做种子包命中检测。
 

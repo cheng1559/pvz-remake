@@ -31,6 +31,8 @@ function loadClientModule(path: string, modules: Record<string, unknown>) {
     return module.exports
 }
 clientStubs['@/client/view/EntityAttachments'] = loadClientModule('view/EntityAttachments', {})
+clientStubs['./EntityFlashes'] = loadClientModule('level/EntityFlashes', {})
+clientStubs['./zombieParts'] = loadClientModule('zombies/zombieParts', {})
 
 test('graves added after level creation are drawn, removed and can be generated again in the same cell', async () => {
     class Node {
@@ -259,7 +261,7 @@ for (const kind of ['plant', 'zombie'] as const) test(`${kind} factories stay hi
     assert.equal(node.active, false, 'the performance visibility switch still applies')
 })
 
-test('a finished or cancelled helm drop cannot leave a component with a null node in zombie sync', async () => {
+test('a finished or cancelled shield drop cannot leave a component with a null node in zombie sync', async () => {
     let loading = Promise.resolve(), playCount = 0
     class Node {
         isValid = true
@@ -288,7 +290,7 @@ test('a finished or cancelled helm drop cannot leave a component with a null nod
         node: new Node(), shadowNode: new Node(), player: null, animation: 'anim_walk', attachments: new EntityAttachments(),
         presentation: presentationFixture.zombies['pvz:newspaper'], applyHitFlash() {}, applyColor() {}, applyParts() {},
     })
-    view.helmDropped()
+    view.armorDropped('shield')
     await new Promise(resolve => setImmediate(resolve))
     const finished = drops[0].player!
     finished.onFinish!()
@@ -297,7 +299,7 @@ test('a finished or cancelled helm drop cannot leave a component with a null nod
 
     let finishLoad!: () => void
     loading = new Promise(resolve => { finishLoad = resolve })
-    view.helmDropped()
+    view.armorDropped('shield')
     view.sync({ state: 'dying', animation: 'anim_walk', animationTime: 0, hasHead: true })
     assert.equal(drops[1].isValid, false, 'death removes a drop even while its animation is loading')
     finishLoad()
@@ -429,8 +431,8 @@ test('presentation track lists name exact tracks that exist in their clips; losi
     }
     const plants = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/plants.json', 'utf8'))
     for (const [id, plant] of Object.entries<any>(plants)) {
-        // A plant without its own clips (the explode-o-nut) draws those of its animationTarget.
-        const clips = plant.animations ?? plants[plant.animationTarget]?.animations ?? {}
+        // A plant without its own clips (the explode-o-nut) draws those of its animationsFrom.
+        const clips = plant.animations ?? plants[plant.animationsFrom]?.animations ?? {}
         const tracks = new Set(Object.values<any>(clips).flatMap(clip => trackIds(clip.reanimId)))
         const { eyes = [], glow = [], face } = plant.parts ?? {}
         for (const track of [...eyes, ...glow, ...face ? [face] : []]) assert.ok(tracks.has(track), `${id} lists ${track}`)
@@ -471,9 +473,9 @@ test('a screen door zombie holds its door with the door arms, lowers them to eat
     const shown = new Map<string, boolean>()
     const player = { setTracksVisible(tracks: string[], visible: boolean) { for (const track of tracks) shown.set(track, visible) }, setTrackSpriteOverride() {} }
     const view = Object.assign(Object.create(ZombieView.prototype), {
-        player, presentation, parts: '', holdingFlag: false, helm: { type: 'door', health: 1100, shield: true }, sprites: { helms: {}, damagedArm: {} },
+        player, presentation, parts: '', holdingFlag: false, armor: { shield: { type: 'door', health: 1100 } }, sprites: { helms: {}, damagedArm: {} },
     })
-    const zombie = { hasHead: true, hasTongue: false, hasArm: true, helmHealth: 1100, state: 'walking', animation: 'anim_walk' }
+    const zombie = { hasHead: true, hasTongue: false, hasArm: true, helmHealth: 0, shieldHealth: 1100, state: 'walking', animation: 'anim_walk' }
     const visible = (...tracks: string[]) => tracks.map(track => shown.get(track))
     view.applyParts(zombie)
     assert.deepEqual(visible('anim_screendoor', 'Zombie_outerarm_screendoor', 'Zombie_innerarm_screendoor_hand', 'Zombie_outerarm_hand', 'anim_innerarm1', 'Zombie_outerarm_upper'),
@@ -481,7 +483,7 @@ test('a screen door zombie holds its door with the door arms, lowers them to eat
     view.applyParts({ ...zombie, state: 'eating', animation: 'anim_eat' })
     assert.deepEqual(visible('anim_screendoor', 'Zombie_outerarm_screendoor', 'Zombie_outerarm_hand', 'anim_innerarm1'), [true, false, true, true],
         'StartEating shows the free arms behind the door')
-    view.applyParts({ ...zombie, helmHealth: 0, hasArm: false })
+    view.applyParts({ ...zombie, shieldHealth: 0, hasArm: false })
     assert.deepEqual(visible('anim_screendoor', 'Zombie_innerarm_screendoor', 'Zombie_outerarm_hand', 'Zombie_outerarm_lower', 'Zombie_outerarm_upper', 'anim_innerarm2'),
         [false, false, false, false, true, true], 'DetachShield restores the arms, except the lost lower arm and hand')
 })

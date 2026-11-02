@@ -202,7 +202,8 @@ function parseTutorial(value: unknown): TutorialState {
         source.step !== 'pick-second-seed' && source.step !== 'plant-second-seed' &&
         source.step !== 'pick-sunflower' && source.step !== 'plant-sunflower' &&
         source.step !== 'refresh-sunflower' && source.step !== 'waiting-for-sunflowers' && source.step !== 'complete' &&
-        !['dave-opening', 'dave-bowling', 'shovel-pickup', 'shovel-dig', 'shovel-keep-digging'].includes(String(source.step))) {
+        !['dave-opening', 'dave-bowling', 'shovel-pickup', 'shovel-dig', 'shovel-keep-digging',
+            'whack-before-pick-seed', 'whack-pick-seed', 'whack-done'].includes(String(source.step))) {
         throw new TypeError('server save.tutorial.step is unknown')
     }
     const result: TutorialState = {
@@ -239,7 +240,7 @@ function parseWave(value: unknown): WaveState {
     const source = optionalExact(
         value,
         ['index', 'plan'],
-        ['nextWaveAtTick', 'accelerateAtTick', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced', 'rowPicks', 'graves', 'graveRiseAtTick'],
+        ['nextWaveAtTick', 'accelerateAtTick', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced', 'rowPicks', 'graves', 'graveRiseAtTick', 'ruleState'],
         'server save.wave',
     )
     const plan = array(source.plan, 'server save.wave.plan').map((value, index) => {
@@ -249,6 +250,8 @@ function parseWave(value: unknown): WaveState {
     })
     const result: WaveState = { index: nonNegativeInteger(source.index, 'server save.wave.index'), plan }
     if (source.graveRiseAtTick !== undefined) result.graveRiseAtTick = nonNegativeInteger(source.graveRiseAtTick, 'wave.graveRiseAtTick')
+    // The level's rules check their own state when the session is restored.
+    if (source.ruleState !== undefined) result.ruleState = jsonRoundTrip(record(source.ruleState, 'server save.wave.ruleState')) as JsonObject
     if (source.graves !== undefined) {
         result.graves = array(source.graves, 'wave.graves').map(value => {
             const grave = optionalExact(value, ['column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], ['special', 'riseAtTick'], 'grave')
@@ -368,7 +371,7 @@ const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
 ]
 
 function parsePlant(value: unknown, name: string): Plant {
-    const source = optionalExact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'eatenFlashCounter', 'recentlyEatenCounter'], ['ability', 'behaviorState'], name)
+    const source = optionalExact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter'], ['ability', 'behaviorState'], name)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
     if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
@@ -378,7 +381,6 @@ function parsePlant(value: unknown, name: string): Plant {
         column: nonNegativeInteger(source.column, `${name}.column`),
         health,
         maxHealth,
-        eatenFlashCounter: nonNegativeInteger(source.eatenFlashCounter, `${name}.eatenFlashCounter`),
         recentlyEatenCounter: nonNegativeInteger(source.recentlyEatenCounter, `${name}.recentlyEatenCounter`),
         ...(source.ability === undefined ? {} : { ability: parsePlantAbility(source.ability, `${name}.ability`) }),
         ...parseBehaviorState(source, name),
@@ -410,8 +412,8 @@ function parseZombie(value: unknown, name: string): Zombie {
     const source = optionalExact(value, [
         'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
         'moweredTicksRemaining', 'walkAnimation', 'animation', 'animationTime', 'animationSpeed', 'hasHead', 'hasArm',
-        'hasTongue', 'hitFlashCounter', 'groanCounter', 'helmHealth', 'chilledTicks', 'hasPole',
-    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'hitThroughShield', 'droppedLoot'], name)
+        'hasTongue', 'groanCounter', 'helmHealth', 'chilledTicks', 'hasPole',
+    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'droppedLoot', 'shieldHealth'], name)
     if (!ZOMBIE_STATES.includes(source.state as Zombie['state'])) throw new TypeError(`${name}.state is unknown`)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
@@ -441,14 +443,14 @@ function parseZombie(value: unknown, name: string): Zombie {
         hasHead: boolean(source.hasHead, `${name}.hasHead`),
         hasTongue: boolean(source.hasTongue, `${name}.hasTongue`),
         hasArm: boolean(source.hasArm, `${name}.hasArm`),
-        hitFlashCounter: nonNegativeInteger(source.hitFlashCounter, `${name}.hitFlashCounter`),
         groanCounter: integer(source.groanCounter, `${name}.groanCounter`),
         helmHealth: nonNegativeInteger(source.helmHealth, `${name}.helmHealth`),
+        // Saves from before the split kept a shield's health in helmHealth; restoreSession moves it.
+        shieldHealth: source.shieldHealth === undefined ? 0 : nonNegativeInteger(source.shieldHealth, `${name}.shieldHealth`),
         chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
         hasPole: boolean(source.hasPole, `${name}.hasPole`),
         ...(source.enrageTicks === undefined ? {} : { enrageTicks: nonNegativeFinite(source.enrageTicks, `${name}.enrageTicks`) }),
         ...(source.riseTicks === undefined ? {} : { riseTicks: positiveInteger(source.riseTicks, `${name}.riseTicks`) }),
-        ...(source.hitThroughShield === undefined ? {} : { hitThroughShield: trueFlag(source.hitThroughShield, `${name}.hitThroughShield`) }),
         ...(source.droppedLoot === undefined ? {} : { droppedLoot: trueFlag(source.droppedLoot, `${name}.droppedLoot`) }),
         ...parseBehaviorState(source, name),
     }

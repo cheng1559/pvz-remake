@@ -120,7 +120,7 @@ test('puff-shrooms sleep by day, only fire within range, and spores expire befor
         const plant = world.createEntity()
         world.add(plant, PositionComponent, { x: 40, y: 80, row: 0 })
         world.add(plant, PlantComponent, { typeId: 'pvz:puffshroom', seedId: 'pvz:puffshroom', column: 0,
-            health: 300, maxHealth: 300, eatenFlashCounter: 0, recentlyEatenCounter: 0 })
+            health: 300, maxHealth: 300, recentlyEatenCounter: 0 })
         world.add(plant, PlantAttackComponent, { readyAtTick: 0 })
         const zombie = spawnZombie(world, definitions, 'pvz:normal', 0, 400, 50)
         schedule.run(world, 1)
@@ -153,12 +153,13 @@ test('a newspaper blocks chill until damage reaches the body, while cones and bu
         const world = worldFor(true)
         const entity = spawnZombie(world, definitions, type, 0, 500, 50)
         const zombie = world.get(entity, ZombieComponent)!
-        if (paperHealth !== undefined) zombie.helmHealth = paperHealth
-        const initialArmor = zombie.helmHealth
+        const slot = definitions.zombies[type].shield ? 'shieldHealth' : 'helmHealth'
+        if (paperHealth !== undefined) zombie[slot] = paperHealth
+        const initialArmor = zombie[slot]
         zombie.chilledTicks = priorChill
         damageZombie(world, definitions, entity, damage, { chillTicks: 1000 })
         assert.equal(zombie.chilledTicks, expectedChill, `${type}, armor ${initialArmor}, damage ${damage}`)
-        assert.equal(zombie.helmHealth, Math.max(0, initialArmor - damage))
+        assert.equal(zombie[slot], Math.max(0, initialArmor - damage))
         assert.equal(zombie.health, zombie.maxHealth - Math.max(0, damage - initialArmor))
         const chilledEvents = drainServerEvents(world.resources.get(EventQueueResource)).filter(event => event.type === 'zombieChilled')
         assert.equal(chilledEvents.length, priorChill === 0 && expectedChill > 0 ? 1 : 0)
@@ -172,7 +173,7 @@ test('breaking a newspaper pauses movement and bites, then enrages; chilled gasp
         const entity = spawnZombie(world, definitions, 'pvz:newspaper', 0, 500, 50)
         const zombie = world.get(entity, ZombieComponent)!
         damageZombie(world, definitions, entity, 160, chilled ? { chillTicks: 1000 } : {})
-        assert.equal(zombie.helmHealth, 0)
+        assert.equal(zombie.shieldHealth, 0)
         assert.equal(zombie.health, 260)
         assert.equal(zombie.animation, 'anim_gasp')
         const duration = definitions.zombies['pvz:newspaper'].enrage!.pauseTicks * (chilled ? 2 : 1)
@@ -194,7 +195,7 @@ function plantAt(world: World, typeId: string, x: number) {
     const definition = definitions.plants[typeId]
     const entity = world.createEntity()
     world.add(entity, PositionComponent, { x, y: 80, row: 0 })
-    world.add(entity, PlantComponent, { typeId, seedId: typeId, column: 0, health: 300, maxHealth: 300, eatenFlashCounter: 0,
+    world.add(entity, PlantComponent, { typeId, seedId: typeId, column: 0, health: 300, maxHealth: 300,
         recentlyEatenCounter: 0, ...(initialPlantAbility(definition) ? { ability: initialPlantAbility(definition) } : {}) })
     world.add(entity, PlantAttackComponent, { readyAtTick: 1 })
     return entity
@@ -236,16 +237,20 @@ test('fume-shrooms hit every zombie in reach at once, through the newspaper and 
     const paper = spawnZombie(world, definitions, 'pvz:newspaper', 0, 150, 50)
     const near = spawnZombie(world, definitions, 'pvz:normal', 0, 360, 50)
     const far = spawnZombie(world, definitions, 'pvz:normal', 0, 420, 50)
-    const health = (entity: number) => [world.get(entity, ZombieComponent)!.helmHealth, world.get(entity, ZombieComponent)!.health]
+    const health = (entity: number) => [world.get(entity, ZombieComponent)!.shieldHealth, world.get(entity, ZombieComponent)!.health]
     const before = [paper, near, far].map(health)
-    for (let tick = 1; !drainServerEvents(world.resources.get(EventQueueResource)).some(event => event.type === 'plantAreaAttack'); tick++) {
+    let events = drainServerEvents(world.resources.get(EventQueueResource))
+    for (let tick = 1; !events.some(event => event.type === 'plantAreaAttack'); tick++) {
         assert.ok(tick < 300)
         schedule.run(world, tick)
+        events = drainServerEvents(world.resources.get(EventQueueResource))
     }
+    const paperHit = () => events.find(event => event.type === 'zombieHit' && event.data.entityId === paper)!.data
     assert.deepEqual(health(paper), [before[0][0] - 20, before[0][1] - 20], 'DAMAGE_HITS_SHIELD_AND_BODY')
-    assert.equal(world.get(paper, ZombieComponent)!.hitThroughShield, true, 'the paper flashes without recoiling, and the body flashes too')
+    assert.deepEqual(paperHit(), { entityId: paper, through: true }, 'the paper flashes without recoiling, and the body flashes too')
     damageZombie(world, definitions, paper, 20)
-    assert.equal(world.get(paper, ZombieComponent)!.hitThroughShield, undefined, 'a pea hit recoils the paper again')
+    events = drainServerEvents(world.resources.get(EventQueueResource))
+    assert.deepEqual(paperHit(), { entityId: paper }, 'a pea hit recoils the paper again')
     assert.deepEqual(health(near), [0, before[1][1] - 20])
     assert.deepEqual(health(far), before[2], 'beyond the 340px reach')
     assert.equal([...world.query(ProjectileComponent)].length, 0)

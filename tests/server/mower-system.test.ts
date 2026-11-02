@@ -48,8 +48,8 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
         speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
         moweredTicksRemaining: 0,
         walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
-        hasHead: false, hasTongue: false, hasArm: true, hitFlashCounter: 0, groanCounter: 300,
-        helmHealth: 0, chilledTicks: 0, hasPole: false,
+        hasHead: false, hasTongue: false, hasArm: true, groanCounter: 300,
+        helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false,
     })
     schedule.run(world, 2)
     assert.equal(world.get(mowerEntity, LawnMowerComponent)!.state, 'ready')
@@ -71,8 +71,8 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
         speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
         moweredTicksRemaining: 0,
         walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
-        hasHead: true, hasTongue: false, hasArm: true, hitFlashCounter: 0, groanCounter: 300,
-        helmHealth: 0, chilledTicks: 0, hasPole: false,
+        hasHead: true, hasTongue: false, hasArm: true, groanCounter: 300,
+        helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false,
     })
     schedule.run(world, 4)
     assert.equal(world.hasEntity(secondZombie), true)
@@ -121,8 +121,9 @@ test('Zombie::MowDown drops a worn helm or shield before the mowed animation', (
         world.add(entity, ZombieComponent, {
             typeId, health: 270, maxHealth: 270, state: 'walking', speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
             moweredTicksRemaining: 0, walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
-            hasHead: true, hasTongue: false, hasArm: true, hitFlashCounter: 0, groanCounter: 300,
-            helmHealth: definitions.zombies[typeId].helm!.health, chilledTicks: 0, hasPole: false,
+            hasHead: true, hasTongue: false, hasArm: true, groanCounter: 300,
+            helmHealth: definitions.zombies[typeId].helm?.health ?? 0, shieldHealth: definitions.zombies[typeId].shield?.health ?? 0,
+            chilledTicks: 0, hasPole: false,
         })
         return entity
     })
@@ -131,8 +132,10 @@ test('Zombie::MowDown drops a worn helm or shield before the mowed animation', (
     schedule.run(world, 1)
     for (const entity of zombies) {
         assert.equal(world.get(entity, ZombieComponent)!.state, 'mowered')
-        assert.equal(world.get(entity, ZombieComponent)!.helmHealth, 0)
+        assert.deepEqual([world.get(entity, ZombieComponent)!.helmHealth, world.get(entity, ZombieComponent)!.shieldHealth], [0, 0])
     }
-    assert.deepEqual(world.resources.get(EventQueueResource).events.filter(event => event.type === 'zombieHelmDropped').map(event => event.data),
-        [{ entityId: zombies[0], helm: 'cone' }, { entityId: zombies[1], helm: 'door' }], 'DropHelm(0U) and DropShield(0U) do not bypass')
+    assert.deepEqual(world.resources.get(EventQueueResource).events.filter(event => event.type === 'zombieHelmDropped' || event.type === 'zombieShieldDropped')
+        .map(event => [event.type, event.data]),
+        [['zombieHelmDropped', { entityId: zombies[0], helm: 'cone' }], ['zombieShieldDropped', { entityId: zombies[1], shield: 'door' }]],
+        'DropHelm(0U) and DropShield(0U) do not bypass')
 })

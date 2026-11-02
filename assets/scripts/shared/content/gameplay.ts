@@ -103,6 +103,9 @@ export interface PlantDefinition {
     deathExplosion?: ExplosionDefinition
 }
 
+/** One armor slot: its kind and full health. */
+export interface ZombieArmor { type: string; health: number }
+
 export interface ZombieDefinition {
     dropsFlag?: boolean
     maxHealth: number
@@ -115,10 +118,17 @@ export interface ZombieDefinition {
     body: Rect
     attack: Rect
     bite: { damage: number; cadenceTicks: number }
-    /** Absorbs damage before the body; drops when depleted. A newspaper also keeps the arm on. */
-    /** A shield (newspaper, screen door) absorbs hits without chill, keeps the arm on and flashes alone. */
-    helm?: { type: 'cone' | 'bucket' | 'newspaper' | 'door'; health: number; shield?: boolean }
-    /** After losing the helm: stands still for pauseTicks, then walks at the new speed. */
+    /**
+     * Zombie::mHelmType: worn on the head (cone, bucket), it takes damage after the shield and before the body
+     * (TakeHelmDamage) and drops when depleted. `type` names it to the client and to level rules.
+     */
+    helm?: ZombieArmor
+    /**
+     * Zombie::mShieldType: held in front (newspaper, screen door), it takes damage first (TakeShieldDamage) without
+     * chill, keeps the arm on and flashes alone; Board::TotalZombiesHealthInWave counts it at 0.2.
+     */
+    shield?: ZombieArmor
+    /** After losing the shield (Zombie::UpdateZombieNewspaper): stands still for pauseTicks, then walks at the new speed. */
     enrage?: { pauseTicks: number; speedPerTick: { min: number; max: number } }
     /** Explicit animation profile and variants; equipment does not imply animation support. */
     gait: string
@@ -485,7 +495,7 @@ function explosion(value: unknown, name: string): ExplosionDefinition {
 }
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'enrage', 'vault', 'targetingInsets', 'behavior', 'dropsFlag', 'wave', 'graveRise'])
+    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'dropsFlag', 'wave', 'graveRise'])
     const spawn = exactObject(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -526,20 +536,16 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
     if (source.targetingInsets !== undefined) {
         result.targetingInsets = mapped(source.targetingInsets, `${name}.targetingInsets`, nonNegativeFinite)
     }
-    if (source.helm !== undefined) {
-        const helm = exactObject(source.helm, ['type', 'health'], `${name}.helm`, ['shield'])
-        if (helm.type !== 'cone' && helm.type !== 'bucket' && helm.type !== 'newspaper' && helm.type !== 'door') {
-            throw new Error(`${name}.helm.type must be cone, bucket, newspaper or door`)
-        }
-        result.helm = { type: helm.type, health: positiveInteger(helm.health, `${name}.helm.health`) }
-        if (helm.shield !== undefined) {
-            if (typeof helm.shield !== 'boolean') throw new Error(`${name}.helm.shield must be boolean`)
-            result.helm.shield = helm.shield
-        }
+    for (const slot of ['helm', 'shield'] as const) {
+        if (source[slot] === undefined) continue
+        const armor = exactObject(source[slot], ['type', 'health'], `${name}.${slot}`)
+        // A helm with `shield: true` is now a `shield`.
+        if (typeof armor.type !== 'string' || !/^[a-z][a-z0-9_]*$/.test(armor.type)) throw new Error(`${name}.${slot}.type must be a lowercase name`)
+        result[slot] = { type: armor.type, health: positiveInteger(armor.health, `${name}.${slot}.health`) }
     }
     if (source.enrage !== undefined) {
         const enrage = exactObject(source.enrage, ['pauseTicks', 'speedPerTick'], `${name}.enrage`)
-        if (!result.helm) throw new Error(`${name}.enrage requires a helm`)
+        if (!result.shield) throw new Error(`${name}.enrage requires a shield`)
         result.enrage = { pauseTicks: positiveInteger(enrage.pauseTicks, `${name}.enrage.pauseTicks`),
             speedPerTick: speedRange(enrage.speedPerTick, `${name}.enrage.speedPerTick`) }
     }

@@ -21,7 +21,6 @@ export interface Plant extends EntityBehaviorState {
     column: number
     health: number
     maxHealth: number
-    eatenFlashCounter: number
     /** Ticks since the last bite, from Plant::mRecentlyEatenCountdown; wall-nuts freeze while it runs. */
     recentlyEatenCounter: number
     /** Fuse, mine, chomper, sun-shroom growth or grave buster progress; `ticks` counts down to the next state. */
@@ -68,13 +67,12 @@ export interface Zombie extends EntityBehaviorState {
     hasHead: boolean
     hasTongue: boolean
     hasArm: boolean
-    hitFlashCounter: number
-    /** The last hit passed the shield into the body (DAMAGE_HITS_SHIELD_AND_BODY): both flash and the shield does not recoil. */
-    hitThroughShield?: true
     /** Zombie::mDroppedLoot: the one loot roll has happened. */
     droppedLoot?: true
     groanCounter: number
+    /** Zombie::mHelmHealth and mShieldHealth; 0 once dropped or without one. */
     helmHealth: number
+    shieldHealth: number
     chilledTicks: number
     /** Pole vaulters run with the pole until their single vault. */
     hasPole: boolean

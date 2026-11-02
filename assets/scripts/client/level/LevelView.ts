@@ -119,7 +119,7 @@ export class LevelView {
         animations.freeze()
         const sprites = new SpriteRepository(content.registry, content.loader)
         const fonts = new FontRepository(content.registry, content.loader)
-        const helmSpriteIds = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => [...(zombie.helm?.damagedSprites ?? []), ...[zombie.damagedArmSprite, zombie.enragedHead?.sprite].filter((id): id is string => !!id)]))]
+        const helmSpriteIds = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => [...(zombie.helm?.damagedSprites ?? []), ...(zombie.shield?.damagedSprites ?? []), ...[zombie.damagedArmSprite, zombie.enragedHead?.sprite].filter((id): id is string => !!id)]))]
         const dropImages = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => Object.values(zombie.drops).flatMap(drop => drop?.image ? [drop.image] : [])))]
         const [
             background, seedbank, projectileEntries, projectileShadowEntries,

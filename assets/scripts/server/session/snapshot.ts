@@ -65,10 +65,11 @@ export const snapshot = {
                 hasTongue: zombie.hasTongue,
                 hasArm: zombie.hasArm,
                 helmHealth: zombie.helmHealth,
+                shieldHealth: zombie.shieldHealth,
                 chilled: zombie.chilledTicks > 0,
                 hasPole: zombie.hasPole,
                 ...(zombie.riseTicks ? { riseTicks: zombie.riseTicks } : {}),
-                ...(definitions.zombies[zombie.typeId].enrage && zombie.helmHealth === 0 ? { enraged: true } : {}),
+                ...(definitions.zombies[zombie.typeId].enrage && zombie.shieldHealth === 0 ? { enraged: true } : {}),
                 ...(zombie.behaviorState ? { behaviorState: jsonRoundTrip(zombie.behaviorState) } : {}),
                 ...position,
             }

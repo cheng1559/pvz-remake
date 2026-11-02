@@ -13,7 +13,7 @@ export class ZombieViewRegistry extends EntityViewRegistry<ZombieViewContext, Zo
         this.register('zombie', context => new ZombieView(
             context.node, context.content.registry, context.content.loader, context.animations, context.shadowParent,
             context.assets.shadow, context.assets.sprites, zombieDefinition(context.animations.definitions, context.zombie.typeId),
-            context.content.definitions.zombies[context.zombie.typeId].helm,
+            context.animations.sourceOf(context.zombie.typeId), context.content.definitions.zombies[context.zombie.typeId],
             context.content.definitions.zombies[context.zombie.typeId].vault?.landingOffset,
             context.attachments,
         ))

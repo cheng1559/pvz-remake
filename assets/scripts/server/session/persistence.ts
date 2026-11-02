@@ -267,8 +267,14 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
         const zombie = definitions.zombies[saved.zombie.typeId]
         if (!zombie) throw new Error(`Unknown saved zombie: ${saved.zombie.typeId}`)
         gameplay.zombieBehaviors.validateState(saved.zombie, zombie)
+        // Before helms and shields were split, a shield's health was saved as helmHealth.
+        if (!zombie.helm && zombie.shield && saved.zombie.helmHealth > 0 && saved.zombie.shieldHealth === 0) {
+            saved.zombie.shieldHealth = saved.zombie.helmHealth
+            saved.zombie.helmHealth = 0
+        }
         if (!boardRow || saved.zombie.maxHealth !== zombie.maxHealth ||
-            saved.zombie.helmHealth > (zombie.helm?.health ?? 0) || saved.zombie.hasPole && !zombie.vault ||
+            saved.zombie.helmHealth > (zombie.helm?.health ?? 0) || saved.zombie.shieldHealth > (zombie.shield?.health ?? 0) ||
+            saved.zombie.hasPole && !zombie.vault ||
             (saved.zombie.animation === 'anim_run' || saved.zombie.state === 'vaulting') && !zombie.vault) {
             throw new Error(`Saved zombie ${saved.entityId} is invalid for the level`)
         }

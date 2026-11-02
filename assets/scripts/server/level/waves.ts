@@ -15,12 +15,12 @@ const EARLY_WAVE_DELAY_TICKS = 200
 const SHIELD_HEALTH_SHARE = Math.fround(0.2)
 
 /**
- * Board::TotalZombiesHealthInWave: body and helm count in full, a shield (newspaper, screen door) at 0.2f. The int
+ * Board::TotalZombiesHealthInWave: body and helm count in full, the shield at 0.2f. The int
  * total adds each zombie's float sum, truncated.
  */
-function addWaveHealth(definitions: GameplayDefinitions, total: number, zombie: Zombie): number {
-    const shield = definitions.zombies[zombie.typeId].helm?.shield === true
-    const health = shield ? Math.fround(zombie.health + Math.fround(zombie.helmHealth * SHIELD_HEALTH_SHARE)) : zombie.health + zombie.helmHealth
+function addWaveHealth(total: number, zombie: Zombie): number {
+    const health = zombie.shieldHealth > 0
+        ? Math.fround(zombie.health + zombie.helmHealth + Math.fround(zombie.shieldHealth * SHIELD_HEALTH_SHARE)) : zombie.health + zombie.helmHealth
     return Math.trunc(Math.fround(total + health))
 }
 
@@ -42,7 +42,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
             const nextIsFlag = waves.plan[waves.index].flagWave === true
             const waveHealth = (waves.zombieIds ?? []).reduce((total, entity) => {
                 const zombie = world.get(entity, ZombieComponent)
-                return zombie?.state === 'walking' || zombie?.state === 'eating' || zombie?.state === 'vaulting' ? addWaveHealth(definitions, total, zombie) : total
+                return zombie?.state === 'walking' || zombie?.state === 'eating' || zombie?.state === 'vaulting' ? addWaveHealth(total, zombie) : total
             }, 0)
             // Board::UpdateZombieSpawning returns during the huge wave countdown, so it cannot be shortened.
             if (!waves.hugeWaveAnnounced && waves.accelerateAtTick !== undefined && tick >= waves.accelerateAtTick &&
@@ -91,7 +91,7 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
             // Board::SpawnZombieWave: after the last wave every grave on the lawn opens, not only the level's own.
             if (waves.index === waves.plan.length && waves.graves?.length && level.definition.graveZombies?.length) waves.graveRiseAtTick = tick + 200
             waves.zombieIds = zombieIds
-            const waveHealthStart = zombieIds.reduce((total, entity) => addWaveHealth(definitions, total, world.get(entity, ZombieComponent)!), 0)
+            const waveHealthStart = zombieIds.reduce((total, entity) => addWaveHealth(total, world.get(entity, ZombieComponent)!), 0)
             waves.healthToNextWave = (0.5 + world.resources.get(RandomResource).nextFloat() * 0.15) * waveHealthStart
             waves.nextWaveAtTick = tick + (waves.plan[waves.index]?.flagWave ? 4500
                 : NEXT_WAVE_DELAY_TICKS + world.resources.get(RandomResource).integer(0, NEXT_WAVE_DELAY_RANGE_TICKS - 1))

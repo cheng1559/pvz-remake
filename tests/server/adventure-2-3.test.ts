@@ -67,25 +67,46 @@ test('a screen door absorbs peas without chill, lets fume through, and falls whe
     const events = () => drainServerEvents(world.resources.get(EventQueueResource))
     const door = spawnZombie(world, definitions, 'pvz:screendoor', 0, 500, 50)
     const zombie = world.get(door, ZombieComponent)!
-    assert.deepEqual([zombie.helmHealth, zombie.health], [1100, 270])
+    assert.deepEqual([zombie.shieldHealth, zombie.health], [1100, 270])
     damageZombie(world, definitions, door, 20, { chillTicks: 1000 })
-    assert.deepEqual([zombie.helmHealth, zombie.health, zombie.chilledTicks], [1080, 270, 0], 'TakeShieldDamage applies no DAMAGE_FREEZE')
+    assert.deepEqual([zombie.shieldHealth, zombie.health, zombie.chilledTicks], [1080, 270, 0], 'TakeShieldDamage applies no DAMAGE_FREEZE')
     damageZombie(world, definitions, door, 20, { hitsShieldAndBody: true })
-    assert.deepEqual([zombie.helmHealth, zombie.health], [1060, 250], 'the fume-shroom hits the door and the body')
+    assert.deepEqual([zombie.shieldHealth, zombie.health], [1060, 250], 'the fume-shroom hits the door and the body')
     for (let hit = 0; hit < 4; hit++) damageZombie(world, definitions, door, 20, { hitsShieldAndBody: true })
     assert.equal(zombie.hasArm, true, 'Zombie::DropArm waits for the door to go')
     events()
     for (let hit = 0; zombie.health > 0; hit++) damageZombie(world, definitions, door, 20, { hitsShieldAndBody: true })
     assert.equal(zombie.state, 'dying')
-    assert.equal(zombie.helmHealth, 0)
-    assert.ok(events().some(event => event.type === 'zombieHelmDropped' && event.data.helm === 'door' && event.data.bypassed === true),
+    assert.equal(zombie.shieldHealth, 0)
+    assert.ok(events().some(event => event.type === 'zombieShieldDropped' && event.data.shield === 'door' && event.data.bypassed === true),
         'PlayDeathAnim drops the door with DropShield(1U)')
 
     const broken = spawnZombie(world, definitions, 'pvz:screendoor', 1, 500, 150)
     damageZombie(world, definitions, broken, 1100)
-    const dropped = events().filter(event => event.type === 'zombieHelmDropped')
-    assert.deepEqual(dropped.map(event => [event.data.helm, event.data.bypassed]), [['door', undefined]])
+    const dropped = events().filter(event => event.type === 'zombieShieldDropped')
+    assert.deepEqual(dropped.map(event => [event.data.shield, event.data.bypassed]), [['door', undefined]])
     assert.equal(world.get(broken, ZombieComponent)!.health, 270)
+})
+
+test('Zombie::TakeDamage: a zombie with a helm and a shield loses the shield, then the helm, then its body', () => {
+    // A Mod zombie: the screen door zombie wearing a cone as well.
+    const armored = { ...definitions, zombies: { ...definitions.zombies, 'pvz:screendoor': { ...definitions.zombies['pvz:screendoor'], helm: { type: 'cone', health: 370 } } } }
+    const world = new World()
+    world.resources.set(LevelStateResource, { id: options.levelId, definition: levels.levels['pvz:adventure-2-3'], board: definitions.boards['pvz:night'], phase: 'gameplay', result: 'playing', paused: false })
+    world.resources.set(RandomResource, new DeterministicRng(7))
+    world.resources.set(EventQueueResource, createEventQueue())
+    const entity = spawnZombie(world, armored, 'pvz:screendoor', 0, 500, 50)
+    const zombie = world.get(entity, ZombieComponent)!
+    const armor = () => [zombie.shieldHealth, zombie.helmHealth, zombie.health]
+    assert.deepEqual(armor(), [1100, 370, 270])
+    damageZombie(world, armored, entity, 1200)
+    assert.deepEqual(armor(), [0, 270, 270], 'the door takes 1100 and the cone the rest')
+    damageZombie(world, armored, entity, 20, { hitsShieldAndBody: true })
+    assert.deepEqual(armor(), [0, 250, 270], 'without the door, a fume hit reaches the cone first')
+    damageZombie(world, armored, entity, 300)
+    assert.deepEqual(armor(), [0, 0, 220])
+    const dropped = drainServerEvents(world.resources.get(EventQueueResource)).filter(event => event.type === 'zombieShieldDropped' || event.type === 'zombieHelmDropped')
+    assert.deepEqual(dropped.map(event => event.type), ['zombieShieldDropped', 'zombieHelmDropped'])
 })
 
 test('wave health counts a screen door at 0.2, so the next wave can come early', () => {

@@ -52,8 +52,9 @@ export class ProjectileSystem implements GameSystem {
         const target = findProjectileTarget(world, this.zombieRows[position.row] ?? [], position, definition.hitbox)
         if (target !== undefined) {
             const zombie = world.get(target, ZombieComponent)!
-            // The impact sound depends on the helm worn before this hit.
+            // The impact sound depends on the armor worn before this hit: the shield takes it first.
             const helm = zombie.helmHealth > 0 ? definitions.zombies[zombie.typeId].helm?.type : undefined
+            const shield = zombie.shieldHealth > 0 ? definitions.zombies[zombie.typeId].shield?.type : undefined
             damageZombie(world, definitions, target, definition.damage, { chillTicks: definition.chillTicks }, commands)
             emitServerEvent(world.resources.get(EventQueueResource), 'projectileImpact', {
                 projectileId: entity,
@@ -61,6 +62,7 @@ export class ProjectileSystem implements GameSystem {
                 targetTypeId: zombie.typeId,
                 typeId: projectile.typeId,
                 ...(helm === undefined ? {} : { helm }),
+                ...(shield === undefined ? {} : { shield }),
                 ...(projectile.sourcePlantId === undefined ? {} : { sourcePlantId: projectile.sourcePlantId }),
                 x: position.x,
                 y: position.y,

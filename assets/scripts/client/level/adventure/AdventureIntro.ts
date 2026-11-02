@@ -50,7 +50,7 @@ export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, 
 function applyPreviewParts(player: ReanimPlayer, typeId: string, definitions: PresentationDefinitions, hasTongue: boolean): void {
     const definition = definitions.zombies[typeId]
     const parts = definition.parts
-    for (const track of parts.helms) player.setTracksVisible([track], definition.helm?.track === track)
+    for (const track of parts.helms) player.setTracksVisible([track], definition.helm?.track === track || definition.shield?.track === track)
     player.setTracksVisible(parts.hair, !definition.helm || definition.helm.showsHair === true)
     player.setTracksVisible(parts.tongue, hasTongue)
     // Street zombies stand holding their shield (Zombie::AttachShield).
@@ -135,7 +135,7 @@ export class AdventureIntro implements LevelIntro {
         await Promise.all(introPositions.map(async (position, index) => {
             const typeId = types[index]
             const definition = content.presentation.zombies[typeId]
-            const animations = content.animations.resolve(definition.animationTarget)
+            const animations = content.animations.resolve(content.animations.sourceOf(typeId))
             const idle2 = !!animations.idle2 && Math.random() < content.animations.zombieIdle2Chance
             const clip = idle2 ? animations.idle2 : animations.idle
             const node = uiNode({
@@ -274,7 +274,7 @@ export class AdventureIntro implements LevelIntro {
                 const definition = this.definitions.zombies[preview.typeId]
                 if (!definition) throw new Error(`Intro zombie is not installed: ${preview.typeId}`)
                 this.previewTypes.set(node, preview.typeId)
-                const clip = Object.values(this.animations.resolve(definition.animationTarget)).find(clip => clip.reanimId === preview.reanim.id)
+                const clip = Object.values(this.animations.resolve(this.animations.sourceOf(preview.typeId))).find(clip => clip.reanimId === preview.reanim.id)
                 if (!clip) throw new Error(`Intro animation is not installed: ${preview.reanim.id}`)
                 let animationNode = node.getChildByName('ZombieAnimation')
                 let player = animationNode?.getComponent(ReanimPlayer) ?? null
@@ -346,7 +346,7 @@ export class AdventureIntro implements LevelIntro {
 
         const bankHeight = uiNode({ node: this.bank }).transform.height || 87
         const bankStart = SEED_BANK_START + this.sodTicks
-        this.bank.active = tick > bankStart
+        this.bank.active = !this.layout.hiddenSeedBank && tick > bankStart
         this.bank.setPosition(
             easeInOut(475, PAN_LEFT_END, tick, 0, 10),
             easeInOut(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0),

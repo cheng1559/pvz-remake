@@ -1,5 +1,6 @@
 import type { MusicTuneId } from './music'
 import type { JsonObject } from '@/shared/protocol'
+import { isQualifiedId } from '@/shared/mod'
 
 export interface ClientAnimationClip {
     readonly reanimId: string
@@ -13,6 +14,11 @@ export interface ClientAnimationClip {
 export interface AnimationDefinition { readonly [slot: string]: ClientAnimationClip }
 
 /** The parent track a head, blink or flag clip attaches to; the data must name it. */
+/** The plant or zombie whose `animations` `id` plays: its `animationsFrom`, else itself. */
+export function animationSource(id: string, definition: { readonly animationsFrom?: string }): ClientAnimationTarget {
+    return definition.animationsFrom ?? id
+}
+
 export function attachmentTrack(clip: ClientAnimationClip): string {
     if (!clip.attachmentTrackId) throw new Error(`${clip.reanimId} needs an attachmentTrackId to attach`)
     return clip.attachmentTrackId
@@ -133,7 +139,8 @@ export interface PlantPresentationDefinition {
     readonly visual: PlantVisual
     readonly parts?: PlantParts
     readonly view?: PlantViewKind
-    readonly animationTarget?: ClientAnimationTarget
+    /** Another plant whose `animations` this one plays (the explode-o-nut plays the wall-nut's); by default its own. */
+    readonly animationsFrom?: ClientAnimationTarget
     readonly animations?: ClientAnimationDefinitions[ClientAnimationTarget]
     readonly chewParticle?: string
     readonly explosion?: { readonly effect: string; readonly x: number; readonly rowOrder: boolean }
@@ -150,8 +157,12 @@ export interface PlantPresentationDefinition {
     }
 }
 
+/**
+ * A sound to play: the `audio` resource (`pvz:splat`), as a foley (TodFoley: the sound's variants, a random pitch
+ * within `pitchRange`, no repeat right after itself) or as the plain sample.
+ */
 export interface PresentationSound {
-    readonly id: string
+    readonly audio: string
     readonly foley: boolean
     readonly pitchRange?: number
 }
@@ -199,8 +210,9 @@ export interface ZombieDrop {
 export interface ZombiePresentationDefinition {
     readonly nameKey?: string
     readonly view?: string
-    readonly animationTarget: ClientAnimationTarget
-    readonly animations: ClientAnimationDefinitions[ClientAnimationTarget]
+    /** Another zombie whose `animations` this one plays (a Mod zombie on the plain body); by default its own. */
+    readonly animationsFrom?: ClientAnimationTarget
+    readonly animations?: ClientAnimationDefinitions[ClientAnimationTarget]
     readonly shadowX: number
     /** Original Y-down coordinates; defaults to 92. */
     readonly shadowY?: number
@@ -209,18 +221,35 @@ export interface ZombiePresentationDefinition {
     readonly damagedArmSprite?: string
     /** Zombie::UpdateZombieNewspaper: the head track takes this sprite while enraged. */
     readonly enragedHead?: { readonly track: string; readonly sprite: string }
+    /** Zombie::UpdateZombieNewspaper: the roar on losing the paper, when the server allows it. */
+    readonly enrageSounds?: readonly PresentationSound[]
     /** Unavailable cells in the 5x5 street-preview grid. */
     readonly previewBlockedCells?: readonly { readonly column: number; readonly row: number }[]
     readonly flag?: boolean
     readonly vault?: boolean
     readonly drops: Readonly<Partial<Record<'head' | 'arm' | 'flag', ZombieDrop>>>
-    readonly helm?: { readonly track: string; readonly damagedSprites: readonly [string, string]; readonly effect: string; readonly offset: readonly [number, number]; readonly impactSounds: readonly PresentationSound[]; readonly bowlingImpactSounds?: readonly PresentationSound[]
-        /** Cones and buckets hide the hair until dropped; a newspaper does not. */
+    /** The gameplay `helm`, worn on the head. */
+    readonly helm?: ZombieArmorPresentation & {
+        /** A helm hides the hair until dropped (Zombie::ZombieInitialize) unless this is set. */
         readonly showsHair?: boolean
-        /** Plays once on the zombie when the helm breaks, like the newspaper's surprise mark. */
-        readonly dropReanim?: { readonly reanimId: string; readonly offset: readonly [number, number] }
-        /** Play with dropReanim, like the newspaper's rip; neither plays when the hit bypasses the shield (Zombie::DropShield). */
-        readonly dropSounds?: readonly PresentationSound[] }
+    }
+    /** The gameplay `shield`, held in front; it flashes and recoils on its own track. */
+    readonly shield?: ZombieArmorPresentation
+}
+
+/** How a helm or shield looks: its track, its dented sprites below 2/3 and 1/3 health, and its fall. */
+export interface ZombieArmorPresentation {
+    readonly track: string
+    readonly damagedSprites: readonly [string, string]
+    readonly effect: string
+    readonly offset: readonly [number, number]
+    /** Played for a projectile hit while worn, instead of the projectile's own; the shield's win while both are worn. */
+    readonly impactSounds: readonly PresentationSound[]
+    readonly bowlingImpactSounds?: readonly PresentationSound[]
+    /** Plays once on the zombie when it breaks, like the newspaper's surprise mark. */
+    readonly dropReanim?: { readonly reanimId: string; readonly offset: readonly [number, number] }
+    /** Play with dropReanim, like the newspaper's rip; neither plays when the hit bypasses the shield (Zombie::DropShield). */
+    readonly dropSounds?: readonly PresentationSound[]
 }
 
 /**
@@ -237,7 +266,7 @@ export interface ZombieParts {
     readonly arm: readonly string[]
     /** Takes the damaged arm sprite once the arm is lost. */
     readonly upperArm: string
-    /** Every helm track in the clips; only the worn helm's track (helm.track) shows. */
+    /** Every helm and shield track in the clips; only the worn ones (helm.track, shield.track) show. */
     readonly helms: readonly string[]
     /** The walk's ground track: how far a cycle moves (the house-entry walk). */
     readonly ground: string
@@ -256,6 +285,8 @@ export type NutBlinkSlot = 'blinkTwitch' | 'blinkTwice' | 'blinkThrice'
 export interface AdventureIntroLayout {
     readonly previewCapacity: number
     readonly stationary?: boolean
+    /** CutScene: a level without a seed bank (IsChallengeWithoutSeedBank) leaves it above the screen. */
+    readonly hiddenSeedBank?: boolean
     readonly sod: string
     readonly x: number
     readonly y: number
@@ -274,6 +305,19 @@ export interface LevelPresentationDefinition {
     readonly guideSeed?: string
     readonly seedGuideSteps: readonly string[]
     readonly lawnGuideSteps: readonly string[]
+    /** False when the seed guide only flashes the packets, without the pick arrow (Whack-a-Zombie). */
+    readonly seedGuideArrow?: false
+}
+/**
+ * How a level rule (`rules.kind`) looks, by kind. The generic level view reads `graveRise` and `itemPadding`; the
+ * rule's own view reads the rest.
+ */
+export interface LevelRulePresentation {
+    /** Zombie::RiseFromGrave: replaces `graves.rise` (Whack-a-Zombie's dirt). */
+    readonly graveRise?: { readonly particle: string; readonly sounds: readonly PresentationSound[] }
+    /** Coin::MouseHitTest: items take clicks this much further around, and `height` more below. */
+    readonly itemPadding?: { readonly size: number; readonly height: number }
+    readonly [key: string]: unknown
 }
 /** Coin::CoinInitialize / Coin::Draw: how a sun or coin item looks; offsets are from the item's 60x60 top-left. */
 export interface ItemPresentationDefinition {
@@ -292,6 +336,23 @@ export interface ItemPresentationDefinition {
     readonly collectSounds?: readonly PresentationSound[]
 }
 
+/**
+ * One ChallengeScreen page: the button grid (the first button's corner, the step to the next column and row, and each
+ * button's size), the
+ * thumbnail sheet cut into `columns` x `rows` equal cels, and each challenge's cel (mChallengeIconIndex).
+ */
+export interface ChallengePagePresentationDefinition {
+    readonly x: number
+    readonly y: number
+    readonly columnSpacing: number
+    readonly rowSpacing: number
+    /** The button's own size (GameButton::Resize), its hit area; the window image draws at its own size. */
+    readonly buttonWidth: number
+    readonly buttonHeight: number
+    readonly thumbnails: { readonly sprite: string; readonly columns: number; readonly rows: number }
+    readonly icons: Readonly<Record<string, number>>
+}
+
 export interface AwardPresentationDefinition {
     readonly sprite: string
     readonly scale: number
@@ -302,6 +363,8 @@ export interface AwardPresentationDefinition {
 }
 const VIEW_SLOTS: Readonly<Record<string, readonly string[]>> = {
     puffshroom: ['body', 'sleep', 'shoot', 'blink'],
+    /** A mushroom that only idles and sleeps (the Hypno-shroom until its ability comes). */
+    mushroom: ['body', 'sleep'],
     sunshroom: ['body', 'small', 'sleep', 'bigSleep', 'grow', 'blink'],
     gravebuster: ['body', 'land'],
     bowling: ['body', 'blinkTwitch', 'blinkTwice', 'blinkThrice'],
@@ -363,9 +426,10 @@ export interface PresentationDefinitions {
         readonly x: number; readonly backdropX: number; readonly clipX: number; readonly width: number; readonly height: number
         readonly packetX: number; readonly packetY: number; readonly beltY: number; readonly beltWidth: number; readonly beltHeight: number
         readonly frames: number; readonly frameTicks: number; readonly introStart: number; readonly introDuration: number
-        readonly stripeOffset: readonly [number, number]; readonly stripeDialogs: readonly number[]
     }
     readonly shovel: { readonly x: number; readonly imageOffset: readonly [number, number]; readonly cursorOffset: readonly [number, number]; readonly arrowOffset: readonly [number, number] }
+    /** Zombie::RiseFromGrave: the dirt and rumble of a zombie rising from a grave; a level may replace them (Whack-a-Zombie). */
+    readonly graves: { readonly rise: { readonly particle: string; readonly sounds: readonly PresentationSound[] } }
     readonly dave: {
         readonly clips: Readonly<Record<string, string>>
         readonly sourceFps: number; readonly transitionFps: number; readonly talkFps: number; readonly blinkFps: number
@@ -378,9 +442,12 @@ export interface PresentationDefinitions {
         readonly mouths: Readonly<Record<string, string>>
     }
     readonly boards?: Readonly<Record<string, BoardPresentation>>
+    readonly rules?: Readonly<Record<string, LevelRulePresentation>>
     readonly screens?: Readonly<Record<string, readonly ScreenAnimationDefinition[]>>
     readonly levels?: Readonly<Record<string, LevelPresentationDefinition>>
     readonly awards?: Readonly<Record<string, AwardPresentationDefinition>>
+    /** Keyed `pvz:<page>`. */
+    readonly challenges?: Readonly<Record<string, ChallengePagePresentationDefinition>>
     readonly items: Readonly<Record<string, ItemPresentationDefinition>>
     readonly animation: {
         readonly rates: Readonly<Record<'plantIdle' | 'shooterIdle' | 'zombieIdle' | 'zombieIdle2', readonly [number, number]>>
@@ -423,12 +490,27 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             if (layer.visibleTracks !== undefined) texts(layer.visibleTracks, id + '.visibleTracks')
         }
     }
+    for (const [id, entry] of Object.entries(object(data.challenges ?? {}, 'presentation challenges'))) {
+        const page = object(entry, 'challenges.' + id)
+        finite(page.x, `challenges.${id}.x`); finite(page.y, `challenges.${id}.y`)
+        positive(page.columnSpacing, `challenges.${id}.columnSpacing`); positive(page.rowSpacing, `challenges.${id}.rowSpacing`)
+        positive(page.buttonWidth, `challenges.${id}.buttonWidth`); positive(page.buttonHeight, `challenges.${id}.buttonHeight`)
+        const thumbnails = object(page.thumbnails, `challenges.${id}.thumbnails`)
+        text(thumbnails.sprite, `challenges.${id}.thumbnails.sprite`)
+        for (const key of ['columns', 'rows']) {
+            if (!Number.isInteger(thumbnails[key]) || (thumbnails[key] as number) < 1) throw new TypeError(`challenges.${id}.thumbnails.${key} must be a positive integer`)
+        }
+        const cels = (thumbnails.columns as number) * (thumbnails.rows as number)
+        for (const [key, icon] of Object.entries(object(page.icons, `challenges.${id}.icons`))) {
+            if (!Number.isInteger(icon) || (icon as number) < 0 || (icon as number) >= cels) throw new TypeError(`challenges.${id}.icons.${key} is not a thumbnail cel`)
+        }
+    }
     parseMainMenu(object(data.mainMenu, 'mainMenu'))
     const conveyor = object(data.conveyor, 'conveyor')
     for (const key of ['x', 'backdropX', 'clipX', 'packetX', 'packetY', 'beltY', 'introStart']) finite(conveyor[key], 'conveyor.' + key)
     for (const key of ['width', 'height', 'beltWidth', 'beltHeight', 'frames', 'frameTicks', 'introDuration']) positive(conveyor[key], 'conveyor.' + key)
-    pair(conveyor.stripeOffset, 'conveyor.stripeOffset')
-    if (!Array.isArray(conveyor.stripeDialogs) || conveyor.stripeDialogs.some(id => !Number.isInteger(id))) throw new TypeError('Invalid conveyor.stripeDialogs')
+    const graveRise = object(object(data.graves, 'graves').rise, 'graves.rise')
+    text(graveRise.particle, 'graves.rise.particle'); sounds(graveRise.sounds, 'graves.rise.sounds', true)
     const shovel = object(data.shovel, 'shovel')
     finite(shovel.x, 'shovel.x')
     for (const key of ['imageOffset', 'cursorOffset', 'arrowOffset']) pair(shovel[key], 'shovel.' + key)
@@ -474,6 +556,18 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (level.adviceDuringIntro !== undefined && typeof level.adviceDuringIntro !== 'boolean') throw new TypeError(id + '.adviceDuringIntro must be boolean')
         if (level.adviceStyle !== undefined && level.adviceStyle !== 'hint-stay' && level.adviceStyle !== 'tutorial-level1-stay') throw new TypeError(id + '.adviceStyle is invalid')
         texts(level.seedGuideSteps, id + '.seedGuideSteps'); texts(level.lawnGuideSteps, id + '.lawnGuideSteps')
+        if (level.seedGuideArrow !== undefined && level.seedGuideArrow !== false) throw new TypeError(id + '.seedGuideArrow can only be false')
+    }
+    for (const [id, entry] of Object.entries(object(data.rules ?? {}, 'presentation rules'))) {
+        const rule = object(entry, 'rules.' + id)
+        if (rule.graveRise !== undefined) {
+            const rise = object(rule.graveRise, 'rules.' + id + '.graveRise')
+            text(rise.particle, 'rules.' + id + '.graveRise.particle'); sounds(rise.sounds, 'rules.' + id + '.graveRise.sounds', true)
+        }
+        if (rule.itemPadding !== undefined) {
+            const padding = object(rule.itemPadding, 'rules.' + id + '.itemPadding')
+            finite(padding.size, 'rules.' + id + '.itemPadding.size'); finite(padding.height, 'rules.' + id + '.itemPadding.height')
+        }
     }
     for (const [id, entry] of Object.entries(object(data.awards ?? {}, 'presentation awards'))) {
         const award = object(entry, id)
@@ -533,8 +627,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (visual.nameKey !== undefined) text(visual.nameKey, id + '.visual.nameKey')
         if (visual.tooltipKey !== undefined) text(visual.tooltipKey, id + '.visual.tooltipKey')
         if (plant.view !== undefined) text(plant.view, id + '.view')
-        if (plant.animationTarget !== undefined) text(plant.animationTarget, id + '.animationTarget')
-        if (typeof plant.view === 'string' && VIEW_SLOTS[plant.view] && !plant.animationTarget) throw new TypeError(id + '.animationTarget is missing')
+        if (plant.animationsFrom !== undefined) text(plant.animationsFrom, id + '.animationsFrom')
         sounds(plant.plantedSounds, id + '.plantedSounds')
         sounds(plant.explosionSounds, id + '.explosionSounds')
         sounds(plant.fireSounds, id + '.fireSounds')
@@ -564,6 +657,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             text(head.track, id + '.enragedHead.track')
             text(head.sprite, id + '.enragedHead.sprite')
         }
+        sounds(zombie.enrageSounds, id + '.enrageSounds')
         if (zombie.view !== undefined) text(zombie.view, id + '.view')
         if (zombie.previewBlockedCells !== undefined) {
             if (!Array.isArray(zombie.previewBlockedCells)) throw new TypeError(id + '.previewBlockedCells must be an array')
@@ -576,7 +670,8 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
                 }
             }
         }
-        if (typeof zombie.animationTarget !== 'string' || !Number.isFinite(zombie.shadowX)) throw new TypeError(id + ' has invalid presentation')
+        if (zombie.animationsFrom !== undefined) text(zombie.animationsFrom, id + '.animationsFrom')
+        if (!Number.isFinite(zombie.shadowX)) throw new TypeError(id + ' has invalid presentation')
         if (zombie.shadowY !== undefined) finite(zombie.shadowY, id + '.shadowY')
         for (const part of ['head', 'hair', 'tongue', 'arm', 'helms']) texts(parts[part], id + '.parts.' + part)
         text(parts.upperArm, id + '.parts.upperArm')
@@ -592,7 +687,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             const shieldArms = object(parts.shieldArms, id + '.parts.shieldArms')
             texts(shieldArms.holding, id + '.parts.shieldArms.holding')
             texts(shieldArms.free, id + '.parts.shieldArms.free')
-            if (zombie.helm === undefined) throw new TypeError(id + '.parts.shieldArms requires a helm')
+            if (zombie.shield === undefined) throw new TypeError(id + '.parts.shieldArms requires a shield')
         }
         if (zombie.flag === true && parts.flagArm === undefined) throw new TypeError(id + '.parts.flagArm is required for a flag zombie')
         object(zombie.animations, id + '.animations')
@@ -604,39 +699,47 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             pair(drop.offset, id + '.drops.' + part + '.offset')
             sounds(drop.sounds, id + '.drops.' + part + '.sounds')
         }
-        if (zombie.helm !== undefined) {
-            const helm = object(zombie.helm, id + '.helm')
-            text(helm.track, id + '.helm.track')
-            text(helm.effect, id + '.helm.effect')
-            texts(helm.damagedSprites, id + '.helm.damagedSprites')
-            if ((helm.damagedSprites as string[]).length !== 2) throw new TypeError(id + '.helm.damagedSprites must have two entries')
-            if (!(parts.helms as string[]).includes(helm.track as string)) throw new TypeError(id + '.helm.track is missing from parts.helms')
-            pair(helm.offset, id + '.helm.offset')
-            if (helm.showsHair !== undefined && typeof helm.showsHair !== 'boolean') throw new TypeError(id + '.helm.showsHair must be boolean')
-            if (helm.dropReanim !== undefined) {
-                const reanim = object(helm.dropReanim, id + '.helm.dropReanim')
-                text(reanim.reanimId, id + '.helm.dropReanim.reanimId')
-                pair(reanim.offset, id + '.helm.dropReanim.offset')
+        for (const slot of ['helm', 'shield'] as const) {
+            if (zombie[slot] === undefined) continue
+            const name = `${id}.${slot}`
+            const armor = object(zombie[slot], name)
+            text(armor.track, name + '.track')
+            text(armor.effect, name + '.effect')
+            texts(armor.damagedSprites, name + '.damagedSprites')
+            if ((armor.damagedSprites as string[]).length !== 2) throw new TypeError(name + '.damagedSprites must have two entries')
+            if (!(parts.helms as string[]).includes(armor.track as string)) throw new TypeError(name + '.track is missing from parts.helms')
+            pair(armor.offset, name + '.offset')
+            if (slot === 'shield' && armor.showsHair !== undefined) throw new TypeError(name + '.showsHair is only for a helm')
+            if (armor.showsHair !== undefined && typeof armor.showsHair !== 'boolean') throw new TypeError(name + '.showsHair must be boolean')
+            if (armor.dropReanim !== undefined) {
+                const reanim = object(armor.dropReanim, name + '.dropReanim')
+                text(reanim.reanimId, name + '.dropReanim.reanimId')
+                pair(reanim.offset, name + '.dropReanim.offset')
             }
-            sounds(helm.impactSounds, id + '.helm.impactSounds', true)
-            sounds(helm.bowlingImpactSounds, id + '.helm.bowlingImpactSounds')
-            sounds(helm.dropSounds, id + '.helm.dropSounds')
+            sounds(armor.impactSounds, name + '.impactSounds', true)
+            sounds(armor.bowlingImpactSounds, name + '.bowlingImpactSounds')
+            sounds(armor.dropSounds, name + '.dropSounds')
         }
+        if (zombie.helm !== undefined && zombie.shield !== undefined &&
+            (zombie.helm as { track?: unknown }).track === (zombie.shield as { track?: unknown }).track) throw new TypeError(id + ' draws its helm and shield on one track')
     }
     if (!zombies['pvz:normal']) throw new TypeError('Missing normal zombie presentation')
     for (const id of Object.keys(plants)) if (Object.hasOwn(zombies, id)) throw new TypeError('Duplicate presentation target: ' + id)
     const targets = { ...plants, ...zombies }
     for (const [id, entry] of Object.entries(targets)) {
-        const definition = entry as { animationTarget?: string }
-        if (definition.animationTarget && !(targets[definition.animationTarget] as { animations?: unknown } | undefined)?.animations) {
-            throw new TypeError(id + ' references missing animations: ' + definition.animationTarget)
+        const definition = entry as { animationsFrom?: string; animations?: unknown }
+        if (definition.animationsFrom && !(targets[definition.animationsFrom] as { animations?: unknown } | undefined)?.animations) {
+            throw new TypeError(id + ' references missing animations: ' + definition.animationsFrom)
         }
+        // Every zombie is drawn from clips, its own or another's.
+        if (Object.hasOwn(zombies, id) && !definition.animationsFrom && !definition.animations) throw new TypeError(id + ' has no animations')
     }
     for (const [id, entry] of Object.entries(plants)) {
         const plant = entry as PlantPresentationDefinition
         const slots = plant.view && VIEW_SLOTS[plant.view]
         if (!slots) continue
-        const target = targets[plant.animationTarget!] as { animations: AnimationDefinition }
+        const target = targets[animationSource(id, plant)] as { animations?: AnimationDefinition }
+        if (!target.animations) throw new TypeError(id + ' has no animations')
         for (const slot of slots) if (!target.animations[slot]) throw new TypeError(`${id} is missing ${slot} animation`)
     }
     for (const [id, value] of Object.entries(object(data.projectiles, 'projectiles'))) {
@@ -758,7 +861,8 @@ function sounds(value: unknown, name: string, required = false): void {
     if (!Array.isArray(value)) throw new TypeError(name + ' must be an array')
     for (const entry of value) {
         const sound = object(entry, name)
-        text(sound.id, name + '.id')
+        // A sound names its owner like any other resource: pvz:splat, corn:shoop.
+        if (!isQualifiedId(sound.audio)) throw new TypeError(name + '.audio must be a qualified ID')
         if (typeof sound.foley !== 'boolean') throw new TypeError(name + '.foley must be boolean')
         // A negative range lowers the pitch, like FOLEY_NEWSPAPER_RIP's -2 (TodFoley).
         if (sound.pitchRange !== undefined) finite(sound.pitchRange, name + '.pitchRange')
