@@ -17,6 +17,8 @@ export class UIHoverManager {
     private static root: Node | null = null
     private static pointer: UIHoverPointer | null = null
     private static blocks = 0
+    /** The cursor while nothing is hovered. */
+    private static idleCursor: 'default' | 'none' = 'default'
     static hasHover = false
 
     static get isInputBlocked(): boolean { return this.blocks > 0 }
@@ -63,7 +65,15 @@ export class UIHoverManager {
         this.pointer = null
         this.blocks = 0
         this.modalRoots.length = 0
+        this.idleCursor = 'default'
         this.clearHoverStates()
+    }
+
+    /** Board::UpdateCursor: the system cursor hides while the game draws its own (the Whack-a-Zombie mallet) and nothing is hovered. */
+    static setIdleCursor(cursor: 'default' | 'none'): void {
+        if (cursor === this.idleCursor) return
+        this.idleCursor = cursor
+        this.refreshHoverStates()
     }
 
     static registerClient(client: UIHoverClient): void { this.clients.add(client) }
@@ -112,18 +122,18 @@ export class UIHoverManager {
 
     static refreshHoverStates(): void {
         if (this.isInputBlocked || !this.pointer) { this.clearHoverStates(); return }
-        let cursor = 'default'
+        let cursor: string | undefined
         for (const client of this.clients) {
             if (client.refreshHover(this.pointer, this.activeModalRoot) && cursor !== 'grabbing') cursor = client.cursor ?? 'pointer'
         }
-        this.hasHover = cursor !== 'default'
-        CursorManager.set(cursor)
+        this.hasHover = cursor !== undefined
+        CursorManager.set(cursor ?? this.idleCursor)
     }
 
     private static clearHoverStates(): void {
         for (const client of this.clients) client.clearHover()
         this.hasHover = false
-        CursorManager.set('default')
+        CursorManager.set(this.idleCursor)
     }
 
     private static removeModal(root: Node): void {

@@ -151,12 +151,17 @@ export class UI {
             pressed: images.pressed ?? images.hover ?? images.normal,
             disabled: images.disabled ?? images.normal,
         }
-        const width = options.width ?? images?.normal.originalSize.width ?? 180
-        const height = options.height ?? images?.normal.originalSize.height ?? 46
+        // AlmanacDialog sizes its footer buttons in code (GameButton::Resize) and centres the label there; the image
+        // draws at its own size from the button's corner.
+        const footerSize = skin === 'almanacIndex' ? [164, 26] : skin === 'almanacClose' ? [89, 26] : undefined
+        const width = options.width ?? footerSize?.[0] ?? images?.normal.originalSize.width ?? 180
+        const height = options.height ?? footerSize?.[1] ?? images?.normal.originalSize.height ?? 46
         const node = this.box(parent, options.text || 'Button', { ...options, width, height })
         node.active = false
         const visual = this.box(node, 'Visual', { width, height })
-        const imageBox = { width, height, ...options.imageBox }
+        const imageSize = footerSize && images
+            ? { width: images.normal.originalSize.width, height: images.normal.originalSize.height } : {}
+        const imageBox = { width, height, ...imageSize, ...options.imageBox }
         let normal: Node | undefined
         let down: Node | undefined
         let image: Sprite | undefined

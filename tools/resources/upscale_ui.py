@@ -21,7 +21,7 @@ from .upscale_fonts import Upscaler
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "mods/pvz-base/assets/images"
 BASE_MOD = ROOT / "mods/pvz-base"
-OUTPUT = ROOT / "art/resource-packs/hd/sprites"
+OUTPUT = ROOT / "mods/hd/sprites"
 SCALE = 2
 PREFIXES = (
     "options_", "button_", "seedchooser_button", "dialog_", "almanac_",

@@ -580,7 +580,7 @@ test('options use direct exit during seed selection and confirmed exit during ga
     for (const [inGame, levelIntro, expected] of [
         [true, true, ['MAIN_MENU_BUTTON', 'BACK_TO_GAME']],
         [true, false, ['VIEW_ALMANAC_BUTTON', 'RESTART_LEVEL_BUTTON', 'MAIN_MENU_BUTTON', 'BACK_TO_GAME']],
-        [false, false, ['OPTIONS_GITHUB_BUTTON', 'OPTIONS_MODS_BUTTON', 'DIALOG_BUTTON_OK']],
+        [false, false, ['OPTIONS_MODS_BUTTON', 'DIALOG_BUTTON_OK']],
     ] as const) {
         const buttons: Array<{ text: string; onClick: () => void }> = [], dialogs: any[] = []
         let exits = 0

@@ -148,7 +148,7 @@ export class LevelInputPresenter {
             leftSource: !packet && !tool, cancelInside: held && !pickable,
         }
         this.view.setPointer(this.mobilePressReady(press) ? press.point : undefined)
-        if (!held && !packet && !tool) this.collectAt(press.point.x, press.point.y)
+        if (!held && !packet && !tool && !this.collectAt(press.point.x, press.point.y)) this.boardClick(press.point, true)
         event.propagationStopped = true
     }
 
@@ -231,7 +231,15 @@ export class LevelInputPresenter {
         const snapshot = this.game.render()
         if (!this.canUseCursor(snapshot)) return
         if (snapshot.cursor.mode !== 'none') this.useCursor({ x, y })
-        else this.collectAt(x, y)
+        else if (!this.collectAt(x, y)) this.boardClick({ x, y }, false)
+    }
+
+    /** Challenge::MouseDown: a click that hits nothing else, while nothing is held, goes to the level rule (the mallet). */
+    private boardClick(point: { x: number; y: number }, touch: boolean): void {
+        const snapshot = this.game.render()
+        if (!this.view.rule?.click || !this.canUseCursor(snapshot) || snapshot.phase !== 'gameplay' || snapshot.cursor.mode !== 'none') return
+        if (!this.view.rule.click(snapshot, point, touch)) return
+        this.game.command({ type: 'boardClick', x: Math.max(0, Math.round(point.x)), y: Math.max(0, Math.round(point.y)) })
     }
 
     /** Like the number keys, a replacing selection swaps a held plant for the tool; the same tool again puts it back. */
@@ -270,22 +278,26 @@ export class LevelInputPresenter {
         })
     }
 
-    private collectAt(x: number, y: number, includeAward = true): void {
+    /** Coin::MouseHitTest: sun and coins take clicks 15 further around; the level rule may widen every item. */
+    private collectAt(x: number, y: number, includeAward = true): boolean {
         const snapshot = this.game.render()
+        const padding = this.view.itemPadding
         for (let index = snapshot.items.length - 1; index >= 0; index--) {
             const item = snapshot.items[index]
             const definition = this.game.definitions.items[item.typeId]
             if (!includeAward && !definition) continue
-            const extra = definition ? 15 : 0
+            const extra = padding?.size ?? (definition ? 15 : 0)
+            const below = padding?.height ?? 0
             const award = levelAwardSize(this.view.level.award)
             const width = definition?.width ?? award.width
             const height = definition?.height ?? award.height
             if (item.state !== 'collecting' && x >= item.x - extra && x < item.x + width + extra &&
-                y >= item.y - extra && y < item.y + height + extra) {
+                y >= item.y - extra && y < item.y + height + extra + below) {
                 this.game.command({ type: 'collectItemAt', itemId: item.entityId })
-                return
+                return true
             }
         }
+        return false
     }
 
     private onKeyPressing(event: EventKeyboard): void {

@@ -5,7 +5,6 @@
   "OPTIONS_FULLSCREEN_REQUIRED_BODY": "Windowed mode is not available on mobile devices.",
   "OPTIONS_FULLSCREEN_UNAVAILABLE_HEADER": "Full Screen Unavailable",
   "OPTIONS_FULLSCREEN_UNAVAILABLE_BODY": "This browser does not support full screen mode.",
-  "OPTIONS_GITHUB_BUTTON": "GitHub",
   "OPTIONS_MODS_BUTTON": "Mods",
   "PACKAGE_PACKS_TITLE": "Resource Packs",
   "PACKAGE_MODS_TITLE": "Mods",

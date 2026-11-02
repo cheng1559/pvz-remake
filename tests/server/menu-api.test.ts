@@ -219,7 +219,7 @@ test('award API resolves the loaded level reward and packet cost instead of choo
     })
     level = levels.levels['pvz:adventure-2-4']
     assert.deepEqual(await api.getAward(), {
-        kind: 'unlock', id: 'pvz:almanac', nextLevelId: null, showMainMenu: true,
+        kind: 'unlock', id: 'pvz:almanac', nextLevelId: 'pvz:adventure-2-5', showMainMenu: true,
         titleKey: 'FOUND_SUBURBAN_ALMANAC', nameKey: 'SUBURBAN_ALMANAC', descriptionKey: 'SUBURBAN_ALMANAC_DESCRIPTION',
         opens: { page: 'almanac', buttonKey: 'VIEW_ALMANAC_BUTTON' },
     })
@@ -270,7 +270,7 @@ test('winning advances the current profile once and exposes the next installed l
         assert.deepEqual(await reconnected.getAdventure(), { levelId: index < 10 ? `pvz:adventure-1-${index + 1}` : 'pvz:adventure-2-1' })
     }
     for (const [index, kind, seed, next] of [[1, 'seed', 9, 'pvz:adventure-2-2'], [2, 'seed', 10, 'pvz:adventure-2-3'],
-        [3, 'seed', 11, 'pvz:adventure-2-4'], [4, 'unlock', undefined, null]] as const) {
+        [3, 'seed', 11, 'pvz:adventure-2-4'], [4, 'unlock', undefined, 'pvz:adventure-2-5'], [5, 'seed', 12, null]] as const) {
         level = levels.levels[`pvz:adventure-2-${index}`]
         const award = await api.completeLevel()
         assert.deepEqual([award.kind, award.seed, award.nextLevelId], [kind, seed, next])

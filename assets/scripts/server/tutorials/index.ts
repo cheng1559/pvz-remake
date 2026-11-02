@@ -10,6 +10,7 @@ import { shovelTutorial } from './shovelTutorial'
 import { introDialog } from './introDialog'
 import { packetUpgradeOffer } from './packetUpgradeOffer'
 import { coinAdvice } from './coinAdvice'
+import { whackTutorial } from './whackTutorial'
 
 /**
  * A level's scripted flow, by its `tutorial` ID. What only one level does lives in its script, as the original's
@@ -70,6 +71,7 @@ export const TUTORIALS: Readonly<Record<string, TutorialScript>> = {
     // CutScene::StartLevelIntro offers the first seed-slot upgrade on levels 13-24 except 15, 20 and 21.
     'pvz:adventure-2-3': packetUpgradeOffer,
     'pvz:adventure-2-4': packetUpgradeOffer,
+    'pvz:adventure-2-5': whackTutorial,
 }
 
 export function getActiveTutorial(world: World): TutorialScript | undefined {

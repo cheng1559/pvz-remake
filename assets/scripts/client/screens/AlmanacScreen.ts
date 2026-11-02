@@ -20,7 +20,8 @@ export interface AlmanacSelection { plant: number, zombie: number }
 
 export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 'plants' | 'zombies', navigate: (action: MenuAction) => void, selection: AlmanacSelection = { plant: 0, zombie: 0 }): Promise<void> {
     if (page === 'almanac') {
-        AlmanacEntityView.create(parent, 'plants', 1, 167, 255)
+        // AlmanacDialog::SetupLayoutIndex places the sunflower at (167, 225) in 1.2.0.1073 (PvZ-Portable has 255).
+        AlmanacEntityView.create(parent, 'plants', 1, 167, 225)
         AlmanacEntityView.create(parent, 'zombies', 0, 535, 215)
         ui.button(parent, { skin: 'seed', text: ui.text('VIEW_PLANTS'), x: 130, y: 345, width: 156, height: 42, font: 'yellow', color: Color.WHITE, onClick: () => navigate('plants') })
         ui.button(parent, { text: ui.text('VIEW_ZOMBIES'), x: 487, y: 345, width: 210, height: 48, imageBox: { height: ui.assets.sprites.button_left.originalSize.height }, clickSound: null, onClick: () => navigate('zombies') })
@@ -37,10 +38,14 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
         if (!parent.isValid) throw new Error('Almanac was destroyed while loading')
         const sprites = Object.fromEntries(frames)
         let details: Node | null = null
+        // AlmanacDialog draws the selected entry itself; its buttons are widgets drawn above it. The holder, made at the
+        // first selection (after the list, before the footer buttons), keeps a re-selected entry in that place.
+        let detailsLayer: Node | null = null
         const plantPosition = (id: number) => ({ x: id === 48 ? 20 : id % 8 * 52 + 26, y: id === 48 ? 23 : Math.floor(id / 8) * 78 + 92 })
         const select = (entry: AlmanacPlantDefinition | AlmanacZombieView) => {
             if (details) { details.active = false; details.destroy() }
-            details = uiNode({ name: `${entry.key}Details`, parent, anchor: { x: 0, y: 1 } }).node
+            detailsLayer ??= uiNode({ name: 'Details', parent, anchor: { x: 0, y: 1 } }).node
+            details = uiNode({ name: `${entry.key}Details`, parent: detailsLayer, anchor: { x: 0, y: 1 } }).node
             if (page === 'plants') {
                 const plant = entry as AlmanacPlantDefinition
                 ui.image(details, sprites[`almanac_ground${plant.ground}`], { x: 521, y: 107 })
@@ -114,7 +119,10 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                 const index = zombie.id === 25 ? 27 : zombie.id
                 const x = index % 5 * 85 + 22, y = Math.floor(index / 5) * 80 + 86
                 if (!zombie.shown) { ui.image(parent, sprites.almanac_zombieblank, { x, y }); continue }
-                const button = ui.button(parent, { images: { normal: sprites.almanac_zombiewindow }, x, y, width: 76, height: 76, pressOffset: [0, 0], pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), onClick: () => choose(zombie) })
+                // AlmanacDialog::DrawZombies draws the window image at its own size over the 76x76 button.
+                const windowSize = sprites.almanac_zombiewindow.originalSize
+                const button = ui.button(parent, { images: { normal: sprites.almanac_zombiewindow }, x, y, width: 76, height: 76,
+                    imageBox: { width: windowSize.width, height: windowSize.height }, pressOffset: [0, 0], pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), onClick: () => choose(zombie) })
                 button.hapticsEnabled = false
                 button.node.name = zombie.key
                 const underlay = ui.additiveImage(button.node, sprites.almanac_zombiewindow, {}, 48)

@@ -306,7 +306,9 @@ export class MainMenuScreen extends Component {
             const stage = Math.min(6, Math.floor((level - 1) / 10) + 1)
             const sub = level - (stage - 1) * 10
             const atlas = this.frames.get('selectorscreen_levelnumbers')!
-            const digit = (value: number, x: number, y: number) => this.ui.image(this.numbersRoot, getAtlasFrame(atlas, value, 12, 17, 10), { x, y })
+            // DrawImageCel of a one-row, 10-column sheet (resources.xml): each cel is a tenth of the image, full height.
+            const [width, height] = [atlas.originalSize.width / 10, atlas.originalSize.height]
+            const digit = (value: number, x: number, y: number) => this.ui.image(this.numbersRoot, getAtlasFrame(atlas, value, width, height, 10), { x, y })
             digit(stage, 486 + (stage === 4 ? -1 : 0), 47 + (stage === 1 ? 1 : 0))
             digit(sub === 10 ? 1 : sub, 509 + (sub === 3 ? -1 : 0), 50)
             if (sub === 10) digit(0, 518, 51)

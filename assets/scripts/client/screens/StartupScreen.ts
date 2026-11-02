@@ -18,7 +18,8 @@ import { UIHoverManager } from '@/client/input/UIHoverManager'
 
 const { ccclass } = _decorator
 const BAR_WIDTH = 314
-const TRIGGERS = [0.11, 0.32, 0.54, 0.72, 0.91]
+/** TitleScreen::Update: 0.906 in 1.0.0.1051, 1.2.0.1073 and 1.2.0.1096 (PvZ-Portable has 0.91). */
+const TRIGGERS = [0.11, 0.32, 0.54, 0.72, 0.906]
 const NORMAL_COLOR = new Color(218, 184, 33)
 const HOVER_COLOR = new Color(250, 90, 15)
 type Preload = (onProgress: (progress: number) => void) => Promise<void>
@@ -154,7 +155,8 @@ export class StartupScreen extends Component {
         const [background, logo, dirt, grass, roll] = frames
         ui.image(title, background)
         this.pvzLogo = ui.image(title, logo, { x: (800 - logo.originalSize.width) / 2, y: -150 }).node
-        this.grassX = 400 - Math.trunc(dirt.originalSize.width / 2)
+        // TitleScreen::Update: (mWidth - IMAGE_LOADBAR_DIRT->mWidth) / 2, an integer division (239 for 321).
+        this.grassX = Math.trunc((800 - dirt.originalSize.width) / 2)
         this.bar = uiNode({ name: 'LoadBar', parent: title, anchor: { x: 0, y: 1 } }).node
         ui.image(this.bar, dirt, { x: 4 })
         const clip = uiNode({

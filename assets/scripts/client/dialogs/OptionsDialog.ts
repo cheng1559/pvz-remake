@@ -1,4 +1,4 @@
-import { Color, screen, sys, type Node } from 'cc'
+import { Color, screen, type Node } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import { SFX_VOLUME_SCALE } from '@/shared/menu'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
@@ -104,10 +104,6 @@ export async function showOptionsDialog(parent: Node, ui: UI, options: {
             }, options.onMainMenu),
         })
     } else {
-        ui.button(content, {
-            text: ui.text('OPTIONS_GITHUB_BUTTON'), x: 107, y: 284, width: 209, clickSound: null,
-            onClick: () => sys.openURL('https://github.com/cheng1559/pvz-remake'),
-        })
         const mods = options.onMods
         if (mods) ui.button(content, {
             text: ui.text('OPTIONS_MODS_BUTTON'), x: 107, y: 327, width: 209,

@@ -33,6 +33,7 @@ export interface LevelPresentation {
     adviceStyle?: 'hint-stay' | 'tutorial-level1-stay'
     guideSeed?: string
     seedGuideSteps: readonly string[]
+    seedGuideArrow?: false
     lawnGuideSteps: readonly string[]
 }
 

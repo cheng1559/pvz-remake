@@ -13,5 +13,6 @@
   "pvz:puffshroom": {"plant": "pvz:puffshroom", "sunCost": 0, "cooldownTicks": 750, "placement": "ground"},
   "pvz:sunshroom": {"plant": "pvz:sunshroom", "sunCost": 25, "cooldownTicks": 750, "placement": "ground"},
   "pvz:fumeshroom": {"plant": "pvz:fumeshroom", "sunCost": 75, "cooldownTicks": 750, "placement": "ground"},
-  "pvz:gravebuster": {"plant": "pvz:gravebuster", "sunCost": 75, "cooldownTicks": 750, "placement": "grave"}
+  "pvz:gravebuster": {"plant": "pvz:gravebuster", "sunCost": 75, "cooldownTicks": 750, "placement": "grave"},
+  "pvz:hypnoshroom": {"plant": "pvz:hypnoshroom", "sunCost": 75, "cooldownTicks": 3000, "placement": "ground"}
 }

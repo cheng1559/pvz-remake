@@ -144,5 +144,13 @@
     "seedGuideSteps": [],
     "lawnGuideSteps": [],
     "advice": {}
+  },
+  "pvz:adventure-2-5": {
+    "music": {"choosing": "choose_seeds", "gameplay": "minigame"},
+    "intro": {"previewCapacity": 10, "sod": "pvz:background2", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": false, "stationary": true, "hiddenSeedBank": true},
+    "seedGuideSteps": ["whack-pick-seed"],
+    "seedGuideArrow": false,
+    "lawnGuideSteps": [],
+    "advice": {}
   }
 }

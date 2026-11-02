@@ -1,7 +1,6 @@
 import type { SeedAvailability } from '@/shared/protocol/index'
 import { graveAt } from '@/shared/protocol/index'
 import { EconomyStateResource, LevelStateResource, PlantAttackComponent, PlantComponent, PositionComponent, RandomResource, SeedBankResource } from '../state/components'
-import { canPlantConveyorAt } from '../level/conveyor'
 import { getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { getAvailableSun } from '../level/items'
@@ -10,6 +9,8 @@ import { initialPlantAbility } from '../plants/abilities'
 import { selectedSeedId } from './seedBank'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
+import { levelRule } from '../rules/registry'
+import { clearCursor } from './cursor'
 
 const CANT_AFFORD_ADVICE = 'ADVICE_CANT_AFFORD_PLANT'
 
@@ -84,15 +85,24 @@ export const planting = {
             notEnoughSun(session)
             return 'not-enough-sun'
         }
-        if (!Number.isInteger(row) || row < 0 || row >= level.board.rows ||
-            !level.definition.activeRows.includes(row)) return 'row-not-active'
-        if (!Number.isInteger(column) || column < 0 || column >= level.board.columns) {
-            return 'column-out-of-range'
+        // Board::MouseDownWithPlant: where the rules say so (Whack-a-Zombie), a seed refused by Board::CanPlantAt is
+        // dropped (RefreshSeedPacketFromCursor with FOLEY_DROP) instead of staying in hand.
+        const refuseCell = (code: CommandRejectionCode): CommandRejectionCode => {
+            if (levelRule(world)?.dropsRefusedSeeds) {
+                clearCursor(world)
+                getActiveTutorial(world)?.seedCanceled?.(world, gameplayTick)
+                emitServerEvent(world.resources.get(EventQueueResource), 'seedDropped', {})
+            }
+            return code
         }
-        const bowling = level.definition.bowling
-        if (!canPlantConveyorAt(world, column)) return 'column-out-of-range'
+        if (!Number.isInteger(row) || row < 0 || row >= level.board.rows ||
+            !level.definition.activeRows.includes(row)) return refuseCell('row-not-active')
+        if (!Number.isInteger(column) || column < 0 || column >= level.board.columns) {
+            return refuseCell('column-out-of-range')
+        }
+        if (levelRule(world)?.canPlantAt?.(world, row, column) === false) return refuseCell('column-out-of-range')
         const occupiedEntity = planting.findPlantAt(session, row, column)
-        if (occupiedEntity !== undefined) return 'cell-occupied'
+        if (occupiedEntity !== undefined) return refuseCell('cell-occupied')
         // Board::CanPlantAt: graves block planting, except that a grave buster needs one.
         const onGrave = !!graveAt(world.resources.get(WaveResource).graves, row, column)
         if (onGrave !== (seed.placement === 'grave')) {
@@ -104,7 +114,7 @@ export const planting = {
                 session.graveAdvice = key
                 emitServerEvent(world.resources.get(EventQueueResource), 'advice', { key, style: 'hint' })
             }
-            return onGrave ? 'cell-has-grave' : 'cell-needs-grave'
+            return refuseCell(onGrave ? 'cell-has-grave' : 'cell-needs-grave')
         }
         if (session.graveAdvice) {
             emitServerEvent(world.resources.get(EventQueueResource), 'adviceCleared', { key: session.graveAdvice })
@@ -126,14 +136,13 @@ export const planting = {
             packet.cooldownTotal = rules.cooldown ? seed.cooldownTicks : 0
             packet.readyAtTick = gameplayTick + packet.cooldownTotal
         }
-        seedBank.selection = { mode: 'none' }
+        clearCursor(world)
         getActiveTutorial(world)?.plantPlaced?.(world, gameplayTick, seed.plant, occupiedEntity !== undefined)
         emitServerEvent(world.resources.get(EventQueueResource), 'plantPlaced', {
             entityId: entity,
             typeId: seed.plant,
             row,
             column,
-            ...(bowling ? { bowling: true } : {}),
         })
     },
 
@@ -157,7 +166,6 @@ export const planting = {
             column,
             health: definition.maxHealth,
             maxHealth: definition.maxHealth,
-            eatenFlashCounter: 0,
             recentlyEatenCounter: 0,
             ...(behaviorState === undefined ? {} : { behaviorState }),
         })

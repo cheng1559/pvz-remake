@@ -1,7 +1,7 @@
 """Redraws the cached plant and zombie portraits and the lawn mower for an HD pack from that pack's own part images, instead of
 super-resolving the 1x atlases, so they match the HD plants and zombies on the lawn.
 
-    python3 -m pvz.cache.hd ../art/resource-packs/hd   (run from tools/)
+    python3 -m pvz.cache.hd ../mods/hd   (run from tools/)
 
 Every part comes from the pack at the density its content.json records, as the game draws it. The portraits draw parts
 at about half size, so they are written at 4x to keep every pixel of the 2x parts. The plant previews sheet would take

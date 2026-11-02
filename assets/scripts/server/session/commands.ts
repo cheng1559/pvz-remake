@@ -10,6 +10,8 @@ import { planting } from '../seeds/planting'
 import { applySeedChoice } from '../seeds/seedChooser'
 import type { CommandRejectionCode, QueuedCommand, Session } from './session'
 import { tools } from '../seeds/tools'
+import { levelRule } from '../rules/registry'
+import { clearCursor } from '../seeds/cursor'
 import { getActiveTutorial } from '../tutorials'
 
 /** Runs one player command. Mods handle their own `mod` commands through `host.around(commands, 'execute', ...)`. */
@@ -65,7 +67,7 @@ export const commands = {
         if (command.type === 'clearCursor') {
             const bank = world.resources.get(SeedBankResource)
             if (bank.selection.mode !== 'none') getActiveTutorial(world)?.seedCanceled?.(world, session.gameplayTick)
-            bank.selection = { mode: 'none' }
+            clearCursor(world)
             return
         }
         if (level.phase !== 'gameplay') return 'intro-not-complete'
@@ -75,6 +77,12 @@ export const commands = {
             case 'selectSeed': return planting.selectSeed(session, command.seedId, command.slot)
             case 'placePlant': return planting.placePlant(session, command.row, command.column)
             case 'collectItemAt': return items.collect(session, command.itemId)
+            case 'boardClick': {
+                // Challenge::MouseDown: a click that hit nothing else, while nothing is held.
+                const rule = levelRule(world)
+                if (!rule?.boardClick || world.resources.get(SeedBankResource).selection.mode !== 'none') return 'unsupported-command'
+                return rule.boardClick(session, command.x, command.y)
+            }
             default: return 'unsupported-command'
         }
     },
@@ -93,7 +101,7 @@ export function processBoundaryCommands(session: Session, processInput: boolean)
         const inputCommand = processInput && playing && (
             command.type === 'selectSeed' || command.type === 'clearCursor' || command.type === 'placePlant' || command.type === 'mod'
             || command.type === 'selectConveyorPacket' || command.type === 'selectTool' || command.type === 'useToolAt'
-            || command.type === 'collectItemAt'
+            || command.type === 'collectItemAt' || command.type === 'boardClick'
         )
         if (!isSessionCommand(command) && !inputCommand && playing) {
             break

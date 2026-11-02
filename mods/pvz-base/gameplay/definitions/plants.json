@@ -106,5 +106,9 @@
   "pvz:gravebuster": {
     "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "graveBuster": {"landTicks": {"min": 47, "max": 70}, "eatTicks": 400}
+  },
+  "pvz:hypnoshroom": {
+    "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
+    "nocturnal": true
   }
 }
