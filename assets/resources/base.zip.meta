@@ -1,10 +1,9 @@
 {
   "ver": "1.0.0",
   "importer": "*",
-  "imported": true,
+  "imported": false,
   "uuid": "4869e6ec-fe37-44a9-9a15-b336e61ea86c",
   "files": [
-    ".json",
     ".zip"
   ],
   "subMetas": {},

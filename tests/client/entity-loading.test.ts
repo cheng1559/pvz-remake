@@ -12,6 +12,7 @@ import { ModuleKind,ScriptTarget,transpileModule } from 'typescript'
 import { presentationFixture } from './presentationFixture'
 import * as kernelModule from '@/shared/kernel/index'
 import * as protocolModule from '@/shared/protocol'
+import * as renderOrderModule from '@/shared/content/renderOrder'
 import { readBaseContent } from '../../tools/mod/content'
 
 // Rendering helpers that need the engine; animation frames pass through unchanged.
@@ -20,6 +21,7 @@ const clientStubs: Record<string, unknown> = {
     '@/client/render/AnimationAtlas': { animationFrame: (frame: unknown) => frame, animationFrames: (frames: unknown[]) => frames },
     '@/shared/kernel/index': kernelModule,
     '@/shared/protocol': protocolModule,
+    '@/shared/content/renderOrder': renderOrderModule,
 }
 
 function loadClientModule(path: string, modules: Record<string, unknown>) {

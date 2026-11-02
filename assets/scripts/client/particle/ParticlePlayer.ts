@@ -8,6 +8,7 @@ import { kernel, ParticleOption } from '@/shared/kernel/index'
 import { KernelParticles } from '@/shared/kernel/particles'
 import { ParticleAssets, type LoadedParticle, type ParticleEmitterAssets } from './ParticleAssets'
 import { nextParticleSeed, parseParticlePlayerSnapshot, type ParticlePlayerSnapshot } from './ParticlePlayerSnapshot'
+import { renderOrder } from '@/shared/content/renderOrder'
 export type { ParticlePlayerSnapshot } from './ParticlePlayerSnapshot'
 const { ccclass } = _decorator
 
@@ -90,7 +91,8 @@ const idleKey = (id: string, sprite?: string | null) => `${id}|${sprite ?? ''}`
 /** The only particle player: one loader, one batch renderer and one C++ simulation on every platform. */
 @ccclass('ParticlePlayer')
 export class ParticlePlayer extends Component {
-    public renderOrder = 10000
+    /** Board::MakeRenderOrder; the board's top layer unless the caller says. */
+    public renderOrder = renderOrder('top')
     public id = ''
     private emitters: ParticleEmitterView[] = []
     private simulation: KernelParticles | null = null
@@ -177,7 +179,7 @@ export class ParticlePlayer extends Component {
     /** The per-spawn settings; the effect and its sprite stay with the node. */
     private configure(args: ParticleSpawnArgs): void {
         this.seed = args.seed ?? nextParticleSeed()
-        this.renderOrder = args.renderOrder ?? 10000
+        this.renderOrder = args.renderOrder ?? renderOrder('top')
         this.particleTint = args.tint?.clone() ?? null
         this.additive = args.extraAdditive ?? false
         this.scale = Math.max(0, args.scale ?? 1)

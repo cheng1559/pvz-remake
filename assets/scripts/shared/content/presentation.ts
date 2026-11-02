@@ -1,6 +1,7 @@
 import type { MusicTuneId } from './music'
 import type { JsonObject } from '@/shared/protocol'
 import { isQualifiedId } from '@/shared/mod'
+import { isRenderLayer, type RenderLayer } from './renderOrder'
 
 export interface ClientAnimationClip {
     readonly reanimId: string
@@ -127,7 +128,8 @@ export interface PlantParts {
 
 export interface PlantPresentationDefinition {
     readonly viewConfig?: Readonly<JsonObject>
-    readonly rowOrder?: number
+    /** The render layer it draws on (`renderOrder.ts`), `plant` by default; rolling bowling nuts use `projectile`. */
+    readonly layer?: RenderLayer
     readonly shadow: { readonly x: number; readonly y: number; readonly scale?: number }
     readonly scale: number
     /** PlantDrawHeightOffset, in original Y-down pixels: the grid preview draws its cached image this far down. */
@@ -143,7 +145,8 @@ export interface PlantPresentationDefinition {
     readonly animationsFrom?: ClientAnimationTarget
     readonly animations?: ClientAnimationDefinitions[ClientAnimationTarget]
     readonly chewParticle?: string
-    readonly explosion?: { readonly effect: string; readonly x: number; readonly rowOrder: boolean }
+    /** `layer`: the render layer of the effect, in the plant's row below `top` (the potato mine's `particle`). */
+    readonly explosion?: { readonly effect: string; readonly x: number; readonly layer: RenderLayer }
     readonly plantedSounds?: readonly PresentationSound[]
     readonly explosionSounds?: readonly PresentationSound[]
     /** Played when an area shooter, like the Fume-shroom, fires. */
@@ -613,7 +616,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         point(plant.shadow, id + '.shadow')
         if ((plant.shadow as Record<string, unknown>).scale !== undefined) positive((plant.shadow as Record<string, unknown>).scale, id + '.shadow.scale')
         positive(plant.scale, id + '.scale')
-        if (plant.rowOrder !== undefined) finite(plant.rowOrder, id + '.rowOrder')
+        if (plant.layer !== undefined && !isRenderLayer(plant.layer)) throw new TypeError(id + '.layer is not a render layer')
         if (plant.drawHeightOffset !== undefined) finite(plant.drawHeightOffset, id + '.drawHeightOffset')
         if (plant.pointerOffsetY !== undefined) finite(plant.pointerOffsetY, id + '.pointerOffsetY')
         if (plant.sleepOffset !== undefined) pair(plant.sleepOffset, id + '.sleepOffset')
@@ -634,7 +637,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (plant.explosion !== undefined) {
             const explosion = object(plant.explosion, id + '.explosion')
             text(explosion.effect, id + '.explosion.effect'); finite(explosion.x, id + '.explosion.x')
-            if (typeof explosion.rowOrder !== 'boolean') throw new TypeError(id + '.explosion.rowOrder must be boolean')
+            if (!isRenderLayer(explosion.layer)) throw new TypeError(id + '.explosion.layer is not a render layer')
         }
         if (plant.mine !== undefined) {
             const mine = object(plant.mine, id + '.mine'), glow = object(mine.glow, id + '.mine.glow')

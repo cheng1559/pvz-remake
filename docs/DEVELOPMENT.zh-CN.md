@@ -26,7 +26,9 @@
 
 冒险 1-5 使用 `ShovelTutorial` 保存戴夫两段对话和三株豌豆射手的铲除进度，客户端 `CrazyDaveView` 只播放动画、显示原版文案并发出交互指令。教程结束后进入 8 波坚果保龄球，传送带按 85:15 提供普通／爆炸保龄球，通关奖励为土豆雷。
 
-`pvz:bowling-wallnut`、`pvz:bowling-explodenut` 是独立植物和种子定义，配置放在 gameplay／presentation JSON。服务端通过现有 `PlantBehaviorRegistry` 注册 `bowling` 行为，状态存入 `behaviorState`；客户端通过 `PlantViewRegistry` 注册 `BowlingNutView`。只复用坚果的美术资源，普通坚果不参与保龄球判断。`occupiesCell: false` 声明移动植物不占格、不作为啃食目标；`rowOrder` 控制行内表现顺序。
+`pvz:bowling-wallnut`、`pvz:bowling-explodenut` 是独立植物和种子定义，配置放在 gameplay／presentation JSON。服务端通过现有 `PlantBehaviorRegistry` 注册 `bowling` 行为，状态存入 `behaviorState`；客户端通过 `PlantViewRegistry` 注册 `BowlingNutView`。只复用坚果的美术资源，普通坚果不参与保龄球判断。`occupiesCell: false` 声明移动植物不占格、不作为啃食目标；表现定义的 `layer: "projectile"` 让滚动的坚果画在本行的弹道层（原版保龄球关卡的 `Plant::CalcRenderOrder`）。
+
+关卡实体的绘制顺序照搬原版 `Board::MakeRenderOrder`：`行 × 10000 + 图层 + 偏移`，从小到大画。图层是 `shared/content/renderOrder.ts` 里与原版 `RenderLayer` 同名同值的常量（`ground`、`graveStone`、`plant`、`zombie`、`projectile`、`lawnMower`、`particle`、`top` 等），`top` 及以上不分行。植物偏移为 `5 − x + 800`（越靠左越在上），僵尸偏移为 4，阴影在 `ground` 层偏移 3（压在所有行的植物和僵尸下面），掉落的头、手臂和头盔在僵尸之上一层，其余粒子按原版各自的图层或所属实体的层级加偏移。层级相同时实体按创建顺序，挂在实体层级上的粒子画在实体之后。表现数据里用图层名（植物的 `layer`、爆炸的 `layer`），不写数字。
 
 选卡目录全局共用：独立的 `gameplay/seed-catalog.json` 按数组顺序列出种子 ID，种子定义不再包含目录属性；保龄球等特殊种子不在目录中。Mod 注册的玩法数据可通过顶层 `seedCatalog` 数组追加自身命名空间的种子 ID。关卡的 `conveyor` 表示传送带，`seedPackets` 表示固定种子栏；其余关卡按原版 `Board::InitLevel`：可用种子放得下时全部带上，多于槽位时打开选卡。槽位数为 `settings.seedBank.baseSlots`（6）加已买的卡槽升级数，不超过 `maxSlots`（10）和可用种子数（`Board::GetNumSeedsInBank`）；关卡不写槽位数和候选池。客户端一开始就建好 `maxSlots` 个卡片，开场买的槽位只是多显示一张。`server/seeds/seedChooser.ts` 统一生成目录并校验选择、移除和确认，顺序与初始冷却随服务端存档保存。`LevelSeedChooser` 按服务端目录顺序排卡，不使用预览图编号决定位置，只负责卡片飞行、补位、面板和提示；演出与全局时钟一致。测试入口为 `/level pvz:seed-chooser-test`。
 

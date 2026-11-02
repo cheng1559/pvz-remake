@@ -8,9 +8,10 @@ import { easeInOut } from '@/client/view/GameScreenMath'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { LoadedContent } from './LevelView'
 import type { LevelEntityRenderer } from './LevelEntityRenderer'
+import { renderOrder } from '@/shared/content/renderOrder'
 
-// Original graves use 301003 and plants start at 302000; row offsets of 10000 map to 10 here.
-const GRAVE_ROW_ORDER = (301003 - 302000) / 1000
+/** Board::AddAGraveStone: RENDER_LAYER_GRAVE_STONE, offset 3. */
+const graveOrder = (row: number) => renderOrder('graveStone', row, 3)
 
 /** FloatRoundToInt: halves round away from zero. */
 const roundToInt = (value: number) => value > 0 ? Math.trunc(value + 0.5) : Math.trunc(value - 0.5)
@@ -48,7 +49,7 @@ export class LevelGraves {
                 x: board.origin.x + grave.column * board.cell.width + grave.offsetX - 4 - 400,
                 y: 300 - board.origin.y - grave.row * board.cell.height - height - grave.offsetY + 9,
             } }).node
-            renderer.addScenery(root, grave.row * 10 + GRAVE_ROW_ORDER)
+            renderer.addScenery(root, graveOrder(grave.row))
             const atlasRow = grave.row === 0 ? 1 : grave.special ? 0 : 2 + grave.variant % 2
             const cell = atlasRow * 5 + grave.variant % 5
             const create = (name: string, atlas: typeof stones) => {
@@ -86,7 +87,7 @@ export class LevelGraves {
     private riseEffects(grave: GraveSnapshot): void {
         this.renderer.spawnBoardParticle('pvz:gravestonerise',
             this.board.origin.x + grave.column * this.board.cell.width + 14 + grave.offsetX,
-            this.board.origin.y + grave.row * this.board.cell.height + 78 + grave.offsetY, grave.row * 10 + GRAVE_ROW_ORDER + 0.001)
+            this.board.origin.y + grave.row * this.board.cell.height + 78 + grave.offsetY, graveOrder(grave.row) + 1)
         void SoundSystem.playFoley(SoundEffect.DirtRise)
     }
 

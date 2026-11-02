@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import { parseParticle, type ParticleTrackCurve } from '@/shared/content/particle'
+import * as renderOrderModule from '@/shared/content/renderOrder'
 const parseDefinition = (value: { emitters: unknown[] }) => parseParticle({ schemaVersion: 3, id: 'pvz:test', ...value })
 
 import { parseParticlePlayerSnapshot } from '@/client/particle/ParticlePlayerSnapshot'
@@ -174,7 +175,7 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
     const code = transpileModule(readFileSync('assets/scripts/client/particle/ParticlePlayer.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
     })
-    runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
+    runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? (id === '@/shared/content/renderOrder' ? renderOrderModule : {}) })
     const { ParticlePlayer } = exports
     const parent = makeNode('Holder', null)
     const spawn = () => ParticlePlayer.spawn({ parent, id: 'pvz:test', x: 0, y: 0, recycle: true })

@@ -8,7 +8,8 @@ import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { SeedPacketRenderer, type SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
-import type { ItemSnapshot, LawnMowerSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
+import type { ItemSnapshot, LawnMowerSnapshot, PlantSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
+import { plantRenderOffset, renderOrder, SHADOW_RENDER_OFFSET, ZOMBIE_RENDER_OFFSET } from '@/shared/content/renderOrder'
 import { SUN_BANK_TARGET } from '@/shared/content/gameplay'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
@@ -25,7 +26,6 @@ import { EntityFlashes } from './EntityFlashes'
 
 const WIDTH = 800
 const HEIGHT = 600
-const GROUND_LAYER_ORDER = -100
 type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 type SpriteAsset = Awaited<ReturnType<SpriteRepository['load']>>
 type FontAsset = Awaited<ReturnType<FontRepository['load']>>
@@ -271,7 +271,7 @@ export class LevelEntityRenderer {
         }
         for (const mower of snapshot.lawnMowers) this.syncMower(mower)
         const particle = (effect: string, x: number, y: number, tint?: Color) => ParticlePlayer.spawn({
-            parent: this.entityLayer, id: effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder: 10000,  tint,
+            parent: this.entityLayer, id: effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder: renderOrder('top'), tint,
         })
         this.plantFlashes = new Map(snapshot.plants.map(plant => [plant.entityId, this.flashes.plant(plant, snapshot.gameplayTick)]))
         for (const plant of snapshot.plants) {
@@ -336,13 +336,16 @@ export class LevelEntityRenderer {
                 this.playExplosion(event)
             } else if (event.type === 'mineRising') {
                 const plant = snapshot.plants.find(candidate => candidate.entityId === event.data.entityId)
-                if (plant) this.spawnBoardParticle("pvz:potatominerise", plant.x + 40, plant.y + 40, plant.row * 10 + 0.5)
+                // Plant::UpdatePotato adds PARTICLE_POTATO_MINE_RISE at the mine's own render order, so it draws after it.
+                if (plant) this.spawnBoardParticle("pvz:potatominerise", plant.x + 40, plant.y + 40, this.plantOrder(plant))
             } else if (event.type === 'graveBusted') {
-                // Plant::UpdateGraveBuster in 1.0.0.1051 spawns PARTICLE_GRAVE_BUSTER_DIE at (mX + 40, mY + 80).
-                this.spawnBoardParticle('pvz:gravebusterdie', Number(event.data.x) + 40, Number(event.data.y) + 80, Number(event.data.row) * 10 + 4)
+                // Plant::UpdateGraveBuster in 1.0.0.1051 spawns PARTICLE_GRAVE_BUSTER_DIE at (mX + 40, mY + 80), 4 above itself.
+                const x = Number(event.data.x)
+                this.spawnBoardParticle('pvz:gravebusterdie', x + 40, Number(event.data.y) + 80, renderOrder('plant', Number(event.data.row), plantRenderOffset(x)) + 4)
             } else if (event.type === 'zombieRoseFromGrave') {
                 const zombie = snapshot.zombies.find(candidate => candidate.entityId === event.data.entityId)
-                if (zombie) this.spawnBoardParticle(this.riseParticle, zombie.x + 60, zombie.y + 110, zombie.row * 10 + 2)
+                // Zombie::RiseFromGrave: PARTICLE_ZOMBIE_RISE on the row's particle layer.
+                if (zombie) this.spawnBoardParticle(this.riseParticle, zombie.x + 60, zombie.y + 110, renderOrder('particle', zombie.row))
             } else if (event.type === 'zombieCharred') {
                 this.spawnCharred(event)
             }
@@ -358,7 +361,8 @@ export class LevelEntityRenderer {
         this.audio.chew(nut)
         if (nut && zombie) {
             const tint = presentation!.visual.tint
-            this.spawnBoardParticle(presentation!.chewParticle!, zombie.x + 37, zombie.y + 40, zombie.row * 10 + 2,
+            // Zombie::AnimateChewEffect: on the row's projectile layer.
+            this.spawnBoardParticle(presentation!.chewParticle!, zombie.x + 37, zombie.y + 40, renderOrder('projectile', zombie.row),
                 tint ? new Color(...tint) : undefined)
         }
     }
@@ -369,7 +373,7 @@ export class LevelEntityRenderer {
         if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
         const explosion = typeof event.data.typeId === 'string' ? this.content.presentation.plants[event.data.typeId]?.explosion : undefined
         if (!explosion) return
-        this.spawnBoardParticle(explosion.effect, x + explosion.x, y, explosion.rowOrder ? row * 10 + 0.5 : 10000)
+        this.spawnBoardParticle(explosion.effect, x + explosion.x, y, renderOrder(explosion.layer, row))
     }
 
     /** Zombie::ApplyBurn leaves a charred zombie that crumbles at its own pace. */
@@ -377,7 +381,7 @@ export class LevelEntityRenderer {
         const { x, y, row, rate, entityId } = event.data
         if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof rate !== 'number' || typeof entityId !== 'number') return
         const node = uiNode({ name: 'CharredZombie', parent: this.entityLayer, position: { x: x - WIDTH / 2, y: HEIGHT / 2 - y }, anchor: { x: 0, y: 1 } }).node
-        this.charred.set(node, { order: row * 10 + 1, entityId })
+        this.charred.set(node, { order: this.zombieOrder(row), entityId })
         const player = node.addComponent(ReanimPlayer)
         void player.load('pvz:zombie_charred', this.content.registry, this.content.loader).then(() => {
             if (!node.isValid) return
@@ -405,7 +409,8 @@ export class LevelEntityRenderer {
         ParticlePlayer.spawn({
             parent: this.entityLayer, id: helm.effect,
             x: local?.x ?? node.position.x + helm.offset[0], y: local?.y ?? node.position.y + helm.offset[1],
-            renderOrder: (zombie?.row ?? 0) * 10 + 1.01,
+            // Zombie::DropHelm and DropShield: one above the zombie.
+            renderOrder: this.zombieOrder(zombie?.row ?? 0) + 1,
         })
     }
 
@@ -556,7 +561,8 @@ export class LevelEntityRenderer {
             id: mowered ? drop.moweredEffect ?? drop.effect : drop.effect,
             x: localPosition?.x ?? node.position.x + drop.offset[0],
             y: localPosition?.y ?? node.position.y + drop.offset[1],
-            renderOrder: row * 10 + 1.01,
+            // Zombie::DropHead and DropArm: one above the zombie.
+            renderOrder: this.zombieOrder(row) + 1,
             // Zombie::DropHead and DropArm swap in the pole vaulter's own head and a bare hand.
             spriteOverride: drop.image,
             // Zombie::OverrideParticleColor keeps a chilled zombie's parts blue.
@@ -572,7 +578,8 @@ export class LevelEntityRenderer {
         ParticlePlayer.spawn({
             parent: this.entityLayer, id: "pvz:planting",
             x: plant.x + 41 - WIDTH / 2, y: HEIGHT / 2 - plant.y - 74,
-            renderOrder: 10000,
+            // Board::DoPlantingEffects: RENDER_LAYER_TOP.
+            renderOrder: renderOrder('top'),
         })
     }
 
@@ -601,20 +608,20 @@ export class LevelEntityRenderer {
             const node = this.entities.get(entityId)
             if (node?.isValid) entries.push({ node, order, entityId })
         }
-        for (const entity of snapshot.plants) add(entity.entityId, (this.plantViews.get(entity.entityId)?.renderRow?.(entity) ?? entity.row) * 10 + (this.content.presentation.plants[entity.typeId]?.rowOrder ?? 0))
+        for (const entity of snapshot.plants) add(entity.entityId, this.plantOrder(entity))
         for (const entity of snapshot.zombies) {
-            add(entity.entityId, entity.row * 10 + 1)
+            add(entity.entityId, this.zombieOrder(entity.row))
+            // Shadows lie on the ground layer, under every row's plants and zombies.
             const shadow = this.zombies.get(entity.entityId)?.shadowNode
-            if (shadow?.isValid) entries.push({ node: shadow, order: entity.row * 10 - 0.1 })
+            if (shadow?.isValid) entries.push({ node: shadow, order: renderOrder('ground', entity.row, SHADOW_RENDER_OFFSET), entityId: entity.entityId })
         }
         for (const entity of snapshot.projectiles) {
-            add(entity.entityId, entity.row * 10 + 2)
+            add(entity.entityId, renderOrder('projectile', entity.row))
             const shadow = this.projectileShadows.get(entity.entityId)
-            // Ground shadows precede plants and projectiles in every row.
-            if (shadow?.isValid) entries.push({ node: shadow, order: GROUND_LAYER_ORDER + entity.row * 10, entityId: entity.entityId })
+            if (shadow?.isValid) entries.push({ node: shadow, order: renderOrder('ground', entity.row, SHADOW_RENDER_OFFSET), entityId: entity.entityId })
         }
         for (const [node, entry] of this.charred) if (node.isValid) entries.push({ node, ...entry })
-        for (const entity of snapshot.lawnMowers) add(entity.entityId, entity.row * 10 + 3)
+        for (const entity of snapshot.lawnMowers) add(entity.entityId, renderOrder('lawnMower', entity.row))
         for (const child of this.entityLayer.children) {
             const particle = child.getComponent(ParticlePlayer)
             if (particle) entries.push({ node: child, order: particle.renderOrder })
@@ -623,9 +630,23 @@ export class LevelEntityRenderer {
         return entries
     }
 
+    /**
+     * Plant::CalcRenderOrder: within a row, a plant further left draws later, so the chomper's head covers the plant to
+     * its right; rolling bowling nuts draw on the projectile layer.
+     */
+    private plantOrder(entity: PlantSnapshot): number {
+        const row = this.plantViews.get(entity.entityId)?.renderRow?.(entity) ?? entity.row
+        return renderOrder(this.content.presentation.plants[entity.typeId]?.layer ?? 'plant', row, plantRenderOffset(entity.x))
+    }
+
+    private zombieOrder(row: number): number {
+        return renderOrder('zombie', row, ZOMBIE_RENDER_OFFSET)
+    }
+
     private syncLayerOrder(snapshot: WorldSnapshot): void {
         const entries = this.collectLayerEntries(snapshot)
-        entries.sort((left, right) => left.order - right.order || (left.entityId ?? 0) - (right.entityId ?? 0))
+        // Equal orders keep entities in creation order, then what was added at their order (an entity's own particles).
+        entries.sort((left, right) => left.order - right.order || (left.entityId ?? Infinity) - (right.entityId ?? Infinity))
         // Unlisted children (an entity leaving the snapshot) keep their place; comparing by index instead would move every
         // node after one of them. Most nodes are already in place, so the engine is called only for the rest.
         const layer = this.entityLayer, children = layer.children, listed = new Set<Node>()

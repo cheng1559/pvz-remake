@@ -1,6 +1,6 @@
 {
   "pvz:bowling-wallnut": {
-    "rowOrder": 2,
+    "layer": "projectile",
     "visual": {"seedType": "wallnut", "preview": 3, "nameKey": "WALL_NUT"},
     "view": "bowling",
     "animations": {
@@ -12,12 +12,12 @@
     "shadow": {"x": -3, "y": -51}, "scale": 1
   },
   "pvz:bowling-explodenut": {
-    "rowOrder": 2,
+    "layer": "projectile",
     "visual": {"seedType": "explodenut", "preview": 3, "tint": [255, 64, 64], "nameKey": "EXPLODE_O_NUT"},
     "view": "bowling", "animationsFrom": "pvz:bowling-wallnut",
     "shadow": {"x": -3, "y": -51}, "scale": 1,
     "explosionSounds": [{"audio": "pvz:cherrybomb", "foley": true}, {"audio": "pvz:bowlingimpact2", "foley": false}],
-    "explosion": {"effect": "pvz:powie", "x": 0, "rowOrder": false}
+    "explosion": {"effect": "pvz:powie", "x": 0, "layer": "top"}
   },
   "pvz:peashooter": {
     "visual": {"seedType": "peashooter", "preview": 0},
@@ -76,7 +76,7 @@
     "scale": 1,
     "plantedSounds": [{"audio": "pvz:reverse_explosion", "foley": true}],
     "explosionSounds": [{"audio": "pvz:cherrybomb", "foley": true}, {"audio": "pvz:juicy", "foley": true}],
-    "explosion": {"effect": "pvz:powie", "x": 0, "rowOrder": false}
+    "explosion": {"effect": "pvz:powie", "x": 0, "layer": "top"}
   },
   "pvz:wallnut": {
     "visual": {"seedType": "wallnut", "preview": 3, "nameKey": "WALL_NUT"},
@@ -95,7 +95,7 @@
   "pvz:potatomine": {
     "visual": {"seedType": "potatomine", "preview": 4, "nameKey": "POTATO_MINE"},
     "view": "potatomine",
-    "explosion": {"effect": "pvz:potatomine", "x": 20, "rowOrder": true},
+    "explosion": {"effect": "pvz:potatomine", "x": 20, "layer": "particle"},
     "animations": {
       "buried": {"reanimId": "pvz:potatomine_buried", "rateScale": 1, "fps": 12, "x": 12, "y": -12},
       "rise": {"reanimId": "pvz:potatomine_rise", "rateScale": 1, "fps": 12, "x": 12, "y": -12},
@@ -136,7 +136,7 @@
     "shadow": {"x": -3, "y": -51},
     "scale": 1,
     "explosionSounds": [{"audio": "pvz:cherrybomb", "foley": true}],
-    "explosion": {"effect": "pvz:powie", "x": 0, "rowOrder": false}
+    "explosion": {"effect": "pvz:powie", "x": 0, "layer": "top"}
   },
   "pvz:puffshroom": {
     "visual": {"seedType": "puffshroom", "preview": 8, "nameKey": "PUFF_SHROOM"},
