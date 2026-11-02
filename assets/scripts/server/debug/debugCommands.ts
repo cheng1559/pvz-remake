@@ -134,7 +134,6 @@ function executeCommand(
         }
         case 'win':
         case 'lose':
-            if (name === 'win') for (const entity of [...world.query(ZombieComponent)]) world.destroyEntity(entity)
             level.result = name === 'win' ? 'won' : 'lost'
             emitServerEvent(events, name === 'win' ? 'levelWon' : 'levelLost', {})
             return debugSuccess(name === 'win' ? 'Level completed' : 'Level failed')
