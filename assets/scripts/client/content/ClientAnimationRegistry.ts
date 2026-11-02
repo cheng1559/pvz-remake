@@ -1,4 +1,4 @@
-import type { ClientAnimationClip, ClientAnimationDefinitions, ClientAnimationTarget, NutBlinkSlot, PresentationDefinitions } from '@/shared/content/presentation'
+import { animationSource, type ClientAnimationClip, type ClientAnimationDefinitions, type ClientAnimationTarget, type NutBlinkSlot, type PresentationDefinitions } from '@/shared/content/presentation'
 export type { ClientAnimationClip, ShooterAnimationDefinition, ZombieAnimationDefinition, NormalZombieAnimationDefinition, SunflowerAnimationDefinition, FlagZombieAnimationDefinition, PoleVaulterAnimationDefinition, CherryBombAnimationDefinition, WallNutAnimationDefinition, PotatoMineAnimationDefinition, ChomperAnimationDefinition, ClientAnimationDefinitions, ClientAnimationTarget } from '@/shared/content/presentation'
 
 export const randomAnimationRate = ([min, max]: readonly [number, number]): number => min + Math.random() * (max - min)
@@ -42,6 +42,13 @@ export class ClientAnimationRegistry {
 
     resolve<K extends ClientAnimationTarget>(target: K): ClientAnimationDefinitions[K] {
         return this.require(target)
+    }
+
+    /** The clips plant or zombie `id` plays (its `animationsFrom`, else its own). */
+    sourceOf(id: string): ClientAnimationTarget {
+        const definition = this.definitions.plants[id] ?? this.definitions.zombies[id]
+        if (!definition) throw new Error(`No presentation for ${id}`)
+        return animationSource(id, definition)
     }
 
     freeze(): void {

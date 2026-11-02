@@ -163,8 +163,8 @@ export class PlantPreview extends Component {
         if (!isValid(root, true) || root !== this.rendered) return
         const layout = id === undefined ? undefined : catalog.plants[id]
         const plant = typeof plantId === 'string' ? this.definitions.plants[plantId] : undefined
-        const definition = plant?.animationTarget && layout
-            ? resolveEntityDisplay('plants', id!, { ...layout, animationTarget: plant.animationTarget }, content.animations)
+        const definition = plant && layout && (plant.animations || plant.animationsFrom)
+            ? resolveEntityDisplay('plants', id!, { ...layout, animationsFrom: content.animations.sourceOf(plantId as string) }, content.animations)
             : layout
         if (!definition) throw new Error(`Plant preview is not installed: ${plantId}`)
         const [x, y] = definition.packetOffset ?? [0, 0]

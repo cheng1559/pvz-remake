@@ -62,8 +62,7 @@ export abstract class AnimatedPlantView implements PlantView {
     }
 
     protected get clips() {
-        const target = plantDefinition(this.animations.definitions, this.context.plant.typeId).animationTarget!
-        return this.animations.resolve(target)
+        return this.animations.resolve(this.animations.sourceOf(this.context.plant.typeId))
     }
 
     protected get isNut(): boolean { return false }
@@ -112,11 +111,11 @@ export abstract class AnimatedPlantView implements PlantView {
         if (trackId && pose && !this.attachmentBases.has(trackId)) this.attachmentBases.set(trackId, pose)
     }
 
-    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle): void {
+    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, _upgradeTarget: boolean, flash: number): void {
         void this.syncAbility(plant.ability?.state, world.gameplayTick)
-        const gray = Math.min(255, plant.eatenFlashCounter * 3)
+        const gray = Math.min(255, flash * 3)
         // Extras attached to the body's tracks take its colors.
-        this.body.setExtraAdditiveDraw(plant.eatenFlashCounter > 0, new Color(gray, gray, gray))
+        this.body.setExtraAdditiveDraw(flash > 0, new Color(gray, gray, gray))
         this.syncVisuals(plant, world, particle)
         this.syncBlink(world.gameplayTick)
         this.syncSleeping(plant.asleep === true)

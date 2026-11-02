@@ -12,7 +12,9 @@ export class LevelAudioPresenter {
     private gameplayStarted = false
     private firstWavePlayed = false
 
-    constructor(private readonly music: BoardPresentation['music'], private readonly definitions: PresentationDefinitions) {}
+    /** `riseSounds`: Zombie::RiseFromGrave, the level rule's `graveRise` or the presentation's `graves.rise`. */
+    constructor(private readonly music: BoardPresentation['music'], private readonly definitions: PresentationDefinitions,
+        private readonly riseSounds: readonly PresentationSound[]) {}
 
     snapshot(): LevelAudioSnapshot {
         return {
@@ -87,8 +89,8 @@ export class LevelAudioPresenter {
 
     sounds(sounds: readonly PresentationSound[] | undefined): void {
         for (const sound of sounds ?? []) {
-            if (sound.foley) void SoundSystem.playFoley(sound.id as SoundEffect, sound.pitchRange)
-            else void SoundSystem.play(sound.id as SoundEffect)
+            if (sound.foley) void SoundSystem.playFoley(sound.audio as SoundEffect, sound.pitchRange)
+            else void SoundSystem.play(sound.audio as SoundEffect)
         }
     }
 
@@ -111,7 +113,6 @@ export class LevelAudioPresenter {
                 break
             case 'plantPlaced':
                 void SoundSystem.playFoley(SoundEffect.Plant)
-                if (event.data.bowling) void SoundSystem.play(SoundEffect.Bowling)
                 this.sounds(this.definitions.plants[String(event.data.typeId)]?.plantedSounds)
                 break
             case 'musicBurst': MusicSystem.startBurst(); break
@@ -128,7 +129,7 @@ export class LevelAudioPresenter {
                 this.sounds(this.definitions.plants[String(event.data.typeId)]?.fireSounds)
                 if (Number(event.data.hits) > 0) void SoundSystem.playFoley(SoundEffect.Splat)
                 break
-            case 'plantGrew': this.sounds([{ id: 'plantgrow', foley: true }]); break
+            case 'plantGrew': void SoundSystem.playFoley(SoundEffect.PlantGrow); break
             case 'mineRising': void SoundSystem.playFoley(SoundEffect.DirtRise); break
             case 'chomperBit': void SoundSystem.playFoley(SoundEffect.BigChomp); break
             case 'zombieChilled': void SoundSystem.playFoley(SoundEffect.Frozen); break
@@ -144,11 +145,20 @@ export class LevelAudioPresenter {
             case 'mowerActivated': void SoundSystem.playFoley(SoundEffect.Lawnmower); break
             case 'zombieMowered': void SoundSystem.playFoley(SoundEffect.Splat); break
             case 'plantEaten': void SoundSystem.play(SoundEffect.Gulp); break
-            case 'zombieEnraged': if (event.data.roar === true) this.sounds([{ id: Math.random() < 1 / 3 ? 'newspaper_rarrgh' : 'newspaper_rarrgh2', foley: true, pitchRange: -2 }]); break
-            case 'zombieRoseFromGrave': this.sounds([{ id: 'gravestone_rumble', foley: true, pitchRange: 10 }]); break
+            case 'zombieEnraged': if (event.data.roar === true) this.sounds(this.definitions.zombies[String(event.data.typeId)]?.enrageSounds); break
+            case 'zombieRoseFromGrave': this.sounds(this.riseSounds); break
+            // Board::NextWaveComing on Whack-a-Zombie: the awooga before the first wave, the siren before the last.
+            case 'nextWaveComing':
+                if (event.data.first) void SoundSystem.play(SoundEffect.Awooga)
+                if (event.data.siren) void SoundSystem.play(SoundEffect.Siren)
+                break
+            // Board::DropLootPiece: FOLEY_SPAWN_SUN for the three suns a whacked zombie can drop.
+            case 'sunDropped': void SoundSystem.playFoley(SoundEffect.Throw, 10); break
             case 'zombieDying': void SoundSystem.playFoley(SoundEffect.ZombieFalling1, 10); break
             case 'zombieGroaned': void SoundSystem.playFoley(SoundEffect.Groan); break
             case 'levelAwardDropped': void SoundSystem.playFoley(SoundEffect.Throw, 10); break
+            // Board::MouseDownWithPlant: FOLEY_DROP for a seed dropped where it cannot be planted.
+            case 'seedDropped': void SoundSystem.play(SoundEffect.Drop); break
             case 'levelAwardCollected':
                 void SoundSystem.play(SoundEffect.SeedLift)
                 void SoundSystem.play(SoundEffect.Drop)

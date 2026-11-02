@@ -20,7 +20,8 @@ export class PuffShroomView extends AnimatedPlantView {
     protected async loadAnimations(): Promise<void> {
         await Promise.all([
             this.playBody(this.asleep ? this.clips.sleep : this.clips.body, true, this.idleRate, 0),
-            this.loadExtra('Blink', this.clips.blink),
+            // A mushroom without eyes to blink (the Hypno-shroom) only idles and sleeps.
+            ...this.clips.blink ? [this.loadExtra('Blink', this.clips.blink)] : [],
         ])
     }
     protected extraClip() { return this.clips.blink }

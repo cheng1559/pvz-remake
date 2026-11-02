@@ -13,7 +13,7 @@ export class SunflowerView implements PlantView {
     static async create(context: PlantViewContext) {
         const { node, content, animations, assets, plant, tick } = context
         const presentation = plantDefinition(animations.definitions, plant.typeId)
-        const animation = animations.resolve(presentation.animationTarget!)
+        const animation = animations.resolve(animations.sourceOf(plant.typeId))
         const shadow = assets.shadow
         uiNode({
             name: 'PlantShadow', parent: node, position: { ...presentation.shadow, z: -1 }, anchor: { x: 0, y: 1 },
@@ -33,8 +33,8 @@ export class SunflowerView implements PlantView {
         return new SunflowerView(body, blink, tick + animations.nextPlantBlinkTicks(), 15 / 12 * animation.blink.rateScale, animations)
     }
 
-    sync(plant: PlantSnapshot, world: WorldSnapshot): void {
-        const flash = plant.eatenFlashCounter, tick = world.gameplayTick
+    sync(_plant: PlantSnapshot, world: WorldSnapshot, _particle: unknown, _upgradeTarget: boolean, flash: number): void {
+        const tick = world.gameplayTick
         if (tick >= this.blinkAtTick) {
             this.blink.play({ loop: false, rate: this.blinkRate, timeSeconds: 0 })
             this.blinkAtTick = tick + this.animations.nextPlantBlinkTicks()

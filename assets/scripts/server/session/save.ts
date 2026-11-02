@@ -412,8 +412,8 @@ function parseZombie(value: unknown, name: string): Zombie {
     const source = optionalExact(value, [
         'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
         'moweredTicksRemaining', 'walkAnimation', 'animation', 'animationTime', 'animationSpeed', 'hasHead', 'hasArm',
-        'hasTongue', 'groanCounter', 'helmHealth', 'chilledTicks', 'hasPole',
-    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'droppedLoot', 'shieldHealth'], name)
+        'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'hasPole',
+    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'droppedLoot'], name)
     if (!ZOMBIE_STATES.includes(source.state as Zombie['state'])) throw new TypeError(`${name}.state is unknown`)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
@@ -446,7 +446,7 @@ function parseZombie(value: unknown, name: string): Zombie {
         groanCounter: integer(source.groanCounter, `${name}.groanCounter`),
         helmHealth: nonNegativeInteger(source.helmHealth, `${name}.helmHealth`),
         // Saves from before the split kept a shield's health in helmHealth; restoreSession moves it.
-        shieldHealth: source.shieldHealth === undefined ? 0 : nonNegativeInteger(source.shieldHealth, `${name}.shieldHealth`),
+        shieldHealth: nonNegativeInteger(source.shieldHealth, `${name}.shieldHealth`),
         chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
         hasPole: boolean(source.hasPole, `${name}.hasPole`),
         ...(source.enrageTicks === undefined ? {} : { enrageTicks: nonNegativeFinite(source.enrageTicks, `${name}.enrageTicks`) }),

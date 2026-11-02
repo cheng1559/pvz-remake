@@ -13,7 +13,7 @@ export class ShooterView implements PlantView {
 
     private constructor(
         private readonly context: PlantViewContext,
-        private readonly animationTarget: ClientAnimationTarget,
+        private readonly animationSource: ClientAnimationTarget,
         private readonly body: ReanimPlayer,
         private readonly idleHead: ReanimPlayer,
         private readonly shootHead: ReanimPlayer,
@@ -25,8 +25,8 @@ export class ShooterView implements PlantView {
     static async create(context: PlantViewContext): Promise<ShooterView> {
         const { node, content, animations: registry, assets, plant, tick } = context
         const presentation = plantDefinition(registry.definitions, plant.typeId)
-        const animationTarget = presentation.animationTarget!
-        const animations = registry.resolve(animationTarget)
+        const animationSource = registry.sourceOf(plant.typeId)
+        const animations = registry.resolve(animationSource)
         uiNode({
             name: 'PlantShadow', parent: node, position: { ...presentation.shadow, z: -1 }, anchor: { x: 0, y: 1 },
             sprite: { frame: assets.shadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
@@ -41,7 +41,7 @@ export class ShooterView implements PlantView {
             shootHead.load(animations.shootHead.reanimId, content.registry, content.loader),
             blink.load(animations.blink.reanimId, content.registry, content.loader),
         ])
-        if (!node.isValid) return new ShooterView(context, animationTarget, body, idleHead, shootHead, blink, 1, tick)
+        if (!node.isValid) return new ShooterView(context, animationSource, body, idleHead, shootHead, blink, 1, tick)
         idleHead.attachToTrack(body, attachmentTrack(animations.idleHead))
         shootHead.attachToTrack(body, attachmentTrack(animations.shootHead))
         blink.attachToTrack(idleHead, attachmentTrack(animations.blink))
@@ -50,7 +50,7 @@ export class ShooterView implements PlantView {
         idleHead.play({ loop: true, rate: idleRate * animations.idleHead.rateScale })
         shootHead.hide()
         blink.hide()
-        return new ShooterView(context, animationTarget, body, idleHead, shootHead, blink, idleRate, tick)
+        return new ShooterView(context, animationSource, body, idleHead, shootHead, blink, idleRate, tick)
     }
 
     fire(): void {
@@ -58,7 +58,7 @@ export class ShooterView implements PlantView {
         // StartBlend records the visible pose before SetFramesForLayer resets playback.
         this.shootHead.blendFrom(this.shootHead.snapshot().visible ? this.shootHead : this.idleHead, 0.2)
         this.shootHead.play({
-            loop: false, rate: 35 / 12 * this.context.animations.resolve(this.animationTarget).shootHead.rateScale,
+            loop: false, rate: 35 / 12 * this.context.animations.resolve(this.animationSource).shootHead.rateScale,
             timeSeconds: 0, hideOnFinish: false,
             onFinish: () => this.finishShoot(),
         })
@@ -68,14 +68,14 @@ export class ShooterView implements PlantView {
     private finishShoot(): void {
         this.idleHead.blendFrom(this.shootHead, 0.2)
         this.idleHead.play({
-            loop: true, rate: this.idleRate * this.context.animations.resolve(this.animationTarget).idleHead.rateScale,
+            loop: true, rate: this.idleRate * this.context.animations.resolve(this.animationSource).idleHead.rateScale,
             timeSeconds: this.body.snapshot().timeSeconds,
         })
         this.shootHead.hide()
     }
 
-    sync(plant: PlantSnapshot, world: WorldSnapshot, _particle: unknown, upgradeTarget: boolean): void {
-        const eatenFlashCounter = plant.eatenFlashCounter, tick = world.gameplayTick
+    sync(_plant: PlantSnapshot, world: WorldSnapshot, _particle: unknown, upgradeTarget: boolean, eatenFlashCounter: number): void {
+        const tick = world.gameplayTick
         const grayness = Math.min(255, eatenFlashCounter * 3)
         const color = new Color(grayness, grayness, grayness, 255)
         // The heads attach to the stem and the blink to the head, so the body's colors reach them all.
@@ -84,12 +84,12 @@ export class ShooterView implements PlantView {
         if (tick >= this.blinkAtTick) {
             this.blinkAtTick = tick + this.context.animations.nextPlantBlinkTicks()
             if (!this.shootHead.snapshot().playing) this.blink.play({
-                loop: false, rate: 15 / 12 * this.context.animations.resolve(this.animationTarget).blink.rateScale, timeSeconds: 0,
+                loop: false, rate: 15 / 12 * this.context.animations.resolve(this.animationSource).blink.rateScale, timeSeconds: 0,
             })
         }
         if (this.shootHead.snapshot().playing || this.idleHead.snapshot().playing) return
         this.idleHead.play({
-            loop: true, rate: this.idleRate * this.context.animations.resolve(this.animationTarget).idleHead.rateScale,
+            loop: true, rate: this.idleRate * this.context.animations.resolve(this.animationSource).idleHead.rateScale,
             timeSeconds: this.body.snapshot().timeSeconds,
         })
     }

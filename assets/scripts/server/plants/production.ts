@@ -25,10 +25,9 @@ export function createProductionSystem(definitions: GameplayDefinitions): GameSy
                 const timer = world.get(entity, PlantAttackComponent)!
                 // A sleeping mushroom and a growing sun-shroom skip UpdateProductionPlant, holding the launch counter.
                 const idle = definition.nocturnal && !level.board.night || plant.ability?.state === 'growing'
-                if (stopped || idle) { timer.readyAtTick++; plant.eatenFlashCounter = 0; continue }
-                const remaining = timer.readyAtTick - tick
-                if (remaining <= 100) plant.eatenFlashCounter = Math.max(plant.eatenFlashCounter, 100 - Math.max(0, remaining))
-                if (remaining > 0) continue
+                if (stopped || idle) { timer.readyAtTick++; continue }
+                // The client draws the glow over the last 100 ticks from the snapshot's produceTicks.
+                if (timer.readyAtTick - tick > 0) continue
                 const random = world.resources.get(RandomResource)
                 timer.readyAtTick = tick + random.integer(Math.max(1, producer.cadenceTicks - 150), producer.cadenceTicks)
                 const position = world.get(entity, PositionComponent)!

@@ -342,7 +342,7 @@ test('overrides replace whole existing definitions by ID, one Mod per ID, before
         'overridden definitions are validated like any other')
 
     const source = readPresentationSource()
-    const view = { ...source.plants['pvz:sunflower'], animationTarget: source.plants['pvz:sunflower'].animationTarget }
+    const view = { ...source.plants['pvz:sunflower'] }
     const visuals = buildPresentationDefinitions(source, [{ ownerId: 'other', data: { overrides: { plants: { 'pvz:peashooter': view } } } }])
     assert.deepEqual(visuals.plants['pvz:peashooter'], buildPresentationDefinitions(source).plants['pvz:sunflower'], 'presentation overrides work the same way')
 })

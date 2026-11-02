@@ -55,7 +55,6 @@ function burnZombie(world: World, definitions: GameplayDefinitions, entity: numb
     if (!zombie.hasHead) {
         zombie.state = 'burned'
         zombie.deathTicksRemaining = BURNED_TICKS
-        zombie.hitFlashCounter = 0
         zombie.biteTicks = 0
         emitServerEvent(events, 'zombieBurned', { entityId: entity })
         return

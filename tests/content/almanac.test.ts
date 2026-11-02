@@ -7,6 +7,7 @@ import { parseReanim, sampleReanimTrack } from '@/shared/content/reanim'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 import * as animationDefinitions from '@/client/content/ClientAnimationRegistry'
+import * as zombieParts from '@/client/zombies/zombieParts'
 
 const json = (path: string) => JSON.parse(readFileSync(path, 'utf8'))
 const bundle = 'mods/pvz-base'
@@ -17,7 +18,8 @@ const displayCode = transpileModule(readFileSync('assets/scripts/client/reanim/E
     compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
 })
 runInNewContext(displayCode.outputText, { exports: displayModule.exports,
-    require: (id: string) => id === '@/client/content/ClientAnimationRegistry' ? animationDefinitions : {} })
+    require: (id: string) => id === '@/client/content/ClientAnimationRegistry' ? animationDefinitions
+        : id === '@/client/zombies/zombieParts' ? zombieParts : {} })
 const layouts = json(`${bundle}/${resources.json['pvz:almanac-animations']}`)
 const registry = new animationDefinitions.ClientAnimationRegistry(presentationFixture)
 const catalog = Object.fromEntries(['plants', 'zombies'].map(kind => [kind,

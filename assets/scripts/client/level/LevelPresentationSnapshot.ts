@@ -11,6 +11,7 @@ import {
     type MusicPlaybackSnapshot,
 } from '@/client/music/MusicPlaybackSnapshot'
 import { assertJsonValue, jsonRoundTrip, type JsonValue } from '@/shared/protocol/index'
+import type { FlashSnapshot } from './EntityFlashes'
 import { isQualifiedId } from '@/shared/mod/index'
 import {
     parseAdviceWidgetSnapshot,
@@ -81,6 +82,7 @@ export type LevelEntitySnapshot =
         animations: Record<string, ReanimPlaybackSnapshot>
         idleRate?: number
         blinkAtTick?: number
+        flash?: FlashSnapshot
     }
     | {
         kind: 'zombie'
@@ -88,6 +90,7 @@ export type LevelEntitySnapshot =
         body: ReanimPlaybackSnapshot | null
         mowerDriver: ReanimPlaybackSnapshot | null
         flag?: ReanimPlaybackSnapshot
+        flash?: FlashSnapshot
     }
     | {
         kind: 'mower'
@@ -284,7 +287,7 @@ function parseEntity(value: unknown, index: number): LevelEntitySnapshot {
     const entityId = positiveInteger(tagged.entityId, `${name}.entityId`)
     switch (tagged.kind) {
         case 'plant': {
-            const plant = exact(value, ['kind', 'entityId', 'animations'], name, ['idleRate', 'blinkAtTick'])
+            const plant = exact(value, ['kind', 'entityId', 'animations'], name, ['idleRate', 'blinkAtTick', 'flash'])
             const animations = plainObject(plant.animations, `${name}.animations`)
             if (!Object.hasOwn(animations, 'body')) throw new TypeError(`${name}.animations.body is required`)
             if (Object.hasOwn(animations, 'idleHead') && (!Object.hasOwn(animations, 'blink') || plant.blinkAtTick === undefined)) {
@@ -295,17 +298,19 @@ function parseEntity(value: unknown, index: number): LevelEntitySnapshot {
                 animations: Object.fromEntries(Object.entries(animations).map(([slot, state]) => [slot, parseReanimPlaybackSnapshot(state)])),
                 ...(plant.idleRate === undefined ? {} : { idleRate: positiveFinite(plant.idleRate, `${name}.idleRate`) }),
                 ...(plant.blinkAtTick === undefined ? {} : { blinkAtTick: nonNegativeInteger(plant.blinkAtTick, `${name}.blinkAtTick`) }),
+                ...(plant.flash === undefined ? {} : { flash: parseFlash(plant.flash, `${name}.flash`) }),
             }
         }
         case 'zombie': {
             const source = exact(value, [
                 'kind', 'entityId', 'body', 'mowerDriver',
-            ], name, ['flag'])
+            ], name, ['flag', 'flash'])
             return {
                 kind: 'zombie', entityId,
                 body: optionalReanim(source.body),
                 mowerDriver: optionalReanim(source.mowerDriver),
                 ...(source.flag === undefined ? {} : { flag: parseReanimPlaybackSnapshot(source.flag) }),
+                ...(source.flash === undefined ? {} : { flash: parseFlash(source.flash, `${name}.flash`) }),
             }
         }
         case 'mower':
@@ -314,6 +319,16 @@ function parseEntity(value: unknown, index: number): LevelEntitySnapshot {
             return { kind: tagged.kind, entityId, animation: optionalReanim(source.animation) }
         }
         default: throw new TypeError(`${name}.kind is invalid`)
+    }
+}
+
+function parseFlash(value: unknown, name: string): FlashSnapshot {
+    const flash = exact(value, ['tick', 'ticks'], name, ['through'])
+    if (flash.through !== undefined && flash.through !== true) throw new TypeError(`${name}.through must be true`)
+    return {
+        tick: nonNegativeInteger(flash.tick, `${name}.tick`),
+        ticks: nonNegativeInteger(flash.ticks, `${name}.ticks`),
+        ...(flash.through ? { through: true as const } : {}),
     }
 }
 

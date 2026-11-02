@@ -20,7 +20,8 @@ export interface PlantViewContext {
 }
 
 export interface PlantView {
-    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, upgradeTarget: boolean): void
+    /** `flash`: the bite or production glow (Plant::mEatenFlashCountdown), from the client's EntityFlashes. */
+    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, upgradeTarget: boolean, flash: number): void
     snapshot(entityId: number): PlantViewSnapshot
     restore(snapshot: PlantViewSnapshot): void | Promise<void>
     fire?(): void

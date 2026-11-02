@@ -3,6 +3,7 @@ import { isValid, JsonAsset, Sprite, type Node, type SpriteFrame } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { uiNode } from '@/client/view/uiNode'
 import { ReanimPlayer } from './ReanimPlayer'
+import { displayPartState, hiddenZombieParts } from '@/client/zombies/zombieParts'
 import { type ClientAnimationClip, type ClientAnimationRegistry, type ClientAnimationTarget } from '@/client/content/ClientAnimationRegistry'
 
 export type EntityKind = 'plants' | 'zombies'
@@ -25,7 +26,8 @@ export interface EntityDisplay {
     portrait?: { offset: [number, number], scale: number, parts?: DisplayPart[] }
 }
 export type EntityDisplayLayout = Omit<EntityDisplay, 'parts' | 'rate' | 'portrait'> & {
-    animationTarget?: ClientAnimationTarget, parts?: DisplayPart[], rate?: readonly [number, number]
+    /** The plant or zombie whose level clips the display plays. */
+    animationsFrom?: ClientAnimationTarget, parts?: DisplayPart[], rate?: readonly [number, number]
     portrait?: { offset: [number, number], scale: number, parts?: Array<Partial<DisplayPart> & { name: string }> }
 }
 let assets: ReturnType<typeof loadAssets> | undefined
@@ -44,7 +46,7 @@ async function loadAssets() {
 
 /** Use level clips, attachments and shadows; keep the catalog's UI placement and display-only poses. */
 export function resolveEntityDisplay(kind: EntityKind, id: number, display: EntityDisplayLayout, animations: ClientAnimationRegistry): EntityDisplay {
-    const target = display.animationTarget
+    const target = display.animationsFrom
     if (!target) {
         if (!display.parts || !display.rate) throw new Error(`Missing display animation: ${kind} ${id}`)
         return display as EntityDisplay
@@ -89,7 +91,8 @@ export function resolveEntityDisplay(kind: EntityKind, id: number, display: Enti
         drawOffset = [clips.idle.x - originX, originY - clips.idle.y]
         parts = [part('body', clips.idle)]
         rate = animations.rates.zombieIdle
-        parts[0].hiddenTracks = [...definition.parts.tongue]
+        // The level's part rules for a whole zombie at rest: its own helm and shield worn, the flag held.
+        parts[0].hiddenTracks = hiddenZombieParts(definition, displayPartState(definition, 'flag' in clips))
         if ('idle2' in clips) {
             parts[0].idle2Id = clips.idle2.reanimId
             parts[0].idle2RateScale = clips.idle2.rateScale

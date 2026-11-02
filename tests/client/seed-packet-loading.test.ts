@@ -45,13 +45,12 @@ function setup() {
 test('namespaced Mod packets keep their ID and render their registered animation instead of the cached plant pose', async () => {
     const { classes, modules, load, renderer } = setup()
     const plant = structuredClone(presentationFixture.plants['pvz:peashooter']) as any
-    plant.animationTarget = 'example:rapid_pea'
     plant.visual.seedType = 'example:rapid_pea'
     plant.animations.body.reanimId = 'example:body'
     const definitions = buildPresentationDefinitions(presentationFixture, [{ ownerId: 'example', data: { plants: { 'example:rapid_pea': plant } } }])
     const animations = new ClientAnimationRegistry(definitions)
     const { resolveEntityDisplay } = load('reanim/EntityDisplay')
-    const layout = resolveEntityDisplay('plants', 0, { animationTarget: 'pvz:peashooter', offset: [0, 0], shadow: false }, animations)
+    const layout = resolveEntityDisplay('plants', 0, { animationsFrom: 'pvz:peashooter', offset: [0, 0], shadow: false }, animations)
     let selected: any[] = []
     Object.assign(modules['@/client/reanim/EntityDisplay'], {
         resolveEntityDisplay,

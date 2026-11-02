@@ -11,7 +11,7 @@ import {
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, SystemContext, World } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { HIT_FLASH_TICKS, damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
+import { damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
 import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { startPostVaultWalk, startVault, updateVault } from './poleVault'
 import { RECENTLY_EATEN_TICKS, destroyEatenPlant, isPlantInedible } from '../plants/damage'
@@ -37,7 +37,6 @@ export class ZombieSystem implements GameSystem {
 
         for (const entity of world.query(PlantComponent)) {
             const plant = world.get(entity, PlantComponent)!
-            if (plant.eatenFlashCounter > 0) plant.eatenFlashCounter--
             if (plant.recentlyEatenCounter > 0) plant.recentlyEatenCounter--
         }
         this.plantRows = []
@@ -56,7 +55,6 @@ export class ZombieSystem implements GameSystem {
             if (!position || !zombie || !world.hasEntity(entity)) continue
             const definition = definitions.zombies[zombie.typeId]
             const gait = zombieGait(definition, definitions)
-            if (zombie.hitFlashCounter > 0) zombie.hitFlashCounter--
             if (zombie.state === 'mowered') {
                 zombie.animationTime = Math.min(
                     ZOMBIE_MOWERED_FRAME_SPAN,
@@ -124,7 +122,7 @@ export class ZombieSystem implements GameSystem {
                         const state = world.get(other, ZombieComponent)!
                         return state.hasHead && state.health > 0 && state.state !== 'dying' && state.state !== 'burned' && state.state !== 'mowered'
                     }).length
-                    emitServerEvent(world.resources.get(EventQueueResource), 'zombieEnraged', { entityId: entity, roar: zombie.hasHead && headed <= 10 })
+                    emitServerEvent(world.resources.get(EventQueueResource), 'zombieEnraged', { entityId: entity, typeId: zombie.typeId, roar: zombie.hasHead && headed <= 10 })
                 }
                 continue
             }
@@ -178,7 +176,7 @@ export class ZombieSystem implements GameSystem {
                     updateHeadlessZombie(world, definitions, entity, zombie)
                 } else {
                     if (eat.chewTimes.some(time => didCrossLoopingTime(previousAnimationTime, zombie.animationTime, time * span))) {
-                        world.get(target, PlantComponent)!.eatenFlashCounter = HIT_FLASH_TICKS
+                        // The client flashes the chewed plant.
                         emitServerEvent(world.resources.get(EventQueueResource), 'zombieChewedPlant', {
                             zombieId: entity,
                             plantId: target,

@@ -68,7 +68,7 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 
 弹丸表现可配置 `shadow`：`sprite`、单行图集的 `columns`/`cell`、`offset` 和 `scale`。影子独立绘制在地面层，X 跟随弹丸，Y 为行起点加 `offset.y`，通过同一资源加载器保留高清包的逻辑尺寸。页面动画写在表现定义的 `screens` 表中，以 `pvz:tree` 等页面 ID 索引有序图层；每层指定 `name`、`reanimId`、`x`、`y`、`rate` 和 `playback`（`loop` 或 `last`），可选 `visibleTracks` 前缀和循环的 `randomPhase`。它们复用 `ReanimPlayer`，不包含服务端养成逻辑。
 
-资源类别共用一套定义：`sprites`、`fonts`、`audio`、`json`、`text`、`reanim`、`particles`、`music`、`prefabs`。图片使用对象，其他类别使用 ID 到文件路径的映射；`audio` 支持 MP3/WAV。新动画、粒子、音乐配置使用对应类别，普通 JSON 使用 `json`。替换已有资源只需使用其原 ID；新增游戏定义使用 Mod 自身命名空间。Mod ID 是不带冒号的名字（如 `widescreen`），它同时就是这个 Mod 的命名空间：自己新增的资源和定义都写作 `名字:…`，例如 `widescreen:background1`。两个 Mod 的 ID 不会相同，所以命名空间也不会重叠；以其他命名空间写的资源都算替换，不算自己的。内置本体的 ID 为 `pvz`。
+资源类别共用一套定义：`sprites`、`fonts`、`audio`、`json`、`text`、`reanim`、`particles`、`music`、`prefabs`。图片使用对象，其他类别使用 ID 到文件路径的映射；`audio` 支持 MP3/WAV。新动画、粒子、音乐配置使用对应类别，普通 JSON 使用 `json`。替换已有资源只需使用其原 ID；新增游戏定义使用 Mod 自身命名空间。Mod ID 是不带冒号的名字（如 `widescreen`），它同时就是这个 Mod 的命名空间：自己新增的资源和定义都写作 `名字:…`，例如 `widescreen:background1`。两个 Mod 的 ID 不会相同，所以命名空间也不会重叠；以其他命名空间写的资源都算替换，不算自己的。内置本体的 ID 为 `pvz`。表现配置里的音效（`{ "audio", "foley", "pitchRange"? }`）的 `audio` 同样写完整的音频资源 ID，例如 `pvz:splat`、`corn:shoop`；不带命名空间的 ID 会在校验时报错。
 
 要整体替换已有定义（本体或其他 Mod 的），在 `gameplay` 或 `presentation` 下加 `"overrides": "assets/gameplay/overrides.json"`，文件按表分组写完整定义，例如 `{ "plants": { "pvz:peashooter": { ... } } }`。覆盖在所有 Mod 登记完后执行，可覆盖任意已存在的 ID，不受加载顺序影响；同一 ID 只能被一个 Mod 覆盖，否则报冲突；目标 ID 不存在时报错；覆盖后的定义照常校验引用。关卡也可覆盖，`levelPatches` 在覆盖之后按字段生效。覆盖只替换数据：按 ID 登记的代码行为（`plantBehaviors.register`）不会随定义转移，旧存档中实体状态与新定义不符时按不兼容存档处理。
 

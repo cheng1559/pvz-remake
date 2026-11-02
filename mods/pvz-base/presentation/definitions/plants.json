@@ -2,7 +2,7 @@
   "pvz:bowling-wallnut": {
     "rowOrder": 2,
     "visual": {"seedType": "wallnut", "preview": 3, "nameKey": "WALL_NUT"},
-    "view": "bowling", "animationTarget": "pvz:bowling-wallnut",
+    "view": "bowling",
     "animations": {
       "body": {"reanimId": "pvz:wallnut_roll", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "blinkTwitch": {"reanimId": "pvz:wallnut_blink_twitch", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face"},
@@ -14,15 +14,14 @@
   "pvz:bowling-explodenut": {
     "rowOrder": 2,
     "visual": {"seedType": "explodenut", "preview": 3, "tint": [255, 64, 64], "nameKey": "EXPLODE_O_NUT"},
-    "view": "bowling", "animationTarget": "pvz:bowling-wallnut",
+    "view": "bowling", "animationsFrom": "pvz:bowling-wallnut",
     "shadow": {"x": -3, "y": -51}, "scale": 1,
-    "explosionSounds": [{"id": "cherrybomb", "foley": true}, {"id": "bowlingimpact2", "foley": false}],
+    "explosionSounds": [{"audio": "pvz:cherrybomb", "foley": true}, {"audio": "pvz:bowlingimpact2", "foley": false}],
     "explosion": {"effect": "pvz:powie", "x": 0, "rowOrder": false}
   },
   "pvz:peashooter": {
     "visual": {"seedType": "peashooter", "preview": 0},
     "view": "shooter",
-    "animationTarget": "pvz:peashooter",
     "animations": {
       "body": {"reanimId": "pvz:peashooter", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "idleHead": {"reanimId": "pvz:peashooter_head_idle", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
@@ -35,7 +34,6 @@
   "pvz:repeater": {
     "visual": {"seedType": "repeater", "preview": 7},
     "view": "shooter",
-    "animationTarget": "pvz:repeater",
     "animations": {
       "body": {"reanimId": "pvz:repeater", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "idleHead": {"reanimId": "pvz:repeater_head_idle", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
@@ -48,7 +46,6 @@
   "pvz:snowpea": {
     "visual": {"seedType": "snowpea", "preview": 5, "nameKey": "SNOW_PEA"},
     "view": "shooter",
-    "animationTarget": "pvz:snowpea",
     "animations": {
       "body": {"reanimId": "pvz:snowpea", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "idleHead": {"reanimId": "pvz:snowpea_head_idle", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
@@ -61,7 +58,6 @@
   "pvz:sunflower": {
     "visual": {"seedType": "sunflower", "preview": 1},
     "view": "sunflower",
-    "animationTarget": "pvz:sunflower",
     "animations": {
       "body": {"reanimId": "pvz:sunflower", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "blink": {"reanimId": "pvz:sunflower_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_idle"}
@@ -72,22 +68,20 @@
   "pvz:cherrybomb": {
     "visual": {"seedType": "cherrybomb", "preview": 2, "nameKey": "CHERRY_BOMB"},
     "view": "cherrybomb",
-    "animationTarget": "pvz:cherrybomb",
     "animations": {
-      "idle": {"reanimId": "pvz:almanac_plant_2_body", "rateScale": 1, "fps": 30, "x": 0, "y": 0},
+      "idle": {"reanimId": "pvz:cherrybomb_idle", "rateScale": 1, "fps": 30, "x": 0, "y": 0},
       "explode": {"reanimId": "pvz:cherrybomb_explode", "rateScale": 1, "fps": 30, "x": 0, "y": 0}
     },
     "shadow": {"x": -3, "y": -51},
     "scale": 1,
-    "plantedSounds": [{"id": "reverse_explosion", "foley": true}],
-    "explosionSounds": [{"id": "cherrybomb", "foley": true}, {"id": "juicy", "foley": true}],
+    "plantedSounds": [{"audio": "pvz:reverse_explosion", "foley": true}],
+    "explosionSounds": [{"audio": "pvz:cherrybomb", "foley": true}, {"audio": "pvz:juicy", "foley": true}],
     "explosion": {"effect": "pvz:powie", "x": 0, "rowOrder": false}
   },
   "pvz:wallnut": {
     "visual": {"seedType": "wallnut", "preview": 3, "nameKey": "WALL_NUT"},
     "view": "wallnut",
     "parts": {"face": "anim_face"},
-    "animationTarget": "pvz:wallnut",
     "chewParticle": "pvz:wallnuteatsmall",
     "animations": {
       "body": {"reanimId": "pvz:wallnut", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
@@ -101,7 +95,6 @@
   "pvz:potatomine": {
     "visual": {"seedType": "potatomine", "preview": 4, "nameKey": "POTATO_MINE"},
     "view": "potatomine",
-    "animationTarget": "pvz:potatomine",
     "explosion": {"effect": "pvz:potatomine", "x": 20, "rowOrder": true},
     "animations": {
       "buried": {"reanimId": "pvz:potatomine_buried", "rateScale": 1, "fps": 12, "x": 12, "y": -12},
@@ -112,7 +105,7 @@
     },
     "shadow": {"x": -3, "y": -51},
     "scale": 0.8,
-    "explosionSounds": [{"id": "potato_mine", "foley": false}],
+    "explosionSounds": [{"audio": "pvz:potato_mine", "foley": false}],
     "mine": {
       "blinkTicks": [400, 4399],
       "riseRate": 18,
@@ -125,7 +118,6 @@
   "pvz:chomper": {
     "visual": {"seedType": "chomper", "preview": 6},
     "view": "chomper",
-    "animationTarget": "pvz:chomper",
     "animations": {
       "idle": {"reanimId": "pvz:chomper", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "bite": {"reanimId": "pvz:chomper_bite", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
@@ -139,17 +131,16 @@
     "visual": {"seedType": "explodenut", "preview": 3, "tint": [255, 64, 64], "nameKey": "EXPLODE_O_NUT"},
     "view": "wallnut",
     "parts": {"face": "anim_face"},
-    "animationTarget": "pvz:wallnut",
+    "animationsFrom": "pvz:wallnut",
     "chewParticle": "pvz:wallnuteatsmall",
     "shadow": {"x": -3, "y": -51},
     "scale": 1,
-    "explosionSounds": [{"id": "cherrybomb", "foley": true}],
+    "explosionSounds": [{"audio": "pvz:cherrybomb", "foley": true}],
     "explosion": {"effect": "pvz:powie", "x": 0, "rowOrder": false}
   },
   "pvz:puffshroom": {
     "visual": {"seedType": "puffshroom", "preview": 8, "nameKey": "PUFF_SHROOM"},
     "view": "puffshroom",
-    "animationTarget": "pvz:puffshroom",
     "animations": {
       "body": {"reanimId": "pvz:puffshroom", "rateScale": 1, "fps": 12, "x": 0, "y": -5},
       "sleep": {"reanimId": "pvz:puffshroom_sleep", "rateScale": 1, "fps": 12, "x": 0, "y": -5},
@@ -163,7 +154,6 @@
   "pvz:sunshroom": {
     "visual": {"seedType": "sunshroom", "preview": 9, "nameKey": "SUN_SHROOM"},
     "view": "sunshroom",
-    "animationTarget": "pvz:sunshroom",
     "animations": {
       "body": {"reanimId": "pvz:sunshroom_big", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "small": {"reanimId": "pvz:sunshroom", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
@@ -179,8 +169,7 @@
     "visual": {"seedType": "fumeshroom", "preview": 10, "nameKey": "FUME_SHROOM"},
     "view": "puffshroom",
     "viewConfig": {"fireParticle": {"id": "pvz:fumecloud", "x": 85, "y": 31, "delayTicks": 35}},
-    "fireSounds": [{"id": "fume", "foley": true}],
-    "animationTarget": "pvz:fumeshroom",
+    "fireSounds": [{"audio": "pvz:fume", "foley": true}],
     "animations": {
       "body": {"reanimId": "pvz:fumeshroom", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "sleep": {"reanimId": "pvz:fumeshroom_sleep", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
@@ -194,8 +183,7 @@
   "pvz:gravebuster": {
     "visual": {"seedType": "gravebuster", "preview": 11, "nameKey": "GRAVE_BUSTER"},
     "view": "gravebuster",
-    "plantedSounds": [{"id": "gravebusterchomp", "foley": true}],
-    "animationTarget": "pvz:gravebuster",
+    "plantedSounds": [{"audio": "pvz:gravebusterchomp", "foley": true}],
     "animations": {
       "body": {"reanimId": "pvz:gravebuster", "rateScale": 1, "fps": 12, "x": 0, "y": 40},
       "land": {"reanimId": "pvz:gravebuster_land", "rateScale": 1, "fps": 12, "x": 0, "y": 40}
@@ -204,5 +192,15 @@
     "scale": 1,
     "drawHeightOffset": -40,
     "pointerOffsetY": 15
+  },
+  "pvz:hypnoshroom": {
+    "visual": {"seedType": "hypnoshroom", "preview": 12, "nameKey": "HYPNO_SHROOM"},
+    "view": "mushroom",
+    "animations": {
+      "body": {"reanimId": "pvz:hypnoshroom", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
+      "sleep": {"reanimId": "pvz:hypnoshroom_sleep", "rateScale": 1, "fps": 12, "x": 0, "y": 0}
+    },
+    "shadow": {"x": -3, "y": -51},
+    "scale": 1
   }
 }

@@ -92,6 +92,7 @@
         "anim_explode"
       ],
       "exports": {
+        "anim_idle": "pvz:cherrybomb_idle",
         "anim_explode": "pvz:cherrybomb_explode"
       }
     }
@@ -301,7 +302,16 @@
     }
   },
   "hypnoshroom": {
-    "body": {}
+    "body": {
+      "animations": [
+        "anim_idle",
+        "anim_sleep"
+      ],
+      "exports": {
+        "anim_idle": "pvz:hypnoshroom",
+        "anim_sleep": "pvz:hypnoshroom_sleep"
+      }
+    }
   },
   "scaredyshroom": {
     "body": {
@@ -1073,6 +1083,7 @@
         "Zombie_outerarm_screendoor"
       ],
       "animations": [
+        "anim_idle",
         "anim_walk",
         "anim_walk2",
         "anim_eat",
@@ -1080,6 +1091,7 @@
         "anim_death2"
       ],
       "exports": {
+        "anim_idle": "pvz:helm_zombie_idle",
         "anim_walk": "pvz:helm_zombie_walk",
         "anim_walk2": "pvz:helm_zombie_walk2",
         "anim_eat": "pvz:helm_zombie_eat"
@@ -1141,6 +1153,7 @@
         "anim_waterdeath"
       ],
       "exports": {
+        "anim_idle": "pvz:flag_idle",
         "anim_walk": "pvz:flag_walk",
         "anim_walk2": "pvz:flag_walk2",
         "anim_eat": "pvz:flag_eat"
@@ -1197,6 +1210,7 @@
         "anim_eat"
       ],
       "exports": {
+        "anim_idle": "pvz:pole_vaulter_idle",
         "anim_run": "pvz:pole_vaulter_run",
         "anim_jump": "pvz:pole_vaulter_jump",
         "anim_walk": "pvz:pole_vaulter_walk",
@@ -1486,6 +1500,16 @@
     "default": {
       "exports": {
         "default": "pvz:readysetplant"
+      }
+    }
+  },
+  "hammer": {
+    "default": {
+      "animations": [
+        "anim_whack_zombie"
+      ],
+      "exports": {
+        "anim_whack_zombie": "pvz:hammer"
       }
     }
   },

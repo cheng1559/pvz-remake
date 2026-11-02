@@ -15,7 +15,8 @@ test('presentation definitions validate independently and never share global con
     assert.deepEqual(other.rates.plantIdle, [20, 30])
     for (const change of [
         (data: any) => { data.animation.plantBlinkTicks = [800, 400] },
-        (data: any) => { data.plants['pvz:explodenut'].animationTarget = 'pvz:missing' },
+        (data: any) => { data.plants['pvz:explodenut'].animationsFrom = 'pvz:missing' },
+        (data: any) => { delete data.zombies['pvz:conehead'].animations },
         (data: any) => { delete data.zombies['pvz:normal'] },
         (data: any) => { data.almanac.cords[20].height = 0 },
         (data: any) => { data.plants['pvz:potatomine'].mine.glow.distance = [50, 50] },
@@ -43,14 +44,16 @@ test('client animation definitions are copied and freeze independently of source
 
 test('plant and zombie presentations use registered animations, including shared bodies', () => {
     const animations = new ClientAnimationRegistry(presentationFixture)
-    for (const definition of Object.values(presentationFixture.plants)) {
-        if (definition.view) assert.ok(animations.resolve(definition.animationTarget!))
+    for (const [id, definition] of Object.entries(presentationFixture.plants)) {
+        if (definition.view) assert.ok(animations.resolve(animations.sourceOf(id)))
     }
-    for (const definition of Object.values(presentationFixture.zombies)) {
-        assert.deepEqual(animations.resolve(definition.animationTarget), definition.animations)
+    for (const [id, definition] of Object.entries(presentationFixture.zombies)) {
+        assert.deepEqual(animations.resolve(animations.sourceOf(id)), definition.animations)
     }
-    assert.equal(plantDefinition(presentationFixture, 'pvz:explodenut').animationTarget, 'pvz:wallnut')
-    const custom = { ...presentationFixture, zombies: { ...presentationFixture.zombies, 'mod:plain': presentationFixture.zombies['pvz:normal'] } }
-    assert.equal(zombieDefinition(custom, 'mod:plain').animationTarget, 'pvz:normal')
+    assert.equal(animations.sourceOf('pvz:explodenut'), 'pvz:wallnut', 'the explode-o-nut plays the wall-nut')
+    const plain = { ...presentationFixture.zombies['pvz:normal'], animations: undefined, animationsFrom: 'pvz:normal' }
+    const custom = { ...presentationFixture, zombies: { ...presentationFixture.zombies, 'mod:plain': plain } }
+    assert.equal(new ClientAnimationRegistry(custom).sourceOf('mod:plain'), 'pvz:normal')
+    assert.equal(zombieDefinition(custom, 'mod:plain').animationsFrom, 'pvz:normal')
     assert.throws(() => zombieDefinition(presentationFixture, 'mod:missing'), /not installed/)
 })

@@ -142,7 +142,7 @@ def almanac_definitions(raw_root: Path, shared: list, configuration: dict, prese
             if not target:
                 continue
             body_name = entry['parts'][0]['name']
-            entry['animationTarget'] = target
+            entry['animationsFrom'] = target
             for key in ('parts', 'rate', 'drawOffset', 'scale', 'shadowOffset', 'shadowScale'):
                 entry.pop(key)
             if kind == 'zombies' and entry.get('portrait', {}).get('parts'):

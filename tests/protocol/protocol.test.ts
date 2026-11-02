@@ -116,14 +116,14 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
         conveyorPackets: [],
         plants: [{
             entityId: 2, typeId: 'pvz:peashooter', seedId: 'pvz:peashooter',
-            x: 40, y: 280, row: 2, column: 0, health: 300, maxHealth: 300, eatenFlashCounter: 0,
+            x: 40, y: 280, row: 2, column: 0, health: 300, maxHealth: 300,
         }],
         zombies: [{
             entityId: 3, typeId: 'pvz:normal', x: 700, y: 280, row: 2,
             state: 'walking', health: 270, maxHealth: 270,
             animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
             moweredTicksRemaining: 0,
-            hasHead: true, hasTongue: false, hasArm: true, hitFlashCounter: 0,
+            hasHead: true, hasTongue: false, hasArm: true,
         }],
         projectiles: [{ entityId: 4, typeId: 'pvz:pea', x: 96, y: 290, row: 2 }],
         items: [{
@@ -142,12 +142,9 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
     assert.throws(() => parseServerPacket({ ...packet, snapshot: { ...snapshot,
         conveyorPackets: [{ id: 1, seedId: 'pvz:peashooter', x: 0, selected: true, availability: {} }],
     } }), /multiple selected/)
-    snapshot.plants[0].eatenFlashCounter = -1
-    assert.throws(() => parseServerPacket(packet), /eatenFlashCounter/)
-    snapshot.plants[0].eatenFlashCounter = 0
-    snapshot.zombies[0].hitFlashCounter = -1
-    assert.throws(() => parseServerPacket(packet), /hitFlashCounter/)
-    snapshot.zombies[0].hitFlashCounter = 0
+    assert.throws(() => parseServerPacket({ ...packet, snapshot: { ...snapshot,
+        plants: [{ ...snapshot.plants[0], produceTicks: 1.5 }],
+    } }), /produceTicks/)
     snapshot.items[0].alpha = -1
     assert.throws(() => parseServerPacket(packet), /non-negative/)
     snapshot.items[0].alpha = 255

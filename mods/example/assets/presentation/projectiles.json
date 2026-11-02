@@ -16,13 +16,13 @@
     },
     "fireSounds": [
       {
-        "id": "example:chime",
+        "audio": "example:chime",
         "foley": false
       }
     ],
     "impactSounds": [
       {
-        "id": "splat",
+        "audio": "pvz:splat",
         "foley": true,
         "pitchRange": 10
       }

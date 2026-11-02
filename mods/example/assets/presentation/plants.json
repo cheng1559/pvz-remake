@@ -6,7 +6,6 @@
       "nameKey": "example:rapid_pea"
     },
     "view": "shooter",
-    "animationTarget": "example:rapid_pea",
     "animations": {
       "body": {
         "reanimId": "pvz:peashooter",
@@ -53,7 +52,6 @@
       "nameKey": "example:beacon"
     },
     "view": "example:beacon",
-    "animationTarget": "example:beacon",
     "animations": {
       "body": {
         "reanimId": "example:beacon",

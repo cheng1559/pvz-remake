@@ -16,12 +16,15 @@
     "screens": "presentation/definitions/screens.json",
     "conveyor": "presentation/definitions/conveyor.json",
     "shovel": "presentation/definitions/shovel.json",
+    "graves": "presentation/definitions/graves.json",
+    "rules": "presentation/definitions/rules.json",
     "dave": "presentation/definitions/dave.json",
     "mainMenu": "presentation/definitions/main-menu.json",
     "boards": "presentation/definitions/boards.json",
     "animation": "presentation/definitions/animation.json",
     "levels": "presentation/definitions/levels.json",
     "awards": "presentation/definitions/awards.json",
+    "challenges": "presentation/definitions/challenges.json",
     "plants": "presentation/definitions/plants.json",
     "zombies": "presentation/definitions/zombies.json",
     "seedPackets": "presentation/definitions/seed-packets.json",
@@ -50947,7 +50950,8 @@
       "pvz:animations/zombie_surprise": "assets/json/animations/zombie_surprise.json",
       "pvz:animations/z": "assets/json/animations/z.json",
       "pvz:animations/zombie_boss": "assets/json/animations/zombie_boss.json",
-      "pvz:animations/zombie_boss_driver": "assets/json/animations/zombie_boss_driver.json"
+      "pvz:animations/zombie_boss_driver": "assets/json/animations/zombie_boss_driver.json",
+      "pvz:animations/hammer": "assets/json/animations/hammer.json"
     },
     "reanim": {
       "pvz:almanac_plant_12_body": "assets/reanim/almanac_plant_12_body.json",
@@ -51177,7 +51181,14 @@
       "pvz:door_zombie_idle": "assets/reanim/door_zombie_idle.json",
       "pvz:door_zombie_walk": "assets/reanim/door_zombie_walk.json",
       "pvz:door_zombie_walk2": "assets/reanim/door_zombie_walk2.json",
-      "pvz:door_zombie_eat": "assets/reanim/door_zombie_eat.json"
+      "pvz:door_zombie_eat": "assets/reanim/door_zombie_eat.json",
+      "pvz:hammer": "assets/reanim/hammer.json",
+      "pvz:hypnoshroom": "assets/reanim/hypnoshroom.json",
+      "pvz:hypnoshroom_sleep": "assets/reanim/hypnoshroom_sleep.json",
+      "pvz:cherrybomb_idle": "assets/reanim/cherrybomb_idle.json",
+      "pvz:helm_zombie_idle": "assets/reanim/helm_zombie_idle.json",
+      "pvz:flag_idle": "assets/reanim/flag_idle.json",
+      "pvz:pole_vaulter_idle": "assets/reanim/pole_vaulter_idle.json"
     },
     "particles": {
       "pvz:artchallengeplant": "assets/particles/artchallengeplant.json",

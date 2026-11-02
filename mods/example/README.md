@@ -45,7 +45,7 @@ npm run mod:test -- dist/mods/example
 4. 在充能中暂停、保存并重新进入关卡：剩余时间、行为计时和后续结果继续保持一致；暂停不消耗充能，也不继续发射粒子。
 5. 在普通关卡观察基础豌豆的外观覆盖。新增能量球资源是 `example:orb`，`pvz:projectilepea` 的映射演示覆盖已有 ID；删除后一个映射即可取消这项覆盖。
 
-原版资源仍由基础包提供。Rapid Pea 的身体和示例僵尸复用原版动画，信标则完全使用示例自己的 PNG 和 Reanim。标准种子包的 `visual.preview` 使用原版图像；渲染种子包模式通过 `animationTarget` 绘制实际植物。
+原版资源仍由基础包提供。Rapid Pea 的身体和示例僵尸复用原版动画，信标则完全使用示例自己的 PNG 和 Reanim。标准种子包的 `visual.preview` 使用原版图像；渲染种子包模式按植物的 `animations`（或 `animationsFrom` 借用的动画）绘制实际植物。
 
 ## 状态与生命周期
 

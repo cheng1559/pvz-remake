@@ -1,7 +1,6 @@
 {
   "example:regenerating_zombie": {
     "view": "zombie",
-    "animationTarget": "example:regenerating_zombie",
     "shadowX": 23,
     "parts": { "head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": [] },
     "damagedArm": "damagedArm",
@@ -16,8 +15,8 @@
       "mowered": { "reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator" }
     },
     "drops": {
-      "head": { "track": "anim_head1", "effect": "zombiehead", "offset": [58, -30], "moweredEffect": "moweredzombiehead", "sounds": [{ "id": "limbs_pop", "foley": true, "pitchRange": 10 }] },
-      "arm": { "track": "Zombie_outerarm_lower", "effect": "zombiearm", "offset": [25, -55], "moweredEffect": "moweredzombiearm", "sounds": [{ "id": "limbs_pop", "foley": true, "pitchRange": 10 }] }
+      "head": { "track": "anim_head1", "effect": "zombiehead", "offset": [58, -30], "moweredEffect": "moweredzombiehead", "sounds": [{ "audio": "pvz:limbs_pop", "foley": true, "pitchRange": 10 }] },
+      "arm": { "track": "Zombie_outerarm_lower", "effect": "zombiearm", "offset": [25, -55], "moweredEffect": "moweredzombiearm", "sounds": [{ "audio": "pvz:limbs_pop", "foley": true, "pitchRange": 10 }] }
     }
   }
 }

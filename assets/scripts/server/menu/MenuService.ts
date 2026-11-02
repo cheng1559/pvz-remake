@@ -79,7 +79,7 @@ export class MenuService {
                 if (!definitions) throw new Error('Unknown challenge page')
                 const records = this.profiles.getCurrentProfile()?.challengeRecords ?? []
                 const items = definitions.map(item => ({
-                    key: item.key, icon: item.icon, ...(item.endless !== undefined && { endless: item.endless }),
+                    key: item.key, ...(item.endless !== undefined && { endless: item.endless }),
                     record: records[item.record] ?? 0,
                     completed: challengeCompleted(item, records),
                 }))

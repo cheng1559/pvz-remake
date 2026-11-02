@@ -71,7 +71,7 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     eating.world.add(plant, PositionComponent, { x: 40, y: 280, row: 2 })
     eating.world.add(plant, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
-        eatenFlashCounter: 0, recentlyEatenCounter: 0,
+        recentlyEatenCounter: 0,
     })
     const eater = spawnZombie(eating.world, definitions, 'pvz:normal', 2, 40, 280)
     for (let tick = 0; tick < 3; tick++) eating.run()
@@ -82,13 +82,12 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     for (let tick = 0; tick < 4; tick++) eating.run()
     assert.equal(eating.world.get(plant, PlantComponent)!.health, 292)
     for (let tick = 0; tick < 8; tick++) eating.run()
-    assert.equal(eating.world.get(plant, PlantComponent)!.eatenFlashCounter, 25)
     assert.equal(
         eating.world.resources.get(EventQueueResource).events.some(event => event.type === 'zombieChewedPlant'),
         true,
+        'the client flashes the chewed plant',
     )
     eating.run()
-    assert.equal(eating.world.get(plant, PlantComponent)!.eatenFlashCounter, 24)
     const eatEvents = eating.world.resources.get(EventQueueResource).events
     assert.equal(eatEvents.filter(event => event.type === 'plantEaten').length, 0)
     eating.world.get(plant, PlantComponent)!.health = definitions.zombies['pvz:normal'].bite.damage
@@ -108,7 +107,7 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     headless.world.add(ignoredPlant, PositionComponent, { x: 40, y: 280, row: 2 })
     headless.world.add(ignoredPlant, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
-        eatenFlashCounter: 0, recentlyEatenCounter: 0,
+        recentlyEatenCounter: 0,
     })
     const headlessWalker = spawnZombie(headless.world, definitions, 'pvz:normal', 2, 40, 280)
     headless.run()
@@ -126,9 +125,9 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     const dying = game()
     const corpse = spawnZombie(dying.world, definitions, 'pvz:normal', 2, 700, 280)
     damageZombie(dying.world, definitions, corpse, 100)
-    assert.equal(dying.world.get(corpse, ZombieComponent)!.hitFlashCounter, 25)
+    assert.ok(dying.world.resources.get(EventQueueResource).events.some(event => event.type === 'zombieHit' && event.data.entityId === corpse),
+        'the client flashes the hit zombie')
     dying.run()
-    assert.equal(dying.world.get(corpse, ZombieComponent)!.hitFlashCounter, 24)
     assert.equal(dying.world.get(corpse, ZombieComponent)!.hasArm, false)
     damageZombie(dying.world, definitions, corpse, 100)
     assert.equal(dying.world.get(corpse, ZombieComponent)!.hasHead, false)
@@ -176,7 +175,7 @@ test('zombie target cache follows component replacement, mutation and removal', 
     world.add(plant, PositionComponent, { x: 40, y: 280, row: 2 })
     world.add(plant, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
-        eatenFlashCounter: 0, recentlyEatenCounter: 0,
+        recentlyEatenCounter: 0,
     })
     const zombie = spawnZombie(world, definitions, 'pvz:normal', 2, 70, 280)
     const state = () => world.get(zombie, ZombieComponent)!.state

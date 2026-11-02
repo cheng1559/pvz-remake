@@ -11,14 +11,14 @@ function snapshot(tick: number): WorldSnapshot {
         cursor: { mode: 'none' }, seedPackets: [], conveyorPackets: [],
         plants: [{
             entityId: 1, typeId: 'pvz:peashooter', seedId: 'pvz:peashooter',
-            x: 0, y: 0, row: 2, column: 0, health: 300, maxHealth: 300, eatenFlashCounter: 0,
+            x: 0, y: 0, row: 2, column: 0, health: 300, maxHealth: 300,
         }],
         zombies: [{
             entityId: 2, typeId: 'pvz:normal', state: 'walking',
             x: 10, y: 20, row: 2, health: 270, maxHealth: 270,
             animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
             moweredTicksRemaining: 0,
-            hasHead: true, hasTongue: false, hasArm: true, hitFlashCounter: 0,
+            hasHead: true, hasTongue: false, hasArm: true,
         }],
         projectiles: [{ entityId: 6, typeId: 'pvz:pea', x: 20, y: 30, row: 2 }],
         items: [{ entityId: 4, typeId: 'pvz:sun', state: 'available', x: 30, y: 40, scale: 1, alpha: 255 }],

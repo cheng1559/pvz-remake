@@ -1,0 +1,3 @@
+{
+  "rise": {"particle": "pvz:zombierise", "sounds": [{"audio": "pvz:gravestone_rumble", "foley": true, "pitchRange": 10}]}
+}

@@ -148,7 +148,7 @@ test('selecting and placing Peashooter changes authority state atomically', () =
         column: 0,
         health: 300,
         maxHealth: 300,
-        eatenFlashCounter: 0, recentlyEatenCounter: 0,
+        recentlyEatenCounter: 0,
         x: 40,
         y: 280,
         row: 2,
@@ -298,7 +298,7 @@ test('collecting the award keeps existing entity updates running while spawning 
     world.add(plantId, PositionComponent, { x: 40, y: 280, row: 2 })
     world.add(plantId, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0,
-        health: 300, maxHealth: 300, eatenFlashCounter: 0, recentlyEatenCounter: 0,
+        health: 300, maxHealth: 300, recentlyEatenCounter: 0,
     })
     world.add(plantId, PlantAttackComponent, { readyAtTick: 150, fireAtTick: 2, shotsRemaining: 1 })
     const corpseId = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)

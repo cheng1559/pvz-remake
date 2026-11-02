@@ -12,8 +12,10 @@ export async function showChallengeScreen(
     parent: Node, ui: UI, page: ChallengePageId, onBack: () => void,
 ): Promise<void> {
     const data = await menuApi.getChallenges(page)
-    const names = ['challenge_window', 'challenge_window_highlight', 'trophy', 'minigame_trophy',
-        page === 'survival' ? 'survival_thumbnails' : 'challenge_thumbnails']
+    // ChallengeScreen's button grid, thumbnail sheet and cels (presentation `challenges`).
+    const layout = ui.assets.presentation.challenges?.[`pvz:${page}`]
+    if (!layout) throw new Error(`Missing challenge layout: ${page}`)
+    const names = ['challenge_window', 'challenge_window_highlight', 'trophy', 'minigame_trophy', layout.thumbnails.sprite]
     const frames = await Promise.all(names.map(async name => {
         const frame = await modResources.asset(name, SpriteFrame)
         if (!frame) throw new Error(`Missing challenge image: ${name}`)
@@ -26,14 +28,16 @@ export async function showChallengeScreen(
         text: `${data.completed}/${data.total}`, font: 'body', x: 739, y: 73,
         align: 'center', baseline: true, color: new Color(255, 240, 0),
     })
+    const { columns, rows } = layout.thumbnails
+    const celWidth = thumbnails.originalSize.width / columns, celHeight = thumbnails.originalSize.height / rows
     data.items.forEach((challenge, index) => {
         const row = page === 'survival' && challenge.endless ? 2 : Math.floor(index / 5)
         const col = page === 'survival' && challenge.endless ? 2 : index % 5
         const name = ui.text(challenge.key)
         const button = ui.button(parent, {
             images: { normal: window, hover: highlight },
-            x: 38 + col * 155, y: (page === 'survival' ? 125 : 93) + row * (page === 'survival' ? 145 : 119),
-            width: 104, height: 115,
+            x: layout.x + col * layout.columnSpacing, y: layout.y + row * layout.rowSpacing,
+            width: layout.buttonWidth, height: layout.buttonHeight,
             imageBox: { x: -6, y: -2, width: window.originalSize.width, height: window.originalSize.height },
             pressOffset: [1, 1], releaseToNormalOnPressOut: true,
             onClick: () => ui.dialog(parent, {
@@ -43,7 +47,9 @@ export async function showChallengeScreen(
         })
         button.node.name = challenge.key
         const visual = button.node.getChildByName('Visual')!
-        const thumbnail = getAtlasFrame(thumbnails, challenge.icon, 80, 65, thumbnails.originalSize.width / 80)
+        const icon = layout.icons[challenge.key]
+        if (icon === undefined) throw new Error(`Missing challenge thumbnail: ${challenge.key}`)
+        const thumbnail = getAtlasFrame(thumbnails, icon, celWidth, celHeight, columns)
         ui.image(visual, thumbnail, { x: 13, y: 4 }).node.setSiblingIndex(0)
         const label = ui.label(visual, {
             text: name, font: 'small', x: 5, width: 94, align: 'center', color: new Color(42, 42, 90),

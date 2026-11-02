@@ -59,7 +59,7 @@ export type ChallengePageId = 'minigames' | 'puzzle' | 'survival'
 export interface ChallengeView {
     completed: number
     total: number
-    items: { key: string, icon: number, endless?: boolean, completed: boolean, record: number }[]
+    items: { key: string, endless?: boolean, completed: boolean, record: number }[]
 }
 export interface AlmanacPlantDefinition {
     id: number, key: string, name: string, cost: number, refreshTime: number, upgrade?: boolean,
