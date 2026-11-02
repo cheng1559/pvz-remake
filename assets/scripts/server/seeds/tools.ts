@@ -5,6 +5,7 @@ import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { TutorialResource } from '../state/levelState'
 import { levelTools } from '@/shared/content/gameplay'
+import { clearCursor } from './cursor'
 
 /** Cursor tools such as the shovel. Mods wrap these through `host.around(tools, name, ...)`. */
 export const tools = {
@@ -34,7 +35,7 @@ export const tools = {
         // Board::ToolHitTestHelper: a grave buster cannot be dug up.
         const found = planting.findPlantAt(session, row, column)
         const entity = found !== undefined && !definitions.plants[world.get(found, PlantComponent)!.typeId].graveBuster ? found : undefined
-        bank.selection = { mode: 'none' }
+        clearCursor(world)
         if (entity !== undefined) {
             world.destroyEntity(entity)
             getActiveTutorial(world)?.plantRemoved?.(world)

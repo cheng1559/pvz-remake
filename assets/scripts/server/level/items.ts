@@ -16,6 +16,7 @@ import { canDropLoot, updateMowerCoins } from './loot'
 import { MAX_MONEY } from '@/shared/menu'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
+import { clearCursor } from '../seeds/cursor'
 
 /** Coin::UpdateCollected: sun flies to the sun bank, money to the coin bank at the bottom left. */
 const COIN_BANK_TARGET = { x: 39, y: 558 }
@@ -149,7 +150,7 @@ export const items = {
                     value: sun.value,
                 })
             }
-            world.resources.get(SeedBankResource).selection = { mode: 'none' }
+            clearCursor(world)
             // Board::FadeOutLevel: unused mowers start turning into gold 200 ticks after the award.
             if (canDropLoot(world)) world.resources.get(EconomyStateResource).mowerCoinTicks = 200
             level.result = 'won'

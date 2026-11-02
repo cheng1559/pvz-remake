@@ -10,6 +10,10 @@ import { modResources } from './ModResources'
 import * as viewport from '@/client/view/ClientViewport'
 import * as menu from '@/client/screens/MainMenuScreen'
 import * as animatedPlant from '@/client/plants/AnimatedPlantView'
+import * as sunShroom from '@/client/plants/SunShroomView'
+import * as graveBuster from '@/client/plants/GraveBusterView'
+import * as wallNut from '@/client/plants/WallNutView'
+import * as bowlingNut from '@/client/plants/BowlingNutView'
 import * as reanim from '@/client/reanim/ReanimPlayer'
 import * as uiNode from '@/client/view/uiNode'
 import * as zombieView from '@/client/zombies/ZombieView'
@@ -23,6 +27,9 @@ import * as levelInput from '@/client/level/LevelInputPresenter'
 import * as levelHud from '@/client/level/LevelHudPresenter'
 import * as seedBank from '@/client/level/LevelSeedBank'
 import * as levelView from '@/client/level/LevelView'
+import * as levelGraves from '@/client/level/LevelGraves'
+import * as entityFlashes from '@/client/level/EntityFlashes'
+import * as levelRules from '@/client/level/rules'
 import * as debugSettings from '@/platform/debug/GameDebugSettings'
 import * as debugCli from '@/shared/debug/DebugCli'
 import * as debugCommands from '@/platform/debug/DebugCliCommands'
@@ -50,6 +57,10 @@ export function createClientModHost(ownerId: string, definitions: DefinitionSour
         'client/view/ClientViewport': viewport,
         'client/screens/MainMenuScreen': menu,
         'client/plants/AnimatedPlantView': animatedPlant,
+        'client/plants/SunShroomView': sunShroom,
+        'client/plants/GraveBusterView': graveBuster,
+        'client/plants/WallNutView': wallNut,
+        'client/plants/BowlingNutView': bowlingNut,
         'client/reanim/ReanimPlayer': reanim,
         'client/view/uiNode': uiNode,
         'client/zombies/ZombieView': zombieView,
@@ -63,6 +74,9 @@ export function createClientModHost(ownerId: string, definitions: DefinitionSour
         'client/level/LevelHudPresenter': levelHud,
         'client/level/LevelSeedBank': seedBank,
         'client/level/LevelView': levelView,
+        'client/level/LevelGraves': levelGraves,
+        'client/level/EntityFlashes': entityFlashes,
+        'client/level/rules': levelRules,
         'platform/debug/GameDebugSettings': debugSettings,
         'shared/debug/DebugCli': debugCli,
         'platform/debug/DebugCliCommands': debugCommands,

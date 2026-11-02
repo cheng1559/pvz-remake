@@ -8,7 +8,7 @@
     "activeRows": [2],
     "startingSun": 150,
     "zombiePool": ["pvz:normal"],
-    "waves": {"kind": "pvz:adventure", "count": 4},
+    "rules": {"kind": "pvz:adventure", "count": 4},
     "tutorial": "pvz:adventure-1-1",
     "award": { "kind": "seed", "id": "pvz:sunflower" }
   },
@@ -63,7 +63,7 @@
     "activeRows": [1, 2, 3],
     "startingSun": 50,
     "zombiePool": ["pvz:normal"],
-    "waves": {"kind": "pvz:adventure", "count": 6},
+    "rules": {"kind": "pvz:adventure", "count": 6},
     "tutorial": "pvz:adventure-1-2",
     "award": { "kind": "seed", "id": "pvz:cherrybomb" }
   },
@@ -77,7 +77,7 @@
     "startingSun": 50,
     "firstWaveTicks": 1800,
     "zombiePool": ["pvz:normal", "pvz:conehead"],
-    "waves": {"kind": "pvz:adventure", "count": 8, "fixedZombies": [{"zombie": "pvz:conehead", "waves": [5, 8]}]},
+    "rules": {"kind": "pvz:adventure", "count": 8, "fixedZombies": [{"zombie": "pvz:conehead", "waves": [5, 8]}]},
     "tutorial": "pvz:more-sun",
     "award": { "kind": "seed", "id": "pvz:wallnut" }
   },
@@ -91,7 +91,7 @@
     "startingSun": 50,
     "firstWaveTicks": 1800,
     "zombiePool": ["pvz:normal", "pvz:conehead"],
-    "waves": {"kind": "pvz:adventure", "count": 10},
+    "rules": {"kind": "pvz:adventure", "count": 10},
     "tutorial": "pvz:more-sun",
     "award": { "kind": "tool", "id": "pvz:shovel", "titleKey": "GOT_SHOVEL", "nameKey": "SHOVEL", "descriptionKey": "SHOVEL_DESCRIPTION", "width": 80, "height": 80 }
   },
@@ -104,7 +104,6 @@
     "activeRows": [0, 1, 2, 3, 4],
     "startingSun": 0,
     "firstWaveTicks": 200,
-    "bowling": {"lineColumn": 2},
     "conveyor": {
       "initialSeed": "pvz:bowling-wallnut",
       "capacity": 10, "spacing": 50, "entryX": 515, "moveTicks": 4, "insertionGap": 40, "removalGap": 1,
@@ -112,7 +111,7 @@
       "seeds": [{"id": "pvz:bowling-wallnut", "weight": 85}, {"id": "pvz:bowling-explodenut", "weight": 15}]
     },
     "zombiePool": ["pvz:normal", "pvz:conehead"],
-    "waves": {"kind": "pvz:adventure", "count": 8, "pointsScale": 4},
+    "rules": {"kind": "pvz:bowling", "count": 8, "lineColumn": 2},
     "tutorial": "pvz:adventure-1-5",
     "award": {"kind": "seed", "id": "pvz:potatomine"}
   },
@@ -125,7 +124,7 @@
     "startingSun": 50,
     "firstWaveTicks": 1800,
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:pole_vaulter"],
-    "waves": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:pole_vaulter", "waves": [6, 10]}]},
+    "rules": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:pole_vaulter", "waves": [6, 10]}]},
     "tutorial": "pvz:more-sun",
     "nextLevel": "pvz:adventure-1-7",
     "award": {
@@ -142,7 +141,7 @@
     "startingSun": 50,
     "firstWaveTicks": 1800,
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:pole_vaulter"],
-    "waves": {"kind": "pvz:adventure", "count": 20},
+    "rules": {"kind": "pvz:adventure", "count": 20},
     "tutorial": "pvz:more-sun",
     "nextLevel": "pvz:adventure-1-8",
     "award": {
@@ -159,7 +158,7 @@
     "startingSun": 50,
     "firstWaveTicks": 1800,
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:buckethead"],
-    "waves": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:buckethead", "waves": [6, 10]}]},
+    "rules": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:buckethead", "waves": [6, 10]}]},
     "tutorial": "pvz:standard",
     "nextLevel": "pvz:adventure-1-9",
     "award": {
@@ -176,7 +175,7 @@
     "startingSun": 50,
     "firstWaveTicks": 1800,
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:pole_vaulter", "pvz:buckethead"],
-    "waves": {"kind": "pvz:adventure", "count": 20},
+    "rules": {"kind": "pvz:adventure", "count": 20},
     "tutorial": "pvz:standard",
     "nextLevel": "pvz:adventure-1-10",
     "award": {
@@ -197,7 +196,7 @@
     "startingSun": 0,
     "firstWaveTicks": 100,
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:pole_vaulter", "pvz:buckethead"],
-    "waves": {"kind": "pvz:adventure", "count": 20, "pointsScale": 3},
+    "rules": {"kind": "pvz:adventure", "count": 20, "pointsScale": 3},
     "tutorial": "pvz:standard",
     "conveyor": {
       "capacity": 10,
@@ -273,7 +272,7 @@
     "graveZombies": ["pvz:normal"],
     "tutorial": "pvz:adventure-2-1",
     "zombiePool": ["pvz:normal", "pvz:newspaper"],
-    "waves": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:newspaper", "waves": [6, 10]}]},
+    "rules": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:newspaper", "waves": [6, 10]}]},
     "award": {"kind": "seed", "id": "pvz:sunshroom"}
   },
   "pvz:adventure-2-2": {
@@ -288,7 +287,7 @@
     "graveZombies": ["pvz:normal", "pvz:conehead"],
     "tutorial": "pvz:adventure-2-2",
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:buckethead", "pvz:newspaper"],
-    "waves": {"kind": "pvz:adventure", "count": 20},
+    "rules": {"kind": "pvz:adventure", "count": 20},
     "award": {"kind": "seed", "id": "pvz:fumeshroom"}
   },
   "pvz:adventure-2-3": {
@@ -303,11 +302,12 @@
     "graveZombies": ["pvz:normal", "pvz:conehead"],
     "tutorial": "pvz:adventure-2-3",
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:screendoor"],
-    "waves": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:screendoor", "waves": [6, 10]}]},
+    "rules": {"kind": "pvz:adventure", "count": 10, "fixedZombies": [{"zombie": "pvz:screendoor", "waves": [6, 10]}]},
     "award": {"kind": "seed", "id": "pvz:gravebuster"}
   },
   "pvz:adventure-2-4": {
     "adventureIndex": 14,
+    "nextLevel": "pvz:adventure-2-5",
     "board": "pvz:night",
     "lawnMower": "pvz:standard",
     "activeRows": [0, 1, 2, 3, 4],
@@ -317,8 +317,24 @@
     "graveZombies": ["pvz:normal", "pvz:conehead"],
     "tutorial": "pvz:adventure-2-4",
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:pole_vaulter", "pvz:screendoor"],
-    "waves": {"kind": "pvz:adventure", "count": 20},
+    "rules": {"kind": "pvz:adventure", "count": 20},
     "award": {"kind": "unlock", "id": "pvz:almanac", "titleKey": "FOUND_SUBURBAN_ALMANAC", "nameKey": "SUBURBAN_ALMANAC", "descriptionKey": "SUBURBAN_ALMANAC_DESCRIPTION", "width": 80, "height": 80,
       "opens": {"page": "almanac", "buttonKey": "VIEW_ALMANAC_BUTTON"}}
+  },
+  "pvz:adventure-2-5": {
+    "adventureIndex": 15,
+    "board": "pvz:night",
+    "lawnMower": "pvz:standard",
+    "activeRows": [0, 1, 2, 3, 4],
+    "startingSun": 0,
+    "seedPackets": ["pvz:potatomine", "pvz:gravebuster", "pvz:cherrybomb"],
+    "openingRecharge": false,
+    "tools": [],
+    "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:buckethead"],
+    "firstWaveTicks": 200,
+    "rules": {"kind": "pvz:whack-a-zombie", "count": 8, "graves": 9, "refillGraves": 5, "firstGraveColumn": 3, "waveTicks": 2000, "zombies": {"plain": "pvz:normal", "cone": "pvz:conehead", "pail": "pvz:buckethead"},
+      "sun": "pvz:sun"},
+    "tutorial": "pvz:adventure-2-5",
+    "award": {"kind": "seed", "id": "pvz:hypnoshroom"}
   }
 }

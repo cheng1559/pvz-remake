@@ -1,6 +1,6 @@
 import type { JsonObject, WorldSnapshot } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
-import { EconomyStateResource, LawnMowerComponent, LevelStateResource, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent } from '../state/components'
+import { EconomyStateResource, LawnMowerComponent, LevelStateResource, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent } from '../state/components'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { getAvailableSun } from '../level/items'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
@@ -10,6 +10,7 @@ import { seedChooserSnapshot } from '../seeds/seedChooser'
 import type { Session } from './session'
 import { tools } from '../seeds/tools'
 import { getActiveTutorial } from '../tutorials'
+import { levelRule } from '../rules/registry'
 
 /** What the client draws each frame. Mods add their state through `host.around(snapshot, 'build', ...)`. */
 export const snapshot = {
@@ -37,11 +38,13 @@ export const snapshot = {
         const plants = [...world.query(PositionComponent, PlantComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
             const plant = world.get(entity, PlantComponent)!
+            const production = definitions.plants[plant.typeId].producer && world.get(entity, PlantAttackComponent)
             return {
                 entityId: entity, ...plant, ...position,
                 ...(plant.ability ? { ability: { ...plant.ability } } : {}),
                 ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
                 ...(definitions.plants[plant.typeId].nocturnal && !level.board.night ? { asleep: true as const } : {}),
+                ...(production ? { produceTicks: Math.max(0, production.readyAtTick - gameplayTick) } : {}),
             }
         })
         const zombies = [...world.query(PositionComponent, ZombieComponent)].map(entity => {
@@ -61,8 +64,6 @@ export const snapshot = {
                 hasHead: zombie.hasHead,
                 hasTongue: zombie.hasTongue,
                 hasArm: zombie.hasArm,
-                hitFlashCounter: zombie.hitFlashCounter,
-                ...(zombie.hitThroughShield ? { hitThroughShield: true as const } : {}),
                 helmHealth: zombie.helmHealth,
                 chilled: zombie.chilledTicks > 0,
                 hasPole: zombie.hasPole,
@@ -100,6 +101,7 @@ export const snapshot = {
 
         const owned = tools.owned(session), script = getActiveTutorial(world)
         const question = tutorial.dialogIndex === undefined ? undefined : script?.dialogQuestion?.(world, definitions)
+        const ruleSnapshot = levelRule(world)?.snapshot?.(world)
         const dialog: JsonObject | undefined = tutorial.dialogIndex === undefined ? undefined : { index: tutorial.dialogIndex, ...(question ? { question } : {}) }
         return {
             levelId: level.id,
@@ -136,6 +138,7 @@ export const snapshot = {
                 ...(owned.length ? { 'pvz:tools': { owned, available: owned.filter(id => tools.available(session, id)) } } : {}),
                 ...(seedBank.conveyor ? { 'pvz:conveyor': { ticks: seedBank.conveyor.moveTicks } } : {}),
                 ...(dialog ? { 'pvz:dialog': dialog } : {}),
+                ...(ruleSnapshot ? { [level.definition.rules!.kind]: ruleSnapshot } : {}),
                 ...(world.resources.has(DebugRulesResource) ? { 'pvz:debug': { ...getDebugRules(world) } } : {}) },
         }
     },

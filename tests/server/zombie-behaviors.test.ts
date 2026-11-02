@@ -14,6 +14,7 @@ source.zombies['test:zombie'] = { ...source.zombies['pvz:normal'], maxHealth: 54
 const definitions = parseGameplayDefinitions(source, json('seed-catalog'))
 const levelSource = withFixedBanks(json('levels'))
 // 1-1's waves as listed waves, with the test zombie in the first.
+delete levelSource.levels['pvz:adventure-1-1'].rules
 levelSource.levels['pvz:adventure-1-1'].waves = [['test:zombie', 'pvz:normal'], ['pvz:normal'], ['pvz:normal'], ['pvz:normal', 'pvz:normal']].map(zombies => ({ zombies }))
 const levels = parseGameplayLevels(levelSource, definitions)
 type State = { ticks: number, history: { heals: number } }

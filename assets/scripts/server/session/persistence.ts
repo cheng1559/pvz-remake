@@ -1,6 +1,6 @@
 import type { World } from '@/ecs/index'
-import { isWaveRule, levelTools, type GameplayDefinitions } from '@/shared/content/gameplay'
-import type { EnabledMod } from '@/shared/protocol/index'
+import { levelTools, levelWaveCount, type GameplayDefinitions } from '@/shared/content/gameplay'
+import type { EnabledMod, JsonObject } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
 import {
@@ -98,6 +98,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
             index: wave.index,
             ...(wave.graves === undefined ? {} : { graves: wave.graves.map(grave => ({ ...grave })) }),
             ...(wave.graveRiseAtTick === undefined ? {} : { graveRiseAtTick: wave.graveRiseAtTick }),
+            ...(wave.ruleState === undefined ? {} : { ruleState: jsonRoundTrip(wave.ruleState) as JsonObject }),
             plan: wave.plan.map(entry => ({ zombies: [...entry.zombies], ...(entry.flagWave ? { flagWave: true as const } : {}) })),
             ...(wave.rowPicks === undefined ? {} : { rowPicks: wave.rowPicks.map(row => ({ ...row })) }),
             ...(wave.hugeWaveAnnounced === undefined ? {} : { hugeWaveAnnounced: wave.hugeWaveAnnounced }),
@@ -134,7 +135,12 @@ export function restoreSession(
     }
     const definition = content.levels.levels[save.levelId]
     if (!definition) throw new Error(`Unknown saved level: ${save.levelId}`)
-    if (save.wave.plan.length !== (isWaveRule(definition.waves) ? definition.waves.count : definition.waves.length) ||
+    if (save.wave.ruleState !== undefined) {
+        const rule = content.gameplay.levelRules.get(definition)
+        if (!rule?.parseState) throw new Error('The saved rule state does not fit the level')
+        save.wave.ruleState = rule.parseState(save.wave.ruleState)
+    }
+    if (save.wave.plan.length !== levelWaveCount(definition) ||
         save.wave.plan.some(wave => wave.zombies.some(id => !definitions.zombies[id]))) {
         throw new Error('Saved zombie waves do not match the level')
     }

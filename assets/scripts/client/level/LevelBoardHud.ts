@@ -30,7 +30,6 @@ export class LevelBoardHud {
     private shovelBank?: Node
     private shovel?: Node
     private cursor?: Node
-    private stripe?: Node
     private conveyor?: Node
     private belt?: Sprite
     private beltFrames: import('cc').SpriteFrame[] = []
@@ -41,11 +40,11 @@ export class LevelBoardHud {
     private shovelHotkey?: UILabel
     private shovelX = 0
 
-    static async create(parent: Node, bankLayer: Node, ground: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, cursorLayer: Node, seedBank: LevelSeedBank, player: LevelPlayer, tooltipSurface: Node, daveLayer: Node): Promise<LevelBoardHud> {
+    static async create(parent: Node, bankLayer: Node, content: LoadedContent, ui: UI, initial: WorldSnapshot, cursorLayer: Node, seedBank: LevelSeedBank, player: LevelPlayer, tooltipSurface: Node, daveLayer: Node): Promise<LevelBoardHud> {
         const root = uiNode({ name: 'BoardHud', parent, anchor: { x: 0, y: 1 }, size: { width: 800, height: 600 } }).node
         const result = new LevelBoardHud(root, content, ui, player)
         const sprites = new SpriteRepository(content.registry, content.loader)
-        const level = content.levels.levels[initial.levelId], board = content.definitions.boards[level.board]
+        const level = content.levels.levels[initial.levelId]
         if (ownedTools(initial).includes('pvz:shovel')) {
             const [bankFrame, shovelFrame] = await Promise.all(['shovelbank', 'shovel'].map(id => sprites.load(`pvz:${id}`)))
             const layout = content.presentation.shovel
@@ -71,18 +70,13 @@ export class LevelBoardHud {
             const layout = content.presentation.conveyor
             const [backdrop, frame] = await Promise.all(['conveyorbelt_backdrop', 'conveyorbelt'].map(id => sprites.load(`pvz:${id}`)))
             const conveyor = result.conveyor = uiNode({ name: 'Conveyor', parent: bankLayer, anchor: { x: 0, y: 1 } }).node
+            // Board::DrawUIBottom draws the seed bank (and its conveyor) before the shovel.
+            if (result.shovelBank) conveyor.setSiblingIndex(result.shovelBank.getSiblingIndex())
             ui.image(conveyor, backdrop, { x: layout.backdropX, y: 0 })
             result.beltFrames = Array.from({ length: layout.frames }, (_, index) => getAtlasFrame(frame, index, layout.beltWidth, layout.beltHeight, 1))
             result.belt = ui.image(conveyor, result.beltFrames[0], { x: layout.clipX, y: layout.beltY }).node.getComponent(Sprite)!
             const clip = uiNode({ name: 'ConveyorPackets', parent: conveyor, position: { x: layout.clipX, y: 0 }, anchor: { x: 0, y: 1 }, size: layout, mask: Mask.Type.GRAPHICS_RECT }).node
             seedBank.attachConveyor(clip)
-        }
-        if (level.bowling) {
-            const [x, y] = content.presentation.conveyor.stripeOffset
-            result.stripe = ui.image(ground.parent!, await sprites.load('pvz:wallnut_bowlingstripe'), {
-                x: board.origin.x + (level.bowling.lineColumn + 1) * board.cell.width + x - 400, y: board.origin.y + y - 300,
-            }).node
-            result.stripe.setSiblingIndex(ground.getSiblingIndex() + 1)
         }
         // Dave comes for scripted dialogue. He stands on a screen layer outside the board, so neither the lawn's shift
         // nor the intro camera moves him.
@@ -150,7 +144,6 @@ export class LevelBoardHud {
             if (this.pointer) this.cursor!.setPosition(this.pointer.x + layout.cursorOffset[0], -this.pointer.y + layout.cursorOffset[1])
         }
         const layout = this.content.presentation.conveyor
-        if (this.stripe) this.stripe.active = snapshot.phase === 'gameplay' || dialog !== undefined && layout.stripeDialogs.includes(dialog.index) || snapshot.tutorial.step === 'complete'
         if (this.conveyor) {
             this.conveyor.active = snapshot.result !== 'lost' && (snapshot.phase === 'gameplay' || !this.blocksIntro)
             this.conveyor.setPosition(layout.x, snapshot.phase === 'gameplay' ? 0 : Math.max(0, layout.height * (1 - (this.introTicks - layout.introStart) / layout.introDuration)))

@@ -45,7 +45,7 @@ function setup() {
     world.resources.set(SeedBankResource, { selection: { mode: 'none' }, packets: [{ seedId: 'pvz:peashooter', readyAtTick: 0 }] })
     const gameplay = new GameplayRegistry()
     gameplay.freeze(definitions)
-    initializeLevel(world, true, definitions, gameplay.waveRules)
+    initializeLevel(world, true, definitions, gameplay.levelRules)
     const schedule = new Schedule()
     schedule.add('tutorial', createLevelProgressSystem(definitions))
     schedule.add('spawn', createWaveSystem(definitions))
@@ -61,7 +61,7 @@ function addPlant(world: World, column: number) {
         column,
         health: 300,
         maxHealth: 300,
-        eatenFlashCounter: 0, recentlyEatenCounter: 0,
+        recentlyEatenCounter: 0,
     })
 }
 

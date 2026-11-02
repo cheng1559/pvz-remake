@@ -1,0 +1,15 @@
+{
+  "pvz:whack-a-zombie": {
+    "hammer": {"reanimId": "pvz:hammer", "x": -25, "y": 16, "fps": 24, "swingTime": 0.2},
+    "swingSounds": [{"audio": "pvz:swing", "foley": true, "pitchRange": 2}],
+    "helmSounds": {"bucket": [{"audio": "pvz:shieldhit", "foley": true}], "cone": [{"audio": "pvz:plastichit", "foley": true}]},
+    "bonk": {"sounds": [{"audio": "pvz:bonk", "foley": true, "pitchRange": 2}], "particle": "pvz:pow", "x": -3, "y": 9},
+    "graveRise": {"particle": "pvz:whackazombierise", "sounds": [{"audio": "pvz:dirt_rise", "foley": true}]},
+    "itemPadding": {"size": 15, "height": 30},
+    "seedBankSlide": 2
+  },
+  "pvz:bowling": {
+    "stripe": {"sprite": "pvz:wallnut_bowlingstripe", "offset": [-12, -3], "dialogs": [2411, 2412, 2413, 2414, 2415]},
+    "plantedSounds": [{"audio": "pvz:bowling", "foley": false}]
+  }
+}

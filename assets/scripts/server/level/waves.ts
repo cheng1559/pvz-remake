@@ -6,6 +6,7 @@ import { WaveResource, type WaveState } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { tryDropLevelAward } from './levelAward'
 import { updateGraveSpawns } from './graves'
+import { levelRule } from '../rules/registry'
 
 const NEXT_WAVE_DELAY_TICKS = 2500
 const NEXT_WAVE_DELAY_RANGE_TICKS = 600
@@ -28,7 +29,8 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
         id: 'pvz:waves',
         run({ world, tick, commands }) {
             const level = world.resources.get(LevelStateResource)
-            if (level.result !== 'playing' || level.paused) return
+            // Challenge::UpdateZombieSpawning: some rules raise their own zombies.
+            if (level.result !== 'playing' || level.paused || levelRule(world)?.spawnsZombies) return
 
             const waves = world.resources.get(WaveResource)
             updateGraveSpawns(world, definitions, tick)

@@ -1,18 +1,6 @@
 import type { GameSystem, World } from '@/ecs/index'
 import { LevelStateResource, RandomResource, SeedBankResource } from '../state/components'
-import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
-import { EventQueueResource, emitServerEvent } from '../state/events'
-
-export function canPlantConveyorAt(world: World, column: number): boolean {
-    const rules = world.resources.get(LevelStateResource).definition.bowling
-    if (!rules || column <= rules.lineColumn) return true
-    const displayed = world.resources.get(TutorialResource).displayedAdvice ??= []
-    if (!displayed.includes('ADVICE_NOT_PASSED_LINE')) {
-        displayed.push('ADVICE_NOT_PASSED_LINE')
-        emitServerEvent(world.resources.get(EventQueueResource), 'advice', { key: 'ADVICE_NOT_PASSED_LINE', style: 'hint' })
-    }
-    return false
-}
+import { ItemComponent, WaveResource } from '../state/levelState'
 
 export function startConveyor(world: World): void {
     const level = world.resources.get(LevelStateResource)

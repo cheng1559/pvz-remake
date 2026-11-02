@@ -9,6 +9,7 @@ import type { SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { levelRulePresentation } from './rules/LevelRuleView'
 import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { UIButton } from '@/client/ui/UIButton'
@@ -31,6 +32,8 @@ export interface LevelHudOptions {
     ui: UI
     content: LoadedContent
     level: LevelDefinition
+    /** Board::CanPlantAt as the level rule narrows it (the bowling line). */
+    canPlantAt?: (snapshot: WorldSnapshot, row: number, column: number) => boolean
     seedChooser?: WorldSnapshot['seedChooser']
     /** The packets the bank starts with; the server builds a fixed bank from the level or the available seeds. */
     initialSeeds: string[]
@@ -85,6 +88,7 @@ export class LevelHudPresenter {
     private menuButton!: UIButton
     private mobileGridGuide!: Node
     private mobileGuideCell = -1
+    private canPlantAt?: LevelHudOptions['canPlantAt']
     private readonly hoverClient = {
         clearHover: () => {},
         refreshHover: (pointer: UIHoverPointer, modalRoot: Node | null) => pointer.canHover && !modalRoot &&
@@ -110,6 +114,7 @@ export class LevelHudPresenter {
         presenter.mobileGridGuide = options.mobileGridGuide
         presenter.coinBank = options.coinBank
         presenter.ui = options.ui
+        presenter.canPlantAt = options.canPlantAt
         presenter.menuButton.node.active = false
         return presenter
     }
@@ -283,7 +288,7 @@ export class LevelHudPresenter {
         const showSeedGuide = introComplete && snapshot.result === 'playing' && this.presentation.seedGuideSteps.includes(snapshot.tutorial.step)
         this.seedBank.sync(snapshot, events, introComplete, showSeedGuide ? tutorialFlashColor(snapshot.gameplayTick) : null, allowTransientEffects)
         const packet = snapshot.seedPackets.find(packet => packet.seedId === (this.presentation.guideSeed ?? snapshot.seedPackets[0]?.seedId))
-        this.syncSeedTutorialArrow(!!(showSeedGuide && packet?.ready && !packet.availability.reason))
+        this.syncSeedTutorialArrow(!!(showSeedGuide && this.presentation.seedGuideArrow !== false && packet?.ready && !packet.availability.reason))
         const showLawnGuide = introComplete && snapshot.result === 'playing' && snapshot.cursor.mode === 'seed' &&
             this.presentation.lawnGuideSteps.includes(snapshot.tutorial.step)
         this.tutorialLawnFlash.active = showLawnGuide
@@ -394,7 +399,7 @@ export class LevelHudPresenter {
             const grave = !!graveAt(snapshot.graves, row, column)
             // Graves block planting, except for a grave buster, which needs one.
             const needsGrave = seedDefinition!.placement === 'grave'
-            valid = valid && !occupant && grave === needsGrave && (!this.level.bowling || column <= this.level.bowling.lineColumn)
+            valid = valid && !occupant && grave === needsGrave && (this.canPlantAt?.(snapshot, row, column) ?? true)
             this.gridPreview.active = valid && !mobile
             if (valid && !mobile) this.gridPreview.setPosition(board.origin.x + column * board.cell.width,
                 -(board.origin.y + row * board.cell.height + (presentation?.drawHeightOffset ?? 0)))
@@ -416,12 +421,15 @@ export class LevelHudPresenter {
     private isPointerOverItem(snapshot: WorldSnapshot): boolean {
         if (snapshot.paused || snapshot.result !== 'playing' || GameDebugSettings.isMobileMode() || !this.pointer || snapshot.cursor.mode !== 'none') return false
         const { x, y } = this.pointer
+        // Coin::MouseHitTest: the level rule may widen every item, as LevelInputPresenter.collectAt does.
+        const padding = levelRulePresentation(this.content.presentation, this.level)?.itemPadding
         return snapshot.items.some(item => {
             const definition = this.content.definitions.items[item.typeId]
             const size = definition ?? levelAwardSize(this.level.award)
-            const extra = definition ? 15 : 0
+            const extra = padding?.size ?? (definition ? 15 : 0)
+            const below = padding?.height ?? 0
             return item.state !== 'collecting' && x >= item.x - extra && x < item.x + size.width + extra &&
-                y >= item.y - extra && y < item.y + size.height + extra
+                y >= item.y - extra && y < item.y + size.height + extra + below
         })
     }
 

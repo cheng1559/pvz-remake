@@ -3,12 +3,15 @@ import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { type EntityRemover, LevelStateResource, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { ItemComponent, WaveResource } from '../state/levelState'
+import { levelRule } from '../rules/registry'
 
 /** Zombie::TrySpawnLevelAward: capture the defeated zombie before its entity is removed. */
 export function tryDropLevelAward(world: World, definitions: GameplayDefinitions, remover: EntityRemover, defeated?: number): void {
     if (!world.resources.has(WaveResource)) return
     const level = world.resources.get(LevelStateResource)
-    if (level.result !== 'playing' || level.paused || world.resources.get(WaveResource).index < world.resources.get(WaveResource).plan.length) return
+    const waves = world.resources.get(WaveResource)
+    if (level.result !== 'playing' || level.paused || waves.index < waves.plan.length) return
+    if (levelRule(world)?.holdsAward?.(world)) return
     if ([...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === level.definition.award.id)) return
     const zombies = [...world.query(PositionComponent, ZombieComponent)]
     if (zombies.some(entity => {

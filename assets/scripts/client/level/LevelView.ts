@@ -37,6 +37,7 @@ import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { LevelSeedChooser } from './LevelSeedChooser'
 import { LevelBoardHud, ownedTools } from './LevelBoardHud'
 import { LevelGraves } from './LevelGraves'
+import { createLevelRuleView, levelRulePresentation, type LevelRuleView } from './rules'
 import { uiAreaEdge } from '@/client/view/ClientViewport'
 
 const WIDTH = 800
@@ -54,6 +55,10 @@ export interface LevelPlayer { name: string; upgradeCost: number; nextUpgradeCos
 
 export class LevelView {
     private graves?: LevelGraves
+    /** The level rule's own view (the Whack-a-Zombie mallet, the bowling line); input passes it unclaimed clicks. */
+    rule?: LevelRuleView
+    /** Coin::MouseHitTest: the level rule widens every item's click area. */
+    itemPadding?: { readonly size: number; readonly height: number }
     private boardHud?: LevelBoardHud
     private hideConveyorBank = () => {}
     private seedChooser?: LevelSeedChooser
@@ -305,7 +310,9 @@ export class LevelView {
         })
         const levelCompleteFade = fadeParts.node
         levelCompleteFade.active = false
-        const audio = new LevelAudioPresenter(presentation.board.music, content.presentation)
+        const rulePresentation = levelRulePresentation(content.presentation, level)
+        const graveRise = rulePresentation?.graveRise ?? content.presentation.graves.rise
+        const audio = new LevelAudioPresenter(presentation.board.music, content.presentation, graveRise.sounds)
         const seedChooser = initial.seedChooser === undefined ? undefined
             : await LevelSeedChooser.create(ui, content, hud, initial.seedChooser.availableSeeds, initial.seedChooser.slots, root, seedId => {
                 // Board::SeedNotRecommendedForLevel: mushrooms by day, and grave busters without graves.
@@ -337,14 +344,14 @@ export class LevelView {
                 loadPacketSprite,
                 packetCostFont: pico129,
             },
-            entityLayer, coinLayer, awardLayer, audio, intro,
+            entityLayer, coinLayer, awardLayer, audio, intro, graveRise.particle,
         )
         const end = new LevelEndPresenter(
             content, awardLayer, overlayLayer, levelCompleteFade,
             id => entityRenderer.node(id), audio, ui,
         )
         const hudPresenter = LevelHudPresenter.create({
-            ui, content, level, seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
+            ui, content, level, canPlantAt: (snapshot, row, column) => view.rule?.canPlantAt?.(snapshot, row, column) ?? true, seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
             loadPacketSprite, packetCostFont: pico129,
             adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: bankRight, adviceFont: houseOfTerror28,
             tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
@@ -368,9 +375,14 @@ export class LevelView {
         view.seedChooser = seedChooser
         view.graves = await LevelGraves.create(entityLayer, entityRenderer, content, boardDefinition, initial.graves ?? [])
         view.syncGraves(initial.phase === 'gameplay')
-        if (ownedTools(initial).length || level.conveyor || initial.tutorial.dave || level.bowling) {
-            view.boardHud = await LevelBoardHud.create(hud, bankLeft, slots.sodClip, content, ui, initial, cursorLayer, hudPresenter.seedBank, player, tooltipSurface, overlayLayer)
+        if (ownedTools(initial).length || level.conveyor || initial.tutorial.dave) {
+            view.boardHud = await LevelBoardHud.create(hud, bankLeft, content, ui, initial, cursorLayer, hudPresenter.seedBank, player, tooltipSurface, overlayLayer)
             if (level.conveyor) view.hideConveyorBank = () => { bank.active = false }
+        }
+        view.itemPadding = rulePresentation?.itemPadding
+        if (level.rules) {
+            view.rule = await createLevelRuleView({ kind: level.rules.kind, config: rulePresentation ?? {}, content, ui, initial, audio,
+                cursorLayer, ground: slots.sodClip, bank, bankHeight })
         }
         // The HUD and the seed bank layer are screen UI under the board. They cancel the lawn's shift, and the seed
         // chooser holds them through its whole camera pan; restoring a completed intro clears that hold. The HUD's lawn
@@ -471,6 +483,7 @@ export class LevelView {
     pointerOffsetY(seedId: string): number { return this.hud.pointerOffsetY(seedId) }
 
     setPointer(pointer?: { x: number, y: number }): void {
+        this.rule?.setPointer?.(pointer)
         this.boardHud?.setPointer(pointer)
         this.entityRenderer.setPointer(pointer)
         this.hud.setPointer(pointer)
@@ -552,6 +565,7 @@ export class LevelView {
         this.end.sync(snapshot, events)
         for (const item of snapshot.items) this.end.syncAward(item, snapshot.levelId)
         this.hud.sync(snapshot, events, this.introComplete, this.menuVisible)
+        this.rule?.sync?.(snapshot, events, this.introComplete)
         for (const event of events) this.audio.play(event)
         this.syncHitboxes(snapshot)
         if (snapshot.result === 'lost') {

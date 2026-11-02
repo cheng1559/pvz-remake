@@ -20,6 +20,7 @@ import { createProductionSystem } from '../plants/production'
 import { createPeashooterSystem } from '../plants/shooter'
 import { createProjectileSystem } from '../combat/projectiles'
 import { createWaveSystem } from '../level/waves'
+import { LevelRuleResource } from '../rules/registry'
 import { createZombieGroanSystem } from '../zombies/groans'
 import { ZombieBehaviorsResource } from '../zombies/behaviors'
 import { createZombieSystem } from '../zombies/system'
@@ -86,10 +87,14 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         commandResults: [],
     }
     const { definitions, gameplay } = content
+    // The level's rules hook in wherever they take part; their systems run after the wave system.
+    const rule = gameplay.levelRules.get(world.resources.get(LevelStateResource).definition)
+    world.resources.set(LevelRuleResource, rule)
     const systems = [
         { phase: 'command', system: { id: 'pvz:commands', run: () => processCommandPhase(session) } },
         { phase: 'tutorial', system: createLevelProgressSystem(definitions) },
         { phase: 'spawn', system: createWaveSystem(definitions) },
+        ...rule?.systems?.(definitions) ?? [],
         { phase: 'plant', system: createPeashooterSystem(definitions) },
         { phase: 'plant', system: createProductionSystem(definitions) },
         { phase: 'plant', system: createPlantAbilitySystem(definitions) },
@@ -133,13 +138,15 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
     const bank = seedBankStart(definitions, content.levels, level, packet.firstAdventure, packet.packetUpgrades)
     world.resources.set(SeedBankResource, {
         selection: { mode: 'none' },
-        packets: 'seeds' in bank ? bank.seeds.map(seedId => ({ seedId,
-            readyAtTick: definitions.seeds[seedId].initialCooldownTicks ?? 0,
-            cooldownTotal: definitions.seeds[seedId].initialCooldownTicks ?? 0 })) : [],
+        // SeedPacket::SetPacketType returns before the opening recharge on some levels.
+        packets: 'seeds' in bank ? bank.seeds.map(seedId => {
+            const cooldown = level.openingRecharge === false ? 0 : definitions.seeds[seedId].initialCooldownTicks ?? 0
+            return { seedId, readyAtTick: cooldown, cooldownTotal: cooldown }
+        }) : [],
         ...('chooser' in bank ? { choosing: true } : {}),
     })
     world.resources.set(EventQueueResource, createEventQueue())
-    initializeLevel(world, packet.firstAdventure, definitions, content.gameplay.waveRules)
+    initializeLevel(world, packet.firstAdventure, definitions, content.gameplay.levelRules)
 
     for (const row of level.activeRows) {
         const entity = world.createEntity()

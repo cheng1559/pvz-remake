@@ -8,6 +8,7 @@ import { tryDropLevelAward } from './levelAward'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { getActiveTutorial } from '../tutorials'
 import { MAX_MONEY } from '@/shared/menu'
+import { levelRule } from '../rules/registry'
 
 const SILVER = 'pvz:coin_silver', GOLD = 'pvz:coin_gold', DIAMOND = 'pvz:diamond'
 
@@ -50,13 +51,13 @@ export function dropGraveLoot(world: World, definitions: GameplayDefinitions, x:
 
 /** Board::DropLootPiece. Presents and chocolate need the Zen Garden and are not installed, so their ranges stay empty. */
 function dropLootPiece(world: World, definitions: GameplayDefinitions, x: number, y: number, factor: number): void {
-    const level = world.resources.get(LevelStateResource).definition
     const economy = world.resources.get(EconomyStateResource)
     const rules = world.resources.get(TutorialResource).firstAdventure ? getActiveTutorial(world)?.loot : undefined
     let roll = world.resources.get(RandomResource).integer(0, 29999)
     if (rules?.firstCoinAfterWave !== undefined && !economy.firstCoinDropped && world.resources.get(WaveResource).index > rules.firstCoinAfterWave) roll = 1000
+    if (levelRule(world)?.dropLoot?.(world, definitions, x, y, roll, factor)) return
     const typeId = roll < 14 * factor ? (economy.diamonds ? DIAMOND : GOLD) : roll < 250 * factor ? GOLD : roll < 2500 * factor ? SILVER : undefined
-    if (!typeId || level.bowling) return
+    if (!typeId) return
     if (rules?.savingsCap !== undefined) {
         // 2-1 keeps the seed-slot upgrade out of reach until 2-2's dialogue: count the mowers' gold and coins in flight.
         let money = economy.money + definitions.items[typeId].value

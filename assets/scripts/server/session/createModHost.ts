@@ -20,6 +20,8 @@ import * as debugCli from '@/shared/debug/DebugCli'
 import * as debugCommands from '../debug/debugCommands'
 import * as gameplay from '../registry/GameplayRegistry'
 import * as seedBank from '../seeds/seedBank'
+import * as levelRules from '../rules/registry'
+import * as cursor from '../seeds/cursor'
 import type { DefinitionSources } from '@/shared/content/DefinitionRegistry'
 
 export function createServerModHost(ownerId: string, registry: gameplay.GameplayRegistry, definitions: DefinitionSources): ModHost {
@@ -36,6 +38,8 @@ export function createServerModHost(ownerId: string, registry: gameplay.Gameplay
         'server/snapshot': snapshot,
         'server/components': components,
         'server/seedBank': seedBank,
+        'server/levelRules': levelRules,
+        'server/cursor': cursor,
         'server/levelState': levelState,
         'server/projectiles': projectiles,
         'server/zombies/system': zombies,

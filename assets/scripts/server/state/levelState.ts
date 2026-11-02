@@ -1,6 +1,6 @@
 import { defineComponent, defineResource } from '@/ecs/index'
-import type { GraveSnapshot } from '@/shared/protocol'
-import type { WavePlan } from '../level/waveRules'
+import type { GraveSnapshot, JsonObject } from '@/shared/protocol'
+import type { WavePlan } from '../rules/registry'
 
 export interface Item {
     typeId: string
@@ -28,6 +28,7 @@ export interface TutorialState {
         | 'collect-more-sun' | 'enough-sun' | 'pick-second-seed' | 'plant-second-seed' | 'complete'
         | 'pick-sunflower' | 'plant-sunflower' | 'refresh-sunflower' | 'waiting-for-sunflowers'
         | 'dave-opening' | 'shovel-pickup' | 'shovel-dig' | 'shovel-keep-digging' | 'dave-bowling'
+        | 'whack-before-pick-seed' | 'whack-pick-seed' | 'whack-done'
     sunAtTick?: number
     promptAtTick?: number
     cantAffordAdviceShown?: boolean
@@ -50,6 +51,8 @@ export interface WaveState {
     finalWaveAnnounced?: boolean
     hugeWaveAnnounced?: boolean
     rowPicks?: Array<{ row: number; lastPicked: number; secondLastPicked: number; mowedAtWave?: number }>
+    /** What the level's rules keep through the game, in their own format (LevelRuleDefinition.parseState). */
+    ruleState?: JsonObject
 }
 
 export const ItemComponent = defineComponent<Item>('pvz:item')

@@ -179,9 +179,14 @@ export interface LawnMowerDefinition {
 
 /** `points` is the wave's whole budget: the listed zombies spend it first, the rest is picked from the zombie pool. */
 export interface LevelWave { zombies: string[]; flagWave?: boolean; points?: number }
-/** A wave rule registered under `kind` builds `count` waves; the other keys are its own settings. */
-export interface WaveRule { kind: string; count: number; settings: JsonObject }
-export function isWaveRule(waves: LevelDefinition['waves']): waves is WaveRule { return !Array.isArray(waves) }
+/**
+ * The level rule registered under `kind` (the server's LevelRuleRegistry) builds `count` waves and may change how the
+ * level plays, as the original's Challenge code does for its modes; the other keys are its own settings.
+ */
+export interface LevelRule { kind: string; count: number; settings: JsonObject }
+
+/** The number of waves the level plays. */
+export function levelWaveCount(level: LevelDefinition): number { return level.rules?.count ?? level.waves!.length }
 
 export interface LevelDefinition {
     adventureIndex: number
@@ -203,8 +208,10 @@ export interface LevelDefinition {
     /** Board::PickGraveRisingZombieType: one per grave after the final wave, by weight. Omitted in the source, it comes
      *  from the zombies' `graveRise`; a lawn with graves must end up with some. */
     graveZombies?: Array<{ id: string; weight: number }>
-    /** The waves as listed, or a registered wave rule that builds them when the level starts. */
-    waves: LevelWave[] | WaveRule
+    /** The waves as listed; a level has these or `rules`. */
+    waves?: LevelWave[]
+    /** The level rule that builds the waves when the level starts and may change the level's play. */
+    rules?: LevelRule
     zombiePool?: Array<{ id: string; points: number; weight: number; firstWave?: number }>
     firstWaveTicks?: number
     conveyor?: {
@@ -219,7 +226,13 @@ export interface LevelDefinition {
         insertionGap: number
         removalGap: number
     }
-    bowling?: { lineColumn: number }
+    /**
+     * False when the packets skip their opening recharge and start ready (SeedPacket::SetPacketType on Whack-a-Zombie,
+     * Scary Potter and similar levels); planting still recharges them (SeedPacket::WasPlanted).
+     */
+    openingRecharge?: false
+    /** The tools the level offers instead of the ones earlier levels awarded (CutScene::ShowShovel). */
+    tools?: string[]
     nextLevel?: string
     tutorial: string
     /**
@@ -296,6 +309,7 @@ export function parseGameplayLevels(
 export interface AwardOpens { page: 'almanac'; buttonKey: string }
 
 export function levelTools(levels: GameplayLevels, level: LevelDefinition, firstAdventure: boolean): string[] {
+    if (level.tools) return [...level.tools]
     const awards = Object.values(levels.levels).flatMap(entry => entry.award.kind === 'tool' ? [entry] : [])
         .sort((a, b) => a.adventureIndex - b.adventureIndex)
     return [...new Set(awards.filter(entry => !firstAdventure || entry.adventureIndex < level.adventureIndex).map(entry => entry.award.id))]
@@ -669,7 +683,7 @@ function parseLevelWaves(value: unknown[], name: string, definitions: GameplayDe
     })
 }
 
-function parseWaveRule(value: unknown, name: string): WaveRule {
+function parseLevelRule(value: unknown, name: string): LevelRule {
     const { kind, count, ...settings } = object(value, name)
     return { kind: qualifiedId(kind, `${name}.kind`), count: positiveInteger(count, `${name}.count`), settings: jsonRoundTrip(settings) as JsonObject }
 }
@@ -694,7 +708,7 @@ function parseZombiePool(value: unknown, name: string, definitions: GameplayDefi
  */
 function defaultGraveZombies(definitions: GameplayDefinitions, waves: LevelDefinition['waves'],
     zombiePool: Array<{ id: string }> | undefined): LevelDefinition['graveZombies'] {
-    const allowed = new Set([...zombiePool?.map(entry => entry.id) ?? [], ...isWaveRule(waves) ? [] : waves.flatMap(wave => wave.zombies)])
+    const allowed = new Set([...zombiePool?.map(entry => entry.id) ?? [], ...waves?.flatMap(wave => wave.zombies) ?? []])
     const picks = Object.entries(definitions.zombies).flatMap(([id, { graveRise, wave }]) =>
         graveRise && allowed.has(id) ? [{ id, weight: wave!.weight }] : [])
     return picks.length ? picks : undefined
@@ -702,9 +716,9 @@ function defaultGraveZombies(definitions: GameplayDefinitions, waves: LevelDefin
 
 function parseLevel(value: unknown, name: string, definitions: GameplayDefinitions): LevelDefinition {
     const source = exactObject(value, [
-        'adventureIndex', 'board', 'lawnMower', 'activeRows', 'startingSun', 'waves', 'tutorial', 'award',
-    ], name, ['nextLevel', 'seedPackets', 'firstWaveTicks', 'zombiePool', 'bowling', 'conveyor', 'initialPlants', 'persistent',
-        'skySun', 'graves', 'graveZombies'])
+        'adventureIndex', 'board', 'lawnMower', 'activeRows', 'startingSun', 'tutorial', 'award',
+    ], name, ['waves', 'rules', 'nextLevel', 'seedPackets', 'firstWaveTicks', 'zombiePool', 'conveyor', 'initialPlants', 'persistent',
+        'skySun', 'graves', 'graveZombies', 'openingRecharge', 'tools'])
     if (source.persistent !== undefined && typeof source.persistent !== 'boolean') throw new Error(`${name}.persistent must be a boolean`)
     const boardId = qualifiedId(source.board, `${name}.board`)
     const board = reference(boardId, definitions.boards, `${name}.board`)
@@ -719,12 +733,6 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const seedPackets = source.seedPackets === undefined ? undefined : qualifiedIdArray(source.seedPackets, `${name}.seedPackets`)
     seedPackets?.forEach((id, index) => reference(id, definitions.seeds, `${name}.seedPackets[${index}]`))
     if (seedPackets && seedPackets.length > definitions.seedBank.maxSlots) throw new Error(`${name}.seedPackets exceeds the bank`)
-    let bowling: LevelDefinition['bowling']
-    if (source.bowling !== undefined) {
-        const data = exactObject(source.bowling, ['lineColumn'], `${name}.bowling`)
-        bowling = { lineColumn: nonNegativeInteger(data.lineColumn, `${name}.bowling.lineColumn`) }
-        if (bowling.lineColumn >= board.columns) throw new Error(`${name}.bowling is invalid`)
-    }
     let conveyor: LevelDefinition['conveyor']
     if (source.conveyor !== undefined) {
         const data = exactObject(source.conveyor, ['seeds', 'capacity', 'spacing', 'entryX', 'moveTicks', 'spawnDelay', 'insertionGap', 'removalGap'], `${name}.conveyor`, ['initialSeed', 'initialDelayTicks'])
@@ -764,14 +772,18 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     })
     const initialPlants = source.initialPlants === undefined ? undefined : plantPositions(source.initialPlants, `${name}.initialPlants`)
     if (seedPackets && conveyor) throw new Error(`${name} cannot combine a conveyor and fixed seed packets`)
-    const waves: LevelWave[] | WaveRule = Array.isArray(source.waves) ? parseLevelWaves(source.waves, name, definitions) : parseWaveRule(source.waves, `${name}.waves`)
+    if ((source.waves === undefined) === (source.rules === undefined)) throw new Error(`${name} needs either waves or rules`)
+    // The rule form moved from `waves: {kind, ...}` to `rules`; say so rather than asking for an array.
+    if (source.waves !== undefined && !Array.isArray(source.waves)) throw new Error(`${name}.waves lists the waves; write a level rule as rules: {kind, count, ...}`)
+    const waves = source.waves === undefined ? undefined : parseLevelWaves(array(source.waves, `${name}.waves`), name, definitions)
+    const rules = source.rules === undefined ? undefined : parseLevelRule(source.rules, `${name}.rules`)
     const zombiePool = source.zombiePool === undefined ? undefined : parseZombiePool(source.zombiePool, name, definitions)
     if (zombiePool && new Set(zombiePool.map(entry => entry.id)).size !== zombiePool.length) throw new Error(`${name}.zombiePool contains duplicate IDs`)
-    const fills = isWaveRule(waves) || waves.some(wave => wave.points !== undefined)
+    const fills = rules !== undefined || waves!.some(wave => wave.points !== undefined)
     if (fills && !zombiePool?.some(entry => entry.weight > 0 && entry.points === 1 && (entry.firstWave ?? 1) === 1)) {
         throw new Error(`${name}.zombiePool must include a weighted one-point zombie`)
     }
-    if (!isWaveRule(waves)) for (const wave of waves) if (wave.points !== undefined) {
+    for (const wave of waves ?? []) if (wave.points !== undefined) {
         let spent = 0
         for (const id of wave.zombies) {
             const entry = zombiePool!.find(entry => entry.id === id)
@@ -780,6 +792,8 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         }
         if (spent > wave.points) throw new Error(`${name}.waves spends more than its points`)
     }
+    if (source.openingRecharge !== undefined && source.openingRecharge !== false) throw new Error(`${name}.openingRecharge can only be false`)
+    const tools = source.tools === undefined ? undefined : qualifiedIdArray(source.tools, `${name}.tools`)
     const lawnMower = qualifiedId(source.lawnMower, `${name}.lawnMower`)
     reference(lawnMower, definitions.lawnMowers, `${name}.lawnMower`)
     const skySun = source.skySun === undefined ? undefined : qualifiedId(source.skySun, `${name}.skySun`)
@@ -838,13 +852,15 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         startingSun: nonNegativeInteger(source.startingSun, `${name}.startingSun`),
         ...(seedPackets === undefined ? {} : { seedPackets }),
         ...(initialPlants === undefined ? {} : { initialPlants }),
-        ...(bowling === undefined ? {} : { bowling }),
         ...(conveyor === undefined ? {} : { conveyor }),
+        ...(source.openingRecharge === false ? { openingRecharge: false as const } : {}),
+        ...(tools === undefined ? {} : { tools }),
         lawnMower,
         ...(skySun === undefined ? {} : { skySun }),
         ...(graves === undefined ? {} : { graves }),
         ...(graveZombies === undefined ? {} : { graveZombies }),
-        waves,
+        ...(waves === undefined ? {} : { waves }),
+        ...(rules === undefined ? {} : { rules }),
         ...(zombiePool === undefined ? {} : { zombiePool }),
         ...(source.firstWaveTicks === undefined ? {} : { firstWaveTicks: positiveInteger(source.firstWaveTicks, `${name}.firstWaveTicks`) }),
         tutorial: qualifiedId(source.tutorial, `${name}.tutorial`),
