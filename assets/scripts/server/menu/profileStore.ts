@@ -36,6 +36,13 @@ export interface PlayerProfile {
     finishedAdventure: number
     challengeRecords: number[]
     purchases: number[]
+    /**
+     * The seeds the player owns beyond the starting ones (LawnApp::HasSeedType): level awards add theirs when the level
+     * is won, and the store adds the plants it sells.
+     */
+    seeds: string[]
+    /** The main menu entries collected awards unlocked (`unlocks` of a level's unlock award). */
+    unlocks: string[]
     playTimeActivePlayer: number
     playTimeInactivePlayer: number
     hasUsedCheatKeys: boolean
@@ -102,6 +109,8 @@ export function createProfileStore(storage: MenuStorage) {
             ...profile,
             challengeRecords: [...profile.challengeRecords],
             purchases: [...profile.purchases],
+            seeds: [...profile.seeds],
+            unlocks: [...profile.unlocks],
             pottedPlants: profile.pottedPlants.map((plant) => ({ ...plant })),
             earnedAchievements: [...profile.earnedAchievements],
             shownAchievements: [...profile.shownAchievements],
@@ -127,6 +136,8 @@ export function createProfileStore(storage: MenuStorage) {
             finishedAdventure: 0,
             challengeRecords: createArray(CHALLENGE_RECORD_COUNT, 0),
             purchases: createArray(PURCHASE_COUNT, 0),
+            seeds: [],
+            unlocks: [],
             playTimeActivePlayer: 0,
             playTimeInactivePlayer: 0,
             hasUsedCheatKeys: false,
@@ -169,6 +180,10 @@ export function createProfileStore(storage: MenuStorage) {
         profile.purchases = [
             ...createArray(PURCHASE_COUNT, 0).map((_, index) => Number(raw.purchases?.[index] ?? 0) || 0),
         ]
+        profile.seeds = Array.isArray(raw.seeds)
+            ? [...new Set(raw.seeds.filter((id): id is string => typeof id === 'string' && id.length > 0))] : []
+        profile.unlocks = Array.isArray(raw.unlocks)
+            ? [...new Set(raw.unlocks.filter((id): id is string => typeof id === 'string' && id.length > 0))] : []
         profile.playTimeActivePlayer = Number(raw.playTimeActivePlayer ?? 0) || 0
         profile.playTimeInactivePlayer = Number(raw.playTimeInactivePlayer ?? 0) || 0
         profile.hasUsedCheatKeys = !!raw.hasUsedCheatKeys

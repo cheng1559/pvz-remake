@@ -154,7 +154,6 @@ test('one clock scales fixed-tick gameplay across frame rates, live speed change
         advanceSecond()
         assert.equal(game.render().gameplayTick, 350)
         assert.equal(game.render().plants.length, 0)
-        assert.equal(definitions.tickSeconds, 0.01)
         for (const invalid of [-1, NaN, Infinity]) assert.throws(() => clock.setSpeed(invalid))
         assert.equal(clock.speed, 0.5)
     }

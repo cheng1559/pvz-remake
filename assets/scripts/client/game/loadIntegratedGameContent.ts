@@ -9,6 +9,14 @@ import { contentJson } from '@/shared/mod/content'
 // Preserve the installed asset ID and prefab UUID for existing content packs and saves.
 export const LEVEL_PREFAB_ID = 'pvz:level'
 
+/** The gameplay definitions and levels with the enabled Mods' changes, without loading any level assets. */
+export async function loadGameplayContent() {
+    const { base, loadedMods } = await loadClientContent()
+    if (!base.content.gameplay) throw new Error('Base content does not define gameplay')
+    const gameplay = contentJson(base.files, base.content.gameplay)
+    return { gameplay, ...buildGameplayContent(gameplay, loadedMods.gameplayDefinitions) }
+}
+
 export async function loadIntegratedGameContent() {
     const { base, loadedMods, registry, loader } = await loadClientContent()
     const { manifest } = base

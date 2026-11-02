@@ -77,6 +77,8 @@ export interface StartSessionPacket extends ClientPacketBase {
      * it while the player has not declined twice.
      */
     packetUpgradeOffer?: { cost: number }
+    /** The seeds the player owns (the profile's awards and purchases); without it every catalog seed is available. */
+    ownedSeeds?: string[]
     firstAdventure: boolean
     mods: EnabledMod[]
     save?: JsonValue
@@ -128,6 +130,9 @@ export interface GraveSnapshot {
 }
 
 /** Board::AddAGraveStone: 20 stone looks and a rise delay of 0-49 ticks. */
+/** The server's fixed step: one tick of the original's 10 ms Board::Update. Ticks in saves and snapshots count these. */
+export const TICK_SECONDS = 0.01
+
 export const GRAVE_VARIANTS = 20
 export const GRAVE_MAX_RISE_DELAY = 49
 /** mGridItemCounter at which a grave has fully risen and can raise zombies (Board::SpawnZombiesFromGraves). */
@@ -376,6 +381,9 @@ export function parseClientPacket(value: unknown): ClientPacket {
             if (packet.packetUpgradeOffer !== undefined) {
                 const offer = record(packet.packetUpgradeOffer, 'startSession.packetUpgradeOffer')
                 integer(offer.cost, 'startSession.packetUpgradeOffer.cost')
+            }
+            if (packet.ownedSeeds !== undefined) {
+                array(packet.ownedSeeds, 'startSession.ownedSeeds').forEach((id, index) => nonEmptyString(id, `startSession.ownedSeeds[${index}]`))
             }
             boolean(packet.firstAdventure, 'startSession.firstAdventure')
             array(packet.mods, 'startSession.mods').forEach((value, index) => validateEnabledMod(value, index))

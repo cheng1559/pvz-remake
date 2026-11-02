@@ -27,6 +27,7 @@ import { menuApi } from '@/client/api/MenuApi'
 import { connectLocalMenuApi } from './LocalMenuApi'
 import { createProfileStore } from '@/server/menu/profileStore'
 import { createAlmanacCatalog } from '@/server/menu/almanacCatalog'
+import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
 import { createStoreCatalog } from '@/server/menu/storeCatalog'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { showDebugCliDialog } from '@/client/dialogs/DebugCliDialog'
@@ -74,7 +75,8 @@ export class GameApp extends Component {
         modManager.deferPendingChanges()
         connectLocalMenuApi(sys.localStorage, () => this.controller?.getLevelDefinition() ?? null, () => this.controller?.isWon() ?? false,
             Promise.all([modResources.baseJson('pvz:gameplay/store').then(createStoreCatalog),
-                modResources.baseJson('pvz:gameplay/almanac').then(createAlmanacCatalog)]))
+                modResources.baseJson('pvz:gameplay/almanac').then(createAlmanacCatalog),
+                loadGameplayContent().then(content => content.definitions)]))
         UIHoverManager.start(this.node)
         // Load the original arrow now rather than on the first mouse move.
         CursorManager.refresh()

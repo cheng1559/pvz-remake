@@ -18,11 +18,13 @@ import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
+import { adventureSeeds } from './adventure-seeds'
+import { TICK_SECONDS } from '@/shared/protocol'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 const options: StartSessionPacket = { type: 'startSession', protocolVersion: 1, sequence: 1,
-    levelId: 'pvz:adventure-2-1', randomSeed: 7, initialMoney: 0, firstAdventure: true, mods: [] }
+    levelId: 'pvz:adventure-2-1', randomSeed: 7, initialMoney: 0, firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-2-1'), mods: [] }
 function restore(save: ReturnType<IntegratedGameServer['save']>) {
     const server = new IntegratedGameServer(definitions, levels)
     server.start({ ...options, save: save as unknown as JsonValue })
@@ -258,7 +260,8 @@ test('fume-shrooms hit every zombie in reach at once, through the newspaper and 
 
 test('grave busters only go on graves, cannot be dug up, then eat the grave and disappear', () => {
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
-    game.start({ ...options, firstAdventure: false })
+    // A replay's player owns every seed.
+    game.start({ ...options, firstAdventure: false, ownedSeeds: definitions.seedCatalog })
     game.debugCommand('/cooldown false')
     game.debugCommand('/suncost false')
     const picks = ['pvz:gravebuster', ...definitions.seedCatalog.filter(id => id !== 'pvz:gravebuster').slice(0, 5)]
@@ -284,7 +287,7 @@ test('grave busters only go on graves, cannot be dug up, then eat the grave and 
     assert.ok(game.render().plants.some(value => value.entityId === buster.entityId), 'Board::ToolHitTestHelper skips grave busters')
     const { landTicks, eatTicks } = definitions.plants['pvz:gravebuster'].graveBuster!
     for (let tick = 0; tick < landTicks.max + eatTicks && game.render().plants.some(value => value.entityId === buster.entityId); tick++) {
-        game.update(definitions.tickSeconds)
+        game.update(TICK_SECONDS)
     }
     assert.ok(!game.render().plants.some(value => value.entityId === buster.entityId))
     assert.ok(!game.render().graves!.some(value => value.row === grave.row && value.column === grave.column))

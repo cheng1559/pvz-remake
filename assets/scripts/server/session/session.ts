@@ -5,7 +5,7 @@ import type { EnabledMod, GameCommand, StartSessionPacket } from '@/shared/proto
 import { DeterministicRng } from '../state/DeterministicRng'
 import type { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processCommandPhase } from './commands'
-import { EconomyStateResource, LawnMowerComponent, LevelStateResource, MAX_SUN, PacketUpgradeOfferResource, PositionComponent, RandomResource, SeedBankResource } from '../state/components'
+import { EconomyStateResource, LawnMowerComponent, LevelStateResource, PacketUpgradeOfferResource, PositionComponent, RandomResource, SeedBankResource } from '../state/components'
 import { createConveyorSystem } from '../level/conveyor'
 import { EventQueueResource, createEventQueue } from '../state/events'
 import { createItemSystem } from '../level/items'
@@ -128,14 +128,14 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         paused: false,
     })
     world.resources.set(EconomyStateResource, {
-        sun: Math.min(MAX_SUN, level.startingSun),
+        sun: Math.min(definitions.economy.maxSun, level.startingSun),
         money: packet.initialMoney,
         pendingSunSpend: 0,
         ...(packet.packetUpgrades ? { diamonds: true as const, packetUpgrades: packet.packetUpgrades } : {}),
     })
     if (packet.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...packet.packetUpgradeOffer })
     world.resources.set(RandomResource, new DeterministicRng(packet.randomSeed))
-    const bank = seedBankStart(definitions, content.levels, level, packet.firstAdventure, packet.packetUpgrades)
+    const bank = seedBankStart(definitions, level, packet.ownedSeeds, packet.packetUpgrades)
     world.resources.set(SeedBankResource, {
         selection: { mode: 'none' },
         // SeedPacket::SetPacketType returns before the opening recharge on some levels.
@@ -144,6 +144,7 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
             return { seedId, readyAtTick: cooldown, cooldownTotal: cooldown }
         }) : [],
         ...('chooser' in bank ? { choosing: true } : {}),
+        ...(packet.ownedSeeds ? { owned: [...packet.ownedSeeds] } : {}),
     })
     world.resources.set(EventQueueResource, createEventQueue())
     initializeLevel(world, packet.firstAdventure, definitions, content.gameplay.levelRules)

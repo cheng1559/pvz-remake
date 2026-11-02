@@ -5,6 +5,8 @@ import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { buildGameplayContent } from '@/shared/content/DefinitionRegistry'
 import type { GameCommand, JsonValue } from '@/shared/protocol'
+import { adventureSeeds } from './adventure-seeds'
+import { TICK_SECONDS } from '@/shared/protocol'
 
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
@@ -22,7 +24,9 @@ const chosen = (game: LocalIntegratedGame) => game.render().seedPackets.map(pack
 test('the bank fills with the available seeds while they fit and opens the chooser once there are more', () => {
     const start = (levelId: string, firstAdventure: boolean, packetUpgrades = 0) => {
         const game = new LocalIntegratedGame(definitions, levels)
-        game.start({ ...options, levelId, firstAdventure, ...(packetUpgrades ? { packetUpgrades } : {}) })
+        // A first adventure owns what the earlier levels awarded; a replay's player has collected every seed.
+        game.start({ ...options, levelId, firstAdventure, ...(firstAdventure ? { ownedSeeds: adventureSeeds(levels, levelId) } : {}),
+            ...(packetUpgrades ? { packetUpgrades } : {}) })
         return game.render()
     }
     // Board::InitLevel: a first adventure's bank holds every unlocked seed, in order, up to level 7.
@@ -38,6 +42,10 @@ test('the bank fills with the available seeds while they fit and opens the choos
     assert.equal(start('pvz:adventure-1-8', true, 3).seedChooser, undefined, 'nine slots take all seven seeds, so nothing is chosen')
     assert.equal(start('pvz:adventure-1-8', false, 3).seedChooser?.slots, 9)
     assert.equal(start('pvz:adventure-1-5', true).seedPackets.length, 0, 'a conveyor level starts with an empty bank')
+    // The owned seeds are the bank's, in catalog order; ones the catalog lacks are left out.
+    const owning = new LocalIntegratedGame(definitions, levels)
+    owning.start({ ...options, levelId: 'pvz:adventure-1-1', ownedSeeds: ['pvz:hypnoshroom', 'test:missing', 'pvz:peashooter'] })
+    assert.deepEqual(owning.render().seedPackets.map(packet => packet.seedId), ['pvz:peashooter', 'pvz:hypnoshroom'])
     // CutScene::ShowShovel: the 1-4 award, from 1-5 on a first adventure and on every replay.
     const owned = (levelId: string, firstAdventure: boolean) => (start(levelId, firstAdventure).extensions['pvz:tools'] as { owned: string[] } | undefined)?.owned
     assert.deepEqual([owned('pvz:adventure-1-4', true), owned('pvz:adventure-1-5', true), owned('pvz:adventure-1-1', false)], [undefined, ['pvz:shovel'], ['pvz:shovel']])
@@ -96,7 +104,7 @@ test('with recharging and sun costs disabled, every chosen packet flashes on the
     command(game, { type: 'confirmSeeds' })
     command(game, { type: 'completeIntro' })
     game.drainEvents()
-    while (game.render().gameplayTick < 1) game.update(definitions.tickSeconds)
+    while (game.render().gameplayTick < 1) game.update(TICK_SECONDS)
     const flashed = game.drainEvents().filter(event => event.type === 'seedPacketFlashRequested').map(event => event.data.seedId)
     assert.deepEqual(flashed, picks, 'a 150-sun cherry bomb flashes with the rest despite the 50 starting sun')
 })
@@ -111,13 +119,13 @@ test('a recharge that runs out flashes once, while one cleared by `/cooldown fal
     const flashes: string[] = []
     const ready = definitions.seeds['pvz:wallnut'].initialCooldownTicks!
     while (game.render().gameplayTick < ready) {
-        game.update(definitions.tickSeconds)
+        game.update(TICK_SECONDS)
         for (const event of game.drainEvents()) if (event.type === 'seedPacketFlashRequested') flashes.push(`${game.render().gameplayTick}:${event.data.seedId}`)
     }
     assert.ok(flashes.includes(`${ready}:pvz:wallnut`), 'the 50-sun wall-nut flashes as its opening recharge ends')
     assert.equal(flashes.filter(flash => flash.endsWith(':pvz:wallnut')).length, 1)
     game.debugCommand('/cooldown false')
-    for (let tick = 0; tick < 5; tick++) game.update(definitions.tickSeconds)
+    for (let tick = 0; tick < 5; tick++) game.update(TICK_SECONDS)
     assert.ok(!game.drainEvents().some(event => event.type === 'seedPacketFlashRequested' && event.data.seedId === 'pvz:cherrybomb'),
         'clearing the cherry bomb\'s recharge is not a recharge finishing')
 })

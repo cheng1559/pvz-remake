@@ -143,7 +143,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
 }
 
 function parseSeedBank(value: unknown): SeedBankState {
-    const source = optionalExact(value, ['packets', 'selection'], ['choosing', 'conveyor'], 'server save.seedBank')
+    const source = optionalExact(value, ['packets', 'selection'], ['choosing', 'conveyor', 'owned'], 'server save.seedBank')
     const selected = record(source.selection, 'seedBank.selection')
     let selection: SeedBankState['selection']
     switch (selected.mode) {
@@ -186,7 +186,9 @@ function parseSeedBank(value: unknown): SeedBankState {
     if (selection.mode === 'conveyor' && !conveyor?.packets.some(packet => packet.id === selection.packetId)) throw new Error('Saved cursor has an invalid conveyor packet')
     return { packets, selection,
         ...(conveyor === undefined ? {} : { conveyor }),
-        ...(source.choosing === undefined ? {} : { choosing: boolean(source.choosing, 'server save.seedBank.choosing') }) }
+        ...(source.choosing === undefined ? {} : { choosing: boolean(source.choosing, 'server save.seedBank.choosing') }),
+        ...(source.owned === undefined ? {} : { owned: array(source.owned, 'server save.seedBank.owned')
+            .map((id, index) => nonEmptyString(id, `server save.seedBank.owned[${index}]`)) }) }
 }
 
 function parseTutorial(value: unknown): TutorialState {

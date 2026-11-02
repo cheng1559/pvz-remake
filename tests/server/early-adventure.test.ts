@@ -5,13 +5,14 @@ import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { runCommand } from './run-command'
+import { adventureSeeds } from './adventure-seeds'
 
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 const options = (index: number): StartSessionPacket => ({
     protocolVersion: 1, sequence: 1, type: 'startSession', levelId: `pvz:adventure-1-${index}`,
-    randomSeed: 12345, initialMoney: 0, firstAdventure: true, mods: [],
+    randomSeed: 12345, initialMoney: 0, firstAdventure: true, ownedSeeds: adventureSeeds(levels, `pvz:adventure-1-${index}`), mods: [],
 })
 function game(index: number, intro = false) {
     const server = new IntegratedGameServer(definitions, levels)

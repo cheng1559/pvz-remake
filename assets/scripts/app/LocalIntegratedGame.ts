@@ -4,7 +4,7 @@ import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { GameplayRegistry } from '@/server/registry/GameplayRegistry'
 import { LocalGameChannel } from '@/shared/channel/index'
 import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gameplay'
-import type { GameCommand, JsonValue, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
+import { TICK_SECONDS, type GameCommand, type JsonValue, type StartSessionPacket, type WorldSnapshot } from '@/shared/protocol/index'
 import type { LevelPresentationSnapshot } from '@/client/level/LevelPresentationSnapshot'
 import type { DebugCliResult } from '@/shared/debug/DebugCli'
 
@@ -40,7 +40,7 @@ export class LocalIntegratedGame {
         this.update(0)
         for (let attempts = 0; this.client.lastDebugResult?.sequence !== sequence && attempts < 1000; attempts++) {
             if (this.client.lastRejection?.sequence === sequence) throw new Error(this.client.lastRejection.code)
-            this.update(this.definitions.tickSeconds)
+            this.update(TICK_SECONDS)
         }
         if (this.client.lastDebugResult?.sequence !== sequence) throw new Error('Server did not return the debug command result')
         return this.client.lastDebugResult.result
@@ -50,7 +50,7 @@ export class LocalIntegratedGame {
         const sequence = this.client.requestSave()
         this.update(0)
         for (let attempts = 0; this.client.lastSaveSequence !== sequence && attempts < 1000; attempts++) {
-            this.update(this.definitions.tickSeconds)
+            this.update(TICK_SECONDS)
         }
         if (this.client.lastSave === undefined || this.client.lastSaveSequence !== sequence) {
             throw new Error('Server did not return a save at the requested boundary')

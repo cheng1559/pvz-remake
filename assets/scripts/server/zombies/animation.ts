@@ -1,9 +1,10 @@
 import type { Position, Zombie, ZombieAnimation } from '../state/components'
 import type { GameplayDefinitions, ZombieDefinition, ZombieGait } from '@/shared/content/gameplay'
+import { TICK_SECONDS } from '@/shared/protocol'
 
 export const ZOMBIE_ASSET_FPS = 12
 
-export const TICKS_PER_SECOND = 100
+export const TICKS_PER_SECOND = Math.round(1 / TICK_SECONDS)
 
 const ZOMBIE_WALK_RATE_FACTOR = 47
 

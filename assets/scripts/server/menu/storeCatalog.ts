@@ -3,6 +3,8 @@ import type { PersistedPottedPlant, PlayerProfile } from './profileStore'
 
 type Purchase = { kind: 'set'; value: number } | { kind: 'count'; amount: number; limit: number }
     | { kind: 'stock'; minimum: number; amount: number; limit: number } | { kind: 'timestamp' | 'plant' }
+    /** A seed the player then owns (the profile's `seeds`), sold once. */
+    | { kind: 'seed'; id: string }
 
 export interface StoreItem {
     id: number
@@ -67,6 +69,7 @@ export function createStoreCatalog(value: unknown) {
             count < (requires.minimumStored ?? 0))) return 'comingSoon'
         const soldOut = rule.kind === 'count' ? count >= rule.limit
             : rule.kind === 'stock' ? count > rule.limit
+            : rule.kind === 'seed' ? profile.seeds.includes(rule.id)
             : rule.kind === 'plant' ? profile.pottedPlants.filter(plant => plant.whichZenGarden === data.garden.template.whichZenGarden).length >= data.garden.capacity || count === currentDay(now)
             : count > 0
         return soldOut ? 'soldOut' : 'available'
@@ -83,6 +86,7 @@ export function createStoreCatalog(value: unknown) {
             case 'stock': profile.purchases[item.id] = Math.max(rule.minimum, count) + rule.amount; break
             case 'set': profile.purchases[item.id] = rule.value; break
             case 'timestamp': profile.purchases[item.id] = Math.max(1, Math.floor(now / 1000)); break
+            case 'seed': profile.seeds.push(rule.id); break
             case 'plant': {
                 const { columns, capacity, template } = data.garden
                 const occupied = new Set(profile.pottedPlants.filter(plant => plant.whichZenGarden === template.whichZenGarden).map(plant => plant.y * columns + plant.x))
@@ -142,6 +146,8 @@ function validateStore(value: unknown): asserts value is StoreDefinition {
             else if (rule.kind === 'count' || rule.kind === 'stock') {
                 if (!Number.isInteger(rule.amount) || rule.amount <= 0 || !Number.isInteger(rule.limit) || rule.limit < 0 ||
                     rule.kind === 'stock' && (!Number.isInteger(rule.minimum) || rule.minimum < 0)) throw new Error('Invalid store purchase limits')
+            } else if (rule.kind === 'seed') {
+                if (typeof rule.id !== 'string' || !rule.id) throw new Error('Invalid store seed purchase')
             } else if (rule.kind !== 'timestamp' && rule.kind !== 'plant') throw new Error('Unknown store purchase rule')
             if (item.effect === 'seedSlots' && !item.seedSlots) throw new Error('Missing store seed slots')
         }

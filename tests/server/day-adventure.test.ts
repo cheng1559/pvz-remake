@@ -5,11 +5,13 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
+import { adventureSeeds } from './adventure-seeds'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 const options = (index: number): StartSessionPacket => ({ type: 'startSession', protocolVersion: 1, sequence: 1,
-    levelId: `pvz:adventure-1-${index}`, randomSeed: 12345, initialMoney: 0, firstAdventure: true, mods: [] })
+    levelId: `pvz:adventure-1-${index}`, randomSeed: 12345, initialMoney: 0, firstAdventure: true,
+    ownedSeeds: adventureSeeds(levels, `pvz:adventure-1-${index}`), mods: [] })
 function start(index: number) {
     const game = new IntegratedGameServer(definitions, levels)
     game.start(options(index))

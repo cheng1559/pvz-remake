@@ -22,6 +22,7 @@ parseGameplayLevels,
 } from '@/shared/content/gameplay'
 import { isJsonValue,parseServerPacket,type StartSessionPacket } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
+import { adventureSeeds } from './adventure-seeds'
 
 const source = readGameplaySource
 
@@ -35,6 +36,7 @@ const startPacket: StartSessionPacket = {
     randomSeed: 12345,
     initialMoney: 50,
     firstAdventure: true,
+    ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-1'),
     mods: [],
 }
 

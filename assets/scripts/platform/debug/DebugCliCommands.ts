@@ -5,7 +5,8 @@ import { setFontSharpness } from '@/client/font/FontAreaMaterial'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import { gameClock } from '@/core/GameClock'
 import { debugAmount, debugCondition, debugInteger, debugSuccess, debugSyntax, parseDebugCliCommand, type DebugCliCatalog, type DebugCliResult, type DebugGotoPage } from '@/shared/debug/DebugCli'
-import { MAX_MONEY, SFX_VOLUME_SCALE } from '@/shared/menu'
+import { SFX_VOLUME_SCALE } from '@/shared/menu'
+import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
 import { OptionsSettings } from '@/platform/OptionsSettings'
 import { GameDebugSettings, type DebugPerfToggle, type SeedPacketStyle } from './GameDebugSettings'
 
@@ -81,7 +82,7 @@ async function executeCommand(
             // Outside a level the purse is the profile's (PlayerInfo::mCoins).
             if (debugInteger(args[1]) === null) return debugSyntax('Amount must be an integer')
             if (!await menuApi.getCurrentUser()) return debugCondition('DEBUG_REQUIRES_PLAYER', name)
-            const next = debugAmount(args, (await menuApi.getPurse()).coins, MAX_MONEY)
+            const next = debugAmount(args, (await menuApi.getPurse()).coins, (await loadGameplayContent()).definitions.economy.maxMoney)
             if (typeof next !== 'number') return next
             const purse = await menuApi.setCoins(next)
             return debugSuccess(`money: ${purse.coins}`)

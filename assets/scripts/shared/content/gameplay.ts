@@ -6,7 +6,8 @@ export const SUN_BANK_TARGET = { x: 15, y: 0 } as const
 
 export interface GameplayDefinitions {
     schemaVersion: 2
-    tickSeconds: number
+    /** Board::AddSun and PlayerInfo::AddCoins cap the sun at 9990 and the coins at 99999 (shown as $999,990). */
+    economy: { maxSun: number; maxMoney: number }
     boards: Record<string, BoardDefinition>
     seeds: Record<string, SeedDefinition>
     seedCatalog: string[]
@@ -17,7 +18,11 @@ export interface GameplayDefinitions {
     items: Record<string, ItemDefinition>
     lawnMowers: Record<string, LawnMowerDefinition>
     /** Board::GetNumSeedsInBank: `baseSlots` plus one per seed-slot upgrade, at most `maxSlots` (SEEDBANK_MAX). */
-    seedBank: { baseSlots: number; maxSlots: number }
+    /**
+     * `startingSeeds` are every player's without being awarded or bought (the Peashooter: LawnApp::HasSeedType with
+     * GetAwardSeedForLevel(1) = 1); the profile records the rest.
+     */
+    seedBank: { baseSlots: number; maxSlots: number; startingSeeds: string[] }
 }
 
 export interface GameplayLevels {
@@ -251,7 +256,9 @@ export interface LevelDefinition {
      */
     award: { kind: 'seed'; id: string }
         | { kind: 'tool'; id: string; titleKey: string; nameKey: string; descriptionKey: string; width: number; height: number }
-        | { kind: 'unlock'; id: string; titleKey: string; nameKey: string; descriptionKey: string; width: number; height: number; opens?: AwardOpens }
+        | { kind: 'unlock'; id: string; titleKey: string; nameKey: string; descriptionKey: string; width: number; height: number; opens?: AwardOpens
+            /** The main menu entry the award unlocks once collected (LawnApp::CanShowAlmanac, CanShowStore, CanShowZenGarden). */
+            unlocks?: UnlockedEntry }
         | { kind: 'note'; id: string; titleKey: string; width: number; height: number }
 }
 
@@ -260,15 +267,16 @@ interface Rect extends Point { width: number; height: number }
 
 export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): GameplayDefinitions {
     const source = exactObject(value, [
-        'schemaVersion', 'tickSeconds', 'boards', 'seeds', 'plants', 'zombies',
+        'schemaVersion', 'economy', 'boards', 'seeds', 'plants', 'zombies',
         'projectiles', 'items', 'lawnMowers', 'zombieGaits', 'seedBank',
     ], 'gameplay definitions')
-    const seedBank = exactObject(source.seedBank, ['baseSlots', 'maxSlots'], 'gameplay definitions.seedBank')
+    const economy = exactObject(source.economy, ['maxSun', 'maxMoney'], 'gameplay definitions.economy')
+    const seedBank = exactObject(source.seedBank, ['baseSlots', 'maxSlots', 'startingSeeds'], 'gameplay definitions.seedBank')
     if (source.schemaVersion !== 2) throw new Error('gameplay definitions.schemaVersion must be 2')
 
     const definitions: GameplayDefinitions = {
         schemaVersion: 2,
-        tickSeconds: positiveFinite(source.tickSeconds, 'gameplay definitions.tickSeconds'),
+        economy: { maxSun: positiveInteger(economy.maxSun, 'economy.maxSun'), maxMoney: positiveInteger(economy.maxMoney, 'economy.maxMoney') },
         boards: mapped(source.boards, 'boards', parseBoard),
         seeds: mapped(source.seeds, 'seeds', parseSeed),
         seedCatalog: qualifiedIdArray(seedCatalog, 'seed catalog'),
@@ -278,9 +286,11 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
         projectiles: mapped(source.projectiles, 'projectiles', parseProjectile),
         items: mapped(source.items, 'items', parseItem),
         lawnMowers: mapped(source.lawnMowers, 'lawnMowers', parseLawnMower),
-        seedBank: { baseSlots: positiveInteger(seedBank.baseSlots, 'seedBank.baseSlots'), maxSlots: positiveInteger(seedBank.maxSlots, 'seedBank.maxSlots') },
+        seedBank: { baseSlots: positiveInteger(seedBank.baseSlots, 'seedBank.baseSlots'), maxSlots: positiveInteger(seedBank.maxSlots, 'seedBank.maxSlots'),
+            startingSeeds: qualifiedIdArray(seedBank.startingSeeds, 'seedBank.startingSeeds') },
     }
     if (definitions.seedBank.baseSlots > definitions.seedBank.maxSlots) throw new Error('seedBank.baseSlots exceeds maxSlots')
+    for (const id of definitions.seedBank.startingSeeds) reference(id, definitions.seeds, 'seedBank.startingSeeds')
 
     if (new Set(definitions.seedCatalog).size !== definitions.seedCatalog.length) throw new Error('seed catalog must not contain duplicates')
     for (const id of definitions.seedCatalog) reference(id, definitions.seeds, 'seed catalog')
@@ -317,22 +327,14 @@ export function parseGameplayLevels(
  * every level of a replay (CutScene::ShowShovel).
  */
 export interface AwardOpens { page: 'almanac'; buttonKey: string }
+export type UnlockedEntry = 'almanac' | 'store' | 'garden'
+const UNLOCKED_ENTRIES: readonly string[] = ['almanac', 'store', 'garden'] satisfies UnlockedEntry[]
 
 export function levelTools(levels: GameplayLevels, level: LevelDefinition, firstAdventure: boolean): string[] {
     if (level.tools) return [...level.tools]
     const awards = Object.values(levels.levels).flatMap(entry => entry.award.kind === 'tool' ? [entry] : [])
         .sort((a, b) => a.adventureIndex - b.adventureIndex)
     return [...new Set(awards.filter(entry => !firstAdventure || entry.adventureIndex < level.adventureIndex).map(entry => entry.award.id))]
-}
-
-/**
- * LawnApp::HasSeedType on a first adventure: the seeds before the level's award seed, that is, a seed a level awards
- * is there from the level after, and a seed no level awards (the peashooter) from the start. Replays have them all.
- */
-export function seedUnlocked(levels: GameplayLevels, seedId: string, level: LevelDefinition, firstAdventure: boolean): boolean {
-    if (!firstAdventure) return true
-    const awarded = Object.values(levels.levels).flatMap(entry => entry.award.kind === 'seed' && entry.award.id === seedId ? [entry.adventureIndex] : [])
-    return !awarded.length || Math.min(...awarded) < level.adventureIndex
 }
 
 function parseBoard(value: unknown, name: string): BoardDefinition {
@@ -832,16 +834,24 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         parsedAward = { kind: 'seed', id: qualifiedId(award.id, `${name}.award.id`) }
     } else if (award.kind === 'tool' || award.kind === 'unlock') {
         exactObject(award, ['kind', 'id', 'titleKey', 'nameKey', 'descriptionKey', 'width', 'height'], `${name}.award`,
-            award.kind === 'unlock' ? ['opens'] : [])
+            award.kind === 'unlock' ? ['opens', 'unlocks'] : [])
         const fields = { id: qualifiedId(award.id, `${name}.award.id`),
             titleKey: string(award.titleKey, `${name}.award.titleKey`), nameKey: string(award.nameKey, `${name}.award.nameKey`),
             descriptionKey: string(award.descriptionKey, `${name}.award.descriptionKey`),
             width: positiveInteger(award.width, `${name}.award.width`), height: positiveInteger(award.height, `${name}.award.height`) }
-        if (award.kind === 'tool' || award.opens === undefined) parsedAward = { kind: award.kind, ...fields }
+        if (award.kind === 'tool') parsedAward = { kind: 'tool', ...fields }
         else {
-            const opens = exactObject(award.opens, ['page', 'buttonKey'], `${name}.award.opens`)
-            if (opens.page !== 'almanac') throw new Error(`${name}.award.opens.page must be almanac`)
-            parsedAward = { kind: 'unlock', ...fields, opens: { page: opens.page, buttonKey: string(opens.buttonKey, `${name}.award.opens.buttonKey`) } }
+            let opens: AwardOpens | undefined
+            if (award.opens !== undefined) {
+                const source = exactObject(award.opens, ['page', 'buttonKey'], `${name}.award.opens`)
+                if (source.page !== 'almanac') throw new Error(`${name}.award.opens.page must be almanac`)
+                opens = { page: source.page, buttonKey: string(source.buttonKey, `${name}.award.opens.buttonKey`) }
+            }
+            if (award.unlocks !== undefined && !UNLOCKED_ENTRIES.includes(award.unlocks as string)) {
+                throw new Error(`${name}.award.unlocks must be almanac, store or garden`)
+            }
+            parsedAward = { kind: 'unlock', ...fields, ...opens && { opens },
+                ...award.unlocks !== undefined && { unlocks: award.unlocks as UnlockedEntry } }
         }
     } else if (award.kind === 'note') {
         exactObject(award, ['kind', 'id', 'titleKey', 'width', 'height'], `${name}.award`)

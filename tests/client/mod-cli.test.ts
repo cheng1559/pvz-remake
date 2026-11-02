@@ -196,7 +196,9 @@ test('/money sets the profile purse outside a level and runs on the board inside
     const code = transpileModule(readFileSync('assets/scripts/platform/debug/DebugCliCommands.ts', 'utf8'), {
         compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
     })
-    const modules: Record<string, unknown> = { '@/shared/debug/DebugCli': cli, '@/shared/menu': menu, '@/client/api/MenuApi': { menuApi }, './GameDebugSettings': { GameDebugSettings: {} } }
+    const modules: Record<string, unknown> = { '@/shared/debug/DebugCli': cli, '@/shared/menu': menu, '@/client/api/MenuApi': { menuApi }, './GameDebugSettings': { GameDebugSettings: {} },
+        // The coin cap comes from the gameplay settings.
+        '@/client/game/loadIntegratedGameContent': { loadGameplayContent: async () => ({ definitions: readGameplaySource('definitions') }) } }
     runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
     const run = (command: string, running = false) => exports.executeDebugCliCommand(command, running, () => cli.debugSuccess('board'))
     const noPlayer = await run('/money set 5')

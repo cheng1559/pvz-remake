@@ -41,7 +41,7 @@ export function register({ host, assets }: GameplayApi): void {
     const { registry } = host.get('server/GameplayRegistry')
     const { defineComponent } = host.get('ecs')
     const { PlantComponent: Plant, PositionComponent: Position, LevelStateResource: Level,
-        EconomyStateResource: Economy, MAX_SUN } = host.get('server/components')
+        EconomyStateResource: Economy } = host.get('server/components')
     const settings = assets.json('assets/settings.json')
     for (const key of ['chargeTicks', 'chargeMultiplier', 'particlePeriodTicks']) {
         if (!Number.isSafeInteger(settings[key]) || settings[key] <= 0) throw new Error(`Invalid example setting: ${key}`)
@@ -74,7 +74,7 @@ export function register({ host, assets }: GameplayApi): void {
             if (++context.state.ticks < context.definition.behavior.intervalTicks) return
             context.state.ticks = 0
             const economy = context.world.resources.get(Economy)
-            economy.sun = Math.min(MAX_SUN, economy.sun + context.definition.behavior.sun * factor)
+            economy.sun = Math.min(context.definitions.economy.maxSun, economy.sun + context.definition.behavior.sun * factor)
         },
     })
 

@@ -5,13 +5,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
+import { adventureSeeds } from './adventure-seeds'
 
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 const start: StartSessionPacket = {
     protocolVersion: 1, sequence: 1, type: 'startSession', levelId: 'pvz:adventure-1-2',
-    randomSeed: 12345, initialMoney: 0, firstAdventure: true, mods: [],
+    randomSeed: 12345, initialMoney: 0, firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-2'), mods: [],
 }
 
 function game() {

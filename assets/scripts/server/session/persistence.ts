@@ -7,7 +7,6 @@ import {
     EconomyStateResource,
     LawnMowerComponent,
     LevelStateResource,
-    MAX_SUN,
     PacketUpgradeOfferResource,
     PlantAttackComponent,
     PlantComponent,
@@ -77,6 +76,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
             ...(seedBank.conveyor === undefined ? {} : { conveyor: jsonRoundTrip(seedBank.conveyor) }),
             ...(seedBank.choosing === undefined ? {} : { choosing: seedBank.choosing }),
             packets: seedBank.packets.map(packet => ({ ...packet })),
+            ...(seedBank.owned === undefined ? {} : { owned: [...seedBank.owned] }),
         },
         tutorial: {
             ...(tutorial.dialogIndex === undefined ? {} : { dialogIndex: tutorial.dialogIndex }),
@@ -155,9 +155,9 @@ export function restoreSession(
         throw new Error('Saved grave is outside the board')
     }
     // A game that opened the chooser keeps `choosing`; a later upgrade only adds slots to it.
-    const start = seedBankStart(definitions, content.levels, definition, save.tutorial.firstAdventure, save.economy.packetUpgrades)
+    const start = seedBankStart(definitions, definition, save.seedBank.owned, save.economy.packetUpgrades)
     const chooser = save.seedBank.choosing !== undefined
-    const slots = chooser ? bankSlots(definitions, content.levels, definition, save.tutorial.firstAdventure, save.economy.packetUpgrades)
+    const slots = chooser ? bankSlots(definitions, save.seedBank.owned, save.economy.packetUpgrades)
         : 'seeds' in start ? start.seeds.length : 0
     if (!!save.seedBank.conveyor !== !!definition.conveyor || save.seedBank.conveyor?.packets.some(packet => !definition.conveyor!.seeds.some(seed => seed.id === packet.seedId))) {
         throw new Error('Saved conveyor does not match the level')
@@ -169,7 +169,7 @@ export function restoreSession(
     if (save.seedBank.choosing ? save.level.phase !== 'intro' || save.seedBank.packets.length > slots
         : save.seedBank.packets.length !== slots) throw new Error('Saved seed bank size does not match the level')
     // Only an open chooser is limited to unlocked seeds; /seed may put any installed seed in a confirmed bank.
-    if (save.seedBank.choosing && save.seedBank.packets.some(packet => !availableSeeds(definitions, content.levels, definition, save.tutorial.firstAdventure).includes(packet.seedId))) {
+    if (save.seedBank.choosing && save.seedBank.packets.some(packet => !availableSeeds(definitions, save.seedBank.owned).includes(packet.seedId))) {
         throw new Error('Saved seed choice does not match the level')
     }
     for (const packet of save.seedBank.packets) {
@@ -188,7 +188,7 @@ export function restoreSession(
         board,
         ...save.level,
     })
-    world.resources.set(EconomyStateResource, { ...save.economy, sun: Math.min(MAX_SUN, save.economy.sun) })
+    world.resources.set(EconomyStateResource, { ...save.economy, sun: Math.min(definitions.economy.maxSun, save.economy.sun) })
     if (save.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...save.packetUpgradeOffer })
     world.resources.set(RandomResource, DeterministicRng.restore(save.random))
     world.resources.set(SeedBankResource, {
@@ -196,6 +196,7 @@ export function restoreSession(
         ...(save.seedBank.conveyor === undefined ? {} : { conveyor: jsonRoundTrip(save.seedBank.conveyor) }),
         ...(save.seedBank.choosing === undefined ? {} : { choosing: save.seedBank.choosing }),
         packets: save.seedBank.packets.map(packet => ({ ...packet })),
+        ...(save.seedBank.owned === undefined ? {} : { owned: [...save.seedBank.owned] }),
     })
     world.resources.set(TutorialResource, { ...save.tutorial })
     world.resources.set(WaveResource, { ...save.wave })

@@ -3,7 +3,6 @@ import { SUN_BANK_TARGET, type GameplayDefinitions } from '@/shared/content/game
 import {
     EconomyStateResource,
     LevelStateResource,
-    MAX_SUN,
     PositionComponent,
     RandomResource,
     SeedBankResource,
@@ -13,7 +12,6 @@ import { getDebugRules } from '../debug/debugRules'
 import { ItemComponent, type Item } from '../state/levelState'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { canDropLoot, updateMowerCoins } from './loot'
-import { MAX_MONEY } from '@/shared/menu'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { clearCursor } from '../seeds/cursor'
@@ -65,11 +63,11 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                     const distance = Math.hypot(dx, dy)
                     if (distance < (money ? 12 : 8)) {
                         const economy = world.resources.get(EconomyStateResource)
-                        if (money) economy.money = Math.min(MAX_MONEY, economy.money + item.value)
+                        if (money) economy.money = Math.min(definitions.economy.maxMoney, economy.money + item.value)
                         else {
                             const spent = Math.min(economy.pendingSunSpend, item.value)
                             economy.pendingSunSpend -= spent
-                            economy.sun = Math.min(MAX_SUN, economy.sun + item.value - spent)
+                            economy.sun = Math.min(definitions.economy.maxSun, economy.sun + item.value - spent)
                         }
                         commands.destroyEntity(entity)
                     } else {

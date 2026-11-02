@@ -12,6 +12,7 @@ import { Schedule } from '@/ecs'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue } from '@/shared/protocol'
 import { levelPresentation, reanim } from './level-test-snapshot'
+import { TICK_SECONDS } from '@/shared/protocol'
 
 const source = readGameplaySource
 const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
@@ -44,7 +45,7 @@ test('LocalIntegratedGame uses real systems wrapped through the host', () => {
         })
         game.command({ type: 'completeIntro' })
         game.update(0)
-        game.update(definitions.tickSeconds)
+        game.update(TICK_SECONDS)
 
         assert.equal(runs, 1)
     } finally { host.dispose() }
@@ -201,7 +202,7 @@ test('LocalIntegratedGame saves before a command queued after the request', () =
     const save = game.lastSave as unknown as ServerSaveSnapshot
     assert.equal(game.lastSaveSequence, saveSequence)
     assert.deepEqual(save.seedBank.selection, { mode: 'none' })
-    game.update(definitions.tickSeconds)
+    game.update(TICK_SECONDS)
     assert.equal(game.render().cursor.mode, 'seed')
 })
 
@@ -228,7 +229,7 @@ test('a debug coin falls to the ground and its animation passes the pause-save f
     game.command({ type: 'completeIntro' })
     game.update(0)
     assert.equal(game.debugCommand('/item coin_silver 3 5').ok, true)
-    for (let tick = 0; tick < 200; tick++) game.update(definitions.tickSeconds)
+    for (let tick = 0; tick < 200; tick++) game.update(TICK_SECONDS)
     const coin = game.render().items.find(item => item.typeId === 'pvz:coin_silver')!
     assert.equal(coin.landed, true, 'COIN_MOTION_COIN pulls the coin back down')
     const presentation = levelPresentation(game.render())

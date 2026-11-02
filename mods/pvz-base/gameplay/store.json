@@ -12,17 +12,17 @@
       {"id": 22, "cost": 100, "sprite": "icon_poolcleaner", "offset": [1, 7], "message": 2026, "purchase": {"kind": "set", "value": 1}},
       {"id": 24, "cost": 20, "sprite": "icon_rake", "offset": [-5, 10], "message": 2028, "purchase": {"kind": "set", "value": 3}},
       {"id": 23, "cost": 300, "sprite": "icon_roofcleaner", "offset": [0, 28], "message": 2027, "level": 42, "purchase": {"kind": "set", "value": 1}},
-      {"id": 0, "cost": 500, "seed": 40, "message": 2000, "purchase": {"kind": "set", "value": 1}},
-      {"id": 1, "cost": 500, "seed": 41, "message": 2001, "purchase": {"kind": "set", "value": 1}},
-      {"id": 2, "cost": 750, "seed": 42, "message": 2002, "level": 35, "purchase": {"kind": "set", "value": 1}},
-      {"id": 3, "cost": 1000, "seed": 43, "message": 2003, "level": 35, "purchase": {"kind": "set", "value": 1}}
+      {"id": 0, "cost": 500, "seed": 40, "message": 2000, "purchase": {"kind": "seed", "id": "pvz:gatlingpea"}},
+      {"id": 1, "cost": 500, "seed": 41, "message": 2001, "purchase": {"kind": "seed", "id": "pvz:twinsunflower"}},
+      {"id": 2, "cost": 750, "seed": 42, "message": 2002, "level": 35, "purchase": {"kind": "seed", "id": "pvz:gloomshroom"}},
+      {"id": 3, "cost": 1000, "seed": 43, "message": 2003, "level": 35, "purchase": {"kind": "seed", "id": "pvz:cattail"}}
     ]},
     {"level": 42, "items": [
-      {"id": 6, "cost": 750, "seed": 46, "message": 2006, "level": 41, "purchase": {"kind": "set", "value": 1}},
-      {"id": 5, "cost": 300, "seed": 45, "message": 2005, "level": 41, "purchase": {"kind": "set", "value": 1}},
-      {"id": 4, "cost": 1000, "seed": 44, "message": 2004, "completed": true, "purchase": {"kind": "set", "value": 1}},
-      {"id": 7, "cost": 2000, "seed": 47, "message": 2007, "completed": true, "purchase": {"kind": "set", "value": 1}},
-      {"id": 8, "cost": 3000, "sprite": "imitaterseed", "highlight": {"type": "seedPacket"}, "message": 2008, "completed": true, "purchase": {"kind": "set", "value": 1}},
+      {"id": 6, "cost": 750, "seed": 46, "message": 2006, "level": 41, "purchase": {"kind": "seed", "id": "pvz:spikerock"}},
+      {"id": 5, "cost": 300, "seed": 45, "message": 2005, "level": 41, "purchase": {"kind": "seed", "id": "pvz:goldmagnet"}},
+      {"id": 4, "cost": 1000, "seed": 44, "message": 2004, "completed": true, "purchase": {"kind": "seed", "id": "pvz:wintermelon"}},
+      {"id": 7, "cost": 2000, "seed": 47, "message": 2007, "completed": true, "purchase": {"kind": "seed", "id": "pvz:cobcannon"}},
+      {"id": 8, "cost": 3000, "sprite": "imitaterseed", "highlight": {"type": "seedPacket"}, "message": 2008, "completed": true, "purchase": {"kind": "seed", "id": "pvz:imitater"}},
       {"id": 29, "cost": 200, "sprite": "store_firstaidwallnuticon", "offset": [-1, 13], "message": 2033, "completed": true, "purchase": {"kind": "set", "value": 1}}
     ]},
     {"level": 45, "items": [

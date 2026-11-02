@@ -1,5 +1,5 @@
-import { MAX_MONEY, type AwardView, type MenuRequest, type MenuResponse, type MenuStorage, type PurseView, type StoreItemView, type StoreView, type UserResult, type UserView } from '@/shared/menu'
-import type { LevelDefinition } from '@/shared/content/gameplay'
+import { type AwardView, type MenuRequest, type MenuResponse, type MenuStorage, type PurseView, type StoreItemView, type StoreView, type UserResult, type UserView } from '@/shared/menu'
+import type { GameplayDefinitions, LevelDefinition, UnlockedEntry } from '@/shared/content/gameplay'
 import type { AlmanacCatalog } from './almanacCatalog'
 import { ACHIEVEMENT_DEFINITIONS } from './achievementCatalog'
 import { CHALLENGES, challengeCompleted, hasAllTrophies } from './challengeCatalog'
@@ -10,26 +10,26 @@ import type { StoreCatalog } from './storeCatalog'
 function userView(profile: PlayerProfile | null): UserView | null {
     if (!profile) return null
     const finished = profile.finishedAdventure > 0
-    const level = profile.adventureLevel
+    const collected = (entry: UnlockedEntry) => finished || profile.unlocks.includes(entry)
     return {
-        id: profile.id, name: profile.name, adventureLevel: level, finishedAdventure: profile.finishedAdventure,
-        // GameSelector::SyncProfile and LawnApp::CanShowAlmanac/CanShowStore/CanShowZenGarden.
+        id: profile.id, name: profile.name, adventureLevel: profile.adventureLevel, finishedAdventure: profile.finishedAdventure,
+        // GameSelector::SyncProfile and LawnApp::CanShowAlmanac/CanShowStore/CanShowZenGarden: the original opens the
+        // almanac, store and garden from the level after the one that drops the almanac, the car keys and the watering
+        // can; here the collected award records it.
         unlocks: {
             minigames: finished || profile.hasUnlockedMinigames,
             puzzle: finished || profile.hasUnlockedPuzzleMode,
             survival: finished || profile.hasUnlockedSurvivalMode,
-            almanac: finished || level >= 15,
-            store: finished || profile.hasSeenUpsell || level >= 25,
-            garden: finished || level >= 45,
+            almanac: collected('almanac'),
+            store: collected('store') || profile.hasSeenUpsell,
+            garden: collected('garden'),
         },
         allTrophies: hasAllTrophies(profile.challengeRecords),
     }
 }
 
-function validCoins(coins: number): number {
-    if (!Number.isSafeInteger(coins) || coins < 0 || coins > MAX_MONEY) throw new Error('Invalid coins')
-    return coins
-}
+/** The gameplay data the menu applies: the starting seeds, the coin cap and the seeds' costs and recharges. */
+export type MenuGameplaySettings = Pick<GameplayDefinitions, 'seedBank' | 'economy' | 'seeds'>
 
 export class MenuService {
     private readonly profiles
@@ -42,6 +42,7 @@ export class MenuService {
         private readonly canCompleteLevel: () => boolean = () => false,
         private readonly catalog?: StoreCatalog,
         private readonly almanac?: AlmanacCatalog,
+        private readonly gameplay?: MenuGameplaySettings,
     ) {
         this.profiles = createProfileStore(storage)
         this.settings = createGameSettingsStore(storage)
@@ -85,7 +86,10 @@ export class MenuService {
                 }))
                 return { items, total: items.filter(item => !item.endless).length, completed: items.filter(item => item.completed).length }
             }
-            case 'getAlmanac': return this.almanacCatalog.view(this.profiles.getCurrentProfile())
+            case 'getAlmanac': {
+                const profile = this.profiles.getCurrentProfile()
+                return this.almanacCatalog.view(profile, this.ownedSeeds(profile), this.gameplaySettings.seeds)
+            }
             case 'getAchievements': {
                 const earned = this.profiles.getCurrentProfile()?.earnedAchievements ?? []
                 const items = ACHIEVEMENT_DEFINITIONS.map(item => ({ ...item, earned: earned[item.id] === true }))
@@ -102,7 +106,11 @@ export class MenuService {
                 const award = this.award()
                 const profile = this.profiles.loadCurrentProfile()
                 if (!profile) throw new Error('Level completion requires a player profile')
-                profile.adventureLevel = Math.max(profile.adventureLevel, this.getLevel()!.adventureIndex + 1)
+                const level = this.getLevel()!
+                profile.adventureLevel = Math.max(profile.adventureLevel, level.adventureIndex + 1)
+                // The award seed is the player's from now on (the seed packet the level dropped).
+                if (level.award.kind === 'seed' && !profile.seeds.includes(level.award.id)) profile.seeds.push(level.award.id)
+                if (level.award.kind === 'unlock' && level.award.unlocks && !profile.unlocks.includes(level.award.unlocks)) profile.unlocks.push(level.award.unlocks)
                 this.profiles.saveProfile(profile)
                 return award
             }
@@ -111,7 +119,7 @@ export class MenuService {
             case 'setCoins': {
                 const profile = this.profiles.getCurrentProfile()
                 if (!profile) throw new Error('Coins require a player profile')
-                profile.coins = validCoins(request.args.coins)
+                profile.coins = this.validCoins(request.args.coins)
                 this.profiles.saveProfile(profile)
                 return this.purse()
             }
@@ -119,7 +127,7 @@ export class MenuService {
                 // CutScene::CrazyDaveDialogDone: the price, the purchase or refusal and the save happen together.
                 const profile = this.profiles.getCurrentProfile()
                 if (!profile) throw new Error('Seed-slot upgrades require a player profile')
-                const upgrade = this.packetUpgrade, coins = validCoins(request.args.coins)
+                const upgrade = this.packetUpgrade, coins = this.validCoins(request.args.coins)
                 if (request.args.accepted) {
                     if (this.storeCatalog.itemState(upgrade, profile, this.now()) !== 'available') throw new Error('The seed-slot upgrade is not for sale')
                     if (coins !== profile.coins - this.storeCatalog.itemCost(upgrade, profile)) throw new Error('The seed-slot upgrade was not paid for')
@@ -146,12 +154,13 @@ export class MenuService {
             titleKey: level.award.titleKey, nameKey: level.award.nameKey, descriptionKey: level.award.descriptionKey,
             ...level.award.kind === 'unlock' && level.award.opens && { opens: { ...level.award.opens } },
         }
-        const plant = this.almanacCatalog.plants.find(plant => `pvz:${plant.key.replace(/_/g, '').toLowerCase()}` === level.award.id)
-        if (!plant) throw new Error(`Unknown plant award: ${level.award.id}`)
+        const plant = this.almanacCatalog.plants.find(plant => plant.seed === level.award.id)
+        const seed = this.gameplaySettings.seeds[level.award.id]
+        if (!plant || !seed) throw new Error(`Unknown plant award: ${level.award.id}`)
         return {
             kind: 'seed', titleKey: 'NEW_PLANT',
             nextLevelId: level.nextLevel ?? null, showMainMenu: level.adventureIndex >= 3,
-            seed: plant.id, cost: plant.cost, name: plant.name,
+            seed: plant.id, cost: seed.sunCost,
             nameKey: plant.key, descriptionKey: `${plant.key}_TOOLTIP`,
         }
     }
@@ -187,6 +196,7 @@ export class MenuService {
         return {
             coins: profile.coins, packetUpgrades: owned, packetUpgradeCost: this.storeCatalog.itemCost(upgrade, profile),
             nextPacketUpgradeCost: this.storeCatalog.itemCost(upgrade, next), declinedPacketUpgrades: profile.declinedPacketUpgrades,
+            ownedSeeds: this.ownedSeeds(profile),
         }
     }
 
@@ -224,6 +234,21 @@ export class MenuService {
             ok: true as const, store: this.store(),
             ...purchaseEffect(item, profile),
         }
+    }
+
+    /** LawnApp::HasSeedType: the starting seeds and the ones the profile collected or bought. */
+    private ownedSeeds(profile: PlayerProfile | null): string[] {
+        return [...new Set([...this.gameplaySettings.seedBank.startingSeeds, ...profile?.seeds ?? []])]
+    }
+
+    private validCoins(coins: number): number {
+        if (!Number.isSafeInteger(coins) || coins < 0 || coins > this.gameplaySettings.economy.maxMoney) throw new Error('Invalid coins')
+        return coins
+    }
+
+    private get gameplaySettings(): MenuGameplaySettings {
+        if (!this.gameplay) throw new Error('Gameplay settings are not loaded')
+        return this.gameplay
     }
 
     private get almanacCatalog(): AlmanacCatalog {

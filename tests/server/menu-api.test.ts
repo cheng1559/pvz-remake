@@ -22,7 +22,8 @@ function fixture(getLevel?: () => LevelDefinition | null, canCompleteLevel?: () 
     }
     const profiles = createProfileStore(storage)
     const catalog = createStoreCatalog(readGameplaySource('store'))
-    const api = new MenuApi(createLocalMenuTransport(storage, getLevel, canCompleteLevel, catalog, createAlmanacCatalog(readGameplaySource('almanac'))))
+    const api = new MenuApi(createLocalMenuTransport(storage, getLevel, canCompleteLevel, catalog, createAlmanacCatalog(readGameplaySource('almanac')),
+        readGameplaySource('definitions')))
     return { data, storage, profiles, api }
 }
 
@@ -102,7 +103,7 @@ test('shop APIs own prices, availability and charging; copied UI data cannot alt
     const results = await Promise.all([api.purchase(profile.id, 0, 500), api.purchase(profile.id, 0, 500)])
     assert.equal(results.filter(result => result.ok).length, 1)
     assert.equal((await api.getStore()).coins, 1500)
-    assert.equal(profiles.getCurrentProfile()!.purchases[0], 1)
+    assert.deepEqual(profiles.getCurrentProfile()!.seeds, ['pvz:gatlingpea'])
     assert.equal((await api.purchase(profile.id, 21, 75)).ok, true)
     assert.equal((await api.getStore()).pages[0].items.find(item => item.id === 21)!.seedSlots, 8)
     const stale = await api.purchase(profile.id, 21, 75)
@@ -148,26 +149,28 @@ test('settings, challenge progress and almanac data are supplied by the backend 
 test('the almanac shows the plants the player has and the zombies met so far', async () => {
     const { api, profiles } = fixture()
     const profile = profiles.createProfile('Alice')!
-    const almanac = async (changes: { adventureLevel?: number, finishedAdventure?: number, purchases?: number[] }) => {
+    const almanac = async (changes: { adventureLevel?: number, finishedAdventure?: number, seeds?: string[] }) => {
         profiles.saveProfile({ ...profile, ...changes })
         const view = await api.getAlmanac()
         const zombie = (key: string) => view.zombies.find(zombie => zombie.key === key)!
         return { plants: view.plants.map(plant => plant.id), zombie: (key: string) => [zombie(key).shown, zombie(key).described] }
     }
-    // After 2-4 the player has the plants through the Grave Buster and has met every zombie up to the screen door.
-    const level15 = await almanac({ adventureLevel: 15 })
+    // After 2-4 the player has collected the plants through the Grave Buster and has met every zombie up to the screen door.
+    const collected = ['sunflower', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'repeater', 'puffshroom', 'sunshroom', 'fumeshroom', 'gravebuster']
+    const level15 = await almanac({ adventureLevel: 15, seeds: collected.map(name => `pvz:${name}`) })
     assert.deepEqual(level15.plants, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+    assert.deepEqual((await almanac({ adventureLevel: 15, seeds: [] })).plants, [0], 'the plants come from the owned seeds, not the level')
     assert.deepEqual(level15.zombie('SCREEN_DOOR_ZOMBIE'), [true, true])
     assert.deepEqual(level15.zombie('FOOTBALL_ZOMBIE'), [false, false])
     // A zombie shows on its debut level but is described only after it; spawned-only zombies wait for that too.
     assert.deepEqual((await almanac({ adventureLevel: 16 })).zombie('FOOTBALL_ZOMBIE'), [true, false])
     const level18 = await almanac({ adventureLevel: 18 })
     assert.deepEqual([level18.zombie('DANCING_ZOMBIE'), level18.zombie('BACKUP_DANCER')], [[true, false], [false, false]])
-    // Store plants follow their purchases; the Yeti only comes once it can spawn.
-    const purchases = [...profile.purchases]; purchases[8] = 1
-    const finished = await almanac({ adventureLevel: 1, finishedAdventure: 1, purchases })
-    assert.equal(finished.plants.length, 41)
-    assert.ok(finished.plants.includes(48) && !finished.plants.includes(40))
+    // A bought store plant is an owned seed too; the Yeti only comes once it can spawn.
+    const finished = await almanac({ adventureLevel: 1, finishedAdventure: 1, seeds: ['pvz:hypnoshroom', 'pvz:imitater'] })
+    assert.deepEqual(finished.plants, [0, 12], 'an owned seed that is not installed (the Imitater) is left out')
+    assert.deepEqual((await api.getAlmanac()).plants.find(plant => plant.id === 12),
+        { id: 12, key: 'HYPNO_SHROOM', cost: 75, refreshTime: 3000, ground: 'night' }, "cost and recharge are the seed definition's")
     assert.deepEqual([finished.zombie('BOSS'), finished.zombie('ZOMBIE_YETI')], [[true, true], [false, false]])
     assert.deepEqual((await almanac({ adventureLevel: 1, finishedAdventure: 2 })).zombie('ZOMBIE_YETI'), [true, true])
 })
@@ -207,16 +210,19 @@ test('award API resolves the loaded level reward and packet cost instead of choo
     assert.deepEqual(award, {
         kind: 'seed', titleKey: 'NEW_PLANT',
         nextLevelId: 'pvz:adventure-1-2', showMainMenu: false,
-        seed: 1, cost: 50, name: 'Sunflower', nameKey: 'SUNFLOWER', descriptionKey: 'SUNFLOWER_TOOLTIP',
+        seed: 1, cost: 50, nameKey: 'SUNFLOWER', descriptionKey: 'SUNFLOWER_TOOLTIP',
     })
     award.seed = 22
     assert.equal((await api.getAward()).seed, 1, 'the returned view cannot change the reward')
-    level = { ...level, award: { kind: 'seed', id: 'pvz:torchwood' } }
+    // The packet shows the seed's own cost; a seed that is not installed has no award to show.
+    level = { ...level, award: { kind: 'seed', id: 'pvz:hypnoshroom' } }
     assert.deepEqual(await api.getAward(), {
         kind: 'seed', titleKey: 'NEW_PLANT',
         nextLevelId: 'pvz:adventure-1-2', showMainMenu: false,
-        seed: 22, cost: 175, name: 'Torchwood', nameKey: 'TORCHWOOD', descriptionKey: 'TORCHWOOD_TOOLTIP',
+        seed: 12, cost: 75, nameKey: 'HYPNO_SHROOM', descriptionKey: 'HYPNO_SHROOM_TOOLTIP',
     })
+    level = { ...level, award: { kind: 'seed', id: 'pvz:torchwood' } }
+    await assert.rejects(api.getAward(), /Unknown plant award/)
     level = levels.levels['pvz:adventure-2-4']
     assert.deepEqual(await api.getAward(), {
         kind: 'unlock', id: 'pvz:almanac', nextLevelId: 'pvz:adventure-2-5', showMainMenu: true,
@@ -231,7 +237,7 @@ test('winning advances the current profile once and exposes the next installed l
     const levels = readGameplaySource('levels') as GameplayLevels
     let level = levels.levels['pvz:adventure-1-1']
     let won = false
-    const { api, storage } = fixture(() => level, () => won)
+    const { api, storage, profiles } = fixture(() => level, () => won)
     await api.createUser('Alice')
     assert.deepEqual(await api.getAdventure(), { levelId: 'pvz:adventure-1-1' })
     await assert.rejects(api.completeLevel(), /before winning/)
@@ -276,14 +282,22 @@ test('winning advances the current profile once and exposes the next installed l
         assert.deepEqual([award.kind, award.seed, award.nextLevelId], [kind, seed, next])
         assert.equal((await api.getCurrentUser())!.adventureLevel, 11 + index)
     }
+    assert.deepEqual([...profiles.getCurrentProfile()!.unlocks], ['almanac'], '2-4 drops the almanac')
+    assert.equal((await api.getCurrentUser())!.unlocks.almanac, true)
+    // Each won level adds its award seed to the profile once, after the starting peashooter.
+    const owned = ['pvz:peashooter', 'pvz:sunflower', 'pvz:cherrybomb', 'pvz:wallnut', 'pvz:potatomine', 'pvz:snowpea', 'pvz:chomper',
+        'pvz:repeater', 'pvz:puffshroom', 'pvz:sunshroom', 'pvz:fumeshroom', 'pvz:gravebuster', 'pvz:hypnoshroom']
+    assert.deepEqual((await api.getPurse()).ownedSeeds, owned)
+    await api.completeLevel()
+    assert.deepEqual((await api.getPurse()).ownedSeeds, owned, 'winning a level again adds nothing')
 })
 
 test("Crazy Dave's seed-slot offer saves the upgrade or a refusal together with the level's coins", async () => {
     const { api, profiles } = fixture()
     await api.createUser('Alice')
     await api.setCoins(80)
-    assert.deepEqual(await api.getPurse(), { coins: 80, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 0 })
-    assert.deepEqual(await api.recordPacketUpgradeOffer(false, 81), { coins: 81, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 1 })
+    assert.deepEqual(await api.getPurse(), { coins: 80, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 0, ownedSeeds: ['pvz:peashooter'] })
+    assert.deepEqual(await api.recordPacketUpgradeOffer(false, 81), { coins: 81, packetUpgrades: 0, packetUpgradeCost: 75, nextPacketUpgradeCost: 500, declinedPacketUpgrades: 1, ownedSeeds: ['pvz:peashooter'] })
     assert.equal(profiles.getCurrentProfile()!.declinedPacketUpgrades, 1, 'the refusal count is saved')
     await assert.rejects(api.recordPacketUpgradeOffer(true, 81), /not paid for/, 'a purchase must take the price')
     assert.equal((await api.getPurse()).packetUpgrades, 0)
@@ -318,8 +332,12 @@ test('menu data and business rules stay behind the API without Cocos or frontend
 test('the main menu unlocks modes, the almanac, store and garden, and the gold trophy from the player’s progress', async () => {
     const { api, profiles } = fixture()
     const profile = profiles.createProfile('Alice')!
-    profile.adventureLevel = 25
+    profile.adventureLevel = 45
     profile.hasUnlockedPuzzleMode = true
+    profiles.saveProfile(profile)
+    assert.deepEqual((await api.getCurrentUser())!.unlocks,
+        { minigames: false, puzzle: true, survival: false, almanac: false, store: false, garden: false }, 'the entries follow collected awards, not the level')
+    profile.unlocks = ['almanac', 'store']
     profiles.saveProfile(profile)
     assert.deepEqual((await api.getCurrentUser())!.unlocks,
         { minigames: false, puzzle: true, survival: false, almanac: true, store: true, garden: false })

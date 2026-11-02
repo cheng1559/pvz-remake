@@ -23,9 +23,6 @@ export class IntegratedGameServer {
     private readonly content: ServerContent
 
     constructor(definitions: GameplayDefinitions, levels: GameplayLevels, gameplay = new GameplayRegistry()) {
-        if (definitions.tickSeconds !== 0.01) {
-            throw new Error('IntegratedGameServer requires a 0.01 second fixed tick')
-        }
         gameplay.freeze(definitions)
         gameplay.validateLevels(levels, definitions)
         this.content = { definitions, levels, gameplay }

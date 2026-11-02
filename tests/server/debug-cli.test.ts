@@ -6,6 +6,7 @@ import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { getDebugCliCompletions, getDebugCliSuffix, parseDebugCliCommand } from '@/shared/debug/DebugCli'
+import { TICK_SECONDS } from '@/shared/protocol'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
 const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
@@ -203,7 +204,7 @@ test('CLI can put one seed in two slots; each slot recharges, flashes and restor
     game.debugCommand('/sun set 500')
     assert.equal(game.debugCommand('/seed 1 sunflower').ok, true)
     game.command({ type: 'resume' })
-    game.update(definitions.tickSeconds)
+    game.update(TICK_SECONDS)
     assert.deepEqual(game.render().seedPackets.map(packet => packet.seedId), ['pvz:sunflower', 'pvz:sunflower'])
     game.command({ type: 'selectSeed', seedId: 'pvz:sunflower', slot: 1 })
     game.update(0)
@@ -218,7 +219,7 @@ test('CLI can put one seed in two slots; each slot recharges, flashes and restor
     assert.deepEqual(game.render().seedPackets.map(packet => packet.selected), [true, false])
     game.command({ type: 'clearCursor' })
     game.drainEvents()
-    for (let i = 0; i < cooldown; i++) game.update(definitions.tickSeconds)
+    for (let i = 0; i < cooldown; i++) game.update(TICK_SECONDS)
     const flashes = game.drainEvents().filter(event => event.type === 'seedPacketFlashRequested').map(event => event.data.slot)
     assert.deepEqual(flashes, [1], 'only the recharged slot flashes')
     const restored = new LocalIntegratedGame(definitions, levels, undefined, true)

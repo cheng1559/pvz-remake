@@ -1,8 +1,12 @@
 {
   "schemaVersion": 2,
-  "tickSeconds": 0.01,
+  "economy": {
+    "maxSun": 9990,
+    "maxMoney": 99999
+  },
   "seedBank": {
     "baseSlots": 6,
-    "maxSlots": 10
+    "maxSlots": 10,
+    "startingSeeds": ["pvz:peashooter"]
   }
 }

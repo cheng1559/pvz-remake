@@ -97,9 +97,9 @@ export interface SeedBankState {
     conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; lastSeedId?: string; packets: Array<{ id: number; seedId: string; x: number }> }
     choosing?: boolean
     packets: Array<{ seedId: string, readyAtTick: number, cooldownTotal?: number }>
+    /** The seeds the player owns, from the start packet; absent, every catalog seed (see availableSeeds). */
+    owned?: string[]
 }
-
-export const MAX_SUN = 9990
 
 export interface EconomyState {
     sun: number

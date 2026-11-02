@@ -319,7 +319,7 @@
     "zombiePool": ["pvz:normal", "pvz:conehead", "pvz:pole_vaulter", "pvz:screendoor"],
     "rules": {"kind": "pvz:adventure", "count": 20},
     "award": {"kind": "unlock", "id": "pvz:almanac", "titleKey": "FOUND_SUBURBAN_ALMANAC", "nameKey": "SUBURBAN_ALMANAC", "descriptionKey": "SUBURBAN_ALMANAC_DESCRIPTION", "width": 80, "height": 80,
-      "opens": {"page": "almanac", "buttonKey": "VIEW_ALMANAC_BUTTON"}}
+      "opens": {"page": "almanac", "buttonKey": "VIEW_ALMANAC_BUTTON"}, "unlocks": "almanac"}
   },
   "pvz:adventure-2-5": {
     "adventureIndex": 15,

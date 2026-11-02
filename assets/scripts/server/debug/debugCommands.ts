@@ -6,7 +6,6 @@ import {
     EconomyStateResource,
     LawnMowerComponent,
     LevelStateResource,
-    MAX_SUN,
     PlantComponent,
     PositionComponent,
     RandomResource,
@@ -18,7 +17,6 @@ import { ItemComponent, TutorialResource, WaveResource } from '../state/levelSta
 import { createWaveSystem } from '../level/waves'
 import { createGrave } from '../level/graves'
 import { spawnLoot } from '../level/loot'
-import { MAX_MONEY } from '@/shared/menu'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
 
@@ -52,7 +50,7 @@ function executeCommand(
     switch (name) {
         case 'sun':
         case 'money': {
-            const next = debugAmount(args, economy[name], name === 'sun' ? MAX_SUN : MAX_MONEY)
+            const next = debugAmount(args, economy[name], name === 'sun' ? definitions.economy.maxSun : definitions.economy.maxMoney)
             if (typeof next !== 'number') return next
             economy[name] = next
             if (name === 'sun') economy.pendingSunSpend = 0

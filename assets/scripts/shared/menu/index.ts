@@ -22,8 +22,6 @@ export type UserResult = { ok: true, user: UserView | null } | {
 }
 export interface MenuSettings { version: number, musicVolume: number, sfxVolume: number, fullScreen: boolean }
 export const SFX_VOLUME_SCALE = 0.65
-/** PlayerInfo::AddCoins caps the purse at 99999 coins ($999,990). */
-export const MAX_MONEY = 99999
 export type StoreItemHighlight = { type: 'none' | 'seedPacket' } | { type: 'additive', opacity: number }
 export interface StoreItemView {
     id: number
@@ -61,8 +59,9 @@ export interface ChallengeView {
     total: number
     items: { key: string, endless?: boolean, completed: boolean, record: number }[]
 }
+/** `cost` and `refreshTime` are the seed's own `sunCost` and `cooldownTicks` (AlmanacDialog reads gPlantDefs too). */
 export interface AlmanacPlantDefinition {
-    id: number, key: string, name: string, cost: number, refreshTime: number, upgrade?: boolean,
+    id: number, key: string, cost: number, refreshTime: number, upgrade?: boolean,
     ground: 'day' | 'night' | 'pool' | 'nightpool' | 'roof',
 }
 export interface AlmanacZombieDefinition { id: number, key: string, iceGround?: boolean }
@@ -83,9 +82,9 @@ interface AwardDetails {
     opens?: { page: 'almanac', buttonKey: string }
 }
 export type AwardView = AwardDetails & (
-    { kind: 'seed'; seed: number; cost: number; name: string; nameKey: string; descriptionKey: string }
-    | { kind: 'tool' | 'unlock'; id: string; seed?: never; cost?: never; name?: never; nameKey: string; descriptionKey: string }
-    | { kind: 'note'; id: string; seed?: never; cost?: never; name?: never }
+    { kind: 'seed'; seed: number; cost: number; nameKey: string; descriptionKey: string }
+    | { kind: 'tool' | 'unlock'; id: string; seed?: never; cost?: never; nameKey: string; descriptionKey: string }
+    | { kind: 'note'; id: string; seed?: never; cost?: never }
 )
 
 export interface MenuEndpoints {
@@ -118,6 +117,8 @@ export interface PurseView {
     /** The price after one more upgrade, which Dave quotes once the first is bought (CRAZY_DAVE_1510). */
     nextPacketUpgradeCost: number
     declinedPacketUpgrades: number
+    /** The seeds the player owns (LawnApp::HasSeedType), for the level's chooser and bank. */
+    ownedSeeds: string[]
 }
 export type MenuMethod = keyof MenuEndpoints
 export type MenuRequest = { [K in MenuMethod]: { method: K, args: MenuEndpoints[K]['args'] } }[MenuMethod]

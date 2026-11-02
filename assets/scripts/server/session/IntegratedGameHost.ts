@@ -1,4 +1,5 @@
 import { LocalGameChannel } from '@/shared/channel/index'
+import { TICK_SECONDS } from '@/shared/protocol'
 import type {
     ClientPacket,
     JsonValue,
@@ -8,7 +9,6 @@ import type {
 } from '@/shared/protocol/index'
 import { IntegratedGameServer } from './IntegratedGameServer'
 
-const TICK_SECONDS = 0.01
 const MAX_TICKS_PER_UPDATE = 1000
 
 export class IntegratedGameHost {

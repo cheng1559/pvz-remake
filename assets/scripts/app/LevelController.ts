@@ -134,6 +134,8 @@ export function createLevelController(
                 save: save.server as unknown as JsonValue,
             } : { ...DEFAULT_START_OPTIONS, initialMoney: purse.coins, packetUpgrades: purse.packetUpgrades, randomSeed: Math.floor(Math.random() * 0x100000000),
                 firstAdventure: profile?.finishedAdventure === 0, levelId, mods: content.enabledMods,
+                // Without a player every seed is there, as on a replay.
+                ...(profile && 'ownedSeeds' in purse ? { ownedSeeds: purse.ownedSeeds } : {}),
                 // CutScene::CanGetPacketUpgrade's mDidntPurchasePacketUpgrade < 2; the level checks the rest.
                 ...(purse.declinedPacketUpgrades < 2 ? { packetUpgradeOffer: { cost: purse.packetUpgradeCost } } : {}) }
             await restoring(save, () => game.start(startOptions))

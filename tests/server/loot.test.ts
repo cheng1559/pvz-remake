@@ -3,6 +3,7 @@ import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { readGameplaySource } from '../../tools/mod/content'
+import { TICK_SECONDS } from '@/shared/protocol'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
@@ -28,7 +29,7 @@ test('2-1 guarantees a first coin with a pickup arrow after wave 5; collected mo
     const before = game.render().money
     game.drainEvents()
     game.command({ type: 'collectItemAt', itemId: first.entityId })
-    for (let tick = 0; tick < 300 && game.render().items.some(item => item.entityId === first.entityId); tick++) game.update(definitions.tickSeconds)
+    for (let tick = 0; tick < 300 && game.render().items.some(item => item.entityId === first.entityId); tick++) game.update(TICK_SECONDS)
     assert.equal(game.render().money, before + 1)
     const advice = game.drainEvents().filter(event => event.type === 'advice').map(event => event.data.key)
     assert.deepEqual(advice, ['ADVICE_CLICKED_ON_COIN'], 'Coin::Collect explains money on the first 2-1')
@@ -52,7 +53,7 @@ test('after the award, each unused mower turns into five coins of gold, 200 tick
     const purse = game.render().money + money(game).reduce((sum, item) => sum + definitions.items[item.typeId].value, 0)
     const scored: number[] = []
     for (let tick = 1; tick <= 600; tick++) {
-        game.update(definitions.tickSeconds)
+        game.update(TICK_SECONDS)
         if (game.drainEvents().some(event => event.type === 'mowerScored')) scored.push(tick)
     }
     assert.deepEqual(scored, [200, 240, 280, 320, 360])
@@ -78,7 +79,7 @@ test('a first adventure drops money from level 11 on, also on levels without a s
         game.drainEvents()
         let scored = 0
         for (let tick = 1; tick <= 600; tick++) {
-            game.update(definitions.tickSeconds)
+            game.update(TICK_SECONDS)
             scored += game.drainEvents().filter(event => event.type === 'mowerScored').length
         }
         return scored

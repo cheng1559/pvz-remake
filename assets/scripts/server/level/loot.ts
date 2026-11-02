@@ -7,7 +7,6 @@ import { emitServerEvent, EventQueueResource } from '../state/events'
 import { tryDropLevelAward } from './levelAward'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { getActiveTutorial } from '../tutorials'
-import { MAX_MONEY } from '@/shared/menu'
 import { levelRule } from '../rules/registry'
 
 const SILVER = 'pvz:coin_silver', GOLD = 'pvz:coin_gold', DIAMOND = 'pvz:diamond'

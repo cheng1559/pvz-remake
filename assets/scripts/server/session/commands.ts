@@ -1,7 +1,6 @@
 import type { GameCommand } from '@/shared/protocol/index'
 import { debugSuccess, parseDebugCliCommand } from '@/shared/debug/DebugCli'
 import { EconomyStateResource, LevelStateResource, SeedBankResource } from '../state/components'
-import { MAX_MONEY } from '@/shared/menu'
 import { startConveyor } from '../level/conveyor'
 import { executeDebugGameCommand } from '../debug/debugCommands'
 import { items } from '../level/items'
@@ -40,7 +39,7 @@ export const commands = {
             // StoreScreen::PurchaseItem: a slot bought while a level is up widens an open chooser at once
             // (SeedBank::UpdateWidth); a bank already in play keeps its size until the next level.
             const economy = world.resources.get(EconomyStateResource)
-            economy.money = Math.min(MAX_MONEY, command.money)
+            economy.money = Math.min(session.definitions.economy.maxMoney, command.money)
             if (command.packetUpgrades > 0) economy.diamonds = true
             else delete economy.diamonds
             if (world.resources.get(SeedBankResource).choosing === true && command.packetUpgrades > (economy.packetUpgrades ?? 0)) {
@@ -49,7 +48,7 @@ export const commands = {
             return
         }
         if (command.type === 'chooseSeed' || command.type === 'confirmSeeds') {
-            return applySeedChoice(world, session.definitions, session.levels, command)
+            return applySeedChoice(world, session.definitions, command)
         }
         if (level.paused) return 'game-paused'
         if (command.type === 'advanceDialog') {
