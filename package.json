@@ -17,6 +17,7 @@
         "test:server": "npm run typecheck:server && tsx --tsconfig tsconfig.server.json --test \"tests/**/*.test.ts\"",
         "preview:debug": "cocos preview --project .",
         "preview:release": "cocos preview --project . --no-debug",
+    "check:preview": "tsx tools/preview/check-imports.ts",
         "build:web:debug": "cocos build --project . --platform web-mobile --build-config build-configs/debug.json --no-interactive",
         "build:web:release": "cocos build --project . --platform web-mobile --build-config build-configs/release.json --no-interactive",
         "build:macos:debug": "cocos build --project . --platform mac --build-config build-configs/macos-debug.json --no-interactive",

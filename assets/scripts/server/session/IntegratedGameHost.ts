@@ -49,6 +49,8 @@ export class IntegratedGameHost {
             }
             this.advance(dtSeconds)
         } catch (error) {
+            // The client only receives the message; keep the stack in the console.
+            console.error('[IntegratedGameHost]', error)
             this.fatal('server-error', error instanceof Error ? error.message : String(error))
         }
     }

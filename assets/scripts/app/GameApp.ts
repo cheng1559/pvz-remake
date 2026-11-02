@@ -1,5 +1,5 @@
 import { _decorator, Component, director, Director, EventKeyboard, type EventTouch, game, Game, input, Input, KeyCode, Mask, Node, screen, sys } from 'cc'
-import { DEBUG } from 'cc/env'
+import { DEBUG, PREVIEW } from 'cc/env'
 import { uiNode } from '@/client/view/uiNode'
 import { initializeViewport, resetViewport } from '@/client/view/ClientViewport'
 import { FpsDisplay } from '@/client/view/FpsDisplay'
@@ -97,6 +97,13 @@ export class GameApp extends Component {
             onComplete: () => this.finish('award'),
             onGameOver: () => this.finish('gameOver'),
         })
+        if (PREVIEW && !Object.hasOwn(Error.prototype, 'toJSON')) {
+            // The preview forwards console arguments to the editor log as JSON, where an Error would print as {}.
+            Object.defineProperty(Error.prototype, 'toJSON', {
+                configurable: true, writable: true,
+                value(this: Error) { return { message: this.message, stack: this.stack } },
+            })
+        }
         if (DEBUG) {
             ;(globalThis as typeof globalThis & { pvzTime?: typeof gameClock }).pvzTime = gameClock
             installLevelProbe(this.controller)
