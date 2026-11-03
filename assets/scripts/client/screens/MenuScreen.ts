@@ -182,7 +182,7 @@ export class MenuScreen extends Component {
                 paperAward = award.kind === 'note'
                 navigateButton(award.opens?.page ?? 'nextLevel', {
                     skin: 'seed', text: ui.text(award.opens?.buttonKey ?? 'NEXT_LEVEL_BUTTON'), x: 324, y: paperAward ? 520 : 500,
-                    pressOffset: [0, 0], rightClickTriggers: false,
+                    rightClickTriggers: false,
                 })
                 // Keeps its margin from the UI area's right edge, like Ultimate's top-right menu button.
                 if (award.showMainMenu) ui.button(uiAreaEdge(controls, 'right'), {

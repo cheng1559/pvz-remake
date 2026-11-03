@@ -56,7 +56,7 @@ export class AwardAchievements extends Component {
         })
         list.continueButton = ui.button(node, {
             skin: 'seed', text: ui.text('CONTINUE_BUTTON'), x: 324, y: 515, width: 156, height: 42,
-            pressOffset: [0, 0], pressSound: null, rightClickTriggers: false, onClick: () => {
+            pressSound: null, rightClickTriggers: false, onClick: () => {
                 node.destroy()
                 onContinue()
             },

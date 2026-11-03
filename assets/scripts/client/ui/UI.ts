@@ -222,8 +222,12 @@ export class UI {
             const highlighted = pressed || state === 'hover'
             if (normal && down) { normal.active = !pressed; down.active = pressed }
             if (image && stateImages) image.spriteFrame = stateImages[state]
-            if (glow) glow.node.active = highlighted
             visual.setPosition(pressed ? pressOffset[0] : 0, pressed ? -pressOffset[1] : 0)
+            if (glow) {
+                glow.node.active = highlighted
+                // GameButton::Draw: the image and label move down-right when pressed; mOverOverlayImage stays put.
+                glow.node.setPosition(pressed ? -pressOffset[0] : 0, pressed ? pressOffset[1] : 0)
+            }
             labels.forEach((label, index) => {
                 if (options.disabledColor) label.color = state === 'disabled' ? options.disabledColor : color ?? Color.WHITE
                 label.node.active = index === (highlighted ? labels.length - 1 : 0)
