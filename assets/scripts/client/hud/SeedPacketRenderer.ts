@@ -6,6 +6,7 @@ import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import type { FontConfig, FontLayerConfig } from '@/client/font/FontRenderer.d'
 import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview } from './PlantPreview'
+import { ZombiePreview } from './ZombiePreview'
 import { applySpriteDensity } from '@/client/content/SpriteDensity'
 import { plantVisual, type SeedPacketSeedType } from '@/client/plants/definitions'
 export type { SeedPacketSeedType } from '@/client/plants/definitions'
@@ -48,6 +49,8 @@ export interface SeedPacketRenderArgs {
     y: number
     scale?: number
     seedType: SeedPacketSeedType
+    /** A zombie seed's zombie type, drawn instead of a plant (SEED_ZOMBIE_*). */
+    zombie?: string
     cost?: number
     drawCost?: boolean
     upgrade?: boolean
@@ -114,7 +117,8 @@ export class SeedPacketRenderer {
         root.setScale(rootScale, rootScale, 1)
 
         this._drawBackground(root, args, scale)
-        this._drawPlantIcon(root, args, scale)
+        if (args.zombie) this._drawZombieIcon(root, args, scale)
+        else this._drawPlantIcon(root, args, scale)
         if (args.drawCost !== false && args.cost != null) {
             this._drawCost(root, args.cost, args.costFont ?? null, args.layer, scale)
         }
@@ -150,6 +154,20 @@ export class SeedPacketRenderer {
             x: placement.offsetX * iconScale, y: -(placement.offsetY + 1) * iconScale,
             scale: placement.scale * iconScale,
         }, iconScale)
+    }
+
+    /**
+     * Plant::DrawSeedType for SEED_ZOMBIE_*: the cached zombie frame, with the zombie posed at (40, 40), drawn at the
+     * zombie's packet offset and scale (SeedPacket::DrawSeedPacket).
+     */
+    private static _drawZombieIcon(root: Node, args: SeedPacketRenderArgs, scale: number) {
+        const packet = args.definitions.zombies[args.zombie!]?.packet
+        if (!packet) return
+        const iconScale = scale > 1 ? scale : 1
+        uiNode({ name: 'PacketZombie', parent: root, layer: args.layer }).node.addComponent(ZombiePreview).initialize({
+            x: (packet.x + 40 * packet.scale) * iconScale, y: -(packet.y + 40 * packet.scale) * iconScale, scale: packet.scale * iconScale, from: 'reanim',
+            facingRightOffsetX: packet.facingRightOffsetX, packetScale: iconScale,
+        }).setZombie(args.zombie)
     }
 
     private static async _drawCachedPlantIcon(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number): Promise<void> {

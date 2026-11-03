@@ -14,5 +14,12 @@
   "pvz:sunshroom": {"plant": "pvz:sunshroom", "sunCost": 25, "cooldownTicks": 750, "placement": "ground"},
   "pvz:fumeshroom": {"plant": "pvz:fumeshroom", "sunCost": 75, "cooldownTicks": 750, "placement": "ground"},
   "pvz:gravebuster": {"plant": "pvz:gravebuster", "sunCost": 75, "cooldownTicks": 750, "placement": "grave"},
-  "pvz:hypnoshroom": {"plant": "pvz:hypnoshroom", "sunCost": 75, "cooldownTicks": 3000, "placement": "ground"}
+  "pvz:hypnoshroom": {"plant": "pvz:hypnoshroom", "sunCost": 75, "cooldownTicks": 3000, "placement": "ground"},
+  "pvz:zombie-normal": {"zombie": "pvz:normal", "sunCost": 50, "cooldownTicks": 0},
+  "pvz:zombie-flag": {"zombie": "pvz:flag", "sunCost": 50, "cooldownTicks": 0},
+  "pvz:zombie-conehead": {"zombie": "pvz:conehead", "sunCost": 75, "cooldownTicks": 0},
+  "pvz:zombie-pole_vaulter": {"zombie": "pvz:pole_vaulter", "sunCost": 75, "cooldownTicks": 0},
+  "pvz:zombie-buckethead": {"zombie": "pvz:buckethead", "sunCost": 125, "cooldownTicks": 0},
+  "pvz:zombie-newspaper": {"zombie": "pvz:newspaper", "sunCost": 75, "cooldownTicks": 0},
+  "pvz:zombie-screendoor": {"zombie": "pvz:screendoor", "sunCost": 100, "cooldownTicks": 0}
 }

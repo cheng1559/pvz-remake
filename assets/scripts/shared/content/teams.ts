@@ -9,6 +9,16 @@ export const zombieTeam = (zombie: { readonly team?: Team }): Team => zombie.tea
 /** A projectile's side: the plants' unless its shooter is a zombie. */
 export const projectileTeam = (projectile: { readonly team?: Team }): Team => projectile.team ?? 'plants'
 
+/** A seed's own side: a plant seed's plants are the plants', a zombie seed's zombies the zombies' (SEED_ZOMBIE_*). */
+export const seedTeam = (seed: { readonly zombie?: string }): Team => seed.zombie === undefined ? 'plants' : 'zombies'
+
+/**
+ * The side a packet keeps for its seed: `team` only when it is not the seed's own, so a packet on its seed's own side
+ * has none. `/seed` and the chooser store their packets this way.
+ */
+export const packetTeam = (seed: { readonly zombie?: string }, team: Team | undefined): Team | undefined =>
+    team !== undefined && team !== seedTeam(seed) ? team : undefined
+
 /** The one rule: different sides attack each other (Zombie::EffectedByDamage, FindZombieTarget). */
 export const isHostile = (left: Team, right: Team): boolean => left !== right
 

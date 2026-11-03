@@ -11,7 +11,7 @@ import { attachmentTrack, type ZombiePresentationDefinition } from '@/shared/con
 import type { ZombieDefinition } from '@/shared/content/gameplay'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import type { ZombieFlash } from '@/client/level/EntityFlashes'
-import { MIND_CONTROLLED_RGB, zombiePartVisibility } from './zombieParts'
+import { MIND_CONTROLLED_RGB, MIRRORED_SHIFT, zombiePartVisibility } from './zombieParts'
 
 type AnimationSlot = keyof (PoleVaulterAnimationDefinition & FlagZombieAnimationDefinition)
 const SLOTS: Record<ZombieSnapshot['animation'], AnimationSlot> = {
@@ -304,7 +304,8 @@ export class ZombieView implements ZombieViewInstance {
         const player = this.player!
         player.pause()
         player.seek(player.lastFrameTimeSeconds)
-        this.place(player.node, jump.x + this.landingOffset, jump.y)
+        // The vault lands `landingOffset` ahead, the way the zombie faces; the held last frame stays where the jump ended.
+        this.place(player.node, jump.x + (this.mirrored ? -1 : 1) * this.landingOffset, jump.y)
     }
 
     private async load(zombie: ZombieSnapshot): Promise<void> {
@@ -412,11 +413,11 @@ export class ZombieView implements ZombieViewInstance {
     }
 
     /**
-     * Zombie::UpdateReanim: a zombie walking right draws its body mirrored (`m00 = -scale`) and 90 further right. Every
-     * body animation node is placed through here.
+     * Zombie::UpdateReanim: a zombie walking right draws its body mirrored (`m00 = -scale`) and 90 further right (see
+     * MIRRORED_SHIFT). Every body animation node is placed through here.
      */
     private place(node: Node, x: number, y: number): void {
-        node.setPosition(this.mirrored ? x + 90 : x, y)
+        node.setPosition(x + (this.mirrored ? MIRRORED_SHIFT : 0), y)
         node.setScale(this.mirrored ? -1 : 1, 1, 1)
     }
 
@@ -424,10 +425,11 @@ export class ZombieView implements ZombieViewInstance {
     private syncFacing(zombie: ZombieSnapshot): void {
         const mirrored = zombie.team === 'plants'
         if (mirrored === this.mirrored) return
+        const moved = mirrored ? MIRRORED_SHIFT : -MIRRORED_SHIFT
         this.mirrored = mirrored
         for (const node of [this.player?.node, this.node.getChildByName('MoweredDriver')]) {
             if (!node?.isValid) continue
-            node.setPosition(node.position.x + (mirrored ? 90 : -90), node.position.y)
+            node.setPosition(node.position.x + moved, node.position.y)
             node.setScale(mirrored ? -1 : 1, 1, 1)
         }
     }
@@ -437,7 +439,7 @@ export class ZombieView implements ZombieViewInstance {
      * (with the same color added, in applyHitFlash).
      */
     private applyColor(zombie: ZombieSnapshot, force = false): void {
-        const color = zombie.state === 'burned' ? 'burned' : zombie.team === 'plants' ? 'mindControlled' : zombie.chilled ? 'chilled' : 'normal'
+        const color = zombie.state === 'burned' ? 'burned' : zombie.mindControlled ? 'mindControlled' : zombie.chilled ? 'chilled' : 'normal'
         if (!this.player || color === this.color && !force) return
         this.color = color
         const value = color === 'burned' ? new Color(0, 0, 0) : color === 'mindControlled' ? mindControlledColor()
@@ -456,7 +458,7 @@ export class ZombieView implements ZombieViewInstance {
         // DrawReanim adds the cold tint and then adds the hit highlight on top of it.
         const color = new Color(Math.min(255, grayness + (cold ? 75 : 0)),
             Math.min(255, grayness + (cold ? 75 : 0)), cold ? 255 : grayness, 255)
-        const mindControlled = zombie.team === 'plants' && zombie.state !== 'burned'
+        const mindControlled = zombie.mindControlled === true && zombie.state !== 'burned'
         const enabled = cold || bodyFlash > 0 || mindControlled
         this.player?.setExtraAdditiveDraw(enabled, mindControlled ? mindControlledColor() : color)
         if (shield && this.player) {

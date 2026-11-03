@@ -1,7 +1,12 @@
 import type { SeedAvailability } from '@/shared/protocol/index'
-import type { Team } from '@/shared/content/teams'
+import { seedTeam, type Team } from '@/shared/content/teams'
+import type { SeedDefinition } from '@/shared/content/gameplay'
+import { spawnZombie } from '../zombies/spawn'
 import { graveAt } from '@/shared/protocol/index'
-import { EconomyStateResource, LevelStateResource, PlantAttackComponent, PlantComponent, PositionComponent, RandomResource, SeedBankResource } from '../state/components'
+import {
+    EconomyStateResource, LevelStateResource, PlantAttackComponent, PlantComponent, PositionComponent, RandomResource, SeedBankResource,
+    type SeedBankState, ZombieComponent,
+} from '../state/components'
 import { getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { getAvailableSun } from '../level/items'
@@ -80,7 +85,6 @@ export const planting = {
         const seed = definitions.seeds[seedId]
         const rules = getDebugRules(world)
         const sunCost = !seedBank.conveyor && rules.sunCost ? seed.sunCost : 0
-        const economy = world.resources.get(EconomyStateResource)
         if (rules.cooldown && packet && packet.readyAtTick > gameplayTick) return 'seed-not-ready'
         if (getAvailableSun(world, definitions) < sunCost) {
             notEnoughSun(session)
@@ -100,6 +104,14 @@ export const planting = {
             !level.definition.activeRows.includes(row)) return refuseCell('row-not-active')
         if (!Number.isInteger(column) || column < 0 || column >= level.board.columns) {
             return refuseCell('column-out-of-range')
+        }
+        const team = packet?.team ?? seedTeam(seed)
+        if (seed.zombie !== undefined) {
+            // Challenge::IZombieMouseDownWithZombie: a zombie goes into any cell of an active row, whatever stands there.
+            const entity = planting.placeZombie(session, seed.zombie, row, column, team)
+            spendSeed(session, seed, packet, sunCost)
+            emitServerEvent(world.resources.get(EventQueueResource), 'zombiePlaced', { entityId: entity, typeId: seed.zombie, row, column })
+            return
         }
         if (levelRule(world)?.canPlantAt?.(world, row, column) === false) return refuseCell('column-out-of-range')
         // Board::CanPlantAt: nothing past the level's red line, with ADVICE_NOT_PASSED_LINE once a game.
@@ -132,22 +144,8 @@ export const planting = {
             session.graveAdvice = undefined
         }
 
-        const entity = planting.createPlant(session, seedId, row, column, packet?.team)
-        if (seedBank.conveyor) {
-            const conveyor = seedBank.conveyor
-            const packetId = seedBank.selection.mode === 'conveyor' ? seedBank.selection.packetId : undefined
-            // Positions are absolute; the remaining packets close the gap through normal belt movement.
-            conveyor.packets = conveyor.packets.filter(packet => packet.id !== packetId)
-            emitServerEvent(world.resources.get(EventQueueResource), 'adviceCleared', { key: 'ADVICE_NOT_PASSED_LINE' })
-        }
-        const bankSpend = Math.min(economy.sun, sunCost)
-        economy.sun -= bankSpend
-        economy.pendingSunSpend += sunCost - bankSpend
-        if (packet) {
-            packet.cooldownTotal = rules.cooldown ? seed.cooldownTicks : 0
-            packet.readyAtTick = gameplayTick + packet.cooldownTotal
-        }
-        clearCursor(world)
+        const entity = planting.createPlant(session, seedId, row, column, team)
+        spendSeed(session, seed, packet, sunCost)
         getActiveTutorial(world)?.plantPlaced?.(world, gameplayTick, seed.plant, occupiedEntity !== undefined)
         emitServerEvent(world.resources.get(EventQueueResource), 'plantPlaced', {
             entityId: entity,
@@ -157,11 +155,26 @@ export const planting = {
         })
     },
 
+    /**
+     * Challenge::IZombiePlaceZombie: the zombie stands in the row, 30 left of the cell, on `team`'s side; one on the
+     * plants' side `facingRightOffsetX` further.
+     */
+    placeZombie(session: Session, typeId: string, row: number, column: number, team: Team = 'zombies'): number {
+        const { world, definitions } = session
+        const board = world.resources.get(LevelStateResource).board
+        const offsetX = team === 'plants' ? definitions.zombies[typeId].facingRightOffsetX ?? 0 : 0
+        const entity = spawnZombie(world, definitions, typeId, row, board.origin.x + column * board.cell.width - 30 + offsetX,
+            board.origin.y + row * board.cell.height - 30)
+        if (team === 'plants') world.get(entity, ZombieComponent)!.team = 'plants'
+        return entity
+    },
+
     /** Creates the plant of `seedId` in a cell without any planting checks, on the plants' side unless `team` says otherwise. */
     createPlant(session: Session, seedId: string, row: number, column: number, team?: Team): number {
         const { world, gameplayTick, definitions, gameplay } = session
         const level = world.resources.get(LevelStateResource)
         const plantedSeed = definitions.seeds[seedId]
+        if (plantedSeed.plant === undefined) throw new Error(`${seedId} places a zombie, not a plant`)
         const definition = definitions.plants[plantedSeed.plant]
         const behaviorState = gameplay.plantBehaviors.createState(plantedSeed.plant, definition)
         const offset = definition.plantingOffset, random = world.resources.get(RandomResource)
@@ -196,6 +209,28 @@ export const planting = {
         return [...world.query(PositionComponent, PlantComponent)].find(entity =>
             definitions.plants[world.get(entity, PlantComponent)!.typeId].occupiesCell !== false && world.get(entity, PositionComponent)!.row === row && world.get(entity, PlantComponent)!.column === column)
     },
+}
+
+/** SeedPacket::WasPlanted: the seed's sun is spent, its packet (or conveyor packet) used and the cursor cleared. */
+function spendSeed(session: Session, seed: SeedDefinition, packet: SeedBankState['packets'][number] | undefined, sunCost: number): void {
+    const { world, gameplayTick } = session
+    const seedBank = world.resources.get(SeedBankResource)
+    if (seedBank.conveyor) {
+        const conveyor = seedBank.conveyor
+        const packetId = seedBank.selection.mode === 'conveyor' ? seedBank.selection.packetId : undefined
+        // Positions are absolute; the remaining packets close the gap through normal belt movement.
+        conveyor.packets = conveyor.packets.filter(packet => packet.id !== packetId)
+        emitServerEvent(world.resources.get(EventQueueResource), 'adviceCleared', { key: 'ADVICE_NOT_PASSED_LINE' })
+    }
+    const economy = world.resources.get(EconomyStateResource)
+    const bankSpend = Math.min(economy.sun, sunCost)
+    economy.sun -= bankSpend
+    economy.pendingSunSpend += sunCost - bankSpend
+    if (packet) {
+        packet.cooldownTotal = getDebugRules(world).cooldown ? seed.cooldownTicks : 0
+        packet.readyAtTick = gameplayTick + packet.cooldownTotal
+    }
+    clearCursor(world)
 }
 
 function notEnoughSun(session: Session): void {

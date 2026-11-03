@@ -4,13 +4,35 @@ import { jsonRoundTrip, type JsonObject, type Team } from '@/shared/protocol'
 /** Board pixel where collected sun flies to: the sun counter in the original 800-wide layout. */
 export const SUN_BANK_TARGET = { x: 15, y: 0 } as const
 
+/**
+ * SeedChooserScreen's grid, the original's plant seed types: 0-39 in five rows, and the upgrade plants 40-47 in a sixth
+ * once the chooser has seven rows (SeedChooserScreen::Has7Rows). 48 is the Imitater's, drawn on its own button, and
+ * the hidden seeds follow from 49 (SEED_EXPLODE_O_NUT); none of those is offered.
+ */
+export const CHOOSER_PLACES = 48
+/** The places in the chooser's usual five rows. */
+export const FIVE_ROW_PLACES = 40
+
+/** A seed's place in the chooser grid (SeedChooserScreen::GetSeedPositionInChooser), in reading order from 0. */
+export interface SeedCatalogEntry { position: number }
+
+/** The catalog seeds in the chooser's grid (places below CHOOSER_PLACES), in place order. */
+export function chooserSeeds(definitions: Pick<GameplayDefinitions, 'seedCatalog'>): string[] {
+    return Object.entries(definitions.seedCatalog).filter(([, entry]) => entry.position < CHOOSER_PLACES)
+        .sort(([, left], [, right]) => left.position - right.position).map(([id]) => id)
+}
+
 export interface GameplayDefinitions {
     schemaVersion: 2
     /** Board::AddSun and PlayerInfo::AddCoins cap the sun at 9990 and the coins at 99999 (shown as $999,990). */
     economy: { maxSun: number; maxMoney: number }
     boards: Record<string, BoardDefinition>
     seeds: Record<string, SeedDefinition>
-    seedCatalog: string[]
+    /**
+     * The chooser catalog, a table like the others: a Mod adds its own seeds and moves anyone's through `overrides`.
+     * A place left out stays empty in the grid.
+     */
+    seedCatalog: Record<string, SeedCatalogEntry>
     plants: Record<string, PlantDefinition>
     zombies: Record<string, ZombieDefinition>
     zombieGaits: Record<string, ZombieGait>
@@ -43,14 +65,31 @@ export interface BoardDefinition {
     cell: { width: number; height: number }
 }
 
-export interface SeedDefinition {
-    plant: string
+interface SeedCommon {
     sunCost: number
     cooldownTicks: number
     initialCooldownTicks?: number
+}
+
+/** A seed that plants `plant`. */
+export interface PlantSeedDefinition extends SeedCommon {
+    plant: string
+    zombie?: undefined
     /** `grave`: only on a grave, like the Grave Buster (PLANTING_ONLY_ON_GRAVES). */
     placement: 'ground' | 'grave'
 }
+
+/**
+ * A seed that places a `zombie` (the original's SEED_ZOMBIE_*, Challenge::IZombiePlaceZombie), usable on any level: in
+ * any cell of an active row, whatever stands there, on the zombies' side unless its packet says otherwise.
+ */
+export interface ZombieSeedDefinition extends SeedCommon {
+    zombie: string
+    plant?: undefined
+    placement?: undefined
+}
+
+export type SeedDefinition = PlantSeedDefinition | ZombieSeedDefinition
 
 /** Damages zombies whose body overlaps the circle; `burn` chars them like the original ApplyBurn. */
 export interface ExplosionDefinition {
@@ -122,6 +161,14 @@ export interface ZombieArmor { type: string; health: number }
 
 export interface ZombieDefinition {
     dropsFlag?: boolean
+    /**
+     * Put down facing right from a zombie seed (the original puts none down so), it stands this much further right to
+     * line up with the others: Zombie::UpdateReanim draws every zombie 90 further, flipped, which turns the plain
+     * zombie about its body but not one whose body stands elsewhere in its frame. The pole vaulter's stands 6 left
+     * of its frame (GetDrawPos) and 14.29 further right in it (its packet x, -8 against -3 at 0.35), so it takes
+     * 6 + 14.29. Zombies that face right in the original (mind-controlled, a digger walking back) keep its place.
+     */
+    facingRightOffsetX?: number
     maxHealth: number
     /** JSON configuration consumed by a registered entity behavior. */
     behavior?: JsonObject
@@ -312,7 +359,9 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
         economy: { maxSun: positiveInteger(economy.maxSun, 'economy.maxSun'), maxMoney: positiveInteger(economy.maxMoney, 'economy.maxMoney') },
         boards: mapped(source.boards, 'boards', parseBoard),
         seeds: mapped(source.seeds, 'seeds', parseSeed),
-        seedCatalog: qualifiedIdArray(seedCatalog, 'seed catalog'),
+        seedCatalog: mapped(seedCatalog, 'seed catalog', (entry, entryName) => ({
+            position: nonNegativeInteger(exactObject(entry, ['position'], entryName).position, `${entryName}.position`),
+        })),
         plants: mapped(source.plants, 'plants', parsePlant),
         zombies: mapped(source.zombies, 'zombies', parseZombie),
         zombieGaits: mapped(source.zombieGaits, 'zombieGaits', parseZombieGait),
@@ -326,10 +375,17 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
     if (definitions.seedBank.baseSlots > definitions.seedBank.maxSlots) throw new Error('seedBank.baseSlots exceeds maxSlots')
     for (const id of definitions.seedBank.startingSeeds) reference(id, definitions.seeds, 'seedBank.startingSeeds')
 
-    if (new Set(definitions.seedCatalog).size !== definitions.seedCatalog.length) throw new Error('seed catalog must not contain duplicates')
-    for (const id of definitions.seedCatalog) reference(id, definitions.seeds, 'seed catalog')
+    const places = new Map<number, string>()
+    for (const [id, { position }] of Object.entries(definitions.seedCatalog)) {
+        const other = places.get(position)
+        if (other) throw new Error(`seed catalog puts ${other} and ${id} in the same place (${position})`)
+        places.set(position, id)
+        reference(id, definitions.seeds, 'seed catalog')
+        if (definitions.seeds[id].plant === undefined) throw new Error(`seed catalog lists ${id}, a zombie seed; the chooser only offers plants`)
+    }
     for (const [id, seed] of Object.entries(definitions.seeds)) {
-        reference(seed.plant, definitions.plants, `seeds.${id}.plant`)
+        if (seed.zombie !== undefined) reference(seed.zombie, definitions.zombies, `seeds.${id}.zombie`)
+        else reference(seed.plant, definitions.plants, `seeds.${id}.plant`)
     }
     for (const [id, plant] of Object.entries(definitions.plants)) {
         if (plant.shooter?.projectile) reference(plant.shooter.projectile, definitions.projectiles, `plants.${id}.shooter.projectile`)
@@ -393,15 +449,19 @@ function parseBoard(value: unknown, name: string): BoardDefinition {
 }
 
 function parseSeed(value: unknown, name: string): SeedDefinition {
-    const source = exactObject(value, ['plant', 'sunCost', 'cooldownTicks', 'placement'], name, ['initialCooldownTicks'])
-    if (source.placement !== 'ground' && source.placement !== 'grave') throw new Error(`${name}.placement must be ground or grave`)
-    return {
-        plant: qualifiedId(source.plant, `${name}.plant`),
+    const source = exactObject(value, ['sunCost', 'cooldownTicks'], name, ['plant', 'zombie', 'placement', 'initialCooldownTicks'])
+    const common = {
         sunCost: nonNegativeInteger(source.sunCost, `${name}.sunCost`),
         cooldownTicks: nonNegativeInteger(source.cooldownTicks, `${name}.cooldownTicks`),
         ...(source.initialCooldownTicks === undefined ? {} : { initialCooldownTicks: nonNegativeInteger(source.initialCooldownTicks, `${name}.initialCooldownTicks`) }),
-        placement: source.placement,
     }
+    if ((source.plant === undefined) === (source.zombie === undefined)) throw new Error(`${name} needs either a plant or a zombie`)
+    if (source.zombie !== undefined) {
+        if (source.placement !== undefined) throw new Error(`${name}.placement is for plant seeds`)
+        return { ...common, zombie: qualifiedId(source.zombie, `${name}.zombie`) }
+    }
+    if (source.placement !== 'ground' && source.placement !== 'grave') throw new Error(`${name}.placement must be ground or grave`)
+    return { ...common, plant: qualifiedId(source.plant, `${name}.plant`), placement: source.placement }
 }
 
 function parsePlant(value: unknown, name: string): PlantDefinition {
@@ -536,7 +596,7 @@ function explosion(value: unknown, name: string): ExplosionDefinition {
 }
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'dropsFlag', 'wave', 'graveRise'])
+    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'dropsFlag', 'wave', 'graveRise', 'facingRightOffsetX'])
     const spawn = exactObject(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -559,6 +619,7 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
             cadenceTicks: positiveInteger(bite.cadenceTicks, `${name}.bite.cadenceTicks`),
         },
     }
+    if (source.facingRightOffsetX !== undefined) result.facingRightOffsetX = finite(source.facingRightOffsetX, `${name}.facingRightOffsetX`)
     if (source.dropsFlag !== undefined) {
         if (typeof source.dropsFlag !== 'boolean') throw new Error(`${name}.dropsFlag must be boolean`)
         result.dropsFlag = source.dropsFlag

@@ -40,7 +40,8 @@ export type GameCommand =
     | { type: 'mod'; id: string; data: JsonObject }
     /** `slot` picks one bank packet when the bank holds the seed more than once. */
     | { type: 'selectSeed'; seedId: string; slot?: number }
-    | { type: 'chooseSeed'; seedId: string }
+    /** `team`: the card's side when not its seed's own, as a Mod's chooser `entries` offer it. */
+    | { type: 'chooseSeed'; seedId: string; team?: Team }
     | { type: 'confirmSeeds' }
     | { type: 'selectConveyorPacket'; packetId: EntityId }
     | { type: 'selectTool'; toolId: string }
@@ -169,8 +170,11 @@ export interface WorldSnapshot {
     wave: WaveSnapshot
     cursor: CursorSnapshot
     seedPackets: SeedPacketSnapshot[]
-    /** `warnings` are shown one after another on confirm; each can be dismissed to repick. */
-    seedChooser?: { availableSeeds: string[], slots: number, choosing: boolean, warnings?: string[] }
+    /**
+     * `availableSeeds` fill the catalog grid; `entries` are the cards Mods offer beyond it (seedChooser.entries).
+     * `warnings` are shown one after another on confirm; each can be dismissed to repick.
+     */
+    seedChooser?: { availableSeeds: string[], entries?: ChooserEntry[], slots: number, choosing: boolean, warnings?: string[] }
     conveyorPackets: Array<{ id: number; seedId: string; x: number; selected: boolean; availability: SeedAvailability }>
     graves?: GraveSnapshot[]
     plants: PlantSnapshot[]
@@ -185,18 +189,27 @@ export interface WorldSnapshot {
 export type CursorSnapshot =
     | { mode: 'none' }
     | { mode: 'tool', toolId: string }
-    /** `team`: the held packet plants on the zombies' side, facing left. */
-    | { mode: 'seed', seedId: string, team?: 'zombies' }
+    /** `team`: the held packet puts down this side's plant or zombie, which faces the other way from its seed's own. */
+    | { mode: 'seed', seedId: string, team?: Team }
 
 export interface SeedAvailability {
     reason?: 'seed-not-available' | 'seed-not-ready' | 'not-enough-sun'
     warningKey?: string
 }
 
+/** A card a chooser offers: a seed, on `team` when not its seed's own (it then faces the other way). */
+export interface ChooserEntry {
+    seedId: string
+    team?: Team
+}
+
+/** One string per card: the same seed on the two sides is two cards. */
+export const chooserEntryKey = (entry: ChooserEntry): string => `${entry.seedId}|${entry.team ?? ''}`
+
 export interface SeedPacketSnapshot {
     seedId: string
-    /** A packet of the zombies' side: its plant faces left. */
-    team?: 'zombies'
+    /** The side of what the packet puts down, when not its seed's own: it faces the other way. */
+    team?: Team
     ready: boolean
     selected: boolean
     cooldownRemaining: number
@@ -272,8 +285,10 @@ export interface ZombieSnapshot extends EntityBehaviorState {
     hasPole?: boolean
     enraged?: boolean
     riseTicks?: number
-    /** Only on the plants' side. */
+    /** Only on the plants' side: it walks right, facing right. */
     team?: 'plants'
+    /** Mind-controlled: tinted purple and chewing softly. */
+    mindControlled?: true
 }
 
 export interface ProjectileSnapshot {
@@ -646,7 +661,10 @@ const validateGameCommand = (value: unknown): void => {
             nonEmptyString(command.seedId, 'selectSeed.seedId')
             if (command.slot !== undefined) integer(command.slot, 'selectSeed.slot')
             return
-        case 'chooseSeed': nonEmptyString(command.seedId, 'chooseSeed.seedId'); return
+        case 'chooseSeed':
+            nonEmptyString(command.seedId, 'chooseSeed.seedId')
+            if (command.team !== undefined) team(command.team, 'chooseSeed.team')
+            return
         case 'selectConveyorPacket': integer(command.packetId, 'selectConveyorPacket.packetId'); return
         case 'selectTool': nonEmptyString(command.toolId, 'selectTool.toolId'); return
         case 'placePlant':
@@ -751,11 +769,18 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         const chooser = record(snapshot.seedChooser, 'snapshot.seedChooser')
         const available = array(chooser.availableSeeds, 'snapshot.seedChooser.availableSeeds')
         available.forEach((id, index) => nonEmptyString(id, `snapshot.seedChooser.availableSeeds[${index}]`))
+        const entries = chooser.entries === undefined ? [] : array(chooser.entries, 'snapshot.seedChooser.entries')
+        entries.forEach((value, index) => {
+            const name = `snapshot.seedChooser.entries[${index}]`, entry = record(value, name)
+            nonEmptyString(entry.seedId, `${name}.seedId`)
+            if (entry.team !== undefined) team(entry.team, `${name}.team`)
+        })
         integer(chooser.slots, 'snapshot.seedChooser.slots')
         const slots = chooser.slots as number
         boolean(chooser.choosing, 'snapshot.seedChooser.choosing')
-        if (slots < 1 || slots > 10 || slots > available.length || new Set(available).size !== available.length ||
-            seedPackets.length > slots || chooser.choosing && seedPackets.some(packet => !available.includes(packet.seedId))) throw new TypeError('Invalid seed chooser bank')
+        // An open bank may hold a card no longer offered (a saved hidden card whose Mod is gone); it can still go back.
+        if (slots < 1 || slots > 10 || slots > available.length + entries.length || new Set(available).size !== available.length ||
+            seedPackets.length > slots) throw new TypeError('Invalid seed chooser bank')
         if (chooser.warnings !== undefined) array(chooser.warnings, 'snapshot.seedChooser.warnings').forEach(value => nonEmptyString(value, 'snapshot.seedChooser.warnings[]'))
     }
     if (snapshot.graves !== undefined) array(snapshot.graves, 'snapshot.graves').forEach((value, index) => {
@@ -940,4 +965,8 @@ const nonEmptyString = (value: unknown, name: string): void => {
 
 const boolean = (value: unknown, name: string): void => {
     if (typeof value !== 'boolean') throw new TypeError(`${name} must be a boolean`)
+}
+
+const team = (value: unknown, name: string): void => {
+    if (value !== 'plants' && value !== 'zombies') throw new TypeError(`${name} must be plants or zombies`)
 }

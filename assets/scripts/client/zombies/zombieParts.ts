@@ -1,5 +1,11 @@
 import type { ZombiePresentationDefinition } from '@/shared/content/presentation'
 
+/**
+ * Where a zombie walking right is drawn: Zombie::UpdateReanim's 90 further, flipped, whatever the clip's offset. One
+ * put down facing right lines up through where it stands (ZombieDefinition.facingRightOffsetX), not how it is drawn.
+ */
+export const MIRRORED_SHIFT = 90
+
 /** Zombie.cpp ZOMBIE_MINDCONTROLLED_COLOR: multiplied over a mind-controlled zombie, and added again. */
 export const MIND_CONTROLLED_RGB = [128, 64, 192] as const
 

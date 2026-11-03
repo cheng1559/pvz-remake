@@ -58,7 +58,7 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 }
 ```
 
-定义索引的路径相对于根目录 `content.json`。`plants.json`、`seeds.json` 等是 ID 到配置的对象；`seed-catalog.json` 是有序种子 ID 数组，可引用本体或 Mod 中已注册的种子。配置按类别分文件，自定义视图参数放在相应植物、子弹定义的 `viewConfig` 中。
+定义索引的路径相对于根目录 `content.json`。`plants.json`、`seeds.json` 等是 ID 到配置的对象；`seed-catalog.json` 是选卡目录表，键为种子 ID、值为 `{ "position": 格子序号 }`：序号即原版的植物种子编号，按 8 列从左到右、从上到下数，从 0 开始。选卡界面显示 0–47 号：平时 5 排（0–39），拥有 40–47 号（原版的升级植物）中任一张时按原版 `Has7Rows` 改成 6 排，行距 70、首排 y=123。48 号是原版的模仿者，不放其他卡；49 号起不在选卡格子里。没有卡的序号留作空位，两张卡不能同号。和其他定义表一样，Mod 只能登记自己命名空间的种子，移动本体或其他 Mod 的卡用 `overrides.seedCatalog`。本体的隐藏卡登记在格子之外：爆炸坚果 49（原版 `SEED_EXPLODE_O_NUT`）、坚果保龄球 50、爆炸坚果保龄球 51。配置按类别分文件，自定义视图参数放在相应植物、子弹定义的 `viewConfig` 中。
 
 成就写在玩法定义的 `achievements` 表里，ID 到 `{ titleKey, descriptionKey, icon: { sprite, index } }`，图标取 `sprite` 中按 70×70、每行 7 格切出的第 `index` 格。成就页和领奖页按本体在前、各 Mod 依次在后的顺序列出。服务端脚本通过宿主模块 `server/achievements` 的 `grantAchievement(world, id, announce)` 发放：玩家已有的不重复发放；`announce` 为 true 时在关卡里立即提示，否则留到过关后的领奖页列出。档案由客户端转交菜单接口保存。成就怎么获得写在它的 `trigger: { kind, ...设置 }` 里：游戏代码只发服务端事件，成就模块观察每个事件，按 `kind` 对应的触发类型判定。本体的触发类型有 `pvz:blast`（`plants`、`kills`）、`pvz:bowling`（`plants`、`hits`）、`pvz:coin-streak`（`items`、`coins`）、`pvz:sun-held`（`sun`）和 `pvz:win-planting`（`boards`、`skipRules`、`only` / `never`），详见 `docs/ACHIEVEMENTS.zh-CN.md`。Mod 的新成就可以直接用这些类型；需要新的判定方式时，用 `registry.achievementTriggers.register(ownerId, kind, { validate, observe })` 注册（`server/GameplayRegistry`），`observe` 收到事件、设置和这个成就在关卡里的状态（随存档保存）。要让本体成就认到 Mod 的植物，用 `overrides` 改它的 `trigger`。关卡定义写 `achievements: false` 时，这一关不发放任何成就，适合测试关卡。
 
@@ -115,6 +115,8 @@ export function register({ host, assets }) {
 | `server/tools` | `tools.available`、`select`、`use` |
 | `server/items` | `items.collect` |
 | `server/commands` | `commands.execute`，处理 Mod 自己的 `mod` 指令 |
+| `shared/protocol` | 两端都能访问；客户端与服务端之间的数据格式及其辅助函数，如 `chooserEntryKey`（选卡卡片的唯一 key，同一种卡的两方算两张） |
+| `server/seedChooser` | `seedChooser.entries(definitions, owned)`，按玩家已拥有的种子，在选卡目录格子之外再提供卡（`{ seedId, team? }`，`team` 可让卡换到另一方）；这些卡和已拥有的种子一样计入卡槽数和是否打开选卡界面（多于卡槽数才打开，否则全部放进卡槽），选卡快照的 `entries` 列出它们，`chooseSeed` 带同样的 `team` 选择；客户端选卡界面用 `showCards` 决定格子里显示哪些卡，卡从卡槽退回而格子里没有它时调用 `onCardHidden` |
 | `server/snapshot` | `snapshot.build`，向 `extensions` 加入 Mod 状态 |
 
 ```ts

@@ -19,7 +19,7 @@ import { MIND_CONTROLLED_RGB } from '@/client/zombies/zombieParts'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { zombieDefinition } from '@/client/zombies/definitions'
 import type { PlantView } from '@/client/plants/PlantView'
-import { mirrorX, PLANT_WIDTH } from '@/shared/content/teams'
+import { mirrorX, PLANT_WIDTH, ZOMBIE_WIDTH } from '@/shared/content/teams'
 import type { LevelEntitySnapshot, LevelParticleOwnerSnapshot } from './LevelPresentationSnapshot'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { boardCell, levelAwardSize } from './LevelGeometry'
@@ -28,6 +28,8 @@ import { EntityFlashes } from './EntityFlashes'
 
 const WIDTH = 800
 const HEIGHT = 600
+/** Zombie::ApplyBurn's shift for a charred zombie walking right, drawn mirrored. */
+const CHARRED_MIRRORED_SHIFT = 60
 type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 type SpriteAsset = Awaited<ReturnType<SpriteRepository['load']>>
 type FontAsset = Awaited<ReturnType<FontRepository['load']>>
@@ -236,7 +238,8 @@ export class LevelEntityRenderer {
                 this.zombies.get(entityId)?.sync(zombie, snapshot, this.flashes.zombie(entityId, snapshot.gameplayTick))
             }
             const row = zombie?.row ?? (typeof event.data.row === 'number' ? event.data.row : 0)
-            this.spawnZombiePart(entityId, part, event.data.mowered === true, row, zombie?.chilled === true, zombie?.team === 'plants')
+            this.spawnZombiePart(entityId, part, event.data.mowered === true, row, zombie?.chilled === true, zombie?.mindControlled === true,
+                zombie?.team === 'plants')
         }
         for (const id of changes.removed) this.remove(id)
         for (const id of changes.added) {
@@ -394,9 +397,11 @@ export class LevelEntityRenderer {
         this.audio.chew(nut)
         if (nut && zombie) {
             const tint = presentation!.visual.tint
-            // Zombie::AnimateChewEffect: on the row's projectile layer.
-            this.spawnBoardParticle(presentation!.chewParticle!, zombie.x + 37, zombie.y + 40, renderOrder('projectile', zombie.row),
-                tint ? new Color(...tint) : undefined)
+            // Zombie::AnimateChewEffect: on the row's projectile layer, at (37, 40) from the zombie. A zombie facing right
+            // mirrors it across its width, and its debris flies the other way.
+            const mirrored = zombie.team === 'plants'
+            this.spawnBoardParticle(presentation!.chewParticle!, zombie.x + mirrorX(37, ZOMBIE_WIDTH, mirrored), zombie.y + 40,
+                renderOrder('projectile', zombie.row), tint ? new Color(...tint) : undefined, mirrored)
         }
     }
 
@@ -415,7 +420,11 @@ export class LevelEntityRenderer {
     private spawnCharred(event: ServerEvent): void {
         const { x, y, row, rate, entityId } = event.data
         if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof rate !== 'number' || typeof entityId !== 'number') return
-        const node = uiNode({ name: 'CharredZombie', parent: this.entityLayer, position: { x: x - WIDTH / 2, y: HEIGHT / 2 - y }, anchor: { x: 0, y: 1 } }).node
+        // Zombie::ApplyBurn: a zombie walking right crumbles flipped and 60 further right.
+        const mirrored = event.data.team === 'plants'
+        const mirrorShift = mirrored ? CHARRED_MIRRORED_SHIFT : 0
+        const node = uiNode({ name: 'CharredZombie', parent: this.entityLayer, position: { x: x + mirrorShift - WIDTH / 2, y: HEIGHT / 2 - y }, anchor: { x: 0, y: 1 } }).node
+        if (mirrored) node.setScale(-1, 1, 1)
         this.charred.set(node, { order: this.zombieOrder(row), entityId })
         const player = node.addComponent(ReanimPlayer)
         void player.load('pvz:zombie_charred', this.content.registry, this.content.loader).then(() => {
@@ -441,24 +450,30 @@ export class LevelEntityRenderer {
         }
         const track = this.zombies.get(entityId)?.getTrackWorldPosition(helm.track)
         const local = track ? uiNode({ node: this.entityLayer }).transform.convertToNodeSpaceAR(track) : null
+        // A zombie facing right sheds its armor the way it faces.
+        const mirrored = zombie?.team === 'plants'
         ParticlePlayer.spawn({
             parent: this.entityLayer, id: helm.effect,
-            x: local?.x ?? node.position.x + helm.offset[0], y: local?.y ?? node.position.y + helm.offset[1],
+            x: local?.x ?? node.position.x + mirrorX(helm.offset[0], ZOMBIE_WIDTH, mirrored), y: local?.y ?? node.position.y + helm.offset[1],
             // Zombie::DropHelm and DropShield: one above the zombie.
             renderOrder: this.zombieOrder(zombie?.row ?? 0) + 1,
             // Zombie::OverrideParticleColor: a mind-controlled zombie's armor keeps its color.
-            ...(zombie?.team === 'plants' ? { tint: new Color(...MIND_CONTROLLED_RGB, 255), extraAdditive: true } : {}),
+            ...(zombie?.mindControlled ? { tint: new Color(...MIND_CONTROLLED_RGB, 255), extraAdditive: true } : {}),
+            mirrored,
         })
     }
 
-    /** Board coordinates; recycled under a shared holder per render order. */
-    spawnBoardParticle(effect: string, x: number, y: number, renderOrder: number, tint?: Color): void {
+    /**
+     * Board coordinates; recycled under a shared holder per render order. `mirrored`: the effect plays flipped left to
+     * right, for a zombie or plant facing the other way.
+     */
+    spawnBoardParticle(effect: string, x: number, y: number, renderOrder: number, tint?: Color, mirrored = false): void {
         let parent = this.particleHolders.get(renderOrder)
         if (!parent) {
             parent = uiNode({ name: `BoardParticles-${renderOrder}`, parent: this.entityLayer, layer: this.entityLayer.layer }).node
             this.particleHolders.set(renderOrder, parent)
         }
-        ParticlePlayer.spawn({ parent, id: effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder, tint, recycle: true })
+        ParticlePlayer.spawn({ parent, id: effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder, tint, mirrored, recycle: true })
     }
 
     private async create(id: number, snapshot: WorldSnapshot): Promise<void> {
@@ -585,7 +600,9 @@ export class LevelEntityRenderer {
         large.active = false
     }
 
-    private spawnZombiePart(entityId: number, part: 'head' | 'arm' | 'flag', mowered: boolean, row: number, chilled: boolean, mindControlled: boolean): void {
+    /** `mirrored`: a zombie facing right, whose part flies off the way it faces, as its body is drawn. */
+    private spawnZombiePart(entityId: number, part: 'head' | 'arm' | 'flag', mowered: boolean, row: number, chilled: boolean, mindControlled: boolean,
+        mirrored: boolean): void {
         const node = this.entities.get(entityId)
         if (!node) return
         const typeId = this.zombieTypes.get(entityId) ?? 'pvz:normal'
@@ -596,7 +613,7 @@ export class LevelEntityRenderer {
         ParticlePlayer.spawn({
             parent: this.entityLayer,
             id: mowered ? drop.moweredEffect ?? drop.effect : drop.effect,
-            x: localPosition?.x ?? node.position.x + drop.offset[0],
+            x: localPosition?.x ?? node.position.x + mirrorX(drop.offset[0], ZOMBIE_WIDTH, mirrored),
             y: localPosition?.y ?? node.position.y + drop.offset[1],
             // Zombie::DropHead and DropArm: one above the zombie.
             renderOrder: this.zombieOrder(row) + 1,
@@ -605,6 +622,8 @@ export class LevelEntityRenderer {
             // Zombie::OverrideParticleColor keeps a chilled zombie's parts blue and a mind-controlled one's purple.
             tint: mindControlled ? new Color(...MIND_CONTROLLED_RGB, 255) : chilled ? new Color(75, 75, 255, 255) : undefined,
             extraAdditive: chilled || mindControlled,
+            // The original keeps the part's flight for a mind-controlled zombie; here it follows the zombie's facing.
+            mirrored,
         })
         this.audio.sounds(drop.sounds)
     }

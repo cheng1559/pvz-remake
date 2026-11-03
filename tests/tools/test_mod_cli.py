@@ -46,7 +46,7 @@ class ModCliTests(unittest.TestCase):
                 self.assertIn("packed/gameplay/cocos/index.js", archive.namelist())
                 self.assertFalse(any(name.endswith(".ts") for name in archive.namelist()))
                 self.assertEqual(json.loads(archive.read("packed/assets/gameplay.json")), {
-                    "plants": {}, "seeds": {}, "seedCatalog": [],
+                    "plants": {}, "seeds": {}, "seedCatalog": {},
                 })
                 self.assertFalse(any(name.startswith("packed/assets/gameplay/") for name in archive.namelist()))
                 self.assertEqual(json.loads(archive.read("packed/content.json"))["resources"], content['resources'])

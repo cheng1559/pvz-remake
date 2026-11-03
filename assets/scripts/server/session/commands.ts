@@ -134,7 +134,8 @@ function processNextCommand(session: Session): CommandRejectionCode | undefined 
         const debug = command === 'catalog' ? {
             ...debugSuccess('Installed debug content'),
             catalog: {
-                plants: Object.keys(definitions.seeds).map(id => id.replace(/^pvz:/, '')),
+                plants: Object.entries(definitions.seeds).filter(([, seed]) => seed.plant !== undefined).map(([id]) => id.replace(/^pvz:/, '')),
+                seeds: Object.keys(definitions.seeds).map(id => id.replace(/^pvz:/, '')),
                 zombies: Object.keys(definitions.zombies).map(id => id.replace(/^pvz:/, '')),
                 items: [...Object.keys(definitions.items).map(id => id.replace(/^pvz:/, '')), 'award'],
                 levels: Object.keys(levels.levels).map(id => id.replace(/^pvz:adventure-/, '')),

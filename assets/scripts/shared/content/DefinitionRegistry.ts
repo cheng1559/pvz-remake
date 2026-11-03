@@ -71,21 +71,16 @@ export function buildGameplayContent(value: unknown, sources: readonly Definitio
     const { settings, levels: levelEntries, seedCatalog: seedCatalogValue, ...tables } = object(value, 'base gameplay')
     const definitions = { ...object(settings, 'gameplay settings'), ...tables }
     const levels = { schemaVersion: definitions.schemaVersion, levels: object(levelEntries, 'gameplay levels') }
-    const registry = new DefinitionRegistry([...GAMEPLAY_TABLES, 'levels'])
+    // The chooser catalog is a table too, keyed by seed: Mods add their own seeds and move any through `overrides`.
+    const registry = new DefinitionRegistry([...GAMEPLAY_TABLES, 'seedCatalog', 'levels'])
     registry.register(BASE_MOD_ID, {
-        ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, definitions[kind]])), levels: levels.levels,
+        ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, definitions[kind]])), seedCatalog: seedCatalogValue, levels: levels.levels,
     }, true)
     const patches: DefinitionSource[] = [], overrides: DefinitionSource[] = []
-    if (!Array.isArray(seedCatalogValue)) throw new Error('seed catalog must be an array')
-    const seedCatalog = [...seedCatalogValue]
     for (const source of sources) {
-        const { levelPatches, overrides: replacements, seedCatalog: additions, ...tables } = object(source.data, source.ownerId)
+        const { levelPatches, overrides: replacements, ...tables } = object(source.data, source.ownerId)
         registry.register(source.ownerId, tables)
         if (replacements !== undefined) overrides.push({ ownerId: source.ownerId, data: replacements })
-        if (additions !== undefined) {
-            if (!Array.isArray(additions)) throw new Error(`${source.ownerId}.seedCatalog must be an array`)
-            seedCatalog.push(...additions)
-        }
         if (levelPatches !== undefined) patches.push({ ownerId: source.ownerId, data: levelPatches })
     }
     // Overrides may target any Mod's IDs, so they wait for every registration; level patches then apply on top.
@@ -104,7 +99,7 @@ export function buildGameplayContent(value: unknown, sources: readonly Definitio
     }
     const resultDefinitions = parseGameplayDefinitions({
         ...definitions, ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, registry.values(kind)])),
-    }, seedCatalog)
+    }, registry.values('seedCatalog'))
     const result = {
         definitions: resultDefinitions,
         levels: parseGameplayLevels({ ...levels, levels: installedLevels }, resultDefinitions),

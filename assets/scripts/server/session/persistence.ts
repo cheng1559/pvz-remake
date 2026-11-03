@@ -21,7 +21,7 @@ import { AchievementsResource } from '../achievements/achievements'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { initialPlantAbility } from '../plants/abilities'
 import { parseServerSaveSnapshot, type SavedEntity, type ServerSaveSnapshot } from './save'
-import { availableSeeds, bankSlots, seedBankStart } from '../seeds/seedChooser'
+import { bankSlots, chooserOffer, seedBankStart } from '../seeds/seedChooser'
 import { createSession, createWorld, type ServerContent, type Session } from './session'
 
 /** Captures a session as a save; `save.ts` defines and validates the format. */
@@ -157,9 +157,10 @@ export function restoreSession(
         throw new Error('Saved grave is outside the board')
     }
     // A game that opened the chooser keeps `choosing`; a later upgrade only adds slots to it.
-    const start = seedBankStart(definitions, definition, save.seedBank.owned, save.economy.packetUpgrades)
+    const offer = chooserOffer(definitions, save.seedBank.owned)
+    const start = seedBankStart(definitions, definition, offer, save.economy.packetUpgrades)
     const chooser = save.seedBank.choosing !== undefined
-    const slots = chooser ? bankSlots(definitions, save.seedBank.owned, save.economy.packetUpgrades)
+    const slots = chooser ? bankSlots(definitions, offer, save.economy.packetUpgrades)
         : 'seeds' in start ? start.seeds.length : 0
     if (!!save.seedBank.conveyor !== !!definition.conveyor || save.seedBank.conveyor?.packets.some(packet => !definition.conveyor!.seeds.some(seed => seed.id === packet.seedId))) {
         throw new Error('Saved conveyor does not match the level')
@@ -170,10 +171,8 @@ export function restoreSession(
     if (chooser && ('conveyor' in start || definition.seedPackets)) throw new Error('Saved seed choice does not match the level')
     if (save.seedBank.choosing ? save.level.phase !== 'intro' || save.seedBank.packets.length > slots
         : save.seedBank.packets.length !== slots) throw new Error('Saved seed bank size does not match the level')
-    // Only an open chooser is limited to unlocked seeds; /seed may put any installed seed in a confirmed bank.
-    if (save.seedBank.choosing && save.seedBank.packets.some(packet => !availableSeeds(definitions, save.seedBank.owned).includes(packet.seedId))) {
-        throw new Error('Saved seed choice does not match the level')
-    }
+    // A bank may hold any installed seed: /seed and Mods' chooser entries put in hidden seeds or other sides, and a save
+    // outlives the Mod that offered them (the card can still go back to the chooser).
     for (const packet of save.seedBank.packets) {
         if (!definitions.seeds[packet.seedId]) throw new Error(`Unknown saved seed: ${packet.seedId}`)
     }

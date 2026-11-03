@@ -46,8 +46,11 @@ test('Gameplay definitions reject unsupported, unsafe, and unresolved data', () 
     assert.throws(invalid(value => { value.plants['pvz:peashooter'].shooter.windupTicks = 0 }), /positive/)
     assert.throws(invalid(value => { value.seeds['pvz:peashooter'].plant = 'pvz:missing' }), /unknown ID/)
     assert.throws(invalid(value => { value.plants['pvz:peashooter'].shooter.projectile = 'pvz:missing' }), /unknown ID/)
-    assert.throws(() => parseGameplayDefinitions(source('definitions'), ['pvz:missing']), /unknown ID/)
-    assert.throws(() => parseGameplayDefinitions(source('definitions'), ['pvz:peashooter', 'pvz:peashooter']), /duplicates/)
+    assert.throws(() => parseGameplayDefinitions(source('definitions'), { 'pvz:missing': { position: 0 } }), /unknown ID/)
+    assert.throws(() => parseGameplayDefinitions(source('definitions'), { 'pvz:peashooter': { position: 0 }, 'pvz:sunflower': { position: 0 } }),
+        /same place/)
+    assert.throws(() => parseGameplayDefinitions(source('definitions'), { 'pvz:peashooter': { position: -1 } }), /non-negative/)
+    assert.throws(() => parseGameplayDefinitions(source('definitions'), ['pvz:peashooter']), /must be an object/)
 })
 
 test('Gameplay levels validate all 1-1 references, active rows, and waves', () => {

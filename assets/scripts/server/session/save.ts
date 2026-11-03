@@ -428,7 +428,7 @@ function parseZombie(value: unknown, name: string): Zombie {
         'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
         'moweredTicksRemaining', 'walkAnimation', 'animation', 'animationTime', 'animationSpeed', 'hasHead', 'hasArm',
         'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'hasPole',
-    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'droppedLoot', 'team'], name)
+    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'droppedLoot', 'team', 'mindControlled'], name)
     if (!ZOMBIE_STATES.includes(source.state as Zombie['state'])) throw new TypeError(`${name}.state is unknown`)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
@@ -467,6 +467,7 @@ function parseZombie(value: unknown, name: string): Zombie {
         ...(source.riseTicks === undefined ? {} : { riseTicks: positiveInteger(source.riseTicks, `${name}.riseTicks`) }),
         ...(source.droppedLoot === undefined ? {} : { droppedLoot: trueFlag(source.droppedLoot, `${name}.droppedLoot`) }),
         ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
+        ...(source.mindControlled === undefined ? {} : { mindControlled: trueFlag(source.mindControlled, `${name}.mindControlled`) }),
         ...parseBehaviorState(source, name),
     }
 }

@@ -1,13 +1,13 @@
 import type { PresentationDefinitions } from '@/shared/content/presentation'
-import { _decorator, Color, Component, Graphics, isValid, Mask, Node, Sprite } from 'cc'
+import { _decorator, Color, Component, isValid, Node, Sprite } from 'cc'
 import type { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { plantVisual } from '@/client/plants/definitions'
 import { loadDisplayParts, loadEntityDisplayAssets, resolveEntityDisplay } from '@/client/reanim/EntityDisplay'
 import { uiNode } from '@/client/view/uiNode'
 import { bakeSprite } from '@/client/view/bakeSprite'
 import { KernelBatch } from '@/client/render/KernelBatch'
-import { GameDebugSettings, type SeedPacketStyle } from '@/platform/debug/GameDebugSettings'
 import { PLANT_WIDTH } from '@/shared/content/teams'
+import { PacketPictureStyle, PLANT_TILT, placePacketPicture } from './packetPicture'
 
 const { ccclass } = _decorator
 export type PreviewPlantId = string | number
@@ -21,8 +21,7 @@ export class PlantPreview extends Component {
     private plantId?: PreviewPlantId
     private placement!: { x: number, y: number, scale: number }
     private packetScale?: number
-    private style?: SeedPacketStyle
-    private packetClip?: Mask
+    private picture!: PacketPictureStyle
     private rendered: Node | null = null
     private rendering: boolean | undefined
     private color = Color.WHITE.clone()
@@ -45,6 +44,7 @@ export class PlantPreview extends Component {
         this.loadCached = loadCached
         this.placement = placement
         this.packetScale = packetScale
+        this.picture ??= new PacketPictureStyle(this.node, 'right')
         this.refresh()
     }
 
@@ -52,7 +52,6 @@ export class PlantPreview extends Component {
         if (this.plantId === plantId) return
         this.plantId = plantId
         this.rendering = undefined
-        this.style = undefined
         this.refresh()
     }
 
@@ -85,15 +84,12 @@ export class PlantPreview extends Component {
     private refresh(): void {
         if (this.plantId === undefined) return
         // Held and grid previews follow /seedstyle too, without the packets' tilt.
-        const packetStyle = GameDebugSettings.seedPacketStyle
-        const style = this.packetScale !== undefined || packetStyle === 'standard' ? packetStyle : 'rendered'
-        if (this.style === style && this.rendering !== undefined) return
-        this.style = style
-        this.updatePacketClip(style)
+        if (!this.picture.sync(this.packetScale) && this.rendering !== undefined) return
+        const style = this.picture.style
         const enabled = style !== 'standard' && (typeof this.plantId === 'number'
             ? this.plantId >= 0 && this.plantId <= 48 : PlantPreview.supports(this.definitions, this.plantId))
         if (this.rendering === enabled) {
-            if (enabled) this.applyPlacement(style)
+            if (enabled) this.applyPlacement()
             return
         }
         this.rendering = enabled
@@ -104,7 +100,7 @@ export class PlantPreview extends Component {
         this.loaded = false
         const root = uiNode({ name: enabled ? 'RenderedPlant' : 'CachedPlant', parent: this.node, active: false }).node
         this.rendered = root
-        if (enabled) this.applyPlacement(style)
+        if (enabled) this.applyPlacement()
         this.ready = (enabled ? this.load(root, this.plantId) : this.loadCached(root, this.plantId)).then(() => {
             if (!isValid(root, true) || root !== this.rendered) return
             this.loaded = true
@@ -142,36 +138,8 @@ export class PlantPreview extends Component {
         root.active = true
     }
 
-    private updatePacketClip(style: SeedPacketStyle): void {
-        if (this.packetScale === undefined || (!this.packetClip && style !== 'tilted')) return
-        const mask = this.packetClip ??= this.node.addComponent(Mask)
-        mask.type = Mask.Type.GRAPHICS_STENCIL
-        mask.enabled = style === 'tilted'
-        if (!mask.enabled) return
-        const scale = this.packetScale
-        const graphics = mask.subComp as Graphics
-        graphics.clear()
-        // Inner image border: left x=3.5, bottom y=52. Leave the top and right open.
-        graphics.rect(3.5 * scale, -52 * scale, 220.5 * scale, 220 * scale)
-        graphics.fill()
-    }
-
-    private applyPlacement(style: SeedPacketStyle): void {
-        const root = this.rendered!
-        const { x, y, scale } = this.placement
-        const enlarged = style === 'tilted'
-        const factor = enlarged ? 1.5 : 1
-        root.angle = enlarged ? -12 : 0
-        root.setScale(scale * factor, scale * factor, 1)
-        if (!enlarged) { root.setPosition(x, y); return }
-
-        // Rotate around the lower centre of the packet so the plant leans to the right.
-        const pivotX = 23 * this.packetScale!
-        const pivotY = -25 * this.packetScale!
-        const radians = root.angle * Math.PI / 180
-        const cos = Math.cos(radians), sin = Math.sin(radians)
-        root.setPosition(pivotX + ((x - pivotX) * cos - (y - pivotY) * sin) * factor,
-            pivotY + ((x - pivotX) * sin + (y - pivotY) * cos) * factor)
+    private applyPlacement(): void {
+        placePacketPicture(this.rendered!, this.placement, this.packetScale, this.picture.style, PLANT_TILT)
     }
 
     private async load(root: Node, plantId: PreviewPlantId): Promise<void> {

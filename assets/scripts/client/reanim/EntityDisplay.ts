@@ -44,6 +44,34 @@ async function loadAssets() {
     } }
 }
 
+/** A display part playing one of the level's clips. */
+function clipPart(name: string, clip: ClientAnimationClip, parent?: string, blink = false, eyeTracks?: readonly string[]): DisplayPart {
+    return {
+        name, id: clip.reanimId, fps: clip.fps ?? 12, rateScale: clip.rateScale, parent, blink,
+        track: clip.attachmentTrackId, ...(blink && eyeTracks ? { eyeTracks } : {}),
+    }
+}
+
+/**
+ * A whole zombie at rest (the almanac, a zombie seed's packet and previews), with the level's part rules: its own helm
+ * and shield worn, the flag held. `clip` is the body's pose, `idle` by default. `offset` is where the body goes from the
+ * zombie's position, as ZombieView places its clip.
+ */
+export function zombieRestingParts(animations: ClientAnimationRegistry, typeId: string, clip = 'idle'): { parts: DisplayPart[], offset: [number, number] } {
+    const clips = animations.resolve(typeId)
+    const definition = animations.definitions.zombies[typeId]
+    const pose = (clips as Record<string, ClientAnimationClip | undefined>)[clip]
+    if (!pose) throw new Error(`Missing zombie ${clip}: ${typeId}`)
+    const body: DisplayPart = { ...clipPart('body', pose), hiddenTracks: hiddenZombieParts(definition, displayPartState(definition, 'flag' in clips)) }
+    if ('idle2' in clips && clip === 'idle') {
+        body.idle2Id = clips.idle2.reanimId
+        body.idle2RateScale = clips.idle2.rateScale
+    }
+    const parts = [body]
+    if ('flag' in clips) parts.push({ ...clipPart('flag', clips.flag, 'body'), behind: definition.parts.flagArm!.front })
+    return { parts, offset: [pose.x, pose.y] }
+}
+
 /** Use level clips, attachments and shadows; keep the catalog's UI placement and display-only poses. */
 export function resolveEntityDisplay(kind: EntityKind, id: number, display: EntityDisplayLayout, animations: ClientAnimationRegistry): EntityDisplay {
     const target = display.animationsFrom
@@ -53,10 +81,7 @@ export function resolveEntityDisplay(kind: EntityKind, id: number, display: Enti
     }
     const clips = animations.resolve(target)
     const eyeTracks = kind === 'plants' ? animations.definitions.plants[target]?.parts?.eyes : undefined
-    const part = (name: string, clip: ClientAnimationClip, parent?: string, blink = false): DisplayPart => ({
-        name, id: clip.reanimId, fps: clip.fps ?? 12, rateScale: clip.rateScale, parent, blink,
-        track: clip.attachmentTrackId, ...(blink && eyeTracks ? { eyeTracks } : {}),
-    })
+    const part = (name: string, clip: ClientAnimationClip, parent?: string, blink = false) => clipPart(name, clip, parent, blink, eyeTracks)
     let parts: DisplayPart[]
     let rate: readonly [number, number]
     let drawOffset: [number, number]
@@ -86,20 +111,11 @@ export function resolveEntityDisplay(kind: EntityKind, id: number, display: Enti
     } else {
         const definition = animations.definitions.zombies[target]
         shadowOffset = [definition.shadowX, definition.shadowY ?? 92]
-        if (!('idle' in clips)) throw new Error(`Missing zombie idle: ${target}`)
         const [originX, originY] = animations.definitions.almanac.zombieOrigin.offset
-        drawOffset = [clips.idle.x - originX, originY - clips.idle.y]
-        parts = [part('body', clips.idle)]
+        const resting = zombieRestingParts(animations, target)
+        drawOffset = [resting.offset[0] - originX, originY - resting.offset[1]]
+        parts = resting.parts
         rate = animations.rates.zombieIdle
-        // The level's part rules for a whole zombie at rest: its own helm and shield worn, the flag held.
-        parts[0].hiddenTracks = hiddenZombieParts(definition, displayPartState(definition, 'flag' in clips))
-        if ('idle2' in clips) {
-            parts[0].idle2Id = clips.idle2.reanimId
-            parts[0].idle2RateScale = clips.idle2.rateScale
-        }
-        if ('flag' in clips) {
-            parts.push({ ...part('flag', clips.flag, 'body'), behind: definition.parts.flagArm!.front })
-        }
     }
     // Portraits can have a different pose/order, but shared parts still resolve through the registry.
     const portrait = display.portrait?.parts ? { ...display.portrait, parts: display.portrait.parts.map(part => {

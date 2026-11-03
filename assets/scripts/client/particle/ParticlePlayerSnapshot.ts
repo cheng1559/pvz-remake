@@ -19,6 +19,8 @@ export interface ParticlePlayerSnapshot {
     playing: boolean
     visible: boolean
     scale: number
+    /** Played flipped left to right (ParticleSpawnArgs.mirrored); absent when not. */
+    mirrored?: true
 }
 
 let nextSeed = 0x9e3779b9
@@ -31,7 +33,8 @@ export function parseParticlePlayerSnapshot(value: unknown): ParticlePlayerSnaps
     const source = exact(value, [
         'id', 'seed', 'ageTicks', 'accumulatorSeconds', 'renderOrder', 'tint',
         'extraAdditive', 'spriteOverride', 'playing', 'visible', 'scale',
-    ], 'Particle snapshot')
+    ], 'Particle snapshot', ['mirrored'])
+    if (source.mirrored !== undefined && source.mirrored !== true) throw new TypeError('Particle snapshot.mirrored must be true when present')
     const accumulator = nonNegativeFinite(source.accumulatorSeconds, 'Particle snapshot.accumulatorSeconds')
     if (accumulator >= 0.01) throw new TypeError('Particle snapshot.accumulatorSeconds must be below one tick')
     return {
@@ -48,6 +51,7 @@ export function parseParticlePlayerSnapshot(value: unknown): ParticlePlayerSnaps
         playing: boolean(source.playing, 'Particle snapshot.playing'),
         visible: boolean(source.visible, 'Particle snapshot.visible'),
         scale: nonNegativeFinite(source.scale, 'Particle snapshot.scale'),
+        ...(source.mirrored ? { mirrored: true as const } : {}),
     }
 }
 
@@ -61,12 +65,12 @@ function parseTint(value: unknown): ParticleTintSnapshot {
     }
 }
 
-function exact(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {
+function exact(value: unknown, keys: readonly string[], name: string, optional: readonly string[] = []): Record<string, unknown> {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         throw new TypeError(`${name} must be an object`)
     }
     const source = value as Record<string, unknown>
-    const allowed = new Set(keys)
+    const allowed = new Set([...keys, ...optional])
     for (const key of Object.keys(source)) if (!allowed.has(key)) throw new TypeError(`${name}.${key} is not supported`)
     for (const key of keys) if (!(key in source)) throw new TypeError(`${name}.${key} is required`)
     return source

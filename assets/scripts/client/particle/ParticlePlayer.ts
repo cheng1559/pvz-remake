@@ -76,6 +76,8 @@ export interface ParticleSpawnArgs {
     spriteOverride?: string
     scale?: number
     seed?: number
+    /** Play flipped left to right, for a zombie or plant facing the other way. */
+    mirrored?: boolean
     /**
      * Once finished, keep the node for the next spawn of the same effect under the same parent instead of destroying
      * it. For frequent board effects: creating and destroying nodes costs more than simulating them.
@@ -108,6 +110,7 @@ export class ParticlePlayer extends Component {
     private additive = false
     private spriteOverride: string | null = null
     private scale = 1
+    private mirrored = false
     private playing = true
     private visible = true
     private perfVisible = true
@@ -122,6 +125,7 @@ export class ParticlePlayer extends Component {
         return this.create({ ...args, id: saved.id, seed: saved.seed, renderOrder: saved.renderOrder,
             tint: saved.tint ? new Color(saved.tint.r, saved.tint.g, saved.tint.b, saved.tint.a) : undefined,
             extraAdditive: saved.extraAdditive, spriteOverride: saved.spriteOverride ?? undefined, scale: saved.scale,
+            mirrored: saved.mirrored,
         }, saved)
     }
 
@@ -183,6 +187,9 @@ export class ParticlePlayer extends Component {
         this.particleTint = args.tint?.clone() ?? null
         this.additive = args.extraAdditive ?? false
         this.scale = Math.max(0, args.scale ?? 1)
+        // A recycled player keeps its node: set the facing either way.
+        this.mirrored = args.mirrored ?? false
+        this.node.setScale(this.mirrored ? -1 : 1, 1, 1)
     }
 
     /** False while a recycled player waits for reuse: it has no simulation and draws nothing. */
@@ -199,7 +206,7 @@ export class ParticlePlayer extends Component {
             accumulatorSeconds: this.accumulator, renderOrder: this.renderOrder,
             tint: this.particleTint ? { r: this.particleTint.r, g: this.particleTint.g, b: this.particleTint.b, a: this.particleTint.a } : null,
             extraAdditive: this.additive, spriteOverride: this.spriteOverride, scale: this.scale,
-            playing: this.playing, visible: this.visible })
+            playing: this.playing, visible: this.visible, ...(this.mirrored ? { mirrored: true } : {}) })
     }
 
     hide(): void { this.playing = false; this.visible = false; this.render() }

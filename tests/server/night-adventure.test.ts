@@ -14,7 +14,7 @@ import { createProjectileSystem } from '@/server/combat/projectiles'
 import { createZombieSystem } from '@/server/zombies/system'
 import { damageZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
-import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import { chooserSeeds, parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
@@ -261,10 +261,10 @@ test('fume-shrooms hit every zombie in reach at once, through the newspaper and 
 test('grave busters only go on graves, cannot be dug up, then eat the grave and disappear', () => {
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     // A replay's player owns every seed.
-    game.start({ ...options, firstAdventure: false, ownedSeeds: definitions.seedCatalog })
+    game.start({ ...options, firstAdventure: false, ownedSeeds: chooserSeeds(definitions) })
     game.debugCommand('/cooldown false')
     game.debugCommand('/suncost false')
-    const picks = ['pvz:gravebuster', ...definitions.seedCatalog.filter(id => id !== 'pvz:gravebuster').slice(0, 5)]
+    const picks = ['pvz:gravebuster', ...chooserSeeds(definitions).filter(id => id !== 'pvz:gravebuster').slice(0, 5)]
     for (const seedId of picks) game.command({ type: 'chooseSeed', seedId })
     game.command({ type: 'confirmSeeds' })
     game.command({ type: 'completeIntro' })

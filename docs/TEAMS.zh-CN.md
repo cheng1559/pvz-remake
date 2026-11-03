@@ -64,7 +64,8 @@
 
 ### 表现
 
-- `plants` 阵营的僵尸镜像（身体右移 90，影子用表现定义里的 `shadowXBackwards`），颜色 `(128, 64, 192)` 相乘并叠加；掉落的肢体和头盔同样上色。颜色目前是客户端常量 `MIND_CONTROLLED_RGB`（`client/zombies/zombieParts.ts`）。
+- `plants` 阵营的僵尸镜像，照原版 `Zombie::UpdateReanim`：身体右移 90 再翻转，不管片段偏移，所以原版里会朝右的僵尸（被魅惑的、以后的矿工和雪人等）都和原版一样。原版没有的“朝右放下”另外修正，让它和其他僵尸对齐：僵尸玩法定义的 `facingRightOffsetX` 让它放下时多站右一些，手持和格子预览同样挪；种子包里用僵尸表现定义 `packet.facingRightOffsetX`。撑杆僵尸的两个值都由原版数据推出：它的 `GetDrawPos` 横向 −6，种子包 x 比普通僵尸左 5 像素（−8 对 −3，缩放 0.35，即自身坐标里身体靠右 14.29），放下时为 6 + 14.29 = 20.29，种子包为 2 × 14.29 = 28.57。影子用表现定义里的 `shadowXBackwards`。掉落的头、手臂、旗帜和护具粒子，以及烧焦后的焦黑僵尸，也跟着朝右翻转；原版对被魅惑的僵尸只镜像位置、不翻转粒子方向，这里按 bug 修正。啃坚果时的碎屑同样翻转。
+- 被魅惑是阵营之外单独的状态（僵尸的 `mindControlled`，随存档和快照，以后由魅惑菇设置）：只有被魅惑的僵尸颜色 `(128, 64, 192)` 相乘并叠加、掉落的肢体和头盔同样上色、啃僵尸用轻柔的咀嚼音（原版这些都看 `mMindControlled`）。用种子包或 `/zombie ... plants` 放出的植物阵营僵尸不算被魅惑，外观和普通僵尸一样，只是朝右。颜色目前是客户端常量 `MIND_CONTROLLED_RGB`（`client/zombies/zombieParts.ts`）。
 - 换阵营事件播放 `FOLEY_FLOOP`、`SOUND_MINDCONTROLLED` 和 `PARTICLE_MIND_CONTROL`；僵尸啃僵尸用轻柔的咀嚼音，对方倒下时播放吞咽音。
 
 ## 步骤
@@ -77,7 +78,7 @@
 6. 部分完成：僵尸镜像和上色、`zombies` 阵营植物和它的子弹镜像、植物受击闪白、啃咬和吞咽音效已做；换阵营的音效和粒子随魅惑菇做。`zombies` 阵营植物没有上色；子弹影子没有镜像。
 7. 部分完成：`tests/server/teams.test.ts` 覆盖往右走、不被植物攻击、互啃、出右边界消失、存档恢复、两边植物互射、爆炸和大嘴花只打敌对植物、僵尸只啃敌对植物；魅惑和白天无效随魅惑菇补。
 
-种子包也带阵营（`seedBank.packets[].team`，随存档保存，快照的 `seedPackets[].team` 和手持的 `cursor.team`）：僵尸阵营的种子包种下僵尸阵营的植物，客户端把包里的植物和手持、落点预览画成朝左（`PlantPreview.setMirrored`）。目前只能用 `/seed {槽位} {种子名} zombies` 换出。
+种子包也带阵营，含义是“放出来的东西属于哪一方”：植物种子默认 `plants`，僵尸种子默认 `zombies`（`seedTeam`），只有和默认不同时才写进 `seedBank.packets[].team`（随存档保存，快照的 `seedPackets[].team` 和手持的 `cursor.team`）。植物种子的 `zombies` 包种下僵尸阵营的植物，僵尸种子的 `plants` 包放出植物阵营的僵尸；客户端把包里的东西和手持、落点预览画成反向（`PlantPreview` / `ZombiePreview` 的 `setMirrored`）。目前用 `/seed {槽位} {种子名} {team}` 换出。
 
 演示关：`/level pvz:teams-demo`。关卡的 `initialPlants` 可以写 `"team": "zombies"` 预放僵尸阵营的植物。
 

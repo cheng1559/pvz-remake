@@ -1,4 +1,5 @@
-export interface DebugCliCatalog { plants: string[], zombies: string[], items: string[], levels: string[] }
+/** `plants`: the plant seeds, which /plant takes; `seeds`: every seed, zombie seeds too, which /seed takes. */
+export interface DebugCliCatalog { plants: string[], seeds: string[], zombies: string[], items: string[], levels: string[] }
 interface DebugCliOutcome {
     action?: 'restart' | 'reload' | 'manageMods' | 'quit' | 'goto' | 'level'
     levelId?: string
@@ -97,7 +98,7 @@ export function getDebugCliCompletions(value: string, catalog?: DebugCliCatalog,
     }
     if (!token && !allowEmpty) return []
     const spec = commands.find(spec => spec.name === name)
-    const dynamic = name === 'seed' && index === 2 ? catalog?.plants : index !== 1 ? undefined : name === 'plant' ? catalog?.plants : name === 'zombie' ? catalog?.zombies
+    const dynamic = name === 'seed' && index === 2 ? catalog?.seeds : index !== 1 ? undefined : name === 'plant' ? catalog?.plants : name === 'zombie' ? catalog?.zombies
         : name === 'item' ? catalog?.items : name === 'level' ? catalog?.levels : undefined
     const values = dynamic ?? spec?.values?.[index - 1] ?? []
     return values.filter(option => option.toLowerCase().startsWith(token.toLowerCase()))

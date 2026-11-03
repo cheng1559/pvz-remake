@@ -34,7 +34,7 @@ async function init(name: string, output?: string) {
     }, resources: {} })
     await writeJson(join(root, 'assets', 'gameplay', 'plants.json'), {})
     await writeJson(join(root, 'assets', 'gameplay', 'seeds.json'), {})
-    await writeJson(join(root, 'assets', 'gameplay', 'seed-catalog.json'), [])
+    await writeJson(join(root, 'assets', 'gameplay', 'seed-catalog.json'), {})
     await writeJson(join(root, 'manifest.json'), {
         schemaVersion: 1,
         // The Mod ID is its namespace: its own resources and definitions are name:...

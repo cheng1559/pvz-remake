@@ -18,9 +18,11 @@ import * as achievements from '../achievements/achievements'
 import * as explosions from '../combat/explosions'
 import * as debugRules from '../debug/debugRules'
 import * as debugCli from '@/shared/debug/DebugCli'
+import * as protocol from '@/shared/protocol'
 import * as debugCommands from '../debug/debugCommands'
 import * as gameplay from '../registry/GameplayRegistry'
 import * as seedBank from '../seeds/seedBank'
+import * as seedChooser from '../seeds/seedChooser'
 import * as levelRules from '../rules/registry'
 import * as cursor from '../seeds/cursor'
 import type { DefinitionSources } from '@/shared/content/DefinitionRegistry'
@@ -39,6 +41,7 @@ export function createServerModHost(ownerId: string, registry: gameplay.Gameplay
         'server/snapshot': snapshot,
         'server/components': components,
         'server/seedBank': seedBank,
+        'server/seedChooser': seedChooser,
         'server/levelRules': levelRules,
         'server/cursor': cursor,
         'server/levelState': levelState,
@@ -51,6 +54,7 @@ export function createServerModHost(ownerId: string, registry: gameplay.Gameplay
         'server/explosions': explosions,
         'server/debug/DebugRules': debugRules,
         'shared/debug/DebugCli': debugCli,
+        'shared/protocol': protocol,
         'server/debug/DebugCommands': debugCommands,
     })
 }

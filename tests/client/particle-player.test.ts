@@ -153,8 +153,8 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
         emitters: [{ definition: definition.emitters[0], frame: {}, geometry: kernelModule.kernel().f64(kernelModule.IMAGE) }] }
     type FakeNode = { name: string, parent: FakeNode | null, children: FakeNode[], isValid: boolean, [key: string]: any }
     const makeNode = (name: string, parent: FakeNode | null): FakeNode => {
-        const node: FakeNode = { name, parent, children: [], isValid: true, worldPosition: { x: 0, y: 0 },
-            setPosition() {}, addComponent(type: new () => any) { const component = new type(); component.node = node; return component },
+        const node: FakeNode = { name, parent, children: [], isValid: true, worldPosition: { x: 0, y: 0 }, scaleX: 1,
+            setPosition() {}, setScale(x: number) { node.scaleX = x }, addComponent(type: new () => any) { const component = new type(); component.node = node; return component },
             once(_event: string, listener: () => void) { node.destroyed = listener },
             destroy() { node.isValid = false; node.destroyed?.() } }
         parent?.children.push(node)
@@ -178,8 +178,9 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
     runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? (id === '@/shared/content/renderOrder' ? renderOrderModule : {}) })
     const { ParticlePlayer } = exports
     const parent = makeNode('Holder', null)
-    const spawn = () => ParticlePlayer.spawn({ parent, id: 'pvz:test', x: 0, y: 0, recycle: true })
-    const first = spawn()
+    const spawn = (mirrored = false) => ParticlePlayer.spawn({ parent, id: 'pvz:test', x: 0, y: 0, mirrored, recycle: true })
+    const first = spawn(true)
+    assert.equal(first.node.scaleX, -1)
     first.update(0.2)
     assert.equal(first.node.isValid, true, 'a finished recyclable particle keeps its node')
     assert.equal(first.live, false)
@@ -187,8 +188,14 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
     const second = spawn()
     assert.equal(second, first)
     assert.equal(second.live, true)
+    assert.equal(second.node.scaleX, 1, 'a recycled particle drops its old facing')
     assert.equal(parent.children.length, 1)
     assert.equal(spawn() === first, false, 'a playing particle is not reused')
+    const saved = spawn(true).snapshot()
+    assert.equal(saved.mirrored, true)
+    assert.equal(ParticlePlayer.restore({ parent, x: 0, y: 0, snapshot: saved }).node.scaleX, -1, 'a restored particle keeps its facing')
+    assert.equal(second.snapshot().mirrored, undefined)
+    assert.throws(() => snapshots.parseParticlePlayerSnapshot({ ...saved, mirrored: false }), /mirrored/)
 })
 
 test('particle frames follow AnimationRate and Animated as in TodParticleEmitter', async () => {

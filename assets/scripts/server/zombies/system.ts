@@ -193,15 +193,15 @@ export class ZombieSystem implements GameSystem {
                     updateHeadlessZombie(world, definitions, entity, zombie)
                 } else {
                     // Zombie::EatZombie bites an enemy zombie as it bites a plant, but through the shield and without
-                    // a flash; a zombie eating one of its own kind chews softly (Zombie::AnimateChewSound). The client
-                    // flashes a chewed plant.
+                    // a flash; a mind-controlled zombie chews softly (Zombie::AnimateChewSound). The client flashes a
+                    // chewed plant.
                     const events = world.resources.get(EventQueueResource)
                     const chewed = eat.chewTimes.some(time => didCrossLoopingTime(previousAnimationTime, zombie.animationTime, time * span))
                     const cadence = definition.bite.cadenceTicks * (zombie.chilledTicks > 0 ? CHILLED_BITE_CADENCE_FACTOR : 1)
                     const bites = ++zombie.biteTicks >= cadence
                     if (bites) zombie.biteTicks = 0
                     if (prey !== undefined) {
-                        if (chewed) emitServerEvent(events, 'zombieChewedZombie', { zombieId: entity, targetId: prey, team })
+                        if (chewed) emitServerEvent(events, 'zombieChewedZombie', { zombieId: entity, targetId: prey, ...(zombie.mindControlled ? { mindControlled: true } : {}) })
                         if (bites) {
                             const victim = world.get(prey, ZombieComponent)!
                             damageZombie(world, definitions, prey, definition.bite.damage, { flash: false, bypassShield: true }, commands)

@@ -91,6 +91,8 @@ function burnZombie(world: World, definitions: GameplayDefinitions, entity: numb
         x: position.x + 22,
         y: position.y - 10,
         rate: CHARRED_RATE_MIN + random.nextFloat() * (CHARRED_RATE_MAX - CHARRED_RATE_MIN),
+        // A zombie facing right crumbles facing right; the client mirrors it.
+        ...(zombie.team === 'plants' ? { team: 'plants' } : {}),
     })
     destroyZombie(world, definitions, entity, remover)
 }

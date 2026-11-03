@@ -6,6 +6,8 @@ import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UILabel } from '@/client/ui/UILabel'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import type { GameCommand, SeedPacketSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol'
+import type { SeedDefinition } from '@/shared/content/gameplay'
+import type { SeedPacketSeedType } from '@/shared/content/presentation'
 import type { LevelHudOptions } from './LevelHudPresenter'
 import { plantDefinition } from '@/client/plants/definitions'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
@@ -27,6 +29,9 @@ export interface LevelSeedPacket extends SeedPacketSnapshot {
 
 export class LevelSeedBank {
     readonly packets: Packet[]
+    /** Every packet's picture, over every packet's background (SeedPacketViewArgs.iconLayer), and their hotkeys over that. */
+    private readonly iconLayer: Node
+    private readonly labelLayer: Node
     private buttons?: UIButton[]
     private slots: number
 
@@ -38,6 +43,8 @@ export class LevelSeedBank {
               // a seed-slot upgrade only reveals more of them, and packets without a server slot stay hidden.
               ? Array.from({ length: options.content.definitions.seedBank.maxSlots }, (_, index) => options.seedChooser!.availableSeeds[index])
               : options.initialSeeds
+        this.iconLayer = uiNode({ name: 'SeedPacketIcons', parent: options.seedPacketSlot, layer: options.rootLayer }).node
+        this.labelLayer = uiNode({ name: 'SeedPacketLabels', parent: options.seedPacketSlot, layer: options.rootLayer }).node
         this.packets = seeds.map((seedId, index) => this.createPacket(seedId, index))
         this.slots = options.seedChooser?.slots ?? seeds.length
         this.layout()
@@ -56,10 +63,21 @@ export class LevelSeedBank {
         for (const [index, packet] of this.packets.entries()) packet.view.node.setPosition(seedPacketX(index, this.slots) - seedPacketX(0, 1), 0)
     }
 
+    /**
+     * What a seed's packet draws and its tooltip's name key. A zombie seed's packet draws its zombie (SEED_ZOMBIE_*, seed
+     * type -1), named as the almanac names it.
+     */
+    private packetLook(seed: SeedDefinition): { seedType: SeedPacketSeedType, zombie?: string, name: string } {
+        const presentation = this.options.content.presentation
+        if (seed.zombie !== undefined) return { seedType: -1, zombie: seed.zombie, name: presentation.zombies[seed.zombie]?.nameKey ?? seed.zombie }
+        const visual = plantDefinition(presentation, seed.plant).visual
+        return { seedType: visual.seedType, name: visual.nameKey ?? String(visual.seedType).toUpperCase() }
+    }
+
     private createPacket(seedId: string | undefined, index: number): Packet {
         const options = this.options
         const seed = seedId === undefined ? undefined : options.content.definitions.seeds[seedId]
-        const visual = seedId === undefined ? undefined : plantDefinition(options.content.presentation, seed!.plant).visual
+        const look = seed && this.packetLook(seed)
         const view = new SeedPacketView({
             definitions: options.content.presentation,
             name: `SeedPacket-${index}`,
@@ -67,7 +85,10 @@ export class LevelSeedBank {
             layer: options.rootLayer,
             x: index * 59,
             y: 0,
-            seedType: visual?.seedType,
+            seedType: look?.seedType,
+            zombie: look?.zombie,
+            iconLayer: this.iconLayer,
+            labelLayer: this.labelLayer,
             cost: seed?.sunCost,
             drawCost: !options.level.conveyor,
             loadSprite: options.loadPacketSprite,
@@ -77,7 +98,7 @@ export class LevelSeedBank {
         view.node.setSiblingIndex(0)
         if (seedId === undefined || options.seedChooser) view.node.active = false
         const tooltip = options.ui.tooltip(view.node, {
-            text: visual ? options.ui.text(visual.nameKey ?? String(visual.seedType).toUpperCase()) : '',
+            text: look ? options.ui.text(look.name) : '',
             gap: 0,
             surface: options.level.conveyor ? options.tooltipSurface : undefined,
         })
@@ -121,6 +142,11 @@ export class LevelSeedBank {
             packet.view.node.setParent(parent)
             packet.view.node.setSiblingIndex(0)
         }
+        // The pictures and hotkeys stay over the packets on the belt.
+        for (const layer of [this.iconLayer, this.labelLayer]) {
+            layer.setParent(parent, true)
+            layer.setSiblingIndex(parent.children.length - 1)
+        }
     }
 
     sync(
@@ -141,16 +167,15 @@ export class LevelSeedBank {
             }
             if (entry.seedId !== packet.seedId) {
                 const seed = this.options.content.definitions.seeds[packet.seedId]
-                const visual = plantDefinition(this.options.content.presentation, seed.plant).visual
+                const look = this.packetLook(seed)
                 entry.seedId = packet.seedId
-                entry.view.setSeed(visual.seedType, seed.sunCost)
                 entry.hotkey = undefined
                 entry.tooltip.hide()
-                entry.tooltip.text = this.options.ui.text(
-                    visual.nameKey ?? String(visual.seedType).toUpperCase(),
-                )
+                entry.view.setSeed(look.seedType, seed.sunCost, look.zombie)
+                entry.tooltip.text = this.options.ui.text(look.name)
             }
-            entry.view.setMirrored(packet.team === 'zombies')
+            // A packet of the other side from its seed's own draws what it puts down facing the other way.
+            entry.view.setMirrored(packet.team !== undefined)
             if (packet.x !== undefined) {
                 const layout = this.options.content.presentation.conveyor
                 entry.view.node.setPosition(layout.packetX + packet.x, -layout.packetY)
@@ -185,7 +210,7 @@ export class LevelSeedBank {
                 conveyor: !!this.options.level.conveyor,
             })
             if (GameDebugSettings.hotkeysEnabled && index < 10) {
-                entry.hotkey ??= this.options.ui.label(entry.view.node, {
+                entry.hotkey ??= this.options.ui.label(entry.view.labels, {
                     text: String((index + 1) % 10),
                     font: 'hotkey',
                     fontSize: 16,

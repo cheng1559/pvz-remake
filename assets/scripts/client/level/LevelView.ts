@@ -332,7 +332,7 @@ export class LevelView {
                 if (content.definitions.plants[seed.plant].nocturnal && !boardDefinition.night) return 'NOCTURNAL_WARNING'
                 if (seed.placement === 'grave' && !level.graves?.length) return 'NOT_RECOMMENDED_FOR_LEVEL'
                 return undefined
-            }, { almanac: player.almanacZombies !== undefined, store: player.store })
+            }, { almanac: player.almanacZombies !== undefined, store: player.store }, initial.seedChooser.entries)
         seedChooser?.placeBefore(cursorLayer)
         let view!: LevelView
         let entityRenderer!: LevelEntityRenderer

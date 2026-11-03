@@ -10,7 +10,7 @@ import { createConveyorSystem } from '../level/conveyor'
 import { EventQueueResource, createEventQueue } from '../state/events'
 import { createItemSystem } from '../level/items'
 import { createLevelProgressSystem, initializeLevel } from '../level/level'
-import { seedBankStart } from '../seeds/seedChooser'
+import { chooserOffer, seedBankStart } from '../seeds/seedChooser'
 import { TUTORIALS } from '../tutorials'
 import { TutorialResource } from '../state/levelState'
 import { createMowerSystem } from '../level/mower'
@@ -143,13 +143,13 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
     })
     if (packet.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...packet.packetUpgradeOffer })
     world.resources.set(RandomResource, new DeterministicRng(packet.randomSeed))
-    const bank = seedBankStart(definitions, level, packet.ownedSeeds, packet.packetUpgrades)
+    const bank = seedBankStart(definitions, level, chooserOffer(definitions, packet.ownedSeeds), packet.packetUpgrades)
     world.resources.set(SeedBankResource, {
         selection: { mode: 'none' },
         // SeedPacket::SetPacketType returns before the opening recharge on some levels.
-        packets: 'seeds' in bank ? bank.seeds.map(seedId => {
+        packets: 'seeds' in bank ? bank.seeds.map(({ seedId, team }) => {
             const cooldown = level.openingRecharge === false ? 0 : definitions.seeds[seedId].initialCooldownTicks ?? 0
-            return { seedId, readyAtTick: cooldown, cooldownTotal: cooldown }
+            return { seedId, readyAtTick: cooldown, cooldownTotal: cooldown, ...(team ? { team } : {}) }
         }) : [],
         ...('chooser' in bank ? { choosing: true } : {}),
         ...(packet.ownedSeeds ? { owned: [...packet.ownedSeeds] } : {}),

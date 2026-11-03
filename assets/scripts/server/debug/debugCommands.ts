@@ -1,5 +1,5 @@
 import { Schedule, type World } from '@/ecs/index'
-import type { Team } from '@/shared/content/teams'
+import { packetTeam, type Team } from '@/shared/content/teams'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { debugAmount, debugCondition, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
@@ -63,13 +63,14 @@ function executeCommand(
         }
         case 'plant': {
             const seedId = findType(definitions.seeds, args[0])
-            if (!seedId) return debugCondition('DEBUG_PLANT_NOT_INSTALLED', args[0])
+            const plant = seedId && definitions.seeds[seedId].plant
+            if (!plant) return debugCondition('DEBUG_PLANT_NOT_INSTALLED', args[0])
             const grid = position(args[1], args[2])
             if (!grid) return invalidPosition()
             // `zombies`: on the zombies' side, facing left; the plants' side attacks it and it attacks them.
             const entityId = createPlant(seedId, grid.row, grid.column!, args[3]?.toLowerCase() === 'zombies' ? 'zombies' : undefined)
             // `debug`: not the player's planting (Board::AddPlant), which the planting achievements check.
-            emitServerEvent(events, 'plantPlaced', { entityId, typeId: definitions.seeds[seedId].plant,
+            emitServerEvent(events, 'plantPlaced', { entityId, typeId: plant,
                 row: grid.row, column: grid.column!, debug: true })
             return debugSuccess(`Planted ${args[0]}`)
         }
@@ -87,10 +88,12 @@ function executeCommand(
             if (bank.selection.mode === 'seed' && bank.selection.slot === slot - 1) bank.selection = { mode: 'none' }
             packet.seedId = seedId
             packet.readyAtTick = tick
-            // `zombies`: the packet plants on the zombies' side.
-            if (args[2]?.toLowerCase() === 'zombies') packet.team = 'zombies'
+            // `team`: the side of what it puts down, kept only when not the seed's own (packetTeam).
+            const side = args[2]?.toLowerCase()
+            const team = packetTeam(definitions.seeds[seedId], side === 'plants' || side === 'zombies' ? side : undefined)
+            if (team) packet.team = team
             else delete packet.team
-            return debugSuccess(`Seed slot ${slot}: ${seedId}${packet.team ? ' (zombies)' : ''}`)
+            return debugSuccess(`Seed slot ${slot}: ${seedId}${packet.team ? ` (${packet.team})` : ''}`)
         }
         case 'removeplant': {
             const grid = position(args[0], args[1])
@@ -126,7 +129,7 @@ function executeCommand(
                 grid.column === undefined ? pickZombieSpawnX(definitions.zombies[typeId], world.resources.get(RandomResource))
                     : level.board.origin.x + grid.column * level.board.cell.width,
                 level.board.origin.y + grid.row * level.board.cell.height - 30)
-            // `plants`: on the plants' side, as if mind-controlled, walking right.
+            // `plants`: on the plants' side, walking right.
             if (args[3]?.toLowerCase() === 'plants') world.get(entityId, ZombieComponent)!.team = 'plants'
             emitServerEvent(events, 'zombieSpawned', { entityId, typeId, row: grid.row })
             return debugSuccess(`Summoned ${args[0]}`)

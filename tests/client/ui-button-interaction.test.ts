@@ -110,6 +110,8 @@ function setup() {
         setMirrored() {}
         sync(options: unknown) { this.options = options }
     } }
+    // The bank's layer for the packets' pictures (SeedPacketViewArgs.iconLayer).
+    modules['@/client/view/uiNode'] = { uiNode: (options: any) => { const node = new FakeNode(0); options.parent?.addChild(node); return { node } } }
     modules['./LevelSeedBank'] = load('assets/scripts/client/level/LevelSeedBank.ts')
     const scene = new FakeNode(), root = new FakeNode()
     scene.transform = null

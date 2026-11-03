@@ -32,6 +32,7 @@ import * as entityFlashes from '@/client/level/EntityFlashes'
 import * as levelRules from '@/client/level/rules'
 import * as debugSettings from '@/platform/debug/GameDebugSettings'
 import * as debugCli from '@/shared/debug/DebugCli'
+import * as protocol from '@/shared/protocol'
 import * as debugCommands from '@/platform/debug/DebugCliCommands'
 import * as haptics from '@/platform/Haptics'
 import * as clock from '@/core/GameClock'
@@ -79,6 +80,7 @@ export function createClientModHost(ownerId: string, definitions: DefinitionSour
         'client/level/rules': levelRules,
         'platform/debug/GameDebugSettings': debugSettings,
         'shared/debug/DebugCli': debugCli,
+        'shared/protocol': protocol,
         'platform/debug/DebugCliCommands': debugCommands,
         'platform/Haptics': haptics,
         'core/GameClock': clock,

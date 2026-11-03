@@ -85,8 +85,13 @@ export interface Zombie extends EntityBehaviorState {
     /** Newspaper gasp and grave emergence progress, persisted with the entity. */
     enrageTicks?: number
     riseTicks?: number
-    /** Its side when not the zombies': `plants` once mind-controlled (see teams.ts). */
+    /** Its side when not the zombies': `plants` when mind-controlled or put down on that side (see teams.ts). */
     team?: Team
+    /**
+     * Mind-controlled (Zombie::mMindControlled, by a Hypno-shroom): it looks it, tinted ZOMBIE_MINDCONTROLLED_COLOR and
+     * chewing softly. Its side decides everything else, so a zombie put down on the plants' side is not one.
+     */
+    mindControlled?: true
 }
 
 export interface Projectile {
@@ -106,7 +111,7 @@ export interface SeedBankState {
     selection: SeedSelection
     conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; lastSeedId?: string; packets: Array<{ id: number; seedId: string; x: number }> }
     choosing?: boolean
-    /** `team`: a packet of the zombies' side plants on that side (from `/seed`); the plants' by default. */
+    /** `team`: the side of what the packet puts down, when not its seed's own (seedTeam; from `/seed`). */
     packets: Array<{ seedId: string, readyAtTick: number, cooldownTotal?: number, team?: Team }>
     /** The seeds the player owns, from the start packet; absent, every catalog seed (see availableSeeds). */
     owned?: string[]

@@ -1,15 +1,18 @@
-[
-  "pvz:peashooter",
-  "pvz:sunflower",
-  "pvz:cherrybomb",
-  "pvz:wallnut",
-  "pvz:potatomine",
-  "pvz:snowpea",
-  "pvz:chomper",
-  "pvz:repeater",
-  "pvz:puffshroom",
-  "pvz:sunshroom",
-  "pvz:fumeshroom",
-  "pvz:gravebuster",
-  "pvz:hypnoshroom"
-]
+{
+  "pvz:peashooter": {"position": 0},
+  "pvz:sunflower": {"position": 1},
+  "pvz:cherrybomb": {"position": 2},
+  "pvz:wallnut": {"position": 3},
+  "pvz:potatomine": {"position": 4},
+  "pvz:snowpea": {"position": 5},
+  "pvz:chomper": {"position": 6},
+  "pvz:repeater": {"position": 7},
+  "pvz:puffshroom": {"position": 8},
+  "pvz:sunshroom": {"position": 9},
+  "pvz:fumeshroom": {"position": 10},
+  "pvz:gravebuster": {"position": 11},
+  "pvz:hypnoshroom": {"position": 12},
+  "pvz:explodenut": {"position": 49},
+  "pvz:bowling-wallnut": {"position": 50},
+  "pvz:bowling-explodenut": {"position": 51}
+}

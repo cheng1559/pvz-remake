@@ -1,4 +1,5 @@
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
+import { ZombiePreview } from '@/client/hud/ZombiePreview'
 import { Color, Graphics, isValid, Node, Vec3 } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { FontRepository } from '@/client/content/ClientContentLoader'
@@ -20,6 +21,13 @@ import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { LevelPresentation } from './LevelPresentation'
 import type { LevelAdviceSnapshot, LevelHudSnapshot } from './LevelPresentationSnapshot'
 import { plantDefinition } from '@/client/plants/definitions'
+
+/** The pointer's place in the held preview, which sits this far left of and above it. */
+const CURSOR_PREVIEW_POINTER_X = 35
+const CURSOR_PREVIEW_POINTER_Y = 60
+/** The zombie in hand and over its cell (see zombiePreview). */
+const CURSOR_ZOMBIE = { x: CURSOR_PREVIEW_POINTER_X - 50, y: -(CURSOR_PREVIEW_POINTER_Y - 90), scale: 1, from: 'reanim' as const }
+const GRID_ZOMBIE = { x: -30, y: 30, scale: 1, from: 'zombie' as const }
 
 const TUTORIAL_FLASH_TICKS = 75
 const PROGRESS_METER_WIDTH = 158
@@ -390,22 +398,37 @@ export class LevelHudPresenter {
         const board = this.content.definitions.boards[this.level.board]
         const seedDefinition = snapshot.cursor.mode === 'seed' ? this.content.definitions.seeds[snapshot.cursor.seedId] : undefined
         const plantId = seedDefinition?.plant
+        // A held packet of the other side from its seed's own puts down what faces the other way.
+        const mirrored = snapshot.cursor.mode === 'seed' && snapshot.cursor.team !== undefined
+        const zombieId = seedDefinition?.zombie
+        this.cursorPlant.node.active = this.gridPlant.node.active = zombieId === undefined
+        if (zombieId !== undefined || this.zombiePreviews) {
+            // Put down facing right, the zombie stands its own `facingRightOffsetX` further (see ZombieDefinition).
+            const facingRightOffsetX = zombieId === undefined ? undefined : this.content.definitions.zombies[zombieId].facingRightOffsetX
+            const { cursor, grid } = this.zombiePreview
+            for (const [preview, placement] of [[cursor, CURSOR_ZOMBIE], [grid, GRID_ZOMBIE]] as const) {
+                preview.setZombie(zombieId)
+                preview.setMirrored(mirrored)
+                preview.setPlacement({ ...placement, facingRightOffsetX })
+            }
+        }
         const presentation = plantId ? plantDefinition(this.content.presentation, plantId) : undefined
         const { row, column, inBounds } = boardCell(board, pointer.x, pointer.y + (presentation?.pointerOffsetY ?? 0))
         let valid = inBounds && this.level.activeRows.includes(row)
+        // Challenge::IZombieMouseDownWithZombie: a zombie takes any cell of an active row, whatever stands there.
         if (plantId) {
-            this.cursorPreview.setPosition(pointer.x - 35, -pointer.y + 60)
-            this.cursorPlant.setPlant(plantId)
-            this.gridPlant.setPlant(plantId)
-            // A packet of the zombies' side plants facing left.
-            const mirrored = snapshot.cursor.mode === 'seed' && snapshot.cursor.team === 'zombies'
-            this.cursorPlant.setMirrored(mirrored)
-            this.gridPlant.setMirrored(mirrored)
+            for (const preview of [this.cursorPlant, this.gridPlant]) {
+                preview.setPlant(plantId)
+                preview.setMirrored(mirrored)
+            }
             const occupant = snapshot.plants.find(plant => this.content.definitions.plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column)
             const grave = !!graveAt(snapshot.graves, row, column)
             // Graves block planting, except for a grave buster, which needs one.
             const needsGrave = seedDefinition!.placement === 'grave'
             valid = valid && !occupant && grave === needsGrave && (this.canPlantAt?.(snapshot, row, column) ?? true)
+        }
+        if (plantId || zombieId !== undefined) {
+            this.cursorPreview.setPosition(pointer.x - CURSOR_PREVIEW_POINTER_X, -pointer.y + CURSOR_PREVIEW_POINTER_Y)
             this.gridPreview.active = valid && !mobile
             if (valid && !mobile) this.gridPreview.setPosition(board.origin.x + column * board.cell.width,
                 -(board.origin.y + row * board.cell.height + (presentation?.drawHeightOffset ?? 0)))
@@ -439,9 +462,28 @@ export class LevelHudPresenter {
         })
     }
 
-    /** Board::OffsetYForPlanting for the seed being planted. */
+    /** Board::OffsetYForPlanting for the seed being planted; a zombie seed's cell is the pointer's. */
     pointerOffsetY(seedId: string): number {
-        return plantDefinition(this.content.presentation, this.content.definitions.seeds[seedId].plant).pointerOffsetY ?? 0
+        const plant = this.content.definitions.seeds[seedId].plant
+        return plant === undefined ? 0 : plantDefinition(this.content.presentation, plant).pointerOffsetY ?? 0
+    }
+
+    private zombiePreviews?: { cursor: ZombiePreview, grid: ZombiePreview }
+    /**
+     * A zombie seed's zombie in hand and translucent over its cell: Plant::DrawSeedType's cached zombie, whose Reanim
+     * origin sits at (40, 40) in the frame. On an I, Zombie level CursorObject::Draw puts the frame at (-90, -130) from
+     * the pointer (Update's -25 and -35, then -10 and -10 - 15, then -55 and -70), so the origin is (-50, -90) from it.
+     * Over the cell the zombie stands where it will be put down (Challenge::IZombiePlaceZombie: 30 left of and above the
+     * cell), drawn as the level draws it; CursorPreview::Draw's (-49, -78) is 6 off that, which is taken as a bug.
+     */
+    private get zombiePreview(): { cursor: ZombiePreview, grid: ZombiePreview } {
+        if (!this.zombiePreviews) {
+            const cursor = uiNode({ name: 'CursorZombie', parent: this.cursorPreview }).node.addComponent(ZombiePreview).initialize(CURSOR_ZOMBIE)
+            const grid = uiNode({ name: 'GridZombie', parent: this.gridPreview }).node.addComponent(ZombiePreview).initialize(GRID_ZOMBIE)
+            grid.setColor(new Color(255, 255, 255, 100))
+            this.zombiePreviews = { cursor, grid }
+        }
+        return this.zombiePreviews
     }
 
     private syncSeedTutorialArrow(visible: boolean): void {
