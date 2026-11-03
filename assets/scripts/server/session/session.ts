@@ -16,6 +16,7 @@ import { TutorialResource } from '../state/levelState'
 import { createMowerSystem } from '../level/mower'
 import { planting } from '../seeds/planting'
 import { createPlantAbilitySystem } from '../plants/abilities'
+import { createPlantChillSystem } from '../plants/chill'
 import { createProductionSystem } from '../plants/production'
 import { createPeashooterSystem } from '../plants/shooter'
 import { createProjectileSystem } from '../combat/projectiles'
@@ -101,6 +102,7 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         { phase: 'tutorial', system: createLevelProgressSystem(definitions) },
         { phase: 'spawn', system: createWaveSystem(definitions) },
         ...rule?.systems?.(definitions) ?? [],
+        { phase: 'plant', system: createPlantChillSystem() },
         { phase: 'plant', system: createPeashooterSystem(definitions) },
         { phase: 'plant', system: createProductionSystem(definitions) },
         { phase: 'plant', system: createPlantAbilitySystem(definitions) },
@@ -171,7 +173,7 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         world.resources.get(SeedBankResource).conveyor = { nextId: 1, spawnAtTick: level.conveyor.spawnDelay[0].ticks, moveTicks: 0, packets: [] }
         world.resources.get(TutorialResource).sunAtTick = undefined
     }
-    for (const plant of level.initialPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column)
+    for (const plant of level.initialPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column, plant.team)
     if (packet.firstAdventure) for (const plant of TUTORIALS[level.tutorial]?.introPlants ?? []) planting.createPlant(session, plant.seedId, plant.row, plant.column)
     return session
 }

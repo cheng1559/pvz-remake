@@ -6,6 +6,7 @@ import { dropZombieLoot } from './loot'
 import { dropZombieFlag } from '../zombies/flag'
 import { WaveResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
+import { isHostile, zombieTeam } from '@/shared/content/teams'
 
 const READY_X = -21
 const ROW_Y_OFFSET = 23
@@ -38,6 +39,8 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
                     if (zombiePosition.row !== position.row || zombie.state === 'dying' || zombie.state === 'mowered') continue
                     if (!world.hasEntity(zombieEntity)) continue
                     if (mower.state === 'ready' && !zombie.hasHead) continue
+                    // LawnMower::UpdatePlaying (EffectedByDamage(127)): a mower passes zombies on the plants' side.
+                    if (!isHostile(zombieTeam(zombie), 'plants')) continue
                     const body = definitions.zombies[zombie.typeId].body
                     if (!overlaps(position.x + definition.attack.x, definition.attack.width,
                         zombiePosition.x + body.x, body.width)) continue

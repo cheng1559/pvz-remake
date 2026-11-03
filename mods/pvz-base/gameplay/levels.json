@@ -56,6 +56,32 @@
     "tutorial": "pvz:standard",
     "award": { "kind": "seed", "id": "pvz:repeater" }
   },
+  "pvz:teams-demo": {
+    "adventureIndex": 9,
+    "persistent": false,
+    "achievements": false,
+    "board": "pvz:day",
+    "lawnMower": "pvz:standard",
+    "skySun": "pvz:sun",
+    "activeRows": [0, 1, 2, 3, 4],
+    "startingSun": 1000,
+    "seedPackets": ["pvz:peashooter", "pvz:repeater", "pvz:snowpea", "pvz:wallnut", "pvz:cherrybomb", "pvz:chomper", "pvz:potatomine", "pvz:sunflower"],
+    "initialPlants": [
+      {"seedId":"pvz:sunflower","row":0,"column":0}, {"seedId":"pvz:peashooter","row":0,"column":1}, {"seedId":"pvz:peashooter","row":0,"column":8,"team":"zombies"},
+      {"seedId":"pvz:sunflower","row":1,"column":0}, {"seedId":"pvz:repeater","row":1,"column":1}, {"seedId":"pvz:wallnut","row":1,"column":7,"team":"zombies"}, {"seedId":"pvz:snowpea","row":1,"column":8,"team":"zombies"},
+      {"seedId":"pvz:sunflower","row":2,"column":0}, {"seedId":"pvz:peashooter","row":2,"column":1}, {"seedId":"pvz:chomper","row":2,"column":6,"team":"zombies"}, {"seedId":"pvz:repeater","row":2,"column":8,"team":"zombies"},
+      {"seedId":"pvz:sunflower","row":3,"column":0}, {"seedId":"pvz:snowpea","row":3,"column":1}, {"seedId":"pvz:potatomine","row":3,"column":6,"team":"zombies"}, {"seedId":"pvz:peashooter","row":3,"column":8,"team":"zombies"},
+      {"seedId":"pvz:sunflower","row":4,"column":0}, {"seedId":"pvz:peashooter","row":4,"column":1}, {"seedId":"pvz:explodenut","row":4,"column":7,"team":"zombies"}, {"seedId":"pvz:peashooter","row":4,"column":8,"team":"zombies"}
+    ],
+    "waves": [
+      { "zombies": ["pvz:normal", "pvz:normal"] },
+      { "zombies": ["pvz:normal", "pvz:conehead", "pvz:normal"] },
+      { "zombies": ["pvz:conehead", "pvz:buckethead", "pvz:normal", "pvz:normal"] },
+      { "zombies": ["pvz:flag", "pvz:normal", "pvz:conehead", "pvz:buckethead", "pvz:normal", "pvz:normal"], "flagWave": true }
+    ],
+    "tutorial": "pvz:standard",
+    "award": { "kind": "seed", "id": "pvz:repeater" }
+  },
   "pvz:adventure-1-2": {
     "adventureIndex": 2,
     "nextLevel": "pvz:adventure-1-3",
@@ -113,7 +139,8 @@
       "seeds": [{"id": "pvz:bowling-wallnut", "weight": 85}, {"id": "pvz:bowling-explodenut", "weight": 15}]
     },
     "zombiePool": ["pvz:normal", "pvz:conehead"],
-    "rules": {"kind": "pvz:bowling", "count": 8, "lineColumn": 2},
+    "rules": {"kind": "pvz:bowling", "count": 8},
+    "plantingLine": {"column": 2},
     "tutorial": "pvz:adventure-1-5",
     "award": {"kind": "seed", "id": "pvz:potatomine"}
   },

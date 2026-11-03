@@ -1,4 +1,5 @@
 import type { SeedAvailability } from '@/shared/protocol/index'
+import type { Team } from '@/shared/content/teams'
 import { graveAt } from '@/shared/protocol/index'
 import { EconomyStateResource, LevelStateResource, PlantAttackComponent, PlantComponent, PositionComponent, RandomResource, SeedBankResource } from '../state/components'
 import { getDebugRules } from '../debug/debugRules'
@@ -101,6 +102,16 @@ export const planting = {
             return refuseCell('column-out-of-range')
         }
         if (levelRule(world)?.canPlantAt?.(world, row, column) === false) return refuseCell('column-out-of-range')
+        // Board::CanPlantAt: nothing past the level's red line, with ADVICE_NOT_PASSED_LINE once a game.
+        const line = level.definition.plantingLine
+        if (line && column > line.column) {
+            const displayed = world.resources.get(TutorialResource).displayedAdvice ??= []
+            if (!displayed.includes('ADVICE_NOT_PASSED_LINE')) {
+                displayed.push('ADVICE_NOT_PASSED_LINE')
+                emitServerEvent(world.resources.get(EventQueueResource), 'advice', { key: 'ADVICE_NOT_PASSED_LINE', style: 'hint' })
+            }
+            return refuseCell('column-out-of-range')
+        }
         const occupiedEntity = planting.findPlantAt(session, row, column)
         if (occupiedEntity !== undefined) return refuseCell('cell-occupied')
         // Board::CanPlantAt: graves block planting, except that a grave buster needs one.
@@ -121,7 +132,7 @@ export const planting = {
             session.graveAdvice = undefined
         }
 
-        const entity = planting.createPlant(session, seedId, row, column)
+        const entity = planting.createPlant(session, seedId, row, column, packet?.team)
         if (seedBank.conveyor) {
             const conveyor = seedBank.conveyor
             const packetId = seedBank.selection.mode === 'conveyor' ? seedBank.selection.packetId : undefined
@@ -146,8 +157,8 @@ export const planting = {
         })
     },
 
-    /** Creates the plant of `seedId` in a cell without any planting checks. */
-    createPlant(session: Session, seedId: string, row: number, column: number): number {
+    /** Creates the plant of `seedId` in a cell without any planting checks, on the plants' side unless `team` says otherwise. */
+    createPlant(session: Session, seedId: string, row: number, column: number, team?: Team): number {
         const { world, gameplayTick, definitions, gameplay } = session
         const level = world.resources.get(LevelStateResource)
         const plantedSeed = definitions.seeds[seedId]
@@ -168,6 +179,7 @@ export const planting = {
             maxHealth: definition.maxHealth,
             recentlyEatenCounter: 0,
             ...(behaviorState === undefined ? {} : { behaviorState }),
+            ...(team === 'zombies' ? { team } : {}),
         })
         const ability = initialPlantAbility(definition, random)
         if (ability) world.get(entity, PlantComponent)!.ability = ability

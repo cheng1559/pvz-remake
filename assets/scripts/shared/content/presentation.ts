@@ -124,6 +124,8 @@ export interface PlantParts {
     readonly face?: string
     /** The potato mine's light: lit near zombies, hidden in the almanac, shown on the seed packet. */
     readonly glow?: readonly string[]
+    /** The chomper's tracks of the zombie it chews and swallows, hidden when it ate a hostile plant instead. */
+    readonly prey?: readonly string[]
 }
 
 export interface PlantPresentationDefinition {
@@ -217,6 +219,8 @@ export interface ZombiePresentationDefinition {
     readonly animationsFrom?: ClientAnimationTarget
     readonly animations?: ClientAnimationDefinitions[ClientAnimationTarget]
     readonly shadowX: number
+    /** Zombie::DrawShadow's offset for a zombie walking right (mind-controlled); defaults to `shadowX`. */
+    readonly shadowXBackwards?: number
     /** Original Y-down coordinates; defaults to 92. */
     readonly shadowY?: number
     readonly parts: ZombieParts
@@ -310,6 +314,8 @@ export interface LevelPresentationDefinition {
     readonly lawnGuideSteps: readonly string[]
     /** False when the seed guide only flashes the packets, without the pick arrow (Whack-a-Zombie). */
     readonly seedGuideArrow?: false
+    /** The look of the level's `plantingLine`: shown in play and during Dave's lines `dialogs` (Wall-nut Bowling's stripe). */
+    readonly plantingLine?: { readonly sprite: string; readonly offset: readonly [number, number]; readonly dialogs: readonly number[] }
 }
 /**
  * How a level rule (`rules.kind`) looks, by kind. The generic level view reads `graveRise` and `itemPadding`; the
@@ -560,6 +566,13 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (level.adviceStyle !== undefined && level.adviceStyle !== 'hint-stay' && level.adviceStyle !== 'tutorial-level1-stay') throw new TypeError(id + '.adviceStyle is invalid')
         texts(level.seedGuideSteps, id + '.seedGuideSteps'); texts(level.lawnGuideSteps, id + '.lawnGuideSteps')
         if (level.seedGuideArrow !== undefined && level.seedGuideArrow !== false) throw new TypeError(id + '.seedGuideArrow can only be false')
+        if (level.plantingLine !== undefined) {
+            const line = object(level.plantingLine, id + '.plantingLine')
+            text(line.sprite, id + '.plantingLine.sprite')
+            if (!Array.isArray(line.offset) || line.offset.length !== 2) throw new TypeError(id + '.plantingLine.offset must be [x, y]')
+            for (const value of line.offset) finite(value, id + '.plantingLine.offset')
+            if (!Array.isArray(line.dialogs) || line.dialogs.some(dialog => !Number.isInteger(dialog))) throw new TypeError(id + '.plantingLine.dialogs must list dialog IDs')
+        }
     }
     for (const [id, entry] of Object.entries(object(data.rules ?? {}, 'presentation rules'))) {
         const rule = object(entry, 'rules.' + id)
@@ -622,10 +635,11 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (plant.sleepOffset !== undefined) pair(plant.sleepOffset, id + '.sleepOffset')
         if (plant.parts !== undefined) {
             const parts = object(plant.parts, id + '.parts')
-            for (const key of Object.keys(parts)) if (!['eyes', 'face', 'glow'].includes(key)) throw new TypeError(id + '.parts.' + key + ' is not supported')
+            for (const key of Object.keys(parts)) if (!['eyes', 'face', 'glow', 'prey'].includes(key)) throw new TypeError(id + '.parts.' + key + ' is not supported')
             if (parts.eyes !== undefined) texts(parts.eyes, id + '.parts.eyes')
             if (parts.face !== undefined) text(parts.face, id + '.parts.face')
             if (parts.glow !== undefined) texts(parts.glow, id + '.parts.glow')
+            if (parts.prey !== undefined) texts(parts.prey, id + '.parts.prey')
         }
         if (visual.nameKey !== undefined) text(visual.nameKey, id + '.visual.nameKey')
         if (visual.tooltipKey !== undefined) text(visual.tooltipKey, id + '.visual.tooltipKey')
@@ -676,6 +690,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (zombie.animationsFrom !== undefined) text(zombie.animationsFrom, id + '.animationsFrom')
         if (!Number.isFinite(zombie.shadowX)) throw new TypeError(id + ' has invalid presentation')
         if (zombie.shadowY !== undefined) finite(zombie.shadowY, id + '.shadowY')
+        if (zombie.shadowXBackwards !== undefined) finite(zombie.shadowXBackwards, id + '.shadowXBackwards')
         for (const part of ['head', 'hair', 'tongue', 'arm', 'helms']) texts(parts[part], id + '.parts.' + part)
         text(parts.upperArm, id + '.parts.upperArm')
         text(parts.ground, id + '.parts.ground')

@@ -107,6 +107,7 @@ function setup() {
         replacement?: { seedType: string, cost: number }
         constructor(options: any) { this.node = new FakeNode(options.x); options.parent.addChild(this.node) }
         setSeed(seedType: string, cost: number) { this.replacement = { seedType, cost } }
+        setMirrored() {}
         sync(options: unknown) { this.options = options }
     } }
     modules['./LevelSeedBank'] = load('assets/scripts/client/level/LevelSeedBank.ts')

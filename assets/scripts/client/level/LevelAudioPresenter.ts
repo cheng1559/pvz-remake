@@ -134,7 +134,8 @@ export class LevelAudioPresenter {
             case 'plantGrew': void SoundSystem.playFoley(SoundEffect.PlantGrow); break
             case 'mineRising': void SoundSystem.playFoley(SoundEffect.DirtRise); break
             case 'chomperBit': void SoundSystem.playFoley(SoundEffect.BigChomp); break
-            case 'zombieChilled': void SoundSystem.playFoley(SoundEffect.Frozen); break
+            // Zombie::ApplyChill plays FOLEY_FROZEN on the first chill; a plant's chill sounds the same.
+            case 'zombieChilled': case 'plantChilled': void SoundSystem.playFoley(SoundEffect.Frozen); break
             case 'zombieVaultSound':
                 void SoundSystem.playFoley(event.data.sound === 'polevault' ? SoundEffect.PoleVault : SoundEffect.Grassstep)
                 break
@@ -147,6 +148,9 @@ export class LevelAudioPresenter {
             case 'mowerActivated': void SoundSystem.playFoley(SoundEffect.Lawnmower); break
             case 'zombieMowered': void SoundSystem.playFoley(SoundEffect.Splat); break
             case 'plantEaten': void SoundSystem.play(SoundEffect.Gulp); break
+            // Zombie::AnimateChewSound: a mind-controlled zombie chews softly; Zombie::EatZombie gulps the last bite.
+            case 'zombieChewedZombie': this.chew(event.data.team === 'plants'); break
+            case 'zombieAteZombie': void SoundSystem.play(SoundEffect.Gulp); break
             case 'zombieEnraged': if (event.data.roar === true) this.sounds(this.definitions.zombies[String(event.data.typeId)]?.enrageSounds); break
             case 'zombieRoseFromGrave': this.sounds(this.riseSounds); break
             // Board::NextWaveComing on Whack-a-Zombie: the awooga before the first wave, the siren before the last.

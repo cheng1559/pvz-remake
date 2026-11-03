@@ -11,7 +11,7 @@ import { attachmentTrack, type ZombiePresentationDefinition } from '@/shared/con
 import type { ZombieDefinition } from '@/shared/content/gameplay'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import type { ZombieFlash } from '@/client/level/EntityFlashes'
-import { zombiePartVisibility } from './zombieParts'
+import { MIND_CONTROLLED_RGB, zombiePartVisibility } from './zombieParts'
 
 type AnimationSlot = keyof (PoleVaulterAnimationDefinition & FlagZombieAnimationDefinition)
 const SLOTS: Record<ZombieSnapshot['animation'], AnimationSlot> = {
@@ -102,6 +102,7 @@ export class ZombieView implements ZombieViewInstance {
     sync(zombie: ZombieSnapshot, _world: WorldSnapshot, flash: ZombieFlash): void {
         this.latestZombie = zombie
         this.flash = flash
+        this.syncFacing(zombie)
         if (zombie.riseTicks && !this.riseClip) {
             this.riseClip = uiNode({ name: 'GraveRiseClip', parent: this.node, position: { x: -50, y: 110 },
                 size: { width: 250, height: 220 }, anchor: { x: 0, y: 1 }, mask: Mask.Type.GRAPHICS_RECT }).node
@@ -154,8 +155,8 @@ export class ZombieView implements ZombieViewInstance {
         const clip = this.definition(zombie.animation)
         if (zombie.riseTicks) {
             this.player.node.setParent(this.riseClip)
-            this.player.node.setPosition(clip.x + 50, clip.y - 110 - Math.min(200, zombie.riseTicks * 4))
-        } else if (this.player.node.parent === this.node) this.player.node.setPosition(clip.x, clip.y)
+            this.place(this.player.node, clip.x + 50, clip.y - 110 - Math.min(200, zombie.riseTicks * 4))
+        } else if (this.player.node.parent === this.node) this.place(this.player.node, clip.x, clip.y)
     }
 
     /** Zombie::DropHelm or DropShield: plays the armor's `dropReanim` on the zombie. */
@@ -243,11 +244,8 @@ export class ZombieView implements ZombieViewInstance {
         if (!player || !player.node.isValid || player.snapshot().id !== snapshot.id) {
             if (player?.node.isValid) player.node.destroy()
             const definition = this.definitionFromReanim(snapshot.id)
-            const node = uiNode({
-                name, parent: this.node,
-                position: definition ? { x: definition.x, y: definition.y } : undefined,
-                anchor: { x: 0, y: 1 },
-            }).node
+            const node = uiNode({ name, parent: this.node, anchor: { x: 0, y: 1 } }).node
+            if (definition) this.place(node, definition.x, definition.y)
             player = node.addComponent(ReanimPlayer)
             await player.load(snapshot.id, this.registry, this.loader)
         }
@@ -281,7 +279,7 @@ export class ZombieView implements ZombieViewInstance {
         if (this.mowerPending || !this.player) return
         this.mowerPending = true
         const driver = uiNode({ name: 'MoweredDriver', parent: this.node }).node.addComponent(ReanimPlayer)
-        driver.node.setPosition(animation.x, animation.y)
+        this.place(driver.node, animation.x, animation.y)
         void driver.load(animation.reanimId, this.registry, this.loader).then(() => {
             zombie = this.latestZombie ?? zombie
             if (!driver.node.isValid || zombie.state !== 'mowered') return
@@ -306,7 +304,7 @@ export class ZombieView implements ZombieViewInstance {
         const player = this.player!
         player.pause()
         player.seek(player.lastFrameTimeSeconds)
-        player.node.setPosition(jump.x + this.landingOffset, jump.y)
+        this.place(player.node, jump.x + this.landingOffset, jump.y)
     }
 
     private async load(zombie: ZombieSnapshot): Promise<void> {
@@ -317,9 +315,9 @@ export class ZombieView implements ZombieViewInstance {
         this.pendingAnimation = zombie.animation
         const animation = this.definition(zombie.animation)
         const animationNode = uiNode({
-            name: 'ZombieAnimationPending', parent: this.node, position: { x: animation.x, y: animation.y },
-            anchor: { x: 0, y: 1 }, active: false,
+            name: 'ZombieAnimationPending', parent: this.node, anchor: { x: 0, y: 1 }, active: false,
         }).node
+        this.place(animationNode, animation.x, animation.y)
         const player = animationNode.addComponent(ReanimPlayer)
         try {
             await player.load(animation.reanimId, this.registry, this.loader)
@@ -404,19 +402,46 @@ export class ZombieView implements ZombieViewInstance {
         }
     }
 
-    private color: 'normal' | 'chilled' | 'burned' = 'normal'
+    private color: 'normal' | 'chilled' | 'burned' | 'mindControlled' = 'normal'
+    /** Zombie::IsWalkingBackwards: a zombie on the plants' side faces right. */
+    private mirrored = false
 
-    /** Zombie::DrawShadow offset in the original board coordinates. */
+    /** Zombie::DrawShadow offset in the original board coordinates, which differs for a zombie walking right. */
     private get shadowX(): number {
-        return this.presentation.shadowX
+        return this.mirrored ? this.presentation.shadowXBackwards ?? this.presentation.shadowX : this.presentation.shadowX
     }
 
-    /** Zombie::DrawReanim tints chilled zombies blue and burned ones black. */
+    /**
+     * Zombie::UpdateReanim: a zombie walking right draws its body mirrored (`m00 = -scale`) and 90 further right. Every
+     * body animation node is placed through here.
+     */
+    private place(node: Node, x: number, y: number): void {
+        node.setPosition(this.mirrored ? x + 90 : x, y)
+        node.setScale(this.mirrored ? -1 : 1, 1, 1)
+    }
+
+    /** A zombie that changes sides turns its body nodes around. */
+    private syncFacing(zombie: ZombieSnapshot): void {
+        const mirrored = zombie.team === 'plants'
+        if (mirrored === this.mirrored) return
+        this.mirrored = mirrored
+        for (const node of [this.player?.node, this.node.getChildByName('MoweredDriver')]) {
+            if (!node?.isValid) continue
+            node.setPosition(node.position.x + (mirrored ? 90 : -90), node.position.y)
+            node.setScale(mirrored ? -1 : 1, 1, 1)
+        }
+    }
+
+    /**
+     * Zombie::DrawReanim tints chilled zombies blue, burned ones black and mind-controlled ones ZOMBIE_MINDCONTROLLED_COLOR
+     * (with the same color added, in applyHitFlash).
+     */
     private applyColor(zombie: ZombieSnapshot, force = false): void {
-        const color = zombie.state === 'burned' ? 'burned' : zombie.chilled ? 'chilled' : 'normal'
+        const color = zombie.state === 'burned' ? 'burned' : zombie.team === 'plants' ? 'mindControlled' : zombie.chilled ? 'chilled' : 'normal'
         if (!this.player || color === this.color && !force) return
         this.color = color
-        const value = color === 'burned' ? new Color(0, 0, 0) : color === 'chilled' ? new Color(75, 75, 255) : Color.WHITE
+        const value = color === 'burned' ? new Color(0, 0, 0) : color === 'mindControlled' ? mindControlledColor()
+            : color === 'chilled' ? new Color(75, 75, 255) : Color.WHITE
         // The flag is attached to the hand track, so it takes the body's colors.
         this.player.setColorOverride(value)
     }
@@ -431,8 +456,9 @@ export class ZombieView implements ZombieViewInstance {
         // DrawReanim adds the cold tint and then adds the hit highlight on top of it.
         const color = new Color(Math.min(255, grayness + (cold ? 75 : 0)),
             Math.min(255, grayness + (cold ? 75 : 0)), cold ? 255 : grayness, 255)
-        const enabled = cold || bodyFlash > 0
-        this.player?.setExtraAdditiveDraw(enabled, color)
+        const mindControlled = zombie.team === 'plants' && zombie.state !== 'burned'
+        const enabled = cold || bodyFlash > 0 || mindControlled
+        this.player?.setExtraAdditiveDraw(enabled, mindControlled ? mindControlledColor() : color)
         if (shield && this.player) {
             const burned = zombie.state === 'burned'
             const gray = Math.min(255, flash * 10)
@@ -466,6 +492,8 @@ export class ZombieView implements ZombieViewInstance {
     }
 
 }
+
+const mindControlledColor = (): Color => new Color(...MIND_CONTROLLED_RGB, 255)
 
 /** -1 without the armor or once it is gone, otherwise its damage index (0 whole, 1 below 2/3, 2 below 1/3). */
 function armorStage(health: number | undefined, armor: { readonly health: number } | undefined): number {

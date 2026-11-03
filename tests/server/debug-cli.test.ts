@@ -47,7 +47,7 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     assert.deepEqual(getDebugCliCompletions('/collect ', catalog, true), ['/collect auto', '/collect click', '/collect move'])
     assert.deepEqual(getDebugCliCompletions('/plantinvincible ', catalog, true), ['/plantinvincible true', '/plantinvincible false'])
     assert.equal((parseDebugCliCommand('/plantinvincible yes') as { failure: string }).failure, 'syntax')
-    assert.equal(getDebugCliSuffix('/plant repeater', catalog), ' {row} {col}')
+    assert.equal(getDebugCliSuffix('/plant repeater', catalog), ' {row} {col} [team]')
     assert.throws(() => setup(false).debugCommand('/sun set 999'), /unsupported-command/)
 })
 

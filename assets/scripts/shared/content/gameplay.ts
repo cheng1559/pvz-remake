@@ -1,5 +1,5 @@
 import { isQualifiedId } from '@/shared/mod/index'
-import { jsonRoundTrip, type JsonObject } from '@/shared/protocol'
+import { jsonRoundTrip, type JsonObject, type Team } from '@/shared/protocol'
 
 /** Board pixel where collected sun flies to: the sun counter in the original 800-wide layout. */
 export const SUN_BANK_TARGET = { x: 15, y: 0 } as const
@@ -65,6 +65,11 @@ export interface PlantTargeting {
     eatingExtraRange: number
     excludeHeldPole: boolean
     insetKey?: string
+    /**
+     * Not in the original, whose plants never face each other: against hostile plants, the attack rect and the blast
+     * sit this much further forward (the potato mine's half cell).
+     */
+    plantReach?: number
 }
 
 /** At most one ability; a plant without one only blocks, like the wall-nut. */
@@ -73,6 +78,8 @@ export interface PlantDefinition {
     plantingOffset?: { min: Point; max: Point }
     /** Mushrooms: asleep, doing nothing, on a board that is not at night. */
     nocturnal?: boolean
+    /** Projectile::FindCollisionTargetPlant: so low that projectiles fly over it (the puff-shroom, the potato mine). */
+    low?: boolean
     maxHealth: number
     body: Rect
     /** JSON configuration consumed by a registered plant behavior. */
@@ -232,7 +239,10 @@ export interface LevelDefinition {
      * fit (the first adventure's first seven levels), and the seed chooser opens when there are more.
      */
     seedPackets?: string[]
-    initialPlants?: Array<{ seedId: string; row: number; column: number }>
+    /** `team`: `zombies` places a plant on the zombies' side, facing left. */
+    initialPlants?: Array<{ seedId: string; row: number; column: number; team?: Team }>
+    /** Board::CanPlantAt on Wall-nut Bowling: the player plants nothing right of `column` (the red line). */
+    plantingLine?: { column: number }
     lawnMower: string
     /** The sun that falls from the sky; omitted at night (Board::UpdateSunSpawning). */
     skySun?: string
@@ -391,7 +401,7 @@ function parseSeed(value: unknown, name: string): SeedDefinition {
 
 function parsePlant(value: unknown, name: string): PlantDefinition {
     const abilities = ['shooter', 'producer', 'fuse', 'mine', 'chomper', 'graveBuster'] as const
-    const source = exactObject(value, ['maxHealth', 'body'], name, [...abilities, 'deathExplosion', 'behavior', 'occupiesCell', 'nocturnal', 'plantingOffset'])
+    const source = exactObject(value, ['maxHealth', 'body'], name, [...abilities, 'deathExplosion', 'behavior', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset'])
     if (abilities.filter(key => source[key] !== undefined).length > 1) {
         throw new Error(`${name} allows at most one of ${abilities.join(', ')}`)
     }
@@ -402,6 +412,10 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
     if (source.occupiesCell !== undefined) {
         if (typeof source.occupiesCell !== 'boolean') throw new Error(`${name}.occupiesCell must be boolean`)
         result.occupiesCell = source.occupiesCell
+    }
+    if (source.low !== undefined) {
+        if (typeof source.low !== 'boolean') throw new Error(`${name}.low must be boolean`)
+        result.low = source.low
     }
     if (source.nocturnal !== undefined) {
         if (typeof source.nocturnal !== 'boolean') throw new Error(`${name}.nocturnal must be boolean`)
@@ -588,12 +602,13 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
 }
 
 function parsePlantTargeting(value: unknown, name: string): PlantTargeting {
-    const source = exactObject(value, ['eatingExtraRange', 'excludeHeldPole'], name, ['insetKey'])
+    const source = exactObject(value, ['eatingExtraRange', 'excludeHeldPole'], name, ['insetKey', 'plantReach'])
     if (typeof source.excludeHeldPole !== 'boolean') throw new Error(`${name}.excludeHeldPole must be boolean`)
     return {
         eatingExtraRange: nonNegativeFinite(source.eatingExtraRange, `${name}.eatingExtraRange`),
         excludeHeldPole: source.excludeHeldPole,
         ...(source.insetKey === undefined ? {} : { insetKey: qualifiedId(source.insetKey, `${name}.insetKey`) }),
+        ...(source.plantReach === undefined ? {} : { plantReach: nonNegativeFinite(source.plantReach, `${name}.plantReach`) }),
     }
 }
 
@@ -762,7 +777,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     const source = exactObject(value, [
         'adventureIndex', 'board', 'lawnMower', 'activeRows', 'startingSun', 'tutorial', 'award',
     ], name, ['waves', 'rules', 'nextLevel', 'seedPackets', 'firstWaveTicks', 'zombiePool', 'conveyor', 'initialPlants', 'persistent',
-        'achievements', 'skySun', 'graves', 'graveZombies', 'openingRecharge', 'tools'])
+        'achievements', 'plantingLine', 'skySun', 'graves', 'graveZombies', 'openingRecharge', 'tools'])
     if (source.persistent !== undefined && typeof source.persistent !== 'boolean') throw new Error(`${name}.persistent must be a boolean`)
     if (source.achievements !== undefined && typeof source.achievements !== 'boolean') throw new Error(`${name}.achievements must be a boolean`)
     const boardId = qualifiedId(source.board, `${name}.board`)
@@ -773,6 +788,12 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         return parsed
     })
     if (activeRows.length === 0) throw new Error(`${name}.activeRows must not be empty`)
+    let plantingLine: LevelDefinition['plantingLine']
+    if (source.plantingLine !== undefined) {
+        const line = exactObject(source.plantingLine, ['column'], `${name}.plantingLine`)
+        plantingLine = { column: nonNegativeInteger(line.column, `${name}.plantingLine.column`) }
+        if (plantingLine.column >= board.columns) throw new Error(`${name}.plantingLine.column is outside the board`)
+    }
     if (new Set(activeRows).size !== activeRows.length) throw new Error(`${name}.activeRows must not contain duplicates`)
 
     const seedPackets = source.seedPackets === undefined ? undefined : qualifiedIdArray(source.seedPackets, `${name}.seedPackets`)
@@ -807,13 +828,14 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     }
     const plantPositions = (value: unknown, field: string) => array(value, field).map((item, index) => {
         const entryName = `${field}[${index}]`
-        const entry = exactObject(item, ['seedId', 'row', 'column'], entryName)
+        const entry = exactObject(item, ['seedId', 'row', 'column'], entryName, ['team'])
         const seedId = qualifiedId(entry.seedId, `${entryName}.seedId`)
         reference(seedId, definitions.seeds, `${entryName}.seedId`)
         const row = nonNegativeInteger(entry.row, `${entryName}.row`)
         const column = nonNegativeInteger(entry.column, `${entryName}.column`)
         if (!activeRows.includes(row) || column >= board.columns) throw new Error(`${entryName} is outside the lawn`)
-        return { seedId, row, column }
+        if (entry.team !== undefined && entry.team !== 'plants' && entry.team !== 'zombies') throw new Error(`${entryName}.team must be plants or zombies`)
+        return { seedId, row, column, ...(entry.team === 'zombies' ? { team: 'zombies' as const } : {}) }
     })
     const initialPlants = source.initialPlants === undefined ? undefined : plantPositions(source.initialPlants, `${name}.initialPlants`)
     if (seedPackets && conveyor) throw new Error(`${name} cannot combine a conveyor and fixed seed packets`)
@@ -906,6 +928,7 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
         startingSun: nonNegativeInteger(source.startingSun, `${name}.startingSun`),
         ...(seedPackets === undefined ? {} : { seedPackets }),
         ...(initialPlants === undefined ? {} : { initialPlants }),
+        ...(plantingLine === undefined ? {} : { plantingLine }),
         ...(conveyor === undefined ? {} : { conveyor }),
         ...(source.openingRecharge === false ? { openingRecharge: false as const } : {}),
         ...(tools === undefined ? {} : { tools }),

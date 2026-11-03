@@ -12,11 +12,14 @@ import {
     PositionComponent,
     ZombieComponent,
 } from '../state/components'
-import { explode } from '../combat/explosions'
 import { WaveResource } from '../state/levelState'
 import { dropGraveLoot } from '../level/loot'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import { destroyZombie, isTargetableZombie } from '../zombies/damage'
+import { zombieFacingRect, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
+import { hostilePlants } from '../combat/targets'
+import { destroyEatenPlant, detonatePlant, isPlantInedible } from './damage'
+import { plantSkipsTick } from './chill'
 
 export function initialPlantAbility(definition: PlantDefinition, random?: DeterministicRng): PlantAbility | undefined {
     if (definition.fuse) return { state: 'fuse', ticks: definition.fuse.ticks }
@@ -38,25 +41,19 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
             if (level.result === 'lost' || level.paused) return
             const events = world.resources.get(EventQueueResource)
             for (const entity of world.query(PositionComponent, PlantComponent)) {
-                const plant = world.get(entity, PlantComponent)!
-                const ability = plant.ability
-                if (!ability) continue
+                // An earlier plant's blast or bite may have taken this one out.
+                const plant = world.get(entity, PlantComponent)
+                const ability = plant?.ability
+                if (!plant || !ability || plantSkipsTick(plant)) continue
                 const position = world.get(entity, PositionComponent)!
                 const definition = definitions.plants[plant.typeId]
                 // Plant::Update returns early while asleep, so a sleeping sun-shroom does not grow.
                 if (definition.nocturnal && !level.board.night) continue
-                const detonate = (explosion: ExplosionDefinition) => {
-                    // `kills`: what Board::KillAllZombiesInRadius returns, which Plant::DoSpecial checks for achievements.
-                    const kills = explode(world, definitions, position, explosion, commands)
-                    emitServerEvent(events, 'plantExploded', {
-                        entityId: entity, typeId: plant.typeId, row: position.row, kills,
-                        x: position.x + explosion.offset.x, y: position.y + explosion.offset.y,
-                    })
-                    commands.destroyEntity(entity)
-                }
+                const detonate = (explosion: ExplosionDefinition) => detonatePlant(world, definitions, entity, explosion, commands)
                 const next = (state: PlantAbilityState, ticks: number) => {
                     ability.state = state
                     ability.ticks = ticks
+                    if (state === 'ready') delete ability.prey
                 }
                 if (ability.ticks > 0) ability.ticks--
                 switch (ability.state) {
@@ -85,12 +82,19 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                         if (ability.ticks > 0) break
                         const chomper = definition.chomper!
                         const target = findAbilityTarget(world, definitions, position, plant, chomper)
-                        // A pole vaulter still holding the pole slips away, as in Plant::UpdateChomper.
-                        const ate = target !== undefined && !world.get(target, ZombieComponent)!.hasPole
-                        if (ate) destroyZombie(world, definitions, target, commands)
+                        // A pole vaulter still holding the pole slips away, as in Plant::UpdateChomper. A hostile plant
+                        // is swallowed whole, unless zombies could not hurt it either (a lit cherry bomb, a rising or
+                        // armed potato mine): it slips away.
+                        const zombie = target === undefined ? undefined : world.get(target, ZombieComponent)
+                        const prey = target === undefined || zombie ? undefined : world.get(target, PlantComponent)!
+                        const ate = target !== undefined && (zombie ? !zombie.hasPole : !isPlantInedible(prey!))
+                        if (ate && zombie) destroyZombie(world, definitions, target, commands)
+                        else if (ate) destroyEatenPlant(world, definitions, target, commands)
                         next(ate ? 'got-one' : 'missed', chomper.biteTicks - chomper.biteDelayTicks)
+                        // The client hides the eaten zombie's arm while it chews a plant.
+                        if (ate && !zombie) ability.prey = 'plant'
                         emitServerEvent(events, 'chomperBit', {
-                            entityId: entity, ate, ...(ate ? { zombieId: target } : {}),
+                            entityId: entity, ate, ...(ate ? zombie ? { zombieId: target } : { plantId: target } : {}),
                         })
                         break
                     }
@@ -134,7 +138,10 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
     }
 }
 
-/** Plant::FindTargetZombie for the chomper and the potato mine: the leftmost zombie in reach. */
+/**
+ * Plant::FindTargetZombie for the chomper and the potato mine: the nearest hostile zombie or plant in reach, the
+ * leftmost for a plant facing right. A plant facing left mirrors the attack rect, the zombie's inset on its far side.
+ */
 function findAbilityTarget(
     world: World,
     definitions: GameplayDefinitions,
@@ -142,29 +149,35 @@ function findAbilityTarget(
     plant: Plant,
     { attack, targeting }: { attack: { x: number, width: number }, targeting: PlantTargeting },
 ): number | undefined {
+    const team = plantTeam(plant), forward = teamDirection(team) > 0
     let target: number | undefined
     let targetX = Infinity
+    const bounds = getBoardBounds(world)
+    const consider = (entity: number, rect: { x: number, width: number }, inset: number, reach: number, ahead = 0) => {
+        if (rect.x > bounds.right) return
+        const reachRect = plantFacingRect({ x: attack.x + inset, width: attack.width - inset }, team)
+        const x = plantPosition.x + reachRect.x + (forward ? ahead : -ahead)
+        if (rectOverlap({ x, width: reachRect.width }, rect) < -reach) return
+        const order = forward ? rect.x : -(rect.x + rect.width)
+        if (order < targetX || (order === targetX && entity < (target ?? Infinity))) {
+            target = entity
+            targetX = order
+        }
+    }
+    const biting = plant.ability?.state === 'biting'
     for (const entity of world.query(PositionComponent, ZombieComponent)) {
         const position = world.get(entity, PositionComponent)!
         const zombie = world.get(entity, ZombieComponent)!
-        if (position.row !== plantPosition.row || !zombie.hasHead || !isTargetableZombie(zombie)) continue
+        if (position.row !== plantPosition.row || !zombie.hasHead || !isTargetableZombie(zombie, team)) continue
         if (targeting.excludeHeldPole && zombie.hasPole) continue
         const definition = definitions.zombies[zombie.typeId]
-        const left = position.x + definition.body.x
-        if (left > getBoardBounds(world).right) continue
+        const body = zombieFacingRect(definition.body, zombieTeam(zombie))
         const inset = targeting.insetKey ? definition.targetingInsets?.[targeting.insetKey] ?? 0 : 0
-        const reach = zombie.state === 'eating' || plant.ability?.state === 'biting'
-            ? targeting.eatingExtraRange
-            : 0
-        const overlap = rectOverlap(
-            { x: plantPosition.x + attack.x + inset, width: attack.width - inset },
-            { x: left, width: definition.body.width },
-        )
-        if (overlap < -reach) continue
-        if (left < targetX || (left === targetX && entity < (target ?? Infinity))) {
-            target = entity
-            targetX = left
-        }
+        consider(entity, { x: position.x + body.x, width: body.width }, inset,
+            zombie.state === 'eating' || biting ? targeting.eatingExtraRange : 0)
+    }
+    for (const { entity, rect } of hostilePlants(world, definitions, team, plantPosition.row)) {
+        consider(entity, rect, 0, biting ? targeting.eatingExtraRange : 0, targeting.plantReach)
     }
     return target
 }

@@ -1,8 +1,15 @@
+import type { World } from '@/ecs/index'
+import type { GameplayDefinitions, PlantDefinition } from '@/shared/content/gameplay'
 import type { PlantBehavior } from './behaviors'
-import { LevelStateResource, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import {
+    type EntityRemover, LevelStateResource, type Plant, PlantComponent, type Position, PositionComponent, RandomResource, ZombieComponent,
+} from '../state/components'
+import type { DeterministicRng } from '../state/DeterministicRng'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { damageZombie, isTargetableZombie } from '../zombies/damage'
-import { explode } from '../combat/explosions'
+import { zombieFacingRect, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
+import { hostilePlants } from '../combat/targets'
+import { damagePlant, detonatePlant } from './damage'
 import { rectOverlap } from '../combat/collision'
 import { TutorialResource } from '../state/levelState'
 
@@ -37,41 +44,97 @@ export const bowlingBehavior: PlantBehavior<State> = {
             return Math.floor(whole / rules.groundDeltas.length) * cycle + rules.groundDeltas.slice(0, index).reduce((sum, delta) => sum + delta, 0)
                 + (frame - whole) * rules.groundDeltas[index]
         }
-        position.x += travel(next) - travel(state.frame)
+        // A nut on the zombies' side rolls left.
+        const team = plantTeam(plant), forward = teamDirection(team) > 0
+        position.x += (forward ? 1 : -1) * (travel(next) - travel(state.frame))
         state.frame = next
-        if (position.x > board.bounds.right) { commands.destroyEntity(entity); return }
+        if (forward ? position.x > board.bounds.right : position.x + definition.body.x + definition.body.width < board.bounds.left) {
+            commands.destroyEntity(entity)
+            return
+        }
         position.y += state.direction * rules.bounceSpeed
         if (Math.abs(board.origin.y + position.row * board.cell.height - position.y) > rules.bounceSpeed) return
         let direction = state.direction
         if (direction < 0 && position.row === 0) direction = 1
         else if (direction > 0 && position.row === board.rows - 1) direction = -1
+        const nutBody = plantFacingRect(definition.body, team)
+        const nut = { x: position.x + nutBody.x, width: nutBody.width }
         const target = [...world.query(ZombieComponent, PositionComponent)].find(id => {
             const zombie = world.get(id, ZombieComponent)!, point = world.get(id, PositionComponent)!
-            const body = definitions.zombies[zombie.typeId].body
-            return point.row === position.row && isTargetableZombie(zombie) &&
-                rectOverlap({ x: position.x + definition.body.x, width: definition.body.width }, { x: point.x + body.x, width: body.width }) > 0
+            const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
+            return point.row === position.row && isTargetableZombie(zombie, team) && rectOverlap(nut, { x: point.x + body.x, width: body.width }) > 0
         })
-        if (target !== undefined) {
-            if (definition.deathExplosion) {
-                const kills = explode(world, definitions, position, definition.deathExplosion, commands)
-                emitServerEvent(world.resources.get(EventQueueResource), 'plantExploded', { entityId: entity, typeId: plant.typeId, kills, x: position.x + definition.deathExplosion.offset.x, y: position.y + definition.deathExplosion.offset.y, row: position.row })
-                commands.destroyEntity(entity)
-                return
-            }
-            const zombie = world.get(target, ZombieComponent)!
-            // Plant::UpdateBowling: a helm without a shield in front takes the helm blow alone (TakeHelmDamage).
-            const helm = zombie.helmHealth > 0 && zombie.shieldHealth === 0
-            damageZombie(world, definitions, target, helm ? rules.helmDamage : rules.damage, helm ? { helmOnly: true } : {})
-            // Plant::UpdateBowling counts every impact (mLaunchCounter, for the coins and Roll Some Heads), except on a
-            // first Adventure up to level 10 (1-5).
-            const level = world.resources.get(LevelStateResource).definition
-            if (!world.resources.get(TutorialResource).firstAdventure || level.adventureIndex > 10) state.hits++
-            emitServerEvent(world.resources.get(EventQueueResource), 'bowlingImpact', {
-                entityId: target, typeId: zombie.typeId, helm, plantId: entity, plantTypeId: plant.typeId, hits: state.hits,
-            })
-            direction = position.row === board.rows - 1 || state.direction > 0 ? -1
-                : position.row === 0 || state.direction < 0 ? 1 : random.integer(0, 1) ? -1 : 1
+        // A hostile plant takes the body blow; it is no zombie impact, so `hits` does not count it.
+        const plantTarget = target === undefined
+            ? hostilePlants(world, definitions, team, position.row).find(candidate => rectOverlap(nut, candidate.rect) > 0)?.entity : undefined
+        if (target === undefined && plantTarget === undefined) {
+            if (direction) { position.row += direction; state.direction = direction }
+            return
         }
-        if (direction) { position.row += direction; state.direction = direction }
+        const self: Nut = { entity, plant, definition, position, state }
+        if (plantTarget !== undefined) {
+            // Two hostile nuts meeting strike each other at once, both blows landing before either moves on, so the
+            // outcome does not depend on which of them the run reaches first: each takes the other's blow and
+            // bounces, and an explode-o-nut goes off.
+            // An explode-o-nut goes off first, so a plain nut's blow never lands on a nut already blowing up.
+            const other = rollingNut(world, definitions, plantTarget, definition)
+            const blows: [Nut, number][] = other ? [[self, plantTarget], [other, entity]] : [[self, plantTarget]]
+            blows.sort(([left], [right]) => Number(!!right.definition.deathExplosion) - Number(!!left.definition.deathExplosion))
+            for (const [nut, struck] of blows) strike(world, definitions, commands, nut, struck)
+            for (const [nut] of blows) if (world.hasEntity(nut.entity)) bounce(nut, board.rows, random)
+            return
+        }
+        if (definition.deathExplosion) {
+            detonatePlant(world, definitions, entity, definition.deathExplosion, commands)
+            return
+        }
+        const struck = target!
+        const zombie = world.get(struck, ZombieComponent)!
+        // Plant::UpdateBowling: a helm without a shield in front takes the helm blow alone (TakeHelmDamage).
+        const helm = zombie.helmHealth > 0 && zombie.shieldHealth === 0
+        damageZombie(world, definitions, struck, helm ? rules.helmDamage : rules.damage, helm ? { helmOnly: true } : {})
+        // Plant::UpdateBowling counts every impact (mLaunchCounter, for the coins and Roll Some Heads), except on a
+        // first Adventure up to level 10 (1-5).
+        const level = world.resources.get(LevelStateResource).definition
+        if (!world.resources.get(TutorialResource).firstAdventure || level.adventureIndex > 10) state.hits++
+        emitServerEvent(world.resources.get(EventQueueResource), 'bowlingImpact', {
+            entityId: struck, typeId: zombie.typeId, helm, plantId: entity, plantTypeId: plant.typeId, hits: state.hits,
+        })
+        bounce(self, board.rows, random)
     },
+}
+
+interface Nut { entity: number; plant: Plant; definition: PlantDefinition; position: Position; state: State }
+
+/** The plant at `entity` when it rolls by the same behavior as `like` (another nut, a Mod's included). */
+function rollingNut(world: World, definitions: GameplayDefinitions, entity: number, like: PlantDefinition): Nut | undefined {
+    const plant = world.get(entity, PlantComponent), position = world.get(entity, PositionComponent)
+    if (!plant?.behaviorState || !position) return undefined
+    const definition = definitions.plants[plant.typeId]
+    const kind = (value: PlantDefinition) => (value.behavior as { kind?: unknown } | undefined)?.kind
+    return kind(definition) === kind(like) ? { entity, plant, definition, position, state: plant.behaviorState as unknown as State } : undefined
+}
+
+/** A nut's blow on a hostile plant: an explode-o-nut's blast, which takes the nut too, otherwise its damage. */
+function strike(world: World, definitions: GameplayDefinitions, remover: EntityRemover, nut: Nut, target: number): void {
+    if (nut.definition.deathExplosion) {
+        detonatePlant(world, definitions, nut.entity, nut.definition.deathExplosion, remover)
+        return
+    }
+    // A nut gone by the other's blast takes no blow.
+    const typeId = world.get(target, PlantComponent)?.typeId
+    if (typeId === undefined) return
+    damagePlant(world, definitions, target, (nut.definition.behavior as unknown as Rules).damage, remover)
+    emitServerEvent(world.resources.get(EventQueueResource), 'bowlingImpact', {
+        entityId: target, typeId, target: 'plant', helm: false, plantId: nut.entity, plantTypeId: nut.plant.typeId, hits: nut.state.hits,
+    })
+}
+
+/** Plant::UpdateBowling: after an impact the nut turns back the way it slanted (and away from an edge row), or, rolling straight, picks a way. */
+function bounce(nut: Nut, rows: number, random: DeterministicRng): void {
+    const { position, state } = nut
+    const direction = position.row === rows - 1 || state.direction > 0 ? -1
+        : position.row === 0 || state.direction < 0 ? 1 : random.integer(0, 1) ? -1 : 1
+    position.row += direction
+    state.direction = direction
 }

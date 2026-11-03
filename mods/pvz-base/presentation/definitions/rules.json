@@ -7,9 +7,5 @@
     "graveRise": {"particle": "pvz:whackazombierise", "sounds": [{"audio": "pvz:dirt_rise", "foley": true}]},
     "itemPadding": {"size": 15, "height": 30},
     "seedBankSlide": 2
-  },
-  "pvz:bowling": {
-    "stripe": {"sprite": "pvz:wallnut_bowlingstripe", "offset": [-12, -3], "dialogs": [2411, 2412, 2413, 2414, 2415]},
-    "plantedSounds": [{"audio": "pvz:bowling", "foley": false}]
   }
 }

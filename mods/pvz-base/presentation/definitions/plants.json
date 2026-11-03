@@ -3,6 +3,7 @@
     "layer": "projectile",
     "visual": {"seedType": "wallnut", "preview": 3, "nameKey": "WALL_NUT"},
     "view": "bowling",
+    "plantedSounds": [{"audio": "pvz:bowling", "foley": false}],
     "animations": {
       "body": {"reanimId": "pvz:wallnut_roll", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "blinkTwitch": {"reanimId": "pvz:wallnut_blink_twitch", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face"},
@@ -14,6 +15,7 @@
   "pvz:bowling-explodenut": {
     "layer": "projectile",
     "visual": {"seedType": "explodenut", "preview": 3, "tint": [255, 64, 64], "nameKey": "EXPLODE_O_NUT"},
+    "plantedSounds": [{"audio": "pvz:bowling", "foley": false}],
     "view": "bowling", "animationsFrom": "pvz:bowling-wallnut",
     "shadow": {"x": -3, "y": -51}, "scale": 1,
     "explosionSounds": [{"audio": "pvz:cherrybomb", "foley": true}, {"audio": "pvz:bowlingimpact2", "foley": false}],
@@ -118,6 +120,7 @@
   "pvz:chomper": {
     "visual": {"seedType": "chomper", "preview": 6},
     "view": "chomper",
+    "parts": {"prey": ["Zombie_outerarm_hand", "Zombie_outerarm_lower"]},
     "animations": {
       "idle": {"reanimId": "pvz:chomper", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "bite": {"reanimId": "pvz:chomper_bite", "rateScale": 1, "fps": 12, "x": 0, "y": 0},

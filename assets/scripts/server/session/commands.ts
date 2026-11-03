@@ -140,7 +140,7 @@ function processNextCommand(session: Session): CommandRejectionCode | undefined 
                 levels: Object.keys(levels.levels).map(id => id.replace(/^pvz:adventure-/, '')),
             },
         } : 'name' in parsed ? executeDebugGameCommand(session.world, definitions, session.gameplayTick, parsed,
-            (seedId, row, column) => planting.createPlant(session, seedId, row, column)) : parsed
+            (seedId, row, column, team) => planting.createPlant(session, seedId, row, column, team)) : parsed
         session.commandResults.push({ sequence: queued.sequence, debug })
         return
     }

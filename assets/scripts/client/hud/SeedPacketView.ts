@@ -33,6 +33,7 @@ export class SeedPacketView {
     selectedHighlight?: Node
     cooldownClip?: Node
     seedType?: SeedPacketSeedType
+    private mirrored = false
     private readonly _baseSpriteColors = new WeakMap<Sprite, Color>()
 
     constructor(private args: SeedPacketViewArgs) {
@@ -52,6 +53,16 @@ export class SeedPacketView {
         SeedPacketRenderer.drawSeedPacket({ ...args, node: this.node })
         this.cooldownClip = this._createCooldownClip(args)
         this.selectedHighlight = this._createSelectedHighlight(args)
+        if (this.mirrored) this.setMirrored(true)
+    }
+
+    /**
+     * A packet of the zombies' side draws its plant facing left, in the packet and in the dark copy the cooldown and
+     * the selection show over it; redrawing the seed keeps it.
+     */
+    setMirrored(mirrored: boolean): void {
+        this.mirrored = mirrored
+        for (const plant of this.node.getComponentsInChildren(PlantPreview)) plant.setMirrored(mirrored)
     }
 
     sync(options: {

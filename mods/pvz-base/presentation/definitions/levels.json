@@ -3,6 +3,7 @@
     "adviceDuringIntro": true, "adviceStyle": "hint-stay",
     "music": {"choosing": "title_theme", "gameplay": "minigame"},
     "intro": {"previewCapacity": 10, "sod": "pvz:background1", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true, "stationary": true},
+    "plantingLine": {"sprite": "pvz:wallnut_bowlingstripe", "offset": [-12, -3], "dialogs": [2411, 2412, 2413, 2414, 2415]},
     "seedGuideSteps": [], "lawnGuideSteps": [],
     "advice": {"shovel-pickup": "ADVICE_CLICK_SHOVEL", "shovel-dig": "ADVICE_CLICK_PLANT", "shovel-keep-digging": "ADVICE_KEEP_DIGGING"}
   },
@@ -12,6 +13,10 @@
   },
   "pvz:seed-chooser-test": {
     "intro": {"previewCapacity": 10, "sod": "pvz:background1", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true},
+    "seedGuideSteps": [], "lawnGuideSteps": [], "advice": {}
+  },
+  "pvz:teams-demo": {
+    "intro": {"previewCapacity": 10, "sod": "pvz:background1", "x": 12, "y": 0, "width": 773, "sourceX": 232, "rolls": [], "readySetPlant": true, "stationary": true},
     "seedGuideSteps": [], "lawnGuideSteps": [], "advice": {}
   },
   "pvz:adventure-1-1": {

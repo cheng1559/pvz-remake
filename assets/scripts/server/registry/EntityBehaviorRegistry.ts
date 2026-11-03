@@ -94,7 +94,9 @@ export class EntityBehaviorRegistry<Key extends string, Data extends BehaviorEnt
                 const level = world.resources.get(LevelStateResource)
                 if (this.entries.size === 0 || level.phase !== 'gameplay' || level.paused || level.result === 'lost') return
                 for (const entity of world.query(this.component, PositionComponent)) {
-                    const data = world.get(entity, this.component)!
+                    // An earlier entity's blow may have taken this one out during the run.
+                    const data = world.get(entity, this.component)
+                    if (!data) continue
                     const behavior = this.entries.get(data.typeId)?.behavior
                     if (!behavior || !this.active(data) || level.result === 'won' && !behavior.tickAfterWin) continue
                     behavior.tick({

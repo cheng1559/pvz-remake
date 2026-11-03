@@ -13,6 +13,7 @@ import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { World } from '@/ecs/index'
 import { dropZombieFlag } from './flag'
 import { dropZombieLoot } from '../level/loot'
+import { isEnemyZombie, isHostile, type Team, zombieTeam } from '@/shared/content/teams'
 
 const ZOMBIE_DEATH_RATE_MIN = 24
 
@@ -31,6 +32,8 @@ export interface ZombieHit {
     hitsShieldAndBody?: boolean
     /** Only the helm takes it, as Zombie::TakeHelmDamage does for the Whack-a-Zombie mallet and a bowled nut. */
     helmOnly?: boolean
+    /** A zombie's bite on another passes its shield (DAMAGE_BYPASSES_SHIELD, Zombie::EatZombie). */
+    bypassShield?: boolean
 }
 
 /** Shield first, then helm, then body, following Zombie::TakeDamage. */
@@ -45,7 +48,7 @@ export function damageZombie(
     const zombie = world.get(entity, ZombieComponent)
     if (!zombie || isDeadOrDying(zombie) || damage <= 0) return
     const definition = definitions.zombies[zombie.typeId]
-    const shield = !hit.helmOnly && zombie.shieldHealth > 0
+    const shield = !hit.helmOnly && !hit.bypassShield && zombie.shieldHealth > 0
     const events = world.resources.get(EventQueueResource)
     // The client flashes the zombie. While worn, the hit timer belongs to the shield; an exact break leaves no body hit
     // to flash and stops the flash (`flash: false`). A hit that also reaches the body (`through`) flashes both.
@@ -54,7 +57,9 @@ export function damageZombie(
         ...(shield && damage === zombie.shieldHealth && !hit.hitsShieldAndBody ? { flash: false } : {}),
         ...(shield && hit.hitsShieldAndBody ? { through: true } : {}),
     })
-    // A shield absorbs hits without chill, even when they exactly break it.
+    // A shield absorbs hits without chill, even when they exactly break it. Zombie::CanBeChilled leaves out
+    // mind-controlled zombies only because the original's chills are all the plants'; a chill reaches whatever a
+    // hostile attack hits, so an enemy snow pea chills a zombie on the plants' side.
     if (hit.chillTicks !== undefined && (!shield || damage > zombie.shieldHealth)) chillZombie(world, entity, zombie, hit.chillTicks)
     let remaining = damage
     if (shield) {
@@ -158,12 +163,12 @@ function canDoSuperLongDeath(world: World): boolean {
     return !world.resources.get(TutorialResource).firstAdventure || world.resources.get(LevelStateResource).definition.adventureIndex > 5
 }
 
-/** Board::CountZombiesOnScreen: zombies with their heads that are not dying, other than `except`. */
+/** Board::CountZombiesOnScreen: the zombies' side with their heads, not dying, other than `except`. */
 function countZombiesOnScreen(world: World, except: number): number {
     let count = 0
     for (const entity of world.query(ZombieComponent)) {
         const zombie = world.get(entity, ZombieComponent)!
-        if (entity !== except && zombie.hasHead && zombie.state !== 'dying' && zombie.state !== 'burned' && zombie.state !== 'mowered') count++
+        if (entity !== except && zombie.hasHead && isEnemyZombie(zombie) && zombie.state !== 'dying' && zombie.state !== 'burned' && zombie.state !== 'mowered') count++
     }
     return count
 }
@@ -204,7 +209,10 @@ function isDeadOrDying(zombie: Zombie): boolean {
     return zombie.state === 'dying' || zombie.state === 'burned' || zombie.state === 'mowered'
 }
 
-/** Standing zombies that ground weapons can hit; vaulting zombies are in the air. */
-export function isTargetableZombie(zombie: Zombie): boolean {
-    return zombie.health > 0 && !zombie.riseTicks && (zombie.state === 'walking' || zombie.state === 'eating')
+/**
+ * Standing zombies that ground weapons can hit; vaulting zombies are in the air. Only an `attacker` on the other side
+ * hits it (Zombie::EffectedByDamage); plants' weapons by default.
+ */
+export function isTargetableZombie(zombie: Zombie, attacker: Team = 'plants'): boolean {
+    return zombie.health > 0 && !zombie.riseTicks && (zombie.state === 'walking' || zombie.state === 'eating') && isHostile(zombieTeam(zombie), attacker)
 }

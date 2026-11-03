@@ -397,6 +397,10 @@ export class LevelHudPresenter {
             this.cursorPreview.setPosition(pointer.x - 35, -pointer.y + 60)
             this.cursorPlant.setPlant(plantId)
             this.gridPlant.setPlant(plantId)
+            // A packet of the zombies' side plants facing left.
+            const mirrored = snapshot.cursor.mode === 'seed' && snapshot.cursor.team === 'zombies'
+            this.cursorPlant.setMirrored(mirrored)
+            this.gridPlant.setMirrored(mirrored)
             const occupant = snapshot.plants.find(plant => this.content.definitions.plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column)
             const grave = !!graveAt(snapshot.graves, row, column)
             // Graves block planting, except for a grave buster, which needs one.

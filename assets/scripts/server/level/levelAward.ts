@@ -4,6 +4,7 @@ import { type EntityRemover, LevelStateResource, PositionComponent, RandomResour
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { ItemComponent, WaveResource } from '../state/levelState'
 import { levelRule } from '../rules/registry'
+import { isEnemyZombie } from '@/shared/content/teams'
 
 /** Zombie::TrySpawnLevelAward: capture the defeated zombie before its entity is removed. */
 export function tryDropLevelAward(world: World, definitions: GameplayDefinitions, remover: EntityRemover, defeated?: number): void {
@@ -14,9 +15,10 @@ export function tryDropLevelAward(world: World, definitions: GameplayDefinitions
     if (levelRule(world)?.holdsAward?.(world)) return
     if ([...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === level.definition.award.id)) return
     const zombies = [...world.query(PositionComponent, ZombieComponent)]
+    // Board::AreEnemyZombiesOnScreen: zombies on the plants' side do not hold the award back.
     if (zombies.some(entity => {
         const zombie = world.get(entity, ZombieComponent)!
-        return entity !== defeated && zombie.hasHead && zombie.state !== 'dying' && zombie.state !== 'mowered' && zombie.state !== 'burned'
+        return entity !== defeated && zombie.hasHead && isEnemyZombie(zombie) && zombie.state !== 'dying' && zombie.state !== 'mowered' && zombie.state !== 'burned'
     })) return
     const source = defeated ?? zombies.sort((left, right) =>
         world.get(right, PositionComponent)!.x - world.get(left, PositionComponent)!.x)[0]

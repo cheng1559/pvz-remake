@@ -26,6 +26,7 @@ export const snapshot = {
             const selected = seedBank.selection.mode === 'seed' && seedBank.selection.slot === slot
             return {
                 seedId: packet.seedId,
+                ...(packet.team === 'zombies' ? { team: 'zombies' as const } : {}),
                 ready: cooldownRemaining === 0 && !selected,
                 selected,
                 cooldownRemaining,
@@ -67,6 +68,7 @@ export const snapshot = {
                 helmHealth: zombie.helmHealth,
                 shieldHealth: zombie.shieldHealth,
                 chilled: zombie.chilledTicks > 0,
+                ...(zombie.team === 'plants' ? { team: 'plants' as const } : {}),
                 hasPole: zombie.hasPole,
                 ...(zombie.riseTicks ? { riseTicks: zombie.riseTicks } : {}),
                 ...(definitions.zombies[zombie.typeId].enrage && zombie.shieldHealth === 0 ? { enraged: true } : {}),
@@ -77,7 +79,7 @@ export const snapshot = {
         const projectiles = [...world.query(PositionComponent, ProjectileComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
             const projectile = world.get(entity, ProjectileComponent)!
-            return { entityId: entity, typeId: projectile.typeId, ...position }
+            return { entityId: entity, typeId: projectile.typeId, ...position, ...(projectile.team === 'zombies' ? { team: 'zombies' as const } : {}) }
         })
         const lawnMowers = [...world.query(PositionComponent, LawnMowerComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
@@ -122,7 +124,9 @@ export const snapshot = {
                 ...(level.phase === 'intro' ? { previewZombies: waves.plan.flatMap(wave => wave.zombies).reduce<Record<string, number>>((counts, id) => { counts[id] = (counts[id] ?? 0) + 1; return counts }, {}) } : {}),
             },
             cursor: seedBank.selection.mode === 'tool' ? { ...seedBank.selection } : selectedSeedId(seedBank)
-                ? { mode: 'seed', seedId: selectedSeedId(seedBank)! } : { mode: 'none' },
+                ? { mode: 'seed', seedId: selectedSeedId(seedBank)!,
+                    ...(seedBank.selection.mode === 'seed' && seedBank.packets[seedBank.selection.slot]?.team === 'zombies' ? { team: 'zombies' as const } : {}) }
+                : { mode: 'none' },
             seedPackets,
             // A game that opened the chooser keeps `choosing`, also once confirmed.
             ...(seedBank.choosing === undefined ? {} : { seedChooser: seedChooserSnapshot(world, definitions) }),

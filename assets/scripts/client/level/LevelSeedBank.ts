@@ -150,6 +150,7 @@ export class LevelSeedBank {
                     visual.nameKey ?? String(visual.seedType).toUpperCase(),
                 )
             }
+            entry.view.setMirrored(packet.team === 'zombies')
             if (packet.x !== undefined) {
                 const layout = this.options.content.presentation.conveyor
                 entry.view.node.setPosition(layout.packetX + packet.x, -layout.packetY)

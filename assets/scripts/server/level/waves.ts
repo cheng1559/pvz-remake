@@ -7,6 +7,7 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
 import { tryDropLevelAward } from './levelAward'
 import { updateGraveSpawns } from './graves'
 import { levelRule } from '../rules/registry'
+import { isEnemyZombie } from '@/shared/content/teams'
 
 const NEXT_WAVE_DELAY_TICKS = 2500
 const NEXT_WAVE_DELAY_RANGE_TICKS = 600
@@ -42,7 +43,9 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
             const nextIsFlag = waves.plan[waves.index].flagWave === true
             const waveHealth = (waves.zombieIds ?? []).reduce((total, entity) => {
                 const zombie = world.get(entity, ZombieComponent)
-                return zombie?.state === 'walking' || zombie?.state === 'eating' || zombie?.state === 'vaulting' ? addWaveHealth(total, zombie) : total
+                // Board::TotalZombiesHealthInWave leaves out mind-controlled zombies.
+                return (zombie?.state === 'walking' || zombie?.state === 'eating' || zombie?.state === 'vaulting') && isEnemyZombie(zombie)
+                    ? addWaveHealth(total, zombie) : total
             }, 0)
             // Board::UpdateZombieSpawning returns during the huge wave countdown, so it cannot be shortened.
             if (!waves.hugeWaveAnnounced && waves.accelerateAtTick !== undefined && tick >= waves.accelerateAtTick &&

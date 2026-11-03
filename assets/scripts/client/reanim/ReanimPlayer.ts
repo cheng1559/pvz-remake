@@ -45,6 +45,10 @@ interface TrackRenderOverride {
 }
 
 const DEG_TO_RAD = Math.PI / 180
+/** Zombie::DrawReanim's chilled color, (75, 75, 255). */
+const CHILL_COLOR = 75
+/** A chilled zombie's animation pace (Zombie::UpdateAnimSpeed), which a chilled plant's animations follow. */
+const CHILLED_TIME_SCALE = 0.5
 
 /** A frame's texture with its untrimmed, top-left anchored rectangle and UVs, read once. */
 interface FrameGeometry {
@@ -176,6 +180,8 @@ export class ReanimPlayer extends Component {
     private extraAdditive = false
     private extraAdditiveColor = Color.BLACK.clone()
     private colorOverride = Color.WHITE.clone()
+    /** Chilled: drawn blue over the color override and hit flash, and played at half speed (see setChilled). */
+    private chilled = false
     private poseDirty = false
     private batches: KernelBatch[] = []
     /** Child nodes drawn right after a track; see drawAfterTrack. */
@@ -417,6 +423,30 @@ export class ReanimPlayer extends Component {
         for (const player of this.attachedPlayers()) player.setExtraAdditiveDraw(enabled, color)
     }
 
+    /**
+     * Zombie::DrawReanim's chill, also for a plant chilled by a hostile snow pea: the color is multiplied by
+     * (75, 75, 255) and (75, 75, 255) is added over the hit flash; time runs at half speed. It stays apart from the
+     * color override and hit flash so that the views keep setting those.
+     */
+    setChilled(chilled: boolean): void {
+        if (this.chilled === chilled) return
+        this.chilled = chilled
+        this.applyPose()
+    }
+
+    private get drawColor(): Color {
+        const color = this.colorOverride
+        return this.chilled ? new Color(color.r * CHILL_COLOR / 255, color.g * CHILL_COLOR / 255, color.b, color.a) : color
+    }
+
+    private get drawExtraAdditive(): boolean { return this.extraAdditive || this.chilled }
+
+    private get drawExtraAdditiveColor(): Color {
+        if (!this.chilled) return this.extraAdditiveColor
+        const extra = this.extraAdditive ? this.extraAdditiveColor : Color.BLACK
+        return new Color(Math.min(255, extra.r + CHILL_COLOR), Math.min(255, extra.g + CHILL_COLOR), 255, 255)
+    }
+
     /** Also applies to players attached to this one's tracks, like the original color propagation. */
     setColorOverride(color: Color = Color.WHITE): void {
         if (!sameColor(this.colorOverride, color)) {
@@ -466,7 +496,7 @@ export class ReanimPlayer extends Component {
             throw new Error('reanim deltaSeconds must be finite and non-negative')
         }
         const data = this.requireData()
-        const next = this.timeSeconds + deltaSeconds * this.rate
+        const next = this.timeSeconds + deltaSeconds * this.rate * (this.chilled ? CHILLED_TIME_SCALE : 1)
         if (this.blendDuration > 0) this.blendElapsed += deltaSeconds
         if (this.loop) {
             this.timeSeconds = next % data.durationSeconds
@@ -602,7 +632,7 @@ export class ReanimPlayer extends Component {
         const single = trackId === undefined ? undefined : this.views.get(trackId)
         if (single?.node) { this.writeTrackNode(trackId!, single); return }
         const drawing = this.prepareDrawing()
-        const state = drawing.state, color = this.colorOverride, extra = this.extraAdditiveColor
+        const state = drawing.state, color = this.drawColor, extra = this.drawExtraAdditiveColor
         let matrix = { a: 1, b: 0, c: 0, d: 1, tx: 0, ty: 0 }, shown = this.visible
         if (shown && this.attachment) {
             const { parent, trackId: parentTrackId, basePose } = this.attachment
@@ -613,7 +643,7 @@ export class ReanimPlayer extends Component {
         }
         state[Header.TIME] = this.timeSeconds
         state[Header.RED] = color.r; state[Header.GREEN] = color.g; state[Header.BLUE] = color.b; state[Header.ALPHA] = color.a
-        state[Header.EXTRA] = this.extraAdditive ? 1 : 0
+        state[Header.EXTRA] = this.drawExtraAdditive ? 1 : 0
         state[Header.EXTRA_RED] = extra.r; state[Header.EXTRA_GREEN] = extra.g; state[Header.EXTRA_BLUE] = extra.b; state[Header.EXTRA_ALPHA] = extra.a
         state[Header.TINTED] = this.trackColors.size > 0 || color.r !== 255 || color.g !== 255 || color.b !== 255 ? 1 : 0
         state[Header.BLENDING] = this.blendDuration > 0 ? 1 : 0
@@ -735,9 +765,9 @@ export class ReanimPlayer extends Component {
         }
 
         const override = view.renderOverride
-        const color = override?.color ?? this.colorOverride
-        const extraAdditive = override?.extraAdditive ?? this.extraAdditive
-        const extraColor = override?.extraAdditiveColor ?? this.extraAdditiveColor
+        const color = override?.color ?? this.drawColor
+        const extraAdditive = override?.extraAdditive ?? this.drawExtraAdditive
+        const extraColor = override?.extraAdditiveColor ?? this.drawExtraAdditiveColor
         node.setPosition(pose.x + (override?.offsetX ?? 0), -pose.y, 0)
         node.angle = -pose.skewX
         const skewDifference = pose.skewX - pose.skewY

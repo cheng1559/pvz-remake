@@ -1,7 +1,7 @@
 import type { BoardDefinition, LevelDefinition } from '@/shared/content/gameplay'
 import type { DeterministicRng } from './DeterministicRng'
 import { defineComponent, defineResource } from '@/ecs/index'
-import type { EntityBehaviorState } from '@/shared/protocol'
+import type { EntityBehaviorState, Team } from '@/shared/protocol'
 
 export interface Position {
     x: number
@@ -25,6 +25,10 @@ export interface Plant extends EntityBehaviorState {
     recentlyEatenCounter: number
     /** Fuse, mine, chomper, sun-shroom growth or grave buster progress; `ticks` counts down to the next state. */
     ability?: PlantAbility
+    /** Its side when not the plants' (see teams.ts). */
+    team?: Team
+    /** Ticks left slowed by a hostile snow pea (see plants/chill.ts); omitted when not chilled. */
+    chilledTicks?: number
 }
 
 export type PlantAbilityState =
@@ -37,6 +41,8 @@ export type PlantAbilityState =
 export interface PlantAbility {
     state: PlantAbilityState
     ticks: number
+    /** A chomper chewing a plant rather than a zombie, until it is ready again. */
+    prey?: 'plant'
 }
 
 export interface PlantAttack {
@@ -79,10 +85,14 @@ export interface Zombie extends EntityBehaviorState {
     /** Newspaper gasp and grave emergence progress, persisted with the entity. */
     enrageTicks?: number
     riseTicks?: number
+    /** Its side when not the zombies': `plants` once mind-controlled (see teams.ts). */
+    team?: Team
 }
 
 export interface Projectile {
     typeId: string
+    /** The side that fired it, when not the plants'. */
+    team?: Team
     sourcePlantId?: number
     /** Updates left before a limited-lifetime projectile disappears. */
     ticksLeft?: number
@@ -96,7 +106,8 @@ export interface SeedBankState {
     selection: SeedSelection
     conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; lastSeedId?: string; packets: Array<{ id: number; seedId: string; x: number }> }
     choosing?: boolean
-    packets: Array<{ seedId: string, readyAtTick: number, cooldownTotal?: number }>
+    /** `team`: a packet of the zombies' side plants on that side (from `/seed`); the plants' by default. */
+    packets: Array<{ seedId: string, readyAtTick: number, cooldownTotal?: number, team?: Team }>
     /** The seeds the player owns, from the start packet; absent, every catalog seed (see availableSeeds). */
     owned?: string[]
 }

@@ -38,6 +38,7 @@ import { LevelSeedChooser } from './LevelSeedChooser'
 import { LevelBoardHud, ownedTools } from './LevelBoardHud'
 import { LevelGraves } from './LevelGraves'
 import { createLevelRuleView, levelRulePresentation, type LevelRuleView } from './rules'
+import { PlantingLineView } from './PlantingLineView'
 import { uiAreaEdge } from '@/client/view/ClientViewport'
 
 const WIDTH = 800
@@ -59,8 +60,10 @@ export interface LevelPlayer { name: string; upgradeCost: number; nextUpgradeCos
 
 export class LevelView {
     private graves?: LevelGraves
-    /** The level rule's own view (the Whack-a-Zombie mallet, the bowling line); input passes it unclaimed clicks. */
+    /** The level rule's own view (the Whack-a-Zombie mallet); input passes it unclaimed clicks. */
     rule?: LevelRuleView
+    /** The level's red line, when it has one. */
+    plantingLine?: PlantingLineView
     /** Coin::MouseHitTest: the level rule widens every item's click area. */
     itemPadding?: { readonly size: number; readonly height: number }
     private boardHud?: LevelBoardHud
@@ -362,7 +365,7 @@ export class LevelView {
             id => entityRenderer.node(id), audio, ui,
         )
         const hudPresenter = LevelHudPresenter.create({
-            ui, content, level, canPlantAt: (snapshot, row, column) => view.rule?.canPlantAt?.(snapshot, row, column) ?? true, seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
+            ui, content, level, canPlantAt: (snapshot, row, column) => (view.plantingLine?.canPlantAt(column) ?? true) && (view.rule?.canPlantAt?.(snapshot, row, column) ?? true), seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
             loadPacketSprite, packetCostFont: pico129,
             adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: bankRight, adviceFont: houseOfTerror28,
             tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
@@ -395,6 +398,7 @@ export class LevelView {
             if (level.conveyor) view.hideConveyorBank = () => { bank.active = false }
         }
         view.itemPadding = rulePresentation?.itemPadding
+        view.plantingLine = await PlantingLineView.create({ content, ui, ground: slots.sodClip, level, look: presentation.plantingLine, initial })
         if (level.rules) {
             view.rule = await createLevelRuleView({ kind: level.rules.kind, config: rulePresentation ?? {}, content, ui, initial, audio,
                 cursorLayer, ground: slots.sodClip, bank, bankHeight })
@@ -582,6 +586,7 @@ export class LevelView {
         for (const item of snapshot.items) this.end.syncAward(item, snapshot.levelId)
         this.hud.sync(snapshot, events, this.introComplete, this.menuVisible)
         this.rule?.sync?.(snapshot, events, this.introComplete)
+        this.plantingLine?.sync(snapshot)
         for (const event of events) this.audio.play(event)
         this.syncHitboxes(snapshot)
         if (snapshot.result === 'lost') {

@@ -185,7 +185,8 @@ export interface WorldSnapshot {
 export type CursorSnapshot =
     | { mode: 'none' }
     | { mode: 'tool', toolId: string }
-    | { mode: 'seed', seedId: string }
+    /** `team`: the held packet plants on the zombies' side, facing left. */
+    | { mode: 'seed', seedId: string, team?: 'zombies' }
 
 export interface SeedAvailability {
     reason?: 'seed-not-available' | 'seed-not-ready' | 'not-enough-sun'
@@ -194,6 +195,8 @@ export interface SeedAvailability {
 
 export interface SeedPacketSnapshot {
     seedId: string
+    /** A packet of the zombies' side: its plant faces left. */
+    team?: 'zombies'
     ready: boolean
     selected: boolean
     cooldownRemaining: number
@@ -214,11 +217,15 @@ export interface PlantSnapshot extends EntityBehaviorState {
     /** Omitted by older snapshots; wall-nuts freeze while it is positive. */
     recentlyEatenCounter?: number
     /** Fuse, mine or chomper progress; drives the plant animation. */
-    ability?: { state: PlantAbilityState, ticks: number }
+    ability?: { state: PlantAbilityState, ticks: number, prey?: 'plant' }
     /** A nocturnal plant on a day board. */
     asleep?: true
     /** A producer's ticks until its next sun (Plant::mLaunchCounter); held while production is paused. */
     produceTicks?: number
+    /** On the zombies' side: the plant faces left. */
+    team?: Team
+    /** Ticks left slowed by a hostile snow pea: the plant draws blue and animates at half speed. */
+    chilledTicks?: number
 }
 
 export type PlantAbilityState =
@@ -231,6 +238,12 @@ export type PlantAbilityState =
 export type ZombieState = 'walking' | 'eating' | 'vaulting' | 'dying' | 'burned' | 'mowered'
 export type ZombieAnimationName =
     | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_gasp' | 'anim_death' | 'anim_death2' | 'anim_superlongdeath' | 'mowered'
+
+/**
+ * The two sides (docs/TEAMS.zh-CN.md): the player's `plants` and the `zombies`. Sides attack each other; a zombie on the
+ * plants' side (the original's mind control) walks right.
+ */
+export type Team = 'plants' | 'zombies'
 
 export interface ZombieSnapshot extends EntityBehaviorState {
     entityId: EntityId
@@ -259,6 +272,8 @@ export interface ZombieSnapshot extends EntityBehaviorState {
     hasPole?: boolean
     enraged?: boolean
     riseTicks?: number
+    /** Only on the plants' side. */
+    team?: 'plants'
 }
 
 export interface ProjectileSnapshot {
@@ -267,6 +282,8 @@ export interface ProjectileSnapshot {
     x: number
     y: number
     row: number
+    /** Fired by a plant on the zombies' side: it flies left. */
+    team?: 'zombies'
 }
 
 export interface ItemSnapshot {

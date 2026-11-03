@@ -23,7 +23,8 @@ export function zombieGait(definition: ZombieDefinition, definitions: GameplayDe
     return definitions.zombieGaits[definition.gait]
 }
 
-export function walkZombie(zombie: Zombie, position: Position, ground: readonly number[], pace: number): void {
+/** `direction`: -1 walks left (toward the house), 1 right (a mind-controlled zombie). */
+export function walkZombie(zombie: Zombie, position: Position, ground: readonly number[], pace: number, direction: -1 | 1 = -1): void {
     const span = ground.length - 1
     zombie.animationSpeed = walkAnimationSpeed(zombie.speedPerTick, ground) * pace
     const previous = sampleGround(ground, zombie.animationTime)
@@ -32,7 +33,7 @@ export function walkZombie(zombie: Zombie, position: Position, ground: readonly 
     zombie.animationTime = nextTime % span
     const next = sampleGround(ground, zombie.animationTime)
     // A local backwards step in the ground track is not an animation loop.
-    position.x -= loops * (ground[span] - ground[0]) + next - previous
+    position.x += direction * (loops * (ground[span] - ground[0]) + next - previous)
 }
 
 export function walkAnimationSpeed(speed: number, ground: readonly number[]): number {

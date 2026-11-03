@@ -2,6 +2,7 @@ import { randomAnimationRate } from '@/client/content/ClientAnimationRegistry'
 import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol'
 import { AnimatedPlantView } from './AnimatedPlantView'
 import type { PlantParticle, PlantViewSnapshot } from './PlantView'
+import { plantFacingX, plantTeam } from '@/shared/content/teams'
 import { plantDefinition } from './definitions'
 
 interface FireParticle { id: string; x: number; y: number; delayTicks: number }
@@ -42,7 +43,8 @@ export class PuffShroomView extends AnimatedPlantView {
         if (cue && this.shotTick !== undefined) {
             this.shotTick ??= world.gameplayTick
             if (world.gameplayTick - this.shotTick >= cue.delayTicks) {
-                particle(cue.id, plant.x + cue.x, plant.y + cue.y)
+                // A puff-shroom facing left puffs from its mirrored mouth.
+                particle(cue.id, plant.x + plantFacingX(cue.x, plantTeam(plant)), plant.y + cue.y)
                 this.shotTick = undefined
             }
         }

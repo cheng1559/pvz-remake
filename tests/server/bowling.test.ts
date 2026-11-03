@@ -167,3 +167,19 @@ test('one wall-nut hitting five zombies grants Roll Some Heads, except on a firs
             firstAdventure ? [] : ['pvz:roll-some-heads'])
     }
 })
+
+test('a planting line holds on a level without the bowling rule', () => {
+    const lined = { ...levels, levels: { ...levels.levels, 'pvz:adventure-1-4': { ...levels.levels['pvz:adventure-1-4'], plantingLine: { column: 2 } } } }
+    const server = new IntegratedGameServer(definitions, lined)
+    server.start({ ...options, levelId: 'pvz:adventure-1-4', firstAdventure: false, ownedSeeds: ['pvz:peashooter'] })
+    assert.equal(runCommand(server, { type: 'completeIntro' }), undefined)
+    server.enqueueDebugCommand(1, '/sun set 500')
+    server.processBoundaryCommands()
+    server.drainCommandResults()
+    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), undefined)
+    server.drainEvents()
+    assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 3 }), 'column-out-of-range')
+    assert.ok(server.drainEvents().some(event => event.type === 'advice' && event.data.key === 'ADVICE_NOT_PASSED_LINE'))
+    // The refused seed stays in hand.
+    assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 2 }), undefined)
+})

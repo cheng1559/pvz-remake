@@ -219,7 +219,7 @@ test('only attachments a zombie view registers keep playing while it walks into 
 })
 
 for (const kind of ['plant', 'zombie'] as const) test(`${kind} factories stay hidden while loading and paused restore reveals the current state`, async () => {
-    const node = { isValid: true, active: true, setPosition() {}, destroy() { this.isValid = false } }
+    const node = { isValid: true, active: true, setPosition() {}, setScale() {}, destroy() { this.isValid = false } }
     const settings = { perfPlantsVisible: true, perfZombiesVisible: true }
     const { LevelEntityRenderer } = loadClientModule('level/LevelEntityRenderer', {
         '@/client/view/uiNode': { uiNode: (options: any) => { node.active = options.active; return { node } } },
@@ -289,7 +289,7 @@ test('a finished or cancelled shield drop cannot leave a component with a null n
     })
     const { EntityAttachments } = clientStubs['@/client/view/EntityAttachments'] as any
     const view = Object.assign(Object.create(ZombieView.prototype), {
-        node: new Node(), shadowNode: new Node(), player: null, animation: 'anim_walk', attachments: new EntityAttachments(),
+        node: new Node(), shadowNode: new Node(), player: null, animation: 'anim_walk', attachments: new EntityAttachments(), mirrored: false,
         presentation: presentationFixture.zombies['pvz:newspaper'], applyHitFlash() {}, applyColor() {}, applyParts() {},
     })
     view.armorDropped('shield')

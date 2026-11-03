@@ -46,6 +46,7 @@
   },
   "pvz:wallnut": {"maxHealth": 4000, "body": {"x": 10, "y": 0, "width": 60, "height": 80}},
   "pvz:potatomine": {
+    "low": true,
     "maxHealth": 300,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "mine": {
@@ -53,7 +54,7 @@
       "riseTicks": 106,
       "attack": {"x": 0, "y": 0, "width": 55, "height": 80},
       "explosion": {"offset": {"x": 20, "y": 40}, "radius": 60, "rowRange": 0, "damage": 1800, "burn": false},
-      "targeting": {"eatingExtraRange": 30, "excludeHeldPole": true, "insetKey": "pvz:mine"}
+      "targeting": {"eatingExtraRange": 30, "excludeHeldPole": true, "insetKey": "pvz:mine", "plantReach": 40}
     }
   },
   "pvz:snowpea": {
@@ -87,6 +88,7 @@
     "deathExplosion": {"offset": {"x": 40, "y": 40}, "radius": 90, "rowRange": 1, "damage": 1800, "burn": true}
   },
   "pvz:puffshroom": {
+    "low": true,
     "plantingOffset": {"min": {"x": -5, "y": -3}, "max": {"x": 4, "y": 2}},
     "maxHealth": 300,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
@@ -94,6 +96,7 @@
     "nocturnal": true
   },
   "pvz:sunshroom": {
+    "low": true,
     "plantingOffset": {"min": {"x": -5, "y": -5}, "max": {"x": 4, "y": 4}}, "maxHealth": 300, "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "producer": {"item": "pvz:sun", "cadenceTicks": 2500, "initialDelayTicks": {"min": 300, "max": 1250}, "growth": {"ticks": 12000, "growingTicks": 100, "smallItem": "pvz:smallsun"}},
     "nocturnal": true

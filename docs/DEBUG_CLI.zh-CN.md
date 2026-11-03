@@ -13,14 +13,15 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 页面跳转 | `/goto {page}`：`main`、`minigames`、`puzzle`、`survival`、`almanac`、`plants`、`zombies`、`store`、`garden`、`mushroom`、`aquarium`、`tree`、`achievements`、`help` |
 | 关卡入口 | `/level 1-1`、`/restart`；跳过旧存档提示 |
 | 选卡测试 | `/level pvz:seed-chooser-test`，从已实现的 9 种植物中选择 6 张，确认后进入测试关卡 |
+| 阵营演示 | `/level pvz:teams-demo` 进入临时关卡，不覆盖冒险存档、不判定成就；左侧预放己方植物，右侧 6–8 列预放 9 株朝左的僵尸阵营植物（射手、寒冰射手、坚果、大嘴花、土豆雷、爆炸坚果），两边互相攻击，4 波普通僵尸从右侧穿过僵尸阵营植物进攻。1000 阳光，固定 8 张卡。可配合 `/zombie normal 3 1 plants` 放出植物阵营的僵尸，见 [阵营](TEAMS.zh-CN.md) |
 | 性能压测 | `/level pvz:stress-test` 进入临时关卡，不覆盖冒险存档；预放 40 株植物，12 秒后生成 160 只僵尸；`/nextwave` 可提前出怪。配合 `/perf plants false`、`/perf zombies false` 分别观察，改回 `true` 恢复 |
 | 应用 | `/reload`、`/quit` |
 | 倍速 | `/gamespeed {0-10}`，作用于统一游戏时钟 |
 | 胜负／波次 | `/win`、`/lose`、`/nextwave` |
-| 植物 | `/plant {plant_name} {row} {col}`、`/removeplant {row} {col}` |
+| 植物 | `/plant {plant_name} {row} {col} [team]`、`/removeplant {row} {col}`。`team` 为 `zombies` 时生成僵尸阵营的植物，朝左，与植物阵营互相攻击，见 [阵营](TEAMS.zh-CN.md) |
 | 墓碑 | `/grave {row} {col}`，在指定格子生成墓碑并播放出土动画（随机延迟、土块粒子和音效，按游戏时间升起，暂停时等恢复后才升）；格子上的植物会被移除（同原版墓碑危机），同一格已有墓碑时替换并重新升起，随关卡存档保存 |
-| 替换种子包 | `/seed {槽位} {种子名}`，如 `/seed 1 snowpea` |
-| 僵尸 | `/zombie {zombie_name} [row] [col]`、`/damage {damage}`、`/kill` |
+| 替换种子包 | `/seed {槽位} {种子名} [team]`，如 `/seed 1 snowpea`；`team` 为 `zombies` 时换成僵尸阵营的种子包，见 [阵营](TEAMS.zh-CN.md) |
+| 僵尸 | `/zombie {zombie_name} [row] [col] [team]`、`/damage {damage}`、`/kill`。`team` 为 `plants` 时生成植物阵营的僵尸（相当于被魅惑），往右走、与僵尸阵营互咬，见 [阵营](TEAMS.zh-CN.md) |
 | 掉落 | `/item {item_name} [row col]`，当前支持 `sun`、`award`；`award` 不像正常掉落那样清除场上僵尸 |
 | 数值 | `/sun {add|set} {number}`、`/money {add|set} {number}`（金币单位为原版 1 枚＝$10，同步写入档案；关卡外直接改档案，关卡内开场阶段也可用；改动后像拾取金币一样显示金币栏，开场阶段只在戴夫出场时显示） |
 | 小推车 | `/lawnmower {trigger|reset} [row]` |
@@ -39,9 +40,9 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 平台 | `/mobile {true|false}`、`/fullscreen {true|false}` |
 | 音量 | `/music {0-100}`、`/sfx {0-100}`，通过设置 API 保存 |
 
-`/seed` 的槽位从左侧的 1 开始，替换为已安装的种子包，立即可用，并使用新种子的费用和冷却。替换正在拿取的种子包会清空光标；允许与其他槽位重复，每个槽位各自冷却。选卡界面打开时不可用，需先确认选卡。暂停和 0 倍速时也可执行，替换结果随关卡存档保存。
+`/seed` 的槽位从左侧的 1 开始，替换为已安装的种子包，立即可用，并使用新种子的费用和冷却。加 `zombies` 时换成僵尸阵营的种子包：包里的植物和手持、落点预览都朝左，种下的是僵尸阵营的植物（照常花阳光、冷却和受种植规则限制，但种下后铲不掉）；不写阵营时恢复为植物阵营。替换正在拿取的种子包会清空光标；允许与其他槽位重复，每个槽位各自冷却。选卡界面打开时不可用，需先确认选卡。暂停和 0 倍速时也可执行，替换结果随关卡存档保存。
 
-`/plantinvincible true` 开启植物无敌，阻止僵尸啃咬扣血；`false` 恢复正常受伤。默认关闭，对当前及后来种下的植物生效；植物自行爆炸、铲除和调试移除仍正常进行。该偏好保存在本机，重新进入关卡后继续生效。
+`/plantinvincible true` 开启植物无敌，阻止僵尸啃咬和敌对植物的攻击扣血；`false` 恢复正常受伤。默认关闭，对当前及后来种下的植物生效；植物自行爆炸、铲除和调试移除仍正常进行。该偏好保存在本机，重新进入关卡后继续生效。
 
 `/cursor true` 使用原版鼠标指针：普通状态为原版大箭头，可点击对象上为伸出食指的手，拖动对话框时为张开五指的手，输入框仍用系统 I 型光标；`/cursor false` 改回系统光标。默认开启，设置保存在本机。光标图片由 `npm run build:content` 从原版程序提取进基础内容，资源包可用同名 ID 替换。
 

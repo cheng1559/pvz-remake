@@ -280,9 +280,10 @@ export class ParticlePlayer extends Component {
     }
 
     private motion(output: Float64Array): void {
-        const position = this.node.worldPosition
-        const x = this.lastWorldX === null ? 0 : position.x - this.lastWorldX
-        const y = this.lastWorldY === null ? 0 : position.y - this.lastWorldY
+        const position = this.node.worldPosition, scale = this.node.worldScale
+        // The particles live in the node's space: a mirrored parent (a projectile flying left) flips the motion.
+        const x = this.lastWorldX === null ? 0 : (position.x - this.lastWorldX) / (scale.x || 1)
+        const y = this.lastWorldY === null ? 0 : (position.y - this.lastWorldY) / (scale.y || 1)
         this.lastWorldX = position.x; this.lastWorldY = position.y
         for (let index = 0; index < this.emitters.length; index++) { output[index * 2] = x; output[index * 2 + 1] = y }
     }

@@ -6,6 +6,7 @@ import {
     type JsonObject,
     type EnabledMod,
     type ServerEvent,
+    type Team,
 } from '@/shared/protocol/index'
 import { DeterministicRng, type DeterministicRngState } from '../state/DeterministicRng'
 import type { EventQueue } from '../state/events'
@@ -166,11 +167,12 @@ function parseSeedBank(value: unknown): SeedBankState {
     }
     const packets = array(source.packets, 'server save.seedBank.packets').map((value, index) => {
         const name = `server save.seedBank.packets[${index}]`
-        const packet = optionalExact(value, ['seedId', 'readyAtTick'], ['cooldownTotal'], name)
+        const packet = optionalExact(value, ['seedId', 'readyAtTick'], ['cooldownTotal', 'team'], name)
         return {
             seedId: nonEmptyString(packet.seedId, `${name}.seedId`),
             readyAtTick: nonNegativeInteger(packet.readyAtTick, `${name}.readyAtTick`),
             ...(packet.cooldownTotal === undefined ? {} : { cooldownTotal: nonNegativeInteger(packet.cooldownTotal, `${name}.cooldownTotal`) }),
+            ...(packet.team === undefined ? {} : { team: team(packet.team, `${name}.team`) }),
         }
     })
     let conveyor: SeedBankState['conveyor']
@@ -378,7 +380,7 @@ const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
 ]
 
 function parsePlant(value: unknown, name: string): Plant {
-    const source = optionalExact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter'], ['ability', 'behaviorState'], name)
+    const source = optionalExact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter'], ['ability', 'behaviorState', 'team', 'chilledTicks'], name)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
     if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
@@ -390,14 +392,20 @@ function parsePlant(value: unknown, name: string): Plant {
         maxHealth,
         recentlyEatenCounter: nonNegativeInteger(source.recentlyEatenCounter, `${name}.recentlyEatenCounter`),
         ...(source.ability === undefined ? {} : { ability: parsePlantAbility(source.ability, `${name}.ability`) }),
+        ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
+        ...(source.chilledTicks === undefined ? {} : { chilledTicks: positiveInteger(source.chilledTicks, `${name}.chilledTicks`) }),
         ...parseBehaviorState(source, name),
     }
 }
 
 function parsePlantAbility(value: unknown, name: string): PlantAbility {
-    const source = exact(value, ['state', 'ticks'], name)
+    const source = optionalExact(value, ['state', 'ticks'], ['prey'], name)
     if (!PLANT_ABILITY_STATES.includes(source.state as PlantAbilityState)) throw new TypeError(`${name}.state is unknown`)
-    return { state: source.state as PlantAbilityState, ticks: nonNegativeInteger(source.ticks, `${name}.ticks`) }
+    if (source.prey !== undefined && source.prey !== 'plant') throw new TypeError(`${name}.prey must be plant`)
+    return {
+        state: source.state as PlantAbilityState, ticks: nonNegativeInteger(source.ticks, `${name}.ticks`),
+        ...(source.prey === 'plant' ? { prey: 'plant' as const } : {}),
+    }
 }
 
 function parsePlantAttack(value: unknown, name: string): PlantAttack {
@@ -420,7 +428,7 @@ function parseZombie(value: unknown, name: string): Zombie {
         'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
         'moweredTicksRemaining', 'walkAnimation', 'animation', 'animationTime', 'animationSpeed', 'hasHead', 'hasArm',
         'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'hasPole',
-    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'droppedLoot'], name)
+    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'droppedLoot', 'team'], name)
     if (!ZOMBIE_STATES.includes(source.state as Zombie['state'])) throw new TypeError(`${name}.state is unknown`)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
@@ -452,21 +460,22 @@ function parseZombie(value: unknown, name: string): Zombie {
         hasArm: boolean(source.hasArm, `${name}.hasArm`),
         groanCounter: integer(source.groanCounter, `${name}.groanCounter`),
         helmHealth: nonNegativeInteger(source.helmHealth, `${name}.helmHealth`),
-        // Saves from before the split kept a shield's health in helmHealth; restoreSession moves it.
         shieldHealth: nonNegativeInteger(source.shieldHealth, `${name}.shieldHealth`),
         chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
         hasPole: boolean(source.hasPole, `${name}.hasPole`),
         ...(source.enrageTicks === undefined ? {} : { enrageTicks: nonNegativeFinite(source.enrageTicks, `${name}.enrageTicks`) }),
         ...(source.riseTicks === undefined ? {} : { riseTicks: positiveInteger(source.riseTicks, `${name}.riseTicks`) }),
         ...(source.droppedLoot === undefined ? {} : { droppedLoot: trueFlag(source.droppedLoot, `${name}.droppedLoot`) }),
+        ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
         ...parseBehaviorState(source, name),
     }
 }
 
 function parseProjectile(value: unknown, name: string): Projectile {
-    const source = optionalExact(value, ['typeId'], ['sourcePlantId', 'ticksLeft'], name)
+    const source = optionalExact(value, ['typeId'], ['sourcePlantId', 'ticksLeft', 'team'], name)
     return {
         typeId: nonEmptyString(source.typeId, `${name}.typeId`),
+        ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
         ...(source.ticksLeft === undefined ? {} : { ticksLeft: positiveInteger(source.ticksLeft, `${name}.ticksLeft`) }),
         ...(source.sourcePlantId === undefined ? {} : {
             sourcePlantId: positiveInteger(source.sourcePlantId, `${name}.sourcePlantId`),
@@ -535,6 +544,11 @@ function record(value: unknown, name: string): Record<string, unknown> {
 
 function array(value: unknown, name: string): unknown[] {
     if (!Array.isArray(value)) throw new TypeError(`${name} must be an array`)
+    return value
+}
+
+function team(value: unknown, name: string): Team {
+    if (value !== 'plants' && value !== 'zombies') throw new TypeError(`${name} must be plants or zombies`)
     return value
 }
 

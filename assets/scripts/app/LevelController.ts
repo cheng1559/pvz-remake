@@ -1,4 +1,5 @@
 import { BlockInputEvents, Mask, Node } from 'cc'
+import { isEnemyZombie } from '@/shared/content/teams'
 import { LocalIntegratedGame } from './LocalIntegratedGame'
 import { createLocalGameSaveStore } from './CocosGameSaveStore'
 import { GAME_SAVE_KEY } from './GameSaveStore'
@@ -284,7 +285,7 @@ export function createLevelController(
             const snapshot = current?.root.isValid ? current.game.currentSnapshot : null
             if (snapshot?.phase !== 'gameplay') return 0
             return snapshot.zombies.reduce((count, zombie) => count + (
-                zombie.hasHead && (zombie.state === 'walking' || zombie.state === 'eating') ? 1 : 0
+                zombie.hasHead && isEnemyZombie(zombie) && (zombie.state === 'walking' || zombie.state === 'eating') ? 1 : 0
             ), 0)
         },
         getLevelDefinition() {

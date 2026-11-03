@@ -7,6 +7,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { bakeSprite } from '@/client/view/bakeSprite'
 import { KernelBatch } from '@/client/render/KernelBatch'
 import { GameDebugSettings, type SeedPacketStyle } from '@/platform/debug/GameDebugSettings'
+import { PLANT_WIDTH } from '@/shared/content/teams'
 
 const { ccclass } = _decorator
 export type PreviewPlantId = string | number
@@ -30,6 +31,9 @@ export class PlantPreview extends Component {
     private composite?: Sprite
     private compositeReady?: Promise<void>
     private loaded = false
+    /** Facing left, for a plant on the zombies' side; the node's own position before it flipped. */
+    private mirrored = false
+    private unmirroredX?: number
 
     static supports(definitions: PresentationDefinitions, plantId: string): boolean {
         return !!plantVisual(definitions, plantId)
@@ -50,6 +54,19 @@ export class PlantPreview extends Component {
         this.rendering = undefined
         this.style = undefined
         this.refresh()
+    }
+
+    /**
+     * A plant on the zombies' side faces left. The preview's node flips across the plant (its placement and 80 width),
+     * whichever way the plant is drawn under it.
+     */
+    setMirrored(mirrored: boolean): void {
+        if (this.mirrored === mirrored) return
+        this.mirrored = mirrored
+        const { x, scale } = this.placement
+        this.unmirroredX ??= this.node.position.x
+        this.node.setScale(mirrored ? -1 : 1, this.node.scale.y, 1)
+        this.node.setPosition(this.unmirroredX + (mirrored ? 2 * x + PLANT_WIDTH * scale : 0), this.node.position.y)
     }
 
     setColor(color: Color): void {
