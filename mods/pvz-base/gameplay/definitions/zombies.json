@@ -76,6 +76,7 @@
         -29.799999
       ],
       "attack": {"x": -29, "y": 0, "width": 70, "height": 115},
+      "bowlingAttack": {"x": -229, "y": 0, "width": 270, "height": 115},
       "jumpFrames": 43,
       "jumpRate": 24,
       "landingOffset": 150,

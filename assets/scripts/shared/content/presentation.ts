@@ -252,6 +252,7 @@ export interface ZombieArmorPresentation {
     readonly offset: readonly [number, number]
     /** Played for a projectile hit while worn, instead of the projectile's own; the shield's win while both are worn. */
     readonly impactSounds: readonly PresentationSound[]
+    /** Played when a bowled nut strikes it: a shield, or a helm without a shield in front. */
     readonly bowlingImpactSounds?: readonly PresentationSound[]
     /** Plays once on the zombie when it breaks, like the newspaper's surprise mark. */
     readonly dropReanim?: { readonly reanimId: string; readonly offset: readonly [number, number] }

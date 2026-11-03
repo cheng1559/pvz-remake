@@ -109,8 +109,12 @@ export class LevelAudioPresenter {
             case 'toolMissed': void SoundSystem.play(SoundEffect.Drop); break
             case 'bowlingImpact':
                 void SoundSystem.playFoley(SoundEffect.BowlingImpact, -3)
-                if (event.data.helm) this.sounds(this.definitions.zombies[String(event.data.typeId)]?.helm?.bowlingImpactSounds)
+                // Zombie::TakeShieldDamage rings a screen door; UpdateBowling a helm without a shield.
+                if (event.data.shield) this.sounds(this.definitions.zombies[String(event.data.typeId)]?.shield?.bowlingImpactSounds)
+                else if (event.data.helm) this.sounds(this.definitions.zombies[String(event.data.typeId)]?.helm?.bowlingImpactSounds)
                 break
+            // Challenge::IZombieMouseDownWithZombie puts a zombie down with FOLEY_PLANT too.
+            case 'zombiePlaced': void SoundSystem.playFoley(SoundEffect.Plant); break
             case 'plantPlaced':
                 void SoundSystem.playFoley(SoundEffect.Plant)
                 this.sounds(this.definitions.plants[String(event.data.typeId)]?.plantedSounds)

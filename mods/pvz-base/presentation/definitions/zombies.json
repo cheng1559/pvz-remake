@@ -273,6 +273,7 @@
       "effect": "pvz:zombiedoor",
       "offset": [46, -71],
       "impactSounds": [{"audio": "pvz:splat", "foley": true, "pitchRange": 10}, {"audio": "pvz:shieldhit", "foley": true}],
+      "bowlingImpactSounds": [{"audio": "pvz:shieldhit", "foley": true}],
       "damagedSprites": ["pvz:zombie_screendoor2", "pvz:zombie_screendoor3"]
     }
   }

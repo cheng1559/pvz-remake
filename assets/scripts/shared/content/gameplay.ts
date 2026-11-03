@@ -159,6 +159,11 @@ export interface ZombieDefinition {
         runSpeedPerTick: { min: number; max: number }
         runGround: number[]
         attack: Rect
+        /**
+         * The rect it finds a rolling nut to vault over with, from much further, then jumping where it stands: the
+         * original's on Wall-nut Bowling (Zombie::ZombieInitialize, UpdateZombiePolevaulter), whose plants all roll.
+         */
+        bowlingAttack?: Rect
         landedAttack: Rect
         jumpFrames: number
         jumpRate: number
@@ -587,11 +592,13 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
     }
     if (source.vault !== undefined) {
         const vault = exactObject(source.vault,
-            ['runSpeedPerTick', 'runGround', 'attack', 'landedAttack', 'jumpFrames', 'jumpRate', 'landingOffset'], `${name}.vault`)
+            ['runSpeedPerTick', 'runGround', 'attack', 'landedAttack', 'jumpFrames', 'jumpRate', 'landingOffset'], `${name}.vault`,
+            ['bowlingAttack'])
         result.vault = {
             runSpeedPerTick: speedRange(vault.runSpeedPerTick, `${name}.vault.runSpeedPerTick`),
             runGround: groundTrack(vault.runGround, `${name}.vault.runGround`),
             attack: rect(vault.attack, `${name}.vault.attack`),
+            ...vault.bowlingAttack === undefined ? {} : { bowlingAttack: rect(vault.bowlingAttack, `${name}.vault.bowlingAttack`) },
             landedAttack: rect(vault.landedAttack, `${name}.vault.landedAttack`),
             jumpFrames: frameCount(vault.jumpFrames, `${name}.vault.jumpFrames`),
             jumpRate: positiveFinite(vault.jumpRate, `${name}.vault.jumpRate`),

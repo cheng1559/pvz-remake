@@ -19,8 +19,11 @@ import { getDebugRules } from '../debug/debugRules'
 import { zombieFacingRect, isHostile, plantFacingRect, plantTeam, teamDirection, zombieTeam } from '@/shared/content/teams'
 
 const CHILLED_BITE_CADENCE_FACTOR = 2
-/** A plant's body span on its row; plants do not move during a run. Cell-less plants are never bitten. */
-interface PlantTarget { entity: number, position: Position, plant: Plant, left: number, right: number }
+/**
+ * A plant's body span on its row; plants do not move during a run. `rolling`: a plant off the grid (a rolling nut),
+ * which a pole vaulter vaults over (`vault.bowlingAttack`) but no zombie bites.
+ */
+interface PlantTarget { entity: number, position: Position, plant: Plant, left: number, right: number, rolling: boolean }
 
 export function createZombieSystem(definitions: GameplayDefinitions): GameSystem { return new ZombieSystem(definitions) }
 
@@ -46,9 +49,8 @@ export class ZombieSystem implements GameSystem {
         for (const entity of world.query(PositionComponent, PlantComponent)) {
             const position = world.get(entity, PositionComponent)!, plant = world.get(entity, PlantComponent)!
             const type = definitions.plants[plant.typeId]
-            if (type.occupiesCell === false) continue
             const body = plantFacingRect(type.body, plantTeam(plant)), left = position.x + body.x
-            ;(this.plantRows[position.row] ??= []).push({ entity, position, plant, left, right: left + body.width })
+            ;(this.plantRows[position.row] ??= []).push({ entity, position, plant, left, right: left + body.width, rolling: type.occupiesCell === false })
         }
 
         const sides = new Set([...world.query(ZombieComponent)].map(entity => zombieTeam(world.get(entity, ZombieComponent)!)))
@@ -152,18 +154,20 @@ export class ZombieSystem implements GameSystem {
         const hostilePlants = (this.plantRows[position.row] ?? []).filter(target => isHostile(plantTeam(target.plant), team))
 
         const vaultTarget = zombie.hasPole && zombie.hasHead && zombie.state === 'walking' && definition.vault
-            ? findPlantTarget(world, hostilePlants, position, definition.vault.attack)
+            ? findPlantTarget(world, hostilePlants, position, zombieFacingRect(definition.vault.attack, team),
+                zombieFacingRect(definition.vault.bowlingAttack ?? definition.vault.attack, team))
             : undefined
         if (zombie.state === 'vaulting') {
             updateVault(world, definitions, entity, zombie, position, pace)
         } else if (vaultTarget !== undefined) {
-            startVault(zombie, position, world.get(vaultTarget, PositionComponent)!, definition, pace)
+            // Over a rolling nut it jumps where it stands.
+            startVault(zombie, position, world.get(vaultTarget.entity, PositionComponent)!, definition, pace, vaultTarget.rolling)
         } else {
             // A running pole vaulter never stops to eat. Zombie::UpdateEating bites an enemy zombie first, then a plant.
             const attack = zombieFacingRect(definition.vault?.landedAttack ?? definition.attack, team)
             const eats = !zombie.hasPole && (zombie.hasHead || zombie.state === 'eating')
             const prey = eats && this.bothSides ? findZombieTarget(world, definitions, entity, team, position, attack) : undefined
-            const target = eats && prey === undefined ? findPlantTarget(world, hostilePlants, position, attack) : undefined
+            const target = eats && prey === undefined ? findPlantTarget(world, hostilePlants, position, attack)?.entity : undefined
             if (target === undefined && prey === undefined) {
                 if (zombie.state !== 'walking') {
                     zombie.state = 'walking'
@@ -269,26 +273,26 @@ function findZombieTarget(
     return undefined
 }
 
+/** The plant `attack` reaches, a rolling nut by `rollingAttack` (none without it). */
 function findPlantTarget(
     world: World,
     /** The plants on the zombie's row. */
     plants: readonly PlantTarget[],
     zombiePosition: Position,
-    attack: { x: number, y: number, width: number, height: number },
-): number | undefined {
-    let target: number | undefined
-    let targetX = Infinity
-    const left = zombiePosition.x + attack.x, right = left + attack.width
+    attack: { x: number, width: number },
+    rollingAttack?: { x: number, width: number },
+): PlantTarget | undefined {
+    let target: PlantTarget | undefined
     // Runs for every zombie on every tick, so the span overlap test comes before entity lookups.
     for (let i = 0; i < plants.length; i++) {
-        const { entity, position, plant } = plants[i]
-        if (Math.min(right, plants[i].right) - Math.max(left, plants[i].left) < 20) continue
+        const candidate = plants[i], { entity, position, plant } = candidate
+        const reach = candidate.rolling ? rollingAttack : attack
+        if (!reach) continue
+        const left = zombiePosition.x + reach.x
+        if (Math.min(left + reach.width, candidate.right) - Math.max(left, candidate.left) < 20) continue
         // An earlier zombie may have finished this plant during the same run.
         if (plant.health <= 0 || !world.hasEntity(entity)) continue
-        if (position.x < targetX || (position.x === targetX && entity < (target ?? Infinity))) {
-            target = entity
-            targetX = position.x
-        }
+        if (!target || position.x < target.position.x || (position.x === target.position.x && entity < target.entity)) target = candidate
     }
     return target
 }

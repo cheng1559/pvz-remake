@@ -1,6 +1,6 @@
 import { withFixedBanks } from '../fixedBankLevels'
 import { type World } from '@/ecs'
-import { ZombieComponent } from '@/server/state/components'
+import { PlantComponent, PositionComponent, ZombieComponent } from '@/server/state/components'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
@@ -25,6 +25,14 @@ function begin(): IntegratedGameServer {
     while (server.snapshot().extensions['pvz:dialog']) runCommand(server, { type: 'advanceDialog' })
     assert.equal(runCommand(server, { type: 'completeIntro' }), undefined)
     return server
+}
+/** A game past 1-5's intro with a wall-nut just put down in row 2 to roll. */
+function rollNut() {
+    const server = begin()
+    runCommand(server, { type: 'selectConveyorPacket', packetId: 1 })
+    runCommand(server, { type: 'placePlant', row: 2, column: 1 })
+    const world = (server as unknown as { session: { world: World } }).session.world
+    return { server, world, plant: server.snapshot().plants[0] }
 }
 
 
@@ -132,7 +140,7 @@ test('a bowling plant hits, ricochets and resumes the same motion after save; an
             assert.equal(world.get(id, ZombieComponent)!.health, 0)
             assert.notEqual(server.snapshot().plants[0].row, 2)
             assert.deepEqual(events.find(event => event.type === 'bowlingImpact')!.data, {
-                entityId: id, typeId: 'pvz:normal', helm: false, plantId: plant.entityId, plantTypeId: 'pvz:bowling-wallnut', hits: 1,
+                entityId: id, typeId: 'pvz:normal', helm: false, shield: false, plantId: plant.entityId, plantTypeId: 'pvz:bowling-wallnut', hits: 1,
             })
         }
         const restored = new IntegratedGameServer(definitions, levels)
@@ -182,4 +190,53 @@ test('a planting line holds on a level without the bowling rule', () => {
     assert.ok(server.drainEvents().some(event => event.type === 'advice' && event.data.key === 'ADVICE_NOT_PASSED_LINE'))
     // The refused seed stays in hand.
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 2 }), undefined)
+})
+
+test('a pole vaulter vaults over a rolling nut from afar, where it stands', () => {
+    const { server, world, plant } = rollNut()
+    // Zombie::ZombieInitialize on Wall-nut Bowling: the vault rect starts 229 ahead, against the nut's GetPlantRect.
+    const far = spawnZombie(world, definitions, 'pvz:pole_vaulter', 2, plant.x + 290, plant.y - 30)
+    server.tick()
+    assert.equal(world.get(far, ZombieComponent)!.state, 'walking')
+    const near = spawnZombie(world, definitions, 'pvz:pole_vaulter', 2, server.snapshot().plants[0].x + 270, plant.y - 30)
+    const x = server.snapshot().zombies.find(zombie => zombie.entityId === near)!.x
+    server.tick()
+    const zombie = world.get(near, ZombieComponent)!
+    assert.equal(zombie.state, 'vaulting')
+    assert.equal(zombie.speedPerTick, 0)
+    assert.equal(server.snapshot().zombies.find(zombie => zombie.entityId === near)!.x, x)
+})
+
+test('no zombie bites a rolling nut', () => {
+    const { server, world, plant } = rollNut()
+    // The nut is bouncing into the row, so it strikes nothing yet, while a zombie overlaps it.
+    world.get(plant.entityId, PositionComponent)!.y += 40
+    ;(world.get(plant.entityId, PlantComponent)!.behaviorState as { direction: number }).direction = -1
+    const id = spawnZombie(world, definitions, 'pvz:normal', 2, plant.x + 24, plant.y - 30)
+    server.tick()
+    const zombie = world.get(id, ZombieComponent)!
+    assert.equal(zombie.health, zombie.maxHealth)
+    assert.equal(zombie.state, 'walking')
+})
+
+test('a bowled nut takes 400 off a shield alone, but breaks a screen door through once it has bounced', () => {
+    for (const [typeId, bounced] of [['pvz:newspaper', false], ['pvz:newspaper', true], ['pvz:screendoor', false], ['pvz:screendoor', true]] as const) {
+        const { server, world, plant } = rollNut()
+        // Plant::UpdateBowling checks mState != STATE_NOTREADY: a nut that has bounced rolls on a slant.
+        if (bounced) (world.get(plant.entityId, PlantComponent)!.behaviorState as { direction: number }).direction = 1
+        const id = spawnZombie(world, definitions, typeId, 2, plant.x + 20, plant.y - 30)
+        const shield = definitions.zombies[typeId].shield!.health
+        server.drainEvents()
+        server.tick()
+        const zombie = world.get(id, ZombieComponent)!
+        const impact = server.drainEvents().find(event => event.type === 'bowlingImpact')!
+        assert.equal(impact.data.shield, true, `${typeId} ${bounced}`)
+        if (typeId === 'pvz:screendoor' && bounced) {
+            assert.equal(zombie.shieldHealth, 0)
+            assert.equal(zombie.health, 0)
+        } else {
+            assert.equal(zombie.shieldHealth, Math.max(0, shield - 400), `${typeId} ${bounced}`)
+            assert.equal(zombie.health, zombie.maxHealth, `${typeId} ${bounced}`)
+        }
+    }
 })

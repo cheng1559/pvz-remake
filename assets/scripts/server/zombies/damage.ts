@@ -32,6 +32,8 @@ export interface ZombieHit {
     hitsShieldAndBody?: boolean
     /** Only the helm takes it, as Zombie::TakeHelmDamage does for the Whack-a-Zombie mallet and a bowled nut. */
     helmOnly?: boolean
+    /** Only the shield takes it, the rest lost, as Zombie::TakeShieldDamage does for a bowled nut. */
+    shieldOnly?: boolean
     /** A zombie's bite on another passes its shield (DAMAGE_BYPASSES_SHIELD, Zombie::EatZombie). */
     bypassShield?: boolean
 }
@@ -54,7 +56,8 @@ export function damageZombie(
     // to flash and stops the flash (`flash: false`). A hit that also reaches the body (`through`) flashes both.
     if (hit.flash !== false) emitServerEvent(events, 'zombieHit', {
         entityId: entity,
-        ...(shield && damage === zombie.shieldHealth && !hit.hitsShieldAndBody ? { flash: false } : {}),
+        ...(shield && (hit.shieldOnly ? damage >= zombie.shieldHealth : damage === zombie.shieldHealth) && !hit.hitsShieldAndBody
+            ? { flash: false } : {}),
         ...(shield && hit.hitsShieldAndBody ? { through: true } : {}),
     })
     // A shield absorbs hits without chill, even when they exactly break it. Zombie::CanBeChilled leaves out
@@ -82,6 +85,7 @@ export function damageZombie(
             })
         }
         if (hit.hitsShieldAndBody) remaining = damage
+        if (hit.shieldOnly) return
     }
     if (remaining > 0 && zombie.helmHealth > 0) {
         const absorbed = Math.min(zombie.helmHealth, remaining)

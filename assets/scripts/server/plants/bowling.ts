@@ -15,7 +15,15 @@ import { TutorialResource } from '../state/levelState'
 
 /** `hits`: Plant::mLaunchCounter, the nut's zombie impacts so far. */
 interface State { [key: string]: number; direction: number; rate: number; frame: number; hits: number }
-interface Rules { rateMin: number; rateMax: number; groundDeltas: number[]; bounceSpeed: number; damage: number; helmDamage: number }
+/**
+ * `attack`: Plant::GetPlantAttackRect on Wall-nut Bowling, the rect its blows land with; its body is GetPlantRect.
+ * `shieldDamage`: the blow a shield takes alone; `bouncedBreaks`: the shields (the screen door) a nut that has
+ * bounced strikes with its full blow instead.
+ */
+interface Rules {
+    attack: { x: number; width: number }; rateMin: number; rateMax: number; groundDeltas: number[]; bounceSpeed: number
+    damage: number; helmDamage: number; shieldDamage: number; bouncedBreaks: string[]
+}
 
 /** A separate moving plant; it shares no stationary wall-nut health or chewing behavior. */
 export const bowlingBehavior: PlantBehavior<State> = {
@@ -27,7 +35,9 @@ export const bowlingBehavior: PlantBehavior<State> = {
             !Number.isSafeInteger(state.hits) || state.hits < 0 ||
             !Number.isFinite(state.rate) || state.rate !== 0 && (state.rate < rules.rateMin || state.rate > rules.rateMax) ||
             !Array.isArray(rules.groundDeltas) || rules.groundDeltas.length === 0 || rules.groundDeltas.some(delta => !Number.isFinite(delta) || delta <= 0) ||
-            ![rules.rateMin, rules.rateMax, rules.bounceSpeed, rules.damage, rules.helmDamage].every(value => Number.isFinite(value) && value > 0)) {
+            ![rules.rateMin, rules.rateMax, rules.bounceSpeed, rules.damage, rules.helmDamage, rules.shieldDamage].every(value => Number.isFinite(value) && value > 0) ||
+            !Array.isArray(rules.bouncedBreaks) || rules.bouncedBreaks.some(type => typeof type !== 'string') ||
+            !Number.isFinite(rules.attack?.x) || !(rules.attack.width > 0)) {
             throw new Error('Invalid bowling plant state or configuration')
         }
     },
@@ -57,8 +67,8 @@ export const bowlingBehavior: PlantBehavior<State> = {
         let direction = state.direction
         if (direction < 0 && position.row === 0) direction = 1
         else if (direction > 0 && position.row === board.rows - 1) direction = -1
-        const nutBody = plantFacingRect(definition.body, team)
-        const nut = { x: position.x + nutBody.x, width: nutBody.width }
+        const nutAttack = plantFacingRect(rules.attack, team)
+        const nut = { x: position.x + nutAttack.x, width: nutAttack.width }
         const target = [...world.query(ZombieComponent, PositionComponent)].find(id => {
             const zombie = world.get(id, ZombieComponent)!, point = world.get(id, PositionComponent)!
             const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
@@ -90,15 +100,20 @@ export const bowlingBehavior: PlantBehavior<State> = {
         }
         const struck = target!
         const zombie = world.get(struck, ZombieComponent)!
-        // Plant::UpdateBowling: a helm without a shield in front takes the helm blow alone (TakeHelmDamage).
-        const helm = zombie.helmHealth > 0 && zombie.shieldHealth === 0
-        damageZombie(world, definitions, struck, helm ? rules.helmDamage : rules.damage, helm ? { helmOnly: true } : {})
+        // Plant::UpdateBowling: a shield takes the shield blow alone (TakeShieldDamage), except a screen door met by a
+        // nut that has bounced (mState != STATE_NOTREADY), which takes the full blow and passes the rest on
+        // (TakeDamage); a helm without a shield in front takes the helm blow alone (TakeHelmDamage).
+        const shieldType = zombie.shieldHealth > 0 ? definitions.zombies[zombie.typeId].shield!.type : undefined
+        const shield = shieldType !== undefined && !(state.direction !== 0 && rules.bouncedBreaks.includes(shieldType))
+        const helm = shieldType === undefined && zombie.helmHealth > 0
+        damageZombie(world, definitions, struck, shield ? rules.shieldDamage : helm ? rules.helmDamage : rules.damage,
+            shield ? { shieldOnly: true } : helm ? { helmOnly: true } : {})
         // Plant::UpdateBowling counts every impact (mLaunchCounter, for the coins and Roll Some Heads), except on a
         // first Adventure up to level 10 (1-5).
         const level = world.resources.get(LevelStateResource).definition
         if (!world.resources.get(TutorialResource).firstAdventure || level.adventureIndex > 10) state.hits++
         emitServerEvent(world.resources.get(EventQueueResource), 'bowlingImpact', {
-            entityId: struck, typeId: zombie.typeId, helm, plantId: entity, plantTypeId: plant.typeId, hits: state.hits,
+            entityId: struck, typeId: zombie.typeId, helm, shield: shieldType !== undefined, plantId: entity, plantTypeId: plant.typeId, hits: state.hits,
         })
         bounce(self, board.rows, random)
     },
@@ -126,7 +141,7 @@ function strike(world: World, definitions: GameplayDefinitions, remover: EntityR
     if (typeId === undefined) return
     damagePlant(world, definitions, target, (nut.definition.behavior as unknown as Rules).damage, remover)
     emitServerEvent(world.resources.get(EventQueueResource), 'bowlingImpact', {
-        entityId: target, typeId, target: 'plant', helm: false, plantId: nut.entity, plantTypeId: nut.plant.typeId, hits: nut.state.hits,
+        entityId: target, typeId, target: 'plant', helm: false, shield: false, plantId: nut.entity, plantTypeId: nut.plant.typeId, hits: nut.state.hits,
     })
 }
 
