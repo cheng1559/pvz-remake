@@ -1,7 +1,7 @@
 import { Schedule, type World } from '@/ecs/index'
 import { packetTeam, type Team } from '@/shared/content/teams'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { EMPTY_SLOT, debugAmount, debugCondition, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
+import { EMPTY_SLOT, debugAmount, debugCondition, debugSwitched, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
 import {
     EconomyStateResource,
@@ -214,17 +214,17 @@ function executeCommand(
         case 'plantinvincible':
         case 'collect': {
             const rules = { ...getDebugRules(world) }
-            const enabled = args[0].toLowerCase() === 'true'
-            if (name === 'collect') rules.collect = args[0].toLowerCase() as typeof rules.collect
-            else if (name === 'suncost') rules.sunCost = enabled
-            else if (name === 'sunspawning') rules.sunSpawning = enabled
-            else if (name === 'plantinvincible') rules.plantInvincible = enabled
-            else {
-                rules.cooldown = enabled
-                if (!enabled) for (const packet of world.resources.get(SeedBankResource).packets) if (packet) packet.readyAtTick = 0
+            if (name === 'collect') {
+                rules.collect = args[0].toLowerCase() as typeof rules.collect
+                world.resources.set(DebugRulesResource, rules)
+                return debugSuccess(`${name}: ${args[0]}`)
             }
+            // A switch turns over.
+            const rule = ({ cooldown: 'cooldown', suncost: 'sunCost', sunspawning: 'sunSpawning', plantinvincible: 'plantInvincible' } as const)[name]
+            const enabled = rules[rule] = !rules[rule]
+            if (rule === 'cooldown' && !enabled) for (const packet of world.resources.get(SeedBankResource).packets) if (packet) packet.readyAtTick = 0
             world.resources.set(DebugRulesResource, rules)
-            return debugSuccess(`${name}: ${args[0]}`)
+            return debugSwitched(name, enabled)
         }
         case 'item': {
             const award = ['award', 'levelaward', 'finalseedpacket'].includes(normalizeDebugName(args[0]))

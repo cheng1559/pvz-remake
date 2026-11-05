@@ -4,7 +4,7 @@ In Debug and Release builds, press `/` or double-tap the bottom-right 100 CSS pi
 
 The previous controls are preserved: Tab cycles completions, Up/Down recalls the last 64 commands, Enter executes, and Escape/Cancel closes. The slash is optional. Names ignore case, spaces, underscores and hyphens. Grid positions are one-based. Explicit positions can use any board row; an omitted zombie row still follows the level's spawn-row selection.
 
-`/level pvz:stress-test` starts a temporary level with 40 plants and spawns 160 zombies after 12 seconds. It does not overwrite the current adventure save. Use `/nextwave` to spawn them early; `/perf plants false` and `/perf zombies false` isolate rendering, with `true` restoring visibility.
+`/level pvz:stress-test` starts a temporary level with 40 plants and spawns 160 zombies after 12 seconds. It does not overwrite the current adventure save. Use `/nextwave` to spawn them early; `/perf plants` and `/perf zombies` turn plant or zombie drawing off to isolate rendering, and on again.
 
 Opening the CLI pauses gameplay and presentation time. Closing restores the previous pause state while preserving any new `/gamespeed` setting. Input and commands work at zero speed. Syntax errors flash red and keep the dialog open; condition failures close it and show the reason.
 
@@ -15,10 +15,10 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /seedstyle tilted
 /fontsharpness 0.5
 /level pvz:seed-chooser-test
-/haptics false
-/cursor false
-/fps true
-/plantinvincible true
+/haptics
+/cursor
+/fps
+/plantinvincible
 /seed 1 snowpea
 /mod
 /sun set 999
@@ -29,13 +29,15 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /goto main
 ```
 
-`/haptics true|false` toggles all haptic feedback immediately and saves the preference locally. Enabled by default.
+The switches (the rules, `/hotkeys`, `/haptics`, `/cursor`, `/fps`, `/hitboxes`, `/mobile`, `/fullscreen` and `/perf {category}`) take no state: each turns its switch over and shows where it now stands as advice, such as "Recharge: off".
 
-`/cursor true|false` switches between the original mouse cursors and the system ones: the original big arrow, a pointing hand over clickable objects and an open hand while dragging a dialog; text fields keep the system I-beam. Enabled by default and saved locally. `npm run build:content` extracts the images from the original executable into the base content; resource packs may replace them by ID.
+`/haptics` turns all haptic feedback on or off immediately and saves the preference locally. Enabled by default.
 
-`/fps true|false` shows or hides a white frame-rate counter at the bottom left of the original 800×600 game area; widescreen expansion does not move it. It is off by default and persists locally. The counter measures drawn frames against real time, independent of game pause or speed.
+`/cursor` switches between the original mouse cursors and the system ones: the original big arrow, a pointing hand over clickable objects and an open hand while dragging a dialog; text fields keep the system I-beam. Enabled by default and saved locally. `npm run build:content` extracts the images from the original executable into the base content; resource packs may replace them by ID.
 
-`/plantinvincible true|false` prevents or restores zombie bite damage to all current and newly planted plants. It defaults to false and persists locally across levels and restarts. Normal self-destruction, shoveling, and debug removal still work.
+`/fps` shows or hides a white frame-rate counter at the bottom left of the original 800×600 game area; widescreen expansion does not move it. It is off by default and persists locally. The counter measures drawn frames against real time, independent of game pause or speed.
+
+`/plantinvincible` prevents or restores zombie bite damage to all current and newly planted plants. It defaults to off and persists locally across levels and restarts. Normal self-destruction, shoveling, and debug removal still work.
 
 `/plant {plant_name} {row} {col}` directly creates an installed plant, including Mod plants such as `/plant corn:cob_cannon 3 1`. It bypasses occupancy, upgrade prerequisites, seed-bank availability, sun cost, cooldown, tutorials and level phase/result restrictions. It preserves the held seed and initializes the plant's registered behavior normally. Only installed IDs and valid board coordinates are required; overlapping plants are saved normally. Mouse/touch planting keeps its usual rules.
 

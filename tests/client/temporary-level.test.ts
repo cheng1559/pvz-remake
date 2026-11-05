@@ -67,7 +67,7 @@ test('temporary levels preserve the adventure save when entered, restarted and e
     }
     assert.deepEqual(commands, ['clearCursor', 'clearCursor', 'clearCursor'])
     await controller.play({ forceNewGame: true, levelId: 'stress' })
-    assert.deepEqual(debugCommands, ['/plantinvincible true', '/plantinvincible true'])
+    assert.deepEqual(debugCommands, ['/plantinvincible', '/plantinvincible'])
     assert.equal(saved.length, 1)
     assert.equal(saved[0].levelId, 'normal')
     assert.equal(deletions, 0)

@@ -191,7 +191,7 @@ npm run build:content -- --pak /path/to/main.pak
 
 应用图标来自原版游戏图标，同样不纳入 Git。`npm run build:icons -- --ico /path/to/game.ico` 生成 `build-templates/web-mobile/` 下的网页图标（`game.ico`、`icon-256.png`、`apple-touch-icon.png`），以及 `native/engine/` 下 macOS、iOS、Android、Windows 的图标，输出均由 Git 忽略；省略 `--ico` 时默认读取 `tools/game.ico`。图标即原版 `PlantsVsZombies.exe` 中的 `IDI_MAIN_ICON` 图标组，其中 16×16 一帧是窗口标题栏上的小花。
 
-鼠标指针只存在于原版程序中，`main.pak` 里没有。转换开始前先从 exe 提取原版 `LawnApp::EnforceCursor` 使用的大箭头（程序的光标资源）和 SexyAppFramework 的手形、拖动手形（`CreateCursor` 的 32×32 遮罩），按内容哈希定位，不依赖资源编号或文件偏移；结果作为 `pvz:cursor_pointer`、`pvz:cursor_hand`、`pvz:cursor_dragging` 图片登记到 `content.json`，随内置 ZIP 发布，资源包可用同名 ID 替换。`CursorManager` 把 `default`／`pointer`／`grabbing` 分别对应到这三张图和原版热点（高密度替换图按 `scale` 放大热点），网页使用 CSS 光标，Windows 和 macOS 原生端通过引擎的 `jsb.setCursorImage` 创建 SDL 彩色光标；`/cursor false` 或图片加载失败时使用系统光标。
+鼠标指针只存在于原版程序中，`main.pak` 里没有。转换开始前先从 exe 提取原版 `LawnApp::EnforceCursor` 使用的大箭头（程序的光标资源）和 SexyAppFramework 的手形、拖动手形（`CreateCursor` 的 32×32 遮罩），按内容哈希定位，不依赖资源编号或文件偏移；结果作为 `pvz:cursor_pointer`、`pvz:cursor_hand`、`pvz:cursor_dragging` 图片登记到 `content.json`，随内置 ZIP 发布，资源包可用同名 ID 替换。`CursorManager` 把 `default`／`pointer`／`grabbing` 分别对应到这三张图和原版热点（高密度替换图按 `scale` 放大热点），网页使用 CSS 光标，Windows 和 macOS 原生端通过引擎的 `jsb.setCursorImage` 创建 SDL 彩色光标；用 `/cursor` 关掉原版光标或图片加载失败时使用系统光标。
 
 
 存档继续检查基础内容 ID、版本、哈希和玩法 Mod。ZIP 和 Mod 共用 `manifest.json`、`content.json`，玩法与表现定义直接由统一索引引用，哈希覆盖默认文件和资源映射；外部表现覆盖不会修改服务端玩法 JSON。
@@ -229,7 +229,7 @@ npm run check:preview -- --dry-run   # 只检查，不改文件
 
 ### iOS 性能分析
 
-iOS 禁止 JIT，V8 以解释模式运行，JS 开销远高于桌面，性能结论以真机为准。`PVZ_JS_PROFILE=1 npm run compile:ios:release` 在 Release 构建中打开 V8 调试端口（6086），不改变 `CC_DEBUG`。安装后用 `pymobiledevice3 usbmux forward 16086 6086` 转发端口，再运行 `npx tsx tools/profile/ios.ts http://127.0.0.1:16086 10 /tmp/pvz.cpuprofile` 采样并列出耗时最高的函数。`/level pvz:stress-test` 加 `/fps true` 用于高负载对比。
+iOS 禁止 JIT，V8 以解释模式运行，JS 开销远高于桌面，性能结论以真机为准。`PVZ_JS_PROFILE=1 npm run compile:ios:release` 在 Release 构建中打开 V8 调试端口（6086），不改变 `CC_DEBUG`。安装后用 `pymobiledevice3 usbmux forward 16086 6086` 转发端口，再运行 `npx tsx tools/profile/ios.ts http://127.0.0.1:16086 10 /tmp/pvz.cpuprofile` 采样并列出耗时最高的函数。`/level pvz:stress-test` 并用 `/fps` 打开帧率，用于高负载对比。
 
 动画和粒子不再每个部件一个节点：`ReanimPlayer` 把动画的图片放进共享图集页（`AnimationAtlas`），每个实例用一两个 `ReanimBatch` 直接写顶点；只有 `getTrackNode` 用到的部件才建节点，并在该处切开批次以保持绘制顺序。关键帧采样、过渡、附着矩阵、写顶点只在 `native/engine/common/kernel/` 的 C++ 里实现一次：原生平台经 `KernelBindings.cpp` 直接调用（iOS 的 JS 引擎没有 JIT，也就没有 WebAssembly）；Web 和测试使用同一源码编译的 WebAssembly，由 `assets/scripts/shared/kernel/` 统一封装。修改 C++ 后运行 `npm run build:kernel`（需要 Emscripten）重新生成并提交 `binary.ts`，其他构建不需要 Emscripten。粒子统一使用 `shared/content/particle.ts` 的 schemaVersion 3 格式与 `client/particle/ParticlePlayer` 入口。随机数、生成、寿命、场、颜色和变换由同一 C++ 核心计算，每个发射器一个 `ParticleBatch`，直接接收核心生成的四边形；同一帧的多个模拟 tick 一次进入核心，仅渲染最后状态。存档继续保存种子和年龄，通过核心重放恢复，播放器销毁或重新播放时释放核心状态。达到固定生成上限且已无粒子的系统会合并等待到期的 tick，并跳过空渲染，原寿命和存档年龄保持一致。
 

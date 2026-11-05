@@ -176,7 +176,7 @@ test('a projectile that finishes a hostile plant reports it and the plant leaves
 test('a hostile snow pea chills a plant, which then does everything at half speed', () => {
     const server = begin()
     // Unhurt, the plants trade shots for the whole count; invincible plants still chill.
-    debug(server, '/plantinvincible true')
+    debug(server, '/plantinvincible')
     debug(server, '/plant peashooter 3 1')
     debug(server, '/plant snowpea 3 8 zombies')
     debug(server, '/plant peashooter 2 1')
@@ -254,7 +254,7 @@ test('a chomper chewing a plant remembers it until it is ready again', () => {
 
 test('a plant chilled by a hostile snow pea reports the chill once', () => {
     const server = begin()
-    debug(server, '/plantinvincible true')
+    debug(server, '/plantinvincible')
     debug(server, '/plant wallnut 3 1')
     debug(server, '/plant snowpea 3 8 zombies')
     server.drainEvents()
@@ -330,7 +330,7 @@ test('a seed packet of the zombies’ side, from /seed, plants on that side and 
     assert.equal(server.snapshot().seedPackets[0]!.team, 'zombies')
     server.start({ ...options, save: server.save() as unknown as JsonValue })
     assert.equal(server.snapshot().seedPackets[0]!.team, 'zombies', 'the packet keeps its side')
-    debug(server, '/cooldown false')
+    debug(server, '/cooldown')
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter', slot: 0 }), undefined)
     assert.deepEqual(server.snapshot().cursor, { mode: 'seed', seedId: 'pvz:peashooter', team: 'zombies' })
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 6 }), undefined)

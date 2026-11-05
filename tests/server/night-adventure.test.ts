@@ -262,8 +262,8 @@ test('grave busters only go on graves, cannot be dug up, then eat the grave and 
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     // A replay's player owns every seed.
     game.start({ ...options, firstAdventure: false, ownedSeeds: chooserSeeds(definitions) })
-    game.debugCommand('/cooldown false')
-    game.debugCommand('/suncost false')
+    game.debugCommand('/cooldown')
+    game.debugCommand('/suncost')
     const picks = ['pvz:gravebuster', ...chooserSeeds(definitions).filter(id => id !== 'pvz:gravebuster').slice(0, 5)]
     for (const seedId of picks) game.command({ type: 'chooseSeed', seedId })
     game.command({ type: 'confirmSeeds' })

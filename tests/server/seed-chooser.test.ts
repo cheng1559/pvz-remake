@@ -91,10 +91,10 @@ test('seed choice is authoritative, ordered, capacity checked and works at an in
 test('with recharging disabled, chosen seeds skip their opening recharge too', () => {
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     game.start(options)
-    game.debugCommand('/cooldown false')
+    game.debugCommand('/cooldown')
     command(game, { type: 'chooseSeed', seedId: 'pvz:cherrybomb' })
     assert.equal(game.render().seedPackets[0]!.cooldownRemaining, 0)
-    game.debugCommand('/cooldown true')
+    game.debugCommand('/cooldown')
     command(game, { type: 'chooseSeed', seedId: 'pvz:wallnut' })
     assert.equal(game.render().seedPackets[1]!.cooldownRemaining, definitions.seeds['pvz:wallnut'].initialCooldownTicks)
 })
@@ -102,8 +102,8 @@ test('with recharging disabled, chosen seeds skip their opening recharge too', (
 test('with recharging and sun costs disabled, every chosen packet flashes on the first gameplay tick', () => {
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     game.start(options)
-    game.debugCommand('/cooldown false')
-    game.debugCommand('/suncost false')
+    game.debugCommand('/cooldown')
+    game.debugCommand('/suncost')
     const picks = ['pvz:cherrybomb', ...seeds.filter(id => id !== 'pvz:cherrybomb').slice(0, 5)]
     for (const seedId of picks) command(game, { type: 'chooseSeed', seedId })
     command(game, { type: 'confirmSeeds' })
@@ -114,7 +114,7 @@ test('with recharging and sun costs disabled, every chosen packet flashes on the
     assert.deepEqual(flashed, picks, 'a 150-sun cherry bomb flashes with the rest despite the 50 starting sun')
 })
 
-test('a recharge that runs out flashes once, while one cleared by `/cooldown false` does not', () => {
+test('a recharge that runs out flashes once, while one cleared by turning `/cooldown` off does not', () => {
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     game.start(options)
     const picks = ['pvz:wallnut', 'pvz:cherrybomb', ...seeds.filter(id => id !== 'pvz:wallnut' && id !== 'pvz:cherrybomb').slice(0, 4)]
@@ -129,7 +129,7 @@ test('a recharge that runs out flashes once, while one cleared by `/cooldown fal
     }
     assert.ok(flashes.includes(`${ready}:pvz:wallnut`), 'the 50-sun wall-nut flashes as its opening recharge ends')
     assert.equal(flashes.filter(flash => flash.endsWith(':pvz:wallnut')).length, 1)
-    game.debugCommand('/cooldown false')
+    game.debugCommand('/cooldown')
     for (let tick = 0; tick < 5; tick++) game.update(TICK_SECONDS)
     assert.ok(!game.drainEvents().some(event => event.type === 'seedPacketFlashRequested' && event.data.seedId === 'pvz:cherrybomb'),
         'clearing the cherry bomb\'s recharge is not a recharge finishing')

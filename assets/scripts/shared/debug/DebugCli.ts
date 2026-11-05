@@ -6,6 +6,10 @@ interface DebugCliOutcome {
     /** For `goto`. */
     page?: DebugGotoPage
     catalog?: DebugCliCatalog
+    /** A switch's state after the command turned it over (`/cooldown` and the like). */
+    enabled?: boolean
+    /** Advice the client shows after a success: a string table key, its %s filled with `args`, string keys themselves. */
+    advice?: { key: string, args?: string[] }
 }
 /**
  * Success and syntax messages only reach the console. A failed condition closes the CLI and shows as advice, so it names
@@ -17,7 +21,11 @@ export type DebugCliResult = DebugCliOutcome & (
     | { ok: false, failure: 'condition', key: string, args?: string[] })
 export interface DebugCliCommand { name: string, args: string[] }
 export interface CommandSpec { name: string, parameters: string[], minimum: number, values?: Record<number, readonly string[]> }
-const bool = ['true', 'false']
+/** The switches: each command turns its switch over and says where it now stands as advice (debugSwitchAdvice). */
+export const DEBUG_SWITCHES = ['hotkeys', 'haptics', 'cursor', 'cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'fps', 'hitboxes',
+    'background', 'mobile', 'fullscreen'] as const
+/** The /perf switches, one per category. */
+export const DEBUG_PERF_SWITCHES = ['plants', 'zombies', 'particles', 'sfx', 'logic'] as const
 /** The menu pages /goto opens (MenuPageId); the splash, title and award screens only come in their own order. */
 export const DEBUG_GOTO_PAGES = ['main', 'minigames', 'puzzle', 'survival', 'almanac', 'plants', 'zombies', 'store',
     'garden', 'mushroom', 'aquarium', 'tree', 'achievements', 'help'] as const
@@ -36,11 +44,11 @@ const builtins: CommandSpec[] = [
     { name: 'level', parameters: ['{level}'], minimum: 1 },
     { name: 'gamespeed', parameters: ['{0-10}'], minimum: 1 },
     ...['music', 'sfx'].map(name => ({ name, parameters: ['{0-100}'], minimum: 1 })),
-    ...['hotkeys', 'haptics', 'cursor', 'cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'fps', 'hitboxes', 'background', 'mobile', 'fullscreen'].map(name => ({ name, parameters: ['{enabled}'], minimum: 1, values: { 0: bool } })),
+    ...DEBUG_SWITCHES.map(name => ({ name, parameters: [], minimum: 0 })),
     { name: 'fontsharpness', parameters: ['{0-1}'], minimum: 1 },
     { name: 'seedstyle', parameters: ['{standard|rendered|tilted}'], minimum: 1, values: { 0: ['standard', 'rendered', 'tilted'] } },
     { name: 'mod', parameters: [], minimum: 0 },
-    { name: 'perf', parameters: ['{plants|zombies|particles|sfx|logic}', '{enabled}'], minimum: 2, values: { 0: ['plants', 'zombies', 'particles', 'sfx', 'logic'], 1: bool } },
+    { name: 'perf', parameters: ['{plants|zombies|particles|sfx|logic}'], minimum: 1, values: { 0: DEBUG_PERF_SWITCHES } },
     { name: 'lawnmower', parameters: ['{trigger|reset}', '[row]'], minimum: 1, values: { 0: ['trigger', 'reset'] } },
     ...['sun', 'money'].map(name => ({ name, parameters: ['{add|set}', '{number}'], minimum: 2, values: { 0: ['add', 'set'] } })),
     { name: 'collect', parameters: ['{auto|click|move}'], minimum: 1, values: { 0: ['auto', 'click', 'move'] } },
@@ -56,6 +64,15 @@ export const debugSyntax = (message: string): DebugCliResult => ({ ok: false, me
 export const debugCondition = (key: string, ...args: (string | number | boolean)[]): DebugCliResult =>
     ({ ok: false, failure: 'condition', key, ...(args.length ? { args: args.map(String) } : {}) })
 export const debugSuccess = (message: string): DebugCliResult => ({ ok: true, message })
+/**
+ * A switch turned over, as advice: DEBUG_SWITCH_ON or DEBUG_SWITCH_OFF with the switch's name, DEBUG_SWITCH_{NAME}
+ * (`/perf plants` is DEBUG_SWITCH_PERF_PLANTS).
+ */
+export const debugSwitchAdvice = (name: string, enabled: boolean): { key: string, args: string[] } =>
+    ({ key: enabled ? 'DEBUG_SWITCH_ON' : 'DEBUG_SWITCH_OFF', args: [`DEBUG_SWITCH_${name.trim().replace(/\s+/g, '_').toUpperCase()}`] })
+/** A switch's success: its new state, and the advice that says it. */
+export const debugSwitched = (name: string, enabled: boolean): DebugCliResult =>
+    ({ ...debugSuccess(`${name}: ${enabled ? 'on' : 'off'}`), enabled, advice: debugSwitchAdvice(name, enabled) })
 export const normalizeDebugName = (name: string) => name.toLowerCase().replace(/^pvz:/, '').replace(/[\s_-]+/g, '')
 export const debugInteger = (value: string | undefined): number | null =>
     value !== undefined && /^-?\d+$/.test(value) && Number.isSafeInteger(Number(value)) ? Number(value) : null

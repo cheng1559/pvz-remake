@@ -415,6 +415,10 @@ export class GameApp extends Component {
         }
         if (!this.node?.isValid || !result) return
         if (!result.ok) { this.showAdvice('key' in result ? (await UI.load()).format(result.key, result.args) : result.message); return }
+        if (result.advice) {
+            const ui = await UI.load()
+            this.showAdvice(ui.format(result.advice.key, result.advice.args?.map(arg => ui.text(arg))))
+        }
         switch (result.action) {
             case 'manageMods':
                 this.debugCliOpen = true

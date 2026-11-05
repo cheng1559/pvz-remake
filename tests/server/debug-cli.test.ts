@@ -45,8 +45,9 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     assert.deepEqual(getDebugCliCompletions('/plant re', catalog), ['/plant repeater'])
     assert.deepEqual(getDebugCliCompletions('/seed 1 sn', catalog), ['/seed 1 snowpea'])
     assert.deepEqual(getDebugCliCompletions('/collect ', catalog, true), ['/collect auto', '/collect click', '/collect move'])
-    assert.deepEqual(getDebugCliCompletions('/plantinvincible ', catalog, true), ['/plantinvincible true', '/plantinvincible false'])
-    assert.equal((parseDebugCliCommand('/plantinvincible yes') as { failure: string }).failure, 'syntax')
+    assert.deepEqual(getDebugCliCompletions('/plantinvincible ', catalog, true), [], 'a switch takes nothing: it turns over')
+    assert.equal((parseDebugCliCommand('/plantinvincible true') as { failure: string }).failure, 'syntax', 'nor takes a state')
+    assert.deepEqual(getDebugCliCompletions('/perf ', catalog, true), ['/perf plants', '/perf zombies', '/perf particles', '/perf sfx', '/perf logic'])
     assert.equal(getDebugCliSuffix('/plant repeater', catalog), ' {row} {col} [team]')
     assert.throws(() => setup(false).debugCommand('/sun set 999'), /unsupported-command/)
 })
@@ -152,7 +153,8 @@ test('plant invincibility blocks bites until disabled and does not prevent remov
     const game = setup()
     assert.equal(game.debugCommand('/plant wallnut 3 2').ok, true)
     assert.equal(game.debugCommand('/zombie normal 3 3').ok, true)
-    assert.equal(game.debugCommand('/plantinvincible true').ok, true)
+    const on = game.debugCommand('/plantinvincible')
+    assert.deepEqual([on.ok, on.enabled, on.advice], [true, true, { key: 'DEBUG_SWITCH_ON', args: ['DEBUG_SWITCH_PLANTINVINCIBLE'] }])
     assert.equal(game.render().paused, true)
     assert.equal(game.debugCommand('/plant wallnut 2 2').ok, true)
     const before = game.render().plants.map(plant => plant.health)
@@ -160,10 +162,10 @@ test('plant invincibility blocks bites until disabled and does not prevent remov
     game.update(8)
     assert.equal(game.render().zombies[0].state, 'eating')
     assert.deepEqual(game.render().plants.map(plant => plant.health), before)
-    assert.equal(game.debugCommand('/plantinvincible false').ok, true)
+    assert.deepEqual(game.debugCommand('/plantinvincible').enabled, false, 'turned over again')
     game.update(2)
     assert.ok(game.render().plants.find(plant => plant.row === 2)!.health < before[0])
-    assert.equal(game.debugCommand('/plantinvincible true').ok, true)
+    assert.equal(game.debugCommand('/plantinvincible').enabled, true)
     assert.equal(game.debugCommand('/removeplant 3 2').ok, true)
     assert.equal(game.render().plants.some(plant => plant.row === 2), false)
 })
@@ -271,7 +273,7 @@ test('CLI can put one seed in two slots; each slot recharges, flashes and restor
 test("a grave buster goes only on a grave of the other side", () => {
     // 1-2 opens rows 2-4 (the CLI's numbering); the four graves stand in row 3.
     const game = setup(true, 'pvz:adventure-1-2')
-    for (const command of ['/seed 1 gravebuster', '/seed 2 gravebuster zombies', '/cooldown false', '/suncost false',
+    for (const command of ['/seed 1 gravebuster', '/seed 2 gravebuster zombies', '/cooldown', '/suncost',
         '/grave 3 4 zombies', '/grave 3 5 plants', '/grave 3 6 zombies', '/grave 3 7 plants']) {
         assert.equal(game.debugCommand(command).ok, true, command)
     }
