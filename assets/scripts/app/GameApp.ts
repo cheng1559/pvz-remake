@@ -130,16 +130,21 @@ export class GameApp extends Component {
         }).catch(error => console.error('[GameApp] Failed to initialize UI', error))
     }
 
-    /** SeedChooserScreen::MouseDown: AlmanacDialog::ShowZombie opens the zombie list on the clicked preview zombie. */
+    /**
+     * SeedChooserScreen::MouseDown: AlmanacDialog::ShowZombie opens the zombie list on the clicked preview zombie. The
+     * chooser's Almanac (SeedChooserScreen::ButtonDepress) waits on the dialog without pausing the board's music, so
+     * the level pauses but its music plays on.
+     */
     private async openAlmanacFromLevel(zombieNameKey?: string): Promise<void> {
-        if (zombieNameKey === undefined) return this.navigate('almanac')
+        if (zombieNameKey === undefined) return this.navigate('almanac', undefined, { keepMusic: true })
         const zombie = (await menuApi.getAlmanac()).zombies.find(entry => entry.key === zombieNameKey)
         if (!zombie || !this.menu) return
         this.menu.presetAlmanac({ plant: 0, zombie: zombie.id })
-        return this.navigate('zombies')
+        return this.navigate('zombies', undefined, { keepMusic: true })
     }
 
-    private async navigate(action: MenuAction, levelId?: string): Promise<void> {
+    /** `keepMusic`: a page opened over the level leaves its music playing while the board waits. */
+    private async navigate(action: MenuAction, levelId?: string, { keepMusic = false }: { keepMusic?: boolean } = {}): Promise<void> {
         const { controller, menu, gameLayer, transitions } = this
         if (this.loading || !controller || !menu || !gameLayer || !transitions) return
         // AwardScreen::StartButtonPressed: closing an almanac opened from the award page continues to the next level.
@@ -201,7 +206,7 @@ export class GameApp extends Component {
                         this.history.length = 0
                     }
                 }
-                controller.pause()
+                controller.pause(false, keepMusic)
                 if (target === 'main' && controller.isRunning()) await controller.saveIfRunning()
                 const page = await menu.prepare(target)
                 return async () => {
@@ -247,9 +252,14 @@ export class GameApp extends Component {
         if (target === 'main') await this.requirePlayer()
     }
 
-    /** GameSelector: an opened main menu without a player keeps asking for one. */
+    /**
+     * GameSelector: an opened main menu without a player keeps asking for one; once the create-user dialog closes with
+     * one (SELECTOR_NEW_USER), the sign drops.
+     */
     private async requirePlayer(): Promise<void> {
-        if (this.currentPage === 'main' && !this.dialog && this.menu?.mainMenuOpened() && !await menuApi.getCurrentUser()) await this.openDialog('players')
+        if (this.currentPage !== 'main' || this.dialog || !this.menu?.mainMenuOpened()) return
+        if (await menuApi.getCurrentUser()) this.menu.showPlayerSign()
+        else await this.openDialog('players')
     }
 
     /**

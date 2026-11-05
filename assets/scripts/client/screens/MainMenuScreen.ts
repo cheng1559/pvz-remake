@@ -218,6 +218,11 @@ export class MainMenuScreen extends Component {
         this.sign.play({ loop: false, rate: 30 / 20, hideOnFinish: false, timeSeconds: 0 })
     }
 
+    /** SELECTOR_NEW_USER: the create-user dialog has closed with a player, so the opened menu drops the sign. */
+    showPlayerSign(): void {
+        if (this.opened && this.user && this.node.isValid) this.showSign()
+    }
+
     async refreshProfile(): Promise<void> {
         const user = await menuApi.getCurrentUser()
         if (!this.ready || !this.node.isValid) return

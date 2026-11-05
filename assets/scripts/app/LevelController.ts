@@ -45,7 +45,8 @@ export interface LevelController {
     countZombiesOnScreenForMusic(): number
     debugCommand(command: string): DebugCliResult
     /** `quiet`: a debug pause (the CLI) that the board does not show, unlike Board::Pause's coin bank. */
-    pause(quiet?: boolean): void
+    /** `keepMusic`: the board waits but its music plays on (a page opened from the seed chooser). */
+    pause(quiet?: boolean, keepMusic?: boolean): void
     resume(): void
     /** Gives the level the profile's purse, which a store page opened over it may have changed. */
     syncPurse(): Promise<void>
@@ -316,8 +317,8 @@ export function createLevelController(
         isLevelIntro() {
             return current?.root.isValid === true && current.game.currentSnapshot?.phase === 'intro'
         },
-        pause(quiet = false) {
-            if (current?.root.isValid) current.scene.pause(quiet)
+        pause(quiet = false, keepMusic = false) {
+            if (current?.root.isValid) current.scene.pause(quiet, keepMusic)
         },
         resume() {
             if (current?.root.isValid) current.scene.resume()

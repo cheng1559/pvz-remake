@@ -46,6 +46,8 @@ export class MenuScreen extends Component {
 
     /** The player list changed the current player; the main menu's sign and buttons follow. */
     async refreshProfile(): Promise<void> { await this.mainMenu?.refreshProfile() }
+    /** The main menu's sign drops for a player who has just been created. */
+    showPlayerSign(): void { this.mainMenu?.showPlayerSign() }
 
     /** The main menu asks for the create-user dialog itself until its entrance finishes. */
     mainMenuOpened(): boolean {

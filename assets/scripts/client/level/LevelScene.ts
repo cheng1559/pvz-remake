@@ -56,9 +56,9 @@ export class LevelScene extends Component {
         return this.game?.render().paused ?? false
     }
 
-    pause(quiet = false): void {
+    pause(quiet = false, keepMusic = false): void {
         if (!this.view || this.game?.render().paused) return
-        this.setPaused(true)
+        this.setPaused(true, keepMusic)
         // Board::Pause shows the coin bank; a debug pause (the CLI) is not one.
         if (!quiet) this.view.showPauseCoinBank()
     }
@@ -139,7 +139,7 @@ export class LevelScene extends Component {
         }
     }
 
-    private setPaused(paused: boolean): void {
+    private setPaused(paused: boolean, keepMusic = false): void {
         if (!this.game || !this.view || this.game.render().paused === paused) return
         this.game.command({ type: paused ? 'pause' : 'resume' })
         this.game.update(0)
@@ -147,7 +147,7 @@ export class LevelScene extends Component {
         this.view.setPaused(paused)
         if (paused) {
             this.input?.suspend()
-            this.audio?.pause()
+            if (!keepMusic) this.audio?.pause()
         } else {
             this.input?.resume()
             this.audio?.resume()

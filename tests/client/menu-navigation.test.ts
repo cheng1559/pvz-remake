@@ -144,6 +144,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     app.showAdvice = (message: string) => advice.push(message)
     let running = false
     let paused = false
+    const pauses: boolean[] = []
     let introReady = true, levelIntro = false
     let cursorMode = 'none'
     let saves = 0
@@ -160,7 +161,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         },
         resume() { paused = false },
         async syncPurse() { purseSyncs.push(paused) },
-        pause() { if (running) paused = true },
+        pause(_quiet?: boolean, keepMusic?: boolean) { if (running) { paused = true; pauses.push(keepMusic === true) } },
         isRunning: () => running,
         countZombiesOnScreenForMusic: () => running ? 10 : 0,
         isPaused: () => paused,
@@ -185,7 +186,10 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         async show(id: MenuPageId) { commits.push(`show-${id}`); shown = id },
         hide() { this.node.active = false },
         mainMenuOpened: () => true,
+        // SELECTOR_NEW_USER: an opened main menu with a player drops its sign.
+        showPlayerSign() { signs++ },
     }
+    let signs = 0
     app.transitions = {
         async run(prepare: () => Promise<() => Promise<void>>) { await (await prepare())() },
     }
@@ -198,6 +202,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
 
     for (const action of ['splash', 'title', 'main', 'garden', 'mushroom', 'store', 'back']) {
         await app.navigate(action)
+        if (action === 'main') assert.equal(signs, 1, 'the main menu has a player, so its sign drops')
         if (action === 'splash' || action === 'title') {
             const recovery = app.showDebugCli()
             await setImmediate()
@@ -258,6 +263,16 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     await cli
     assert.equal(paused, false)
     assert.equal(gameClock.delta(1), 2, 'closing the CLI keeps the newly selected speed')
+    // SeedChooserScreen's Almanac waits on the dialog with the board's music playing; other pages pause it.
+    pauses.length = 0
+    await app.openAlmanacFromLevel()
+    assert.deepEqual([app.currentPage, pauses], ['almanac', [true]])
+    await app.navigate('back')
+    assert.equal(app.currentPage, null)
+    await app.navigate('store')
+    assert.deepEqual(pauses, [true, false])
+    await app.navigate('back')
+    assert.equal(app.currentPage, null)
     gameClock.setSpeed(1)
     const savesBeforeManager = saves
     const manager = app.showDebugCli()
