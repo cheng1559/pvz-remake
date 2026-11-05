@@ -17,6 +17,7 @@ import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { createWaveSystem } from '../level/waves'
 import { placeGrave } from '../level/graves'
+import { startRepick } from '../seeds/seedChooser'
 import { spawnLoot } from '../level/loot'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
@@ -75,9 +76,18 @@ function executeCommand(
                 row: grid.row, column: grid.column!, debug: true })
             return debugSuccess(`Planted ${args[0]}`)
         }
+        case 'repick': {
+            const bank = world.resources.get(SeedBankResource)
+            // A repick's bank is the chooser's until the level goes on after it.
+            if (bank.choosing || bank.repick) return debugCondition('DEBUG_FINISH_CHOOSING')
+            if (bank.conveyor || !bank.packets.length) return debugCondition('DEBUG_REPICK_NO_BANK')
+            startRepick(world)
+            return debugSuccess('Choose your seeds again')
+        }
         case 'seed': {
             const bank = world.resources.get(SeedBankResource)
-            if (bank.choosing) return debugCondition('DEBUG_FINISH_CHOOSING')
+            // A repick's bank is the chooser's until the level goes on after it.
+            if (bank.choosing || bank.repick) return debugCondition('DEBUG_FINISH_CHOOSING')
             const slot = debugInteger(args[0])
             if (slot === null || slot < 1 || slot > bank.packets.length) {
                 return debugSyntax(`Use slot 1-${bank.packets.length}`)

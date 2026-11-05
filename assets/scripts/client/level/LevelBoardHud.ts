@@ -127,7 +127,9 @@ export class LevelBoardHud {
         }
         if (this.shovelBank) {
             const layout = this.content.presentation.shovel
+            // The shovel leaves for a repick (`/repick`) until the level goes on, as it is hidden for the intro's choice.
             this.shovelBank.active = snapshot.result !== 'lost' && (!!snapshot.tutorial.toolsInIntro || snapshot.phase === 'gameplay')
+                && !snapshot.seedChooser?.choosing && !snapshot.seedChooser?.repick
             this.shovelHotkey!.node.active = GameDebugSettings.hotkeysEnabled
             this.shovelButton!.interactable = (snapshot.extensions['pvz:tools'] as { available: string[] } | undefined)?.available.includes('pvz:shovel') === true
             if (snapshot.tutorial.step === 'shovel-pickup') {

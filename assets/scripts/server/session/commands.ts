@@ -6,7 +6,7 @@ import { executeDebugGameCommand } from '../debug/debugCommands'
 import { items } from '../level/items'
 import { TutorialResource } from '../state/levelState'
 import { planting } from '../seeds/planting'
-import { applySeedChoice } from '../seeds/seedChooser'
+import { applySeedChoice, finishRepick } from '../seeds/seedChooser'
 import type { CommandRejectionCode, QueuedCommand, Session } from './session'
 import { tools } from '../seeds/tools'
 import { levelRule } from '../rules/registry'
@@ -42,7 +42,8 @@ export const commands = {
             economy.money = Math.min(session.definitions.economy.maxMoney, command.money)
             if (command.packetUpgrades > 0) economy.diamonds = true
             else delete economy.diamonds
-            if (world.resources.get(SeedBankResource).choosing === true && command.packetUpgrades > (economy.packetUpgrades ?? 0)) {
+            const bank = world.resources.get(SeedBankResource)
+            if (bank.choosing === true && !bank.repick && command.packetUpgrades > (economy.packetUpgrades ?? 0)) {
                 economy.packetUpgrades = command.packetUpgrades
             }
             return
@@ -50,6 +51,9 @@ export const commands = {
         if (command.type === 'chooseSeed' || command.type === 'confirmSeeds') {
             return applySeedChoice(world, session.definitions, command)
         }
+        if (command.type === 'finishRepick') return finishRepick(world)
+        // A repick stands the level still: nothing but the choice goes on.
+        if (world.resources.get(SeedBankResource).repick) return 'choosing-seeds'
         if (level.paused) return 'game-paused'
         if (command.type === 'advanceDialog') {
             if (level.phase !== 'intro') return 'unsupported-command'
@@ -110,7 +114,7 @@ export function processBoundaryCommands(session: Session, processInput: boolean)
         const rejection = processNextCommand(session)
         const introInput = previousPhase === 'intro' && (command.type === 'advanceDialog' || command.type === 'answerDialog' || command.type === 'selectTool' || command.type === 'useToolAt' || command.type === 'clearCursor')
         if (inputCommand || (rejection === undefined && (introInput || isSessionCommand(command)
-            && (command.type === 'debug' || command.type === 'chooseSeed' || command.type === 'confirmSeeds' || level.phase !== previousPhase || level.paused !== previousPaused)))) {
+            && (command.type === 'debug' || command.type === 'chooseSeed' || command.type === 'confirmSeeds' || command.type === 'finishRepick' || level.phase !== previousPhase || level.paused !== previousPaused)))) {
             session.tick++
             changed = true
         }
@@ -158,5 +162,5 @@ function isSessionCommand(command: QueuedCommand): boolean {
     if (command.type === 'debug') return true
     return command.type === 'pause' || command.type === 'resume' || command.type === 'completeIntro' || command.type === 'syncPurse'
         || command.type === 'advanceDialog' || command.type === 'answerDialog'
-        || command.type === 'chooseSeed' || command.type === 'confirmSeeds'
+        || command.type === 'chooseSeed' || command.type === 'confirmSeeds' || command.type === 'finishRepick'
 }

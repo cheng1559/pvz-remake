@@ -52,7 +52,19 @@ export class LevelAudioPresenter {
     }
 
     resume(): void {
-        if (this.ownsMusic) MusicSystem.resume()
+        if (this.ownsMusic && !this.musicHeld) MusicSystem.resume()
+    }
+
+    private musicHeld = false
+    /**
+     * A repick stands the level still and its music with it. The pause menu's resume leaves it paused meanwhile, and a
+     * tune started meanwhile (a restored level's) starts paused, as MusicSystem keeps the pause asked for.
+     */
+    holdMusic(held: boolean): void {
+        if (held === this.musicHeld) return
+        if (held) this.pause()
+        this.musicHeld = held
+        if (!held) this.resume()
     }
 
     syncResult(result: WorldSnapshot['result']): void {

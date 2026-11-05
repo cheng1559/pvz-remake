@@ -2,7 +2,8 @@ import type { GameplayDefinitions, GameplayLevels } from '@/shared/content/gamep
 import type { EnabledMod, GameCommand, ServerEvent, StartSessionPacket, WorldSnapshot } from '@/shared/protocol/index'
 import { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processBoundaryCommands, processCommandPhase } from './commands'
-import { EconomyStateResource, LevelStateResource } from '../state/components'
+import { EconomyStateResource, LevelStateResource, SeedBankResource } from '../state/components'
+import { savedSeedBank } from '../seeds/seedChooser'
 import { getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, drainServerEvents } from '../state/events'
 import { items } from '../level/items'
@@ -93,7 +94,8 @@ export class IntegratedGameServer {
         const session = this.requireSession()
         if (this.processBoundaryCommands()) return
         const level = session.world.resources.get(LevelStateResource)
-        if (level.phase !== 'gameplay' || level.paused || level.result === 'lost') return
+        // A repick (`/repick`) stands the level still until its Let's Rock.
+        if (level.phase !== 'gameplay' || level.paused || level.result === 'lost' || session.world.resources.get(SeedBankResource).repick) return
         session.tick++
         session.gameplayTick++
         session.schedule.run(session.world, session.gameplayTick)
@@ -107,6 +109,15 @@ export class IntegratedGameServer {
 
     snapshot(): WorldSnapshot {
         return snapshot.build(this.requireSession())
+    }
+
+    /** The world as a save made now holds it: without a repick under way (savedSeedBank). */
+    savedSnapshot(): WorldSnapshot {
+        const session = this.requireSession(), resources = session.world.resources
+        const bank = resources.get(SeedBankResource)
+        if (!bank.repick) return this.snapshot()
+        resources.set(SeedBankResource, savedSeedBank(bank))
+        try { return snapshot.build(session) } finally { resources.set(SeedBankResource, bank) }
     }
 
     drainEvents(): ServerEvent[] {

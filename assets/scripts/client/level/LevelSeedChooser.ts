@@ -38,6 +38,9 @@ interface Choice extends ChooserEntry {
     grayed?: boolean
 }
 
+/** A repick's last tick: the chooser is out and the bank back from its choosing place, as quickly as they came in. */
+export const REPICK_END_TICK = 475
+
 /** Seed ownership/order comes from the server. Only card flights and panel motion live here. */
 export class LevelSeedChooser {
     readonly previewTooltipSurface: Node
@@ -58,6 +61,16 @@ export class LevelSeedChooser {
     private send: (command: GameCommand) => void = () => {}
     private age = 0
     private introTick = 0
+    /**
+     * A repick in play (`/repick`): the chooser's own ticks on the intro's timeline, dropping in over 400–425 and lifting
+     * out over 450–475 (REPICK_END_TICK) while the camera stays where it is, the bank sliding with it;
+     * undefined until the first repick.
+     */
+    repickTick?: number
+    private bankShift = 0
+    private repickFinished = false
+    /** The almanac and store buttons, which a repick leaves out. */
+    private readonly pageButtons: UIButton[] = []
     private warningOpen = false
     private readonly panel: Node
     private readonly edge: Node
@@ -176,6 +189,7 @@ export class LevelSeedChooser {
             [pages.store, 'SHOP_BUTTON', 680, () => this.onStore()]] as const) {
             if (!shown) continue
             const button = ui.button(this.buttons, { text: ui.text(key), skin: 'seedSmall', x, y: 572, rightClickTriggers: false, onClick: open })
+            this.pageButtons.push(button)
             button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= 425 && !this.warningOpen && !this.inFlight
         }
         const pointerDown = (event: EventMouse | EventTouch) => {
@@ -227,7 +241,8 @@ export class LevelSeedChooser {
         UIHoverManager.refreshHoverStates()
     }
 
-    get choosing(): boolean { return this.snapshot?.seedChooser?.choosing ?? true }
+    /** Until the first snapshot the chooser is choosing; a bank that went back to being dealt after a repick is not. */
+    get choosing(): boolean { return this.snapshot ? this.snapshot.seedChooser?.choosing === true : true }
     get active(): boolean { return this.panel.active }
     private get inFlight(): boolean { return this.choices.some(choice => !!choice.motion) }
 
@@ -254,18 +269,47 @@ export class LevelSeedChooser {
         this.emptySlots.forEach((node, index) => { const { x, y } = this.slotPosition(index); node.setPosition(x, -y) })
     }
 
-    /** Board::GetSeedPacketPositionX, 8px below the bank's top. */
+    /** Board::GetSeedPacketPositionX, 8px below the bank's top, from where the bank stands now. */
     private slotPosition(slot: number): { x: number, y: number } {
-        return { x: seedPacketX(slot, this.slots), y: 8 }
+        return { x: seedPacketX(slot, this.slots) + this.bankShift, y: 8 }
+    }
+
+    /**
+     * How far the bank stands right of its choosing place (SEED_BANK_OFFSET_X), while a repick slides it there and back:
+     * the cards resting in it and its empty slots ride along (SeedChooserScreen::GetSeedPositionInBank reads mSeedBank->mX).
+     */
+    setBankShift(shift: number): void {
+        if (shift === this.bankShift) return
+        this.bankShift = shift
+        for (const choice of this.choices) if (choice.slot >= 0 && !choice.motion) {
+            const destination = this.slotPosition(choice.slot)
+            choice.view.node.setPosition(destination.x, -destination.y)
+        }
+        this.emptySlots.forEach((node, index) => { const { x, y } = this.slotPosition(index); node.setPosition(x, -y) })
     }
 
     placeBefore(node: Node): void {
         this.edge.setSiblingIndex(node.getSiblingIndex())
     }
 
+    /** Puts `node`, the chooser's sibling, right under it: over everything else, below the chooser's cards. */
+    placeUnder(node: Node): void {
+        const from = node.getSiblingIndex(), to = this.edge.getSiblingIndex()
+        // setSiblingIndex takes the node out before putting it back in.
+        node.setSiblingIndex(from < to ? to - 1 : to)
+    }
+
     sync(snapshot: WorldSnapshot): void {
         const before = this.snapshot
         this.snapshot = snapshot
+        // A repick drops the chooser in from the top again, its cards straight in their places.
+        const repick = snapshot.seedChooser?.repick === true
+        if (repick && snapshot.seedChooser!.choosing && (this.repickTick === undefined || this.repickTick >= 450)) {
+            this.repickTick = 400
+            this.repickFinished = false
+            this.syncIntro(400)
+        }
+        for (const button of this.pageButtons) button.node.active = !repick
         for (const choice of this.choices) {
             const slot = snapshot.seedPackets.findIndex(packet => packet?.seedId === choice.seedId && packet.team === choice.team)
             if (slot !== choice.slot) {
@@ -293,6 +337,16 @@ export class LevelSeedChooser {
 
     update(dt: number): void {
         this.age += dt * 100
+        // A repick holds the chooser down while choosing and lifts it out after Let's Rock; once the bank is back in its
+        // place the level goes on.
+        if (this.repickTick !== undefined && this.repickTick < REPICK_END_TICK) {
+            this.repickTick = this.snapshot?.seedChooser?.repick && this.choosing ? Math.min(425, this.repickTick + dt * 100)
+                : Math.min(REPICK_END_TICK, Math.max(450, this.repickTick) + dt * 100)
+        }
+        if (this.repickTick === REPICK_END_TICK && this.snapshot?.seedChooser?.repick && !this.choosing && !this.repickFinished) {
+            this.repickFinished = true
+            this.send({ type: 'finishRepick' })
+        }
         for (const choice of this.choices) {
             const motion = choice.motion
             if (!motion) continue
@@ -309,7 +363,8 @@ export class LevelSeedChooser {
         // A pointer already resting on Let's Rock lights it once the chooser has arrived.
         if (this.introTick < 425 && tick >= 425) UIHoverManager.refreshHoverStates()
         this.introTick = tick
-        this.previewTooltipSurface.active = tick === 425 && this.choosing && !this.snapshot?.paused
+        // The intro's preview zombies are not there for a repick.
+        this.previewTooltipSurface.active = tick === 425 && this.choosing && !this.snapshot?.paused && !this.snapshot?.seedChooser?.repick
         this.panel.active = tick >= 400 && tick < 475
         this.cards.active = this.panel.active
         this.flying.active = this.panel.active

@@ -522,7 +522,9 @@ export class GameApp extends Component {
         }
         if (UIDialog.handleKey(event)) return
         // Board::KeyDown hands Space to the cutscene during SCENE_LEVEL_INTRO (seed chooser included); only play pauses.
-        if (!this.currentPage && !this.dialog && this.controller?.canPause() && !this.controller.isLevelIntro() && event.keyCode === KeyCode.SPACE) {
+        // A repick's chooser is the intro's again, so Space leaves it alone too; Escape and the menu button still open the menu.
+        if (!this.currentPage && !this.dialog && this.controller?.canPause() && !this.controller.isLevelIntro() && !this.controller.isRepicking()
+            && event.keyCode === KeyCode.SPACE) {
             event.propagationStopped = true
             void this.openDialog('pause')
             return

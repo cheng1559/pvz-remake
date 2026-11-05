@@ -154,6 +154,11 @@ export class IntegratedGameHost {
         }
     }
 
+    /** The server's world as a save made now holds it, for the frame saved with that save. */
+    savedSnapshot(): WorldSnapshot {
+        return this.server.savedSnapshot()
+    }
+
     private sendFrame(snapshot: WorldSnapshot, events = this.server.drainEvents()): void {
         const packet: ServerFramePacket = {
             protocolVersion: 1,

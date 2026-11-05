@@ -27,6 +27,7 @@ const builtins: CommandSpec[] = [
     { name: 'goto', parameters: ['{page}'], minimum: 1, values: { 0: DEBUG_GOTO_PAGES } },
     { name: 'plant', parameters: ['{plant_name}', '{row}', '{col}', '[team]'], minimum: 3, values: { 3: ['plants', 'zombies'] } },
     { name: 'seed', parameters: ['{slot}', '{seed_name}', '[team]'], minimum: 2, values: { 2: ['plants', 'zombies'] } },
+    { name: 'repick', parameters: [], minimum: 0 },
     { name: 'removeplant', parameters: ['{row}', '{col}'], minimum: 2 },
     { name: 'grave', parameters: ['{row}', '{col}', '[team]'], minimum: 2, values: { 2: ['zombies', 'plants'] } },
     { name: 'zombie', parameters: ['{zombie_name}', '[row]', '[col]', '[team]'], minimum: 1, values: { 3: ['zombies', 'plants'] } },

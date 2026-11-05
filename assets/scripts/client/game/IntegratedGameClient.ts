@@ -58,8 +58,9 @@ export class IntegratedGameClient {
         return sequence
     }
 
-    snapshot(level: LevelPresentationSnapshot): ClientPresentationSnapshot {
-        const current = this.world.current
+    /** `frame`: the frame to save in place of the ones held (with none before it), when the save holds another world. */
+    snapshot(level: LevelPresentationSnapshot, frame?: WorldSnapshot): ClientPresentationSnapshot {
+        const current = frame ?? this.world.current
         if (!current) throw new Error('Cannot snapshot client presentation before the session starts')
         return parseClientPresentationSnapshot({
             schemaVersion: 2,
@@ -67,7 +68,7 @@ export class IntegratedGameClient {
             transport: {
                 sequence: this.sequence,
                 highestEventId: this.highestEventId,
-                previous: this.world.previous ?? null,
+                previous: frame ? null : this.world.previous ?? null,
                 current,
             },
         })

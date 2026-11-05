@@ -110,6 +110,13 @@ export type SeedSelection = { mode: 'none' } | { mode: 'seed'; slot: number }
 /** A bank packet. `team`: the side of what it puts down, when not its seed's own (seedTeam; from `/seed`). */
 export interface SeedPacketState { seedId: string, readyAtTick: number, cooldownTotal?: number, team?: Team }
 
+/**
+ * A repick under way: `packets`, the bank as it stood before, its size and each packet's recharge; `chooser`, whether
+ * the level had opened the chooser; `confirmed`, Let's Rock pressed and the chooser lifting out (`finishRepick`). It
+ * is never saved: a save made meanwhile holds the bank from before, or once confirmed, the bank chosen.
+ */
+export interface SeedRepick { chooser: boolean, packets: Array<SeedPacketState | null>, confirmed?: true }
+
 export interface SeedBankState {
     selection: SeedSelection
     conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; lastSeedId?: string; packets: Array<{ id: number; seedId: string; x: number }> }
@@ -119,6 +126,13 @@ export interface SeedBankState {
      * by `/seed {slot} empty`. While choosing, the chosen packets come one after another with no empty slots.
      */
     packets: Array<SeedPacketState | null>
+    /**
+     * `/repick` in play, as Survival's repick (CutScene::IsSurvivalRepick): the level stands still while the bank, its
+     * cards still chosen, is chosen again for its size. A card chosen again picks up the recharge it had in the bank
+     * before (SeedChooserScreen keeps each seed's mRefreshCounter), any other is ready; the bank goes back to the
+     * level's own state, chosen or dealt, after.
+     */
+    repick?: SeedRepick
     /** The seeds the player owns, from the start packet; absent, every catalog seed (see availableSeeds). */
     owned?: string[]
 }

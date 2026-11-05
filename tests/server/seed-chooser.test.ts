@@ -331,3 +331,126 @@ test('partial and confirmed seed choices survive saving without reselecting or l
     assert.equal(confirmed.render().seedChooser?.choosing, false)
     assert.deepEqual(chosen(confirmed), seeds.slice(0, 6))
 })
+
+test('/repick stands the level still and chooses the bank again, its cards still chosen, keeping their recharge as Survival does', () => {
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start(options)
+    const first = ['pvz:peashooter', 'pvz:sunflower', 'pvz:cherrybomb', 'pvz:wallnut', 'pvz:potatomine', 'pvz:snowpea']
+    for (const seedId of first) command(game, { type: 'chooseSeed', seedId })
+    command(game, { type: 'confirmSeeds' })
+    command(game, { type: 'completeIntro' })
+    for (let tick = 0; tick < 100; tick++) game.update(TICK_SECONDS)
+    const remaining = (seedId: string) => game.render().seedPackets.find(packet => packet?.seedId === seedId)?.cooldownRemaining
+    const cherry = remaining('pvz:cherrybomb')!
+    assert.ok(cherry > 0, 'the cherry bomb is still on its opening recharge')
+
+    game.command({ type: 'selectSeed', seedId: 'pvz:peashooter', slot: 0 })
+    game.update(0)
+    assert.equal(game.debugCommand('/repick').ok, true)
+    const frozen = game.render()
+    assert.deepEqual([frozen.seedChooser?.choosing, frozen.seedChooser?.repick, frozen.seedChooser?.slots, chosen(game), frozen.cursor.mode],
+        [true, true, 6, first, 'none'], 'the bank keeps its cards and its size, and the held packet goes')
+    assert.equal(remaining('pvz:cherrybomb'), cherry, 'a card left in keeps its recharge')
+    assert.equal(frozen.seedChooser?.warnings, undefined, 'no sun warning on a repick')
+    for (let tick = 0; tick < 50; tick++) game.update(TICK_SECONDS)
+    assert.equal(game.render().gameplayTick, frozen.gameplayTick, 'the level stands still')
+    game.command({ type: 'collectItemAt', itemId: 1 })
+    game.update(0)
+    assert.equal(game.lastRejection?.code, 'choosing-seeds', 'nothing but the choice goes on')
+    assert.equal(game.debugCommand('/repick').ok, false, 'one repick at a time')
+
+    // A card the bank held picks its recharge up again; any other is ready.
+    for (const seedId of first) command(game, { type: 'chooseSeed', seedId })
+    assert.deepEqual(chosen(game), [])
+    command(game, { type: 'chooseSeed', seedId: 'pvz:cherrybomb' })
+    command(game, { type: 'chooseSeed', seedId: 'pvz:chomper' })
+    assert.deepEqual([remaining('pvz:cherrybomb'), remaining('pvz:chomper')], [cherry, 0])
+    command(game, { type: 'chooseSeed', seedId: 'pvz:cherrybomb' })
+    command(game, { type: 'chooseSeed', seedId: 'pvz:cherrybomb' })
+    assert.equal(remaining('pvz:cherrybomb'), cherry, 'taking it out and back does not refresh it')
+    game.command({ type: 'confirmSeeds' })
+    game.update(0)
+    assert.equal(game.lastRejection?.code, 'seed-choice-incomplete')
+
+    // A repick is not saved: a save made meanwhile holds the bank from before it, and loads into play.
+    const load = (save: JsonValue) => {
+        const loaded = new LocalIntegratedGame(definitions, levels, undefined, true)
+        loaded.start({ ...options, save })
+        return loaded
+    }
+    const before = load(game.saveAtBoundary())
+    assert.deepEqual([before.render().seedChooser?.choosing, before.render().seedChooser?.repick, slotSeeds(before)], [false, undefined, first])
+    assert.equal(before.render().seedPackets[2]!.cooldownRemaining, cherry, 'with the recharges it had')
+    before.update(TICK_SECONDS)
+    assert.equal(before.render().gameplayTick, frozen.gameplayTick + 1, 'and the level goes on')
+
+    for (const seedId of ['pvz:repeater', 'pvz:peashooter', 'pvz:sunflower', 'pvz:wallnut']) command(game, { type: 'chooseSeed', seedId })
+    command(game, { type: 'confirmSeeds' })
+    const confirmed = game.render()
+    const second = ['pvz:chomper', 'pvz:cherrybomb', 'pvz:repeater', 'pvz:peashooter', 'pvz:sunflower', 'pvz:wallnut']
+    assert.deepEqual([confirmed.seedChooser?.choosing, confirmed.seedChooser?.repick, chosen(game)], [false, true, second])
+    game.update(TICK_SECONDS)
+    assert.equal(game.render().gameplayTick, confirmed.gameplayTick, "after Let's Rock the level waits for the chooser to lift out")
+    const chosenSave = load(game.saveAtBoundary())
+    assert.deepEqual([chosenSave.render().seedChooser?.repick, slotSeeds(chosenSave)], [undefined, second], 'a save made then holds the bank chosen')
+    command(game, { type: 'finishRepick' })
+    const resumed = game.render()
+    assert.equal(resumed.seedChooser?.repick, undefined)
+    game.update(TICK_SECONDS)
+    assert.equal(game.render().gameplayTick, resumed.gameplayTick + 1, 'then the level goes on')
+    game.command({ type: 'finishRepick' })
+    game.update(0)
+    assert.equal(game.lastRejection?.code, 'not-choosing-seeds', 'only after a repick')
+    assert.deepEqual(slotSeeds(setup(game.saveAtBoundary())), slotSeeds(game), 'the chosen bank saves as one chosen at the start')
+})
+
+test('/repick opens the chooser on a level that deals its bank, which goes back to a dealt bank afterwards, but not on a conveyor', () => {
+    const start = (levelId: string) => {
+        const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+        game.start({ ...options, levelId, firstAdventure: true, ownedSeeds: adventureSeeds(levels, levelId) })
+        command(game, { type: 'completeIntro' })
+        return game
+    }
+    const dealt = start('pvz:adventure-1-3')
+    const bank = chosen(dealt)
+    assert.equal(dealt.render().seedChooser, undefined)
+    assert.equal(dealt.debugCommand('/repick').ok, true)
+    assert.deepEqual([dealt.render().seedChooser?.slots, chosen(dealt)], [bank.length, bank], 'its dealt cards come chosen')
+    for (const seedId of [...bank, ...[...bank].reverse()]) command(dealt, { type: 'chooseSeed', seedId })
+    command(dealt, { type: 'confirmSeeds' })
+    command(dealt, { type: 'finishRepick' })
+    assert.deepEqual([dealt.render().seedChooser, chosen(dealt)], [undefined, [...bank].reverse()])
+    const restored = new LocalIntegratedGame(definitions, levels, undefined, true)
+    restored.start({ ...options, levelId: 'pvz:adventure-1-3', firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-3'), save: dealt.saveAtBoundary() })
+    assert.deepEqual(chosen(restored), [...bank].reverse())
+
+    const belt = start('pvz:adventure-1-10')
+    const result = belt.debugCommand('/repick')
+    assert.deepEqual(result, { ok: false, failure: 'condition', key: 'DEBUG_REPICK_NO_BANK' })
+})
+
+test('a save made during a repick holds none, the client part neither, and loads straight into play', async () => {
+    const { levelPresentation } = await import('../client/level-test-snapshot')
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start(options)
+    for (const seedId of seeds.slice(0, 6)) command(game, { type: 'chooseSeed', seedId })
+    command(game, { type: 'confirmSeeds' })
+    command(game, { type: 'completeIntro' })
+    const bank = slotSeeds(game)
+    assert.equal(game.debugCommand('/repick').ok, true)
+    command(game, { type: 'chooseSeed', seedId: seeds[0] })
+    const server = game.saveAtBoundary()
+    const client = game.snapshotPresentation(levelPresentation(game.render()))
+    const saved = client.transport.current
+    assert.equal(game.render().seedChooser?.repick, true)
+    assert.deepEqual([saved.seedChooser?.choosing, saved.seedChooser?.repick, client.transport.previous],
+        [false, undefined, null], "the client saves the server's world as the save holds it")
+    assert.deepEqual(saved.seedPackets.map(packet => packet?.seedId ?? null), bank)
+
+    const loaded = new LocalIntegratedGame(definitions, levels, undefined, true)
+    loaded.start({ ...options, save: server })
+    loaded.restorePresentation(JSON.parse(JSON.stringify(client)))
+    const first = loaded.render()
+    assert.deepEqual([first.seedChooser?.choosing, first.seedChooser?.repick, slotSeeds(loaded)], [false, undefined, bank],
+        'the first frame shows the bank from before the repick')
+})

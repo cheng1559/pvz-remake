@@ -145,7 +145,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     let running = false
     let paused = false
     const pauses: boolean[] = []
-    let introReady = true, levelIntro = false
+    let introReady = true, levelIntro = false, repicking = false
     let cursorMode = 'none'
     let saves = 0
     const freshGames: boolean[] = []
@@ -167,6 +167,7 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         isPaused: () => paused,
         canPause: () => running && introReady && !paused,
         isLevelIntro: () => levelIntro,
+        isRepicking: () => repicking,
         cancelCursor() {
             if (cursorMode === 'none') return false
             cursorMode = 'none'
@@ -306,6 +307,18 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     assert.deepEqual([app.currentPage, paused], [null, false], 'Space cannot pause the seed chooser, though Menu works there')
     app.onKeyUp({ keyCode: 32 })
     levelIntro = false
+    repicking = true
+    app.onKeyDown({ keyCode: 32 })
+    await setImmediate()
+    assert.deepEqual([app.dialog, paused], [null, false], "Space cannot pause a repick's chooser either")
+    app.onKeyUp({ keyCode: 32 })
+    app.onKeyDown({ keyCode: 27 })
+    await setImmediate()
+    assert.equal(app.dialog?.id, 'gameOptions', 'but Escape opens the menu over it')
+    opened.at(-1)!.act('resume')
+    await setImmediate()
+    assert.deepEqual([app.dialog, paused], [null, false])
+    repicking = false
     const beforeEscape = sounds.length
     for (const held of ['seed', 'tool']) {
         cursorMode = held

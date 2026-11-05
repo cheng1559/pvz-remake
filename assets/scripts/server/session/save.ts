@@ -19,6 +19,7 @@ import type {
     Position,
     Projectile,
     SeedBankState,
+    SeedPacketState,
     Zombie,
     ZombieAnimation,
 } from '../state/components'
@@ -165,9 +166,7 @@ function parseSeedBank(value: unknown): SeedBankState {
             selection = { mode: 'tool', toolId: nonEmptyString(selected.toolId, 'selection.toolId') }; break
         default: throw new Error('Invalid saved selection')
     }
-    const packets = array(source.packets, 'server save.seedBank.packets').map((value, index) => {
-        if (value === null) return null
-        const name = `server save.seedBank.packets[${index}]`
+    const parsePacket = (value: unknown, name: string): SeedPacketState => {
         const packet = optionalExact(value, ['seedId', 'readyAtTick'], ['cooldownTotal', 'team'], name)
         return {
             seedId: nonEmptyString(packet.seedId, `${name}.seedId`),
@@ -175,7 +174,9 @@ function parseSeedBank(value: unknown): SeedBankState {
             ...(packet.cooldownTotal === undefined ? {} : { cooldownTotal: nonNegativeInteger(packet.cooldownTotal, `${name}.cooldownTotal`) }),
             ...(packet.team === undefined ? {} : { team: team(packet.team, `${name}.team`) }),
         }
-    })
+    }
+    const packets = array(source.packets, 'server save.seedBank.packets').map((value, index) =>
+        value === null ? null : parsePacket(value, `server save.seedBank.packets[${index}]`))
     let conveyor: SeedBankState['conveyor']
     if (source.conveyor !== undefined) {
         const data = optionalExact(source.conveyor, ['nextId', 'spawnAtTick', 'moveTicks', 'packets'], ['lastSeedId'], 'seedBank.conveyor')

@@ -58,8 +58,9 @@ export class LocalIntegratedGame {
         return this.client.lastSave
     }
 
+    /** A repick is not saved, by the client either: its frame is the server's world as the save holds it. */
     snapshotPresentation(level: LevelPresentationSnapshot) {
-        return this.client.snapshot(level)
+        return this.client.snapshot(level, this.client.render().seedChooser?.repick ? this.host.savedSnapshot() : undefined)
     }
 
     restorePresentation(value: unknown): LevelPresentationSnapshot {

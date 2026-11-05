@@ -47,6 +47,7 @@
   "DEBUG_REQUIRES_PLAYER": "/%s requires a player",
   "DEBUG_PLANT_NOT_INSTALLED": "Plant is not installed: %s",
   "DEBUG_FINISH_CHOOSING": "Finish choosing seeds first",
+  "DEBUG_REPICK_NO_BANK": "This level has no seed bank to choose again",
   "DEBUG_SEED_NOT_INSTALLED": "Seed is not installed: %s",
   "DEBUG_NO_PLANT_THERE": "No plant at that position",
   "DEBUG_ZOMBIE_NOT_INSTALLED": "Zombie is not installed: %s",

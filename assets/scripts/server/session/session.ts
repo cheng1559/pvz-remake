@@ -48,6 +48,8 @@ export type CommandRejectionCode =
     | 'not-choosing-seeds'
     | 'seed-bank-full'
     | 'seed-choice-incomplete'
+    /** `/repick` is choosing the bank again; the level waits for Let's Rock. */
+    | 'choosing-seeds'
 
 export type QueuedCommand = GameCommand | { type: 'debug'; command: string }
 export interface CommandResult { sequence: number, rejection?: CommandRejectionCode, debug?: DebugCliResult }

@@ -21,7 +21,7 @@ import { AchievementsResource } from '../achievements/achievements'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { initialPlantAbility } from '../plants/abilities'
 import { parseServerSaveSnapshot, type SavedEntity, type ServerSaveSnapshot } from './save'
-import { bankSlots, chooserOffer, seedBankStart } from '../seeds/seedChooser'
+import { bankSlots, chooserOffer, seedBankStart, savedSeedBank } from '../seeds/seedChooser'
 import { createSession, createWorld, type ServerContent, type Session } from './session'
 
 /** Captures a session as a save; `save.ts` defines and validates the format. */
@@ -57,7 +57,8 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         if (item) entity.item = { ...item }
         return entity
     })
-    const seedBank = world.resources.get(SeedBankResource)
+    // A repick is not saved (savedSeedBank).
+    const seedBank = savedSeedBank(world.resources.get(SeedBankResource))
     const tutorial = world.resources.get(TutorialResource)
     const wave = world.resources.get(WaveResource)
     const eventQueue = world.resources.get(EventQueueResource)

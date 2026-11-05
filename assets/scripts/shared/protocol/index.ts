@@ -43,6 +43,8 @@ export type GameCommand =
     /** `team`: the card's side when not its seed's own, as a Mod's chooser `entries` offer it. */
     | { type: 'chooseSeed'; seedId: string; team?: Team }
     | { type: 'confirmSeeds' }
+    /** After a repick's Let's Rock: the chooser has lifted out and the bank is back, so the level goes on. */
+    | { type: 'finishRepick' }
     | { type: 'selectConveyorPacket'; packetId: EntityId }
     | { type: 'selectTool'; toolId: string }
     | { type: 'placePlant'; row: number; column: number }
@@ -175,9 +177,10 @@ export interface WorldSnapshot {
     seedPackets: Array<SeedPacketSnapshot | null>
     /**
      * `availableSeeds` fill the catalog grid; `entries` are the cards Mods offer beyond it (seedChooser.entries).
-     * `warnings` are shown one after another on confirm; each can be dismissed to repick.
+     * `warnings` are shown one after another on confirm; each can be dismissed to repick. `repick`: chosen again in play
+     * (`/repick`), the level standing still, for the bank's own size.
      */
-    seedChooser?: { availableSeeds: string[], entries?: ChooserEntry[], slots: number, choosing: boolean, warnings?: string[] }
+    seedChooser?: { availableSeeds: string[], entries?: ChooserEntry[], slots: number, choosing: boolean, warnings?: string[], repick?: true }
     conveyorPackets: Array<{ id: number; seedId: string; x: number; selected: boolean; availability: SeedAvailability }>
     graves?: GraveSnapshot[]
     plants: PlantSnapshot[]
@@ -694,6 +697,7 @@ const validateGameCommand = (value: unknown): void => {
         case 'advanceDialog':
         case 'completeIntro':
         case 'confirmSeeds':
+        case 'finishRepick':
             return
         default:
             throw new TypeError('command.command.type is unknown')
@@ -783,7 +787,9 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         const slots = chooser.slots as number
         boolean(chooser.choosing, 'snapshot.seedChooser.choosing')
         // An open bank may hold a card no longer offered (a saved hidden card whose Mod is gone); it can still go back.
-        if (slots < 1 || slots > 10 || slots > available.length + entries.length || new Set(available).size !== available.length ||
+        // A repick keeps the bank's size, which a level's fixed bank may make larger than what the chooser offers.
+        if (chooser.repick !== undefined && chooser.repick !== true) throw new TypeError('snapshot.seedChooser.repick must be true')
+        if (slots < 1 || slots > 10 || slots > available.length + entries.length && chooser.repick === undefined || new Set(available).size !== available.length ||
             seedPackets.length > slots) throw new TypeError('Invalid seed chooser bank')
         if (chooser.warnings !== undefined) array(chooser.warnings, 'snapshot.seedChooser.warnings').forEach(value => nonEmptyString(value, 'snapshot.seedChooser.warnings[]'))
     }

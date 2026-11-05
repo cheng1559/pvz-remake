@@ -34,7 +34,7 @@ import {
 import { LevelParticlePresenter } from './LevelParticlePresenter'
 import { LevelGameOverPresenter } from './LevelGameOverPresenter'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { LevelSeedChooser } from './LevelSeedChooser'
+import { LevelSeedChooser, REPICK_END_TICK } from './LevelSeedChooser'
 import { LevelBoardHud, ownedTools } from './LevelBoardHud'
 import { LevelGraves } from './LevelGraves'
 import { createLevelRuleView, levelRulePresentation, type LevelRuleView } from './rules'
@@ -69,6 +69,13 @@ export class LevelView {
     private boardHud?: LevelBoardHud
     private hideConveyorBank = () => {}
     private seedChooser?: LevelSeedChooser
+    private seedChooserSend: (command: GameCommand) => void = () => {}
+    /** Builds a chooser for a level that opened none, the first time a repick asks for one. */
+    private openSeedChooser?: (chooser: NonNullable<WorldSnapshot['seedChooser']>) => Promise<LevelSeedChooser>
+    private openingSeedChooser = false
+    /** The lawn's layers, whose animations stand still while a repick stands the level still. */
+    private lawnLayers: Node[] = []
+    private readonly frozenComponents: Component[] = []
     private syncSeedChooserIntro = () => {}
     private pinScreen = () => {}
     /** How far the lawn sits right of its original gameplay position (wide viewports); the screen UI stays put. */
@@ -325,16 +332,19 @@ export class LevelView {
         const rulePresentation = levelRulePresentation(content.presentation, level)
         const graveRise = rulePresentation?.graveRise ?? content.presentation.graves.rise
         const audio = new LevelAudioPresenter(presentation.board.music, content.presentation, graveRise.sounds)
-        const seedChooser = initial.seedChooser === undefined ? undefined
-            : await LevelSeedChooser.create(ui, content, hud, initial.seedChooser.availableSeeds, initial.seedChooser.slots, root, seedId => {
+        const createSeedChooser = async (chooser: NonNullable<WorldSnapshot['seedChooser']>) => {
+            const created = await LevelSeedChooser.create(ui, content, hud, chooser.availableSeeds, chooser.slots, root, seedId => {
                 // Board::SeedNotRecommendedForLevel: mushrooms by day, and grave busters without graves.
                 const seed = content.definitions.seeds[seedId]
                 if (seed.kind !== 'plant') return undefined
                 if (content.definitions.plants[seed.id].nocturnal && !boardDefinition.night) return 'NOCTURNAL_WARNING'
                 if (seed.placement === 'grave' && !level.graves?.length) return 'NOT_RECOMMENDED_FOR_LEVEL'
                 return undefined
-            }, { almanac: player.almanacZombies !== undefined, store: player.store }, initial.seedChooser.entries)
-        seedChooser?.placeBefore(cursorLayer)
+            }, { almanac: player.almanacZombies !== undefined, store: player.store }, chooser.entries)
+            created.placeBefore(cursorLayer)
+            return created
+        }
+        const seedChooser = initial.seedChooser === undefined ? undefined : await createSeedChooser(initial.seedChooser)
         let view!: LevelView
         let entityRenderer!: LevelEntityRenderer
         const intro = await presentation.createIntro({
@@ -386,12 +396,10 @@ export class LevelView {
         )
         const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, gameOverFrames, presentation.board.gameOver)
         view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition)
-        if (seedChooser) {
-            seedChooser.onAlmanac = () => view.onOpenAlmanac?.()
-            seedChooser.onStore = () => view.onOpenStore?.()
-        }
         entityRenderer.sunBankOffset = () => bankLeft.position.x
-        view.seedChooser = seedChooser
+        view.lawnLayers = [entityLayer, coinLayer]
+        view.openSeedChooser = createSeedChooser
+        if (seedChooser) view.attachSeedChooser(seedChooser)
         view.graves = await LevelGraves.create(entityLayer, entityRenderer, content, boardDefinition, initial.graves ?? [])
         view.syncGraves(initial.phase === 'gameplay')
         if (ownedTools(initial).length || level.conveyor || initial.tutorial.dave) {
@@ -410,19 +418,60 @@ export class LevelView {
         view.pinScreen = () => {
             const pin = seedChooser && !intro.complete ? board.position.x : view.lawnShift
             hud.setPosition(-WIDTH / 2 - pin, HEIGHT / 2)
-            bankLayer.setPosition(-WIDTH / 2 - pin, HEIGHT / 2)
+            // A repick lifts the bank's layer into the HUD, over it (raiseBankToChooser).
+            if (bankLayer.parent === hud) bankLayer.setPosition(0, 0)
+            else bankLayer.setPosition(-WIDTH / 2 - pin, HEIGHT / 2)
             for (const layer of [coinLayer, awardLayer, cursorLayer]) layer.setPosition(pin, 0)
         }
-        if (seedChooser) view.syncSeedChooserIntro = () => {
-            const tick = intro.elapsedTicks
-            seedChooser.syncIntro(tick)
+        // A repick lifts the bank over everything but the chooser: the lawn's entities and the HUD's coins and sun, which
+        // would otherwise come between the bank and the chooser's cards resting in it. It goes back under the entities
+        // after, where play draws it, the sun flying over it. Above the chooser it would hide those cards.
+        let bankRaised = false
+        const raiseBankToChooser = (raised: boolean) => {
+            const chooser = view.seedChooser
+            if (raised === bankRaised || !chooser) return
+            bankRaised = raised
+            if (hud.parent !== board) {
+                // The HUD stands elsewhere, so the bank only goes over the entities beside it.
+                if (raised !== bankLayer.getSiblingIndex() > entityLayer.getSiblingIndex()) bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
+                return
+            }
+            if (raised) {
+                bankLayer.setParent(hud, true)
+                chooser.placeUnder(bankLayer)
+            } else {
+                bankLayer.setParent(board, true)
+                // Right before the entity layer, where it was put at the start.
+                bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
+            }
             view.pinScreen()
-            // Keep the bank above the entities until the return pan finishes at tick 600.
-            const above = !intro.complete && tick < 600
-            if (above !== bankLayer.getSiblingIndex() > entityLayer.getSiblingIndex()) {
+        }
+        view.syncSeedChooserIntro = () => {
+            const chooser = view.seedChooser
+            if (!chooser) return
+            // Keep the bank above the entities while the chooser is over it: until the intro's return pan finishes at tick
+            // 600, and through a repick.
+            const raiseBank = (above: boolean) => {
+                if (above === bankLayer.getSiblingIndex() > entityLayer.getSiblingIndex()) return
                 // The two layers are adjacent, so moving the bank to the entity layer's index swaps them.
                 bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
             }
+            // A repick in play drops and lifts the chooser on its own ticks, the camera staying put. The bank goes to its
+            // choosing place at the left edge as the chooser drops and back as it lifts, as quickly (the intro's
+            // SeedBankRight, SEED_BANK_OFFSET_X and SEED_BANK_OFFSET_X_END).
+            const tick = intro.elapsedTicks
+            const repick = intro.complete ? chooser.repickTick : undefined
+            if (repick !== undefined) {
+                chooser.syncIntro(repick)
+                bank.setPosition(repick <= 425 ? easeInOut(400, 425, repick, 10, 0) : easeInOut(450, REPICK_END_TICK, repick, 0, 10), bank.position.y)
+                chooser.setBankShift(bank.position.x)
+                raiseBankToChooser(repick < REPICK_END_TICK)
+                return
+            }
+            chooser.syncIntro(tick)
+            if (!seedChooser) return
+            view.pinScreen()
+            raiseBank(!intro.complete && tick < 600)
             if (intro.complete) return
             bank.active = tick > 400
             bank.setPosition(bank.position.x, easeInOut(400, 425, tick, 87, 0))
@@ -478,7 +527,33 @@ export class LevelView {
         return complete
     }
 
-    bindSeedChooser(send: (command: GameCommand) => void): void { this.seedChooser?.bind(send) }
+    bindSeedChooser(send: (command: GameCommand) => void): void {
+        this.seedChooserSend = send
+        this.seedChooser?.bind(send)
+    }
+
+    /** Takes the level's chooser, opened with the level or later by a repick; Mods wrap it to add to every chooser. */
+    attachSeedChooser(chooser: LevelSeedChooser): void {
+        this.seedChooser = chooser
+        chooser.onAlmanac = () => this.onOpenAlmanac?.()
+        chooser.onStore = () => this.onOpenStore?.()
+        chooser.bind(this.seedChooserSend)
+    }
+
+    /** A repick stands the level still: the lawn's animations wait with it, the chooser over it going on. */
+    private freezeLawn(frozen: boolean): void {
+        if (frozen === this.frozenComponents.length > 0) return
+        if (!frozen) {
+            for (const component of this.frozenComponents.splice(0)) if (component.isValid) component.enabled = true
+            return
+        }
+        for (const layer of this.lawnLayers) for (const component of layer.getComponentsInChildren(Component)) {
+            if (component.enabled && (component instanceof ReanimPlayer || component instanceof ParticlePlayer)) {
+                this.frozenComponents.push(component)
+                component.enabled = false
+            }
+        }
+    }
     /** Sends the player's Yes/No to a dialogue question (`answerDialog`). */
     bindDialogAnswer(send: (accept: boolean) => void): void { this.answerDialog = send }
 
@@ -573,6 +648,18 @@ export class LevelView {
         }
         const slots = snapshot.seedChooser?.slots ?? 0
         if (slots > this.seedBankSlots) { this.seedBankSlots = slots; this.applySeedBankSlots(slots) }
+        const repick = snapshot.seedChooser?.repick === true
+        this.audio.holdMusic(repick)
+        if (repick && !this.seedChooser && this.openSeedChooser && !this.openingSeedChooser) {
+            this.openingSeedChooser = true
+            void this.openSeedChooser(snapshot.seedChooser!).then(chooser => {
+                this.attachSeedChooser(chooser)
+                if (this.lastSnapshot) chooser.sync(this.lastSnapshot)
+                this.syncSeedChooserIntro()
+            }).catch(error => console.error('[LevelView] Failed to open the seed chooser for a repick', error))
+                .finally(() => { this.openingSeedChooser = false })
+        }
+        this.freezeLawn(repick)
         if (this.money !== undefined && snapshot.money !== this.money) this.onMoneyChanged?.(snapshot.money)
         this.money = snapshot.money
         this.boardHud?.sync(snapshot)

@@ -40,6 +40,8 @@ export interface LevelController {
     canPause(): boolean
     cancelCursor(): boolean
     isLevelIntro(): boolean
+    /** A repick (`/repick`) is choosing the bank again, or its chooser still lifting out. */
+    isRepicking(): boolean
     getLevelDefinition(): LevelDefinition | null
     isWon(): boolean
     countZombiesOnScreenForMusic(): number
@@ -316,6 +318,9 @@ export function createLevelController(
         },
         isLevelIntro() {
             return current?.root.isValid === true && current.game.currentSnapshot?.phase === 'intro'
+        },
+        isRepicking() {
+            return current?.root.isValid === true && current.game.currentSnapshot?.seedChooser?.repick === true
         },
         pause(quiet = false, keepMusic = false) {
             if (current?.root.isValid) current.scene.pause(quiet, keepMusic)
