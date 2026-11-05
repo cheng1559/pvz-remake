@@ -225,6 +225,34 @@ test('level seeds keep independent affordability and cooldowns, and placement us
 
 
 
+test('a belt packet is in its place on the belt when it shows, for its picture to snap to there', () => {
+    const ui = setup()
+    const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
+    const definitions = { seeds: { pea: { kind: 'plant', id: 'pvz:peashooter', sunCost: 100 } }, items: {} }
+    const bank = new LevelSeedBank({
+        level: { conveyor: { capacity: 2, seeds: [{ id: 'pea' }] } }, initialSeeds: [],
+        content: { definitions, presentation: presentationFixture }, seedPacketSlot: ui.root, presentation: {},
+        ui: { text: (key: string) => key, tooltip: () => ({ show() {}, hide() {} }) },
+    })
+    try {
+        // The picture (another layer) snaps to the packet as it shows (SeedPacketIconFollower.onEnable), and a component
+        // shown during update has no lateUpdate until the next frame: shown first, it draws a frame at a bank slot.
+        const shownAt: number[] = []
+        for (const packet of bank.packets as any[]) {
+            const node = packet.view.node
+            let active = node.active
+            Object.defineProperty(node, 'active', {
+                configurable: true, get: () => active,
+                set(value: boolean) { if (value && !active) shownAt.push(node.x); active = value },
+            })
+        }
+        const layout = presentationFixture.conveyor
+        bank.sync({ phase: 'gameplay', result: 'playing', paused: false, availableSun: 0, cursor: { mode: 'none' }, extensions: {}, items: [],
+            seedPackets: [], conveyorPackets: [{ id: 5, seedId: 'pea', selected: false, x: 300, availability: {} }] }, [], true, null, false)
+        assert.equal(JSON.stringify(shownAt), JSON.stringify([layout.packetX + 300]))
+    } finally { bank.destroy?.(); ui.cleanup() }
+})
+
 test('ordinary and conveyor packets share mobile drag, tap, switch and cancel interaction', () => {
     for (const conveyor of [false, true]) {
         const ui = setup(), e = ui.events

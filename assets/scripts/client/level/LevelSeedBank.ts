@@ -162,6 +162,12 @@ export class LevelSeedBank {
         if (this.options.level.conveyor) this.syncConveyorOrder(snapshot)
         for (const [index, entry] of this.packets.entries()) {
             const packet = this.packetAt(snapshot, index)
+            // A belt packet takes its place before it shows: its picture, in its own layer, follows it from the moment it
+            // shows, so a packet shown first would draw its picture for a frame where it last stood (a bank slot).
+            if (packet?.x !== undefined) {
+                const layout = this.options.content.presentation.conveyor
+                entry.view.node.setPosition(layout.packetX + packet.x, -layout.packetY)
+            }
             entry.view.node.active = !!packet && !snapshot.seedChooser?.choosing
             if (!packet) {
                 if (entry.button) entry.button.interactable = false
@@ -179,10 +185,6 @@ export class LevelSeedBank {
             }
             // A packet of the other side from its seed's own draws what it puts down facing the other way.
             entry.view.setMirrored(packet.team !== undefined)
-            if (packet.x !== undefined) {
-                const layout = this.options.content.presentation.conveyor
-                entry.view.node.setPosition(layout.packetX + packet.x, -layout.packetY)
-            }
             const available = packet.ready && !packet.availability.reason
             const canAfford = packet.availability.reason !== 'not-enough-sun'
             entry.tooltip.warning = packet.availability.warningKey
