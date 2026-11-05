@@ -363,9 +363,11 @@ export class LevelEntityRenderer {
                 // Plant::UpdatePotato adds PARTICLE_POTATO_MINE_RISE at the mine's own render order, so it draws after it.
                 if (plant) this.spawnBoardParticle("pvz:potatominerise", plant.x + 40, plant.y + 40, this.plantOrder(plant))
             } else if (event.type === 'graveBusted') {
-                // Plant::UpdateGraveBuster in 1.0.0.1051 spawns PARTICLE_GRAVE_BUSTER_DIE at (mX + 40, mY + 80), 4 above itself.
+                // Plant::UpdateGraveBuster in 1.0.0.1051 spawns PARTICLE_GRAVE_BUSTER_DIE at (mX + 40, mY + 80), 4 above itself;
+                // a buster of the zombies' side faces left, so its dirt does too, about the same middle.
                 const x = Number(event.data.x)
-                this.spawnBoardParticle('pvz:gravebusterdie', x + 40, Number(event.data.y) + 80, renderOrder('plant', Number(event.data.row), plantRenderOffset(x)) + 4)
+                this.spawnBoardParticle('pvz:gravebusterdie', x + 40, Number(event.data.y) + 80, renderOrder('plant', Number(event.data.row), plantRenderOffset(x)) + 4,
+                    undefined, event.data.team === 'zombies')
             } else if (event.type === 'zombieRoseFromGrave') {
                 const zombie = snapshot.zombies.find(candidate => candidate.entityId === event.data.entityId)
                 // Zombie::RiseFromGrave: PARTICLE_ZOMBIE_RISE on the row's particle layer.

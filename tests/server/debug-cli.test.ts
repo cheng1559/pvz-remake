@@ -296,8 +296,11 @@ test("a grave buster goes only on a grave of the other side", () => {
     // Only a grave eaten by the plants' side pays: not one eaten by the zombies' side, nor a buster put on bare ground.
     assert.equal(game.debugCommand('/plant gravebuster 3 2').ok, true)
     const { landTicks, eatTicks } = definitions.plants['pvz:gravebuster'].graveBuster!
+    game.drainEvents()
     for (let tick = 0; tick < landTicks.max + eatTicks + 1; tick++) game.update(TICK_SECONDS)
     assert.ok(!game.render().plants.some(value => value.typeId === 'pvz:gravebuster'), 'every grave buster is done')
+    const busted = game.drainEvents().filter(event => event.type === 'graveBusted').map(event => [event.data.column, event.data.team])
+    assert.deepEqual(busted.sort(), [[1, undefined], [5, undefined], [6, 'zombies']], "the zombies' buster's dirt turns round with it")
     assert.deepEqual(game.render().graves!.map(grave => grave.column).sort(), [3, 4], 'the eaten graves are gone')
     const loot = game.render().items.filter(item => definitions.items[item.typeId]?.kind === 'money')
     assert.equal(loot.length, 1, "one coin, from the plants' grave buster")

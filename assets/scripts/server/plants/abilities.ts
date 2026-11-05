@@ -128,8 +128,10 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                         waves.graves = graves.filter(grave => grave.row !== position.row || grave.column !== plant.column)
                         const ate = waves.graves.length < graves.length
                         commands.destroyEntity(entity)
+                        // `team`: a buster of the zombies' side, facing left, whose dirt turns round with it.
                         emitServerEvent(events, 'graveBusted', {
                             entityId: entity, row: position.row, column: plant.column, x: position.x, y: position.y,
+                            ...(plantTeam(plant) === 'zombies' ? { team: 'zombies' } : {}),
                         })
                         // The original drops its loot piece even without a grave, which planting never allows but `/plant`
                         // does; here only a grave eaten by the plants' side pays the player.
