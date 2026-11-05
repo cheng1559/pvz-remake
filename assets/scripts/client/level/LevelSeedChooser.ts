@@ -67,6 +67,11 @@ export class LevelSeedChooser {
      * undefined until the first repick.
      */
     repickTick?: number
+    /**
+     * The mouse wheel anywhere over the level while the chooser is out, for a Mod (seed-chooser-pages turns its pages).
+     * A Mod uses this rather than listening on a node of its own, which would take the presses under it.
+     */
+    onWheel?: (event: EventMouse) => void
     private bankShift = 0
     private repickFinished = false
     /** The almanac and store buttons, which a repick leaves out. */
@@ -202,12 +207,18 @@ export class LevelSeedChooser {
                 choice.view.node.getComponent(UITransform)!.hitTest(event.getLocation(), event.windowId))
             if (choice) { this.pick(choice); event.propagationStopped = true }
         }
-        // HUD is above the seed bank. Listening on it would turn it into a hit target covering the bank.
+        // The mouse wheel while the chooser is out, for a Mod to use (onWheel).
+        const wheel = (event: EventMouse) => { if (this.panel.active) this.onWheel?.(event) }
+        // HUD is above the seed bank. Listening on it would turn it into a hit target covering the bank. The level's root
+        // is under everything, so listening there takes no click from anything else: a node with any mouse listener
+        // takes every mouse press over it (NodeEventProcessor._handleMouseDown), whatever it listens for.
         inputRoot.on(Node.EventType.MOUSE_DOWN, pointerDown, this, true)
         inputRoot.on(Node.EventType.TOUCH_START, pointerDown, this, true)
+        inputRoot.on(Node.EventType.MOUSE_WHEEL, wheel, this, true)
         this.panel.once(Node.EventType.NODE_DESTROYED, () => {
             inputRoot.off(Node.EventType.MOUSE_DOWN, pointerDown, this, true)
             inputRoot.off(Node.EventType.TOUCH_START, pointerDown, this, true)
+            inputRoot.off(Node.EventType.MOUSE_WHEEL, wheel, this, true)
         })
         this.showCards(this.catalogCards)
     }
