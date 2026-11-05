@@ -237,6 +237,15 @@ export class UIButton extends Component {
         UIHoverManager.refreshHoverStates()
     }
 
+    /** A key standing in for a press: the click and its sound, when the button could be pressed now; whether it was. */
+    trigger(): boolean {
+        if (!this.available()) return false
+        this.playPressSound()
+        this.node.emit(Button.EventType.CLICK, this)
+        this.onClick()
+        return true
+    }
+
     private playPressSound(): void {
         if (this.pressSound !== null) void SoundSystem.play(this.pressSound)
     }

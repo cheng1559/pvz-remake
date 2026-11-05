@@ -3,6 +3,7 @@ import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { gameClock } from '@/core/GameClock'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
 import { boardCell, levelAwardSize } from './LevelGeometry'
 import type { LevelGame } from './LevelGame'
 import { LevelView } from './LevelView'
@@ -328,6 +329,19 @@ export class LevelInputPresenter {
         else if (event.keyCode === KeyCode.KEY_D) {
             if (gameClock.speed > 0) { this.previousSpeed = gameClock.speed; gameClock.setSpeed(0) }
             else gameClock.setSpeed(this.previousSpeed)
+        }
+        // `/repick`, which says itself when the level has no bank to choose again; in a repick, its Let's Rock.
+        else if (event.keyCode === KeyCode.KEY_R) {
+            if (this.game.render().seedChooser?.repick) this.view.pressSeedChooserStart()
+            else this.game.debugCommand?.('/repick')
+        }
+        // `/suncost` and `/cooldown`, run as the CLI runs them: the preference kept for later levels, the advice shown.
+        else if (event.keyCode === KeyCode.KEY_S || event.keyCode === KeyCode.KEY_C) {
+            const game = this.game
+            if (!game.debugCommand) return
+            void executeDebugCliCommand(event.keyCode === KeyCode.KEY_S ? '/suncost' : '/cooldown', true, command => game.debugCommand!(command))
+                .then(result => { if (result.ok && result.advice) this.view.showAdvice(result.advice) })
+                .catch(error => console.error('[LevelInput] Switch failed', error))
         }
     }
 

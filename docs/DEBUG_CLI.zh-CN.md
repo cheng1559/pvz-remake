@@ -29,7 +29,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 规则 | `/cooldown`、`/suncost`、`/sunspawning`、`/plantinvincible` |
 | 收集 | `/collect {auto|click|move}`，自动／移动收集仅处理普通掉落 |
 | 成就 | `/achievement give {achievement}`、`/achievement reset [achievement]`（名称可省略 `pvz:`，如 `sunny-days`）。关卡内由关卡发放，与正常获得一样显示提示并播放音效；关卡外只写入档案，留到下一次领奖页列出。`reset` 不带名称时清除全部 |
-| 快捷键 | `/hotkeys`；`1`–`9`、`0` 选择普通种子栏或传送带对应槽位，`F` 拿起／放回铲子（手持植物时直接换成铲子，与数字键一致），`D` 切换 0 倍速 |
+| 快捷键 | `/hotkeys`；`1`–`9`、`0` 选择普通种子栏或传送带对应槽位，`F` 拿起／放回铲子（手持植物时直接换成铲子，与数字键一致），`D` 切换 0 倍速，`R` 执行 `/repick` 重选种子，重选时再按 `R` 等同按下开始战斗，`S` 切换是否需要阳光（同 `/suncost`），`C` 切换是否有冷却（同 `/cooldown`） |
 | 震动 | `/haptics`，默认开启，立即生效并保存到本地 |
 | 原版光标 | `/cursor`，默认开启，立即生效并保存到本地 |
 | 帧率 | `/fps`，在原始 800×600 游戏区域左下角显示或隐藏实时帧率 |

@@ -3,6 +3,7 @@ import type { ClientPresentationSnapshot } from '@/client/game/ClientPresentatio
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { GameCommand, ServerEvent, StartSessionPacket, WorldSnapshot } from '@/shared/protocol'
 import type { LevelPresentationSnapshot } from './LevelPresentationSnapshot'
+import type { DebugCliResult } from '@/shared/debug/DebugCli'
 
 export type LevelStartOptions = Omit<StartSessionPacket, 'protocolVersion' | 'sequence' | 'type'>
 
@@ -17,4 +18,6 @@ export interface LevelGame {
     drainChanges(): ClientWorldChanges
     snapshotPresentation(level: LevelPresentationSnapshot): ClientPresentationSnapshot
     restorePresentation(value: unknown): LevelPresentationSnapshot
+    /** A debug CLI command (`/repick` for its hotkey), where the game takes them. */
+    debugCommand?(command: string): DebugCliResult
 }

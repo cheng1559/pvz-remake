@@ -309,6 +309,11 @@ export class LevelHudPresenter {
         if (showLawnGuide) uiNode({ node: this.tutorialLawnFlash, sprite: {} }).sprite!.color = tutorialFlashColor(snapshot.gameplayTick)
     }
 
+    /** Advice the client itself has, as a hint: `key`'s string with its %s filled with the strings of `args`. */
+    showAdvice(key: string, args: readonly string[] = []): void {
+        this.advice.show(this.ui.format(key, args.map(arg => this.ui.text(arg))), 'hint')
+    }
+
     /** Level advice names pvz:strings keys; the server only sends keys. */
     private adviceText(key: string): string { return key ? this.ui.text(key) : '' }
 

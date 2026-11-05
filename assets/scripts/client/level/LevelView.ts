@@ -532,6 +532,16 @@ export class LevelView {
         this.seedChooser?.bind(send)
     }
 
+    /** Advice the client itself has (a debug switch turned by its key): a string key, its %s filled with `args`' strings. */
+    showAdvice(advice: { key: string, args?: string[] }): void {
+        this.hud.showAdvice(advice.key, advice.args)
+    }
+
+    /** Presses the chooser's Let's Rock from the keyboard; whether there was one to press. */
+    pressSeedChooserStart(): boolean {
+        return this.seedChooser?.pressStart() ?? false
+    }
+
     /** Takes the level's chooser, opened with the level or later by a repick; Mods wrap it to add to every chooser. */
     attachSeedChooser(chooser: LevelSeedChooser): void {
         this.seedChooser = chooser

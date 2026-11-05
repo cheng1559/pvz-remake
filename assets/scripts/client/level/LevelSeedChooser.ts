@@ -303,6 +303,11 @@ export class LevelSeedChooser {
         this.edge.setSiblingIndex(node.getSiblingIndex())
     }
 
+    /** Presses Let's Rock from the keyboard, as a click on it would; whether it could be pressed. */
+    pressStart(): boolean {
+        return this.start.trigger()
+    }
+
     /** Puts `node`, the chooser's sibling, right under it: over everything else, below the chooser's cards. */
     placeUnder(node: Node): void {
         const from = node.getSiblingIndex(), to = this.edge.getSiblingIndex()

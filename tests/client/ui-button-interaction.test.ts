@@ -444,3 +444,17 @@ test('touch dragging cancels outside, clicks only its captured touch, and leaves
         assert.equal(a.clicks, 1); assert.equal(a.state, 'normal'); assert.equal(ui.cursor, 'default')
     } finally { ui.cleanup() }
 })
+
+test('a key can stand in for a press, only while the button could be pressed', () => {
+    const ui = setup(), a = ui.makeButton(0)
+    try {
+        assert.equal(a.button.trigger(), true)
+        assert.equal(a.clicks, 1)
+        a.button.canInteract = () => false
+        assert.equal(a.button.trigger(), false, 'not while it cannot be pressed')
+        a.button.canInteract = () => true
+        a.button.interactable = false
+        assert.equal(a.button.trigger(), false, 'nor while disabled')
+        assert.equal(a.clicks, 1)
+    } finally { ui.cleanup() }
+})
