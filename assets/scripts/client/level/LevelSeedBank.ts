@@ -96,8 +96,9 @@ export class LevelSeedBank {
             loadSprite: options.loadPacketSprite,
             costFont: options.packetCostFont,
         })
-        // Left packets draw last so their plants can overlap the packets to their right.
-        view.node.setSiblingIndex(0)
+        // SeedBank::Draw goes left to right: each packet goes in after the ones before it, all of them under the layers of
+        // pictures and labels over every packet, whose pictures follow the same order.
+        view.node.setSiblingIndex(this.iconLayer.getSiblingIndex())
         if (seedId === undefined || options.seedChooser) view.node.active = false
         const tooltip = options.ui.tooltip(view.node, {
             text: look ? options.ui.text(look.name) : '',

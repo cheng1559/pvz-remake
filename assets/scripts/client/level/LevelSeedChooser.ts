@@ -164,8 +164,9 @@ export class LevelSeedChooser {
             button.onHoverChange = hovering => hovering && !this.inFlight ? tooltip.show() : tooltip.hide()
             this.choices.push(choice)
         }
-        // The pictures in the same order as their cards, each put before the earlier ones.
-        for (const choice of [...this.choices].reverse()) choice.view.raiseIcon()
+        // The pictures in the order of their cards, each drawn over the earlier ones (SeedChooserScreen::Draw goes through
+        // the seed types in turn), so a picture standing out of its packet shows over the card before it.
+        for (const choice of this.choices) choice.view.raiseIcon()
         this.start = ui.button(this.buttons, { text: ui.text('LETS_ROCK_BUTTON'), skin: 'seed', font: 'yellow',
             color: Color.WHITE, disabledColor: new Color(64, 64, 64), x: 154, y: 545, width: 156, height: 42,
             rightClickTriggers: false, enabled: false, onClick: () => this.confirm() })
@@ -363,8 +364,10 @@ export class LevelSeedChooser {
         choice.view.node.setParent(this.cards)
         choice.view.setIconLayer(this.cardIcons)
         this.syncPlaceholders()
-        // The pictures in the same order as their cards.
-        this.choices.filter(candidate => !candidate.motion).sort((a, b) => b.view.node.position.x - a.view.node.position.x)
+        // The cards and their pictures in reading order, each over the one before it, as SeedChooserScreen::Draw and
+        // SeedBank::Draw go left to right.
+        this.choices.filter(candidate => !candidate.motion)
+            .sort((a, b) => b.view.node.position.y - a.view.node.position.y || a.view.node.position.x - b.view.node.position.x)
             .forEach((candidate, index) => { candidate.view.node.setSiblingIndex(this.emptySlots.length + index); candidate.view.raiseIcon() })
         UIHoverManager.refreshHoverStates()
     }
