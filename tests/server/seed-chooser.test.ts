@@ -177,22 +177,22 @@ test('the seed catalog is a table of grid places that Mods extend and override',
 test('Mods offer cards beyond the grid, on either side, which the bank tells apart and a save keeps', () => {
     const original = seedChooser.entries
     seedChooser.entries = (defs, owned) => [...original(defs, owned),
-        { seedId: 'pvz:explodenut' }, { seedId: 'pvz:zombie-normal', team: 'plants' }, { seedId: 'pvz:zombie-normal' },
+        { seedId: 'pvz:explodenut' }, { seedId: 'pvz:normal', team: 'plants' }, { seedId: 'pvz:normal' },
         // The seed's own side is the same card as no side at all, so an owned grid seed is offered already.
         { seedId: 'pvz:peashooter', team: 'zombies' }, { seedId: 'pvz:sunflower', team: 'plants' }, { seedId: 'pvz:explodenut' }, { seedId: 'test:missing' }]
     try {
         const game = setup()
         assert.deepEqual(game.render().seedChooser?.entries, [
-            { seedId: 'pvz:explodenut' }, { seedId: 'pvz:zombie-normal', team: 'plants' }, { seedId: 'pvz:zombie-normal' },
+            { seedId: 'pvz:explodenut' }, { seedId: 'pvz:normal', team: 'plants' }, { seedId: 'pvz:normal' },
             { seedId: 'pvz:peashooter', team: 'zombies' },
         ])
         const packets = () => game.render().seedPackets.map(packet => ({ seedId: packet.seedId, ...(packet.team ? { team: packet.team } : {}) }))
         command(game, { type: 'chooseSeed', seedId: 'pvz:explodenut' })
-        command(game, { type: 'chooseSeed', seedId: 'pvz:zombie-normal', team: 'plants' })
-        command(game, { type: 'chooseSeed', seedId: 'pvz:zombie-normal', team: 'zombies' })
+        command(game, { type: 'chooseSeed', seedId: 'pvz:normal', team: 'plants' })
+        command(game, { type: 'chooseSeed', seedId: 'pvz:normal', team: 'zombies' })
         command(game, { type: 'chooseSeed', seedId: 'pvz:peashooter', team: 'zombies' })
         command(game, { type: 'chooseSeed', seedId: 'pvz:peashooter' })
-        assert.deepEqual(packets(), [{ seedId: 'pvz:explodenut' }, { seedId: 'pvz:zombie-normal', team: 'plants' }, { seedId: 'pvz:zombie-normal' },
+        assert.deepEqual(packets(), [{ seedId: 'pvz:explodenut' }, { seedId: 'pvz:normal', team: 'plants' }, { seedId: 'pvz:normal' },
             { seedId: 'pvz:peashooter', team: 'zombies' }, { seedId: 'pvz:peashooter' }])
         // Not offered: a hidden seed on the other side, or a seed the chooser does not list.
         game.command({ type: 'chooseSeed', seedId: 'pvz:explodenut', team: 'zombies' })
@@ -200,9 +200,9 @@ test('Mods offer cards beyond the grid, on either side, which the bank tells apa
         game.update(0)
         assert.equal(packets().length, 5)
         // Each side goes back on its own.
-        command(game, { type: 'chooseSeed', seedId: 'pvz:zombie-normal', team: 'plants' })
+        command(game, { type: 'chooseSeed', seedId: 'pvz:normal', team: 'plants' })
         assert.deepEqual(packets().map(packet => packet.team), [undefined, undefined, 'zombies', undefined])
-        command(game, { type: 'chooseSeed', seedId: 'pvz:zombie-normal', team: 'plants' })
+        command(game, { type: 'chooseSeed', seedId: 'pvz:normal', team: 'plants' })
         const save = game.saveAtBoundary()
         // A save holds them even once nothing offers them any more, and they can still go back.
         seedChooser.entries = original
@@ -249,11 +249,11 @@ test("a Mod's cards count like owned seeds towards the slots and opening the cho
         const plain = start([]).render()
         assert.deepEqual([plain.seedChooser, plain.seedPackets.map(packet => packet.seedId)], [undefined, ['pvz:peashooter']])
         // A few more cards still fit: they all go in the bank, in order, each on its side.
-        const few = start([{ seedId: 'pvz:explodenut' }, { seedId: 'pvz:zombie-normal', team: 'plants' }]).render()
+        const few = start([{ seedId: 'pvz:explodenut' }, { seedId: 'pvz:normal', team: 'plants' }]).render()
         assert.deepEqual([few.seedChooser, few.seedPackets.map(packet => [packet.seedId, packet.team])],
-            [undefined, [['pvz:peashooter', undefined], ['pvz:explodenut', undefined], ['pvz:zombie-normal', 'plants']]])
+            [undefined, [['pvz:peashooter', undefined], ['pvz:explodenut', undefined], ['pvz:normal', 'plants']]])
         // More cards than slots open the chooser, with the full six slots.
-        const many = ['pvz:explodenut', 'pvz:bowling-wallnut', 'pvz:bowling-explodenut', 'pvz:zombie-normal', 'pvz:zombie-conehead', 'pvz:zombie-flag']
+        const many = ['pvz:explodenut', 'pvz:bowling-wallnut', 'pvz:bowling-explodenut', 'pvz:normal', 'pvz:conehead', 'pvz:flag']
         const game = start(many.map(seedId => ({ seedId })))
         assert.deepEqual([game.render().seedChooser?.slots, game.render().seedChooser?.availableSeeds], [6, ['pvz:peashooter']])
         for (const seedId of ['pvz:peashooter', ...many.slice(0, 5)]) command(game, { type: 'chooseSeed', seedId })

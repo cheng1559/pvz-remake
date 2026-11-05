@@ -343,10 +343,10 @@ test('a zombie seed puts a zombie into any cell of an active row, of the zombies
     const server = begin()
     debug(server, '/sun set 500')
     debug(server, '/plant peashooter 3 3')
-    assert.equal(debug(server, '/seed 1 zombie-normal').ok, true)
+    assert.equal(debug(server, '/seed 1 normal').ok, true)
     server.drainEvents()
-    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:zombie-normal', slot: 0 }), undefined)
-    assert.deepEqual(server.snapshot().cursor, { mode: 'seed', seedId: 'pvz:zombie-normal' })
+    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:normal', slot: 0 }), undefined)
+    assert.deepEqual(server.snapshot().cursor, { mode: 'seed', seedId: 'pvz:normal' })
     // Challenge::IZombiePlaceZombie: on a plant's cell too, 30 left of it.
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 2 }), undefined)
     const [placed] = zombies(server)
@@ -357,13 +357,13 @@ test('a zombie seed puts a zombie into any cell of an active row, of the zombies
     assert.ok(server.drainEvents().some(event => event.type === 'zombiePlaced'))
     assert.equal(plants(server).length, 1, 'no plant is made')
     // No recharge (Plant::GetRefreshTime): it can go down again at once.
-    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:zombie-normal', slot: 0 }), undefined)
+    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:normal', slot: 0 }), undefined)
     assert.equal(runCommand(server, { type: 'placePlant', row: 7, column: 8 }), 'row-not-active')
 
-    debug(server, '/seed 1 zombie-normal plants')
+    debug(server, '/seed 1 normal plants')
     assert.equal(server.snapshot().seedPackets[0].team, 'plants')
-    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:zombie-normal', slot: 0 }), undefined)
-    assert.deepEqual(server.snapshot().cursor, { mode: 'seed', seedId: 'pvz:zombie-normal', team: 'plants' })
+    assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:normal', slot: 0 }), undefined)
+    assert.deepEqual(server.snapshot().cursor, { mode: 'seed', seedId: 'pvz:normal', team: 'plants' })
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 5 }), undefined)
     const ally = zombies(server).at(-1)!
     assert.equal(ally.team, 'plants', 'a packet of the plants’ side puts down a zombie of that side')
@@ -374,9 +374,9 @@ test('a zombie seed puts a zombie into any cell of an active row, of the zombies
     server.start({ ...options, save: server.save() as unknown as JsonValue })
     assert.equal(zombies(server).find(zombie => zombie.team === 'plants')!.mindControlled, true, 'and keeps it through a save')
     debug(server, '/sun set 500')
-    debug(server, '/seed 1 zombie-normal zombies')
+    debug(server, '/seed 1 normal zombies')
     assert.equal(server.snapshot().seedPackets[0].team, undefined, 'its own side is not stored')
-    assert.equal(debug(server, '/plant zombie-normal 3 1').ok, false, '/plant only plants')
+    assert.equal(debug(server, '/plant normal 3 1').ok, false, '/plant only plants')
 })
 
 test('a pole vaulter facing right vaults right over a hostile plant, and one put down on a plant does not vault back', () => {
@@ -396,8 +396,8 @@ test('a pole vaulter facing right vaults right over a hostile plant, and one put
     const other = begin()
     debug(other, '/sun set 500')
     debug(other, '/plant wallnut 3 5')
-    debug(other, '/seed 1 zombie-pole_vaulter')
-    runCommand(other, { type: 'selectSeed', seedId: 'pvz:zombie-pole_vaulter', slot: 0 })
+    debug(other, '/seed 1 pole_vaulter')
+    runCommand(other, { type: 'selectSeed', seedId: 'pvz:pole_vaulter', slot: 0 })
     assert.equal(runCommand(other, { type: 'placePlant', row: 2, column: 4 }), undefined)
     const start = zombies(other)[0].x
     let max = start
@@ -408,7 +408,7 @@ test('a pole vaulter facing right vaults right over a hostile plant, and one put
 test('every zombie has a seed, the flag and newspaper zombies too', () => {
     const server = begin()
     for (const name of ['normal', 'flag', 'conehead', 'pole_vaulter', 'buckethead', 'newspaper', 'screendoor']) {
-        assert.equal(debug(server, `/seed 1 zombie-${name}`).ok, true, name)
+        assert.equal(debug(server, `/seed 1 ${name}`).ok, true, name)
     }
 })
 
@@ -432,6 +432,6 @@ test('a zombie put down facing right stands its own facingRightOffsetX further; 
         return zombies(server).find(zombie => zombie.row === row)!.x
     }
     const offset = definitions.zombies['pvz:pole_vaulter'].facingRightOffsetX!
-    assert.ok(Math.abs(put('zombie-pole_vaulter', 1) - put('zombie-normal', 2) - offset) < 1e-9)
-    assert.equal(put('zombie-pole_vaulter', 3, 'zombies'), put('zombie-normal', 0, 'zombies'))
+    assert.ok(Math.abs(put('pole_vaulter', 1) - put('normal', 2) - offset) < 1e-9)
+    assert.equal(put('pole_vaulter', 3, 'zombies'), put('normal', 0, 'zombies'))
 })
