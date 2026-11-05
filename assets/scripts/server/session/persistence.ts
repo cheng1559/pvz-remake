@@ -253,7 +253,7 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
     if (saved.plant) {
         const plant = definitions.plants[saved.plant.typeId]
         const seed = definitions.seeds[saved.plant.seedId]
-        if (!plant || !seed || seed.plant !== saved.plant.typeId) {
+        if (!plant || seed?.kind !== 'plant' || seed.id !== saved.plant.typeId) {
             throw new Error(`Unknown saved plant: ${saved.plant.typeId}`)
         }
         gameplay.plantBehaviors.validateState(saved.plant, plant)

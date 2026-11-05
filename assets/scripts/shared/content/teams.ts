@@ -1,4 +1,5 @@
 import type { Team } from '@/shared/protocol'
+import type { SeedKind } from './gameplay'
 
 export type { Team }
 
@@ -13,14 +14,13 @@ export const projectileTeam = (projectile: { readonly team?: Team }): Team => pr
  * A seed's own side: a plant seed's plants are the plants', a zombie seed's zombies the zombies' (SEED_ZOMBIE_*), and a
  * grave seed's grave the zombies', as every grave of the original is.
  */
-export const seedTeam = (seed: { readonly zombie?: string, readonly grave?: true }): Team =>
-    seed.zombie === undefined && !seed.grave ? 'plants' : 'zombies'
+export const seedTeam = (seed: { readonly kind: SeedKind }): Team => seed.kind === 'plant' ? 'plants' : 'zombies'
 
 /**
  * The side a packet keeps for its seed: `team` only when it is not the seed's own, so a packet on its seed's own side
  * has none. `/seed` and the chooser store their packets this way.
  */
-export const packetTeam = (seed: { readonly zombie?: string, readonly grave?: true }, team: Team | undefined): Team | undefined =>
+export const packetTeam = (seed: { readonly kind: SeedKind }, team: Team | undefined): Team | undefined =>
     team !== undefined && team !== seedTeam(seed) ? team : undefined
 
 /** The one rule: different sides attack each other (Zombie::EffectedByDamage, FindZombieTarget). */

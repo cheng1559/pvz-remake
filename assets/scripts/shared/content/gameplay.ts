@@ -71,24 +71,23 @@ interface SeedCommon {
     initialCooldownTicks?: number
 }
 
-/** A seed that plants `plant`. */
+/** A seed that plants the plant `id`. */
 export interface PlantSeedDefinition extends SeedCommon {
-    plant: string
-    zombie?: undefined
-    grave?: undefined
+    kind: 'plant'
+    /** The plant it plants: the seed's own ID unless its definition names another. */
+    id: string
     /** `grave`: only on a grave, like the Grave Buster (PLANTING_ONLY_ON_GRAVES). */
     placement: 'ground' | 'grave'
 }
 
 /**
- * A seed that places a `zombie` (the original's SEED_ZOMBIE_*, Challenge::IZombiePlaceZombie), usable on any level: in
- * any cell of an active row, whatever stands there, on the zombies' side unless its packet says otherwise.
+ * A seed that places the zombie `id` (the original's SEED_ZOMBIE_*, Challenge::IZombiePlaceZombie), usable on any level:
+ * in any cell of an active row, whatever stands there, on the zombies' side unless its packet says otherwise.
  */
 export interface ZombieSeedDefinition extends SeedCommon {
-    zombie: string
-    plant?: undefined
-    grave?: undefined
-    placement?: undefined
+    kind: 'zombie'
+    /** The zombie it places: the seed's own ID unless its definition names another. */
+    id: string
 }
 
 /**
@@ -97,13 +96,12 @@ export interface ZombieSeedDefinition extends SeedCommon {
  * zombies rise on the grave's side, the zombies' unless its packet says otherwise.
  */
 export interface GraveSeedDefinition extends SeedCommon {
-    grave: true
-    plant?: undefined
-    zombie?: undefined
-    placement?: undefined
+    kind: 'grave'
 }
 
+/** A seed, told apart by `kind`: a new kind is one more definition here, none of the others change. */
 export type SeedDefinition = PlantSeedDefinition | ZombieSeedDefinition | GraveSeedDefinition
+export type SeedKind = SeedDefinition['kind']
 
 /** Damages zombies whose body overlaps the circle; `burn` chars them like the original ApplyBurn. */
 export interface ExplosionDefinition {
@@ -395,11 +393,11 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
         if (other) throw new Error(`seed catalog puts ${other} and ${id} in the same place (${position})`)
         places.set(position, id)
         reference(id, definitions.seeds, 'seed catalog')
-        if (definitions.seeds[id].plant === undefined) throw new Error(`seed catalog lists ${id}, not a plant seed; the chooser only offers plants`)
+        if (definitions.seeds[id].kind !== 'plant') throw new Error(`seed catalog lists ${id}, not a plant seed; the chooser only offers plants`)
     }
     for (const [id, seed] of Object.entries(definitions.seeds)) {
-        if (seed.zombie !== undefined) reference(seed.zombie, definitions.zombies, `seeds.${id}.zombie`)
-        else if (seed.plant !== undefined) reference(seed.plant, definitions.plants, `seeds.${id}.plant`)
+        if (seed.kind === 'plant') reference(seed.id, definitions.plants, `seeds.${id}.id`)
+        else if (seed.kind === 'zombie') reference(seed.id, definitions.zombies, `seeds.${id}.id`)
     }
     for (const [id, plant] of Object.entries(definitions.plants)) {
         if (plant.shooter?.projectile) reference(plant.shooter.projectile, definitions.projectiles, `plants.${id}.shooter.projectile`)
@@ -462,27 +460,30 @@ function parseBoard(value: unknown, name: string): BoardDefinition {
     }
 }
 
-function parseSeed(value: unknown, name: string): SeedDefinition {
-    const source = exactObject(value, ['sunCost', 'cooldownTicks'], name, ['plant', 'zombie', 'grave', 'placement', 'initialCooldownTicks'])
+/**
+ * `kind` says what a seed puts down; a plant or zombie seed's `id`, the plant or zombie, is the seed's own ID unless
+ * given. Only a plant seed has a `placement`, and a grave seed has no `id`.
+ */
+function parseSeed(value: unknown, name: string, seedId: string): SeedDefinition {
+    const source = exactObject(value, ['kind', 'sunCost', 'cooldownTicks'], name, ['id', 'placement', 'initialCooldownTicks'])
     const common = {
         sunCost: nonNegativeInteger(source.sunCost, `${name}.sunCost`),
         cooldownTicks: nonNegativeInteger(source.cooldownTicks, `${name}.cooldownTicks`),
         ...(source.initialCooldownTicks === undefined ? {} : { initialCooldownTicks: nonNegativeInteger(source.initialCooldownTicks, `${name}.initialCooldownTicks`) }),
     }
-    if ([source.plant, source.zombie, source.grave].filter(value => value !== undefined).length !== 1) {
-        throw new Error(`${name} needs one of a plant, a zombie or a grave`)
+    if (source.kind !== 'plant' && source.kind !== 'zombie' && source.kind !== 'grave') throw new Error(`${name}.kind must be plant, zombie or grave`)
+    if (source.kind !== 'plant' && source.placement !== undefined) throw new Error(`${name}.placement is for plant seeds`)
+    const id = () => source.id === undefined ? seedId : qualifiedId(source.id, `${name}.id`)
+    switch (source.kind) {
+        case 'plant':
+            if (source.placement !== 'ground' && source.placement !== 'grave') throw new Error(`${name}.placement must be ground or grave`)
+            return { ...common, kind: 'plant', id: id(), placement: source.placement }
+        case 'zombie':
+            return { ...common, kind: 'zombie', id: id() }
+        case 'grave':
+            if (source.id !== undefined) throw new Error(`${name}.id is for plant and zombie seeds`)
+            return { ...common, kind: 'grave' }
     }
-    if (source.grave !== undefined) {
-        if (source.grave !== true) throw new Error(`${name}.grave must be true`)
-        if (source.placement !== undefined) throw new Error(`${name}.placement is for plant seeds`)
-        return { ...common, grave: true }
-    }
-    if (source.zombie !== undefined) {
-        if (source.placement !== undefined) throw new Error(`${name}.placement is for plant seeds`)
-        return { ...common, zombie: qualifiedId(source.zombie, `${name}.zombie`) }
-    }
-    if (source.placement !== 'ground' && source.placement !== 'grave') throw new Error(`${name}.placement must be ground or grave`)
-    return { ...common, plant: qualifiedId(source.plant, `${name}.plant`), placement: source.placement }
 }
 
 function parsePlant(value: unknown, name: string): PlantDefinition {
@@ -1037,13 +1038,13 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
 function mapped<T>(
     value: unknown,
     name: string,
-    parse: (entry: unknown, entryName: string) => T,
+    parse: (entry: unknown, entryName: string, id: string) => T,
 ): Record<string, T> {
     const source = object(value, name)
     const result: Record<string, T> = {}
     for (const [id, entry] of Object.entries(source)) {
         qualifiedId(id, `${name} key`)
-        result[id] = parse(entry, `${name}.${id}`)
+        result[id] = parse(entry, `${name}.${id}`, id)
     }
     return result
 }

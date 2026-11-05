@@ -107,14 +107,14 @@ export const planting = {
             return refuseCell('column-out-of-range')
         }
         const team = packet?.team ?? seedTeam(seed)
-        if (seed.zombie !== undefined) {
+        if (seed.kind === 'zombie') {
             // Challenge::IZombieMouseDownWithZombie: a zombie goes into any cell of an active row, whatever stands there.
-            const entity = planting.placeZombie(session, seed.zombie, row, column, team)
+            const entity = planting.placeZombie(session, seed.id, row, column, team)
             spendSeed(session, seed, packet, sunCost)
-            emitServerEvent(world.resources.get(EventQueueResource), 'zombiePlaced', { entityId: entity, typeId: seed.zombie, row, column })
+            emitServerEvent(world.resources.get(EventQueueResource), 'zombiePlaced', { entityId: entity, typeId: seed.id, row, column })
             return
         }
-        if (seed.grave) {
+        if (seed.kind === 'grave') {
             // Like Grave Danger's graves (placeGrave): any cell of an active row without a grave (the plants there die);
             // on the plants' side when its packet is, so its zombies rise there too.
             if (graveAt(world.resources.get(WaveResource).graves, row, column)) return refuseCell('cell-has-grave')
@@ -155,10 +155,10 @@ export const planting = {
 
         const entity = planting.createPlant(session, seedId, row, column, team)
         spendSeed(session, seed, packet, sunCost)
-        getActiveTutorial(world)?.plantPlaced?.(world, gameplayTick, seed.plant, occupiedEntity !== undefined)
+        getActiveTutorial(world)?.plantPlaced?.(world, gameplayTick, seed.id, occupiedEntity !== undefined)
         emitServerEvent(world.resources.get(EventQueueResource), 'plantPlaced', {
             entityId: entity,
-            typeId: seed.plant,
+            typeId: seed.id,
             row,
             column,
         })
@@ -183,9 +183,9 @@ export const planting = {
         const { world, gameplayTick, definitions, gameplay } = session
         const level = world.resources.get(LevelStateResource)
         const plantedSeed = definitions.seeds[seedId]
-        if (plantedSeed.plant === undefined) throw new Error(`${seedId} places a zombie, not a plant`)
-        const definition = definitions.plants[plantedSeed.plant]
-        const behaviorState = gameplay.plantBehaviors.createState(plantedSeed.plant, definition)
+        if (plantedSeed.kind !== 'plant') throw new Error(`${seedId} is a ${plantedSeed.kind} seed, not a plant seed`)
+        const definition = definitions.plants[plantedSeed.id]
+        const behaviorState = gameplay.plantBehaviors.createState(plantedSeed.id, definition)
         const offset = definition.plantingOffset, random = world.resources.get(RandomResource)
         const entity = world.createEntity()
         world.add(entity, PositionComponent, {
@@ -194,7 +194,7 @@ export const planting = {
             row,
         })
         world.add(entity, PlantComponent, {
-            typeId: plantedSeed.plant,
+            typeId: plantedSeed.id,
             seedId,
             column,
             health: definition.maxHealth,

@@ -63,8 +63,9 @@ function executeCommand(
         }
         case 'plant': {
             const seedId = findType(definitions.seeds, args[0])
-            const plant = seedId && definitions.seeds[seedId].plant
-            if (!plant) return debugCondition('DEBUG_PLANT_NOT_INSTALLED', args[0])
+            const seed = seedId ? definitions.seeds[seedId] : undefined
+            if (!seedId || seed?.kind !== 'plant') return debugCondition('DEBUG_PLANT_NOT_INSTALLED', args[0])
+            const plant = seed.id
             const grid = position(args[1], args[2])
             if (!grid) return invalidPosition()
             // `zombies`: on the zombies' side, facing left; the plants' side attacks it and it attacks them.

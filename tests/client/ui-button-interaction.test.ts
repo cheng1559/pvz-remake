@@ -161,9 +161,9 @@ test('level seeds keep independent affordability and cooldowns, and placement us
     const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
     const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
     const definitions = { seeds: {
-        pea: { plant: 'pvz:peashooter', sunCost: 100 },
-        double: { plant: 'pvz:repeater', sunCost: 200 },
-        ice: { plant: 'pvz:snowpea', sunCost: 175 },
+        pea: { kind: 'plant', id: 'pvz:peashooter', sunCost: 100 },
+        double: { kind: 'plant', id: 'pvz:repeater', sunCost: 200 },
+        ice: { kind: 'plant', id: 'pvz:snowpea', sunCost: 175 },
     } }
     const bank = new LevelSeedBank({
         content: { definitions, presentation: presentationFixture }, level: {}, initialSeeds: ['pea', 'double'], seedPacketSlot: ui.root, presentation: {},
@@ -231,7 +231,7 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
         ui.setMobile()
         const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
         const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
-        const definitions = { seeds: { pea: { plant: 'pvz:peashooter', sunCost: 100 }, sunflower: { plant: 'pvz:sunflower', sunCost: 50 } }, items: {} }
+        const definitions = { seeds: { pea: { kind: 'plant', id: 'pvz:peashooter', sunCost: 100 }, sunflower: { kind: 'plant', id: 'pvz:sunflower', sunCost: 50 } }, items: {} }
         const bank = new LevelSeedBank({
             level: conveyor ? { conveyor: { capacity: 2, seeds: [{ id: 'pea' }] } } : {}, initialSeeds: conveyor ? [] : ['pea', 'sunflower'],
             content: { definitions, presentation: presentationFixture }, seedPacketSlot: ui.root, presentation: {},

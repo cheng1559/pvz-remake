@@ -398,11 +398,12 @@ export class LevelHudPresenter {
         }
         const board = this.content.definitions.boards[this.level.board]
         const seedDefinition = snapshot.cursor.mode === 'seed' ? this.content.definitions.seeds[snapshot.cursor.seedId] : undefined
-        const plantId = seedDefinition?.plant
+        const plantSeed = seedDefinition?.kind === 'plant' ? seedDefinition : undefined
+        const plantId = plantSeed?.id
         // A held packet of the other side from its seed's own puts down what faces the other way.
         const mirrored = snapshot.cursor.mode === 'seed' && snapshot.cursor.team !== undefined
-        const zombieId = seedDefinition?.zombie
-        const graveSeed = !!seedDefinition?.grave
+        const zombieId = seedDefinition?.kind === 'zombie' ? seedDefinition.id : undefined
+        const graveSeed = seedDefinition?.kind === 'grave'
         this.cursorPlant.node.active = this.gridPlant.node.active = zombieId === undefined && !graveSeed
         if (graveSeed || this.gravePreviews) {
             const { cursor, grid } = this.gravePreview
@@ -435,7 +436,7 @@ export class LevelHudPresenter {
             const occupant = snapshot.plants.find(plant => this.content.definitions.plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column)
             const grave = !!graveAt(snapshot.graves, row, column)
             // Graves block planting, except for a grave buster, which needs one.
-            const needsGrave = seedDefinition!.placement === 'grave'
+            const needsGrave = plantSeed!.placement === 'grave'
             valid = valid && !occupant && grave === needsGrave && (this.canPlantAt?.(snapshot, row, column) ?? true)
         }
         // A grave seed takes any cell of an active row but one with a grave already.
@@ -477,8 +478,8 @@ export class LevelHudPresenter {
 
     /** Board::OffsetYForPlanting for the seed being planted; a zombie seed's cell is the pointer's. */
     pointerOffsetY(seedId: string): number {
-        const plant = this.content.definitions.seeds[seedId].plant
-        return plant === undefined ? 0 : plantDefinition(this.content.presentation, plant).pointerOffsetY ?? 0
+        const seed = this.content.definitions.seeds[seedId]
+        return seed.kind === 'plant' ? plantDefinition(this.content.presentation, seed.id).pointerOffsetY ?? 0 : 0
     }
 
     private loadPacketSprite!: LevelHudOptions['loadPacketSprite']

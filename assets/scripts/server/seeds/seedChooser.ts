@@ -123,7 +123,7 @@ export function seedChooserSnapshot(world: World, definitions: GameplayDefinitio
     const special = firstAdventure ? getActiveTutorial(world)?.chooserWarnings : undefined
     const warnings = [
         ...(special?.seed && !bank.packets.some(packet => packet.seedId === special.seed!.id) ? [special.seed.warning] : []),
-        ...(bank.packets.some(packet => { const plant = definitions.seeds[packet.seedId].plant; return plant !== undefined && definitions.plants[plant].producer })
+        ...(bank.packets.some(packet => { const seed = definitions.seeds[packet.seedId]; return seed.kind === 'plant' && definitions.plants[seed.id].producer })
             ? [] : [special?.sunWarning ?? 'SEED_CHOOSER_SUN_WARNING']),
     ]
     const { offer, slots } = worldOffer(world, definitions)

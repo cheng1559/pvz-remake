@@ -69,9 +69,9 @@ export class LevelSeedBank {
      */
     private packetLook(seed: SeedDefinition): { seedType: SeedPacketSeedType, zombie?: string, grave?: boolean, name: string } {
         const presentation = this.options.content.presentation
-        if (seed.zombie !== undefined) return { seedType: -1, zombie: seed.zombie, name: presentation.zombies[seed.zombie]?.nameKey ?? seed.zombie }
-        if (seed.grave) return { seedType: -1, grave: true, name: 'GRAVE_SEED' }
-        const visual = plantDefinition(presentation, seed.plant).visual
+        if (seed.kind === 'zombie') return { seedType: -1, zombie: seed.id, name: presentation.zombies[seed.id]?.nameKey ?? seed.id }
+        if (seed.kind === 'grave') return { seedType: -1, grave: true, name: 'GRAVE_SEED' }
+        const visual = plantDefinition(presentation, seed.id).visual
         return { seedType: visual.seedType, name: visual.nameKey ?? String(visual.seedType).toUpperCase() }
     }
 

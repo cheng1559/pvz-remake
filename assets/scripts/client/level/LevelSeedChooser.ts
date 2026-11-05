@@ -133,15 +133,15 @@ export class LevelSeedChooser {
                 new SeedPacketView({ ...args, iconLayer: this.cardIcons })]
             let tooltipOptions: Parameters<UI['tooltip']>[1]
             let warning: string | undefined
-            if (seed.zombie !== undefined) {
+            if (seed.kind === 'zombie') {
                 // A zombie seed's packet draws its zombie (SEED_ZOMBIE_*), named as the almanac names it.
-                for (const view of views) view.setSeed(-1, seed.sunCost, seed.zombie)
-                tooltipOptions = { text: ui.text(content.presentation.zombies[seed.zombie]?.nameKey ?? seed.zombie), gap: 0 }
-            } else if (seed.grave) {
+                for (const view of views) view.setSeed(-1, seed.sunCost, seed.id)
+                tooltipOptions = { text: ui.text(content.presentation.zombies[seed.id]?.nameKey ?? seed.id), gap: 0 }
+            } else if (seed.kind === 'grave') {
                 for (const view of views) view.setSeed(-1, seed.sunCost, undefined, true)
                 tooltipOptions = { text: ui.text('GRAVE_SEED'), gap: 0 }
             } else {
-                const visual = plantDefinition(content.presentation, seed.plant).visual
+                const visual = plantDefinition(content.presentation, seed.id).visual
                 for (const view of views) view.setSeed(visual.seedType, seed.sunCost)
                 const nameKey = visual.nameKey ?? String(visual.seedType).toUpperCase()
                 warning = card.team === undefined ? notRecommended(card.seedId) : undefined

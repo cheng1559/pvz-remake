@@ -329,7 +329,8 @@ export class LevelView {
             : await LevelSeedChooser.create(ui, content, hud, initial.seedChooser.availableSeeds, initial.seedChooser.slots, root, seedId => {
                 // Board::SeedNotRecommendedForLevel: mushrooms by day, and grave busters without graves.
                 const seed = content.definitions.seeds[seedId]
-                if (content.definitions.plants[seed.plant].nocturnal && !boardDefinition.night) return 'NOCTURNAL_WARNING'
+                if (seed.kind !== 'plant') return undefined
+                if (content.definitions.plants[seed.id].nocturnal && !boardDefinition.night) return 'NOCTURNAL_WARNING'
                 if (seed.placement === 'grave' && !level.graves?.length) return 'NOT_RECOMMENDED_FOR_LEVEL'
                 return undefined
             }, { almanac: player.almanacZombies !== undefined, store: player.store }, initial.seedChooser.entries)

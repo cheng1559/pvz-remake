@@ -106,7 +106,7 @@ test('1-10 starts empty, spawns at ticks 100/200, permits free planting across t
     for (const server of [game, restored]) {
         assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 8 }), undefined)
         assert.equal(server.snapshot().sun, 0)
-        assert.equal(server.snapshot().plants[0].typeId, definitions.seeds[packet.seedId].plant)
+        assert.deepEqual([definitions.seeds[packet.seedId].kind, server.snapshot().plants[0].typeId], ['plant', packet.seedId])
         assert.equal(server.snapshot().conveyorPackets.length, 0)
     }
     for (let tick = 0; tick < 1000; tick++) assert.deepEqual(restored.tick(), game.tick())

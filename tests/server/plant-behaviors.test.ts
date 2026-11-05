@@ -11,7 +11,7 @@ import { runCommand } from './run-command'
 const json = readGameplaySource
 const source = json('definitions')
 source.plants['test:plant'] = { maxHealth: 300, body: source.plants['pvz:peashooter'].body, behavior: { intervalTicks: 10 } }
-source.seeds['test:plant'] = { plant: 'test:plant', sunCost: 0, cooldownTicks: 1, placement: 'ground' }
+source.seeds['test:plant'] = { kind: 'plant', sunCost: 0, cooldownTicks: 1, placement: 'ground' }
 const definitions = parseGameplayDefinitions(source, json('seed-catalog'))
 const levelSource = withFixedBanks(json('levels'))
 levelSource.levels['pvz:adventure-1-1'].seedPackets.push('test:plant')
