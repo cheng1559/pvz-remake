@@ -2,6 +2,7 @@ import type { GameSystem } from '@/ecs/index'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import {
+    EconomyStateResource,
     LevelStateResource,
     PlantAttackComponent,
     PlantComponent,
@@ -10,6 +11,7 @@ import {
 } from '../state/components'
 import { ItemComponent } from '../state/levelState'
 import { getDebugRules } from '../debug/debugRules'
+import { plantTeam } from '@/shared/content/teams'
 
 export function createProductionSystem(definitions: GameplayDefinitions): GameSystem {
     return {
@@ -32,8 +34,18 @@ export function createProductionSystem(definitions: GameplayDefinitions): GameSy
                 timer.readyAtTick = tick + random.integer(Math.max(1, producer.cadenceTicks - 150), producer.cadenceTicks)
                 const position = world.get(entity, PositionComponent)!
                 const itemId = plant.ability?.state === 'small' ? producer.growth!.smallItem : producer.item
-                const item = commands.createEntity()
                 const itemDefinition = definitions.items[itemId]
+                if (plantTeam(plant) === 'zombies') {
+                    // An enemy producer takes from the player instead: what its sun is worth leaves the bank, down to
+                    // 0. One producing money gives nothing.
+                    if (itemDefinition.kind === 'money') continue
+                    const economy = world.resources.get(EconomyStateResource)
+                    const drained = Math.min(economy.sun, itemDefinition.value)
+                    economy.sun -= drained
+                    emitServerEvent(world.resources.get(EventQueueResource), 'sunDrained', { entityId: entity, sun: drained })
+                    continue
+                }
+                const item = commands.createEntity()
                 commands.add(item, PositionComponent, { x: position.x, y: position.y, row: -1 })
                 commands.add(item, ItemComponent, {
                     typeId: itemId, value: itemDefinition.value, state: 'available',

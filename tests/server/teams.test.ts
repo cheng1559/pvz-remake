@@ -435,3 +435,23 @@ test('a zombie put down facing right stands its own facingRightOffsetX further; 
     assert.ok(Math.abs(put('pole_vaulter', 1) - put('normal', 2) - offset) < 1e-9)
     assert.equal(put('pole_vaulter', 3, 'zombies'), put('normal', 0, 'zombies'))
 })
+
+test("an enemy sunflower takes 25 sun from the player each time it would make one, never below 0", () => {
+    const server = begin()
+    assert.equal(debug(server, '/plant sunflower 3 5 zombies').ok, true)
+    assert.equal(debug(server, '/sun set 30').ok, true)
+    const { cadenceTicks, initialDelayTicks } = definitions.plants['pvz:sunflower'].producer!
+    const produced: unknown[] = []
+    const drains = (ticks: number) => {
+        const events = run(server, ticks)
+        produced.push(...events.filter(event => event.type === 'sunProduced'))
+        return events.filter(event => event.type === 'sunDrained').map(event => event.data.sun)
+    }
+    assert.deepEqual(drains(initialDelayTicks.max + 1), [25])
+    assert.equal(server.snapshot().sun, 5)
+    assert.deepEqual(drains(cadenceTicks + 1), [5], 'only what is left goes')
+    assert.equal(server.snapshot().sun, 0)
+    assert.deepEqual(drains(cadenceTicks + 1), [0])
+    assert.equal(server.snapshot().sun, 0, 'the bank does not go below 0')
+    assert.deepEqual(produced, [], 'it drops no sun (the sky still does)')
+})

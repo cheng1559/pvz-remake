@@ -273,7 +273,8 @@ export class LevelHudPresenter {
         this.syncMenu(snapshot, menuVisible)
         const elapsedTicks = Math.max(0, snapshot.gameplayTick - this.adviceTick)
         this.sunFlashTicks = Math.max(0, this.sunFlashTicks - elapsedTicks)
-        if (events.some(event => event.type === 'sunFlash')) this.sunFlashTicks = 70
+        // Like too little sun, sun an enemy producer takes flashes the counter red, though without the buzzer.
+        if (events.some(event => event.type === 'sunFlash' || event.type === 'sunDrained')) this.sunFlashTicks = 70
         this.syncSun(snapshot.sun)
         this.syncCoinBank(snapshot, events)
         this.syncProgress(snapshot, introComplete)

@@ -26,7 +26,7 @@ export class EntityFlashes {
         for (const { type, data } of events) {
             // A hostile plant's hit flashes like a bite (Projectile::DoImpact for the zombie pea).
             if ((type === 'zombieChewedPlant' || type === 'plantHit') && typeof data.plantId === 'number') this.raise(data.plantId, { tick, ticks: HIT_FLASH_TICKS })
-            else if (type === 'sunProduced' && typeof data.entityId === 'number') this.raise(data.entityId, { tick, ticks: PRODUCTION_FLASH_TICKS })
+            else if ((type === 'sunProduced' || type === 'sunDrained') && typeof data.entityId === 'number') this.raise(data.entityId, { tick, ticks: PRODUCTION_FLASH_TICKS })
             else if (type === 'zombieHit' && typeof data.entityId === 'number') {
                 // An exact shield break ends the shield's flash, but a body flash from an earlier hit through it runs on
                 // (TakeShieldDamage keeps mJustGotShotCounter).
