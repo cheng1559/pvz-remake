@@ -27,7 +27,7 @@ test('1-2 starts with three rows and Sunflower teaching, and production resumes 
     const initial = server.snapshot()
     assert.equal(initial.sun, 50)
     assert.deepEqual(initial.lawnMowers.map(mower => mower.row), [1, 2, 3])
-    assert.deepEqual(initial.seedPackets.map(packet => packet.seedId), ['pvz:peashooter', 'pvz:sunflower'])
+    assert.deepEqual(initial.seedPackets.map(packet => packet!.seedId), ['pvz:peashooter', 'pvz:sunflower'])
     assert.equal(initial.tutorial.step, 'pick-sunflower')
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:sunflower' }), undefined)
     assert.equal(server.snapshot().tutorial.step, 'plant-sunflower')

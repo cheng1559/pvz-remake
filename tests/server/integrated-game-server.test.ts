@@ -156,7 +156,7 @@ test('selecting and placing Peashooter changes authority state atomically', () =
         row: 2,
     }])
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), 'seed-not-ready')
-    assert.equal(server.tick().seedPackets[0].cooldownRemaining, 749)
+    assert.equal(server.tick().seedPackets[0]!.cooldownRemaining, 749)
 })
 
 test('Peashooter acquires a zombie ahead and fires after its fixed windup', () => {

@@ -323,5 +323,5 @@ test('a /seed swap to a locked seed after choosing still restores; /seed waits f
     assert.equal(game.debugCommand('/seed 1 gravebuster').ok, true)
     const restored = new LocalIntegratedGame(definitions, levels, undefined, true)
     restored.start({ ...options, save: game.saveAtBoundary() })
-    assert.equal(restored.render().seedPackets[0].seedId, 'pvz:gravebuster')
+    assert.equal(restored.render().seedPackets[0]!.seedId, 'pvz:gravebuster')
 })

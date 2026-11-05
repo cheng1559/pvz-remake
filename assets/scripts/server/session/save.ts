@@ -166,6 +166,7 @@ function parseSeedBank(value: unknown): SeedBankState {
         default: throw new Error('Invalid saved selection')
     }
     const packets = array(source.packets, 'server save.seedBank.packets').map((value, index) => {
+        if (value === null) return null
         const name = `server save.seedBank.packets[${index}]`
         const packet = optionalExact(value, ['seedId', 'readyAtTick'], ['cooldownTotal', 'team'], name)
         return {

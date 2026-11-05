@@ -1,7 +1,7 @@
 import { Schedule, type World } from '@/ecs/index'
 import { packetTeam, type Team } from '@/shared/content/teams'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { debugAmount, debugCondition, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
+import { EMPTY_SLOT, debugAmount, debugCondition, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
 import {
     EconomyStateResource,
@@ -82,11 +82,17 @@ function executeCommand(
             if (slot === null || slot < 1 || slot > bank.packets.length) {
                 return debugSyntax(`Use slot 1-${bank.packets.length}`)
             }
-            const seedId = findType(definitions.seeds, args[1])
-            if (!seedId) return debugCondition('DEBUG_SEED_NOT_INSTALLED', args[1])
-            // A bank may hold the same seed twice; each slot keeps its own recharge.
-            const packet = bank.packets[slot - 1]
+            // `empty` clears the slot; a seed fills an empty one or replaces the packet there.
+            const empty = args[1].toLowerCase() === EMPTY_SLOT
+            const seedId = empty ? undefined : findType(definitions.seeds, args[1])
+            if (!empty && !seedId) return debugCondition('DEBUG_SEED_NOT_INSTALLED', args[1])
             if (bank.selection.mode === 'seed' && bank.selection.slot === slot - 1) bank.selection = { mode: 'none' }
+            if (!seedId) {
+                bank.packets[slot - 1] = null
+                return debugSuccess(`Seed slot ${slot}: ${EMPTY_SLOT}`)
+            }
+            // A bank may hold the same seed twice; each slot keeps its own recharge.
+            const packet = bank.packets[slot - 1] ??= { seedId, readyAtTick: tick }
             packet.seedId = seedId
             packet.readyAtTick = tick
             // `team`: the side of what it puts down, kept only when not the seed's own (packetTeam).
@@ -205,7 +211,7 @@ function executeCommand(
             else if (name === 'plantinvincible') rules.plantInvincible = enabled
             else {
                 rules.cooldown = enabled
-                if (!enabled) for (const packet of world.resources.get(SeedBankResource).packets) packet.readyAtTick = 0
+                if (!enabled) for (const packet of world.resources.get(SeedBankResource).packets) if (packet) packet.readyAtTick = 0
             }
             world.resources.set(DebugRulesResource, rules)
             return debugSuccess(`${name}: ${args[0]}`)

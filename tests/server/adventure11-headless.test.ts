@@ -50,7 +50,7 @@ test('headless 1-1 reaches the same win for the same seed and commands', () => {
             }
             command({ type: 'collectItemAt', itemId: item.entityId })
         }
-        if (!secondPlanted && snapshot.sun >= 100 && snapshot.seedPackets[0].ready) {
+        if (!secondPlanted && snapshot.sun >= 100 && snapshot.seedPackets[0]!.ready) {
             command({ type: 'selectSeed', seedId: 'pvz:peashooter' })
             command({ type: 'placePlant', row: 2, column: 1 })
             secondPlanted = true

@@ -27,18 +27,18 @@ test('1-3 and 1-4 start on three/five rows, wait 18 seconds and use the original
         const initial = server.snapshot()
         assert.equal(initial.sun, 50)
         assert.equal(initial.lawnMowers.length, index === 3 ? 3 : 5)
-        assert.deepEqual(initial.seedPackets.map(packet => packet.seedId), ['pvz:peashooter', 'pvz:sunflower', 'pvz:cherrybomb', ...index === 4 ? ['pvz:wallnut'] : []],
+        assert.deepEqual(initial.seedPackets.map(packet => packet!.seedId), ['pvz:peashooter', 'pvz:sunflower', 'pvz:cherrybomb', ...index === 4 ? ['pvz:wallnut'] : []],
             'Board::InitLevel fills the bank with the available seeds in order')
         assert.equal(initial.wave.countdown, 1800)
         assert.ok(initial.wave.previewZombies!['pvz:conehead'] > 0)
         for (const [seedId, ticks] of [['pvz:cherrybomb', 3500], ...(index === 4 ? [['pvz:wallnut', 2000]] : [])] as [string, number][]) {
-            const packet = initial.seedPackets.find(packet => packet.seedId === seedId)!
+            const packet = initial.seedPackets.find(packet => packet!.seedId === seedId)!
             assert.equal(packet.cooldownRemaining, ticks)
             assert.equal(packet.cooldownTotal, ticks)
             assert.equal(packet.ready, false)
         }
         for (let tick = 0; tick < 30; tick++) server.tick()
-        assert.equal(server.snapshot().seedPackets[2].cooldownRemaining, 3500, 'intro time cannot recharge packets')
+        assert.equal(server.snapshot().seedPackets[2]!.cooldownRemaining, 3500, 'intro time cannot recharge packets')
         runCommand(server, { type: 'completeIntro' })
         assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:cherrybomb' }), 'seed-not-ready')
         for (let tick = 0; tick < 1799; tick++) server.tick()
@@ -130,7 +130,7 @@ test('seed rejection advice is excluded before the first sun prompt and from lat
         if (index > 1) while (!server.save().tutorial.sunsFallen) server.tick()
         const save = server.save()
         save.economy.sun = 0
-        const packet = save.seedBank.packets[0]
+        const packet = save.seedBank.packets[0]!
         packet.readyAtTick = 0
         server.start({ ...options(index), save: save as unknown as JsonValue })
         server.drainEvents()

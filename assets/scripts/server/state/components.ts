@@ -107,12 +107,18 @@ export interface Projectile {
 export type SeedSelection = { mode: 'none' } | { mode: 'seed'; slot: number }
     | { mode: 'conveyor'; packetId: number } | { mode: 'tool'; toolId: string }
 
+/** A bank packet. `team`: the side of what it puts down, when not its seed's own (seedTeam; from `/seed`). */
+export interface SeedPacketState { seedId: string, readyAtTick: number, cooldownTotal?: number, team?: Team }
+
 export interface SeedBankState {
     selection: SeedSelection
     conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; lastSeedId?: string; packets: Array<{ id: number; seedId: string; x: number }> }
     choosing?: boolean
-    /** `team`: the side of what the packet puts down, when not its seed's own (seedTeam; from `/seed`). */
-    packets: Array<{ seedId: string, readyAtTick: number, cooldownTotal?: number, team?: Team }>
+    /**
+     * The bank's slots in order; `null` is an empty one: a slot Let's Rock left unchosen (finishSeedChoice) or emptied
+     * by `/seed {slot} empty`. While choosing, the chosen packets come one after another with no empty slots.
+     */
+    packets: Array<SeedPacketState | null>
     /** The seeds the player owns, from the start packet; absent, every catalog seed (see availableSeeds). */
     owned?: string[]
 }

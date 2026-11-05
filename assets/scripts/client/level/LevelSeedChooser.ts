@@ -266,7 +266,7 @@ export class LevelSeedChooser {
         const before = this.snapshot
         this.snapshot = snapshot
         for (const choice of this.choices) {
-            const slot = snapshot.seedPackets.findIndex(packet => packet.seedId === choice.seedId && packet.team === choice.team)
+            const slot = snapshot.seedPackets.findIndex(packet => packet?.seedId === choice.seedId && packet.team === choice.team)
             if (slot !== choice.slot) {
                 const oldSlot = choice.slot
                 choice.slot = slot

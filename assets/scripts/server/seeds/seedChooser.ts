@@ -98,14 +98,14 @@ export function applySeedChoice(world: World, definitions: GameplayDefinitions, 
     const { offer, slots } = worldOffer(world, definitions)
     if (command.type === 'confirmSeeds') {
         if (bank.packets.length !== slots) return 'seed-choice-incomplete'
-        bank.choosing = false
+        finishSeedChoice(world, definitions)
         return
     }
     const seed = definitions.seeds[command.seedId]
     if (!seed) return 'seed-not-available'
     // A card in the bank always goes back; one is only added while the chooser offers it.
     const team = packetTeam(seed, command.team)
-    const index = bank.packets.findIndex(packet => packet.seedId === command.seedId && packet.team === team)
+    const index = bank.packets.findIndex(packet => packet?.seedId === command.seedId && packet.team === team)
     if (index >= 0) bank.packets.splice(index, 1)
     else {
         if (!offers(offer, command.seedId, team)) return 'seed-not-available'
@@ -116,14 +116,25 @@ export function applySeedChoice(world: World, definitions: GameplayDefinitions, 
     }
 }
 
+/**
+ * Ends the choice and starts the level: the slots left unchosen stay empty (null) for the level, which only a Mod's
+ * Let's Rock taking fewer cards than slots leaves.
+ */
+export function finishSeedChoice(world: World, definitions: GameplayDefinitions): void {
+    const bank = world.resources.get(SeedBankResource)
+    const { slots } = worldOffer(world, definitions)
+    while (bank.packets.length < slots) bank.packets.push(null)
+    bank.choosing = false
+}
+
 /** For a game that opened the chooser. */
 export function seedChooserSnapshot(world: World, definitions: GameplayDefinitions): NonNullable<WorldSnapshot['seedChooser']> {
     const bank = world.resources.get(SeedBankResource)
     const firstAdventure = world.resources.get(TutorialResource).firstAdventure
     const special = firstAdventure ? getActiveTutorial(world)?.chooserWarnings : undefined
     const warnings = [
-        ...(special?.seed && !bank.packets.some(packet => packet.seedId === special.seed!.id) ? [special.seed.warning] : []),
-        ...(bank.packets.some(packet => { const seed = definitions.seeds[packet.seedId]; return seed.kind === 'plant' && definitions.plants[seed.id].producer })
+        ...(special?.seed && !bank.packets.some(packet => packet?.seedId === special.seed!.id) ? [special.seed.warning] : []),
+        ...(bank.packets.some(packet => { const seed = packet && definitions.seeds[packet.seedId]; return seed?.kind === 'plant' && !!definitions.plants[seed.id].producer })
             ? [] : [special?.sunWarning ?? 'SEED_CHOOSER_SUN_WARNING']),
     ]
     const { offer, slots } = worldOffer(world, definitions)

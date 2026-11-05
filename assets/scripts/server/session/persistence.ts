@@ -76,7 +76,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
             selection: { ...seedBank.selection },
             ...(seedBank.conveyor === undefined ? {} : { conveyor: jsonRoundTrip(seedBank.conveyor) }),
             ...(seedBank.choosing === undefined ? {} : { choosing: seedBank.choosing }),
-            packets: seedBank.packets.map(packet => ({ ...packet })),
+            packets: seedBank.packets.map(packet => packet && { ...packet }),
             ...(seedBank.owned === undefined ? {} : { owned: [...seedBank.owned] }),
         },
         tutorial: {
@@ -169,16 +169,16 @@ export function restoreSession(
     if (save.seedBank.conveyor?.lastSeedId && !definition.conveyor!.seeds.some(seed => seed.id === save.seedBank.conveyor!.lastSeedId)) throw new Error('Saved conveyor last seed is not in the supply')
     if (save.seedBank.selection.mode === 'tool' && !levelTools(content.levels, definition, save.tutorial.firstAdventure).includes(save.seedBank.selection.toolId)) throw new Error('Saved tool is unavailable in this level')
     if (chooser && ('conveyor' in start || definition.seedPackets)) throw new Error('Saved seed choice does not match the level')
-    // A chosen bank may have started with empty slots (a Mod's Let's Rock taking fewer cards); a filled one holds exactly
-    // its slots.
-    if (save.seedBank.choosing ? save.level.phase !== 'intro' || save.seedBank.packets.length > slots
+    // A bank holds its slots, empty ones as null; while choosing, the chosen packets one after another. A chosen bank
+    // saved before empty slots were kept may be short, and gets its empty slots back here.
+    if (save.seedBank.choosing ? save.level.phase !== 'intro' || save.seedBank.packets.length > slots || save.seedBank.packets.includes(null)
         : chooser ? save.seedBank.packets.length > slots : save.seedBank.packets.length !== slots) {
         throw new Error('Saved seed bank size does not match the level')
     }
     // A bank may hold any installed seed: /seed and Mods' chooser entries put in hidden seeds or other sides, and a save
     // outlives the Mod that offered them (the card can still go back to the chooser).
     for (const packet of save.seedBank.packets) {
-        if (!definitions.seeds[packet.seedId]) throw new Error(`Unknown saved seed: ${packet.seedId}`)
+        if (packet && !definitions.seeds[packet.seedId]) throw new Error(`Unknown saved seed: ${packet.seedId}`)
     }
     const selection = save.seedBank.selection
     if (selection.mode === 'seed' && !save.seedBank.packets[selection.slot] ||
@@ -200,7 +200,8 @@ export function restoreSession(
         selection: { ...save.seedBank.selection },
         ...(save.seedBank.conveyor === undefined ? {} : { conveyor: jsonRoundTrip(save.seedBank.conveyor) }),
         ...(save.seedBank.choosing === undefined ? {} : { choosing: save.seedBank.choosing }),
-        packets: save.seedBank.packets.map(packet => ({ ...packet })),
+        packets: [...save.seedBank.packets.map(packet => packet && { ...packet }),
+            ...Array<null>(chooser && !save.seedBank.choosing ? slots - save.seedBank.packets.length : 0).fill(null)],
         ...(save.seedBank.owned === undefined ? {} : { owned: [...save.seedBank.owned] }),
     })
     world.resources.set(TutorialResource, { ...save.tutorial })

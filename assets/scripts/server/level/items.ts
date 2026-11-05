@@ -176,6 +176,7 @@ export const items = {
         const availableBefore = getAvailableSun(world, definitions) - item.value
         const availableAfter = availableBefore + item.value
         for (const [slot, packet] of world.resources.get(SeedBankResource).packets.entries()) {
+            if (!packet) continue
             const seedCost = getDebugRules(world).sunCost ? definitions.seeds[packet.seedId].sunCost : 0
             const ready = packet.readyAtTick <= session.gameplayTick
             if (ready && availableBefore < seedCost && availableAfter >= seedCost) {

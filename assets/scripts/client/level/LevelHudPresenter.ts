@@ -298,7 +298,7 @@ export class LevelHudPresenter {
     ): void {
         const showSeedGuide = introComplete && snapshot.result === 'playing' && this.presentation.seedGuideSteps.includes(snapshot.tutorial.step)
         this.seedBank.sync(snapshot, events, introComplete, showSeedGuide ? tutorialFlashColor(snapshot.gameplayTick) : null, allowTransientEffects)
-        const packet = snapshot.seedPackets.find(packet => packet.seedId === (this.presentation.guideSeed ?? snapshot.seedPackets[0]?.seedId))
+        const packet = snapshot.seedPackets.find(packet => packet?.seedId === (this.presentation.guideSeed ?? snapshot.seedPackets[0]?.seedId))
         this.syncSeedTutorialArrow(!!(showSeedGuide && this.presentation.seedGuideArrow !== false && packet?.ready && !packet.availability.reason))
         const showLawnGuide = introComplete && snapshot.result === 'playing' && snapshot.cursor.mode === 'seed' &&
             this.presentation.lawnGuideSteps.includes(snapshot.tutorial.step)

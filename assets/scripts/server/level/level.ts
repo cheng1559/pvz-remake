@@ -47,6 +47,7 @@ export function createLevelProgressSystem(definitions: GameplayDefinitions): Gam
             // `/suncost false` makes every packet affordable, as the planting check already does.
             const sunCost = getDebugRules(world).sunCost
             for (const [slot, packet] of bank.packets.entries()) {
+                if (!packet) continue
                 const initialReady = tick === 1 && packet.readyAtTick <= tick
                 const cooldownFinished = packet.readyAtTick === tick
                 if (!initialReady && !cooldownFinished || bank.selection.mode === 'seed' && bank.selection.slot === slot ||

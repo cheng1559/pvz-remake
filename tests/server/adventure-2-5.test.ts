@@ -46,7 +46,7 @@ test('2-5 opens on nine graves from column 4 with three ready packets, no sun an
     const snapshot = server.snapshot()
     assert.equal(snapshot.graves!.length, 9)
     assert.ok(snapshot.graves!.every(grave => grave.column >= 3 && grave.riseAtTick === undefined), 'WhackAZombiePlaceGraves from column 3')
-    assert.deepEqual(snapshot.seedPackets.map(packet => [packet.seedId, packet.ready]),
+    assert.deepEqual(snapshot.seedPackets.map(packet => [packet!.seedId, packet!.ready]),
         [['pvz:potatomine', true], ['pvz:gravebuster', true], ['pvz:cherrybomb', true]])
     assert.equal(snapshot.sun, 0)
     assert.equal(snapshot.extensions['pvz:tools'], undefined, 'CutScene::ShowShovel: no shovel')
@@ -111,7 +111,7 @@ test('planting recharges the packet, and the award only drops once the final gro
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:potatomine' }), undefined)
     assert.equal(runCommand(server, { type: 'placePlant', row: 0, column: 0 }), undefined)
     // SeedPacket::SetPacketType skips only the opening recharge; SeedPacket::WasPlanted recharges as usual.
-    assert.equal(server.snapshot().seedPackets[0].ready, false, 'planting recharges the packet')
+    assert.equal(server.snapshot().seedPackets[0]!.ready, false, 'planting recharges the packet')
     // Challenge::ClearCursor: before the award, an emptied cursor is the mallet again.
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:cherrybomb' }), undefined)
     assert.equal(runCommand(server, { type: 'clearCursor' }), undefined)

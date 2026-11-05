@@ -134,7 +134,7 @@ test("a grave seed puts down a grave in any active cell, on the zombies' side or
     place(1, 1, 4)
     assert.deepEqual(game.render().graves!.map(({ row, column, riseAtTick, team }) => [row, column, riseAtTick, team]),
         [[2, 2, tick, undefined], [2, 5, tick, 'plants'], [1, 4, tick, 'plants']])
-    assert.equal(game.render().seedPackets[1].team, 'plants')
+    assert.equal(game.render().seedPackets[1]!.team, 'plants')
 
     const save = JSON.parse(JSON.stringify(game.saveAtBoundary()))
     save.wave.index = save.wave.plan.length - 1
@@ -183,8 +183,8 @@ test('CLI replaces a seed slot while paused, preserves slot order and saves the 
         assert.deepEqual(game.render().seedPackets, before)
     }
     assert.equal(game.debugCommand('/seed 1 snowpea').ok, true)
-    assert.deepEqual(game.render().seedPackets.map(packet => packet.seedId), ['pvz:snowpea', 'pvz:sunflower'])
-    assert.equal(game.render().seedPackets[0].ready, true)
+    assert.deepEqual(game.render().seedPackets.map(packet => packet!.seedId), ['pvz:snowpea', 'pvz:sunflower'])
+    assert.equal(game.render().seedPackets[0]!.ready, true)
     assert.equal(game.render().cursor.mode, 'none')
     assert.equal(game.render().gameplayTick, tick)
     assert.equal(game.render().paused, true)
@@ -194,7 +194,7 @@ test('CLI replaces a seed slot while paused, preserves slot order and saves the 
     game.update(0)
     assert.equal(game.render().plants[0].typeId, 'pvz:snowpea')
     assert.equal(game.render().availableSun, 325)
-    assert.equal(game.render().seedPackets[0].cooldownRemaining, definitions.seeds['pvz:snowpea'].cooldownTicks)
+    assert.equal(game.render().seedPackets[0]!.cooldownRemaining, definitions.seeds['pvz:snowpea'].cooldownTicks)
     const restored = new LocalIntegratedGame(definitions, levels, undefined, true)
     restored.start({ levelId: 'pvz:adventure-1-2', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save: game.saveAtBoundary() })
     assert.deepEqual(restored.render(), game.render())
@@ -246,18 +246,18 @@ test('CLI can put one seed in two slots; each slot recharges, flashes and restor
     assert.equal(game.debugCommand('/seed 1 sunflower').ok, true)
     game.command({ type: 'resume' })
     game.update(TICK_SECONDS)
-    assert.deepEqual(game.render().seedPackets.map(packet => packet.seedId), ['pvz:sunflower', 'pvz:sunflower'])
+    assert.deepEqual(game.render().seedPackets.map(packet => packet!.seedId), ['pvz:sunflower', 'pvz:sunflower'])
     game.command({ type: 'selectSeed', seedId: 'pvz:sunflower', slot: 1 })
     game.update(0)
-    assert.deepEqual(game.render().seedPackets.map(packet => packet.selected), [false, true])
+    assert.deepEqual(game.render().seedPackets.map(packet => packet!.selected), [false, true])
     game.command({ type: 'placePlant', row: 2, column: 0 })
     game.update(0)
     const cooldown = definitions.seeds['pvz:sunflower'].cooldownTicks
-    assert.deepEqual(game.render().seedPackets.map(packet => packet.cooldownRemaining), [0, cooldown])
+    assert.deepEqual(game.render().seedPackets.map(packet => packet!.cooldownRemaining), [0, cooldown])
     // Without a slot, the ready copy is picked over the recharging one.
     game.command({ type: 'selectSeed', seedId: 'pvz:sunflower' })
     game.update(0)
-    assert.deepEqual(game.render().seedPackets.map(packet => packet.selected), [true, false])
+    assert.deepEqual(game.render().seedPackets.map(packet => packet!.selected), [true, false])
     game.command({ type: 'clearCursor' })
     game.drainEvents()
     for (let i = 0; i < cooldown; i++) game.update(TICK_SECONDS)

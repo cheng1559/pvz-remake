@@ -24,6 +24,7 @@ export const snapshot = {
         const selectedSeed = selectedSeedId(seedBank)
         const selectedTeam = seedBank.selection.mode === 'seed' ? seedBank.packets[seedBank.selection.slot]?.team : undefined
         const seedPackets = seedBank.packets.map((packet, slot) => {
+            if (!packet) return null
             const cooldownRemaining = Math.max(0, packet.readyAtTick - gameplayTick)
             const selected = seedBank.selection.mode === 'seed' && seedBank.selection.slot === slot
             return {

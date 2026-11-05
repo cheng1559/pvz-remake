@@ -49,6 +49,8 @@ const builtins: CommandSpec[] = [
 // Wrap the read instead of mutating the table so host.dispose() also removes Mod syntax.
 export const specs = { list: (): readonly CommandSpec[] => builtins }
 
+/** `/seed {slot} empty`: the name that empties a bank slot instead of naming a seed. */
+export const EMPTY_SLOT = 'empty'
 export const debugSyntax = (message: string): DebugCliResult => ({ ok: false, message, failure: 'syntax' })
 export const debugCondition = (key: string, ...args: (string | number | boolean)[]): DebugCliResult =>
     ({ ok: false, failure: 'condition', key, ...(args.length ? { args: args.map(String) } : {}) })
@@ -98,7 +100,7 @@ export function getDebugCliCompletions(value: string, catalog?: DebugCliCatalog,
     }
     if (!token && !allowEmpty) return []
     const spec = commands.find(spec => spec.name === name)
-    const dynamic = name === 'seed' && index === 2 ? catalog?.seeds : index !== 1 ? undefined : name === 'plant' ? catalog?.plants : name === 'zombie' ? catalog?.zombies
+    const dynamic = name === 'seed' && index === 2 ? catalog?.seeds && [...catalog.seeds, EMPTY_SLOT] : index !== 1 ? undefined : name === 'plant' ? catalog?.plants : name === 'zombie' ? catalog?.zombies
         : name === 'item' ? catalog?.items : name === 'level' ? catalog?.levels : undefined
     const values = dynamic ?? spec?.values?.[index - 1] ?? []
     return values.filter(option => option.toLowerCase().startsWith(token.toLowerCase()))

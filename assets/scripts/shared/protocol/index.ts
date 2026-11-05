@@ -171,7 +171,8 @@ export interface WorldSnapshot {
     money: number
     wave: WaveSnapshot
     cursor: CursorSnapshot
-    seedPackets: SeedPacketSnapshot[]
+    /** The bank's slots in order; `null` is an empty slot. */
+    seedPackets: Array<SeedPacketSnapshot | null>
     /**
      * `availableSeeds` fill the catalog grid; `entries` are the cards Mods offer beyond it (seedChooser.entries).
      * `warnings` are shown one after another on confirm; each can be dismissed to repick.
@@ -742,7 +743,8 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
     if (cursor.mode === 'seed') nonEmptyString(cursor.seedId, 'snapshot.cursor.seedId')
     else if (cursor.mode === 'tool') nonEmptyString(cursor.toolId, 'snapshot.cursor.toolId')
     else if (cursor.mode !== 'none') throw new TypeError('snapshot.cursor.mode is unknown')
-    const seedPackets = array(snapshot.seedPackets, 'snapshot.seedPackets').map((entry, index) => {
+    const seedPackets = array(snapshot.seedPackets, 'snapshot.seedPackets').flatMap((entry, index) => {
+        if (entry === null) return []
         const name = `snapshot.seedPackets[${index}]`
         const packet = record(entry, name)
         nonEmptyString(packet.seedId, `${name}.seedId`)
@@ -756,7 +758,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         }
         const shouldBeReady = packet.cooldownRemaining === 0 && packet.selected === false
         if (packet.ready !== shouldBeReady) throw new TypeError(`${name}.ready is inconsistent`)
-        return packet
+        return [packet]
     })
     const conveyorPackets = array(snapshot.conveyorPackets, 'snapshot.conveyorPackets').map(value => record(value, 'conveyor packet'))
     const selectedPackets = [...seedPackets, ...conveyorPackets].filter(packet => packet.selected === true)

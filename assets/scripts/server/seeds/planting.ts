@@ -32,7 +32,7 @@ export const planting = {
         const seedBank = world.resources.get(SeedBankResource)
         if (packetId !== undefined) return seedBank.conveyor?.packets.some(packet => packet.id === packetId && packet.seedId === seedId)
             ? {} : { reason: 'seed-not-available' }
-        const packet = slot === undefined ? seedBank.packets.find(packet => packet.seedId === seedId) : seedBank.packets[slot]
+        const packet = slot === undefined ? seedBank.packets.find(packet => packet?.seedId === seedId) : seedBank.packets[slot]
         if (packet?.seedId !== seedId) return { reason: 'seed-not-available' }
         if (getDebugRules(world).cooldown && packet.readyAtTick > session.gameplayTick) {
             return { reason: 'seed-not-ready', warningKey: 'WAITING_FOR_SEED' }
@@ -54,7 +54,7 @@ export const planting = {
         const { world } = session
         const seedBank = world.resources.get(SeedBankResource)
         // Without a slot, prefer a ready copy of the seed so a recharging duplicate does not hide it.
-        const slots = seedBank.packets.flatMap((packet, slot) => packet.seedId === seedId ? [slot] : [])
+        const slots = seedBank.packets.flatMap((packet, slot) => packet?.seedId === seedId ? [slot] : [])
         const slot = requestedSlot ?? slots.find(slot => !planting.seedAvailability(session, seedId, undefined, slot).reason) ?? slots[0]
         const availability = planting.seedAvailability(session, seedId, undefined, slot)
         if (availability.reason) return planting.rejectSeed(session, seedId, availability)

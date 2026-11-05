@@ -6,7 +6,7 @@ import type { TutorialScript } from './index'
 import { selectedSeedId } from '../seeds/seedBank'
 
 export function sunflowerReady(world: World, tick: number): boolean {
-    const packet = world.resources.get(SeedBankResource).packets.find(packet => packet.seedId === 'pvz:sunflower')
+    const packet = world.resources.get(SeedBankResource).packets.find(packet => packet?.seedId === 'pvz:sunflower')
     const economy = world.resources.get(EconomyStateResource)
     const pending = [...world.query(ItemComponent)].reduce((sum, entity) => {
         const item = world.get(entity, ItemComponent)!
