@@ -366,7 +366,7 @@ export class LevelView {
             id => entityRenderer.node(id), audio, ui,
         )
         const hudPresenter = LevelHudPresenter.create({
-            ui, content, level, canPlantAt: (snapshot, row, column) => (view.plantingLine?.canPlantAt(column) ?? true) && (view.rule?.canPlantAt?.(snapshot, row, column) ?? true), seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
+            ui, content, level, canPlantAt: (snapshot, row, column) => (view.plantingLine?.canPlantAt(column) ?? true) && (view.rule?.canPlantAt?.(snapshot, row, column) ?? true), seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet?.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
             loadPacketSprite, packetCostFont: pico129,
             adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: bankRight, adviceFont: houseOfTerror28,
             tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,

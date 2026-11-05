@@ -44,8 +44,11 @@ export interface LevelHudOptions {
     /** Board::CanPlantAt as the level rule narrows it (the bowling line). */
     canPlantAt?: (snapshot: WorldSnapshot, row: number, column: number) => boolean
     seedChooser?: WorldSnapshot['seedChooser']
-    /** The packets the bank starts with; the server builds a fixed bank from the level or the available seeds. */
-    initialSeeds: string[]
+    /**
+     * The packets the bank starts with, in slot order and undefined for an empty slot; the server builds a fixed bank
+     * from the level or the available seeds.
+     */
+    initialSeeds: Array<string | undefined>
     presentation: LevelPresentation
     seedPacketSlot: Node
     rootLayer: number
