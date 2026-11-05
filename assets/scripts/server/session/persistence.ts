@@ -169,8 +169,12 @@ export function restoreSession(
     if (save.seedBank.conveyor?.lastSeedId && !definition.conveyor!.seeds.some(seed => seed.id === save.seedBank.conveyor!.lastSeedId)) throw new Error('Saved conveyor last seed is not in the supply')
     if (save.seedBank.selection.mode === 'tool' && !levelTools(content.levels, definition, save.tutorial.firstAdventure).includes(save.seedBank.selection.toolId)) throw new Error('Saved tool is unavailable in this level')
     if (chooser && ('conveyor' in start || definition.seedPackets)) throw new Error('Saved seed choice does not match the level')
+    // A chosen bank may have started with empty slots (a Mod's Let's Rock taking fewer cards); a filled one holds exactly
+    // its slots.
     if (save.seedBank.choosing ? save.level.phase !== 'intro' || save.seedBank.packets.length > slots
-        : save.seedBank.packets.length !== slots) throw new Error('Saved seed bank size does not match the level')
+        : chooser ? save.seedBank.packets.length > slots : save.seedBank.packets.length !== slots) {
+        throw new Error('Saved seed bank size does not match the level')
+    }
     // A bank may hold any installed seed: /seed and Mods' chooser entries put in hidden seeds or other sides, and a save
     // outlives the Mod that offered them (the card can still go back to the chooser).
     for (const packet of save.seedBank.packets) {

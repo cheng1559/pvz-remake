@@ -265,6 +265,23 @@ test("a Mod's cards count like owned seeds towards the slots and opening the cho
     }
 })
 
+test('a chosen bank that started with empty slots loads, as a Mod may start it before the bank is full', () => {
+    const game = setup()
+    for (const seedId of seeds.slice(0, 6)) command(game, { type: 'chooseSeed', seedId })
+    command(game, { type: 'confirmSeeds' })
+    const save = game.saveAtBoundary() as { seedBank: { packets: unknown[] } }
+    save.seedBank.packets.splice(3)
+    const restored = setup(save as unknown as JsonValue)
+    assert.deepEqual([restored.render().seedChooser?.choosing, restored.render().seedChooser?.slots, chosen(restored)], [false, 6, seeds.slice(0, 3)])
+    // A bank without a chooser still holds exactly its seeds.
+    const start = { ...options, levelId: 'pvz:adventure-1-1', firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-1') }
+    const fixed = new LocalIntegratedGame(definitions, levels)
+    fixed.start(start)
+    const fixedSave = fixed.saveAtBoundary() as { seedBank: { packets: unknown[] } }
+    fixedSave.seedBank.packets.length = 0
+    assert.throws(() => new LocalIntegratedGame(definitions, levels).start({ ...start, save: fixedSave as unknown as JsonValue }), /seed bank size/)
+})
+
 test('partial and confirmed seed choices survive saving without reselecting or losing slot order', () => {
     const game = setup()
     for (const seedId of seeds.slice(0, 3)) command(game, { type: 'chooseSeed', seedId })

@@ -196,11 +196,12 @@ export class LevelSeedChooser {
 
     /**
      * Shows these cards in the grid, each at its place, with silhouettes on the places left empty (SeedChooserScreen::
-     * Draw); five rows, or six once a card sits at 40-47 (Has7Rows). Cards in the bank stay there; a card waiting in
-     * the grid that is not listed is put away.
+     * Draw); five rows, or six once a card sits at 40-47 (Has7Rows). `places` limits the silhouettes to the first that
+     * many places (a page of its own that need not fill the grid); the whole grid by default. Cards in the bank stay
+     * there; a card waiting in the grid that is not listed is put away.
      */
-    showCards(cards: readonly ChooserCard[]): void {
-        const places = new Map(cards.map(card => {
+    showCards(cards: readonly ChooserCard[], places?: number): void {
+        const homes = new Map(cards.map(card => {
             const seed = this.definitions.seeds[card.seedId], team = seed && packetTeam(seed, card.team)
             return [cardKey({ seedId: card.seedId, ...(team ? { team } : {}) }), card.place]
         }))
@@ -209,11 +210,11 @@ export class LevelSeedChooser {
         for (const node of this.gridSilhouettes) node.destroy()
         const taken = new Set(cards.map(card => card.place))
         this.gridSilhouettes = []
-        for (let index = 0; index < (sixRows ? CHOOSER_PLACES : FIVE_ROW_PLACES); index++) {
+        for (let index = 0; index < Math.min(places ?? Infinity, sixRows ? CHOOSER_PLACES : FIVE_ROW_PLACES); index++) {
             if (!taken.has(index)) this.gridSilhouettes.push(this.ui.image(this.gridShadows, this.silhouette, grid(index)).node)
         }
         for (const choice of this.choices) {
-            const place = places.get(choice.key)
+            const place = homes.get(choice.key)
             choice.home = place === undefined ? undefined : grid(place)
             if (choice.home) choice.shadow.node.setPosition(choice.home.x, -choice.home.y)
             choice.tooltip.hide()
