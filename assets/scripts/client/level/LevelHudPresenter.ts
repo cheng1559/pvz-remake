@@ -15,6 +15,7 @@ import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { UIButton } from '@/client/ui/UIButton'
 import { graveAt, type ServerEvent, type WorldSnapshot } from '@/shared/protocol/index'
+import { graveAllowsPlanting } from '@/shared/content/teams'
 import { LevelSeedBank } from './LevelSeedBank'
 import { adventureStage, boardCell, levelAwardSize } from './LevelGeometry'
 import type { LevelDefinition } from '@/shared/content/gameplay'
@@ -434,10 +435,10 @@ export class LevelHudPresenter {
                 preview.setMirrored(mirrored)
             }
             const occupant = snapshot.plants.find(plant => this.content.definitions.plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column)
-            const grave = !!graveAt(snapshot.graves, row, column)
-            // Graves block planting, except for a grave buster, which needs one.
-            const needsGrave = plantSeed!.placement === 'grave'
-            valid = valid && !occupant && grave === needsGrave && (this.canPlantAt?.(snapshot, row, column) ?? true)
+            // Graves block planting, except for a grave buster, which needs one of the other side.
+            const team = snapshot.cursor.mode === 'seed' && snapshot.cursor.team || 'plants'
+            valid = valid && !occupant && graveAllowsPlanting(plantSeed!.placement, team, graveAt(snapshot.graves, row, column))
+                && (this.canPlantAt?.(snapshot, row, column) ?? true)
         }
         // A grave seed takes any cell of an active row but one with a grave already.
         if (graveSeed) valid = valid && !graveAt(snapshot.graves, row, column)

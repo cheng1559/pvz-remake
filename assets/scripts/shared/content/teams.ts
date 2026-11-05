@@ -26,6 +26,16 @@ export const packetTeam = (seed: { readonly kind: SeedKind }, team: Team | undef
 /** The one rule: different sides attack each other (Zombie::EffectedByDamage, FindZombieTarget). */
 export const isHostile = (left: Team, right: Team): boolean => left !== right
 
+/** A grave's side: the zombies' unless it was put down on the plants' (a grave seed's packet of that side). */
+export const graveTeam = (grave: { readonly team?: Team }): Team => grave.team ?? 'zombies'
+
+/**
+ * Whether a plant of `team` may go into a cell with `grave` or none (Board::CanPlantAt): graves block planting, except
+ * that a plant placed on graves (the Grave Buster) needs one, and one of the other side, to eat.
+ */
+export const graveAllowsPlanting = (placement: 'ground' | 'grave', team: Team, grave: { readonly team?: Team } | undefined): boolean =>
+    placement === 'grave' ? grave !== undefined && isHostile(graveTeam(grave), team) : grave === undefined
+
 /**
  * A zombie the player has to beat: not one on the plants' side. Board::AreEnemyZombiesOnScreen, CountZombiesOnScreen
  * and TotalZombiesHealthInWave leave mind-controlled zombies out.

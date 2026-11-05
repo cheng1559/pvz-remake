@@ -124,12 +124,16 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                         // Plant::UpdateGraveBuster: the grave and the buster disappear together.
                         if (ability.ticks > 0) break
                         const waves = world.resources.get(WaveResource)
-                        waves.graves = waves.graves?.filter(grave => grave.row !== position.row || grave.column !== plant.column)
+                        const graves = waves.graves ?? []
+                        waves.graves = graves.filter(grave => grave.row !== position.row || grave.column !== plant.column)
+                        const ate = waves.graves.length < graves.length
                         commands.destroyEntity(entity)
                         emitServerEvent(events, 'graveBusted', {
                             entityId: entity, row: position.row, column: plant.column, x: position.x, y: position.y,
                         })
-                        dropGraveLoot(world, definitions, position.x, position.y)
+                        // The original drops its loot piece even without a grave, which planting never allows but `/plant`
+                        // does; here only a grave eaten by the plants' side pays the player.
+                        if (ate && plantTeam(plant) === 'plants') dropGraveLoot(world, definitions, position.x, position.y)
                         break
                     }
                 }

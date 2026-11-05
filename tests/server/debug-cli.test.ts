@@ -267,3 +267,36 @@ test('CLI can put one seed in two slots; each slot recharges, flashes and restor
     restored.start({ levelId: 'pvz:adventure-1-2', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save: game.saveAtBoundary() })
     assert.deepEqual(restored.render().seedPackets, game.render().seedPackets)
 })
+
+test("a grave buster goes only on a grave of the other side", () => {
+    // 1-2 opens rows 2-4 (the CLI's numbering); the four graves stand in row 3.
+    const game = setup(true, 'pvz:adventure-1-2')
+    for (const command of ['/seed 1 gravebuster', '/seed 2 gravebuster zombies', '/cooldown false', '/suncost false',
+        '/grave 3 4 zombies', '/grave 3 5 plants', '/grave 3 6 zombies', '/grave 3 7 plants']) {
+        assert.equal(game.debugCommand(command).ok, true, command)
+    }
+    game.command({ type: 'resume' })
+    game.update(0)
+    // What became of the attempt: the grave buster planted, or why not (the last refusal stays after a success).
+    const plant = (slot: number, column: number) => {
+        game.command({ type: 'selectSeed', seedId: 'pvz:gravebuster', slot })
+        game.command({ type: 'placePlant', row: 2, column })
+        game.update(0)
+        return game.render().plants.some(value => value.column === column) ? 'planted' : game.lastRejection?.code
+    }
+    assert.equal(plant(0, 4), 'cell-has-own-grave', "the plants' grave buster leaves a plants' grave alone")
+    assert.equal(plant(1, 3), 'cell-has-own-grave', "the zombies' grave buster leaves a zombies' grave alone")
+    assert.equal(plant(0, 5), 'planted', "the plants' grave buster eats a zombies' grave")
+    assert.equal(plant(1, 6), 'planted', "the zombies' grave buster eats a plants' grave")
+    assert.deepEqual(game.render().plants.filter(value => value.typeId === 'pvz:gravebuster').map(value => [value.column, value.team]),
+        [[5, undefined], [6, 'zombies']])
+
+    // Only a grave eaten by the plants' side pays: not one eaten by the zombies' side, nor a buster put on bare ground.
+    assert.equal(game.debugCommand('/plant gravebuster 3 2').ok, true)
+    const { landTicks, eatTicks } = definitions.plants['pvz:gravebuster'].graveBuster!
+    for (let tick = 0; tick < landTicks.max + eatTicks + 1; tick++) game.update(TICK_SECONDS)
+    assert.ok(!game.render().plants.some(value => value.typeId === 'pvz:gravebuster'), 'every grave buster is done')
+    assert.deepEqual(game.render().graves!.map(grave => grave.column).sort(), [3, 4], 'the eaten graves are gone')
+    const loot = game.render().items.filter(item => definitions.items[item.typeId]?.kind === 'money')
+    assert.equal(loot.length, 1, "one coin, from the plants' grave buster")
+})

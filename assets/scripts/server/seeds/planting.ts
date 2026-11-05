@@ -1,5 +1,5 @@
 import type { SeedAvailability } from '@/shared/protocol/index'
-import { seedTeam, type Team } from '@/shared/content/teams'
+import { graveAllowsPlanting, seedTeam, type Team } from '@/shared/content/teams'
 import type { SeedDefinition } from '@/shared/content/gameplay'
 import { spawnZombie } from '../zombies/spawn'
 import { graveAt } from '@/shared/protocol/index'
@@ -135,8 +135,10 @@ export const planting = {
         }
         const occupiedEntity = planting.findPlantAt(session, row, column)
         if (occupiedEntity !== undefined) return refuseCell('cell-occupied')
-        // Board::CanPlantAt: graves block planting, except that a grave buster needs one.
-        const onGrave = !!graveAt(world.resources.get(WaveResource).graves, row, column)
+        // Board::CanPlantAt: graves block planting, except that a grave buster needs one, of the other side.
+        const grave = graveAt(world.resources.get(WaveResource).graves, row, column)
+        const onGrave = grave !== undefined
+        if (onGrave && seed.placement === 'grave' && !graveAllowsPlanting(seed.placement, team, grave)) return refuseCell('cell-has-own-grave')
         if (onGrave !== (seed.placement === 'grave')) {
             // Board::DisplayAdvice remembers the help index for the rest of this game.
             const key = onGrave ? 'ADVICE_PLANT_NOT_ON_GRAVE' : 'ADVICE_GRAVEBUSTERS_ON_GRAVES'

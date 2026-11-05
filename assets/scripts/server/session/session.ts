@@ -39,6 +39,8 @@ export type CommandRejectionCode =
     | 'cell-occupied'
     | 'cell-has-grave'
     | 'cell-needs-grave'
+    /** A grave buster's cell has a grave of its own side, which it does not eat. */
+    | 'cell-has-own-grave'
     | 'item-not-found'
     | 'intro-not-complete'
     | 'intro-already-complete'
