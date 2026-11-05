@@ -89,6 +89,8 @@ export class LevelSeedChooser {
     private readonly cardIcons: Node
     private readonly buttons: Node
     private readonly choices: Choice[] = []
+    /** Builds a card's views; for the offered cards, and for one the bank holds that nothing offers (sync). */
+    private readonly addChoice: (card: ChooserEntry) => Choice
     private readonly start: UIButton
     private readonly emptySlots: Node[] = []
     private slots: number
@@ -143,7 +145,8 @@ export class LevelSeedChooser {
             return { seedId, place }
         })
         this.entries = entries
-        for (const card of [...available.map(seedId => ({ seedId }) as ChooserEntry), ...this.entries]) {
+        // A card's two views, its grid shadow and the card itself, with its tooltip and button.
+        this.addChoice = (card: ChooserEntry): Choice => {
             const seed = content.definitions.seeds[card.seedId]
             const args = { definitions: content.presentation, name: `Choose-${cardKey(card)}`, parent: this.cards, layer: parent.layer,
                 x: 0, y: 0, cost: seed.sunCost, costFont: ui.assets.fonts.packetCost, loadSprite: (name: string) => sprites.load(`pvz:${name}`) }
@@ -181,7 +184,9 @@ export class LevelSeedChooser {
             const choice: Choice = { ...card, key: cardKey(card), view, shadow, button, tooltip, slot: -1, notRecommended: warning !== undefined }
             button.onHoverChange = hovering => hovering && !this.inFlight ? tooltip.show() : tooltip.hide()
             this.choices.push(choice)
+            return choice
         }
+        for (const card of [...available.map(seedId => ({ seedId }) as ChooserEntry), ...this.entries]) this.addChoice(card)
         // The pictures in the order of their cards, each drawn over the earlier ones (SeedChooserScreen::Draw goes through
         // the seed types in turn), so a picture standing out of its packet shows over the card before it.
         for (const choice of this.choices) choice.view.raiseIcon()
@@ -326,6 +331,16 @@ export class LevelSeedChooser {
             this.syncIntro(400)
         }
         for (const button of this.pageButtons) button.node.active = !repick
+        // The bank may hold a card nothing offers: one /seed put in, or a saved one whose Mod is gone. It shows in its slot
+        // and can go back, but has no place in the grid, so going back it leaves the chooser (as the server lets it).
+        snapshot.seedPackets.forEach((packet, slot) => {
+            if (!packet || this.choices.some(choice => choice.key === cardKey(packet))) return
+            const choice = this.addChoice({ seedId: packet.seedId, ...(packet.team ? { team: packet.team } : {}) })
+            const { x, y } = this.slotPosition(slot)
+            choice.slot = slot
+            choice.view.node.setPosition(x, -y)
+            choice.view.raiseIcon()
+        })
         for (const choice of this.choices) {
             const slot = snapshot.seedPackets.findIndex(packet => packet?.seedId === choice.seedId && packet.team === choice.team)
             if (slot !== choice.slot) {

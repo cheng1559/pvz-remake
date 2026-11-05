@@ -106,6 +106,7 @@ test('with recharging and sun costs disabled, every chosen packet flashes on the
     game.debugCommand('/suncost')
     const picks = ['pvz:cherrybomb', ...seeds.filter(id => id !== 'pvz:cherrybomb').slice(0, 5)]
     for (const seedId of picks) command(game, { type: 'chooseSeed', seedId })
+    assert.deepEqual(chosen(game), picks)
     command(game, { type: 'confirmSeeds' })
     command(game, { type: 'completeIntro' })
     game.drainEvents()
@@ -119,6 +120,7 @@ test('a recharge that runs out flashes once, while one cleared by turning `/cool
     game.start(options)
     const picks = ['pvz:wallnut', 'pvz:cherrybomb', ...seeds.filter(id => id !== 'pvz:wallnut' && id !== 'pvz:cherrybomb').slice(0, 4)]
     for (const seedId of picks) command(game, { type: 'chooseSeed', seedId })
+    assert.deepEqual(chosen(game), picks)
     command(game, { type: 'confirmSeeds' })
     command(game, { type: 'completeIntro' })
     const flashes: string[] = []
@@ -453,4 +455,22 @@ test('a save made during a repick holds none, the client part neither, and loads
     const first = loaded.render()
     assert.deepEqual([first.seedChooser?.choosing, first.seedChooser?.repick, slotSeeds(loaded)], [false, undefined, bank],
         'the first frame shows the bank from before the repick')
+})
+
+test("a repick asks nothing before its Let's Rock, not even a level's own warnings", () => {
+    const levelId = 'pvz:adventure-2-1'
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start({ ...options, levelId, firstAdventure: true, ownedSeeds: adventureSeeds(levels, levelId) })
+    // Crazy Dave's lines come first (CutScene::StartLevelIntro on level 11).
+    for (let step = 0; step < 20; step++) command(game, { type: 'advanceDialog' })
+    const offered = game.render().seedChooser!
+    const picks = offered.availableSeeds.filter(seedId => seedId !== 'pvz:puffshroom' && seedId !== 'pvz:sunflower' && seedId !== 'pvz:sunshroom')
+        .slice(0, offered.slots)
+    for (const seedId of picks) command(game, { type: 'chooseSeed', seedId })
+    assert.deepEqual(chosen(game), picks)
+    assert.deepEqual(game.render().seedChooser?.warnings, ['SEED_CHOOSER_PUFFSHROOM_WARNING', 'SEED_CHOOSER_NIGHT_SUN_WARNING'], "the intro's chooser warns")
+    command(game, { type: 'confirmSeeds' })
+    command(game, { type: 'completeIntro' })
+    assert.equal(game.debugCommand('/repick').ok, true)
+    assert.equal(game.render().seedChooser?.warnings, undefined, 'a repick does not')
 })

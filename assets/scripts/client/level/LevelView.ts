@@ -426,7 +426,8 @@ export class LevelView {
         // A repick lifts the bank over everything but the chooser: the lawn's entities and the HUD's coins and sun, which
         // would otherwise come between the bank and the chooser's cards resting in it. It goes back under the entities
         // after, where play draws it, the sun flying over it. Above the chooser it would hide those cards.
-        let bankRaised = false
+        // The level award (the seed packet a win drops) goes under the bank meanwhile, as the lawn's other items do.
+        let bankRaised = false, awardIndex = 0
         const raiseBankToChooser = (raised: boolean) => {
             const chooser = view.seedChooser
             if (raised === bankRaised || !chooser) return
@@ -436,13 +437,16 @@ export class LevelView {
                 if (raised !== bankLayer.getSiblingIndex() > entityLayer.getSiblingIndex()) bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
                 return
             }
+            const award = awardLayer.parent === hud
             if (raised) {
+                if (award) { awardIndex = awardLayer.getSiblingIndex(); chooser.placeUnder(awardLayer) }
                 bankLayer.setParent(hud, true)
                 chooser.placeUnder(bankLayer)
             } else {
                 bankLayer.setParent(board, true)
                 // Right before the entity layer, where it was put at the start.
                 bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
+                if (award) awardLayer.setSiblingIndex(awardIndex)
             }
             view.pinScreen()
         }

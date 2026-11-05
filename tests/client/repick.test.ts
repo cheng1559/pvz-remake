@@ -87,3 +87,29 @@ test("a repick's music waits with the level, through the pause menu's resume too
     audio.holdMusic(false)
     assert.deepEqual(calls, ['pause', 'resume'])
 })
+
+test('a card the bank holds that nothing offers gets its card in its slot, so the chooser shows and can put it back', () => {
+    const { LevelSeedChooser } = load('assets/scripts/client/level/LevelSeedChooser.ts', {
+        cc: { Component, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/client/input/UIHoverManager': { UIHoverManager: { isModalBlocked: false, refreshHoverStates() {} } },
+        '@/shared/protocol': { chooserEntryKey: (entry: { seedId: string, team?: string }) => `${entry.seedId}|${entry.team ?? ''}` },
+        './LevelGeometry': { seedPacketX: (slot: number) => 85 + slot * 59 },
+    })
+    const added: Array<{ seedId: string, team?: string }> = []
+    const chooser = Object.assign(Object.create(LevelSeedChooser.prototype), {
+        age: 0, choices: [] as unknown[], start: {}, slots: 6, bankShift: 0, pageButtons: [], syncPlaceholders() {}, syncIntro() {},
+        addChoice(card: { seedId: string, team?: string }) {
+            added.push(card)
+            const placed: number[][] = []
+            const choice = { ...card, key: `${card.seedId}|${card.team ?? ''}`, slot: -1, placed,
+                view: { node: { setPosition: (x: number, y: number) => placed.push([x, y]), position: { x: 0, y: 0 } }, raiseIcon() {} } }
+            this.choices.push(choice)
+            return choice
+        },
+    })
+    const snapshot = { seedPackets: [{ seedId: 'pvz:peashooter' }, { seedId: 'pvz:explodenut', team: 'zombies' }, null], seedChooser: { slots: 6, choosing: true } }
+    chooser.sync(snapshot)
+    chooser.sync(snapshot)
+    assert.equal(JSON.stringify(added), JSON.stringify([{ seedId: 'pvz:peashooter' }, { seedId: 'pvz:explodenut', team: 'zombies' }]), 'once each')
+    assert.deepEqual(chooser.choices.map((choice: { slot: number }) => choice.slot), [0, 1], 'straight in their slots')
+})

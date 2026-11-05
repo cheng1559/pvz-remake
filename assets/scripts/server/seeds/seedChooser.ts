@@ -172,10 +172,10 @@ export function seedChooserSnapshot(world: World, definitions: GameplayDefinitio
     const bank = world.resources.get(SeedBankResource)
     const firstAdventure = world.resources.get(TutorialResource).firstAdventure
     const special = firstAdventure ? getActiveTutorial(world)?.chooserWarnings : undefined
-    const warnings = [
+    // A repick asks nothing before its Let's Rock: no warning, as Survival's repick leaves out its sun and pool ones.
+    const warnings = bank.repick ? [] : [
         ...(special?.seed && !bank.packets.some(packet => packet?.seedId === special.seed!.id) ? [special.seed.warning] : []),
-        // OnStartButton leaves the sun warning out of Survival's repick.
-        ...(bank.repick || bank.packets.some(packet => { const seed = packet && definitions.seeds[packet.seedId]; return seed?.kind === 'plant' && !!definitions.plants[seed.id].producer })
+        ...(bank.packets.some(packet => { const seed = packet && definitions.seeds[packet.seedId]; return seed?.kind === 'plant' && !!definitions.plants[seed.id].producer })
             ? [] : [special?.sunWarning ?? 'SEED_CHOOSER_SUN_WARNING']),
     ]
     const { offer, slots } = worldOffer(world, definitions)
