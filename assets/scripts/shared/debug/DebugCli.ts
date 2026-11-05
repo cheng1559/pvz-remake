@@ -28,7 +28,7 @@ const builtins: CommandSpec[] = [
     { name: 'plant', parameters: ['{plant_name}', '{row}', '{col}', '[team]'], minimum: 3, values: { 3: ['plants', 'zombies'] } },
     { name: 'seed', parameters: ['{slot}', '{seed_name}', '[team]'], minimum: 2, values: { 2: ['plants', 'zombies'] } },
     { name: 'removeplant', parameters: ['{row}', '{col}'], minimum: 2 },
-    { name: 'grave', parameters: ['{row}', '{col}'], minimum: 2 },
+    { name: 'grave', parameters: ['{row}', '{col}', '[team]'], minimum: 2, values: { 2: ['zombies', 'plants'] } },
     { name: 'zombie', parameters: ['{zombie_name}', '[row]', '[col]', '[team]'], minimum: 1, values: { 3: ['zombies', 'plants'] } },
     { name: 'item', parameters: ['{item_name}', '[row]', '[col]'], minimum: 1 },
     { name: 'damage', parameters: ['{damage}'], minimum: 1 },

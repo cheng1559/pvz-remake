@@ -16,7 +16,7 @@ import {
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { createWaveSystem } from '../level/waves'
-import { createGrave } from '../level/graves'
+import { placeGrave } from '../level/graves'
 import { spawnLoot } from '../level/loot'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
@@ -107,18 +107,12 @@ function executeCommand(
         case 'grave': {
             const grid = position(args[0], args[1])
             if (!grid) return invalidPosition()
-            // Challenge::GraveDangerSpawnGraveAt: every plant in the cell dies (Plant::Die, silently). A grave already there
-            // is replaced and rises again, which the original's CanAddGraveStoneAt would not pick. Rolling nuts keep the
-            // column they were planted in but hold no cell (planting.findPlantAt), so they roll on.
-            for (const entity of [...world.query(PositionComponent, PlantComponent)]) {
-                const plant = world.get(entity, PlantComponent)!
-                if (definitions.plants[plant.typeId].occupiesCell !== false && world.get(entity, PositionComponent)!.row === grid.row
-                    && plant.column === grid.column) world.destroyEntity(entity)
-            }
-            const wave = world.resources.get(WaveResource)
-            wave.graves = (wave.graves ?? []).filter(grave => grave.row !== grid.row || grave.column !== grid.column)
-            wave.graves.push({ ...createGrave(world, grid.row, grid.column!), riseAtTick: tick })
-            return debugSuccess(`Spawned grave at ${args[0]}, ${args[1]}`)
+            // `plants`: a grave on the plants' side, whose zombies rise on that side.
+            const team = args[2]?.toLowerCase()
+            if (team !== undefined && team !== 'plants' && team !== 'zombies') return debugSyntax('Team must be plants or zombies')
+            // Challenge::GraveDangerSpawnGraveAt (placeGrave): the plants there die, a grave there gives way.
+            placeGrave(world, definitions, grid.row, grid.column!, tick, team === 'plants' ? 'plants' : undefined)
+            return debugSuccess(`Spawned grave at ${args[0]}, ${args[1]}${team === 'plants' ? ' (plants)' : ''}`)
         }
         case 'zombie': {
             const typeId = findType(definitions.zombies, args[0])

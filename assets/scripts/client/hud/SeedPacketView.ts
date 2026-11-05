@@ -4,6 +4,7 @@ import { _decorator, Color, Component, Mask, Node, Sprite } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontRenderer } from '@/client/font'
 import {
+    PacketGrave,
     SEED_PACKET_HEIGHT,
     SEED_PACKET_WIDTH,
     SeedPacketRenderer,
@@ -25,6 +26,8 @@ export interface SeedPacketViewArgs {
     seedType?: SeedPacketSeedType
     /** A zombie seed's zombie type, drawn instead of a plant. */
     zombie?: string
+    /** A grave seed's packet, which draws a grave. */
+    grave?: boolean
     costFont: BitmapFontAssets | null
     drawCost?: boolean
     cost?: number
@@ -69,7 +72,7 @@ class SeedPacketIconFollower extends Component {
 }
 
 /** Parts of a packet that draw over the packets: its picture and cost; the background stays. */
-const ICON_PARTS = new Set(['PacketPlant', 'PacketZombie', 'Cost'])
+const ICON_PARTS = new Set(['PacketPlant', 'PacketZombie', 'PacketGrave', 'Cost'])
 /**
  * How far a tilted picture may stand out of its packet, sideways and above, which the cooldown's shade over the
  * picture covers. With the picture in its own layer the shade holds only the dark copy, so it can reach this far.
@@ -99,11 +102,11 @@ export class SeedPacketView {
             size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT } }).node
         if (args.iconLayer) this.top = this.followingNode(args.iconLayer, `${args.name}Icon`)
         this.labels = args.labelLayer ? this.followingNode(args.labelLayer, `${args.name}Labels`) : this.node
-        if (args.seedType !== undefined) this.setSeed(args.seedType, args.cost ?? 0, args.zombie)
+        if (args.seedType !== undefined) this.setSeed(args.seedType, args.cost ?? 0, args.zombie, args.grave)
     }
 
-    setSeed(seedType: SeedPacketSeedType, cost: number, zombie?: string): void {
-        const args = { ...this.args, seedType, cost, zombie,
+    setSeed(seedType: SeedPacketSeedType, cost: number, zombie?: string, grave?: boolean): void {
+        const args = { ...this.args, seedType, cost, zombie, grave,
             parent: this.node.parent!, x: this.node.position.x, y: this.node.position.y }
         this.args = args
         this.seedType = seedType
@@ -133,6 +136,7 @@ export class SeedPacketView {
         for (const parent of this.parts) {
             for (const plant of parent.getComponentsInChildren(PlantPreview)) plant.setMirrored(mirrored)
             for (const zombie of parent.getComponentsInChildren(ZombiePreview)) zombie.setMirrored(mirrored)
+            for (const grave of parent.getComponentsInChildren(PacketGrave)) grave.setMirrored(mirrored)
         }
     }
 

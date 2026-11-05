@@ -17,6 +17,7 @@ import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule } from '../rules/registry'
 import { clearCursor } from './cursor'
+import { placeGrave } from '../level/graves'
 
 const CANT_AFFORD_ADVICE = 'ADVICE_CANT_AFFORD_PLANT'
 
@@ -111,6 +112,14 @@ export const planting = {
             const entity = planting.placeZombie(session, seed.zombie, row, column, team)
             spendSeed(session, seed, packet, sunCost)
             emitServerEvent(world.resources.get(EventQueueResource), 'zombiePlaced', { entityId: entity, typeId: seed.zombie, row, column })
+            return
+        }
+        if (seed.grave) {
+            // Like Grave Danger's graves (placeGrave): any cell of an active row without a grave (the plants there die);
+            // on the plants' side when its packet is, so its zombies rise there too.
+            if (graveAt(world.resources.get(WaveResource).graves, row, column)) return refuseCell('cell-has-grave')
+            placeGrave(world, definitions, row, column, gameplayTick, team === 'plants' ? 'plants' : undefined)
+            spendSeed(session, seed, packet, sunCost)
             return
         }
         if (levelRule(world)?.canPlantAt?.(world, row, column) === false) return refuseCell('column-out-of-range')

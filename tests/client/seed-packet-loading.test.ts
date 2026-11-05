@@ -105,3 +105,19 @@ test('a scaled packet cost reads HD font glyphs at their texture scale and skips
     assert.deepEqual(frames.map(frame => frame.rect.v), [[40, 8, 16, 36], [4, 4, 16, 36]], 'texture pixels = logical rect x textureScale')
     assert.deepEqual(nodes.filter(node => node.sprite).map(node => [node.size.width, node.size.height]), [[8, 18], [8, 18]], 'drawn at logical size x packet scale')
 })
+
+test('a grave packet of the other side turns its picture round within the packet', () => {
+    const { classes } = setup()
+    const node = {
+        scaleX: 1, position: { x: 0, y: -3 },
+        setScale(x: number) { this.scaleX = x },
+        setPosition(x: number, y: number) { this.position = { x, y } },
+        getComponent: () => ({ width: 50 }),
+    }
+    const grave = new classes.PacketGrave()
+    grave.node = node
+    grave.setMirrored(true)
+    assert.deepEqual([node.scaleX, node.position], [-1, { x: 50, y: -3 }])
+    grave.setMirrored(false)
+    assert.deepEqual([node.scaleX, node.position], [1, { x: 0, y: -3 }])
+})

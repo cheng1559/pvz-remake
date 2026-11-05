@@ -1,6 +1,6 @@
 import { modResources } from '@/client/content/ModResources'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
-import { _decorator, Color, Component, isValid, Node, Rect, Size, Sprite, SpriteFrame, Vec2 } from 'cc'
+import { _decorator, Color, Component, isValid, Node, Rect, Size, Sprite, SpriteFrame, UITransform, Vec2 } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import type { FontConfig, FontLayerConfig } from '@/client/font/FontRenderer.d'
@@ -51,12 +51,19 @@ export interface SeedPacketRenderArgs {
     seedType: SeedPacketSeedType
     /** A zombie seed's zombie type, drawn instead of a plant (SEED_ZOMBIE_*). */
     zombie?: string
+    /** A grave seed's packet, which draws a grave instead of a plant. */
+    grave?: boolean
     cost?: number
     drawCost?: boolean
     upgrade?: boolean
     loadSprite?: (name: string) => Promise<SpriteFrame>
     costFont?: BitmapFontAssets | null
 }
+
+/** The plain grave's cell in the tombstone atlases (5 looks a row): its third row (other rows' graves), first look. */
+const GRAVE_CELL = 10
+/** A grave seed's packet picture: the grave at about a plant's size, centred, a little above the picture window's floor. */
+const GRAVE_PACKET = { x: 8, y: 13, scale: 0.38 }
 
 async function loadPacketSprite(name: string): Promise<SpriteFrame> {
     const frame = await modResources.asset(name, SpriteFrame)
@@ -77,6 +84,15 @@ class SeedPacketBackground extends Component {
         }).catch(error => {
             if (isValid(this.node, true)) console.error('[SeedPacket] Failed to load background', error)
         })
+    }
+}
+
+/** A grave seed's packet picture: a holder the packet's size, which a packet of the other side turns round within it. */
+@_decorator.ccclass('PacketGrave')
+export class PacketGrave extends Component {
+    setMirrored(mirrored: boolean): void {
+        this.node.setScale(mirrored ? -1 : 1, 1, 1)
+        this.node.setPosition(mirrored ? this.node.getComponent(UITransform)!.width : 0, this.node.position.y)
     }
 }
 
@@ -118,6 +134,7 @@ export class SeedPacketRenderer {
 
         this._drawBackground(root, args, scale)
         if (args.zombie) this._drawZombieIcon(root, args, scale)
+        else if (args.grave) this._drawGraveIcon(root, args, scale)
         else this._drawPlantIcon(root, args, scale)
         if (args.drawCost !== false && args.cost != null) {
             this._drawCost(root, args.cost, args.costFont ?? null, args.layer, scale)
@@ -168,6 +185,33 @@ export class SeedPacketRenderer {
             x: (packet.x + 40 * packet.scale) * iconScale, y: -(packet.y + 40 * packet.scale) * iconScale, scale: packet.scale * iconScale, from: 'reanim',
             facingRightOffsetX: packet.facingRightOffsetX, packetScale: iconScale,
         }).setZombie(args.zombie)
+    }
+
+    /**
+     * A grave as it stands once risen (GridItem::DrawGraveStone): the plain stone (the atlases' third row, first look)
+     * and its mound, from (x, y) at `scale`. On the lawn its corner is 4 left of and 9 above its cell.
+     */
+    static drawGrave(parent: Node, layer: number | undefined, loadSprite: (name: string) => Promise<SpriteFrame>,
+        x: number, y: number, scale: number): Node {
+        const node = uiNode({ name: 'Grave', parent, layer, anchor: { x: 0, y: 1 }, position: { x, y: -y } }).node
+        node.setScale(scale, scale, 1)
+        for (const atlas of ['tombstones', 'tombstone_mounds']) {
+            const image = uiNode({ name: atlas, parent: node, layer, anchor: { x: 0, y: 1 }, sprite: { sizeMode: Sprite.SizeMode.RAW, trim: false } })
+            void loadSprite(atlas).then(frame => {
+                if (!isValid(image.node, true)) return
+                image.sprite!.spriteFrame = getAtlasFrame(frame, GRAVE_CELL, frame.originalSize.width / 5, frame.originalSize.height / 4, 5)
+            }).catch(error => console.error('[SeedPacket] Failed to load the grave', error))
+        }
+        return node
+    }
+
+    /** A grave seed's packet: the grave in the picture's place (GRAVE_PACKET), in a holder the packet's width that a packet of the other side turns round. */
+    private static _drawGraveIcon(root: Node, args: SeedPacketRenderArgs, scale: number) {
+        const size = scale > 1 ? scale : 1
+        const holder = uiNode({ name: 'PacketGrave', parent: root, layer: args.layer, anchor: { x: 0, y: 1 },
+            size: { width: SEED_PACKET_WIDTH * size, height: SEED_PACKET_HEIGHT * size } }).node
+        holder.addComponent(PacketGrave)
+        this.drawGrave(holder, args.layer, args.loadSprite ?? loadPacketSprite, GRAVE_PACKET.x * size, GRAVE_PACKET.y * size, GRAVE_PACKET.scale * size)
     }
 
     private static async _drawCachedPlantIcon(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number): Promise<void> {

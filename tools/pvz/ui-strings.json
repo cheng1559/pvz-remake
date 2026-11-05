@@ -58,5 +58,6 @@
   "DEBUG_ACHIEVEMENT_NOT_INSTALLED": "Achievement is not installed: %s",
   "DEBUG_ACHIEVEMENT_EARNED": "Achievement already earned: %s",
   "DEBUG_ACHIEVEMENTS_OFF": "This level grants no achievements",
-  "DEBUG_UNAVAILABLE": "/%s is unavailable in this version"
+  "DEBUG_UNAVAILABLE": "/%s is unavailable in this version",
+  "GRAVE_SEED": "Grave"
 }

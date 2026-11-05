@@ -75,6 +75,7 @@ interface SeedCommon {
 export interface PlantSeedDefinition extends SeedCommon {
     plant: string
     zombie?: undefined
+    grave?: undefined
     /** `grave`: only on a grave, like the Grave Buster (PLANTING_ONLY_ON_GRAVES). */
     placement: 'ground' | 'grave'
 }
@@ -86,10 +87,23 @@ export interface PlantSeedDefinition extends SeedCommon {
 export interface ZombieSeedDefinition extends SeedCommon {
     zombie: string
     plant?: undefined
+    grave?: undefined
     placement?: undefined
 }
 
-export type SeedDefinition = PlantSeedDefinition | ZombieSeedDefinition
+/**
+ * A seed that puts down a grave, which the original has no seed for: in any cell of an active row, as Grave Danger's
+ * graves come (Challenge::GraveDangerSpawnGraveAt: the plants there die), but not in a cell with a grave already. Its
+ * zombies rise on the grave's side, the zombies' unless its packet says otherwise.
+ */
+export interface GraveSeedDefinition extends SeedCommon {
+    grave: true
+    plant?: undefined
+    zombie?: undefined
+    placement?: undefined
+}
+
+export type SeedDefinition = PlantSeedDefinition | ZombieSeedDefinition | GraveSeedDefinition
 
 /** Damages zombies whose body overlaps the circle; `burn` chars them like the original ApplyBurn. */
 export interface ExplosionDefinition {
@@ -381,11 +395,11 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
         if (other) throw new Error(`seed catalog puts ${other} and ${id} in the same place (${position})`)
         places.set(position, id)
         reference(id, definitions.seeds, 'seed catalog')
-        if (definitions.seeds[id].plant === undefined) throw new Error(`seed catalog lists ${id}, a zombie seed; the chooser only offers plants`)
+        if (definitions.seeds[id].plant === undefined) throw new Error(`seed catalog lists ${id}, not a plant seed; the chooser only offers plants`)
     }
     for (const [id, seed] of Object.entries(definitions.seeds)) {
         if (seed.zombie !== undefined) reference(seed.zombie, definitions.zombies, `seeds.${id}.zombie`)
-        else reference(seed.plant, definitions.plants, `seeds.${id}.plant`)
+        else if (seed.plant !== undefined) reference(seed.plant, definitions.plants, `seeds.${id}.plant`)
     }
     for (const [id, plant] of Object.entries(definitions.plants)) {
         if (plant.shooter?.projectile) reference(plant.shooter.projectile, definitions.projectiles, `plants.${id}.shooter.projectile`)
@@ -449,13 +463,20 @@ function parseBoard(value: unknown, name: string): BoardDefinition {
 }
 
 function parseSeed(value: unknown, name: string): SeedDefinition {
-    const source = exactObject(value, ['sunCost', 'cooldownTicks'], name, ['plant', 'zombie', 'placement', 'initialCooldownTicks'])
+    const source = exactObject(value, ['sunCost', 'cooldownTicks'], name, ['plant', 'zombie', 'grave', 'placement', 'initialCooldownTicks'])
     const common = {
         sunCost: nonNegativeInteger(source.sunCost, `${name}.sunCost`),
         cooldownTicks: nonNegativeInteger(source.cooldownTicks, `${name}.cooldownTicks`),
         ...(source.initialCooldownTicks === undefined ? {} : { initialCooldownTicks: nonNegativeInteger(source.initialCooldownTicks, `${name}.initialCooldownTicks`) }),
     }
-    if ((source.plant === undefined) === (source.zombie === undefined)) throw new Error(`${name} needs either a plant or a zombie`)
+    if ([source.plant, source.zombie, source.grave].filter(value => value !== undefined).length !== 1) {
+        throw new Error(`${name} needs one of a plant, a zombie or a grave`)
+    }
+    if (source.grave !== undefined) {
+        if (source.grave !== true) throw new Error(`${name}.grave must be true`)
+        if (source.placement !== undefined) throw new Error(`${name}.placement is for plant seeds`)
+        return { ...common, grave: true }
+    }
     if (source.zombie !== undefined) {
         if (source.placement !== undefined) throw new Error(`${name}.placement is for plant seeds`)
         return { ...common, zombie: qualifiedId(source.zombie, `${name}.zombie`) }

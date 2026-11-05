@@ -21,5 +21,6 @@
   "pvz:zombie-pole_vaulter": {"zombie": "pvz:pole_vaulter", "sunCost": 75, "cooldownTicks": 0},
   "pvz:zombie-buckethead": {"zombie": "pvz:buckethead", "sunCost": 125, "cooldownTicks": 0},
   "pvz:zombie-newspaper": {"zombie": "pvz:newspaper", "sunCost": 75, "cooldownTicks": 0},
-  "pvz:zombie-screendoor": {"zombie": "pvz:screendoor", "sunCost": 100, "cooldownTicks": 0}
+  "pvz:zombie-screendoor": {"zombie": "pvz:screendoor", "sunCost": 100, "cooldownTicks": 0},
+  "pvz:grave": {"grave": true, "sunCost": 0, "cooldownTicks": 0}
 }

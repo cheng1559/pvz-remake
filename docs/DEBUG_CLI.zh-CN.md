@@ -19,7 +19,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 倍速 | `/gamespeed {0-10}`，作用于统一游戏时钟 |
 | 胜负／波次 | `/win`、`/lose`、`/nextwave` |
 | 植物 | `/plant {plant_name} {row} {col} [team]`、`/removeplant {row} {col}`。`team` 为 `zombies` 时生成僵尸阵营的植物，朝左，与植物阵营互相攻击，见 [阵营](TEAMS.zh-CN.md) |
-| 墓碑 | `/grave {row} {col}`，在指定格子生成墓碑并播放出土动画（随机延迟、土块粒子和音效，按游戏时间升起，暂停时等恢复后才升）；格子上的植物会被移除（同原版墓碑危机），同一格已有墓碑时替换并重新升起，随关卡存档保存 |
+| 墓碑 | `/grave {row} {col} [team]`，在指定格子生成墓碑并播放出土动画；`team` 为 `plants` 时墓碑在植物方（镜像），最后一波后冒出的僵尸也在植物方（随机延迟、土块粒子和音效，按游戏时间升起，暂停时等恢复后才升）；格子上的植物会被移除（同原版墓碑危机），同一格已有墓碑时替换并重新升起，随关卡存档保存 |
 | 替换种子包 | `/seed {槽位} {种子名} [team]`，如 `/seed 1 snowpea`；`team` 为 `zombies` 时换成僵尸阵营的种子包，见 [阵营](TEAMS.zh-CN.md) |
 | 僵尸 | `/zombie {zombie_name} [row] [col] [team]`、`/damage {damage}`、`/kill`。`team` 为 `plants` 时生成植物阵营的僵尸，往右走、与僵尸阵营互咬；它没有被魅惑，所以不变紫色，见 [阵营](TEAMS.zh-CN.md) |
 | 掉落 | `/item {item_name} [row col]`，当前支持 `sun`、`award`；`award` 不像正常掉落那样清除场上僵尸 |

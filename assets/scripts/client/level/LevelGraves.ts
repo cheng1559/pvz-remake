@@ -50,6 +50,11 @@ export class LevelGraves {
                 y: 300 - board.origin.y - grave.row * board.cell.height - height - grave.offsetY + 9,
             } }).node
             renderer.addScenery(root, graveOrder(grave.row))
+            // A grave on the plants' side is turned round within its own width, as that side's plants and zombies are.
+            if (grave.team === 'plants') {
+                root.setScale(-1, 1, 1)
+                root.setPosition(root.position.x + width, root.position.y)
+            }
             const atlasRow = grave.row === 0 ? 1 : grave.special ? 0 : 2 + grave.variant % 2
             const cell = atlasRow * 5 + grave.variant % 5
             const create = (name: string, atlas: typeof stones) => {

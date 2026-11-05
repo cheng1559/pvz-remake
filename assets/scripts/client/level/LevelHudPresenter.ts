@@ -1,12 +1,12 @@
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ZombiePreview } from '@/client/hud/ZombiePreview'
-import { Color, Graphics, isValid, Node, Vec3 } from 'cc'
+import { Color, Graphics, isValid, Node, Sprite, Vec3 } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { FontRepository } from '@/client/content/ClientContentLoader'
 import { uiNode } from '@/client/view/uiNode'
 import { formatMoney } from '@/client/ui/formatMoney'
 import { PlantPreview } from '@/client/hud/PlantPreview'
-import type { SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
+import { SeedPacketRenderer, type SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
@@ -123,6 +123,7 @@ export class LevelHudPresenter {
         presenter.coinBank = options.coinBank
         presenter.ui = options.ui
         presenter.canPlantAt = options.canPlantAt
+        presenter.loadPacketSprite = options.loadPacketSprite
         presenter.menuButton.node.active = false
         return presenter
     }
@@ -401,7 +402,17 @@ export class LevelHudPresenter {
         // A held packet of the other side from its seed's own puts down what faces the other way.
         const mirrored = snapshot.cursor.mode === 'seed' && snapshot.cursor.team !== undefined
         const zombieId = seedDefinition?.zombie
-        this.cursorPlant.node.active = this.gridPlant.node.active = zombieId === undefined
+        const graveSeed = !!seedDefinition?.grave
+        this.cursorPlant.node.active = this.gridPlant.node.active = zombieId === undefined && !graveSeed
+        if (graveSeed || this.gravePreviews) {
+            const { cursor, grid } = this.gravePreview
+            cursor.active = grid.active = graveSeed
+            // A packet of the plants' side turns the grave round, as its packet does.
+            for (const node of [cursor, grid]) {
+                node.setScale(mirrored ? -1 : 1, 1, 1)
+                node.setPosition(mirrored ? 82 : -4, node.position.y)
+            }
+        }
         if (zombieId !== undefined || this.zombiePreviews) {
             // Put down facing right, the zombie stands its own `facingRightOffsetX` further (see ZombieDefinition).
             const facingRightOffsetX = zombieId === undefined ? undefined : this.content.definitions.zombies[zombieId].facingRightOffsetX
@@ -427,7 +438,9 @@ export class LevelHudPresenter {
             const needsGrave = seedDefinition!.placement === 'grave'
             valid = valid && !occupant && grave === needsGrave && (this.canPlantAt?.(snapshot, row, column) ?? true)
         }
-        if (plantId || zombieId !== undefined) {
+        // A grave seed takes any cell of an active row but one with a grave already.
+        if (graveSeed) valid = valid && !graveAt(snapshot.graves, row, column)
+        if (plantId || zombieId !== undefined || graveSeed) {
             this.cursorPreview.setPosition(pointer.x - CURSOR_PREVIEW_POINTER_X, -pointer.y + CURSOR_PREVIEW_POINTER_Y)
             this.gridPreview.active = valid && !mobile
             if (valid && !mobile) this.gridPreview.setPosition(board.origin.x + column * board.cell.width,
@@ -466,6 +479,23 @@ export class LevelHudPresenter {
     pointerOffsetY(seedId: string): number {
         const plant = this.content.definitions.seeds[seedId].plant
         return plant === undefined ? 0 : plantDefinition(this.content.presentation, plant).pointerOffsetY ?? 0
+    }
+
+    private loadPacketSprite!: LevelHudOptions['loadPacketSprite']
+    private gravePreviews?: { cursor: Node, grid: Node }
+    /**
+     * A grave seed's grave in hand and translucent over its cell, as it will stand once risen: its corner 4 left of and
+     * 9 above the cell (GridItem::DrawGraveStone), from the cell the pointer is over.
+     */
+    private get gravePreview(): { cursor: Node, grid: Node } {
+        if (!this.gravePreviews) {
+            const load = this.loadPacketSprite!
+            const cursor = SeedPacketRenderer.drawGrave(this.cursorPreview, this.cursorPreview.layer, load, -4, -9, 1)
+            const grid = SeedPacketRenderer.drawGrave(this.gridPreview, this.gridPreview.layer, load, -4, -9, 1)
+            for (const sprite of grid.getComponentsInChildren(Sprite)) sprite.color = new Color(255, 255, 255, 100)
+            this.gravePreviews = { cursor, grid }
+        }
+        return this.gravePreviews
     }
 
     private zombiePreviews?: { cursor: ZombiePreview, grid: ZombiePreview }

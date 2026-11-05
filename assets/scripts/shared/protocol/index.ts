@@ -130,6 +130,8 @@ export interface GraveSnapshot {
     special?: true
     /** A grave added during play (/grave) rises from this gameplay tick; the level's own graves rise in the intro. */
     riseAtTick?: number
+    /** A grave put down on the plants' side (a grave seed's packet of that side): its zombies rise on that side too. */
+    team?: 'plants'
 }
 
 /** Board::AddAGraveStone: 20 stone looks and a rise delay of 0-49 ticks. */
@@ -790,6 +792,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         finite(grave.offsetX, `${name}.offsetX`); finite(grave.offsetY, `${name}.offsetY`)
         if (grave.special !== undefined && grave.special !== true) throw new TypeError(`${name}.special must be true`)
         if (grave.riseAtTick !== undefined) integer(grave.riseAtTick, `${name}.riseAtTick`)
+        if (grave.team !== undefined && grave.team !== 'plants') throw new TypeError(`${name}.team must be plants`)
     })
     array(snapshot.plants, 'snapshot.plants').forEach((entry, index) => {
         const name = `snapshot.plants[${index}]`

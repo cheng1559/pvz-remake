@@ -263,12 +263,13 @@ function parseWave(value: unknown): WaveState {
     if (source.ruleState !== undefined) result.ruleState = jsonRoundTrip(record(source.ruleState, 'server save.wave.ruleState')) as JsonObject
     if (source.graves !== undefined) {
         result.graves = array(source.graves, 'wave.graves').map(value => {
-            const grave = optionalExact(value, ['column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], ['special', 'riseAtTick'], 'grave')
+            const grave = optionalExact(value, ['column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], ['special', 'riseAtTick', 'team'], 'grave')
             const result = { column: nonNegativeInteger(grave.column, 'grave.column'), row: nonNegativeInteger(grave.row, 'grave.row'),
                 variant: integer(grave.variant, 'grave.variant'), riseDelay: integer(grave.riseDelay, 'grave.riseDelay'),
                 offsetX: integer(grave.offsetX, 'grave.offsetX'), offsetY: integer(grave.offsetY, 'grave.offsetY'),
                 ...(grave.special === undefined ? {} : { special: trueFlag(grave.special, 'grave.special') }),
-                ...(grave.riseAtTick === undefined ? {} : { riseAtTick: nonNegativeInteger(grave.riseAtTick, 'grave.riseAtTick') }) }
+                ...(grave.riseAtTick === undefined ? {} : { riseAtTick: nonNegativeInteger(grave.riseAtTick, 'grave.riseAtTick') }),
+                ...(grave.team === undefined ? {} : { team: plantsTeam(grave.team, 'grave.team') }) }
             checkGraveRanges(result, 'grave')
             return result
         })
@@ -561,6 +562,11 @@ function nonEmptyString(value: unknown, name: string): string {
 function trueFlag(value: unknown, name: string): true {
     if (value !== true) throw new TypeError(`${name} must be true`)
     return true
+}
+
+function plantsTeam(value: unknown, name: string): 'plants' {
+    if (value !== 'plants') throw new TypeError(`${name} must be plants`)
+    return 'plants'
 }
 
 function boolean(value: unknown, name: string): boolean {

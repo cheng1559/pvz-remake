@@ -63,7 +63,10 @@ test('CLI graves rise from where they are told, replace a grave in their cell, b
         'they rise from the current gameplay tick')
     assert.equal(game.render().paused, true)
     assert.equal(game.render().gameplayTick, tick)
-    assert.equal(game.debugCommand('/grave 3 2').ok, true, 'a grave in the cell is replaced')
+    assert.equal(game.debugCommand('/grave 3 2 plants').ok, true, 'a grave in the cell is replaced')
+    assert.equal(game.render().graves!.find(grave => grave.row === 2 && grave.column === 1)!.team, 'plants', "`plants`: on the plants' side")
+    assert.equal(game.debugCommand('/grave 3 2 zombies').ok, true)
+    assert.equal(game.render().graves!.find(grave => grave.row === 2 && grave.column === 1)!.team, undefined)
     assert.equal(game.debugCommand('/plant wallnut 3 3').ok, true)
     assert.equal(game.debugCommand('/grave 3 3').ok, true, 'plants do not stop a debug grave')
     assert.ok(!game.render().plants.some(plant => plant.row === 2 && plant.column === 2), 'Challenge::GraveDangerSpawnGraveAt kills the plants in the cell')
@@ -105,6 +108,44 @@ test('CLI graves rise from where they are told, replace a grave in their cell, b
     for (let tick = 0; tick < 300; tick++) partial.tick()
     assert.deepEqual(partial.snapshot().zombies.filter(zombie => zombie.riseTicks !== undefined).map(zombie => zombie.row), [graves[1].row],
         'only the grave at counter 100 raises a zombie')
+})
+
+test("a grave seed puts down a grave in any active cell, on the zombies' side or its packet's, whose zombies rise on that side", () => {
+    // 1-2's bank holds two packets.
+    const game = setup(true, 'pvz:adventure-1-2')
+    assert.equal(game.debugCommand('/seed 1 grave').ok, true)
+    assert.equal(game.debugCommand('/seed 2 grave plants').ok, true)
+    assert.equal(game.debugCommand('/plant wallnut 3 3').ok, true)
+    game.command({ type: 'resume' })
+    game.update(0)
+    const tick = game.render().gameplayTick
+    const place = (slot: number, row: number, column: number) => {
+        game.command({ type: 'selectSeed', seedId: 'pvz:grave', slot })
+        game.command({ type: 'placePlant', row, column })
+        game.update(0)
+    }
+    place(0, 2, 2)
+    assert.equal(game.lastRejection, undefined)
+    assert.ok(!game.render().plants.some(plant => plant.row === 2 && plant.column === 2), 'the plants in the cell die, as a Grave Danger grave comes')
+    place(1, 2, 5)
+    place(0, 2, 5)
+    const rejection = () => game.lastRejection
+    assert.equal(rejection()?.code, 'cell-has-grave', 'unlike /grave, a planted grave leaves a grave there alone')
+    place(1, 1, 4)
+    assert.deepEqual(game.render().graves!.map(({ row, column, riseAtTick, team }) => [row, column, riseAtTick, team]),
+        [[2, 2, tick, undefined], [2, 5, tick, 'plants'], [1, 4, tick, 'plants']])
+    assert.equal(game.render().seedPackets[1].team, 'plants')
+
+    const save = JSON.parse(JSON.stringify(game.saveAtBoundary()))
+    save.wave.index = save.wave.plan.length - 1
+    save.wave.nextWaveAtTick = save.gameplayTick + 1
+    save.wave.hugeWaveAnnounced = true
+    const final = new IntegratedGameServer(definitions, levels)
+    final.restore(save)
+    for (let step = 0; step < 300; step++) final.tick()
+    const risen = final.snapshot().zombies.filter(zombie => zombie.riseTicks !== undefined)
+    assert.deepEqual(risen.map(zombie => [zombie.row, zombie.team]).sort(), [[1, 'plants'], [2, 'plants'], [2, undefined]].sort(),
+        "a grave of the plants' side raises its zombie on that side")
 })
 
 test('plant invincibility blocks bites until disabled and does not prevent removal', () => {

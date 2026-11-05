@@ -67,9 +67,10 @@ export class LevelSeedBank {
      * What a seed's packet draws and its tooltip's name key. A zombie seed's packet draws its zombie (SEED_ZOMBIE_*, seed
      * type -1), named as the almanac names it.
      */
-    private packetLook(seed: SeedDefinition): { seedType: SeedPacketSeedType, zombie?: string, name: string } {
+    private packetLook(seed: SeedDefinition): { seedType: SeedPacketSeedType, zombie?: string, grave?: boolean, name: string } {
         const presentation = this.options.content.presentation
         if (seed.zombie !== undefined) return { seedType: -1, zombie: seed.zombie, name: presentation.zombies[seed.zombie]?.nameKey ?? seed.zombie }
+        if (seed.grave) return { seedType: -1, grave: true, name: 'GRAVE_SEED' }
         const visual = plantDefinition(presentation, seed.plant).visual
         return { seedType: visual.seedType, name: visual.nameKey ?? String(visual.seedType).toUpperCase() }
     }
@@ -87,6 +88,7 @@ export class LevelSeedBank {
             y: 0,
             seedType: look?.seedType,
             zombie: look?.zombie,
+            grave: look?.grave,
             iconLayer: this.iconLayer,
             labelLayer: this.labelLayer,
             cost: seed?.sunCost,
@@ -171,7 +173,7 @@ export class LevelSeedBank {
                 entry.seedId = packet.seedId
                 entry.hotkey = undefined
                 entry.tooltip.hide()
-                entry.view.setSeed(look.seedType, seed.sunCost, look.zombie)
+                entry.view.setSeed(look.seedType, seed.sunCost, look.zombie, look.grave)
                 entry.tooltip.text = this.options.ui.text(look.name)
             }
             // A packet of the other side from its seed's own draws what it puts down facing the other way.

@@ -137,6 +137,9 @@ export class LevelSeedChooser {
                 // A zombie seed's packet draws its zombie (SEED_ZOMBIE_*), named as the almanac names it.
                 for (const view of views) view.setSeed(-1, seed.sunCost, seed.zombie)
                 tooltipOptions = { text: ui.text(content.presentation.zombies[seed.zombie]?.nameKey ?? seed.zombie), gap: 0 }
+            } else if (seed.grave) {
+                for (const view of views) view.setSeed(-1, seed.sunCost, undefined, true)
+                tooltipOptions = { text: ui.text('GRAVE_SEED'), gap: 0 }
             } else {
                 const visual = plantDefinition(content.presentation, seed.plant).visual
                 for (const view of views) view.setSeed(visual.seedType, seed.sunCost)
