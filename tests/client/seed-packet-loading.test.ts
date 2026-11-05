@@ -1,6 +1,6 @@
 import { presentationFixture } from './presentationFixture'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
@@ -107,7 +107,8 @@ test('a scaled packet cost reads HD font glyphs at their texture scale and skips
 })
 
 test('a grave packet of the other side turns its picture round within the packet', () => {
-    const { classes } = setup()
+    const { classes, load } = setup()
+    load('PacketGrave')
     const node = {
         scaleX: 1, position: { x: 0, y: -3 },
         setScale(x: number) { this.scaleX = x },
@@ -120,4 +121,11 @@ test('a grave packet of the other side turns its picture round within the packet
     assert.deepEqual([node.scaleX, node.position], [-1, { x: 50, y: -3 }])
     grave.setMirrored(false)
     assert.deepEqual([node.scaleX, node.position], [1, { x: 0, y: -3 }])
+})
+
+test('every script defines at most one component, as Cocos allows (error 3615)', () => {
+    const scripts = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
+        entry.isDirectory() ? scripts(`${dir}/${entry.name}`) : entry.name.endsWith('.ts') ? [`${dir}/${entry.name}`] : [])
+    const crowded = scripts('assets/scripts').filter(path => (readFileSync(path, 'utf8').match(/^\s*@(?:_decorator\.)?ccclass\(/gm) ?? []).length > 1)
+    assert.deepEqual(crowded, [])
 })

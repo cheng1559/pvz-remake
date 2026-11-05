@@ -4,7 +4,6 @@ import { _decorator, Color, Component, Mask, Node, Sprite } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontRenderer } from '@/client/font'
 import {
-    PacketGrave,
     SEED_PACKET_HEIGHT,
     SEED_PACKET_WIDTH,
     SeedPacketRenderer,
@@ -14,6 +13,7 @@ import {
 import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview } from './PlantPreview'
 import { ZombiePreview } from './ZombiePreview'
+import { PacketGrave } from './PacketGrave'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
 export interface SeedPacketViewArgs {

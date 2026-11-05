@@ -1,12 +1,13 @@
 import { modResources } from '@/client/content/ModResources'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
-import { _decorator, Color, Component, isValid, Node, Rect, Size, Sprite, SpriteFrame, UITransform, Vec2 } from 'cc'
+import { _decorator, Color, Component, isValid, Node, Rect, Size, Sprite, SpriteFrame, Vec2 } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil, FontRenderer } from '@/client/font'
 import type { FontConfig, FontLayerConfig } from '@/client/font/FontRenderer.d'
 import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview } from './PlantPreview'
 import { ZombiePreview } from './ZombiePreview'
+import { PacketGrave } from './PacketGrave'
 import { applySpriteDensity } from '@/client/content/SpriteDensity'
 import { plantVisual, type SeedPacketSeedType } from '@/client/plants/definitions'
 export type { SeedPacketSeedType } from '@/client/plants/definitions'
@@ -84,15 +85,6 @@ class SeedPacketBackground extends Component {
         }).catch(error => {
             if (isValid(this.node, true)) console.error('[SeedPacket] Failed to load background', error)
         })
-    }
-}
-
-/** A grave seed's packet picture: a holder the packet's size, which a packet of the other side turns round within it. */
-@_decorator.ccclass('PacketGrave')
-export class PacketGrave extends Component {
-    setMirrored(mirrored: boolean): void {
-        this.node.setScale(mirrored ? -1 : 1, 1, 1)
-        this.node.setPosition(mirrored ? this.node.getComponent(UITransform)!.width : 0, this.node.position.y)
     }
 }
 
