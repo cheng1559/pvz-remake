@@ -18,7 +18,8 @@ interface Box { x?: number, y?: number, width?: number, height?: number }
 /** LawnDialog's mSpaceAfterHeader (1073 0x45a5be, 1096 0x45cd2e); Dialog itself uses 10. */
 const DIALOG_SPACE_AFTER_HEADER = 3
 
-export type UIButtonSkin = 'stone' | 'back' | 'seed' | 'seedSmall' | 'almanacIndex' | 'almanacClose' | 'image'
+/** `text`: a label alone, on IMAGE_BLANK as SeedChooserScreen's (Debug Play) is, lit by `hoverColor`. */
+export type UIButtonSkin = 'stone' | 'back' | 'seed' | 'seedSmall' | 'almanacIndex' | 'almanacClose' | 'image' | 'text'
 export interface UIButtonImages {
     normal: SpriteFrame
     hover?: SpriteFrame
@@ -37,6 +38,8 @@ export interface UIButtonOptions extends Box {
     font?: UIFont | BitmapFontAssets
     hoverFont?: UIFont | BitmapFontAssets
     color?: Color
+    /** The label's colour while hovered or pressed (GameButton::SetLabelHiliteColor). */
+    hoverColor?: Color
     enabled?: boolean
     rightClickTriggers?: boolean
     rightClickPressesVisual?: boolean
@@ -144,7 +147,7 @@ export class UI {
         } : skin === 'almanacClose' ? {
             normal: sprites.almanac_closebutton, hover: sprites.almanac_closebuttonhighlight,
         } : undefined)
-        if (!stone && !images) throw new Error('Image buttons require images.normal')
+        if (!stone && skin !== 'text' && !images) throw new Error('Image buttons require images.normal')
         const stateImages = images && {
             normal: images.normal,
             hover: images.hover ?? images.normal,
@@ -170,14 +173,14 @@ export class UI {
             down = this.box(visual, 'Pressed', { ...imageBox, x: (imageBox.x ?? 0) + 1 })
             this.stoneRow(normal, imageBox.width, imageBox.height, false)
             this.stoneRow(down, imageBox.width, imageBox.height, true)
-        } else image = this.image(visual, images!.normal, imageBox)
+        } else if (images) image = this.image(visual, images.normal, imageBox)
         const normalFont = options.font ?? (back ? 'large' : stone ? 'button' : skin === 'seedSmall' || footer ? 'small' : 'body')
         const hoverFont = options.hoverFont ?? options.font ?? (back ? 'largeHover' : stone ? 'buttonHover' : normalFont)
         const fonts = normalFont === hoverFont ? [normalFont] : [normalFont, hoverFont]
         const color = options.color ?? (skin === 'seed' ? new Color(213, 159, 43)
             : skin === 'seedSmall' || footer ? new Color(42, 42, 90) : undefined)
-        const textOffsetX = { stone: 1, back: -2, seed: 0, seedSmall: 0, almanacIndex: 8, almanacClose: -8, image: 0 }[skin]
-        const textOffsetY = { stone: -4, back: -5, seed: -1, seedSmall: 1, almanacIndex: 1, almanacClose: 1, image: 0 }[skin]
+        const textOffsetX = { stone: 1, back: -2, seed: 0, seedSmall: 0, almanacIndex: 8, almanacClose: -8, image: 0, text: 0 }[skin]
+        const textOffsetY = { stone: -4, back: -5, seed: -1, seedSmall: 1, almanacIndex: 1, almanacClose: 1, image: 0, text: 0 }[skin]
         const labels = fonts.map(font => {
             const ascent = FontMetricsUtil.getMetrics((typeof font === 'object' ? font : this.assets.fonts[font]).config).ascent
             const baseline = back
@@ -229,7 +232,8 @@ export class UI {
                 glow.node.setPosition(pressed ? -pressOffset[0] : 0, pressed ? pressOffset[1] : 0)
             }
             labels.forEach((label, index) => {
-                if (options.disabledColor) label.color = state === 'disabled' ? options.disabledColor : color ?? Color.WHITE
+                if (options.disabledColor && state === 'disabled') label.color = options.disabledColor
+                else if (options.disabledColor || options.hoverColor) label.color = highlighted && options.hoverColor ? options.hoverColor : color ?? Color.WHITE
                 label.node.active = index === (highlighted ? labels.length - 1 : 0)
                 label.node.setPosition(
                     labelPositions[index].x + (pressed && (stone || skin === 'seedSmall') ? 1 : 0),
