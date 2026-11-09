@@ -14,6 +14,8 @@ export interface WordWrapMeasure {
     lineWidths: number[]
 }
 
+const defaultHeights = new WeakMap<FontLayerConfig, number>()
+
 export class FontMetricsUtil {
     static measureTextWidth(fontConfig: JsonAsset | null, text: string): number {
         const cfg = this._getConfig(fontConfig)
@@ -146,12 +148,16 @@ export class FontMetricsUtil {
     }
 
     static getLayerDefaultHeight(layer: FontLayerConfig): number {
+        // Once per font: a Chinese font has thousands of characters, and every label laid out asks again.
+        const known = defaultHeights.get(layer)
+        if (known !== undefined) return known
         let height = layer.ascent
         for (const charCode in layer.chars) {
             const charInfo = layer.chars[charCode]
             const bottom = charInfo.rect[3] + charInfo.offset[1]
             if (bottom > height) height = bottom
         }
+        defaultHeights.set(layer, height)
         return height
     }
 

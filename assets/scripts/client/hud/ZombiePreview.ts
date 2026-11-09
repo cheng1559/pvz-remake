@@ -2,8 +2,7 @@ import { _decorator, Color, Component, isValid, Node, type Sprite } from 'cc'
 import { type PacketTilt, PacketPictureStyle, placePacketPicture } from './packetPicture'
 import { bakeSprite } from '@/client/view/bakeSprite'
 import type { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
-import { loadDisplayParts, zombieRestingParts } from '@/client/reanim/EntityDisplay'
-import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
+import { loadDisplayParts, loadEntityDisplayAssets, zombieRestingParts } from '@/client/reanim/EntityDisplay'
 import { uiNode } from '@/client/view/uiNode'
 import { MIRRORED_SHIFT } from '@/client/zombies/zombieParts'
 
@@ -154,7 +153,9 @@ export class ZombiePreview extends Component {
     }
 
     private async load(root: Node, typeId: string): Promise<void> {
-        const content = await loadIntegratedGameContent()
+        // The content loaded once for every display: loading it anew builds every definition again, which a chooser's
+        // dozens of zombie packets would each do.
+        const { content } = await loadEntityDisplayAssets()
         if (!isValid(root, true) || root !== this.root) return
         // ReanimatorCache::MakeCachedZombieFrame poses most zombies on anim_idle, the pole vaulter on anim_walk.
         const clip = content.presentation.zombies[typeId]?.packet?.clip
