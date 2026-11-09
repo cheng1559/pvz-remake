@@ -187,7 +187,8 @@ export interface WorldSnapshot {
      */
     /** `cheatSeeds`: `/cheatseed` stands on, so the chooser turns its pages and Let's Rock takes any cards chosen. */
     seedChooser?: { availableSeeds: string[], entries?: ChooserEntry[], slots: number, choosing: boolean, warnings?: string[], repick?: true, cheatSeeds?: true }
-    conveyorPackets: Array<{ id: number; seedId: string; x: number; selected: boolean; availability: SeedAvailability }>
+    /** `team`: the side it puts down on, when not its seed's own (`/seed`). */
+    conveyorPackets: Array<{ id: number; seedId: string; x: number; team?: Team; selected: boolean; availability: SeedAvailability }>
     graves?: GraveSnapshot[]
     plants: PlantSnapshot[]
     zombies: ZombieSnapshot[]
@@ -884,6 +885,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         const name = `snapshot.conveyorPackets[${index}]`, packet = record(entry, name)
         integer(packet.id, `${name}.id`); nonEmptyString(packet.seedId, `${name}.seedId`)
         finite(packet.x, `${name}.x`); boolean(packet.selected, `${name}.selected`)
+        if (packet.team !== undefined) team(packet.team, `${name}.team`)
         validateSeedAvailability(packet.availability, name)
     })
     array(snapshot.items, 'snapshot.items').forEach((entry, index) => {

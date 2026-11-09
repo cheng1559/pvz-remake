@@ -561,3 +561,33 @@ test("a repick asks nothing before its Let's Rock, not even a level's own warnin
     assert.equal(game.debugCommand('/repick').ok, true)
     assert.equal(game.render().seedChooser?.warnings, undefined, 'a repick does not')
 })
+
+test('/seed works on a conveyor belt: its packets from the left, empty takes one off, a team kept and saved', () => {
+    const start = { ...options, levelId: 'pvz:adventure-1-10', firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-10') }
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start(start)
+    command(game, { type: 'completeIntro' })
+    const belt = (from = game) => from.render().conveyorPackets.map(packet => `${packet.seedId}${packet.team ? `@${packet.team}` : ''}`)
+    assert.equal(game.debugCommand('/seed 1 peashooter').ok, false, 'nothing on an empty belt')
+    while (game.render().conveyorPackets.length < 3) game.update(TICK_SECONDS)
+    const [first, second, third] = game.render().conveyorPackets
+    assert.equal(game.debugCommand('/seed 4 peashooter').ok, false, 'no slot past the last packet')
+    for (const line of ['/seed 1 snowpea', '/seed 2 normal plants', '/seed 3 wallnut zombies']) assert.equal(game.debugCommand(line).ok, true, line)
+    assert.deepEqual(belt(), ['pvz:snowpea', 'pvz:normal@plants', 'pvz:wallnut@zombies'])
+    assert.deepEqual(game.render().conveyorPackets.map(packet => [packet.id, packet.x]), [first, second, third].map(packet => [packet.id, packet.x]),
+        'each packet changes its seed where it stands')
+    // Held, a packet of the other side puts down on that side.
+    command(game, { type: 'selectConveyorPacket', packetId: second.id })
+    const cursor = game.render().cursor
+    assert.equal(cursor.mode === 'seed' ? cursor.team : undefined, 'plants')
+    command(game, { type: 'placePlant', row: 2, column: 5 })
+    assert.ok(game.render().zombies.some(zombie => zombie.typeId === 'pvz:normal' && zombie.team === 'plants'), "it walks on the plants' side")
+    assert.deepEqual(belt(), ['pvz:snowpea', 'pvz:wallnut@zombies'])
+    // A held packet that /seed changes is put down.
+    command(game, { type: 'selectConveyorPacket', packetId: first.id })
+    assert.equal(game.debugCommand('/seed 1 empty').ok, true)
+    assert.deepEqual([belt(), game.render().cursor.mode], [['pvz:wallnut@zombies'], 'none'])
+    const restored = new LocalIntegratedGame(definitions, levels, undefined, true)
+    restored.start({ ...start, save: game.saveAtBoundary() })
+    assert.deepEqual(belt(restored), ['pvz:wallnut@zombies'], 'the side is saved')
+})

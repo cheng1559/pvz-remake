@@ -115,11 +115,14 @@ export interface SeedPacketState { seedId: string, readyAtTick: number, cooldown
  * the level had opened the chooser; `confirmed`, Let's Rock pressed and the chooser lifting out (`finishRepick`). It
  * is never saved: a save made meanwhile holds the bank from before, or once confirmed, the bank chosen.
  */
+/** A packet on the conveyor belt; `team` (from `/seed`) only when it is not its seed's own (packetTeam). */
+export interface ConveyorPacketState { id: number; seedId: string; x: number; team?: Team }
+
 export interface SeedRepick { chooser: boolean, packets: Array<SeedPacketState | null>, confirmed?: true }
 
 export interface SeedBankState {
     selection: SeedSelection
-    conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; lastSeedId?: string; packets: Array<{ id: number; seedId: string; x: number }> }
+    conveyor?: { nextId: number; spawnAtTick: number; moveTicks: number; lastSeedId?: string; packets: ConveyorPacketState[] }
     choosing?: boolean
     /**
      * The bank's slots in order; `null` is an empty one: a slot Let's Rock left unchosen (finishSeedChoice) or emptied

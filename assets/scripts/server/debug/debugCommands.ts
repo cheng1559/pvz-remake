@@ -96,13 +96,34 @@ function executeCommand(
             const bank = world.resources.get(SeedBankResource)
             // A repick's bank is the chooser's until the level goes on after it.
             if (bank.choosing || bank.repick) return debugCondition('DEBUG_FINISH_CHOOSING')
-            const slot = debugInteger(args[0])
-            if (slot === null || slot < 1 || slot > bank.packets.length) {
-                return debugSyntax(`Use slot 1-${bank.packets.length}`)
-            }
             // `empty` clears the slot; a seed fills an empty one or replaces the packet there.
             const empty = args[1].toLowerCase() === EMPTY_SLOT
             const seedId = empty ? undefined : findType(definitions.seeds, args[1])
+            const slot = debugInteger(args[0])
+            // `team`: the side of what it puts down, kept only when not the seed's own (packetTeam).
+            const side = args[2]?.toLowerCase()
+            const sideOf = (id: string) => packetTeam(definitions.seeds[id], side === 'plants' || side === 'zombies' ? side : undefined)
+            if (bank.conveyor) {
+                // The belt's packets from the left.
+                const conveyor = bank.conveyor, count = conveyor.packets.length
+                if (slot === null || slot < 1 || slot > count) return debugSyntax(count ? `Use slot 1-${count}` : 'The conveyor belt is empty')
+                if (!empty && !seedId) return debugCondition('DEBUG_SEED_NOT_INSTALLED', args[1])
+                const packet = conveyor.packets[slot - 1]
+                if (bank.selection.mode === 'conveyor' && bank.selection.packetId === packet.id) bank.selection = { mode: 'none' }
+                if (!seedId) {
+                    // The packets after it close the gap as the belt moves, as after a planting.
+                    conveyor.packets.splice(slot - 1, 1)
+                    return debugSuccess(`Conveyor slot ${slot}: ${EMPTY_SLOT}`)
+                }
+                packet.seedId = seedId
+                const team = sideOf(seedId)
+                if (team) packet.team = team
+                else delete packet.team
+                return debugSuccess(`Conveyor slot ${slot}: ${seedId}${packet.team ? ` (${packet.team})` : ''}`)
+            }
+            if (slot === null || slot < 1 || slot > bank.packets.length) {
+                return debugSyntax(`Use slot 1-${bank.packets.length}`)
+            }
             if (!empty && !seedId) return debugCondition('DEBUG_SEED_NOT_INSTALLED', args[1])
             if (bank.selection.mode === 'seed' && bank.selection.slot === slot - 1) bank.selection = { mode: 'none' }
             if (!seedId) {
@@ -113,9 +134,7 @@ function executeCommand(
             const packet = bank.packets[slot - 1] ??= { seedId, readyAtTick: tick }
             packet.seedId = seedId
             packet.readyAtTick = tick
-            // `team`: the side of what it puts down, kept only when not the seed's own (packetTeam).
-            const side = args[2]?.toLowerCase()
-            const team = packetTeam(definitions.seeds[seedId], side === 'plants' || side === 'zombies' ? side : undefined)
+            const team = sideOf(seedId)
             if (team) packet.team = team
             else delete packet.team
             return debugSuccess(`Seed slot ${slot}: ${seedId}${packet.team ? ` (${packet.team})` : ''}`)

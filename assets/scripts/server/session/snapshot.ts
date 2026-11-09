@@ -5,7 +5,7 @@ import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { getAvailableSun } from '../level/items'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { planting } from '../seeds/planting'
-import { selectedSeedId } from '../seeds/seedBank'
+import { selectedSeedId, selectedTeam } from '../seeds/seedBank'
 import { seedChooserSnapshot } from '../seeds/seedChooser'
 import type { Session } from './session'
 import { tools } from '../seeds/tools'
@@ -22,7 +22,7 @@ export const snapshot = {
         const waves = world.resources.get(WaveResource)
         const tutorial = world.resources.get(TutorialResource)
         const selectedSeed = selectedSeedId(seedBank)
-        const selectedTeam = seedBank.selection.mode === 'seed' ? seedBank.packets[seedBank.selection.slot]?.team : undefined
+        const heldTeam = selectedTeam(seedBank)
         const seedPackets = seedBank.packets.map((packet, slot) => {
             if (!packet) return null
             const cooldownRemaining = Math.max(0, packet.readyAtTick - gameplayTick)
@@ -128,7 +128,7 @@ export const snapshot = {
                 ...(level.phase === 'intro' ? { previewZombies: waves.plan.flatMap(wave => wave.zombies).reduce<Record<string, number>>((counts, id) => { counts[id] = (counts[id] ?? 0) + 1; return counts }, {}) } : {}),
             },
             cursor: seedBank.selection.mode === 'tool' ? { ...seedBank.selection } : selectedSeed
-                ? { mode: 'seed', seedId: selectedSeed, ...(selectedTeam ? { team: selectedTeam } : {}) }
+                ? { mode: 'seed', seedId: selectedSeed, ...(heldTeam ? { team: heldTeam } : {}) }
                 : { mode: 'none' },
             seedPackets,
             // A game that opened the chooser keeps `choosing`, also once confirmed.

@@ -12,7 +12,7 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
 import { getAvailableSun } from '../level/items'
 import { TutorialResource, WaveResource } from '../state/levelState'
 import { initialPlantAbility } from '../plants/abilities'
-import { selectedSeedId } from './seedBank'
+import { selectedSeedId, selectedTeam } from './seedBank'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule } from '../rules/registry'
@@ -106,7 +106,7 @@ export const planting = {
         if (!Number.isInteger(column) || column < 0 || column >= level.board.columns) {
             return refuseCell('column-out-of-range')
         }
-        const team = packet?.team ?? seedTeam(seed)
+        const team = selectedTeam(seedBank) ?? seedTeam(seed)
         if (seed.kind === 'zombie') {
             // Challenge::IZombieMouseDownWithZombie: a zombie goes into any cell of an active row, whatever stands there.
             const entity = planting.placeZombie(session, seed.id, row, column, team)
