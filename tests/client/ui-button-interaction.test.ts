@@ -255,8 +255,8 @@ test('a belt packet shows once its picture is drawn, in its place on the belt fo
         bank.sync(at(300), [], true, null, false)
         assert.equal(JSON.stringify(shownAt), '[]')
         await new Promise(resolve => setTimeout(resolve, 0))
-        bank.sync(at(299), [], true, null, false)
-        assert.equal(JSON.stringify(shownAt), JSON.stringify([layout.packetX + 299]))
+        // Drawn, it shows at once, with no sync to wait for: a paused level (a loaded save on its dialog) has none.
+        assert.equal(JSON.stringify(shownAt), JSON.stringify([layout.packetX + 300]))
     } finally { bank.destroy?.(); ui.cleanup() }
 })
 

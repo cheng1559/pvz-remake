@@ -18,6 +18,8 @@ interface Packet {
     seedId?: string
     /** Its new seed's picture is still loading: the packet waits hidden rather than show a frame without it. */
     drawing?: boolean
+    /** Whether the bank shows it, once drawn. */
+    shown?: boolean
     view: SeedPacketView
     tooltip: UITooltip
     hotkey?: UILabel
@@ -186,9 +188,15 @@ export class LevelSeedBank {
                 // The picture loads after this frame is drawn: a belt packet would come in empty for a frame first.
                 const seedId = packet.seedId
                 entry.drawing = true
-                void entry.view.ready.then(() => { if (entry.seedId === seedId) entry.drawing = false })
+                // Shown once drawn, not at the next sync: a paused level (a loaded save waiting on its dialog) has none.
+                void entry.view.ready.then(() => {
+                    if (entry.seedId !== seedId || !entry.view.node.isValid) return
+                    entry.drawing = false
+                    entry.view.node.active = entry.shown === true
+                })
             }
-            entry.view.node.active = !!packet && (!snapshot.seedChooser?.choosing || this.awaitingChooser) && !entry.drawing
+            entry.shown = !!packet && (!snapshot.seedChooser?.choosing || this.awaitingChooser)
+            entry.view.node.active = entry.shown && !entry.drawing
             if (!packet) {
                 if (entry.button) entry.button.interactable = false
                 entry.tooltip.hide()
