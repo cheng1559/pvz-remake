@@ -31,6 +31,11 @@ export interface LevelSeedPacket extends SeedPacketSnapshot {
 
 export class LevelSeedBank {
     readonly packets: Packet[]
+    /**
+     * A repick's chooser is still being built (the first one in a level without one): the packets stay until its cards
+     * take their places, so the bank is never empty for a frame between them.
+     */
+    awaitingChooser = false
     /** Every packet's picture, over every packet's background (SeedPacketViewArgs.iconLayer), and their hotkeys over that. */
     private readonly iconLayer: Node
     private readonly labelLayer: Node
@@ -183,7 +188,7 @@ export class LevelSeedBank {
                 entry.drawing = true
                 void entry.view.ready.then(() => { if (entry.seedId === seedId) entry.drawing = false })
             }
-            entry.view.node.active = !!packet && !snapshot.seedChooser?.choosing && !entry.drawing
+            entry.view.node.active = !!packet && (!snapshot.seedChooser?.choosing || this.awaitingChooser) && !entry.drawing
             if (!packet) {
                 if (entry.button) entry.button.interactable = false
                 entry.tooltip.hide()

@@ -673,6 +673,7 @@ export class LevelView {
             }).catch(error => console.error('[LevelView] Failed to open the seed chooser for a repick', error))
                 .finally(() => { this.openingSeedChooser = false })
         }
+        this.hud.seedBank.awaitingChooser = repick && !this.seedChooser
         this.freezeLawn(repick)
         if (this.money !== undefined && snapshot.money !== this.money) this.onMoneyChanged?.(snapshot.money)
         this.money = snapshot.money
