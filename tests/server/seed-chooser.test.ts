@@ -6,8 +6,8 @@ import { chooserSeeds, parseGameplayDefinitions, parseGameplayLevels } from '@/s
 import { buildGameplayContent } from '@/shared/content/DefinitionRegistry'
 import type { GameCommand, JsonValue } from '@/shared/protocol'
 import { adventureSeeds } from './adventure-seeds'
-import { finishSeedChoice, seedChooser } from '@/server/seeds/seedChooser'
-import { commands } from '@/server/session/commands'
+import { availableSeeds, chooserOffer, seedChooser } from '@/server/seeds/seedChooser'
+import { chooserPages, cheatSeedEntries } from '@/shared/content/chooserPages'
 import { TICK_SECONDS } from '@/shared/protocol'
 
 const source = readGameplaySource
@@ -289,18 +289,12 @@ test('a chosen bank that started with empty slots loads, as a Mod may start it b
     assert.throws(() => new LocalIntegratedGame(definitions, levels).start({ ...start, save: fixedSave as unknown as JsonValue }), /seed bank size/)
 })
 
-test("Let's Rock taking fewer cards leaves the other slots empty, and /seed fills or empties any slot", () => {
-    const execute = commands.execute
-    // A Mod's Let's Rock, as seed-chooser-pages does it: the base finds the bank short, and the Mod starts it anyway.
-    commands.execute = function (session, value) {
-        const rejection = execute.call(this, session, value)
-        if (value.type !== 'confirmSeeds' || rejection !== 'seed-choice-incomplete') return rejection
-        finishSeedChoice(session.world, session.definitions)
-        return undefined
-    }
-    try {
+test("/cheatseed's Let's Rock takes fewer cards and leaves the other slots empty, and /seed fills or empties any slot", () => {
+    {
         const game = new LocalIntegratedGame(definitions, levels, undefined, true)
-        game.start(options)
+        game.start({ ...options, cheatSeeds: true })
+        command(game, { type: 'confirmSeeds' })
+        assert.equal(game.render().seedChooser?.choosing, true, 'not with an empty bank')
         for (const seedId of seeds.slice(0, 4)) command(game, { type: 'chooseSeed', seedId })
         command(game, { type: 'confirmSeeds' })
         assert.deepEqual(slotSeeds(game), [...seeds.slice(0, 4), null, null])
@@ -315,8 +309,101 @@ test("Let's Rock taking fewer cards leaves the other slots empty, and /seed fill
         game.update(0)
         assert.equal(game.render().cursor.mode, 'none')
         assert.deepEqual(slotSeeds(setup(game.saveAtBoundary())), slotSeeds(game), 'empty slots survive saving')
+    }
+    // Without the switch Let's Rock waits for a full bank.
+    const game = setup()
+    for (const seedId of seeds.slice(0, 4)) command(game, { type: 'chooseSeed', seedId })
+    command(game, { type: 'confirmSeeds' })
+    assert.equal(game.render().seedChooser?.choosing, true)
+})
+
+test("/cheatseed's pages: the owned grid, the hidden seeds, graves and zombies, then both again on the zombies' side", () => {
+    for (const owned of [undefined, ['pvz:peashooter', 'pvz:wallnut']]) {
+        const available = availableSeeds(definitions, owned)
+        const pages = chooserPages(definitions, available)
+        const names = pages.map(page => page.cards.map(card => `${card.seedId}${card.team ? `@${card.team}` : ''}`))
+        const zombies = Object.keys(definitions.seeds).filter(id => definitions.seeds[id].kind === 'zombie')
+        const hidden = ['pvz:explodenut', 'pvz:bowling-wallnut', 'pvz:bowling-explodenut']
+        assert.deepEqual(pages.map(page => page.catalog), [true, false, true, false])
+        assert.deepEqual(names[0], available)
+        assert.deepEqual(pages[0].cards.map(card => card.place), available.map(id => definitions.seedCatalog[id].position), 'at their catalog places')
+        // The grave seed is the zombies' own: page 4 has it as it is, page 2 on the plants' side.
+        assert.deepEqual(names[1], [...hidden, 'pvz:grave@plants', ...zombies.map(id => `${id}@plants`)])
+        assert.deepEqual(pages[1].cards.map(card => card.place), names[1].map((_, index) => index), 'one after another')
+        assert.deepEqual(names[2], names[0].map(id => `${id}@zombies`))
+        assert.deepEqual(pages[2].cards.map(card => card.place), pages[0].cards.map(card => card.place), "page 3 keeps page 1's places")
+        assert.deepEqual(names[3], [...hidden.map(id => `${id}@zombies`), 'pvz:grave', ...zombies])
+        assert.deepEqual(cheatSeedEntries(definitions, available),
+            pages.slice(1).flatMap(page => page.cards).map(({ seedId, team }) => ({ seedId, ...(team ? { team } : {}) })))
+    }
+})
+
+test("/cheatseed puts the Mods' plants outside the grid on pages of their own, the cheat cards after them", () => {
+    const plant = definitions.seeds['pvz:peashooter'], zombie = definitions.seeds['pvz:normal']
+    const modded = { ...definitions,
+        seeds: { ...definitions.seeds, 'test:far': { ...plant, id: 'test:far' }, 'test:loose': { ...plant, id: 'test:loose' },
+            'test:inside': { ...plant, id: 'test:inside' }, 'test:walker': { ...zombie, id: 'test:walker' } },
+        seedCatalog: { ...definitions.seedCatalog, 'test:far': { position: 60 }, 'test:inside': { position: 47 } } }
+    const available = availableSeeds(modded, undefined)
+    const names = chooserPages(modded, available).map(page => page.cards.map(card => `${card.seedId}${card.team ? `@${card.team}` : ''}`))
+    const cheat = chooserPages(definitions, availableSeeds(definitions, undefined))[1].cards.map(card => `${card.seedId}${card.team ? `@${card.team}` : ''}`)
+    assert.equal(names.length, 6)
+    assert.equal(names[0].at(-1), 'test:inside', 'a Mod seed in the grid stays on the first page')
+    assert.deepEqual(names[1], ['test:far', 'test:loose'], 'in catalog order, then those it does not list')
+    assert.deepEqual(names[2], [...cheat, 'test:walker@plants'], 'the cheat cards start a page of their own, with a Mod zombie among them')
+    assert.deepEqual(names[4], ['test:far@zombies', 'test:loose@zombies'])
+    assert.deepEqual(names[5].at(-1), 'test:walker')
+})
+
+test('/cheatseed offers every grid seed, owned or not, and its pages, counted towards opening the chooser, and a Mod still adds its cards after them', () => {
+    const start = (cheatSeeds: boolean) => {
+        const game = new LocalIntegratedGame(definitions, levels)
+        // A first adventure's 1-1 owns the Peashooter alone, so without the switch it fills its one slot unasked.
+        game.start({ ...options, levelId: 'pvz:adventure-1-1', firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-1'), cheatSeeds })
+        return game
+    }
+    assert.equal(start(false).render().seedChooser, undefined)
+    const chooser = start(true).render().seedChooser!
+    // Owning the Peashooter alone, every grid seed is there all the same.
+    assert.deepEqual([chooser.slots, chooser.cheatSeeds, chooser.availableSeeds], [6, true, seeds])
+    assert.deepEqual(chooser.entries, cheatSeedEntries(definitions, seeds))
+    const game = start(true)
+    command(game, { type: 'chooseSeed', seedId: 'pvz:sunflower' })
+    assert.deepEqual(chosen(game), ['pvz:sunflower'], 'a seed not owned can be chosen')
+    // A Mod's plant placed in the grid, as corn's are, is on page 1 though nobody owns it.
+    const modded = { ...definitions, seeds: { ...definitions.seeds, 'test:pult': { ...definitions.seeds['pvz:peashooter'], id: 'test:pult' } },
+        seedCatalog: { ...definitions.seedCatalog, 'test:pult': { position: 47 } } }
+    assert.equal(chooserOffer(modded, ['pvz:peashooter'], true).available.at(-1), 'test:pult')
+    assert.deepEqual(chooserOffer(modded, ['pvz:peashooter']).available, ['pvz:peashooter'], 'without the switch only owned seeds')
+    const original = seedChooser.entries
+    seedChooser.entries = (defs, owned) => [...original(defs, owned), { seedId: 'pvz:normal', team: 'plants' }, { seedId: 'test:missing' }]
+    try {
+        // A card the pages hold already is offered once; a seed not installed not at all.
+        assert.deepEqual(start(true).render().seedChooser!.entries, chooser.entries)
     } finally {
-        commands.execute = execute
+        seedChooser.entries = original
+    }
+})
+
+test('/cheatseed turns over between choosers, which take it up as they open, and stays with a loaded save', () => {
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start(options)
+    assert.deepEqual([game.debugCommand('/cheatseed').ok, game.render().seedChooser?.cheatSeeds], [false, undefined], 'not while choosing')
+    for (const seedId of seeds.slice(0, 6)) command(game, { type: 'chooseSeed', seedId })
+    command(game, { type: 'confirmSeeds' })
+    command(game, { type: 'completeIntro' })
+    const on = game.debugCommand('/cheatseed')
+    assert.deepEqual([on.ok, on.enabled, on.advice], [true, true, { key: 'DEBUG_SWITCH_ON', args: ['DEBUG_SWITCH_CHEATSEED'] }])
+    assert.equal(game.debugCommand('/repick').ok, true)
+    const repick = game.render().seedChooser!
+    assert.deepEqual([repick.cheatSeeds, repick.entries, repick.slots], [true, cheatSeedEntries(definitions, seeds), 6], "a repick's chooser takes it up")
+    // A loaded save starts with the switch as the player has it; the switches are not saved.
+    const save = game.saveAtBoundary()
+    for (const cheatSeeds of [false, true]) {
+        const loaded = new LocalIntegratedGame(definitions, levels, undefined, true)
+        loaded.start({ ...options, save, cheatSeeds })
+        loaded.debugCommand('/repick')
+        assert.equal(loaded.render().seedChooser?.cheatSeeds, cheatSeeds ? true : undefined, String(cheatSeeds))
     }
 })
 

@@ -84,6 +84,11 @@ export interface StartSessionPacket extends ClientPacketBase {
     ownedSeeds?: string[]
     /** The achievements the player has; the level reports only new ones. */
     earnedAchievements?: string[]
+    /**
+     * `/cheatseed` stands on (the player's preference): the chooser offers every seed on its pages. It counts towards
+     * whether the chooser opens, so it comes with the start, a loaded save's too, rather than after it.
+     */
+    cheatSeeds?: boolean
     firstAdventure: boolean
     mods: EnabledMod[]
     save?: JsonValue
@@ -180,7 +185,8 @@ export interface WorldSnapshot {
      * `warnings` are shown one after another on confirm; each can be dismissed to repick. `repick`: chosen again in play
      * (`/repick`), the level standing still, for the bank's own size.
      */
-    seedChooser?: { availableSeeds: string[], entries?: ChooserEntry[], slots: number, choosing: boolean, warnings?: string[], repick?: true }
+    /** `cheatSeeds`: `/cheatseed` stands on, so the chooser turns its pages and Let's Rock takes any cards chosen. */
+    seedChooser?: { availableSeeds: string[], entries?: ChooserEntry[], slots: number, choosing: boolean, warnings?: string[], repick?: true, cheatSeeds?: true }
     conveyorPackets: Array<{ id: number; seedId: string; x: number; selected: boolean; availability: SeedAvailability }>
     graves?: GraveSnapshot[]
     plants: PlantSnapshot[]
@@ -429,6 +435,7 @@ export function parseClientPacket(value: unknown): ClientPacket {
                 array(packet.earnedAchievements, 'startSession.earnedAchievements')
                     .forEach((id, index) => nonEmptyString(id, `startSession.earnedAchievements[${index}]`))
             }
+            if (packet.cheatSeeds !== undefined) boolean(packet.cheatSeeds, 'startSession.cheatSeeds')
             boolean(packet.firstAdventure, 'startSession.firstAdventure')
             array(packet.mods, 'startSession.mods').forEach((value, index) => validateEnabledMod(value, index))
             break

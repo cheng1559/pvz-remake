@@ -10,6 +10,8 @@ type DebugSettings = {
     rechargingEnabled: boolean
     sunCostEnabled: boolean
     plantInvincible: boolean
+    /** `/cheatseed`: every seed on the chooser's pages, and Let's Rock with any cards chosen. */
+    cheatSeedsEnabled: boolean
     fpsVisible: boolean
     collectMode: DebugCollectMode
     hitboxesVisible: boolean
@@ -31,6 +33,7 @@ const DEFAULT_DEBUG_SETTINGS: DebugSettings = {
     rechargingEnabled: true,
     sunCostEnabled: true,
     plantInvincible: false,
+    cheatSeedsEnabled: false,
     fpsVisible: false,
     collectMode: 'click',
     hitboxesVisible: false,
@@ -63,6 +66,7 @@ function loadDebugSettings(): DebugSettings {
             rechargingEnabled: parsed.rechargingEnabled ?? DEFAULT_DEBUG_SETTINGS.rechargingEnabled,
             sunCostEnabled: parsed.sunCostEnabled ?? DEFAULT_DEBUG_SETTINGS.sunCostEnabled,
             plantInvincible: typeof parsed.plantInvincible === 'boolean' ? parsed.plantInvincible : DEFAULT_DEBUG_SETTINGS.plantInvincible,
+            cheatSeedsEnabled: typeof parsed.cheatSeedsEnabled === 'boolean' ? parsed.cheatSeedsEnabled : DEFAULT_DEBUG_SETTINGS.cheatSeedsEnabled,
             fpsVisible: typeof parsed.fpsVisible === 'boolean' ? parsed.fpsVisible : DEFAULT_DEBUG_SETTINGS.fpsVisible,
             collectMode: normalizeCollectMode(parsed.collectMode),
             hitboxesVisible: parsed.hitboxesVisible ?? DEFAULT_DEBUG_SETTINGS.hitboxesVisible,
@@ -136,6 +140,12 @@ export const GameDebugSettings = {
         this.plantInvincible = enabled
         saveDebugSettings(this)
         return this.plantInvincible
+    },
+
+    setCheatSeedsEnabled(enabled: boolean) {
+        this.cheatSeedsEnabled = enabled
+        saveDebugSettings(this)
+        return this.cheatSeedsEnabled
     },
 
     setFpsVisible(visible: boolean) {

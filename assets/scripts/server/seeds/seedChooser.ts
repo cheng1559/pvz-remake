@@ -1,5 +1,6 @@
 import type { World } from '@/ecs'
 import { chooserSeeds, type GameplayDefinitions, type LevelDefinition } from '@/shared/content/gameplay'
+import { cheatSeedEntries } from '@/shared/content/chooserPages'
 import { chooserEntryKey, type ChooserEntry, type GameCommand, type Team, type WorldSnapshot } from '@/shared/protocol'
 import { packetTeam } from '@/shared/content/teams'
 import { EconomyStateResource, LevelStateResource, SeedBankResource, type SeedBankState } from '../state/components'
@@ -18,9 +19,9 @@ export function availableSeeds(definitions: GameplayDefinitions, owned: readonly
 }
 
 /**
- * The cards the chooser offers beyond its catalog grid, for a player owning `owned` (see availableSeeds). The base
- * offers none; Mods wrap `entries` to add theirs, such as hidden seeds or a seed on the other side (`team`), in the
- * order they show them. They count like owned seeds towards the slots and towards opening the chooser.
+ * The cards Mods offer beyond the catalog grid, for a player owning `owned` (see availableSeeds), after `/cheatseed`'s
+ * pages when it is on. The base offers none; Mods wrap `entries` to add theirs, such as hidden seeds or a seed on the
+ * other side (`team`), in their order. They count like owned seeds towards the slots and towards opening the chooser.
  */
 export const seedChooser = {
     entries(_definitions: GameplayDefinitions, _owned: readonly string[] | undefined): ChooserEntry[] {
@@ -33,18 +34,22 @@ export const seedChooser = {
  * take and its slots come from the same answer even if a Mod's `entries` would answer differently another time.
  */
 export interface ChooserOffer {
-    /** The owned seeds in the catalog grid, in place order (availableSeeds). */
+    /** The owned seeds in the catalog grid, in place order (availableSeeds); with `/cheatseed` every seed there. */
     available: string[]
-    /** The Mods' cards beyond them: installed seeds, each card once, sides kept as packets keep them (packetTeam). */
+    /**
+     * The cards beyond them, `/cheatseed`'s pages and then the Mods': installed seeds, each card once, sides kept as
+     * packets keep them (packetTeam).
+     */
     entries: ChooserEntry[]
 }
 
-export function chooserOffer(definitions: GameplayDefinitions, owned: readonly string[] | undefined): ChooserOffer {
-    const available = availableSeeds(definitions, owned)
+export function chooserOffer(definitions: GameplayDefinitions, owned: readonly string[] | undefined, cheatSeeds = false): ChooserOffer {
+    // `/cheatseed` offers every seed in the grid, owned or not: a Mod's seed placed there shows as the base's do.
+    const available = availableSeeds(definitions, cheatSeeds ? undefined : owned)
     // An owned grid seed on its own side is offered already.
     const seen = new Set(available.map(seedId => chooserEntryKey({ seedId })))
     const entries: ChooserEntry[] = []
-    for (const entry of seedChooser.entries(definitions, owned)) {
+    for (const entry of [...cheatSeeds ? cheatSeedEntries(definitions, available) : [], ...seedChooser.entries(definitions, owned)]) {
         const seed = definitions.seeds[entry.seedId]
         if (!seed) continue
         const team = packetTeam(seed, entry.team)
@@ -56,7 +61,7 @@ export function chooserOffer(definitions: GameplayDefinitions, owned: readonly s
     return { available, entries }
 }
 
-/** Every card offered, in order: the owned grid seeds, then the Mods' entries. */
+/** Every card offered, in order: the owned grid seeds, then the entries beyond them. */
 const offeredCards = (offer: ChooserOffer): ChooserEntry[] => [...offer.available.map(seedId => ({ seedId })), ...offer.entries]
 
 const offers = (offer: ChooserOffer, seedId: string, team: Team | undefined): boolean =>
@@ -86,7 +91,7 @@ export function seedBankStart(definitions: GameplayDefinitions, level: LevelDefi
 /** The offer for the world's player and the chooser's slots with it. */
 function worldOffer(world: World, definitions: GameplayDefinitions): { offer: ChooserOffer, slots: number } {
     const bank = world.resources.get(SeedBankResource)
-    const offer = chooserOffer(definitions, bank.owned)
+    const offer = chooserOffer(definitions, bank.owned, getDebugRules(world).cheatSeeds)
     // A repick keeps the bank's size: a slot bought since waits for the next level, as a bank in play does.
     return { offer, slots: bank.repick?.packets.length ?? bankSlots(definitions, offer, world.resources.get(EconomyStateResource).packetUpgrades) }
 }
@@ -99,7 +104,8 @@ export function applySeedChoice(world: World, definitions: GameplayDefinitions, 
     if (world.resources.get(TutorialResource).dialogIndex !== undefined) return 'intro-not-complete'
     const { offer, slots } = worldOffer(world, definitions)
     if (command.type === 'confirmSeeds') {
-        if (bank.packets.length !== slots) return 'seed-choice-incomplete'
+        // `/cheatseed` starts with any cards chosen, the slots left over empty (finishSeedChoice).
+        if (bank.packets.length !== slots && !(getDebugRules(world).cheatSeeds && bank.packets.length > 0)) return 'seed-choice-incomplete'
         finishSeedChoice(world, definitions)
         return
     }
@@ -126,7 +132,7 @@ export function applySeedChoice(world: World, definitions: GameplayDefinitions, 
 
 /**
  * Ends the choice and starts the level; a repick's level waits on until the chooser has lifted out (finishRepick). The
- * slots left unchosen stay empty (null), which only a Mod's Let's Rock taking fewer cards than slots leaves.
+ * slots left unchosen stay empty (null), which only Let's Rock taking fewer cards than slots leaves (`/cheatseed`).
  */
 export function finishSeedChoice(world: World, definitions: GameplayDefinitions): void {
     const bank = world.resources.get(SeedBankResource)
@@ -182,5 +188,6 @@ export function seedChooserSnapshot(world: World, definitions: GameplayDefinitio
     return {
         availableSeeds: offer.available, ...(offer.entries.length ? { entries: offer.entries } : {}),
         slots, choosing: bank.choosing === true, ...(warnings.length ? { warnings } : {}), ...(bank.repick ? { repick: true } : {}),
+        ...(getDebugRules(world).cheatSeeds ? { cheatSeeds: true } : {}),
     }
 }

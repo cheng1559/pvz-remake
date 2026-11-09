@@ -22,8 +22,8 @@ export type DebugCliResult = DebugCliOutcome & (
 export interface DebugCliCommand { name: string, args: string[] }
 export interface CommandSpec { name: string, parameters: string[], minimum: number, values?: Record<number, readonly string[]> }
 /** The switches: each command turns its switch over and says where it now stands as advice (debugSwitchAdvice). */
-export const DEBUG_SWITCHES = ['hotkeys', 'haptics', 'cursor', 'cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'fps', 'hitboxes',
-    'background', 'mobile', 'fullscreen'] as const
+export const DEBUG_SWITCHES = ['hotkeys', 'haptics', 'cursor', 'cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'cheatseed', 'fps',
+    'hitboxes', 'background', 'mobile', 'fullscreen'] as const
 /** The /perf switches, one per category. */
 export const DEBUG_PERF_SWITCHES = ['plants', 'zombies', 'particles', 'sfx', 'logic'] as const
 /** The menu pages /goto opens (MenuPageId); the splash, title and award screens only come in their own order. */

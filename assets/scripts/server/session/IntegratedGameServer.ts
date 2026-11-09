@@ -4,7 +4,7 @@ import { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processBoundaryCommands, processCommandPhase } from './commands'
 import { EconomyStateResource, LevelStateResource, SeedBankResource } from '../state/components'
 import { savedSeedBank } from '../seeds/seedChooser'
-import { getDebugRules } from '../debug/debugRules'
+import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, drainServerEvents } from '../state/events'
 import { items } from '../level/items'
 import { ItemComponent } from '../state/levelState'
@@ -34,6 +34,8 @@ export class IntegratedGameServer {
     start(packet: StartSessionPacket): WorldSnapshot {
         this.session = packet.save === undefined ? startSession(this.content, packet)
             : restoreSession(this.content, packet.save, packet.levelId, packet.mods)
+        // The switches are not saved; `/cheatseed` comes with the start, as it shapes the chooser the level opens with.
+        if (packet.cheatSeeds) this.setCheatSeeds(true)
         // The profile owns the achievements, so a save does not keep them.
         this.session.world.resources.get(AchievementsResource).earned = new Set(packet.earnedAchievements)
         if (packet.save === undefined) return this.snapshot()
@@ -51,9 +53,16 @@ export class IntegratedGameServer {
 
     restore(value: unknown, expectedLevelId?: string, expectedMods?: readonly EnabledMod[]): WorldSnapshot {
         const earned = this.session?.world.resources.get(AchievementsResource).earned
+        const cheatSeeds = this.session ? getDebugRules(this.session.world).cheatSeeds : false
         this.session = restoreSession(this.content, value, expectedLevelId, expectedMods)
         if (earned) this.session.world.resources.get(AchievementsResource).earned = earned
+        if (cheatSeeds) this.setCheatSeeds(true)
         return this.snapshot()
+    }
+
+    private setCheatSeeds(cheatSeeds: boolean): void {
+        const world = this.requireSession().world
+        world.resources.set(DebugRulesResource, { ...getDebugRules(world), cheatSeeds })
     }
 
     enqueueCommand(sequence: number, command: GameCommand): void {

@@ -57,6 +57,7 @@
   "DEBUG_SWITCH_SUNCOST": "Sun cost",
   "DEBUG_SWITCH_SUNSPAWNING": "Sun production",
   "DEBUG_SWITCH_PLANTINVINCIBLE": "Invincible plants",
+  "DEBUG_SWITCH_CHEATSEED": "Cheat seeds",
   "DEBUG_SWITCH_FPS": "Frame rate",
   "DEBUG_SWITCH_HITBOXES": "Hitboxes",
   "DEBUG_SWITCH_BACKGROUND": "Background play",
@@ -79,5 +80,7 @@
   "DEBUG_ACHIEVEMENT_EARNED": "Achievement already earned: %s",
   "DEBUG_ACHIEVEMENTS_OFF": "This level grants no achievements",
   "DEBUG_UNAVAILABLE": "/%s is unavailable in this version",
-  "GRAVE_SEED": "Grave"
+  "GRAVE_SEED": "Grave",
+  "SEED_CHOOSER_PREVIOUS_PAGE": "(Prev Page)",
+  "SEED_CHOOSER_NEXT_PAGE": "(Next Page)"
 }

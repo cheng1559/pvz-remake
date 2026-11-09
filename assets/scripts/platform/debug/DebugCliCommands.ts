@@ -70,6 +70,13 @@ async function executeCommand(
             CursorManager.refresh()
             return debugSwitched(name, GameDebugSettings.originalCursorsEnabled)
         }
+        case 'cheatseed': {
+            // A preference for the levels to come; in a level its chooser takes it up from the next one it opens.
+            if (!running) return debugSwitched(name, GameDebugSettings.setCheatSeedsEnabled(!GameDebugSettings.cheatSeedsEnabled))
+            const result = runGameCommand(command)
+            if (result.ok && result.enabled !== undefined) GameDebugSettings.setCheatSeedsEnabled(result.enabled)
+            return result
+        }
         case 'fps': return debugSwitched(name, (GameDebugSettings.setFpsVisible(!GameDebugSettings.fpsVisible), GameDebugSettings.fpsVisible))
         case 'hitboxes': return debugSwitched(name, (GameDebugSettings.setHitboxesVisible(!GameDebugSettings.hitboxesVisible), GameDebugSettings.hitboxesVisible))
         case 'seedstyle': GameDebugSettings.setSeedPacketStyle(args[0].toLowerCase() as SeedPacketStyle); break

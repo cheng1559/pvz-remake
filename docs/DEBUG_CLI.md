@@ -19,6 +19,7 @@ See the [command table](DEBUG_CLI.zh-CN.md) for all command signatures. Common e
 /cursor
 /fps
 /plantinvincible
+/cheatseed
 /seed 1 snowpea
 /mod
 /sun set 999
@@ -38,6 +39,8 @@ The switches (the rules, `/hotkeys`, `/haptics`, `/cursor`, `/fps`, `/hitboxes`,
 `/fps` shows or hides a white frame-rate counter at the bottom left of the original 800×600 game area; widescreen expansion does not move it. It is off by default and persists locally. The counter measures drawn frames against real time, independent of game pause or speed.
 
 `/plantinvincible` prevents or restores zombie bite damage to all current and newly planted plants. It defaults to off and persists locally across levels and restarts. Normal self-destruction, shoveling, and debug removal still work.
+
+`/cheatseed` gives the seed chooser more pages, turned by two yellow `(Prev Page)` and `(Next Page)` buttons drawn as the original's cheat-key `(Debug Play)` button (FONT_BRIANNETOD12 in 255,240,0, lit 200,200,255) where the DLC puts its arrows beside Let's Rock, or by the mouse wheel over the chooser (a notch a page, both ways round from either end). Page 1 is the catalog grid with every seed in it, owned or not, so a Mod's seeds placed in the grid show too; next come the Mods' plant seeds outside the grid, on a page of their own when there are any, then the cheat cards on a page of their own: the base game's hidden plant seeds (past the catalog grid), the grave seed and every zombie seed, Mods' too, one after another, all on the plants' side. The same pages follow on the zombies' side, and a longer list goes on to more pages. Cards on the side that is not their seed's own draw mirrored, and both sides of one seed can be chosen. Let's Rock starts with any cards chosen, the slots left over empty. These cards count towards the chooser's slots and whether it opens, so a first adventure's early levels open the chooser too. It defaults to off and persists locally; outside a level it only sets the preference. A chooser takes it up when it opens, at the next level or the next `/repick`, so it cannot be turned while one is open. Mods may restyle the two buttons (`LevelSeedChooser.pageTurners`).
 
 `/plant {plant_name} {row} {col}` directly creates an installed plant, including Mod plants such as `/plant corn:cob_cannon 3 1`. It bypasses occupancy, upgrade prerequisites, seed-bank availability, sun cost, cooldown, tutorials and level phase/result restrictions. It preserves the held seed and initializes the plant's registered behavior normally. Only installed IDs and valid board coordinates are required; overlapping plants are saved normally. Mouse/touch planting keeps its usual rules.
 

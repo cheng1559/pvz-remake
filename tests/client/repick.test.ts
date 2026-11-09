@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import * as chooserPages from '@/shared/content/chooserPages'
+import * as protocol from '@/shared/protocol'
 
 class Component { enabled = true; isValid = true; node?: unknown }
 class ReanimPlayer extends Component {}
@@ -25,7 +27,8 @@ test("a repick drops the chooser in, holds it while choosing and lifts it out af
     const ticks: number[] = [], sent: unknown[] = []
     const almanac = { node: { active: true } }
     const chooser = Object.assign(Object.create(LevelSeedChooser.prototype), {
-        age: 0, choices: [], start: {}, syncPlaceholders() {}, syncIntro(tick: number) { ticks.push(tick) },
+        // The pages are not what this is about: their layout is skipped.
+        age: 0, choices: [], start: {}, syncPlaceholders() {}, syncIntro(tick: number) { ticks.push(tick) }, layOut() {},
         pageButtons: [almanac], send: (command: unknown) => sent.push(command),
     })
     const snapshot = (repick: boolean, choosing = repick) => ({ seedPackets: [], seedChooser: { slots: 6, choosing, ...(repick ? { repick: true } : {}) } })
@@ -99,7 +102,7 @@ test('a card the bank holds that nothing offers gets its card in its slot, so th
     })
     const added: Array<{ seedId: string, team?: string }> = []
     const chooser = Object.assign(Object.create(LevelSeedChooser.prototype), {
-        age: 0, choices: [] as unknown[], start: {}, slots: 6, bankShift: 0, pageButtons: [], syncPlaceholders() {}, syncIntro() {},
+        age: 0, choices: [] as unknown[], start: {}, slots: 6, bankShift: 0, pageButtons: [], syncPlaceholders() {}, syncIntro() {}, layOut() {},
         addChoice(card: { seedId: string, team?: string }) {
             added.push(card)
             const placed: number[][] = []
@@ -114,4 +117,38 @@ test('a card the bank holds that nothing offers gets its card in its slot, so th
     chooser.sync(snapshot)
     assert.equal(JSON.stringify(added), JSON.stringify([{ seedId: 'pvz:peashooter' }, { seedId: 'pvz:explodenut', team: 'zombies' }]), 'once each')
     assert.deepEqual(chooser.choices.map((choice: { slot: number }) => choice.slot), [0, 1], 'straight in their slots')
+})
+
+test('a chooser lays its pages out from the offer it has now, as /cheatseed turning over between repicks changes the grid', () => {
+    const { LevelSeedChooser } = load('assets/scripts/client/level/LevelSeedChooser.ts', {
+        cc: { Component, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/shared/protocol': protocol, '@/shared/content/chooserPages': chooserPages,
+    })
+    const definitions = { seeds: { 'pvz:pea': { kind: 'plant' }, 'pvz:sun': { kind: 'plant' }, 'pvz:normal': { kind: 'zombie' } },
+        seedCatalog: { 'pvz:pea': { position: 0 }, 'pvz:sun': { position: 3 } } }
+    const added: string[] = [], shown: string[][] = [], turner = { node: { active: true } }
+    const chooser = Object.assign(Object.create(LevelSeedChooser.prototype), {
+        definitions, choices: [] as Array<{ key: string }>, pages: [], page: 0, offerKey: '', pageTurners: [{ button: turner, step: 1 }],
+        addChoice(card: { seedId: string, team?: string }) {
+            const choice = { ...card, key: protocol.chooserEntryKey(card as protocol.ChooserEntry), view: { raiseIcon() {} } }
+            added.push(choice.key)
+            this.choices.push(choice)
+            return choice
+        },
+        showCards(cards: Array<{ seedId: string, team?: string, place: number }>) { shown.push(cards.map(card => `${card.seedId}${card.team ? `@${card.team}` : ''}:${card.place}`)) },
+    })
+    // The level opens the chooser owning the Peashooter alone.
+    chooser.layOut(false, ['pvz:pea'], [])
+    assert.deepEqual([shown.at(-1), turner.node.active], [['pvz:pea:0'], false])
+    // `/cheatseed` on, the next repick offers every grid seed and the pages: the cards it lacks are made then.
+    const all = ['pvz:pea', 'pvz:sun'], entries = chooserPages.cheatSeedEntries(definitions as any, all)
+    const count = added.length
+    chooser.layOut(true, all, entries)
+    assert.deepEqual([shown.at(-1), turner.node.active], [['pvz:pea:0', 'pvz:sun:3'], true])
+    assert.equal(added.length - count, 1 + entries.length, 'the Sunflower and every page card, once')
+    chooser.turnPage(1)
+    assert.deepEqual(shown.at(-1), ['pvz:normal@plants:0'])
+    // Off again: the grid is the owned seeds once more, on its single page.
+    chooser.layOut(false, ['pvz:pea'], [])
+    assert.deepEqual([shown.at(-1), turner.node.active, added.length], [['pvz:pea:0'], false, count + 1 + entries.length])
 })

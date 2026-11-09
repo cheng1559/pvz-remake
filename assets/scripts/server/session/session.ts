@@ -147,7 +147,7 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
     })
     if (packet.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...packet.packetUpgradeOffer })
     world.resources.set(RandomResource, new DeterministicRng(packet.randomSeed))
-    const bank = seedBankStart(definitions, level, chooserOffer(definitions, packet.ownedSeeds), packet.packetUpgrades)
+    const bank = seedBankStart(definitions, level, chooserOffer(definitions, packet.ownedSeeds, packet.cheatSeeds === true), packet.packetUpgrades)
     world.resources.set(SeedBankResource, {
         selection: { mode: 'none' },
         // SeedPacket::SetPacketType returns before the opening recharge on some levels.

@@ -11,6 +11,7 @@ import { easeInOut } from '@/client/view/GameScreenMath'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { chooserEntryKey as cardKey, type ChooserEntry, type GameCommand, type WorldSnapshot } from '@/shared/protocol'
 import { CHOOSER_PLACES, FIVE_ROW_PLACES, type GameplayDefinitions } from '@/shared/content/gameplay'
+import { chooserPages, pagePlaces, type ChooserPage } from '@/shared/content/chooserPages'
 import { packetTeam } from '@/shared/content/teams'
 import type { LoadedContent } from './LevelView'
 import { seedPacketX } from './LevelGeometry'
@@ -40,6 +41,8 @@ interface Choice extends ChooserEntry {
 
 /** A repick's last tick: the chooser is out and the bank back from its choosing place, as quickly as they came in. */
 export const REPICK_END_TICK = 475
+/** One wheel notch (WHEEL_SCROLL_DELTA_PER_STEP); a touchpad's smaller steps add up to one before a page turns. */
+const WHEEL_STEP = 120
 
 /** Seed ownership/order comes from the server. Only card flights and panel motion live here. */
 export class LevelSeedChooser {
@@ -53,10 +56,18 @@ export class LevelSeedChooser {
      */
     onCardHidden: (card: ChooserEntry) => void = () => {}
     readonly definitions: GameplayDefinitions
-    /** The grid SeedChooserScreen shows: the owned catalog seeds at their catalog places. */
-    readonly catalogCards: readonly ChooserCard[]
-    /** The cards Mods offer beyond the catalog grid (seedChooser.entries); the grid shows them only through showCards. */
-    readonly entries: readonly ChooserEntry[]
+    /**
+     * `(Previous page)` and `(Next page)`: (Debug Play)'s yellow words where the DLC puts its arrows beside Let's Rock,
+     * shown while `/cheatseed` gives the chooser more than one page. Mods may restyle them; the turning stays here.
+     */
+    readonly pageTurners: Array<{ readonly button: UIButton, readonly step: number }> = []
+    /** `/cheatseed`'s pages (chooserPages), or the catalog grid alone, and the one shown. */
+    private pages: ChooserPage[] = []
+    private page = 0
+    /** What the pages were laid out from: a chooser that a later repick opens again may offer other cards. */
+    private offerKey = ''
+    /** The wheel's travel towards the next turn. */
+    private wheelTravel = 0
     private snapshot?: WorldSnapshot
     private send: (command: GameCommand) => void = () => {}
     private age = 0
@@ -67,11 +78,6 @@ export class LevelSeedChooser {
      * undefined until the first repick.
      */
     repickTick?: number
-    /**
-     * The mouse wheel anywhere over the level while the chooser is out, for a Mod (seed-chooser-pages turns its pages).
-     * A Mod uses this rather than listening on a node of its own, which would take the presses under it.
-     */
-    onWheel?: (event: EventMouse) => void
     private bankShift = 0
     private repickFinished = false
     /** The almanac and store buttons, which a repick leaves out. */
@@ -100,18 +106,18 @@ export class LevelSeedChooser {
 
     static async create(ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, inputRoot: Node,
         notRecommended: (seedId: string) => string | undefined = () => undefined,
-        pages: { almanac?: boolean, store?: boolean } = {}, entries: readonly ChooserEntry[] = []): Promise<LevelSeedChooser> {
+        pages: { almanac?: boolean, store?: boolean } = {}, entries: readonly ChooserEntry[] = [], cheatSeeds = false): Promise<LevelSeedChooser> {
         const [background, silhouette] = await Promise.all(['seedchooser_background', 'seedpacketsilhouette'].map(async id => {
             const sprite = await modResources.asset(id, SpriteFrame)
             if (!sprite) throw new Error(`Missing seed chooser sprite: ${id}`)
             return sprite
         }))
-        return new LevelSeedChooser(ui, content, parent, available, slots, background, silhouette, inputRoot, notRecommended, pages, entries)
+        return new LevelSeedChooser(ui, content, parent, available, slots, background, silhouette, inputRoot, notRecommended, pages, entries, cheatSeeds)
     }
 
     private constructor(private readonly ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, background: SpriteFrame, silhouette: SpriteFrame, inputRoot: Node,
         notRecommended: (seedId: string) => string | undefined = () => undefined, pages: { almanac?: boolean, store?: boolean } = {},
-        entries: readonly ChooserEntry[] = []) {
+        entries: readonly ChooserEntry[] = [], cheatSeeds = false) {
         const sprites = new SpriteRepository(content.registry, content.loader)
         this.definitions = content.definitions
         this.slots = slots
@@ -137,14 +143,6 @@ export class LevelSeedChooser {
         this.buttons = uiNode({ name: 'ChooserButtons', parent: this.edge, active: false }).node
         this.gridShadows = uiNode({ name: 'GridSilhouettes', parent: shadows }).node
         this.addEmptySlots()
-        // SeedChooserScreen::GetSeedPositionInChooser: a seed keeps its own place in the catalog, so one not unlocked
-        // yet leaves its place empty (a silhouette) instead of the later seeds moving up.
-        this.catalogCards = available.map(seedId => {
-            const place = content.definitions.seedCatalog[seedId]?.position
-            if (place === undefined) throw new Error(`Seed chooser seed is not in the catalog: ${seedId}`)
-            return { seedId, place }
-        })
-        this.entries = entries
         // A card's two views, its grid shadow and the card itself, with its tooltip and button.
         this.addChoice = (card: ChooserEntry): Choice => {
             const seed = content.definitions.seeds[card.seedId]
@@ -186,10 +184,6 @@ export class LevelSeedChooser {
             this.choices.push(choice)
             return choice
         }
-        for (const card of [...available.map(seedId => ({ seedId }) as ChooserEntry), ...this.entries]) this.addChoice(card)
-        // The pictures in the order of their cards, each drawn over the earlier ones (SeedChooserScreen::Draw goes through
-        // the seed types in turn), so a picture standing out of its packet shows over the card before it.
-        for (const choice of this.choices) choice.view.raiseIcon()
         this.start = ui.button(this.buttons, { text: ui.text('LETS_ROCK_BUTTON'), skin: 'seed', font: 'yellow',
             color: Color.WHITE, disabledColor: new Color(64, 64, 64), x: 154, y: 545, width: 156, height: 42,
             rightClickTriggers: false, enabled: false, onClick: () => this.confirm() })
@@ -202,6 +196,17 @@ export class LevelSeedChooser {
             this.pageButtons.push(button)
             button.canInteract = () => !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= 425 && !this.warningOpen && !this.inFlight
         }
+        // SeedChooserScreen's (Debug Play): no image (IMAGE_BLANK), FONT_BRIANNETOD12 in (255, 240, 0), lit (200, 200, 255),
+        // its label moving 1px down-right while pressed; at the DLC's arrows 107 and 108, Resize(20, 545, 77, 46) and
+        // Resize(373, 545, 77, 46). Pressing taps, as the chooser's other buttons do.
+        for (const [name, key, x, step] of [['PreviousPage', 'SEED_CHOOSER_PREVIOUS_PAGE', 20, -1], ['NextPage', 'SEED_CHOOSER_NEXT_PAGE', 373, 1]] as const) {
+            const button = ui.button(this.buttons, { skin: 'text', text: ui.text(key), font: 'small', color: new Color(255, 240, 0),
+                hoverColor: new Color(200, 200, 255), x, y: 545, width: 77, height: 46, pressOffset: [1, 1], pressSound: SoundEffect.Tap,
+                rightClickTriggers: false, onClick: () => this.turnPage(step) })
+            button.node.name = name
+            button.canInteract = () => this.canTurnPage
+            this.pageTurners.push({ button, step })
+        }
         const pointerDown = (event: EventMouse | EventTouch) => {
             if (!this.panel.active || !this.choosing || this.introTick < 425 || this.snapshot?.paused || UIHoverManager.isModalBlocked) return
             if (event instanceof EventMouse && (GameDebugSettings.isMobileMode() || ![0, 2].includes(event.getButton()))) return
@@ -212,8 +217,8 @@ export class LevelSeedChooser {
                 choice.view.node.getComponent(UITransform)!.hitTest(event.getLocation(), event.windowId))
             if (choice) { this.pick(choice); event.propagationStopped = true }
         }
-        // The mouse wheel while the chooser is out, for a Mod to use (onWheel).
-        const wheel = (event: EventMouse) => { if (this.panel.active) this.onWheel?.(event) }
+        // The mouse wheel while the chooser is out turns its pages.
+        const wheel = (event: EventMouse) => { if (this.panel.active) this.wheel(event) }
         // HUD is above the seed bank. Listening on it would turn it into a hit target covering the bank. The level's root
         // is under everything, so listening there takes no click from anything else: a node with any mouse listener
         // takes every mouse press over it (NodeEventProcessor._handleMouseDown), whatever it listens for.
@@ -225,7 +230,61 @@ export class LevelSeedChooser {
             inputRoot.off(Node.EventType.TOUCH_START, pointerDown, this, true)
             inputRoot.off(Node.EventType.MOUSE_WHEEL, wheel, this, true)
         })
-        this.showCards(this.catalogCards)
+        this.layOut(cheatSeeds, available, entries)
+    }
+
+    /**
+     * Lays the pages out from the offer: the catalog grid alone, or `/cheatseed`'s pages (chooserPages), each card on
+     * them with its views, and shows the first. A chooser that a later repick opens again takes a changed offer up here,
+     * as `/cheatseed` changes the grid too (every seed there, owned or not).
+     */
+    private layOut(cheatSeeds: boolean, available: readonly string[], entries: readonly ChooserEntry[]): void {
+        const key = JSON.stringify([cheatSeeds, available, entries])
+        if (key === this.offerKey) return
+        this.offerKey = key
+        // The pictures in the order of their cards, each drawn over the earlier ones (SeedChooserScreen::Draw goes through
+        // the seed types in turn), so a picture standing out of its packet shows over the card before it.
+        for (const card of [...available.map(seedId => ({ seedId }) as ChooserEntry), ...entries]) {
+            if (!this.choices.some(choice => choice.key === cardKey(card))) this.addChoice(card).view.raiseIcon()
+        }
+        // SeedChooserScreen::GetSeedPositionInChooser: a seed keeps its own place in the catalog, so one not unlocked
+        // yet leaves its place empty (a silhouette) instead of the later seeds moving up.
+        const pages = chooserPages(this.definitions, available)
+        this.pages = cheatSeeds ? pages : pages.slice(0, 1)
+        for (const { button } of this.pageTurners) button.node.active = this.pages.length > 1
+        this.showPage(0)
+    }
+
+    /** Turns to the next page (`step` 1) or the one before (-1), round from either end. */
+    turnPage(step: number): void {
+        if (this.pages.length > 1) this.showPage((this.page + step + this.pages.length) % this.pages.length)
+    }
+
+    /** SeedChooserScreen::ButtonDepress takes the chooser's buttons only while choosing, with no warning open or seed flying. */
+    get canTurnPage(): boolean {
+        return this.pages.length > 1 && !!this.snapshot && !this.snapshot.paused && this.choosing && this.introTick >= 425
+            && !this.warningOpen && !this.inFlight
+    }
+
+    private showPage(index: number): void {
+        this.page = index
+        const { cards, catalog } = this.pages[index]
+        // A page at catalog places fills its grid with silhouettes, as its empty places are seeds not unlocked yet; one
+        // whose cards come one after another draws them only up to its last card.
+        this.showCards(cards, catalog ? undefined : pagePlaces(cards))
+    }
+
+    /** The wheel turns as the buttons do: down to the next page, up to the one before, one notch a page. */
+    private wheel(event: EventMouse): void {
+        const delta = event.getScrollY()
+        if (!delta || !this.canTurnPage) return
+        event.propagationStopped = true
+        if (Math.sign(delta) !== Math.sign(this.wheelTravel)) this.wheelTravel = 0
+        this.wheelTravel += delta
+        if (Math.abs(this.wheelTravel) < WHEEL_STEP) return
+        this.wheelTravel = 0
+        void SoundSystem.play(SoundEffect.Tap)
+        this.turnPage(delta < 0 ? 1 : -1)
     }
 
     /**
@@ -328,6 +387,8 @@ export class LevelSeedChooser {
     sync(snapshot: WorldSnapshot): void {
         const before = this.snapshot
         this.snapshot = snapshot
+        const offer = snapshot.seedChooser
+        if (offer) this.layOut(offer.cheatSeeds === true, offer.availableSeeds, offer.entries ?? [])
         // A repick drops the chooser in from the top again, its cards straight in their places.
         const repick = snapshot.seedChooser?.repick === true
         if (repick && snapshot.seedChooser!.choosing && (this.repickTick === undefined || this.repickTick >= 450)) {
@@ -367,7 +428,9 @@ export class LevelSeedChooser {
         }
         // SeedChooserScreen::EnableStartButton: the button looks enabled exactly while the bank is full; a dialog or the
         // intro only keeps it from being pressed (canInteract), as GameButton::IsMouseOver does.
-        this.start.interactable = !!snapshot.seedChooser && snapshot.seedPackets.length === snapshot.seedChooser.slots
+        // `/cheatseed` starts with any cards chosen, the slots left over empty.
+        const chosen = snapshot.seedPackets.length
+        this.start.interactable = !!offer && (chosen === offer.slots || offer.cheatSeeds === true && chosen > 0)
         this.syncPlaceholders()
     }
 

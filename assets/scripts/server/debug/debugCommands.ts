@@ -84,6 +84,14 @@ function executeCommand(
             startRepick(world)
             return debugSuccess('Choose your seeds again')
         }
+        case 'cheatseed': {
+            // A chooser takes the switch up when it opens: one open now keeps the offer it opened with.
+            const bank = world.resources.get(SeedBankResource)
+            if (bank.choosing || bank.repick) return debugCondition('DEBUG_FINISH_CHOOSING')
+            const rules = { ...getDebugRules(world), cheatSeeds: !getDebugRules(world).cheatSeeds }
+            world.resources.set(DebugRulesResource, rules)
+            return debugSwitched(name, rules.cheatSeeds)
+        }
         case 'seed': {
             const bank = world.resources.get(SeedBankResource)
             // A repick's bank is the chooser's until the level goes on after it.

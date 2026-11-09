@@ -116,7 +116,7 @@ export function register({ host, assets }) {
 | `server/items` | `items.collect` |
 | `server/commands` | `commands.execute`，处理 Mod 自己的 `mod` 指令 |
 | `shared/protocol` | 两端都能访问；客户端与服务端之间的数据格式及其辅助函数，如 `chooserEntryKey`（选卡卡片的唯一 key，同一种卡的两方算两张） |
-| `server/seedChooser` | `seedChooser.entries(definitions, owned)`，按玩家已拥有的种子，在选卡目录格子之外再提供卡（`{ seedId, team? }`，`team` 可让卡换到另一方）；这些卡和已拥有的种子一样计入卡槽数和是否打开选卡界面（多于卡槽数才打开，否则全部放进卡槽），选卡快照的 `entries` 列出它们，`chooseSeed` 带同样的 `team` 选择；客户端选卡界面用 `showCards` 决定格子里显示哪些卡，卡从卡槽退回而格子里没有它时调用 `onCardHidden` |
+| `server/seedChooser` | `seedChooser.entries(definitions, owned)`，按玩家已拥有的种子，在选卡目录格子之外再提供卡（`{ seedId, team? }`，`team` 可让卡换到另一方）；开启 `/cheatseed` 时排在本体翻页的卡之后，重复的卡只算一次。这些卡和已拥有的种子一样计入卡槽数和是否打开选卡界面（多于卡槽数才打开，否则全部放进卡槽），选卡快照的 `entries` 列出它们，`chooseSeed` 带同样的 `team` 选择；客户端选卡界面用 `showCards` 决定格子里显示哪些卡，卡从卡槽退回而格子里没有它时调用 `onCardHidden`。翻页按钮是选卡界面的 `pageTurners`（`{ button, step }`），Mod 可以改画它们，翻页仍由本体处理 |
 | `server/snapshot` | `snapshot.build`，向 `extensions` 加入 Mod 状态 |
 
 ```ts
