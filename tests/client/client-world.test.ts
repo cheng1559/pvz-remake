@@ -113,3 +113,16 @@ test('ClientWorld hands out the frame it last rendered until its frames or the i
     world.accept({ ...snapshot(3), zombies: [{ ...snapshot(3).zombies[0], x: 30 }] })
     assert.equal(world.render(0.25).zombies[0].x, 22.5, 'a new frame renders afresh')
 })
+
+test('ClientWorld holds the latest frame through a repick, while the host interpolation clock keeps cycling', () => {
+    const world = new ClientWorld()
+    world.accept(snapshot(1))
+    const moved = snapshot(2)
+    moved.projectiles[0].x = 40
+    world.accept(moved)
+    // `/repick` stands the level still: its frames keep the gameplay tick, so the last two moving frames stay.
+    const repick = { ...snapshot(3), gameplayTick: 2, projectiles: moved.projectiles,
+        seedChooser: { choosing: true, repick: true, slots: 1, availableSeeds: [], entries: [] } } as unknown as WorldSnapshot
+    world.accept(repick)
+    for (const alpha of [0, 0.3, 0.7, 1]) assert.equal(world.render(alpha).projectiles[0].x, 40)
+})

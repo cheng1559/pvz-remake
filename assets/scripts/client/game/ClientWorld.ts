@@ -62,8 +62,9 @@ export class ClientWorld {
 
         const current = this.currentValue
         const previous = this.previousValue
-        // Loss freezes simulation, but the host's interpolation clock keeps cycling during house entry.
-        const t = current.result === 'lost' ? 1 : Math.max(0, Math.min(1, alpha))
+        // Loss and a repick stand the simulation still, but the host's interpolation clock keeps cycling (through house
+        // entry, or the choice): going on between the last two frames would twitch everything moving back each tick.
+        const t = current.result === 'lost' || current.seedChooser?.repick ? 1 : Math.max(0, Math.min(1, alpha))
         const rendered = this.rendered
         if (rendered && rendered.current === current && rendered.previous === previous && rendered.t === t) return rendered.frame
         const frame: WorldSnapshot = {
