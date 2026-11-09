@@ -120,6 +120,7 @@ export const planting = {
             if (graveAt(world.resources.get(WaveResource).graves, row, column)) return refuseCell('cell-has-grave')
             placeGrave(world, definitions, row, column, gameplayTick, team === 'plants' ? 'plants' : undefined)
             spendSeed(session, seed, packet, sunCost)
+            emitServerEvent(world.resources.get(EventQueueResource), 'gravePlaced', { seedId, row, column })
             return
         }
         if (levelRule(world)?.canPlantAt?.(world, row, column) === false) return refuseCell('column-out-of-range')

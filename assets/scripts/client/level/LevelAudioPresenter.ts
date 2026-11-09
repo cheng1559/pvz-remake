@@ -125,8 +125,8 @@ export class LevelAudioPresenter {
                 if (event.data.shield) this.sounds(this.definitions.zombies[String(event.data.typeId)]?.shield?.bowlingImpactSounds)
                 else if (event.data.helm) this.sounds(this.definitions.zombies[String(event.data.typeId)]?.helm?.bowlingImpactSounds)
                 break
-            // Challenge::IZombieMouseDownWithZombie puts a zombie down with FOLEY_PLANT too.
-            case 'zombiePlaced': void SoundSystem.playFoley(SoundEffect.Plant); break
+            // Challenge::IZombieMouseDownWithZombie puts a zombie down with FOLEY_PLANT too, and a grave seed goes down alike.
+            case 'zombiePlaced': case 'gravePlaced': void SoundSystem.playFoley(SoundEffect.Plant); break
             case 'plantPlaced':
                 void SoundSystem.playFoley(SoundEffect.Plant)
                 this.sounds(this.definitions.plants[String(event.data.typeId)]?.plantedSounds)

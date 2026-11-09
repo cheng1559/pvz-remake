@@ -127,6 +127,7 @@ test("a grave seed puts down a grave in any active cell, on the zombies' side or
     }
     place(0, 2, 2)
     assert.equal(game.lastRejection, undefined)
+    assert.ok(game.drainEvents().some(event => event.type === 'gravePlaced'), 'it goes down with the planting sound (gravePlaced)')
     assert.ok(!game.render().plants.some(plant => plant.row === 2 && plant.column === 2), 'the plants in the cell die, as a Grave Danger grave comes')
     place(1, 2, 5)
     place(0, 2, 5)
