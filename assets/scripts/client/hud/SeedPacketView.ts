@@ -151,6 +151,12 @@ export class SeedPacketView {
         if (!layer) this.top.setSiblingIndex(this.node.children.length - 1)
     }
 
+    /** The packet's plant or zombie picture is drawn; it loads after the packet itself, so a frame later at least. */
+    get ready(): Promise<void> {
+        const pictures = this.parts.flatMap(part => [...part.getComponentsInChildren(PlantPreview), ...part.getComponentsInChildren(ZombiePreview)])
+        return Promise.all(pictures.map(picture => picture.ready.catch(() => {}))).then(() => {})
+    }
+
     /** Draws the packet's picture over the others in its layer; packets raised in turn draw in that order. */
     raiseIcon(): void {
         if (this.top?.isValid && this.top.parent !== this.node) this.top.setSiblingIndex(this.top.parent!.children.length - 1)

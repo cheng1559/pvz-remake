@@ -16,6 +16,8 @@ import { seedPacketX } from './LevelGeometry'
 interface Packet {
     conveyorId?: number
     seedId?: string
+    /** Its new seed's picture is still loading: the packet waits hidden rather than show a frame without it. */
+    drawing?: boolean
     view: SeedPacketView
     tooltip: UITooltip
     hotkey?: UILabel
@@ -168,13 +170,7 @@ export class LevelSeedBank {
                 const layout = this.options.content.presentation.conveyor
                 entry.view.node.setPosition(layout.packetX + packet.x, -layout.packetY)
             }
-            entry.view.node.active = !!packet && !snapshot.seedChooser?.choosing
-            if (!packet) {
-                if (entry.button) entry.button.interactable = false
-                entry.tooltip.hide()
-                continue
-            }
-            if (entry.seedId !== packet.seedId) {
+            if (packet && entry.seedId !== packet.seedId) {
                 const seed = this.options.content.definitions.seeds[packet.seedId]
                 const look = this.packetLook(seed)
                 entry.seedId = packet.seedId
@@ -182,6 +178,16 @@ export class LevelSeedBank {
                 entry.tooltip.hide()
                 entry.view.setSeed(look.seedType, seed.sunCost, look.zombie, look.grave)
                 entry.tooltip.text = this.options.ui.text(look.name)
+                // The picture loads after this frame is drawn: a belt packet would come in empty for a frame first.
+                const seedId = packet.seedId
+                entry.drawing = true
+                void entry.view.ready.then(() => { if (entry.seedId === seedId) entry.drawing = false })
+            }
+            entry.view.node.active = !!packet && !snapshot.seedChooser?.choosing && !entry.drawing
+            if (!packet) {
+                if (entry.button) entry.button.interactable = false
+                entry.tooltip.hide()
+                continue
             }
             // A packet of the other side from its seed's own draws what it puts down facing the other way.
             entry.view.setMirrored(packet.team !== undefined)

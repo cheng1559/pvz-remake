@@ -105,6 +105,8 @@ function setup() {
     modules['@/client/hud/SeedPacketView'] = { SeedPacketView: class {
         node: FakeNode; options: unknown
         replacement?: { seedType: string, cost: number }
+        /** The picture loads later than the packet, as SeedPacketView's does. */
+        ready: Promise<void> = Promise.resolve()
         constructor(options: any) { this.node = new FakeNode(options.x); options.parent.addChild(this.node) }
         setSeed(seedType: string, cost: number) { this.replacement = { seedType, cost } }
         setMirrored() {}
@@ -225,7 +227,7 @@ test('level seeds keep independent affordability and cooldowns, and placement us
 
 
 
-test('a belt packet is in its place on the belt when it shows, for its picture to snap to there', () => {
+test('a belt packet shows once its picture is drawn, in its place on the belt for the picture to snap to there', async () => {
     const ui = setup()
     const { LevelSeedBank } = ui.load('assets/scripts/client/level/LevelSeedBank.ts')
     const definitions = { seeds: { pea: { kind: 'plant', id: 'pvz:peashooter', sunCost: 100 } }, items: {} }
@@ -247,13 +249,18 @@ test('a belt packet is in its place on the belt when it shows, for its picture t
             })
         }
         const layout = presentationFixture.conveyor
-        bank.sync({ phase: 'gameplay', result: 'playing', paused: false, availableSun: 0, cursor: { mode: 'none' }, extensions: {}, items: [],
-            seedPackets: [], conveyorPackets: [{ id: 5, seedId: 'pea', selected: false, x: 300, availability: {} }] }, [], true, null, false)
-        assert.equal(JSON.stringify(shownAt), JSON.stringify([layout.packetX + 300]))
+        const at = (x: number) => ({ phase: 'gameplay', result: 'playing', paused: false, availableSun: 0, cursor: { mode: 'none' }, extensions: {},
+            items: [], seedPackets: [], conveyorPackets: [{ id: 5, seedId: 'pea', selected: false, x, availability: {} }] })
+        // The picture loads after the frame is drawn: until then the packet would show empty, so it waits.
+        bank.sync(at(300), [], true, null, false)
+        assert.equal(JSON.stringify(shownAt), '[]')
+        await new Promise(resolve => setTimeout(resolve, 0))
+        bank.sync(at(299), [], true, null, false)
+        assert.equal(JSON.stringify(shownAt), JSON.stringify([layout.packetX + 299]))
     } finally { bank.destroy?.(); ui.cleanup() }
 })
 
-test('ordinary and conveyor packets share mobile drag, tap, switch and cancel interaction', () => {
+test('ordinary and conveyor packets share mobile drag, tap, switch and cancel interaction', async () => {
     for (const conveyor of [false, true]) {
         const ui = setup(), e = ui.events
         ui.setMobile()
@@ -305,6 +312,9 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
             bank.sync(snapshot, [], true, null, false)
             if (conveyor) assert.ok(bank.packets.every((packet: any) => packet.view.replacement.seedType === 'peashooter'),
                 'each slot initializes its card from the supplied packet')
+            // A new card shows once its picture is drawn.
+            await new Promise(resolve => setTimeout(resolve, 0))
+            bank.sync(snapshot, [], true, null, false)
             touch(e.TOUCH_START, 20)
             assert.equal(commands.at(-1).type, conveyor ? 'selectConveyorPacket' : 'selectSeed')
             if (conveyor) assert.equal(commands.at(-1).packetId, 17)
