@@ -1,4 +1,4 @@
-import { _decorator, Color, Component, gfx, isValid, JsonAsset, Material, Node, Sprite, SpriteFrame, toRadian, UISkew, UITransform, Vec3 } from 'cc'
+import { _decorator, Color, Component, director, Director, gfx, isValid, JsonAsset, Material, Node, Sprite, SpriteFrame, toRadian, UISkew, UITransform, Vec3 } from 'cc'
 import { ClientContentLoader, SpriteRepository } from '@/client/content/ClientContentLoader'
 import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { uiNode } from '@/client/view/uiNode'
@@ -72,7 +72,8 @@ function frameGeometry(frame: SpriteFrame): FrameGeometry {
 }
 
 /** A clip's keyframes in the kernel's layout, packed once; sprite slots index `sprites`. */
-interface PackedClip { keys: Float64Array, starts: Map<ReanimTrack, number>, sprites: string[] }
+/** `trackSprites`: the sprite slots each track shows, once each, in the order its keyframes first show them. */
+interface PackedClip { keys: Float64Array, starts: Map<ReanimTrack, number>, sprites: string[], trackSprites: Map<ReanimTrack, number[]> }
 const packedClips = new WeakMap<Reanim, PackedClip>()
 function packClip(data: Reanim): PackedClip {
     let packed = packedClips.get(data)
@@ -80,14 +81,15 @@ function packClip(data: Reanim): PackedClip {
     const sprites = [...new Set(data.tracks.flatMap(track => track.keyframes.flatMap(frame => frame.sprite ? [frame.sprite] : [])))].sort()
     const slots = new Map(sprites.map((id, slot) => [id, slot]))
     const keys = kernel().f64(data.tracks.reduce((sum, track) => sum + track.keyframes.length, 0) * KEY)
-    const starts = new Map<ReanimTrack, number>()
+    const starts = new Map<ReanimTrack, number>(), trackSprites = new Map<ReanimTrack, number[]>()
     let index = 0
     for (const track of data.tracks) {
         starts.set(track, index)
+        trackSprites.set(track, [...new Set(track.keyframes.flatMap(frame => frame.sprite ? [slots.get(frame.sprite)!] : []))])
         packKeyframes(track.keyframes, keys, index, frame => frame.sprite ? slots.get(frame.sprite)! : -1)
         index += track.keyframes.length
     }
-    packedClips.set(data, packed = { keys, starts, sprites })
+    packedClips.set(data, packed = { keys, starts, sprites, trackSprites })
     return packed
 }
 
@@ -153,6 +155,29 @@ export class ReanimRepository {
         this.cache.set(id, promise)
         return promise
     }
+}
+
+/**
+ * Players whose node is not shown, with pose changes waiting: a zombie being set up turns parts on and off and swaps
+ * sprites several times before it shows, and writing each change at once rebuilt its drawing every time (a wave of
+ * 160 zombies held one frame for a fifth of a second). Nothing hidden is drawn, so one write before the frame that
+ * first draws it is enough.
+ */
+const hiddenPoses = new Set<ReanimPlayer>()
+let hiddenPosesFlushed = false
+function waitForShown(player: ReanimPlayer): void {
+    hiddenPoses.add(player)
+    if (hiddenPosesFlushed) return
+    hiddenPosesFlushed = true
+    director.on(Director.EVENT_BEFORE_DRAW, () => {
+        for (const waiting of hiddenPoses) {
+            if (!waiting.isValid) hiddenPoses.delete(waiting)
+            else if (waiting.node.activeInHierarchy) {
+                hiddenPoses.delete(waiting)
+                waiting.flushPose()
+            }
+        }
+    })
 }
 
 @ccclass('ReanimPlayer')
@@ -617,6 +642,8 @@ export class ReanimPlayer extends Component {
 
     private applyPose(trackId?: string): void {
         if (this.enabledInHierarchy) { this.poseDirty = true; return }
+        // Hidden, it waits to show (hiddenPoses). Shown but disabled (a paused or frozen lawn), it writes now.
+        if (this.node?.activeInHierarchy === false) { this.poseDirty = true; waitForShown(this); return }
         // Without lateUpdate, write now; a single-track change leaves the other tracks alone.
         if (trackId === undefined) this.poseDirty = false
         this.writePose(trackId)
@@ -709,8 +736,9 @@ export class ReanimPlayer extends Component {
             const override = this.frameOverrides.get(id)
             const overrideSlot = override && !view.node ? images.push(frameGeometry(override)) - 1 : -1
             tracks.set(track ? [clip.starts.get(track)!, track.keyframes.length, overrideSlot, view.visible === false ? 0 : 1] : [0, 0, -1, 0], index * TRACK)
+            // Packed once per clip: walking every keyframe here took most of a rebuild, 160 times over when a wave arrives.
             const trackImages = view.node ? [] : overrideSlot >= 0 ? [images[overrideSlot]]
-                : track?.keyframes.flatMap(frame => frame.sprite ? [images[clip.sprites.indexOf(frame.sprite)]] : []) ?? []
+                : track ? (clip.trackSprites.get(track) ?? []).map(slot => images[slot]) : []
             const image = trackImages.find(Boolean)
             // A batch binds one texture. Images too many for one atlas page can spread over several,
             // so a track switching between pages draws through its own node.

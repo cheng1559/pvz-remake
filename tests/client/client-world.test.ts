@@ -99,3 +99,17 @@ test('ClientWorld switches the pole vaulter landing origin together with its ani
     assert.equal(world.render(0).zombies[0].x, 249.9)
     assert.equal(world.render(0.5).zombies[0].x, 249.8, 'normal walking still interpolates')
 })
+
+test('ClientWorld hands out the frame it last rendered until its frames or the interpolation change', () => {
+    const world = new ClientWorld()
+    world.accept(snapshot(1))
+    world.accept({ ...snapshot(2), zombies: [{ ...snapshot(2).zombies[0], x: 20 }] })
+    // Every button asks for the frame on every hover refresh; interpolating each time cost a fifth of a crowded frame.
+    const frame = world.render(0.5)
+    assert.equal(world.render(0.5), frame)
+    assert.equal(frame.zombies[0].x, 15)
+    assert.notEqual(world.render(0.25), frame)
+    assert.equal(world.render(0.25).zombies[0].x, 12.5)
+    world.accept({ ...snapshot(3), zombies: [{ ...snapshot(3).zombies[0], x: 30 }] })
+    assert.equal(world.render(0.25).zombies[0].x, 22.5, 'a new frame renders afresh')
+})

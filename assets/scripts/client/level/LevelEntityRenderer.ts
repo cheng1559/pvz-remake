@@ -656,7 +656,7 @@ export class LevelEntityRenderer {
         const position = zombie
             ? { x: x + offsetX - zombie.x, y: -Math.max(impact.yRange[0], Math.min(impact.yRange[1], y + impact.offset[1] - zombie.y)) }
             : { x: x + offsetX - WIDTH / 2, y: HEIGHT / 2 - y - impact.offset[1] }
-        return ParticlePlayer.spawn({ parent, id: impact.id, ...position, seed: event.eventId >>> 0 }).node
+        return ParticlePlayer.spawn({ parent, id: impact.id, ...position, seed: event.eventId >>> 0, recycle: true }).node
     }
 
     /** Mods can append scenery to the same ordering pass as entities and particles. */

@@ -17,6 +17,11 @@ type Positioned = { entityId: EntityId, x: number, y: number }
 export class ClientWorld {
     private previousValue?: WorldSnapshot
     private currentValue?: WorldSnapshot
+    /**
+     * The last frame rendered: buttons ask for it over and over within one display frame (each one's canInteract on
+     * every hover refresh), and interpolating every entity each time cost a fifth of a frame with a full lawn.
+     */
+    private rendered?: { current: WorldSnapshot, previous?: WorldSnapshot, t: number, frame: WorldSnapshot }
 
     get previous(): WorldSnapshot | undefined {
         return this.previousValue
@@ -59,7 +64,9 @@ export class ClientWorld {
         const previous = this.previousValue
         // Loss freezes simulation, but the host's interpolation clock keeps cycling during house entry.
         const t = current.result === 'lost' ? 1 : Math.max(0, Math.min(1, alpha))
-        return {
+        const rendered = this.rendered
+        if (rendered && rendered.current === current && rendered.previous === previous && rendered.t === t) return rendered.frame
+        const frame: WorldSnapshot = {
             ...current,
             plants: interpolate(current.plants, previous?.plants, t),
             // Landing changes the animation's origin; its pose and position must switch together.
@@ -69,12 +76,14 @@ export class ClientWorld {
             items: interpolateItems(current.items, previous?.items, t),
             lawnMowers: interpolate(current.lawnMowers, previous?.lawnMowers, t),
         }
+        this.rendered = { current, previous, t, frame }
+        return frame
     }
 }
 
 function interpolateItems(current: ItemSnapshot[], previous: ItemSnapshot[] | undefined, alpha: number): ItemSnapshot[] {
     const positions = interpolate(current, previous, alpha)
-    const previousById = new Map(previous?.map(item => [item.entityId, item]))
+    const previousById = byId(previous)
     return positions.map(item => {
         const before = previousById.get(item.entityId)
         return before ? {
@@ -95,13 +104,22 @@ function entityIds(snapshot: WorldSnapshot): Set<EntityId> {
     ].map(entity => entity.entityId))
 }
 
+/** By entity, for a frame's list: the previous frame stays the same for every display frame until the next tick. */
+const indexes = new WeakMap<readonly Positioned[], Map<EntityId, Positioned>>()
+function byId<T extends Positioned>(entities: readonly T[] | undefined): Map<EntityId, T> {
+    if (!entities) return new Map()
+    let index = indexes.get(entities)
+    if (!index) indexes.set(entities, index = new Map(entities.map(entity => [entity.entityId, entity])))
+    return index as Map<EntityId, T>
+}
+
 function interpolate<T extends Positioned>(
     current: T[],
     previous: T[] | undefined,
     alpha: number,
     canInterpolate?: (before: T, after: T) => boolean,
 ): T[] {
-    const previousById = new Map(previous?.map(entity => [entity.entityId, entity]))
+    const previousById = byId(previous)
     return current.map(entity => {
         const before = previousById.get(entity.entityId)
         return before && (!canInterpolate || canInterpolate(before, entity)) ? {
