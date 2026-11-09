@@ -4,7 +4,7 @@ import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 
-class Component { enabled = true; isValid = true }
+class Component { enabled = true; isValid = true; node?: unknown }
 class ReanimPlayer extends Component {}
 class ParticlePlayer extends Component {}
 
@@ -52,24 +52,26 @@ test("a repick drops the chooser in, holds it while choosing and lifts it out af
         'a bank dealt again after a repick is not choosing')
 })
 
-test('a repick stands the lawn still and attaching a chooser binds it, whenever it comes', () => {
+test('a repick stands the level still but its chooser, and attaching a chooser binds it, whenever it comes', () => {
     const { LevelView } = load('assets/scripts/client/level/LevelView.ts', {
         cc: { Component, _decorator: { ccclass: () => (value: unknown) => value }, Tween: { pauseAllByTarget() {}, resumeAllByTarget() {} } },
         '@/client/reanim/ReanimPlayer': { ReanimPlayer }, '@/client/particle/ParticlePlayer': { ParticlePlayer },
     })
-    const reanim = new ReanimPlayer(), particle = new ParticlePlayer(), other = new Component()
-    const view = new LevelView({ children: [], getComponentsInChildren: () => [] })
-    view.lawnLayers = [{ getComponentsInChildren: () => [reanim, particle, other] }]
-    view.freezeLawn(true)
-    assert.deepEqual([reanim.enabled, particle.enabled, other.enabled], [false, false, true])
-    view.freezeLawn(false)
-    assert.deepEqual([reanim.enabled, particle.enabled], [true, true])
-
+    // The lawn's, the HUD's (a tutorial arrow, the award's arrow) and the chooser's own (a card's plant).
+    const lawn = new ReanimPlayer(), arrow = new ParticlePlayer(), card = new ReanimPlayer(), other = new Component()
+    const chooserNode = {}
+    card.node = chooserNode
+    const view = new LevelView({ children: [], getComponentsInChildren: () => [lawn, arrow, card, other] })
     const sent: unknown[] = []
     view.bindSeedChooser((command: unknown) => sent.push(command))
     let send: (command: unknown) => void = () => {}
-    const chooser = { bind(value: typeof send) { send = value } }
+    const chooser = { bind(value: typeof send) { send = value }, holds: (node: unknown) => node === chooserNode }
     view.attachSeedChooser(chooser)
+    view.standStill(true)
+    assert.deepEqual([lawn.enabled, arrow.enabled, card.enabled, other.enabled], [false, false, true, true])
+    view.standStill(false)
+    assert.deepEqual([lawn.enabled, arrow.enabled], [true, true])
+
     send({ type: 'confirmSeeds' })
     assert.deepEqual([view.seedChooser, sent], [chooser, [{ type: 'confirmSeeds' }]], 'a chooser a repick opens sends like the intro\'s')
 })

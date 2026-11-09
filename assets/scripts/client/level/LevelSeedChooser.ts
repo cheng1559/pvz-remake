@@ -304,6 +304,11 @@ export class LevelSeedChooser {
         this.emptySlots.forEach((node, index) => { const { x, y } = this.slotPosition(index); node.setPosition(x, -y) })
     }
 
+    /** Whether the node is the chooser's: its panel, cards and buttons, and the preview zombies' tooltips. */
+    holds(node: Node): boolean {
+        return node.isChildOf(this.edge) || node.isChildOf(this.previewTooltipSurface)
+    }
+
     placeBefore(node: Node): void {
         this.edge.setSiblingIndex(node.getSiblingIndex())
     }

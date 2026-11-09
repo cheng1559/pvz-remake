@@ -73,9 +73,9 @@ export class LevelView {
     /** Builds a chooser for a level that opened none, the first time a repick asks for one. */
     private openSeedChooser?: (chooser: NonNullable<WorldSnapshot['seedChooser']>) => Promise<LevelSeedChooser>
     private openingSeedChooser = false
-    /** The lawn's layers, whose animations stand still while a repick stands the level still. */
-    private lawnLayers: Node[] = []
+    /** The animations a repick stopped, and whether it stands the level still. */
     private readonly frozenComponents: Component[] = []
+    private standingStill = false
     private syncSeedChooserIntro = () => {}
     private pinScreen = () => {}
     /** How far the lawn sits right of its original gameplay position (wide viewports); the screen UI stays put. */
@@ -375,11 +375,13 @@ export class LevelView {
             content, awardLayer, overlayLayer, levelCompleteFade,
             id => entityRenderer.node(id), audio, ui,
         )
+        // The tutorial's arrow at a packet, over the HUD; a repick puts it under the bank it points at (raiseBankToChooser).
+        const tutorialArrows = uiNode({ name: 'TutorialArrows', parent: coinLayer.parent! }).node
         const hudPresenter = LevelHudPresenter.create({
             ui, content, level, canPlantAt: (snapshot, row, column) => (view.plantingLine?.canPlantAt(column) ?? true) && (view.rule?.canPlantAt?.(snapshot, row, column) ?? true), seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet?.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
             loadPacketSprite, packetCostFont: pico129,
             adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: bankRight, adviceFont: houseOfTerror28,
-            tutorialArrowLayer: coinLayer.parent!, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
+            tutorialArrowLayer: tutorialArrows, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
             cursorPlant, gridPlant,
             sunText, progressMeter, progressFillClip, progressFill, progressHead, levelText, coinBank: { node: coinBank, text: coinText },
         })
@@ -397,7 +399,6 @@ export class LevelView {
         const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, gameOverFrames, presentation.board.gameOver)
         view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition)
         entityRenderer.sunBankOffset = () => bankLeft.position.x
-        view.lawnLayers = [entityLayer, coinLayer]
         view.openSeedChooser = createSeedChooser
         if (seedChooser) view.attachSeedChooser(seedChooser)
         view.graves = await LevelGraves.create(entityLayer, entityRenderer, content, boardDefinition, initial.graves ?? [])
@@ -440,12 +441,14 @@ export class LevelView {
             const award = awardLayer.parent === hud
             if (raised) {
                 if (award) { awardIndex = awardLayer.getSiblingIndex(); chooser.placeUnder(awardLayer) }
+                if (tutorialArrows.parent === hud) chooser.placeUnder(tutorialArrows)
                 bankLayer.setParent(hud, true)
                 chooser.placeUnder(bankLayer)
             } else {
                 bankLayer.setParent(board, true)
                 // Right before the entity layer, where it was put at the start.
                 bankLayer.setSiblingIndex(entityLayer.getSiblingIndex())
+                if (tutorialArrows.parent === hud) tutorialArrows.setSiblingIndex(hud.children.length - 1)
                 if (award) awardLayer.setSiblingIndex(awardIndex)
             }
             view.pinScreen()
@@ -501,6 +504,8 @@ export class LevelView {
         intro.sync()
         view.pinScreen()
         view.hideConveyorBank()
+        // Over everything the HUD got since, as the arrow spawned in play always was.
+        tutorialArrows.setSiblingIndex(tutorialArrows.parent!.children.length - 1)
         return view
     }
 
@@ -554,19 +559,26 @@ export class LevelView {
         chooser.bind(this.seedChooserSend)
     }
 
-    /** A repick stands the level still: the lawn's animations wait with it, the chooser over it going on. */
-    private freezeLawn(frozen: boolean): void {
-        if (frozen === this.frozenComponents.length > 0) return
-        if (!frozen) {
-            for (const component of this.frozenComponents.splice(0)) if (component.isValid) component.enabled = true
-            return
-        }
-        for (const layer of this.lawnLayers) for (const component of layer.getComponentsInChildren(Component)) {
-            if (component.enabled && (component instanceof ReanimPlayer || component instanceof ParticlePlayer)) {
-                this.frozenComponents.push(component)
+    /** A repick stands the level still as a pause does: everything but the chooser over it waits. */
+    private standStill(still: boolean): void {
+        if (still === this.standingStill) return
+        this.standingStill = still
+        if (still) this.holdStill(this.frozenComponents, component => this.seedChooser?.holds(component.node) === true)
+        else LevelView.release(this.frozenComponents)
+    }
+
+    /** Stops the level's animations, its Reanims and particles, but those `keep` lets go on; `held` takes the ones stopped. */
+    private holdStill(held: Component[], keep: (component: Component) => boolean): void {
+        for (const component of this.root.getComponentsInChildren(Component)) {
+            if (component.enabled && (component instanceof ReanimPlayer || component instanceof ParticlePlayer) && !keep(component)) {
+                held.push(component)
                 component.enabled = false
             }
         }
+    }
+
+    private static release(held: Component[]): void {
+        for (const component of held.splice(0)) if (component.isValid) component.enabled = true
     }
     /** Sends the player's Yes/No to a dialogue question (`answerDialog`). */
     bindDialogAnswer(send: (accept: boolean) => void): void { this.answerDialog = send }
@@ -628,18 +640,10 @@ export class LevelView {
         if (!paused && !this.presentationPaused) return
         this.presentationPaused = paused
         if (paused) {
+            // The zombie that got in goes on into the house.
             const winnerId = this.gameOver.winnerId
-            for (const component of this.root.getComponentsInChildren(Component)) {
-                if (winnerId !== undefined && this.entityRenderer.runsDuringGameOver(winnerId, component)) continue
-                if (component.enabled && (component instanceof ReanimPlayer || component instanceof ParticlePlayer)) {
-                    this.pausedComponents.push(component)
-                    component.enabled = false
-                }
-            }
-        } else {
-            for (const component of this.pausedComponents) if (component.isValid) component.enabled = true
-            this.pausedComponents.length = 0
-        }
+            this.holdStill(this.pausedComponents, component => winnerId !== undefined && this.entityRenderer.runsDuringGameOver(winnerId, component))
+        } else LevelView.release(this.pausedComponents)
         const visit = (node: Node) => {
             if (paused) Tween.pauseAllByTarget(node)
             else Tween.resumeAllByTarget(node)
@@ -674,7 +678,7 @@ export class LevelView {
                 .finally(() => { this.openingSeedChooser = false })
         }
         this.hud.seedBank.awaitingChooser = repick && !this.seedChooser
-        this.freezeLawn(repick)
+        this.standStill(repick)
         if (this.money !== undefined && snapshot.money !== this.money) this.onMoneyChanged?.(snapshot.money)
         this.money = snapshot.money
         this.boardHud?.sync(snapshot)
