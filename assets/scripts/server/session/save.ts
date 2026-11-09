@@ -185,9 +185,10 @@ function parseSeedBank(value: unknown): SeedBankState {
             moveTicks: nonNegativeInteger(data.moveTicks, 'conveyor.moveTicks'),
             ...(data.lastSeedId === undefined ? {} : { lastSeedId: nonEmptyString(data.lastSeedId, 'conveyor.lastSeedId') }),
             packets: array(data.packets, 'conveyor.packets').map(value => {
-                const packet = optionalExact(value, ['id', 'seedId', 'x'], ['team'], 'conveyor packet')
-                return { id: positiveInteger(packet.id, 'packet.id'), seedId: nonEmptyString(packet.seedId, 'packet.seedId'), x: finite(packet.x, 'packet.x'),
-                    ...(packet.team === undefined ? {} : { team: team(packet.team, 'packet.team') }) }
+                const packet = exact(value, ['id', 'x', 'card'], 'conveyor packet')
+                const card = optionalExact(packet.card, ['seedId'], ['team'], 'conveyor packet.card')
+                return { id: positiveInteger(packet.id, 'packet.id'), x: finite(packet.x, 'packet.x'), card: {
+                    seedId: nonEmptyString(card.seedId, 'packet.card.seedId'), ...(card.team === undefined ? {} : { team: team(card.team, 'packet.card.team') }) } }
             }),
         }
         if (new Set(conveyor.packets.map(packet => packet.id)).size !== conveyor.packets.length ||

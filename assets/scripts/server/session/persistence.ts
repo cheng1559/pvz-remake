@@ -163,7 +163,7 @@ export function restoreSession(
     const chooser = save.seedBank.choosing !== undefined
     const slots = chooser ? bankSlots(definitions, offer, save.economy.packetUpgrades)
         : 'seeds' in start ? start.seeds.length : 0
-    if (!!save.seedBank.conveyor !== !!definition.conveyor || save.seedBank.conveyor?.packets.some(packet => !definition.conveyor!.seeds.some(seed => seed.id === packet.seedId))) {
+    if (!!save.seedBank.conveyor !== !!definition.conveyor || save.seedBank.conveyor?.packets.some(packet => !definition.conveyor!.seeds.some(seed => seed.id === packet.card.seedId))) {
         throw new Error('Saved conveyor does not match the level')
     }
     if (save.seedBank.conveyor && save.seedBank.conveyor.packets.length > definition.conveyor!.capacity) throw new Error('Saved conveyor exceeds capacity')

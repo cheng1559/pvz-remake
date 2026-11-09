@@ -7,7 +7,7 @@ export function startConveyor(world: World): void {
     const rules = level.definition.conveyor
     if (!rules) return
     const conveyor = world.resources.get(SeedBankResource).conveyor!
-    if (rules.initialSeed) conveyor.packets.push({ id: conveyor.nextId++, seedId: rules.initialSeed, x: rules.entryX })
+    if (rules.initialSeed) conveyor.packets.push({ id: conveyor.nextId++, x: rules.entryX, card: { seedId: rules.initialSeed } })
     conveyor.spawnAtTick = rules.initialDelayTicks ?? rules.spawnDelay[0].ticks
     world.resources.get(WaveResource).nextWaveAtTick = level.definition.firstWaveTicks
 }
@@ -29,7 +29,7 @@ export function createConveyorSystem(): GameSystem {
         if (count >= rules.capacity) return
         // Challenge::UpdateConveyorBelt reduces duplicates in a multi-plant supply.
         const choices = rules.seeds.map(seed => {
-            const count = conveyor.packets.filter(packet => packet.seedId === seed.id).length
+            const count = conveyor.packets.filter(packet => packet.card.seedId === seed.id).length
             const weight = rules.seeds.length <= 2 ? seed.weight : count >= 4 ? 1 : count >= 3 ? 5
                 : seed.id === conveyor.lastSeedId ? Math.trunc(seed.weight / 2) : seed.weight
             return { ...seed, weight }
@@ -39,7 +39,7 @@ export function createConveyorSystem(): GameSystem {
         const previousOffset = count ? conveyor.packets[count - 1].x - (count - 1) * rules.spacing : 0
         let offset = rules.entryX - (rules.spacing + rules.removalGap) * count
         if (count && offset < previousOffset) offset = previousOffset + rules.insertionGap
-        conveyor.packets.push({ id: conveyor.nextId++, seedId: seed.id, x: count * rules.spacing + offset })
+        conveyor.packets.push({ id: conveyor.nextId++, x: count * rules.spacing + offset, card: { seedId: seed.id } })
         conveyor.lastSeedId = seed.id
     } }
 }

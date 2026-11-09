@@ -107,17 +107,23 @@ export interface Projectile {
 export type SeedSelection = { mode: 'none' } | { mode: 'seed'; slot: number }
     | { mode: 'conveyor'; packetId: number } | { mode: 'tool'; toolId: string }
 
-/** A bank packet. `team`: the side of what it puts down, when not its seed's own (seedTeam; from `/seed`). */
-export interface SeedPacketState { seedId: string, readyAtTick: number, cooldownTotal?: number, team?: Team }
+/**
+ * A seed card, the same in a bank slot and on the conveyor belt: its seed, and `team`, the side of what it puts down
+ * when not its seed's own (packetTeam; from `/seed`).
+ */
+export interface SeedCard { seedId: string, team?: Team }
+
+/** A bank packet: its card and its recharge. */
+export interface SeedPacketState extends SeedCard { readyAtTick: number, cooldownTotal?: number }
+
+/** A packet on the conveyor belt: the belt's own id and position for it, and the card it carries. */
+export interface ConveyorPacketState { id: number; x: number; card: SeedCard }
 
 /**
  * A repick under way: `packets`, the bank as it stood before, its size and each packet's recharge; `chooser`, whether
  * the level had opened the chooser; `confirmed`, Let's Rock pressed and the chooser lifting out (`finishRepick`). It
  * is never saved: a save made meanwhile holds the bank from before, or once confirmed, the bank chosen.
  */
-/** A packet on the conveyor belt; `team` (from `/seed`) only when it is not its seed's own (packetTeam). */
-export interface ConveyorPacketState { id: number; seedId: string; x: number; team?: Team }
-
 export interface SeedRepick { chooser: boolean, packets: Array<SeedPacketState | null>, confirmed?: true }
 
 export interface SeedBankState {

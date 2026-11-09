@@ -115,11 +115,9 @@ function executeCommand(
                     conveyor.packets.splice(slot - 1, 1)
                     return debugSuccess(`Conveyor slot ${slot}: ${EMPTY_SLOT}`)
                 }
-                packet.seedId = seedId
                 const team = sideOf(seedId)
-                if (team) packet.team = team
-                else delete packet.team
-                return debugSuccess(`Conveyor slot ${slot}: ${seedId}${packet.team ? ` (${packet.team})` : ''}`)
+                packet.card = { seedId, ...(team ? { team } : {}) }
+                return debugSuccess(`Conveyor slot ${slot}: ${seedId}${team ? ` (${team})` : ''}`)
             }
             if (slot === null || slot < 1 || slot > bank.packets.length) {
                 return debugSyntax(`Use slot 1-${bank.packets.length}`)

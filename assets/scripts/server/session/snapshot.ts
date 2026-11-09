@@ -133,8 +133,9 @@ export const snapshot = {
             seedPackets,
             // A game that opened the chooser keeps `choosing`, also once confirmed.
             ...(seedBank.choosing === undefined ? {} : { seedChooser: seedChooserSnapshot(world, definitions) }),
-            conveyorPackets: seedBank.conveyor?.packets.map(packet => ({ ...packet, selected: seedBank.selection.mode === 'conveyor' && packet.id === seedBank.selection.packetId,
-                availability: planting.seedAvailability(session, packet.seedId, packet.id) })) ?? [],
+            conveyorPackets: seedBank.conveyor?.packets.map(packet => ({ id: packet.id, x: packet.x, ...packet.card,
+                selected: seedBank.selection.mode === 'conveyor' && packet.id === seedBank.selection.packetId,
+                availability: planting.seedAvailability(session, packet.card.seedId, packet.id) })) ?? [],
             ...(waves.graves ? { graves: waves.graves.map(grave => ({ ...grave })) } : {}),
             plants,
             zombies,

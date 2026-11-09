@@ -122,7 +122,7 @@ test('a bowling plant hits, ricochets and resumes the same motion after save; an
     for (const explosive of [false, true]) {
         const server = begin()
         const saved = server.save()
-        saved.seedBank.conveyor!.packets[0].seedId = explosive ? 'pvz:bowling-explodenut' : 'pvz:bowling-wallnut'
+        saved.seedBank.conveyor!.packets[0].card.seedId = explosive ? 'pvz:bowling-explodenut' : 'pvz:bowling-wallnut'
         server.start({ ...options, save: saved as unknown as JsonValue })
         runCommand(server, { type: 'selectConveyorPacket', packetId: 1 })
         runCommand(server, { type: 'placePlant', row: 2, column: 1 })

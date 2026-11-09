@@ -30,7 +30,7 @@ export const planting = {
     seedAvailability(session: Session, seedId: string, packetId?: number, slot?: number): SeedAvailability {
         const { world, definitions } = session
         const seedBank = world.resources.get(SeedBankResource)
-        if (packetId !== undefined) return seedBank.conveyor?.packets.some(packet => packet.id === packetId && packet.seedId === seedId)
+        if (packetId !== undefined) return seedBank.conveyor?.packets.some(packet => packet.id === packetId && packet.card.seedId === seedId)
             ? {} : { reason: 'seed-not-available' }
         const packet = slot === undefined ? seedBank.packets.find(packet => packet?.seedId === seedId) : seedBank.packets[slot]
         if (packet?.seedId !== seedId) return { reason: 'seed-not-available' }
@@ -69,8 +69,8 @@ export const planting = {
         const bank = session.world.resources.get(SeedBankResource)
         const packet = bank.conveyor?.packets.find(packet => packet.id === packetId)
         if (!packet) return 'seed-not-available'
-        const availability = planting.seedAvailability(session, packet.seedId, packet.id)
-        if (availability.reason) return planting.rejectSeed(session, packet.seedId, availability)
+        const availability = planting.seedAvailability(session, packet.card.seedId, packet.id)
+        if (availability.reason) return planting.rejectSeed(session, packet.card.seedId, availability)
         bank.selection = { mode: 'conveyor', packetId: packet.id }
     },
 
