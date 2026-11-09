@@ -46,8 +46,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         }
         if (plantAttack) entity.plantAttack = {
             readyAtTick: plantAttack.readyAtTick,
-            ...(plantAttack.fireAtTick === undefined ? {} : { fireAtTick: plantAttack.fireAtTick }),
-            ...(plantAttack.shotsRemaining === undefined ? {} : { shotsRemaining: plantAttack.shotsRemaining }),
+            ...(plantAttack.burst ? { burst: { ...plantAttack.burst } } : {}),
         }
         if (zombie) {
             gameplay.zombieBehaviors.validateState(zombie, definitions.zombies[zombie.typeId])
@@ -84,33 +83,27 @@ export function saveSession(session: Session): ServerSaveSnapshot {
             ...(tutorial.dialogIndex === undefined ? {} : { dialogIndex: tutorial.dialogIndex }),
             firstAdventure: tutorial.firstAdventure,
             step: tutorial.step,
-            ...(tutorial.zombieWarningShown === undefined ? {} : { zombieWarningShown: tutorial.zombieWarningShown }),
-            ...(tutorial.sunsFallen === undefined ? {} : { sunsFallen: tutorial.sunsFallen }),
+            zombieWarningShown: tutorial.zombieWarningShown,
+            sunsFallen: tutorial.sunsFallen,
             ...(tutorial.sunAtTick === undefined ? {} : { sunAtTick: tutorial.sunAtTick }),
             ...(tutorial.promptAtTick === undefined ? {} : { promptAtTick: tutorial.promptAtTick }),
-            ...(tutorial.cantAffordAdviceShown === undefined
-                ? {}
-                : { cantAffordAdviceShown: tutorial.cantAffordAdviceShown }),
-            ...(tutorial.seedRefreshAdviceShown === undefined
-                ? {}
-                : { seedRefreshAdviceShown: tutorial.seedRefreshAdviceShown }),
-            ...(tutorial.displayedAdvice === undefined ? {} : { displayedAdvice: [...tutorial.displayedAdvice] }),
+            cantAffordAdviceShown: tutorial.cantAffordAdviceShown,
+            seedRefreshAdviceShown: tutorial.seedRefreshAdviceShown,
+            displayedAdvice: [...tutorial.displayedAdvice],
         },
         wave: {
             index: wave.index,
-            ...(wave.graves === undefined ? {} : { graves: wave.graves.map(grave => ({ ...grave })) }),
+            graves: wave.graves.map(grave => ({ ...grave })),
             ...(wave.graveRiseAtTick === undefined ? {} : { graveRiseAtTick: wave.graveRiseAtTick }),
             ...(wave.ruleState === undefined ? {} : { ruleState: jsonRoundTrip(wave.ruleState) as JsonObject }),
             plan: wave.plan.map(entry => ({ zombies: [...entry.zombies], ...(entry.flagWave ? { flagWave: true as const } : {}) })),
             ...(wave.rowPicks === undefined ? {} : { rowPicks: wave.rowPicks.map(row => ({ ...row })) }),
-            ...(wave.hugeWaveAnnounced === undefined ? {} : { hugeWaveAnnounced: wave.hugeWaveAnnounced }),
+            hugeWaveAnnounced: wave.hugeWaveAnnounced,
             ...(wave.nextWaveAtTick === undefined ? {} : { nextWaveAtTick: wave.nextWaveAtTick }),
             ...(wave.accelerateAtTick === undefined ? {} : { accelerateAtTick: wave.accelerateAtTick }),
-            ...(wave.zombieIds === undefined ? {} : {
-                zombieIds: wave.zombieIds.filter(entity => world.get(entity, ZombieComponent) !== undefined),
-            }),
-            ...(wave.healthToNextWave === undefined ? {} : { healthToNextWave: wave.healthToNextWave }),
-            ...(wave.finalWaveAnnounced === undefined ? {} : { finalWaveAnnounced: wave.finalWaveAnnounced }),
+            zombieIds: wave.zombieIds.filter(entity => world.get(entity, ZombieComponent) !== undefined),
+            healthToNextWave: wave.healthToNextWave,
+            finalWaveAnnounced: wave.finalWaveAnnounced,
         },
         eventQueue: {
             nextEventId: eventQueue.nextEventId,
@@ -154,7 +147,7 @@ export function restoreSession(
         throw new Error('Saved wave row history does not match the level')
     }
     const board = definitions.boards[definition.board]
-    if (save.wave.graves?.some(grave => grave.row >= board.rows || grave.column >= board.columns)) {
+    if (save.wave.graves.some(grave => grave.row >= board.rows || grave.column >= board.columns)) {
         throw new Error('Saved grave is outside the board')
     }
     // A game that opened the chooser keeps `choosing`; a later upgrade only adds slots to it.
@@ -213,11 +206,10 @@ export function restoreSession(
         events: save.eventQueue.events.map(event => ({ ...event, data: { ...event.data } })),
     })
     for (const saved of save.entities) restoreEntity(content, world, saved)
-    const waveZombieIds = save.wave.zombieIds ?? []
-    if (new Set(waveZombieIds).size !== waveZombieIds.length) {
+    if (new Set(save.wave.zombieIds).size !== save.wave.zombieIds.length) {
         throw new Error('Saved wave zombie IDs must be unique')
     }
-    for (const entity of waveZombieIds) {
+    for (const entity of save.wave.zombieIds) {
         if (!world.get(entity, ZombieComponent)) throw new Error(`Saved wave zombie ${entity} is invalid`)
     }
     const collectingSun = [...world.query(ItemComponent)].reduce((total, entity) => {
@@ -263,8 +255,7 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
             saved.plant.maxHealth !== plant.maxHealth) {
             throw new Error(`Saved plant ${saved.entityId} is invalid for the level`)
         }
-        if (saved.plantAttack?.shotsRemaining !== undefined &&
-            saved.plantAttack.shotsRemaining > (plant.shooter?.shotsPerBurst ?? 0)) {
+        if (saved.plantAttack?.burst && saved.plantAttack.burst.shotsRemaining > (plant.shooter?.shotsPerBurst ?? 0)) {
             throw new Error(`Saved plant ${saved.entityId} has invalid burst state`)
         }
         if ((saved.plant.ability === undefined) !== (initialPlantAbility(plant) === undefined) ||
@@ -299,7 +290,9 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
     world.add(saved.entityId, PositionComponent, { ...saved.position })
     if (saved.lawnMower) world.add(saved.entityId, LawnMowerComponent, { ...saved.lawnMower })
     if (saved.plant) world.add(saved.entityId, PlantComponent, { ...saved.plant })
-    if (saved.plantAttack) world.add(saved.entityId, PlantAttackComponent, { ...saved.plantAttack })
+    if (saved.plantAttack) world.add(saved.entityId, PlantAttackComponent, {
+        readyAtTick: saved.plantAttack.readyAtTick, ...(saved.plantAttack.burst ? { burst: { ...saved.plantAttack.burst } } : {}),
+    })
     if (saved.zombie) world.add(saved.entityId, ZombieComponent, { ...saved.zombie })
     if (saved.projectile) world.add(saved.entityId, ProjectileComponent, { ...saved.projectile })
     if (saved.item) world.add(saved.entityId, ItemComponent, { ...saved.item })

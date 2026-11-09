@@ -129,7 +129,7 @@ function executeCommand(
                 return debugSuccess(`Seed slot ${slot}: ${EMPTY_SLOT}`)
             }
             // A bank may hold the same seed twice; each slot keeps its own recharge.
-            const packet = bank.packets[slot - 1] ??= { seedId, readyAtTick: tick }
+            const packet = bank.packets[slot - 1] ??= { seedId, readyAtTick: tick, cooldownTotal: 0 }
             packet.seedId = seedId
             packet.readyAtTick = tick
             const team = sideOf(seedId)
@@ -269,7 +269,7 @@ function executeCommand(
             world.add(entityId, PositionComponent, { x, y, row: -1 })
             world.add(entityId, ItemComponent, {
                 typeId, value: 1, state: 'available',
-                velocityX: 0, velocityY: -3, groundY: y + 45, disappearTicks: 0, fadeTicks: 0,
+                velocityX: 0, velocityY: -3, accelerationY: 0, groundY: y + 45, disappearTicks: 0, fadeTicks: 0,
                 width: 50, scale: 1, alpha: 255,
             })
             world.resources.get(WaveResource).index = world.resources.get(WaveResource).plan.length

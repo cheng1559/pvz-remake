@@ -24,7 +24,7 @@ export function placeGrave(world: World, definitions: GameplayDefinitions, row: 
             && plant.column === column) world.destroyEntity(entity)
     }
     const wave = world.resources.get(WaveResource)
-    wave.graves = (wave.graves ?? []).filter(grave => grave.row !== row || grave.column !== column)
+    wave.graves = wave.graves.filter(grave => grave.row !== row || grave.column !== column)
     const grave: GraveSnapshot = { ...createGrave(world, row, column), riseAtTick: tick, ...(team ? { team } : {}) }
     wave.graves.push(grave)
     return grave
@@ -56,7 +56,7 @@ export function updateGraveSpawns(world: World, definitions: GameplayDefinitions
     // Board::UpdateGame stops the rise counter after HasLevelAwardDropped.
     if ([...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === definition.award.id)) return
     const choices = definition.graveZombies!, random = world.resources.get(RandomResource)
-    for (const grave of waves.graves ?? []) {
+    for (const grave of waves.graves) {
         // Board::SpawnZombiesFromGraves skips a grave still rising, before picking its zombie. The level's own graves
         // rose in the intro.
         if ((graveRiseCounter(grave, tick) ?? GRAVE_RISEN_COUNTER) < GRAVE_RISEN_COUNTER) continue

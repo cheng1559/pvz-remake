@@ -72,6 +72,7 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     eating.world.add(plant, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
         recentlyEatenCounter: 0,
+        chilledTicks: 0,
     })
     const eater = spawnZombie(eating.world, definitions, 'pvz:normal', 2, 40, 280)
     for (let tick = 0; tick < 3; tick++) eating.run()
@@ -108,6 +109,7 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     headless.world.add(ignoredPlant, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
         recentlyEatenCounter: 0,
+        chilledTicks: 0,
     })
     const headlessWalker = spawnZombie(headless.world, definitions, 'pvz:normal', 2, 40, 280)
     headless.run()
@@ -176,6 +178,7 @@ test('zombie target cache follows component replacement, mutation and removal', 
     world.add(plant, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0, health: 300, maxHealth: 300,
         recentlyEatenCounter: 0,
+        chilledTicks: 0,
     })
     const zombie = spawnZombie(world, definitions, 'pvz:normal', 2, 70, 280)
     const state = () => world.get(zombie, ZombieComponent)!.state

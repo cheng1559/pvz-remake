@@ -11,7 +11,7 @@ import { attachmentTrack, type ZombiePresentationDefinition } from '@/shared/con
 import type { ZombieDefinition } from '@/shared/content/gameplay'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import type { ZombieFlash } from '@/client/level/EntityFlashes'
-import { MIND_CONTROLLED_RGB, MIRRORED_SHIFT, zombiePartVisibility } from './zombieParts'
+import { MIRRORED_SHIFT, zombiePartVisibility } from './zombieParts'
 
 type AnimationSlot = keyof (PoleVaulterAnimationDefinition & FlagZombieAnimationDefinition)
 const SLOTS: Record<ZombieSnapshot['animation'], AnimationSlot> = {
@@ -403,7 +403,7 @@ export class ZombieView implements ZombieViewInstance {
         }
     }
 
-    private color: 'normal' | 'chilled' | 'burned' | 'mindControlled' = 'normal'
+    private color: 'normal' | 'chilled' | 'burned' = 'normal'
     /** Zombie::IsWalkingBackwards: a zombie on the plants' side faces right. */
     private mirrored = false
 
@@ -434,16 +434,12 @@ export class ZombieView implements ZombieViewInstance {
         }
     }
 
-    /**
-     * Zombie::DrawReanim tints chilled zombies blue, burned ones black and mind-controlled ones ZOMBIE_MINDCONTROLLED_COLOR
-     * (with the same color added, in applyHitFlash).
-     */
+    /** Zombie::DrawReanim tints chilled zombies blue and burned ones black. */
     private applyColor(zombie: ZombieSnapshot, force = false): void {
-        const color = zombie.state === 'burned' ? 'burned' : zombie.mindControlled ? 'mindControlled' : zombie.chilled ? 'chilled' : 'normal'
+        const color = zombie.state === 'burned' ? 'burned' : zombie.chilled ? 'chilled' : 'normal'
         if (!this.player || color === this.color && !force) return
         this.color = color
-        const value = color === 'burned' ? new Color(0, 0, 0) : color === 'mindControlled' ? mindControlledColor()
-            : color === 'chilled' ? new Color(75, 75, 255) : Color.WHITE
+        const value = color === 'burned' ? new Color(0, 0, 0) : color === 'chilled' ? new Color(75, 75, 255) : Color.WHITE
         // The flag is attached to the hand track, so it takes the body's colors.
         this.player.setColorOverride(value)
     }
@@ -458,9 +454,7 @@ export class ZombieView implements ZombieViewInstance {
         // DrawReanim adds the cold tint and then adds the hit highlight on top of it.
         const color = new Color(Math.min(255, grayness + (cold ? 75 : 0)),
             Math.min(255, grayness + (cold ? 75 : 0)), cold ? 255 : grayness, 255)
-        const mindControlled = zombie.mindControlled === true && zombie.state !== 'burned'
-        const enabled = cold || bodyFlash > 0 || mindControlled
-        this.player?.setExtraAdditiveDraw(enabled, mindControlled ? mindControlledColor() : color)
+        this.player?.setExtraAdditiveDraw(cold || bodyFlash > 0, color)
         if (shield && this.player) {
             const burned = zombie.state === 'burned'
             const gray = Math.min(255, flash * 10)
@@ -494,8 +488,6 @@ export class ZombieView implements ZombieViewInstance {
     }
 
 }
-
-const mindControlledColor = (): Color => new Color(...MIND_CONTROLLED_RGB, 255)
 
 /** -1 without the armor or once it is gone, otherwise its damage index (0 whole, 1 below 2/3, 2 below 1/3). */
 function armorStage(health: number | undefined, armor: { readonly health: number } | undefined): number {

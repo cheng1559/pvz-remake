@@ -124,7 +124,7 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                         // Plant::UpdateGraveBuster: the grave and the buster disappear together.
                         if (ability.ticks > 0) break
                         const waves = world.resources.get(WaveResource)
-                        const graves = waves.graves ?? []
+                        const graves = waves.graves
                         waves.graves = graves.filter(grave => grave.row !== position.row || grave.column !== plant.column)
                         const ate = waves.graves.length < graves.length
                         commands.destroyEntity(entity)

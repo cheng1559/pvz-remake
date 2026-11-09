@@ -16,7 +16,7 @@ export function updateSkySun(world: World, commands: CommandBuffer, definitions:
         state.sunAtTick === undefined || tick < state.sunAtTick ||
         [...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === level.definition.award.id)) return false
     spawnSkySun(world, commands, definitions, skySun)
-    const extra = Math.min(525, (state.sunsFallen = (state.sunsFallen ?? 0) + 1) * 10)
+    const extra = Math.min(525, ++state.sunsFallen * 10)
     state.sunAtTick = tick + world.resources.get(RandomResource).integer(425 + extra, 699 + extra)
     return true
 }
@@ -40,6 +40,7 @@ function spawnSkySun(
         state: 'available',
         velocityX: 0,
         velocityY: 0.67,
+        accelerationY: 0,
         width: definition.width,
         groundY: world.resources.get(RandomResource).integer(300, 549),
         disappearTicks: 0,

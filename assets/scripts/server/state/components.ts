@@ -27,8 +27,8 @@ export interface Plant extends EntityBehaviorState {
     ability?: PlantAbility
     /** Its side when not the plants' (see teams.ts). */
     team?: Team
-    /** Ticks left slowed by a hostile snow pea (see plants/chill.ts); omitted when not chilled. */
-    chilledTicks?: number
+    /** Ticks left slowed by a hostile snow pea (see plants/chill.ts); 0 when not chilled. */
+    chilledTicks: number
 }
 
 export type PlantAbilityState =
@@ -47,8 +47,8 @@ export interface PlantAbility {
 
 export interface PlantAttack {
     readyAtTick: number
-    fireAtTick?: number
-    shotsRemaining?: number
+    /** A burst under way: the tick of its next shot and the shots left in it. */
+    burst?: { fireAtTick: number, shotsRemaining: number }
 }
 
 export type ZombieAnimation =
@@ -83,22 +83,16 @@ export interface Zombie extends EntityBehaviorState {
     /** Pole vaulters run with the pole until their single vault. */
     hasPole: boolean
     /** Newspaper gasp and grave emergence progress, persisted with the entity. */
-    enrageTicks?: number
-    riseTicks?: number
+    enrageTicks: number
+    riseTicks: number
     /** Its side when not the zombies': `plants` when mind-controlled or put down on that side (see teams.ts). */
     team?: Team
-    /**
-     * Mind-controlled (Zombie::mMindControlled, by a Hypno-shroom): it looks it, tinted ZOMBIE_MINDCONTROLLED_COLOR and
-     * chewing softly. Its side decides everything else, so a zombie put down on the plants' side is not one.
-     */
-    mindControlled?: true
 }
 
 export interface Projectile {
     typeId: string
     /** The side that fired it, when not the plants'. */
     team?: Team
-    sourcePlantId?: number
     /** Updates left before a limited-lifetime projectile disappears. */
     ticksLeft?: number
 }
@@ -114,7 +108,7 @@ export type SeedSelection = { mode: 'none' } | { mode: 'seed'; slot: number }
 export interface SeedCard { seedId: string, team?: Team }
 
 /** A bank packet: its card and its recharge. */
-export interface SeedPacketState extends SeedCard { readyAtTick: number, cooldownTotal?: number }
+export interface SeedPacketState extends SeedCard { readyAtTick: number, cooldownTotal: number }
 
 /** A packet on the conveyor belt: the belt's own id and position for it, and the card it carries. */
 export interface ConveyorPacketState { id: number; x: number; card: SeedCard }
@@ -159,7 +153,7 @@ export interface EconomyState {
      * Seed-slot upgrades owned (PlayerInfo::mPurchases); the chooser adds a slot for each (Board::GetNumSeedsInBank).
      * From the profile at start; a save keeps the count its bank was chosen with.
      */
-    packetUpgrades?: number
+    packetUpgrades: number
     /** Board::mScoreNextMowerCounter: after the award, ticks until the next unused mower becomes a gold coin. */
     mowerCoinTicks?: number
 }

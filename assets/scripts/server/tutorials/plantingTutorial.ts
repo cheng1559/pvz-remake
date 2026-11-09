@@ -78,13 +78,13 @@ export const plantingTutorial: TutorialScript = {
     },
     sunSpawned(world) {
         const tutorial = world.resources.get(TutorialResource)
-        const displayed = tutorial.displayedAdvice ??= []
+        const displayed = tutorial.displayedAdvice
         if (!displayed.includes('ADVICE_CLICK_ON_SUN')) displayed.push('ADVICE_CLICK_ON_SUN')
         if (tutorial.step === 'first-plant-done') tutorial.step = 'collect-first-sun'
     },
     seedRejected(world, reason) {
         const tutorial = world.resources.get(TutorialResource)
-        if (!tutorial.displayedAdvice?.includes('ADVICE_CLICK_ON_SUN')) return
+        if (!tutorial.displayedAdvice.includes('ADVICE_CLICK_ON_SUN')) return
         const flag = reason === 'seed-not-ready' ? 'seedRefreshAdviceShown' : 'cantAffordAdviceShown'
         if (tutorial[flag]) return
         tutorial[flag] = true

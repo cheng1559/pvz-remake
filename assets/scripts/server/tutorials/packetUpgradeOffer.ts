@@ -20,7 +20,7 @@ export const packetUpgradeOffer: TutorialScript = {
     initialize(world, firstAdventure) {
         const offer = world.resources.has(PacketUpgradeOfferResource) ? world.resources.get(PacketUpgradeOfferResource) : undefined
         const economy = world.resources.get(EconomyStateResource)
-        if (!firstAdventure || !offer || (economy.packetUpgrades ?? 0) > 0 || economy.money < offer.cost) return
+        if (!firstAdventure || !offer || economy.packetUpgrades > 0 || economy.money < offer.cost) return
         const tutorial = world.resources.get(TutorialResource)
         tutorial.step = 'dave-opening'
         tutorial.dialogIndex = PITCH[0]
@@ -36,7 +36,7 @@ export const packetUpgradeOffer: TutorialScript = {
     dialogQuestion(world, definitions) {
         if (world.resources.get(TutorialResource).dialogIndex !== QUESTION) return undefined
         // CutScene: the dialog quotes the price and mPurchases + 7 slots.
-        const slots = definitions.seedBank.baseSlots + (world.resources.get(EconomyStateResource).packetUpgrades ?? 0) + 1
+        const slots = definitions.seedBank.baseSlots + world.resources.get(EconomyStateResource).packetUpgrades + 1
         return { kind: PACKET_UPGRADE_QUESTION, cost: world.resources.get(PacketUpgradeOfferResource).cost, slots }
     },
     answerDialog(world, accept) {
@@ -48,7 +48,7 @@ export const packetUpgradeOffer: TutorialScript = {
             // PlayerInfo::AddCoins(-cost) and mPurchases++; the new slot joins this level's chooser (SeedBank::UpdateWidth).
             const economy = world.resources.get(EconomyStateResource)
             economy.money -= offer.cost
-            economy.packetUpgrades = (economy.packetUpgrades ?? 0) + 1
+            economy.packetUpgrades++
             economy.diamonds = true
             emitServerEvent(events, 'packetUpgradePurchased', { cost: offer.cost, upgrades: economy.packetUpgrades })
             tutorial.dialogIndex = ACCEPTED[0]

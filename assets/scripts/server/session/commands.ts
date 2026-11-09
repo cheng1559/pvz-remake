@@ -43,7 +43,7 @@ export const commands = {
             if (command.packetUpgrades > 0) economy.diamonds = true
             else delete economy.diamonds
             const bank = world.resources.get(SeedBankResource)
-            if (bank.choosing === true && !bank.repick && command.packetUpgrades > (economy.packetUpgrades ?? 0)) {
+            if (bank.choosing === true && !bank.repick && command.packetUpgrades > economy.packetUpgrades) {
                 economy.packetUpgrades = command.packetUpgrades
             }
             return

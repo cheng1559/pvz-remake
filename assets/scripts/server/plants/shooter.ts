@@ -34,8 +34,8 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                 // Mushrooms sleep on day boards.
                 if (!shooter || definition.nocturnal && !level.board.night) continue
 
-                if (attack.fireAtTick !== undefined) {
-                    if (tick < attack.fireAtTick) continue
+                if (attack.burst) {
+                    if (tick < attack.burst.fireAtTick) continue
                     if (shooter.area) {
                         // Plant::Fire for the Fume-shroom: DoRowAreaDamage instead of a projectile.
                         const hits = targetsAhead(world, definitions, position, plant)
@@ -45,8 +45,7 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                         emitServerEvent(world.resources.get(EventQueueResource), 'plantAreaAttack', {
                             plantId: entity, typeId: plant.typeId, hits: hits.zombies.length + hits.plants.length,
                         })
-                        attack.fireAtTick = undefined
-                        attack.shotsRemaining = undefined
+                        delete attack.burst
                         continue
                     }
                     const projectile = commands.createEntity()
@@ -62,7 +61,6 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                     commands.add(projectile, ProjectileComponent, {
                         typeId: shooter.projectile!,
                         ...(plant.team ? { team: plant.team } : {}),
-                        sourcePlantId: entity,
                         ...(lifetime === undefined ? {} : { ticksLeft: lifetime }),
                     })
                     emitServerEvent(world.resources.get(EventQueueResource), 'projectileFired', {
@@ -70,16 +68,13 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                         projectileId: projectile,
                         typeId: shooter.projectile!,
                     })
-                    const shotsRemaining = (attack.shotsRemaining ?? 1) - 1
-                    if (shotsRemaining > 0) {
-                        attack.shotsRemaining = shotsRemaining
-                        attack.fireAtTick = tick + shooter.burstIntervalTicks
+                    if (--attack.burst.shotsRemaining > 0) {
+                        attack.burst.fireAtTick = tick + shooter.burstIntervalTicks
                         emitServerEvent(world.resources.get(EventQueueResource), 'plantFiring', {
                             plantId: entity,
                         })
                     } else {
-                        attack.fireAtTick = undefined
-                        attack.shotsRemaining = undefined
+                        delete attack.burst
                     }
                     continue
                 }
@@ -88,8 +83,7 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                 attack.readyAtTick = tick + world.resources.get(RandomResource).integer(shooter.cadenceTicks.min, shooter.cadenceTicks.max)
                 const ahead = targetsAhead(world, definitions, position, plant)
                 if (!ahead.zombies.length && !ahead.plants.length) continue
-                attack.fireAtTick = tick + shooter.windupTicks - 1
-                attack.shotsRemaining = shooter.shotsPerBurst
+                attack.burst = { fireAtTick: tick + shooter.windupTicks - 1, shotsRemaining: shooter.shotsPerBurst }
                 emitServerEvent(world.resources.get(EventQueueResource), 'plantFiring', {
                     plantId: entity,
                 })

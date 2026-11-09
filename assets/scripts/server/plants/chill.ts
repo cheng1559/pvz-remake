@@ -9,11 +9,11 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
  */
 export function chillPlant(world: World, entity: number, plant: Plant, ticks: number): void {
     if (!plant.chilledTicks) emitServerEvent(world.resources.get(EventQueueResource), 'plantChilled', { entityId: entity })
-    plant.chilledTicks = Math.max(plant.chilledTicks ?? 0, ticks)
+    plant.chilledTicks = Math.max(plant.chilledTicks, ticks)
 }
 
 /** Whether a chilled plant sits out this tick; every plant system reads it after the chill system counted down. */
-export const plantSkipsTick = (plant: Plant): boolean => (plant.chilledTicks ?? 0) % 2 === 1
+export const plantSkipsTick = (plant: Plant): boolean => plant.chilledTicks % 2 === 1
 
 /**
  * Counts chills down before the other plant systems run. On a tick a plant sits out, its shot and production
@@ -28,15 +28,11 @@ export function createPlantChillSystem(): GameSystem {
             for (const entity of world.query(PlantComponent)) {
                 const plant = world.get(entity, PlantComponent)!
                 if (!plant.chilledTicks) continue
-                if (--plant.chilledTicks === 0) {
-                    delete plant.chilledTicks
-                    continue
-                }
-                if (!plantSkipsTick(plant)) continue
+                if (--plant.chilledTicks === 0 || !plantSkipsTick(plant)) continue
                 const timer = world.get(entity, PlantAttackComponent)
                 if (!timer) continue
                 timer.readyAtTick++
-                if (timer.fireAtTick !== undefined) timer.fireAtTick++
+                if (timer.burst) timer.burst.fireAtTick++
             }
         },
     }

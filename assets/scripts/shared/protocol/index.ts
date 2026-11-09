@@ -300,8 +300,6 @@ export interface ZombieSnapshot extends EntityBehaviorState {
     riseTicks?: number
     /** Only on the plants' side: it walks right, facing right. */
     team?: 'plants'
-    /** Mind-controlled: tinted purple and chewing softly. */
-    mindControlled?: true
 }
 
 export interface ProjectileSnapshot {

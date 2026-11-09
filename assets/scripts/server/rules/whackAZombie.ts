@@ -102,7 +102,7 @@ function animateCurve(start: number, end: number, age: number, from: number, to:
 function placeWhackGraves(world: World, count: number, riseAtTick?: number): void {
     const { definition, board } = world.resources.get(LevelStateResource)
     const waves = world.resources.get(WaveResource)
-    const graves = waves.graves ??= []
+    const graves = waves.graves
     const plants = [...world.query(PositionComponent, PlantComponent)]
     const plantsAt = (row: number, column: number) => plants.filter(entity =>
         world.get(entity, PositionComponent)!.row === row && world.get(entity, PlantComponent)!.column === column)
@@ -140,7 +140,7 @@ function createWhackSystem(definitions: GameplayDefinitions): GameSystem {
             const events = world.resources.get(EventQueueResource)
             state.countdown--
             if (state.countdown === 100 && waves.index > 0) {
-                placeWhackGraves(world, Math.max(1, rules.refillGraves - (waves.graves?.length ?? 0)), tick)
+                placeWhackGraves(world, Math.max(1, rules.refillGraves - waves.graves.length), tick)
             }
             if (state.countdown === 5) {
                 // Board::NextWaveComing: the final wave's banner; the awooga first, the siren before the last wave.
@@ -179,7 +179,7 @@ function raiseGroup(world: World, definitions: GameplayDefinitions): void {
         : typeHit < PAIL_CHANCE[phase] + CONE_CHANCE[phase] ? zombies.cone : zombies.plain
     // A grave a grave buster is eating raises nothing.
     const plants = [...world.query(PositionComponent, PlantComponent)]
-    const graves = (waves.graves ?? []).filter(grave => !plants.some(entity => world.get(entity, PositionComponent)!.row === grave.row
+    const graves = waves.graves.filter(grave => !plants.some(entity => world.get(entity, PositionComponent)!.row === grave.row
         && world.get(entity, PlantComponent)!.column === grave.column && definitions.plants[world.get(entity, PlantComponent)!.typeId].graveBuster))
     let maxSpeed = animateCurve(1, 12, wave, 1, 3, true)
     count = Math.min(count, graves.length)

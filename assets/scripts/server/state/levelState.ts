@@ -8,8 +8,8 @@ export interface Item {
     state: 'available' | 'collecting' | 'fading'
     velocityX: number
     velocityY: number
-    accelerationY?: number
-    width?: number
+    accelerationY: number
+    width: number
     groundY: number
     disappearTicks: number
     fadeTicks: number
@@ -31,25 +31,25 @@ export interface TutorialState {
         | 'whack-before-pick-seed' | 'whack-pick-seed' | 'whack-done'
     sunAtTick?: number
     promptAtTick?: number
-    cantAffordAdviceShown?: boolean
-    seedRefreshAdviceShown?: boolean
-    zombieWarningShown?: boolean
-    sunsFallen?: number
-    displayedAdvice?: string[]
+    cantAffordAdviceShown: boolean
+    seedRefreshAdviceShown: boolean
+    zombieWarningShown: boolean
+    sunsFallen: number
+    displayedAdvice: string[]
 }
 
 export interface WaveState {
     index: number
-    graves?: GraveSnapshot[]
+    graves: GraveSnapshot[]
     graveRiseAtTick?: number
     /** Every wave of this game, built when it starts and kept by saves. */
     plan: WavePlan[]
     nextWaveAtTick?: number
     accelerateAtTick?: number
-    zombieIds?: number[]
-    healthToNextWave?: number
-    finalWaveAnnounced?: boolean
-    hugeWaveAnnounced?: boolean
+    zombieIds: number[]
+    healthToNextWave: number
+    finalWaveAnnounced: boolean
+    hugeWaveAnnounced: boolean
     rowPicks?: Array<{ row: number; lastPicked: number; secondLastPicked: number; mowedAtWave?: number }>
     /** What the level's rules keep through the game, in their own format (LevelRuleDefinition.parseState). */
     ruleState?: JsonObject

@@ -9,7 +9,7 @@ const sunflowerCount = (world: World) => [...world.query(PlantComponent)]
     .filter(entity => world.get(entity, PlantComponent)!.typeId === 'pvz:sunflower').length
 
 function advice(world: World, key: string, stay = false): void {
-    const displayed = world.resources.get(TutorialResource).displayedAdvice ??= []
+    const displayed = world.resources.get(TutorialResource).displayedAdvice
     if (displayed.includes(key)) return
     displayed.push(key)
     emitServerEvent(world.resources.get(EventQueueResource), 'advice', { key, style: stay ? 'tutorial-later-stay' : 'tutorial-later' })

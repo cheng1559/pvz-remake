@@ -121,7 +121,7 @@ export function applySeedChoice(world: World, definitions: GameplayDefinitions, 
         if (bank.repick) {
             // Survival's repick: no opening recharge (SeedPacket::SetPacketType), but a card the bank held keeps its own.
             const kept = bank.repick.packets.find(packet => packet?.seedId === command.seedId && packet.team === team)
-            bank.packets.push(kept ? { ...kept } : { seedId: command.seedId, readyAtTick: 0, ...(team ? { team } : {}) })
+            bank.packets.push(kept ? { ...kept } : { seedId: command.seedId, readyAtTick: 0, cooldownTotal: 0, ...(team ? { team } : {}) })
             return
         }
         // Like a planted packet's recharge, the opening recharge is skipped while `/cooldown false` is active.

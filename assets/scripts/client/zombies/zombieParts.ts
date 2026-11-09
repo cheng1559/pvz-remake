@@ -6,9 +6,6 @@ import type { ZombiePresentationDefinition } from '@/shared/content/presentation
  */
 export const MIRRORED_SHIFT = 90
 
-/** Zombie.cpp ZOMBIE_MINDCONTROLLED_COLOR: multiplied over a mind-controlled zombie, and added again. */
-export const MIND_CONTROLLED_RGB = [128, 64, 192] as const
-
 /** What decides which body parts a zombie shows. */
 export interface ZombiePartState {
     hasHead: boolean

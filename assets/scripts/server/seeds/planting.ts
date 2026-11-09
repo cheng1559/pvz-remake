@@ -127,7 +127,7 @@ export const planting = {
         // Board::CanPlantAt: nothing past the level's red line, with ADVICE_NOT_PASSED_LINE once a game.
         const line = level.definition.plantingLine
         if (line && column > line.column) {
-            const displayed = world.resources.get(TutorialResource).displayedAdvice ??= []
+            const displayed = world.resources.get(TutorialResource).displayedAdvice
             if (!displayed.includes('ADVICE_NOT_PASSED_LINE')) {
                 displayed.push('ADVICE_NOT_PASSED_LINE')
                 emitServerEvent(world.resources.get(EventQueueResource), 'advice', { key: 'ADVICE_NOT_PASSED_LINE', style: 'hint' })
@@ -143,7 +143,7 @@ export const planting = {
         if (onGrave !== (seed.placement === 'grave')) {
             // Board::DisplayAdvice remembers the help index for the rest of this game.
             const key = onGrave ? 'ADVICE_PLANT_NOT_ON_GRAVE' : 'ADVICE_GRAVEBUSTERS_ON_GRAVES'
-            const displayed = world.resources.get(TutorialResource).displayedAdvice ??= []
+            const displayed = world.resources.get(TutorialResource).displayedAdvice
             if (!displayed.includes(key)) {
                 displayed.push(key)
                 session.graveAdvice = key
@@ -203,6 +203,7 @@ export const planting = {
             health: definition.maxHealth,
             maxHealth: definition.maxHealth,
             recentlyEatenCounter: 0,
+            chilledTicks: 0,
             ...(behaviorState === undefined ? {} : { behaviorState }),
             ...(team === 'zombies' ? { team } : {}),
         })

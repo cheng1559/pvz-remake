@@ -54,7 +54,7 @@ function game(config = definitions) {
         const definition = config.plants[typeId]
         world.add(entity, PositionComponent, { x: board.origin.x + column * board.cell.width, y: board.origin.y + row * board.cell.height, row })
         world.add(entity, PlantComponent, {
-            typeId, seedId: typeId, column, health: definition.maxHealth, maxHealth: definition.maxHealth, recentlyEatenCounter: 0,
+            typeId, seedId: typeId, column, health: definition.maxHealth, maxHealth: definition.maxHealth, recentlyEatenCounter: 0, chilledTicks: 0,
             ...(initialPlantAbility(definition) ? { ability: initialPlantAbility(definition) } : {}),
         })
         if (definition.shooter) world.add(entity, PlantAttackComponent, { readyAtTick: world.resources.get(RandomResource).integer(

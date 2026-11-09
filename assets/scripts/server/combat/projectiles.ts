@@ -79,7 +79,6 @@ export class ProjectileSystem implements GameSystem {
             targetId: target.entity,
             typeId: projectile.typeId,
             ...(team === 'zombies' ? { team } : {}),
-            ...(projectile.sourcePlantId === undefined ? {} : { sourcePlantId: projectile.sourcePlantId }),
             x: position.x,
             y: position.y,
         }

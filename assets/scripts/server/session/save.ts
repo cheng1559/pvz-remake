@@ -49,7 +49,7 @@ export interface ServerSaveSnapshot {
     allocator: EntityAllocatorSnapshot
     random: DeterministicRngState
     level: { phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean }
-    economy: { sun: number, money: number, pendingSunSpend: number, packetUpgrades?: number }
+    economy: { sun: number, money: number, pendingSunSpend: number, packetUpgrades: number }
     /** Crazy Dave's seed-slot offer of a game started with one, so a restored intro can still sell it. */
     packetUpgradeOffer?: { cost: number }
     seedBank: SeedBankState
@@ -91,15 +91,15 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         paused: boolean(levelSource.paused, 'server save.level.paused'),
     }
 
-    const economySource = optionalExact(save.economy, ['sun', 'money', 'pendingSunSpend'], ['firstCoinDropped', 'mowerCoinTicks', 'diamonds', 'packetUpgrades'], 'server save.economy')
+    const economySource = optionalExact(save.economy, ['sun', 'money', 'pendingSunSpend', 'packetUpgrades'], ['firstCoinDropped', 'mowerCoinTicks', 'diamonds'], 'server save.economy')
     const economy = {
         sun: integer(economySource.sun, 'server save.economy.sun'),
         money: integer(economySource.money, 'server save.economy.money'),
         pendingSunSpend: integer(economySource.pendingSunSpend, 'server save.economy.pendingSunSpend'),
+        packetUpgrades: nonNegativeInteger(economySource.packetUpgrades, 'server save.economy.packetUpgrades'),
         ...(economySource.firstCoinDropped === undefined ? {} : { firstCoinDropped: trueFlag(economySource.firstCoinDropped, 'server save.economy.firstCoinDropped') }),
         ...(economySource.diamonds === undefined ? {} : { diamonds: trueFlag(economySource.diamonds, 'server save.economy.diamonds') }),
         ...(economySource.mowerCoinTicks === undefined ? {} : { mowerCoinTicks: nonNegativeInteger(economySource.mowerCoinTicks, 'server save.economy.mowerCoinTicks') }),
-        ...(economySource.packetUpgrades === undefined ? {} : { packetUpgrades: nonNegativeInteger(economySource.packetUpgrades, 'server save.economy.packetUpgrades') }),
     }
     const seedBank = parseSeedBank(save.seedBank)
     const tutorial = parseTutorial(save.tutorial)
@@ -167,11 +167,11 @@ function parseSeedBank(value: unknown): SeedBankState {
         default: throw new Error('Invalid saved selection')
     }
     const parsePacket = (value: unknown, name: string): SeedPacketState => {
-        const packet = optionalExact(value, ['seedId', 'readyAtTick'], ['cooldownTotal', 'team'], name)
+        const packet = optionalExact(value, ['seedId', 'readyAtTick', 'cooldownTotal'], ['team'], name)
         return {
             seedId: nonEmptyString(packet.seedId, `${name}.seedId`),
             readyAtTick: nonNegativeInteger(packet.readyAtTick, `${name}.readyAtTick`),
-            ...(packet.cooldownTotal === undefined ? {} : { cooldownTotal: nonNegativeInteger(packet.cooldownTotal, `${name}.cooldownTotal`) }),
+            cooldownTotal: nonNegativeInteger(packet.cooldownTotal, `${name}.cooldownTotal`),
             ...(packet.team === undefined ? {} : { team: team(packet.team, `${name}.team`) }),
         }
     }
@@ -205,8 +205,8 @@ function parseSeedBank(value: unknown): SeedBankState {
 function parseTutorial(value: unknown): TutorialState {
     const source = optionalExact(
         value,
-        ['firstAdventure', 'step'],
-        ['sunAtTick', 'promptAtTick', 'cantAffordAdviceShown', 'seedRefreshAdviceShown', 'zombieWarningShown', 'sunsFallen', 'displayedAdvice', 'dialogIndex'],
+        ['firstAdventure', 'step', 'cantAffordAdviceShown', 'seedRefreshAdviceShown', 'zombieWarningShown', 'sunsFallen', 'displayedAdvice'],
+        ['sunAtTick', 'promptAtTick', 'dialogIndex'],
         'server save.tutorial',
     )
     if (source.step !== 'pick-first-seed' && source.step !== 'plant-first-seed' &&
@@ -222,29 +222,19 @@ function parseTutorial(value: unknown): TutorialState {
     const result: TutorialState = {
         firstAdventure: boolean(source.firstAdventure, 'server save.tutorial.firstAdventure'),
         step: source.step as TutorialState['step'],
+        cantAffordAdviceShown: boolean(source.cantAffordAdviceShown, 'server save.tutorial.cantAffordAdviceShown'),
+        seedRefreshAdviceShown: boolean(source.seedRefreshAdviceShown, 'server save.tutorial.seedRefreshAdviceShown'),
+        zombieWarningShown: boolean(source.zombieWarningShown, 'server save.tutorial.zombieWarningShown'),
+        sunsFallen: nonNegativeInteger(source.sunsFallen, 'server save.tutorial.sunsFallen'),
+        displayedAdvice: array(source.displayedAdvice, 'server save.tutorial.displayedAdvice')
+            .map(value => nonEmptyString(value, 'server save.tutorial.displayedAdvice[]')),
         ...(source.dialogIndex === undefined ? {} : { dialogIndex: nonNegativeInteger(source.dialogIndex, 'tutorial.dialogIndex') }),
     }
-    if (source.zombieWarningShown !== undefined) result.zombieWarningShown = boolean(source.zombieWarningShown, 'server save.tutorial.zombieWarningShown')
-    if (source.sunsFallen !== undefined) result.sunsFallen = nonNegativeInteger(source.sunsFallen, 'server save.tutorial.sunsFallen')
-    if (source.displayedAdvice !== undefined) result.displayedAdvice = array(source.displayedAdvice, 'server save.tutorial.displayedAdvice')
-        .map(value => nonEmptyString(value, 'server save.tutorial.displayedAdvice[]'))
     if (source.sunAtTick !== undefined) {
         result.sunAtTick = nonNegativeInteger(source.sunAtTick, 'server save.tutorial.sunAtTick')
     }
     if (source.promptAtTick !== undefined) {
         result.promptAtTick = nonNegativeInteger(source.promptAtTick, 'server save.tutorial.promptAtTick')
-    }
-    if (source.cantAffordAdviceShown !== undefined) {
-        result.cantAffordAdviceShown = boolean(
-            source.cantAffordAdviceShown,
-            'server save.tutorial.cantAffordAdviceShown',
-        )
-    }
-    if (source.seedRefreshAdviceShown !== undefined) {
-        result.seedRefreshAdviceShown = boolean(
-            source.seedRefreshAdviceShown,
-            'server save.tutorial.seedRefreshAdviceShown',
-        )
     }
     return result
 }
@@ -252,8 +242,8 @@ function parseTutorial(value: unknown): TutorialState {
 function parseWave(value: unknown): WaveState {
     const source = optionalExact(
         value,
-        ['index', 'plan'],
-        ['nextWaveAtTick', 'accelerateAtTick', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced', 'rowPicks', 'graves', 'graveRiseAtTick', 'ruleState'],
+        ['index', 'plan', 'graves', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced'],
+        ['nextWaveAtTick', 'accelerateAtTick', 'rowPicks', 'graveRiseAtTick', 'ruleState'],
         'server save.wave',
     )
     const plan = array(source.plan, 'server save.wave.plan').map((value, index) => {
@@ -261,36 +251,36 @@ function parseWave(value: unknown): WaveState {
         return { zombies: array(wave.zombies, `server save.wave.plan[${index}].zombies`).map(id => nonEmptyString(id, 'wave zombie ID')),
             ...(wave.flagWave === undefined ? {} : { flagWave: trueFlag(wave.flagWave, `server save.wave.plan[${index}].flagWave`) }) }
     })
-    const result: WaveState = { index: nonNegativeInteger(source.index, 'server save.wave.index'), plan }
+    const graves = array(source.graves, 'wave.graves').map(value => {
+        const grave = optionalExact(value, ['column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], ['special', 'riseAtTick', 'team'], 'grave')
+        const result = { column: nonNegativeInteger(grave.column, 'grave.column'), row: nonNegativeInteger(grave.row, 'grave.row'),
+            variant: integer(grave.variant, 'grave.variant'), riseDelay: integer(grave.riseDelay, 'grave.riseDelay'),
+            offsetX: integer(grave.offsetX, 'grave.offsetX'), offsetY: integer(grave.offsetY, 'grave.offsetY'),
+            ...(grave.special === undefined ? {} : { special: trueFlag(grave.special, 'grave.special') }),
+            ...(grave.riseAtTick === undefined ? {} : { riseAtTick: nonNegativeInteger(grave.riseAtTick, 'grave.riseAtTick') }),
+            ...(grave.team === undefined ? {} : { team: plantsTeam(grave.team, 'grave.team') }) }
+        checkGraveRanges(result, 'grave')
+        return result
+    })
+    if (new Set(graves.map(grave => `${grave.column}:${grave.row}`)).size !== graves.length) throw new TypeError('Duplicate graves')
+    const result: WaveState = {
+        index: nonNegativeInteger(source.index, 'server save.wave.index'),
+        graves,
+        plan,
+        zombieIds: array(source.zombieIds, 'server save.wave.zombieIds').map((id, index) =>
+            positiveInteger(id, `server save.wave.zombieIds[${index}]`)),
+        healthToNextWave: nonNegativeFinite(source.healthToNextWave, 'server save.wave.healthToNextWave'),
+        finalWaveAnnounced: boolean(source.finalWaveAnnounced, 'server save.wave.finalWaveAnnounced'),
+        hugeWaveAnnounced: boolean(source.hugeWaveAnnounced, 'server save.wave.hugeWaveAnnounced'),
+    }
     if (source.graveRiseAtTick !== undefined) result.graveRiseAtTick = nonNegativeInteger(source.graveRiseAtTick, 'wave.graveRiseAtTick')
     // The level's rules check their own state when the session is restored.
     if (source.ruleState !== undefined) result.ruleState = jsonRoundTrip(record(source.ruleState, 'server save.wave.ruleState')) as JsonObject
-    if (source.graves !== undefined) {
-        result.graves = array(source.graves, 'wave.graves').map(value => {
-            const grave = optionalExact(value, ['column', 'row', 'variant', 'riseDelay', 'offsetX', 'offsetY'], ['special', 'riseAtTick', 'team'], 'grave')
-            const result = { column: nonNegativeInteger(grave.column, 'grave.column'), row: nonNegativeInteger(grave.row, 'grave.row'),
-                variant: integer(grave.variant, 'grave.variant'), riseDelay: integer(grave.riseDelay, 'grave.riseDelay'),
-                offsetX: integer(grave.offsetX, 'grave.offsetX'), offsetY: integer(grave.offsetY, 'grave.offsetY'),
-                ...(grave.special === undefined ? {} : { special: trueFlag(grave.special, 'grave.special') }),
-                ...(grave.riseAtTick === undefined ? {} : { riseAtTick: nonNegativeInteger(grave.riseAtTick, 'grave.riseAtTick') }),
-                ...(grave.team === undefined ? {} : { team: plantsTeam(grave.team, 'grave.team') }) }
-            checkGraveRanges(result, 'grave')
-            return result
-        })
-        if (new Set(result.graves.map(grave => `${grave.column}:${grave.row}`)).size !== result.graves.length) throw new TypeError('Duplicate graves')
-    }
     if (source.nextWaveAtTick !== undefined) {
         result.nextWaveAtTick = nonNegativeInteger(source.nextWaveAtTick, 'server save.wave.nextWaveAtTick')
     }
     if (source.accelerateAtTick !== undefined) {
         result.accelerateAtTick = nonNegativeInteger(source.accelerateAtTick, 'server save.wave.accelerateAtTick')
-    }
-    if (source.zombieIds !== undefined) {
-        result.zombieIds = array(source.zombieIds, 'server save.wave.zombieIds').map((id, index) =>
-            positiveInteger(id, `server save.wave.zombieIds[${index}]`))
-    }
-    if (source.healthToNextWave !== undefined) {
-        result.healthToNextWave = nonNegativeFinite(source.healthToNextWave, 'server save.wave.healthToNextWave')
     }
     if (source.rowPicks !== undefined) {
         result.rowPicks = array(source.rowPicks, 'server save.wave.rowPicks').map((value, index) => {
@@ -304,10 +294,6 @@ function parseWave(value: unknown): WaveState {
             }
         })
         if (new Set(result.rowPicks.map(row => row.row)).size !== result.rowPicks.length) throw new TypeError('Saved wave row history contains duplicate rows')
-    }
-    if (source.hugeWaveAnnounced !== undefined) result.hugeWaveAnnounced = boolean(source.hugeWaveAnnounced, 'server save.wave.hugeWaveAnnounced')
-    if (source.finalWaveAnnounced !== undefined) {
-        result.finalWaveAnnounced = boolean(source.finalWaveAnnounced, 'server save.wave.finalWaveAnnounced')
     }
     return result
 }
@@ -385,7 +371,7 @@ const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
 ]
 
 function parsePlant(value: unknown, name: string): Plant {
-    const source = optionalExact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter'], ['ability', 'behaviorState', 'team', 'chilledTicks'], name)
+    const source = optionalExact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], ['ability', 'behaviorState', 'team'], name)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
     if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
@@ -396,9 +382,9 @@ function parsePlant(value: unknown, name: string): Plant {
         health,
         maxHealth,
         recentlyEatenCounter: nonNegativeInteger(source.recentlyEatenCounter, `${name}.recentlyEatenCounter`),
+        chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
         ...(source.ability === undefined ? {} : { ability: parsePlantAbility(source.ability, `${name}.ability`) }),
         ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
-        ...(source.chilledTicks === undefined ? {} : { chilledTicks: positiveInteger(source.chilledTicks, `${name}.chilledTicks`) }),
         ...parseBehaviorState(source, name),
     }
 }
@@ -414,13 +400,15 @@ function parsePlantAbility(value: unknown, name: string): PlantAbility {
 }
 
 function parsePlantAttack(value: unknown, name: string): PlantAttack {
-    const source = optionalExact(value, ['readyAtTick'], ['fireAtTick', 'shotsRemaining'], name)
-    const attack: PlantAttack = { readyAtTick: nonNegativeInteger(source.readyAtTick, `${name}.readyAtTick`) }
-    if (source.fireAtTick !== undefined) attack.fireAtTick = nonNegativeInteger(source.fireAtTick, `${name}.fireAtTick`)
-    if (source.shotsRemaining !== undefined) {
-        attack.shotsRemaining = positiveInteger(source.shotsRemaining, `${name}.shotsRemaining`)
+    const source = optionalExact(value, ['readyAtTick'], ['burst'], name)
+    const burst = source.burst === undefined ? undefined : exact(source.burst, ['fireAtTick', 'shotsRemaining'], `${name}.burst`)
+    return {
+        readyAtTick: nonNegativeInteger(source.readyAtTick, `${name}.readyAtTick`),
+        ...(burst === undefined ? {} : { burst: {
+            fireAtTick: nonNegativeInteger(burst.fireAtTick, `${name}.burst.fireAtTick`),
+            shotsRemaining: positiveInteger(burst.shotsRemaining, `${name}.burst.shotsRemaining`),
+        } }),
     }
-    return attack
 }
 
 const ZOMBIE_STATES: readonly Zombie['state'][] = ['walking', 'eating', 'vaulting', 'dying', 'burned', 'mowered']
@@ -432,8 +420,8 @@ function parseZombie(value: unknown, name: string): Zombie {
     const source = optionalExact(value, [
         'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
         'moweredTicksRemaining', 'walkAnimation', 'animation', 'animationTime', 'animationSpeed', 'hasHead', 'hasArm',
-        'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'hasPole',
-    ], ['behaviorState', 'enrageTicks', 'riseTicks', 'droppedLoot', 'team', 'mindControlled'], name)
+        'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'hasPole', 'enrageTicks', 'riseTicks',
+    ], ['behaviorState', 'droppedLoot', 'team'], name)
     if (!ZOMBIE_STATES.includes(source.state as Zombie['state'])) throw new TypeError(`${name}.state is unknown`)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
@@ -468,36 +456,33 @@ function parseZombie(value: unknown, name: string): Zombie {
         shieldHealth: nonNegativeInteger(source.shieldHealth, `${name}.shieldHealth`),
         chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
         hasPole: boolean(source.hasPole, `${name}.hasPole`),
-        ...(source.enrageTicks === undefined ? {} : { enrageTicks: nonNegativeFinite(source.enrageTicks, `${name}.enrageTicks`) }),
-        ...(source.riseTicks === undefined ? {} : { riseTicks: positiveInteger(source.riseTicks, `${name}.riseTicks`) }),
+        enrageTicks: nonNegativeFinite(source.enrageTicks, `${name}.enrageTicks`),
+        riseTicks: nonNegativeInteger(source.riseTicks, `${name}.riseTicks`),
         ...(source.droppedLoot === undefined ? {} : { droppedLoot: trueFlag(source.droppedLoot, `${name}.droppedLoot`) }),
         ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
-        ...(source.mindControlled === undefined ? {} : { mindControlled: trueFlag(source.mindControlled, `${name}.mindControlled`) }),
         ...parseBehaviorState(source, name),
     }
 }
 
 function parseProjectile(value: unknown, name: string): Projectile {
-    const source = optionalExact(value, ['typeId'], ['sourcePlantId', 'ticksLeft', 'team'], name)
+    const source = optionalExact(value, ['typeId'], ['ticksLeft', 'team'], name)
     return {
         typeId: nonEmptyString(source.typeId, `${name}.typeId`),
         ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
         ...(source.ticksLeft === undefined ? {} : { ticksLeft: positiveInteger(source.ticksLeft, `${name}.ticksLeft`) }),
-        ...(source.sourcePlantId === undefined ? {} : {
-            sourcePlantId: positiveInteger(source.sourcePlantId, `${name}.sourcePlantId`),
-        }),
     }
 }
 
 function parseItem(value: unknown, name: string): Item {
     const source = optionalExact(value, [
-        'typeId', 'value', 'state', 'velocityX', 'velocityY', 'groundY', 'disappearTicks', 'fadeTicks', 'scale', 'alpha',
-    ], ['accelerationY', 'width', 'landed', 'arrow'], name)
+        'typeId', 'value', 'state', 'velocityX', 'velocityY', 'accelerationY', 'width', 'groundY', 'disappearTicks', 'fadeTicks',
+        'scale', 'alpha',
+    ], ['landed', 'arrow'], name)
     if (source.state !== 'available' && source.state !== 'collecting' && source.state !== 'fading') {
         throw new TypeError(`${name}.state is unknown`)
     }
     const alpha = nonNegativeInteger(source.alpha, `${name}.alpha`)
-    const width = source.width === undefined ? undefined : nonNegativeFinite(source.width, `${name}.width`)
+    const width = nonNegativeFinite(source.width, `${name}.width`)
     if (alpha > 255) throw new TypeError(`${name}.alpha must not exceed 255`)
     if (width === 0) throw new TypeError(`${name}.width must be positive`)
     return {
@@ -506,10 +491,8 @@ function parseItem(value: unknown, name: string): Item {
         state: source.state,
         velocityX: finite(source.velocityX, `${name}.velocityX`),
         velocityY: finite(source.velocityY, `${name}.velocityY`),
-        ...(source.accelerationY === undefined ? {} : {
-            accelerationY: finite(source.accelerationY, `${name}.accelerationY`),
-        }),
-        ...(width === undefined ? {} : { width }),
+        accelerationY: finite(source.accelerationY, `${name}.accelerationY`),
+        width,
         groundY: nonNegativeFinite(source.groundY, `${name}.groundY`),
         disappearTicks: nonNegativeInteger(source.disappearTicks, `${name}.disappearTicks`),
         fadeTicks: nonNegativeInteger(source.fadeTicks, `${name}.fadeTicks`),

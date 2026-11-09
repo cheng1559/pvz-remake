@@ -15,7 +15,6 @@ import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
 import { plantDefinition } from '@/client/plants/definitions'
 import type { ZombieViewInstance, ZombieViewSprites } from '@/client/zombies/ZombieView'
-import { MIND_CONTROLLED_RGB } from '@/client/zombies/zombieParts'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { zombieDefinition } from '@/client/zombies/definitions'
 import type { PlantView } from '@/client/plants/PlantView'
@@ -238,8 +237,7 @@ export class LevelEntityRenderer {
                 this.zombies.get(entityId)?.sync(zombie, snapshot, this.flashes.zombie(entityId, snapshot.gameplayTick))
             }
             const row = zombie?.row ?? (typeof event.data.row === 'number' ? event.data.row : 0)
-            this.spawnZombiePart(entityId, part, event.data.mowered === true, row, zombie?.chilled === true, zombie?.mindControlled === true,
-                zombie?.team === 'plants')
+            this.spawnZombiePart(entityId, part, event.data.mowered === true, row, zombie?.chilled === true, zombie?.team === 'plants')
         }
         for (const id of changes.removed) this.remove(id)
         for (const id of changes.added) {
@@ -459,8 +457,6 @@ export class LevelEntityRenderer {
             x: local?.x ?? node.position.x + mirrorX(helm.offset[0], ZOMBIE_WIDTH, mirrored), y: local?.y ?? node.position.y + helm.offset[1],
             // Zombie::DropHelm and DropShield: one above the zombie.
             renderOrder: this.zombieOrder(zombie?.row ?? 0) + 1,
-            // Zombie::OverrideParticleColor: a mind-controlled zombie's armor keeps its color.
-            ...(zombie?.mindControlled ? { tint: new Color(...MIND_CONTROLLED_RGB, 255), extraAdditive: true } : {}),
             mirrored,
         })
     }
@@ -603,7 +599,7 @@ export class LevelEntityRenderer {
     }
 
     /** `mirrored`: a zombie facing right, whose part flies off the way it faces, as its body is drawn. */
-    private spawnZombiePart(entityId: number, part: 'head' | 'arm' | 'flag', mowered: boolean, row: number, chilled: boolean, mindControlled: boolean,
+    private spawnZombiePart(entityId: number, part: 'head' | 'arm' | 'flag', mowered: boolean, row: number, chilled: boolean,
         mirrored: boolean): void {
         const node = this.entities.get(entityId)
         if (!node) return
@@ -621,9 +617,9 @@ export class LevelEntityRenderer {
             renderOrder: this.zombieOrder(row) + 1,
             // Zombie::DropHead and DropArm swap in the pole vaulter's own head and a bare hand.
             spriteOverride: drop.image,
-            // Zombie::OverrideParticleColor keeps a chilled zombie's parts blue and a mind-controlled one's purple.
-            tint: mindControlled ? new Color(...MIND_CONTROLLED_RGB, 255) : chilled ? new Color(75, 75, 255, 255) : undefined,
-            extraAdditive: chilled || mindControlled,
+            // Zombie::OverrideParticleColor keeps a chilled zombie's parts blue.
+            tint: chilled ? new Color(75, 75, 255, 255) : undefined,
+            extraAdditive: chilled,
             // The original keeps the part's flight for a mind-controlled zombie; here it follows the zombie's facing.
             mirrored,
         })

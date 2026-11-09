@@ -300,22 +300,22 @@ test('collecting the award keeps existing entity updates running while spawning 
     world.add(plantId, PositionComponent, { x: 40, y: 280, row: 2 })
     world.add(plantId, PlantComponent, {
         typeId: 'pvz:peashooter', seedId: 'pvz:peashooter', column: 0,
-        health: 300, maxHealth: 300, recentlyEatenCounter: 0,
+        health: 300, maxHealth: 300, recentlyEatenCounter: 0, chilledTicks: 0,
     })
-    world.add(plantId, PlantAttackComponent, { readyAtTick: 150, fireAtTick: 2, shotsRemaining: 1 })
+    world.add(plantId, PlantAttackComponent, { readyAtTick: 150, burst: { fireAtTick: 2, shotsRemaining: 1 } })
     const corpseId = spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250)
     damageZombie(world, definitions, corpseId, 270)
     world.resources.get(TutorialResource).sunAtTick = 1
     const sunId = world.createEntity()
     world.add(sunId, PositionComponent, { x: 300, y: 300, row: -1 })
     world.add(sunId, ItemComponent, {
-        typeId: 'pvz:sun', value: 25, state: 'available', velocityX: 0, velocityY: 0,
+        typeId: 'pvz:sun', value: 25, state: 'available', velocityX: 0, velocityY: 0, accelerationY: 0, width: 60,
         groundY: 300, disappearTicks: 0, fadeTicks: 0, scale: 1, alpha: 255,
     })
     const awardId = world.createEntity()
     world.add(awardId, PositionComponent, { x: 400, y: 300, row: -1 })
     world.add(awardId, ItemComponent, {
-        typeId: 'pvz:sunflower', value: 1, state: 'available', velocityX: 0, velocityY: 0,
+        typeId: 'pvz:sunflower', value: 1, state: 'available', velocityX: 0, velocityY: 0, accelerationY: 0, width: 60,
         groundY: 300, disappearTicks: 0, fadeTicks: 0, scale: 1, alpha: 255,
     })
 

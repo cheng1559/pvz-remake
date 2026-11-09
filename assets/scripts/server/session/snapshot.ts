@@ -34,17 +34,15 @@ export const snapshot = {
                 selected,
                 cooldownRemaining,
                 availability: planting.seedAvailability(session, packet.seedId, undefined, slot),
-                cooldownTotal: cooldownRemaining === 0
-                    ? 0
-                    : packet.cooldownTotal ?? definitions.seeds[packet.seedId].cooldownTicks,
+                cooldownTotal: cooldownRemaining === 0 ? 0 : packet.cooldownTotal,
             }
         })
         const plants = [...world.query(PositionComponent, PlantComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
-            const plant = world.get(entity, PlantComponent)!
+            const { chilledTicks, ...plant } = world.get(entity, PlantComponent)!
             const production = definitions.plants[plant.typeId].producer && world.get(entity, PlantAttackComponent)
             return {
-                entityId: entity, ...plant, ...position,
+                entityId: entity, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...position,
                 ...(plant.ability ? { ability: { ...plant.ability } } : {}),
                 ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
                 ...(definitions.plants[plant.typeId].nocturnal && !level.board.night ? { asleep: true as const } : {}),
@@ -72,7 +70,6 @@ export const snapshot = {
                 shieldHealth: zombie.shieldHealth,
                 chilled: zombie.chilledTicks > 0,
                 ...(zombie.team === 'plants' ? { team: 'plants' as const } : {}),
-                ...(zombie.mindControlled ? { mindControlled: true as const } : {}),
                 hasPole: zombie.hasPole,
                 ...(zombie.riseTicks ? { riseTicks: zombie.riseTicks } : {}),
                 ...(definitions.zombies[zombie.typeId].enrage && zombie.shieldHealth === 0 ? { enraged: true } : {}),
@@ -136,7 +133,7 @@ export const snapshot = {
             conveyorPackets: seedBank.conveyor?.packets.map(packet => ({ id: packet.id, x: packet.x, ...packet.card,
                 selected: seedBank.selection.mode === 'conveyor' && packet.id === seedBank.selection.packetId,
                 availability: planting.seedAvailability(session, packet.card.seedId, packet.id) })) ?? [],
-            ...(waves.graves ? { graves: waves.graves.map(grave => ({ ...grave })) } : {}),
+            ...(waves.graves.length ? { graves: waves.graves.map(grave => ({ ...grave })) } : {}),
             plants,
             zombies,
             projectiles,

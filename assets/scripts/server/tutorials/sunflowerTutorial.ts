@@ -71,7 +71,7 @@ function update(world: World, tick: number): void {
         tutorial.promptAtTick = undefined
     }
     const waves = world.resources.get(WaveResource)
-    if (!tutorial.zombieWarningShown && waves.index === 0 && tick >= (waves.nextWaveAtTick ?? 5000) - 750) {
+    if (!tutorial.zombieWarningShown && waves.index === 0 && tick >= waves.nextWaveAtTick! - 750) {
         tutorial.zombieWarningShown = true
         advice(world, 'ADVICE_PLANT_SUNFLOWER3')
     }

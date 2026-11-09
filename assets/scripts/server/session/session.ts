@@ -143,7 +143,8 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         sun: Math.min(definitions.economy.maxSun, level.startingSun),
         money: packet.initialMoney,
         pendingSunSpend: 0,
-        ...(packet.packetUpgrades ? { diamonds: true as const, packetUpgrades: packet.packetUpgrades } : {}),
+        packetUpgrades: packet.packetUpgrades ?? 0,
+        ...(packet.packetUpgrades ? { diamonds: true as const } : {}),
     })
     if (packet.packetUpgradeOffer) world.resources.set(PacketUpgradeOfferResource, { ...packet.packetUpgradeOffer })
     world.resources.set(RandomResource, new DeterministicRng(packet.randomSeed))

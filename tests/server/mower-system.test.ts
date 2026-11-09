@@ -49,7 +49,7 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
         moweredTicksRemaining: 0,
         walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
         hasHead: false, hasTongue: false, hasArm: true, groanCounter: 300,
-        helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false,
+        helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
     })
     schedule.run(world, 2)
     assert.equal(world.get(mowerEntity, LawnMowerComponent)!.state, 'ready')
@@ -72,7 +72,7 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
         moweredTicksRemaining: 0,
         walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
         hasHead: true, hasTongue: false, hasArm: true, groanCounter: 300,
-        helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false,
+        helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
     })
     schedule.run(world, 4)
     assert.equal(world.hasEntity(secondZombie), true)
@@ -123,7 +123,7 @@ test('Zombie::MowDown drops a worn helm or shield before the mowed animation', (
             moweredTicksRemaining: 0, walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
             hasHead: true, hasTongue: false, hasArm: true, groanCounter: 300,
             helmHealth: definitions.zombies[typeId].helm?.health ?? 0, shieldHealth: definitions.zombies[typeId].shield?.health ?? 0,
-            chilledTicks: 0, hasPole: false,
+            chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
         })
         return entity
     })

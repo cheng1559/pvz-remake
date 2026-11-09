@@ -367,12 +367,6 @@ test('a zombie seed puts a zombie into any cell of an active row, of the zombies
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 5 }), undefined)
     const ally = zombies(server).at(-1)!
     assert.equal(ally.team, 'plants', 'a packet of the plants’ side puts down a zombie of that side')
-    assert.equal(ally.mindControlled, undefined, 'one put down on the plants’ side is not mind-controlled, so it is not tinted')
-    const allyEntity = [...world(server).query(ZombieComponent)].find(entity => entity === ally.entityId)!
-    world(server).get(allyEntity, ZombieComponent)!.mindControlled = true
-    assert.equal(zombies(server).at(-1)!.mindControlled, true, 'a mind-controlled zombie shows it')
-    server.start({ ...options, save: server.save() as unknown as JsonValue })
-    assert.equal(zombies(server).find(zombie => zombie.team === 'plants')!.mindControlled, true, 'and keeps it through a save')
     debug(server, '/sun set 500')
     debug(server, '/seed 1 normal zombies')
     assert.equal(server.snapshot().seedPackets[0]!.team, undefined, 'its own side is not stored')

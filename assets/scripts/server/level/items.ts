@@ -94,7 +94,7 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                 if (position.y + item.velocityY < item.groundY) {
                     moveItemWithinHorizontalBounds(world, position, item)
                     position.y += item.velocityY
-                    item.velocityY += item.accelerationY ?? 0
+                    item.velocityY += item.accelerationY
                     continue
                 }
                 position.y = item.groundY
@@ -116,7 +116,7 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
 function moveItemWithinHorizontalBounds(world: World, position: Position, item: Item): void {
     position.x += item.velocityX
     const bounds = world.resources.get(LevelStateResource).board.bounds
-    const maxX = bounds.right - (item.width ?? 60)
+    const maxX = bounds.right - item.width
     if (position.x > maxX) {
         position.x = maxX
         item.velocityX = -0.4 - world.resources.get(RandomResource).nextFloat() * 0.4

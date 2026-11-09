@@ -41,8 +41,8 @@ function setup() {
     })
     world.resources.set(RandomResource, new DeterministicRng(1))
     world.resources.set(EventQueueResource, createEventQueue())
-    world.resources.set(EconomyStateResource, { sun: definition.startingSun, money: 0, pendingSunSpend: 0 })
-    world.resources.set(SeedBankResource, { selection: { mode: 'none' }, packets: [{ seedId: 'pvz:peashooter', readyAtTick: 0 }] })
+    world.resources.set(EconomyStateResource, { sun: definition.startingSun, money: 0, pendingSunSpend: 0, packetUpgrades: 0 })
+    world.resources.set(SeedBankResource, { selection: { mode: 'none' }, packets: [{ seedId: 'pvz:peashooter', readyAtTick: 0, cooldownTotal: 0 }] })
     const gameplay = new GameplayRegistry()
     gameplay.freeze(definitions)
     initializeLevel(world, true, definitions, gameplay.levelRules)
@@ -62,6 +62,7 @@ function addPlant(world: World, column: number) {
         health: 300,
         maxHealth: 300,
         recentlyEatenCounter: 0,
+        chilledTicks: 0,
     })
 }
 

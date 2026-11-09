@@ -18,13 +18,22 @@ export function initializeLevel(world: World, firstAdventure: boolean, definitio
     world.resources.set(TutorialResource, {
         firstAdventure,
         step: 'complete',
+        cantAffordAdviceShown: false,
+        seedRefreshAdviceShown: false,
+        zombieWarningShown: false,
+        sunsFallen: 0,
+        displayedAdvice: [],
         ...(blocked || !level.skySun ? {} : { sunAtTick: world.resources.get(RandomResource).integer(425, 699) }),
     })
     world.resources.set(WaveResource, {
         index: 0,
-        ...(level.graves ? { graves: createGraves(world) } : {}),
+        graves: level.graves ? createGraves(world) : [],
         nextWaveAtTick: blocked ? undefined : level.firstWaveTicks ?? 1,
         plan: planWaves(rules.draft(level, definitions), level, world.resources.get(RandomResource)),
+        zombieIds: [],
+        healthToNextWave: 0,
+        finalWaveAnnounced: false,
+        hugeWaveAnnounced: false,
         ...(level.activeRows.length > 1 ? {
             rowPicks: level.activeRows.map(row => ({ row, lastPicked: 0, secondLastPicked: 0 })),
         } : {}),

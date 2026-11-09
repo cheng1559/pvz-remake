@@ -32,7 +32,7 @@ export function tryDropLevelAward(world: World, definitions: GameplayDefinitions
     world.add(entity, PositionComponent, { x, y, row: -1 })
     world.add(entity, ItemComponent, {
         typeId: level.definition.award.id, value: 1, state: 'available',
-        velocityX: -0.5 + random.nextFloat(), velocityY: -3 - random.nextFloat() * 2,
+        velocityX: -0.5 + random.nextFloat(), velocityY: -3 - random.nextFloat() * 2, accelerationY: 0,
         width: level.definition.award.kind === 'seed' ? 50 : level.definition.award.width,
         // Coin::CoinInitialize (COIN_MOTION_COIN): level awards land 30 higher than the clamped coin ground.
         groundY: Math.max(80, Math.min(521, y + 45 + random.integer(0, 19))) - 30,

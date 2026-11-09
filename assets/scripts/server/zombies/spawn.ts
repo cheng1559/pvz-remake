@@ -51,6 +51,8 @@ export function spawnZombie(
         shieldHealth: definition.shield?.health ?? 0,
         chilledTicks: 0,
         hasPole: vault !== undefined,
+        enrageTicks: 0,
+        riseTicks: 0,
         ...(behaviorState === undefined ? {} : { behaviorState }),
     })
     const zombie = world.get(entity, ZombieComponent)!

@@ -122,11 +122,11 @@ test('puff-shrooms sleep by day, only fire within range, and spores expire befor
         const plant = world.createEntity()
         world.add(plant, PositionComponent, { x: 40, y: 80, row: 0 })
         world.add(plant, PlantComponent, { typeId: 'pvz:puffshroom', seedId: 'pvz:puffshroom', column: 0,
-            health: 300, maxHealth: 300, recentlyEatenCounter: 0 })
+            health: 300, maxHealth: 300, recentlyEatenCounter: 0, chilledTicks: 0 })
         world.add(plant, PlantAttackComponent, { readyAtTick: 0 })
         const zombie = spawnZombie(world, definitions, 'pvz:normal', 0, 400, 50)
         schedule.run(world, 1)
-        assert.equal(world.get(plant, PlantAttackComponent)!.fireAtTick, undefined)
+        assert.equal(world.get(plant, PlantAttackComponent)!.burst, undefined)
         world.get(zombie, PositionComponent)!.x = 240
         for (let tick = 2; tick <= 200; tick++) schedule.run(world, tick)
         assert.equal([...world.query(ProjectileComponent)].length > 0, night)
@@ -187,7 +187,7 @@ test('breaking a newspaper pauses movement and bites, then enrages; chilled gasp
         const enraged = drainServerEvents(world.resources.get(EventQueueResource)).find(event => event.type === 'zombieEnraged')
         assert.equal(enraged?.data.roar, true, 'a lone headed newspaper roars')
         assert.ok(zombie.speedPerTick >= 0.89 && zombie.speedPerTick <= 0.91)
-        assert.equal('enrageTicks' in zombie, false)
+        assert.equal(zombie.enrageTicks, 0)
         schedule.run(world, duration + 1)
         assert.ok(world.get(entity, PositionComponent)!.x < 500)
     }
@@ -198,7 +198,7 @@ function plantAt(world: World, typeId: string, x: number) {
     const entity = world.createEntity()
     world.add(entity, PositionComponent, { x, y: 80, row: 0 })
     world.add(entity, PlantComponent, { typeId, seedId: typeId, column: 0, health: 300, maxHealth: 300,
-        recentlyEatenCounter: 0, ...(initialPlantAbility(definition) ? { ability: initialPlantAbility(definition) } : {}) })
+        recentlyEatenCounter: 0, chilledTicks: 0, ...(initialPlantAbility(definition) ? { ability: initialPlantAbility(definition) } : {}) })
     world.add(entity, PlantAttackComponent, { readyAtTick: 1 })
     return entity
 }

@@ -116,7 +116,6 @@ export class ZombieSystem implements GameSystem {
             if (zombie.chilledTicks > 0) zombie.chilledTicks--
             if (zombie.riseTicks) {
                 zombie.riseTicks--
-                if (zombie.riseTicks === 0) delete zombie.riseTicks
                 continue
             }
             if (zombie.enrageTicks) {
@@ -124,7 +123,6 @@ export class ZombieSystem implements GameSystem {
                 zombie.animationTime += (Math.round(definition.enrage!.pauseTicks * 8 / 100) - 1) / definition.enrage!.pauseTicks * pace
                 zombie.enrageTicks = Math.max(0, zombie.enrageTicks - pace)
                 if (zombie.enrageTicks === 0) {
-                    delete zombie.enrageTicks
                     const speed = definition.enrage!.speedPerTick
                     zombie.speedPerTick = speed.min + world.resources.get(RandomResource).nextFloat() * (speed.max - speed.min)
                     zombie.animation = zombie.walkAnimation
@@ -193,15 +191,14 @@ export class ZombieSystem implements GameSystem {
                     updateHeadlessZombie(world, definitions, entity, zombie)
                 } else {
                     // Zombie::EatZombie bites an enemy zombie as it bites a plant, but through the shield and without
-                    // a flash; a mind-controlled zombie chews softly (Zombie::AnimateChewSound). The client flashes a
-                    // chewed plant.
+                    // a flash. The client flashes a chewed plant.
                     const events = world.resources.get(EventQueueResource)
                     const chewed = eat.chewTimes.some(time => didCrossLoopingTime(previousAnimationTime, zombie.animationTime, time * span))
                     const cadence = definition.bite.cadenceTicks * (zombie.chilledTicks > 0 ? CHILLED_BITE_CADENCE_FACTOR : 1)
                     const bites = ++zombie.biteTicks >= cadence
                     if (bites) zombie.biteTicks = 0
                     if (prey !== undefined) {
-                        if (chewed) emitServerEvent(events, 'zombieChewedZombie', { zombieId: entity, targetId: prey, ...(zombie.mindControlled ? { mindControlled: true } : {}) })
+                        if (chewed) emitServerEvent(events, 'zombieChewedZombie', { zombieId: entity, targetId: prey })
                         if (bites) {
                             const victim = world.get(prey, ZombieComponent)!
                             damageZombie(world, definitions, prey, definition.bite.damage, { flash: false, bypassShield: true }, commands)
