@@ -289,9 +289,9 @@ export class LevelEntityRenderer {
             uiNode({ node, opacity: item.alpha })
             this.itemViews.get(item.entityId)?.sync(item)
         }
-        for (const mower of snapshot.lawnMowers) this.syncMower(mower)
-        const particle = (effect: string, x: number, y: number, tint?: Color) => ParticlePlayer.spawn({
-            parent: this.entityLayer, id: effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder: renderOrder('top'), tint,
+        this.syncWaitingMowers(snapshot)
+        const particle = (effect: string, x: number, y: number, tint?: Color, mirrored = false) => ParticlePlayer.spawn({
+            parent: this.entityLayer, id: effect, x: x - WIDTH / 2, y: HEIGHT / 2 - y, renderOrder: renderOrder('top'), tint, mirrored,
         })
         this.plantFlashes = new Map(snapshot.plants.map(plant => [plant.entityId, this.flashes.plant(plant, snapshot.gameplayTick)]))
         for (const plant of snapshot.plants) {

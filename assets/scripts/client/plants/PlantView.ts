@@ -7,7 +7,8 @@ import type { EntityAttachments } from '@/client/view/EntityAttachments'
 
 export type PlantViewSnapshot = Extract<LevelEntitySnapshot, { kind: 'plant' }>
 /** Requests a particle in board coordinates, matching Board::AddPvzpParticle. */
-export type PlantParticle = (effect: string, x: number, y: number, tint?: Color) => void
+/** `mirrored`: the effect turned round, for a plant facing left (the zombies' side). */
+export type PlantParticle = (effect: string, x: number, y: number, tint?: Color, mirrored?: boolean) => void
 export interface PlantViewContext {
     node: Node
     /** The plant's attachment list for effects that belong to it, such as Mod-added marks. */

@@ -43,8 +43,9 @@ export class PuffShroomView extends AnimatedPlantView {
         if (cue && this.shotTick !== undefined) {
             this.shotTick ??= world.gameplayTick
             if (world.gameplayTick - this.shotTick >= cue.delayTicks) {
-                // A puff-shroom facing left puffs from its mirrored mouth.
-                particle(cue.id, plant.x + plantFacingX(cue.x, plantTeam(plant)), plant.y + cue.y)
+                // A mushroom facing left puffs from its mirrored mouth, the cloud blowing left.
+                const team = plantTeam(plant)
+                particle(cue.id, plant.x + plantFacingX(cue.x, team), plant.y + cue.y, undefined, team === 'zombies')
                 this.shotTick = undefined
             }
         }
