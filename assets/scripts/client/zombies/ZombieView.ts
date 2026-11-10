@@ -128,6 +128,8 @@ export class ZombieView implements ZombieViewInstance {
         this.applyHitFlash(zombie)
         this.applyColor(zombie)
         if (zombie.state === 'mowered') {
+            // Mowed before its body loaded (put down on a running mower): its walk stands in for the driver to take.
+            if (!this.player && !this.pendingAnimation) void this.load({ ...zombie, animation: 'anim_walk', animationTime: 0 })
             this.syncMowered(zombie)
             return
         }
