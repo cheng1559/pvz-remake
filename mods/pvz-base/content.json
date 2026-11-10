@@ -8,7 +8,6 @@
     "zombieGaits": "gameplay/definitions/zombie-gaits.json",
     "projectiles": "gameplay/definitions/projectiles.json",
     "items": "gameplay/definitions/items.json",
-    "lawnMowers": "gameplay/definitions/lawn-mowers.json",
     "achievements": "gameplay/definitions/achievements.json",
     "levels": "gameplay/levels.json",
     "seedCatalog": "gameplay/seed-catalog.json"
@@ -51151,6 +51150,7 @@
       "pvz:tree_cloud4": "assets/reanim/tree_cloud4.json",
       "pvz:tree_cloud5": "assets/reanim/tree_cloud5.json",
       "pvz:tree_cloud6": "assets/reanim/tree_cloud6.json",
+      "pvz:puff": "assets/reanim/puff.json",
       "pvz:puffshroom": "assets/reanim/puffshroom.json",
       "pvz:puffshroom_sleep": "assets/reanim/puffshroom_sleep.json",
       "pvz:puffshroom_shoot": "assets/reanim/puffshroom_shoot.json",

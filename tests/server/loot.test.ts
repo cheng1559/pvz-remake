@@ -57,7 +57,7 @@ test('after the award, each unused mower turns into five coins of gold, 200 tick
         if (game.drainEvents().some(event => event.type === 'mowerScored')) scored.push(tick)
     }
     assert.deepEqual(scored, [200, 240, 280, 320, 360])
-    assert.equal(game.render().lawnMowers.length, 0)
+    assert.equal(game.render().mowerRows.length, 0)
     assert.equal(game.render().money, purse + 25)
 })
 

@@ -172,9 +172,16 @@ export interface PresentationSound {
     readonly pitchRange?: number
 }
 
+/** Exactly one of `sprite` and `reanim`. */
 export interface ProjectilePresentationDefinition {
     readonly viewConfig?: Readonly<JsonObject>
-    readonly sprite: string
+    readonly sprite?: string
+    /** An animation it plays looping, like a running mower's: at `x`, `y` in its frame, at `scale` and `rate`. */
+    readonly reanim?: { readonly id: string; readonly x: number; readonly y: number; readonly scale: number; readonly rate: number }
+    /** The board's plant shadow (the darker one at night) under it, at this point of its frame: a mower's. */
+    readonly plantShadow?: { readonly x: number; readonly y: number }
+    /** Its render layer; `projectile` when omitted, a mower's `lawnMower`. */
+    readonly layer?: RenderLayer
     readonly shadow?: {
         readonly sprite: string; readonly columns: number; readonly cell: number
         readonly offset: { readonly x: number; readonly y: number }; readonly scale: number
@@ -777,7 +784,15 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     for (const [id, value] of Object.entries(object(data.projectiles, 'projectiles'))) {
         const projectile = object(value, id)
         if (projectile.viewConfig !== undefined) object(projectile.viewConfig, id + '.viewConfig')
-        text(projectile.sprite, id + '.sprite')
+        if ((projectile.sprite === undefined) === (projectile.reanim === undefined)) throw new TypeError(id + ' needs exactly one of sprite and reanim')
+        if (projectile.sprite !== undefined) text(projectile.sprite, id + '.sprite')
+        if (projectile.reanim !== undefined) {
+            const reanim = object(projectile.reanim, id + '.reanim')
+            text(reanim.id, id + '.reanim.id'); point(reanim, id + '.reanim')
+            positive(reanim.scale, id + '.reanim.scale'); positive(reanim.rate, id + '.reanim.rate')
+        }
+        if (projectile.plantShadow !== undefined) point(projectile.plantShadow, id + '.plantShadow')
+        if (projectile.layer !== undefined && !isRenderLayer(projectile.layer)) throw new TypeError(id + '.layer is not a render layer')
         if (projectile.shadow !== undefined) {
             const shadow = object(projectile.shadow, id + '.shadow')
             text(shadow.sprite, id + '.shadow.sprite'); point(shadow.offset, id + '.shadow.offset')

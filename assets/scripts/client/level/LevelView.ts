@@ -4,7 +4,7 @@ import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { Haptics, type HapticStyle } from '@/platform/Haptics'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
-import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { easeInOut } from '@/client/view/GameScreenMath'
 import { LevelSlots } from './LevelSlots'
@@ -148,7 +148,8 @@ export class LevelView {
         ] = await Promise.all([
             sprites.load(presentation.board.background),
             sprites.load('pvz:seedbank'),
-            Promise.all(Object.entries(content.presentation.projectiles).map(async ([id, definition]) => [id, await sprites.load(definition.sprite)] as const)),
+            Promise.all(Object.entries(content.presentation.projectiles).flatMap(([id, definition]) => definition.sprite
+                ? [(async () => [id, await sprites.load(definition.sprite!)] as const)()] : [])),
             Promise.all(Object.entries(content.presentation.projectiles).flatMap(([id, definition]) => definition.shadow ? [(async () => {
                 const shadow = definition.shadow!
                 const atlas = await sprites.load(shadow.sprite)
@@ -171,6 +172,9 @@ export class LevelView {
             ].map(id => sprites.load(id))),
             Promise.all(helmSpriteIds.map(async id => [id, await sprites.load(id)] as const)),
             Promise.all(dropImages.map(id => modResources.asset(id, SpriteFrame))),
+            // A mower's animation is ready when the first one sets off.
+            Promise.all(Object.values(content.presentation.projectiles).flatMap(definition => definition.reanim
+                ? [new ReanimRepository(content.registry, content.loader).load(definition.reanim.id)] : [])),
         ])
         const layout = instantiate(content.levelPrefab)
         root.addChild(layout)
@@ -730,7 +734,6 @@ export class LevelView {
             draw(zombie, this.definitions.zombies[zombie.typeId].attack, Color.YELLOW)
         }
         for (const projectile of snapshot.projectiles) draw(projectile, this.definitions.projectiles[projectile.typeId].hitbox, Color.CYAN)
-        for (const mower of snapshot.lawnMowers) draw(mower, this.definitions.lawnMowers[mower.typeId].attack, Color.YELLOW)
     }
 
     private shake = { endTick: 0, ticks: 0, x: 0, y: 0, tick: 0 }

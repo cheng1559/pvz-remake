@@ -22,9 +22,7 @@ function snapshot(tick: number): WorldSnapshot {
         }],
         projectiles: [{ entityId: 6, typeId: 'pvz:pea', x: 20, y: 30, row: 2 }],
         items: [{ entityId: 4, typeId: 'pvz:sun', state: 'available', x: 30, y: 40, scale: 1, alpha: 255 }],
-        lawnMowers: [{
-            entityId: 5, typeId: 'pvz:standard', state: 'ready', x: -21, y: 303, row: 2,
-        }],
+        mowerRows: [2],
         tutorial: { id: 'pvz:adventure-1-1', step: 'complete' }, extensions: {},
     }
 }
@@ -35,7 +33,7 @@ test('ClientWorld diffs entities and renders current state at interpolated posit
     const started: SessionStartedPacket = {
         protocolVersion: 1, type: 'sessionStarted', acknowledgedSequence: 1, snapshot: first,
     }
-    assert.deepEqual(world.accept(started), { added: [1, 2, 4, 5, 6], removed: [] })
+    assert.deepEqual(world.accept(started), { added: [1, 2, 4, 6], removed: [] })
     assert.equal(world.current, first)
 
     const second = snapshot(2)
@@ -48,7 +46,6 @@ test('ClientWorld diffs entities and renders current state at interpolated posit
     second.items[0].x = 40
     second.items[0].scale = 0.5
     second.items[0].alpha = 155
-    second.lawnMowers[0].x = -11
     const frame: ServerFramePacket = {
         protocolVersion: 1, type: 'frame', serverTick: 2,
         acknowledgedSequence: 2, snapshot: second, events: [],
@@ -64,7 +61,6 @@ test('ClientWorld diffs entities and renders current state at interpolated posit
     assert.equal(rendered.items[0].x, 35)
     assert.equal(rendered.items[0].scale, 0.75)
     assert.equal(rendered.items[0].alpha, 205)
-    assert.equal(rendered.lawnMowers[0].x, -16)
     assert.equal(rendered.projectiles.some(entity => entity.entityId === 6), false)
 
     const sameTick = { ...second, sun: 75 }

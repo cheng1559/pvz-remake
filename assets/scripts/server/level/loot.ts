@@ -1,7 +1,7 @@
 import type { CommandBuffer, World } from '@/ecs/index'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, MOWER_READY_X, mowerY } from '@/shared/content/gameplay'
 import {
-    EconomyStateResource, type EntityRemover, LawnMowerComponent, LevelStateResource, PositionComponent, RandomResource, ZombieComponent,
+    EconomyStateResource, type EntityRemover, LevelStateResource, PositionComponent, RandomResource, ZombieComponent,
 } from '../state/components'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { tryDropLevelAward } from './levelAward'
@@ -60,7 +60,7 @@ function dropLootPiece(world: World, definitions: GameplayDefinitions, x: number
     if (rules?.savingsCap !== undefined) {
         // 2-1 keeps the seed-slot upgrade out of reach until 2-2's dialogue: count the mowers' gold and coins in flight.
         let money = economy.money + definitions.items[typeId].value
-        for (const entity of world.query(LawnMowerComponent)) if (world.get(entity, LawnMowerComponent)!.state === 'ready') money += definitions.items[GOLD].value
+        money += world.resources.get(LevelStateResource).mowerRows.length * definitions.items[GOLD].value
         for (const entity of world.query(ItemComponent)) {
             const item = world.get(entity, ItemComponent)!
             if (item.state === 'collecting' && definitions.items[item.typeId]?.kind === 'money') money += item.value
@@ -98,13 +98,11 @@ export function spawnLoot(world: World, definitions: GameplayDefinitions, comman
 export function updateMowerCoins(world: World, definitions: GameplayDefinitions, commands: CommandBuffer): void {
     const economy = world.resources.get(EconomyStateResource)
     if (economy.mowerCoinTicks === undefined || --economy.mowerCoinTicks > 0) return
-    const mowers = [...world.query(PositionComponent, LawnMowerComponent)]
-        .filter(entity => world.get(entity, LawnMowerComponent)!.state === 'ready')
-        .sort((left, right) => world.get(right, PositionComponent)!.row - world.get(left, PositionComponent)!.row)
-    if (!mowers.length) { delete economy.mowerCoinTicks; return }
+    const level = world.resources.get(LevelStateResource)
+    if (!level.mowerRows.length) { delete economy.mowerCoinTicks; return }
     economy.mowerCoinTicks = 40
-    const position = world.get(mowers[0], PositionComponent)!
-    spawnLoot(world, definitions, commands, GOLD, position.x + 40, position.y + 40, false, true)
-    emitServerEvent(world.resources.get(EventQueueResource), 'mowerScored', { entityId: mowers[0], remaining: mowers.length })
-    commands.destroyEntity(mowers[0])
+    const row = Math.max(...level.mowerRows)
+    spawnLoot(world, definitions, commands, GOLD, MOWER_READY_X + 40, mowerY(level.board, row) + 40, false, true)
+    emitServerEvent(world.resources.get(EventQueueResource), 'mowerScored', { row, remaining: level.mowerRows.length })
+    level.mowerRows = level.mowerRows.filter(waiting => waiting !== row)
 }

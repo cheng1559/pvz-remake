@@ -42,8 +42,6 @@ function snapshot(): any {
             kind: 'zombie', entityId: 2, body: reanim('pvz:zombie_walk'),
             mowerDriver: null,
         }, {
-            kind: 'mower', entityId: 3, animation: reanim('pvz:lawnmower'),
-        }, {
             kind: 'sun', entityId: 4, animation: null,
         }],
         particles: [{

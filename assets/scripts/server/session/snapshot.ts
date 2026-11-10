@@ -1,6 +1,6 @@
 import type { JsonObject, WorldSnapshot } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
-import { EconomyStateResource, LawnMowerComponent, LevelStateResource, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent } from '../state/components'
+import { EconomyStateResource, LevelStateResource, MowedPlantComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent } from '../state/components'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { getAvailableSun } from '../level/items'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
@@ -37,7 +37,7 @@ export const snapshot = {
                 cooldownTotal: cooldownRemaining === 0 ? 0 : packet.cooldownTotal,
             }
         })
-        const plants = [...world.query(PositionComponent, PlantComponent)].map(entity => {
+        const plants: WorldSnapshot['plants'] = [...world.query(PositionComponent, PlantComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
             const { chilledTicks, ...plant } = world.get(entity, PlantComponent)!
             const production = definitions.plants[plant.typeId].producer && world.get(entity, PlantAttackComponent)
@@ -49,6 +49,15 @@ export const snapshot = {
                 ...(production ? { produceTicks: Math.max(0, production.readyAtTick - gameplayTick) } : {}),
             }
         })
+        for (const entity of world.query(PositionComponent, MowedPlantComponent)) {
+            const { plant: { chilledTicks, ...plant }, ticks, left } = world.get(entity, MowedPlantComponent)!
+            plants.push({
+                entityId: entity, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...world.get(entity, PositionComponent)!,
+                ...(plant.ability ? { ability: { ...plant.ability } } : {}),
+                ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
+                mowered: { ticks, ...(left ? { left } : {}) },
+            })
+        }
         const zombies = [...world.query(PositionComponent, ZombieComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
             const zombie = world.get(entity, ZombieComponent)!
@@ -81,11 +90,6 @@ export const snapshot = {
             const position = world.get(entity, PositionComponent)!
             const projectile = world.get(entity, ProjectileComponent)!
             return { entityId: entity, typeId: projectile.typeId, ...position, ...(projectile.team === 'zombies' ? { team: 'zombies' as const } : {}) }
-        })
-        const lawnMowers = [...world.query(PositionComponent, LawnMowerComponent)].map(entity => {
-            const position = world.get(entity, PositionComponent)!
-            const mower = world.get(entity, LawnMowerComponent)!
-            return { entityId: entity, typeId: mower.typeId, state: mower.state, ...position }
         })
         const items = [...world.query(PositionComponent, ItemComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
@@ -138,7 +142,7 @@ export const snapshot = {
             zombies,
             projectiles,
             items,
-            lawnMowers,
+            mowerRows: [...level.mowerRows],
             tutorial: { id: level.definition.tutorial, step: tutorial.step, ...(script?.dave ? { dave: true } : {}), ...(script?.toolsInIntro ? { toolsInIntro: true } : {}) },
             extensions: { ...gameplay.components.snapshot(world),
                 ...(owned.length ? { 'pvz:tools': { owned, available: owned.filter(id => tools.available(session, id)) } } : {}),

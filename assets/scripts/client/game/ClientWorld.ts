@@ -75,7 +75,6 @@ export class ClientWorld {
                 (before, after) => before.state !== 'vaulting' || after.state === 'vaulting'),
             projectiles: interpolate(current.projectiles, previous?.projectiles, t),
             items: interpolateItems(current.items, previous?.items, t),
-            lawnMowers: interpolate(current.lawnMowers, previous?.lawnMowers, t),
         }
         this.rendered = { current, previous, t, frame }
         return frame
@@ -101,7 +100,6 @@ function entityIds(snapshot: WorldSnapshot): Set<EntityId> {
         ...snapshot.zombies,
         ...snapshot.projectiles,
         ...snapshot.items,
-        ...snapshot.lawnMowers,
     ].map(entity => entity.entityId))
 }
 

@@ -194,7 +194,8 @@ export interface WorldSnapshot {
     zombies: ZombieSnapshot[]
     projectiles: ProjectileSnapshot[]
     items: ItemSnapshot[]
-    lawnMowers: LawnMowerSnapshot[]
+    /** The rows whose mower still waits at the house end; one set off is a mowing projectile. */
+    mowerRows: number[]
     tutorial: TutorialSnapshot
     extensions: Record<string, JsonValue>
 }
@@ -252,6 +253,8 @@ export interface PlantSnapshot extends EntityBehaviorState {
     team?: Team
     /** Ticks left slowed by a hostile snow pea: the plant draws blue and animates at half speed. */
     chilledTicks?: number
+    /** A mower crushed it: no plant any more, it is squashed, `ticks` into it; `left` when the mower ran left. */
+    mowered?: { ticks: number, left?: true }
 }
 
 export type PlantAbilityState =
@@ -342,15 +345,6 @@ export interface TutorialSnapshot {
     dave?: true
     /** The level's script shows the shovel during the intro. */
     toolsInIntro?: true
-}
-
-export interface LawnMowerSnapshot {
-    entityId: EntityId
-    typeId: string
-    state: 'ready' | 'active' | 'spent'
-    x: number
-    y: number
-    row: number
 }
 
 export interface SessionStartedPacket {
@@ -832,6 +826,11 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
             if (!PLANT_ABILITY_STATES.includes(ability.state as PlantAbilityState)) throw new TypeError(`${name}.ability.state is unknown`)
             integer(ability.ticks, `${name}.ability.ticks`)
         }
+        if (plant.mowered !== undefined) {
+            const mowered = record(plant.mowered, `${name}.mowered`)
+            integer(mowered.ticks, `${name}.mowered.ticks`)
+            if (mowered.left !== undefined && mowered.left !== true) throw new TypeError(`${name}.mowered.left must be true`)
+        }
     })
     array(snapshot.zombies, 'snapshot.zombies').forEach((entry, index) => {
         const name = `snapshot.zombies[${index}]`
@@ -903,18 +902,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         integer(item.alpha, `${name}.alpha`)
         if ((item.alpha as number) > 255) throw new TypeError(`${name}.alpha must not exceed 255`)
     })
-    array(snapshot.lawnMowers, 'snapshot.lawnMowers').forEach((entry, index) => {
-        const name = `snapshot.lawnMowers[${index}]`
-        const mower = record(entry, name)
-        integer(mower.entityId, `${name}.entityId`)
-        nonEmptyString(mower.typeId, `${name}.typeId`)
-        if (mower.state !== 'ready' && mower.state !== 'active' && mower.state !== 'spent') {
-            throw new TypeError(`${name}.state is unknown`)
-        }
-        finite(mower.x, `${name}.x`)
-        finite(mower.y, `${name}.y`)
-        integer(mower.row, `${name}.row`)
-    })
+    array(snapshot.mowerRows, 'snapshot.mowerRows').forEach(row => integer(row, 'snapshot.mowerRows[]'))
     return snapshot
 }
 

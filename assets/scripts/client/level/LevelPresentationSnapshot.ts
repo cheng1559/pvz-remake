@@ -93,11 +93,6 @@ export type LevelEntitySnapshot =
         flash?: FlashSnapshot
     }
     | {
-        kind: 'mower'
-        entityId: number
-        animation: ReanimPlaybackSnapshot | null
-    }
-    | {
         kind: 'sun'
         entityId: number
         animation: ReanimPlaybackSnapshot | null
@@ -313,7 +308,6 @@ function parseEntity(value: unknown, index: number): LevelEntitySnapshot {
                 ...(source.flash === undefined ? {} : { flash: parseFlash(source.flash, `${name}.flash`) }),
             }
         }
-        case 'mower':
         case 'sun': {
             const source = exact(value, ['kind', 'entityId', 'animation'], name)
             return { kind: tagged.kind, entityId, animation: optionalReanim(source.animation) }

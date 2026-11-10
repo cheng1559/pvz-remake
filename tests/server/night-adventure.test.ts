@@ -109,7 +109,7 @@ test('2-1 runs Dave before choosing, blocks graves, has no sky sun, and restores
 function worldFor(night: boolean) {
     const world = new World()
     const definition = levels.levels['pvz:adventure-2-1'], board = definitions.boards[night ? 'pvz:night' : 'pvz:day']
-    world.resources.set(LevelStateResource, { id: options.levelId, definition, board, phase: 'gameplay', result: 'playing', paused: false })
+    world.resources.set(LevelStateResource, { id: options.levelId, definition, board, phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] })
     world.resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     return world

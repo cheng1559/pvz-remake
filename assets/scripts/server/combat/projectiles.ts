@@ -51,7 +51,10 @@ export class ProjectileSystem implements GameSystem {
             const position = world.get(entity, PositionComponent)!, plant = world.get(entity, PlantComponent)!
             if (!definitions.plants[plant.typeId].low) add({ entity, position, plant }, plantFacingRect(definitions.plants[plant.typeId].body, plantTeam(plant)))
         }
-        for (const entity of world.query(PositionComponent, ProjectileComponent)) this.update(context, entity)
+        // A mowing projectile runs with the level's mowers (mower.ts).
+        for (const entity of world.query(PositionComponent, ProjectileComponent)) {
+            if (!definitions.projectiles[world.get(entity, ProjectileComponent)!.typeId].mow) this.update(context, entity)
+        }
     }
     update({ world, commands }: SystemContext, entity: number): void {
         const definitions = this.definitions
@@ -87,12 +90,12 @@ export class ProjectileSystem implements GameSystem {
             // The impact sound depends on the armor worn before this hit: the shield takes it first.
             const helm = zombie.helmHealth > 0 ? definitions.zombies[zombie.typeId].helm?.type : undefined
             const shield = zombie.shieldHealth > 0 ? definitions.zombies[zombie.typeId].shield?.type : undefined
-            damageZombie(world, definitions, target.entity, definition.damage, { chillTicks: definition.chillTicks }, commands)
+            damageZombie(world, definitions, target.entity, definition.damage!, { chillTicks: definition.chillTicks }, commands)
             emitServerEvent(world.resources.get(EventQueueResource), 'projectileImpact', {
                 ...impact, targetTypeId: zombie.typeId, ...(helm === undefined ? {} : { helm }), ...(shield === undefined ? {} : { shield }),
             })
         } else {
-            damagePlant(world, definitions, target.entity, definition.damage, commands, definition.chillTicks)
+            damagePlant(world, definitions, target.entity, definition.damage!, commands, definition.chillTicks)
             emitServerEvent(world.resources.get(EventQueueResource), 'projectileImpact', { ...impact, targetTypeId: target.plant.typeId, target: 'plant' })
         }
         commands.destroyEntity(entity)

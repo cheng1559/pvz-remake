@@ -163,7 +163,7 @@ export class LevelAudioPresenter {
             // Not enough sun, and an enemy producer taking sun away: the sun counter flashes with the buzzer.
             case 'sunFlash': case 'sunDrained': void SoundSystem.play(SoundEffect.Buzzer); break
             case 'mowerActivated': void SoundSystem.playFoley(SoundEffect.Lawnmower); break
-            case 'zombieMowered': void SoundSystem.playFoley(SoundEffect.Splat); break
+            case 'zombieMowered': case 'zombiePuffed': case 'plantMowered': void SoundSystem.playFoley(SoundEffect.Splat); break
             case 'plantEaten': void SoundSystem.play(SoundEffect.Gulp); break
             // Zombie::AnimateChewSound; Zombie::EatZombie gulps the last bite.
             case 'zombieChewedZombie': this.chew(false); break

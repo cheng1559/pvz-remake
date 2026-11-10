@@ -5,7 +5,6 @@ import { EMPTY_SLOT, debugAmount, debugCondition, debugSwitched, debugInteger, d
 import { damageZombie } from '../zombies/damage'
 import {
     EconomyStateResource,
-    LawnMowerComponent,
     LevelStateResource,
     PlantComponent,
     PositionComponent,
@@ -18,6 +17,7 @@ import { ItemComponent, TutorialResource, WaveResource } from '../state/levelSta
 import { createWaveSystem } from '../level/waves'
 import { placeGrave } from '../level/graves'
 import { startRepick } from '../seeds/seedChooser'
+import { startMower } from '../level/mower'
 import { spawnLoot } from '../level/loot'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { DebugRulesResource, getDebugRules } from './debugRules'
@@ -215,23 +215,14 @@ function executeCommand(
         case 'lawnmower': {
             const row = args[1] === undefined ? undefined : position(args[1])?.row
             if (args[1] !== undefined && row === undefined) return invalidPosition()
-            let changed = 0
-            for (const entity of world.query(PositionComponent, LawnMowerComponent)) {
-                const p = world.get(entity, PositionComponent)!, mower = world.get(entity, LawnMowerComponent)!
-                if (row !== undefined && p.row !== row) continue
-                if (args[0].toLowerCase() === 'trigger') {
-                    if (mower.state !== 'ready') continue
-                    mower.state = 'active'
-                    emitServerEvent(events, 'mowerActivated', { entityId: entity, row: p.row })
-                } else {
-                    if (mower.state === 'ready') continue
-                    mower.state = 'ready'
-                    mower.chompCounter = 0
-                    p.x = -21
-                }
-                changed++
+            // `trigger` sets the rows' waiting mowers off; `reset` puts one back where it has gone, whatever it is doing.
+            const trigger = args[0].toLowerCase() === 'trigger', level = world.resources.get(LevelStateResource)
+            const rows = level.definition.activeRows.filter(active => (row === undefined || active === row) && level.mowerRows.includes(active) === trigger)
+            for (const changed of rows) {
+                if (trigger) startMower(world, definitions, changed)
+                else level.mowerRows = [...level.mowerRows, changed].sort((left, right) => left - right)
             }
-            return changed ? debugSuccess(`Changed ${changed} lawn mower(s)`) : debugCondition('DEBUG_NO_MOWERS')
+            return rows.length ? debugSuccess(`Changed ${rows.length} lawn mower(s)`) : debugCondition('DEBUG_NO_MOWERS')
         }
         case 'cooldown':
         case 'suncost':

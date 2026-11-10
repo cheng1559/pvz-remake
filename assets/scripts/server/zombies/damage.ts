@@ -214,6 +214,14 @@ function isDeadOrDying(zombie: Zombie): boolean {
 }
 
 /**
+ * Zombie::MowDown: a mower flattens a zombie standing on the lawn; one dying, burned, in its vault or still rising from
+ * a grave cannot be flattened as it stands, and goes in a puff instead.
+ */
+export function isFlattenableZombie(zombie: Zombie): boolean {
+    return zombie.state !== 'dying' && zombie.state !== 'burned' && zombie.state !== 'vaulting' && !zombie.riseTicks
+}
+
+/**
  * Standing zombies that ground weapons can hit; vaulting zombies are in the air. Only an `attacker` on the other side
  * hits it (Zombie::EffectedByDamage); plants' weapons by default.
  */

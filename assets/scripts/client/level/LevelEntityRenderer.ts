@@ -5,12 +5,14 @@ import type { ClientWorldChanges } from '@/client/game/ClientWorld'
 import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
 import type { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
+import { type ReanimTrack, sampleReanimTrack } from '@/shared/content/reanim'
+import { TICK_SECONDS } from '@/shared/protocol/index'
 import { uiNode } from '@/client/view/uiNode'
 import { SeedPacketRenderer, type SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
-import type { ItemSnapshot, LawnMowerSnapshot, PlantSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
+import type { ItemSnapshot, PlantSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
 import { plantRenderOffset, renderOrder, SHADOW_RENDER_OFFSET, ZOMBIE_RENDER_OFFSET } from '@/shared/content/renderOrder'
-import { SUN_BANK_TARGET } from '@/shared/content/gameplay'
+import { MOWER_READY_X, mowerY, SUN_BANK_TARGET } from '@/shared/content/gameplay'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
 import type { LevelIntro } from './LevelIntro'
 import { plantDefinition } from '@/client/plants/definitions'
@@ -29,6 +31,13 @@ const WIDTH = 800
 const HEIGHT = 600
 /** Zombie::ApplyBurn's shift for a charred zombie walking right, drawn mirrored. */
 const CHARRED_MIRRORED_SHIFT = 60
+/** The original's driver for a mowed zombie, and its rate (ZOMBIE_MOWERED_ANIMATION_SPEED: 8 fps, advanced twice). */
+const MOWERED_REANIM = 'pvz:lawnmowered_zombie'
+const MOWERED_RATE = 16 / 12
+/** The point LawnMoweredZombie's locator turns a zombie about, its foot, in the zombie's own y-up units. */
+const MOWERED_ZOMBIE_FOOT = { x: 50, y: -117 }
+/** A plant turns about the middle of its base instead, from its top left in board units. */
+const MOWED_PLANT_FOOT = { x: PLANT_WIDTH / 2, y: 80 }
 type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 type SpriteAsset = Awaited<ReturnType<SpriteRepository['load']>>
 type FontAsset = Awaited<ReturnType<FontRepository['load']>>
@@ -65,10 +74,14 @@ export class LevelEntityRenderer {
     private readonly chilledPlants = new Set<number>()
     /** Each plant's and zombie's attachment list. */
     private readonly attachments = new Map<number, EntityAttachments>()
-    /** Charred remains keep their zombie's layer and ordering identity after removal. */
+    /** Charred remains and mower puffs keep their zombie's layer and ordering identity after removal. */
     private readonly charred = new Map<Node, { order: number, entityId: number }>()
-    private readonly mowerPlayersReady = new Set<number>()
-    private readonly mowerStates = new Map<number, LawnMowerSnapshot['state']>()
+    /** Mowed plants already frozen for their squashing. */
+    private readonly frozenPlants = new Set<number>()
+    private moweredLoad?: Promise<void>
+    private locator?: ReanimTrack
+    /** The rows' waiting mowers, by row; one set off goes on as a projectile. */
+    private readonly waitingMowers = new Map<number, Node>()
     private pointer?: { x: number; y: number }
     private lastSnapshot?: WorldSnapshot
     private highlightedPlant?: number
@@ -94,8 +107,9 @@ export class LevelEntityRenderer {
         return this.entities.get(id)
     }
 
+    /** The entities' nodes and the waiting mowers', which the intro rolls in. */
     nodes(): Iterable<Node> {
-        return this.entities.values()
+        return [...this.entities.values(), ...this.waitingMowers.values()]
     }
 
     setPointer(pointer?: { x: number; y: number }): void {
@@ -111,7 +125,7 @@ export class LevelEntityRenderer {
         // The shovel's targets (tools.use): neither a grave buster nor a plant on the zombies' side.
         const highlighted = cell?.inBounds ? snapshot.plants.find(plant => plant.row === cell.row && plant.column === cell.column &&
             this.content.definitions.plants[plant.typeId].occupiesCell !== false && !this.content.definitions.plants[plant.typeId].graveBuster &&
-            plant.team !== 'zombies')?.entityId : undefined
+            plant.team !== 'zombies' && !plant.mowered)?.entityId : undefined
         for (const id of new Set([this.highlightedPlant, highlighted])) {
             if (id === undefined) continue
             const flash = this.plantFlashes.get(id) ?? 0
@@ -189,12 +203,8 @@ export class LevelEntityRenderer {
         }
         for (const [entityId, node] of this.entities) {
             if (this.plantViews.has(entityId) || this.zombies.has(entityId)) continue
-            const mower = node.getChildByName('MowerAnimation')?.getComponent(ReanimPlayer)
-            if (mower) result.push({ kind: 'mower', entityId, animation: mower.snapshot() })
-            else {
-                const animation = node.getChildByName(LevelItemView.ANIMATION)?.getComponent(ReanimPlayer)
-                if (animation) result.push({ kind: 'sun', entityId, animation: animation.snapshot() })
-            }
+            const animation = node.getChildByName(LevelItemView.ANIMATION)?.getComponent(ReanimPlayer)
+            if (animation) result.push({ kind: 'sun', entityId, animation: animation.snapshot() })
         }
         return result.sort((left, right) => left.entityId - right.entityId)
     }
@@ -210,7 +220,7 @@ export class LevelEntityRenderer {
                 if (view) await view.restore(snapshot)
             } else {
                 const node = this.entities.get(snapshot.entityId)
-                const player = node?.getChildByName(snapshot.kind === 'mower' ? 'MowerAnimation' : LevelItemView.ANIMATION)?.getComponent(ReanimPlayer)
+                const player = node?.getChildByName(LevelItemView.ANIMATION)?.getComponent(ReanimPlayer)
                 if (player && snapshot.animation) player.restore(snapshot.animation)
             }
         }
@@ -247,13 +257,14 @@ export class LevelEntityRenderer {
                 .finally(() => this.creationTasks.delete(id))
             this.creationTasks.set(id, task)
         }
-        for (const entity of [...snapshot.zombies, ...snapshot.lawnMowers]) {
+        for (const entity of snapshot.zombies) {
             this.entities.get(entity.entityId)?.setPosition(entity.x - WIDTH / 2, HEIGHT / 2 - entity.y)
         }
         // A plant on the zombies' side faces left, mirrored across its 80 width; its projectiles fly left, mirrored
         // across their hitbox.
         for (const plant of snapshot.plants) {
             const node = this.entities.get(plant.entityId), mirrored = plant.team === 'zombies'
+            if (plant.mowered) { if (node) this.syncMowedPlant(node, plant); continue }
             node?.setPosition(plant.x + (mirrored ? PLANT_WIDTH : 0) - WIDTH / 2, HEIGHT / 2 - plant.y)
             node?.setScale(mirrored ? -1 : 1, 1, 1)
         }
@@ -295,6 +306,8 @@ export class LevelEntityRenderer {
         })
         this.plantFlashes = new Map(snapshot.plants.map(plant => [plant.entityId, this.flashes.plant(plant, snapshot.gameplayTick)]))
         for (const plant of snapshot.plants) {
+            // A mowed plant stays as it stood.
+            if (plant.mowered) continue
             this.plantViews.get(plant.entityId)?.sync(plant, snapshot, particle, false, this.plantFlashes.get(plant.entityId)!)
             this.syncPlantChill(plant)
         }
@@ -320,13 +333,12 @@ export class LevelEntityRenderer {
         this.plantViews.get(id)?.destroy?.()
         this.plantViews.delete(id)
         this.chilledPlants.delete(id)
+        this.frozenPlants.delete(id)
         this.zombies.get(id)?.destroy()
         this.zombies.delete(id)
         this.zombieTypes.delete(id)
         this.flashes.remove(id)
         this.attachments.delete(id)
-        this.mowerPlayersReady.delete(id)
-        this.mowerStates.delete(id)
         this.itemViews.delete(id)
         this.entities.get(id)?.destroy()
         this.entities.delete(id)
@@ -372,6 +384,8 @@ export class LevelEntityRenderer {
                 if (zombie) this.spawnBoardParticle(this.riseParticle, zombie.x + 60, zombie.y + 110, renderOrder('particle', zombie.row))
             } else if (event.type === 'zombieCharred') {
                 this.spawnCharred(event)
+            } else if (event.type === 'zombiePuffed') {
+                this.spawnMowerPuff(event)
             }
         }
     }
@@ -437,6 +451,63 @@ export class LevelEntityRenderer {
         })
     }
 
+    /** Zombie::MowDown for a zombie that is not flattened: REANIM_PUFF two above it and the mower's cloud one above. */
+    private spawnMowerPuff(event: ServerEvent): void {
+        const { x, y, row, zombieId } = event.data
+        if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number' || typeof zombieId !== 'number') return
+        const order = this.zombieOrder(row)
+        this.spawnBoardParticle('pvz:mowercloud', x + 110, y, order + 1)
+        const node = uiNode({ name: 'MowerPuff', parent: this.entityLayer, position: { x: x - 73 - WIDTH / 2, y: HEIGHT / 2 - (y - 56) }, anchor: { x: 0, y: 1 } }).node
+        this.charred.set(node, { order: order + 2, entityId: zombieId })
+        const end = () => { this.charred.delete(node); if (node.isValid) node.destroy() }
+        const player = node.addComponent(ReanimPlayer)
+        void player.load('pvz:puff', this.content.registry, this.content.loader).then(() => {
+            if (node.isValid) player.play({ loop: false, rate: 1, timeSeconds: 0, onFinish: end })
+        }).catch(error => {
+            end()
+            console.error('[Level] Failed to play the mower puff', error)
+        })
+    }
+
+    /** LawnMoweredZombie's locator, once loaded. */
+    private moweredLocator(): ReanimTrack | undefined {
+        this.moweredLoad ??= new ReanimRepository(this.content.registry, this.content.loader).load(MOWERED_REANIM)
+            .then(({ data }) => { this.locator = data.tracks.find(track => track.id === 'locator') })
+            .catch(error => console.error('[Level] Failed to load the mowed animation', error))
+        return this.locator
+    }
+
+    /**
+     * A plant a mower crushed (PlantSnapshot.mowered) is squashed with a zombie's LawnMoweredZombie, at the server's
+     * time: frozen as it stood, without its shadow, its node turns and scales by the locator's pose about the middle of
+     * its base as a zombie does about its foot, tipping the way the mower ran, then flattens.
+     */
+    private syncMowedPlant(node: Node, plant: PlantSnapshot): void {
+        if (!this.frozenPlants.has(plant.entityId) && this.plantViews.has(plant.entityId)) {
+            this.frozenPlants.add(plant.entityId)
+            for (const player of node.getComponentsInChildren(ReanimPlayer)) player.pause()
+            const shadow = node.getChildByName('PlantShadow')
+            if (shadow) shadow.active = false
+        }
+        const track = this.moweredLocator()
+        const pose = track && sampleReanimTrack(track, plant.mowered!.ticks * TICK_SECONDS * MOWERED_RATE)
+        if (!pose) return
+        const facing = plant.team === 'zombies' ? -1 : 1, tip = plant.mowered!.left ? -1 : 1
+        const origin = { x: plant.x + (facing < 0 ? PLANT_WIDTH : 0) - WIDTH / 2, y: HEIGHT / 2 - plant.y }
+        const foot = { x: plant.x + MOWED_PLANT_FOOT.x - WIDTH / 2, y: HEIGHT / 2 - plant.y - MOWED_PLANT_FOOT.y }
+        const linear = (degrees: number) => {
+            const turn = degrees * Math.PI / 180, cos = Math.cos(turn), sin = Math.sin(turn)
+            return (x: number, y: number) => ({ x: cos * pose.scaleX * x - sin * pose.scaleY * y, y: sin * pose.scaleX * x + cos * pose.scaleY * y })
+        }
+        // The locator moves the zombie's foot (MOWERED_ZOMBIE_FOOT); that carries over to the plant's, mirrored tipping left.
+        const zombieFoot = linear(-pose.skewX)(MOWERED_ZOMBIE_FOOT.x, MOWERED_ZOMBIE_FOOT.y)
+        const carry = { x: tip * (zombieFoot.x + pose.x - MOWERED_ZOMBIE_FOOT.x), y: zombieFoot.y - pose.y - MOWERED_ZOMBIE_FOOT.y }
+        const body = linear(-tip * pose.skewX)(origin.x - foot.x, origin.y - foot.y)
+        node.setPosition(foot.x + body.x + carry.x, foot.y + body.y + carry.y)
+        node.angle = -tip * pose.skewX
+        node.setScale(facing * pose.scaleX, pose.scaleY, 1)
+    }
+
     /** Zombie::DropHelm and DropShield: the armor falls as its effect, with its sound and reanim unless bypassed. */
     private dropArmor(entityId: number, snapshot: WorldSnapshot, slot: 'helm' | 'shield', bypassed: boolean): void {
         const node = this.entities.get(entityId)
@@ -493,10 +564,16 @@ export class LevelEntityRenderer {
         try {
             const projectile = snapshot.projectiles.find(value => value.entityId === id)
             if (projectile) {
-                const frame = this.assets.projectileFrames[projectile.typeId]
-                if (!frame) throw new Error(`Projectile sprite is not installed: ${projectile.typeId}`)
-                uiNode({ node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
-                const shadow = this.content.presentation.projectiles[projectile.typeId]?.shadow
+                const presentation = this.content.presentation.projectiles[projectile.typeId]
+                if (presentation?.plantShadow) uiNode({ name: 'ProjectilePlantShadow', parent: node, position: { ...presentation.plantShadow, z: -1 },
+                    sprite: { frame: this.assets.mowerShadow, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+                if (presentation?.reanim) await this.createAnimatedProjectile(node, presentation.reanim)
+                else {
+                    const frame = this.assets.projectileFrames[projectile.typeId]
+                    if (!frame) throw new Error(`Projectile sprite is not installed: ${projectile.typeId}`)
+                    uiNode({ node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+                }
+                const shadow = presentation?.shadow
                 if (shadow) {
                     const frame = this.assets.projectileShadowFrames[projectile.typeId]
                     if (!frame) throw new Error(`Projectile shadow is not installed: ${projectile.typeId}`)
@@ -508,10 +585,7 @@ export class LevelEntityRenderer {
                     shadowNode.setScale(shadow.scale, shadow.scale, 1)
                     this.projectileShadows.set(id, shadowNode)
                 }
-                const trail = this.content.presentation.projectiles[projectile.typeId]?.trail
-                if (trail) ParticlePlayer.spawn({ parent: node, ...trail })
-            } else if (snapshot.lawnMowers.some(value => value.entityId === id)) {
-                await this.createMower(id, node, snapshot)
+                if (presentation?.trail) ParticlePlayer.spawn({ parent: node, ...presentation.trail })
             } else if (plant) {
                 const attachments = new EntityAttachments()
                 const view = await this.content.plantViews.create({ node, attachments, content: this.content, animations: this.animations,
@@ -674,12 +748,12 @@ export class LevelEntityRenderer {
             if (shadow?.isValid) entries.push({ node: shadow, order: renderOrder('ground', entity.row, SHADOW_RENDER_OFFSET), entityId: entity.entityId })
         }
         for (const entity of snapshot.projectiles) {
-            add(entity.entityId, renderOrder('projectile', entity.row))
+            add(entity.entityId, renderOrder(this.content.presentation.projectiles[entity.typeId]?.layer ?? 'projectile', entity.row))
             const shadow = this.projectileShadows.get(entity.entityId)
             if (shadow?.isValid) entries.push({ node: shadow, order: renderOrder('ground', entity.row, SHADOW_RENDER_OFFSET), entityId: entity.entityId })
         }
         for (const [node, entry] of this.charred) if (node.isValid) entries.push({ node, ...entry })
-        for (const entity of snapshot.lawnMowers) add(entity.entityId, renderOrder('lawnMower', entity.row))
+        for (const [row, node] of this.waitingMowers) entries.push({ node, order: renderOrder('lawnMower', row) })
         for (const child of this.entityLayer.children) {
             const particle = child.getComponent(ParticlePlayer)
             if (particle) entries.push({ node: child, order: particle.renderOrder })
@@ -718,41 +792,36 @@ export class LevelEntityRenderer {
         }
     }
 
-    private async createMower(id: number, node: Node, snapshot: WorldSnapshot): Promise<void> {
-        uiNode({ name: 'MowerShadow', parent: node, position: { x: 36, y: -65, z: -1 }, sprite: { frame: this.assets.mowerShadow, sizeMode: Sprite.SizeMode.RAW, trim: false } })
-        uiNode({ name: 'CachedMower', parent: node, position: { x: -14, y: -19 }, anchor: { x: 0, y: 1 }, sprite: { frame: this.assets.mowerFrame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
-        const animationNode = uiNode({ name: 'MowerAnimation', parent: node, position: { x: 6, y: -19 }, anchor: { x: 0, y: 1 } }).node
-        animationNode.setScale(0.85, 0.85, 1)
+    /** A projectile drawn by a looping animation, like a running mower. */
+    private async createAnimatedProjectile(node: Node, reanim: NonNullable<ProjectilePresentationDefinition['reanim']>): Promise<void> {
+        const animationNode = uiNode({ name: 'ProjectileAnimation', parent: node, position: { x: reanim.x, y: reanim.y }, anchor: { x: 0, y: 1 } }).node
+        animationNode.setScale(reanim.scale, reanim.scale, 1)
         const player = animationNode.addComponent(ReanimPlayer)
-        await player.load('pvz:lawnmower', this.content.registry, this.content.loader)
-        if (!node.isValid) return
-        this.mowerPlayersReady.add(id)
-        const mower = snapshot.lawnMowers.find(value => value.entityId === id)
-        if (mower) this.syncMower(mower)
-        if (!this.intro.complete) this.intro.sync()
+        await player.load(reanim.id, this.content.registry, this.content.loader)
+        if (node.isValid) player.play({ loop: true, rate: reanim.rate })
     }
 
-    private syncMower(mower: LawnMowerSnapshot): void {
-        const node = this.entities.get(mower.entityId)
-        if (!node) return
-        const active = mower.state === 'active'
-        const visible = mower.state !== 'spent'
-        const cached = node.getChildByName('CachedMower')
-        const animation = node.getChildByName('MowerAnimation')
-        const shadow = node.getChildByName('MowerShadow')
-        if (cached) cached.active = mower.state === 'ready'
-        if (animation) animation.active = active
-        if (shadow) shadow.active = visible
-        if (!this.mowerPlayersReady.has(mower.entityId) || this.mowerStates.get(mower.entityId) === mower.state) return
-        const player = animation?.getComponent(ReanimPlayer)
-        if (active) player?.play({ loop: true, rate: 70 / 12 })
-        else player?.pause()
-        this.mowerStates.set(mower.entityId, mower.state)
+    /** Each row's waiting mower: the cached picture on the plants' shadow, where the intro rolls it in. */
+    private syncWaitingMowers(snapshot: WorldSnapshot): void {
+        for (const [row, node] of this.waitingMowers) {
+            if (snapshot.mowerRows.includes(row)) continue
+            node.destroy()
+            this.waitingMowers.delete(row)
+        }
+        for (const row of snapshot.mowerRows) {
+            if (this.waitingMowers.has(row)) continue
+            const board = this.content.definitions.boards[this.content.levels.levels[snapshot.levelId].board]
+            const node = uiNode({ name: `WaitingMower-${row}`, parent: this.entityLayer, anchor: { x: 0, y: 1 },
+                position: { x: MOWER_READY_X - WIDTH / 2, y: HEIGHT / 2 - mowerY(board, row) } }).node
+            uiNode({ name: 'MowerShadow', parent: node, position: { x: 36, y: -65, z: -1 }, sprite: { frame: this.assets.mowerShadow, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+            uiNode({ name: 'CachedMower', parent: node, position: { x: -14, y: -19 }, anchor: { x: 0, y: 1 }, sprite: { frame: this.assets.mowerFrame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+            this.waitingMowers.set(row, node)
+        }
     }
 }
 
 type Positioned = { entityId: number, x: number, y: number }
 
 function allEntities(snapshot: WorldSnapshot): Positioned[] {
-    return [...snapshot.plants, ...snapshot.zombies, ...snapshot.projectiles, ...snapshot.items, ...snapshot.lawnMowers]
+    return [...snapshot.plants, ...snapshot.zombies, ...snapshot.projectiles, ...snapshot.items]
 }

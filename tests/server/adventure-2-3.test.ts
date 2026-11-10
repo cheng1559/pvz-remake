@@ -62,7 +62,7 @@ test('2-3 introduces the screen door in wave 6 and the flag wave only, over 2-2\
 test('a screen door absorbs peas without chill, lets fume through, and falls when its zombie dies holding it', () => {
     const world = new World()
     const definition = levels.levels['pvz:adventure-2-3']
-    world.resources.set(LevelStateResource, { id: options.levelId, definition, board: definitions.boards['pvz:night'], phase: 'gameplay', result: 'playing', paused: false })
+    world.resources.set(LevelStateResource, { id: options.levelId, definition, board: definitions.boards['pvz:night'], phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] })
     world.resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     const events = () => drainServerEvents(world.resources.get(EventQueueResource))
@@ -93,7 +93,7 @@ test('Zombie::TakeDamage: a zombie with a helm and a shield loses the shield, th
     // A Mod zombie: the screen door zombie wearing a cone as well.
     const armored = { ...definitions, zombies: { ...definitions.zombies, 'pvz:screendoor': { ...definitions.zombies['pvz:screendoor'], helm: { type: 'cone', health: 370 } } } }
     const world = new World()
-    world.resources.set(LevelStateResource, { id: options.levelId, definition: levels.levels['pvz:adventure-2-3'], board: definitions.boards['pvz:night'], phase: 'gameplay', result: 'playing', paused: false })
+    world.resources.set(LevelStateResource, { id: options.levelId, definition: levels.levels['pvz:adventure-2-3'], board: definitions.boards['pvz:night'], phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] })
     world.resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     const entity = spawnZombie(world, armored, 'pvz:screendoor', 0, 500, 50)

@@ -1,45 +1,49 @@
 import { readGameplaySource } from '../../tools/mod/content'
+import { withFixedBanks } from '../fixedBankLevels'
+import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
+import { parseGameplayLevels } from '@/shared/content/gameplay'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { Schedule, World } from '@/ecs/index'
 import { parseGameplayDefinitions } from '@/shared/content/gameplay'
 import {
-    LawnMowerComponent,
     LevelStateResource,
+    MowedPlantComponent,
+    PlantComponent,
     PositionComponent,
+    ProjectileComponent,
     RandomResource,
     ZombieComponent,
 } from '@/server/state/components'
 import { createZombieSystem } from '@/server/zombies/system'
-import { createMowerSystem } from '@/server/level/mower'
+import { createMowerSystem, startMower } from '@/server/level/mower'
 import { EventQueueResource, createEventQueue } from '@/server/state/events'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
 const board = definitions.boards['pvz:day']
-
-test('mower transitions ready to active, kills overlaps, and remains spent off-board', () => {
+/** A level whose row 2 has a mower waiting. */
+function mowerWorld(): World {
     const world = new World()
-    world.resources.set(LevelStateResource, {
-        id: 'pvz:test',
-        definition: {} as never,
-        board,
-        phase: 'gameplay',
-        result: 'playing',
-        paused: false,
-    })
+    world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board,
+        phase: 'gameplay', result: 'playing', paused: false, mowerRows: [2] })
     world.resources.set(EventQueueResource, createEventQueue())
     world.resources.set(RandomResource, new DeterministicRng(1))
-    const mowerEntity = world.createEntity()
-    world.add(mowerEntity, PositionComponent, { x: 999, y: 999, row: 2 })
-    world.add(mowerEntity, LawnMowerComponent, { typeId: 'pvz:standard', state: 'ready', chompCounter: 0 })
+    return world
+}
+/** The running mowers, which are projectiles. */
+const mowers = (world: World) => [...world.query(PositionComponent, ProjectileComponent)]
+
+test("a row's mower sets off as a mowing projectile when a zombie with its head reaches it, kills overlaps, and is gone off the board", () => {
+    const world = mowerWorld()
     const schedule = new Schedule()
     schedule.add('zombie', createZombieSystem(definitions))
     schedule.add('mower', createMowerSystem(definitions))
 
     schedule.run(world, 1)
-    assert.deepEqual(world.get(mowerEntity, PositionComponent), { x: -21, y: 303, row: 2 })
+    assert.deepEqual(world.resources.get(LevelStateResource).mowerRows, [2])
+    assert.equal(mowers(world).length, 0)
 
     const zombie = world.createEntity()
     world.add(zombie, PositionComponent, { x: -10, y: 280, row: 2 })
@@ -52,16 +56,19 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
     })
     schedule.run(world, 2)
-    assert.equal(world.get(mowerEntity, LawnMowerComponent)!.state, 'ready')
+    assert.deepEqual(world.resources.get(LevelStateResource).mowerRows, [2])
     assert.equal(world.get(zombie, ZombieComponent)!.state, 'walking')
     world.get(zombie, ZombieComponent)!.hasHead = true
     schedule.run(world, 3)
+    assert.deepEqual(world.resources.get(LevelStateResource).mowerRows, [])
+    const [mowerEntity] = mowers(world)
+    assert.deepEqual(world.get(mowerEntity, ProjectileComponent)!.typeId, 'pvz:lawnmower')
+    assert.equal(world.get(mowerEntity, PositionComponent)!.y, 303)
     assert.equal(world.hasEntity(zombie), true)
     assert.equal(world.get(zombie, ZombieComponent)!.state, 'mowered')
     assert.equal(world.get(zombie, ZombieComponent)!.animationSpeed, 16 / 12)
     assert.equal(world.get(zombie, ZombieComponent)!.moweredTicksRemaining, 50)
-    assert.equal(world.get(mowerEntity, LawnMowerComponent)!.state, 'active')
-    assert.equal(world.get(mowerEntity, LawnMowerComponent)!.chompCounter, 24)
+    assert.equal(world.get(mowerEntity, ProjectileComponent)!.chompCounter, 24)
     assert.equal(world.get(mowerEntity, PositionComponent)!.x, -19.996272)
 
     const secondZombie = world.createEntity()
@@ -82,7 +89,7 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
         2,
     )
 
-    assert.equal(world.get(mowerEntity, LawnMowerComponent)!.chompCounter, 49)
+    assert.equal(world.get(mowerEntity, ProjectileComponent)!.chompCounter, 49)
     for (let tick = 5; tick <= 28; tick++) schedule.run(world, tick)
     assert.ok(Math.abs(world.get(zombie, ZombieComponent)!.animationTime - 3.5) < 1e-9)
     for (let tick = 29; tick <= 52; tick++) schedule.run(world, tick)
@@ -102,19 +109,12 @@ test('mower transitions ready to active, kills overlaps, and remains spent off-b
     world.resources.get(LevelStateResource).result = 'won'
     world.get(mowerEntity, PositionComponent)!.x = 799
     schedule.run(world, 55)
-    assert.equal((world.get(mowerEntity, LawnMowerComponent) as { state: string }).state, 'spent')
-    assert.equal(world.hasEntity(mowerEntity), true)
-    assert.equal(world.get(mowerEntity, PositionComponent)!.x, 802.33)
+    assert.equal(world.hasEntity(mowerEntity), false)
+    assert.deepEqual(world.resources.get(LevelStateResource).mowerRows, [], 'the row has used its mower')
 })
 
 test('Zombie::MowDown drops a worn helm or shield before the mowed animation', () => {
-    const world = new World()
-    world.resources.set(LevelStateResource, { id: 'pvz:test', definition: {} as never, board, phase: 'gameplay', result: 'playing', paused: false })
-    world.resources.set(EventQueueResource, createEventQueue())
-    world.resources.set(RandomResource, new DeterministicRng(1))
-    const mower = world.createEntity()
-    world.add(mower, PositionComponent, { x: -21, y: 303, row: 2 })
-    world.add(mower, LawnMowerComponent, { typeId: 'pvz:standard', state: 'ready', chompCounter: 0 })
+    const world = mowerWorld()
     const zombies = ['pvz:conehead', 'pvz:screendoor'].map(typeId => {
         const entity = world.createEntity()
         world.add(entity, PositionComponent, { x: -10, y: 280, row: 2 })
@@ -138,4 +138,113 @@ test('Zombie::MowDown drops a worn helm or shield before the mowed animation', (
         .map(event => [event.type, event.data]),
         [['zombieHelmDropped', { entityId: zombies[0], helm: 'cone' }], ['zombieShieldDropped', { entityId: zombies[1], shield: 'door' }]],
         'DropHelm(0U) and DropShield(0U) do not bypass')
+})
+
+test('a zombie that cannot be flattened (dying, vaulting, rising) goes in a puff: its parts drop and it is gone at once', () => {
+    const world = mowerWorld()
+    const zombie = world.createEntity()
+    world.add(zombie, PositionComponent, { x: -10, y: 280, row: 2 })
+    world.add(zombie, ZombieComponent, {
+        typeId: 'pvz:normal', health: 0, maxHealth: 270, state: 'dying', speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 100,
+        moweredTicksRemaining: 0, walkAnimation: 'anim_walk', animation: 'anim_death', animationTime: 0, animationSpeed: 1,
+        hasHead: false, hasTongue: false, hasArm: true, groanCounter: 300,
+        helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
+    })
+    startMower(world, definitions, 2)
+    const schedule = new Schedule()
+    schedule.add('mower', createMowerSystem(definitions))
+    schedule.run(world, 1)
+    assert.equal(world.hasEntity(zombie), false)
+    assert.deepEqual(world.resources.get(EventQueueResource).events.filter(event => event.type === 'zombiePuffed' || event.type === 'zombiePartDropped' || event.type === 'zombieMowered')
+        .map(event => [event.type, event.data.part]), [['zombiePuffed', undefined], ['zombiePartDropped', 'arm']])
+})
+
+test("a running mower crushes the zombies' plants in its row, and they do not set a waiting one off", () => {
+    const world = mowerWorld()
+    const plant = (team: 'plants' | 'zombies', column: number, row = 2, typeId = 'pvz:wallnut') => {
+        const entity = world.createEntity()
+        world.add(entity, PositionComponent, { x: board.origin.x + column * board.cell.width, y: 280, row })
+        world.add(entity, PlantComponent, {
+            typeId, seedId: typeId, column, health: 4000, maxHealth: 4000,
+            recentlyEatenCounter: 0, chilledTicks: 0, ...(team === 'zombies' ? { team } : {}),
+        })
+        return entity
+    }
+    const enemy = plant('zombies', 0), friend = plant('plants', 1), otherRow = plant('zombies', 0, 3)
+    const explosive = plant('zombies', 3, 2, 'pvz:explodenut')
+    const schedule = new Schedule()
+    schedule.add('mower', createMowerSystem(definitions))
+    schedule.run(world, 1)
+    assert.deepEqual(world.resources.get(LevelStateResource).mowerRows, [2])
+    assert.equal(world.get(enemy, PlantComponent)!.health, 4000)
+
+    startMower(world, definitions, 2)
+    const [mower] = mowers(world)
+    let tick = 2
+    while (!world.get(enemy, MowedPlantComponent)) schedule.run(world, tick++)
+    assert.equal(world.get(enemy, PlantComponent), undefined, 'it is no plant any more')
+    let squashing = 0
+    while (world.hasEntity(enemy)) { schedule.run(world, tick++); squashing++ }
+    assert.equal(squashing, 50, 'it stays for its squashing, as long as a mowed zombie')
+    while (world.hasEntity(mower)) schedule.run(world, tick++)
+    const events = world.resources.get(EventQueueResource).events
+    assert.deepEqual(events.filter(event => event.type === 'plantMowered').map(event => event.data),
+        [{ mowerId: mower, plantId: enemy }, { mowerId: mower, plantId: explosive }], 'the client squashes them')
+    assert.equal(world.isQueryable(explosive), false)
+    assert.ok(!events.some(event => event.type === 'plantExploded'), 'an explode-o-nut is crushed, not set off')
+    assert.equal(world.get(friend, PlantComponent)!.health, 4000)
+    assert.equal(world.get(otherRow, PlantComponent)!.health, 4000)
+})
+
+test('a shooter can fire mowing projectiles, each from its mouth on its side, crushing the other side, and gone off the board', () => {
+    // A peashooter that fires mowers in place of peas.
+    const source = readGameplaySource('definitions')
+    source.plants['pvz:peashooter'].shooter.projectile = 'pvz:lawnmower'
+    const firing = parseGameplayDefinitions(source, readGameplaySource('seed-catalog'))
+    const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), firing)
+    const play = (lines: string[]) => {
+        const game = new LocalIntegratedGame(firing, levels, undefined, true)
+        game.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
+        game.command({ type: 'completeIntro' })
+        for (const line of lines) assert.equal(game.debugCommand(line).ok, true, line)
+        game.command({ type: 'resume' })
+        game.update(0)
+        return game
+    }
+    const running = (game: LocalIntegratedGame) => game.render().projectiles.filter(projectile => projectile.typeId === 'pvz:lawnmower')
+    const run = (game: LocalIntegratedGame, until: () => boolean) => {
+        for (let step = 0; step < 3000 && !until(); step++) game.update(0.01)
+        assert.ok(until())
+    }
+
+    const ours = play(['/plant peashooter 3 1', '/zombie normal 3 8'])
+    run(ours, () => running(ours).length > 0)
+    assert.equal(running(ours)[0].team, undefined)
+    run(ours, () => ours.render().zombies.some(zombie => zombie.state === 'mowered'))
+    run(ours, () => running(ours).length === 0)
+    assert.deepEqual(ours.render().mowerRows, [2], "the row's own mower still waits")
+
+    const theirs = play(['/plant peashooter 3 9 zombies', '/plant wallnut 3 3'])
+    run(theirs, () => running(theirs).some(mower => mower.team === 'zombies'))
+    const fired = running(theirs).find(mower => mower.team === 'zombies')!
+    const loaded = new LocalIntegratedGame(firing, levels, undefined, true)
+    loaded.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save: theirs.saveAtBoundary() })
+    assert.deepEqual(running(loaded), running(theirs), 'a save keeps it')
+    run(theirs, () => running(theirs).find(mower => mower.entityId === fired.entityId)!.x < fired.x)
+    run(theirs, () => !theirs.render().plants.some(plant => plant.typeId === 'pvz:wallnut'))
+    run(theirs, () => !running(theirs).some(mower => mower.entityId === fired.entityId))
+    assert.ok(theirs.render().plants.some(plant => plant.team === 'zombies'), 'it passes its own side')
+
+    // A plant put down on a running mower is mowed in the same tick: the client first sees it mowed, and squashes it.
+    const planted = play(['/seed 1 wallnut zombies', '/sun set 1000', '/lawnmower trigger 3'])
+    run(planted, () => running(planted)[0].x >= 150)
+    planted.command({ type: 'selectSeed', seedId: 'pvz:wallnut', slot: 0 })
+    planted.command({ type: 'placePlant', row: 2, column: 1 })
+    planted.update(0.01)
+    const nut = () => planted.render().plants.find(plant => plant.typeId === 'pvz:wallnut')
+    assert.deepEqual(nut()?.mowered, { ticks: 0 })
+    const squashed = new LocalIntegratedGame(firing, levels, undefined, true)
+    squashed.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save: planted.saveAtBoundary() })
+    assert.deepEqual(squashed.render().plants, planted.render().plants, 'a save keeps it mid-squash')
+    run(planted, () => !nut())
 })

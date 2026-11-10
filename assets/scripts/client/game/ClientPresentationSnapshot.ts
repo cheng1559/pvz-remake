@@ -77,7 +77,7 @@ function validateLevel(snapshot: LevelPresentationSnapshot, current: WorldSnapsh
     // Both halves of a save must describe the same frame: every presentation entry needs its entity in it.
     const worldIds = new Set([
         ...current.plants, ...current.zombies, ...current.projectiles,
-        ...current.items, ...current.lawnMowers,
+        ...current.items,
     ].map(entity => entity.entityId))
     for (const entity of snapshot.entities) {
         if (!worldIds.has(entity.entityId)) {

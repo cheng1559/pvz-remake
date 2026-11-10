@@ -38,7 +38,6 @@ export interface GameplayDefinitions {
     zombieGaits: Record<string, ZombieGait>
     projectiles: Record<string, ProjectileDefinition>
     items: Record<string, ItemDefinition>
-    lawnMowers: Record<string, LawnMowerDefinition>
     /** The achievements, in their screen order (base first, then each Mod's). */
     achievements: Record<string, AchievementDefinition>
     /** Board::GetNumSeedsInBank: `baseSlots` plus one per seed-slot upgrade, at most `maxSlots` (SEEDBANK_MAX). */
@@ -54,6 +53,13 @@ export interface GameplayLevels {
     levels: Record<string, LevelDefinition>
 }
 
+/** Where a level's mower waits, its left edge (LawnMower::LawnMowerInitialize). */
+export const MOWER_READY_X = -21
+
+/** Where a mower rides in a row: a level's waits there, and a mowing projectile runs there, on the ground. */
+export function mowerY(board: BoardDefinition, row: number): number {
+    return board.origin.y + row * board.cell.height + 23
+}
 
 export interface BoardDefinition {
     /** Nocturnal plants sleep on boards that are not at night. */
@@ -238,8 +244,16 @@ export interface ZombieGait {
     deaths: Array<{ animation: 'anim_death' | 'anim_death2' | 'anim_superlongdeath'; frames: number; fallTime: number; rate?: number }>
 }
 
+/** Exactly one of `damage` and `mow`. */
 export interface ProjectileDefinition {
-    damage: number
+    /** Taken off what it hits first, which it stops at. */
+    damage?: number
+    /**
+     * A lawn mower: it runs through everything of the other side in its row, crushing each (Zombie::MowDown, a plant
+     * squashed) and slowing as it chews, until it leaves the board (LawnMower::UpdatePlaying). A level's mowers set off
+     * as one when a zombie reaches them (mower.ts); a shooter may fire one.
+     */
+    mow?: true
     speedPerTick: Point
     hitbox: Rect
     /** Slows the target for this many ticks, renewed by each hit. */
@@ -258,11 +272,6 @@ export interface ItemDefinition {
     scale?: number
     /** Coin::GetDisappearTime: ticks on the ground before fading; 750 when omitted. */
     lifetimeTicks?: number
-}
-
-export interface LawnMowerDefinition {
-    speedPerTick: number
-    attack: Rect
 }
 
 /**
@@ -304,6 +313,7 @@ export interface LevelDefinition {
     initialPlants?: Array<{ seedId: string; row: number; column: number; team?: Team }>
     /** Board::CanPlantAt on Wall-nut Bowling: the player plants nothing right of `column` (the red line). */
     plantingLine?: { column: number }
+    /** The mower waiting at each active row's end, set off when a zombie reaches it: a projectile that mows. */
     lawnMower: string
     /** The sun that falls from the sky; omitted at night (Board::UpdateSunSpawning). */
     skySun?: string
@@ -357,7 +367,7 @@ interface Rect extends Point { width: number; height: number }
 export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): GameplayDefinitions {
     const source = exactObject(value, [
         'schemaVersion', 'economy', 'boards', 'seeds', 'plants', 'zombies',
-        'projectiles', 'items', 'lawnMowers', 'achievements', 'zombieGaits', 'seedBank',
+        'projectiles', 'items', 'achievements', 'zombieGaits', 'seedBank',
     ], 'gameplay definitions')
     const economy = exactObject(source.economy, ['maxSun', 'maxMoney'], 'gameplay definitions.economy')
     const seedBank = exactObject(source.seedBank, ['baseSlots', 'maxSlots', 'startingSeeds'], 'gameplay definitions.seedBank')
@@ -376,7 +386,6 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
         zombieGaits: mapped(source.zombieGaits, 'zombieGaits', parseZombieGait),
         projectiles: mapped(source.projectiles, 'projectiles', parseProjectile),
         items: mapped(source.items, 'items', parseItem),
-        lawnMowers: mapped(source.lawnMowers, 'lawnMowers', parseLawnMower),
         achievements: mapped(source.achievements, 'achievements', parseAchievement),
         seedBank: { baseSlots: positiveInteger(seedBank.baseSlots, 'seedBank.baseSlots'), maxSlots: positiveInteger(seedBank.maxSlots, 'seedBank.maxSlots'),
             startingSeeds: qualifiedIdArray(seedBank.startingSeeds, 'seedBank.startingSeeds') },
@@ -769,9 +778,12 @@ function fraction(value: unknown, name: string): number {
 }
 
 function parseProjectile(value: unknown, name: string): ProjectileDefinition {
-    const source = exactObject(value, ['damage', 'speedPerTick', 'hitbox'], name, ['chillTicks', 'lifetimeTicks'])
+    const source = exactObject(value, ['speedPerTick', 'hitbox'], name, ['damage', 'mow', 'chillTicks', 'lifetimeTicks'])
+    if ((source.damage === undefined) === (source.mow === undefined)) throw new Error(`${name} needs exactly one of damage and mow`)
+    if (source.mow !== undefined && source.mow !== true) throw new Error(`${name}.mow must be true`)
     return {
-        damage: positiveInteger(source.damage, `${name}.damage`),
+        ...(source.damage === undefined ? {} : { damage: positiveInteger(source.damage, `${name}.damage`) }),
+        ...(source.mow ? { mow: true as const } : {}),
         speedPerTick: point(source.speedPerTick, `${name}.speedPerTick`),
         hitbox: rect(source.hitbox, `${name}.hitbox`),
         ...(source.chillTicks === undefined ? {} : { chillTicks: positiveInteger(source.chillTicks, `${name}.chillTicks`) }),
@@ -789,14 +801,6 @@ function parseItem(value: unknown, name: string): ItemDefinition {
         width: positiveFinite(source.width, `${name}.width`),
         height: positiveFinite(source.height, `${name}.height`),
         ...(source.scale === undefined ? {} : { scale: positiveFinite(source.scale, `${name}.scale`) }),
-    }
-}
-
-function parseLawnMower(value: unknown, name: string): LawnMowerDefinition {
-    const source = exactObject(value, ['speedPerTick', 'attack'], name)
-    return {
-        speedPerTick: positiveFinite(source.speedPerTick, `${name}.speedPerTick`),
-        attack: rect(source.attack, `${name}.attack`),
     }
 }
 
@@ -949,7 +953,8 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
     if (source.openingRecharge !== undefined && source.openingRecharge !== false) throw new Error(`${name}.openingRecharge can only be false`)
     const tools = source.tools === undefined ? undefined : qualifiedIdArray(source.tools, `${name}.tools`)
     const lawnMower = qualifiedId(source.lawnMower, `${name}.lawnMower`)
-    reference(lawnMower, definitions.lawnMowers, `${name}.lawnMower`)
+    reference(lawnMower, definitions.projectiles, `${name}.lawnMower`)
+    if (!definitions.projectiles[lawnMower].mow) throw new Error(`${name}.lawnMower must be a projectile that mows`)
     const skySun = source.skySun === undefined ? undefined : qualifiedId(source.skySun, `${name}.skySun`)
     if (skySun) reference(skySun, definitions.items, `${name}.skySun`)
     const graves = source.graves === undefined ? undefined : array(source.graves, `${name}.graves`).map((value, index) => {

@@ -11,7 +11,7 @@ import {
 import { DeterministicRng, type DeterministicRngState } from '../state/DeterministicRng'
 import type { EventQueue } from '../state/events'
 import type {
-    LawnMower,
+    MowedPlant,
     Plant,
     PlantAbility,
     PlantAbilityState,
@@ -32,8 +32,8 @@ export interface SavedEntity {
     extensions?: SavedComponents
     entityId: EntityId
     position?: Position
-    lawnMower?: LawnMower
     plant?: Plant
+    mowedPlant?: MowedPlant
     plantAttack?: PlantAttack
     zombie?: Zombie
     projectile?: Projectile
@@ -48,7 +48,7 @@ export interface ServerSaveSnapshot {
     gameplayTick: number
     allocator: EntityAllocatorSnapshot
     random: DeterministicRngState
-    level: { phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean }
+    level: { phase: 'intro' | 'gameplay', result: 'playing' | 'won' | 'lost', paused: boolean, mowerRows: number[] }
     economy: { sun: number, money: number, pendingSunSpend: number, packetUpgrades: number }
     /** Crazy Dave's seed-slot offer of a game started with one, so a restored intro can still sell it. */
     packetUpgradeOffer?: { cost: number }
@@ -78,7 +78,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
     } as DeterministicRngState
     DeterministicRng.restore(random)
 
-    const levelSource = exact(save.level, ['phase', 'result', 'paused'], 'server save.level')
+    const levelSource = exact(save.level, ['phase', 'result', 'paused', 'mowerRows'], 'server save.level')
     if (levelSource.phase !== 'intro' && levelSource.phase !== 'gameplay') {
         throw new TypeError('server save.level.phase is unknown')
     }
@@ -89,6 +89,7 @@ export function parseServerSaveSnapshot(value: unknown): ServerSaveSnapshot {
         phase: levelSource.phase as 'intro' | 'gameplay',
         result: levelSource.result as 'playing' | 'won' | 'lost',
         paused: boolean(levelSource.paused, 'server save.level.paused'),
+        mowerRows: array(levelSource.mowerRows, 'server save.level.mowerRows').map(row => integer(row, 'server save.level.mowerRows[]')),
     }
 
     const economySource = optionalExact(save.economy, ['sun', 'money', 'pendingSunSpend', 'packetUpgrades'], ['firstCoinDropped', 'mowerCoinTicks', 'diamonds'], 'server save.economy')
@@ -323,7 +324,7 @@ function parseEventQueue(value: unknown): EventQueue {
 function parseEntity(value: unknown, index: number, nextEntity: number): SavedEntity {
     const name = `server save.entities[${index}]`
     const source = optionalExact(value, ['entityId', 'position'], [
-        'lawnMower', 'plant', 'plantAttack', 'zombie', 'projectile', 'item', 'extensions',
+        'plant', 'mowedPlant', 'plantAttack', 'zombie', 'projectile', 'item', 'extensions',
     ], name)
     const entityId = positiveInteger(source.entityId, `${name}.entityId`)
     if (entityId >= nextEntity) throw new TypeError(`${name}.entityId must be below allocator.nextEntity`)
@@ -331,8 +332,13 @@ function parseEntity(value: unknown, index: number, nextEntity: number): SavedEn
         entityId,
         position: parsePosition(source.position, `${name}.position`),
     }
-    if (source.lawnMower !== undefined) entity.lawnMower = parseMower(source.lawnMower, `${name}.lawnMower`)
     if (source.plant !== undefined) entity.plant = parsePlant(source.plant, `${name}.plant`)
+    if (source.mowedPlant !== undefined) {
+        const mowed = optionalExact(source.mowedPlant, ['plant', 'ticks'], ['left'], `${name}.mowedPlant`)
+        if (mowed.left !== undefined && mowed.left !== true) throw new TypeError(`${name}.mowedPlant.left must be true`)
+        entity.mowedPlant = { plant: parsePlant(mowed.plant, `${name}.mowedPlant.plant`), ticks: nonNegativeInteger(mowed.ticks, `${name}.mowedPlant.ticks`),
+            ...(mowed.left ? { left: true } : {}) }
+    }
     if (source.plantAttack !== undefined) entity.plantAttack = parsePlantAttack(source.plantAttack, `${name}.plantAttack`)
     if (source.zombie !== undefined) entity.zombie = parseZombie(source.zombie, `${name}.zombie`)
     if (source.projectile !== undefined) entity.projectile = parseProjectile(source.projectile, `${name}.projectile`)
@@ -353,17 +359,6 @@ function parsePosition(value: unknown, name: string): Position {
     return { x: finite(source.x, `${name}.x`), y: finite(source.y, `${name}.y`), row: integer(source.row, `${name}.row`) }
 }
 
-function parseMower(value: unknown, name: string): LawnMower {
-    const source = exact(value, ['typeId', 'state', 'chompCounter'], name)
-    if (source.state !== 'ready' && source.state !== 'active' && source.state !== 'spent') {
-        throw new TypeError(`${name}.state is unknown`)
-    }
-    return {
-        typeId: nonEmptyString(source.typeId, `${name}.typeId`),
-        state: source.state,
-        chompCounter: nonNegativeInteger(source.chompCounter, `${name}.chompCounter`),
-    }
-}
 
 const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
     'fuse', 'arming', 'rising', 'armed', 'ready', 'biting', 'got-one', 'missed', 'digesting', 'swallowing',
@@ -465,11 +460,12 @@ function parseZombie(value: unknown, name: string): Zombie {
 }
 
 function parseProjectile(value: unknown, name: string): Projectile {
-    const source = optionalExact(value, ['typeId'], ['ticksLeft', 'team'], name)
+    const source = optionalExact(value, ['typeId'], ['ticksLeft', 'team', 'chompCounter'], name)
     return {
         typeId: nonEmptyString(source.typeId, `${name}.typeId`),
         ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
         ...(source.ticksLeft === undefined ? {} : { ticksLeft: positiveInteger(source.ticksLeft, `${name}.ticksLeft`) }),
+        ...(source.chompCounter === undefined ? {} : { chompCounter: nonNegativeInteger(source.chompCounter, `${name}.chompCounter`) }),
     }
 }
 

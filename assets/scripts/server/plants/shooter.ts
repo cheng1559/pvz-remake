@@ -1,7 +1,6 @@
 import { getBoardBounds } from '../combat/collision'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, World } from '@/ecs/index'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import {
     LevelStateResource,
     type Plant,
@@ -17,6 +16,7 @@ import { damageZombie, isTargetableZombie } from '../zombies/damage'
 import { plantFacingRect, plantFacingX, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { hostilePlants } from '../combat/targets'
 import { damagePlant } from './damage'
+import { type GameplayDefinitions, mowerY } from '@/shared/content/gameplay'
 
 export function createPeashooterSystem(definitions: GameplayDefinitions): GameSystem {
     return {
@@ -50,18 +50,19 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                     }
                     const projectile = commands.createEntity()
                     // A plant facing left fires from its mirrored mouth: the projectile's hitbox mirrors across the plant.
-                    const hitbox = definitions.projectiles[shooter.projectile!].hitbox
+                    const { hitbox, lifetimeTicks: lifetime, mow } = definitions.projectiles[shooter.projectile!]
                     const fired = plantFacingRect({ x: shooter.offset.x + hitbox.x, width: hitbox.width }, plantTeam(plant))
                     commands.add(projectile, PositionComponent, {
                         x: position.x + fired.x - hitbox.x,
-                        y: position.y + shooter.offset.y,
+                        // A mower runs on the ground, as a level's does.
+                        y: mow ? mowerY(level.board, position.row) : position.y + shooter.offset.y,
                         row: position.row,
                     })
-                    const lifetime = definitions.projectiles[shooter.projectile!].lifetimeTicks
                     commands.add(projectile, ProjectileComponent, {
                         typeId: shooter.projectile!,
                         ...(plant.team ? { team: plant.team } : {}),
                         ...(lifetime === undefined ? {} : { ticksLeft: lifetime }),
+                        ...(mow ? { chompCounter: 0 } : {}),
                     })
                     emitServerEvent(world.resources.get(EventQueueResource), 'projectileFired', {
                         plantId: entity,

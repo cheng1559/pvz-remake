@@ -4,7 +4,6 @@ import { readGameplaySource } from '../../tools/mod/content'
 
 import type { World } from '@/ecs/index'
 import {
-LawnMowerComponent,
 PlantAttackComponent,
 PlantComponent,
 PositionComponent,
@@ -15,6 +14,7 @@ import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { ItemComponent,TutorialResource } from '@/server/state/levelState'
 import { damageZombie } from '@/server/zombies/damage'
+import { startMower } from '@/server/level/mower'
 import { spawnZombie } from '@/server/zombies/spawn'
 import {
 parseGameplayDefinitions,
@@ -70,14 +70,7 @@ test('1-1 starts at tick zero and advances as a JSON-safe authoritative world', 
     assert.equal(initial.tick, 0)
     assert.equal(initial.sun, 150)
     assert.equal(initial.money, 50)
-    assert.deepEqual(initial.lawnMowers, [{
-        entityId: 1,
-        typeId: 'pvz:standard',
-        state: 'ready',
-        x: -21,
-        y: 303,
-        row: 2,
-    }])
+    assert.deepEqual(initial.mowerRows, [2])
     assert.deepEqual(initial, second.start(startPacket))
 
     assert.equal(initial.phase, 'intro')
@@ -144,7 +137,7 @@ test('selecting and placing Peashooter changes authority state atomically', () =
         availability: { reason: 'seed-not-ready', warningKey: 'WAITING_FOR_SEED' },
     }])
     assert.deepEqual(planted.plants, [{
-        entityId: 2,
+        entityId: 1,
         typeId: 'pvz:peashooter',
         seedId: 'pvz:peashooter',
         column: 0,
@@ -166,14 +159,14 @@ test('Peashooter acquires a zombie ahead and fires after its fixed windup', () =
     runCommand(server, { type: 'placePlant', row: 2, column: 0 })
 
     const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
-    assert.equal(spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250), 3)
+    assert.equal(spawnZombie(world, definitions, 'pvz:normal', 2, 700, 250), 2)
     server.drainEvents()
 
     let snapshot = server.snapshot()
     const ready = Math.max(1, server.save().entities.find(entity => entity.plantAttack)!.plantAttack!.readyAtTick)
     while (gameplayTick(server) < ready) snapshot = server.tick()
     assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [[
-        'plantFiring', { plantId: 2 },
+        'plantFiring', { plantId: 1 },
     ]])
     const fire = ready + definitions.plants['pvz:peashooter'].shooter!.windupTicks - 1
     while (gameplayTick(server) < fire - 1) snapshot = server.tick()
@@ -181,18 +174,18 @@ test('Peashooter acquires a zombie ahead and fires after its fixed windup', () =
 
     snapshot = server.tick()
     assert.equal(gameplayTick(server), fire)
-    assert.equal(snapshot.zombies[0].entityId, 3)
+    assert.equal(snapshot.zombies[0].entityId, 2)
     assert.equal(snapshot.zombies[0].state, 'walking')
     assert.equal(snapshot.zombies[0].x < 700, true)
     assert.deepEqual(snapshot.projectiles, [{
-        entityId: 4,
+        entityId: 3,
         typeId: 'pvz:pea',
         x: 99.33,
         y: 290,
         row: 2,
     }])
     assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [[
-        'projectileFired', { plantId: 2, projectileId: 4, typeId: 'pvz:pea' },
+        'projectileFired', { plantId: 1, projectileId: 3, typeId: 'pvz:pea' },
     ]])
 })
 
@@ -291,8 +284,8 @@ test('collecting the award keeps existing entity updates running while spawning 
     const server = new IntegratedGameServer(definitions, levels)
     startGameplay(server)
     const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
-    const mowerId = server.snapshot().lawnMowers[0].entityId
-    world.get(mowerId, LawnMowerComponent)!.state = 'active'
+    startMower(world, definitions, 2)
+    const mower = (snapshot: { projectiles: Array<{ typeId: string, x: number }> }) => snapshot.projectiles.find(projectile => projectile.typeId === 'pvz:lawnmower')!
     const peaId = world.createEntity()
     world.add(peaId, PositionComponent, { x: 100, y: 290, row: 2 })
     world.add(peaId, ProjectileComponent, { typeId: 'pvz:pea' })
@@ -323,15 +316,15 @@ test('collecting the award keeps existing entity updates running while spawning 
     assert.equal(runCommand(server, { type: 'collectItemAt', itemId: awardId }), undefined)
     assert.equal(server.snapshot().items.find(item => item.entityId === sunId)?.state, 'collecting')
     const winTick = server.snapshot().tick
-    const mowerX = server.snapshot().lawnMowers[0].x
+    const mowerX = mower(server.snapshot()).x
     const peaX = world.get(peaId, PositionComponent)!.x
     const corpseTicks = world.get(corpseId, ZombieComponent)!.deathTicksRemaining
     let snapshot = server.tick()
     assert.equal(snapshot.tick, winTick + 1)
     assert.equal(snapshot.result, 'won')
-    assert.ok(snapshot.lawnMowers[0].x > mowerX, 'collecting the award must not stop an active mower')
+    assert.ok(mower(snapshot).x > mowerX, 'collecting the award must not stop an active mower')
     assert.equal(world.get(peaId, PositionComponent)!.x, peaX + definitions.projectiles['pvz:pea'].speedPerTick.x)
-    assert.equal(snapshot.projectiles.length, 2, 'a pending shot completes after victory')
+    assert.equal(snapshot.projectiles.filter(projectile => projectile.typeId === 'pvz:pea').length, 2, 'a pending shot completes after victory')
     assert.equal(world.get(corpseId, ZombieComponent)!.deathTicksRemaining, corpseTicks - 1)
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), 'game-not-playing')
     assert.ok(snapshot.items.find(item => item.entityId === sunId)!.x < 300)

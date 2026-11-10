@@ -9,12 +9,6 @@ export interface Position {
     row: number
 }
 
-export interface LawnMower {
-    typeId: string
-    state: 'ready' | 'active' | 'spent'
-    chompCounter: number
-}
-
 export interface Plant extends EntityBehaviorState {
     typeId: string
     seedId: string
@@ -95,6 +89,8 @@ export interface Projectile {
     team?: Team
     /** Updates left before a limited-lifetime projectile disappears. */
     ticksLeft?: number
+    /** A mowing one's (ProjectileDefinition.mow) ticks left chewing, slowed (LawnMower::mChompCounter). */
+    chompCounter?: number
 }
 
 /** A bank packet is picked by slot, so a bank may hold the same seed twice with separate recharges. */
@@ -165,15 +161,23 @@ export interface LevelState {
     phase: 'intro' | 'gameplay'
     result: 'playing' | 'won' | 'lost'
     paused: boolean
+    /** The rows whose mower still waits at the house end, in order; one set off is a mowing projectile (mower.ts). */
+    mowerRows: number[]
 }
 
 export const PositionComponent = defineComponent<Position>('pvz:position')
 
-export const LawnMowerComponent = defineComponent<LawnMower>('pvz:lawn_mower')
-
 export const PlantComponent = defineComponent<Plant>('pvz:plant')
 
 export const PlantAttackComponent = defineComponent<PlantAttack>('pvz:plant_attack')
+
+/**
+ * A plant a mower has crushed, as it stood: no plant any more (nothing aims at it, eats it or holds its cell by it), it
+ * stays for the squashing, `ticks` into it, as a mowed zombie does. `left`: the mower ran left, so it tips that way.
+ */
+export interface MowedPlant { plant: Plant, ticks: number, left?: true }
+
+export const MowedPlantComponent = defineComponent<MowedPlant>('pvz:mowed_plant')
 
 export const ZombieComponent = defineComponent<Zombie>('pvz:zombie')
 

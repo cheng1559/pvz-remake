@@ -1,4 +1,11 @@
 {
+  "pvz:lawnmower": {
+    "reanim": {"id": "pvz:lawnmower", "x": 6, "y": -19, "scale": 0.85, "rate": 5.833333333333333},
+    "plantShadow": {"x": 36, "y": -65},
+    "layer": "lawnMower",
+    "fireSounds": [{"audio": "pvz:lawnmower", "foley": true}],
+    "impactSounds": []
+  },
   "pvz:pea": {
     "shadow": {"sprite": "pvz:pea_shadows", "columns": 2, "cell": 0, "offset": {"x": 3, "y": 67}, "scale": 1},
     "impact": {"id": "pvz:peasplat", "offset": [49, 12], "yRange": [20, 100]},

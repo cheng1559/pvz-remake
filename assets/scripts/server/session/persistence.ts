@@ -5,8 +5,8 @@ import { jsonRoundTrip } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
 import {
     EconomyStateResource,
-    LawnMowerComponent,
     LevelStateResource,
+    MowedPlantComponent,
     PacketUpgradeOfferResource,
     PlantAttackComponent,
     PlantComponent,
@@ -32,18 +32,18 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         const extensions = gameplay.components.capture(world, entityId)
         const entity: SavedEntity = { entityId, ...(Object.keys(extensions).length ? { extensions } : {}) }
         const position = world.get(entityId, PositionComponent)
-        const lawnMower = world.get(entityId, LawnMowerComponent)
         const plant = world.get(entityId, PlantComponent)
         const plantAttack = world.get(entityId, PlantAttackComponent)
+        const mowedPlant = world.get(entityId, MowedPlantComponent)
         const zombie = world.get(entityId, ZombieComponent)
         const projectile = world.get(entityId, ProjectileComponent)
         const item = world.get(entityId, ItemComponent)
         if (position) entity.position = { ...position }
-        if (lawnMower) entity.lawnMower = { ...lawnMower }
         if (plant) {
             gameplay.plantBehaviors.validateState(plant, definitions.plants[plant.typeId])
             entity.plant = { ...plant, ...(plant.ability ? { ability: { ...plant.ability } } : {}) }
         }
+        if (mowedPlant) entity.mowedPlant = jsonRoundTrip(mowedPlant)
         if (plantAttack) entity.plantAttack = {
             readyAtTick: plantAttack.readyAtTick,
             ...(plantAttack.burst ? { burst: { ...plantAttack.burst } } : {}),
@@ -69,7 +69,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         gameplayTick,
         allocator: world.snapshotEntityAllocator(),
         random: world.resources.get(RandomResource).snapshot(),
-        level: { phase: level.phase, result: level.result, paused: level.paused },
+        level: { phase: level.phase, result: level.result, paused: level.paused, mowerRows: [...level.mowerRows] },
         economy: { ...world.resources.get(EconomyStateResource) },
         ...(world.resources.has(PacketUpgradeOfferResource) ? { packetUpgradeOffer: { ...world.resources.get(PacketUpgradeOfferResource) } } : {}),
         seedBank: {
@@ -211,7 +211,7 @@ export function restoreSession(
 function restoreEntity(content: ServerContent, world: World, saved: SavedEntity): void {
     const { definitions, gameplay } = content
     if (!saved.position) throw new Error(`Saved entity ${saved.entityId} has no position`)
-    const kinds = [saved.lawnMower, saved.plant, saved.zombie, saved.projectile, saved.item]
+    const kinds = [saved.plant, saved.mowedPlant, saved.zombie, saved.projectile, saved.item]
         .filter(value => value !== undefined).length
     if (kinds !== 1 && !(kinds === 0 && saved.extensions && Object.keys(saved.extensions).length)) throw new Error(`Saved entity ${saved.entityId} must have exactly one domain component`)
     const savedPlantDefinition = saved.plant ? definitions.plants[saved.plant.typeId] : undefined
@@ -221,14 +221,7 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
         throw new Error(`Saved entity ${saved.entityId} has an invalid plant attack component`)
     }
     const level = world.resources.get(LevelStateResource)
-    const activeRow = level.definition.activeRows.includes(saved.position.row)
     const boardRow = saved.position.row >= 0 && saved.position.row < level.board.rows
-    if (saved.lawnMower && !definitions.lawnMowers[saved.lawnMower.typeId]) {
-        throw new Error(`Unknown saved mower: ${saved.lawnMower.typeId}`)
-    }
-    if (saved.lawnMower && (!activeRow || saved.lawnMower.typeId !== level.definition.lawnMower)) {
-        throw new Error(`Saved mower ${saved.entityId} is invalid for the level`)
-    }
     if (saved.plant) {
         const plant = definitions.plants[saved.plant.typeId]
         const seed = definitions.seeds[saved.plant.seedId]
@@ -241,6 +234,9 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
             saved.plant.ability && !abilityMatches(plant, saved.plant.ability.state)) {
             throw new Error(`Saved plant ${saved.entityId} has an invalid ability state`)
         }
+    }
+    if (saved.mowedPlant && (!boardRow || !definitions.plants[saved.mowedPlant.plant.typeId])) {
+        throw new Error(`Unknown saved plant: ${saved.mowedPlant.plant.typeId}`)
     }
     if (saved.zombie) {
         const zombie = definitions.zombies[saved.zombie.typeId]
@@ -255,6 +251,10 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
     if (saved.projectile && (!boardRow || !definitions.projectiles[saved.projectile.typeId])) {
         throw new Error(`Unknown saved projectile: ${saved.projectile.typeId}`)
     }
+    // A mowing projectile runs on its chew.
+    if (saved.projectile && !!definitions.projectiles[saved.projectile.typeId].mow !== (saved.projectile.chompCounter !== undefined)) {
+        throw new Error(`Saved projectile ${saved.entityId} is invalid for its type`)
+    }
     if (saved.item && (saved.item.typeId !== level.definition.award.id && !definitions.items[saved.item.typeId] || saved.position.row !== -1)) {
         throw new Error(`Unknown saved item: ${saved.item.typeId}`)
     }
@@ -262,8 +262,8 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
     world.activateEntity(saved.entityId)
     gameplay.components.restore(world, saved.entityId, saved.extensions ?? {})
     world.add(saved.entityId, PositionComponent, { ...saved.position })
-    if (saved.lawnMower) world.add(saved.entityId, LawnMowerComponent, { ...saved.lawnMower })
     if (saved.plant) world.add(saved.entityId, PlantComponent, { ...saved.plant })
+    if (saved.mowedPlant) world.add(saved.entityId, MowedPlantComponent, jsonRoundTrip(saved.mowedPlant))
     if (saved.plantAttack) world.add(saved.entityId, PlantAttackComponent, {
         readyAtTick: saved.plantAttack.readyAtTick, ...(saved.plantAttack.burst ? { burst: { ...saved.plantAttack.burst } } : {}),
     })

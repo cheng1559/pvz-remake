@@ -38,6 +38,7 @@ function setup() {
         phase: 'gameplay',
         result: 'playing',
         paused: false,
+        mowerRows: [],
     })
     world.resources.set(RandomResource, new DeterministicRng(1))
     world.resources.set(EventQueueResource, createEventQueue())

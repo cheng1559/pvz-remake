@@ -147,9 +147,10 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
         () => new IntegratedGameServer(definitions, levels).restore(missingWaveEntity),
         /is invalid/,
     )
-    const invalidMower = {
+    const sun = saved.entities.findIndex(entity => entity.item)
+    const twoKinds = {
         ...saved,
-        entities: saved.entities.map((entity, index) => index === 0
+        entities: saved.entities.map((entity, index) => index === sun
             ? {
                 ...entity,
                 plant: {
@@ -161,7 +162,7 @@ test('server save restores IDs, pending events, and deterministic 1-1 completion
             : entity),
     }
     assert.throws(
-        () => new IntegratedGameServer(definitions, levels).restore(invalidMower),
+        () => new IntegratedGameServer(definitions, levels).restore(twoKinds),
         /exactly one domain component/,
     )
 })

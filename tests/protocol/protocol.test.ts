@@ -129,9 +129,7 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
         items: [{
             entityId: 5, typeId: 'pvz:sun', state: 'available', x: 100, y: 60, scale: 1, alpha: 255,
         }],
-        lawnMowers: [{
-            entityId: 1, typeId: 'pvz:standard', state: 'ready', x: 40, y: 280, row: 2,
-        }],
+        mowerRows: [2],
         tutorial: { id: 'pvz:adventure-1-1', step: 'pick-first-seed' }, extensions: {},
     }
     const packet = { protocolVersion: 1, type: 'sessionStarted', acknowledgedSequence: 1, snapshot }

@@ -185,7 +185,7 @@ test('removing an entity while its custom view loads disposes the completed plan
         const content = { plantViews: factory, zombieViews: factory, levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' } } } } }
         const renderer = new LevelEntityRenderer(0, content, {}, {}, {}, {}, {}, {}, {})
         const entity = { entityId: 1, typeId: 'test:entity', behaviorState: { ticks: 3 } }
-        const snapshot = { levelId: 'test:level', gameplayTick: 5, plants: [], zombies: [], lawnMowers: [], projectiles: [], items: [],
+        const snapshot = { levelId: 'test:level', gameplayTick: 5, plants: [], zombies: [], mowerRows: [], projectiles: [], items: [],
             [kind + 's']: [entity] }
         const pending = renderer.create(1, snapshot)
         assert.equal(context[kind], entity)
@@ -209,7 +209,7 @@ test('only attachments a zombie view registers keep playing while it walks into 
     const content = { levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' } } } },
         zombieViews: { create(context: any) { context.attachments.add(flag); return { sync() {}, destroy() {} } } } }
     const renderer = new LevelEntityRenderer(0, content, {}, {}, {}, {}, {}, {}, { complete: true })
-    await renderer.create(1, { levelId: 'test:level', gameplayTick: 0, plants: [], lawnMowers: [], projectiles: [], items: [],
+    await renderer.create(1, { levelId: 'test:level', gameplayTick: 0, plants: [], mowerRows: [], projectiles: [], items: [],
         zombies: [{ entityId: 1, typeId: 'test:zombie' }] })
     assert.equal(renderer.runsDuringGameOver(1, { node: flag }), true)
     assert.equal(renderer.runsDuringGameOver(1, { node: cloth }), true, 'parts of an attachment follow it')
@@ -243,7 +243,7 @@ for (const kind of ['plant', 'zombie'] as const) test(`${kind} factories stay hi
     renderer.syncLayerOrder = () => {}
     const plant = { entityId: 1, typeId: 'test:plant', x: 40, y: 280, health: 300 }
     const snapshot = { levelId: 'test:level', gameplayTick: 0, paused: true, plants: [], zombies: [], [kind + 's']: [plant], projectiles: [],
-        items: [], lawnMowers: [], cursor: { mode: 'none' } }
+        items: [], mowerRows: [], cursor: { mode: 'none' } }
     const changes = { added: [1], removed: [] }
     renderer.sync(snapshot, changes, [])
     const creation = renderer.creationTasks.get(1)

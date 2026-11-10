@@ -1530,6 +1530,16 @@
       }
     }
   },
+  "puff": {
+    "default": {
+      "animations": [
+        "anim_puff"
+      ],
+      "exports": {
+        "anim_puff": "pvz:puff"
+      }
+    }
+  },
   "zombie_charred": {
     "default": {
       "animations": [

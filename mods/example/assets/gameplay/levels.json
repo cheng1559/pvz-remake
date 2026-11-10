@@ -11,7 +11,7 @@
       "example:rapid_pea",
       "example:beacon"
     ],
-    "lawnMower": "pvz:standard",
+    "lawnMower": "pvz:lawnmower",
     "skySun": "pvz:sun",
     "waves": [
       {

@@ -5,7 +5,7 @@ import type { EnabledMod, GameCommand, StartSessionPacket } from '@/shared/proto
 import { DeterministicRng } from '../state/DeterministicRng'
 import type { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processCommandPhase } from './commands'
-import { EconomyStateResource, LawnMowerComponent, LevelStateResource, PacketUpgradeOfferResource, PositionComponent, RandomResource, SeedBankResource } from '../state/components'
+import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, PositionComponent, RandomResource, SeedBankResource } from '../state/components'
 import { createConveyorSystem } from '../level/conveyor'
 import { EventQueueResource, createEventQueue } from '../state/events'
 import { createItemSystem } from '../level/items'
@@ -138,6 +138,7 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
         phase: 'intro',
         result: 'playing',
         paused: false,
+        mowerRows: [...level.activeRows],
     })
     world.resources.set(EconomyStateResource, {
         sun: Math.min(definitions.economy.maxSun, level.startingSun),
@@ -161,16 +162,6 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
     })
     world.resources.set(EventQueueResource, createEventQueue())
     initializeLevel(world, packet.firstAdventure, definitions, content.gameplay.levelRules)
-
-    for (const row of level.activeRows) {
-        const entity = world.createEntity()
-        world.add(entity, PositionComponent, {
-            x: -21,
-            y: board.origin.y + row * board.cell.height + 23,
-            row,
-        })
-        world.add(entity, LawnMowerComponent, { typeId: level.lawnMower, state: 'ready', chompCounter: 0 })
-    }
 
     const session = createSession(content, world, { tick: 0, gameplayTick: 0 }, packet.mods)
     if (level.conveyor) {
