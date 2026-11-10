@@ -1,5 +1,5 @@
 import type { World } from '@/ecs/index'
-import { levelTools, levelWaveCount, type GameplayDefinitions } from '@/shared/content/gameplay'
+import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import type { EnabledMod, JsonObject } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
@@ -21,7 +21,7 @@ import { AchievementsResource } from '../achievements/achievements'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { initialPlantAbility } from '../plants/abilities'
 import { parseServerSaveSnapshot, type SavedEntity, type ServerSaveSnapshot } from './save'
-import { bankSlots, chooserOffer, seedBankStart, savedSeedBank } from '../seeds/seedChooser'
+import { savedSeedBank } from '../seeds/seedChooser'
 import { createSession, createWorld, type ServerContent, type Session } from './session'
 
 /** Captures a session as a save; `save.ts` defines and validates the format. */
@@ -114,7 +114,11 @@ export function saveSession(session: Session): ServerSaveSnapshot {
     })
 }
 
-/** Rebuilds a session from a save, rejecting one that does not fit the installed content or the requested game. */
+/**
+ * Rebuilds a session from a save, rejecting one that does not fit the installed content or the requested game: only
+ * what would break the game once loaded (content gone, a shape the level's systems cannot run), not a state the level
+ * would not have started with, which the save holds whole.
+ */
 export function restoreSession(
     content: ServerContent,
     value: unknown,
@@ -136,8 +140,7 @@ export function restoreSession(
         if (!rule?.parseState) throw new Error('The saved rule state does not fit the level')
         save.wave.ruleState = rule.parseState(save.wave.ruleState)
     }
-    if (save.wave.plan.length !== levelWaveCount(definition) ||
-        save.wave.plan.some(wave => wave.zombies.some(id => !definitions.zombies[id]))) {
+    if (save.wave.plan.some(wave => wave.zombies.some(id => !definitions.zombies[id]))) {
         throw new Error('Saved zombie waves do not match the level')
     }
     if (save.wave.index > save.wave.plan.length) throw new Error('Saved wave index is outside the level')
@@ -150,29 +153,12 @@ export function restoreSession(
     if (save.wave.graves.some(grave => grave.row >= board.rows || grave.column >= board.columns)) {
         throw new Error('Saved grave is outside the board')
     }
-    // A game that opened the chooser keeps `choosing`; a later upgrade only adds slots to it.
-    const offer = chooserOffer(definitions, save.seedBank.owned)
-    const start = seedBankStart(definitions, definition, offer, save.economy.packetUpgrades)
-    const chooser = save.seedBank.choosing !== undefined
-    const slots = chooser ? bankSlots(definitions, offer, save.economy.packetUpgrades)
-        : 'seeds' in start ? start.seeds.length : 0
-    if (!!save.seedBank.conveyor !== !!definition.conveyor || save.seedBank.conveyor?.packets.some(packet => !definition.conveyor!.seeds.some(seed => seed.id === packet.card.seedId))) {
-        throw new Error('Saved conveyor does not match the level')
-    }
-    if (save.seedBank.conveyor && save.seedBank.conveyor.packets.length > definition.conveyor!.capacity) throw new Error('Saved conveyor exceeds capacity')
-    if (save.seedBank.conveyor?.lastSeedId && !definition.conveyor!.seeds.some(seed => seed.id === save.seedBank.conveyor!.lastSeedId)) throw new Error('Saved conveyor last seed is not in the supply')
-    if (save.seedBank.selection.mode === 'tool' && !levelTools(content.levels, definition, save.tutorial.firstAdventure).includes(save.seedBank.selection.toolId)) throw new Error('Saved tool is unavailable in this level')
-    if (chooser && ('conveyor' in start || definition.seedPackets)) throw new Error('Saved seed choice does not match the level')
-    // A bank holds its slots, empty ones as null; while choosing, the chosen packets one after another. A chosen bank
-    // saved before empty slots were kept may be short, and gets its empty slots back here.
-    if (save.seedBank.choosing ? save.level.phase !== 'intro' || save.seedBank.packets.length > slots || save.seedBank.packets.includes(null)
-        : chooser ? save.seedBank.packets.length > slots : save.seedBank.packets.length !== slots) {
-        throw new Error('Saved seed bank size does not match the level')
-    }
-    // A bank may hold any installed seed: /seed and Mods' chooser entries put in hidden seeds or other sides, and a save
-    // outlives the Mod that offered them (the card can still go back to the chooser).
-    for (const packet of save.seedBank.packets) {
-        if (packet && !definitions.seeds[packet.seedId]) throw new Error(`Unknown saved seed: ${packet.seedId}`)
+    // The conveyor system runs on a level's belt with the save's.
+    if (!!save.seedBank.conveyor !== !!definition.conveyor) throw new Error('Saved conveyor does not match the level')
+    // A bank or a belt may hold any installed seed: /seed and Mods' chooser entries put in hidden seeds or other sides,
+    // and a save outlives the Mod that offered them (the card can still go back to the chooser).
+    for (const card of [...save.seedBank.packets, ...save.seedBank.conveyor?.packets.map(packet => packet.card) ?? []]) {
+        if (card && !definitions.seeds[card.seedId]) throw new Error(`Unknown saved seed: ${card.seedId}`)
     }
     const selection = save.seedBank.selection
     if (selection.mode === 'seed' && !save.seedBank.packets[selection.slot] ||
@@ -194,8 +180,7 @@ export function restoreSession(
         selection: { ...save.seedBank.selection },
         ...(save.seedBank.conveyor === undefined ? {} : { conveyor: jsonRoundTrip(save.seedBank.conveyor) }),
         ...(save.seedBank.choosing === undefined ? {} : { choosing: save.seedBank.choosing }),
-        packets: [...save.seedBank.packets.map(packet => packet && { ...packet }),
-            ...Array<null>(chooser && !save.seedBank.choosing ? slots - save.seedBank.packets.length : 0).fill(null)],
+        packets: save.seedBank.packets.map(packet => packet && { ...packet }),
         ...(save.seedBank.owned === undefined ? {} : { owned: [...save.seedBank.owned] }),
     })
     world.resources.set(TutorialResource, { ...save.tutorial })
@@ -251,13 +236,7 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
             throw new Error(`Unknown saved plant: ${saved.plant.typeId}`)
         }
         gameplay.plantBehaviors.validateState(saved.plant, plant)
-        if (!boardRow || saved.plant.column >= level.board.columns ||
-            saved.plant.maxHealth !== plant.maxHealth) {
-            throw new Error(`Saved plant ${saved.entityId} is invalid for the level`)
-        }
-        if (saved.plantAttack?.burst && saved.plantAttack.burst.shotsRemaining > (plant.shooter?.shotsPerBurst ?? 0)) {
-            throw new Error(`Saved plant ${saved.entityId} has invalid burst state`)
-        }
+        if (!boardRow || saved.plant.column >= level.board.columns) throw new Error(`Saved plant ${saved.entityId} is invalid for the level`)
         if ((saved.plant.ability === undefined) !== (initialPlantAbility(plant) === undefined) ||
             saved.plant.ability && !abilityMatches(plant, saved.plant.ability.state)) {
             throw new Error(`Saved plant ${saved.entityId} has an invalid ability state`)
@@ -267,8 +246,7 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
         const zombie = definitions.zombies[saved.zombie.typeId]
         if (!zombie) throw new Error(`Unknown saved zombie: ${saved.zombie.typeId}`)
         gameplay.zombieBehaviors.validateState(saved.zombie, zombie)
-        if (!boardRow || saved.zombie.maxHealth !== zombie.maxHealth ||
-            saved.zombie.helmHealth > (zombie.helm?.health ?? 0) || saved.zombie.shieldHealth > (zombie.shield?.health ?? 0) ||
+        if (!boardRow || saved.zombie.helmHealth > (zombie.helm?.health ?? 0) || saved.zombie.shieldHealth > (zombie.shield?.health ?? 0) ||
             saved.zombie.hasPole && !zombie.vault ||
             (saved.zombie.animation === 'anim_run' || saved.zombie.state === 'vaulting') && !zombie.vault) {
             throw new Error(`Saved zombie ${saved.entityId} is invalid for the level`)
@@ -277,11 +255,7 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
     if (saved.projectile && (!boardRow || !definitions.projectiles[saved.projectile.typeId])) {
         throw new Error(`Unknown saved projectile: ${saved.projectile.typeId}`)
     }
-    if (saved.item && ((saved.item.typeId === level.definition.award.id
-        ? saved.item.value !== 1
-        : !definitions.items[saved.item.typeId] ||
-            definitions.items[saved.item.typeId].value !== saved.item.value &&
-            !(saved.item.typeId === 'pvz:sun' && saved.item.value === 15)) || saved.position.row !== -1)) {
+    if (saved.item && (saved.item.typeId !== level.definition.award.id && !definitions.items[saved.item.typeId] || saved.position.row !== -1)) {
         throw new Error(`Unknown saved item: ${saved.item.typeId}`)
     }
 

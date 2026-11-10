@@ -271,24 +271,6 @@ test("a Mod's cards count like owned seeds towards the slots and opening the cho
     }
 })
 
-test('a chosen bank that started with empty slots loads, as a Mod may start it before the bank is full', () => {
-    const game = setup()
-    for (const seedId of seeds.slice(0, 6)) command(game, { type: 'chooseSeed', seedId })
-    command(game, { type: 'confirmSeeds' })
-    const save = game.saveAtBoundary() as { seedBank: { packets: unknown[] } }
-    save.seedBank.packets.splice(3)
-    const restored = setup(save as unknown as JsonValue)
-    assert.deepEqual([restored.render().seedChooser?.choosing, restored.render().seedChooser?.slots, slotSeeds(restored)],
-        [false, 6, [...seeds.slice(0, 3), null, null, null]], 'a short bank from an older save gets its empty slots back')
-    // A bank without a chooser still holds exactly its seeds.
-    const start = { ...options, levelId: 'pvz:adventure-1-1', firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-1') }
-    const fixed = new LocalIntegratedGame(definitions, levels)
-    fixed.start(start)
-    const fixedSave = fixed.saveAtBoundary() as { seedBank: { packets: unknown[] } }
-    fixedSave.seedBank.packets.length = 0
-    assert.throws(() => new LocalIntegratedGame(definitions, levels).start({ ...start, save: fixedSave as unknown as JsonValue }), /seed bank size/)
-})
-
 test("/cheatseed's Let's Rock takes fewer cards and leaves the other slots empty, and /seed fills or empties any slot", () => {
     {
         const game = new LocalIntegratedGame(definitions, levels, undefined, true)
@@ -315,6 +297,23 @@ test("/cheatseed's Let's Rock takes fewer cards and leaves the other slots empty
     for (const seedId of seeds.slice(0, 4)) command(game, { type: 'chooseSeed', seedId })
     command(game, { type: 'confirmSeeds' })
     assert.equal(game.render().seedChooser?.choosing, true)
+})
+
+test('a bank /cheatseed widened loads, with the switch on or off: a save holds its bank whole', () => {
+    // Three owned seeds alone fill a bank of three, without a chooser; the cheat cards open one of six.
+    const start = { ...options, ownedSeeds: seeds.slice(0, 3), cheatSeeds: true }
+    const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+    game.start(start)
+    for (const seedId of seeds.slice(0, 2)) command(game, { type: 'chooseSeed', seedId })
+    command(game, { type: 'confirmSeeds' })
+    command(game, { type: 'completeIntro' })
+    assert.equal(game.render().seedPackets.length, 6)
+    const save = game.saveAtBoundary()
+    for (const cheatSeeds of [true, false]) {
+        const loaded = new LocalIntegratedGame(definitions, levels, undefined, true)
+        loaded.start({ ...start, cheatSeeds, save })
+        assert.deepEqual(slotSeeds(loaded), slotSeeds(game), String(cheatSeeds))
+    }
 })
 
 test("/cheatseed's pages: the owned grid, the hidden seeds, graves and zombies, then both again on the zombies' side", () => {

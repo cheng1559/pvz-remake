@@ -287,9 +287,6 @@ export interface LevelWave { zombies: string[]; flagWave?: boolean; points?: num
  */
 export interface LevelRule { kind: string; count: number; settings: JsonObject }
 
-/** The number of waves the level plays. */
-export function levelWaveCount(level: LevelDefinition): number { return level.rules?.count ?? level.waves!.length }
-
 export interface LevelDefinition {
     adventureIndex: number
     persistent?: boolean
