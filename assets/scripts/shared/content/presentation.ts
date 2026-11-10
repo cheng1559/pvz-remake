@@ -228,13 +228,6 @@ export interface ZombiePresentationDefinition {
      */
     readonly packet?: {
         readonly x: number; readonly y: number; readonly scale: number; readonly clip?: string
-        /**
-         * A packet of the plants' side draws the zombie 90 further and flipped, as the lawn does, then this much
-         * further in its own units, to line up with the others (the original has no such packet). The pole vaulter's
-         * packet x is 5 left of the plain zombie's (-8 against -3, at 0.35): its body stands 14.29 further right in
-         * its own frame, which flipping sends as far the other way, so it takes 2 x 14.29.
-         */
-        readonly facingRightOffsetX?: number
     }
     /** Original Y-down coordinates; defaults to 92. */
     readonly shadowY?: number
@@ -711,7 +704,6 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             const packet = object(zombie.packet, id + '.packet')
             finite(packet.x, id + '.packet.x'); finite(packet.y, id + '.packet.y'); positive(packet.scale, id + '.packet.scale')
             if (packet.clip !== undefined) text(packet.clip, id + '.packet.clip')
-            if (packet.facingRightOffsetX !== undefined) finite(packet.facingRightOffsetX, id + '.packet.facingRightOffsetX')
         }
         for (const part of ['head', 'hair', 'tongue', 'arm', 'helms']) texts(parts[part], id + '.parts.' + part)
         text(parts.upperArm, id + '.parts.upperArm')

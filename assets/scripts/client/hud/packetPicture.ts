@@ -8,6 +8,15 @@ import { GameDebugSettings, type SeedPacketStyle } from '@/platform/debug/GameDe
  */
 
 /** /seedstyle tilted: how much larger, the turn in degrees and its pivot in the packet. */
+/** SeedPacket's width, in its own units. */
+export const SEED_PACKET_WIDTH = 50
+
+/** A packet of the other side turns its picture round about the packet's middle, whatever the picture is. */
+export function mirrorInPacket(node: Node, mirrored: boolean, packetScale: number): void {
+    node.setScale(mirrored ? -1 : 1, node.scale.y, 1)
+    node.setPosition(mirrored ? SEED_PACKET_WIDTH * packetScale : 0, node.position.y)
+}
+
 export interface PacketTilt { readonly factor: number, readonly angle: number, readonly pivot: readonly [number, number] }
 
 /** A plant faces right: half as large again, leaning right about the packet's lower centre. */

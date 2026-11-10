@@ -156,7 +156,7 @@
     }
   },
   "pvz:pole_vaulter": {
-    "packet": {"x": -8, "y": -12, "scale": 0.35, "clip": "walk", "facingRightOffsetX": 28.57},
+    "packet": {"x": -8, "y": -12, "scale": 0.35, "clip": "walk"},
     "nameKey": "POLE_VAULTING_ZOMBIE",
     "previewBlockedCells": [
       {"column": 0, "row": 0}, {"column": 0, "row": 1}, {"column": 0, "row": 2},

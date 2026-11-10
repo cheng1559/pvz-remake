@@ -7,7 +7,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { bakeSprite } from '@/client/view/bakeSprite'
 import { KernelBatch } from '@/client/render/KernelBatch'
 import { PLANT_WIDTH } from '@/shared/content/teams'
-import { PacketPictureStyle, PLANT_TILT, placePacketPicture } from './packetPicture'
+import { mirrorInPacket, PacketPictureStyle, PLANT_TILT, placePacketPicture } from './packetPicture'
 
 const { ccclass } = _decorator
 export type PreviewPlantId = string | number
@@ -56,12 +56,17 @@ export class PlantPreview extends Component {
     }
 
     /**
-     * A plant on the zombies' side faces left. The preview's node flips across the plant (its placement and 80 width),
+     * A plant on the zombies' side faces left. In a packet the picture turns round about the packet's middle
+     * (mirrorInPacket); held or over its cell the preview's node flips across the plant (its placement and 80 width),
      * whichever way the plant is drawn under it.
      */
     setMirrored(mirrored: boolean): void {
         if (this.mirrored === mirrored) return
         this.mirrored = mirrored
+        if (this.packetScale !== undefined) {
+            mirrorInPacket(this.node, mirrored, this.packetScale)
+            return
+        }
         const { x, scale } = this.placement
         this.unmirroredX ??= this.node.position.x
         this.node.setScale(mirrored ? -1 : 1, this.node.scale.y, 1)

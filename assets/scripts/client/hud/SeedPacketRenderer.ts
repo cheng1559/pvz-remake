@@ -8,11 +8,12 @@ import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview } from './PlantPreview'
 import { ZombiePreview } from './ZombiePreview'
 import { PacketGrave } from './PacketGrave'
+import { SEED_PACKET_WIDTH } from './packetPicture'
 import { applySpriteDensity } from '@/client/content/SpriteDensity'
 import { plantVisual, type SeedPacketSeedType } from '@/client/plants/definitions'
 export type { SeedPacketSeedType } from '@/client/plants/definitions'
 
-export const SEED_PACKET_WIDTH = 50
+export { SEED_PACKET_WIDTH }
 export const SEED_PACKET_HEIGHT = 70
 
 const SEED_PACKET_ATLAS_COLUMNS = 9
@@ -175,7 +176,7 @@ export class SeedPacketRenderer {
         const iconScale = scale > 1 ? scale : 1
         uiNode({ name: 'PacketZombie', parent: root, layer: args.layer }).node.addComponent(ZombiePreview).initialize({
             x: (packet.x + 40 * packet.scale) * iconScale, y: -(packet.y + 40 * packet.scale) * iconScale, scale: packet.scale * iconScale, from: 'reanim',
-            facingRightOffsetX: packet.facingRightOffsetX, packetScale: iconScale,
+            packetScale: iconScale,
         }).setZombie(args.zombie)
     }
 

@@ -1,5 +1,5 @@
 import { _decorator, Color, Component, isValid, Node, type Sprite } from 'cc'
-import { type PacketTilt, PacketPictureStyle, placePacketPicture } from './packetPicture'
+import { mirrorInPacket, type PacketTilt, PacketPictureStyle, placePacketPicture } from './packetPicture'
 import { bakeSprite } from '@/client/view/bakeSprite'
 import type { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { loadDisplayParts, loadEntityDisplayAssets, zombieRestingParts } from '@/client/reanim/EntityDisplay'
@@ -10,8 +10,8 @@ const { ccclass } = _decorator
 
 /**
  * `facingRightOffsetX`: facing right, the zombie is drawn 90 further and flipped as on the lawn, then this much further,
- * in its own units (the zombie's where it is put down, its packet's in a packet). `packetScale`: the zombie is a
- * packet's, which follows /seedstyle `tilted` as PlantPreview does.
+ * in its own units (ZombieDefinition's, where it is put down). `packetScale`: the zombie is a packet's, which follows
+ * /seedstyle `tilted` as PlantPreview does and turns round about the packet's middle (mirrorInPacket).
  */
 interface Placement { x: number, y: number, scale: number, from: 'zombie' | 'reanim', facingRightOffsetX?: number, packetScale?: number }
 
@@ -130,20 +130,15 @@ export class ZombiePreview extends Component {
     private place(): void {
         this.syncStyle()
         if (!this.root) return
-        const { x, scale, packetScale } = this.placement
+        const { packetScale } = this.placement
         const [offsetX, offsetY] = this.offset
         const [fromX, fromY] = this.placement.from === 'reanim' ? this.offset : [0, 0]
-        // A packet is drawn facing left and, facing right, turned around whole as PlantPreview.setMirrored does: about
-        // the axis the body flips about on the lawn (90 further and `facingRightOffsetX`), so it stands where that
-        // would put it, and its tilt and clip turn with it. Over the lawn the body itself flips, as ZombieView's.
+        // A packet is drawn facing left and, facing right, turned round whole about the packet's middle, as a plant's
+        // and a grave's are, its tilt and clip with it. Over the lawn the body itself flips, as ZombieView's.
         const packet = packetScale !== undefined
         const mirrorBody = this.mirrored && !packet
         const facingRightShift = MIRRORED_SHIFT + (this.placement.facingRightOffsetX ?? 0)
-        if (packet) {
-            const axis = x + scale * (offsetX - fromX + facingRightShift / 2)
-            this.node.setPosition(this.mirrored ? 2 * axis : 0, this.node.position.y)
-            this.node.setScale(this.mirrored ? -1 : 1, 1, 1)
-        }
+        if (packet) mirrorInPacket(this.node, this.mirrored, packetScale)
         placePacketPicture(this.root, this.placement, packetScale, this.picture?.style, ZOMBIE_TILT)
         for (const player of this.players) {
             if (player.node.parent !== this.root) continue
