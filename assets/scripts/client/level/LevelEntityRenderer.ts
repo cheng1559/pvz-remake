@@ -10,7 +10,7 @@ import { type ReanimTrack, sampleReanimTrack } from '@/shared/content/reanim'
 import { TICK_SECONDS } from '@/shared/protocol/index'
 import { uiNode } from '@/client/view/uiNode'
 import { SeedPacketRenderer, type SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
-import type { ItemSnapshot, PlantSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
+import type { ItemSnapshot, PlantSnapshot, ProjectileSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
 import { plantRenderOffset, renderOrder, SHADOW_RENDER_OFFSET, ZOMBIE_RENDER_OFFSET } from '@/shared/content/renderOrder'
 import { MOWER_READY_X, mowerY, SUN_BANK_TARGET } from '@/shared/content/gameplay'
 import { LevelAudioPresenter } from './LevelAudioPresenter'
@@ -31,6 +31,17 @@ const WIDTH = 800
 const HEIGHT = 600
 /** Zombie::ApplyBurn's shift for a charred zombie walking right, drawn mirrored. */
 const CHARRED_MIRRORED_SHIFT = 60
+/** Projectile::DrawShadow: a thrown projectile's shadow is half its size by this far up, and no smaller above. */
+const SHADOW_SHRINK_HEIGHT = 200
+/**
+ * Projectile::DoImpact: where the splat of a projectile is from its middle, forward and down, by default. Flying into
+ * what it hits (`shotOffset`), ahead at its front, as the pea's; coming down (`lobOffset`), where it is. A shot already
+ * past the middle of the zombie, this far from its corner, splats as far back.
+ */
+const SHOT_SPLAT: readonly [number, number] = [35, -2]
+const LOB_SPLAT: readonly [number, number] = [0, 0]
+const IMPACT_PAST = 60
+const ZOMBIE_MIDDLE = 40
 /** The original's driver for a mowed zombie, and its rate (ZOMBIE_MOWERED_ANIMATION_SPEED: 8 fps, advanced twice). */
 const MOWERED_REANIM = 'pvz:lawnmowered_zombie'
 const MOWERED_RATE = 16 / 12
@@ -62,6 +73,7 @@ export class LevelEntityRenderer {
     /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
     sunBankOffset = (): number => 0
     private readonly projectileShadows = new Map<number, Node>()
+    private readonly projectileTrails = new Map<number, ParticlePlayer>()
     private readonly pending = new Set<number>()
     private readonly creationTasks = new Map<number, Promise<void>>()
     private readonly plantViews = new Map<number, PlantView>()
@@ -271,15 +283,22 @@ export class LevelEntityRenderer {
         for (const projectile of snapshot.projectiles) {
             const node = this.entities.get(projectile.entityId), hitbox = this.content.definitions.projectiles[projectile.typeId]?.hitbox
             const mirror = projectile.team === 'zombies' && hitbox ? 2 * hitbox.x + hitbox.width : 0
-            node?.setPosition(projectile.x + mirror - WIDTH / 2, HEIGHT / 2 - projectile.y)
+            let x = projectile.x + mirror - WIDTH / 2, y = HEIGHT / 2 - projectile.y, angle = 0
+            if (projectile.facing !== undefined && hitbox) {
+                // It points the way it flies, turned about the middle of its picture (of its hitbox, drawn by an
+                // animation); mirrored, it already points left. The angle is counter-clockwise here, and the middle is
+                // from the node's corner, y up.
+                angle = (mirror ? Math.PI : 0) - projectile.facing
+                const middle = this.projectileMiddle(projectile.typeId)!
+                const middleX = (mirror ? -1 : 1) * middle.x, middleY = -middle.y
+                const cos = Math.cos(angle), sin = Math.sin(angle)
+                x += middleX - (cos * middleX - sin * middleY)
+                y += middleY - (sin * middleX + cos * middleY)
+            }
+            node?.setPosition(x, y)
+            if (node) node.angle = angle * 180 / Math.PI
             node?.setScale(mirror ? -1 : 1, 1, 1)
-        }
-        for (const projectile of snapshot.projectiles) {
-            const shadow = this.content.presentation.projectiles[projectile.typeId]?.shadow
-            if (!shadow) continue
-            const board = this.content.definitions.boards[this.content.levels.levels[snapshot.levelId].board]
-            this.projectileShadows.get(projectile.entityId)?.setPosition(projectile.x + shadow.offset.x - WIDTH / 2,
-                HEIGHT / 2 - (board.origin.y + projectile.row * board.cell.height + shadow.offset.y))
+            this.placeProjectileParts(projectile)
         }
         for (const id of this.collectStarts.keys()) {
             if (!snapshot.items.some(item => item.entityId === id && item.state === 'collecting')) this.collectStarts.delete(id)
@@ -342,8 +361,7 @@ export class LevelEntityRenderer {
         this.itemViews.delete(id)
         this.entities.get(id)?.destroy()
         this.entities.delete(id)
-        this.projectileShadows.get(id)?.destroy()
-        this.projectileShadows.delete(id)
+        this.removeProjectileParts(id)
     }
 
     private playEvents(snapshot: WorldSnapshot, events: ServerEvent[]): void {
@@ -355,15 +373,19 @@ export class LevelEntityRenderer {
                 const id = event.data.entityId
                 if (typeof id === 'number') this.spawnPlantingParticle(snapshot, id)
             } else if (event.type === 'projectileImpact') {
-                const id = event.data.projectileId
-                if (typeof id === 'number') this.entities.get(id)?.destroy()
+                // A piercing projectile flies on through what it hits (`through`): it stays, with the sound of its hit, and
+                // only splats where it comes down.
+                const id = event.data.projectileId, through = event.data.through === true
+                if (typeof id === 'number' && !through) this.entities.get(id)?.destroy()
                 const projectile = this.content.presentation.projectiles[String(event.data.typeId)]
                 const targetType = event.data.targetTypeId
-                // The armor worn before the hit takes the projectile's sound; the shield is hit first.
+                // Projectile::PlayImpactSound: the armor worn before the hit sounds too, the shield in front of the helm,
+                // and some armor muffles the projectile's own sound unless that is loud.
                 const target = typeof targetType === 'string' ? this.content.presentation.zombies[targetType] : undefined
                 const armor = event.data.shield ? target?.shield : event.data.helm ? target?.helm : undefined
-                this.audio.sounds(armor?.impactSounds ?? projectile?.impactSounds)
-                if (projectile?.impact) this.spawnProjectileImpact(snapshot, event, projectile.impact)
+                this.audio.sounds(armor?.impactSounds)
+                if (!armor?.muffles || projectile?.loud) this.audio.sounds(projectile?.impactSounds)
+                if (projectile?.impact && !through) this.spawnProjectileImpact(snapshot, event, projectile.impact)
             } else if (event.type === 'zombieChewedPlant') {
                 this.playChew(snapshot, event)
             } else if (event.type === 'plantExploded') {
@@ -533,6 +555,43 @@ export class LevelEntityRenderer {
     }
 
     /**
+     * What goes with a projectile apart from it, so that neither turns as it does, each at its offset from the
+     * projectile and mirrored across the hitbox of one flying left. Its shadow lies on the ground under it: as far down
+     * as the projectile flies above the ground (ProjectileSnapshot.height), and smaller the higher it has been thrown
+     * (`lift`). Its trail leaves from the projectile itself, at its render order; no save keeps it, so it starts here,
+     * again after a load.
+     */
+    private placeProjectileParts(projectile: ProjectileSnapshot): void {
+        const hitbox = this.content.definitions.projectiles[projectile.typeId]?.hitbox
+        const { shadow, plantShadow, trail, layer } = this.content.presentation.projectiles[projectile.typeId] ?? {}
+        if (!hitbox) return
+        const mirrored = projectile.team === 'zombies', top = HEIGHT / 2 - projectile.y
+        const left = (x: number) => projectile.x + (mirrored ? 2 * hitbox.x + hitbox.width - x : x) - WIDTH / 2
+        const shadowNode = this.projectileShadows.get(projectile.entityId), offset = shadow?.offset ?? plantShadow
+        if (shadowNode && offset) {
+            const scale = (shadow?.scale ?? 1) * SHADOW_SHRINK_HEIGHT / (Math.min(projectile.lift ?? 0, SHADOW_SHRINK_HEIGHT) + SHADOW_SHRINK_HEIGHT)
+            shadowNode.setPosition(left(offset.x), top - offset.y - (projectile.height ?? 0))
+            shadowNode.setScale(mirrored ? -scale : scale, scale, 1)
+        }
+        if (trail && this.entities.get(projectile.entityId)?.isValid) {
+            let particles = this.projectileTrails.get(projectile.entityId)
+            if (!particles?.isValid) this.projectileTrails.set(projectile.entityId, particles = ParticlePlayer.spawn({ parent: this.entityLayer, ...trail, unsaved: true }))
+            particles.node.setPosition(left(trail.x), top + trail.y)
+            particles.node.setScale(mirrored ? -1 : 1, 1, 1)
+            particles.renderOrder = renderOrder(layer ?? 'projectile', projectile.row)
+        }
+    }
+
+    private removeProjectileParts(id: number): void {
+        this.projectileShadows.get(id)?.destroy()
+        this.projectileShadows.delete(id)
+        // Projectile::Die: its trail stays where it ended, launching no more, until its last particle is gone.
+        const trail = this.projectileTrails.get(id)
+        if (trail?.isValid) trail.stop()
+        this.projectileTrails.delete(id)
+    }
+
+    /**
      * Board coordinates; recycled under a shared holder per render order. `mirrored`: the effect plays flipped left to
      * right, for a zombie or plant facing the other way.
      */
@@ -565,27 +624,20 @@ export class LevelEntityRenderer {
             const projectile = snapshot.projectiles.find(value => value.entityId === id)
             if (projectile) {
                 const presentation = this.content.presentation.projectiles[projectile.typeId]
-                if (presentation?.plantShadow) uiNode({ name: 'ProjectilePlantShadow', parent: node, position: { ...presentation.plantShadow, z: -1 },
-                    sprite: { frame: this.assets.mowerShadow, sizeMode: Sprite.SizeMode.RAW, trim: false } })
                 if (presentation?.reanim) await this.createAnimatedProjectile(node, presentation.reanim)
                 else {
                     const frame = this.assets.projectileFrames[projectile.typeId]
                     if (!frame) throw new Error(`Projectile sprite is not installed: ${projectile.typeId}`)
                     uiNode({ node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
                 }
-                const shadow = presentation?.shadow
-                if (shadow) {
-                    const frame = this.assets.projectileShadowFrames[projectile.typeId]
-                    if (!frame) throw new Error(`Projectile shadow is not installed: ${projectile.typeId}`)
-                    const board = this.content.definitions.boards[this.content.levels.levels[snapshot.levelId].board]
-                    const shadowNode = uiNode({ name: `ProjectileShadow-${id}`, parent: this.entityLayer, anchor: { x: 0, y: 1 },
-                        position: { x: projectile.x + shadow.offset.x - WIDTH / 2,
-                            y: HEIGHT / 2 - (board.origin.y + projectile.row * board.cell.height + shadow.offset.y) },
-                        sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node
-                    shadowNode.setScale(shadow.scale, shadow.scale, 1)
-                    this.projectileShadows.set(id, shadowNode)
+                // Its shadow is apart from it, on the ground: its own picture, or the board's plant shadow about a point.
+                const frame = presentation?.shadow ? this.assets.projectileShadowFrames[projectile.typeId] : presentation?.plantShadow ? this.assets.mowerShadow : undefined
+                if (presentation?.shadow && !frame) throw new Error(`Projectile shadow is not installed: ${projectile.typeId}`)
+                if (frame && node.isValid) {
+                    this.projectileShadows.set(id, uiNode({ name: `ProjectileShadow-${id}`, parent: this.entityLayer,
+                        ...(presentation.shadow ? { anchor: { x: 0, y: 1 } } : {}), sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node)
                 }
-                if (presentation?.trail) ParticlePlayer.spawn({ parent: node, ...presentation.trail })
+                this.placeProjectileParts(projectile)
             } else if (plant) {
                 const attachments = new EntityAttachments()
                 const view = await this.content.plantViews.create({ node, attachments, content: this.content, animations: this.animations,
@@ -616,8 +668,7 @@ export class LevelEntityRenderer {
         } catch (error) {
             if (node.isValid) node.destroy()
             this.entities.delete(id)
-            this.projectileShadows.get(id)?.destroy()
-            this.projectileShadows.delete(id)
+            this.removeProjectileParts(id)
             throw error
         } finally {
             this.pending.delete(id)
@@ -711,22 +762,41 @@ export class LevelEntityRenderer {
         })
     }
 
+    /** The middle of a projectile from its corner: of its picture, or of its hitbox for an animated one. It turns about it. */
+    private projectileMiddle(typeId: string): { x: number, y: number } | undefined {
+        const picture = this.assets.projectileFrames[typeId]?.originalSize, hitbox = this.content.definitions.projectiles[typeId]?.hitbox
+        return picture ? { x: picture.width / 2, y: picture.height / 2 } : hitbox && { x: hitbox.x + hitbox.width / 2, y: hitbox.y + hitbox.height / 2 }
+    }
+
     private spawnProjectileImpact(snapshot: WorldSnapshot, event: ServerEvent, impact: NonNullable<ProjectilePresentationDefinition['impact']>): Node | undefined {
         const targetId = event.data.targetId
         const x = event.data.x
         const y = event.data.y
         if (typeof x !== 'number' || typeof y !== 'number') return
         const zombie = snapshot.zombies.find(candidate => candidate.entityId === targetId)
-        // A splat on a zombie follows it; one on a plant stays on the board.
-        const parent = typeof targetId === 'number' && event.data.target !== 'plant' ? this.entities.get(targetId) : this.entityLayer
+        // A splat on a zombie follows it; one on a plant, on the ground, or the board's own (`free`) stays on the board.
+        const attached = !impact.free && typeof targetId === 'number' && event.data.target !== 'plant'
+        const parent = attached ? this.entities.get(targetId) : this.entityLayer
         if (!parent) return
+        const typeId = String(event.data.typeId), hitbox = this.content.definitions.projectiles[typeId]?.hitbox, middle = this.projectileMiddle(typeId)
+        if (!hitbox || !middle) return
+        // One that flew into what it hit splats by its shot offset; one that came down on it from above (`above`), or
+        // only on the ground, by its lob offset.
+        const shot = typeof targetId === 'number' && event.data.above !== true
+        const [forward, down] = shot ? impact.shotOffset ?? SHOT_SPLAT : impact.lobOffset ?? LOB_SPLAT
         // A projectile flying left splats at its mirrored front, across its hitbox.
-        const hitbox = this.content.definitions.projectiles[String(event.data.typeId)]?.hitbox
-        const offsetX = hitbox ? mirrorX(impact.offset[0], 2 * hitbox.x + hitbox.width, event.data.team === 'zombies') : impact.offset[0]
-        const position = zombie
-            ? { x: x + offsetX - zombie.x, y: -Math.max(impact.yRange[0], Math.min(impact.yRange[1], y + impact.offset[1] - zombie.y)) }
-            : { x: x + offsetX - WIDTH / 2, y: HEIGHT / 2 - y - impact.offset[1] }
-        return ParticlePlayer.spawn({ parent, id: impact.id, ...position, seed: event.eventId >>> 0, recycle: true }).node
+        const mirrored = event.data.team === 'zombies', mirror = 2 * hitbox.x + hitbox.width
+        const past = shot && zombie && (mirrored ? x + mirror < zombie.x + ZOMBIE_WIDTH - ZOMBIE_MIDDLE : x > zombie.x + ZOMBIE_MIDDLE)
+        const offsetX = mirrorX(middle.x + forward - (past ? IMPACT_PAST : 0), mirror, mirrored), offsetY = middle.y + down
+        const [top, bottom] = impact.yRange ?? [-Infinity, Infinity]
+        const position = attached && zombie
+            ? { x: x + offsetX - zombie.x, y: -Math.max(top, Math.min(bottom, y + offsetY - zombie.y)) }
+            : { x: x + offsetX - WIDTH / 2, y: HEIGHT / 2 - y - offsetY }
+        // The board's own is drawn over what flies in its row (the original's mRenderOrder + 1), so over the row's zombies.
+        const row = event.data.row
+        const order = impact.free && typeof row === 'number'
+            ? { renderOrder: renderOrder(this.content.presentation.projectiles[typeId]?.layer ?? 'projectile', row) + 1 } : {}
+        return ParticlePlayer.spawn({ parent, id: impact.id, ...position, ...order, seed: event.eventId >>> 0, recycle: true }).node
     }
 
     /** Mods can append scenery to the same ordering pass as entities and particles. */

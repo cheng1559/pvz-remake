@@ -3,6 +3,7 @@ import test from 'node:test'
 import { readGameplaySource } from '../../tools/mod/content'
 
 import type { World } from '@/ecs/index'
+import { launchProjectile, STRAIGHT } from '@/server/combat/motions'
 import {
 PlantAttackComponent,
 PlantComponent,
@@ -180,9 +181,11 @@ test('Peashooter acquires a zombie ahead and fires after its fixed windup', () =
     assert.deepEqual(snapshot.projectiles, [{
         entityId: 3,
         typeId: 'pvz:pea',
-        x: 99.33,
-        y: 290,
+        x: 109.83,
+        y: 292.75,
         row: 2,
+        // It flies at its mouth's height over the ground, where its shadow lies.
+        height: 50.25,
     }])
     assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [[
         'projectileFired', { plantId: 1, projectileId: 3, typeId: 'pvz:pea' },
@@ -286,9 +289,7 @@ test('collecting the award keeps existing entity updates running while spawning 
     const world = (server as unknown as { requireSession(): { world: World } }).requireSession().world
     startMower(world, definitions, 2)
     const mower = (snapshot: { projectiles: Array<{ typeId: string, x: number }> }) => snapshot.projectiles.find(projectile => projectile.typeId === 'pvz:lawnmower')!
-    const peaId = world.createEntity()
-    world.add(peaId, PositionComponent, { x: 100, y: 290, row: 2 })
-    world.add(peaId, ProjectileComponent, { typeId: 'pvz:pea' })
+    const peaId = launchProjectile(world, definitions, world, { typeId: 'pvz:pea', position: { x: 100, y: 290, row: 2 }, motion: STRAIGHT })
     const plantId = world.createEntity()
     world.add(plantId, PositionComponent, { x: 40, y: 280, row: 2 })
     world.add(plantId, PlantComponent, {
@@ -323,7 +324,7 @@ test('collecting the award keeps existing entity updates running while spawning 
     assert.equal(snapshot.tick, winTick + 1)
     assert.equal(snapshot.result, 'won')
     assert.ok(mower(snapshot).x > mowerX, 'collecting the award must not stop an active mower')
-    assert.equal(world.get(peaId, PositionComponent)!.x, peaX + definitions.projectiles['pvz:pea'].speedPerTick.x)
+    assert.equal(world.get(peaId, PositionComponent)!.x, peaX + 3.33)
     assert.equal(snapshot.projectiles.filter(projectile => projectile.typeId === 'pvz:pea').length, 2, 'a pending shot completes after victory')
     assert.equal(world.get(corpseId, ZombieComponent)!.deathTicksRemaining, corpseTicks - 1)
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), 'game-not-playing')

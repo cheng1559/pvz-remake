@@ -108,7 +108,7 @@
       "track": "anim_cone",
       "effect": "pvz:zombietrafficcone",
       "offset": [61, -20],
-      "impactSounds": [{"audio": "pvz:plastichit", "foley": true}, {"audio": "pvz:splat", "foley": true, "pitchRange": 10}],
+      "impactSounds": [{"audio": "pvz:plastichit", "foley": true}],
       "bowlingImpactSounds": [{"audio": "pvz:plastichit", "foley": true}],
       "damagedSprites": ["pvz:zombie_cone2", "pvz:zombie_cone3"]
     }
@@ -150,7 +150,7 @@
       "track": "anim_bucket",
       "effect": "pvz:zombiepail",
       "offset": [61, -20],
-      "impactSounds": [{"audio": "pvz:shieldhit", "foley": true}],
+      "impactSounds": [{"audio": "pvz:shieldhit", "foley": true}], "muffles": true,
       "bowlingImpactSounds": [{"audio": "pvz:shieldhit", "foley": true}],
       "damagedSprites": ["pvz:zombie_bucket2", "pvz:zombie_bucket3"]
     }
@@ -228,7 +228,7 @@
       "track": "Zombie_paper_paper",
       "effect": "pvz:zombienewspaper",
       "offset": [0, 0],
-      "impactSounds": [{"audio": "pvz:splat", "foley": true, "pitchRange": 10}],
+      "impactSounds": [],
       "damagedSprites": ["pvz:zombie_paper_paper2", "pvz:zombie_paper_paper3"],
       "dropReanim": {"reanimId": "pvz:zombie_surprise", "offset": [-11, 0]},
       "dropSounds": [{"audio": "pvz:newspaper_rip", "foley": true, "pitchRange": -2}]
@@ -279,7 +279,7 @@
       "track": "anim_screendoor",
       "effect": "pvz:zombiedoor",
       "offset": [46, -71],
-      "impactSounds": [{"audio": "pvz:splat", "foley": true, "pitchRange": 10}, {"audio": "pvz:shieldhit", "foley": true}],
+      "impactSounds": [{"audio": "pvz:shieldhit", "foley": true}],
       "bowlingImpactSounds": [{"audio": "pvz:shieldhit", "foley": true}],
       "damagedSprites": ["pvz:zombie_screendoor2", "pvz:zombie_screendoor3"]
     }

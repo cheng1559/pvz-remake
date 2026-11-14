@@ -61,6 +61,11 @@ export function mowerY(board: BoardDefinition, row: number): number {
     return board.origin.y + row * board.cell.height + 23
 }
 
+/** The ground of a row, where a mower's wheels stand (mowerY and its height): what is thrown comes down there. */
+export function rowGroundY(board: BoardDefinition, row: number): number {
+    return mowerY(board, row) + 80
+}
+
 export interface BoardDefinition {
     /** Nocturnal plants sleep on boards that are not at night. */
     night?: boolean
@@ -141,18 +146,34 @@ export interface PlantDefinition {
     body: Rect
     /** JSON configuration consumed by a registered plant behavior. */
     behavior?: JsonObject
+    /**
+     * A plant that attacks on a rhythm, written as `shooter`, `lobber` or `seeker` (`type`): the three keep the same
+     * rhythm and differ in what they aim at and how what they fire flies (PLANT_ATTACKS), as Plant::Fire picks the
+     * motion by the plant. A projectile says how fast and the like (ProjectileDefinition), not which way it flies.
+     */
     shooter?: {
+        /**
+         * `shooter`: at the first thing ahead on its row, straight along it. `lobber`: at the same, thrown up to come
+         * down on it. `seeker`: at the nearest thing anywhere, homing on it.
+         */
+        type: PlantAttack
         cadenceTicks: { min: number; max: number }
         initialDelayTicks: { min: number; max: number }
         windupTicks: number
         shotsPerBurst: number
         burstIntervalTicks: number
-        /** Exactly one of `projectile` and `area`. */
+        /**
+         * Exactly one of `projectile` and `area`; only a `shooter` has an `area`. Written as the projectile's id, or as
+         * `{id, ...}` with what this plant's are to have their own way (`overrides`).
+         */
         projectile?: string
+        /** What of its projectile this plant's have their own way, the rest as the projectile is defined. */
+        overrides?: ProjectileOverrides
         /** Plant::DoRowAreaDamage: hits every zombie in the row within reach, like the Fume-shroom. */
         area?: { damage: number; hitsShieldAndBody: boolean }
+        /** Its mouth, within the plant: where the middle of what it fires (of its hitbox) leaves, whatever its size. */
         offset: Point
-        /** Reach beyond the plant body, like the puff-shroom's 230; unlimited when omitted. */
+        /** Reach beyond the plant body, like the puff-shroom's 230; unlimited when omitted. A `seeker` reaches everywhere. */
         range?: number
     }
     producer?: {
@@ -244,22 +265,94 @@ export interface ZombieGait {
     deaths: Array<{ animation: 'anim_death' | 'anim_death2' | 'anim_superlongdeath'; frames: number; fallTime: number; rate?: number }>
 }
 
-/** Exactly one of `damage` and `mow`. */
+/**
+ * The ways a plant attacks on a rhythm, each with the motion of what it fires (the server's ProjectileMotionRegistry):
+ * which way a projectile flies is its launcher's, not the projectile's.
+ */
+export const PLANT_ATTACKS = { shooter: 'pvz:straight', lobber: 'pvz:lob', seeker: 'pvz:homing' } as const
+export type PlantAttack = keyof typeof PLANT_ATTACKS
+
+/**
+ * What a projectile is and does to what it hits: its hitbox, its hit, whether a hit uses it up (`pierce`), and how it
+ * flies each way a launcher may send it, each the original's when omitted. Exactly one of `damage` and `mow`.
+ */
 export interface ProjectileDefinition {
-    /** Taken off what it hits first, which it stops at. */
+    /** Taken off what it hits. */
     damage?: number
     /**
-     * A lawn mower: it runs through everything of the other side in its row, crushing each (Zombie::MowDown, a plant
-     * squashed) and slowing as it chews, until it leaves the board (LawnMower::UpdatePlaying). A level's mowers set off
-     * as one when a zombie reaches them (mower.ts); a shooter may fire one.
+     * A lawn mower's: it crushes what of the other side it hits (Zombie::MowDown, a plant squashed), slowing as it chews
+     * (LawnMower::UpdatePlaying). A level's mowers set off as one when a zombie reaches them (mower.ts).
      */
     mow?: true
-    speedPerTick: Point
+    /**
+     * A hit does not use it up: it hits all it meets, each once, and flies on until its motion ends, as a lawn mower
+     * runs through its row. Without it, it hits the nearest thing it meets and is gone.
+     */
+    pierce?: true
+    /**
+     * Projectile::DoSplashDamage, a melon's: what else of the other side its hitbox reaches where it hits, on its row
+     * and the rows next to it, takes a third of its damage; less each when that would come to more than seven times
+     * its damage in all.
+     */
+    splash?: true
     hitbox: Rect
     /** Slows the target for this many ticks, renewed by each hit. */
     chillTicks?: number
-    /** Disappears after this many ticks, like the puff-shroom's spore. */
+    /** Flying straight (a `shooter`'s): how far a tick, 3.33. */
+    speed?: number
+    /** Flying straight: it disappears after this many ticks, like the puff-shroom's spore; never when omitted. */
     lifetimeTicks?: number
+    /**
+     * Thrown (a `lobber`'s): the ticks it takes to its target, 120. It is thrown up under the same gravity whatever
+     * this is, as hard as brings it back down by then: lower and flatter the sooner.
+     */
+    flightTicks?: number
+    /**
+     * Thrown: it only hits coming down below a height over the ground of its row (its hitbox's bottom), wherever it
+     * was thrown from: 105 for a zombie, the cabbage's as the cabbage-pult throws it, and 77 for a plant, which stands
+     * lower (the basketball's, from the catapult's arm). This is how much higher this one hits either: a kernel 25, the
+     * butter 27, a melon 39.
+     */
+    landingOffset?: number
+    /** Thrown: the angle it leaves at, forward (clockwise thrown right): 0.88, the cabbage's and the butter's; the kernel leaves at 0, a melon at 1.26. */
+    rotation?: number
+    /** Thrown: how fast it tumbles forward, a tick, picked between the two: 0.02 to 0.08, the cabbage's; the kernel's 0.08 to 0.2. */
+    spin?: [number, number]
+    /** Homing (a `seeker`'s): how far a tick, 2. */
+    homingSpeed?: number
+    /** Homing: how much more it turns toward its target for each tick it has flown, 0.001. */
+    turn?: number
+}
+
+/** What of a projectile a plant firing it may have its own way: all but its hitbox and whether it mows. */
+export type ProjectileOverrides = Omit<ProjectileDefinition, 'hitbox' | 'mow'>
+const PROJECTILE_ATTRIBUTES: Record<keyof ProjectileOverrides, (value: unknown, name: string) => unknown> = {
+    damage: positiveInteger,
+    pierce: flag,
+    splash: flag,
+    chillTicks: positiveInteger,
+    speed: positiveFinite,
+    lifetimeTicks: positiveInteger,
+    flightTicks: positiveInteger,
+    landingOffset: finite,
+    rotation: finite,
+    spin(value, name) {
+        if (!Array.isArray(value) || value.length !== 2 || !value.every(Number.isFinite) || value[0] > value[1]) throw new Error(`${name} must be two ordered finite numbers`)
+        return [value[0], value[1]]
+    },
+    homingSpeed: positiveFinite,
+    turn: positiveFinite,
+}
+
+function flag(value: unknown, name: string): true {
+    if (value !== true) throw new Error(`${name} must be true`)
+    return true
+}
+
+function parseProjectileAttributes(source: Record<string, unknown>, name: string): ProjectileOverrides {
+    const result: Record<string, unknown> = {}
+    for (const [key, parse] of Object.entries(PROJECTILE_ATTRIBUTES)) if (source[key] !== undefined) result[key] = parse(source[key], `${name}.${key}`)
+    return result
 }
 
 export interface ItemDefinition {
@@ -406,7 +499,11 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
         else if (seed.kind === 'zombie') reference(seed.id, definitions.zombies, `seeds.${id}.id`)
     }
     for (const [id, plant] of Object.entries(definitions.plants)) {
-        if (plant.shooter?.projectile) reference(plant.shooter.projectile, definitions.projectiles, `plants.${id}.shooter.projectile`)
+        if (plant.shooter?.projectile) {
+            const name = `plants.${id}.${plant.shooter.type}.projectile`
+            reference(plant.shooter.projectile, definitions.projectiles, name)
+            if (plant.shooter.overrides?.damage !== undefined && definitions.projectiles[plant.shooter.projectile].mow) throw new Error(`${name}.damage is not supported: ${plant.shooter.projectile} mows`)
+        }
         if (plant.producer) reference(plant.producer.item, definitions.items, `plants.${id}.producer.item`)
         if (plant.producer?.growth) reference(plant.producer.growth.smallItem, definitions.items, `plants.${id}.producer.growth.smallItem`)
     }
@@ -493,7 +590,8 @@ function parseSeed(value: unknown, name: string, seedId: string): SeedDefinition
 }
 
 function parsePlant(value: unknown, name: string): PlantDefinition {
-    const abilities = ['shooter', 'producer', 'fuse', 'mine', 'chomper', 'graveBuster'] as const
+    const attacks = Object.keys(PLANT_ATTACKS) as PlantAttack[]
+    const abilities = [...attacks, 'producer', 'fuse', 'mine', 'chomper', 'graveBuster'] as const
     const source = exactObject(value, ['maxHealth', 'body'], name, [...abilities, 'deathExplosion', 'behavior', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset'])
     if (abilities.filter(key => source[key] !== undefined).length > 1) {
         throw new Error(`${name} allows at most one of ${abilities.join(', ')}`)
@@ -523,30 +621,35 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
         result.plantingOffset = { min, max }
     }
     if (source.behavior !== undefined) result.behavior = jsonRoundTrip(object(source.behavior, `${name}.behavior`)) as JsonObject
-    if (source.shooter) {
-        const shooter = exactObject(
-            source.shooter,
-            ['cadenceTicks', 'initialDelayTicks', 'windupTicks', 'shotsPerBurst', 'burstIntervalTicks', 'offset'],
-            `${name}.shooter`, ['range', 'projectile', 'area'],
+    const type = attacks.find(key => source[key] !== undefined)
+    if (type) {
+        const block = `${name}.${type}`
+        const { cadenceTicks, initialDelayTicks, windupTicks, shotsPerBurst, burstIntervalTicks, projectile: shot, area, offset, range } = exactObject(
+            source[type], ['cadenceTicks', 'initialDelayTicks', 'windupTicks', 'shotsPerBurst', 'burstIntervalTicks', 'offset'], block, ['range', 'projectile', 'area'],
         )
+        const { id: projectile, ...overrides } = shot === undefined || typeof shot === 'string' ? { id: shot } : object(shot, `${block}.projectile`)
+        exactObject(overrides, [], `${block}.projectile`, Object.keys(PROJECTILE_ATTRIBUTES))
         result.shooter = {
-            cadenceTicks: tickRange(shooter.cadenceTicks, `${name}.shooter.cadenceTicks`, 1),
-            initialDelayTicks: tickRange(shooter.initialDelayTicks, `${name}.shooter.initialDelayTicks`, 0),
-            windupTicks: positiveInteger(shooter.windupTicks, `${name}.shooter.windupTicks`),
-            shotsPerBurst: positiveInteger(shooter.shotsPerBurst, `${name}.shooter.shotsPerBurst`),
-            burstIntervalTicks: nonNegativeInteger(shooter.burstIntervalTicks, `${name}.shooter.burstIntervalTicks`),
-            ...(shooter.projectile === undefined ? {} : { projectile: qualifiedId(shooter.projectile, `${name}.shooter.projectile`) }),
-            ...(shooter.area === undefined ? {} : { area: (() => {
-                const area = exactObject(shooter.area, ['damage', 'hitsShieldAndBody'], `${name}.shooter.area`)
-                if (typeof area.hitsShieldAndBody !== 'boolean') throw new Error(`${name}.shooter.area.hitsShieldAndBody must be boolean`)
-                return { damage: positiveInteger(area.damage, `${name}.shooter.area.damage`), hitsShieldAndBody: area.hitsShieldAndBody }
+            type,
+            cadenceTicks: tickRange(cadenceTicks, `${block}.cadenceTicks`, 1),
+            initialDelayTicks: tickRange(initialDelayTicks, `${block}.initialDelayTicks`, 0),
+            windupTicks: positiveInteger(windupTicks, `${block}.windupTicks`),
+            shotsPerBurst: positiveInteger(shotsPerBurst, `${block}.shotsPerBurst`),
+            burstIntervalTicks: nonNegativeInteger(burstIntervalTicks, `${block}.burstIntervalTicks`),
+            ...(shot === undefined ? {} : { projectile: qualifiedId(projectile, `${block}.projectile`) }),
+            ...(Object.keys(overrides).length ? { overrides: parseProjectileAttributes(overrides, `${block}.projectile`) } : {}),
+            ...(area === undefined ? {} : { area: (() => {
+                const source = exactObject(area, ['damage', 'hitsShieldAndBody'], `${block}.area`)
+                if (typeof source.hitsShieldAndBody !== 'boolean') throw new Error(`${block}.area.hitsShieldAndBody must be boolean`)
+                return { damage: positiveInteger(source.damage, `${block}.area.damage`), hitsShieldAndBody: source.hitsShieldAndBody }
             })() }),
-            offset: point(shooter.offset, `${name}.shooter.offset`),
-            ...(shooter.range === undefined ? {} : { range: positiveFinite(shooter.range, `${name}.shooter.range`) }),
+            offset: point(offset, `${block}.offset`),
+            ...(range === undefined ? {} : { range: positiveFinite(range, `${block}.range`) }),
         }
-        if ((result.shooter.projectile === undefined) === (result.shooter.area === undefined)) {
-            throw new Error(`${name}.shooter needs exactly one of projectile and area`)
+        if (type === 'shooter' ? (result.shooter.projectile === undefined) === (result.shooter.area === undefined) : !result.shooter.projectile || result.shooter.area) {
+            throw new Error(type === 'shooter' ? `${block} needs exactly one of projectile and area` : `${block} needs a projectile, and no area`)
         }
+        if (type === 'seeker' && range !== undefined) throw new Error(`${block}.range is not supported: a seeker reaches everywhere`)
     }
     if (source.producer) {
         const producer = exactObject(source.producer, ['item', 'cadenceTicks', 'initialDelayTicks'], `${name}.producer`, ['growth'])
@@ -777,18 +880,11 @@ function fraction(value: unknown, name: string): number {
     return result
 }
 
-function parseProjectile(value: unknown, name: string): ProjectileDefinition {
-    const source = exactObject(value, ['speedPerTick', 'hitbox'], name, ['damage', 'mow', 'chillTicks', 'lifetimeTicks'])
+export function parseProjectile(value: unknown, name: string): ProjectileDefinition {
+    const source = exactObject(value, ['hitbox'], name, ['mow', ...Object.keys(PROJECTILE_ATTRIBUTES)])
     if ((source.damage === undefined) === (source.mow === undefined)) throw new Error(`${name} needs exactly one of damage and mow`)
     if (source.mow !== undefined && source.mow !== true) throw new Error(`${name}.mow must be true`)
-    return {
-        ...(source.damage === undefined ? {} : { damage: positiveInteger(source.damage, `${name}.damage`) }),
-        ...(source.mow ? { mow: true as const } : {}),
-        speedPerTick: point(source.speedPerTick, `${name}.speedPerTick`),
-        hitbox: rect(source.hitbox, `${name}.hitbox`),
-        ...(source.chillTicks === undefined ? {} : { chillTicks: positiveInteger(source.chillTicks, `${name}.chillTicks`) }),
-        ...(source.lifetimeTicks === undefined ? {} : { lifetimeTicks: positiveInteger(source.lifetimeTicks, `${name}.lifetimeTicks`) }),
-    }
+    return { ...(source.mow ? { mow: true as const } : {}), hitbox: rect(source.hitbox, `${name}.hitbox`), ...parseProjectileAttributes(source, name) }
 }
 
 function parseItem(value: unknown, name: string): ItemDefinition {

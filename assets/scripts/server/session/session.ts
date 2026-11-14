@@ -20,6 +20,7 @@ import { createPlantChillSystem } from '../plants/chill'
 import { createProductionSystem } from '../plants/production'
 import { createPeashooterSystem } from '../plants/shooter'
 import { createProjectileSystem } from '../combat/projectiles'
+import { ProjectileMotionsResource } from '../combat/motions'
 import { createWaveSystem } from '../level/waves'
 import { LevelRuleResource } from '../rules/registry'
 import { createZombieGroanSystem } from '../zombies/groans'
@@ -77,6 +78,7 @@ export interface Session extends ServerContent {
 export function createWorld(content: ServerContent): World {
     const world = new World()
     world.resources.set(ZombieBehaviorsResource, content.gameplay.zombieBehaviors)
+    world.resources.set(ProjectileMotionsResource, content.gameplay.projectileMotions)
     world.resources.set(AchievementsResource, {
         definitions: content.definitions.achievements, earned: new Set<string>(), progress: {},
     })

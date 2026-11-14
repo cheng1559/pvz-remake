@@ -1,28 +1,32 @@
 import { type GameplayDefinitions, MOWER_READY_X, mowerY } from '@/shared/content/gameplay'
-import type { CommandBuffer, GameSystem, World } from '@/ecs/index'
-import { LevelStateResource, MowedPlantComponent, PlantAttackComponent, PlantComponent, type Position, PositionComponent, ProjectileComponent, type Zombie, ZombieComponent } from '../state/components'
+import type { GameSystem, World } from '@/ecs/index'
+import {
+    LevelStateResource, MowedPlantComponent, type Plant, PlantAttackComponent, PlantComponent, type Position, PositionComponent, type Projectile,
+    ProjectileComponent, type Zombie, ZombieComponent,
+} from '../state/components'
 import { ZOMBIE_MOWERED_TICKS } from '../zombies/animation'
-import { destroyZombie, dropZombieHelm, dropZombieShield, isFlattenableZombie, mowZombie } from '../zombies/damage'
+import { destroyZombie, dropZombieHelm, dropZombieShield, isFlattenableZombie, mowZombie as flattenZombie } from '../zombies/damage'
 import { dropZombieLoot } from './loot'
 import { dropZombieFlag } from '../zombies/flag'
 import { WaveResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { isHostile, projectileTeam, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
-import { hostilePlants } from '../combat/targets'
+import { isHostile, type Team, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { getDebugRules } from '../debug/debugRules'
-import { getBoardBounds } from '../combat/collision'
+import { launchProjectile, STRAIGHT } from '../combat/motions'
 
 /** LawnMower::mChompCounter: a mower a zombie sets off chews on it for less than on the ones it runs into after. */
 const CHOMP_READY_TICKS = 25
 const CHOMP_ACTIVE_TICKS = 50
+/** The original's mower slows from its 3.33 a tick to 1 as it chews: this much of its speed. */
+const CHOMP_SPEED_SCALE = 1 / 3.33
 
 type MowTarget = { entity: number, position: Position, zombie: Zombie }
 
 /**
- * The level's mowers and every mowing projectile (ProjectileDefinition.mow), after the other projectiles as the original
- * updates its mowers. A level's mower waits at each active row's end (LevelState.mowerRows) until a zombie with its
- * head reaches it, and then sets off as the level's mowing projectile (startMower). A mowing projectile, a level's or a
- * shooter's, runs through its row crushing the other side (LawnMower::UpdatePlaying) until it leaves the board.
+ * The level's mowers. One waits at each active row's end (LevelState.mowerRows) until a zombie with its head reaches
+ * it, and then sets off as the level's mowing projectile (startMower), which the projectile system flies like any
+ * other: the rest of this is what `mow` does to what such a projectile hits (ProjectileDefinition.mow), a level's or
+ * a shooter's.
  */
 export function createMowerSystem(definitions: GameplayDefinitions): GameSystem {
     return {
@@ -30,22 +34,19 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
         run({ world, commands }) {
             const level = world.resources.get(LevelStateResource)
             if (level.result === 'lost' || level.paused) return
-            // Collected once per run; positions and components are not replaced during it.
-            const zombies: MowTarget[] = [...world.query(PositionComponent, ZombieComponent)].map(entity => ({
-                entity, position: world.get(entity, PositionComponent)!, zombie: world.get(entity, ZombieComponent)!,
-            }))
-            const waiting = definitions.projectiles[level.definition.lawnMower].hitbox
-            for (const row of [...level.mowerRows]) {
-                const trigger = zombies.find(target => target.position.row === row && target.zombie.hasHead &&
-                    mowable(definitions, target, 'plants', MOWER_READY_X + waiting.x, waiting.width))
-                if (trigger) startMower(world, definitions, row, trigger)
+            const waiting = definitions.projectiles[level.definition.lawnMower].hitbox, left = MOWER_READY_X + waiting.x
+            if (level.mowerRows.length) for (const entity of [...world.query(PositionComponent, ZombieComponent)]) {
+                const position = world.get(entity, PositionComponent)!, zombie = world.get(entity, ZombieComponent)!
+                // Dead zombies cannot set a mower off themselves (LawnMower::Update).
+                if (!level.mowerRows.includes(position.row) || !zombie.hasHead || !mowsZombie(zombie, 'plants')) continue
+                const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
+                if (Math.min(left + waiting.width, position.x + body.x + body.width) > Math.max(left, position.x + body.x)) {
+                    startMower(world, definitions, position.row, { entity, position, zombie })
+                }
             }
             // A mowed plant is squashed for as long as a mowed zombie, then gone.
             for (const entity of world.query(MowedPlantComponent)) {
                 if (++world.get(entity, MowedPlantComponent)!.ticks >= ZOMBIE_MOWERED_TICKS) commands.destroyEntity(entity)
-            }
-            for (const entity of world.query(PositionComponent, ProjectileComponent)) {
-                if (definitions.projectiles[world.get(entity, ProjectileComponent)!.typeId].mow) runMower(world, definitions, commands, entity, zombies)
             }
         },
     }
@@ -63,58 +64,38 @@ export function startMower(world: World, definitions: GameplayDefinitions, row: 
         const picks = wave.rowPicks?.find(state => state.row === row)
         if (picks) picks.mowedAtWave = wave.index
     }
-    const entity = world.createEntity()
-    world.add(entity, PositionComponent, { x: MOWER_READY_X, y: mowerY(level.board, row), row })
-    world.add(entity, ProjectileComponent, { typeId: level.definition.lawnMower, chompCounter: 0 })
+    const entity = launchProjectile(world, definitions, world, {
+        typeId: level.definition.lawnMower, position: { x: MOWER_READY_X, y: mowerY(level.board, row), row }, motion: STRAIGHT,
+    })
     emitServerEvent(world.resources.get(EventQueueResource), 'mowerActivated', { entityId: entity, row })
     if (!trigger) return
-    mowDown(world, definitions, entity, trigger)
-    world.get(entity, ProjectileComponent)!.chompCounter = CHOMP_READY_TICKS
+    const mower = world.get(entity, ProjectileComponent)!
+    mowZombie(world, definitions, entity, mower, trigger)
+    mower.chompCounter = CHOMP_READY_TICKS
 }
 
-/** A mowing projectile crushes what of the other side it meets, chewing on each, then runs on (slowed while it chews). */
-function runMower(world: World, definitions: GameplayDefinitions, commands: CommandBuffer, entity: number, zombies: MowTarget[]): void {
-    const position = world.get(entity, PositionComponent)!, mower = world.get(entity, ProjectileComponent)!
-    const { hitbox, speedPerTick } = definitions.projectiles[mower.typeId], team = projectileTeam(mower)
-    const left = position.x + hitbox.x
-    for (const target of zombies) {
-        if (target.position.row !== position.row || !mowable(definitions, target, team, left, hitbox.width)) continue
-        mowDown(world, definitions, entity, target)
-        mower.chompCounter = CHOMP_ACTIVE_TICKS
-    }
-    // The other side's plants go too, past their own ends (an explode-o-nut does not go off): each stops being a plant
-    // at once and stays as a mowed one for its squashing, as a mowed zombie does. /plantinvincible keeps them.
-    if (!getDebugRules(world).plantInvincible) for (const target of hostilePlants(world, definitions, team, position.row)) {
-        if (!overlaps(left, hitbox.width, target.rect.x, target.rect.width)) continue
-        mower.chompCounter = CHOMP_ACTIVE_TICKS
-        world.remove(target.entity, PlantComponent)
-        world.remove(target.entity, PlantAttackComponent)
-        world.add(target.entity, MowedPlantComponent, { plant: target.plant, ticks: 0, ...(team === 'zombies' ? { left: true as const } : {}) })
-        emitServerEvent(world.resources.get(EventQueueResource), 'plantMowered', { mowerId: entity, plantId: target.entity })
-    }
-    let speed = speedPerTick.x
-    if (mower.chompCounter! > 0) speed = bounceSlowMiddle(CHOMP_ACTIVE_TICKS, 0, --mower.chompCounter!, speedPerTick.x, 1)
-    // One of the zombies' side runs left.
-    position.x += speed * teamDirection(team)
-    const bounds = getBoardBounds(world)
-    if (position.x > bounds.right || left + hitbox.width < bounds.left) commands.destroyEntity(entity)
+/** LawnMower::UpdatePlaying (EffectedByDamage(127)): a mower takes the other side's zombies, dying ones too, once. */
+export function mowsZombie(zombie: Zombie, team: Team): boolean {
+    return zombie.state !== 'mowered' && isHostile(zombieTeam(zombie), team)
 }
 
-/** A zombie of the other side, not already going, whose body overlaps the span. */
-function mowable(definitions: GameplayDefinitions, { position, zombie }: MowTarget, team: Team, left: number, width: number): boolean {
-    // LawnMower::UpdatePlaying (EffectedByDamage(127)): a mower passes zombies on its own side, and takes dying ones.
-    if (zombie.state === 'mowered' || !isHostile(zombieTeam(zombie), team)) return false
-    const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
-    return overlaps(left, width, position.x + body.x, body.width)
+/** A mower crushes the other side's plants too, unless /plantinvincible keeps them. */
+export function mowsPlants(world: World): boolean {
+    return !getDebugRules(world).plantInvincible
+}
+
+/** LawnMower::UpdatePlaying: it slows toward a third of its speed and back as it chews. */
+export function chewSpeedScale(mower: Projectile): number {
+    return mower.chompCounter! > 0 ? bounceSlowMiddle(CHOMP_ACTIVE_TICKS, 0, --mower.chompCounter!, 1, CHOMP_SPEED_SCALE) : 1
 }
 
 /**
- * Zombie::MowDown: DropShield(0U) and DropHelm(0U), then the flag; it drops loot like any other death. One that cannot
- * be flattened as it stands (dying, burned, in its vault, rising from a grave) goes in a puff instead: its head, arm
- * and armor drop, and it is gone at once (DieWithLoot).
+ * Zombie::MowDown, and the mower chews on it: DropShield(0U) and DropHelm(0U), then the flag; it drops loot like any
+ * other death. One that cannot be flattened as it stands (dying, burned, in its vault, rising from a grave) goes in a
+ * puff instead: its head, arm and armor drop, and it is gone at once (DieWithLoot).
  */
-function mowDown(world: World, definitions: GameplayDefinitions, mowerId: number, { entity, position, zombie }: MowTarget): void {
-    if (!world.hasEntity(entity)) return
+export function mowZombie(world: World, definitions: GameplayDefinitions, mowerId: number, mower: Projectile, { entity, position, zombie }: MowTarget): void {
+    mower.chompCounter = CHOMP_ACTIVE_TICKS
     const events = world.resources.get(EventQueueResource)
     if (!isFlattenableZombie(zombie)) {
         emitServerEvent(events, 'zombiePuffed', { mowerId, zombieId: entity, x: position.x, y: position.y, row: position.row })
@@ -132,9 +113,21 @@ function mowDown(world: World, definitions: GameplayDefinitions, mowerId: number
     dropZombieShield(world, definitions, entity, zombie)
     dropZombieHelm(world, definitions, entity, zombie)
     dropZombieFlag(world, definitions, entity)
-    mowZombie(zombie)
+    flattenZombie(zombie)
     dropZombieLoot(world, definitions, entity, world)
-    emitServerEvent(world.resources.get(EventQueueResource), 'zombieMowered', { mowerId, zombieId: entity })
+    emitServerEvent(events, 'zombieMowered', { mowerId, zombieId: entity })
+}
+
+/**
+ * A mower crushes a plant past its own end (an explode-o-nut does not go off): it stops being a plant at once and stays
+ * as a mowed one for its squashing, as a mowed zombie does. `team`: the mower's, which tips it the way the mower runs.
+ */
+export function mowPlant(world: World, mowerId: number, mower: Projectile, target: { entity: number, plant: Plant }, team: Team): void {
+    mower.chompCounter = CHOMP_ACTIVE_TICKS
+    world.remove(target.entity, PlantComponent)
+    world.remove(target.entity, PlantAttackComponent)
+    world.add(target.entity, MowedPlantComponent, { plant: target.plant, ticks: 0, ...(team === 'zombies' ? { left: true as const } : {}) })
+    emitServerEvent(world.resources.get(EventQueueResource), 'plantMowered', { mowerId, plantId: target.entity })
 }
 
 function bounceSlowMiddle(timeStart: number, timeEnd: number, age: number, start: number, end: number): number {
@@ -143,8 +136,4 @@ function bounceSlowMiddle(timeStart: number, timeEnd: number, age: number, start
     const bounce = 1 - Math.abs(2 * warpedAge - 1)
     const invQuad = 2 * bounce - bounce * bounce
     return (end - start) * invQuad + start
-}
-
-function overlaps(leftA: number, widthA: number, leftB: number, widthB: number): boolean {
-    return Math.min(leftA + widthA, leftB + widthB) > Math.max(leftA, leftB)
 }

@@ -1,3 +1,4 @@
+import { withProjectileMotions } from '../projectileMotions'
 import { readGameplaySource } from '../../tools/mod/content'
 import { withFixedBanks } from '../fixedBankLevels'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
@@ -18,6 +19,7 @@ import {
 } from '@/server/state/components'
 import { createZombieSystem } from '@/server/zombies/system'
 import { createMowerSystem, startMower } from '@/server/level/mower'
+import { createProjectileSystem } from '@/server/combat/projectiles'
 import { EventQueueResource, createEventQueue } from '@/server/state/events'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 
@@ -29,7 +31,7 @@ function mowerWorld(): World {
     world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board,
         phase: 'gameplay', result: 'playing', paused: false, mowerRows: [2] })
     world.resources.set(EventQueueResource, createEventQueue())
-    world.resources.set(RandomResource, new DeterministicRng(1))
+    withProjectileMotions(world).resources.set(RandomResource, new DeterministicRng(1))
     return world
 }
 /** The running mowers, which are projectiles. */
@@ -39,6 +41,7 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     const world = mowerWorld()
     const schedule = new Schedule()
     schedule.add('zombie', createZombieSystem(definitions))
+    schedule.add('projectile', createProjectileSystem(definitions))
     schedule.add('mower', createMowerSystem(definitions))
 
     schedule.run(world, 1)
@@ -89,7 +92,7 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
         2,
     )
 
-    assert.equal(world.get(mowerEntity, ProjectileComponent)!.chompCounter, 49)
+    assert.equal(world.get(mowerEntity, ProjectileComponent)!.chompCounter, 50)
     for (let tick = 5; tick <= 28; tick++) schedule.run(world, tick)
     assert.ok(Math.abs(world.get(zombie, ZombieComponent)!.animationTime - 3.5) < 1e-9)
     for (let tick = 29; tick <= 52; tick++) schedule.run(world, tick)
@@ -128,8 +131,10 @@ test('Zombie::MowDown drops a worn helm or shield before the mowed animation', (
         return entity
     })
     const schedule = new Schedule()
+    schedule.add('projectile', createProjectileSystem(definitions))
     schedule.add('mower', createMowerSystem(definitions))
-    schedule.run(world, 1)
+    // The first sets the mower off; it runs into the second on the next tick.
+    for (const tick of [1, 2]) schedule.run(world, tick)
     for (const entity of zombies) {
         assert.equal(world.get(entity, ZombieComponent)!.state, 'mowered')
         assert.deepEqual([world.get(entity, ZombieComponent)!.helmHealth, world.get(entity, ZombieComponent)!.shieldHealth], [0, 0])
@@ -152,6 +157,7 @@ test('a zombie that cannot be flattened (dying, vaulting, rising) goes in a puff
     })
     startMower(world, definitions, 2)
     const schedule = new Schedule()
+    schedule.add('projectile', createProjectileSystem(definitions))
     schedule.add('mower', createMowerSystem(definitions))
     schedule.run(world, 1)
     assert.equal(world.hasEntity(zombie), false)
@@ -173,6 +179,7 @@ test("a running mower crushes the zombies' plants in its row, and they do not se
     const enemy = plant('zombies', 0), friend = plant('plants', 1), otherRow = plant('zombies', 0, 3)
     const explosive = plant('zombies', 3, 2, 'pvz:explodenut')
     const schedule = new Schedule()
+    schedule.add('projectile', createProjectileSystem(definitions))
     schedule.add('mower', createMowerSystem(definitions))
     schedule.run(world, 1)
     assert.deepEqual(world.resources.get(LevelStateResource).mowerRows, [2])
@@ -219,8 +226,10 @@ test('a shooter can fire mowing projectiles, each from its mouth on its side, cr
 
     const ours = play(['/plant peashooter 3 1', '/zombie normal 3 8'])
     run(ours, () => running(ours).length > 0)
-    assert.equal(running(ours)[0].team, undefined)
+    const flat = ours.currentSnapshot!.projectiles[0]
+    assert.equal(flat.team, undefined)
     run(ours, () => ours.render().zombies.some(zombie => zombie.state === 'mowered'))
+    assert.ok(ours.currentSnapshot!.projectiles[0].y === flat.y && flat.height! > 0, 'fired from a mouth, it flies flat at that height, over its shadow on the ground')
     run(ours, () => running(ours).length === 0)
     assert.deepEqual(ours.render().mowerRows, [2], "the row's own mower still waits")
 

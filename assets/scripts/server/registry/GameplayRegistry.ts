@@ -8,6 +8,7 @@ import { installBuiltinLevelRules } from '../rules'
 import { bowlingBehavior } from '../plants/bowling'
 import { AchievementTriggerRegistry } from '../achievements/achievements'
 import { installBuiltinAchievementTriggers } from '../achievements/triggers'
+import { installBuiltinProjectileMotions, ProjectileMotionRegistry } from '../combat/motions'
 
 export class GameplayRegistry {
     readonly plantBehaviors = new PlantBehaviorRegistry()
@@ -15,9 +16,11 @@ export class GameplayRegistry {
     readonly components = new JsonComponents()
     readonly levelRules = new LevelRuleRegistry()
     readonly achievementTriggers = new AchievementTriggerRegistry()
+    readonly projectileMotions = new ProjectileMotionRegistry()
     private installBuiltins(definitions: GameplayDefinitions): void {
         installBuiltinLevelRules(this.levelRules)
         installBuiltinAchievementTriggers(this.achievementTriggers)
+        installBuiltinProjectileMotions(this.projectileMotions)
         const behaviors = new Map([['bowling', bowlingBehavior]])
         for (const [id, definition] of Object.entries(definitions.plants)) {
             const behavior = behaviors.get(String(definition.behavior?.kind))
@@ -25,7 +28,7 @@ export class GameplayRegistry {
         }
     }
     checkpoint(): () => void {
-        const rollback = [this.plantBehaviors.checkpoint(), this.zombieBehaviors.checkpoint(), this.components.checkpoint(), this.levelRules.checkpoint(), this.achievementTriggers.checkpoint()]
+        const rollback = [this.plantBehaviors.checkpoint(), this.zombieBehaviors.checkpoint(), this.components.checkpoint(), this.levelRules.checkpoint(), this.achievementTriggers.checkpoint(), this.projectileMotions.checkpoint()]
         return () => { for (const undo of rollback.reverse()) undo() }
     }
     validate(definitions: GameplayDefinitions): void {
@@ -40,6 +43,7 @@ export class GameplayRegistry {
         this.components.freeze()
         this.levelRules.freeze()
         this.achievementTriggers.freeze()
+        this.projectileMotions.freeze()
     }
     /** Every level's rule is installed and takes its settings. */
     validateLevels(levels: GameplayLevels, definitions: GameplayDefinitions): void { this.levelRules.validate(levels, definitions) }

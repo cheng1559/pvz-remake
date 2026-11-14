@@ -178,10 +178,14 @@ export interface ProjectilePresentationDefinition {
     readonly sprite?: string
     /** An animation it plays looping, like a running mower's: at `x`, `y` in its frame, at `scale` and `rate`. */
     readonly reanim?: { readonly id: string; readonly x: number; readonly y: number; readonly scale: number; readonly rate: number }
-    /** The board's plant shadow (the darker one at night) under it, at this point of its frame: a mower's. */
+    /**
+     * The board's plant shadow (the darker one at night) on the ground under it, a mower's: its middle this far from
+     * the projectile's corner, down positive, and as far down again as the projectile flies above the ground.
+     */
     readonly plantShadow?: { readonly x: number; readonly y: number }
     /** Its render layer; `projectile` when omitted, a mower's `lawnMower`. */
     readonly layer?: RenderLayer
+    /** Its own shadow on the ground under it: its corner at `offset` from the projectile's, placed as `plantShadow` is. */
     readonly shadow?: {
         readonly sprite: string; readonly columns: number; readonly cell: number
         readonly offset: { readonly x: number; readonly y: number }; readonly scale: number
@@ -189,11 +193,26 @@ export interface ProjectilePresentationDefinition {
     readonly trail?: { readonly id: string; readonly x: number; readonly y: number }
     readonly impact?: {
         readonly id: string
-        readonly offset: readonly [number, number]
-        readonly yRange: readonly [number, number]
+        /**
+         * Where its splat is from its middle, forward and down, when it flies into what it hits (a shooter's, a
+         * seeker's): ahead at its front, the pea's [35, -2] when omitted.
+         */
+        readonly shotOffset?: readonly [number, number]
+        /** The same when it comes down on what it hits, or on the ground (a lobber's): where it is, [0, 0], when omitted. */
+        readonly lobOffset?: readonly [number, number]
+        /** On a zombie, the splat stays this far below its top, between the two. */
+        readonly yRange?: readonly [number, number]
+        /**
+         * Projectile::DoImpact for a melon: its splat is the board's and not the zombie's it hit. It stays where it
+         * was, over what flies in the row, so no zombie of the row covers it; `yRange` is not used. Without it a splat
+         * is on the zombie: it goes with it, and a zombie drawn after that one covers it.
+         */
+        readonly free?: true
     }
     readonly fireSounds: readonly PresentationSound[]
     readonly impactSounds: readonly PresentationSound[]
+    /** Its impact sounds are heard on armor that muffles (ZombieArmorPresentation.muffles), as a melon's. */
+    readonly loud?: true
 }
 
 export interface ScreenAnimationDefinition {
@@ -265,8 +284,13 @@ export interface ZombieArmorPresentation {
     readonly damagedSprites: readonly [string, string]
     readonly effect: string
     readonly offset: readonly [number, number]
-    /** Played for a projectile hit while worn, instead of the projectile's own; the shield's win while both are worn. */
+    /** Its own sound for a projectile hit while worn, with the projectile's; the shield's while both are worn. */
     readonly impactSounds: readonly PresentationSound[]
+    /**
+     * Projectile::PlayImpactSound for a pail: a projectile's own impact sound is not heard on it, unless the
+     * projectile is `loud`.
+     */
+    readonly muffles?: true
     /** Played when a bowled nut strikes it: a shield, or a helm without a shield in front. */
     readonly bowlingImpactSounds?: readonly PresentationSound[]
     /** Plays once on the zombie when it breaks, like the newspaper's surprise mark. */
@@ -756,6 +780,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
                 pair(reanim.offset, name + '.dropReanim.offset')
             }
             sounds(armor.impactSounds, name + '.impactSounds', true)
+            if (armor.muffles !== undefined && armor.muffles !== true) throw new TypeError(name + '.muffles must be true')
             sounds(armor.bowlingImpactSounds, name + '.bowlingImpactSounds')
             sounds(armor.dropSounds, name + '.dropSounds')
         }
@@ -803,8 +828,10 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (projectile.impact !== undefined) {
             const impact = object(projectile.impact, id + '.impact')
             text(impact.id, id + '.impact.id')
-            pair(impact.offset, id + '.impact.offset')
-            range(impact.yRange, id + '.impact.yRange', true)
+            if (impact.shotOffset !== undefined) pair(impact.shotOffset, id + '.impact.shotOffset')
+            if (impact.lobOffset !== undefined) pair(impact.lobOffset, id + '.impact.lobOffset')
+            if (impact.free !== undefined && impact.free !== true) throw new TypeError(id + '.impact.free must be true')
+            if (!impact.free || impact.yRange !== undefined) range(impact.yRange, id + '.impact.yRange', true)
         }
         if (projectile.trail !== undefined) {
             const trail = object(projectile.trail, id + '.trail')
@@ -813,6 +840,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         }
         sounds(projectile.fireSounds, id + '.fireSounds', true)
         sounds(projectile.impactSounds, id + '.impactSounds', true)
+        if (projectile.loud !== undefined && projectile.loud !== true) throw new TypeError(id + '.loud must be true')
     }
     const packets = object(data.seedPackets, 'seedPackets')
     const flash = object(packets.flash, 'seedPackets.flash')

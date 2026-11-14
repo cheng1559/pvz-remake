@@ -26,6 +26,7 @@ import type {
 import type { Item, TutorialState, WaveState } from '../state/levelState'
 import type { SavedComponents } from '../registry/JsonComponents'
 import { isQualifiedId } from '@/shared/mod'
+import { parseProjectile as parseProjectileDefinition } from '@/shared/content/gameplay'
 import { checkGraveRanges } from '@/shared/protocol'
 
 export interface SavedEntity {
@@ -460,12 +461,16 @@ function parseZombie(value: unknown, name: string): Zombie {
 }
 
 function parseProjectile(value: unknown, name: string): Projectile {
-    const source = optionalExact(value, ['typeId'], ['ticksLeft', 'team', 'chompCounter'], name)
+    const source = optionalExact(value, ['typeId', 'definition', 'motion'], ['team', 'chompCounter', 'motionState', 'hits'], name)
     return {
         typeId: nonEmptyString(source.typeId, `${name}.typeId`),
+        definition: parseProjectileDefinition(source.definition, `${name}.definition`),
+        motion: nonEmptyString(source.motion, `${name}.motion`),
         ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
-        ...(source.ticksLeft === undefined ? {} : { ticksLeft: positiveInteger(source.ticksLeft, `${name}.ticksLeft`) }),
         ...(source.chompCounter === undefined ? {} : { chompCounter: nonNegativeInteger(source.chompCounter, `${name}.chompCounter`) }),
+        ...(source.hits === undefined ? {} : { hits: array(source.hits, `${name}.hits`).map(hit => positiveInteger(hit, `${name}.hits[]`)) }),
+        // Its motion checks it (restoreEntity).
+        ...(source.motionState === undefined ? {} : { motionState: jsonRoundTrip(record(source.motionState, `${name}.motionState`)) as JsonObject }),
     }
 }
 

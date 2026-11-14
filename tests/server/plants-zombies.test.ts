@@ -1,3 +1,4 @@
+import { withProjectileMotions } from '../projectileMotions'
 import { withFixedBanks } from '../fixedBankLevels'
 import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
@@ -32,7 +33,7 @@ const board = definitions.boards['pvz:day']
 
 function game(config = definitions) {
     const world = new World()
-    world.resources.set(RandomResource, new DeterministicRng(7))
+    withProjectileMotions(world).resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     world.resources.set(LevelStateResource, {
         id: 'pvz:test',

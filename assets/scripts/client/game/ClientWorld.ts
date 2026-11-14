@@ -1,4 +1,5 @@
 import type {
+    ProjectileSnapshot,
     EntityId,
     ItemSnapshot,
     ServerFramePacket,
@@ -73,12 +74,21 @@ export class ClientWorld {
             // Landing changes the animation's origin; its pose and position must switch together.
             zombies: interpolate(current.zombies, previous?.zombies, t,
                 (before, after) => before.state !== 'vaulting' || after.state === 'vaulting'),
-            projectiles: interpolate(current.projectiles, previous?.projectiles, t),
+            projectiles: interpolateProjectiles(current.projectiles, previous?.projectiles, t),
             items: interpolateItems(current.items, previous?.items, t),
         }
         this.rendered = { current, previous, t, frame }
         return frame
     }
+}
+
+/** A projectile's height goes with its position: what lies on the ground under it stays there as it rises and falls. */
+function interpolateProjectiles(current: ProjectileSnapshot[], previous: ProjectileSnapshot[] | undefined, alpha: number): ProjectileSnapshot[] {
+    const previousById = byId(previous)
+    return interpolate(current, previous, alpha).map(projectile => {
+        const before = previousById.get(projectile.entityId), from = before?.height ?? 0, to = projectile.height ?? 0
+        return before && from !== to ? { ...projectile, height: from + (to - from) * alpha } : projectile
+    })
 }
 
 function interpolateItems(current: ItemSnapshot[], previous: ItemSnapshot[] | undefined, alpha: number): ItemSnapshot[] {

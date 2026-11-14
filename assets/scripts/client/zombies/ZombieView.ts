@@ -70,7 +70,7 @@ export class ZombieView implements ZombieViewInstance {
     private flag: ReanimPlayer | null = null
     private holdingFlag = false
     private latestZombie: ZombieSnapshot | null = null
-    private flash: ZombieFlash = { flash: 0, through: false }
+    private flash: ZombieFlash = { flash: 0, through: false, past: false }
     private riseClip?: Node
 
     constructor(
@@ -385,9 +385,11 @@ export class ZombieView implements ZombieViewInstance {
     private applyHitFlash(zombie: ZombieSnapshot): void {
         const cold = zombie.chilled === true && zombie.state !== 'burned'
         const shield = (zombie.shieldHealth ?? 0) > 0 ? this.presentation.shield : undefined
-        // TakeShieldDamage flashes only the shield, unless the hit also reached the body (the Fume-shroom).
-        const { flash, through } = this.flash
-        const bodyFlash = shield && !through ? 0 : flash
+        // TakeShieldDamage flashes only the shield, unless the hit also reached the body (the Fume-shroom); one that
+        // came past the shield (a lobbed projectile) flashes only the body.
+        const { through, past } = this.flash
+        const bodyFlash = shield && !through && !past ? 0 : this.flash.flash
+        const flash = past ? 0 : this.flash.flash
         const grayness = Math.min(255, bodyFlash * 10)
         // DrawReanim adds the cold tint and then adds the hit highlight on top of it.
         const color = new Color(Math.min(255, grayness + (cold ? 75 : 0)),

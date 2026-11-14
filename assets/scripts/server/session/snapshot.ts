@@ -2,6 +2,7 @@ import type { JsonObject, WorldSnapshot } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
 import { EconomyStateResource, LevelStateResource, MowedPlantComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent } from '../state/components'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
+import { heightOverRow, ProjectileMotionsResource } from '../combat/motions'
 import { getAvailableSun } from '../level/items'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { planting } from '../seeds/planting'
@@ -86,10 +87,15 @@ export const snapshot = {
                 ...position,
             }
         })
+        const motions = world.resources.get(ProjectileMotionsResource)
         const projectiles = [...world.query(PositionComponent, ProjectileComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
             const projectile = world.get(entity, ProjectileComponent)!
-            return { entityId: entity, typeId: projectile.typeId, ...position, ...(projectile.team === 'zombies' ? { team: 'zombies' as const } : {}) }
+            const motion = motions.of(projectile)
+            const height = motion.height?.(projectile.motionState) ?? heightOverRow(world, projectile.definition, position), facing = motion.facing?.(projectile.motionState)
+            const lift = motion.lift?.(projectile.motionState) ?? 0
+            return { entityId: entity, typeId: projectile.typeId, ...position, ...(projectile.team === 'zombies' ? { team: 'zombies' as const } : {}),
+                ...(height > 0 ? { height } : {}), ...(lift > 0 ? { lift } : {}), ...(facing === undefined ? {} : { facing }) }
         })
         const items = [...world.query(PositionComponent, ItemComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!

@@ -52,7 +52,7 @@ export function saveSession(session: Session): ServerSaveSnapshot {
             gameplay.zombieBehaviors.validateState(zombie, definitions.zombies[zombie.typeId])
             entity.zombie = { ...zombie }
         }
-        if (projectile) entity.projectile = { ...projectile }
+        if (projectile) entity.projectile = jsonRoundTrip(projectile)
         if (item) entity.item = { ...item }
         return entity
     })
@@ -251,8 +251,14 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
     if (saved.projectile && (!boardRow || !definitions.projectiles[saved.projectile.typeId])) {
         throw new Error(`Unknown saved projectile: ${saved.projectile.typeId}`)
     }
+    if (saved.projectile) {
+        // Its motion is installed and takes the state it flew with.
+        const motion = gameplay.projectileMotions.of(saved.projectile)
+        if (!motion.parseState && saved.projectile.motionState !== undefined) throw new Error(`Saved projectile ${saved.entityId} has an invalid motion state`)
+        motion.parseState?.(saved.projectile.motionState)
+    }
     // A mowing projectile runs on its chew.
-    if (saved.projectile && !!definitions.projectiles[saved.projectile.typeId].mow !== (saved.projectile.chompCounter !== undefined)) {
+    if (saved.projectile && !!saved.projectile.definition.mow !== (saved.projectile.chompCounter !== undefined)) {
         throw new Error(`Saved projectile ${saved.entityId} is invalid for its type`)
     }
     if (saved.item && (saved.item.typeId !== level.definition.award.id && !definitions.items[saved.item.typeId] || saved.position.row !== -1)) {
@@ -268,7 +274,7 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
         readyAtTick: saved.plantAttack.readyAtTick, ...(saved.plantAttack.burst ? { burst: { ...saved.plantAttack.burst } } : {}),
     })
     if (saved.zombie) world.add(saved.entityId, ZombieComponent, { ...saved.zombie })
-    if (saved.projectile) world.add(saved.entityId, ProjectileComponent, { ...saved.projectile })
+    if (saved.projectile) world.add(saved.entityId, ProjectileComponent, jsonRoundTrip(saved.projectile))
     if (saved.item) world.add(saved.entityId, ItemComponent, { ...saved.item })
 }
 

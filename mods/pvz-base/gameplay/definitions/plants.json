@@ -23,7 +23,7 @@
       "shotsPerBurst": 1,
       "burstIntervalTicks": 0,
       "projectile": "pvz:pea",
-      "offset": {"x": 56, "y": 10}
+      "offset": {"x": 79, "y": 32.75}
     }
   },
   "pvz:repeater": {
@@ -36,7 +36,7 @@
       "shotsPerBurst": 2,
       "burstIntervalTicks": 26,
       "projectile": "pvz:pea",
-      "offset": {"x": 56, "y": 10}
+      "offset": {"x": 79, "y": 32.75}
     }
   },
   "pvz:cherrybomb": {
@@ -67,7 +67,7 @@
       "shotsPerBurst": 1,
       "burstIntervalTicks": 0,
       "projectile": "pvz:snow_pea",
-      "offset": {"x": 56, "y": 10}
+      "offset": {"x": 79, "y": 32.75}
     }
   },
   "pvz:chomper": {
@@ -92,7 +92,7 @@
     "plantingOffset": {"min": {"x": -5, "y": -3}, "max": {"x": 4, "y": 2}},
     "maxHealth": 300,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
-    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 29, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": "pvz:spore", "offset": {"x": 40, "y": 40}, "range": 230},
+    "shooter": {"cadenceTicks": {"min": 136, "max": 150}, "initialDelayTicks": {"min": 0, "max": 150}, "windupTicks": 29, "shotsPerBurst": 1, "burstIntervalTicks": 0, "projectile": "pvz:spore", "offset": {"x": 52.5, "y": 60}, "range": 230},
     "nocturnal": true
   },
   "pvz:sunshroom": {

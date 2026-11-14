@@ -4,10 +4,6 @@
     "impact": {
       "kind": "particle",
       "id": "example:sparks",
-      "offset": [
-        49,
-        12
-      ],
       "yRange": [
         20,
         100

@@ -1,6 +1,8 @@
+import { withProjectileMotions } from '../projectileMotions'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { Schedule, World } from '@/ecs'
+import { launchProjectile, STRAIGHT } from '@/server/combat/motions'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { LevelStateResource, PlantComponent, PlantAttackComponent, PositionComponent, ProjectileComponent, RandomResource, ZombieComponent } from '@/server/state/components'
@@ -110,7 +112,7 @@ function worldFor(night: boolean) {
     const world = new World()
     const definition = levels.levels['pvz:adventure-2-1'], board = definitions.boards[night ? 'pvz:night' : 'pvz:day']
     world.resources.set(LevelStateResource, { id: options.levelId, definition, board, phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] })
-    world.resources.set(RandomResource, new DeterministicRng(7))
+    withProjectileMotions(world).resources.set(RandomResource, new DeterministicRng(7))
     world.resources.set(EventQueueResource, createEventQueue())
     return world
 }
@@ -134,9 +136,9 @@ test('puff-shrooms sleep by day, only fire within range, and spores expire befor
     const world = worldFor(true), schedule = new Schedule()
     schedule.add('projectile', createProjectileSystem(definitions))
     const zombie = spawnZombie(world, definitions, 'pvz:normal', 0, 100, 50)
-    const spore = world.createEntity()
-    world.add(spore, PositionComponent, { x: 100, y: 80, row: 0 })
-    world.add(spore, ProjectileComponent, { typeId: 'pvz:spore', ticksLeft: 1 })
+    const spore = launchProjectile(world, definitions, world, { typeId: 'pvz:spore', position: { x: 100, y: 80, row: 0 }, motion: STRAIGHT })
+    assert.deepEqual(world.get(spore, ProjectileComponent)!.motionState, { ticksLeft: 75 })
+    world.get(spore, ProjectileComponent)!.motionState = { ticksLeft: 1 }
     schedule.run(world, 1)
     assert.equal(world.hasEntity(spore), false)
     assert.equal(world.get(zombie, ZombieComponent)!.health, 270)

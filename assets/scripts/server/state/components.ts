@@ -1,7 +1,7 @@
-import type { BoardDefinition, LevelDefinition } from '@/shared/content/gameplay'
+import type { BoardDefinition, LevelDefinition, ProjectileDefinition } from '@/shared/content/gameplay'
 import type { DeterministicRng } from './DeterministicRng'
 import { defineComponent, defineResource } from '@/ecs/index'
-import type { EntityBehaviorState, Team } from '@/shared/protocol'
+import type { EntityBehaviorState, JsonObject, Team } from '@/shared/protocol'
 
 export interface Position {
     x: number
@@ -85,12 +85,18 @@ export interface Zombie extends EntityBehaviorState {
 
 export interface Projectile {
     typeId: string
+    /** What it is as it was set off: its type's definition, with what its launcher has its own way (shooter.overrides). */
+    definition: ProjectileDefinition
     /** The side that fired it, when not the plants'. */
     team?: Team
-    /** Updates left before a limited-lifetime projectile disappears. */
-    ticksLeft?: number
     /** A mowing one's (ProjectileDefinition.mow) ticks left chewing, slowed (LawnMower::mChompCounter). */
     chompCounter?: number
+    /** The motion it flies by (ProjectileMotionRegistry), its launcher's: a plant's attack (PLANT_ATTACKS), or the level's for its mowers. */
+    motion: string
+    /** What its motion keeps as it flies (ProjectileMotionDefinition.launch). */
+    motionState?: JsonObject
+    /** What a piercing one has hit, by entity: it hits each once (ProjectileDefinition.pierce). */
+    hits?: number[]
 }
 
 /** A bank packet is picked by slot, so a bank may hold the same seed twice with separate recharges. */

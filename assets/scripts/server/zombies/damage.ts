@@ -53,12 +53,14 @@ export function damageZombie(
     const shield = !hit.helmOnly && !hit.bypassShield && zombie.shieldHealth > 0
     const events = world.resources.get(EventQueueResource)
     // The client flashes the zombie. While worn, the hit timer belongs to the shield; an exact break leaves no body hit
-    // to flash and stops the flash (`flash: false`). A hit that also reaches the body (`through`) flashes both.
+    // to flash and stops the flash (`flash: false`). A hit that also reaches the body (`through`) flashes both, and one
+    // that comes past a worn shield (`past`) only the body, as TakeBodyDamage alone runs for DAMAGE_BYPASSES_SHIELD.
     if (hit.flash !== false) emitServerEvent(events, 'zombieHit', {
         entityId: entity,
         ...(shield && (hit.shieldOnly ? damage >= zombie.shieldHealth : damage === zombie.shieldHealth) && !hit.hitsShieldAndBody
             ? { flash: false } : {}),
         ...(shield && hit.hitsShieldAndBody ? { through: true } : {}),
+        ...(hit.bypassShield && zombie.shieldHealth > 0 ? { past: true } : {}),
     })
     // A shield absorbs hits without chill, even when they exactly break it. Zombie::CanBeChilled leaves out
     // mind-controlled zombies only because the original's chills are all the plants'; a chill reaches whatever a

@@ -313,6 +313,12 @@ export interface ProjectileSnapshot {
     row: number
     /** Fired by a plant on the zombies' side: it flies left. */
     team?: 'zombies'
+    /** How far above the ground it flies, when it does: what it draws on the ground lies as far under it. */
+    height?: number
+    /** How far up it has been thrown from where it set off, when it is above there: its shadow shrinks the higher. */
+    lift?: number
+    /** The way it points, when its motion turns it: the angle of its flight from straight right, clockwise on screen. */
+    facing?: number
 }
 
 export interface ItemSnapshot {
@@ -877,6 +883,9 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         finite(projectile.x, `${name}.x`)
         finite(projectile.y, `${name}.y`)
         integer(projectile.row, `${name}.row`)
+        if (projectile.height !== undefined) finite(projectile.height, `${name}.height`)
+        if (projectile.lift !== undefined) finite(projectile.lift, `${name}.lift`)
+        if (projectile.facing !== undefined) finite(projectile.facing, `${name}.facing`)
     })
     array(snapshot.conveyorPackets, 'snapshot.conveyorPackets').forEach((entry, index) => {
         const name = `snapshot.conveyorPackets[${index}]`, packet = record(entry, name)

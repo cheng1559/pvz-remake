@@ -8,15 +8,15 @@ import {
     PlantComponent,
     type Position,
     PositionComponent,
-    ProjectileComponent,
     RandomResource,
     ZombieComponent,
 } from '../state/components'
 import { damageZombie, isTargetableZombie } from '../zombies/damage'
-import { plantFacingRect, plantFacingX, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { PLANT_WIDTH, plantFacingX, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { hostilePlants } from '../combat/targets'
 import { damagePlant } from './damage'
-import { type GameplayDefinitions, mowerY } from '@/shared/content/gameplay'
+import { launchProjectile } from '../combat/motions'
+import { type GameplayDefinitions, PLANT_ATTACKS } from '@/shared/content/gameplay'
 
 export function createPeashooterSystem(definitions: GameplayDefinitions): GameSystem {
     return {
@@ -38,7 +38,7 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                     if (tick < attack.burst.fireAtTick) continue
                     if (shooter.area) {
                         // Plant::Fire for the Fume-shroom: DoRowAreaDamage instead of a projectile.
-                        const hits = targetsAhead(world, definitions, position, plant)
+                        const hits = targets(world, definitions, position, plant)
                         for (const zombie of hits.zombies) damageZombie(world, definitions, zombie, shooter.area.damage,
                             { hitsShieldAndBody: shooter.area.hitsShieldAndBody }, commands)
                         for (const target of hits.plants) damagePlant(world, definitions, target, shooter.area.damage, commands)
@@ -48,21 +48,21 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                         delete attack.burst
                         continue
                     }
-                    const projectile = commands.createEntity()
-                    // A plant facing left fires from its mirrored mouth: the projectile's hitbox mirrors across the plant.
-                    const { hitbox, lifetimeTicks: lifetime, mow } = definitions.projectiles[shooter.projectile!]
-                    const fired = plantFacingRect({ x: shooter.offset.x + hitbox.x, width: hitbox.width }, plantTeam(plant))
-                    commands.add(projectile, PositionComponent, {
-                        x: position.x + fired.x - hitbox.x,
-                        // A mower runs on the ground, as a level's does.
-                        y: mow ? mowerY(level.board, position.row) : position.y + shooter.offset.y,
-                        row: position.row,
-                    })
-                    commands.add(projectile, ProjectileComponent, {
+                    // The middle of the projectile's hitbox leaves the mouth, which a plant facing left has mirrored.
+                    const hitbox = definitions.projectiles[shooter.projectile!].hitbox, team = plantTeam(plant)
+                    // What it aims at, for a motion that takes a target.
+                    const target = targets(world, definitions, position, plant).nearest
+                    const projectile = launchProjectile(world, definitions, commands, {
                         typeId: shooter.projectile!,
+                        position: {
+                            x: position.x + plantFacingX(shooter.offset.x, team) - (hitbox.x + hitbox.width / 2),
+                            y: position.y + shooter.offset.y - (hitbox.y + hitbox.height / 2),
+                            row: position.row,
+                        },
+                        motion: PLANT_ATTACKS[shooter.type],
+                        ...(shooter.overrides ? { overrides: shooter.overrides } : {}),
                         ...(plant.team ? { team: plant.team } : {}),
-                        ...(lifetime === undefined ? {} : { ticksLeft: lifetime }),
-                        ...(mow ? { chompCounter: 0 } : {}),
+                        ...(target === undefined ? {} : { target }),
                     })
                     emitServerEvent(world.resources.get(EventQueueResource), 'projectileFired', {
                         plantId: entity,
@@ -82,8 +82,7 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                 if (tick < attack.readyAtTick) continue
 
                 attack.readyAtTick = tick + world.resources.get(RandomResource).integer(shooter.cadenceTicks.min, shooter.cadenceTicks.max)
-                const ahead = targetsAhead(world, definitions, position, plant)
-                if (!ahead.zombies.length && !ahead.plants.length) continue
+                if (targets(world, definitions, position, plant).nearest === undefined) continue
                 attack.burst = { fireAtTick: tick + shooter.windupTicks - 1, shotsRemaining: shooter.shotsPerBurst }
                 emitServerEvent(world.resources.get(EventQueueResource), 'plantFiring', {
                     plantId: entity,
@@ -94,33 +93,50 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
 }
 
 /**
- * Hostile zombies and plants in the row overlapping the attack rect: what a shooter aims at, and what an area attack
- * hits. The rect runs from the body's front edge `range` ahead within the board, mirrored for a plant facing left.
+ * What the plant attacks, by its type (PlantDefinition.shooter), `nearest` the one it aims at.
+ *
+ * A `shooter` and a `lobber`: the hostile zombies and plants in the row overlapping the attack rect, which an area
+ * attack hits; the rect runs from the body's front edge `range` ahead within the board, mirrored for a plant facing
+ * left, and the first of them ahead is the nearest. A `seeker`: the hostile zombies and plants anywhere, the nearest
+ * by how far its middle is from the plant's (Plant::FindTargetZombie for the cattail). None attacks a zombie in its
+ * vault (Plant::GetDamageRangeFlags).
  */
-function targetsAhead(
+function targets(
     world: World,
     definitions: GameplayDefinitions,
     plantPosition: Position,
     plant: Plant,
-): { zombies: number[], plants: number[] } {
+): { zombies: number[], plants: number[], nearest?: number } {
     const { body: plantBody, shooter } = definitions.plants[plant.typeId]
-    const team = plantTeam(plant), forward = teamDirection(team) > 0
+    const team = plantTeam(plant), direction = teamDirection(team), anywhere = shooter?.type === 'seeker'
     const bounds = getBoardBounds(world), reach = shooter?.range ?? Infinity
     const front = plantPosition.x + plantFacingX(plantBody.width, team)
-    const ahead = (left: number, width: number) => forward
+    const ahead = (left: number, width: number) => direction > 0
         ? left < Math.min(bounds.right, front + reach) && left + width >= front
         : left < bounds.right && left + width > Math.max(bounds.left, front - reach) && left <= front
+    // How near a body is: along the row for what is ahead, or from the plant's middle.
+    const middle = { x: plantPosition.x + PLANT_WIDTH / 2, y: plantPosition.y + PLANT_WIDTH / 2 }
+    const distance = (rect: { x: number, y: number, width: number, height: number }) => anywhere
+        ? Math.hypot(rect.x + rect.width / 2 - middle.x, rect.y + rect.height / 2 - middle.y) : direction * rect.x
+    let nearest: number | undefined, least = Infinity
+    const near = (entity: number, rect: { x: number, y: number, width: number, height: number }) => {
+        const far = distance(rect)
+        if (far < least) { least = far; nearest = entity }
+    }
     const zombies: number[] = []
     for (const entity of world.query(PositionComponent, ZombieComponent)) {
         const position = world.get(entity, PositionComponent)!
         const zombie = world.get(entity, ZombieComponent)!
-        if (!isTargetableZombie(zombie, team) || position.row !== plantPosition.row) continue
+        if (!isTargetableZombie(zombie, team) || !anywhere && position.row !== plantPosition.row) continue
         const body = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
-        if (ahead(position.x + body.x, body.width)) zombies.push(entity)
+        const rect = { x: position.x + body.x, y: position.y + body.y, width: body.width, height: body.height }
+        if (!anywhere && !ahead(rect.x, rect.width)) continue
+        zombies.push(entity)
+        near(entity, rect)
     }
     // A projectile would fly over a low plant, so only an area attack aims at one.
-    const plants = hostilePlants(world, definitions, team, plantPosition.row)
-        .filter(target => (shooter?.area || !definitions.plants[target.plant.typeId].low) && ahead(target.rect.x, target.rect.width))
-        .map(target => target.entity)
-    return { zombies, plants }
+    const plants = hostilePlants(world, definitions, team, anywhere ? undefined : plantPosition.row)
+        .filter(target => (shooter?.area || !definitions.plants[target.plant.typeId].low) && (anywhere || ahead(target.rect.x, target.rect.width)))
+    for (const target of plants) near(target.entity, target.rect)
+    return { zombies, plants: plants.map(target => target.entity), nearest }
 }

@@ -317,12 +317,13 @@ function parseEntity(value: unknown, index: number): LevelEntitySnapshot {
 }
 
 function parseFlash(value: unknown, name: string): FlashSnapshot {
-    const flash = exact(value, ['tick', 'ticks'], name, ['through'])
-    if (flash.through !== undefined && flash.through !== true) throw new TypeError(`${name}.through must be true`)
+    const flash = exact(value, ['tick', 'ticks'], name, ['through', 'past'])
+    for (const key of ['through', 'past']) if (flash[key] !== undefined && flash[key] !== true) throw new TypeError(`${name}.${key} must be true`)
     return {
         tick: nonNegativeInteger(flash.tick, `${name}.tick`),
         ticks: nonNegativeInteger(flash.ticks, `${name}.ticks`),
         ...(flash.through ? { through: true as const } : {}),
+        ...(flash.past ? { past: true as const } : {}),
     }
 }
 

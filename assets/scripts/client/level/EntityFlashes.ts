@@ -3,10 +3,11 @@ import type { PlantSnapshot, ServerEvent } from '@/shared/protocol/index'
 /**
  * A flash that fades one step per gameplay tick from `ticks` at gameplay tick `tick`, like Plant::mEatenFlashCountdown
  * and Zombie::mJustGotShotCounter. `through`: the hit reached the body behind a shield (DAMAGE_HITS_SHIELD_AND_BODY).
+ * `past`: it came past the shield onto the body alone (DAMAGE_BYPASSES_SHIELD).
  */
-export interface FlashSnapshot { tick: number; ticks: number; through?: true }
+export interface FlashSnapshot { tick: number; ticks: number; through?: true; past?: true }
 
-export interface ZombieFlash { flash: number; through: boolean }
+export interface ZombieFlash { flash: number; through: boolean; past: boolean }
 
 /** Zombie::EatPlant and Zombie::TakeDamage start a 25-tick flash. */
 const HIT_FLASH_TICKS = 25
@@ -32,7 +33,8 @@ export class EntityFlashes {
                 // (TakeShieldDamage keeps mJustGotShotCounter).
                 if (data.flash === false) {
                     if (!this.flashes.get(data.entityId)?.through) this.flashes.set(data.entityId, { tick, ticks: 0 })
-                } else this.flashes.set(data.entityId, { tick, ticks: HIT_FLASH_TICKS, ...(data.through === true ? { through: true } : {}) })
+                } else this.flashes.set(data.entityId, { tick, ticks: HIT_FLASH_TICKS, ...(data.through === true ? { through: true } : {}),
+                    ...(data.past === true ? { past: true } : {}) })
             } else if (type === 'zombieBurned' && typeof data.entityId === 'number') this.flashes.set(data.entityId, { tick, ticks: 0 })
         }
     }
@@ -54,7 +56,7 @@ export class EntityFlashes {
 
     zombie(entityId: number, tick: number): ZombieFlash {
         const flash = this.flashes.get(entityId)
-        return { flash: value(flash, tick), through: flash?.through === true }
+        return { flash: value(flash, tick), through: flash?.through === true, past: flash?.past === true }
     }
 
     remove(entityId: number): void {
