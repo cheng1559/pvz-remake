@@ -1,5 +1,5 @@
 import { Color, Mask, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
-import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import type { ContentRegistry } from '@/client/content/ContentRegistry'
@@ -62,13 +62,11 @@ export interface ZombieViewInstance {
 
 export class ZombieView implements ZombieViewInstance {
     readonly shadowNode: Node
+    /** The body: one player for all its clips, which it changes between in place. */
     private player: ReanimPlayer | null = null
     private animation: ZombieSnapshot['animation'] | null = null
-    private pendingAnimation: ZombieSnapshot['animation'] | null = null
-    private loadVersion = 0
     private parts = ''
     private mowerDriver: ReanimPlayer | null = null
-    private mowerPending = false
     private flag: ReanimPlayer | null = null
     private holdingFlag = false
     private latestZombie: ZombieSnapshot | null = null
@@ -88,8 +86,6 @@ export class ZombieView implements ZombieViewInstance {
         private readonly target: ClientAnimationTarget,
         /** The gameplay helm and shield, for their full health. */
         private readonly armor: Pick<ZombieDefinition, 'helm' | 'shield'> = {},
-        /** How far a vault lands ahead of the jump's last frame. */
-        private readonly landingOffset = 0,
         private readonly attachments = new EntityAttachments(),
     ) {
         this.shadowNode = uiNode({
@@ -97,6 +93,13 @@ export class ZombieView implements ZombieViewInstance {
             active: false,
             sprite: { frame: shadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
         }).node
+    }
+
+    /** Has every clip of this zombie in memory, so that it changes between them at once. */
+    async prepare(): Promise<this> {
+        await new ReanimRepository(this.registry, this.loader).prepare(
+            Object.values(this.clips()).flatMap(clip => typeof clip?.reanimId === 'string' ? [clip.reanimId] : []))
+        return this
     }
 
     sync(zombie: ZombieSnapshot, _world: WorldSnapshot, flash: ZombieFlash): void {
@@ -128,23 +131,11 @@ export class ZombieView implements ZombieViewInstance {
         this.applyHitFlash(zombie)
         this.applyColor(zombie)
         if (zombie.state === 'mowered') {
-            // Mowed before its body loaded (put down on a running mower): its walk stands in for the driver to take.
-            if (!this.player && !this.pendingAnimation) void this.load({ ...zombie, animation: 'anim_walk', animationTime: 0 })
             this.syncMowered(zombie)
             return
         }
-        if (this.animation !== zombie.animation) {
-            // The server moved the zombie to its landing spot; hold the last jump frame there until the walk loads.
-            if (this.animation === 'anim_jump' && this.player && (zombie.state === 'walking' || zombie.state === 'eating')) {
-                this.holdLandingPose()
-            }
-            if (this.pendingAnimation !== zombie.animation) void this.load(zombie)
-        }
+        if (this.animation !== zombie.animation) this.show(zombie)
         else {
-            if (this.pendingAnimation) {
-                this.pendingAnimation = null
-                this.loadVersion++
-            }
             this.applyParts(zombie)
             this.player?.seek(zombie.animationTime / 12 * this.definition(zombie.animation).rateScale)
         }
@@ -214,8 +205,6 @@ export class ZombieView implements ZombieViewInstance {
     }
 
     async restore(snapshot: Extract<LevelEntitySnapshot, { kind: 'zombie' }>): Promise<void> {
-        this.loadVersion++
-        this.pendingAnimation = null
         this.player = await this.restorePlayer(this.player, 'ZombieAnimation', snapshot.body)
         this.mowerDriver = await this.restorePlayer(this.mowerDriver, 'MoweredDriver', snapshot.mowerDriver)
         this.flag = await this.restorePlayer(this.flag, 'Flag', snapshot.flag ?? null)
@@ -242,31 +231,23 @@ export class ZombieView implements ZombieViewInstance {
             if (current?.node.isValid) current.node.destroy()
             return null
         }
-        let player = current
-        if (!player || !player.node.isValid || player.snapshot().id !== snapshot.id) {
-            if (player?.node.isValid) player.node.destroy()
+        await new ReanimRepository(this.registry, this.loader).prepare([snapshot.id])
+        const player = current?.node.isValid ? current
+            : uiNode({ name, parent: this.node, anchor: { x: 0, y: 1 } }).node.addComponent(ReanimPlayer)
+        if (player.loadedId !== snapshot.id) {
+            player.change(snapshot.id, this.registry)
             const definition = this.definitionFromReanim(snapshot.id)
-            const node = uiNode({ name, parent: this.node, anchor: { x: 0, y: 1 } }).node
-            if (definition) this.place(node, definition.x, definition.y)
-            player = node.addComponent(ReanimPlayer)
-            await player.load(snapshot.id, this.registry, this.loader)
+            if (definition) this.place(player.node, definition.x, definition.y)
         }
         player.restore(snapshot)
         return player
     }
 
     private syncMowered(zombie: ZombieSnapshot): void {
-        // Landing and mowing can happen in one tick, with no walking snapshot between them.
-        if (this.presentation.vault && !zombie.hasPole &&
-            (!this.player || this.animation === 'anim_jump' || this.pendingAnimation === 'anim_jump')) {
-            if (this.animation === 'anim_jump') this.holdLandingPose()
-            if (this.pendingAnimation !== 'anim_walk') void this.load({ ...zombie, animation: 'anim_walk', animationTime: 0 })
-            return
-        }
-        // A pending walk/eat load must not replace the body once it is attached to the mower driver.
-        if (this.pendingAnimation && this.player) {
-            this.pendingAnimation = null
-            this.loadVersion++
+        // Mowed before its body showed (put down on a running mower), or as it landed from its vault, with no walking
+        // snapshot between: its walk stands in for the driver to take.
+        if (!this.player || this.presentation.vault && !zombie.hasPole && this.animation === 'anim_jump') {
+            this.show({ ...zombie, animation: 'anim_walk', animationTime: 0 })
         }
         this.flag?.hide()
         this.applyParts(zombie)
@@ -278,102 +259,57 @@ export class ZombieView implements ZombieViewInstance {
             this.flag?.seek(this.flag.snapshot().timeSeconds)
             return
         }
-        if (this.mowerPending || !this.player) return
-        this.mowerPending = true
-        const driver = uiNode({ name: 'MoweredDriver', parent: this.node }).node.addComponent(ReanimPlayer)
+        if (!this.player) return
+        const driver = this.mowerDriver = uiNode({ name: 'MoweredDriver', parent: this.node }).node.addComponent(ReanimPlayer)
         this.place(driver.node, animation.x, animation.y)
-        void driver.load(animation.reanimId, this.registry, this.loader).then(() => {
-            zombie = this.latestZombie ?? zombie
-            if (!driver.node.isValid || zombie.state !== 'mowered') return
-            this.mowerDriver = driver
-            this.animation = 'mowered'
-            this.player?.attachToTrack(driver, attachmentTrack(animation))
-            driver.play({
-                loop: false, rate: zombie.animationSpeed * animation.rateScale,
-                timeSeconds: zombie.animationTime / 12 * animation.rateScale, hideOnFinish: false,
-            })
-            driver.pause()
-        }).catch(error => {
-            if (driver.node.isValid) driver.node.destroy()
-            console.error('[Level] Failed to load mowered zombie animation', error)
-        }).finally(() => {
-            this.mowerPending = false
+        driver.change(animation.reanimId, this.registry)
+        this.animation = 'mowered'
+        this.player.attachToTrack(driver, attachmentTrack(animation))
+        driver.play({
+            loop: false, rate: zombie.animationSpeed * animation.rateScale,
+            timeSeconds: zombie.animationTime / 12 * animation.rateScale, hideOnFinish: false,
         })
+        driver.pause()
     }
 
-    private holdLandingPose(): void {
-        const jump = this.definition('anim_jump')
-        const player = this.player!
-        player.pause()
-        player.seek(player.lastFrameTimeSeconds)
-        // The vault lands `landingOffset` ahead, the way the zombie faces; the held last frame stays where the jump ended.
-        this.place(player.node, jump.x + (this.mirrored ? -1 : 1) * this.landingOffset, jump.y)
-    }
-
-    private async load(zombie: ZombieSnapshot): Promise<void> {
-        const version = ++this.loadVersion
+    /**
+     * Shows the zombie's animation: its body changes to that clip where it is, blending from the pose it had, so that
+     * what is on the zombie (a splat, a dropped helm) stays over it.
+     */
+    private show(zombie: ZombieSnapshot): void {
         // Landing and WalkIntoHouse both use StartWalkAnim(0), without blending the held pole into the walk.
         const landing = (this.animation === 'anim_jump' || this.presentation.vault && this.animation === 'anim_run' && zombie.hasPole === false)
             && (zombie.state === 'walking' || zombie.state === 'eating')
-        this.pendingAnimation = zombie.animation
         const animation = this.definition(zombie.animation)
-        const animationNode = uiNode({
-            name: 'ZombieAnimationPending', parent: this.node, anchor: { x: 0, y: 1 }, active: false,
-        }).node
-        this.place(animationNode, animation.x, animation.y)
-        const player = animationNode.addComponent(ReanimPlayer)
-        try {
-            await player.load(animation.reanimId, this.registry, this.loader)
-            if (!animationNode.isValid) return
-            let flag: ReanimPlayer | null = null
-            if (this.holdingFlag) {
-                const animation = this.definition('flag')
-                flag = uiNode({ name: 'Flag', parent: animationNode, position: animation }).node.addComponent(ReanimPlayer)
-                this.attachments.add(flag.node)
-                await flag.load(animation.reanimId, this.registry, this.loader)
-                if (!animationNode.isValid) return
-                this.attachFlag(flag, player, attachmentTrack(animation))
-                flag.play({ loop: true, rate: 15 / 12 * animation.rateScale })
+        const blend = this.player && !landing && zombie.state !== 'mowered' ? 0.2 : 0
+        const player = this.player ??= uiNode({ name: 'ZombieAnimation', parent: this.node, anchor: { x: 0, y: 1 } }).node.addComponent(ReanimPlayer)
+        player.change(animation.reanimId, this.registry, blend)
+        if (player.node.parent === this.node) this.place(player.node, animation.x, animation.y)
+        this.animation = zombie.animation
+        this.parts = ''
+        // Its flag goes with the hand of whichever clip plays, for as long as it holds one.
+        if (!this.holdingFlag && this.flag?.node.isValid) this.flag.node.destroy()
+        if (!this.holdingFlag) this.flag = null
+        else {
+            const clip = this.definition('flag')
+            if (!this.flag?.node.isValid) {
+                this.flag = uiNode({ name: 'Flag', parent: player.node, position: clip }).node.addComponent(ReanimPlayer)
+                this.attachments.add(this.flag.node)
+                this.flag.change(clip.reanimId, this.registry)
+                this.flag.play({ loop: true, rate: 15 / 12 * clip.rateScale })
             }
-            if (version !== this.loadVersion) {
-                animationNode.destroy()
-                return
-            }
-            const latest = this.latestZombie ?? zombie
-            // Freeze the requested body pose; the mower's animation/time belong to its driver.
-            zombie = latest.state === 'mowered'
-                ? { ...latest, animation: zombie.animation, animationTime: zombie.animationTime }
-                : latest
-            const previousPlayer = this.player
-            if (this.flag?.node.isValid && this.flag.node.parent !== previousPlayer?.node) this.flag.node.destroy()
-            animationNode.name = 'ZombieAnimation'
-            this.animation = zombie.animation
-            this.pendingAnimation = null
-            this.parts = ''
-            this.player = player
-            this.flag = flag
-            player.play({
-                loop: zombie.state !== 'dying' && zombie.state !== 'vaulting',
-                rate: zombie.animationSpeed * animation.rateScale,
-                timeSeconds: zombie.animationTime / 12 * animation.rateScale,
-                hideOnFinish: false,
-            })
-            this.applyParts(zombie)
-            this.applyHitFlash(zombie)
-            this.applyColor(zombie, true)
-            if (previousPlayer?.node.isValid) {
-                if (!landing && latest.state !== 'mowered') player.blendFrom(previousPlayer, 0.2)
-                previousPlayer.node.active = false
-                previousPlayer.node.destroy()
-            }
-            animationNode.active = true
-            this.syncRise(zombie)
-            if (latest.state === 'mowered') this.syncMowered(latest)
-        } catch (error) {
-            if (animationNode.isValid) animationNode.destroy()
-            // A zombie eaten or blown up while loading is not an error.
-            if (this.node.isValid) console.error('[Level] Failed to load zombie animation', error)
+            this.attachFlag(this.flag, player, attachmentTrack(clip))
         }
+        player.play({
+            loop: zombie.state !== 'dying' && zombie.state !== 'vaulting',
+            rate: zombie.animationSpeed * animation.rateScale,
+            timeSeconds: zombie.animationTime / 12 * animation.rateScale,
+            hideOnFinish: false,
+        })
+        this.applyParts(zombie)
+        this.applyHitFlash(zombie)
+        this.applyColor(zombie, true)
+        this.syncRise(zombie)
     }
 
     private attachFlag(flag: ReanimPlayer, body: ReanimPlayer, trackId: string): void {

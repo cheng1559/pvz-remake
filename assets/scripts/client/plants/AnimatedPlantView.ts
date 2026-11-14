@@ -1,7 +1,7 @@
 import { plantDefinition } from './definitions'
 import { Color, Node, Sprite } from 'cc'
 import { type ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
-import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { ReanimKeyframe } from '@/shared/content/reanim'
 import { attachmentTrack, type PlantParts } from '@/shared/content/presentation'
@@ -11,11 +11,9 @@ import type { PlantParticle, PlantView, PlantViewContext, PlantViewSnapshot } fr
 export interface PlantAnimation { clip: ClientAnimationClip; loop: boolean; rate: number; blend: number }
 export const plantAnimation = (clip: ClientAnimationClip, loop: boolean, rate: number, blend = 0): PlantAnimation => ({ clip, loop, rate, blend })
 
-/** Shared body loading, blending, blink playback and presentation persistence. */
+/** Shared body playback, blending, blink playback and presentation persistence. */
 export abstract class AnimatedPlantView implements PlantView {
     protected abilityState: string | undefined
-    /** A slower clip load must not overwrite a newer body change. */
-    private bodyVersion = 0
     protected blinkAtTick: number
     private blinking = false
     protected body: ReanimPlayer
@@ -51,6 +49,8 @@ export abstract class AnimatedPlantView implements PlantView {
             shadowNode.setSiblingIndex(0)
             shadowNode.setScale(shadowScale, shadowScale, 1)
         }
+        // Every clip of the plant is in memory from here on: its body changes between them at once (playBody).
+        await new ReanimRepository(this.content.registry, this.content.loader).prepare(this.playableClips())
         await this.loadAnimations()
         if (!this.node.isValid) return
         for (const [name, player] of this.extras) {
@@ -58,7 +58,7 @@ export abstract class AnimatedPlantView implements PlantView {
             player.hide()
         }
         this.startBody()
-        await this.syncAbility(this.context.plant.ability?.state, this.context.tick)
+        this.syncAbility(this.context.plant.ability?.state, this.context.tick)
     }
 
     protected get clips() {
@@ -73,6 +73,10 @@ export abstract class AnimatedPlantView implements PlantView {
     /** Plant::DrawShadow skips a few plants, such as the grave buster. */
     protected get hasShadow(): boolean { return true }
     protected get shadow(): { x: number; y: number; scale?: number } { return plantDefinition(this.animations.definitions, this.context.plant.typeId).shadow }
+    /** The clips this plant may play, by reanim id: its own, and a Mod that plays others on it adds those here. */
+    protected playableClips(): string[] {
+        return Object.values(this.clips as Record<string, Partial<ClientAnimationClip> | undefined>).flatMap(clip => typeof clip?.reanimId === 'string' ? [clip.reanimId] : [])
+    }
     protected async loadAnimations(): Promise<void> {}
     protected startBody(): void {}
     protected onAbilityChanged(_state: string | undefined, _tick: number): void {}
@@ -112,7 +116,7 @@ export abstract class AnimatedPlantView implements PlantView {
     }
 
     sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, _upgradeTarget: boolean, flash: number): void {
-        void this.syncAbility(plant.ability?.state, world.gameplayTick)
+        this.syncAbility(plant.ability?.state, world.gameplayTick)
         const gray = Math.min(255, flash * 3)
         // Extras attached to the body's tracks take its colors.
         this.body.setExtraAdditiveDraw(flash > 0, new Color(gray, gray, gray))
@@ -166,47 +170,24 @@ export abstract class AnimatedPlantView implements PlantView {
         this.afterRestore()
     }
 
-    protected async syncAbility(state: string | undefined, tick: number): Promise<void> {
+    protected syncAbility(state: string | undefined, tick: number): void {
         if (state === this.abilityState) return
         const previous = this.abilityState
         this.abilityState = state
         this.onAbilityChanged(state, tick)
         const target = this.abilityClip(state, previous)
         if (!target || this.body.loadedId === target.clip.reanimId) return
-        await this.playBody(target.clip, target.loop, target.rate, previous === undefined ? 0 : target.blend)
-        if (this.body.loadedId === target.clip.reanimId) this.onAbilityPlayed(state)
+        this.playBody(target.clip, target.loop, target.rate, previous === undefined ? 0 : target.blend)
+        this.onAbilityPlayed(state)
     }
 
-    /** Keep the outgoing player alive until its pose has been captured for blending. */
-    protected async playBody(clip: ClientAnimationClip, loop: boolean, rate: number, blend: number): Promise<void> {
-        const version = ++this.bodyVersion
-        const previous = this.body
-        let player = previous
-        if (previous.loadedId !== clip.reanimId) {
-            if (previous.loadedId && blend > 0) {
-                player = uiNode({ name: 'Body', parent: this.node }).node.addComponent(ReanimPlayer)
-                player.node.setSiblingIndex(previous.node.getSiblingIndex())
-            }
-            try {
-                await player.load(clip.reanimId, this.content.registry, this.content.loader)
-            } catch (error) {
-                if (player !== previous && player.node.isValid) player.node.destroy()
-                if (this.node.isValid) throw error
-                return
-            }
-            if (version !== this.bodyVersion || !this.node.isValid) {
-                if (player !== previous && player.node.isValid) player.node.destroy()
-                return
-            }
-        }
-        player.node.setPosition(clip.x, clip.y)
-        this.prepareBody(player)
-        player.play({ loop, rate: rate * clip.rateScale, timeSeconds: 0, hideOnFinish: false })
-        if (player !== previous) {
-            player.blendFrom(previous, blend)
-            previous.node.destroy()
-            this.body = player
-        }
+    /** Plays a clip on the body from its start: changing to it where it is, blending from the pose it had for `blend` seconds. */
+    protected playBody(clip: ClientAnimationClip, loop: boolean, rate: number, blend: number): void {
+        const body = this.body
+        if (body.loadedId !== clip.reanimId) body.change(clip.reanimId, this.content.registry, body.loadedId ? blend : 0)
+        body.node.setPosition(clip.x, clip.y)
+        this.prepareBody(body)
+        body.play({ loop, rate: rate * clip.rateScale, timeSeconds: 0, hideOnFinish: false })
         this.attachExtras(clip)
     }
 

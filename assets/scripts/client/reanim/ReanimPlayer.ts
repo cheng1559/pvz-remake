@@ -104,6 +104,8 @@ interface ReanimAssets {
 }
 // Registries define sprite overrides; share prepared assets only within the same content registry.
 const preparedReanims = new WeakMap<ContentRegistry, Map<string, Promise<ReanimAssets>>>()
+/** The ones that have arrived, for a player changing clips at once (ReanimPlayer.change). */
+const loadedReanims = new WeakMap<ContentRegistry, Map<string, ReanimAssets>>()
 
 interface TrackAttachment {
     parent: ReanimPlayer
@@ -113,14 +115,25 @@ interface TrackAttachment {
 
 export class ReanimRepository {
     private readonly cache: Map<string, Promise<ReanimAssets>>
+    private readonly loaded: Map<string, ReanimAssets>
 
     constructor(
         private readonly registry: ContentRegistry,
         private readonly loader = new ClientContentLoader(),
     ) {
-        let cache = preparedReanims.get(registry)
+        let cache = preparedReanims.get(registry), loaded = loadedReanims.get(registry)
         if (!cache) preparedReanims.set(registry, cache = new Map())
+        if (!loaded) loadedReanims.set(registry, loaded = new Map())
         this.cache = cache
+        this.loaded = loaded
+    }
+
+    /**
+     * Has every clip a view will play in memory, with what draws them, so that the view changes between them at once
+     * (ReanimPlayer.change): what the loading screen already did for all of them, where it loads everything.
+     */
+    async prepare(ids: Iterable<string>): Promise<void> {
+        await Promise.all([...[...new Set(ids)].map(id => this.load(id)), loadKernelMaterial()])
     }
 
     load(id: string): Promise<ReanimAssets> {
@@ -147,7 +160,9 @@ export class ReanimRepository {
             // Pack after every image has arrived, so one animation's images share a page.
             const packed = animationFrames(loaded.map(([, frame]) => frame))
             const frames = loaded.map(([spriteId], index) => [spriteId, packed[index]] as const)
-            return { data, frames }
+            const assets = { data, frames }
+            this.loaded.set(id, assets)
+            return assets
         }).catch(error => {
             this.cache.delete(id)
             throw error
@@ -294,6 +309,48 @@ export class ReanimPlayer extends Component {
         this.blendFromPoses.clear()
         this.blendDuration = 0
         this.colorOverride = Color.WHITE.clone()
+        this.applyPose()
+    }
+
+    /**
+     * Plays another clip in place, from its start: one body's clips are files of their own, and going from one to
+     * another only changes which is played. This node and its batches stay, with its attachment to a parent's track,
+     * its colors and what was put after tracks both clips have; what was set on single tracks (shown or hidden, other
+     * images, colors) starts over, as with a clip just loaded. `blendSeconds`: from the pose it shows now (the
+     * original's StartBlend). The clip is in memory already (ReanimRepository.prepare).
+     */
+    change(id: string, registry: ContentRegistry, blendSeconds = 0): void {
+        const assets = loadedReanims.get(registry)?.get(id)
+        if (!assets) throw new Error(`reanim is not loaded: ${id}`)
+        const previous = this.data
+        // The pose showing now, before its tracks are the other clip's.
+        const poses = previous && blendSeconds > 0 ? previous.tracks.map(track => [track.id, this.sampleBlendedTrack(track)] as const) : []
+        if (assets.data !== previous) {
+            const views = new Map(this.views)
+            this.views.clear()
+            this.trackColors.clear()
+            this.frameOverrides.clear()
+            this.data = assets.data
+            this.frames.clear()
+            for (const [spriteId, frame] of assets.frames) this.frames.set(spriteId, frame)
+            for (const track of [...assets.data.tracks].sort(compareTracks)) {
+                // A track's own node stays for what is attached to it or drawn after it.
+                const { node, sprite, skew, additive } = views.get(track.id) ?? {}
+                views.delete(track.id)
+                if (node) node.active = true
+                this.views.set(track.id, node ? { track, visible: true, node, sprite, skew, additive } : { track, visible: true })
+            }
+            for (const [trackId, view] of views) {
+                if (isValid(view.node, true)) view.node!.destroy()
+                this.followers.delete(trackId)
+            }
+        }
+        this.blendFromPoses.clear()
+        for (const [trackId, pose] of poses) if (this.views.has(trackId) && pose?.sprite) this.blendFromPoses.set(trackId, pose)
+        this.blendDuration = blendSeconds > 0 ? blendSeconds : 0
+        this.blendElapsed = 0
+        this.timeSeconds = 0
+        this.drawingStale = true
         this.applyPose()
     }
 

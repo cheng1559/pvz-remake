@@ -169,7 +169,7 @@ export class LevelEntityRenderer {
             for (let ancestor = node.parent; ancestor && ancestor !== root; ancestor = ancestor.parent) {
                 if (ancestor.name === 'AwardBackEffects') { slot = 'award-back-effects'; parent = ancestor; break }
                 if (ancestor.name === 'Body') { slot = 'body'; parent = ancestor; break }
-                if (ancestor.name === 'IdleHead' || ancestor.name === 'ShootHead') { slot = 'head'; parent = ancestor; break }
+                if (ancestor.name === 'Head') { slot = 'head'; parent = ancestor; break }
                 if (ancestor.name.includes('Shadow')) { slot = 'shadow'; parent = ancestor; break }
             }
             const position = parent.inverseTransformPoint(new Vec3(), node.worldPosition)
@@ -183,7 +183,7 @@ export class LevelEntityRenderer {
         if (!root) return null
         switch (owner.slot) {
             case 'body': return root.getChildByName('Body') ?? root
-            case 'head': return root.getChildByName('ShootHead') ?? root.getChildByName('IdleHead') ?? root
+            case 'head': return root.getChildByName('Head') ?? root
             case 'shadow': return root.getChildByName('MowerShadow') ?? root
             case 'award-back-effects': return root.getChildByName('AwardBackEffects') ?? root
             default: return root

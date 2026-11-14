@@ -1,13 +1,17 @@
 import { Color, Sprite } from 'cc'
 import { randomAnimationRate } from '@/client/content/ClientAnimationRegistry'
 import { attachmentTrack } from '@/shared/content/presentation'
-import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import type { PlantView, PlantViewContext, PlantViewSnapshot } from './PlantView'
 import type { ClientAnimationTarget } from '@/client/content/ClientAnimationRegistry'
 import { plantDefinition } from './definitions'
 
+/**
+ * A plant whose head shoots on its stem: the body, the head attached to it, which idles and shoots (two clips it
+ * changes between in place), and the blink over its face.
+ */
 export class ShooterView implements PlantView {
     private blinkAtTick: number
 
@@ -15,8 +19,7 @@ export class ShooterView implements PlantView {
         private readonly context: PlantViewContext,
         private readonly animationSource: ClientAnimationTarget,
         private readonly body: ReanimPlayer,
-        private readonly idleHead: ReanimPlayer,
-        private readonly shootHead: ReanimPlayer,
+        private readonly head: ReanimPlayer,
         private readonly blink: ReanimPlayer,
         private idleRate: number,
         tick: number,
@@ -32,89 +35,82 @@ export class ShooterView implements PlantView {
             sprite: { frame: assets.shadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
         })
         const body = uiNode({ name: 'Body', parent: node, position: animations.body }).node.addComponent(ReanimPlayer)
-        const idleHead = uiNode({ name: 'IdleHead', parent: node, position: animations.idleHead }).node.addComponent(ReanimPlayer)
-        const shootHead = uiNode({ name: 'ShootHead', parent: node, position: animations.shootHead }).node.addComponent(ReanimPlayer)
+        const head = uiNode({ name: 'Head', parent: node }).node.addComponent(ReanimPlayer)
         const blink = uiNode({ name: 'Blink', parent: node, position: animations.blink }).node.addComponent(ReanimPlayer)
         await Promise.all([
             body.load(animations.body.reanimId, content.registry, content.loader),
-            idleHead.load(animations.idleHead.reanimId, content.registry, content.loader),
-            shootHead.load(animations.shootHead.reanimId, content.registry, content.loader),
             blink.load(animations.blink.reanimId, content.registry, content.loader),
+            new ReanimRepository(content.registry, content.loader).prepare([animations.idleHead.reanimId, animations.shootHead.reanimId]),
         ])
-        if (!node.isValid) return new ShooterView(context, animationSource, body, idleHead, shootHead, blink, 1, tick)
-        idleHead.attachToTrack(body, attachmentTrack(animations.idleHead))
-        shootHead.attachToTrack(body, attachmentTrack(animations.shootHead))
-        blink.attachToTrack(idleHead, attachmentTrack(animations.blink))
-        const idleRate = randomAnimationRate(registry.rates.shooterIdle) / 12
-        body.play({ loop: true, rate: idleRate * animations.body.rateScale })
-        idleHead.play({ loop: true, rate: idleRate * animations.idleHead.rateScale })
-        shootHead.hide()
+        const view = new ShooterView(context, animationSource, body, head, blink, randomAnimationRate(registry.rates.shooterIdle) / 12, tick)
+        if (!node.isValid) return view
+        body.play({ loop: true, rate: view.idleRate * animations.body.rateScale })
+        view.idle(0)
+        blink.attachToTrack(head, attachmentTrack(animations.blink))
         blink.hide()
-        return new ShooterView(context, animationSource, body, idleHead, shootHead, blink, idleRate, tick)
+        return view
+    }
+
+    private get clips() { return this.context.animations.resolve(this.animationSource) }
+
+    private get shooting(): boolean { return this.head.loadedId === this.clips.shootHead.reanimId && this.head.snapshot().playing }
+
+    /** The head changes to a clip where it is, on the stem that clip names, blending from the pose it had. */
+    private show(clip: 'idleHead' | 'shootHead', blend: number): void {
+        const animation = this.clips[clip]
+        this.head.change(animation.reanimId, this.context.content.registry, blend)
+        this.head.node.setPosition(animation.x, animation.y)
+        this.head.attachToTrack(this.body, attachmentTrack(animation))
+    }
+
+    private idle(blend: number): void {
+        this.show('idleHead', blend)
+        this.head.play({ loop: true, rate: this.idleRate * this.clips.idleHead.rateScale, timeSeconds: this.body.snapshot().timeSeconds })
     }
 
     fire(): void {
         this.blink.hide()
-        // StartBlend records the visible pose before SetFramesForLayer resets playback.
-        this.shootHead.blendFrom(this.shootHead.snapshot().visible ? this.shootHead : this.idleHead, 0.2)
-        this.shootHead.play({
-            loop: false, rate: 35 / 12 * this.context.animations.resolve(this.animationSource).shootHead.rateScale,
-            timeSeconds: 0, hideOnFinish: false,
-            onFinish: () => this.finishShoot(),
+        // StartBlend records the visible pose before SetFramesForLayer resets playback: a repeated shot blends from the last.
+        this.show('shootHead', 0.2)
+        this.head.play({
+            loop: false, rate: 35 / 12 * this.clips.shootHead.rateScale, timeSeconds: 0, hideOnFinish: false,
+            onFinish: () => this.idle(0.2),
         })
-        this.idleHead.hide()
-    }
-
-    private finishShoot(): void {
-        this.idleHead.blendFrom(this.shootHead, 0.2)
-        this.idleHead.play({
-            loop: true, rate: this.idleRate * this.context.animations.resolve(this.animationSource).idleHead.rateScale,
-            timeSeconds: this.body.snapshot().timeSeconds,
-        })
-        this.shootHead.hide()
     }
 
     sync(_plant: PlantSnapshot, world: WorldSnapshot, _particle: unknown, upgradeTarget: boolean, eatenFlashCounter: number): void {
         const tick = world.gameplayTick
         const grayness = Math.min(255, eatenFlashCounter * 3)
         const color = new Color(grayness, grayness, grayness, 255)
-        // The heads attach to the stem and the blink to the head, so the body's colors reach them all.
+        // The head attaches to the stem and the blink to the head, so the body's colors reach them all.
         this.body.setColorOverride(upgradeTarget ? upgradeFlashColor(tick) : Color.WHITE)
         this.body.setExtraAdditiveDraw(eatenFlashCounter > 0, color)
         if (tick >= this.blinkAtTick) {
             this.blinkAtTick = tick + this.context.animations.nextPlantBlinkTicks()
-            if (!this.shootHead.snapshot().playing) this.blink.play({
-                loop: false, rate: 15 / 12 * this.context.animations.resolve(this.animationSource).blink.rateScale, timeSeconds: 0,
-            })
+            if (!this.shooting) this.blink.play({ loop: false, rate: 15 / 12 * this.clips.blink.rateScale, timeSeconds: 0 })
         }
-        if (this.shootHead.snapshot().playing || this.idleHead.snapshot().playing) return
-        this.idleHead.play({
-            loop: true, rate: this.idleRate * this.context.animations.resolve(this.animationSource).idleHead.rateScale,
-            timeSeconds: this.body.snapshot().timeSeconds,
-        })
+        if (!this.head.snapshot().playing) this.idle(0)
     }
 
     snapshot(entityId: number): PlantViewSnapshot {
         return { kind: 'plant', entityId, idleRate: this.idleRate, blinkAtTick: this.blinkAtTick,
-            animations: { body: this.body.snapshot(), idleHead: this.idleHead.snapshot(),
-                shootHead: this.shootHead.snapshot(), blink: this.blink.snapshot() } }
+            animations: { body: this.body.snapshot(), head: this.head.snapshot(), blink: this.blink.snapshot() } }
     }
 
     restore(snapshot: PlantViewSnapshot): void {
-        const { body, idleHead, shootHead, blink } = snapshot.animations
-        if (!idleHead || !shootHead || !blink || snapshot.idleRate === undefined || snapshot.blinkAtTick === undefined) {
+        const { body, head, blink } = snapshot.animations
+        if (!head || !blink || snapshot.idleRate === undefined || snapshot.blinkAtTick === undefined) {
             throw new Error(`Missing shooter animation state for plant ${snapshot.entityId}`)
         }
         this.idleRate = snapshot.idleRate
         this.body.restore(body)
-        this.idleHead.restore(idleHead)
-        this.shootHead.restore(shootHead)
+        if (head.id !== this.head.loadedId) this.head.change(head.id, this.context.content.registry)
+        this.head.restore(head)
         this.blink.restore(blink)
         this.blinkAtTick = snapshot.blinkAtTick
-        if (idleHead.attachmentTrackId) this.idleHead.reattachAfterRestore(this.body)
-        if (shootHead.attachmentTrackId) this.shootHead.reattachAfterRestore(this.body)
-        if (blink.attachmentTrackId) this.blink.reattachAfterRestore(this.idleHead)
-        if (shootHead.playing) this.shootHead.setOnFinish(() => this.finishShoot())
+        if (head.attachmentTrackId) this.head.reattachAfterRestore(this.body)
+        if (blink.attachmentTrackId) this.blink.reattachAfterRestore(this.head)
+        if (this.shooting) this.head.setOnFinish(() => this.idle(0.2))
     }
 }
 

@@ -523,6 +523,55 @@ test('a plant blink keeps the base pose from its first blink when the body anima
     assert.deepEqual(blink.node.position, { x: 0, y: -5 }, 'an attachment sits where the body is drawn')
 })
 
+test('a player changes to another clip of its body in place: its batches stay, and it blends from the pose it showed', async () => {
+    const track = (id: string, zIndex: number) => ({ id, zIndex, keyframes: [{ sprite: `pvz:${id}` }] })
+    const clips: Record<string, unknown> = {
+        'pvz:walk': { id: 'pvz:walk', tracks: [track('leg', 2), track('arm', 1)] },
+        'pvz:death': { id: 'pvz:death', tracks: [track('head', 3), track('arm', 1)] },
+    }
+    const { ReanimPlayer, ReanimRepository } = loadClientModule('reanim/ReanimPlayer', {
+        cc: { Component: class {}, JsonAsset: class {}, isValid: (node?: { isValid: boolean }) => node?.isValid === true,
+            _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/shared/content/reanim': { parseReanim: (json: unknown) => json, sampleReanimTrack: (item: { id: string }) => ({ sprite: `pvz:${item.id}`, x: 7 }) },
+        '@/client/content/ClientContentLoader': { SpriteRepository: class { async load(id: string) { return { id } } } },
+        '@/client/render/KernelBatch': { loadKernelMaterial: async () => {} },
+    })
+    const registry = { resolve: (_category: string, id: string) => ({ id }) }
+    const loader = { async load(content: { id: string }) { return { json: clips[content.id] } } }
+    const batches = [{}]
+    const player = Object.assign(Object.create(ReanimPlayer.prototype), {
+        data: null, views: new Map(), frames: new Map(), trackColors: new Map(), frameOverrides: new Map(), followers: new Map(),
+        blendFromPoses: new Map(), batches, blendDuration: 0, blendElapsed: 0, timeSeconds: 5, drawingStale: false, applyPose() {},
+    })
+    assert.throws(() => player.change('pvz:walk', registry), /reanim is not loaded: pvz:walk/, 'a clip is in memory before it is played')
+    await new ReanimRepository(registry, loader).prepare(['pvz:walk', 'pvz:death'])
+    player.change('pvz:walk', registry, 0.2)
+    assert.deepEqual([[...player.views.keys()], player.blendDuration, player.blendFromPoses.size], [['arm', 'leg'], 0.2, 0], 'nothing to blend from before the first clip')
+
+    // What was set on single tracks starts over; a track both clips have keeps its own node, the others' go.
+    const node = () => ({ isValid: true, active: false, destroy() { this.isValid = false } })
+    const arm = node(), leg = node()
+    Object.assign(player.views.get('arm'), { node: arm, visible: false })
+    Object.assign(player.views.get('leg'), { node: leg })
+    player.followers.set('arm', [{}]).set('leg', [{}])
+    player.trackColors.set('arm', {})
+    player.timeSeconds = 3
+    player.change('pvz:death', registry, 0.2)
+    assert.equal(player.loadedId, 'pvz:death')
+    assert.deepEqual([...player.views.keys()], ['arm', 'head'])
+    assert.deepEqual([player.views.get('arm').node, player.views.get('arm').visible, arm.active, arm.isValid, leg.isValid], [arm, true, true, true, false])
+    assert.deepEqual([[...player.followers.keys()], player.trackColors.size, [...player.frames.keys()].sort()], [['arm'], 0, ['pvz:arm', 'pvz:head']])
+    assert.equal(player.batches, batches, 'what draws it is not rebuilt')
+    assert.deepEqual([[...player.blendFromPoses.keys()], player.blendDuration, player.blendElapsed, player.timeSeconds, player.drawingStale], [['arm'], 0.2, 0, 0, true],
+        'it blends the tracks both clips have, from the start of the new one')
+
+    // The same clip again (a repeated shot) only starts a blend from where it was.
+    const views = [...player.views.values()]
+    player.blendFromPoses.clear()
+    player.change('pvz:death', registry, 0.1)
+    assert.deepEqual([[...player.views.values()], [...player.blendFromPoses.keys()].sort(), player.blendDuration], [views, ['arm', 'head'], 0.1])
+})
+
 test('preloaded animation frames are shared by registry and failed preparation can retry', async () => {
     let reads = 0, parses = 0
     const sprites: string[] = []

@@ -19,24 +19,22 @@ export class PuffShroomView extends AnimatedPlantView {
     }
 
     protected async loadAnimations(): Promise<void> {
-        await Promise.all([
-            this.playBody(this.asleep ? this.clips.sleep : this.clips.body, true, this.idleRate, 0),
-            // A mushroom without eyes to blink (the Hypno-shroom) only idles and sleeps.
-            ...this.clips.blink ? [this.loadExtra('Blink', this.clips.blink)] : [],
-        ])
+        this.playBody(this.asleep ? this.clips.sleep : this.clips.body, true, this.idleRate, 0)
+        // A mushroom without eyes to blink (the Hypno-shroom) only idles and sleeps.
+        if (this.clips.blink) await this.loadExtra('Blink', this.clips.blink)
     }
     protected extraClip() { return this.clips.blink }
     protected blinkPlayer() { return !this.asleep && this.body.loadedId === this.clips.body.reanimId ? this.extras.get('Blink') : undefined }
 
-    async fire(): Promise<void> {
+    fire(): void {
         if (this.asleep) return
         if (this.fireParticle) this.shotTick = null
         this.extras.get('Blink')?.hide()
-        await this.playBody(this.clips.shoot, false, 35 / 12, 0.2)
-        if (this.node.isValid && this.body.loadedId === this.clips.shoot.reanimId) this.bindShootFinish()
+        this.playBody(this.clips.shoot, false, 35 / 12, 0.2)
+        this.bindShootFinish()
     }
     private bindShootFinish(): void {
-        this.body.setOnFinish(() => { void this.playBody(this.clips.body, true, this.idleRate, 0.2) })
+        this.body.setOnFinish(() => this.playBody(this.clips.body, true, this.idleRate, 0.2))
     }
     protected syncVisuals(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle): void {
         const cue = this.fireParticle
@@ -52,7 +50,7 @@ export class PuffShroomView extends AnimatedPlantView {
         if (this.asleep === (plant.asleep === true)) return
         this.asleep = plant.asleep === true
         this.extras.get('Blink')?.hide()
-        void this.playBody(this.asleep ? this.clips.sleep : this.clips.body, true, this.idleRate, 0.2)
+        this.playBody(this.asleep ? this.clips.sleep : this.clips.body, true, this.idleRate, 0.2)
     }
     snapshot(entityId: number): PlantViewSnapshot { return { ...super.snapshot(entityId), idleRate: this.idleRate } }
     async restore(snapshot: PlantViewSnapshot): Promise<void> {

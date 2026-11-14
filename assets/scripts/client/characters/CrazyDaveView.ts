@@ -1,5 +1,5 @@
 import { Color, Node } from 'cc'
-import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import { SpriteRepository, type ClientContentLoader } from '@/client/content/ClientContentLoader'
 import type { ContentRegistry } from '@/client/content/ContentRegistry'
 import { uiNode } from '@/client/view/uiNode'
@@ -8,9 +8,13 @@ import type { UILabel } from '@/client/ui/UILabel'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 
-/** Dave's original talk/idle/enter clips, token-controlled mouth, hand item and speech bubble. */
+/**
+ * Dave's original talk/idle/enter clips, token-controlled mouth, hand item and speech bubble. His body is one player,
+ * which changes between the clips in place; his blink plays over it.
+ */
 export class CrazyDaveView {
-    private current?: ReanimPlayer
+    /** Whether a clip has played: the first has nothing to blend from. */
+    private started = false
     private message?: string
     private pending?: string
     private visible = false
@@ -39,29 +43,29 @@ export class CrazyDaveView {
             align: 'center', baseline: true, color: Color.BLACK,
         }).node
         bubble.active = false
-        const entries = await Promise.all(Object.entries(config.clips).map(async ([name, id]) => {
-            const node = uiNode({ name: name, parent: root, active: false }).node
-            const player = node.addComponent(ReanimPlayer)
-            await player.load(id, content.registry, content.loader)
-            player.enabled = false
-            return [name, player] as const
-        }))
+        // Every clip is in memory from here on: the body changes between them at once.
+        await new ReanimRepository(content.registry, content.loader).prepare(Object.values(config.clips))
+        const body = uiNode({ name: 'Body', parent: root }).node.addComponent(ReanimPlayer)
+        const blink = uiNode({ name: 'blink', parent: root, active: false }).node.addComponent(ReanimPlayer)
         const hand = uiNode({ name: 'HandItem', parent: root, position: config.hand }).node.addComponent(ReanimPlayer)
         await hand.load(config.hand.reanim, content.registry, content.loader)
         hand.node.setScale(config.hand.scale, config.hand.scale, 1)
-        const players = new Map(entries)
-        // Parenting the entire item applies hand motion to its offset and scale as well as its tracks.
-        hand.node.setParent(players.get('idle_handing')!.getTrackNode(config.hand.track)!, true)
-        hand.enabled = false
+        body.change(config.clips.idle_handing, content.registry)
+        blink.change(config.clips.blink, content.registry)
+        // Parenting the entire item applies hand motion to its offset and scale as well as its tracks: it keeps the
+        // place it has in the hand here, and waits on Dave himself while no clip holds it out.
+        hand.node.setParent(body.getTrackNode(config.hand.track)!, true)
+        hand.node.setParent(root)
+        body.enabled = blink.enabled = hand.enabled = false
         hand.node.active = false
         hand.play({ loop: true })
         const mouths = await Promise.all(Object.entries(config.mouths).map(async ([token, id]) => [token, await sprites.load(id)] as const))
         root.active = false
-        return new CrazyDaveView(root, bubble, label, players, hand, new Map(mouths), config, hint)
+        return new CrazyDaveView(root, bubble, label, content.registry, body, blink, hand, new Map(mouths), config, hint)
     }
 
     private constructor(readonly node: Node, private bubble: Node, private label: UILabel,
-        private players: Map<string, ReanimPlayer>, private hand: ReanimPlayer,
+        private registry: ContentRegistry, private body: ReanimPlayer, private blink: ReanimPlayer, private hand: ReanimPlayer,
         private mouths: Map<string, import('cc').SpriteFrame>, private config: PresentationDefinitions['dave'], private hint?: Node) {
         this.blinkSeconds = config.blinkSeconds[0]
     }
@@ -131,7 +135,7 @@ export class CrazyDaveView {
         this.play(animation, false, this.config.talkFps, () => {
             this.play(handing ? 'idle_handing' : 'idle', true, this.config.talkFps)
             const mouth = [...this.mouths.keys()].find(token => raw.includes(`{${token}}`))
-            this.current?.setTrackSpriteOverride(this.config.parts.mouth, mouth ? this.mouths.get(mouth)! : null)
+            this.body.setTrackSpriteOverride(this.config.parts.mouth, mouth ? this.mouths.get(mouth)! : null)
         })
         const effect = raw.includes('{SHAKE}') ? SoundEffect.CrazyDaveCrazy : handing || raw.includes('{SCREAM2}') ? SoundEffect.CrazyDaveScream2
             : raw.includes('{SCREAM}') ? SoundEffect.CrazyDaveScream : text.length < this.config.talkLengths[0] ? SoundEffect.CrazyDaveShort1
@@ -145,39 +149,36 @@ export class CrazyDaveView {
     }
 
     private play(name: string, loop: boolean, fps: number, onFinish?: () => void): void {
-        const next = this.players.get(name)!
-        if (this.current && name !== 'enter') {
-            next.blendFrom(this.current, name === 'leave' || name.startsWith('idle') ? this.config.idleBlend : this.config.talkBlend)
-        }
-        if (this.current && this.current !== next) this.current.node.active = false
-        this.current = next
-        next.node.active = true
-        const parts = this.config.parts
-        next.setTrackSpriteOverride(parts.mouth, null)
-        const blink = this.players.get('blink')!
-        next.setTracksVisible(parts.eyes, !blink.node.active)
-        next.play({ loop, rate: fps / this.config.sourceFps, timeSeconds: 0, hideOnFinish: false, onFinish })
-        if (blink.node.active) blink.attachToTrack(next, parts.head)
-        if (this.hand.node.active) this.hand.node.setParent(next.getTrackNode(this.config.hand.track)!)
+        const { body, blink } = this, parts = this.config.parts
+        // The hand item leaves the hand's track first: a clip without that track takes the track's node away.
+        this.hand.node.setParent(this.node)
+        body.change(this.config.clips[name], this.registry,
+            !this.started || name === 'enter' ? 0 : name === 'leave' || name.startsWith('idle') ? this.config.idleBlend : this.config.talkBlend)
+        this.started = true
+        body.setTrackSpriteOverride(parts.mouth, null)
+        body.setTracksVisible(parts.eyes, !blink.node.active)
+        body.play({ loop, rate: fps / this.config.sourceFps, timeSeconds: 0, hideOnFinish: false, onFinish })
+        if (blink.node.active) blink.attachToTrack(body, parts.head)
+        if (this.hand.node.active) this.hand.node.setParent(body.getTrackNode(this.config.hand.track)!)
     }
 
     update(dt: number): void {
         if (!this.node.active) return
-        this.current?.advance(dt)
+        if (this.started) this.body.advance(dt)
         const layout = this.config.bubble
         if (this.shaking && this.bubble.active) this.label.setPosition(layout.textX + Math.floor(Math.random() * layout.shake), this.textY + Math.floor(Math.random() * layout.shake))
         if (this.hand.node.active) this.hand.advance(dt)
-        const blink = this.players.get('blink')!
-        if (!this.entering && !this.leaving && (this.blinkSeconds -= dt) <= 0 && this.current) {
+        const { body, blink } = this
+        if (!this.entering && !this.leaving && (this.blinkSeconds -= dt) <= 0 && this.started) {
             const [min, max] = this.config.blinkSeconds
             this.blinkSeconds = min + Math.random() * (max - min)
             const parts = this.config.parts
-            blink.attachToTrack(this.current, parts.head)
+            blink.attachToTrack(body, parts.head)
             blink.node.active = true
-            this.current.setTracksVisible(parts.eyes, false)
+            body.setTracksVisible(parts.eyes, false)
             blink.play({ loop: false, rate: this.config.blinkFps / this.config.sourceFps, timeSeconds: 0, onFinish: () => {
                 blink.node.active = false
-                this.current?.setTracksVisible(parts.eyes, true)
+                body.setTracksVisible(parts.eyes, true)
             } })
         }
         if (blink.node.active) blink.advance(dt)

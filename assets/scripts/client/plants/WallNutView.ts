@@ -15,8 +15,8 @@ export class WallNutView extends AnimatedPlantView {
 
     protected async loadAnimations(): Promise<void> {
         const nut = this.clips
+        this.playBody(nut.body, true, randomAnimationRate(this.animations.rates.plantIdle) / 12, 0)
         await Promise.all([
-            this.playBody(nut.body, true, randomAnimationRate(this.animations.rates.plantIdle) / 12, 0),
             this.loadExtra('BlinkTwitch', nut.blinkTwitch), this.loadExtra('BlinkTwice', nut.blinkTwice), this.loadExtra('BlinkThrice', nut.blinkThrice),
         ])
     }

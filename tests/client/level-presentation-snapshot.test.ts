@@ -34,8 +34,7 @@ function snapshot(): any {
         entities: [{
             kind: 'plant', entityId: 1,
             animations: {
-                body: reanim('pvz:peashooter'), idleHead: reanim('pvz:peashooter_head_idle'),
-                shootHead: reanim('pvz:peashooter_shoot'),
+                body: reanim('pvz:peashooter'), head: reanim('pvz:peashooter_head_idle'),
                 blink: reanim('pvz:peashooter_blink'),
             }, idleRate: 1.25, blinkAtTick: 500,
         }, {
