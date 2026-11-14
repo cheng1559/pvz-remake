@@ -14,28 +14,32 @@ import { rectOverlap } from '../combat/collision'
 import { TutorialResource } from '../state/levelState'
 
 /** `hits`: Plant::mLaunchCounter, the nut's zombie impacts so far. */
-interface State { [key: string]: number; direction: number; rate: number; frame: number; hits: number }
+interface State { [key: string]: number; direction: number; hits: number }
+/**
+ * Plant::UpdateBowling moves the nut by its body's `_ground` track: the layer whose clip rolls it along, a frame of
+ * the clip taking it one of `groundDeltas`.
+ */
+const ROLL_LAYER = 'body'
 /**
  * `attack`: Plant::GetPlantAttackRect on Wall-nut Bowling, the rect its blows land with; its body is GetPlantRect.
  * `shieldDamage`: the blow a shield takes alone; `bouncedBreaks`: the shields (the screen door) a nut that has
  * bounced strikes with its full blow instead.
  */
 interface Rules {
-    attack: { x: number; width: number }; rateMin: number; rateMax: number; groundDeltas: number[]; bounceSpeed: number
+    attack: { x: number; width: number }; groundDeltas: number[]; bounceSpeed: number
     damage: number; helmDamage: number; shieldDamage: number; bouncedBreaks: string[]
 }
 
 /** A separate moving plant; it shares no stationary wall-nut health or chewing behavior. */
 export const bowlingBehavior: PlantBehavior<State> = {
     tickAfterWin: true,
-    createState: () => ({ direction: 0, rate: 0, frame: 0, hits: 0 }),
+    createState: () => ({ direction: 0, hits: 0 }),
     validateState(state, definition) {
         const rules = definition.behavior as unknown as Rules
-        if (rules.rateMax < rules.rateMin || !Number.isFinite(state.frame) || state.frame < 0 || ![-1, 0, 1].includes(state.direction) ||
+        if (!definition.animation?.layers[ROLL_LAYER] || ![-1, 0, 1].includes(state.direction) ||
             !Number.isSafeInteger(state.hits) || state.hits < 0 ||
-            !Number.isFinite(state.rate) || state.rate !== 0 && (state.rate < rules.rateMin || state.rate > rules.rateMax) ||
             !Array.isArray(rules.groundDeltas) || rules.groundDeltas.length === 0 || rules.groundDeltas.some(delta => !Number.isFinite(delta) || delta <= 0) ||
-            ![rules.rateMin, rules.rateMax, rules.bounceSpeed, rules.damage, rules.helmDamage, rules.shieldDamage].every(value => Number.isFinite(value) && value > 0) ||
+            ![rules.bounceSpeed, rules.damage, rules.helmDamage, rules.shieldDamage].every(value => Number.isFinite(value) && value > 0) ||
             !Array.isArray(rules.bouncedBreaks) || rules.bouncedBreaks.some(type => typeof type !== 'string') ||
             !Number.isFinite(rules.attack?.x) || !(rules.attack.width > 0)) {
             throw new Error('Invalid bowling plant state or configuration')
@@ -45,9 +49,11 @@ export const bowlingBehavior: PlantBehavior<State> = {
         const rules = definition.behavior as unknown as Rules
         const board = world.resources.get(LevelStateResource).board
         const random = world.resources.get(RandomResource)
-        if (state.rate === 0) state.rate = rules.rateMin + random.nextFloat() * (rules.rateMax - rules.rateMin)
-        // Use the original _ground displacement curve, rather than a separate constant travel speed.
-        const next = state.frame + state.rate / 100
+        const roll = plant.animations?.[ROLL_LAYER]
+        if (!roll) return
+        // Use the original _ground displacement curve, rather than a separate constant travel speed: the frames the
+        // roll goes on this tick (the animation system moves it on after the plants have acted).
+        const next = roll.time + roll.rate / 100
         const travel = (frame: number) => {
             const cycle = rules.groundDeltas.reduce((sum, delta) => sum + delta, 0)
             const whole = Math.floor(frame), index = whole % rules.groundDeltas.length
@@ -56,8 +62,7 @@ export const bowlingBehavior: PlantBehavior<State> = {
         }
         // A nut on the zombies' side rolls left.
         const team = plantTeam(plant), forward = teamDirection(team) > 0
-        position.x += (forward ? 1 : -1) * (travel(next) - travel(state.frame))
-        state.frame = next
+        position.x += (forward ? 1 : -1) * (travel(next) - travel(roll.time))
         if (forward ? position.x > board.bounds.right : position.x + definition.body.x + definition.body.width < board.bounds.left) {
             commands.destroyEntity(entity)
             return

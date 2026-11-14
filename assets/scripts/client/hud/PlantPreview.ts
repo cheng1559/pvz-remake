@@ -2,7 +2,7 @@ import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { _decorator, Color, Component, isValid, Node, Sprite } from 'cc'
 import type { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { plantVisual } from '@/client/plants/definitions'
-import { loadDisplayParts, loadEntityDisplayAssets, resolveEntityDisplay } from '@/client/reanim/EntityDisplay'
+import { createOffBoardPlant } from '@/client/view/offBoard'
 import { uiNode } from '@/client/view/uiNode'
 import { bakeSprite } from '@/client/view/bakeSprite'
 import { KernelBatch } from '@/client/render/KernelBatch'
@@ -91,8 +91,8 @@ export class PlantPreview extends Component {
         // Held and grid previews follow /seedstyle too, without the packets' tilt.
         if (!this.picture.sync(this.packetScale) && this.rendering !== undefined) return
         const style = this.picture.style
-        const enabled = style !== 'standard' && (typeof this.plantId === 'number'
-            ? this.plantId >= 0 && this.plantId <= 48 : PlantPreview.supports(this.definitions, this.plantId))
+        // A plant drawn by its view; one named by its packet image alone (no plant behind it yet) keeps the cached picture.
+        const enabled = style !== 'standard' && typeof this.plantId === 'string' && PlantPreview.supports(this.definitions, this.plantId)
         if (this.rendering === enabled) {
             if (enabled) this.applyPlacement()
             return
@@ -106,7 +106,7 @@ export class PlantPreview extends Component {
         const root = uiNode({ name: enabled ? 'RenderedPlant' : 'CachedPlant', parent: this.node, active: false }).node
         this.rendered = root
         if (enabled) this.applyPlacement()
-        this.ready = (enabled ? this.load(root, this.plantId) : this.loadCached(root, this.plantId)).then(() => {
+        this.ready = (enabled ? this.load(root, this.plantId as string) : this.loadCached(root, this.plantId)).then(() => {
             if (!isValid(root, true) || root !== this.rendered) return
             this.loaded = true
             return this.finish(root)
@@ -147,26 +147,17 @@ export class PlantPreview extends Component {
         placePacketPicture(this.rendered!, this.placement, this.packetScale, this.picture.style, PLANT_TILT)
     }
 
-    private async load(root: Node, plantId: PreviewPlantId): Promise<void> {
-        const id = typeof plantId === 'number' ? plantId : plantVisual(this.definitions, plantId)?.preview
-        const { content, catalog } = await loadEntityDisplayAssets()
+    private async load(root: Node, plantId: string): Promise<void> {
+        // Plant::DrawSeedType: where and how big its packet has the plant, without its shadow, held on its pose.
+        const packet = this.definitions.plants[plantId]?.packet
+        const pose = uiNode({ name: 'Pose', parent: root, position: { x: packet?.x ?? 0, y: -(packet?.y ?? 0) } }).node
+        const plant = await createOffBoardPlant(pose, plantId, { packet: true, draw: { position: { x: 0, y: 0 }, scale: packet?.scale ?? 1, shadow: false } })
         if (!isValid(root, true) || root !== this.rendered) return
-        const layout = id === undefined ? undefined : catalog.plants[id]
-        const plant = typeof plantId === 'string' ? this.definitions.plants[plantId] : undefined
-        const definition = plant && layout && (plant.animations || plant.animationsFrom)
-            ? resolveEntityDisplay('plants', id!, { ...layout, animationsFrom: content.animations.sourceOf(plantId as string) }, content.animations)
-            : layout
-        if (!definition) throw new Error(`Plant preview is not installed: ${plantId}`)
-        const [x, y] = definition.packetOffset ?? [0, 0]
-        const pose = uiNode({ name: 'Pose', parent: root, position: { x, y: -y } }).node
-        const scale = definition.packetScale ?? 1
-        pose.setScale(scale, scale, 1)
-        const parts = definition.parts.filter(part => !part.blink).map(part => ({ ...part, id: part.packetId ?? part.id }))
-        const players = await loadDisplayParts(pose, parts, content)
-        if (!players || root !== this.rendered) return
-        for (const player of players.values()) player.seek(player.lastFrameTimeSeconds * (definition.packetTimeRatio ?? 0))
-        for (const part of parts) players.get(part.name)!.setTracksVisible(part.packetVisibleTracks ?? [], true)
-        this.players.push(...players.values())
+        // A plant its view does not draw off the board has the cached picture.
+        if (!plant) { pose.destroy(); return this.loadCached(root, plantId) }
+        const players = plant.view.players
+        for (const player of players) player.pause()
+        this.players.push(...players)
     }
 
     private applyColor(): void {

@@ -1,17 +1,16 @@
 import type { Context } from './types.js'
 
 export function installBeacon({ host, assets }: Context): void {
-    const { AnimatedPlantView } = host.get('client/plants/AnimatedPlantView')
+    const { PlantView } = host.get('client/plants/PlantView')
     const { Color } = host.get('cc')
     const settings = assets.json('assets/settings.json')
-    class BeaconView extends AnimatedPlantView {
+    // The beacon is drawn by its animation (its gameplay `animation`), as every plant is: on the board the server
+    // keeps it, and `sync` adds what the board does to the plant. Off the board (a packet's picture) only `show` runs.
+    class BeaconView extends PlantView {
         private pulseAtTick = -1
         constructor(context: any) { super(context) }
-        protected async loadAnimations() {
-            await this.body.load('example:beacon', this.content.registry, this.content.loader)
-        }
-        protected startBody() { this.body.play({ loop: true }) }
-        protected syncVisuals(plant: any, world: any, particle: (...args: any[]) => void) {
+        sync(plant: any, world: any, particle: (...args: any[]) => void, ...rest: any[]) {
+            super.sync(plant, world, particle, ...rest)
             const charged = Boolean(world.extensions['example:charge']?.[String(plant.entityId)])
             this.body.setColorOverride(charged ? new Color(255, 220, 110) : Color.WHITE)
             // Derive cosmetics from authoritative gameplay time; pause does not emit more particles.

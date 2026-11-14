@@ -1,5 +1,5 @@
 import { AudioClip, JsonAsset, Prefab, SpriteFrame, type Asset } from 'cc'
-import { loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
+import { offBoardContent } from '@/client/view/offBoard'
 import { ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import { CONTENT_CATEGORIES } from '@/shared/content'
@@ -13,7 +13,7 @@ const assetTypes = { sprites: SpriteFrame, reanim: JsonAsset, particles: JsonAss
 
 /** Warm the shared ZIP and animation caches during Release startup. */
 export async function preloadAssets(onProgress: (progress: number) => void): Promise<void> {
-    const { content: { registry, loader } } = await loadEntityDisplayAssets()
+    const { registry, loader } = await offBoardContent()
     const archives: ResolvedContent[] = []
     for (const category of CONTENT_CATEGORIES) {
         for (const [, content] of registry.entries(category)) {

@@ -14,7 +14,7 @@ export class ZombieViewRegistry extends EntityViewRegistry<ZombieViewContext, Zo
             context.node, context.content.registry, context.content.loader, context.animations, context.shadowParent,
             context.assets.shadow, context.assets.sprites, zombieDefinition(context.animations.definitions, context.zombie.typeId),
             context.animations.sourceOf(context.zombie.typeId), context.content.definitions.zombies[context.zombie.typeId],
-            context.attachments,
+            context.attachments, context.draw,
         ).prepare())
     }
 }

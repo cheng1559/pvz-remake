@@ -109,14 +109,6 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
               for name, nodes in configs.items() for node, settings in nodes.items()
               for clip, id in settings.get('exports', {}).items()]
     emit_clips(shared, configs)
-    from .almanac import almanac_definitions
-    presentation = {kind: json.loads((mod / index['presentation'][kind]).read_text())
-                    for kind in ('plants', 'zombies')}
-    catalog, display_configs, clips = almanac_definitions(raw, shared, configs, presentation)
-    emit_clips(clips, display_configs)
-    file = assets / 'json/almanac-animations.json'
-    write_json(file, catalog)
-    register('json', 'pvz:almanac-animations', file)
 
     print('[content] Particle effects and text', flush=True)
     convert_particles(raw / 'particles', assets / 'particles', raw / 'properties/resources.xml')

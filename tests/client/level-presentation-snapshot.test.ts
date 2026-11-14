@@ -95,8 +95,5 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
     assert.throws(invalid(value => { value.hud.progressMeterWidth = 1.5 }), /progressMeterWidth/)
     assert.throws(invalid(value => { value.advice.lastSyncedTick = -1 }), /lastSyncedTick/)
     assert.throws(invalid(value => { value.entities[0].idleRate = Number.POSITIVE_INFINITY }), /finite numbers/)
-    assert.throws(invalid(value => { delete value.entities[0].animations.body }), /animations.body is required/)
-    assert.throws(invalid(value => { delete value.entities[0].animations.blink }), /missing shooter blink state/)
-    assert.throws(invalid(value => { delete value.entities[0].blinkAtTick }), /missing shooter blink state/)
     assert.throws(invalid(value => { value.extensions.bad = {} }), /extension ID is invalid/)
 })

@@ -1,6 +1,7 @@
 {
   "pvz:normal": {
     "packet": {"x": -3, "y": -7, "scale": 0.35},
+    "portrait": {"x": 21, "y": 14, "scale": 0.5},
     "nameKey": "ZOMBIE",
     "shadowX": 23,
     "shadowXBackwards": 11,
@@ -36,6 +37,7 @@
   },
   "pvz:flag": {
     "packet": {"x": -3, "y": -7, "scale": 0.35},
+    "portrait": {"x": 23, "y": 24, "scale": 0.5},
     "nameKey": "FLAG_ZOMBIE",
     "shadowX": 23,
     "shadowXBackwards": 11,
@@ -73,6 +75,7 @@
   },
   "pvz:conehead": {
     "packet": {"x": -3, "y": -7, "scale": 0.35},
+    "portrait": {"x": 21, "y": 26, "scale": 0.5},
     "nameKey": "CONEHEAD_ZOMBIE",
     "shadowX": 23,
     "shadowXBackwards": 11,
@@ -115,6 +118,7 @@
   },
   "pvz:buckethead": {
     "packet": {"x": -3, "y": -7, "scale": 0.35},
+    "portrait": {"x": 21, "y": 23, "scale": 0.5},
     "nameKey": "BUCKETHEAD_ZOMBIE",
     "shadowX": 23,
     "shadowXBackwards": 11,
@@ -157,6 +161,7 @@
   },
   "pvz:pole_vaulter": {
     "packet": {"x": -8, "y": -12, "scale": 0.35, "clip": "walk"},
+    "portrait": {"x": 23, "y": 11, "scale": 0.5},
     "nameKey": "POLE_VAULTING_ZOMBIE",
     "previewBlockedCells": [
       {"column": 0, "row": 0}, {"column": 0, "row": 1}, {"column": 0, "row": 2},
@@ -199,6 +204,7 @@
   },
   "pvz:newspaper": {
     "packet": {"x": -3, "y": -10, "scale": 0.35},
+    "portrait": {"x": 21, "y": 14, "scale": 0.5},
     "nameKey": "NEWSPAPER_ZOMBIE",
     "damagedArmSprite": "pvz:zombie_paper_leftarm_upper2",
     "enragedHead": {"track": "anim_head1", "sprite": "pvz:zombie_paper_madhead"},
@@ -236,6 +242,7 @@
   },
   "pvz:screendoor": {
     "packet": {"x": -3, "y": -10, "scale": 0.35},
+    "portrait": {"x": 21, "y": 14, "scale": 0.5},
     "nameKey": "SCREEN_DOOR_ZOMBIE",
     "shadowX": 23,
     "shadowXBackwards": 11,

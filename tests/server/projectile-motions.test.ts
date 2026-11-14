@@ -36,6 +36,20 @@ function facing(world: World, projectile: number): number {
     return world.resources.get(ProjectileMotionsResource).of(state).facing!(state.motionState)
 }
 
+test('what is thrown or homes comes down on a low plant, which only what flies along the lawn passes over', () => {
+    for (const type of ['lobber', 'seeker', 'shooter'] as const) {
+        const { definitions, levels } = firing(type)
+        const game = new LocalIntegratedGame(definitions, levels, undefined, true)
+        game.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
+        game.command({ type: 'completeIntro' })
+        for (const line of ['/plant peashooter 3 1', '/plant potatomine 3 6 zombies']) assert.equal(game.debugCommand(line).ok, true, line)
+        game.command({ type: 'resume' })
+        const mine = () => game.render().plants.find(plant => plant.typeId === 'pvz:potatomine')!
+        for (let step = 0; step < 600 && mine().health === mine().maxHealth; step++) game.update(0.01)
+        assert.equal(mine().health < mine().maxHealth, type !== 'shooter', type)
+    }
+})
+
 test("a lobber's pea arcs over to its target with the damage the plant gives it, and a save keeps it in flight", () => {
     const { definitions, levels } = firing('lobber', { damage: 40 })
     const start = { levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] }

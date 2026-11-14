@@ -367,7 +367,7 @@ const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
 ]
 
 function parsePlant(value: unknown, name: string): Plant {
-    const source = optionalExact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], ['ability', 'behaviorState', 'team'], name)
+    const source = optionalExact(value, ['typeId', 'seedId', 'column', 'health', 'maxHealth', 'recentlyEatenCounter', 'chilledTicks'], ['ability', 'behaviorState', 'team', 'animations', 'blinkTicks'], name)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
     if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
@@ -381,6 +381,17 @@ function parsePlant(value: unknown, name: string): Plant {
         chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
         ...(source.ability === undefined ? {} : { ability: parsePlantAbility(source.ability, `${name}.ability`) }),
         ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
+        ...(source.animations === undefined ? {} : { animations: Object.fromEntries(Object.entries(record(source.animations, `${name}.animations`)).map(([layer, entry]) => {
+            const state = optionalExact(entry, ['clip', 'time', 'rate'], ['hidden'], `${name}.animations.${layer}`)
+            if (state.hidden !== undefined && state.hidden !== true) throw new TypeError(`${name}.animations.${layer}.hidden must be true`)
+            return [layer, {
+                ...(state.hidden ? { hidden: true as const } : {}),
+                clip: nonEmptyString(state.clip, `${name}.animations.${layer}.clip`),
+                time: nonNegativeFinite(state.time, `${name}.animations.${layer}.time`),
+                rate: nonNegativeFinite(state.rate, `${name}.animations.${layer}.rate`),
+            }]
+        })) }),
+        ...(source.blinkTicks === undefined ? {} : { blinkTicks: nonNegativeInteger(source.blinkTicks, `${name}.blinkTicks`) }),
         ...parseBehaviorState(source, name),
     }
 }

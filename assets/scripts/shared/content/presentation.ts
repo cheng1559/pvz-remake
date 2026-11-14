@@ -9,6 +9,12 @@ export interface ClientAnimationClip {
     readonly x: number
     readonly y: number
     readonly attachmentTrackId?: string
+    /** Another of its owner's clips, from whose first frame of that track it is attached whenever it is (Reanimation::mFrameBasePose). */
+    readonly attachmentBase?: string
+    /** The only tracks of it that are drawn (Reanimation::ShowOnlyTrack); its owner's other clips leave them to it. */
+    readonly onlyTracks?: readonly string[]
+    /** Seconds a layer blends into it from the pose it had (Reanimation::StartBlend), 0.2 by default. */
+    readonly blend?: number
     readonly fps?: number
 }
 
@@ -122,8 +128,6 @@ export interface PlantParts {
     readonly eyes?: readonly string[]
     /** Takes the cracked sprites as a nut is chewed (Plant::UpdateReanim). */
     readonly face?: string
-    /** The potato mine's light: lit near zombies, hidden in the almanac, shown on the seed packet. */
-    readonly glow?: readonly string[]
     /** The chomper's tracks of the zombie it chews and swallows, hidden when it ate a hostile plant instead. */
     readonly prey?: readonly string[]
 }
@@ -132,20 +136,35 @@ export interface PlantPresentationDefinition {
     readonly viewConfig?: Readonly<JsonObject>
     /** The render layer it draws on (`renderOrder.ts`), `plant` by default; rolling bowling nuts use `projectile`. */
     readonly layer?: RenderLayer
-    readonly shadow: { readonly x: number; readonly y: number; readonly scale?: number }
+    /** Plant::DrawShadow: where its shadow lies; a plant without one (the grave buster) has none. */
+    readonly shadow?: { readonly x: number; readonly y: number; readonly scale?: number }
     readonly scale: number
     /** PlantDrawHeightOffset, in original Y-down pixels: the grid preview draws its cached image this far down. */
     readonly drawHeightOffset?: number
     /** Board::OffsetYForPlanting: the planted cell is picked this far below the pointer. */
     readonly pointerOffsetY?: number
-    /** Plant::SetSleeping: extra offset of the Z animation from (50, 40), in original Y-down pixels. */
-    readonly sleepOffset?: readonly [number, number]
     readonly visual: PlantVisual
     readonly parts?: PlantParts
     readonly view?: PlantViewKind
     /** Another plant whose `animations` this one plays (the explode-o-nut plays the wall-nut's); by default its own. */
     readonly animationsFrom?: ClientAnimationTarget
     readonly animations?: ClientAnimationDefinitions[ClientAnimationTarget]
+    /**
+     * Plant::PlantInitialize off the board (the almanac, a packet's picture): the clips its layers show there in place
+     * of the ones they start with on it, `{layer: clip}`, going at those's pace (an armed potato mine, a grown sun-shroom).
+     */
+    readonly offBoard?: Readonly<Record<string, string>>
+    /**
+     * Plant::DrawSeedType, a packet's picture of the plant: where it goes from the picture's place and at what size
+     * (the potato mine's), how far towards its clips' last frame it is posed (`time`, the sunflower's), and the clips
+     * its layers show on top of `offBoard` (`clips`: the potato mine's light lit, the sun-shroom small).
+     */
+    readonly packet?: {
+        readonly x?: number; readonly y?: number; readonly scale?: number; readonly time?: number
+        readonly clips?: Readonly<Record<string, string>>
+    }
+    /** AlmanacDialog: how far from a plant's usual place the almanac shows it, in original Y-down pixels (the grave buster's 55 down). */
+    readonly almanacOffset?: readonly [number, number]
     readonly chewParticle?: string
     /** `layer`: the render layer of the effect, in the plant's row below `top` (the potato mine's `particle`). */
     readonly explosion?: { readonly effect: string; readonly x: number; readonly layer: RenderLayer }
@@ -153,13 +172,6 @@ export interface PlantPresentationDefinition {
     readonly explosionSounds?: readonly PresentationSound[]
     /** Played when an area shooter, like the Fume-shroom, fires. */
     readonly fireSounds?: readonly PresentationSound[]
-    readonly mine?: {
-        readonly blinkTicks: readonly [number, number]
-        readonly riseRate: number
-        readonly armedRate: readonly [number, number]
-        readonly blendSeconds: number
-        readonly glow: { readonly distance: readonly [number, number]; readonly frames: readonly [number, number]; readonly rateOffset: number }
-    }
 }
 
 /**
@@ -228,7 +240,6 @@ export interface ScreenAnimationDefinition {
 }
 
 export interface SeedPacketPlacement { readonly scale: number; readonly offsetX: number; readonly offsetY: number }
-export interface DisplayCord { readonly sprite: string; readonly track: string; readonly x: number; readonly height: number }
 export interface ZombieDrop {
     readonly track: string
     readonly effect: string
@@ -255,6 +266,8 @@ export interface ZombiePresentationDefinition {
     readonly packet?: {
         readonly x: number; readonly y: number; readonly scale: number; readonly clip?: string
     }
+    /** The almanac's small picture of it: where its Reanim's origin goes in the frame, and at what size. */
+    readonly portrait?: { readonly x: number; readonly y: number; readonly scale: number }
     /** Original Y-down coordinates; defaults to 92. */
     readonly shadowY?: number
     readonly parts: ZombieParts
@@ -328,7 +341,6 @@ export interface ZombieParts {
     readonly shieldArms?: { readonly holding: readonly string[]; readonly free: readonly string[] }
 }
 
-export type NutBlinkSlot = 'blinkTwitch' | 'blinkTwice' | 'blinkThrice'
 export interface AdventureIntroLayout {
     readonly previewCapacity: number
     readonly stationary?: boolean
@@ -498,13 +510,6 @@ export interface PresentationDefinitions {
     /** Keyed `pvz:<page>`. */
     readonly challenges?: Readonly<Record<string, ChallengePagePresentationDefinition>>
     readonly items: Readonly<Record<string, ItemPresentationDefinition>>
-    readonly animation: {
-        readonly rates: Readonly<Record<'plantIdle' | 'shooterIdle' | 'zombieIdle' | 'zombieIdle2', readonly [number, number]>>
-        readonly zombieIdle2Chance: number
-        readonly nutBlinkWeights: Readonly<Record<NutBlinkSlot, number>>
-        readonly plantBlinkTicks: readonly [number, number]
-        readonly nutBlinkTicks: readonly [number, number]
-    }
     readonly plants: Readonly<Record<string, PlantPresentationDefinition>>
     readonly zombies: Readonly<Record<string, ZombiePresentationDefinition>>
     readonly projectiles: Readonly<Record<string, ProjectilePresentationDefinition>>
@@ -514,12 +519,6 @@ export interface PresentationDefinitions {
         readonly defaultPlacement: SeedPacketPlacement
         readonly placements: Readonly<Record<string, SeedPacketPlacement>>
         readonly plantCels: Readonly<Record<string, number>>
-    }
-    readonly almanac: {
-        readonly zombieOrigin: { readonly offset: readonly [number, number]; readonly scaleOffset: readonly [number, number] }
-        readonly cords: Readonly<Record<string, DisplayCord>>
-        readonly pogo: { readonly bounceTicks: number; readonly restartCounter: number; readonly rate: number; readonly offset: number; readonly height: number }
-        readonly bungee: { readonly height: number; readonly periodSeconds: number }
     }
 }
 
@@ -650,15 +649,6 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (item.arrow !== undefined) { const arrow = object(item.arrow, id + '.arrow'); text(arrow.particle, id + '.arrow.particle'); pair(arrow.offset, id + '.arrow.offset') }
         for (const field of ['spawnSounds', 'landSounds', 'collectSounds']) sounds(item[field], id + '.' + field)
     }
-    const animation = object(data.animation, 'presentation definitions.animation')
-    const rates = object(animation.rates, 'animation.rates')
-    for (const name of ['plantIdle', 'shooterIdle', 'zombieIdle', 'zombieIdle2']) range(rates[name], name, true)
-    range(animation.plantBlinkTicks, 'plantBlinkTicks')
-    range(animation.nutBlinkTicks, 'nutBlinkTicks')
-    const chance = animation.zombieIdle2Chance
-    if (typeof chance !== 'number' || !Number.isFinite(chance) || chance < 0 || chance > 1) throw new TypeError('Invalid zombieIdle2Chance')
-    const weights = object(animation.nutBlinkWeights, 'nutBlinkWeights')
-    for (const slot of ['blinkTwitch', 'blinkTwice', 'blinkThrice']) positive(weights[slot], slot)
     const plants = object(data.plants, 'presentation definitions.plants')
     const zombies = object(data.zombies, 'presentation definitions.zombies')
     for (const [id, entry] of Object.entries(plants)) {
@@ -666,25 +656,32 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (plant.viewConfig !== undefined) object(plant.viewConfig, id + '.viewConfig')
         if (typeof visual.seedType !== 'string' && typeof visual.seedType !== 'number') throw new TypeError(id + '.seedType is invalid')
         if (visual.preview !== undefined && (!Number.isInteger(visual.preview) || (visual.preview as number) < 0)) throw new TypeError(id + '.preview is invalid')
-        point(plant.shadow, id + '.shadow')
-        if ((plant.shadow as Record<string, unknown>).scale !== undefined) positive((plant.shadow as Record<string, unknown>).scale, id + '.shadow.scale')
+        if (plant.shadow !== undefined) {
+            point(plant.shadow, id + '.shadow')
+            if ((plant.shadow as Record<string, unknown>).scale !== undefined) positive((plant.shadow as Record<string, unknown>).scale, id + '.shadow.scale')
+        }
         positive(plant.scale, id + '.scale')
         if (plant.layer !== undefined && !isRenderLayer(plant.layer)) throw new TypeError(id + '.layer is not a render layer')
         if (plant.drawHeightOffset !== undefined) finite(plant.drawHeightOffset, id + '.drawHeightOffset')
         if (plant.pointerOffsetY !== undefined) finite(plant.pointerOffsetY, id + '.pointerOffsetY')
-        if (plant.sleepOffset !== undefined) pair(plant.sleepOffset, id + '.sleepOffset')
         if (plant.parts !== undefined) {
             const parts = object(plant.parts, id + '.parts')
-            for (const key of Object.keys(parts)) if (!['eyes', 'face', 'glow', 'prey'].includes(key)) throw new TypeError(id + '.parts.' + key + ' is not supported')
+            for (const key of Object.keys(parts)) if (!['eyes', 'face', 'prey'].includes(key)) throw new TypeError(id + '.parts.' + key + ' is not supported')
             if (parts.eyes !== undefined) texts(parts.eyes, id + '.parts.eyes')
             if (parts.face !== undefined) text(parts.face, id + '.parts.face')
-            if (parts.glow !== undefined) texts(parts.glow, id + '.parts.glow')
             if (parts.prey !== undefined) texts(parts.prey, id + '.parts.prey')
         }
         if (visual.nameKey !== undefined) text(visual.nameKey, id + '.visual.nameKey')
         if (visual.tooltipKey !== undefined) text(visual.tooltipKey, id + '.visual.tooltipKey')
         if (plant.view !== undefined) text(plant.view, id + '.view')
         if (plant.animationsFrom !== undefined) text(plant.animationsFrom, id + '.animationsFrom')
+        const packet = plant.packet === undefined ? {} : object(plant.packet, id + '.packet')
+        for (const [field, clips] of [['offBoard', plant.offBoard], ['packet.clips', packet.clips]] as const) {
+            if (clips !== undefined) for (const [layer, clip] of Object.entries(object(clips, id + '.' + field))) text(clip, id + '.' + field + '.' + layer)
+        }
+        for (const key of ['x', 'y', 'time']) if (packet[key] !== undefined) finite(packet[key], id + '.packet.' + key)
+        if (packet.scale !== undefined) positive(packet.scale, id + '.packet.scale')
+        if (plant.almanacOffset !== undefined) pair(plant.almanacOffset, id + '.almanacOffset')
         sounds(plant.plantedSounds, id + '.plantedSounds')
         sounds(plant.explosionSounds, id + '.explosionSounds')
         sounds(plant.fireSounds, id + '.fireSounds')
@@ -692,17 +689,6 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             const explosion = object(plant.explosion, id + '.explosion')
             text(explosion.effect, id + '.explosion.effect'); finite(explosion.x, id + '.explosion.x')
             if (!isRenderLayer(explosion.layer)) throw new TypeError(id + '.explosion.layer is not a render layer')
-        }
-        if (plant.mine !== undefined) {
-            const mine = object(plant.mine, id + '.mine'), glow = object(mine.glow, id + '.mine.glow')
-            range(mine.blinkTicks, id + '.mine.blinkTicks')
-            range(mine.armedRate, id + '.mine.armedRate', true)
-            positive(mine.riseRate, id + '.mine.riseRate')
-            positive(mine.blendSeconds, id + '.mine.blendSeconds')
-            increasingRange(glow.distance, id + '.mine.glow.distance')
-            increasingRange(glow.frames, id + '.mine.glow.frames')
-            positive((glow.frames as number[])[0], id + '.mine.glow.frames[0]')
-            finite(glow.rateOffset, id + '.mine.glow.rateOffset')
         }
     }
     for (const [id, entry] of Object.entries(zombies)) {
@@ -735,6 +721,10 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             const packet = object(zombie.packet, id + '.packet')
             finite(packet.x, id + '.packet.x'); finite(packet.y, id + '.packet.y'); positive(packet.scale, id + '.packet.scale')
             if (packet.clip !== undefined) text(packet.clip, id + '.packet.clip')
+        }
+        if (zombie.portrait !== undefined) {
+            const portrait = object(zombie.portrait, id + '.portrait')
+            finite(portrait.x, id + '.portrait.x'); finite(portrait.y, id + '.portrait.y'); positive(portrait.scale, id + '.portrait.scale')
         }
         for (const part of ['head', 'hair', 'tongue', 'arm', 'helms']) texts(parts[part], id + '.parts.' + part)
         text(parts.upperArm, id + '.parts.upperArm')
@@ -852,20 +842,6 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     for (const [id, value] of Object.entries(object(packets.plantCels, 'seedPackets.plantCels'))) {
         if (!Number.isInteger(value) || (value as number) < 0) throw new TypeError('Invalid packet cel: ' + id)
     }
-    const almanac = object(data.almanac, 'almanac'), origin = object(almanac.zombieOrigin, 'almanac.zombieOrigin')
-    pair(origin.offset, 'almanac.zombieOrigin.offset')
-    pair(origin.scaleOffset, 'almanac.zombieOrigin.scaleOffset')
-    for (const [id, value] of Object.entries(object(almanac.cords, 'almanac.cords'))) {
-        const cord = object(value, 'almanac.cords.' + id)
-        text(cord.sprite, 'cord.sprite'); text(cord.track, 'cord.track')
-        finite(cord.x, 'cord.x'); positive(cord.height, 'cord.height')
-    }
-    const pogo = object(almanac.pogo, 'almanac.pogo'), bungee = object(almanac.bungee, 'almanac.bungee')
-    for (const key of ['bounceTicks', 'restartCounter', 'rate', 'height']) positive(pogo[key], 'almanac.pogo.' + key)
-    if (!Number.isInteger(pogo.bounceTicks) || !Number.isInteger(pogo.restartCounter) || (pogo.restartCounter as number) >= (pogo.bounceTicks as number)) throw new TypeError('Invalid pogo bounce counters')
-    finite(pogo.offset, 'almanac.pogo.offset')
-    positive(bungee.height, 'almanac.bungee.height')
-    positive(bungee.periodSeconds, 'almanac.bungee.periodSeconds')
     return value as PresentationDefinitions
 }
 
@@ -916,12 +892,6 @@ function texts(value: unknown, name: string): void {
 function pair(value: unknown, name: string): void {
     if (!Array.isArray(value) || value.length !== 2) throw new TypeError(name + ' must be a pair')
     value.forEach(entry => finite(entry, name))
-}
-
-function increasingRange(value: unknown, name: string): void {
-    range(value, name, true)
-    const [min, max] = value as number[]
-    if (min >= max) throw new TypeError(name + ' must be an increasing range')
 }
 
 function placement(value: unknown, name: string): void {

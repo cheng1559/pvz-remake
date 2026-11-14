@@ -16,6 +16,7 @@ class Color {
 class Node {
     isValid = true
     setScale() {}
+    destroy() {}
     addComponent(Type: new () => object) { return new Type() }
 }
 
@@ -25,7 +26,7 @@ function setup() {
         cc: { Component: class {}, Color,
             isValid: (node: Node) => node.isValid, _decorator: { ccclass: (name: string) => (value: unknown) => { classes[name] = value; return value } } },
         '@/client/plants/definitions': plantVisuals,
-        '@/client/reanim/EntityDisplay': { resolveEntityDisplay: (_kind: string, _id: number, layout: unknown) => layout },
+        '@/client/view/offBoard': {},
         '@/client/view/uiNode': { uiNode: () => ({ node: new Node() }) },
     }
     const load = (name: string) => {
@@ -42,29 +43,30 @@ function setup() {
     return { classes, modules, load, renderer }
 }
 
-test('namespaced Mod packets keep their ID and render their registered animation instead of the cached plant pose', async () => {
+test('namespaced Mod packets keep their ID and are drawn by their plant view instead of the cached plant pose', async () => {
     const { classes, modules, load, renderer } = setup()
     const plant = structuredClone(presentationFixture.plants['pvz:peashooter']) as any
     plant.visual.seedType = 'example:rapid_pea'
     plant.animations.body.reanimId = 'example:body'
+    plant.packet = { x: 12, y: 12, scale: 0.85 }
     const definitions = buildPresentationDefinitions(presentationFixture, [{ ownerId: 'example', data: { plants: { 'example:rapid_pea': plant } } }])
-    const animations = new ClientAnimationRegistry(definitions)
-    const { resolveEntityDisplay } = load('reanim/EntityDisplay')
-    const layout = resolveEntityDisplay('plants', 0, { animationsFrom: 'pvz:peashooter', offset: [0, 0], shadow: false }, animations)
-    let selected: any[] = []
-    Object.assign(modules['@/client/reanim/EntityDisplay'], {
-        resolveEntityDisplay,
-        loadEntityDisplayAssets: async () => ({ content: { animations }, catalog: { plants: [layout] } }),
-        loadDisplayParts: async (_node: Node, parts: any[]) => {
-            selected = parts
-            return new Map(parts.map(part => [part.name, { lastFrameTimeSeconds: 1, seek() {}, setTracksVisible() {} }]))
-        },
-    })
+    // The plant as a packet's picture has it: by its view, without a shadow, at the packet's place and size, held still.
+    const drawn: any[] = [], paused: string[] = [], cached: unknown[] = []
+    let view: { players: any[] } | null = { players: [{ pause() { paused.push('body') } }, { pause() { paused.push('head') } }] }
+    modules['@/client/view/offBoard'].createOffBoardPlant = async (_node: Node, typeId: string, options: unknown) => {
+        drawn.push([typeId, options])
+        return view && { view }
+    }
     const preview = new classes.PlantPreview(), root = new Node()
-    preview.definitions = definitions
-    preview.rendered = root
+    Object.assign(preview, { definitions, rendered: root, loadCached: async (_root: Node, plantId: unknown) => { cached.push(plantId) } })
     await preview.load(root, 'example:rapid_pea')
-    assert.equal(selected[0].id, 'example:body')
+    // The preview runs in a realm of its own: its values are compared as JSON.
+    assert.deepEqual(JSON.parse(JSON.stringify(drawn)), [['example:rapid_pea', { packet: true, draw: { position: { x: 0, y: 0 }, scale: 0.85, shadow: false } }]])
+    assert.deepEqual([paused, preview.players.length, cached.length], [['body', 'head'], 2, 0])
+    // A plant its view does not draw off the board keeps the cached picture.
+    view = null
+    await preview.load(root, 'example:rapid_pea')
+    assert.deepEqual(cached, ['example:rapid_pea'])
 
     let id: unknown
     modules['./PlantPreview'].PlantPreview = class { initialize(_definitions: unknown, plantId: unknown) { id = plantId } }

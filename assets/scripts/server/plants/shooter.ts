@@ -15,8 +15,9 @@ import { damageZombie, isTargetableZombie } from '../zombies/damage'
 import { PLANT_WIDTH, plantFacingX, plantTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { hostilePlants } from '../combat/targets'
 import { damagePlant } from './damage'
-import { launchProjectile } from '../combat/motions'
+import { launchProjectile, ProjectileMotionsResource } from '../combat/motions'
 import { type GameplayDefinitions, PLANT_ATTACKS } from '@/shared/content/gameplay'
+import { firePlantAnimation, plantTrackPoint } from './animation'
 
 export function createPeashooterSystem(definitions: GameplayDefinitions): GameSystem {
     return {
@@ -50,13 +51,15 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                     }
                     // The middle of the projectile's hitbox leaves the mouth, which a plant facing left has mirrored.
                     const hitbox = definitions.projectiles[shooter.projectile!].hitbox, team = plantTeam(plant)
+                    // Plant::GetPeaHeadOffset: the mouth is where the part it is on is now.
+                    const anchor = shooter.anchor ? plantTrackPoint(plant, definition, shooter.anchor.layer, shooter.anchor.track) : { x: 0, y: 0 }
                     // What it aims at, for a motion that takes a target.
                     const target = targets(world, definitions, position, plant).nearest
                     const projectile = launchProjectile(world, definitions, commands, {
                         typeId: shooter.projectile!,
                         position: {
-                            x: position.x + plantFacingX(shooter.offset.x, team) - (hitbox.x + hitbox.width / 2),
-                            y: position.y + shooter.offset.y - (hitbox.y + hitbox.height / 2),
+                            x: position.x + plantFacingX(anchor.x + shooter.offset.x, team) - (hitbox.x + hitbox.width / 2),
+                            y: position.y + anchor.y + shooter.offset.y - (hitbox.y + hitbox.height / 2),
                             row: position.row,
                         },
                         motion: PLANT_ATTACKS[shooter.type],
@@ -71,6 +74,7 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                     })
                     if (--attack.burst.shotsRemaining > 0) {
                         attack.burst.fireAtTick = tick + shooter.burstIntervalTicks
+                        firePlantAnimation(plant, definition, world.resources.get(RandomResource))
                         emitServerEvent(world.resources.get(EventQueueResource), 'plantFiring', {
                             plantId: entity,
                         })
@@ -84,6 +88,7 @@ export function createPeashooterSystem(definitions: GameplayDefinitions): GameSy
                 attack.readyAtTick = tick + world.resources.get(RandomResource).integer(shooter.cadenceTicks.min, shooter.cadenceTicks.max)
                 if (targets(world, definitions, position, plant).nearest === undefined) continue
                 attack.burst = { fireAtTick: tick + shooter.windupTicks - 1, shotsRemaining: shooter.shotsPerBurst }
+                firePlantAnimation(plant, definition, world.resources.get(RandomResource))
                 emitServerEvent(world.resources.get(EventQueueResource), 'plantFiring', {
                     plantId: entity,
                 })
@@ -134,9 +139,10 @@ function targets(
         zombies.push(entity)
         near(entity, rect)
     }
-    // A projectile would fly over a low plant, so only an area attack aims at one.
+    // What it fires along the lawn would fly over a low plant, so it does not aim at one; an area attack reaches it.
+    const overLow = shooter && !shooter.area && world.resources.get(ProjectileMotionsResource).resolve(PLANT_ATTACKS[shooter.type]).overLow
     const plants = hostilePlants(world, definitions, team, anywhere ? undefined : plantPosition.row)
-        .filter(target => (shooter?.area || !definitions.plants[target.plant.typeId].low) && (anywhere || ahead(target.rect.x, target.rect.width)))
+        .filter(target => !(overLow && definitions.plants[target.plant.typeId].low) && (anywhere || ahead(target.rect.x, target.rect.width)))
     for (const target of plants) near(target.entity, target.rect)
     return { zombies, plants: plants.map(target => target.entity), nearest }
 }

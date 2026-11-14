@@ -2,9 +2,8 @@ import { _decorator, Color, Component, isValid, Node, type Sprite } from 'cc'
 import { mirrorInPacket, type PacketTilt, PacketPictureStyle, placePacketPicture } from './packetPicture'
 import { bakeSprite } from '@/client/view/bakeSprite'
 import type { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
-import { loadDisplayParts, loadEntityDisplayAssets, zombieRestingParts } from '@/client/reanim/EntityDisplay'
+import { createOffBoardZombie, offBoardContent, type OffBoardZombie } from '@/client/view/offBoard'
 import { uiNode } from '@/client/view/uiNode'
-import { MIRRORED_SHIFT } from '@/client/zombies/zombieParts'
 
 const { ccclass } = _decorator
 
@@ -37,8 +36,8 @@ export class ZombiePreview extends Component {
      * showing through; the flat image then takes the color.
      */
     private composite?: Sprite
-    /** The body's place from the zombie's position: its idle clip's offset, as ZombieView places it. */
-    private offset: [number, number] = [0, 0]
+    /** The zombie, drawn by its view. */
+    private zombie?: OffBoardZombie
     /** A packet's /seedstyle, and the clip a tilted one draws through. */
     private picture?: PacketPictureStyle
 
@@ -66,7 +65,9 @@ export class ZombiePreview extends Component {
             current.from === placement.from && current.facingRightOffsetX === placement.facingRightOffsetX &&
             current.packetScale === placement.packetScale) return
         this.placement = placement
-        this.place()
+        // Where its body is drawn from is the view's from the start.
+        if (current.from !== placement.from && this.typeId) this.reload()
+        else this.place()
     }
 
     setZombie(typeId: string | undefined): void {
@@ -75,6 +76,7 @@ export class ZombiePreview extends Component {
         if (this.root?.isValid) this.root.destroy()
         this.root = null
         this.players = []
+        this.zombie = undefined
         this.composite = undefined
         if (!typeId) return
         const root = uiNode({ name: 'RestingZombie', parent: this.node, active: false }).node
@@ -122,43 +124,39 @@ export class ZombiePreview extends Component {
     }
 
     /**
-     * As ZombieView: the body at its clip's offset from the zombie's position, for one facing right 90 further and
-     * flipped (MIRRORED_SHIFT), then `facingRightOffsetX` further. From the Reanim's origin, as the cache draws it, the clip's offset
-     * (the original's GetDrawPos adjustments, such as the pole vaulter's) is not there. Parts drawn among the body's
-     * tracks (the flag, which drawAfterTrack moves under the body) follow the body.
+     * The body is where ZombieView has it: at its clip's offset from the zombie's position, for one facing right 90
+     * further and flipped, then `facingRightOffsetX` further; or from the Reanim's origin, as the cache draws it (the
+     * clip's offset, the original's GetDrawPos adjustments such as the pole vaulter's, is not there).
      */
     private place(): void {
         this.syncStyle()
         if (!this.root) return
         const { packetScale } = this.placement
-        const [offsetX, offsetY] = this.offset
-        const [fromX, fromY] = this.placement.from === 'reanim' ? this.offset : [0, 0]
         // A packet is drawn facing left and, facing right, turned round whole about the packet's middle, as a plant's
-        // and a grave's are, its tilt and clip with it. Over the lawn the body itself flips, as ZombieView's.
+        // and a grave's are, its tilt and clip with it. Over the lawn the body itself flips, as on it.
         const packet = packetScale !== undefined
         const mirrorBody = this.mirrored && !packet
-        const facingRightShift = MIRRORED_SHIFT + (this.placement.facingRightOffsetX ?? 0)
         if (packet) mirrorInPacket(this.node, this.mirrored, packetScale)
         placePacketPicture(this.root, this.placement, packetScale, this.picture?.style, ZOMBIE_TILT)
-        for (const player of this.players) {
-            if (player.node.parent !== this.root) continue
-            player.node.setPosition(offsetX + (mirrorBody ? facingRightShift : 0) - fromX, offsetY - fromY)
-            player.node.setScale(mirrorBody ? -1 : 1, 1, 1)
-        }
+        const zombie = this.zombie
+        if (!zombie || this.composite) return
+        zombie.zombie = { ...zombie.zombie, team: mirrorBody ? 'plants' : undefined }
+        zombie.view.display(zombie.zombie)
+        this.root.getChildByName('Zombie')?.setPosition(mirrorBody ? this.placement.facingRightOffsetX ?? 0 : 0, 0)
     }
 
     private async load(root: Node, typeId: string): Promise<void> {
-        // The content loaded once for every display: loading it anew builds every definition again, which a chooser's
-        // dozens of zombie packets would each do.
-        const { content } = await loadEntityDisplayAssets()
-        if (!isValid(root, true) || root !== this.root) return
         // ReanimatorCache::MakeCachedZombieFrame poses most zombies on anim_idle, the pole vaulter on anim_walk.
-        const clip = content.presentation.zombies[typeId]?.packet?.clip
-        const { parts, offset } = zombieRestingParts(content.animations, typeId, clip)
-        const players = await loadDisplayParts(root, parts, content)
-        if (!players || !isValid(root, true) || root !== this.root) return
-        this.offset = offset
-        this.players = [...players.values()]
+        const pose = (await offBoardContent()).presentation.zombies[typeId]?.packet?.clip ?? 'idle'
+        if (!isValid(root, true) || root !== this.root) return
+        const zombie = await createOffBoardZombie(uiNode({ name: 'Zombie', parent: root }).node, typeId, {
+            pose, mirrored: this.mirrored && this.placement.packetScale === undefined,
+            draw: { shadow: false, ...(this.placement.from === 'reanim' ? { position: { x: 0, y: 0 } } : {}) },
+        })
+        if (!zombie || !isValid(root, true) || root !== this.root) return
+        this.zombie = zombie
+        this.players = zombie.view.players
+        for (const player of this.players) player.pause()
         this.place()
         if (this.color.a < 255) { await this.flatten(root); return }
         for (const player of this.players) player.setColorOverride(this.color)

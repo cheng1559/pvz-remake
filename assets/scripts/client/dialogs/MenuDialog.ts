@@ -1,6 +1,6 @@
 import { game, isValid, type Node } from 'cc'
 import { modManager } from '@/client/content/ModManager'
-import { loadDisplayParts, loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
+import { createOffBoardZombie } from '@/client/view/offBoard'
 import type { UI } from '@/client/ui/UI'
 import type { UIDialog } from '@/client/ui/UIDialog'
 import { uiNode } from '@/client/view/uiNode'
@@ -75,13 +75,9 @@ export async function showMenuDialog(parent: Node, ui: UI, id: MenuDialogId, { l
     const zombie = uiNode({
         name: 'NewspaperZombie', parent: dialog.content, position: { x: 144, y: -129 }, active: false,
     }).node
-    void loadEntityDisplayAssets().then(async ({ content, catalog }) => {
-        if (!isValid(zombie, true)) return
-        const parts = catalog.zombies[5].parts
-        const players = await loadDisplayParts(zombie, parts, content)
-        if (!players) return
-        for (const part of parts) players.get(part.name)!.play({ loop: true, rate: 12 / part.fps * (part.rateScale ?? 1) })
-        zombie.active = true
+    // The zombie on its idle at the Reanim's own pace, from the Reanim's origin, as the original draws the widget.
+    void createOffBoardZombie(uiNode({ name: 'Zombie', parent: zombie }).node, 'pvz:newspaper', { pose: 'idle', draw: { position: { x: 0, y: 0 }, shadow: false } }).then(shown => {
+        if (shown && isValid(zombie, true)) zombie.active = true
     }).catch(error => {
         if (isValid(zombie, true)) console.error('[PauseDialog] Failed to load newspaper zombie', error)
     })

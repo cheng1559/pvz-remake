@@ -1,5 +1,5 @@
 import { isQualifiedId } from '@/shared/mod/index'
-import { jsonRoundTrip, type JsonObject, type Team } from '@/shared/protocol'
+import { jsonRoundTrip, type JsonObject, PLANT_ABILITY_STATES, type PlantAbilityState, type Team } from '@/shared/protocol'
 
 /** Board pixel where collected sun flies to: the sun counter in the original 800-wide layout. */
 export const SUN_BANK_TARGET = { x: 15, y: 0 } as const
@@ -171,8 +171,16 @@ export interface PlantDefinition {
         overrides?: ProjectileOverrides
         /** Plant::DoRowAreaDamage: hits every zombie in the row within reach, like the Fume-shroom. */
         area?: { damage: number; hitsShieldAndBody: boolean }
-        /** Its mouth, within the plant: where the middle of what it fires (of its hitbox) leaves, whatever its size. */
+        /**
+         * Its mouth: where the middle of what it fires (of its hitbox) leaves, whatever its size. Within the plant, or
+         * from its `anchor`.
+         */
         offset: Point
+        /**
+         * Plant::GetPeaHeadOffset: the mouth goes with a part of the plant as it moves, this track of the clip that
+         * layer of its animation plays (the stem a pea shooter's head sways on).
+         */
+        anchor?: { layer: string; track: string }
         /** Reach beyond the plant body, like the puff-shroom's 230; unlimited when omitted. A `seeker` reaches everywhere. */
         range?: number
     }
@@ -193,7 +201,63 @@ export interface PlantDefinition {
     chomper?: { attack: Rect; targeting: PlantTargeting; biteDelayTicks: number; biteTicks: number; digestTicks: number; swallowTicks: number }
     /** Explodes when eaten or otherwise destroyed by zombies. */
     deathExplosion?: ExplosionDefinition
+    /** What it plays, which the server keeps (server/plants/animation.ts); a plant without one is animated by its view. */
+    animation?: PlantAnimationDefinition
 }
+
+/**
+ * One clip of a plant's animation, under the name its presentation has the pictures under. It loops unless it has a
+ * `next` or is `once`.
+ */
+export interface PlantClip {
+    /** How long it is, in frames: a loop comes round, and a clip played once ends, after this many (Reanimation::mFrameCount). */
+    frames: number
+    /** Frames a second (Reanimation::mAnimRate), drawn when the clip starts; written as a number or as `[min, max]`. */
+    fps?: { min: number; max: number }
+    /** In place of `fps`: it starts where that layer is and goes at its rate (a pea shooter's head idles with its body). */
+    sync?: string
+    /** In place of `fps`: it lasts the ticks its plant's ability has left as it starts (a grave buster's landing). */
+    fit?: true
+    /** Plant::AnimateNuts: while zombies chew the plant it all but stops, and goes on at a rate drawn anew once they leave it. */
+    chewed?: true
+    /** It plays once, and its layer goes on to this clip. */
+    next?: string
+    /** It plays once, and its layer is gone (a blink). */
+    once?: true
+    /** It plays once, and stays on its last frame (REANIM_PLAY_ONCE_AND_HOLD) until its layer plays another. */
+    hold?: true
+    /** How far into itself it starts, a part of its length drawn when it does; written `[min, max]`. From its start when omitted. */
+    start?: { min: number; max: number }
+    /** Where parts of the plant are in each of its frames, for what goes with them (PlantDefinition.shooter.anchor). */
+    tracks?: Record<string, Point[]>
+}
+
+export interface PlantAnimationDefinition {
+    clips: Record<string, PlantClip>
+    /**
+     * Its layers, drawn in this order (a later one on an earlier one's part), and the clip each starts with; `null`
+     * for one that is not there until something plays a clip on it.
+     */
+    layers: Record<string, string | null>
+    /** The clips its layers play from the start as its ability comes to a state (Plant::PlayBodyReanim as mState changes). */
+    states?: Partial<Record<PlantAbilityState, Record<string, string>>>
+    /** Plant::SetSleeping: the clips its layers play in place of their own while it is asleep (a mushroom by day). */
+    asleep?: Record<string, string>
+    /** Plant::FindTargetAndFire: the clip a layer plays from its start as the plant starts a shot. */
+    fire?: Record<string, string>
+    /**
+     * Plant::DoBlink: every `ticks` (400 to 799 by default) the `blink` layer, over the others, plays one of these
+     * clips, drawn by their weights (written `clip` for one, `{clip: weight}` for several: a nut's three); not while
+     * the plant is about to shoot or asleep. With `states`, only while its ability is in one of them, the first blink
+     * `first` ticks after it comes to one (an armed potato mine's, 400 to 4399).
+     */
+    blink?: { clips: Record<string, number>; ticks: { min: number; max: number }; states?: PlantAbilityState[]; first?: { min: number; max: number } }
+}
+
+/** The layer a plant blinks on. */
+export const PLANT_BLINK_LAYER = 'blink'
+/** Plant::PlantInitialize: the ticks between a plant's blinks, unless its animation says. */
+export const PLANT_BLINK_TICKS = { min: 400, max: 799 }
 
 /** One armor slot: its kind and full health. */
 export interface ZombieArmor { type: string; health: number }
@@ -232,6 +296,8 @@ export interface ZombieDefinition {
     enrage?: { pauseTicks: number; speedPerTick: { min: number; max: number } }
     /** Explicit animation profile and variants; equipment does not imply animation support. */
     gait: string
+    /** Zombie::LoadReanim: it has a second way to stand (anim_idle2), which it takes three times in four off the board. */
+    idle2?: true
     tongueChance: number
     walk2Chance: number
     targetingInsets?: Record<string, number>
@@ -592,7 +658,7 @@ function parseSeed(value: unknown, name: string, seedId: string): SeedDefinition
 function parsePlant(value: unknown, name: string): PlantDefinition {
     const attacks = Object.keys(PLANT_ATTACKS) as PlantAttack[]
     const abilities = [...attacks, 'producer', 'fuse', 'mine', 'chomper', 'graveBuster'] as const
-    const source = exactObject(value, ['maxHealth', 'body'], name, [...abilities, 'deathExplosion', 'behavior', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset'])
+    const source = exactObject(value, ['maxHealth', 'body'], name, [...abilities, 'deathExplosion', 'behavior', 'occupiesCell', 'nocturnal', 'low', 'plantingOffset', 'animation'])
     if (abilities.filter(key => source[key] !== undefined).length > 1) {
         throw new Error(`${name} allows at most one of ${abilities.join(', ')}`)
     }
@@ -621,11 +687,12 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
         result.plantingOffset = { min, max }
     }
     if (source.behavior !== undefined) result.behavior = jsonRoundTrip(object(source.behavior, `${name}.behavior`)) as JsonObject
+    if (source.animation !== undefined) result.animation = parsePlantAnimation(source.animation, `${name}.animation`)
     const type = attacks.find(key => source[key] !== undefined)
     if (type) {
         const block = `${name}.${type}`
-        const { cadenceTicks, initialDelayTicks, windupTicks, shotsPerBurst, burstIntervalTicks, projectile: shot, area, offset, range } = exactObject(
-            source[type], ['cadenceTicks', 'initialDelayTicks', 'windupTicks', 'shotsPerBurst', 'burstIntervalTicks', 'offset'], block, ['range', 'projectile', 'area'],
+        const { cadenceTicks, initialDelayTicks, windupTicks, shotsPerBurst, burstIntervalTicks, projectile: shot, area, offset, range, anchor } = exactObject(
+            source[type], ['cadenceTicks', 'initialDelayTicks', 'windupTicks', 'shotsPerBurst', 'burstIntervalTicks', 'offset'], block, ['range', 'projectile', 'area', 'anchor'],
         )
         const { id: projectile, ...overrides } = shot === undefined || typeof shot === 'string' ? { id: shot } : object(shot, `${block}.projectile`)
         exactObject(overrides, [], `${block}.projectile`, Object.keys(PROJECTILE_ATTRIBUTES))
@@ -645,6 +712,13 @@ function parsePlant(value: unknown, name: string): PlantDefinition {
             })() }),
             offset: point(offset, `${block}.offset`),
             ...(range === undefined ? {} : { range: positiveFinite(range, `${block}.range`) }),
+        }
+        if (anchor !== undefined) {
+            const { layer, track } = exactObject(anchor, ['layer', 'track'], `${block}.anchor`)
+            // The layer starts with a clip that has the track; on a clip without it the mouth is at the plant's own place.
+            const start = result.animation?.clips[result.animation.layers[layer as string] ?? '']
+            if (typeof track !== 'string' || !start?.tracks?.[track]) throw new Error(`${block}.anchor must name a layer of the plant's animation and a track of the clip it starts with`)
+            result.shooter.anchor = { layer: layer as string, track }
         }
         if (type === 'shooter' ? (result.shooter.projectile === undefined) === (result.shooter.area === undefined) : !result.shooter.projectile || result.shooter.area) {
             throw new Error(type === 'shooter' ? `${block} needs exactly one of projectile and area` : `${block} needs a projectile, and no area`)
@@ -727,7 +801,7 @@ function explosion(value: unknown, name: string): ExplosionDefinition {
 }
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'dropsFlag', 'wave', 'graveRise', 'facingRightOffsetX'])
+    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['idle2', 'helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'dropsFlag', 'wave', 'graveRise', 'facingRightOffsetX'])
     const spawn = exactObject(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -743,6 +817,7 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
         body: rect(source.body, `${name}.body`),
         attack: rect(source.attack, `${name}.attack`),
         gait: qualifiedId(source.gait, `${name}.gait`),
+        ...(source.idle2 === undefined ? {} : { idle2: flag(source.idle2, `${name}.idle2`) }),
         tongueChance: fraction(source.tongueChance, `${name}.tongueChance`),
         walk2Chance: fraction(source.walk2Chance, `${name}.walk2Chance`),
         bite: {
@@ -798,6 +873,91 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
         }
     }
     return result
+}
+
+function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefinition {
+    const source = exactObject(value, ['clips', 'layers'], name, ['fire', 'blink', 'states', 'asleep'])
+    const clips = named(source.clips, `${name}.clips`, (entry, clipName): PlantClip => {
+        const clip = exactObject(entry, ['frames'], clipName, ['fps', 'sync', 'fit', 'chewed', 'next', 'once', 'hold', 'start', 'tracks'])
+        const frames = positiveInteger(clip.frames, `${clipName}.frames`)
+        if ([clip.fps, clip.sync, clip.fit].filter(pace => pace !== undefined).length !== 1) throw new Error(`${clipName} needs exactly one of fps, sync and fit`)
+        if (clip.chewed !== undefined && clip.fps === undefined) throw new Error(`${clipName}.chewed needs fps`)
+        for (const key of ['once', 'hold', 'fit', 'chewed']) if (clip[key] !== undefined && clip[key] !== true) throw new Error(`${clipName}.${key} must be true`)
+        if ([clip.next, clip.once, clip.hold].filter(end => end !== undefined).length > 1) throw new Error(`${clipName} allows at most one of next, once and hold`)
+        const from = clip.start === undefined ? undefined : array(clip.start, `${clipName}.start`).map((part, index) => fraction(part, `${clipName}.start[${index}]`))
+        if (from && (from.length !== 2 || from[0] > from[1])) throw new Error(`${clipName}.start must be [min, max]`)
+        const fps = clip.fps === undefined ? undefined : (Array.isArray(clip.fps) ? clip.fps : [clip.fps, clip.fps])
+            .map((rate, index) => positiveFinite(rate, `${clipName}.fps[${index}]`))
+        if (fps && (fps.length !== 2 || fps[0] > fps[1])) throw new Error(`${clipName}.fps must be a rate or [min, max]`)
+        return {
+            frames,
+            ...(fps ? { fps: { min: fps[0], max: fps[1] } } : {}),
+            ...(clip.sync === undefined ? {} : { sync: string(clip.sync, `${clipName}.sync`) }),
+            ...(clip.fit ? { fit: true as const } : {}),
+            ...(clip.chewed ? { chewed: true as const } : {}),
+            ...(clip.next === undefined ? {} : { next: string(clip.next, `${clipName}.next`) }),
+            ...(clip.once ? { once: true as const } : {}),
+            ...(clip.hold ? { hold: true as const } : {}),
+            ...(from ? { start: { min: from[0], max: from[1] } } : {}),
+            ...(clip.tracks === undefined ? {} : { tracks: named(clip.tracks, `${clipName}.tracks`, (track, trackName) => {
+                const points = array(track, trackName).map((pair, index) => {
+                    if (!Array.isArray(pair) || pair.length !== 2) throw new Error(`${trackName}[${index}] must be [x, y]`)
+                    return { x: finite(pair[0], `${trackName}[${index}]`), y: finite(pair[1], `${trackName}[${index}]`) }
+                })
+                if (points.length !== frames) throw new Error(`${trackName} must have a point for each of the clip's ${frames} frames`)
+                return points
+            }) }),
+        }
+    })
+    const clipOf = (entry: unknown, entryName: string): string => {
+        if (typeof entry !== 'string' || !clips[entry]) throw new Error(`${entryName} must be one of the animation's clips`)
+        return entry
+    }
+    const layers = named(source.layers, `${name}.layers`, (entry, entryName) => entry === null ? null : clipOf(entry, entryName))
+    if (!Object.keys(layers).length) throw new Error(`${name}.layers must not be empty`)
+    /** What some layers play: `{layer: clip}`. */
+    const playing = (entry: unknown, entryName: string): Record<string, string> => {
+        const result = named(entry, entryName, clipOf)
+        for (const layer of Object.keys(result)) layerOf(layer, `${entryName}.${layer}`)
+        return result
+    }
+    const abilityState = (entry: unknown, entryName: string): PlantAbilityState => {
+        if (!PLANT_ABILITY_STATES.includes(entry as PlantAbilityState)) throw new Error(`${entryName} must be a state of a plant's ability`)
+        return entry as PlantAbilityState
+    }
+    const layerOf = (entry: string, entryName: string): void => {
+        if (!Object.hasOwn(layers, entry)) throw new Error(`${entryName} must be one of the animation's layers`)
+    }
+    for (const [id, clip] of Object.entries(clips)) {
+        if (clip.next !== undefined) clipOf(clip.next, `${name}.clips.${id}.next`)
+        if (clip.sync !== undefined) layerOf(clip.sync, `${name}.clips.${id}.sync`)
+    }
+    const result: PlantAnimationDefinition = { clips, layers }
+    if (source.fire !== undefined) result.fire = playing(source.fire, `${name}.fire`)
+    if (source.asleep !== undefined) result.asleep = playing(source.asleep, `${name}.asleep`)
+    if (source.states !== undefined) {
+        result.states = named(source.states, `${name}.states`, playing)
+        for (const state of Object.keys(result.states)) abilityState(state, `${name}.states.${state}`)
+    }
+    if (source.blink !== undefined) {
+        const blink = exactObject(source.blink, ['clip'], `${name}.blink`, ['ticks', 'states', 'first'])
+        const blinks = typeof blink.clip === 'string' ? { [blink.clip]: 1 }
+            : named(blink.clip, `${name}.blink.clip`, (weight, entryName) => positiveInteger(weight, entryName))
+        if (!Object.keys(blinks).length) throw new Error(`${name}.blink.clip must not be empty`)
+        for (const clip of Object.keys(blinks)) if (!clips[clipOf(clip, `${name}.blink.clip`)].once) throw new Error(`${name}.blink.clip must be played once: ${clip}`)
+        if (Object.hasOwn(layers, PLANT_BLINK_LAYER)) throw new Error(`${name}.layers must leave ${PLANT_BLINK_LAYER} to the blink`)
+        result.blink = {
+            clips: blinks, ticks: blink.ticks === undefined ? PLANT_BLINK_TICKS : tickRange(blink.ticks, `${name}.blink.ticks`, 1),
+            ...(blink.states === undefined ? {} : { states: array(blink.states, `${name}.blink.states`).map((state, index) => abilityState(state, `${name}.blink.states[${index}]`)) }),
+            ...(blink.first === undefined ? {} : { first: tickRange(blink.first, `${name}.blink.first`, 1) }),
+        }
+    }
+    return result
+}
+
+/** The entries of an object under names of the content's own (a plant's clips and layers), not qualified ids. */
+function named<T>(value: unknown, name: string, parse: (entry: unknown, entryName: string) => T): Record<string, T> {
+    return Object.fromEntries(Object.entries(object(value, name)).map(([id, entry]) => [id, parse(entry, `${name}.${id}`)]))
 }
 
 function parsePlantTargeting(value: unknown, name: string): PlantTargeting {

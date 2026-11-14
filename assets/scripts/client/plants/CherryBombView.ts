@@ -1,19 +1,14 @@
-import { randomAnimationRate } from '@/client/content/ClientAnimationRegistry'
 import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
-import { AnimatedPlantView, plantAnimation } from './AnimatedPlantView'
+import { PlantView, type PlantParticle } from './PlantView'
 
-export class CherryBombView extends AnimatedPlantView {
-    private lastSyncedTick = -1
+export class CherryBombView extends PlantView {
+    private shakenTick = -1
 
-    protected abilityClip() {
-        // The explosion runs at the plant's random 10-15 fps on a 30 fps clip.
-        return plantAnimation(this.clips.explode, false, randomAnimationRate(this.animations.rates.plantIdle) / 30)
-    }
-
-    protected syncVisuals(_plant: PlantSnapshot, world: WorldSnapshot): void {
-        if (world.gameplayTick === this.lastSyncedTick) return
+    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, upgradeTarget: boolean, flash: number): void {
+        super.sync(plant, world, particle, upgradeTarget, flash)
+        if (world.gameplayTick === this.shakenTick) return
         // Plant::Animate jitters a lit cherry bomb by up to a pixel.
-        this.body.node.setPosition(-1 + Math.random() * 2, -1 + Math.random() * 2)
-        this.lastSyncedTick = world.gameplayTick
+        this.root.setPosition(-1 + Math.random() * 2, -1 + Math.random() * 2)
+        this.shakenTick = world.gameplayTick
     }
 }

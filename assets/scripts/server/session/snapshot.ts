@@ -40,21 +40,23 @@ export const snapshot = {
         })
         const plants: WorldSnapshot['plants'] = [...world.query(PositionComponent, PlantComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
-            const { chilledTicks, ...plant } = world.get(entity, PlantComponent)!
+            const { chilledTicks, blinkTicks, ...plant } = world.get(entity, PlantComponent)!
             const production = definitions.plants[plant.typeId].producer && world.get(entity, PlantAttackComponent)
             return {
                 entityId: entity, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...position,
                 ...(plant.ability ? { ability: { ...plant.ability } } : {}),
+                ...(plant.animations ? { animations: jsonRoundTrip(plant.animations) } : {}),
                 ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
                 ...(definitions.plants[plant.typeId].nocturnal && !level.board.night ? { asleep: true as const } : {}),
                 ...(production ? { produceTicks: Math.max(0, production.readyAtTick - gameplayTick) } : {}),
             }
         })
         for (const entity of world.query(PositionComponent, MowedPlantComponent)) {
-            const { plant: { chilledTicks, ...plant }, ticks, left } = world.get(entity, MowedPlantComponent)!
+            const { plant: { chilledTicks, blinkTicks, ...plant }, ticks, left } = world.get(entity, MowedPlantComponent)!
             plants.push({
                 entityId: entity, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...world.get(entity, PositionComponent)!,
                 ...(plant.ability ? { ability: { ...plant.ability } } : {}),
+                ...(plant.animations ? { animations: jsonRoundTrip(plant.animations) } : {}),
                 ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
                 mowered: { ticks, ...(left ? { left } : {}) },
             })

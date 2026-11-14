@@ -101,7 +101,7 @@ test('Release preloading loads Mod archive assets without requesting a Cocos bun
     const modules: Record<string, unknown> = {
         cc: { SpriteFrame: types.sprites, JsonAsset: types.reanim, AudioClip: types.sounds, Prefab: types.prefabs },
         '@/shared/content': { CONTENT_CATEGORIES },
-        '@/client/reanim/EntityDisplay': { loadEntityDisplayAssets: async () => ({ content: { registry, loader } }) },
+        '@/client/view/offBoard': { offBoardContent: async () => ({ registry, loader }) },
         '@/client/reanim/ReanimPlayer': { ReanimRepository: class {
             async load(id: string) { assert.ok(loaded.has(`reanim/${id}`), 'archive JSON must be preloaded before animation preparation') }
         } },

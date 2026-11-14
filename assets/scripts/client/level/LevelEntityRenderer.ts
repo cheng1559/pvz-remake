@@ -837,7 +837,9 @@ export class LevelEntityRenderer {
      * its right; rolling bowling nuts draw on the projectile layer.
      */
     private plantOrder(entity: PlantSnapshot): number {
-        const row = this.plantViews.get(entity.entityId)?.renderRow?.(entity) ?? entity.row
+        // Plant::UpdateBowling changes draw order before incrementing the downward target row: a plant rolling down
+        // is drawn with the row above.
+        const row = entity.row - (Number(entity.behaviorState?.direction) > 0 ? 1 : 0)
         return renderOrder(this.content.presentation.plants[entity.typeId]?.layer ?? 'plant', row, plantRenderOffset(entity.x))
     }
 

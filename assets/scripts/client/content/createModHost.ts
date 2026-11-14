@@ -9,11 +9,9 @@ import { modResources } from './ModResources'
 
 import * as viewport from '@/client/view/ClientViewport'
 import * as menu from '@/client/screens/MainMenuScreen'
-import * as animatedPlant from '@/client/plants/AnimatedPlantView'
-import * as sunShroom from '@/client/plants/SunShroomView'
+import * as plantView from '@/client/plants/PlantView'
 import * as graveBuster from '@/client/plants/GraveBusterView'
 import * as wallNut from '@/client/plants/WallNutView'
-import * as bowlingNut from '@/client/plants/BowlingNutView'
 import * as reanim from '@/client/reanim/ReanimPlayer'
 import * as uiNode from '@/client/view/uiNode'
 import * as zombieView from '@/client/zombies/ZombieView'
@@ -57,11 +55,9 @@ export function createClientModHost(ownerId: string, definitions: DefinitionSour
         'client/views': { plants, zombies },
         'client/view/ClientViewport': viewport,
         'client/screens/MainMenuScreen': menu,
-        'client/plants/AnimatedPlantView': animatedPlant,
-        'client/plants/SunShroomView': sunShroom,
+        'client/plants/PlantView': plantView,
         'client/plants/GraveBusterView': graveBuster,
         'client/plants/WallNutView': wallNut,
-        'client/plants/BowlingNutView': bowlingNut,
         'client/reanim/ReanimPlayer': reanim,
         'client/view/uiNode': uiNode,
         'client/zombies/ZombieView': zombieView,

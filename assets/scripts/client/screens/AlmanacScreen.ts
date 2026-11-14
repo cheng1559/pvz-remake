@@ -21,8 +21,8 @@ export interface AlmanacSelection { plant: number, zombie: number }
 export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 'plants' | 'zombies', navigate: (action: MenuAction) => void, selection: AlmanacSelection = { plant: 0, zombie: 0 }): Promise<void> {
     if (page === 'almanac') {
         // AlmanacDialog::SetupLayoutIndex places the sunflower at (167, 225) in 1.2.0.1073 (PvZ-Portable has 255).
-        AlmanacEntityView.create(parent, 'plants', 1, 167, 225)
-        AlmanacEntityView.create(parent, 'zombies', 0, 535, 215)
+        AlmanacEntityView.create(parent, 'plants', 'pvz:sunflower', 167, 225)
+        AlmanacEntityView.create(parent, 'zombies', 'pvz:normal', 535, 215)
         ui.button(parent, { skin: 'seed', text: ui.text('VIEW_PLANTS'), x: 130, y: 345, width: 156, height: 42, font: 'yellow', color: Color.WHITE, onClick: () => navigate('plants') })
         ui.button(parent, { text: ui.text('VIEW_ZOMBIES'), x: 487, y: 345, width: 210, height: 48, imageBox: { height: ui.assets.sprites.button_left.originalSize.height }, clickSound: null, onClick: () => navigate('zombies') })
     } else {
@@ -49,7 +49,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             if (page === 'plants') {
                 const plant = entry as AlmanacPlantDefinition
                 ui.image(details, sprites[`almanac_ground${plant.ground}`], { x: 521, y: 107 })
-                AlmanacEntityView.create(details, 'plants', plant.id, 578, 140)
+                AlmanacEntityView.create(details, 'plants', plant.seed, 578, 140)
                 ui.image(details, sprites.almanac_plantcard, { x: 459, y: 86 })
                 ui.label(details, { text: ui.text(plant.key), font: 'yellow', x: 617, y: 288, baseline: true, align: 'center' })
                 const header = drawAlmanacText(details, ui, ui.text(`${plant.key}_DESCRIPTION_HEADER`), { x: 485, y: 309, width: 258 })
@@ -64,7 +64,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             } else {
                 const zombie = entry as AlmanacZombieView
                 ui.image(details, sprites[zombie.iceGround ? 'almanac_groundice' : 'almanac_groundday'], { x: 518, y: 110 })
-                AlmanacEntityView.create(details, 'zombies', zombie.id, 559, 175, { x: 517, y: 124, width: 197, height: 187 })
+                AlmanacEntityView.create(details, 'zombies', zombie.zombie, 559, 175, { x: 517, y: 124, width: 197, height: 187 })
                 ui.image(details, sprites.almanac_zombiecard, { x: 455, y: 78 })
                 ui.label(details, { text: ui.text(zombie.key), font: 'button', color: new Color(190, 255, 235), x: 613, y: 362, baseline: true, align: 'center' })
                 if (zombie.described) {
@@ -105,7 +105,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     button.onStateChange = state => { update(state); overlay.active = state === 'hover' || state === 'pressed' }
                     button.onStateChange(button.isHovering ? 'hover' : 'normal')
                 } else {
-                    const packet = SeedPacketRenderer.drawSeedPacket({ definitions: ui.assets.presentation, parent: button.node, x: 0, y: 0, seedType: plant.id, cost: plant.cost, upgrade: plant.upgrade, costFont: ui.assets.fonts.packetCost })
+                    const packet = SeedPacketRenderer.drawSeedPacket({ definitions: ui.assets.presentation, parent: button.node, x: 0, y: 0, seedType: plant.seed, cost: plant.cost, upgrade: plant.upgrade, costFont: ui.assets.fonts.packetCost })
                     packet.setSiblingIndex(0)
                     const visual = button.node.getChildByName('Visual')!
                     const update = button.onStateChange!
@@ -130,7 +130,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
                     name: 'PortraitClip', parent: button.node, position: { x: 2, y: -2 },
                     anchor: { x: 0, y: 1 }, size: { width: 72, height: 72 }, mask: Mask.Type.GRAPHICS_RECT,
                 }).node
-                clip.addComponent(AlmanacZombiePortrait).initialize(zombie.id, async root => {
+                clip.addComponent(AlmanacZombiePortrait).initialize(zombie.zombie, async root => {
                     const atlas = await modResources.asset('zombie_previews_cached', SpriteFrame)
                     if (!atlas) throw new Error('Missing zombie portrait atlas')
                     if (root.isValid) ui.image(root, getAtlasFrame(atlas, zombie.id, 76, 76, 8), { x: -2, y: -2 })

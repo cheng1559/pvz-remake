@@ -4,7 +4,7 @@ export type JsonValue = null | boolean | number | string | JsonValue[] | JsonObj
 export type JsonObject = { [key: string]: JsonValue }
 export interface EntityBehaviorState { behaviorState?: JsonObject }
 
-const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
+export const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
     'fuse', 'arming', 'rising', 'armed', 'ready', 'biting', 'got-one', 'missed', 'digesting', 'swallowing',
     'small', 'growing', 'big', 'landing', 'eating',
 ]
@@ -253,6 +253,11 @@ export interface PlantSnapshot extends EntityBehaviorState {
     team?: Team
     /** Ticks left slowed by a hostile snow pea: the plant draws blue and animates at half speed. */
     chilledTicks?: number
+    /**
+     * What each layer of the plant's animation plays, for a plant the server animates (PlantDefinition.animation):
+     * the clip, how far into it in frames, and its frames a second. A loop's time counts on past its length.
+     */
+    animations?: Record<string, { clip: string, time: number, rate: number, hidden?: true }>
     /** A mower crushed it: no plant any more, it is squashed, `ticks` into it; `left` when the mower ran left. */
     mowered?: { ticks: number, left?: true }
 }
@@ -267,6 +272,8 @@ export type PlantAbilityState =
 export type ZombieState = 'walking' | 'eating' | 'vaulting' | 'dying' | 'burned' | 'mowered'
 export type ZombieAnimationName =
     | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_gasp' | 'anim_death' | 'anim_death2' | 'anim_superlongdeath' | 'mowered'
+    /** Standing, as a zombie does off the board (shared/content/zombieAnimation). */
+    | 'anim_idle' | 'anim_idle2'
 
 /**
  * The two sides (docs/TEAMS.zh-CN.md): the player's `plants` and the `zombies`. Sides attack each other; a zombie on the
@@ -831,6 +838,13 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
             const ability = record(plant.ability, `${name}.ability`)
             if (!PLANT_ABILITY_STATES.includes(ability.state as PlantAbilityState)) throw new TypeError(`${name}.ability.state is unknown`)
             integer(ability.ticks, `${name}.ability.ticks`)
+        }
+        if (plant.animations !== undefined) for (const [layer, entry] of Object.entries(record(plant.animations, `${name}.animations`))) {
+            const state = record(entry, `${name}.animations.${layer}`)
+            nonEmptyString(state.clip, `${name}.animations.${layer}.clip`)
+            finite(state.time, `${name}.animations.${layer}.time`)
+            finite(state.rate, `${name}.animations.${layer}.rate`)
+            if (state.hidden !== undefined && state.hidden !== true) throw new TypeError(`${name}.animations.${layer}.hidden must be true`)
         }
         if (plant.mowered !== undefined) {
             const mowered = record(plant.mowered, `${name}.mowered`)

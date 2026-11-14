@@ -17,6 +17,7 @@ import { createMowerSystem } from '../level/mower'
 import { planting } from '../seeds/planting'
 import { createPlantAbilitySystem } from '../plants/abilities'
 import { createPlantChillSystem } from '../plants/chill'
+import { createPlantAnimationSystem } from '../plants/animation'
 import { createProductionSystem } from '../plants/production'
 import { createPeashooterSystem } from '../plants/shooter'
 import { createProjectileSystem } from '../combat/projectiles'
@@ -114,6 +115,7 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         { phase: 'plant', system: createPlantAbilitySystem(definitions) },
         { phase: 'plant', system: createConveyorSystem() },
         { phase: 'plant', system: gameplay.plantBehaviors.system(definitions) },
+        { phase: 'plant', system: createPlantAnimationSystem(definitions) },
         { phase: 'zombie', system: createZombieGroanSystem() },
         { phase: 'zombie', system: createZombieSystem(definitions) },
         { phase: 'zombie', system: gameplay.zombieBehaviors.system(definitions) },

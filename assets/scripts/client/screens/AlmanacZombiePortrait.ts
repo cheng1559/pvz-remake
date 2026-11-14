@@ -1,26 +1,25 @@
 import { _decorator, Component, isValid, Node } from 'cc'
-import { SpriteRepository } from '@/client/content/ClientContentLoader'
-import { drawBungeeCord, loadDisplayParts, loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
+import { createOffBoardZombie, offBoardContent } from '@/client/view/offBoard'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
-/** Static Reanim portraits use the same placement as the original cached atlas. */
+/** The almanac's small picture of a zombie: the original cached one, or the zombie itself held still at the same place. */
 @_decorator.ccclass('AlmanacZombiePortrait')
 export class AlmanacZombiePortrait extends Component {
     ready: Promise<void> = Promise.resolve()
-    private zombieId = 0
+    private typeId = ''
     private loadCached!: (root: Node) => Promise<void>
     private rendered: Node | null = null
     private hd?: boolean
 
-    initialize(zombieId: number, loadCached: (root: Node) => Promise<void>): void {
-        this.zombieId = zombieId
+    initialize(typeId: string, loadCached: (root: Node) => Promise<void>): void {
+        this.typeId = typeId
         this.loadCached = loadCached
         this.update()
     }
 
     protected update(): void {
-        // /seedstyle standard keeps the original cached portraits; the other styles render the Reanim pose.
+        // /seedstyle standard keeps the original cached portraits; the other styles draw the zombie.
         const enabled = GameDebugSettings.seedPacketStyle !== 'standard'
         if (this.hd === enabled) return
         this.hd = enabled
@@ -31,30 +30,21 @@ export class AlmanacZombiePortrait extends Component {
             if (isValid(root, true) && root === this.rendered) root.active = true
         })
         void this.ready.catch(error => {
-            if (isValid(root, true) && root === this.rendered) console.error('[Almanac] Failed to load zombie portrait', this.zombieId, error)
+            if (isValid(root, true) && root === this.rendered) console.error('[Almanac] Failed to load zombie portrait', this.typeId, error)
         })
     }
 
     private async load(root: Node): Promise<void> {
-        const { content, catalog } = await loadEntityDisplayAssets()
+        const portrait = (await offBoardContent()).presentation.zombies[this.typeId]?.portrait
         if (!isValid(root, true)) return
-        const definition = catalog.zombies[this.zombieId]
-        const portrait = definition?.portrait
-        if (!portrait) throw new Error(`Zombie portrait is not installed: ${this.zombieId}`)
+        if (!portrait) throw new Error(`Zombie portrait is not installed: ${this.typeId}`)
         // The existing portrait mask starts two pixels inside the 76x76 frame.
-        root.setPosition(portrait.offset[0] - 2, 2 - portrait.offset[1])
+        root.setPosition(portrait.x - 2, 2 - portrait.y)
         root.setScale(portrait.scale, portrait.scale, 1)
-        const players = await loadDisplayParts(root, portrait.parts ?? definition.parts, content)
-        if (!players) return
-        const cordDefinition = content.presentation.almanac.cords[this.zombieId]
-        if (cordDefinition) {
-            const cord = await new SpriteRepository(content.registry, content.loader).load(cordDefinition.sprite)
-            if (!isValid(root, true)) return
-            const body = players.get('body')!.getTrackNode(cordDefinition.track)!
-            const scale = definition.scale ?? 1
-            const origin = content.presentation.almanac.zombieOrigin
-            const drawX = (definition.drawOffset?.[0] ?? 0) + origin.offset[0] + origin.scaleOffset[0] * (1 - scale)
-            drawBungeeCord(root, cord, cordDefinition.x - drawX, body.position.y, cordDefinition.height)
-        }
+        // ReanimatorCache::MakeCachedZombieFrame: the zombie on the first frame of its idle, from its Reanim's origin.
+        const zombie = await createOffBoardZombie(uiNode({ name: 'Zombie', parent: root }).node, this.typeId,
+            { pose: 'idle', draw: { position: { x: 0, y: 0 }, shadow: false } })
+        if (!zombie) { if (isValid(root, true)) throw new Error(`Zombie is not drawn off the board: ${this.typeId}`); return }
+        for (const player of zombie.view.players) player.pause()
     }
 }

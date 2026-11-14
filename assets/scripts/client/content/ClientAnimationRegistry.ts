@@ -1,7 +1,5 @@
-import { animationSource, type ClientAnimationClip, type ClientAnimationDefinitions, type ClientAnimationTarget, type NutBlinkSlot, type PresentationDefinitions } from '@/shared/content/presentation'
+import { animationSource, type ClientAnimationClip, type ClientAnimationDefinitions, type ClientAnimationTarget, type PresentationDefinitions } from '@/shared/content/presentation'
 export type { ClientAnimationClip, ShooterAnimationDefinition, ZombieAnimationDefinition, NormalZombieAnimationDefinition, SunflowerAnimationDefinition, FlagZombieAnimationDefinition, PoleVaulterAnimationDefinition, CherryBombAnimationDefinition, WallNutAnimationDefinition, PotatoMineAnimationDefinition, ChomperAnimationDefinition, ClientAnimationDefinitions, ClientAnimationTarget } from '@/shared/content/presentation'
-
-export const randomAnimationRate = ([min, max]: readonly [number, number]): number => min + Math.random() * (max - min)
 
 type AnyAnimationDefinition = Record<string, ClientAnimationClip>
 
@@ -20,25 +18,6 @@ export class ClientAnimationRegistry {
         }
     }
 
-    get rates() { return this.definitions.animation.rates }
-    get zombieIdle2Chance() { return this.definitions.animation.zombieIdle2Chance }
-    get nutBlinkWeights() { return this.definitions.animation.nutBlinkWeights }
-
-    nextPlantBlinkTicks(nut = false): number {
-        const [min, max] = nut ? this.definitions.animation.nutBlinkTicks : this.definitions.animation.plantBlinkTicks
-        return min + Math.floor(Math.random() * (max - min + 1))
-    }
-
-    pickNutBlinkSlot(): NutBlinkSlot {
-        const weights = this.definitions.animation.nutBlinkWeights
-        const slots = Object.keys(weights) as NutBlinkSlot[]
-        let hit = Math.random() * Object.values(weights).reduce((total, weight) => total + weight, 0)
-        for (const slot of slots) {
-            hit -= weights[slot]
-            if (hit < 0) return slot
-        }
-        return slots[slots.length - 1]
-    }
 
     resolve<K extends ClientAnimationTarget>(target: K): ClientAnimationDefinitions[K] {
         return this.require(target)
@@ -73,7 +52,7 @@ function cloneDefinition<T extends object>(value: T): T {
 
 function validateClip(target: string, slot: string, value: ClientAnimationClip): void {
     if (!value || typeof value !== 'object') throw new TypeError(`${target}.${slot} must be an object`)
-    const fields = new Set(['reanimId', 'rateScale', 'x', 'y', 'attachmentTrackId', 'fps'])
+    const fields = new Set(['reanimId', 'rateScale', 'x', 'y', 'attachmentTrackId', 'attachmentBase', 'onlyTracks', 'blend', 'fps'])
     const unknown = Object.keys(value).find(key => !fields.has(key))
     if (unknown) throw new TypeError(`unknown ${target}.${slot} field: ${unknown}`)
     if (typeof value.reanimId !== 'string' || value.reanimId.length === 0) {
@@ -88,4 +67,11 @@ function validateClip(target: string, slot: string, value: ClientAnimationClip):
         (typeof value.attachmentTrackId !== 'string' || value.attachmentTrackId.length === 0)) {
         throw new TypeError(`${target}.${slot}.attachmentTrackId must be a non-empty string`)
     }
+    if (value.attachmentBase !== undefined && (typeof value.attachmentBase !== 'string' || value.attachmentBase.length === 0)) {
+        throw new TypeError(`${target}.${slot}.attachmentBase must be a non-empty string`)
+    }
+    if (value.onlyTracks !== undefined && (!Array.isArray(value.onlyTracks) || value.onlyTracks.some(track => typeof track !== 'string' || track.length === 0))) {
+        throw new TypeError(`${target}.${slot}.onlyTracks must be non-empty strings`)
+    }
+    if (value.blend !== undefined && (!Number.isFinite(value.blend) || value.blend < 0)) throw new TypeError(`${target}.${slot}.blend must not be negative`)
 }

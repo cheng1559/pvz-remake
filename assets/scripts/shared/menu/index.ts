@@ -60,11 +60,13 @@ export interface ChallengeView {
     items: { key: string, endless?: boolean, completed: boolean, record: number }[]
 }
 /** `cost` and `refreshTime` are the seed's own `sunCost` and `cooldownTicks` (AlmanacDialog reads gPlantDefs too). */
+/** `id`: the packet image (the original SeedType); `seed`: the seed the player owns the plant by, which is the plant's own ID. */
 export interface AlmanacPlantDefinition {
-    id: number, key: string, cost: number, refreshTime: number, upgrade?: boolean,
+    id: number, key: string, seed: string, cost: number, refreshTime: number, upgrade?: boolean,
     ground: 'day' | 'night' | 'pool' | 'nightpool' | 'roof',
 }
-export interface AlmanacZombieDefinition { id: number, key: string, iceGround?: boolean }
+/** `zombie`: the zombie it shows. */
+export interface AlmanacZombieDefinition { id: number, key: string, zombie: string, iceGround?: boolean }
 /** `shown` is AlmanacDialog::ZombieIsShown and `described` ZombieHasDescription for the current player. */
 export interface AlmanacZombieView extends AlmanacZombieDefinition { shown: boolean, described: boolean }
 /** The plants are only the ones the current player has (LawnApp::HasSeedType); every zombie keeps its window. */

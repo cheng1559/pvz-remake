@@ -137,7 +137,11 @@ test('selecting and placing Peashooter changes authority state atomically', () =
         cooldownTotal: 750,
         availability: { reason: 'seed-not-ready', warningKey: 'WAITING_FOR_SEED' },
     }])
-    assert.deepEqual(planted.plants, [{
+    // Its body starts its idle loop at a rate of its own (Reanimation::mAnimRate, 15 to 20 frames a second), its head with it.
+    const { animations, ...peashooter } = planted.plants[0]
+    assert.ok(animations!.body.rate >= 15 && animations!.body.rate <= 20, `idle rate ${animations!.body.rate}`)
+    assert.deepEqual(animations, { body: { clip: 'body', time: 0, rate: animations!.body.rate }, head: { clip: 'idleHead', time: 0, rate: animations!.body.rate } })
+    assert.deepEqual([peashooter], [{
         entityId: 1,
         typeId: 'pvz:peashooter',
         seedId: 'pvz:peashooter',
@@ -178,18 +182,61 @@ test('Peashooter acquires a zombie ahead and fires after its fixed windup', () =
     assert.equal(snapshot.zombies[0].entityId, 2)
     assert.equal(snapshot.zombies[0].state, 'walking')
     assert.equal(snapshot.zombies[0].x < 700, true)
-    assert.deepEqual(snapshot.projectiles, [{
+    // Plant::GetPeaHeadOffset: the pea's corner leaves (24, -33) from the stem the head is on, where the body's idle
+    // loop had it when the plant fired, between two frames of its track; it has flown its first tick since.
+    const { clips } = definitions.plants['pvz:peashooter'].animation!, track = clips.body.tracks!.anim_stem
+    const { body, head } = snapshot.plants[0].animations!, time = (body.time - body.rate / 100) % clips.body.frames
+    const from = track[Math.floor(time)], to = track[Math.min(track.length - 1, Math.floor(time) + 1)], part = time - Math.floor(time)
+    const stem = { x: from.x + (to.x - from.x) * part, y: from.y + (to.y - from.y) * part }
+    assert.ok(body.time > 0 && stem.x >= 37.6 && stem.x <= 47.4, `the loop has gone on to ${body.time}`)
+    const round = (value: number) => Math.round(value * 1e6) / 1e6
+    const [pea] = snapshot.projectiles
+    assert.deepEqual({ ...pea, x: round(pea.x), y: round(pea.y), height: round(pea.height!) }, {
         entityId: 3,
         typeId: 'pvz:pea',
-        x: 109.83,
-        y: 292.75,
+        x: round(40 + stem.x + 24 + 3.33),
+        y: round(280 + stem.y - 33),
         row: 2,
         // It flies at its mouth's height over the ground, where its shadow lies.
-        height: 50.25,
-    }])
+        height: round(63 - (stem.y - 33)),
+    })
+    assert.equal(snapshot.projectiles.length, 1)
     assert.deepEqual(server.drainEvents().map(event => [event.type, event.data]), [[
         'projectileFired', { plantId: 1, projectileId: 3, typeId: 'pvz:pea' },
     ]])
+
+    // Plant::FindTargetAndFire: its head has played the shooting clip since the windup began, at 35 frames a second,
+    const windup = definitions.plants['pvz:peashooter'].shooter!.windupTicks
+    assert.deepEqual({ ...head, time: round(head.time) }, { clip: 'shootHead', time: round(windup * 0.35), rate: 35 })
+    // and when the clip's 25 frames are through it idles again where the body is, at the body's rate.
+    while (gameplayTick(server) < ready + Math.ceil(25 / 0.35) - 2) snapshot = server.tick()
+    assert.equal(snapshot.plants[0].animations!.head.clip, 'shootHead')
+    snapshot = server.tick()
+    assert.deepEqual(snapshot.plants[0].animations!.head, { ...snapshot.plants[0].animations!.body, clip: 'idleHead' })
+})
+
+test('a plant blinks on the server, and a save keeps its animation', () => {
+    const server = new IntegratedGameServer(definitions, levels)
+    startGameplay(server)
+    runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
+    runCommand(server, { type: 'placePlant', row: 2, column: 0 })
+
+    // Plant::DoBlink: the first blink comes 400 to 799 ticks after planting, over the other layers.
+    let snapshot = server.snapshot()
+    while (!snapshot.plants[0].animations!.blink && gameplayTick(server) < 800) snapshot = server.tick()
+    const planted = server.save().entities.find(entity => entity.plant)!.plant!
+    assert.ok(gameplayTick(server) >= 400, `blinked at ${gameplayTick(server)}`)
+    assert.deepEqual(snapshot.plants[0].animations!.blink, { clip: 'blink', time: 0, rate: 15 })
+    assert.ok(planted.blinkTicks! >= 400 && planted.blinkTicks! <= 799, `the next blink in ${planted.blinkTicks}`)
+
+    // A restored session goes on as this one does: the blink's 3 frames at 15 a second end 20 ticks after it began.
+    const restored = new IntegratedGameServer(definitions, levels)
+    restored.restore(JSON.parse(JSON.stringify(server.save())))
+    for (let tick = 1; tick <= 20; tick++) {
+        snapshot = server.tick()
+        assert.deepEqual(restored.tick().plants, snapshot.plants)
+        assert.equal(snapshot.plants[0].animations!.blink !== undefined, tick < 20, `tick ${tick}`)
+    }
 })
 
 

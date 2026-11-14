@@ -233,6 +233,15 @@ export class ReanimPlayer extends Component {
     private drawingStale = true
 
     get durationSeconds(): number { return this.requireData().durationSeconds }
+    /** Where a track of a clip in memory (ReanimRepository.prepare) is in its first frame, for attaching from it. */
+    static firstPose(id: string, trackId: string, registry: ContentRegistry): ReanimKeyframe | undefined {
+        const track = loadedReanims.get(registry)?.get(id)?.data.tracks.find(candidate => candidate.id === trackId)
+        return track && sampleReanimTrack(track, 0) || undefined
+    }
+    /** How long a clip in memory (ReanimRepository.prepare) is, for timing it before a player shows it. */
+    static duration(id: string, registry: ContentRegistry): number | undefined {
+        return loadedReanims.get(registry)?.get(id)?.data.durationSeconds
+    }
     /** The loaded clip, or null before the first load. */
     get loadedId(): string | null { return this.data?.id ?? null }
     get lastFrameTimeSeconds(): number {

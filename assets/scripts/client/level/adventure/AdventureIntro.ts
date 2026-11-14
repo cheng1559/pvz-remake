@@ -16,7 +16,8 @@ import { ParticleAssets } from '@/client/particle/ParticleAssets'
 import type { LevelIntro } from '../LevelIntro'
 import type { LevelIntroContext } from '../LevelPresentation'
 import type { ClientContentLoader } from '@/client/content/ClientContentLoader'
-import { randomAnimationRate, type ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
+import type { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
+import { createOffBoardZombie, type OffBoardZombie } from '@/client/view/offBoard'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
@@ -48,17 +49,20 @@ export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, 
     return entries.flatMap(([id, count]) => Array.from({ length: Math.max(1, Math.min(count, Math.floor(count * capacity / total))) }, () => id))
 }
 
-function applyPreviewParts(player: ReanimPlayer, typeId: string, definitions: PresentationDefinitions, hasTongue: boolean): void {
-    const definition = definitions.zombies[typeId]
-    const parts = definition.parts
-    for (const track of parts.helms) player.setTracksVisible([track], definition.helm?.track === track || definition.shield?.track === track)
-    player.setTracksVisible(parts.hair, !definition.helm || definition.helm.showsHair === true)
-    player.setTracksVisible(parts.tongue, hasTongue)
-    // Street zombies stand holding their shield (Zombie::AttachShield).
-    if (parts.shieldArms) {
-        player.setTracksVisible(parts.shieldArms.free, false)
-        player.setTracksVisible(parts.shieldArms.holding, true)
-    }
+/**
+ * A street's zombie, drawn by its view as it stands off the board (CutScene::PlaceAZombie makes a zombie of
+ * ZOMBIE_WAVE_CUTSCENE): by the node it is in.
+ */
+const street = new WeakMap<Node, OffBoardZombie>()
+
+/** The zombie in a street node's `Body`, its shadow beside that. `pose`: a clip it is held on from its start, when its playback is restored over it. */
+async function standInStreet(node: Node, typeId: string, hasTongue: boolean, pose?: string): Promise<OffBoardZombie> {
+    street.get(node)?.view.destroy()
+    node.getChildByName('Body')?.destroy()
+    const zombie = await createOffBoardZombie(uiNode({ name: 'Body', parent: node }).node, typeId, { pose, hasTongue })
+    if (!zombie) throw new Error(`Street zombie is not drawn off the board: ${typeId}`)
+    street.set(node, zombie)
+    return zombie
 }
 
 export class AdventureIntro implements LevelIntro {
@@ -69,7 +73,7 @@ export class AdventureIntro implements LevelIntro {
     private previewTooltipContext?: { ui: UI; gameplay: GameplayDefinitions; almanacZombies: readonly string[] }
 
     static async create(context: LevelIntroContext, layout: AdventureIntroLayout): Promise<AdventureIntro> {
-        const { content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow, entityNodes, previewZombies } = context
+        const { content, level, slots, board, entityLayer, bank, houseName, audio, entityNodes, previewZombies } = context
         const sprites = new SpriteRepository(content.registry, content.loader)
         const [sod] = await Promise.all([sprites.load(layout.sod), ...(layout.rolls.length ? [ParticleAssets.load('pvz:sodroll')] : [])])
         const sodClip = uiNode({
@@ -137,25 +141,11 @@ export class AdventureIntro implements LevelIntro {
         }
         await Promise.all(introPositions.map(async (position, index) => {
             const typeId = types[index]
-            const definition = content.presentation.zombies[typeId]
-            const animations = content.animations.resolve(content.animations.sourceOf(typeId))
-            const idle2 = !!animations.idle2 && Math.random() < content.animations.zombieIdle2Chance
-            const clip = idle2 ? animations.idle2 : animations.idle
             const node = uiNode({
                 name: `IntroZombie-${index}`, parent: entityLayer, position,
                 size: { width: 120, height: 120 }, anchor: { x: 0, y: 1 },
             }).node
-            uiNode({
-                name: 'ZombieShadow', parent: node, position: { x: definition.shadowX, y: -(definition.shadowY ?? 92) }, anchor: { x: 0, y: 1 },
-                sprite: { frame: mowerShadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
-            })
-            const player = uiNode({
-                name: 'ZombieAnimation', parent: node, position: { x: clip.x, y: clip.y },
-                anchor: { x: 0, y: 1 },
-            }).node.addComponent(ReanimPlayer)
-            await player.load(clip.reanimId, content.registry, content.loader)
-            applyPreviewParts(player, typeId, content.presentation, Math.random() < content.definitions.zombies[typeId].tongueChance)
-            player.play({ loop: true, rate: randomAnimationRate(content.animations.rates[idle2 ? 'zombieIdle2' : 'zombieIdle']) / (clip.fps ?? 12) * clip.rateScale, timeSeconds: Math.random() * 20 })
+            await standInStreet(node, typeId, Math.random() < content.definitions.zombies[typeId].tongueChance)
             introZombies.push(node)
             previewTypes.set(node, typeId)
         }))
@@ -266,15 +256,15 @@ export class AdventureIntro implements LevelIntro {
             ticks: this.ticks,
             ...(this.hasOpeningDialog ? { hasOpeningDialog: true } : {}),
             previews: this.complete ? [] : this.introZombies.map((node, slot) => {
-                const player = node.getChildByName('ZombieAnimation')!.getComponent(ReanimPlayer)!
+                const zombie = street.get(node)!
                 return {
                     slot,
                     typeId: this.previewTypes.get(node)!,
                     x: node.position.x,
                     y: node.position.y,
                     z: node.position.z,
-                    hasTongue: this.definitions.zombies[this.previewTypes.get(node)!].parts.tongue.some(track => player.isTrackVisible(track)),
-                    reanim: player.snapshot(),
+                    hasTongue: zombie.zombie.hasTongue,
+                    reanim: zombie.view.players[0].snapshot(),
                 }
             }),
         }
@@ -297,21 +287,11 @@ export class AdventureIntro implements LevelIntro {
                 const definition = this.definitions.zombies[preview.typeId]
                 if (!definition) throw new Error(`Intro zombie is not installed: ${preview.typeId}`)
                 this.previewTypes.set(node, preview.typeId)
-                const clip = Object.values(this.animations.resolve(this.animations.sourceOf(preview.typeId))).find(clip => clip.reanimId === preview.reanim.id)
-                if (!clip) throw new Error(`Intro animation is not installed: ${preview.reanim.id}`)
-                let animationNode = node.getChildByName('ZombieAnimation')
-                let player = animationNode?.getComponent(ReanimPlayer) ?? null
-                if (!player || player.snapshot().id !== preview.reanim.id) {
-                    if (animationNode?.isValid) animationNode.destroy()
-                    animationNode = uiNode({
-                        name: 'ZombieAnimation', parent: node, position: { x: clip.x, y: clip.y },
-                        anchor: { x: 0, y: 1 },
-                    }).node
-                    player = animationNode.addComponent(ReanimPlayer)
-                    await player.load(preview.reanim.id, this.registry, this.loader)
-                }
-                player.restore(preview.reanim)
-                applyPreviewParts(player, preview.typeId, this.definitions, preview.hasTongue)
+                // The clip its body was on, which its saved playback then goes on from.
+                const pose = Object.entries(this.animations.resolve(this.animations.sourceOf(preview.typeId))).find(([, clip]) => clip.reanimId === preview.reanim.id)?.[0]
+                if (!pose) throw new Error(`Intro animation is not installed: ${preview.reanim.id}`)
+                const zombie = await standInStreet(node, preview.typeId, preview.hasTongue, pose)
+                zombie.view.players[0].restore(preview.reanim)
                 this.syncPreviewTooltip(node)
             }
         }

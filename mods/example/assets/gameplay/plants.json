@@ -28,6 +28,41 @@
         "x": 79,
         "y": 32.75
       }
+    },
+    "animation": {
+      "clips": {
+        "body": {
+          "frames": 25,
+          "fps": [
+            15,
+            20
+          ]
+        },
+        "idleHead": {
+          "frames": 25,
+          "sync": "body"
+        },
+        "shootHead": {
+          "frames": 25,
+          "fps": 35,
+          "next": "idleHead"
+        },
+        "blink": {
+          "frames": 3,
+          "fps": 15,
+          "once": true
+        }
+      },
+      "layers": {
+        "body": "body",
+        "head": "idleHead"
+      },
+      "fire": {
+        "head": "shootHead"
+      },
+      "blink": {
+        "clip": "blink"
+      }
     }
   },
   "example:beacon": {
@@ -41,6 +76,17 @@
     "behavior": {
       "intervalTicks": 200,
       "sun": 25
+    },
+    "animation": {
+      "clips": {
+        "body": {
+          "frames": 12,
+          "fps": 12
+        }
+      },
+      "layers": {
+        "body": "body"
+      }
     }
   }
 }

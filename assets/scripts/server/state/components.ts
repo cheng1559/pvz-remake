@@ -23,6 +23,20 @@ export interface Plant extends EntityBehaviorState {
     team?: Team
     /** Ticks left slowed by a hostile snow pea (see plants/chill.ts); 0 when not chilled. */
     chilledTicks: number
+    /** What each layer of its animation plays now (PlantDefinition.animation); see plants/animation.ts. */
+    animations?: Record<string, PlantLayer>
+    /** Ticks to its next blink (Plant::mBlinkCountdown). */
+    blinkTicks?: number
+}
+
+/**
+ * A layer of a plant's animation: the clip it plays, how far into it in frames, and its frames a second
+ * (Reanimation::mAnimRate). A loop's time counts on past its length, for a view to wrap by its own clip's.
+ */
+export interface PlantLayer {
+    clip: string, time: number, rate: number
+    /** There and going on, but not shown now (the potato mine's light between its flashes). */
+    hidden?: true
 }
 
 export type PlantAbilityState =
@@ -47,6 +61,8 @@ export interface PlantAttack {
 
 export type ZombieAnimation =
     | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_gasp' | 'anim_death' | 'anim_death2' | 'anim_superlongdeath' | 'mowered'
+    /** Standing, as a zombie does off the board (shared/content/zombieAnimation). */
+    | 'anim_idle' | 'anim_idle2'
 
 export interface Zombie extends EntityBehaviorState {
     typeId: string

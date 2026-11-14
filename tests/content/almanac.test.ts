@@ -1,57 +1,75 @@
-import { readBaseContent, readGameplaySource } from '../../tools/mod/content'
+import { readGameplaySource } from '../../tools/mod/content'
 import { presentationFixture } from '../client/presentationFixture'
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
-import { parseReanim, sampleReanimTrack } from '@/shared/content/reanim'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
-import * as animationDefinitions from '@/client/content/ClientAnimationRegistry'
-import * as zombieParts from '@/client/zombies/zombieParts'
+import { parseGameplayDefinitions } from '@/shared/content/gameplay'
+import { type AnimationRandom, startOffBoardPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
+import { offBoardZombieAnimation } from '@/shared/content/zombieAnimation'
 
-const json = (path: string) => JSON.parse(readFileSync(path, 'utf8'))
-const bundle = 'mods/pvz-base'
-const resources = readBaseContent().resources
-interface Part { name: string, id: string, parent?: string, track?: string, blink?: boolean, packetId?: string }
-const displayModule = { exports: {} as Record<string, any> }
-const displayCode = transpileModule(readFileSync('assets/scripts/client/reanim/EntityDisplay.ts', 'utf8'), {
-    compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-})
-runInNewContext(displayCode.outputText, { exports: displayModule.exports,
-    require: (id: string) => id === '@/client/content/ClientAnimationRegistry' ? animationDefinitions
-        : id === '@/client/zombies/zombieParts' ? zombieParts : {} })
-const layouts = json(`${bundle}/${resources.json['pvz:almanac-animations']}`)
-const registry = new animationDefinitions.ClientAnimationRegistry(presentationFixture)
-const catalog = Object.fromEntries(['plants', 'zombies'].map(kind => [kind,
-    layouts[kind].map((entry: any, id: number) => displayModule.exports.resolveEntityDisplay(kind, id, entry, registry)),
-])) as Record<'plants' | 'zombies', Array<{ parts: Part[] }>>
-const animation = (part: Part) => parseReanim(json(`${bundle}/${resources.reanim[part.id]}`))
+const gameplay = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const almanac = readGameplaySource('almanac') as { plants: Array<{ id: number, key: string, seed: string }>, zombies: Array<{ id: number, key: string, zombie: string }> }
+/** Draws in turn from the values given, the last one from then on. */
+const random = (...values: number[]): AnimationRandom => {
+    const next = () => values.length > 1 ? values.shift()! : values[0]
+    return { nextFloat: next, integer: (min, max) => min + Math.floor(next() * (max - min + 1)) }
+}
+const shown = (id: string, picture: 'offBoard' | 'packet' = 'offBoard') => {
+    const presentation = presentationFixture.plants[id]
+    return startOffBoardPlant(gameplay.plants[id].animation!, { ...presentation.offBoard, ...(picture === 'packet' ? presentation.packet?.clips : {}) },
+        random(0), picture === 'packet' ? presentation.packet?.time : 0)
+}
 
-test('every almanac entry has renderable animation clips, valid attachments and installed sprites', () => {
-    const sprites = new Set<string>()
-    const almanac = readGameplaySource('almanac') as Record<'plants' | 'zombies', Array<{ id: number, key: string }>>
-    for (const [kind, entries] of [['plants', almanac.plants], ['zombies', almanac.zombies]] as const) {
-        assert.equal(catalog[kind].length, entries.length)
-        for (const entry of entries) {
-            const parts = catalog[kind][entry.id].parts
-            assert.ok(parts.length, entry.key)
-            const loaded = new Map(parts.map(part => [part.name, animation(part)]))
-            for (const part of parts) {
-                const data = loaded.get(part.name)!
-                if (!part.blink) assert.ok(data.tracks.some(track => sampleReanimTrack(track, 0)?.sprite), `${entry.key}: empty ${part.name}`)
-                if (part.parent) {
-                    const parent = loaded.get(part.parent)
-                    assert.ok(parent, `${entry.key}: missing parent ${part.parent}`)
-                    const track = parent.tracks.find(track => track.id === part.track)
-                    assert.ok(track && sampleReanimTrack(track, 0), `${entry.key}: missing attachment ${part.track}`)
-                }
-                const clips = [data, ...(part.packetId ? [animation({ ...part, id: part.packetId })] : [])]
-                for (const clip of clips) for (const track of clip.tracks) for (const frame of track.keyframes) if (frame.sprite) sprites.add(frame.sprite)
-            }
+test('every almanac entry is a plant or a zombie its view can draw off the board', () => {
+    for (const entry of almanac.plants) {
+        const plant = gameplay.plants[entry.seed], presentation = presentationFixture.plants[entry.seed]
+        assert.ok(plant?.animation && presentation, `${entry.key} has no plant to show`)
+        const clips = presentation.animations ?? presentationFixture.plants[presentation.animationsFrom!].animations!
+        for (const picture of ['offBoard', 'packet'] as const) {
+            const layers = shown(entry.seed, picture).animations!
+            assert.ok(Object.keys(plant.animation.layers)[0] in layers, `${entry.key}: nothing on its first layer`)
+            for (const state of Object.values(layers)) assert.ok(state.clip in clips, `${entry.key}: no pictures for ${state.clip}`)
         }
     }
-    for (const id of sprites) {
-        const path = resources.sprites[id]?.file
-        assert.ok(path && existsSync(`${bundle}/${path}`), `Missing sprite: ${id}`)
+    for (const entry of almanac.zombies) {
+        const presentation = presentationFixture.zombies[entry.zombie]
+        assert.ok(gameplay.zombies[entry.zombie] && presentation, `${entry.key} has no zombie to show`)
+        assert.ok(presentation.portrait, `${entry.key} has no small picture`)
+        const clips = (presentation.animations ?? presentationFixture.zombies[presentation.animationsFrom!].animations!) as unknown as Record<string, unknown>
+        assert.ok(clips.idle && (!gameplay.zombies[entry.zombie].idle2 || clips.idle2), `${entry.key} cannot stand`)
     }
+})
+
+test('a plant off the board starts as on it and shows the clips it has there', () => {
+    // Plant::PlantInitialize: the head sways with the body; the blink is counted down to as on the board.
+    const pea = shown('pvz:peashooter')
+    assert.deepEqual(pea.animations, { body: { clip: 'body', time: 0, rate: 15 }, head: { clip: 'idleHead', time: 0, rate: 15 } })
+    assert.equal(pea.blinkTicks, 400)
+    // An armed mine at the 12 it is buried at, its light lit only in a packet's picture; a cherry bomb that is not
+    // going off; a grown sun-shroom at the small one's pace, small in its packet.
+    assert.deepEqual(shown('pvz:potatomine').animations, { body: { clip: 'armed', time: 0, rate: 12 } })
+    assert.deepEqual(shown('pvz:potatomine', 'packet').animations, { body: { clip: 'armed', time: 0, rate: 12 }, light: { clip: 'glow', time: 0, rate: 12 } })
+    assert.deepEqual(shown('pvz:cherrybomb').animations, { body: { clip: 'idle', time: 0, rate: 10 } })
+    assert.deepEqual(shown('pvz:sunshroom').animations, { body: { clip: 'body', time: 0, rate: 10 } })
+    assert.deepEqual(shown('pvz:sunshroom', 'packet').animations, { body: { clip: 'small', time: 0, rate: 10 } })
+    // DrawSeedType poses the sunflower 0.15 of the way to its last frame.
+    assert.deepEqual(shown('pvz:sunflower', 'packet').animations, { body: { clip: 'body', time: 24 * 0.15, rate: 10 } })
+})
+
+test('a plant off the board goes on by the rules of the board: a clip of the presentation loops, and a nut blinks one of its three ways', () => {
+    const cherry = shown('pvz:cherrybomb'), animation = gameplay.plants['pvz:cherrybomb'].animation!
+    for (let tick = 0; tick < 1000; tick++) stepPlantAnimation(animation, cherry, random(0))
+    assert.deepEqual([cherry.animations!.body.clip, Math.round(cherry.animations!.body.time)], ['idle', 100], 'its idle is not a clip of the animation, and goes round')
+    const nut = shown('pvz:wallnut'), nutAnimation = gameplay.plants['pvz:wallnut'].animation!
+    assert.equal(nut.blinkTicks, 1000)
+    // The blink comes round, its ticks are drawn again (0), then the way it blinks: the last of 10 is the third.
+    for (let tick = 0; tick < 1000; tick++) stepPlantAnimation(nutAnimation, nut, random(0, 0.95, 0))
+    assert.equal(nut.animations!.blink.clip, 'blinkThrice')
+})
+
+test('a zombie off the board stands, three times in four its second way when it has one', () => {
+    const normal = gameplay.zombies['pvz:normal'], cone = gameplay.zombies['pvz:conehead']
+    // Zombie::LoadReanim: Rand(4) > 0, then the pace of the clip it took, then where in it it starts.
+    assert.deepEqual(offBoardZombieAnimation(normal, random(0.5, 1, 0.5)), { animation: 'anim_idle2', animationTime: 0, animationSpeed: 2, start: 0.495 })
+    assert.deepEqual(offBoardZombieAnimation(normal, random(0, 0.5, 0)), { animation: 'anim_idle', animationTime: 0, animationSpeed: 1.25, start: 0 })
+    assert.equal(offBoardZombieAnimation(cone, random(0.5, 0)).animation, 'anim_idle', 'a zombie with one way to stand takes it')
 })

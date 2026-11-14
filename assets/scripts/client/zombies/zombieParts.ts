@@ -21,16 +21,8 @@ export interface ZombiePartState {
     holdingShield: boolean
 }
 
-/** The state of a zombie shown whole and at rest: the almanac, seed packets and level previews. */
-export function displayPartState(presentation: ZombiePresentationDefinition, holdingFlag: boolean): ZombiePartState {
-    const helmStage = presentation.helm ? 0 : -1, shieldStage = presentation.shield ? 0 : -1
-    // ZombieView keeps the tongue for the zombies that roll one; a display shows none.
-    return { hasHead: true, hasTongue: false, hasArm: true, holdingFlag, helmStage, shieldStage, holdingShield: shieldStage >= 0 }
-}
-
 /**
  * Track visibility for a zombie's parts, in the order it is applied: a later entry wins for a track in two lists.
- * Shared by the level's ZombieView and the almanac and preview displays so both show the same body.
  */
 export function zombiePartVisibility(presentation: ZombiePresentationDefinition, state: ZombiePartState): Array<[readonly string[], boolean]> {
     const parts = presentation.parts, helm = presentation.helm, shield = presentation.shield
@@ -53,11 +45,4 @@ export function zombiePartVisibility(presentation: ZombiePresentationDefinition,
         result.push([[track], helm?.track === track && state.helmStage >= 0 || shield?.track === track && state.shieldStage >= 0])
     }
     return result
-}
-
-/** The tracks left hidden once every entry is applied. */
-export function hiddenZombieParts(presentation: ZombiePresentationDefinition, state: ZombiePartState): string[] {
-    const visible = new Map<string, boolean>()
-    for (const [tracks, shown] of zombiePartVisibility(presentation, state)) for (const track of tracks) visible.set(track, shown)
-    return [...visible].filter(([, shown]) => !shown).map(([track]) => track)
 }

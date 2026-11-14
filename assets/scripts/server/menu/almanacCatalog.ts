@@ -6,7 +6,7 @@ import type { PlayerProfile } from './profileStore'
  * `id` is the packet image (the original SeedType) and `seed` the seed ID the player owns the plant by; the cost and
  * recharge come from that seed's definition.
  */
-type AlmanacPlant = Omit<AlmanacPlantDefinition, 'cost' | 'refreshTime'> & { seed: string }
+type AlmanacPlant = Omit<AlmanacPlantDefinition, 'cost' | 'refreshTime'>
 /**
  * gZombieDefs' mStartingLevel; `spawnedOnly` is Board::IsZombieTypeSpawnedOnly; `afterAdventure` zombies only come
  * once the adventure is finished (LawnApp::CanSpawnYetis).
@@ -31,8 +31,8 @@ export function createAlmanacCatalog(value: unknown) {
     function view(profile: PlayerProfile | null, owned: readonly string[], seeds: Readonly<Record<string, SeedDefinition>>): AlmanacView {
         const level = profile?.adventureLevel ?? 1, finishedTimes = profile?.finishedAdventure ?? 0, finished = finishedTimes > 0
         return {
-            plants: plants.flatMap(({ seed, ...plant }) => owned.includes(seed) && seeds[seed]
-                ? [{ ...plant, cost: seeds[seed].sunCost, refreshTime: seeds[seed].cooldownTicks }] : []),
+            plants: plants.flatMap(plant => owned.includes(plant.seed) && seeds[plant.seed]
+                ? [{ ...plant, cost: seeds[plant.seed].sunCost, refreshTime: seeds[plant.seed].cooldownTicks }] : []),
             zombies: zombies.map(({ startingLevel, spawnedOnly, afterAdventure, ...zombie }) => {
                 if (afterAdventure) {
                     const spawns = finished && (finishedTimes >= 2 || level >= startingLevel)
@@ -64,6 +64,7 @@ function validateAlmanac(value: unknown): asserts value is AlmanacDefinition {
     const zombies = new Set<number>()
     for (const zombie of data.zombies) {
         if (!Number.isInteger(zombie.id) || zombie.id < 0 || zombies.has(zombie.id) || typeof zombie.key !== 'string' ||
+            typeof zombie.zombie !== 'string' || !zombie.zombie ||
             !Number.isInteger(zombie.startingLevel) || zombie.startingLevel < 1) throw new Error(`Invalid or duplicate almanac zombie: ${zombie.id}`)
         zombies.add(zombie.id)
     }

@@ -8,18 +8,13 @@ import { parsePresentationDefinitions } from '@/shared/content/presentation'
 
 test('presentation definitions validate independently and never share global configuration state', () => {
     const current = new ClientAnimationRegistry(presentationFixture)
-    const custom: any = structuredClone(presentationFixture)
-    custom.animation.rates.plantIdle = [20, 30]
-    const other = new ClientAnimationRegistry(parsePresentationDefinitions(custom))
-    assert.deepEqual(current.rates.plantIdle, [10, 15])
-    assert.deepEqual(other.rates.plantIdle, [20, 30])
     for (const change of [
-        (data: any) => { data.animation.plantBlinkTicks = [800, 400] },
+        (data: any) => { data.plants['pvz:potatomine'].offBoard = { body: 1 } },
         (data: any) => { data.plants['pvz:explodenut'].animationsFrom = 'pvz:missing' },
         (data: any) => { delete data.zombies['pvz:conehead'].animations },
         (data: any) => { delete data.zombies['pvz:normal'] },
-        (data: any) => { data.almanac.cords[20].height = 0 },
-        (data: any) => { data.plants['pvz:potatomine'].mine.glow.distance = [50, 50] },
+        (data: any) => { data.plants['pvz:potatomine'].packet = { scale: 0 } },
+        (data: any) => { data.zombies['pvz:normal'].portrait = { x: 0, y: 0 } },
         (data: any) => { data.zombies['pvz:conehead'].helm.damagedSprites = ['pvz:zombie_cone2'] },
         (data: any) => { data.zombies['pvz:pole_vaulter'].previewBlockedCells = 'invalid' },
         (data: any) => { data.zombies['pvz:newspaper'].shadowY = 'invalid' },

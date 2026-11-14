@@ -2,7 +2,7 @@ import { modResources } from '@/client/content/ModResources'
 import { _decorator, Color, Component, director, Director, Mask, Node, Sprite, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { MainMenuUnlocks, UserView } from '@/shared/menu'
-import { loadEntityDisplayAssets } from '@/client/reanim/EntityDisplay'
+import { offBoardContent } from '@/client/view/offBoard'
 import { preloadTasks } from '@/client/content/preloadTasks'
 import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
 import { MusicSystem } from '@/client/music/MusicSystem'
@@ -71,7 +71,7 @@ export class MainMenuScreen extends Component {
 
     async initialize(ui: UI, onProgress: (progress: number) => void = () => {}): Promise<void> {
         this.ui = ui
-        const { content: game } = await loadEntityDisplayAssets()
+        const game = await offBoardContent()
         const { registry, loader } = game
         const menu = this.menu = game.presentation.mainMenu
         const imageNames = new Set([

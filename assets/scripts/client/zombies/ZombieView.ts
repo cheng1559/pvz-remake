@@ -3,7 +3,7 @@ import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import type { ContentRegistry } from '@/client/content/ContentRegistry'
-import type { ClientAnimationClip, ClientAnimationRegistry, ClientAnimationTarget, PoleVaulterAnimationDefinition, FlagZombieAnimationDefinition } from '@/client/content/ClientAnimationRegistry'
+import type { ClientAnimationClip, ClientAnimationRegistry, ClientAnimationTarget, PoleVaulterAnimationDefinition, FlagZombieAnimationDefinition, NormalZombieAnimationDefinition } from '@/client/content/ClientAnimationRegistry'
 import type { ZombieSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { LevelEntitySnapshot } from '@/client/level/LevelPresentationSnapshot'
@@ -13,7 +13,7 @@ import { EntityAttachments } from '@/client/view/EntityAttachments'
 import type { ZombieFlash } from '@/client/level/EntityFlashes'
 import { MIRRORED_SHIFT, zombiePartVisibility } from './zombieParts'
 
-type AnimationSlot = keyof (PoleVaulterAnimationDefinition & FlagZombieAnimationDefinition)
+type AnimationSlot = keyof (PoleVaulterAnimationDefinition & FlagZombieAnimationDefinition & NormalZombieAnimationDefinition)
 const SLOTS: Record<ZombieSnapshot['animation'], AnimationSlot> = {
     anim_walk: 'walk',
     anim_walk2: 'walk2',
@@ -25,6 +25,8 @@ const SLOTS: Record<ZombieSnapshot['animation'], AnimationSlot> = {
     anim_death2: 'death2',
     anim_superlongdeath: 'superLongDeath',
     mowered: 'mowered',
+    anim_idle: 'idle',
+    anim_idle2: 'idle2',
 }
 
 /** Sprites a zombie swaps in as it takes damage. */
@@ -32,6 +34,14 @@ export interface ZombieViewSprites {
     damagedArm: SpriteFrame
     poleVaulterDamagedArm: SpriteFrame
     helms: Record<string, SpriteFrame>
+}
+
+/** How a view draws its zombie, where that is not the board's way. */
+export interface ZombieDraw {
+    /** Where the body goes in its node, in place of where each of its clips has it (a cached picture draws from the Reanim's origin). */
+    position?: { x: number, y: number }
+    /** `false`: without its shadow. */
+    shadow?: boolean
 }
 
 export interface ZombieViewContext {
@@ -44,6 +54,7 @@ export interface ZombieViewContext {
     assets: { shadow: SpriteFrame, sprites: ZombieViewSprites }
     zombie: ZombieSnapshot
     tick: number
+    draw?: ZombieDraw
 }
 
 export type ZombieViewSnapshot = Extract<LevelEntitySnapshot, { kind: 'zombie' }>
@@ -51,6 +62,14 @@ export interface ZombieViewInstance {
     readonly shadowNode: Node
     /** `flash`: the hit flash (Zombie::mJustGotShotCounter), from the client's EntityFlashes. */
     sync(zombie: ZombieSnapshot, world: WorldSnapshot, flash: ZombieFlash): void
+    /**
+     * The zombie off the board (the almanac, a packet's picture, the street before a level): whole, on the animation
+     * it is given, with nothing the board does to one. `start`: how far into the clip, as a part of its length. A view
+     * without it is not drawn off the board.
+     */
+    display?(zombie: ZombieSnapshot, start?: number): void
+    /** Its players, for whoever shows a picture of the zombie (a packet stills and colors them). */
+    readonly players?: ReanimPlayer[]
     snapshot(entityId: number): ZombieViewSnapshot
     restore(snapshot: ZombieViewSnapshot): void | Promise<void>
     getTrackWorldPosition(trackId: string): Vec3 | null
@@ -87,6 +106,7 @@ export class ZombieView implements ZombieViewInstance {
         /** The gameplay helm and shield, for their full health. */
         private readonly armor: Pick<ZombieDefinition, 'helm' | 'shield'> = {},
         private readonly attachments = new EntityAttachments(),
+        private readonly draw: ZombieDraw = {},
     ) {
         this.shadowNode = uiNode({
             name: 'ZombieShadow', parent: shadowParent, anchor: { x: 0, y: 1 },
@@ -141,6 +161,19 @@ export class ZombieView implements ZombieViewInstance {
         }
         this.syncRise(zombie)
     }
+
+    display(zombie: ZombieSnapshot, start = 0): void {
+        this.latestZombie = zombie
+        this.syncFacing(zombie)
+        this.holdingFlag = this.presentation.flag === true
+        this.shadowNode.setPosition(this.node.position.x + this.shadowX, this.node.position.y - (this.presentation.shadowY ?? 92))
+        this.shadowNode.active = this.draw.shadow !== false
+        if (this.animation === zombie.animation) { this.applyParts(zombie); return }
+        this.show(zombie)
+        if (start) this.player!.seek(start * this.player!.durationSeconds)
+    }
+
+    get players(): ReanimPlayer[] { return [this.player, this.flag].filter((player): player is ReanimPlayer => !!player?.node.isValid) }
 
     private syncRise(zombie: ZombieSnapshot): void {
         // Only the grave-rise clip owns this offset; a pending landing keeps its jump-origin compensation.
@@ -284,7 +317,8 @@ export class ZombieView implements ZombieViewInstance {
         const blend = this.player && !landing && zombie.state !== 'mowered' ? 0.2 : 0
         const player = this.player ??= uiNode({ name: 'ZombieAnimation', parent: this.node, anchor: { x: 0, y: 1 } }).node.addComponent(ReanimPlayer)
         player.change(animation.reanimId, this.registry, blend)
-        if (player.node.parent === this.node) this.place(player.node, animation.x, animation.y)
+        const at = this.draw.position ?? animation
+        if (player.node.parent === this.node) this.place(player.node, at.x, at.y)
         this.animation = zombie.animation
         this.parts = ''
         // Its flag goes with the hand of whichever clip plays, for as long as it holds one.

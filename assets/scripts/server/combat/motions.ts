@@ -69,6 +69,11 @@ export interface ProjectileMotionDefinition<State = any> {
      * passes the shield (DAMAGE_BYPASSES_SHIELD), and its splat is where it lands, not carried on into the body.
      */
     fromAbove?: true
+    /**
+     * Projectile::FindCollisionTargetPlant for the zombie's pea: flying along the lawn, it passes over a low plant
+     * (PlantDefinition.low), which a plant that fires it does not aim at. One thrown or homing comes down on it.
+     */
+    overLow?: true
 }
 
 export class ProjectileMotionRegistry {
@@ -173,6 +178,7 @@ const STRAIGHT_SPEED = 3.33
  * many ticks, before it can hit then, like the puff-shroom's spore (Projectile::CheckForCollision).
  */
 const straight: ProjectileMotionDefinition<{ ticksLeft: number } | undefined> = {
+    overLow: true,
     launch: ({ definition: { lifetimeTicks } }) => lifetimeTicks === undefined ? undefined : { ticksLeft: lifetimeTicks },
     parseState: state => state === undefined ? undefined : numbers(state, ['ticksLeft'], 'straight'),
     move({ position, projectile, team, speedScale }, state) {

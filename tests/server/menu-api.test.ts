@@ -161,18 +161,16 @@ test('the almanac shows the plants the player has and the zombies met so far', a
     assert.deepEqual(level15.plants, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
     assert.deepEqual((await almanac({ adventureLevel: 15, seeds: [] })).plants, [0], 'the plants come from the owned seeds, not the level')
     assert.deepEqual(level15.zombie('SCREEN_DOOR_ZOMBIE'), [true, true])
-    assert.deepEqual(level15.zombie('FOOTBALL_ZOMBIE'), [false, false])
-    // A zombie shows on its debut level but is described only after it; spawned-only zombies wait for that too.
-    assert.deepEqual((await almanac({ adventureLevel: 16 })).zombie('FOOTBALL_ZOMBIE'), [true, false])
-    const level18 = await almanac({ adventureLevel: 18 })
-    assert.deepEqual([level18.zombie('DANCING_ZOMBIE'), level18.zombie('BACKUP_DANCER')], [[true, false], [false, false]])
-    // A bought store plant is an owned seed too; the Yeti only comes once it can spawn.
+    // A zombie shows on its debut level but is described only after it.
+    assert.deepEqual((await almanac({ adventureLevel: 12 })).zombie('SCREEN_DOOR_ZOMBIE'), [false, false])
+    assert.deepEqual((await almanac({ adventureLevel: 13 })).zombie('SCREEN_DOOR_ZOMBIE'), [true, false])
+    // A bought store plant is an owned seed too.
     const finished = await almanac({ adventureLevel: 1, finishedAdventure: 1, seeds: ['pvz:hypnoshroom', 'pvz:imitater'] })
     assert.deepEqual(finished.plants, [0, 12], 'an owned seed that is not installed (the Imitater) is left out')
     assert.deepEqual((await api.getAlmanac()).plants.find(plant => plant.id === 12),
-        { id: 12, key: 'HYPNO_SHROOM', cost: 75, refreshTime: 3000, ground: 'night' }, "cost and recharge are the seed definition's")
-    assert.deepEqual([finished.zombie('BOSS'), finished.zombie('ZOMBIE_YETI')], [[true, true], [false, false]])
-    assert.deepEqual((await almanac({ adventureLevel: 1, finishedAdventure: 2 })).zombie('ZOMBIE_YETI'), [true, true])
+        { id: 12, key: 'HYPNO_SHROOM', seed: 'pvz:hypnoshroom', cost: 75, refreshTime: 3000, ground: 'night' }, "cost and recharge are the seed definition's")
+    assert.deepEqual(finished.zombie('SCREEN_DOOR_ZOMBIE'), [true, true], 'a finished adventure has met them all')
+    assert.equal((await api.getAlmanac()).zombies.find(zombie => zombie.key === 'ZOMBIE')!.zombie, 'pvz:normal', 'an entry names the zombie it shows')
 })
 
 test('achievement entries keep the original order and expose only the active user’s unlocks', async () => {

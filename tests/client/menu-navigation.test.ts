@@ -658,7 +658,7 @@ test('menu opened answer with the action their buttons stand for', async () => {
     const modules: Record<string, unknown> = {
         cc: { isValid: () => false, game: { end() { quits++ } } },
         './UserDialog': { showUserDialog: async (_parent: unknown, _ui: unknown, onClose: () => void) => { userClose = onClose; return { node: node() } } },
-        '@/client/reanim/EntityDisplay': { loadEntityDisplayAssets: () => new Promise(() => {}) },
+        '@/client/view/offBoard': { createOffBoardZombie: () => new Promise(() => {}) },
         '@/client/view/uiNode': { uiNode: () => ({ node: node() }) },
         './OptionsDialog': { showOptionsDialog: async (_parent: unknown, _ui: unknown, value: unknown) => { options = value; return { node: node() } } },
     }
@@ -722,7 +722,7 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
             } },
             UIHoverManager: { beginModalBlock() {}, endModalBlock() {} },
             Color: class {}, Node: { EventType: { SIZE_CHANGED: 'size-changed' } },
-            isValid: () => false, loadEntityDisplayAssets: async () => ({}),
+            isValid: () => false, offBoardContent: async () => ({}),
             MENU_PAGES, MusicSystem: { playTune: async (tune: string) => { music.push(tune) } },
             UI: { load: async () => ({
                 assets: { presentation: { screens: {} } },

@@ -10,6 +10,7 @@ import {
     PlantComponent,
     type Position,
     PositionComponent,
+    RandomResource,
     ZombieComponent,
 } from '../state/components'
 import { WaveResource } from '../state/levelState'
@@ -20,6 +21,7 @@ import { zombieFacingRect, plantFacingRect, plantTeam, teamDirection, zombieTeam
 import { hostilePlants } from '../combat/targets'
 import { destroyEatenPlant, detonatePlant, isPlantInedible } from './damage'
 import { plantSkipsTick } from './chill'
+import { plantAbilityAnimation } from './animation'
 
 export function initialPlantAbility(definition: PlantDefinition, random?: DeterministicRng): PlantAbility | undefined {
     if (definition.fuse) return { state: 'fuse', ticks: definition.fuse.ticks }
@@ -54,6 +56,7 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                     ability.state = state
                     ability.ticks = ticks
                     if (state === 'ready') delete ability.prey
+                    plantAbilityAnimation(plant, definition, state, world.resources.get(RandomResource))
                 }
                 if (ability.ticks > 0) ability.ticks--
                 switch (ability.state) {
@@ -71,7 +74,7 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                     case 'armed':
                         if (findAbilityTarget(world, definitions, position, plant, definition.mine!) !== undefined) {
                             detonate(definition.mine!.explosion)
-                        }
+                        } else flashMineLight(world, definitions, position, plant)
                         break
                     case 'ready':
                         if (findAbilityTarget(world, definitions, position, plant, definition.chomper!) === undefined) break
@@ -142,6 +145,32 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
             }
         },
     }
+}
+
+/**
+ * Plant::UpdatePotato: an armed mine's light, on its `light` layer, goes round at 2 frames a second under its body's
+ * rate and is lit for the first frame of each round. A round is the clip's 10 frames with no zombie within 200 of the
+ * mine's reach (Plant::DistanceToClosestZombie), down to 3 with one within 50, so the light flashes faster as one nears.
+ */
+const MINE_LIGHT = { layer: 'light', body: 'body', near: 50, far: 200, fast: 3, slower: 2 }
+function flashMineLight(world: World, definitions: GameplayDefinitions, position: Position, plant: Plant): void {
+    const light = plant.animations?.[MINE_LIGHT.layer], body = plant.animations?.[MINE_LIGHT.body]
+    const definition = definitions.plants[plant.typeId]
+    if (!light || !body) return
+    const team = plantTeam(plant), reach = plantFacingRect(definition.mine!.attack, team)
+    let distance = Infinity
+    for (const entity of world.query(PositionComponent, ZombieComponent)) {
+        const at = world.get(entity, PositionComponent)!, zombie = world.get(entity, ZombieComponent)!
+        if (at.row !== position.row || !isTargetableZombie(zombie, team)) continue
+        const rect = zombieFacingRect(definitions.zombies[zombie.typeId].body, zombieTeam(zombie))
+        distance = Math.min(distance, Math.max(0, -rectOverlap({ x: position.x + reach.x, width: reach.width }, { x: at.x + rect.x, width: rect.width })))
+    }
+    const frames = definition.animation!.clips[light.clip].frames, { near, far, fast } = MINE_LIGHT
+    const round = Math.round(Math.max(fast, Math.min(frames, frames + (distance - far) * (fast - frames) / (near - far))))
+    // The round is that many frames in place of the clip's, so the clip goes round that much faster.
+    light.rate = (body.rate - MINE_LIGHT.slower) * frames / round
+    if (light.time % frames / frames * (round - 1) < 1) delete light.hidden
+    else light.hidden = true
 }
 
 /**

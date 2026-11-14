@@ -31,17 +31,11 @@ export function exampleClient() {
     }
     class MainMenuScreen { node = new Node(); ui = ui; initialized = 0; async initialize(_ui = ui) { this.initialized++ } }
     class Color { static WHITE = new Color(255, 255, 255); constructor(public r: number, public g: number, public b: number) {} }
-    class AnimatedPlantView {
-        content: any
-        body = {
-            loadedId: '', playing: false, tint: Color.WHITE,
-            async load(id: string) { this.loadedId = id },
-            play() { this.playing = true },
-            setColorOverride(color: Color) { this.tint = color },
-        }
-        constructor(context: any) { this.content = context.content }
-        async initialize() { await (this as any).loadAnimations(); (this as any).startBody() }
-        sync(plant: any, world: any, particle: any) { (this as any).syncVisuals(plant, world, particle) }
+    class PlantView {
+        body = { loadedId: '', tint: Color.WHITE, setColorOverride(color: Color) { this.tint = color } }
+        constructor(readonly context: any) {}
+        async initialize() { this.body.loadedId = this.context.typeId }
+        sync(_plant: any, _world: any, _particle: any) {}
     }
     const game = {
         registry: { resolve: (category: string, id: string) => ({ category, id }) },
@@ -54,7 +48,7 @@ export function exampleClient() {
         'platform/debug/DebugCliCommands': { executor },
         'client/screens/MainMenuScreen': { MainMenuScreen },
         'client/view/uiNode': { uiNode: ({ parent }: any) => ({ node: child(parent) }) },
-        'client/plants/AnimatedPlantView': { AnimatedPlantView },
+        'client/plants/PlantView': { PlantView },
         'client/game/loadIntegratedGameContent': { loadIntegratedGameContent: async () => game },
         'client/sound/SoundSystem': { SoundSystem: { async playClip(clip: any) { sounds.push(clip) } } },
     } }

@@ -1,5 +1,5 @@
 import type { World } from '@/ecs/index'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, PLANT_BLINK_LAYER } from '@/shared/content/gameplay'
 import type { EnabledMod, JsonObject } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
@@ -41,7 +41,8 @@ export function saveSession(session: Session): ServerSaveSnapshot {
         if (position) entity.position = { ...position }
         if (plant) {
             gameplay.plantBehaviors.validateState(plant, definitions.plants[plant.typeId])
-            entity.plant = { ...plant, ...(plant.ability ? { ability: { ...plant.ability } } : {}) }
+            entity.plant = { ...plant, ...(plant.ability ? { ability: { ...plant.ability } } : {}),
+                ...(plant.animations ? { animations: jsonRoundTrip(plant.animations) } : {}) }
         }
         if (mowedPlant) entity.mowedPlant = jsonRoundTrip(mowedPlant)
         if (plantAttack) entity.plantAttack = {
@@ -233,6 +234,12 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
         if ((saved.plant.ability === undefined) !== (initialPlantAbility(plant) === undefined) ||
             saved.plant.ability && !abilityMatches(plant, saved.plant.ability.state)) {
             throw new Error(`Saved plant ${saved.entityId} has an invalid ability state`)
+        }
+        // A plant the server animates has its layers, each on a clip of its own; the blink is counted down to with them.
+        const layers = Object.entries(saved.plant.animations ?? {})
+        if (!plant.animation !== !saved.plant.animations || !plant.animation?.blink !== (saved.plant.blinkTicks === undefined) ||
+            layers.some(([layer, state]) => !plant.animation!.clips[state.clip] || layer !== PLANT_BLINK_LAYER && !Object.hasOwn(plant.animation!.layers, layer))) {
+            throw new Error(`Saved plant ${saved.entityId} has an invalid animation state`)
         }
     }
     if (saved.mowedPlant && (!boardRow || !definitions.plants[saved.mowedPlant.plant.typeId])) {

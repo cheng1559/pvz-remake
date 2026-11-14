@@ -12,6 +12,7 @@ import { EventQueueResource, emitServerEvent } from '../state/events'
 import { getAvailableSun } from '../level/items'
 import { TutorialResource, WaveResource } from '../state/levelState'
 import { initialPlantAbility } from '../plants/abilities'
+import { startPlantAnimations } from '../plants/animation'
 import { selectedSeedId, selectedTeam } from './seedBank'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
@@ -213,6 +214,7 @@ export const planting = {
         if (delay) world.add(entity, PlantAttackComponent, {
             readyAtTick: gameplayTick + random.integer(delay.min, delay.max),
         })
+        startPlantAnimations(world.get(entity, PlantComponent)!, definition, !!definition.nocturnal && !level.board.night, random)
         return entity
     },
 

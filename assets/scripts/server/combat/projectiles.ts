@@ -64,10 +64,10 @@ function strike({ world, definitions, commands, definition, motion }: Hit, targe
 
 /** `damage`: taken off a standing zombie, or a plant it does not fly over. */
 const damaging: ProjectileEffect = {
-    hits({ team }, target, overlap) {
+    hits({ team, motion }, target, overlap) {
         // Plant::GetDamageRangeFlags: no projectile reaches a zombie in its vault, a thrown one no more than the others.
         if ('zombie' in target) return overlap > 0 && isTargetableZombie(target.zombie, team)
-        return !target.low && overlap > PLANT_HIT_OVERLAP && isHostile(plantTeam(target.plant), team) && target.plant.health > 0
+        return !(motion.overLow && target.low) && overlap > PLANT_HIT_OVERLAP && isHostile(plantTeam(target.plant), team) && target.plant.health > 0
     },
     apply(hit, target) {
         const { world, definitions, entity, position, projectile, definition, team, motion } = hit
