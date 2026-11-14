@@ -83,6 +83,8 @@ export interface ParticleSpawnArgs {
      * it. For frequent board effects: creating and destroying nodes costs more than simulating them.
      */
     recycle?: boolean
+    /** No save keeps it: whatever spawned it brings it back, as a projectile does its trail. */
+    unsaved?: boolean
 }
 
 /** Finished recyclable players by parent and effect. */
@@ -115,6 +117,8 @@ export class ParticlePlayer extends Component {
     private visible = true
     private perfVisible = true
     private recycle = false
+    /** See ParticleSpawnArgs.unsaved; one that was stopped is not kept either. */
+    public unsaved = false
     /** The parent's pool this finished player waits in; see ParticleSpawnArgs.recycle. */
     private idlePool: ParticlePlayer[] | null = null
 
@@ -190,6 +194,17 @@ export class ParticlePlayer extends Component {
         // A recycled player keeps its node: set the facing either way.
         this.mirrored = args.mirrored ?? false
         this.node.setScale(this.mirrored ? -1 : 1, 1, 1)
+        this.unsaved = args.unsaved ?? false
+    }
+
+    /**
+     * What it went with is gone (Projectile::Die: AttachmentCrossFade "FadeOut", then AttachmentDetach): left where it
+     * is, it launches no more, its particles live out their time, and it is gone with the last.
+     */
+    stop(): void {
+        if (!this.simulation) { this.node.destroy(); return }
+        this.unsaved = true
+        this.simulation.stop()
     }
 
     /** False while a recycled player waits for reuse: it has no simulation and draws nothing. */

@@ -19,7 +19,7 @@ export class LevelParticlePresenter {
         const players = this.root.getComponentsInChildren(ParticlePlayer)
         await Promise.all(players.map(player => player.whenReady()))
         for (const player of players) {
-            if (!player.node?.isValid || !player.live) continue
+            if (!player.node?.isValid || !player.live || player.unsaved) continue
             const owner = this.owner(player.node)
             if (owner) result.push({ instanceId: result.length + 1, owner, playback: player.snapshot() })
         }

@@ -76,6 +76,11 @@ export class KernelParticles {
         if (this.api.particlesInfo(this.handle, this.status) < 0) throw new Error('particle kernel system was disposed')
     }
 
+    /** It launches no more; each emitter is dead with its last particle (TodParticleSystem::CrossFade to nothing). */
+    stop(): void {
+        if (this.handle) this.api.particlesStop(this.handle)
+    }
+
     get dead(): boolean { return this.counts.every(count => count < 0) }
 
     /**

@@ -128,6 +128,14 @@ test('fractional emission reaches the same spawn boundary in the shared core', a
     try {
         system.step(25)
         assert.equal(system.counts[0], 5)
+        // Stopped, it launches no more: its five particles live out their 40 ticks, and it is dead with the last.
+        system.stop()
+        system.step(20)
+        assert.equal(system.counts[0], 4)
+        system.step(19)
+        assert.deepEqual([system.counts[0], system.dead], [1, false])
+        system.step(2)
+        assert.equal(system.dead, true)
     } finally { system.dispose() }
 })
 
@@ -196,6 +204,14 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
     assert.equal(ParticlePlayer.restore({ parent, x: 0, y: 0, snapshot: saved }).node.scaleX, -1, 'a restored particle keeps its facing')
     assert.equal(second.snapshot().mirrored, undefined)
     assert.throws(() => snapshots.parseParticlePlayerSnapshot({ ...saved, mirrored: false }), /mirrored/)
+
+    // What it went with gone, it is stopped where it is: kept by no save, and gone with its last particle.
+    const trail = ParticlePlayer.spawn({ parent, id: 'pvz:test', x: 0, y: 0 })
+    assert.equal(trail.unsaved, false)
+    trail.stop()
+    assert.deepEqual([trail.node.isValid, trail.unsaved], [true, true])
+    trail.update(0.2)
+    assert.equal(trail.node.isValid, false)
 })
 
 test('particle frames follow AnimationRate and Animated as in TodParticleEmitter', async () => {

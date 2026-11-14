@@ -17,5 +17,8 @@ enum PvzParticleOption {
 int32_t pvz_particles_write(int32_t handle, int32_t emitter, const double *geometry, int32_t geometryLength,
                             const double *options, int32_t optionsLength, float *positions, int32_t positionCount,
                             float *vertices, int32_t vertexCount);
+// TodParticleSystem::CrossFade to an emitter that launches nothing: it launches no more, and each emitter is dead with
+// its last particle.
+void pvz_particles_stop(int32_t handle);
 void pvz_particles_destroy(int32_t handle);
 }

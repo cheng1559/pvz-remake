@@ -62,7 +62,7 @@ struct Particle {
 struct Emitter {
     int type = 0, flags = 0, frames = 1, columns = 1, rows = 1, col = 0, row = 0, age = -1, spawned = 0;
     double duration = 1, time = 0, accumulator = 0, centerX = 0, centerY = 0, launchLimit = -1;
-    bool dead = false;
+    bool dead = false, stopped = false;
     std::array<Track, TrackCount> tracks;
     std::array<double, 9> interpolation{}; // alpha, red, green, blue, brightness, rate, min, max, launched
     std::vector<Field> fields, systemFields;
@@ -216,6 +216,11 @@ struct System {
         }
         liveParticles -= e.particles.size() - live;
         e.particles.resize(live);
+        // Stopped, it launches no more and is done with its last particle; looping ones would never end.
+        if (e.stopped) {
+            if (!live || (e.flags & ParticleLoop)) { liveParticles -= live; e.particles.clear(); e.dead = true; }
+            return;
+        }
         const double minimum = std::floor(e.tracks[MinActive].at(e.time, e.interpolation[6]));
         e.accumulator += e.tracks[Rate].at(e.time, e.interpolation[5]) * .01;
         double count = std::floor(e.accumulator); e.accumulator -= count;
@@ -327,5 +332,8 @@ int32_t pvz_particles_write(int32_t handle, int32_t emitter, const double *geome
     return static_cast<int32_t>(quad);
 }
 
+void pvz_particles_stop(int32_t handle) {
+    if (auto *s = get(handle)) for (auto &e : s->emitters) e.stopped = true;
+}
 void pvz_particles_destroy(int32_t handle) { systems.erase(handle); }
 }

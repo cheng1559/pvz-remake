@@ -20,6 +20,8 @@ export interface Kernel {
     particlesInfo(handle: number, output: Float64Array): number
     /** Writes an emitter's particles straight to vertices; options follow ParticleOption. Returns the quads written. */
     particlesWrite(handle: number, emitter: number, geometry: Float64Array, options: Float64Array, positions: Float32Array, vertices: Float32Array): number
+    /** It launches no more particles; each emitter is dead with its last one. */
+    particlesStop(handle: number): void
     particlesDestroy(handle: number): void
     /** Decodes a premultiplied RGBA8 PNG into the start of output, which holds (width * 4 + 1) * height bytes; see PngResult. */
     decodePng(png: Uint8Array, output: Uint8Array): number
@@ -42,6 +44,7 @@ type Native = {
     __pvzParticlesStep?: Kernel['particlesStep']
     __pvzParticlesInfo?: Kernel['particlesInfo']
     __pvzParticlesWrite?: Kernel['particlesWrite']
+    __pvzParticlesStop?: Kernel['particlesStop']
     __pvzParticlesDestroy?: Kernel['particlesDestroy']
     __pvzKernelSample?: Kernel['sample']
     __pvzKernelBlend?: Kernel['blend']
@@ -51,7 +54,7 @@ type Native = {
 
 function nativeKernel(): Kernel | null {
     const native = globalThis as Native
-    if (!native.__pvzParticlesCreate || !native.__pvzParticlesStep || !native.__pvzParticlesInfo || !native.__pvzParticlesWrite || !native.__pvzParticlesDestroy || !native.__pvzKernelSample || !native.__pvzKernelBlend || !native.__pvzKernelWriteReanim || !native.__pvzKernelDecodePng) return null
+    if (!native.__pvzParticlesCreate || !native.__pvzParticlesStep || !native.__pvzParticlesInfo || !native.__pvzParticlesWrite || !native.__pvzParticlesStop || !native.__pvzParticlesDestroy || !native.__pvzKernelSample || !native.__pvzKernelBlend || !native.__pvzKernelWriteReanim || !native.__pvzKernelDecodePng) return null
     return {
         f64: length => new Float64Array(length),
         i32: length => new Int32Array(length),
@@ -60,6 +63,7 @@ function nativeKernel(): Kernel | null {
         particlesStep: native.__pvzParticlesStep,
         particlesInfo: native.__pvzParticlesInfo,
         particlesWrite: native.__pvzParticlesWrite,
+        particlesStop: native.__pvzParticlesStop,
         particlesDestroy: native.__pvzParticlesDestroy,
         sample: native.__pvzKernelSample,
         blend: native.__pvzKernelBlend,
@@ -74,6 +78,7 @@ interface WasmExports {
     pvz_particles_info(handle: number, output: number, length: number): number
     pvz_particles_write(handle: number, emitter: number, geometry: number, geometryLength: number, options: number, optionsLength: number,
         positions: number, positionCount: number, vertices: number, vertexCount: number): number
+    pvz_particles_stop(handle: number): void
     pvz_particles_destroy(handle: number): void
     pvz_png_decode_premultiplied(png: number, length: number, output: number, outputLength: number): number
     _initialize?(): void
@@ -142,6 +147,7 @@ function wasmKernel(instance: WebAssembly.Instance): Kernel {
             done(vertices === positions ? [[positions, positionAddress]] : [[positions, positionAddress], [vertices, vertexAddress]])
             return written
         },
+        particlesStop(handle) { wasm.pvz_particles_stop(handle) },
         particlesDestroy(handle) { wasm.pvz_particles_destroy(handle) },
         decodePng(png, output) {
             const address = pointer(output)

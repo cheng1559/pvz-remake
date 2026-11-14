@@ -117,6 +117,13 @@ bool particlesWriteBinding(se::State &s) {
 }
 SE_BIND_FUNC(particlesWriteBinding)
 
+bool particlesStopBinding(se::State &s) {
+    const auto &a = s.args();
+    if (a.size() == 1 && a[0].isNumber()) pvz_particles_stop(a[0].toInt32());
+    return true;
+}
+SE_BIND_FUNC(particlesStopBinding)
+
 bool particlesDestroyBinding(se::State &s) {
     const auto &a = s.args();
     if (a.size() == 1 && a[0].isNumber()) pvz_particles_destroy(a[0].toInt32());
@@ -142,6 +149,7 @@ bool registerPvzKernel(se::Object *global) {
            global->defineFunction("__pvzParticlesStep", _SE(particlesStepBinding)) &&
            global->defineFunction("__pvzParticlesInfo", _SE(particlesInfoBinding)) &&
            global->defineFunction("__pvzParticlesWrite", _SE(particlesWriteBinding)) &&
+           global->defineFunction("__pvzParticlesStop", _SE(particlesStopBinding)) &&
            global->defineFunction("__pvzParticlesDestroy", _SE(particlesDestroyBinding)) &&
            global->defineFunction("__pvzKernelSample", _SE(sampleBinding)) &&
            global->defineFunction("__pvzKernelBlend", _SE(blendBinding)) &&
