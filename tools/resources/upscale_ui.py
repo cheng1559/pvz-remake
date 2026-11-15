@@ -93,7 +93,6 @@ def all_sheet_sizes(inputs):
             name = emitter['sprite'].split(':', 1)[1]
             add(name, int(emitter.get('columns', 1)), int(emitter.get('rows', 1)))
     sheets.update(SHEETS)
-    sheets.update({'plant_previews_cached': (220, 160)})
     return sheets
 
 

@@ -18197,27 +18197,6 @@
           0
         ]
       },
-      "pvz:plant_previews_cached": {
-        "file": "assets/images/plant_previews_cached.png",
-        "width": 1760,
-        "height": 1120,
-        "rect": [
-          20,
-          31,
-          1717,
-          1047
-        ],
-        "offset": [
-          -1.5,
-          5.5
-        ],
-        "borders": [
-          0,
-          0,
-          0,
-          0
-        ]
-      },
       "pvz:plantern_body": {
         "file": "assets/images/plantern_body.png",
         "width": 70,

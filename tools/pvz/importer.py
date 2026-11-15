@@ -78,10 +78,6 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
 
     print('[content] Animation tracks and display clips', flush=True)
     configs = load_animation_config()
-    # The tracks of each animation are what the plant caches (cache/) draw from; the game plays the clips below, so
-    # the tracks are not registered.
-    for name, config in configs.items():
-        write_json(assets / f'json/animations/{name}.json', get_anim_nodes(name, config, load_anim_xml(raw / 'reanim', name)))
 
     def emit_clips(clips: list, definitions: dict) -> None:
         nodes = {}
@@ -126,10 +122,6 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
         register('music', f'pvz:{tune}', file)
     music.unlink()
 
-    print('[content] Cached plants', flush=True)
-    from .cache.plants import generate as plant_cache
-    plant_cache()
-    register_sprite(assets / 'images/plant_previews_cached.png')
     file = assets / 'prefabs/ui/level.prefab'
     file.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / 'assets/resources/ui/level.prefab', file)

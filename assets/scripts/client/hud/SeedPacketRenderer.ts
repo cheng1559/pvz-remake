@@ -25,12 +25,6 @@ export const SEED_PACKET_HEIGHT = 70
 export const IMITATER_SEED_TYPE = 48
 
 const SEED_PACKET_ATLAS_COLUMNS = 9
-const PACKET_PLANTS_ATLAS_COLUMNS = 13
-const PLANT_PREVIEWS_CACHED_ATLAS_COLUMNS = 8
-const PLANT_PREVIEW_CACHE_CELL_WIDTH = 220
-const PLANT_PREVIEW_CACHE_CELL_HEIGHT = 160
-const PLANT_PREVIEW_CACHE_OFFSET_X = -40
-const PLANT_PREVIEW_CACHE_OFFSET_Y = -40
 const BACKGROUND_IMITATER = 0
 const BACKGROUND_UPGRADE = 1
 const BACKGROUND_NORMAL = 2
@@ -156,7 +150,7 @@ export class SeedPacketRenderer {
         const icon = uiNode({ name: 'PacketPlant', parent: root, layer: args.layer }).node
         const placement = args.definitions.seedPackets.placements[seedId] ?? args.definitions.seedPackets.defaultPlacement
         const iconScale = scale > 1 ? scale : 1
-        icon.addComponent(PlantPreview).initialize(args.definitions, plantId, parent => this._drawCachedPlantIcon(parent, seedId, args, scale), {
+        icon.addComponent(PlantPreview).initialize(args.definitions, plantId, {
             x: placement.offsetX * iconScale, y: -(placement.offsetY + 1) * iconScale,
             scale: placement.scale * iconScale,
         }, iconScale)
@@ -201,78 +195,6 @@ export class SeedPacketRenderer {
         const { offsetX, offsetY, scale: graveScale } = args.definitions.seedPackets.grave
         holder.addComponent(PacketGrave).initialize(drawn =>
             this.drawGrave(holder, args.layer, offsetX * size, offsetY * size, graveScale * size, () => { supersampleSprites(holder); drawn() }))
-    }
-
-    /**
-     * A seed whose plant no view draws yet, as SeedPacket's DrawSeedPacket has it: a packet at its own size shows the
-     * seed's own packet picture where it has one (`seedPackets.plantCels`); any other, and any larger packet, the
-     * plant's cached frame scaled into the picture's place.
-     */
-    private static async _drawCachedPlantIcon(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number): Promise<void> {
-        const packetPlantCel = args.definitions.seedPackets.plantCels[seedId]
-        if (scale > 1 || packetPlantCel == null) {
-            await this._drawScaledCachedPlant(root, seedId, args, scale)
-            return
-        }
-
-        const atlas = await modResources.sprite('packet_plants')
-        if (!isValid(root, true)) return
-
-        uiNode({
-            name: 'PacketPlant',
-            parent: root,
-            layer: args.layer,
-            position: { x: 0, y: 0 },
-            size: { width: SEED_PACKET_WIDTH, height: SEED_PACKET_HEIGHT },
-            anchor: { x: 0, y: 1 },
-            sprite: {
-                frame: getAtlasFrame(
-                    atlas,
-                    packetPlantCel,
-                    SEED_PACKET_WIDTH,
-                    SEED_PACKET_HEIGHT,
-                    PACKET_PLANTS_ATLAS_COLUMNS,
-                ),
-                sizeMode: Sprite.SizeMode.RAW,
-                trim: false,
-            },
-        })
-    }
-
-    private static async _drawScaledCachedPlant(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number): Promise<void> {
-        const atlas = await modResources.sprite('plant_previews_cached')
-        if (!isValid(root, true)) return
-
-        const placement = args.definitions.seedPackets.placements[seedId] ?? args.definitions.seedPackets.defaultPlacement
-        const plantRoot = uiNode({
-            name: 'PacketPlant',
-            parent: root,
-            layer: args.layer,
-            anchor: { x: 0, y: 1 },
-            size: { width: PLANT_PREVIEW_CACHE_CELL_WIDTH, height: PLANT_PREVIEW_CACHE_CELL_HEIGHT },
-            position: { x: placement.offsetX * scale, y: -(placement.offsetY + 1) * scale, z: 10 },
-        }).node
-        plantRoot.setScale(placement.scale * scale, placement.scale * scale, 1)
-
-        uiNode({
-            name: 'CachedPlantPreview',
-            parent: plantRoot,
-            layer: args.layer,
-            position: { x: PLANT_PREVIEW_CACHE_OFFSET_X, y: -PLANT_PREVIEW_CACHE_OFFSET_Y },
-            size: { width: PLANT_PREVIEW_CACHE_CELL_WIDTH, height: PLANT_PREVIEW_CACHE_CELL_HEIGHT },
-            anchor: { x: 0, y: 1 },
-            sprite: {
-                frame: getAtlasFrame(
-                    atlas,
-                    seedId,
-                    PLANT_PREVIEW_CACHE_CELL_WIDTH,
-                    PLANT_PREVIEW_CACHE_CELL_HEIGHT,
-                    PLANT_PREVIEWS_CACHED_ATLAS_COLUMNS,
-                ),
-                sizeMode: Sprite.SizeMode.RAW,
-                trim: false,
-            },
-        })
     }
 
     private static _drawCost(

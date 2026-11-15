@@ -14,8 +14,6 @@ import { UI } from '@/client/ui/UI'
 import { formatMoney } from '@/client/ui/formatMoney'
 import { seedBankExtraWidth } from './LevelGeometry'
 import type { UIButton } from '@/client/ui/UIButton'
-import { plantDefinition } from '@/client/plants/definitions'
-import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
 import type { GameCommand, JsonObject, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
@@ -212,12 +210,7 @@ export class LevelView {
         const initializePreview = (node: Node) => {
             uiNode({ node, position: { x: 0, y: 0 }, anchor: { x: 0, y: 1 }, sprite: { frame: null } })
             const preview = node.addComponent(PlantPreview)
-            preview.initialize(content.presentation, undefined, async (parent, plantId) => {
-                const atlas = await modResources.sprite('plant_previews_cached')
-                if (!parent.isValid) return
-                uiNode({ name: 'CachedPlantPreview', parent, position: { x: -40, y: 40 }, anchor: { x: 0, y: 1 },
-                    sprite: { frame: getAtlasFrame(atlas, plantDefinition(content.presentation, String(plantId)).visual.preview, 220, 160, 8), sizeMode: Sprite.SizeMode.RAW, trim: false } })
-            }, { x: 0, y: 0, scale: 1 })
+            preview.initialize(content.presentation, undefined, { x: 0, y: 0, scale: 1 })
             return preview
         }
         const cursorPreview = uiNode({

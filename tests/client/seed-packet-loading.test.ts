@@ -41,7 +41,7 @@ function setup() {
     return { classes, modules, load, renderer, resources }
 }
 
-test('namespaced Mod packets keep their ID and are drawn by their plant view instead of the cached plant pose', async () => {
+test('namespaced Mod packets keep their ID and are drawn by their plant view', async () => {
     const { classes, modules, load, renderer } = setup()
     const plant = structuredClone(presentationFixture.plants['pvz:peashooter']) as any
     plant.visual.seedType = 'example:rapid_pea'
@@ -49,22 +49,24 @@ test('namespaced Mod packets keep their ID and are drawn by their plant view ins
     plant.packet = { x: 12, y: 12, scale: 0.85 }
     const definitions = buildPresentationDefinitions(presentationFixture, [{ ownerId: 'example', data: { plants: { 'example:rapid_pea': plant } } }])
     // The plant as a packet's picture has it: by its view, without a shadow, at the packet's place and size, held still.
-    const drawn: any[] = [], paused: string[] = [], cached: unknown[] = []
+    const drawn: any[] = [], paused: string[] = []
     let view: { players: any[] } | null = { players: [{ pause() { paused.push('body') } }, { pause() { paused.push('head') } }] }
     modules['@/client/view/offBoard'].createOffBoardPlant = async (_node: Node, typeId: string, options: unknown) => {
         drawn.push([typeId, options])
         return view && { view }
     }
     const preview = new classes.PlantPreview(), root = new Node()
-    Object.assign(preview, { definitions, rendered: root, loadCached: async (_root: Node, plantId: unknown) => { cached.push(plantId) } })
+    Object.assign(preview, { definitions, rendered: root })
     await preview.load(root, 'example:rapid_pea')
     // The preview runs in a realm of its own: its values are compared as JSON.
     assert.deepEqual(JSON.parse(JSON.stringify(drawn)), [['example:rapid_pea', { packet: true, draw: { position: { x: 0, y: 0 }, scale: 0.85, shadow: false } }]])
-    assert.deepEqual([paused, preview.players.length, cached.length], [['body', 'head'], 2, 0])
-    // A plant its view does not draw off the board keeps the cached picture.
+    assert.deepEqual([paused, preview.players.length], [['body', 'head'], 2])
+    // A plant its view does not draw off the board shows nothing: its pose goes.
     view = null
+    let destroyed = 0
+    modules['@/client/view/uiNode'].uiNode = () => ({ node: Object.assign(new Node(), { destroy() { destroyed++ } }) })
     await preview.load(root, 'example:rapid_pea')
-    assert.deepEqual(cached, ['example:rapid_pea'])
+    assert.deepEqual([destroyed, preview.players.length], [1, 2])
 
     let id: unknown
     modules['./PlantPreview'].PlantPreview = class { initialize(_definitions: unknown, plantId: unknown) { id = plantId } }

@@ -557,7 +557,6 @@ export interface PresentationDefinitions {
         readonly placements: Readonly<Record<string, SeedPacketPlacement>>
         /** A grave seed's packet: the grave at about a plant's size, centred, a little above the picture window's floor. */
         readonly grave: SeedPacketPlacement
-        readonly plantCels: Readonly<Record<string, number>>
     }
 }
 
@@ -883,9 +882,6 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     placement(packets.defaultPlacement, 'seedPackets.defaultPlacement')
     placement(packets.grave, 'seedPackets.grave')
     for (const [id, value] of Object.entries(record(packets.placements, 'seedPackets.placements'))) placement(value, 'seedPackets.placements.' + id)
-    for (const [id, value] of Object.entries(record(packets.plantCels, 'seedPackets.plantCels'))) {
-        if (!Number.isInteger(value) || (value as number) < 0) throw new TypeError('Invalid packet cel: ' + id)
-    }
     return data as unknown as PresentationDefinitions
 }
 

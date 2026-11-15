@@ -12,11 +12,13 @@ import { mirrorInPacket, PacketPictureStyle, PLANT_TILT, placePacketPicture } fr
 const { ccclass } = _decorator
 export type PreviewPlantId = string | number
 
-/** Static plant rendering shared by seed packets and placement previews. */
+/**
+ * A plant held still, by its view, for seed packets and placement previews. A seed type with no plant behind it (a
+ * number), or a plant its view does not draw off the board, shows nothing.
+ */
 @ccclass('PlantPreview')
 export class PlantPreview extends Component {
     ready: Promise<void> = Promise.resolve()
-    private loadCached!: (root: Node, plantId: PreviewPlantId) => Promise<void>
     private definitions!: PresentationDefinitions
     private plantId?: PreviewPlantId
     private placement!: { x: number, y: number, scale: number }
@@ -26,7 +28,6 @@ export class PlantPreview extends Component {
     private rendering: boolean | undefined
     private color = Color.WHITE.clone()
     private readonly players: ReanimPlayer[] = []
-    private readonly baseColors = new WeakMap<Sprite, Color>()
     private composite?: Sprite
     private compositeReady?: Promise<void>
     private loaded = false
@@ -34,14 +35,9 @@ export class PlantPreview extends Component {
     private mirrored = false
     private unmirroredX?: number
 
-    static supports(definitions: PresentationDefinitions, plantId: string): boolean {
-        return !!plantVisual(definitions, plantId)
-    }
-
-    initialize(definitions: PresentationDefinitions, plantId: PreviewPlantId | undefined, loadCached: (root: Node, plantId: PreviewPlantId) => Promise<void>, placement: { x: number, y: number, scale: number }, packetScale?: number): void {
+    initialize(definitions: PresentationDefinitions, plantId: PreviewPlantId | undefined, placement: { x: number, y: number, scale: number }, packetScale?: number): void {
         this.definitions = definitions
         this.plantId = plantId
-        this.loadCached = loadCached
         this.placement = placement
         this.packetScale = packetScale
         this.picture ??= new PacketPictureStyle(this.node, 'right')
@@ -90,22 +86,24 @@ export class PlantPreview extends Component {
         if (this.plantId === undefined) return
         // /tilted is a packet's; the held and grid previews are never tilted.
         if (!this.picture.sync(this.packetScale) && this.rendering !== undefined) return
-        // A plant drawn by its view; one named by its packet image alone (no plant behind it yet) has the cached picture.
-        const enabled = typeof this.plantId === 'string' && PlantPreview.supports(this.definitions, this.plantId)
-        if (this.rendering === enabled) {
-            if (enabled) this.applyPlacement()
+        const drawn = typeof this.plantId === 'string' && !!plantVisual(this.definitions, this.plantId)
+        if (this.rendering === drawn) {
+            if (drawn) this.applyPlacement()
             return
         }
-        this.rendering = enabled
+        this.rendering = drawn
         if (this.rendered) { this.rendered.active = false; this.rendered.destroy() }
+        this.rendered = null
         this.players.length = 0
         this.composite = undefined
         this.compositeReady = undefined
         this.loaded = false
-        const root = uiNode({ name: enabled ? 'RenderedPlant' : 'CachedPlant', parent: this.node, active: false }).node
+        this.ready = Promise.resolve()
+        if (!drawn) return
+        const root = uiNode({ name: 'RenderedPlant', parent: this.node, active: false }).node
         this.rendered = root
-        if (enabled) this.applyPlacement()
-        this.ready = (enabled ? this.load(root, this.plantId as string) : this.loadCached(root, this.plantId)).then(() => {
+        this.applyPlacement()
+        this.ready = this.load(root, this.plantId as string).then(() => {
             if (!isValid(root, true) || root !== this.rendered) return
             this.loaded = true
             return this.finish(root)
@@ -124,10 +122,6 @@ export class PlantPreview extends Component {
                 root.active = false
                 const parts = [...root.children]
                 for (const player of this.players) player.setColorOverride(Color.WHITE)
-                for (const sprite of root.getComponentsInChildren(Sprite)) {
-                    const base = this.baseColors.get(sprite)
-                    if (base) sprite.color = base.clone()
-                }
                 this.compositeReady = bakeSprite(root).then(composite => {
                     if (!isValid(root, true) || root !== this.rendered) return
                     this.composite = composite
@@ -152,8 +146,8 @@ export class PlantPreview extends Component {
         const pose = uiNode({ name: 'Pose', parent: root, position: { x: packet?.x ?? 0, y: -(packet?.y ?? 0) } }).node
         const plant = await createOffBoardPlant(pose, plantId, { packet: true, draw: { position: { x: 0, y: 0 }, scale: packet?.scale ?? 1, shadow: false } })
         if (!isValid(root, true) || root !== this.rendered) return
-        // A plant its view does not draw off the board has the cached picture.
-        if (!plant) { pose.destroy(); return this.loadCached(root, plantId) }
+        // A plant its view does not draw off the board (it has no animation) shows nothing.
+        if (!plant) { pose.destroy(); return }
         const players = plant.view.players
         for (const player of players) {
             player.pause()
@@ -170,12 +164,5 @@ export class PlantPreview extends Component {
             : this.color
         if (this.composite) { this.composite.color = color; return }
         for (const player of this.players) player.setColorOverride(color)
-        if (this.players.length || !this.rendered) return
-        for (const sprite of this.rendered.getComponentsInChildren(Sprite)) {
-            let base = this.baseColors.get(sprite)
-            if (!base) { base = sprite.color.clone(); this.baseColors.set(sprite, base) }
-            sprite.color = new Color(Math.round(base.r * color.r / 255), Math.round(base.g * color.g / 255),
-                Math.round(base.b * color.b / 255), Math.round(base.a * color.a / 255))
-        }
     }
 }
