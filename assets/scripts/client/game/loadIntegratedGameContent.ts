@@ -39,6 +39,6 @@ export async function loadIntegratedGameContent() {
         .map(mod => ({ id: mod.id, version: mod.version, contentHash: mod.contentHash }))
     return {
         definitions, presentation, levels, levelPrefab, registry, loader,
-        contentHash: manifest.contentHash, loadedMods, enabledMods, animations, views,
+        contentHash: manifest.contentHash, enabledMods, animations, views,
     }
 }

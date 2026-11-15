@@ -7,8 +7,9 @@ const root = join(process.cwd(), 'assets', 'scripts')
 
 test('runtime imports preserve client-server architecture boundaries', () => {
     const violations: string[] = []
-    // The client talks to the server through the protocol only; the clock and tweens (core) stand on the engine alone.
-    check('client', imports(['server']), 'client -> server', violations)
+    // The client talks to the server through the protocol only and is handed what the application loads (app); the
+    // clock and tweens (core) stand on the engine alone.
+    check('client', imports(['server', 'app']), 'client -> server/app', violations)
     check('core', imports(['app', 'client', 'server', 'platform']), 'core -> app/client/server/platform', violations)
     // The server, what it shares with the client and the ECS run without the engine (headless tests, Node hosts).
     check('server', imports(['app', 'client', 'platform', 'core'], true), 'server -> app/client/platform/core/cc', violations)

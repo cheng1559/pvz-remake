@@ -40,6 +40,8 @@ import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { modResources } from '@/client/content/ModResources'
 import { modManager, type ModImport } from '@/client/content/ModManager'
 import { selectZips, type SelectedZip } from '@/client/content/InstalledArchives'
+import { provideInstalledMods } from '@/client/content/installedMods'
+import { loadInstalledMods } from './ModLoader'
 
 const { ccclass } = _decorator
 const ALMANAC_PAGES = new Set<MenuPageId>(['almanac', 'plants', 'zombies'])
@@ -69,6 +71,8 @@ export class GameApp extends Component {
 
     start(): void {
         game.frameRate = Infinity
+        // Before anything loads content: the client reads the Mods this loads for both sides through this.
+        provideInstalledMods(loadInstalledMods)
         uiNode({ node: this.node, viewport: true })
         // Mods load for the current player, read straight from the profile store (menu requests wait for the store
         // catalog, which is itself built from Mod content).

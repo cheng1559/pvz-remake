@@ -352,7 +352,7 @@ test('presentation definitions use the common ZIP resolver without mutating base
             assert.equal(id, 'pvz:presentation/definitions')
             return current
         } } },
-        '@/app/ModLoader': { loadInstalledMods: async () => ({ presentationDefinitions: [] }) },
+        './installedMods': { installedMods: async () => ({ presentationDefinitions: [] }) },
         '@/shared/content/DefinitionRegistry': { buildPresentationDefinitions },
         '@/shared/mod/content': { contentJson },
     })

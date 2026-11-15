@@ -13,6 +13,7 @@ import { ClientViews } from '@/client/content/ClientViews'
 import { ArchiveContentRegistry } from '@/client/content/ArchiveContentRegistry'
 import { modManager } from '@/client/content/ModManager'
 import { importModModule, mountMod } from '@/client/content/ModRuntime'
+import { ClientModAssets, createClientModHost } from '@/client/content/createModHost'
 
 interface ModModule { register(context: { host: ModHost, assets: ModAssets }): void | Promise<void> }
 let installedMods: Promise<LoadedMods> | undefined
@@ -65,8 +66,6 @@ async function loadMods() {
             if (manifest.client) {
                 stage = manifest.client.module
                 const module = await importModModule(manifest.id, stage) as ModModule
-                // The host exposes game/UI modules that also consume this loader.
-                const { ClientModAssets, createClientModHost } = await import('@/client/content/createModHost')
                 const host = createClientModHost(manifest.id, presentationDefinitions, clientContent, views)
                 hosts.push(host)
                 await module.register({ host, assets: new ClientModAssets(manifest, mod.files) })

@@ -1,7 +1,7 @@
 import { CONTENT_CATEGORIES, type ContentCategory } from '@/shared/content'
-import { loadInstalledMods } from '@/app/ModLoader'
 import { ClientContentLoader } from './ClientContentLoader'
 import { ContentRegistry } from './ContentRegistry'
+import { installedMods } from './installedMods'
 
 let pending: ReturnType<typeof loadAssets> | undefined
 
@@ -12,7 +12,7 @@ export function loadClientContent() {
 
 async function loadAssets() {
     const loader = new ClientContentLoader()
-    const [base, loadedMods] = await Promise.all([loader.loadBaseContent(), loadInstalledMods()])
+    const [base, loadedMods] = await Promise.all([loader.loadBaseContent(), installedMods()])
     const registry = new ContentRegistry()
     registry.register(base)
     for (const [, content] of loadedMods.clientContent.entries()) {

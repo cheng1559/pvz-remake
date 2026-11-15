@@ -1,6 +1,7 @@
 import { BlockInputEvents, Mask, Node } from 'cc'
 import { isEnemyZombie } from '@/shared/content/teams'
 import { LocalIntegratedGame } from './LocalIntegratedGame'
+import { loadInstalledMods } from './ModLoader'
 import { createLocalGameSaveStore } from './CocosGameSaveStore'
 import { GAME_SAVE_KEY } from './GameSaveStore'
 import { createGameSave, isCompatibleBaseContent, parseGameSave, type GameSave } from './SaveCoordinator'
@@ -123,8 +124,9 @@ export function createLevelController(
                     throw new IncompatibleSaveError('GameSave Mods do not match the installed gameplay Mods')
                 }
             }
+            // The Mods' server side (behaviors, rules, hooks) goes to the game the client hosts, never through the client.
+            const { gameplay } = await loadInstalledMods()
             if (!root.isValid) throw new Error('Level scene was closed while loading')
-            const gameplay = content.loadedMods.gameplay
             const profile = await menuApi.getCurrentUser()
             const purse = profile ? await menuApi.getPurse()
                 : { coins: 0, packetUpgrades: 0, packetUpgradeCost: 0, nextPacketUpgradeCost: 0, declinedPacketUpgrades: 2 }
