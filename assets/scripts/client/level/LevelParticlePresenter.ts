@@ -29,14 +29,15 @@ export class LevelParticlePresenter {
     async restore(snapshots: LevelParticleSnapshot[]): Promise<void> {
         for (const player of this.root.getComponentsInChildren(ParticlePlayer)) if (player.node.isValid) player.node.destroy()
         for (const snapshot of snapshots) {
-            const parent = snapshot.owner.kind === 'entity'
-                ? this.entities.particleParent(snapshot.owner)
-                : snapshot.owner.kind === 'screen'
-                    ? this.screenParents.get(snapshot.owner.slot) ?? null
-                    : this.intro.particleParent(snapshot.owner.slot)
+            const { owner } = snapshot
+            // One of the board's own goes back where the board draws it, among the entities at its order.
+            const parent = owner.kind === 'entity'
+                ? this.entities.particleParent(owner)
+                : owner.kind === 'screen'
+                    ? owner.slot === 'entity-layer' ? this.entities.particleLayer(snapshot.playback.renderOrder) : this.screenParents.get(owner.slot) ?? null
+                    : this.intro.particleParent(owner.slot)
             if (!parent?.isValid) continue
-            const player = ParticlePlayer.restore({ parent, snapshot: snapshot.playback,
-                x: snapshot.owner.x, y: snapshot.owner.y, z: snapshot.owner.z })
+            const player = ParticlePlayer.restore({ parent, snapshot: snapshot.playback, x: owner.x, y: owner.y, z: owner.z })
             await player.whenReady()
         }
     }

@@ -139,9 +139,10 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                         const grave = graveAt(gridItems(world), position.row, plant.column), ate = grave !== undefined
                         if (grave) world.destroyEntity(grave.entityId)
                         commands.destroyEntity(entity)
-                        // `team`: a buster of the zombies' side, facing left, whose dirt turns round with it.
+                        // The buster as it stood, for its draw order (Plant::CalcRenderOrder); `team`: a buster of the
+                        // zombies' side, facing left, whose dirt turns round with it.
                         emitServerEvent(events, 'graveBusted', {
-                            entityId: entity, row: position.row, column: plant.column, x: position.x, y: position.y,
+                            entityId: entity, typeId: plant.typeId, row: position.row, column: plant.column, x: position.x, y: position.y,
                             ...(plantTeam(plant) === 'zombies' ? { team: 'zombies' } : {}),
                         })
                         // The original drops its loot piece even without a grave, which planting never allows but `/plant`

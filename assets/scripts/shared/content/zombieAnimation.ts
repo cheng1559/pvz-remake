@@ -1,4 +1,4 @@
-import { ASSET_FPS, type Animated, type AnimationRandom, type LayerState, startLayer, startLayers, TICKS_PER_SECOND } from './animation'
+import { ASSET_FPS, type Animated, type AnimationRandom, type LayerState, startLayer, startLayers } from './animation'
 import { type AnimationClip, type AnimationDefinition, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from './gameplay'
 
 /** What only a zombie's animation does (ZombieDefinition.animation), on the rules of every animation (./animation). */
@@ -11,10 +11,19 @@ const SECOND_IN = 4
  * frames at 8 a second, advanced twice a tick, and held on the last.
  */
 export const MOWERED_CLIP: AnimationClip = { frames: 8, fps: { min: 16, max: 16 }, hold: true }
-/** The ticks it lasts, after which what was flattened is gone. */
-export const MOWERED_TICKS = Math.ceil(MOWERED_CLIP.frames / MOWERED_CLIP.fps!.min * TICKS_PER_SECOND)
-/** The animation of a zombie under the mower: the driver, whatever the zombie. */
+/**
+ * The animation of what is under the mower, whatever it is: the driver, on a zombie's body (its body's layer) and on a
+ * mowed plant alike (MowedPlant.squash).
+ */
 export const MOWERED_ANIMATION: AnimationDefinition = { clips: { [ZOMBIE_CLIPS.mowered]: MOWERED_CLIP }, layers: {} }
+
+/**
+ * Zombie::UpdateMowered: what a mower flattened is gone once the driver's clip it plays (MOWERED_ANIMATION) is through,
+ * held on its last frame (the original's mLoopCount).
+ */
+export function squashed(state: LayerState): boolean {
+    return state.clip === ZOMBIE_CLIPS.mowered && state.time >= MOWERED_CLIP.frames
+}
 
 /** A clip a zombie's body is on: its animation's, or the mower's. */
 export function zombieClip(animation: AnimationDefinition, clip: string): AnimationClip | undefined {

@@ -14,7 +14,6 @@ import type {
 import { ParticleAssets } from '@/client/particle/ParticleAssets'
 import type { LevelIntro } from '../LevelIntro'
 import type { LevelIntroContext } from '../LevelPresentation'
-import type { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { createOffBoardZombie, type OffBoardZombie } from '@/client/view/offBoard'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
@@ -55,11 +54,11 @@ export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, 
  */
 const street = new WeakMap<Node, OffBoardZombie>()
 
-/** The zombie in a street node's `Body`, its shadow beside that. `pose`: a clip it is held on from its start, when its playback is restored over it. */
-async function standInStreet(node: Node, typeId: string, hasTongue: boolean, pose?: string): Promise<OffBoardZombie> {
+/** The zombie in a street node's `Body`, its shadow beside that. */
+async function standInStreet(node: Node, typeId: string, hasTongue: boolean): Promise<OffBoardZombie> {
     street.get(node)?.view.destroy()
     node.getChildByName('Body')?.destroy()
-    const zombie = await createOffBoardZombie(uiNode({ name: 'Body', parent: node }).node, typeId, { pose, hasTongue })
+    const zombie = await createOffBoardZombie(uiNode({ name: 'Body', parent: node }).node, typeId, { hasTongue })
     if (!zombie) throw new Error(`Street zombie is not drawn off the board: ${typeId}`)
     street.set(node, zombie)
     return zombie
@@ -153,7 +152,7 @@ export class AdventureIntro implements LevelIntro {
         // A conveyor level's belt stands in for the bank (Board::UpdateGame draws no bank with one).
         const shown = level.conveyor ? { ...layout, hiddenSeedBank: true } : layout
         const intro = new AdventureIntro(board, sodClip, sodRolls, shown, ready, introZombies, previewTypes, content.presentation, bank, houseName,
-            mowers, audio, content.animations)
+            mowers, audio)
         intro.seedChooser = context.seedChooser === true
         intro.graveTicks = level.graves?.length ? GRAVE_STONE_TICKS : 0
         intro.hasOpeningDialog = context.hasOpeningDialog === true
@@ -220,7 +219,6 @@ export class AdventureIntro implements LevelIntro {
         private readonly houseName: Node,
         private readonly mowers: () => ReadonlyMap<number, Node>,
         private readonly audio: LevelAudioPresenter,
-        private readonly animations: ClientAnimationRegistry,
     ) { if (layout.stationary) this.ticks = SEED_BANK_START }
 
     get complete(): boolean {
@@ -263,7 +261,7 @@ export class AdventureIntro implements LevelIntro {
                     y: node.position.y,
                     z: node.position.z,
                     hasTongue: zombie.zombie.hasTongue,
-                    reanim: zombie.view.players[0].snapshot(),
+                    view: zombie.view.snapshot(zombie.zombie.entityId).data,
                 }
             }),
         }
@@ -286,11 +284,9 @@ export class AdventureIntro implements LevelIntro {
                 const definition = this.definitions.zombies[preview.typeId]
                 if (!definition) throw new Error(`Intro zombie is not installed: ${preview.typeId}`)
                 this.previewTypes.set(node, preview.typeId)
-                // The clip its body was on, which its saved playback then goes on from.
-                const pose = Object.entries(this.animations.resolve(preview.typeId)).find(([, clip]) => clip.reanimId === preview.reanim.id)?.[0]
-                if (!pose) throw new Error(`Intro animation is not installed: ${preview.reanim.id}`)
-                const zombie = await standInStreet(node, preview.typeId, preview.hasTongue, pose)
-                zombie.view.players[0].restore(preview.reanim)
+                // Its view takes back where its body was, on the clip it was on.
+                const zombie = await standInStreet(node, preview.typeId, preview.hasTongue)
+                await zombie.view.restore({ kind: 'zombie', entityId: zombie.zombie.entityId, data: preview.view })
                 this.syncPreviewTooltip(node)
             }
         }

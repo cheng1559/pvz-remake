@@ -6,7 +6,7 @@ import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import { uiNode } from '@/client/view/uiNode'
-import { SUN_BANK_TARGET } from '@/shared/content/gameplay'
+import { collectTarget } from '@/shared/content/gameplay'
 import type { ItemPresentationDefinition } from '@/shared/content/presentation'
 import { jsonRoundTrip, type ItemSnapshot, type JsonObject } from '@/shared/protocol/index'
 
@@ -29,6 +29,12 @@ export class ItemView implements EntityView<ItemSnapshot> {
     private glow?: Node
     /** Where it started flying to the counter from. */
     private collectStart?: { x: number, y: number }
+    /**
+     * How far a collected item is on its way to its counter, from 0 where it was picked up to 1 there (0 until it is
+     * collected), as the frame being drawn has it: what the sun is eased toward the counter's actual position by, and
+     * what a Mod that shifts the lawn moves it by.
+     */
+    collectProgress = 0
 
     constructor(protected readonly context: ItemViewContext) {}
 
@@ -60,9 +66,11 @@ export class ItemView implements EntityView<ItemSnapshot> {
     sync(item: ItemSnapshot): void {
         const { node, content } = this.context, definition = this.presentation
         uiNode({ node, opacity: item.alpha })
-        // Only sun flies to the (possibly edge-pinned) sun counter.
+        this.collectProgress = this.progress(item)
+        // The server flies sun to the layout's counter; it is eased toward the counter's actual position (possibly
+        // pinned to the screen's edge) along the way.
         const sun = content.definitions.items[item.typeId]?.kind !== 'money'
-        node.setPosition(item.x + HALF + (sun ? this.collectOffset(item) : 0), -(item.y + HALF))
+        node.setPosition(item.x + HALF + (sun ? this.context.stage.sunBankOffset() * this.collectProgress : 0), -(item.y + HALF))
         node.setScale(item.scale, item.scale, 1)
         // Moving silver and gold coins use the flat dollar image and hide the spinning animation.
         const flying = !!this.flight && (!item.landed || item.state === 'collecting')
@@ -77,14 +85,13 @@ export class ItemView implements EntityView<ItemSnapshot> {
         } else current?.destroy()
     }
 
-    /** The server flies sun to the layout's counter; ease toward the counter's actual position along the way. */
-    private collectOffset(item: ItemSnapshot): number {
-        const offset = this.context.stage.sunBankOffset()
+    /** collectProgress: the part of the way from where it was picked up to its counter (collectTarget) it has come. */
+    private progress(item: ItemSnapshot): number {
         if (item.state !== 'collecting') { this.collectStart = undefined; return 0 }
-        if (!offset) return 0
         const start = this.collectStart ??= { x: item.x, y: item.y }
-        const total = Math.hypot(start.x - SUN_BANK_TARGET.x, start.y - SUN_BANK_TARGET.y)
-        return total ? offset * (1 - Math.hypot(item.x - SUN_BANK_TARGET.x, item.y - SUN_BANK_TARGET.y) / total) : offset
+        const target = collectTarget(this.context.content.definitions.items[item.typeId])
+        const total = Math.hypot(start.x - target.x, start.y - target.y)
+        return total ? 1 - Math.hypot(item.x - target.x, item.y - target.y) / total : 1
     }
 
     /** Where its spin is, for a save. */

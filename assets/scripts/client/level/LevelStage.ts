@@ -3,6 +3,7 @@ import { getBoardPresentation } from './boards/definitions'
 import type { HapticStyle } from '@/platform/Haptics'
 import type { Color, Node, SpriteFrame } from 'cc'
 import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
+import type { ParticlePlayer, ParticleSpawnArgs } from '@/client/particle/ParticlePlayer'
 import type { PlantView } from '@/client/plants/PlantView'
 import type { ZombieView } from '@/client/zombies/ZombieView'
 import type { LevelDefinition } from '@/shared/content/gameplay'
@@ -45,6 +46,8 @@ export interface EntityView<Entity = unknown> {
     readonly shadowNode?: Node
     /** The nodes of its own that particles go under, by name: a save keeps a particle's place by them. */
     readonly particleAnchors?: Readonly<Record<string, Node>>
+    /** An item's: how far it is, collected, on its way to its counter, from 0 to 1 (ItemView, AwardView). */
+    readonly collectProgress?: number
 }
 
 /**
@@ -75,10 +78,18 @@ export interface LevelStage {
     /** Board::ShakeBoard by (x, y), felt as `haptic`: of a frame's shakes, the strongest is felt once. */
     shake(x: number, y: number, haptic: HapticStyle): void
     /**
-     * A particle effect on the board at a draw order, in board coordinates (Board::AddPvzpParticle). `mirrored`: played
-     * flipped left to right, for a zombie or plant facing the other way.
+     * A particle effect on the board at a draw order, in board coordinates (Board::AddPvzpParticle), its node kept for
+     * the next one once through (spawnParticle's `recycle`). `mirrored`: played flipped left to right, for a zombie or
+     * plant facing the other way.
      */
     particle(effect: string, x: number, y: number, order: number, tint?: Color, mirrored?: boolean): void
+    /**
+     * A particle effect on the board at a draw order, in the layer's coordinates, played as `args` say. Every particle
+     * of the board is drawn at its order among the rest this way, and a save puts it back the same way.
+     */
+    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer
+    /** A particle of the board (spawnParticle) goes to another draw order, as a projectile's trail does with its projectile. */
+    reorderParticle(player: ParticlePlayer, order: number): void
     /**
      * A node of the layer takes its place in the draw order until it is destroyed. `entityId`: among what else is at
      * that order, it goes where that entity does.
@@ -88,10 +99,17 @@ export interface LevelStage {
     node(entityId: number): Node | undefined
     plant(entityId: number): PlantView | undefined
     zombie(entityId: number): ZombieView | undefined
-    /** Plant::CalcRenderOrder. */
+    /**
+     * Where each kind of entity is drawn among the rest, as the board draws it, for what a view draws with it. A plant's:
+     * Plant::CalcRenderOrder.
+     */
     plantOrder(plant: Pick<PlantSnapshot, 'typeId' | 'row' | 'x' | 'behaviorState'>): number
     /** A zombie's draw order in a row. */
     zombieOrder(row: number): number
+    /** A projectile's draw order in a row, by its type's layer (a row's waiting mower's too). */
+    projectileOrder(typeId: string, row: number): number
+    /** A thing of a cell's draw order in a row, by its type's layer and offset. */
+    gridItemOrder(typeId: string, row: number): number
 }
 
 /** What a view does about one of the server's events: with the level's state after it. */

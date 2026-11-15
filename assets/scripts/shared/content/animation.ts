@@ -68,9 +68,21 @@ export function drawn(clips: Record<string, number>, random: AnimationRandom): s
 }
 
 /**
+ * Zombie::ApplyAnimRate: a chill slows an animation to this part of its rate, a zombie's body (the original's) and a
+ * plant chilled by a hostile snow pea (the remake's own). The server paces the layers (stepLayers' `slowed`) and sends
+ * the rate it paces them at (pacedLayers), which is all a view plays.
+ */
+export const CHILLED_ANIMATION_FACTOR = 0.5
+
+/** The layers as a view plays them: each at its rate times the part of it it goes at (`pace`, stepLayers' `slowed`). */
+export function pacedLayers(layers: Readonly<Record<string, LayerState>>, pace: (layer: string) => number): Record<string, LayerState> {
+    return Object.fromEntries(Object.entries(layers).map(([layer, state]) => [layer, { ...state, rate: state.rate * pace(layer) }]))
+}
+
+/**
  * A tick of an animation's layers: each moves on, and a clip that is through gives way (to the next, to nothing, or to
- * its last frame). `slowed`: a layer goes at this part of its rate (a chilled zombie's body, at half). `before`: what
- * is done to a layer on a clip of the animation before it moves on.
+ * its last frame). `slowed`: a layer goes at this part of its rate (a chilled one at CHILLED_ANIMATION_FACTOR). `before`:
+ * what is done to a layer on a clip of the animation before it moves on.
  */
 export function stepLayers(animation: AnimationDefinition, entity: Animated, random: AnimationRandom,
     on: { slowed?: (layer: string) => number, before?: (state: LayerState, clip: AnimationClip) => void } = {}): void {

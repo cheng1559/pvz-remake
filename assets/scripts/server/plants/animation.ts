@@ -4,7 +4,7 @@ import { type AnimationRandom, framePosition, playLayers } from '@/shared/conten
 import { startPlantLayers, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { LevelStateResource, type Plant, PlantAttackComponent, PlantComponent, RandomResource } from '../state/components'
 import type { PlantAbilityState } from '@/shared/content/plantAbilities'
-import { plantSkipsTick } from './chill'
+import { plantPace, plantSkipsTick } from './chill'
 
 /**
  * A plant's animation is the server's, as a zombie's is: what each of its layers plays and how far into it
@@ -59,13 +59,14 @@ export function createPlantAnimationSystem(definitions: GameplayDefinitions): Ga
             for (const entity of world.query(PlantComponent)) {
                 const plant = world.get(entity, PlantComponent)!
                 const definition = definitions.plants[plant.typeId], animation = definition.animation
-                // A chilled plant does everything at half speed, its animation too.
-                if (!animation || !plant.animations || plantSkipsTick(plant)) continue
+                if (!animation || !plant.animations) continue
                 stepPlantAnimation(animation, plant, random, {
+                    // A chilled plant animates at half its rate, and counts down to its blink every other tick.
+                    slowed: () => plantPace(plant),
                     chewed: plant.recentlyEatenCounter > 0,
                     // Plant::UpdateBlink: an asleep plant's blink waits. Plant::DoBlink: one about to shoot, or in a state
                     // it does not blink in (a potato mine not armed), misses its blink.
-                    blinkWaits: !!definition.nocturnal && !level.board.night,
+                    blinkWaits: plantSkipsTick(plant) || !!definition.nocturnal && !level.board.night,
                     blinkMisses: () => !!world.get(entity, PlantAttackComponent)?.burst
                         || !!animation.blink?.states && !animation.blink.states.includes(plant.ability?.state!),
                 })

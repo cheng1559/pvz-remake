@@ -5,6 +5,13 @@ import type { PlantAbilityState } from './plantAbilities'
 
 /** Board pixel where collected sun flies to: the sun counter in the original 800-wide layout. */
 export const SUN_BANK_TARGET = { x: 15, y: 0 } as const
+/** Board pixel where collected money flies to: the coin bank at the bottom left. */
+export const COIN_BANK_TARGET = { x: 39, y: 558 } as const
+
+/** Coin::UpdateCollected: where a collected item flies, money to the coin bank and the rest to the sun counter. */
+export function collectTarget(item: Pick<ItemDefinition, 'kind'> | undefined): { readonly x: number, readonly y: number } {
+    return item?.kind === 'money' ? COIN_BANK_TARGET : SUN_BANK_TARGET
+}
 
 /**
  * SeedChooserScreen's grid, the original's plant seed types: 0-39 in five rows, and the upgrade plants 40-47 in a sixth

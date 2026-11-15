@@ -1,5 +1,4 @@
 import { TICKS_PER_SECOND, playZombie, zombiePace } from './animation'
-import { MOWERED_TICKS } from '@/shared/content/zombieAnimation'
 import { type EntityRemover, LevelStateResource, RandomResource, type Zombie, ZombieComponent } from '../state/components'
 import { TutorialResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
@@ -116,7 +115,7 @@ export function destroyZombie(world: World, definitions: GameplayDefinitions, en
     remover.destroyEntity(entity)
 }
 
-/** Zombie::MowDown: flattened where it stands, it plays its mowered clip and is gone after MOWERED_TICKS. */
+/** Zombie::MowDown: flattened where it stands, it plays its mowered clip and is gone once that is through (squashed). */
 export function flattenZombie(world: World, definitions: GameplayDefinitions, zombie: Zombie): void {
     if (zombie.state === 'dying' || zombie.state === 'mowered') return
     zombie.health = 0
@@ -124,7 +123,6 @@ export function flattenZombie(world: World, definitions: GameplayDefinitions, zo
     playZombie(zombie, definitions.zombies[zombie.typeId].animation, ZOMBIE_CLIPS.mowered, world.resources.get(RandomResource))
     zombie.biteTicks = 0
     zombie.deathTicksRemaining = 0
-    zombie.moweredTicksRemaining = MOWERED_TICKS
 }
 
 function chillZombie(world: World, entity: number, zombie: Zombie, ticks: number): void {

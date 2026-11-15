@@ -194,7 +194,7 @@ export class SeedPacketRenderer {
         const holder = uiNode({ name: 'PacketGrave', parent: root, layer: args.layer, anchor: { x: 0, y: 1 },
             size: { width: SEED_PACKET_WIDTH * size, height: SEED_PACKET_HEIGHT * size } }).node
         const { offsetX, offsetY, scale: graveScale } = args.definitions.seedPackets.grave
-        holder.addComponent(PacketGrave).initialize(drawn =>
+        holder.addComponent(PacketGrave).initialize(size, drawn =>
             this.drawGrave(holder, args.layer, offsetX * size, offsetY * size, graveScale * size, () => { supersampleSprites(holder); drawn() }))
     }
 

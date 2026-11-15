@@ -117,8 +117,11 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
     }
     const world = (gameplayTick = 0, phase = 'intro') => ({ levelId: 'test:level', phase, gameplayTick, plants: [] })
     let particles = 0
+    const orders: number[] = []
     const intro = { complete: false, elapsedTicks: 0, graveStartTick: 0 }
-    const stage = { intro, quiet: false, particle() { particles++ } }
+    // The board's order of a grave, by its type and row.
+    const gridItemOrder = (typeId: string, row: number) => row * 10 + (typeId === 'pvz:grave' ? 1 : 0)
+    const stage = { intro, quiet: false, gridItemOrder, particle(_effect: string, _x: number, _y: number, order: number) { particles++; orders.push(order) } }
     const graves = [
         { row: 2, column: 1, variant: 7, riseDelay: 0, offsetX: 0, offsetY: 0, special: true },
         { row: 3, column: 1, variant: 7, riseDelay: 30, offsetX: 0, offsetY: 0 },
@@ -140,6 +143,7 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
         for (const index of [0, 1]) assert.ok(Number.isInteger(stone(roots[index])), `whole pixels at tick ${tick}`)
     }
     assert.equal(particles, 3, 'the dirt of each as the rise starts')
+    assert.deepEqual([...orders].sort((left, right) => left - right), [2, 22, 32], 'one over its grave, as the board draws it')
     // GridItem::DrawGraveStone at whole ticks, with mGridItemCounter = ticks + 1 - delay.
     const { easeInOut } = loadClientModule('view/GameScreenMath', {})
     const round = (value: number) => Math.trunc(value + 0.5)
@@ -167,7 +171,7 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
 
     // /grave: a grave added in play rises from its gameplay tick, with the intro's dirt, once.
     const added = { entityId: 9, typeId: 'pvz:grave', row: 1, column: 3, variant: 4, riseDelay: 0, offsetX: 0, offsetY: 0, riseAtTick: 500 }
-    const root = new Node(), board = { intro: { complete: true }, quiet: false, particle() { particles++ } }
+    const root = new Node(), board = { intro: { complete: true }, quiet: false, gridItemOrder, particle() { particles++ } }
     const playing = await makeGrave({ node: root, content, item: added, stage: board })
     playing.sync(added, world(500, 'gameplay'))
     assert.equal(particles, 1)
@@ -202,6 +206,68 @@ test('plant and zombie Mod view factories share registration, conflict and freez
         assert.throws(() => registry.register('example:late', () => view), /frozen/)
     }
     assert.throws(() => zombieDefinitions.zombieDefinition(presentationFixture, 'example:missing'), /not installed/)
+})
+
+test('every particle of the board is drawn at its order among the entities, one node per order, and a save puts it back there', async () => {
+    class Node {
+        isValid = true
+        name = ''
+        parent?: Node
+        readonly children: Node[] = []
+        setParent(parent: Node) {
+            if (this.parent) this.parent.children.splice(this.parent.children.indexOf(this), 1)
+            parent.children.push(this)
+            this.parent = parent
+        }
+    }
+    const spawned: any[] = [], restored: any[] = []
+    const player = (args: any) => {
+        const node = new Node()
+        node.setParent(args.parent)
+        return { node, renderOrder: args.renderOrder, args, whenReady: async () => {} }
+    }
+    const ParticlePlayer = {
+        spawn(args: any) { const made = player(args); spawned.push(made); return made },
+        restore(args: any) { const made = player({ ...args, renderOrder: args.snapshot.renderOrder }); restored.push(made); return made },
+    }
+    const uiNode = (options: any) => {
+        const node = new Node()
+        node.name = options.name ?? ''
+        if (options.parent) node.setParent(options.parent)
+        return { node }
+    }
+    const modules = { '@/client/view/uiNode': { uiNode }, '@/client/particle/ParticlePlayer': { ParticlePlayer } }
+    const { LevelEntityRenderer } = loadClientModule('level/LevelEntityRenderer', modules)
+    const content = {
+        levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' }, lawnMower: 'test:mower' } } },
+        presentation: { projectiles: { 'test:pea': {}, 'test:mower': { layer: 'lawnMower' } } },
+        views: { events: { of: () => [] } },
+    }
+    const layer = new Node(), board = new LevelEntityRenderer(content, layer, {}, {}, { complete: true }, {})
+    const holder = (order: number) => layer.children.find(child => child.name === `BoardParticles-${order}`)
+    board.particle('test:dirt', 100, 50, 500, undefined, true)
+    assert.deepEqual([spawned[0].node.parent, spawned[0].renderOrder, spawned[0].args.x, spawned[0].args.y, spawned[0].args.recycle, spawned[0].args.mirrored],
+        [holder(500), 500, 100 - 400, 300 - 50, true, true], 'in board coordinates, kept for the next once through')
+    const armor = board.spawnParticle(500, { id: 'test:armor', x: 1, y: 2 })
+    assert.deepEqual([armor.node.parent, armor.args.recycle], [holder(500), undefined], 'played as asked, after the other of its order')
+    assert.deepEqual(holder(500)!.children, [spawned[0].node, armor.node])
+    // A trail goes with its projectile's order.
+    const order = board.projectileOrder('test:pea', 2), trail = board.spawnParticle(order, { id: 'test:trail', x: 0, y: 0, unsaved: true })
+    assert.equal(order, renderOrderModule.renderOrder('projectile', 2))
+    board.reorderParticle(trail, board.projectileOrder('test:pea', 3))
+    assert.deepEqual([trail.node.parent, trail.renderOrder], [holder(renderOrderModule.renderOrder('projectile', 3)), renderOrderModule.renderOrder('projectile', 3)])
+    assert.equal(holder(order)!.children.length, 0)
+    const snapshot = { levelId: 'test:level', plants: [], zombies: [], projectiles: [], items: [], mowerRows: [] }
+    assert.deepEqual([...board.collectLayerEntries(snapshot)].map((entry: any) => [entry.node.name, entry.order]),
+        [500, order, renderOrderModule.renderOrder('projectile', 3)].map(value => [`BoardParticles-${value}`, value]), 'each order once, at its order')
+    // A save's particle of the board's layer goes back into the node of its order.
+    const { LevelParticlePresenter } = loadClientModule('level/LevelParticlePresenter', {
+        cc: { Vec3: class {} }, '@/client/particle/ParticlePlayer': { ParticlePlayer }, './LevelEntityRenderer': {},
+    })
+    const root = { getComponentsInChildren: () => [] }, presenter = new LevelParticlePresenter(root, new Map([['entity-layer', layer]]), board, {})
+    await presenter.restore([{ instanceId: 1, owner: { kind: 'screen', slot: 'entity-layer', x: 3, y: 4, z: 0 }, playback: { renderOrder: 500 } }])
+    assert.deepEqual([restored[0].node.parent, restored[0].args.x, restored[0].args.y], [holder(500), 3, 4])
+    assert.equal(board.projectileOrder('test:mower', 1), renderOrderModule.renderOrder('lawnMower', 1), "a mower's by its type's layer")
 })
 
 test('removing an entity while its custom view loads disposes the completed plant or zombie view', async () => {
@@ -596,6 +662,45 @@ test('sound playback loads overridden base effects and namespaced Mod effects th
     assert.equal(await SoundSystem.load('example:late'), modEffect, 'a missing effect must not poison future loads')
 })
 
+test("a grave buster's dirt is 4 over the buster, at the board's order of the plant it was", () => {
+    const { GraveBusterView } = loadClientModule('plants/GraveBusterView', { './PlantView': { PlantView: class {} } })
+    const asked: unknown[] = [], particles: unknown[][] = []
+    const stage = {
+        plantOrder(plant: unknown) { asked.push(plant); return 1000 },
+        particle(...args: unknown[]) { particles.push(args) },
+    }
+    GraveBusterView.busted(stage, { type: 'graveBusted', data: { typeId: 'pvz:gravebuster', row: 2, x: 120, y: 280, team: 'zombies' } })
+    assert.deepEqual(JSON.parse(JSON.stringify(asked)), [{ typeId: 'pvz:gravebuster', row: 2, x: 120 }])
+    assert.deepEqual(JSON.parse(JSON.stringify(particles)), [['pvz:gravebusterdie', 160, 360, 1004, null, true]])
+})
+
+test('a collected item says how far it is on its way to its counter, which the sun is eased toward the pinned counter by', () => {
+    const { ItemView } = loadClientModule('items/ItemView', {
+        '@/client/view/uiNode': { uiNode: () => ({}) },
+        '@/client/particle/ParticlePlayer': { ParticlePlayer: {} },
+    })
+    const node = { position: { x: 0, y: 0 }, setPosition(x: number, y: number) { this.position = { x, y } }, setScale() {} }
+    const content = { definitions: { items: { 'test:sun': { kind: 'sun' }, 'test:coin': { kind: 'money' } } }, presentation: { items: { 'test:sun': {}, 'test:coin': {} } } }
+    const shown = (typeId: string) => {
+        const view = new ItemView({ node, content, item: { typeId }, stage: { sunBankOffset: () => 100 } })
+        view.animation = {}
+        return view
+    }
+    const sun = shown('test:sun'), at = (x: number, y: number, state = 'collecting') => ({ typeId: 'test:sun', x, y, scale: 1, alpha: 255, state })
+    sun.sync(at(315, 400, 'available'))
+    assert.equal(sun.collectProgress, 0, 'not on its way before it is collected')
+    sun.sync(at(315, 400))
+    assert.equal(sun.collectProgress, 0)
+    sun.sync(at(165, 200))
+    assert.equal(sun.collectProgress, 0.5, 'half way to the sun counter at (15, 0)')
+    assert.equal(node.position.x, 165 + 30 + 100 * 0.5, 'half the way to the pinned counter as well')
+    const coin = shown('test:coin')
+    coin.sync({ ...at(39 + 300, 558), typeId: 'test:coin' })
+    coin.sync({ ...at(39 + 100, 558), typeId: 'test:coin' })
+    assert.ok(Math.abs(coin.collectProgress - 2 / 3) < 1e-9, 'money, to the coin bank')
+    assert.equal(node.position.x, 39 + 100 + 30, 'which is not pinned')
+})
+
 test("a projectile's impact sounds and splats without a view of the projectile, the board's own over its row", () => {
     const spawned: any[] = [], sounds: unknown[] = []
     const { ProjectileView } = loadClientModule('projectiles/ProjectileView', {
@@ -605,9 +710,12 @@ test("a projectile's impact sounds and splats without a view of the projectile, 
         '@/client/sound/SoundSystem': { SoundSystem: { playSounds(value: unknown) { if (value) sounds.push(value) } } },
         '@/shared/content/teams': teamsModule,
     })
-    const layer = {}, zombieNode = {}
+    const zombieNode = {}
     const stage = {
-        layer, node: (id: number) => id === 7 ? zombieNode : undefined,
+        node: (id: number) => id === 7 ? zombieNode : undefined,
+        // The board's order of a projectile, by its type and row; what it draws at an order.
+        projectileOrder: (typeId: string, row: number) => row * 1000 + (typeId === 'test:melon' ? 7 : 0),
+        spawnParticle(order: number, args: object) { spawned.push({ ...args, order }) },
         assets: { projectileFrames: { 'test:pea': { originalSize: { width: 28, height: 28 } } } },
         content: {
             definitions: { projectiles: { 'test:pea': { hitbox: { x: 0, y: 0, width: 28, height: 28 } }, 'test:melon': { hitbox: { x: 20, y: 0, width: 60, height: 40 } } } },
@@ -625,12 +733,14 @@ test("a projectile's impact sounds and splats without a view of the projectile, 
     assert.equal(spawned[0].parent, zombieNode, 'a splat on a zombie goes with it')
     assert.deepEqual([spawned[0].id, spawned[0].x, spawned[0].y], ['test:splat', 290 + 14 + 35 - 300, -(120 + 14 - 2 - 100)], "ahead of its picture's middle, from the zombie")
     impact({ projectileId: 4, typeId: 'test:melon', x: 280, y: 90, targetId: 7, row: 1, above: true })
-    assert.equal(spawned[1].parent, layer, "the board's own stays on the board")
-    assert.deepEqual([spawned[1].x, spawned[1].y, spawned[1].renderOrder], [280 + 50 - 400, 300 - (90 + 20), renderOrderModule.renderOrder('projectile', 1) + 1],
+    assert.equal(spawned[1].parent, undefined, "the board's own stays on the board")
+    assert.deepEqual([spawned[1].x, spawned[1].y, spawned[1].order], [280 + 50 - 400, 300 - (90 + 20), 1007 + 1],
         'at the middle of its hitbox, one over what flies in its row')
+    impact({ projectileId: 6, typeId: 'test:pea', x: 290, y: 120, targetId: 2, target: 'plant', row: 1 })
+    assert.deepEqual([spawned[2].parent, spawned[2].order], [undefined, renderOrderModule.renderOrder('top')], 'a splat on a plant stays on the board, over everything')
     impact({ projectileId: 5, typeId: 'test:pea', x: 290, y: 120, targetId: 7, row: 1, through: true })
-    assert.equal(spawned.length, 2, 'one that flies on through does not splat')
-    assert.deepEqual(sounds, ['splat', 'thud', 'splat'])
+    assert.equal(spawned.length, 3, 'one that flies on through does not splat')
+    assert.deepEqual(sounds, ['splat', 'thud', 'splat', 'splat'])
 })
 
 test('a clip that ends plays over its own pictures and goes on where they end; a clip that fits its time is stretched', () => {

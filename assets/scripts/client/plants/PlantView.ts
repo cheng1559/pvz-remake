@@ -12,9 +12,9 @@ import { PLANT_BLINK_LAYER, type PlantAnimationDefinition } from '@/shared/conte
 import { type ReanimKeyframe, type ReanimTrack, sampleReanimTrack } from '@/shared/content/reanim'
 export type { LayerShown } from '@/client/view/layerPlayback'
 import { renderOrder } from '@/shared/content/renderOrder'
-import { MOWERED_CLIP } from '@/shared/content/zombieAnimation'
+import { ASSET_FPS } from '@/shared/content/animation'
 import { PLANT_WIDTH, plantFacingX, plantTeam } from '@/shared/content/teams'
-import { type PlantSnapshot, TICK_SECONDS, type WorldSnapshot } from '@/shared/protocol/index'
+import { type PlantSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
 import { plantDefinition } from './definitions'
 
 /**
@@ -42,9 +42,8 @@ export interface PlantViewContext {
 
 /** Reanimation::StartBlend(20): a layer that changes its clip blends from the pose it had, unless the clip says how long. */
 const BLEND_SECONDS = 0.2
-/** The original's driver for a mowed zombie, which a mowed plant is squashed by too, at its pace (MOWERED_CLIP). */
+/** The original's driver for a mowed zombie, which a mowed plant is squashed by too (MOWERED_CLIP). */
 const MOWERED_REANIM = 'pvz:lawnmowered_zombie'
-const MOWERED_RATE = MOWERED_CLIP.fps!.min / 12
 /** The point LawnMoweredZombie's locator turns a zombie about, its foot, in the zombie's own y-up units. */
 const MOWERED_ZOMBIE_FOOT = { x: 50, y: -117 }
 /** A plant turns about the middle of its base instead, from its top left in board units. */
@@ -179,7 +178,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
             if (clip && !clip.onlyTracks) this.layers.player(name).setTracksVisible(this.presentation.parts?.eyes ?? [], !blinking)
         }
         // On the board and off it (the almanac): the layers over the first are on its parts, so its colors reach them all.
-        if (this.body.loadedId) this.body.setColorOverride(this.tint ?? Color.WHITE)
+        if (this.body.loadedId) this.body.setColorOverride(this.tinted())
     }
 
     /** The plant's clips, for what a layer shows (shownLayer). */
@@ -218,8 +217,8 @@ export class PlantView implements EntityView<PlantSnapshot> {
         node.setPosition(at.x, at.y)
         node.setScale(mirrored ? -1 : 1, 1, 1)
         this.onBoard(plant, world)
-        // A plant chilled by a hostile snow pea draws blue and animates at half speed. Its players are revisited every
-        // frame while chilled, since a layer may start a new clip, and once more as it thaws.
+        // A plant chilled by a hostile snow pea draws blue (its slower animation is the server's). Its players are
+        // revisited every frame while chilled, since a layer may start a new clip, and once more as it thaws.
         const chilled = (plant.chilledTicks ?? 0) > 0
         if (chilled || this.chilled) for (const player of node.getComponentsInChildren(ReanimPlayer)) player.setChilled(chilled)
         this.chilled = chilled
@@ -240,9 +239,10 @@ export class PlantView implements EntityView<PlantSnapshot> {
     }
 
     /**
-     * A plant a mower crushed (PlantSnapshot.mowered) is squashed with a zombie's LawnMoweredZombie, at the server's
-     * time: frozen as it stood, without its shadow, its node turns and scales by the locator's pose about the middle of
-     * its base as a zombie does about its foot, tipping the way the mower ran, then flattens.
+     * A plant a mower crushed (PlantSnapshot.mowered) is squashed with a zombie's LawnMoweredZombie, where the server
+     * has it in the driver's clip, as a mowed zombie's body (ZombieView's MoweredDriver): frozen as it stood, without its
+     * shadow, its node turns and scales by the locator's pose about the middle of its base as a zombie does about its
+     * foot, tipping the way the mower ran, then flattens.
      */
     private squash(plant: PlantSnapshot): void {
         const { node } = this.context
@@ -258,7 +258,8 @@ export class PlantView implements EntityView<PlantSnapshot> {
                 .then(({ data }) => { loaded.track = data.tracks.find(track => track.id === 'locator') })
                 .catch(error => console.error('[Level] Failed to load the mowed animation', error))
         }
-        const pose = locator.track && sampleReanimTrack(locator.track, plant.mowered!.ticks * TICK_SECONDS * MOWERED_RATE)
+        // The driver's frames are its pictures', made at their own pace, as a zombie's presentation has its clip.
+        const pose = locator.track && sampleReanimTrack(locator.track, plant.mowered!.time / ASSET_FPS)
         if (!pose) return
         const facing = plant.team === 'zombies' ? -1 : 1, tip = plant.mowered!.left ? -1 : 1
         const origin = boardToLayer(plant.x + (facing < 0 ? PLANT_WIDTH : 0), plant.y)
@@ -310,6 +311,13 @@ export class PlantView implements EntityView<PlantSnapshot> {
     protected get tint(): Color | undefined {
         const tint = this.presentation.visual.tint
         return tint ? new Color(...tint) : undefined
+    }
+
+    /** The color the plant is drawn in under `shade` (a packet's gray, a preview's translucency): its tint, shaded. */
+    tinted(shade: Color = Color.WHITE): Color {
+        const tint = this.tint
+        return tint ? new Color(Math.round(shade.r * tint.r / 255), Math.round(shade.g * tint.g / 255), Math.round(shade.b * tint.b / 255), shade.a)
+            : shade.clone()
     }
 
     /** Its flash, which goes on across a save; the server's snapshot has the rest of what it shows. */

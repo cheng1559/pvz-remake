@@ -34,6 +34,7 @@ import * as levelRules from '@/client/level/rules'
 import * as debugSettings from '@/platform/debug/GameDebugSettings'
 import * as debugCli from '@/shared/debug/DebugCli'
 import * as protocol from '@/shared/protocol'
+import * as renderOrder from '@/shared/content/renderOrder'
 import * as debugCommands from '@/platform/debug/DebugCliCommands'
 import * as haptics from '@/platform/Haptics'
 import * as clock from '@/core/GameClock'
@@ -79,6 +80,7 @@ export function createClientModHost(ownerId: string, definitions: DefinitionSour
         'platform/debug/GameDebugSettings': debugSettings,
         'shared/debug/DebugCli': debugCli,
         'shared/protocol': protocol,
+        'shared/content/renderOrder': renderOrder,
         'platform/debug/DebugCliCommands': debugCommands,
         'platform/Haptics': haptics,
         'core/GameClock': clock,

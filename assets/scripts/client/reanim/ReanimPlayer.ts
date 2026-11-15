@@ -46,8 +46,6 @@ interface TrackRenderOverride {
 const DEG_TO_RAD = Math.PI / 180
 /** Zombie::DrawReanim's chilled color, (75, 75, 255). */
 const CHILL_COLOR = 75
-/** A chilled zombie's animation pace (Zombie::UpdateAnimSpeed), which a chilled plant's animations follow. */
-const CHILLED_TIME_SCALE = 0.5
 
 /** A frame's texture with its untrimmed, top-left anchored rectangle and UVs, read once. */
 interface FrameGeometry {
@@ -155,7 +153,7 @@ export class ReanimPlayer extends Component {
     private extraAdditive = false
     private extraAdditiveColor = Color.BLACK.clone()
     private colorOverride = Color.WHITE.clone()
-    /** Chilled: drawn blue over the color override and hit flash, and played at half speed (see setChilled). */
+    /** Chilled: drawn blue over the color override and hit flash (see setChilled). */
     private chilled = false
     private poseDirty = false
     private batches: KernelBatch[] = []
@@ -446,14 +444,17 @@ export class ReanimPlayer extends Component {
     }
 
     /**
-     * Zombie::DrawReanim's chill, also for a plant chilled by a hostile snow pea: the color is multiplied by
-     * (75, 75, 255) and (75, 75, 255) is added over the hit flash; time runs at half speed. It stays apart from the
-     * color override and hit flash so that the views keep setting those.
+     * Zombie::DrawReanim's chill, the one way a chilled zombie or plant (one chilled by a hostile snow pea) is drawn:
+     * the color is multiplied by (75, 75, 255) and (75, 75, 255) is added over the hit flash. It stays apart from the
+     * color override and hit flash so that the views keep setting those, and, like them, applies to players attached to
+     * this one's tracks. Its slower animation is the server's, which sends the rate it plays at.
      */
     setChilled(chilled: boolean): void {
-        if (this.chilled === chilled) return
-        this.chilled = chilled
-        this.applyPose()
+        if (this.chilled !== chilled) {
+            this.chilled = chilled
+            this.applyPose()
+        }
+        for (const player of this.attachedPlayers()) player.setChilled(chilled)
     }
 
     private get drawColor(): Color {
@@ -531,7 +532,7 @@ export class ReanimPlayer extends Component {
             throw new Error('reanim deltaSeconds must be finite and non-negative')
         }
         const data = this.requireData()
-        const next = this.timeSeconds + deltaSeconds * this.rate * (this.chilled ? CHILLED_TIME_SCALE : 1)
+        const next = this.timeSeconds + deltaSeconds * this.rate
         if (this.blendDuration > 0) this.blendElapsed += deltaSeconds
         if (this.loop) {
             this.timeSeconds = next % data.durationSeconds

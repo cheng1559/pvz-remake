@@ -13,6 +13,8 @@ import { getActiveTutorial } from '../tutorials'
 import { levelRule } from '../rules/registry'
 import { zombiePace } from '../zombies/animation'
 import { gridItems as lawnGridItems } from '../level/lawn'
+import { plantPace } from '../plants/chill'
+import { pacedLayers } from '@/shared/content/animation'
 
 /** What the client draws each frame. Mods add their state through `host.around(snapshot, 'build', ...)`. */
 export const snapshot = {
@@ -49,8 +51,8 @@ export const snapshot = {
             }
         })
         for (const entity of world.query(PositionComponent, MowedPlantComponent)) {
-            const { plant, ticks, left } = world.get(entity, MowedPlantComponent)!
-            plants.push({ ...plantSnapshot(entity, plant, world.get(entity, PositionComponent)!), mowered: { ticks, ...(left ? { left } : {}) } })
+            const { plant, squash, left } = world.get(entity, MowedPlantComponent)!
+            plants.push({ ...plantSnapshot(entity, plant, world.get(entity, PositionComponent)!), mowered: { time: squash.time, ...(left ? { left } : {}) } })
         }
         const zombies = [...world.query(PositionComponent, ZombieComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
@@ -61,8 +63,8 @@ export const snapshot = {
                 state: zombie.state,
                 health: zombie.health,
                 maxHealth: zombie.maxHealth,
-                // The rates a view plays them at: a chilled zombie's are halved.
-                animations: Object.fromEntries(Object.entries(zombie.animations).map(([layer, state]) => [layer, { ...state, rate: state.rate * zombiePace(zombie, layer) }])),
+                // The rates a view plays them at: a chilled zombie's body's is halved.
+                animations: pacedLayers(zombie.animations, layer => zombiePace(zombie, layer)),
                 alpha: zombie.state === 'dying' ? Math.min(255, Math.trunc(255 * zombie.deathTicksRemaining / 10)) : 255,
                 hasHead: zombie.hasHead,
                 hasTongue: zombie.hasTongue,
@@ -152,12 +154,16 @@ export const snapshot = {
     },
 }
 
-/** A plant as a view draws it, standing or mowed: the server's own counters (its blink, its last bite) left out. */
-function plantSnapshot(entityId: number, { chilledTicks, blinkTicks: _blink, recentlyEatenCounter: _bitten, ...plant }: Plant, position: Position): PlantSnapshot {
+/**
+ * A plant as a view draws it, standing or mowed: the server's own counters (its blink, its last bite) left out, its
+ * layers at the rates a view plays them at (a chilled plant's are halved).
+ */
+function plantSnapshot(entityId: number, source: Plant, position: Position): PlantSnapshot {
+    const { chilledTicks, blinkTicks: _blink, recentlyEatenCounter: _bitten, ...plant } = source
     return {
         entityId, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...position,
         ...(plant.ability ? { ability: { ...plant.ability } } : {}),
-        ...(plant.animations ? { animations: jsonRoundTrip(plant.animations) } : {}),
+        ...(plant.animations ? { animations: pacedLayers(plant.animations, () => plantPace(source)) } : {}),
         ...(plant.behaviorState ? { behaviorState: jsonRoundTrip(plant.behaviorState) } : {}),
     }
 }

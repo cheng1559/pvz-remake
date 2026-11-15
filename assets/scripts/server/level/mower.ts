@@ -2,9 +2,11 @@ import { type GameplayDefinitions, MOWER_READY_X, mowerY } from '@/shared/conten
 import type { GameSystem, World } from '@/ecs/index'
 import {
     LevelStateResource, MowedPlantComponent, type Plant, PlantAttackComponent, PlantComponent, type Position, PositionComponent, type Projectile,
-    ProjectileComponent, type Zombie, ZombieComponent,
+    ProjectileComponent, RandomResource, type Zombie, ZombieComponent,
 } from '../state/components'
-import { MOWERED_TICKS } from '@/shared/content/zombieAnimation'
+import { startLayer, stepLayers } from '@/shared/content/animation'
+import { ZOMBIE_CLIPS } from '@/shared/content/gameplay'
+import { MOWERED_ANIMATION, squashed } from '@/shared/content/zombieAnimation'
 import { destroyZombie, dropZombieHelm, dropZombieShield, isFlattenableZombie, flattenZombie } from '../zombies/damage'
 import { dropZombieLoot } from './loot'
 import { dropZombieFlag } from '../zombies/flag'
@@ -44,9 +46,12 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
                     startMower(world, definitions, position.row, { entity, position, zombie })
                 }
             }
-            // A mowed plant is squashed for as long as a mowed zombie, then gone.
+            // A mowed plant is squashed as a mowed zombie is, by the driver it plays, then gone.
+            const random = world.resources.get(RandomResource)
             for (const entity of world.query(MowedPlantComponent)) {
-                if (++world.get(entity, MowedPlantComponent)!.ticks >= MOWERED_TICKS) commands.destroyEntity(entity)
+                const { squash } = world.get(entity, MowedPlantComponent)!
+                stepLayers(MOWERED_ANIMATION, { animations: { squash } }, random)
+                if (squashed(squash)) commands.destroyEntity(entity)
             }
         },
     }
@@ -126,7 +131,8 @@ export function mowPlant(world: World, mowerId: number, mower: Projectile, targe
     mower.chompCounter = CHOMP_ACTIVE_TICKS
     world.remove(target.entity, PlantComponent)
     world.remove(target.entity, PlantAttackComponent)
-    world.add(target.entity, MowedPlantComponent, { plant: target.plant, ticks: 0, ...(team === 'zombies' ? { left: true as const } : {}) })
+    const squash = startLayer(MOWERED_ANIMATION, {}, ZOMBIE_CLIPS.mowered, world.resources.get(RandomResource))
+    world.add(target.entity, MowedPlantComponent, { plant: target.plant, squash, ...(team === 'zombies' ? { left: true as const } : {}) })
     emitServerEvent(world.resources.get(EventQueueResource), 'plantMowered', { mowerId, plantId: target.entity })
 }
 

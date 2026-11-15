@@ -1,4 +1,3 @@
-import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { GraveBusterView } from '@/client/plants/GraveBusterView'
 import { ChomperView } from '@/client/plants/ChomperView'
 import { PlantView } from '@/client/plants/PlantView'
@@ -22,7 +21,7 @@ const planted: StageEvent = (stage, event, world) => {
     void SoundSystem.playFoley(SoundEffect.Plant)
     if (event.type !== 'plantPlaced') return
     const plant = world.plants.find(candidate => candidate.entityId === event.data.entityId)
-    if (plant) ParticlePlayer.spawn({ parent: stage.layer, id: 'pvz:planting', ...boardToLayer(plant.x + 41, plant.y + 74), renderOrder: renderOrder('top') })
+    if (plant) stage.spawnParticle(renderOrder('top'), { id: 'pvz:planting', ...boardToLayer(plant.x + 41, plant.y + 74) })
 }
 
 /**

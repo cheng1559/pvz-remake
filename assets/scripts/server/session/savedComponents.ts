@@ -102,12 +102,13 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
     savedComponent({
         key: 'mowedPlant', component: MowedPlantComponent,
         parse: (value, name): MowedPlant => {
-            const mowed = exact(value, ['plant', 'ticks'], name, ['left'])
-            return { plant: parsePlant(mowed.plant, `${name}.plant`), ticks: nonNegativeInteger(mowed.ticks, `${name}.ticks`),
+            const mowed = exact(value, ['plant', 'squash'], name, ['left'])
+            return { plant: parsePlant(mowed.plant, `${name}.plant`), squash: parseLayer(mowed.squash, `${name}.squash`),
                 ...(mowed.left === undefined ? {} : { left: trueFlag(mowed.left, `${name}.left`) }) }
         },
         check: (mowed, context) => {
             if (!onBoardRow(context) || !context.content.definitions.plants[mowed.plant.typeId]) throw new Error(`Unknown saved plant: ${mowed.plant.typeId}`)
+            if (mowed.squash.clip !== ZOMBIE_CLIPS.mowered) throw new Error(`Saved entity ${context.entity.entityId} has an invalid squash`)
         },
     }),
     savedComponent({
@@ -134,7 +135,7 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
         parse: (value, name): Zombie => {
             const source = exact(value, [
                 'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
-                'moweredTicksRemaining', 'walkClip', 'animations', 'hasHead', 'hasArm',
+                'walkClip', 'animations', 'hasHead', 'hasArm',
                 'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'hasPole', 'enrageTicks', 'riseTicks',
             ], name, ['behaviorState', 'droppedLoot', 'team'])
             const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
@@ -148,7 +149,6 @@ export const SAVED_COMPONENTS: readonly SavedComponent[] = [
                 speedPerTick: finite(source.speedPerTick, `${name}.speedPerTick`),
                 biteTicks: nonNegativeInteger(source.biteTicks, `${name}.biteTicks`),
                 deathTicksRemaining: nonNegativeInteger(source.deathTicksRemaining, `${name}.deathTicksRemaining`),
-                moweredTicksRemaining: nonNegativeInteger(source.moweredTicksRemaining, `${name}.moweredTicksRemaining`),
                 walkClip: nonEmptyString(source.walkClip, `${name}.walkClip`),
                 animations: parseLayers(source.animations, `${name}.animations`),
                 hasHead: boolean(source.hasHead, `${name}.hasHead`),
@@ -298,15 +298,18 @@ function parsePlantAbility(value: unknown, name: string): PlantAbility {
 
 /** What the layers of an animation play, a plant's or a zombie's, by layer. */
 function parseLayers(value: unknown, name: string): Record<string, LayerState> {
-    return Object.fromEntries(Object.entries(record(value, name)).map(([layer, entry]) => {
-        const state = exact(entry, ['clip', 'time', 'rate'], `${name}.${layer}`, ['hidden'])
-        return [layer, {
-            ...(state.hidden === undefined ? {} : { hidden: trueFlag(state.hidden, `${name}.${layer}.hidden`) }),
-            clip: nonEmptyString(state.clip, `${name}.${layer}.clip`),
-            time: nonNegativeFinite(state.time, `${name}.${layer}.time`),
-            rate: nonNegativeFinite(state.rate, `${name}.${layer}.rate`),
-        }]
-    }))
+    return Object.fromEntries(Object.entries(record(value, name)).map(([layer, entry]) => [layer, parseLayer(entry, `${name}.${layer}`)]))
+}
+
+/** What a layer of an animation plays. */
+function parseLayer(value: unknown, name: string): LayerState {
+    const state = exact(value, ['clip', 'time', 'rate'], name, ['hidden'])
+    return {
+        ...(state.hidden === undefined ? {} : { hidden: trueFlag(state.hidden, `${name}.hidden`) }),
+        clip: nonEmptyString(state.clip, `${name}.clip`),
+        time: nonNegativeFinite(state.time, `${name}.time`),
+        rate: nonNegativeFinite(state.rate, `${name}.rate`),
+    }
 }
 
 /** A behaviour's own state, which the behaviour checks (EntityBehaviorRegistry.validateState). */

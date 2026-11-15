@@ -1,6 +1,6 @@
 import type { Position, Zombie } from '../state/components'
 import { type AnimationClip, type AnimationDefinition, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
-import { type AnimationRandom, framePosition, type LayerState, startLayer, startLayers, stepLayers, TICKS_PER_SECOND } from '@/shared/content/animation'
+import { type AnimationRandom, CHILLED_ANIMATION_FACTOR, framePosition, type LayerState, startLayer, startLayers, stepLayers, TICKS_PER_SECOND } from '@/shared/content/animation'
 import { MOWERED_ANIMATION } from '@/shared/content/zombieAnimation'
 
 /**
@@ -14,12 +14,10 @@ export { TICKS_PER_SECOND }
 /** Zombie::UpdateAnimSpeed: a walk goes at the rate that takes its zombie over the ground at the zombie's speed, by this. */
 const ZOMBIE_WALK_RATE_FACTOR = 47
 
-// Zombie::ApplyAnimRate halves a chilled zombie's body; walking speed follows its `_ground` track.
-export const CHILLED_ANIMATION_FACTOR = 0.5
-
 /**
  * The part of its rate a layer of a zombie's animation goes at: Zombie::ApplyAnimRate halves a chilled zombie's body
- * alone, and what it carries (a flag, a propeller) is a Reanim of its own, at its own rate. The mower's driver is not slowed.
+ * alone (CHILLED_ANIMATION_FACTOR; its walking speed follows its `_ground` track), and what it carries (a flag, a
+ * propeller) is a Reanim of its own, at its own rate. The mower's driver is not slowed.
  */
 export function zombiePace(zombie: Zombie, layer = ZOMBIE_BODY_LAYER): number {
     return layer === ZOMBIE_BODY_LAYER && zombie.chilledTicks > 0 && zombie.state !== 'mowered' ? CHILLED_ANIMATION_FACTOR : 1

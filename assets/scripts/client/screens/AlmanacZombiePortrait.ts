@@ -1,5 +1,5 @@
 import { _decorator, Component, isValid, Node } from 'cc'
-import { createOffBoardZombie, offBoardContent } from '@/client/view/offBoard'
+import { createOffBoardZombie, holdStill, offBoardContent } from '@/client/view/offBoard'
 import { uiNode } from '@/client/view/uiNode'
 
 /**
@@ -27,10 +27,7 @@ export class AlmanacZombiePortrait extends Component {
         const zombie = await createOffBoardZombie(uiNode({ name: 'Zombie', parent: root }).node, typeId,
             { pose: 'idle', draw: { position: { x: 0, y: 0 }, shadow: false } })
         if (!zombie) { if (isValid(root, true)) throw new Error(`Zombie is not drawn off the board: ${typeId}`); return }
-        for (const player of zombie.view.players) {
-            player.pause()
-            // The picture is much smaller than its art.
-            player.setSupersampled()
-        }
+        // The picture is much smaller than its art.
+        holdStill(zombie.view.players, true)
     }
 }

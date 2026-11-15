@@ -40,7 +40,6 @@ export function spawnZombie(
         speedPerTick: speed.min + random.nextFloat() * (speed.max - speed.min),
         biteTicks: 0,
         deathTicksRemaining: 0,
-        moweredTicksRemaining: 0,
         walkClip: ZOMBIE_CLIPS.walk,
         animations: {},
         hasHead: true,

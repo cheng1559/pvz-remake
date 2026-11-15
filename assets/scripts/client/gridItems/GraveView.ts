@@ -4,7 +4,6 @@ import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { easeInOut } from '@/client/view/GameScreenMath'
 import { uiNode } from '@/client/view/uiNode'
-import { renderOrder } from '@/shared/content/renderOrder'
 import type { GraveSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import { graveRiseCounter } from '@/shared/content/graves'
 import type { GridItemView, GridItemViewContext } from './GridItemView'
@@ -98,9 +97,9 @@ export class GraveView implements GridItemView {
     /** GridItem::AddGraveStoneParticles. */
     private riseEffects(grave: GraveSnapshot, world: WorldSnapshot): void {
         const { stage, content } = this.context
-        const board = content.definitions.boards[content.levels.levels[world.levelId].board], { layer, offset } = content.presentation.gridItems[grave.typeId]
+        const board = content.definitions.boards[content.levels.levels[world.levelId].board]
         stage!.particle('pvz:gravestonerise', board.origin.x + grave.column * board.cell.width + 14 + grave.offsetX,
-            board.origin.y + grave.row * board.cell.height + 78 + grave.offsetY, renderOrder(layer, grave.row, offset) + 1)
+            board.origin.y + grave.row * board.cell.height + 78 + grave.offsetY, stage!.gridItemOrder(grave.typeId, grave.row) + 1)
         void SoundSystem.playFoley(SoundEffect.DirtRise)
     }
 

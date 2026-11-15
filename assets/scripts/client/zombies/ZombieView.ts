@@ -3,7 +3,6 @@ import { modResources } from '@/client/content/ModResources'
 import { Color, Mask, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
 import { zombieDefinition } from './definitions'
-import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { renderOrder } from '@/shared/content/renderOrder'
 import { mirrorX, ZOMBIE_WIDTH } from '@/shared/content/teams'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -274,7 +273,9 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
             : snapshot.body
                 ? Object.entries(this.clips()).find(([, clip]) => clip?.reanimId === snapshot.body!.id)?.[0] ?? null
                 : null
+        // What it has on goes back on the clip it came back to: off the board (a street's zombie) nothing shows it again.
         this.parts = ''
+        if (this.latestZombie) this.applyParts(this.latestZombie)
     }
 
     private async restorePlayer(
@@ -399,18 +400,18 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         }
     }
 
-    /** Zombie::DrawReanim tints chilled zombies blue and burned ones black. */
+    /** Zombie::DrawReanim draws a burned zombie black, and a chilled one blue (ReanimPlayer.setChilled) unless burned. */
     private applyColor(zombie: ZombieSnapshot, force = false): void {
         const color = zombie.state === 'burned' ? 'burned' : zombie.chilled ? 'chilled' : 'normal'
         if (!this.player || color === this.color && !force) return
         this.color = color
-        const value = color === 'burned' ? new Color(0, 0, 0) : color === 'chilled' ? new Color(75, 75, 255) : Color.WHITE
         // What it carries is attached to the body's tracks, so it takes the body's colors.
-        this.player.setColorOverride(value)
+        this.player.setColorOverride(color === 'burned' ? Color.BLACK : Color.WHITE)
+        this.player.setChilled(color === 'chilled')
     }
 
+    /** Zombie::DrawReanim's hit highlight (mJustGotShotCounter), over its chill; the shield's own (mShieldJustGotShotCounter). */
     private applyHitFlash(zombie: ZombieSnapshot): void {
-        const cold = zombie.chilled === true && zombie.state !== 'burned'
         const shield = zombie.shieldHealth > 0 ? this.presentation.shield : undefined
         // TakeShieldDamage flashes only the shield, unless the hit also reached the body (the Fume-shroom); one that
         // came past the shield (a lobbed projectile) flashes only the body.
@@ -418,10 +419,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const bodyFlash = shield && !through && !past ? 0 : this.flash.flash
         const flash = past ? 0 : this.flash.flash
         const grayness = Math.min(255, bodyFlash * 10)
-        // DrawReanim adds the cold tint and then adds the hit highlight on top of it.
-        const color = new Color(Math.min(255, grayness + (cold ? 75 : 0)),
-            Math.min(255, grayness + (cold ? 75 : 0)), cold ? 255 : grayness, 255)
-        this.player?.setExtraAdditiveDraw(cold || bodyFlash > 0, color)
+        this.player?.setExtraAdditiveDraw(bodyFlash > 0, new Color(grayness, grayness, grayness, 255))
         if (shield && this.player) {
             const burned = zombie.state === 'burned'
             const gray = Math.min(255, flash * 10)
@@ -522,12 +520,10 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const local = track ? uiNode({ node: stage.layer }).transform.convertToNodeSpaceAR(track) : null
         // A zombie facing right sheds its armor the way it faces.
         const mirrored = zombie?.team === 'plants'
-        ParticlePlayer.spawn({
-            parent: stage.layer, id: armor.effect,
+        // One above the zombie.
+        stage.spawnParticle(stage.zombieOrder(zombie?.row ?? 0) + 1, {
+            id: armor.effect, mirrored,
             x: local?.x ?? node.position.x + mirrorX(armor.offset[0], ZOMBIE_WIDTH, mirrored), y: local?.y ?? node.position.y + armor.offset[1],
-            // One above the zombie.
-            renderOrder: stage.zombieOrder(zombie?.row ?? 0) + 1,
-            mirrored,
         })
     }
 
@@ -545,13 +541,11 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         // A zombie facing right: its part flies off the way it faces, as its body is drawn. (The original keeps the
         // part's flight for a mind-controlled zombie.)
         const mirrored = zombie?.team === 'plants', chilled = zombie?.chilled === true
-        ParticlePlayer.spawn({
-            parent: stage.layer,
+        // One above the zombie.
+        stage.spawnParticle(stage.zombieOrder(zombie?.row ?? (typeof event.data.row === 'number' ? event.data.row : 0)) + 1, {
             id: event.data.mowered === true ? drop.moweredEffect ?? drop.effect : drop.effect,
             x: local?.x ?? node.position.x + mirrorX(drop.offset[0], ZOMBIE_WIDTH, mirrored),
             y: local?.y ?? node.position.y + drop.offset[1],
-            // One above the zombie.
-            renderOrder: stage.zombieOrder(zombie?.row ?? (typeof event.data.row === 'number' ? event.data.row : 0)) + 1,
             // The pole vaulter's own head and a bare hand are swapped in.
             spriteOverride: drop.image,
             // Zombie::OverrideParticleColor keeps a chilled zombie's parts blue.

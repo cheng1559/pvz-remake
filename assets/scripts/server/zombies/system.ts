@@ -1,5 +1,6 @@
 import { playZombie, startWalk, stepZombie, walkZombie, zombieBody, zombiePace } from './animation'
 import { passedMark } from '@/shared/content/animation'
+import { squashed } from '@/shared/content/zombieAnimation'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, SystemContext, World } from '@/ecs/index'
 import { type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
@@ -62,7 +63,7 @@ export class ZombieSystem implements GameSystem {
             const random = world.resources.get(RandomResource)
             if (zombie.state === 'mowered') {
                 stepZombie(zombie, animation, random)
-                if (--zombie.moweredTicksRemaining <= 0) {
+                if (squashed(zombieBody(zombie))) {
                     const events = world.resources.get(EventQueueResource)
                     if (zombie.hasHead) {
                         zombie.hasHead = false

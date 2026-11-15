@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { World } from '@/ecs'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
-import { ZombieComponent } from '@/server/state/components'
+import { PlantComponent, ZombieComponent } from '@/server/state/components'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { adventureSeeds } from './adventure-seeds'
@@ -194,6 +194,34 @@ test('a hostile snow pea chills a plant, which then does everything at half spee
     assert.equal(plants(server).find(plant => plant.entityId === control)!.chilledTicks, undefined, 'a plain pea does not chill')
     server.start({ ...options, save: server.save() as unknown as JsonValue })
     assert.ok(plants(server).find(plant => plant.row === 2 && plant.column === 0)!.chilledTicks! > 0, 'the chill survives a save')
+})
+
+test('a chilled plant animates every tick at half its rate, as a chilled zombie\'s body, and a view is sent that rate', () => {
+    const server = begin()
+    debug(server, '/plant sunflower 3 1')
+    const id = plants(server)[0].entityId, plant = world(server).get(id, PlantComponent)!
+    const step = () => {
+        const before = structuredClone(plant.animations!)
+        server.tick()
+        return Object.entries(plant.animations!).map(([layer, state]) => [layer, state.time - before[layer].time, before[layer].rate] as const)
+    }
+    for (const [layer, moved, rate] of step()) assert.ok(Math.abs(moved - rate / 100) < 1e-9, `${layer} at its rate`)
+    plant.chilledTicks = 10
+    plant.blinkTicks = 50
+    for (let tick = 0; tick < 2; tick++) {
+        for (const [layer, moved, rate] of step()) assert.ok(Math.abs(moved - rate / 200) < 1e-9, `chilled, ${layer} at half its rate on each tick`)
+        const shown = server.snapshot().plants.find(candidate => candidate.entityId === id)!
+        for (const [layer, state] of Object.entries(plant.animations!)) assert.equal(shown.animations![layer].rate, state.rate / 2, 'the view plays it at that rate')
+    }
+    assert.equal(plant.blinkTicks, 49, 'it counts down to its blink every other tick')
+})
+
+test('a grave buster that is done says what it was, for the draw order of its dirt', () => {
+    const server = begin()
+    debug(server, '/plant gravebuster 3 2 zombies')
+    const [buster] = plants(server)
+    const busted = run(server, 2000).find(event => event.type === 'graveBusted')
+    assert.deepEqual(busted?.data, { entityId: buster.entityId, typeId: 'pvz:gravebuster', row: 2, column: 1, x: buster.x, y: buster.y, team: 'zombies' })
 })
 
 test('peas fly over low plants and hit the plant behind', () => {

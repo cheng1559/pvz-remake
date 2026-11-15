@@ -53,7 +53,6 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     world.add(zombie, ZombieComponent, {
         typeId: 'pvz:normal', health: 270, maxHealth: 270, state: 'walking',
         speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
-        moweredTicksRemaining: 0,
         walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
         hasHead: false, hasTongue: false, hasArm: true, groanCounter: 300,
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
@@ -70,7 +69,6 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     assert.equal(world.hasEntity(zombie), true)
     assert.equal(world.get(zombie, ZombieComponent)!.state, 'mowered')
     assert.deepEqual(world.get(zombie, ZombieComponent)!.animations.body, { clip: 'mowered', time: 0, rate: 16 })
-    assert.equal(world.get(zombie, ZombieComponent)!.moweredTicksRemaining, 50)
     assert.equal(world.get(mowerEntity, ProjectileComponent)!.chompCounter, 24)
     assert.equal(world.get(mowerEntity, PositionComponent)!.x, -19.996272)
 
@@ -79,7 +77,6 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     world.add(secondZombie, ZombieComponent, {
         typeId: 'pvz:normal', health: 270, maxHealth: 270, state: 'walking',
         speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
-        moweredTicksRemaining: 0,
         walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
         hasHead: true, hasTongue: false, hasArm: true, groanCounter: 300,
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
@@ -124,7 +121,7 @@ test('Zombie::MowDown drops a worn helm or shield before the mowed animation', (
         world.add(entity, PositionComponent, { x: -10, y: 280, row: 2 })
         world.add(entity, ZombieComponent, {
             typeId, health: 270, maxHealth: 270, state: 'walking', speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
-            moweredTicksRemaining: 0, walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
+            walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
             hasHead: true, hasTongue: false, hasArm: true, groanCounter: 300,
             helmHealth: definitions.zombies[typeId].helm?.health ?? 0, shieldHealth: definitions.zombies[typeId].shield?.health ?? 0,
             chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
@@ -152,7 +149,7 @@ test('a zombie that cannot be flattened (dying, vaulting, rising) goes in a puff
     world.add(zombie, PositionComponent, { x: -10, y: 280, row: 2 })
     world.add(zombie, ZombieComponent, {
         typeId: 'pvz:normal', health: 0, maxHealth: 270, state: 'dying', speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 100,
-        moweredTicksRemaining: 0, walkClip: 'walk', animations: { body: { clip: 'death', time: 0, rate: 12 } },
+        walkClip: 'walk', animations: { body: { clip: 'death', time: 0, rate: 12 } },
         hasHead: false, hasTongue: false, hasArm: true, groanCounter: 300,
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
     })
@@ -252,7 +249,7 @@ test('a shooter can fire mowing projectiles, each from its mouth on its side, cr
     planted.command({ type: 'placePlant', row: 2, column: 1 })
     planted.update(0.01)
     const nut = () => planted.render().plants.find(plant => plant.typeId === 'pvz:wallnut')
-    assert.deepEqual(nut()?.mowered, { ticks: 0 })
+    assert.deepEqual(nut()?.mowered, { time: 0 })
     const squashed = new LocalIntegratedGame(firing, levels, undefined, true)
     squashed.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save: planted.saveAtBoundary() })
     assert.deepEqual(squashed.render().plants, planted.render().plants, 'a save keeps it mid-squash')

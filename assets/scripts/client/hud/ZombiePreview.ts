@@ -1,8 +1,8 @@
-import { _decorator, Color, Component, isValid, Node, Sprite } from 'cc'
+import { _decorator, Color, Component, isValid, Node, type Sprite } from 'cc'
 import { mirrorInPacket, type PacketTilt, PacketPictureStyle, placePacketPicture } from './packetPicture'
-import { bakeSprite } from '@/client/view/bakeSprite'
+import { flattenTranslucent } from '@/client/view/bakeSprite'
 import type { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
-import { createOffBoardZombie, offBoardContent, type OffBoardZombie } from '@/client/view/offBoard'
+import { createOffBoardZombie, holdStill, offBoardContent, type OffBoardZombie } from '@/client/view/offBoard'
 import { uiNode } from '@/client/view/uiNode'
 
 const { ccclass } = _decorator
@@ -32,10 +32,7 @@ export class ZombiePreview extends Component {
     private color = Color.WHITE.clone()
     private root: Node | null = null
     private players: ReanimPlayer[] = []
-    /**
-     * A translucent zombie is flattened first, as PlantPreview does, so its own parts hide each other instead of
-     * showing through; the flat image then takes the color.
-     */
+    /** A translucent zombie drawn whole (flattenTranslucent), as PlantPreview draws a plant. */
     private composite?: Sprite
     private zombie?: OffBoardZombie
     /** Whether a packet's picture is tilted, and the clip a tilted one draws through. */
@@ -99,9 +96,9 @@ export class ZombiePreview extends Component {
     setColor(color: Color): void {
         if (this.color.equals(color)) return
         this.color = color.clone()
-        if (this.composite) this.composite.color = this.color
-        else if (this.color.a < 255 && this.players.length && this.root) this.ready = this.flatten(this.root)
-        else for (const player of this.players) player.setColorOverride(this.color)
+        if (this.composite) { this.composite.color = this.color; return }
+        const painting = this.root && this.players.length ? this.paint(this.root) : undefined
+        if (painting) this.ready = painting
     }
 
     private reload(): void {
@@ -110,17 +107,23 @@ export class ZombiePreview extends Component {
         this.setZombie(typeId)
     }
 
-    /** bakeSprite: the opaque pose captured as one image, which replaces the parts. */
-    private async flatten(root: Node): Promise<void> {
-        root.active = false
-        for (const player of this.players) player.setColorOverride(Color.WHITE)
-        const composite = await bakeSprite(root)
-        if (!composite || !isValid(root, true) || root !== this.root) return
-        for (const child of [...root.children]) if (child !== composite.node) child.destroy()
-        this.players = []
-        this.composite = composite
-        composite.color = this.color
-        root.active = true
+    /**
+     * The zombie in its color: its parts at once, or, translucent, drawn whole first (flattenTranslucent), the flat image
+     * taking the color and shown once it is there.
+     */
+    private paint(root: Node): Promise<void> | undefined {
+        const flattening = flattenTranslucent(root, this.players, this.color, () => root === this.root)
+        if (!flattening) {
+            for (const player of this.players) player.setColorOverride(this.color)
+            return undefined
+        }
+        return flattening.then(composite => {
+            if (!composite) return
+            this.players = []
+            this.composite = composite
+            composite.color = this.color
+            root.active = true
+        })
     }
 
     /**
@@ -157,14 +160,11 @@ export class ZombiePreview extends Component {
         if (!zombie || !isValid(root, true) || root !== this.root) return
         this.zombie = zombie
         this.players = zombie.view.players
-        for (const player of this.players) {
-            player.pause()
-            // A packet's picture is much smaller than its art.
-            if (this.placement.packetScale !== undefined) player.setSupersampled()
-        }
+        // A packet's picture is much smaller than its art.
+        holdStill(this.players, this.placement.packetScale !== undefined)
         this.place()
-        if (this.color.a < 255) { await this.flatten(root); return }
-        for (const player of this.players) player.setColorOverride(this.color)
-        root.active = true
+        const painting = this.paint(root)
+        if (painting) await painting
+        else root.active = true
     }
 }

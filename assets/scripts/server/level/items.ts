@@ -1,5 +1,5 @@
 import type { GameSystem, World } from '@/ecs/index'
-import { SUN_BANK_TARGET, type GameplayDefinitions } from '@/shared/content/gameplay'
+import { collectTarget, type GameplayDefinitions } from '@/shared/content/gameplay'
 import {
     EconomyStateResource,
     LevelStateResource,
@@ -15,9 +15,6 @@ import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { clearCursor } from '../seeds/cursor'
 import { seedSunCost } from '../seeds/seedBank'
-
-/** Coin::UpdateCollected: sun flies to the sun bank, money to the coin bank at the bottom left. */
-const COIN_BANK_TARGET = { x: 39, y: 558 }
 
 export function getAvailableSun(world: World, definitions: GameplayDefinitions): number {
     const economy = world.resources.get(EconomyStateResource)
@@ -55,7 +52,7 @@ export function createItemSystem(definitions: GameplayDefinitions): GameSystem {
                 }
                 const money = definitions.items[item.typeId]?.kind === 'money'
                 if (item.state === 'collecting') {
-                    const target = money ? COIN_BANK_TARGET : SUN_BANK_TARGET
+                    const target = collectTarget(definitions.items[item.typeId])
                     const dx = Math.abs(position.x - target.x)
                     const dy = Math.abs(position.y - target.y)
                     position.x += (target.x - position.x) / 21

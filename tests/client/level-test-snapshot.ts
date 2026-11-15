@@ -19,7 +19,7 @@ export function levelPresentation(current: WorldSnapshot): LevelPresentationSnap
             ticks: complete ? 855 : 0,
             previews: complete ? [] : Array.from({ length: 5 }, (_, slot) => ({
                 slot, typeId: 'pvz:normal', x: 430 + slot * 10, y: 230, z: 100 + slot, hasTongue: slot === 0,
-                reanim: reanim('pvz:zombie_idle2'),
+                view: { body: reanim('pvz:zombie_idle2'), mowerDriver: null },
             })),
         },
         end: { ticks: current.result === 'won' ? 600 : -1, finalWave: null },

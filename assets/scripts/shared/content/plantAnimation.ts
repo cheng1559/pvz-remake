@@ -39,16 +39,16 @@ export function startOffBoardPlant(animation: PlantAnimationDefinition, shown: R
 }
 
 /**
- * A tick of a plant's animation: its layers move on (stepLayers) and the blink comes round. `chewed`: zombies are
- * eating the plant. Plant::UpdateBlink: with `blinkWaits` (an asleep plant) the blink is not counted down to.
- * Plant::DoBlink: with `blinkMisses` (a plant about to shoot, or in a state it does not blink in) the blink that came
- * round is not played.
+ * A tick of a plant's animation: its layers move on (stepLayers, at the part of their rate `slowed` says) and the blink
+ * comes round. `chewed`: zombies are eating the plant. Plant::UpdateBlink: with `blinkWaits` (an asleep plant) the
+ * blink is not counted down to. Plant::DoBlink: with `blinkMisses` (a plant about to shoot, or in a state it does not
+ * blink in) the blink that came round is not played.
  */
 export function stepPlantAnimation(animation: PlantAnimationDefinition, plant: AnimatedPlant, random: AnimationRandom,
-    on: { chewed?: boolean, blinkWaits?: boolean, blinkMisses?: () => boolean } = {}): void {
+    on: { slowed?: (layer: string) => number, chewed?: boolean, blinkWaits?: boolean, blinkMisses?: () => boolean } = {}): void {
     const layers = plant.animations
     if (!layers) return
-    stepLayers(animation, plant, random, { before: (state, clip) => {
+    stepLayers(animation, plant, random, { slowed: on.slowed, before: (state, clip) => {
         if (!clip.chewed) return
         if (on.chewed) state.rate = CHEWED_FPS
         else if (state.rate === CHEWED_FPS) state.rate = pace(clip, random)

@@ -17,6 +17,10 @@ import type { ItemViewContext } from './ItemView'
  */
 /** A packet's cost (SeedPacket::DrawSeedPacket's FONT_PICO129). */
 const PACKET_COST_FONT = 'pvz:pico129'
+/** Coin::UpdateCollected: the ticks a collected award flies to the screen's middle over (easing out). */
+const AWARD_MOVE_TICKS = 350
+/** Coin::UpdateCollected: the ticks it grows to twice its size over (easing in and out). */
+const AWARD_GROW_TICKS = 400
 
 export class AwardView implements EntityView<ItemSnapshot> {
     /** The effects behind it. */
@@ -25,6 +29,12 @@ export class AwardView implements EntityView<ItemSnapshot> {
     /** Its picture, or its packet at 1x and the 2x one it turns into as it grows. */
     private image?: Node
     private packets?: { readonly normal: Node, readonly large: Node }
+    /**
+     * How far a collected award is on its way to the screen's middle, from 0 where it was picked up to 1 there (0
+     * until it is collected, and for a note, which fades where it is), as the frame being drawn has it: what a Mod that
+     * shifts the lawn moves it by.
+     */
+    collectProgress = 0
 
     constructor(protected readonly context: ItemViewContext) {}
 
@@ -63,11 +73,12 @@ export class AwardView implements EntityView<ItemSnapshot> {
         let { x, y, scale } = item
         // Board::UpdateLevelEndSequence: a collected award flies to the screen's middle as it grows to twice its size; a
         // note fades out where it is instead.
+        const moveTime = Math.min(1, ticks / AWARD_MOVE_TICKS)
+        this.collectProgress = collected && award.kind !== 'note' ? 2 * moveTime - moveTime * moveTime : 0
         if (collected && award.kind !== 'note') {
-            const moveTime = Math.min(1, ticks / 350), moveEaseOut = 2 * moveTime - moveTime * moveTime
-            x += (400 - size.width / 2 - x) * moveEaseOut
-            y += (200 - size.height / 2 - y) * moveEaseOut
-            scale = 1.01 + 0.99 * easeInOutCurve(Math.min(1, ticks / 400))
+            x += (400 - size.width / 2 - x) * this.collectProgress
+            y += (200 - size.height / 2 - y) * this.collectProgress
+            scale = 1.01 + 0.99 * easeInOutCurve(Math.min(1, ticks / AWARD_GROW_TICKS))
         }
         node.setPosition(x + size.width / 2, -(y + size.height / 2))
         uiNode({ node, opacity: collected && award.kind === 'note' ? Math.round(item.alpha * Math.max(0, 1 - ticks / 15)) : item.alpha })

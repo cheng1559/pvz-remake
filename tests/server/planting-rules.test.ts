@@ -34,8 +34,8 @@ test('a plant holds its own cell only, while it is one that occupies its cell an
     assert.equal(holdsCell(plants, nut, 2, 4), false)
     assert.equal(holdsCell(plants, nut, 1, 3), false)
     assert.equal(holdsCell(plants, plant('pvz:bowling-wallnut', 2, 3), 2, 3), false, 'a rolling nut keeps its column but holds no cell')
-    assert.equal(holdsCell(plants, plant('pvz:wallnut', 2, 3, { mowered: { ticks: 0 } }), 2, 3), false, 'a mowed plant is no plant any more')
-    const lawnPlants = [plant('pvz:bowling-wallnut', 2, 3), plant('pvz:wallnut', 2, 3, { mowered: { ticks: 4 } }), nut]
+    assert.equal(holdsCell(plants, plant('pvz:wallnut', 2, 3, { mowered: { time: 0 } }), 2, 3), false, 'a mowed plant is no plant any more')
+    const lawnPlants = [plant('pvz:bowling-wallnut', 2, 3), plant('pvz:wallnut', 2, 3, { mowered: { time: 4 } }), nut]
     assert.equal(cellPlant(plants, lawnPlants, 2, 3), nut)
     assert.equal(cellPlant(plants, lawnPlants, 2, 2), undefined)
 })

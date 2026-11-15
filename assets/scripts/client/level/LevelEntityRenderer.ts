@@ -1,6 +1,6 @@
 import { Color, Component, Node, Vec3 } from 'cc'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
-import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
+import { ParticlePlayer, type ParticleSpawnArgs } from '@/client/particle/ParticlePlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { levelStandsStill, type PlantSnapshot, type ServerEvent, type WorldSnapshot, type ZombieSnapshot } from '@/shared/protocol/index'
 import { plantRenderOffset, renderOrder, SHADOW_RENDER_OFFSET, ZOMBIE_RENDER_OFFSET } from '@/shared/content/renderOrder'
@@ -48,7 +48,7 @@ export class LevelEntityRenderer implements LevelStage {
     private pointer?: { x: number; y: number }
     private lastSnapshot?: WorldSnapshot
     private highlightedPlant?: number
-    /** Board particles share one node per drawing order, so a new one is appended rather than moved. */
+    /** The board's particles, in one node of the layer per draw order (particleLayer). */
     private readonly particleHolders = new Map<number, Node>()
     /** Drawing its first frame, or putting a save back. */
     private firstFrame = false
@@ -71,13 +71,16 @@ export class LevelEntityRenderer implements LevelStage {
 
     node(id: number): Node | undefined { return this.entities.get(id)?.node }
 
+    /** An entity's view, once made. */
+    view(id: number): EntityView | undefined { return this.entities.get(id)?.view }
+
     plant(id: number): PlantView | undefined {
-        const view = this.entities.get(id)?.view
+        const view = this.view(id)
         return view instanceof PlantView ? view : undefined
     }
 
     zombie(id: number): ZombieView | undefined {
-        const view = this.entities.get(id)?.view
+        const view = this.view(id)
         return view instanceof ZombieView ? view : undefined
     }
 
@@ -213,14 +216,32 @@ export class LevelEntityRenderer implements LevelStage {
         this.entities.delete(id)
     }
 
-    /** Recycled under a shared holder per draw order. */
     particle(effect: string, x: number, y: number, order: number, tint?: Color, mirrored = false): void {
-        let parent = this.particleHolders.get(order)
-        if (!parent) {
-            parent = uiNode({ name: `BoardParticles-${order}`, parent: this.layer, layer: this.layer.layer }).node
-            this.particleHolders.set(order, parent)
+        this.spawnParticle(order, { id: effect, ...boardToLayer(x, y), tint, mirrored, recycle: true })
+    }
+
+    spawnParticle(order: number, args: Omit<ParticleSpawnArgs, 'parent' | 'renderOrder'>): ParticlePlayer {
+        return ParticlePlayer.spawn({ ...args, parent: this.particleLayer(order), renderOrder: order })
+    }
+
+    reorderParticle(player: ParticlePlayer, order: number): void {
+        player.renderOrder = order
+        const parent = this.particleLayer(order)
+        if (player.node.parent !== parent) player.node.setParent(parent)
+    }
+
+    /**
+     * The node of the layer the board's particles at a draw order are in, made when first needed, at the layer's
+     * origin. It is drawn at that order among the entities, and its particles in the order they came, so a new one is
+     * appended rather than moved among the entities. A save's particle of the layer goes back into it by its order.
+     */
+    particleLayer(order: number): Node {
+        let holder = this.particleHolders.get(order)
+        if (!holder) {
+            holder = uiNode({ name: `BoardParticles-${order}`, parent: this.layer, layer: this.layer.layer }).node
+            this.particleHolders.set(order, holder)
         }
-        ParticlePlayer.spawn({ parent, id: effect, ...boardToLayer(x, y), renderOrder: order, tint, mirrored, recycle: true })
+        return holder
     }
 
     /** An entity's node, and its view from the registry of its kind, shown at once as it is now. */
@@ -256,15 +277,11 @@ export class LevelEntityRenderer implements LevelStage {
 
     /** Where an entity is drawn among the rest; none for an item, which is not on the board's layer. */
     private orderOf(kind: EntityKind, entity: Positioned): number | undefined {
-        const { presentation } = this.content
         switch (kind) {
             case 'plant': return this.plantOrder(entity as unknown as PlantSnapshot)
             case 'zombie': return this.zombieOrder(entity.row)
-            case 'projectile': return renderOrder(presentation.projectiles[entity.typeId]?.layer ?? 'projectile', entity.row)
-            case 'gridItem': {
-                const { layer, offset } = presentation.gridItems[entity.typeId]
-                return renderOrder(layer, entity.row, offset)
-            }
+            case 'projectile': return this.projectileOrder(entity.typeId, entity.row)
+            case 'gridItem': return this.gridItemOrder(entity.typeId, entity.row)
             default: return undefined
         }
     }
@@ -284,12 +301,8 @@ export class LevelEntityRenderer implements LevelStage {
             const shadow = entity.view?.shadowNode
             if (shadow?.isValid) entries.push({ node: shadow, order: renderOrder('ground', (value as Positioned).row, SHADOW_RENDER_OFFSET), entityId: value.entityId })
         }
-        const mower = this.content.presentation.projectiles[this.content.levels.levels[snapshot.levelId].lawnMower]?.layer ?? 'projectile'
-        for (const [row, node] of this.waitingMowers) entries.push({ node, order: renderOrder(mower, row) })
-        for (const child of this.layer.children) {
-            const particle = child.getComponent(ParticlePlayer)
-            if (particle) entries.push({ node: child, order: particle.renderOrder })
-        }
+        const mower = this.content.levels.levels[snapshot.levelId].lawnMower
+        for (const [row, node] of this.waitingMowers) entries.push({ node, order: this.projectileOrder(mower, row) })
         for (const [order, node] of this.particleHolders) entries.push({ node, order })
         return entries
     }
@@ -307,6 +320,15 @@ export class LevelEntityRenderer implements LevelStage {
 
     zombieOrder(row: number): number {
         return renderOrder('zombie', row, ZOMBIE_RENDER_OFFSET)
+    }
+
+    projectileOrder(typeId: string, row: number): number {
+        return renderOrder(this.content.presentation.projectiles[typeId]?.layer ?? 'projectile', row)
+    }
+
+    gridItemOrder(typeId: string, row: number): number {
+        const { layer, offset } = this.content.presentation.gridItems[typeId]
+        return renderOrder(layer, row, offset)
     }
 
     private syncLayerOrder(snapshot: WorldSnapshot): void {

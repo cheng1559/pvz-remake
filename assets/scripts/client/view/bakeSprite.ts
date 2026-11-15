@@ -97,3 +97,24 @@ export function bakeSprite(source: Node): Promise<Sprite | undefined> {
     queue = task.then(() => {}, () => {})
     return task
 }
+
+/**
+ * A still picture of Reanim players (a packet's, a preview's) drawn translucent in `color`: of more than one image, its
+ * parts would show through each other, so it is flattened first (bakeSprite), its pose captured opaque as one image
+ * that replaces its parts and takes the color. Hidden meanwhile. Undefined when it need not be (opaque, or one image);
+ * the image is none when `current` says the picture went meanwhile.
+ */
+export function flattenTranslucent(root: Node, players: readonly ReanimPlayer[], color: Color, current: () => boolean): Promise<Sprite | undefined> | undefined {
+    if (color.a >= 255) return undefined
+    // A batch draws several images.
+    for (const player of players) player.flushPose()
+    const images = root.getComponentsInChildren(Sprite).reduce((count, sprite) => count + (sprite instanceof KernelBatch ? sprite.count : 1), 0)
+    if (images <= 1) return undefined
+    root.active = false
+    for (const player of players) player.setColorOverride(Color.WHITE)
+    return bakeSprite(root).then(composite => {
+        if (!composite || !isValid(root, true) || !current()) return undefined
+        for (const child of [...root.children]) if (child !== composite.node) child.destroy()
+        return composite
+    })
+}

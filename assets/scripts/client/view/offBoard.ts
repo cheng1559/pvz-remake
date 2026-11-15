@@ -2,6 +2,7 @@ import type { Node } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { PlantDraw, PlantView, ShownPlant } from '@/client/plants/PlantView'
 import { plantDefinition } from '@/client/plants/definitions'
+import type { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import type { ZombieDraw, ZombieView } from '@/client/zombies/ZombieView'
 import { type AnimationRandom } from '@/shared/content/animation'
 import { startOffBoardPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
@@ -17,6 +18,17 @@ import type { GridItemSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
 /** The game's content for everything shown off the board, the one a level is drawn with (loaded once). */
 export function offBoardContent(): ReturnType<typeof loadIntegratedGameContent> {
     return loadIntegratedGameContent()
+}
+
+/**
+ * A plant's or a zombie's picture held on its pose (a packet's, a preview's, the almanac's portrait): its players stop,
+ * and take four samples to a screen pixel when it is drawn much smaller than its art (`supersampled`).
+ */
+export function holdStill(players: readonly ReanimPlayer[], supersampled: boolean): void {
+    for (const player of players) {
+        player.pause()
+        if (supersampled) player.setSupersampled()
+    }
 }
 
 /** Nothing off the board is the server's, so nothing has to come out the same twice. */

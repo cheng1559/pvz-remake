@@ -1,4 +1,4 @@
-import { record, array, nonEmptyString, boolean, oneOf, finite, nonNegativeInteger } from '@/shared/validate'
+import { record, array, nonEmptyString, boolean, oneOf, finite, nonNegativeFinite, nonNegativeInteger } from '@/shared/validate'
 import { ZOMBIE_STATES, type ZombieState } from '@/shared/content/zombieStates'
 import { PLANT_ABILITY_STATES, type PlantAbilityState } from '@/shared/content/plantAbilities'
 import { GRAVE, checkGraveRanges } from '@/shared/content/graves'
@@ -140,8 +140,11 @@ export interface PlantSnapshot extends EntityBehaviorState {
     chilledTicks?: number
     /** What each layer of the plant's animation plays, for a plant the server animates (PlantDefinition.animation). */
     animations?: Record<string, LayerSnapshot>
-    /** A mower crushed it: no plant any more, it is squashed, `ticks` into it; `left` when the mower ran left. */
-    mowered?: { ticks: number, left?: true }
+    /**
+     * A mower crushed it: no plant any more, it is squashed, `time` frames into the mower's driver (MOWERED_CLIP), as a
+     * mowed zombie's body plays it; `left` when the mower ran left.
+     */
+    mowered?: { time: number, left?: true }
 }
 
 /**
@@ -360,7 +363,7 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         if (plant.animations !== undefined) validateLayers(plant.animations, `${name}.animations`)
         if (plant.mowered !== undefined) {
             const mowered = record(plant.mowered, `${name}.mowered`)
-            nonNegativeInteger(mowered.ticks, `${name}.mowered.ticks`)
+            nonNegativeFinite(mowered.time, `${name}.mowered.time`)
             if (mowered.left !== undefined && mowered.left !== true) throw new TypeError(`${name}.mowered.left must be true`)
         }
     })

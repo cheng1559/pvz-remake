@@ -1,11 +1,11 @@
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { _decorator, Color, Component, isValid, Node, Sprite } from 'cc'
 import type { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import type { PlantView } from '@/client/plants/PlantView'
 import { plantVisual } from '@/client/plants/definitions'
-import { createOffBoardPlant } from '@/client/view/offBoard'
+import { createOffBoardPlant, holdStill } from '@/client/view/offBoard'
 import { uiNode } from '@/client/view/uiNode'
-import { bakeSprite } from '@/client/view/bakeSprite'
-import { KernelBatch } from '@/client/render/KernelBatch'
+import { flattenTranslucent } from '@/client/view/bakeSprite'
 import { PLANT_WIDTH } from '@/shared/content/teams'
 import { mirrorInPacket, PacketPictureStyle, PLANT_TILT, placePacketPicture } from './packetPicture'
 
@@ -27,6 +27,8 @@ export class PlantPreview extends Component {
     private rendered: Node | null = null
     private rendering: boolean | undefined
     private color = Color.WHITE.clone()
+    /** The plant's view, which colors it (PlantView.tinted), and its players. */
+    private view?: PlantView
     private readonly players: ReanimPlayer[] = []
     private composite?: Sprite
     private compositeReady?: Promise<void>
@@ -94,6 +96,7 @@ export class PlantPreview extends Component {
         this.rendering = drawn
         if (this.rendered) { this.rendered.active = false; this.rendered.destroy() }
         this.rendered = null
+        this.view = undefined
         this.players.length = 0
         this.composite = undefined
         this.compositeReady = undefined
@@ -114,21 +117,13 @@ export class PlantPreview extends Component {
     }
 
     private async finish(root: Node): Promise<void> {
-        // A batch draws several images; translucent overlapping images need compositing.
-        for (const player of this.players) player.flushPose()
-        const images = root.getComponentsInChildren(Sprite).reduce((count, sprite) => count + (sprite instanceof KernelBatch ? sprite.count : 1), 0)
-        if (this.color.a < 255 && !this.composite && images > 1) {
-            if (!this.compositeReady) {
-                root.active = false
-                const parts = [...root.children]
-                for (const player of this.players) player.setColorOverride(Color.WHITE)
-                this.compositeReady = bakeSprite(root).then(composite => {
-                    if (!isValid(root, true) || root !== this.rendered) return
-                    this.composite = composite
-                    for (const part of parts) part.destroy()
-                    this.players.length = 0
-                })
-            }
+        // A translucent plant is drawn whole first, once (flattenTranslucent).
+        if (!this.composite && !this.compositeReady) {
+            this.compositeReady = flattenTranslucent(root, this.players, this.color, () => root === this.rendered)?.then(composite => {
+                if (!composite) return
+                this.composite = composite
+                this.players.length = 0
+            })
         }
         if (this.compositeReady) await this.compositeReady
         if (!isValid(root, true) || root !== this.rendered) return
@@ -148,20 +143,15 @@ export class PlantPreview extends Component {
         if (!isValid(root, true) || root !== this.rendered) return
         // A plant its view does not draw off the board (it has no animation) shows nothing.
         if (!plant) { pose.destroy(); return }
-        const players = plant.view.players
-        for (const player of players) {
-            player.pause()
-            // A packet's picture is much smaller than its art.
-            if (this.packetScale !== undefined) player.setSupersampled()
-        }
-        this.players.push(...players)
+        // A packet's picture is much smaller than its art.
+        holdStill(plant.view.players, this.packetScale !== undefined)
+        this.view = plant.view
+        this.players.push(...plant.view.players)
     }
 
+    /** The preview's shade over the plant's own colors, as its view draws them. */
     private applyColor(): void {
-        const tint = typeof this.plantId === 'string' ? plantVisual(this.definitions, this.plantId)?.tint : undefined
-        const color = tint
-            ? new Color(Math.round(this.color.r * tint[0] / 255), Math.round(this.color.g * tint[1] / 255), Math.round(this.color.b * tint[2] / 255), this.color.a)
-            : this.color
+        const color = this.view?.tinted(this.color) ?? this.color
         if (this.composite) { this.composite.color = color; return }
         for (const player of this.players) player.setColorOverride(color)
     }

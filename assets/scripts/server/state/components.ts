@@ -55,7 +55,6 @@ export interface Zombie extends EntityBehaviorState {
     biteTicks: number
     /** Also counts down a burned zombie. */
     deathTicksRemaining: number
-    moweredTicksRemaining: number
     /** The clip it walks on, drawn as it comes (`walk` or `walk2`). */
     walkClip: string
     /**
@@ -178,9 +177,10 @@ export const PlantAttackComponent = defineComponent<PlantAttack>('pvz:plant_atta
 
 /**
  * A plant a mower has crushed, as it stood: no plant any more (nothing aims at it, eats it or holds its cell by it), it
- * stays for the squashing, `ticks` into it, as a mowed zombie does. `left`: the mower ran left, so it tips that way.
+ * stays for the squashing, as a mowed zombie does: `squash` plays the mower's driver (MOWERED_ANIMATION) as a mowed
+ * zombie's body does, and it is gone once that is through. `left`: the mower ran left, so it tips that way.
  */
-export interface MowedPlant { plant: Plant, ticks: number, left?: true }
+export interface MowedPlant { plant: Plant, squash: LayerState, left?: true }
 
 export const MowedPlantComponent = defineComponent<MowedPlant>('pvz:mowed_plant')
 

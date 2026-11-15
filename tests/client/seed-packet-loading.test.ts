@@ -38,6 +38,9 @@ function setup() {
         const path = name.includes('/') ? name : `hud/${name}`
         return loadScript(`assets/scripts/client/${path}.ts`, (id: string) => modules[id] ?? {})
     }
+    // The real helpers of the pictures, which a test's view stubs are held by.
+    Object.assign(modules['@/client/view/offBoard'], load('view/offBoard'))
+    modules['./packetPicture'] = load('packetPicture')
     modules['./PlantPreview'] = load('PlantPreview')
     const renderer = load('SeedPacketRenderer').SeedPacketRenderer
     return { classes, modules, load, renderer, resources }
@@ -115,17 +118,18 @@ test('a grave packet of the other side turns its picture round within the packet
     const { classes, load } = setup()
     load('PacketGrave')
     const node = {
-        scaleX: 1, position: { x: 0, y: -3 },
-        setScale(x: number) { this.scaleX = x },
+        scale: { x: 1, y: 1 }, position: { x: 0, y: -3 },
+        setScale(x: number, y: number) { this.scale = { x, y } },
         setPosition(x: number, y: number) { this.position = { x, y } },
-        getComponent: () => ({ width: 50 }),
     }
-    const grave = new classes.PacketGrave()
-    grave.node = node
-    grave.setMirrored(true)
-    assert.deepEqual([node.scaleX, node.position], [-1, { x: 50, y: -3 }])
-    grave.setMirrored(false)
-    assert.deepEqual([node.scaleX, node.position], [1, { x: 0, y: -3 }])
+    for (const scale of [1, 2]) {
+        const grave = new classes.PacketGrave().initialize(scale, () => ({}))
+        grave.node = node
+        grave.setMirrored(true)
+        assert.deepEqual([node.scale, node.position], [{ x: -1, y: 1 }, { x: 50 * scale, y: -3 }], `about the middle of a packet at ${scale}x`)
+        grave.setMirrored(false)
+        assert.deepEqual([node.scale, node.position], [{ x: 1, y: 1 }, { x: 0, y: -3 }])
+    }
 })
 
 test('every script defines at most one component, as Cocos allows (error 3615)', () => {

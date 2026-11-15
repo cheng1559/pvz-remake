@@ -138,7 +138,7 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
         }
         if (!hitbox) return
         // Each of the rest at its offset from the projectile, mirrored across the hitbox of one flying left.
-        const { shadow, plantShadow, trail, layer } = this.presentation
+        const { shadow, plantShadow, trail } = this.presentation
         const mirrored = projectile.team === 'zombies', top = boardToLayer(0, projectile.y).y
         const left = (offset: number) => boardToLayer(projectile.x + (mirrored ? 2 * hitbox.x + hitbox.width - offset : offset), 0).x
         const offset = shadow?.offset ?? plantShadow
@@ -151,10 +151,11 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
         // The trail leaves from the projectile itself, at its draw order; no save keeps it, so it starts here, again
         // after a load.
         if (trail && node.isValid) {
-            if (!this.trail?.isValid) this.trail = ParticlePlayer.spawn({ parent: stage.layer, ...trail, unsaved: true })
+            const order = stage.projectileOrder(projectile.typeId, projectile.row)
+            if (!this.trail?.isValid) this.trail = stage.spawnParticle(order, { ...trail, unsaved: true })
+            else stage.reorderParticle(this.trail, order)
             this.trail.node.setPosition(left(trail.x), top + trail.y)
             this.trail.node.setScale(mirrored ? -1 : 1, 1, 1)
-            this.trail.renderOrder = renderOrder(layer ?? 'projectile', projectile.row)
         }
     }
 
@@ -196,9 +197,9 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
         const zombie = world.zombies.find(candidate => candidate.entityId === targetId)
         // A splat on a zombie follows it; one on a plant, on the ground, or the board's own (`free`) stays on the board.
         const attached = !impact.free && typeof targetId === 'number' && event.data.target !== 'plant'
-        const parent = attached ? stage.node(targetId) : stage.layer
+        const parent = attached ? stage.node(targetId) : undefined
         const hitbox = stage.content.definitions.projectiles[typeId]?.hitbox, middle = ProjectileView.middle(stage, typeId)
-        if (!parent || !hitbox || !middle) return
+        if (attached && !parent || !hitbox || !middle) return
         // One that flew into what it hit splats by its shot offset; one that came down on it from above (`above`), or
         // only on the ground, by its lob offset.
         const shot = typeof targetId === 'number' && event.data.above !== true
@@ -211,8 +212,10 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
         const position = attached && zombie
             ? { x: x + offsetX - zombie.x, y: -Math.max(top, Math.min(bottom, y + offsetY - zombie.y)) }
             : boardToLayer(x + offsetX, y + offsetY)
-        // The board's own is drawn over what flies in its row (the original's mRenderOrder + 1), so over the row's zombies.
-        const order = impact.free && typeof row === 'number' ? { renderOrder: renderOrder(projectile.layer ?? 'projectile', row) + 1 } : {}
-        ParticlePlayer.spawn({ parent, id: impact.id, ...position, ...order, seed: event.eventId >>> 0, recycle: true })
+        const splat = { id: impact.id, ...position, seed: event.eventId >>> 0, recycle: true }
+        if (parent) { ParticlePlayer.spawn({ parent, ...splat }); return }
+        // The board's own is drawn over what flies in its row (the original's mRenderOrder + 1), so over the row's
+        // zombies; any other on the board over everything.
+        stage.spawnParticle(impact.free && typeof row === 'number' ? stage.projectileOrder(typeId, row) + 1 : renderOrder('top'), splat)
     }
 }
