@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
+import { World } from '@/ecs'
+import { dropZombieLoot } from '@/server/level/loot'
+import { EconomyStateResource, LevelStateResource, RandomResource } from '@/server/state/components'
+import { createEventQueue, EventQueueResource } from '@/server/state/events'
+import { ItemComponent, TutorialResource } from '@/server/state/levelState'
+import { spawnZombie } from '@/server/zombies/spawn'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { readGameplaySource } from '../../tools/mod/content'
 import { TICK_SECONDS } from '@/shared/protocol'
@@ -8,6 +14,24 @@ import { TICK_SECONDS } from '@/shared/protocol'
 const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 const money = (game: LocalIntegratedGame) => game.render().items.filter(item => definitions.items[item.typeId]?.kind === 'money')
+
+test('Zombie::DropLoot: a zombie the level does not pick still drops at its own value (mZombieValue)', () => {
+    /** What a replay of 1-1 (whose pool has only the plain zombie) drops for `typeId` on a roll of `roll`. */
+    const drop = (typeId: string, roll: number) => {
+        const world = new World()
+        world.resources.set(LevelStateResource, { id: 'pvz:adventure-1-1', definition: levels.levels['pvz:adventure-1-1'], board: definitions.boards['pvz:day'], phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] } as never)
+        world.resources.set(TutorialResource, { firstAdventure: false, step: 'complete', displayedAdvice: [] })
+        world.resources.set(EconomyStateResource, { sun: 0, money: 0, pendingSunSpend: 0, packetUpgrades: 0 })
+        world.resources.set(RandomResource, { integer: (min: number, max: number) => min === 0 && max === 29999 ? roll : min, nextFloat: () => 0.5 } as never)
+        world.resources.set(EventQueueResource, createEventQueue())
+        dropZombieLoot(world, definitions, spawnZombie(world, definitions, typeId, 2, 500, 0), world)
+        return [...world.query(ItemComponent)].map(entity => world.get(entity, ItemComponent)!.typeId)
+    }
+    // Board::DropLootPiece: silver below 2500 times the value.
+    assert.deepEqual(drop('pvz:normal', 2500), [], 'a plain zombie, worth 1')
+    assert.deepEqual(drop('pvz:buckethead', 2500), ['pvz:coin_silver'], 'a buckethead outside the pool, worth its 4')
+    assert.deepEqual(drop('pvz:buckethead', 4 * 2500), [])
+})
 
 function play21(initialMoney: number, firstAdventure = true) {
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)

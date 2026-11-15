@@ -1,5 +1,6 @@
 import { type Graphics, Mask, type Node } from 'cc'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import { SEED_PACKET_SIZE } from '@/shared/content/gameplay'
 
 /**
  * How a seed packet's picture is drawn, shared by plants (PlantPreview) and zombies (ZombiePreview). Each kind sets
@@ -8,7 +9,7 @@ import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
  */
 
 /** SeedPacket's width, in its own units. */
-export const SEED_PACKET_WIDTH = 50
+export const SEED_PACKET_WIDTH = SEED_PACKET_SIZE.width
 
 /** A packet of the other side turns its picture round about the packet's middle, whatever the picture is. */
 export function mirrorInPacket(node: Node, mirrored: boolean, packetScale: number): void {

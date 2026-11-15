@@ -17,6 +17,8 @@ import type { MenuAction } from './MenuPages'
 import { formatMoney } from '@/client/ui/formatMoney'
 import { CrazyDaveView } from '@/client/characters/CrazyDaveView'
 import { uiAreaEdge } from '@/client/view/ClientViewport'
+import { offBoardRandom } from '@/client/view/offBoard'
+import { pickWeighted } from '@/shared/random'
 
 const { ccclass } = _decorator
 const SPRITES = [
@@ -276,9 +278,9 @@ export class StoreScreen extends Component {
         if (this.age < speech.readyDelay || !this.dave?.ready) return
         this.ambientTimer -= dt
         if (this.ambientTimer > 0) return
+        // StoreScreen::Update: Dave's chatter by weight, never the line he said last.
         const choices = speech.ambient.messages.filter(entry => entry.message !== this.previousAmbient && entry.weight > 0)
-        let pick = Math.random() * choices.reduce((sum, entry) => sum + entry.weight, 0)
-        const chosen = choices.find(entry => (pick -= entry.weight) < 0)
+        const chosen = choices.length ? pickWeighted(choices, offBoardRandom) : undefined
         if (chosen) {
             this.previousAmbient = chosen.message
             this.showSpeech(chosen.message, speech.ambient.duration)

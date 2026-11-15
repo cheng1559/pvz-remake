@@ -311,8 +311,11 @@ export interface ZombieDefinition {
     tongueChance: number
     walk2Chance: number
     targetingInsets?: Record<string, number>
-    /** ZombieDefinition: mZombieValue, mPickWeight and mFirstAllowedWave, the defaults of a level's zombiePool entry. */
-    wave?: { points: number; weight: number; firstWave?: number }
+    /**
+     * ZombieDefinition: mZombieValue, mPickWeight and mFirstAllowedWave, the defaults of a level's zombiePool entry.
+     * Every zombie has them: its value also sets the odds of the loot it drops (Zombie::DropLoot).
+     */
+    wave: { points: number; weight: number; firstWave?: number }
     /** Board::PickGraveRisingZombieType: rises with its wave weight from the graves of levels that allow it; levels
      *  with their own graves name their zombies instead. */
     graveRise?: boolean

@@ -57,6 +57,8 @@ test('integrated host processes FIFO commands, acknowledgements, pause, resume, 
     assert.equal(started[1].type === 'frame' && started[1].snapshot.plants.length, 1)
     assert.deepEqual(started[1].type === 'frame' && started[1].events.map(event => event.type), [
         'plantPlaced',
+        // Board::NextWaveComing before the first wave: this level's comes at once.
+        'nextWaveComing',
         'zombieSpawned',
     ])
 

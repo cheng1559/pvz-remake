@@ -80,12 +80,16 @@ test('/nextflag announces the flag wave 750 ticks ahead; repeating it ends the c
     Object.assign(save.wave, { zombieIds: [], accelerateAtTick: save.gameplayTick })
     server.start({ ...start, save: save as unknown as JsonValue })
     server.drainEvents()
-    const timeline = new Map<string, number>()
+    const timeline = new Map<string, number>(), comings: unknown[] = []
     for (let tick = 1; !server.snapshot().zombies.length; tick++) {
         server.tick()
-        for (const event of server.drainEvents()) if (!timeline.has(event.type)) timeline.set(event.type, tick)
+        for (const event of server.drainEvents()) {
+            if (!timeline.has(event.type)) timeline.set(event.type, tick)
+            if (event.type === 'nextWaveComing') comings.push(event.data)
+        }
     }
-    assert.deepEqual([timeline.get('hugeWaveSound'), timeline.get('musicBurst'), timeline.get('finalWave'), timeline.get('zombieSpawned')], [25, 350, 750, 751])
+    assert.deepEqual(['hugeWaveSound', 'musicBurst', 'finalWave', 'nextWaveComing', 'zombieSpawned'].map(type => timeline.get(type)), [25, 350, 750, 750, 751])
+    assert.deepEqual(comings, [{ siren: true }], 'Board::NextWaveComing sounds the siren once, as the huge wave countdown ends')
 
     const skipped = game()
     debug(skipped, '/nextflag')
@@ -93,7 +97,30 @@ test('/nextflag announces the flag wave 750 ticks ahead; repeating it ends the c
     skipped.drainEvents()
     assert.equal(debug(skipped, '/nextflag')?.ok, true)
     assert.equal(skipped.snapshot().zombies.length, 5, 'Board::KeyChar ends a running huge wave countdown')
-    assert.ok(skipped.drainEvents().some(event => event.type === 'finalWave'))
+    const events = skipped.drainEvents()
+    assert.ok(events.some(event => event.type === 'finalWave'))
+    assert.deepEqual(events.filter(event => event.type === 'nextWaveComing').map(event => event.data), [{ siren: true }])
+})
+
+test('Board::NextWaveComing comes once a wave, 5 ticks before it, with the awooga before the first', () => {
+    const packet = { ...start, levelId: 'pvz:adventure-1-3', firstAdventure: false, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-3') }
+    const server = new IntegratedGameServer(definitions, levels)
+    server.start(packet)
+    runCommand(server, { type: 'completeIntro' })
+    server.drainEvents()
+    const comings: Array<[number, unknown]> = [], spawned = new Map<number, number>()
+    let restoreAt = -1
+    for (let tick = 1; tick <= 6000 && spawned.size < 2; tick++) {
+        server.tick()
+        for (const event of server.drainEvents()) {
+            if (event.type === 'nextWaveComing') { comings.push([tick, event.data]); if (restoreAt < 0) restoreAt = tick + 2 }
+            if (event.type === 'zombieSpawned' && !spawned.has(Number(event.data.wave))) spawned.set(Number(event.data.wave), tick)
+        }
+        // A game saved and restored before the announced wave comes does not announce it again.
+        if (tick === restoreAt) server.start({ ...packet, save: server.save() as unknown as JsonValue })
+    }
+    assert.equal(spawned.size, 2)
+    assert.deepEqual(comings, [[spawned.get(0)! - 5, { first: true }], [spawned.get(1)! - 5, {}]])
 })
 
 test('1-2 runs six waves, saves the huge-wave countdown and awards Cherry Bomb', () => {

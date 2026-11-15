@@ -1,4 +1,5 @@
 import type { GameSystem, World } from '@/ecs/index'
+import { pickWeighted } from '@/shared/random'
 import { LevelStateResource, RandomResource, SeedBankResource } from '../state/components'
 import { WaveResource } from '../state/levelState'
 import { levelAwardDropped } from './levelAward'
@@ -35,8 +36,7 @@ export function createConveyorSystem(): GameSystem {
                 : seed.id === conveyor.lastSeedId ? Math.trunc(seed.weight / 2) : seed.weight
             return { ...seed, weight }
         })
-        let roll = world.resources.get(RandomResource).integer(0, choices.reduce((sum, seed) => sum + seed.weight, 0) - 1)
-        const seed = choices.find(seed => (roll -= seed.weight) < 0)!
+        const seed = pickWeighted(choices, world.resources.get(RandomResource))
         const previousOffset = count ? conveyor.packets[count - 1].x - (count - 1) * rules.spacing : 0
         let offset = rules.entryX - (rules.spacing + rules.removalGap) * count
         if (count && offset < previousOffset) offset = previousOffset + rules.insertionGap

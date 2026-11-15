@@ -45,11 +45,13 @@ export interface WaveState {
     graveRiseAtTick?: number
     /** Every wave of this game, built when it starts and kept by saves. */
     plan: WavePlan[]
+    /** When the next wave comes (mZombieCountDown), for the wave system or a rule that counts its own; unset while none is due. */
     nextWaveAtTick?: number
     accelerateAtTick?: number
     zombieIds: number[]
     healthToNextWave: number
-    finalWaveAnnounced: boolean
+    /** The wave Board::NextWaveComing last ran for (nextWaveComing). */
+    announcedWave?: number
     hugeWaveAnnounced: boolean
     rowPicks?: Array<{ row: number; lastPicked: number; secondLastPicked: number; mowedAtWave?: number }>
     /** What the level's rules keep through the game, in their own format (LevelRuleDefinition.parseState). */

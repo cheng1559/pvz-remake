@@ -10,6 +10,7 @@
     "bite": { "damage": 4, "cadenceTicks": 4 },
     "animation": {"from": "pvz:normal"},
     "tongueChance": 0.2,
-    "walk2Chance": 0.5
+    "walk2Chance": 0.5,
+    "wave": { "points": 2, "weight": 0 }
   }
 }

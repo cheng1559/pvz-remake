@@ -10,10 +10,12 @@ import { damagePlant } from '../plants/damage'
 import { isHostile, plantFacingRect, plantTeam, zombieTeam } from '@/shared/content/teams'
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import type { Team } from '@/shared/protocol'
+import { pickWeighted } from '@/shared/random'
 import { circleRectOverlap } from '../combat/collision'
 import { graves as lawnGraves, placeGrave, raiseZombieFromGrave } from '../level/graves'
 import { spawnLoot } from '../level/loot'
 import { levelAwardDropped, tryDropLevelAward } from '../level/levelAward'
+import { nextWaveComing } from '../level/waves'
 import { clearCursor } from '../seeds/cursor'
 import type { LevelRuleDefinition } from './registry'
 
@@ -29,8 +31,11 @@ interface WhackSettings {
     sun: string
 }
 
-/** mZombieCountDown to the next wave, mChallengeStateCounter to the next group, and whether the empty cursor is the mallet. */
-interface WhackState { countdown: number; groupTicks: number; hammer: boolean }
+/**
+ * mChallengeStateCounter to the next group, and whether the empty cursor is the mallet. mZombieCountDown is the waves'
+ * own `nextWaveAtTick`, unset once the final group has risen.
+ */
+interface WhackState { groupTicks: number; hammer: boolean }
 
 const parsed = new WeakMap<LevelRule, WhackSettings>()
 
@@ -109,8 +114,7 @@ function placeWhackGraves(world: World, definitions: GameplayDefinitions, count:
     }
     const random = world.resources.get(RandomResource)
     for (let index = Math.min(count, picks.length); index > 0; index--) {
-        let roll = random.integer(0, picks.reduce((sum, pick) => sum + pick.weight, 0) - 1)
-        const pick = picks.find(entry => (roll -= entry.weight) < 0)!
+        const pick = pickWeighted(picks, random)
         placeGrave(world, definitions, pick.row, pick.column, riseAtTick)
         pick.weight = 0
     }
@@ -129,28 +133,19 @@ function createWhackSystem(definitions: GameplayDefinitions): GameSystem {
             const rules = whackSettings(level.definition.rules!)
             const waves = world.resources.get(WaveResource)
             const state = whackState(world)
-            if (waves.index === waves.plan.length && state.countdown === 0) return
-            const events = world.resources.get(EventQueueResource)
-            state.countdown--
-            if (state.countdown === 100 && waves.index > 0) {
+            // The waves' mZombieCountDown, counted down by the gameplay ticks: none once the final group has risen.
+            if (waves.nextWaveAtTick === undefined) return
+            const countdown = waves.nextWaveAtTick - tick
+            if (countdown === 100 && waves.index > 0) {
                 placeWhackGraves(world, definitions, Math.max(1, rules.refillGraves - lawnGraves(world).length), tick)
             }
-            if (state.countdown === 5) {
-                // Board::NextWaveComing: the final wave's banner; the awooga first, the siren before the last wave.
-                if (waves.index + 1 === waves.plan.length) {
-                    waves.finalWaveAnnounced = true
-                    emitServerEvent(events, 'finalWave', {})
-                }
-                emitServerEvent(events, 'nextWaveComing', {
-                    ...(waves.index === 0 ? { first: true } : {}),
-                    ...(waves.index === waves.plan.length - 1 ? { siren: true } : {}),
-                })
-            }
-            if (state.countdown === 0) {
-                state.countdown = rules.waveTicks
+            // Board::NextWaveComing, whose siren goes before the last wave here.
+            if (countdown <= 5) nextWaveComing(world, waves.index === waves.plan.length - 1)
+            if (countdown <= 0) {
+                waves.nextWaveAtTick = tick + rules.waveTicks
                 if (waves.index < waves.plan.length) waves.index++
                 state.groupTicks = waves.index === waves.plan.length ? FINAL_GROUP_DELAY : 1
-            } else if (state.countdown < SPAWN_CUTOFF) return
+            } else if (countdown < SPAWN_CUTOFF) return
             if (--state.groupTicks !== 0) return
             raiseGroup(world, definitions, commands)
         },
@@ -188,7 +183,7 @@ function raiseGroup(world: World, definitions: GameplayDefinitions, remover: Ent
     }
     state.groupTicks = random.integer(animateCurve(1, 12, wave, 100, 30), animateCurve(1, 12, wave, 200, 60))
     if (final) {
-        state.countdown = 0
+        waves.nextWaveAtTick = undefined
         state.groupTicks = 0
         // The award comes from the last zombie to go. With every grave being eaten no zombie rose, and with none left
         // on the lawn either there is none to go: the award drops now, which the original never does (it stays stuck).
@@ -263,21 +258,20 @@ export const whackAZombieRule: LevelRuleDefinition = {
     draft(rule) { return Array.from({ length: rule.count }, () => ({ zombies: [], points: 0 })) },
     systems: definitions => [{ phase: 'spawn', system: createWhackSystem(definitions) }],
     spawnsZombies: true,
-    /** Board::InitLevel and Challenge::StartLevel: the opening graves, and the first wave's countdown. */
+    /**
+     * Board::InitLevel and Challenge::StartLevel: the opening graves. The first wave's countdown is the level's
+     * `firstWaveTicks`, as the waves have it.
+     */
     initialize(world, definitions) {
         const level = world.resources.get(LevelStateResource).definition
-        const waves = world.resources.get(WaveResource)
         for (const { entity } of lawnGraves(world)) world.destroyEntity(entity)
         placeWhackGraves(world, definitions, whackSettings(level.rules!).graves)
-        // The rule counts mZombieCountDown itself; the wave system's countdown stays unset.
-        waves.nextWaveAtTick = undefined
-        const state: WhackState = { countdown: level.firstWaveTicks!, groupTicks: 0, hammer: true }
-        waves.ruleState = { ...state }
+        const state: WhackState = { groupTicks: 0, hammer: true }
+        world.resources.get(WaveResource).ruleState = { ...state }
     },
     parseState(value) {
-        const state = exact(value, ['countdown', 'groupTicks', 'hammer'], 'Whack-a-Zombie state')
-        return { countdown: nonNegativeInteger(state.countdown, 'Whack-a-Zombie state.countdown'),
-            groupTicks: integer(state.groupTicks, 'Whack-a-Zombie state.groupTicks'), hammer: boolean(state.hammer, 'Whack-a-Zombie state.hammer') }
+        const state = exact(value, ['groupTicks', 'hammer'], 'Whack-a-Zombie state')
+        return { groupTicks: integer(state.groupTicks, 'Whack-a-Zombie state.groupTicks'), hammer: boolean(state.hammer, 'Whack-a-Zombie state.hammer') }
     },
     snapshot(world) { return { hammer: whackState(world).hammer } },
     boardClick(session, x, y) {
@@ -297,6 +291,6 @@ export const whackAZombieRule: LevelRuleDefinition = {
         for (const offset of [20, 40, 60]) spawnLoot(world, definitions, world, item, x - offset, y)
         return true
     },
-    /** Not before the final group has risen (mZombieCountDown back at 0). */
-    holdsAward(world) { return whackState(world).countdown > 0 },
+    /** Not before the final group has risen (mZombieCountDown back at 0, the waves' countdown unset). */
+    holdsAward(world) { return world.resources.get(WaveResource).nextWaveAtTick !== undefined },
 }

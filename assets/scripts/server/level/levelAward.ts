@@ -1,5 +1,5 @@
 import type { World } from '@/ecs/index'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, levelAwardSize } from '@/shared/content/gameplay'
 import { type EntityRemover, LevelStateResource, PositionComponent, ZombieComponent } from '../state/components'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { ItemComponent, WaveResource } from '../state/levelState'
@@ -16,7 +16,7 @@ export function levelAwardDropped(world: World): boolean {
 /** Board::AddCoin of the level's award at (x, y), dropped like a coin (COIN_MOTION_COIN). */
 export function spawnLevelAward(world: World, x: number, y: number): number {
     const award = world.resources.get(LevelStateResource).definition.award
-    const entity = spawnItem(world, world, { typeId: award.id, value: 1, width: award.kind === 'seed' ? 50 : award.width, levelAward: true }, x, y, 'coin')
+    const entity = spawnItem(world, world, { typeId: award.id, value: 1, width: levelAwardSize(award).width, levelAward: true }, x, y, 'coin')
     emitServerEvent(world.resources.get(EventQueueResource), 'levelAwardDropped', { entityId: entity, typeId: award.id })
     return entity
 }

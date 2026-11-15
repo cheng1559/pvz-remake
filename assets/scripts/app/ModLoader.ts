@@ -72,7 +72,7 @@ async function loadMods() {
             const presentation = buildPresentationDefinitions(base!.presentation, presentationDefinitions.sources)
             gameplay.validate(content.definitions, content.levels)
             new ClientAnimationRegistry(presentation)
-            assertPresented(content.definitions, presentation, views)
+            assertPresented(content, presentation, views)
             manifests.push(manifest)
             loadedIds.add(manifest.id)
         } catch (error) {

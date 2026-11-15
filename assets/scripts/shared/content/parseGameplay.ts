@@ -294,7 +294,7 @@ function explosion(value: unknown, name: string): ExplosionDefinition {
 }
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exact(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'animation', 'tongueChance', 'walk2Chance'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'wave', 'graveRise', 'facingRightOffsetX'])
+    const source = exact(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'animation', 'tongueChance', 'walk2Chance', 'wave'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'graveRise', 'facingRightOffsetX'])
     const spawn = exact(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -302,6 +302,8 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
         throw new Error(`${name}.spawn must have ordered safe integer bounds spanning at most 2^32 positions`)
     }
     const bite = exact(source.bite, ['damage', 'cadenceTicks'], `${name}.bite`)
+    // Every zombie has its value (mZombieValue): the points a wave spends on it and its loot's odds when it dies.
+    const wave = exact(source.wave, ['points', 'weight'], `${name}.wave`, ['firstWave'])
     const result: ZombieDefinition = {
         maxHealth: positiveInteger(source.maxHealth, `${name}.maxHealth`),
         boardEdgeX: finite(source.boardEdgeX, `${name}.boardEdgeX`),
@@ -316,17 +318,14 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
             damage: positiveInteger(bite.damage, `${name}.bite.damage`),
             cadenceTicks: positiveInteger(bite.cadenceTicks, `${name}.bite.cadenceTicks`),
         },
+        wave: { points: positiveInteger(wave.points, `${name}.wave.points`), weight: nonNegativeInteger(wave.weight, `${name}.wave.weight`),
+            ...(wave.firstWave === undefined ? {} : { firstWave: positiveInteger(wave.firstWave, `${name}.wave.firstWave`) }) },
     }
     if (source.facingRightOffsetX !== undefined) result.facingRightOffsetX = finite(source.facingRightOffsetX, `${name}.facingRightOffsetX`)
     if (source.behavior !== undefined) result.behavior = jsonRoundTrip(record(source.behavior, `${name}.behavior`)) as JsonObject
-    if (source.wave !== undefined) {
-        const wave = exact(source.wave, ['points', 'weight'], `${name}.wave`, ['firstWave'])
-        result.wave = { points: positiveInteger(wave.points, `${name}.wave.points`), weight: nonNegativeInteger(wave.weight, `${name}.wave.weight`),
-            ...(wave.firstWave === undefined ? {} : { firstWave: positiveInteger(wave.firstWave, `${name}.wave.firstWave`) }) }
-    }
     if (source.graveRise !== undefined) {
         if (typeof source.graveRise !== 'boolean') throw new Error(`${name}.graveRise must be boolean`)
-        if (source.graveRise && !result.wave?.weight) throw new Error(`${name}.graveRise needs a weighted wave`)
+        if (source.graveRise && !result.wave.weight) throw new Error(`${name}.graveRise needs a weighted wave`)
         result.graveRise = source.graveRise
     }
     if (source.targetingInsets !== undefined) {
@@ -576,8 +575,7 @@ function parseZombiePool(value: unknown, name: string, definitions: GameplayDefi
         const entry = typeof value === 'string' ? { id: value } as Record<string, unknown> : exact(value, ['id'], entryName, ['points', 'weight', 'firstWave'])
         const id = qualifiedId(entry.id, `${entryName}.id`)
         const wave = reference(id, definitions.zombies, `${entryName}.id`).wave
-        const points = entry.points ?? wave?.points, weight = entry.weight ?? wave?.weight, firstWave = entry.firstWave ?? wave?.firstWave
-        if (points === undefined || weight === undefined) throw new Error(`${entryName} needs points and weight, from the zombie's wave or the entry`)
+        const points = entry.points ?? wave.points, weight = entry.weight ?? wave.weight, firstWave = entry.firstWave ?? wave.firstWave
         return { id, points: positiveInteger(points, `${entryName}.points`), weight: nonNegativeInteger(weight, `${entryName}.weight`),
             ...(firstWave === undefined ? {} : { firstWave: positiveInteger(firstWave, `${entryName}.firstWave`) }) }
     })
@@ -591,7 +589,7 @@ function defaultGraveZombies(definitions: GameplayDefinitions, waves: LevelDefin
     zombiePool: Array<{ id: string }> | undefined): LevelDefinition['graveZombies'] {
     const allowed = new Set([...zombiePool?.map(entry => entry.id) ?? [], ...waves?.flatMap(wave => wave.zombies) ?? []])
     const picks = Object.entries(definitions.zombies).flatMap(([id, { graveRise, wave }]) =>
-        graveRise && allowed.has(id) ? [{ id, weight: wave!.weight }] : [])
+        graveRise && allowed.has(id) ? [{ id, weight: wave.weight }] : [])
     return picks.length ? picks : undefined
 }
 
@@ -703,10 +701,8 @@ function parseLevel(value: unknown, name: string, definitions: GameplayDefinitio
             const entryName = `${name}.graveZombies[${index}]`
             const entry = typeof value === 'string' ? { id: value } as Record<string, unknown> : exact(value, ['id'], entryName, ['weight'])
             const id = qualifiedId(entry.id, `${entryName}.id`)
-            const zombie = reference(id, definitions.zombies, `${entryName}.id`)
-            const weight = entry.weight ?? zombie.wave?.weight
-            if (weight === undefined) throw new Error(`${entryName} needs a weight, from the zombie's wave or the entry`)
-            return { id, weight: positiveInteger(weight, `${entryName}.weight`) }
+            const { wave } = reference(id, definitions.zombies, `${entryName}.id`)
+            return { id, weight: positiveInteger(entry.weight ?? wave.weight, `${entryName}.weight`) }
         })
     if (source.graveZombies !== undefined && !graveZombies?.length) throw new Error(`${name}.graveZombies must not be empty`)
     const award = record(source.award, `${name}.award`)

@@ -1,6 +1,14 @@
 import type { BoardDefinition, GameplayLevels, LevelDefinition } from '@/shared/content/gameplayTypes'
 
-/** What the definitions of a level and its board give: where its mowers ride and the tools it has. */
+/** What the definitions of a level and its board give: where its mowers ride, the tools it has and its award's size. */
+
+/** A seed packet's size (IMAGE_SEEDS' cel): in the bank, in the chooser, and a seed award's. */
+export const SEED_PACKET_SIZE = Object.freeze({ width: 50, height: 70 })
+
+/** The level award's size on the lawn (Coin::CoinInitialize's mWidth, mHeight): a seed award's is its packet's. */
+export function levelAwardSize(award: LevelDefinition['award']): { readonly width: number; readonly height: number } {
+    return award.kind === 'seed' ? SEED_PACKET_SIZE : award
+}
 
 /** Where a mower rides in a row: a level's waits there, and a mowing projectile runs there, on the ground. */
 export function mowerY(board: BoardDefinition, row: number): number {

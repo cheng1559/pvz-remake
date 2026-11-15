@@ -110,7 +110,8 @@ export function buildGameplayContent(value: unknown, sources: readonly Definitio
 
 export function buildPresentationDefinitions(value: unknown, sources: readonly DefinitionSource[] = []) {
     const base = record(jsonRoundTrip(value), 'presentation definitions')
-    const kinds = ['plants', 'zombies', 'projectiles', 'gridItems', 'tools', 'foley', 'boards', 'screens', 'levels', 'challenges']
+    // The tables a Mod adds to or overrides, all by qualified ID: `awards` by the level award's, `rules` by the rule's kind.
+    const kinds = ['plants', 'zombies', 'projectiles', 'gridItems', 'items', 'awards', 'tools', 'foley', 'boards', 'screens', 'levels', 'rules', 'challenges']
     const registry = new DefinitionRegistry(kinds)
     registry.register(BASE_MOD_ID, Object.fromEntries(kinds.map(kind => [kind, base[kind] ?? {}])), true)
     for (const source of sources) {

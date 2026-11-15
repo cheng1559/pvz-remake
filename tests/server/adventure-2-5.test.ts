@@ -105,9 +105,27 @@ function debug(server: IntegratedGameServer, command: string) {
     return server.drainCommandResults()[0].debug
 }
 
+test('the waves count the shared countdown down and come by Board::NextWaveComing, the siren before the last', () => {
+    const server = play({ randomSeed: 11 })
+    const comings: Array<[number, unknown]> = [], finals: number[] = []
+    assert.equal(server.snapshot().wave.countdown, 200, 'Challenge::StartLevel: mZombieCountDown, which the progress meter follows')
+    for (let tick = 0; tick < 2000 * 9 && server.snapshot().wave.index < server.snapshot().wave.total; tick++) {
+        const snapshot = server.tick()
+        whackAll(server, snapshot)
+        for (const event of server.drainEvents()) {
+            if (event.type === 'nextWaveComing') comings.push([snapshot.gameplayTick, event.data])
+            if (event.type === 'finalWave') finals.push(snapshot.gameplayTick)
+        }
+    }
+    assert.deepEqual(comings.map(([tick]) => tick), Array.from({ length: 8 }, (_, wave) => 195 + 2000 * wave), '5 ticks before each wave')
+    assert.deepEqual(comings.map(([, data]) => data), [{ first: true }, {}, {}, {}, {}, {}, {}, { siren: true }])
+    assert.deepEqual(finals, [195 + 2000 * 7], 'the final wave\'s banner once, before the last')
+    assert.equal(server.snapshot().wave.countdown, 2000)
+})
+
 test('with every grave being eaten and no zombie left, the award drops when the final group would have risen', () => {
     const server = play({ randomSeed: 11 })
-    const wave = () => (server.save() as unknown as { wave: { ruleState: { countdown: number }, index: number } }).wave
+    const wave = () => (server.save() as unknown as { wave: { nextWaveAtTick?: number, index: number } }).wave
     for (let tick = 0; tick < 2000 * 9 && wave().index < server.snapshot().wave.total; tick++) whackAll(server, server.tick())
     // The final wave has started: its group rises 300 ticks on. A grave buster on each grave by then, and the lawn cleared.
     const graves = server.snapshot().gridItems!
@@ -118,7 +136,7 @@ test('with every grave being eaten and no zombie left, the award drops when the 
         const snapshot = server.tick()
         whackAll(server, snapshot)
         if (snapshot.items.some(item => item.typeId === 'pvz:hypnoshroom')) dropped = tick
-        else assert.ok(wave().ruleState.countdown > 0, 'not before the final group is due')
+        else assert.ok(wave().nextWaveAtTick !== undefined, 'not before the final group is due')
     }
     assert.ok(dropped >= 0, 'the level does not stay stuck')
     assert.equal(server.snapshot().zombies.length, 0)
@@ -179,8 +197,8 @@ test('planting recharges the packet, and the award only drops once the final gro
         const snapshot = server.tick()
         seen = Math.max(seen, snapshot.zombies.length)
         whackAll(server, snapshot)
-        const state = (server.save() as unknown as { wave: { ruleState: { countdown: number }, index: number } }).wave
-        if (snapshot.items.some(item => item.typeId === 'pvz:hypnoshroom') && state.ruleState.countdown > 0) awardBeforeEnd = true
+        const state = (server.save() as unknown as { wave: { nextWaveAtTick?: number, index: number } }).wave
+        if (snapshot.items.some(item => item.typeId === 'pvz:hypnoshroom') && state.nextWaveAtTick !== undefined) awardBeforeEnd = true
         if (snapshot.items.some(item => item.typeId === 'pvz:hypnoshroom')) break
     }
     assert.equal(awardBeforeEnd, false)

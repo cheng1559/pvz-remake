@@ -1,4 +1,5 @@
 import { TICK_SECONDS } from '@/shared/protocol'
+import { pickWeighted } from '@/shared/random'
 import type { AnimationClip, AnimationDefinition } from './gameplay'
 
 /**
@@ -60,11 +61,10 @@ export function playLayers(animation: AnimationDefinition, entity: Animated, cli
     for (const [layer, clip] of Object.entries(clips ?? {})) entity.animations![layer] = startLayer(animation, entity, clip, random)
 }
 
-/** One of the clips, by their weights; a single one costs no draw. */
+/** One of the clips, by their weights; a single one costs no draw, as Plant::AttachBlinkAnim draws only among several. */
 export function drawn(clips: Record<string, number>, random: AnimationRandom): string {
-    const entries = Object.entries(clips)
-    let roll = entries.length > 1 ? random.integer(1, entries.reduce((sum, [, weight]) => sum + weight, 0)) : 1
-    return entries.find(([, weight]) => (roll -= weight) <= 0)![0]
+    const entries = Object.entries(clips).map(([clip, weight]) => ({ clip, weight }))
+    return entries.length > 1 ? pickWeighted(entries, random).clip : entries[0].clip
 }
 
 /**

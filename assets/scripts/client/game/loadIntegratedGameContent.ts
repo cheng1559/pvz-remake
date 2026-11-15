@@ -37,7 +37,7 @@ async function buildIntegrated() {
     animations.freeze()
     const { views } = loadedMods
     views.freeze()
-    assertPresented(definitions, presentation, views)
+    assertPresented({ definitions, levels }, presentation, views)
     const enabledMods = loadedMods.manifests
         .filter(mod => mod.gameplay !== undefined || loadedMods.gameplayDefinitions.some(source => source.ownerId === mod.id))
         .map(mod => ({ id: mod.id, version: mod.version, contentHash: mod.contentHash }))

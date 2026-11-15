@@ -73,7 +73,6 @@ export interface LevelAudioSnapshot {
     music: MusicPlaybackSnapshot | null
     ownsMusic: boolean
     gameplayStarted: boolean
-    firstWavePlayed: boolean
 }
 
 /**
@@ -244,13 +243,12 @@ function parseHud(value: unknown): LevelHudSnapshot {
 
 function parseAudio(value: unknown): LevelAudioSnapshot {
     const source = exact(value, [
-        'music', 'ownsMusic', 'gameplayStarted', 'firstWavePlayed',
+        'music', 'ownsMusic', 'gameplayStarted',
     ], 'Level audio')
     return {
         music: parseMusicPlaybackSnapshot(source.music),
         ownsMusic: boolean(source.ownsMusic, 'Level audio.ownsMusic'),
         gameplayStarted: boolean(source.gameplayStarted, 'Level audio.gameplayStarted'),
-        firstWavePlayed: boolean(source.firstWavePlayed, 'Level audio.firstWavePlayed'),
     }
 }
 

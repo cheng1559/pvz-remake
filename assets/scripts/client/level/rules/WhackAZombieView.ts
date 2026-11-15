@@ -99,12 +99,6 @@ export class WhackAZombieView implements LevelRuleView {
 
     sync(snapshot: WorldSnapshot, events: readonly ServerEvent[], introComplete: boolean): void {
         for (const event of events) {
-            // Board::NextWaveComing here: the awooga before the first wave, the siren before the last.
-            if (event.type === 'nextWaveComing') {
-                if (event.data.first) void SoundSystem.play(SoundEffect.Awooga)
-                if (event.data.siren) void SoundSystem.play(SoundEffect.Siren)
-                continue
-            }
             // Board::DropLootPiece: FOLEY_SPAWN_SUN for the three suns a whacked zombie can drop.
             if (event.type === 'sunDropped') { void SoundSystem.playFoley(SoundEffect.Throw, 10); continue }
             // A blow on a plant (`plantWhacked`) lands as one on a bare zombie: its bonk, and the POW when it ends it.

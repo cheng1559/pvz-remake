@@ -1,5 +1,7 @@
-import type { BoardDefinition, GameplayDefinitions, LevelDefinition } from '@/shared/content/gameplay'
+import { type BoardDefinition, type GameplayDefinitions, type LevelDefinition, levelAwardSize } from '@/shared/content/gameplay'
 import type { ItemSnapshot } from '@/shared/protocol'
+
+export { levelAwardSize }
 
 /** Board::GetSeedBankExtraWidth, shared by the adjacent board tools. */
 export function seedBankExtraWidth(slots: number): number {
@@ -9,10 +11,6 @@ export function seedBankExtraWidth(slots: number): number {
 /** Board::GetSeedPacketPositionX: packets in the seed bank, from its left edge; more slots squeeze them closer. */
 export function seedPacketX(index: number, slots: number): number {
     return slots <= 7 ? index * 59 + 85 : slots === 8 ? index * 54 + 81 : slots === 9 ? index * 52 + 80 : index * 51 + 79
-}
-
-export function levelAwardSize(award: LevelDefinition['award']): { width: number; height: number } {
-    return award.kind === 'seed' ? { width: 50, height: 70 } : award
 }
 
 /**

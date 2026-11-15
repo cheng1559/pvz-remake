@@ -126,12 +126,13 @@ function validateStore(value: unknown): asserts value is StoreDefinition {
     if (!data || !Array.isArray(data.pages) || !data.garden || !Number.isInteger(data.garden.columns) || data.garden.columns <= 0 ||
         !Number.isInteger(data.garden.capacity) || data.garden.capacity <= 0 || !data.garden.template?.whichZenGarden) throw new Error('Invalid store definition')
     const dialogue = data.dialogue
+    // The chatter's weights are whole numbers, as PvzpPickFromWeightedArray's are.
     if (!dialogue || !dialogue.ambient ||
         !Array.isArray(dialogue.ambient.interval) || !Array.isArray(dialogue.ambient.messages) ||
         [dialogue.readyDelay, dialogue.descriptionDuration,
             dialogue.ambient.initialDelay, dialogue.ambient.duration, ...dialogue.ambient.interval].some(value => !Number.isFinite(value) || value <= 0) ||
         dialogue.ambient.interval.length !== 2 || dialogue.ambient.interval[0] > dialogue.ambient.interval[1] ||
-        !dialogue.ambient.messages.length || dialogue.ambient.messages.some(entry => !Number.isInteger(entry.message) || entry.weight < 0 || !Number.isFinite(entry.weight))) throw new Error('Invalid store dialogue')
+        !dialogue.ambient.messages.length || dialogue.ambient.messages.some(entry => !Number.isInteger(entry.message) || !Number.isSafeInteger(entry.weight) || entry.weight < 0)) throw new Error('Invalid store dialogue')
     const ids = new Set<number>()
     for (const page of data.pages) {
         if (!Array.isArray(page.items)) throw new Error('Invalid store page')

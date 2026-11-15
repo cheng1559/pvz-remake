@@ -3,6 +3,7 @@ import type { GameplayDefinitions, GameplayLevels, LevelDefinition, LevelRule } 
 import type { LevelPlantingRule } from '@/shared/content/planting'
 import type { JsonObject } from '@/shared/protocol'
 import { isModId, isQualifiedId, Registry } from '@/shared/mod'
+import { pickWeighted } from '@/shared/random'
 import { defineResource } from '@/ecs/index'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import type { CommandRejectionCode, Session } from '../session/session'
@@ -53,11 +54,9 @@ export function levelRule(world: World): LevelRuleDefinition | undefined {
     return world.resources.has(LevelRuleResource) ? world.resources.get(LevelRuleResource) : undefined
 }
 
-/** The points a zombie spends: its zombiePool entry, else its definition (mZombieValue). */
+/** The points a zombie spends and its loot's odds: its zombiePool entry, else its definition (mZombieValue). */
 export function zombieValue(level: LevelDefinition, definitions: GameplayDefinitions, id: string): number {
-    const points = level.zombiePool?.find(entry => entry.id === id)?.points ?? definitions.zombies[id].wave?.points
-    if (points === undefined) throw new Error(`${id} has no wave points`)
-    return points
+    return level.zombiePool?.find(entry => entry.id === id)?.points ?? definitions.zombies[id].wave.points
 }
 
 export class LevelRuleRegistry {
@@ -110,8 +109,7 @@ export function planWaves(drafts: WaveDraft[], level: LevelDefinition, random: D
         let remaining = draft.points
         while (remaining > 0) {
             const choices = level.zombiePool!.filter(entry => entry.weight > 0 && entry.points <= remaining && index + 1 >= (entry.firstWave ?? 1))
-            let roll = random.integer(0, choices.reduce((sum, entry) => sum + entry.weight, 0) - 1)
-            const picked = choices.find(entry => (roll -= entry.weight) < 0)!
+            const picked = pickWeighted(choices, random)
             zombies.push(picked.id)
             remaining -= picked.points
         }

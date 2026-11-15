@@ -2,6 +2,7 @@ import type { EntityId, World } from '@/ecs'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { GRAVE, GRAVE_MAX_RISE_DELAY, GRAVE_RISEN_COUNTER, GRAVE_VARIANTS, graveAt, graveRiseCounter } from '@/shared/content/graves'
 import { holdsCell } from '@/shared/content/planting'
+import { pickWeighted } from '@/shared/random'
 import { type Grave, GridItemComponent, LevelStateResource, RandomResource, ZombieComponent } from '../state/components'
 import { WaveResource } from '../state/levelState'
 import { spawnZombie } from '../zombies/spawn'
@@ -88,7 +89,6 @@ export function updateGraveSpawns(world: World, definitions: GameplayDefinitions
         // Board::SpawnZombiesFromGraves skips a grave still rising, before picking its zombie. The level's own graves
         // rose in the intro.
         if ((graveRiseCounter(grave, tick) ?? GRAVE_RISEN_COUNTER) < GRAVE_RISEN_COUNTER) continue
-        let roll = random.integer(0, choices.reduce((sum, entry) => sum + entry.weight, 0) - 1)
-        raiseZombieFromGrave(world, definitions, grave, choices.find(entry => (roll -= entry.weight) < 0)!.id, 150)
+        raiseZombieFromGrave(world, definitions, grave, pickWeighted(choices, random).id, 150)
     }
 }

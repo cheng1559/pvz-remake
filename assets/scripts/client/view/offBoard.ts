@@ -21,6 +21,8 @@ export function offBoardContent(): ReturnType<typeof loadIntegratedGameContent> 
 
 /** Nothing off the board is the server's, so nothing has to come out the same twice. */
 const random: AnimationRandom = { nextFloat: () => Math.random(), integer: (min, max) => min + Math.floor(Math.random() * (max - min + 1)) }
+/** The same for whatever else only a client shows (the store's chatter). */
+export { random as offBoardRandom }
 
 export interface OffBoardPlant {
     view: PlantView

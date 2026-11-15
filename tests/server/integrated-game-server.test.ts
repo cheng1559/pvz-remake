@@ -26,6 +26,7 @@ import { isJsonValue,parseServerPacket,type StartSessionPacket } from '@/shared/
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
 import { framePosition } from '@/shared/content/animation'
+import { pickWeighted } from '@/shared/random'
 
 const source = readGameplaySource
 
@@ -63,6 +64,14 @@ test('deterministic RNG repeats and resumes its uint32 sequence', () => {
     assert.equal(restored.nextUint32(), first.nextUint32())
     assert.throws(() => new DeterministicRng(0x100000000), /uint32/)
     assert.throws(() => first.integer(2, 1), /range/)
+})
+
+test('PvzpPickArrayItemFromWeightedArray: one draw below the total weight, never an entry of weight 0', () => {
+    const draws: Array<[number, number]> = []
+    const rolling = (roll: number) => ({ integer: (min: number, max: number) => { draws.push([min, max]); return roll } })
+    const entries = [{ id: 'a', weight: 2 }, { id: 'b', weight: 0 }, { id: 'c', weight: 3 }]
+    assert.deepEqual([0, 1, 2, 3, 4].map(roll => pickWeighted(entries, rolling(roll)).id), ['a', 'a', 'c', 'c', 'c'])
+    assert.deepEqual(draws, Array(5).fill([0, 4]))
 })
 
 test('1-1 starts at tick zero and advances as a JSON-safe authoritative world', () => {

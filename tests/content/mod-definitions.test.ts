@@ -279,8 +279,38 @@ test('definition registries reject collisions, foreign namespaces, unresolved re
     delete invalid.data.plants['example:rapid_pea'].clips.blink
     // What draws a plant has the pictures of every clip its animation plays.
     const any = { has: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any, items: any }
-    assert.doesNotThrow(() => assertPresented(build().definitions, installed, views))
-    assert.throws(() => assertPresented(build().definitions, buildPresentationDefinitions(source, [invalid]), views), /missing blink animation/)
+    assert.doesNotThrow(() => assertPresented(build(), installed, views))
+    assert.throws(() => assertPresented(build(), buildPresentationDefinitions(source, [invalid]), views), /missing blink animation/)
+})
+
+test('a Mod adds and overrides item, award and rule presentations, and one missing fails at load', () => {
+    const source = readPresentationSource()
+    const any = { has: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any, items: any }
+    const sun = source.items['pvz:sun'], almanac = source.awards['pvz:almanac'], whack = source.rules['pvz:whack-a-zombie']
+    // Like every other table: new IDs in the Mod's own namespace, anyone's through overrides.
+    const plain = buildPresentationDefinitions(source, [presentation()])
+    const added = buildPresentationDefinitions(source, [{ ownerId: 'example', data: { ...presentation().data,
+        items: { 'example:moon': sun }, awards: { 'example:key': almanac }, rules: { 'example:rule': whack },
+        overrides: { items: { 'pvz:sun': { ...sun, offset: [1, 2] } }, awards: { 'pvz:almanac': { ...almanac, x: 7 } }, rules: { 'pvz:whack-a-zombie': { ...whack, seedBankSlide: 3 } } },
+    } }])
+    assert.deepEqual([added.items['example:moon'], added.awards!['example:key'], added.rules!['example:rule']], [sun, almanac, whack])
+    assert.deepEqual([added.items['pvz:sun'].offset, added.awards!['pvz:almanac'].x, added.rules!['pvz:whack-a-zombie'].seedBankSlide], [[1, 2], 7, 3])
+    for (const kind of ['items', 'awards', 'rules']) {
+        assert.throws(() => buildPresentationDefinitions(source, [{ ownerId: 'other', data: { [kind]: { 'pvz:extra': {} } } }]), /cannot register pvz:extra/)
+    }
+
+    // A gameplay item or a level award the presentation has nothing for fails as content is put together.
+    const content = build()
+    const item = { ...content, definitions: { ...content.definitions, items: { ...content.definitions.items, 'example:moon': content.definitions.items['pvz:sun'] } } }
+    assert.throws(() => assertPresented(item, plain, views), /Item presentation is not installed: example:moon/)
+    assert.doesNotThrow(() => assertPresented(item, added, views))
+    const level = content.levels.levels['pvz:adventure-1-4'], award = { ...level.award, id: 'example:key' } as typeof level.award
+    const awarded = { ...content, levels: { ...content.levels, levels: { ...content.levels.levels, 'example:level': { ...level, award } } } }
+    assert.throws(() => assertPresented(awarded, plain, views), /Award presentation is not installed: example:key/)
+    assert.doesNotThrow(() => assertPresented(awarded, added, views))
+    const note = { ...content.levels.levels['pvz:adventure-1-9'].award, id: 'example:key' } as typeof level.award
+    const noted = { ...content, levels: { ...content.levels, levels: { ...content.levels.levels, 'example:level': { ...level, award: note } } } }
+    assert.throws(() => assertPresented(noted, added, views), /Award presentation is not installed: example:key/, 'a note needs its pages')
 })
 
 test('overrides replace whole existing definitions by ID, one Mod per ID, before level patches apply', () => {

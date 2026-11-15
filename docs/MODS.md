@@ -63,6 +63,8 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 
 植物的 `visual.nameKey`、`visual.tooltipKey` 分别指定名称和选卡说明的文本键，文本写在 Mod 的 `pvz:strings` 资源里。未指定 `tooltipKey` 时沿用原版的 `名称键_TOOLTIP` 约定。
 
+每个僵尸定义都必须写 `wave: { points, weight, firstWave? }`，即原版 `ZombieDefinition` 的分值 `mZombieValue`、出怪权重 `mPickWeight` 和最早出现的波次 `mFirstAllowedWave`。分值既是出怪时花的点数，也决定它死亡时掉钱的概率（`Zombie::DropLoot`），所以只在列出的波次、墓碑或调试命令里出现的僵尸也要写；不想被出怪池随机选中就把 `weight` 写成 0。关卡 `zombiePool` 的条目可以覆盖这些值。缺少 `wave` 的僵尸在加载时报错。
+
 所有文字只存在一张按键合并的文本表 `pvz:strings` 中：本体一层是原版文本（含关卡提示语；服务端只发送提示的键）加上本体新增的界面文本（手写在 `tools/pvz/ui-strings.json`，生成 pvz-base 时合并进来，键不得与原版重复）。Mod 在 `content.json` 的 `json` 类资源里登记自己的 `pvz:strings` 文件作为一层：新增的键必须带自己的命名空间（如 `example:menu`），已有的键（本体或任何 Mod 的）都可以改写，按启用优先级后面的生效，所以翻译包只需列出要改的条目，也能翻译其他 Mod 的文字；不符合规则的新键会被忽略并在控制台报错。背景音乐每首是一个 `music` 资源，ID 为 `pvz:曲目名`（如 `pvz:night_moongrains`），格式见 `shared/content/music.ts`（schemaVersion 3：时长、循环点、以音频资源 ID 表示的分轨，可选原版爆发段落）。音乐 Mod 用同一 ID 登记要替换的曲目即可，其余曲目沿用本体。字体只按 ID 覆盖，没有“只读本体”的特例：快捷键字母使用独立的 `pvz:hotkey`（与 `pvz:houseofterror16` 同一份文件），文字包只覆盖后者，快捷键保持原版字形；高清包需同时登记 `pvz:hotkey` 才会重绘它。`ui.text(key)` 只接受键，不带默认值；缺失的键显示键名并在控制台报错。翻译包在 `manifest.json` 的 `locale` 写明文字语言（如 `zh-CN`，最后一个声明了 locale 的已启用 Mod 生效，默认 en-US）；本体通过 `ui.locale` 提供该值，图片里带文字的素材据此选择版本（例如宽屏 Mod 的成就页顶部）。
 
 射手的 `shooter.initialDelayTicks` 和 `shooter.cadenceTicks` 均使用整数范围，例如初始等待 `{ "min": 0, "max": 150 }`、周期 `{ "min": 136, "max": 150 }`（周期最小值必须大于零）。服务端使用局内 RNG 抽取初始等待和每次周期；没有目标时也推进周期，当前时钟与 RNG 状态随存档保存。固定间隔使用相同的 `min`、`max`。
@@ -72,6 +74,8 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 资源类别共用一套定义：`sprites`、`fonts`、`audio`、`json`、`text`、`reanim`、`particles`、`music`、`prefabs`。图片使用对象，其他类别使用 ID 到文件路径的映射；`audio` 支持 MP3/WAV。新动画、粒子、音乐配置使用对应类别，普通 JSON 使用 `json`。替换已有资源只需使用其原 ID；新增游戏定义使用 Mod 自身命名空间。Mod ID 是不带冒号的名字（如 `widescreen`），它同时就是这个 Mod 的命名空间：自己新增的资源和定义都写作 `名字:…`，例如 `widescreen:background1`。两个 Mod 的 ID 不会相同，所以命名空间也不会重叠；以其他命名空间写的资源都算替换，不算自己的。内置本体的 ID 为 `pvz`。表现配置里的音效（`{ "audio", "foley", "pitchRange"? }`）的 `audio` 同样写完整的音频资源 ID，例如 `pvz:splat`、`corn:shoop`；不带命名空间的 ID 会在校验时报错。
 
 要整体替换已有定义（本体或其他 Mod 的），在 `gameplay` 或 `presentation` 下加 `"overrides": "assets/gameplay/overrides.json"`，文件按表分组写完整定义，例如 `{ "plants": { "pvz:peashooter": { ... } } }`。覆盖在所有 Mod 登记完后执行，可覆盖任意已存在的 ID，不受加载顺序影响；同一 ID 只能被一个 Mod 覆盖，否则报冲突；目标 ID 不存在时报错；覆盖后的定义照常校验引用。关卡也可覆盖，`levelPatches` 在覆盖之后按字段生效。覆盖只替换数据：按 ID 登记的代码行为（`plantBehaviors.register`）不会随定义转移，旧存档中实体状态与新定义不符时按不兼容存档处理。
+
+表现定义里 Mod 可以新增或覆盖的表有 `plants`、`zombies`、`projectiles`、`gridItems`、`items`、`awards`、`tools`、`foley`、`boards`、`screens`、`levels`、`rules`、`challenges`，规则和其他定义表相同：新 ID 只能用自己的命名空间，改已有的走 `overrides`。`items` 按掉落物 ID、`awards` 按关卡奖励的 ID、`rules` 按关卡规则的 `kind` 索引。内容组装时检查玩法里的每个植物、僵尸、弹丸和掉落物都有表现且视图已安装，每关的奖励都有图（种子奖励用它的植物表现，`note` 还要有 `pageImages`）；缺了就是这个 Mod 加载失败，而不是等到它出现在关卡里才报错。
 
 图片可通过 `alphaMode: "premultiplied"` 标记预乘透明度的源 PNG，未标记或 `"straight"` 时沿用普通 RGBA。该标记按 PNG 文件生效，共用同一文件的裁片不能声明冲突格式；`assets.sprite(path)` 原始路径也读取这份清单。本体加载器统一解码非交错 RGBA8 PNG 并还原颜色。所有图片（无论哪种 `alphaMode`、来自本体还是 Mod）加载时都会像原版一样“补色”：每个全透明像素取上下两行相邻可见像素的平均色，没有则为黑色，透明度不变，避免线性采样在边缘混入黑边；因此图片里全透明像素自带的 RGB 不会被保留。Web 和 Native 使用同一路径，动画、淡入淡出及普通 Sprite 都保持默认混合，无需 Mod 单独设置混合因子。
 

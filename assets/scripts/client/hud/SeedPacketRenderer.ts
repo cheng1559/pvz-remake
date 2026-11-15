@@ -4,6 +4,7 @@ import { createOffBoardGridItem } from '@/client/view/offBoard'
 import { GRAVE } from '@/shared/content/graves'
 import { modResources } from '@/client/content/ModResources'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
+import { SEED_PACKET_SIZE } from '@/shared/content/gameplay'
 import { _decorator, Color, Component, isValid, Node, Rect, Size, Sprite, SpriteFrame, Vec2 } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil, FontRenderer } from '@/client/font'
@@ -20,7 +21,7 @@ export type { SeedPacketSeedType } from '@/client/plants/definitions'
 export { getAtlasFrame } from '@/client/render/atlasFrame'
 
 export { SEED_PACKET_WIDTH }
-export const SEED_PACKET_HEIGHT = 70
+export const SEED_PACKET_HEIGHT = SEED_PACKET_SIZE.height
 /** SEED_IMITATER: its packet has a background of its own and no mobile selection frame. */
 export const IMITATER_SEED_TYPE = 48
 

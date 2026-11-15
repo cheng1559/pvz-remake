@@ -73,7 +73,7 @@ test('day wave plans match original counts, flags, introduction waves and zombie
                 const budget = wave % 10 === 9 ? Math.floor(base * 2.5) : base
                 const expected = index === 10 ? fixedFlag + (budget - fixedFlag) * 3
                     : index === 8 && wave === 5 ? 4 : index === 8 && wave === 9 ? 11 : budget
-                assert.equal(plan[wave].reduce((sum, id) => sum + definitions.zombies[id].wave!.points, 0), expected)
+                assert.equal(plan[wave].reduce((sum, id) => sum + definitions.zombies[id].wave.points, 0), expected)
             }
             for (const id of levels.levels[options(index).levelId].zombiePool!.filter(entry => entry.weight).map(entry => entry.id)) assert.ok(plan.at(-1)!.includes(id))
             if (index === 6) assert.ok(plan[5].includes('pvz:pole_vaulter'))

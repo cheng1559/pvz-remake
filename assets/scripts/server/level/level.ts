@@ -27,7 +27,6 @@ export function initializeLevel(world: World, firstAdventure: boolean, definitio
         plan: planWaves(rules.draft(level, definitions), level, world.resources.get(RandomResource)),
         zombieIds: [],
         healthToNextWave: 0,
-        finalWaveAnnounced: false,
         hugeWaveAnnounced: false,
         ...(level.activeRows.length > 1 ? {
             rowPicks: level.activeRows.map(row => ({ row, lastPicked: 0, secondLastPicked: 0 })),

@@ -5,6 +5,7 @@ import test from 'node:test'
 import { loadScript } from '../loadScript'
 import * as plantVisuals from '@/client/plants/definitions'
 import * as modApi from '@/shared/mod'
+import * as gameplay from '@/shared/content/gameplay'
 import { buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 
@@ -27,6 +28,7 @@ function setup() {
             isValid: (node: Node) => node.isValid, _decorator: { ccclass: (name: string) => (value: unknown) => { classes[name] = value; return value } } },
         '@/client/plants/definitions': plantVisuals,
         '@/shared/mod': modApi,
+        '@/shared/content/gameplay': gameplay,
         '@/client/view/offBoard': {},
         '@/client/view/uiNode': { uiNode: () => ({ node: new Node() }) },
     }

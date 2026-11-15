@@ -30,7 +30,7 @@ export function levelPresentation(current: WorldSnapshot): LevelPresentationSnap
             progressMeterWidth: 0, progressTick: current.gameplayTick,
         },
         audio: {
-            music: null, ownsMusic: true, gameplayStarted: complete, firstWavePlayed: false,
+            music: null, ownsMusic: true, gameplayStarted: complete,
         },
         entities: [],
         particles: [],

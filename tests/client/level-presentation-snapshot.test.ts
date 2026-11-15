@@ -29,7 +29,7 @@ function snapshot(): any {
             progressCountdownStart: 10, progressMeterWidth: 20, progressTick: 11,
         },
         audio: {
-            music: null, ownsMusic: true, gameplayStarted: true, firstWavePlayed: false,
+            music: null, ownsMusic: true, gameplayStarted: true,
         },
         entities: [{
             kind: 'plant', entityId: 1, data: { flash: { tick: 10, ticks: 25 } },

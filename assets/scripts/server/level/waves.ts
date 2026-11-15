@@ -25,6 +25,20 @@ function addWaveHealth(total: number, zombie: Zombie): number {
     return Math.trunc(Math.fround(total + health))
 }
 
+/**
+ * Board::NextWaveComing, once for each wave as it is about to come (`waves.index`): the final wave's banner before the
+ * last one, and the awooga before the first or else the siren where `siren` says (a flag wave; on Whack-a-Zombie, the
+ * last wave). A rule that counts its own waves calls it too.
+ */
+export function nextWaveComing(world: World, siren: boolean): void {
+    const waves = world.resources.get(WaveResource)
+    if (waves.announcedWave === waves.index) return
+    waves.announcedWave = waves.index
+    const events = world.resources.get(EventQueueResource)
+    if (waves.index + 1 === waves.plan.length) emitServerEvent(events, 'finalWave', {})
+    emitServerEvent(events, 'nextWaveComing', waves.index === 0 ? { first: true } : siren ? { siren: true } : {})
+}
+
 export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
     return {
         id: 'pvz:waves',
@@ -62,11 +76,8 @@ export function createWaveSystem(definitions: GameplayDefinitions): GameSystem {
                 if (tick === waves.nextWaveAtTick - 726) emitServerEvent(world.resources.get(EventQueueResource), 'hugeWaveSound', {})
                 if (tick === waves.nextWaveAtTick - 401) emitServerEvent(world.resources.get(EventQueueResource), 'musicBurst', {})
             }
-            if (waves.index === waves.plan.length - 1 && !waves.finalWaveAnnounced &&
-                tick >= waves.nextWaveAtTick - (nextIsFlag ? 1 : 5)) {
-                waves.finalWaveAnnounced = true
-                emitServerEvent(world.resources.get(EventQueueResource), 'finalWave', {})
-            }
+            // Board::UpdateZombieSpawning: 5 ticks before a wave; a flag wave's as its huge wave countdown ends.
+            if (tick >= waves.nextWaveAtTick - (nextIsFlag ? 1 : 5)) nextWaveComing(world, nextIsFlag)
             if (tick < waves.nextWaveAtTick) return
 
             const wave = waves.plan[waves.index]

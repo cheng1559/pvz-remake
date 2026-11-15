@@ -203,7 +203,7 @@ function parseTutorial(value: unknown): TutorialState {
 }
 
 function parseWave(value: unknown): WaveState {
-    const source = exact(value, ['index', 'plan', 'zombieIds', 'healthToNextWave', 'finalWaveAnnounced', 'hugeWaveAnnounced'], 'server save.wave', ['nextWaveAtTick', 'accelerateAtTick', 'rowPicks', 'graveRiseAtTick', 'ruleState'])
+    const source = exact(value, ['index', 'plan', 'zombieIds', 'healthToNextWave', 'hugeWaveAnnounced'], 'server save.wave', ['nextWaveAtTick', 'accelerateAtTick', 'announcedWave', 'rowPicks', 'graveRiseAtTick', 'ruleState'])
     const plan = array(source.plan, 'server save.wave.plan').map((value, index) => {
         const wave = exact(value, ['zombies'], `server save.wave.plan[${index}]`, ['flagWave'])
         return { zombies: array(wave.zombies, `server save.wave.plan[${index}].zombies`).map(id => nonEmptyString(id, 'wave zombie ID')),
@@ -215,9 +215,9 @@ function parseWave(value: unknown): WaveState {
         zombieIds: array(source.zombieIds, 'server save.wave.zombieIds').map((id, index) =>
             positiveInteger(id, `server save.wave.zombieIds[${index}]`)),
         healthToNextWave: nonNegativeFinite(source.healthToNextWave, 'server save.wave.healthToNextWave'),
-        finalWaveAnnounced: boolean(source.finalWaveAnnounced, 'server save.wave.finalWaveAnnounced'),
         hugeWaveAnnounced: boolean(source.hugeWaveAnnounced, 'server save.wave.hugeWaveAnnounced'),
     }
+    if (source.announcedWave !== undefined) result.announcedWave = nonNegativeInteger(source.announcedWave, 'server save.wave.announcedWave')
     if (source.graveRiseAtTick !== undefined) result.graveRiseAtTick = nonNegativeInteger(source.graveRiseAtTick, 'wave.graveRiseAtTick')
     // The level's rules check their own state when the session is restored.
     if (source.ruleState !== undefined) result.ruleState = jsonRoundTrip(record(source.ruleState, 'server save.wave.ruleState')) as JsonObject

@@ -59,7 +59,7 @@ test('early adventure wave plans obey points, reserve conehead introductions and
         for (let wave = 0; wave < plan.length; wave++) {
             // Board::PickZombieWaves: wave / 3 + 1 points, times 2.5 on the flag wave.
             const points = Math.trunc(wave / 3) + 1
-            assert.equal(plan[wave].reduce((sum, id) => sum + definitions.zombies[id].wave!.points, 0), wave === plan.length - 1 ? Math.trunc(points * 2.5) : points)
+            assert.equal(plan[wave].reduce((sum, id) => sum + definitions.zombies[id].wave.points, 0), wave === plan.length - 1 ? Math.trunc(points * 2.5) : points)
             assert.equal(plan[wave].filter(id => id === 'pvz:flag').length, wave === plan.length - 1 ? 1 : 0)
         }
         if (index === 3) assert.deepEqual(plan[4], ['pvz:conehead'])

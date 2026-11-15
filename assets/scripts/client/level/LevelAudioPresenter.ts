@@ -9,7 +9,6 @@ import type { LevelAudioSnapshot } from './LevelPresentationSnapshot'
 export class LevelAudioPresenter {
     private ownsMusic = false
     private gameplayStarted = false
-    private firstWavePlayed = false
 
     /**
      * The level's own sounds and its music. What is heard of something on the board (a plant, a zombie, a projectile, an
@@ -22,14 +21,12 @@ export class LevelAudioPresenter {
             music: this.ownsMusic ? MusicSystem.capturePlaybackSnapshot() : null,
             ownsMusic: this.ownsMusic,
             gameplayStarted: this.gameplayStarted,
-            firstWavePlayed: this.firstWavePlayed,
         }
     }
 
     async restore(snapshot: LevelAudioSnapshot): Promise<void> {
         this.ownsMusic = snapshot.ownsMusic
         this.gameplayStarted = snapshot.gameplayStarted
-        this.firstWavePlayed = snapshot.firstWavePlayed
         if (snapshot.music) await MusicSystem.restorePlaybackSnapshot(snapshot.music)
         else if (snapshot.ownsMusic) {
             await MusicSystem.playTune(snapshot.gameplayStarted ? this.music.gameplay : this.music.choosing, true)
@@ -124,11 +121,10 @@ export class LevelAudioPresenter {
                 void SoundSystem.play(SoundEffect.Drop)
                 break
             case 'levelWon': void SoundSystem.playMusicVolumeSfx(SoundEffect.WinMusic); break
-            case 'zombieSpawned':
-                if (!this.firstWavePlayed && event.data.wave === 0) {
-                    this.firstWavePlayed = true
-                    void SoundSystem.play(SoundEffect.Awooga)
-                }
+            // Board::NextWaveComing: the awooga before the first wave, else the siren where the server says (a flag wave).
+            case 'nextWaveComing':
+                if (event.data.first === true) void SoundSystem.play(SoundEffect.Awooga)
+                else if (event.data.siren === true) void SoundSystem.play(SoundEffect.Siren)
                 break
         }
     }
