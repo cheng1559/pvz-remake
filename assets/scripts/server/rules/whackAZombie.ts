@@ -11,7 +11,7 @@ import { isHostile, plantFacingRect, plantTeam, zombieTeam } from '@/shared/cont
 import { isDeadOrDying } from '@/shared/content/zombieStates'
 import type { Team } from '@/shared/protocol'
 import { circleRectOverlap } from '../combat/collision'
-import { createGrave, graves as lawnGraves, raiseZombieFromGrave } from '../level/graves'
+import { graves as lawnGraves, placeGrave, raiseZombieFromGrave } from '../level/graves'
 import { spawnLoot } from '../level/loot'
 import { levelAwardDropped, tryDropLevelAward } from '../level/levelAward'
 import { clearCursor } from '../seeds/cursor'
@@ -90,9 +90,11 @@ function animateCurve(start: number, end: number, age: number, from: number, to:
 
 /**
  * Challenge::WhackAZombiePlaceGraves: graves on random free cells from the level's first grave column, strongly
- * preferring empty ones; a plant on a picked cell dies. Graves added during play rise from `riseAtTick`.
+ * preferring empty ones, each put down as any grave is (placeGrave): the plant holding the cell dies and a rolling nut
+ * rolls on, where the original kills every plant whose mPlantCol and row are the cell's. Graves added during play rise
+ * from `riseAtTick`.
  */
-function placeWhackGraves(world: World, count: number, riseAtTick?: number): void {
+function placeWhackGraves(world: World, definitions: GameplayDefinitions, count: number, riseAtTick?: number): void {
     const { definition, board } = world.resources.get(LevelStateResource)
     const graves = lawnGraves(world).map(({ grave }) => grave)
     const plants = [...world.query(PositionComponent, PlantComponent)]
@@ -109,8 +111,7 @@ function placeWhackGraves(world: World, count: number, riseAtTick?: number): voi
     for (let index = Math.min(count, picks.length); index > 0; index--) {
         let roll = random.integer(0, picks.reduce((sum, pick) => sum + pick.weight, 0) - 1)
         const pick = picks.find(entry => (roll -= entry.weight) < 0)!
-        for (const entity of plantsAt(pick.row, pick.column)) if (world.hasEntity(entity)) world.destroyEntity(entity)
-        createGrave(world, pick.row, pick.column, riseAtTick === undefined ? {} : { riseAtTick })
+        placeGrave(world, definitions, pick.row, pick.column, riseAtTick)
         pick.weight = 0
     }
 }
@@ -132,7 +133,7 @@ function createWhackSystem(definitions: GameplayDefinitions): GameSystem {
             const events = world.resources.get(EventQueueResource)
             state.countdown--
             if (state.countdown === 100 && waves.index > 0) {
-                placeWhackGraves(world, Math.max(1, rules.refillGraves - lawnGraves(world).length), tick)
+                placeWhackGraves(world, definitions, Math.max(1, rules.refillGraves - lawnGraves(world).length), tick)
             }
             if (state.countdown === 5) {
                 // Board::NextWaveComing: the final wave's banner; the awooga first, the siren before the last wave.
@@ -263,11 +264,11 @@ export const whackAZombieRule: LevelRuleDefinition = {
     systems: definitions => [{ phase: 'spawn', system: createWhackSystem(definitions) }],
     spawnsZombies: true,
     /** Board::InitLevel and Challenge::StartLevel: the opening graves, and the first wave's countdown. */
-    initialize(world) {
+    initialize(world, definitions) {
         const level = world.resources.get(LevelStateResource).definition
         const waves = world.resources.get(WaveResource)
         for (const { entity } of lawnGraves(world)) world.destroyEntity(entity)
-        placeWhackGraves(world, whackSettings(level.rules!).graves)
+        placeWhackGraves(world, definitions, whackSettings(level.rules!).graves)
         // The rule counts mZombieCountDown itself; the wave system's countdown stays unset.
         waves.nextWaveAtTick = undefined
         const state: WhackState = { countdown: level.firstWaveTicks!, groupTicks: 0, hammer: true }

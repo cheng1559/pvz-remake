@@ -1,5 +1,6 @@
 import type { GameSystem, Schedule, World } from '@/ecs/index'
 import type { GameplayDefinitions, GameplayLevels, LevelDefinition, LevelRule } from '@/shared/content/gameplay'
+import type { LevelPlantingRule } from '@/shared/content/planting'
 import type { JsonObject } from '@/shared/protocol'
 import { isModId, isQualifiedId, Registry } from '@/shared/mod'
 import { defineResource } from '@/ecs/index'
@@ -15,9 +16,10 @@ export interface WaveDraft { zombies: string[]; flagWave?: true; points: number 
 /**
  * A level's rules, by its `rules: {kind, count, ...settings}`: they build the waves, and the optional hooks change the
  * level's play where the original's Board calls into Challenge. The generic systems only call these hooks, so a mode's
- * whole design stays in its own module.
+ * whole design stays in its own module. Its share of Board::CanPlantAt (`canPlantAt`) is the shared LevelPlantingRule,
+ * which its client view takes too.
  */
-export interface LevelRuleDefinition {
+export interface LevelRuleDefinition extends LevelPlantingRule {
     /** Throw on settings the rule does not take or that do not fit the level. */
     validate(rule: LevelRule, level: LevelDefinition, definitions: GameplayDefinitions, name: string): void
     /** The level's waves before the random picks. */
@@ -27,7 +29,7 @@ export interface LevelRuleDefinition {
     /** Challenge::UpdateZombieSpawning: the rule raises the zombies itself and the wave system stands by. */
     readonly spawnsZombies?: true
     /** Board::InitLevel and Challenge::StartLevel, before the level's script. */
-    initialize?(world: World): void
+    initialize?(world: World, definitions: GameplayDefinitions): void
     /** Checks a saved `wave.ruleState` and returns it as the rule keeps it; required for a rule that keeps one. */
     parseState?(value: JsonObject): JsonObject
     /** What the client sees of the rule, under `extensions[kind]`. */
@@ -38,8 +40,6 @@ export interface LevelRuleDefinition {
     cursorCleared?(world: World): void
     /** Board::MouseDownWithPlant: a seed that cannot go where it is placed is dropped instead of staying in hand. */
     readonly dropsRefusedSeeds?: true
-    /** Board::CanPlantAt: false keeps the cell closed (the rule shows its own advice). */
-    canPlantAt?(world: World, row: number, column: number): boolean
     /** Board::DropLootPiece after the roll: true when the rule has dealt with the drop. */
     dropLoot?(world: World, definitions: GameplayDefinitions, x: number, y: number, roll: number, factor: number): boolean
     /** True while the level award must not drop yet. */

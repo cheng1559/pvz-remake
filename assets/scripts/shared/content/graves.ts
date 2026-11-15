@@ -1,4 +1,4 @@
-import type { GraveSnapshot, GridItemSnapshot } from '@/shared/protocol/snapshot'
+import type { GraveSnapshot } from '@/shared/protocol/snapshot'
 
 /** Graves (GridItem GRIDITEM_GRAVESTONE): their type, the ranges Board::AddAGraveStone picks from, and how one rises. */
 
@@ -19,7 +19,9 @@ export function graveRiseCounter(grave: Pick<GraveSnapshot, 'riseAtTick' | 'rise
     return grave.riseAtTick === undefined ? undefined : Math.min(GRAVE_RISEN_COUNTER, gameplayTick - grave.riseAtTick - grave.riseDelay)
 }
 
-export function graveAt(items: readonly GridItemSnapshot[] | undefined, row: number, column: number): GraveSnapshot | undefined {
+/** The grave in a cell, among the things of the cells: a snapshot's `gridItems`, or the server's (server/level/lawn). */
+export function graveAt<T extends { readonly typeId: string, readonly row: number, readonly column: number }>(
+    items: readonly T[] | undefined, row: number, column: number): T | undefined {
     return items?.find(item => item.typeId === GRAVE && item.row === row && item.column === column)
 }
 

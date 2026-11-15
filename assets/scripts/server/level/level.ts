@@ -33,7 +33,7 @@ export function initializeLevel(world: World, firstAdventure: boolean, definitio
             rowPicks: level.activeRows.map(row => ({ row, lastPicked: 0, secondLastPicked: 0 })),
         } : {}),
     })
-    rules.get(level)?.initialize?.(world)
+    rules.get(level)?.initialize?.(world, definitions)
     script?.initialize?.(world, firstAdventure)
 }
 

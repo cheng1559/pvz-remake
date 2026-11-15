@@ -1,5 +1,5 @@
 import type { SeedAvailability } from '@/shared/protocol/index'
-import { graveAllowsPlanting, seedTeam, type Team } from '@/shared/content/teams'
+import { seedTeam, type Team } from '@/shared/content/teams'
 import type { SeedDefinition } from '@/shared/content/gameplay'
 import { spawnZombie } from '../zombies/spawn'
 import {
@@ -17,9 +17,24 @@ import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule } from '../rules/registry'
 import { clearCursor } from './cursor'
-import { graveAt, placeGrave } from '../level/graves'
+import { placeGrave } from '../level/graves'
+import { graveAt } from '@/shared/content/graves'
+import { cellPlant, type PlantingLawn, type PlantingRefusal, plantingRefusal } from '@/shared/content/planting'
+import { gridItems, lawnPlants } from '../level/lawn'
 
 const CANT_AFFORD_ADVICE = 'ADVICE_CANT_AFFORD_PLANT'
+
+/** Board::MouseDownWithPlant: what a placement refused by Board::CanPlantAt answers. */
+const REJECTIONS: Record<PlantingRefusal, CommandRejectionCode> = {
+    'row-not-active': 'row-not-active', 'column-out-of-range': 'column-out-of-range', 'rule-closed': 'column-out-of-range',
+    'past-line': 'column-out-of-range', 'cell-occupied': 'cell-occupied', 'cell-has-grave': 'cell-has-grave',
+    'not-on-grave': 'cell-has-grave', 'cell-needs-grave': 'cell-needs-grave', 'cell-has-own-grave': 'cell-has-own-grave',
+}
+
+/** Board::MouseDownWithPlant: the grave advice a refusal shows. */
+const GRAVE_ADVICE: Partial<Record<PlantingRefusal, string>> = {
+    'not-on-grave': 'ADVICE_PLANT_NOT_ON_GRAVE', 'cell-needs-grave': 'ADVICE_GRAVEBUSTERS_ON_GRAVES',
+}
 
 /**
  * Seed selection and planting. Mods wrap these through `host.around(planting, name, ...)`; the functions call each
@@ -71,7 +86,6 @@ export const planting = {
     /** Plants the selected seed, spending its sun and starting its recharge. */
     placePlant(session: Session, row: number, column: number): CommandRejectionCode | undefined {
         const { world, gameplayTick, definitions } = session
-        const level = world.resources.get(LevelStateResource)
         const seedBank = world.resources.get(SeedBankResource)
         const seedId = selectedSeedId(seedBank)
         if (!seedId) return 'no-seed-selected'
@@ -96,46 +110,28 @@ export const planting = {
             }
             return code
         }
-        if (!Number.isInteger(row) || row < 0 || row >= level.board.rows ||
-            !level.definition.activeRows.includes(row)) return refuseCell('row-not-active')
-        if (!Number.isInteger(column) || column < 0 || column >= level.board.columns) {
-            return refuseCell('column-out-of-range')
-        }
         const team = selectedTeam(seedBank) ?? seedTeam(seed)
+        const refusal = plantingRefusal(sessionLawn(session), seed, team, row, column)
+        if (refusal) {
+            // Board::MouseDownWithPlant: the line's advice once a game; Board::DisplayAdvice remembers a grave's help
+            // index for the rest of this game, and the next planting clears it.
+            if (refusal === 'past-line') displayAdviceOnce(world, 'ADVICE_NOT_PASSED_LINE', 'hint')
+            const graveAdvice = GRAVE_ADVICE[refusal]
+            if (graveAdvice && displayAdviceOnce(world, graveAdvice, 'hint')) session.graveAdvice = graveAdvice
+            return refuseCell(REJECTIONS[refusal])
+        }
         if (seed.kind === 'zombie') {
-            // Challenge::IZombieMouseDownWithZombie: a zombie goes into any cell of an active row, whatever stands there.
             const entity = planting.placeZombie(session, seed.id, row, column, team)
             spendSeed(session, seed, packet, sunCost)
             emitServerEvent(world.resources.get(EventQueueResource), 'zombiePlaced', { entityId: entity, typeId: seed.id, row, column })
             return
         }
         if (seed.kind === 'grave') {
-            // Like Grave Danger's graves (placeGrave): any cell of an active row without a grave (the plants there die);
-            // on the plants' side when its packet is, so its zombies rise there too.
-            if (graveAt(world, row, column)) return refuseCell('cell-has-grave')
+            // On the plants' side when its packet is, so its zombies rise there too.
             placeGrave(world, definitions, row, column, gameplayTick, team === 'plants' ? 'plants' : undefined)
             spendSeed(session, seed, packet, sunCost)
             emitServerEvent(world.resources.get(EventQueueResource), 'gravePlaced', { seedId, row, column })
             return
-        }
-        if (levelRule(world)?.canPlantAt?.(world, row, column) === false) return refuseCell('column-out-of-range')
-        // Board::CanPlantAt: nothing past the level's red line, with ADVICE_NOT_PASSED_LINE once a game.
-        const line = level.definition.plantingLine
-        if (line && column > line.column) {
-            displayAdviceOnce(world, 'ADVICE_NOT_PASSED_LINE', 'hint')
-            return refuseCell('column-out-of-range')
-        }
-        const occupiedEntity = planting.findPlantAt(session, row, column)
-        if (occupiedEntity !== undefined) return refuseCell('cell-occupied')
-        // Board::CanPlantAt: graves block planting, except that a grave buster needs one, of the other side.
-        const grave = graveAt(world, row, column)?.grave
-        const onGrave = grave !== undefined
-        if (onGrave && seed.placement === 'grave' && !graveAllowsPlanting(seed.placement, team, grave)) return refuseCell('cell-has-own-grave')
-        if (onGrave !== (seed.placement === 'grave')) {
-            // Board::DisplayAdvice remembers the help index for the rest of this game.
-            const key = onGrave ? 'ADVICE_PLANT_NOT_ON_GRAVE' : 'ADVICE_GRAVEBUSTERS_ON_GRAVES'
-            if (displayAdviceOnce(world, key, 'hint')) session.graveAdvice = key
-            return refuseCell(onGrave ? 'cell-has-grave' : 'cell-needs-grave')
         }
         if (session.graveAdvice) {
             emitServerEvent(world.resources.get(EventQueueResource), 'adviceCleared', { key: session.graveAdvice })
@@ -203,12 +199,24 @@ export const planting = {
         return entity
     },
 
-    /** The plant occupying a cell, if any; plants that do not occupy their cell are skipped. */
+    /** The plant holding a cell (holdsCell), if any. */
     findPlantAt(session: Session, row: number, column: number): number | undefined {
-        const { world, definitions } = session
-        return [...world.query(PositionComponent, PlantComponent)].find(entity =>
-            definitions.plants[world.get(entity, PlantComponent)!.typeId].occupiesCell !== false && world.get(entity, PositionComponent)!.row === row && world.get(entity, PlantComponent)!.column === column)
+        return cellPlant(session.definitions.plants, lawnPlants(session.world), row, column)?.entity
     },
+}
+
+/** The World as the shared planting decision reads it; its plants are planting.findPlantAt's, so a wrapper of it applies. */
+function sessionLawn(session: Session): PlantingLawn {
+    const { world } = session
+    const { definition, board } = world.resources.get(LevelStateResource)
+    return {
+        level: definition, board, rule: levelRule(world),
+        plantAt: (row, column) => {
+            const entity = planting.findPlantAt(session, row, column)
+            return entity === undefined ? undefined : world.get(entity, PlantComponent)
+        },
+        graveAt: (row, column) => graveAt(gridItems(world), row, column),
+    }
 }
 
 /** SeedPacket::WasPlanted: the seed's sun is spent, its packet (or conveyor packet) used and the cursor cleared. */

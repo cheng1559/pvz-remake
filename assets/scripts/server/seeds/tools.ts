@@ -6,7 +6,7 @@ import { getActiveTutorial } from '../tutorials'
 import { TutorialResource } from '../state/levelState'
 import { levelTools } from '@/shared/content/gameplay'
 import { clearCursor } from './cursor'
-import { plantTeam } from '@/shared/content/teams'
+import { canShovel } from '@/shared/content/planting'
 
 /** Cursor tools such as the shovel. Mods wrap these through `host.around(tools, name, ...)`. */
 export const tools = {
@@ -33,10 +33,10 @@ export const tools = {
         const { world, definitions } = session
         const bank = world.resources.get(SeedBankResource)
         if (bank.selection.mode !== 'tool' || bank.selection.toolId !== 'pvz:shovel') return 'unsupported-command'
-        // Board::ToolHitTestHelper: a grave buster cannot be dug up, nor can a plant on the zombies' side.
+        // Board::ToolHitTestHelper: the cell's plant, unless the shovel cannot dig it up (canShovel).
         const found = planting.findPlantAt(session, row, column)
         const plant = found === undefined ? undefined : world.get(found, PlantComponent)!
-        const entity = plant && !definitions.plants[plant.typeId].graveBuster && plantTeam(plant) === 'plants' ? found : undefined
+        const entity = plant && canShovel(definitions.plants, plant) ? found : undefined
         clearCursor(world)
         if (entity !== undefined) {
             world.destroyEntity(entity)

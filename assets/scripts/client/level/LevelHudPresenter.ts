@@ -19,6 +19,7 @@ import { levelStandsStill, type ServerEvent, type WorldSnapshot } from '@/shared
 import { LevelSeedBank } from './LevelSeedBank'
 import { itemAt } from './LevelGeometry'
 import type { LevelDefinition } from '@/shared/content/gameplay'
+import type { LevelPlantingRule } from '@/shared/content/planting'
 import type { LevelPresentation } from './LevelPresentation'
 import type { LevelAdviceSnapshot, LevelHudSnapshot } from './LevelPresentationSnapshot'
 
@@ -30,8 +31,8 @@ export interface LevelHudOptions {
     ui: UI
     content: LoadedContent
     level: LevelDefinition
-    /** Board::CanPlantAt as the level rule narrows it (the bowling line). */
-    canPlantAt?: (snapshot: WorldSnapshot, row: number, column: number) => boolean
+    /** The level rule's share of Board::CanPlantAt, for the planting preview (its view's, made after the HUD). */
+    levelRule?: () => LevelPlantingRule | undefined
     seedChooser?: WorldSnapshot['seedChooser']
     /**
      * The packets the bank starts with, in slot order and undefined for an empty slot; the server builds a fixed bank
@@ -118,7 +119,7 @@ export class LevelHudPresenter {
             meter: options.progressMeter, fillClip: options.progressFillClip, fill: options.progressFill, head: options.progressHead, levelText: options.levelText,
         })
         this.coinBank = new LevelCoinBank(options.content.definitions.items, options.coinBank)
-        this.preview = new LevelPlantingPreview(options.content, options.level, options, options.canPlantAt)
+        this.preview = new LevelPlantingPreview(options.content, options.level, options, options.levelRule)
         UIHoverManager.registerClient(this.hoverClient)
         this.tutorialArrowLayer.once(Node.EventType.NODE_DESTROYED, () => {
             UIHoverManager.unregisterClient(this.hoverClient)

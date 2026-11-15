@@ -1,11 +1,13 @@
 import type { EntityId, World } from '@/ecs'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
-import { GRAVE, GRAVE_MAX_RISE_DELAY, GRAVE_RISEN_COUNTER, GRAVE_VARIANTS, graveRiseCounter } from '@/shared/content/graves'
-import { type Grave, GridItemComponent, LevelStateResource, PlantComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
+import { GRAVE, GRAVE_MAX_RISE_DELAY, GRAVE_RISEN_COUNTER, GRAVE_VARIANTS, graveAt, graveRiseCounter } from '@/shared/content/graves'
+import { holdsCell } from '@/shared/content/planting'
+import { type Grave, GridItemComponent, LevelStateResource, RandomResource, ZombieComponent } from '../state/components'
 import { WaveResource } from '../state/levelState'
 import { spawnZombie } from '../zombies/spawn'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { levelAwardDropped } from './levelAward'
+import { gridItems, lawnPlants } from './lawn'
 
 /** The graves on the lawn, in the order they were made. */
 export function graves(world: World): Array<{ entity: EntityId, grave: Grave }> {
@@ -13,10 +15,6 @@ export function graves(world: World): Array<{ entity: EntityId, grave: Grave }> 
         const grave = world.get(entity, GridItemComponent)!
         return grave.typeId === GRAVE ? [{ entity, grave }] : []
     })
-}
-
-export function graveAt(world: World, row: number, column: number): { entity: EntityId, grave: Grave } | undefined {
-    return graves(world).find(({ grave }) => grave.row === row && grave.column === column)
 }
 
 /** Board::AddAGraveStone: a grave in the cell, with its look and how late it rises. `more`: what it has besides. */
@@ -29,20 +27,19 @@ export function createGrave(world: World, row: number, column: number, more: Pic
 }
 
 /**
- * Challenge::GraveDangerSpawnGraveAt: a grave rises in the cell from `tick`, and every plant there dies (Plant::Die,
- * silently). A grave already there is replaced and rises again, which the original's CanAddGraveStoneAt would not pick.
- * Rolling nuts keep the column they were planted in but hold no cell (planting.findPlantAt), so they roll on. `team`:
- * a grave on the plants' side, whose zombies rise on that side.
+ * Challenge::GraveDangerSpawnGraveAt, and WhackAZombiePlaceGraves for each grave it picks: a grave rises in the cell
+ * from `riseAtTick` (one without rises with the level's own, in the intro), and every plant holding the cell dies
+ * (Plant::Die, silently). A grave already there is replaced and rises again, which the original's CanAddGraveStoneAt
+ * would not pick. The original kills every plant whose mPlantCol and row are the cell's; a rolling nut keeps the
+ * column it was planted in but holds no cell (holdsCell), so here it rolls on. `team`: a grave on the plants' side,
+ * whose zombies rise on that side.
  */
-export function placeGrave(world: World, definitions: GameplayDefinitions, row: number, column: number, tick: number, team?: 'plants'): EntityId {
-    for (const entity of [...world.query(PositionComponent, PlantComponent)]) {
-        const plant = world.get(entity, PlantComponent)!
-        if (definitions.plants[plant.typeId].occupiesCell !== false && world.get(entity, PositionComponent)!.row === row
-            && plant.column === column) world.destroyEntity(entity)
-    }
-    const old = graveAt(world, row, column)
-    if (old) world.destroyEntity(old.entity)
-    return createGrave(world, row, column, { riseAtTick: tick, ...(team ? { team } : {}) })
+export function placeGrave(world: World, definitions: GameplayDefinitions, row: number, column: number, riseAtTick: number | undefined,
+    team?: 'plants'): EntityId {
+    for (const plant of lawnPlants(world)) if (holdsCell(definitions.plants, plant, row, column)) world.destroyEntity(plant.entity)
+    const old = graveAt(gridItems(world), row, column)
+    if (old) world.destroyEntity(old.entityId)
+    return createGrave(world, row, column, { ...(riseAtTick === undefined ? {} : { riseAtTick }), ...(team ? { team } : {}) })
 }
 
 /** Board::AddGraveStones: each column picks distinct rows (columns are unique per level). Keep the look stable on restore. */

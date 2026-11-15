@@ -58,9 +58,9 @@ export interface LevelPlayer { name: string; upgradeCost: number; nextUpgradeCos
 /** CRAZY_DAVE_1503 ({NO_CLICK} "How's that sound?") asks to buy the seed-slot upgrade it just quoted. */
 
 export class LevelView {
-    /** The level rule's own view (the Whack-a-Zombie mallet); input passes it unclaimed clicks. */
+    /** The level rule's own view (the Whack-a-Zombie mallet); input passes it unclaimed clicks, the planting preview asks its canPlantAt. */
     rule?: LevelRuleView
-    /** The level's red line, when it has one. */
+    /** The level's red line, when it has one with a look. */
     plantingLine?: PlantingLineView
     /** Coin::MouseHitTest: the level rule widens every item's click area. */
     itemPadding?: { readonly size: number; readonly height: number }
@@ -281,7 +281,7 @@ export class LevelView {
         // The tutorial's arrow at a packet, over the HUD; a repick puts it under the bank it points at (raiseBankToChooser).
         const tutorialArrows = uiNode({ name: 'TutorialArrows', parent: coinLayer.parent! }).node
         const hudPresenter = LevelHudPresenter.create({
-            ui, content, level, canPlantAt: (snapshot, row, column) => (view.plantingLine?.canPlantAt(column) ?? true) && (view.rule?.canPlantAt?.(snapshot, row, column) ?? true), seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet?.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
+            ui, content, level, levelRule: () => view.rule, seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet?.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
             packetCostFont: pico129,
             adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: bankRight, adviceFont: houseOfTerror28,
             tutorialArrowLayer: tutorialArrows, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,

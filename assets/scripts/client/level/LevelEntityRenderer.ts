@@ -12,6 +12,7 @@ import type { LevelEntitySnapshot, LevelParticleOwnerSnapshot } from './LevelPre
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { boardCell } from './LevelGeometry'
 import { EntityFlashes } from './EntityFlashes'
+import { canShovel, cellPlant } from '@/shared/content/planting'
 import { boardToLayer, type Content, type EntityView, type LevelStage } from './LevelStage'
 
 /** What an entity of the board is, by the list of the server's snapshot it is in. */
@@ -90,15 +91,14 @@ export class LevelEntityRenderer implements LevelStage {
         if (this.lastSnapshot) this.syncPlantHighlight(this.lastSnapshot)
     }
 
-    /** The shovel's target under the pointer is lit (tools.use: neither a grave buster nor a plant on the zombies' side). */
+    /** The shovel's target under the pointer is lit: the cell's plant, if the shovel can dig it up (tools.use). */
     private syncPlantHighlight(snapshot: WorldSnapshot): void {
         if (!this.pointer && this.highlightedPlant === undefined) return
-        const level = this.content.levels.levels[snapshot.levelId]
+        const level = this.content.levels.levels[snapshot.levelId], { plants } = this.content.definitions
         const cell = this.pointer && !levelStandsStill(snapshot) && snapshot.cursor.mode === 'tool'
             ? boardCell(this.content.definitions.boards[level.board], this.pointer.x, this.pointer.y) : undefined
-        const highlighted = cell?.inBounds ? snapshot.plants.find(plant => plant.row === cell.row && plant.column === cell.column &&
-            this.content.definitions.plants[plant.typeId].occupiesCell !== false && !this.content.definitions.plants[plant.typeId].graveBuster &&
-            plant.team !== 'zombies' && !plant.mowered)?.entityId : undefined
+        const plant = cell?.inBounds ? cellPlant(plants, snapshot.plants, cell.row, cell.column) : undefined
+        const highlighted = plant && canShovel(plants, plant) ? plant.entityId : undefined
         if (highlighted !== this.highlightedPlant && this.highlightedPlant !== undefined) this.plant(this.highlightedPlant)?.highlight(false)
         if (highlighted !== undefined) this.plant(highlighted)?.highlight(true)
         this.highlightedPlant = highlighted

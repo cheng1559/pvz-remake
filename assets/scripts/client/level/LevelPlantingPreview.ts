@@ -6,9 +6,9 @@ import { plantDefinition } from '@/client/plants/definitions'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { LevelDefinition } from '@/shared/content/gameplay'
-import { graveAllowsPlanting } from '@/shared/content/teams'
+import { seedTeam } from '@/shared/content/teams'
 import type { WorldSnapshot } from '@/shared/protocol/index'
-import { graveAt } from '@/shared/content/graves'
+import { cellOutOfPlay, type LevelPlantingRule, plantingRefusal, snapshotLawn } from '@/shared/content/planting'
 import { boardCell } from './LevelGeometry'
 import type { Content } from './LevelStage'
 
@@ -41,8 +41,8 @@ export class LevelPlantingPreview {
         private readonly content: Content,
         private readonly level: LevelDefinition,
         private readonly nodes: LevelPlantingPreviewNodes,
-        /** Board::CanPlantAt as the level's rule narrows it (the bowling line). */
-        private readonly canPlantAt?: (snapshot: WorldSnapshot, row: number, column: number) => boolean,
+        /** The level rule's share of Board::CanPlantAt (its view's, made after the HUD). */
+        private readonly rule?: () => LevelPlantingRule | undefined,
     ) {}
 
     hide(): void {
@@ -95,22 +95,18 @@ export class LevelPlantingPreview {
             }
         }
         const presentation = plantId ? plantDefinition(this.content.presentation, plantId) : undefined
-        const { row, column, inBounds } = boardCell(board, pointer.x, pointer.y + (presentation?.pointerOffsetY ?? 0))
-        let valid = inBounds && this.level.activeRows.includes(row)
-        // Challenge::IZombieMouseDownWithZombie: a zombie takes any cell of an active row, whatever stands there.
+        const { row, column } = boardCell(board, pointer.x, pointer.y + (presentation?.pointerOffsetY ?? 0))
         if (plantId) {
             for (const preview of [cursorPlant, gridPlant]) {
                 preview.setPlant(plantId)
                 preview.setMirrored(mirrored)
             }
-            const occupant = snapshot.plants.find(plant => this.content.definitions.plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column)
-            // Graves block planting, except for a grave buster, which needs one of the other side.
-            const team = snapshot.cursor.mode === 'seed' && snapshot.cursor.team || 'plants'
-            valid = valid && !occupant && graveAllowsPlanting(plantSeed!.placement, team, graveAt(snapshot.gridItems, row, column))
-                && (this.canPlantAt?.(snapshot, row, column) ?? true)
         }
-        // A grave seed takes any cell of an active row but one with a grave already.
-        if (graveSeed) valid = valid && !graveAt(snapshot.gridItems, row, column)
+        // Board::CanPlantAt, as the server decides it; a mobile tool lights any cell in play.
+        const lawn = snapshotLawn(this.content.definitions, this.level, snapshot, this.rule?.())
+        const valid = seedDefinition && snapshot.cursor.mode === 'seed'
+            ? !plantingRefusal(lawn, seedDefinition, snapshot.cursor.team ?? seedTeam(seedDefinition), row, column)
+            : !cellOutOfPlay(lawn, row, column)
         if (plantId || zombieId !== undefined || graveSeed) {
             cursorPreview.setPosition(pointer.x - CURSOR_PREVIEW_POINTER_X, -pointer.y + CURSOR_PREVIEW_POINTER_Y)
             gridPreview.active = valid && !mobile

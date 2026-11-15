@@ -1,5 +1,6 @@
 import type { Node } from 'cc'
 import type { LevelDefinition } from '@/shared/content/gameplay'
+import type { LevelPlantingRule } from '@/shared/content/planting'
 import type { LevelRulePresentation, PresentationDefinitions } from '@/shared/content/presentation'
 import type { ServerEvent, WorldSnapshot } from '@/shared/protocol'
 import type { UI } from '@/client/ui/UI'
@@ -26,15 +27,14 @@ export interface LevelRuleViewContext {
 
 /**
  * The client side of a level rule (the server's LevelRuleDefinition): what the mode draws and how it takes input.
- * The generic level view only calls these.
+ * The generic level view only calls these. Its `canPlantAt` (the shared LevelPlantingRule) is the same function as
+ * the server rule's, which the planting preview asks.
  */
-export interface LevelRuleView {
+export interface LevelRuleView extends LevelPlantingRule {
     setPointer?(pointer?: { x: number; y: number }): void
     sync?(snapshot: WorldSnapshot, events: readonly ServerEvent[], introComplete: boolean): void
     /** Challenge::MouseDown: a click that hit no item while nothing is held; true sends it as a `boardClick`. */
     click?(snapshot: WorldSnapshot, point: { x: number; y: number }, touch: boolean): boolean
-    /** Board::CanPlantAt as the rule narrows it, for the planting preview. */
-    canPlantAt?(snapshot: WorldSnapshot, row: number, column: number): boolean
 }
 
 export type LevelRuleViewFactory = (context: LevelRuleViewContext) => Promise<LevelRuleView>
