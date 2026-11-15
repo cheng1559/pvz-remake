@@ -155,7 +155,6 @@ test('selecting and placing Peashooter changes authority state atomically', () =
     assert.deepEqual([peashooter], [{
         entityId: 1,
         typeId: 'pvz:peashooter',
-        seedId: 'pvz:peashooter',
         column: 0,
         health: 300,
         maxHealth: 300,

@@ -278,7 +278,7 @@ export function parseSavedFlash(value: unknown, name: string): FlashSnapshot | u
 
 /** A Reanim player's place in its clip, or none. */
 export function parseSavedPlayback(value: unknown): ReanimPlaybackSnapshot | null {
-    return optionalReanim(value)
+    return value === null ? null : parseReanimPlaybackSnapshot(value)
 }
 
 function parseFlash(value: unknown, name: string): FlashSnapshot {
@@ -362,10 +362,6 @@ function parseExtensions(value: unknown): Record<string, JsonValue> {
         result[id] = jsonRoundTrip(extension)
     }
     return result
-}
-
-function optionalReanim(value: unknown): ReanimPlaybackSnapshot | null {
-    return value === null ? null : parseReanimPlaybackSnapshot(value)
 }
 
 function taggedObject(value: unknown, name: string): Record<string, unknown> & { kind: string } {

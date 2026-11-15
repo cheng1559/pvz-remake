@@ -2,7 +2,6 @@ import { modResources } from '@/client/content/ModResources'
 import { _decorator, Color, Component, director, Director, Mask, Node, Sprite, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { MainMenuUnlocks, UserView } from '@/shared/menu'
-import { offBoardContent } from '@/client/view/offBoard'
 import { preloadTasks } from '@/client/content/preloadTasks'
 import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { MusicSystem } from '@/client/music/MusicSystem'
@@ -17,6 +16,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
 import type { MainMenuButtonDefinition, MainMenuDefinition } from '@/shared/content/presentation'
 import { isMenuDialog, type MenuAction, type MenuDialogId } from './MenuPages'
+import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 
 const { ccclass } = _decorator
 const random = (minimum: number, maximum: number) => minimum + Math.random() * (maximum - minimum)
@@ -72,7 +72,7 @@ export class MainMenuScreen extends Component {
 
     async initialize(ui: UI, onProgress: (progress: number) => void = () => {}): Promise<void> {
         this.ui = ui
-        const game = await offBoardContent()
+        const game = await loadIntegratedGameContent()
         const menu = this.menu = game.presentation.mainMenu
         const imageNames = new Set([
             ...menu.buttons.flatMap(button => [button.image, button.highlight]), ...menu.images,

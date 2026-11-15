@@ -2,8 +2,9 @@ import { _decorator, Color, Component, isValid, Node, type Sprite } from 'cc'
 import { mirrorInPacket, type PacketTilt, PacketPictureStyle, placePacketPicture } from './packetPicture'
 import { flattenTranslucent } from '@/client/view/bakeSprite'
 import type { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
-import { createOffBoardZombie, holdStill, offBoardContent, type OffBoardZombie } from '@/client/view/offBoard'
+import { createOffBoardZombie, holdStill, type OffBoardZombie } from '@/client/view/offBoard'
 import { uiNode } from '@/client/view/uiNode'
+import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 
 const { ccclass } = _decorator
 
@@ -149,7 +150,7 @@ export class ZombiePreview extends Component {
     }
 
     private async load(root: Node, typeId: string): Promise<void> {
-        const packet = (await offBoardContent()).presentation.zombies[typeId]?.packet
+        const packet = (await loadIntegratedGameContent()).presentation.zombies[typeId]?.packet
         if (!isValid(root, true) || root !== this.root) return
         // ReanimatorCache::MakeCachedZombieFrame poses most zombies on anim_idle, the pole vaulter on anim_walk.
         const pose = packet?.clip ?? 'idle'

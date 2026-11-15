@@ -143,7 +143,7 @@ export const snapshot = {
             projectiles,
             items,
             mowerRows: [...level.mowerRows],
-            tutorial: { id: level.definition.tutorial, step: tutorial.step, ...(script?.dave ? { dave: true } : {}), ...(script?.toolsInIntro ? { toolsInIntro: true } : {}) },
+            tutorial: { step: tutorial.step, ...(script?.dave ? { dave: true } : {}), ...(script?.toolsInIntro ? { toolsInIntro: true } : {}) },
             extensions: { ...gameplay.components.snapshot(world),
                 ...(owned.length ? { 'pvz:tools': { owned, available: owned.filter(id => tools.available(session, id)) } } : {}),
                 ...(seedBank.conveyor ? { 'pvz:conveyor': { ticks: seedBank.conveyor.moveTicks } } : {}),
@@ -159,7 +159,7 @@ export const snapshot = {
  * layers at the rates a view plays them at (a chilled plant's are halved).
  */
 function plantSnapshot(entityId: number, source: Plant, position: Position): PlantSnapshot {
-    const { chilledTicks, blinkTicks: _blink, recentlyEatenCounter: _bitten, ...plant } = source
+    const { chilledTicks, seedId: _seed, blinkTicks: _blink, recentlyEatenCounter: _bitten, ...plant } = source
     return {
         entityId, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...position,
         ...(plant.ability ? { ability: { ...plant.ability } } : {}),

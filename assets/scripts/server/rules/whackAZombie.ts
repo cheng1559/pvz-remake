@@ -226,7 +226,7 @@ function whackAt(world: World, definitions: GameplayDefinitions, x: number, y: n
     }
     const zombie = world.get(top.entity, ZombieComponent)!
     if (zombie.helmHealth > 0) {
-        emitServerEvent(events, 'zombieWhacked', { entityId: top.entity, x, y, helm: definitions.zombies[zombie.typeId].helm?.type ?? 'cone' })
+        emitServerEvent(events, 'zombieWhacked', { entityId: top.entity, x, y, helm: definitions.zombies[zombie.typeId].helm!.type })
         damageZombie(world, definitions, top.entity, HAMMER_DAMAGE, { helmOnly: true }, remover)
         return
     }

@@ -35,88 +35,6 @@ export function attachmentTrack(clip: ClientAnimationClip): string {
     return clip.attachmentTrackId
 }
 
-export interface ShooterAnimationDefinition extends AnimationDefinition {
-    readonly body: ClientAnimationClip
-    readonly idleHead: ClientAnimationClip
-    readonly shootHead: ClientAnimationClip
-    readonly blink: ClientAnimationClip
-}
-
-export interface ZombieAnimationDefinition extends AnimationDefinition {
-    readonly idle: ClientAnimationClip
-    readonly walk: ClientAnimationClip
-    readonly walk2: ClientAnimationClip
-    readonly eat: ClientAnimationClip
-    readonly death: ClientAnimationClip
-    readonly death2: ClientAnimationClip
-    readonly mowered: ClientAnimationClip
-}
-
-export interface NormalZombieAnimationDefinition extends ZombieAnimationDefinition {
-    readonly idle2: ClientAnimationClip
-}
-
-export interface SunflowerAnimationDefinition extends AnimationDefinition {
-    readonly body: ClientAnimationClip
-    readonly blink: ClientAnimationClip
-}
-
-export interface FlagZombieAnimationDefinition extends ZombieAnimationDefinition {
-    readonly flag: ClientAnimationClip
-}
-
-export interface PoleVaulterAnimationDefinition extends ZombieAnimationDefinition {
-    readonly run: ClientAnimationClip
-    readonly jump: ClientAnimationClip
-}
-
-export interface CherryBombAnimationDefinition extends AnimationDefinition {
-    readonly idle: ClientAnimationClip
-    readonly explode: ClientAnimationClip
-}
-
-export interface WallNutAnimationDefinition extends AnimationDefinition {
-    readonly body: ClientAnimationClip
-    readonly blinkTwitch: ClientAnimationClip
-    readonly blinkTwice: ClientAnimationClip
-    readonly blinkThrice: ClientAnimationClip
-}
-
-export interface PotatoMineAnimationDefinition extends AnimationDefinition {
-    readonly buried: ClientAnimationClip
-    readonly rise: ClientAnimationClip
-    readonly armed: ClientAnimationClip
-    readonly blink: ClientAnimationClip
-    readonly glow: ClientAnimationClip
-}
-
-export interface ChomperAnimationDefinition extends AnimationDefinition {
-    readonly idle: ClientAnimationClip
-    readonly bite: ClientAnimationClip
-    readonly chew: ClientAnimationClip
-    readonly swallow: ClientAnimationClip
-}
-
-export interface ClientAnimationDefinitions {
-    readonly [id: string]: AnimationDefinition
-    readonly 'pvz:peashooter': ShooterAnimationDefinition
-    readonly 'pvz:repeater': ShooterAnimationDefinition
-    readonly 'pvz:snowpea': ShooterAnimationDefinition
-    readonly 'pvz:normal': NormalZombieAnimationDefinition
-    readonly 'pvz:flag': FlagZombieAnimationDefinition
-    readonly 'pvz:conehead': ZombieAnimationDefinition
-    readonly 'pvz:buckethead': ZombieAnimationDefinition
-    readonly 'pvz:pole_vaulter': PoleVaulterAnimationDefinition
-    readonly 'pvz:sunflower': SunflowerAnimationDefinition
-    readonly 'pvz:cherrybomb': CherryBombAnimationDefinition
-    readonly 'pvz:wallnut': WallNutAnimationDefinition
-    readonly 'pvz:potatomine': PotatoMineAnimationDefinition
-    readonly 'pvz:chomper': ChomperAnimationDefinition
-}
-
-export type ClientAnimationTarget = string
-
-export type PlantViewKind = string
 export interface PlantVisual {
     /** The plant its seed's packet shows, when not itself (a bowling nut's shows the plain nut). */
     readonly packetPlant?: string
@@ -150,12 +68,12 @@ export interface PlantPresentationDefinition {
     readonly visual: PlantVisual
     readonly parts?: PlantParts
     /** The view that draws it (PlantViewRegistry), where it has one of its own: every plant is drawn by its animation. */
-    readonly view?: PlantViewKind
+    readonly view?: string
     /**
      * The pictures of its clips, by the names of its gameplay animation's: the Reanim each is drawn with, where, and the
      * part it goes on. With `from`, another plant's, adding what it writes of its own (the explode-o-nut's are the wall-nut's).
      */
-    readonly clips?: ClientAnimationDefinitions[ClientAnimationTarget]
+    readonly clips?: AnimationDefinition
     /**
      * Plant::PlantInitialize off the board (the almanac, a packet's picture): the clips its layers show there in place
      * of the ones they start with on it, `{layer: clip}`, going at those's pace (an armed potato mine, a grown sun-shroom).
@@ -286,7 +204,7 @@ export interface ZombiePresentationDefinition {
     /** The view that draws it (ZombieViewRegistry), where it has one of its own. */
     readonly view?: string
     /** The pictures of its clips, as a plant's: with `from`, another zombie's, adding what it writes of its own (a Mod zombie on the plain body). */
-    readonly clips: ClientAnimationDefinitions[ClientAnimationTarget]
+    readonly clips: AnimationDefinition
     /**
      * Zombie::DrawShadow: where its shadow lies from the zombie's place, as a plant's; `backwardsX` in place of `x`
      * for a zombie walking right (mind-controlled), `x` by default.

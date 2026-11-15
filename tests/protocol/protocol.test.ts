@@ -115,7 +115,7 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
         }],
         conveyorPackets: [],
         plants: [{
-            entityId: 2, typeId: 'pvz:peashooter', seedId: 'pvz:peashooter',
+            entityId: 2, typeId: 'pvz:peashooter',
             x: 40, y: 280, row: 2, column: 0, health: 300, maxHealth: 300,
         }],
         zombies: [{
@@ -129,7 +129,7 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
             entityId: 5, typeId: 'pvz:sun', state: 'available', x: 100, y: 60, scale: 1, alpha: 255,
         }],
         mowerRows: [2],
-        tutorial: { id: 'pvz:adventure-1-1', step: 'pick-first-seed' }, extensions: {},
+        tutorial: { step: 'pick-first-seed' }, extensions: {},
     }
     const packet = { protocolVersion: 1, type: 'sessionStarted', acknowledgedSequence: 1, snapshot }
     assert.doesNotThrow(() => parseServerPacket(packet))

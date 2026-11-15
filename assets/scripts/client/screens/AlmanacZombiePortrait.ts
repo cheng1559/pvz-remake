@@ -1,6 +1,7 @@
 import { _decorator, Component, isValid, Node } from 'cc'
-import { createOffBoardZombie, holdStill, offBoardContent } from '@/client/view/offBoard'
+import { createOffBoardZombie, holdStill } from '@/client/view/offBoard'
 import { uiNode } from '@/client/view/uiNode'
+import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 
 /**
  * The almanac's small picture of a zombie: the zombie itself, held still where the original's cached one stands
@@ -17,7 +18,7 @@ export class AlmanacZombiePortrait extends Component {
     }
 
     private async load(root: Node, typeId: string): Promise<void> {
-        const portrait = (await offBoardContent()).presentation.zombies[typeId]?.portrait
+        const portrait = (await loadIntegratedGameContent()).presentation.zombies[typeId]?.portrait
         if (!isValid(root, true)) return
         if (!portrait) throw new Error(`Zombie portrait is not installed: ${typeId}`)
         // The existing portrait mask starts two pixels inside the 76x76 frame.

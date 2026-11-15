@@ -118,7 +118,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
 
     private get clips(): Record<string, ClientAnimationClip | undefined> {
         const { content, plant } = this.context
-        return content.animations.resolve(plant.typeId) as Record<string, ClientAnimationClip | undefined>
+        return content.animations.resolve(plant.typeId)
     }
 
     /** The presentation's clip of a name. */

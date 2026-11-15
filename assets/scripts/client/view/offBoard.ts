@@ -15,11 +15,6 @@ import type { GridItemSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
  * animation differs (shared/content/animation, plantAnimation, zombieAnimation).
  */
 
-/** The game's content for everything shown off the board, the one a level is drawn with (loaded once). */
-export function offBoardContent(): ReturnType<typeof loadIntegratedGameContent> {
-    return loadIntegratedGameContent()
-}
-
 /**
  * A plant's or a zombie's picture held on its pose (a packet's, a preview's, the almanac's portrait): its players stop,
  * and take four samples to a screen pixel when it is drawn much smaller than its art (`supersampled`).
@@ -47,7 +42,7 @@ export interface OffBoardPlant {
  * picture has it (PlantPresentationDefinition.packet). Nothing for a plant that has no animation to draw it by.
  */
 export async function createOffBoardPlant(node: Node, typeId: string, options: { packet?: boolean, draw?: PlantDraw } = {}): Promise<OffBoardPlant | null> {
-    const game = await offBoardContent()
+    const game = await loadIntegratedGameContent()
     const animation = game.definitions.plants[typeId]?.animation
     if (!animation || !node.isValid) return null
     const presentation = plantDefinition(game.presentation, typeId), packet = options.packet ? presentation.packet : undefined
@@ -72,7 +67,7 @@ export interface OffBoardZombie {
  */
 export async function createOffBoardZombie(node: Node, typeId: string,
     options: { pose?: string, mirrored?: boolean, hasTongue?: boolean, draw?: ZombieDraw } = {}): Promise<OffBoardZombie | null> {
-    const game = await offBoardContent()
+    const game = await loadIntegratedGameContent()
     const definition = game.definitions.zombies[typeId]
     if (!definition || !node.isValid) return null
     const clips: Record<string, unknown> = game.animations.resolve(typeId)
@@ -95,7 +90,7 @@ export async function createOffBoardZombie(node: Node, typeId: string,
  * by its view. Nothing when its type has none.
  */
 export async function createOffBoardGridItem(node: Node, typeId: GridItemSnapshot['typeId']): Promise<boolean> {
-    const game = await offBoardContent()
+    const game = await loadIntegratedGameContent()
     if (!node.isValid || !game.presentation.gridItems[typeId]) return false
     await game.views.gridItems.create({ node, content: game, item: { typeId } })
     return true

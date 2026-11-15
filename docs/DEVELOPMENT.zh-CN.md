@@ -52,7 +52,7 @@
 
 `StartupScreen` 自动播放 PopCap Logo 的 200 tick 淡入停留淡出，再进入标题／加载页：标题下落、草皮卷展开，在原版五个进度点播放新版 `ReanimPlayer` 小花／僵尸头动画和音效。计时使用全局时钟的 100Hz 游戏 tick。进度来自主菜单图片和动画的实际准备，预加载的主菜单保持隐藏，点击进入时复用并开始入场。资源全部就绪后，加载条内按按钮规则响应左右键，背景按下、触摸或任意键也可进入；返回标题页不重播 PopCap Logo。新增动画可用 `npm run build:content -- --pak /path/to/main.pak` 单独生成，再重新打包内置 ZIP。
 
-Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览复用 `offBoardContent()` 加载的同一份内容；`ReanimRepository` 按注册表共享动画数据与贴图，失败后可重试。资源已在引擎缓存时直接读取，图鉴页面等待头像与详情的首帧就绪后再显示。动画节点仍随页面创建和销毁，不常驻整套图鉴。
+Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览复用 `loadIntegratedGameContent()` 加载的同一份内容；`ReanimRepository` 按注册表共享动画数据与贴图，失败后可重试。资源已在引擎缓存时直接读取，图鉴页面等待头像与详情的首帧就绪后再显示。动画节点仍随页面创建和销毁，不常驻整套图鉴。
 
 音效和音乐统一使用 MP3，沿用现有 `tools/pvz/audio.py`／`tools/pvz/music/convert.py` 转换流程，兼容 Web、iOS、macOS、Windows 和 Android 的音频加载器。音乐使用 LAME VBR q2，音效使用 q4，采样率统一为 44.1kHz；动态鼓点各轨不裁剪静音、不单独归一化，循环与节拍数据保持不变。压缩减少下载和包体大小，解码后的 PCM 内存不会按同样比例减少。
 

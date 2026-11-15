@@ -1,7 +1,8 @@
 import { _decorator, Component, isValid, Mask, Node } from 'cc'
-import { createOffBoardPlant, createOffBoardZombie, offBoardContent, type OffBoardPlant } from '@/client/view/offBoard'
+import { createOffBoardPlant, createOffBoardZombie, type OffBoardPlant } from '@/client/view/offBoard'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
+import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 
 const { ccclass } = _decorator
 /** A frame that took long moves an animation on by no more ticks than this. */
@@ -35,7 +36,7 @@ export class AlmanacEntityView extends Component {
     private async load(kind: 'plants' | 'zombies', typeId: string): Promise<void> {
         const body = uiNode({ name: 'Entity', parent: this.node, active: false }).node
         if (kind === 'plants') {
-            const [x, y] = (await offBoardContent()).presentation.plants[typeId]?.almanacOffset ?? [0, 0]
+            const [x, y] = (await loadIntegratedGameContent()).presentation.plants[typeId]?.almanacOffset ?? [0, 0]
             if (!isValid(this.node, true)) return
             this.node.setPosition(this.node.position.x + x, this.node.position.y - y)
             this.plant = await createOffBoardPlant(body, typeId) ?? undefined

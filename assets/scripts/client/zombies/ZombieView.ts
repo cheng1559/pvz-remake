@@ -94,7 +94,6 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         return player.loadedId ? player : null
     }
 
-    /** Its shadow beside it, and every clip of this zombie in memory, so that it changes between them at once. */
     /** Every zombie's swapped sprites and dropped parts, ready before play. */
     static async preload(content: Content): Promise<void> {
         const ids = new Set(Object.values(content.presentation.zombies).flatMap(zombie => [...swapSprites(zombie),
@@ -444,7 +443,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     private clips(): Record<string, ClientAnimationClip | undefined> {
-        return this.context.content.animations.resolve(this.typeId) as Record<string, ClientAnimationClip | undefined>
+        return this.context.content.animations.resolve(this.typeId)
     }
 
     private definitionFromReanim(reanimId: string): ClientAnimationClip | undefined {

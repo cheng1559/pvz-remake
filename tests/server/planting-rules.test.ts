@@ -25,7 +25,7 @@ function lawn(lawnPlants: WorldSnapshot['plants'] = [], graves: Array<{ row: num
     return snapshotLawn(definitions, level, { plants: lawnPlants, gridItems }, rule)
 }
 function plant(typeId: string, row: number, column: number, more: Partial<WorldSnapshot['plants'][number]> = {}): WorldSnapshot['plants'][number] {
-    return { entityId: row * 10 + column, typeId, seedId: typeId, x: 0, y: 0, row, column, health: 300, maxHealth: 300, ...more }
+    return { entityId: row * 10 + column, typeId, x: 0, y: 0, row, column, health: 300, maxHealth: 300, ...more }
 }
 
 test('a plant holds its own cell only, while it is one that occupies its cell and no mower has crushed it', () => {

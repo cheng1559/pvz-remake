@@ -693,7 +693,7 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
         } },
         UIHoverManager: { beginModalBlock() {}, endModalBlock() {} },
         Color: class {}, Node: { EventType: { SIZE_CHANGED: 'size-changed' } },
-        isValid: () => false, offBoardContent: async () => ({}),
+        isValid: () => false, loadIntegratedGameContent: async () => ({}),
         MENU_PAGES, MusicSystem: { playTune: async (tune: string) => { music.push(tune) } },
         UI: { load: async () => ({
             assets: { presentation: { screens: {} } },

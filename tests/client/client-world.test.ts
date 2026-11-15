@@ -10,7 +10,7 @@ function snapshot(tick: number): WorldSnapshot {
         sun: 50, money: 0, wave: { index: 0, total: 4, flagWaves: [], countdown: 10 },
         cursor: { mode: 'none' }, seedPackets: [], conveyorPackets: [],
         plants: [{
-            entityId: 1, typeId: 'pvz:peashooter', seedId: 'pvz:peashooter',
+            entityId: 1, typeId: 'pvz:peashooter',
             x: 0, y: 0, row: 2, column: 0, health: 300, maxHealth: 300,
         }],
         zombies: [{
@@ -22,7 +22,7 @@ function snapshot(tick: number): WorldSnapshot {
         projectiles: [{ entityId: 6, typeId: 'pvz:pea', x: 20, y: 30, row: 2 }],
         items: [{ entityId: 4, typeId: 'pvz:sun', state: 'available', x: 30, y: 40, scale: 1, alpha: 255 }],
         mowerRows: [2],
-        tutorial: { id: 'pvz:adventure-1-1', step: 'complete' }, extensions: {},
+        tutorial: { step: 'complete' }, extensions: {},
     }
 }
 

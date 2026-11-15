@@ -13,7 +13,7 @@ function snapshot(tick: number, x: number): WorldSnapshot {
         sun: 50, money: 0, wave: { index: 0, total: 4, flagWaves: [], countdown: 10 },
         cursor: { mode: 'none' }, seedPackets: [], conveyorPackets: [],
         plants: [], zombies: [], projectiles: [{ entityId: 1, typeId: 'pvz:pea', x, y: 20, row: 2 }],
-        items: [], mowerRows: [], tutorial: { id: 'pvz:adventure-1-1', step: 'complete' }, extensions: {},
+        items: [], mowerRows: [], tutorial: { step: 'complete' }, extensions: {},
     }
 }
 

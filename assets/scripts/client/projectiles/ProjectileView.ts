@@ -182,8 +182,7 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
      * the sound of its hit, and only splats where it comes down.
      */
     static readonly impact: StageEvent = (stage, event, world) => {
-        const id = event.data.projectileId, through = event.data.through === true
-        if (typeof id === 'number' && !through) stage.node(id)?.destroy()
+        const through = event.data.through === true
         const typeId = String(event.data.typeId), projectile = stage.content.presentation.projectiles[typeId]
         // Projectile::PlayImpactSound: the armor worn before the hit sounds too, the shield in front of the helm, and
         // some armor muffles the projectile's own sound unless that is loud.

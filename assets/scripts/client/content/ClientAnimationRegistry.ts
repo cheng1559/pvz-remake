@@ -1,16 +1,14 @@
-import { type ClientAnimationClip, type ClientAnimationDefinitions, type ClientAnimationTarget, type PresentationDefinitions } from '@/shared/content/presentation'
-export type { ClientAnimationClip, ShooterAnimationDefinition, ZombieAnimationDefinition, NormalZombieAnimationDefinition, SunflowerAnimationDefinition, FlagZombieAnimationDefinition, PoleVaulterAnimationDefinition, CherryBombAnimationDefinition, WallNutAnimationDefinition, PotatoMineAnimationDefinition, ChomperAnimationDefinition, ClientAnimationDefinitions, ClientAnimationTarget } from '@/shared/content/presentation'
-
-type AnyAnimationDefinition = Record<string, ClientAnimationClip>
+import type { AnimationDefinition, ClientAnimationClip, PresentationDefinitions } from '@/shared/content/presentation'
+export type { ClientAnimationClip } from '@/shared/content/presentation'
 
 export class ClientAnimationRegistry {
-    private readonly values = new Map<ClientAnimationTarget, AnyAnimationDefinition>()
+    private readonly values = new Map<string, AnimationDefinition>()
     private frozen = false
 
     constructor(readonly definitions: PresentationDefinitions) {
         const { plants, zombies } = definitions
         const defaults = Object.fromEntries(Object.entries({ ...plants, ...zombies })
-            .filter(([, definition]) => definition.clips).map(([id, definition]) => [id, definition.clips])) as unknown as ClientAnimationDefinitions
+            .filter(([, definition]) => definition.clips).map(([id, definition]) => [id, definition.clips!]))
         for (const [target, value] of Object.entries(defaults)) {
             const copy = cloneDefinition(value)
             for (const [slot, clip] of Object.entries(copy)) validateClip(target, slot, clip)
@@ -18,9 +16,11 @@ export class ClientAnimationRegistry {
         }
     }
 
-
-    resolve<K extends ClientAnimationTarget>(target: K): ClientAnimationDefinitions[K] {
-        return this.require(target)
+    /** A plant's or a zombie's clips, by its id. */
+    resolve(target: string): AnimationDefinition {
+        const value = this.values.get(target)
+        if (!value) throw new Error(`unknown client animation target: ${target}`)
+        return value
     }
 
     freeze(): void {
@@ -30,12 +30,6 @@ export class ClientAnimationRegistry {
             for (const value of Object.values(definition)) Object.freeze(value)
             Object.freeze(definition)
         }
-    }
-
-    private require<K extends ClientAnimationTarget>(target: K): ClientAnimationDefinitions[K] {
-        const value = this.values.get(target)
-        if (!value) throw new Error(`unknown client animation target: ${target}`)
-        return value as unknown as ClientAnimationDefinitions[K]
     }
 }
 

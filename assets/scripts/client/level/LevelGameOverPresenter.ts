@@ -100,7 +100,7 @@ export class LevelGameOverPresenter {
             const x = easeInOut(0, PAN_START, this.ticks, this.winner.x, Math.max(this.winner.x, this.presentation.clipX))
             // Late loss thresholds can put the root behind the doorway already.
             // Approach in front of the door, then start the clipped walk from its edge.
-            this.entities.syncGameOverWinner({ ...this.winner, x }, this.ticks < PAN_START ? this.entityLayer : this.winnerLayer, true,
+            this.entities.syncGameOverWinner({ ...this.winner, x }, this.ticks < PAN_START ? this.entityLayer : this.winnerLayer,
                 Math.max(0, this.ticks - PAN_START), y, Math.min(this.ticks, PAN_START))
         }
         const frame = Math.max(0, (this.ticks - GRAPHIC_START) * 12 / 100)

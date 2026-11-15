@@ -121,7 +121,6 @@ export interface SeedPacketSnapshot {
 export interface PlantSnapshot extends EntityBehaviorState {
     entityId: EntityId
     typeId: string
-    seedId: string
     x: number
     y: number
     row: number
@@ -233,7 +232,6 @@ export interface WaveSnapshot {
 }
 
 export interface TutorialSnapshot {
-    id: string
     step: string
     /** The level's script brings Crazy Dave for the intro. */
     dave?: true
@@ -272,7 +270,6 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         throw new TypeError('snapshot.wave.index must not exceed total')
     }
     const tutorial = record(snapshot.tutorial, 'snapshot.tutorial')
-    nonEmptyString(tutorial.id, 'snapshot.tutorial.id')
     nonEmptyString(tutorial.step, 'snapshot.tutorial.step')
     for (const key of ['dave', 'toolsInIntro']) if (tutorial[key] !== undefined && tutorial[key] !== true) throw new TypeError(`snapshot.tutorial.${key} must be true`)
     record(snapshot.extensions, 'snapshot.extensions')
@@ -342,7 +339,6 @@ export const validateWorldSnapshot = (value: unknown): Record<string, JsonValue>
         const plant = record(entry, name)
         nonNegativeInteger(plant.entityId, `${name}.entityId`)
         nonEmptyString(plant.typeId, `${name}.typeId`)
-        nonEmptyString(plant.seedId, `${name}.seedId`)
         finite(plant.x, `${name}.x`)
         finite(plant.y, `${name}.y`)
         nonNegativeInteger(plant.row, `${name}.row`)

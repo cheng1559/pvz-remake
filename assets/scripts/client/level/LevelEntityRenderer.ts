@@ -107,12 +107,12 @@ export class LevelEntityRenderer implements LevelStage {
         this.highlightedPlant = highlighted
     }
 
-    syncGameOverWinner(zombie: ZombieSnapshot, parent: Node, visible: boolean, ticks: number, y: number, approachTicks = 0): void {
+    syncGameOverWinner(zombie: ZombieSnapshot, parent: Node, ticks: number, y: number, approachTicks = 0): void {
         const node = this.node(zombie.entityId), view = this.zombie(zombie.entityId)
         if (!node || !view) return
         if (node.parent !== parent) node.setParent(parent)
         if (view.shadowNode.parent !== parent) view.shadowNode.setParent(parent)
-        node.active = view.shadowNode.active = visible
+        node.active = view.shadowNode.active = true
         view.syncGameOverWalk(zombie, ticks, y, approachTicks)
     }
 
