@@ -214,10 +214,11 @@ export class MenuScreen extends Component {
         }
     }
 
-    async show(page: PreparedMenuPage, animate?: (previous: Node, next: Node) => Promise<void>): Promise<void> {
+    /** `music`: the page plays its own tune; not over a paused level, whose music waits with it. */
+    async show(page: PreparedMenuPage, animate?: (previous: Node, next: Node) => Promise<void>, music = true): Promise<void> {
         page.root.active = true
-        const music = MENU_PAGES[page.id].music
-        if (music) void MusicSystem.playTune(music)
+        const tune = MENU_PAGES[page.id].music
+        if (tune && music) void MusicSystem.playTune(tune)
         page.enter?.()
         if (animate && this.page?.root.isValid && this.page.root !== page.root) await animate(this.page.root, page.root)
         if (this.node?.isValid) this.replacePage(page)

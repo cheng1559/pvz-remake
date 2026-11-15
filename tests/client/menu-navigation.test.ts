@@ -787,7 +787,7 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
         await screen.show(main)
         assert.equal(full.root.isValid, false)
     }
-    assert.deepEqual(music, ['choose_seeds', 'choose_seeds', 'choose_seeds', 'zen_garden', 'zen_garden', 'zen_garden', 'zen_garden'])
+    assert.deepEqual(music, ['choose_seeds', 'choose_seeds', 'choose_seeds', 'choose_seeds', 'zen_garden', 'zen_garden', 'zen_garden', 'zen_garden'])
     const store = page('store')
     await screen.show(store)
     screen.hide()

@@ -99,19 +99,22 @@ export const MENU_PAGES: Record<MenuPageId, MenuPage> = {
         heading: { key: 'PICK_AREA', font: 'pageTitle', y: 58, color: [220, 220, 220] },
         buttons: [], back: 'main',
     },
+    // AlmanacDialog: MakeSureMusicIsPlaying(MUSIC_TUNE_CHOOSE_YOUR_SEEDS) unless the board is paused (MenuScreen.show's
+    // `music`); the main menu's theme comes back when it closes (GameSelector). Each page plays it, the lists being
+    // opened straight from a level.
     almanac: {
-        retainPrevious: true,
+        music: 'choose_seeds', retainPrevious: true,
         backgrounds: [{ image: 'almanac_indexback' }],
         heading: { key: 'SUBURBAN_ALMANAC_INDEX', font: 'pageTitle', y: 60, color: [220, 220, 220] },
         buttons: [{ target: 'plants' }, { target: 'zombies' }], back: 'back',
     },
     plants: {
-        retainPrevious: true,
+        music: 'choose_seeds', retainPrevious: true,
         backgrounds: [{ image: 'almanac_plantback' }], buttons: [], back: 'almanac',
         heading: { key: 'SUBURBAN_ALMANAC_PLANTS', font: 'pageTitleSmall', y: 48, color: [213, 159, 43] },
     },
     zombies: {
-        retainPrevious: true,
+        music: 'choose_seeds', retainPrevious: true,
         backgrounds: [{ image: 'almanac_zombieback' }], buttons: [], back: 'almanac',
         heading: { key: 'SUBURBAN_ALMANAC_ZOMBIES', font: 'title', y: 54, color: [0, 196, 0] },
     },

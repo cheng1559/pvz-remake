@@ -214,7 +214,9 @@ export class GameApp extends Component {
                 return async () => {
                     if (target === 'main') controller.hide()
                     menu.node.active = true
-                    await menu.show(page, slide ? (previous, next) => transitions.slide(previous, next, slide) : undefined)
+                    // AlmanacDialog: its music unless the board is paused; one opened from the seed chooser leaves it playing.
+                    await menu.show(page, slide ? (previous, next) => transitions.slide(previous, next, slide) : undefined,
+                        !controller.isRunning() || keepMusic)
                     if (!this.node?.isValid) return
                     if (action === 'back') this.history.pop()
                     // The almanac index, plants and zombies pages count as one page, so Close leaves all of them.
