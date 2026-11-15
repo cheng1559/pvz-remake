@@ -161,10 +161,14 @@ export class KernelBatch extends Sprite {
         if (this.customMaterial !== wanted) this.customMaterial = wanted
     }
 
-    /** World bounds of the drawn images, for offscreen compositing. */
-    getWorldBounds(): Rect {
+    /**
+     * World bounds of the drawn images, for offscreen compositing; none when it draws nothing, as a batch does whose
+     * tracks are all hidden (it keeps its quads).
+     */
+    getWorldBounds(): Rect | null {
         // Compositing reads bounds before the engine's render update.
         if (this.dirty) writeQuads(this)
+        if (!this.written) return null
         const rd = this.renderData!, stride = rd.floatStride, m = this.node.worldMatrix
         const positions = (JSB ? rd.renderDrawInfo?.render2dBuffer : undefined) ?? this.local
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity

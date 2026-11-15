@@ -42,8 +42,11 @@ export function bakeSprite(source: Node): Promise<Sprite | undefined> {
             for (const player of source.getComponentsInChildren(ReanimPlayer)) player.flushPose()
             const sprites = source.getComponentsInChildren(Sprite).filter(sprite => sprite.enabledInHierarchy && sprite.spriteFrame &&
                 !(sprite instanceof KernelBatch && !sprite.count))
-            if (!sprites.length) throw new Error('Cannot composite an empty plant pose')
-            const rects = sprites.map(sprite => sprite instanceof KernelBatch ? sprite.getWorldBounds() : sprite.node.getComponent(UITransform)!.getBoundingBoxToWorld())
+            const rects = sprites.flatMap(sprite => {
+                const rect = sprite instanceof KernelBatch ? sprite.getWorldBounds() : sprite.node.getComponent(UITransform)!.getBoundingBoxToWorld()
+                return rect ? [rect] : []
+            })
+            if (!rects.length) throw new Error('Cannot composite an empty plant pose')
             const left = Math.floor(Math.min(...rects.map(rect => rect.x))) - 1
             const bottom = Math.floor(Math.min(...rects.map(rect => rect.y))) - 1
             const width = Math.ceil(Math.max(...rects.map(rect => rect.xMax))) + 1 - left
