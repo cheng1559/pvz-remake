@@ -495,8 +495,10 @@ export class ZombieView implements ZombieViewInstance {
     static readonly armorDropped: StageEvent = (stage, event, world) => {
         const entityId = event.data.entityId, slot = event.type === 'zombieHelmDropped' ? 'helm' : 'shield'
         if (typeof entityId !== 'number' || event.data.silent === true) return
-        const node = stage.node(entityId), view = stage.zombie(entityId)
         const zombie = world.zombies.find(candidate => candidate.entityId === entityId)
+        // Zombie::DropHelm takes the track where it is this tick, as the parts do: one rising from a grave is higher now.
+        if (zombie) stage.showZombie(zombie, world)
+        const node = stage.node(entityId), view = stage.zombie(entityId)
         const typeId = zombie?.typeId ?? stage.zombieType(entityId)
         const armor = typeId ? stage.content.presentation.zombies[typeId]?.[slot] : undefined
         if (!node || !armor) return
