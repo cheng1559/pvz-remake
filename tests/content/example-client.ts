@@ -39,19 +39,14 @@ export function exampleClient() {
         onBoard(_plant: any, _world: any, _flash: number) {}
         particle(...args: unknown[]) { this.context.particle(...args) }
     }
-    const game = {
-        registry: { resolve: (category: string, id: string) => ({ category, id }) },
-        loader: { async load(content: any) { return content } },
-    }
     const executor = { execute: async (_input: string, _running: boolean, _run: (input: string) => any) => cli.debugCondition('DEBUG_NO_ACTIVE_GAME') }
-    return { MainMenuScreen, buttons, dialogs, sounds, executor, Node, game, modules: {
-        'cc': { Node, Color, AudioClip: class {} },
+    return { MainMenuScreen, buttons, dialogs, sounds, executor, Node, modules: {
+        'cc': { Node, Color },
         'shared/debug/DebugCli': cli,
         'platform/debug/DebugCliCommands': { executor },
         'client/screens/MainMenuScreen': { MainMenuScreen },
         'client/view/uiNode': { uiNode: ({ parent }: any) => ({ node: child(parent) }) },
         'client/plants/PlantView': { PlantView },
-        'client/game/loadIntegratedGameContent': { loadIntegratedGameContent: async () => game },
-        'client/sound/SoundSystem': { SoundSystem: { async playClip(clip: any) { sounds.push(clip) } } },
+        'client/sound/SoundSystem': { SoundSystem: { async play(id: string) { sounds.push(id) } } },
     } }
 }

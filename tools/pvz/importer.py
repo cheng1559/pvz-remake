@@ -137,7 +137,7 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
     for kind, entries in resources.items():
         for id, entry in entries.items():
             file = entry['file'] if kind == 'sprites' else entry
-            if file not in ('assets/gameplay.json', 'assets/presentation.json') and not (mod / file).is_file():
+            if not (mod / file).is_file():
                 raise ValueError(f'Missing {kind} resource: {id} -> {file}')
     # Resource categories are optional; leave out the ones the base does not use.
     index['resources'] = {kind: entries for kind, entries in resources.items() if entries}

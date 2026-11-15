@@ -1,6 +1,5 @@
 import type { Node } from 'cc'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
-import type { ContentRegistry } from '@/client/content/ContentRegistry'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { AnimationClip } from '@/shared/content/gameplay'
@@ -8,7 +7,7 @@ import type { ReanimKeyframe } from '@/shared/content/reanim'
 
 /** Seconds of a clip's own pictures to a frame of an animation: at the pace they were made at (`fps`, 12 by default). */
 function secondsPerFrame(clip: ClientAnimationClip): number {
-    return clip.rateScale / (clip.fps ?? 12)
+    return (clip.rateScale ?? 1) / (clip.fps ?? 12)
 }
 
 /** Within this of a clip's length, pictures are as long as the clip: their length is a sum of seconds. */
@@ -102,7 +101,7 @@ export class LayerPlayers {
     private readonly bases = new Map<string, ReanimKeyframe>()
 
     /** `alone`: tracks a clip of the animation draws alone (the potato mine's light), left to it by the others. */
-    constructor(parent: Node, names: readonly string[], private readonly registry: ContentRegistry, private readonly alone: readonly string[] = []) {
+    constructor(parent: Node, names: readonly string[], private readonly alone: readonly string[] = []) {
         for (const name of names) this.layers.set(name, { player: uiNode({ name, parent }).node.addComponent(ReanimPlayer), time: 0, shown: false, offset: 0 })
     }
 
@@ -143,7 +142,7 @@ export class LayerPlayers {
             // A clip started over (a second shot) blends from where the first had got to, as a clip changed to does.
             const started = layer.key !== what.key || !loop && what.time < layer.time
             if (started) {
-                player.change(clip.reanimId, this.registry, options.blend(name, clip, layer.key === undefined))
+                player.change(clip.reanimId, options.blend(name, clip, layer.key === undefined))
                 player.fullLastFrame = clip.fullLastFrame === true
                 // A synced layer starts at the part of its pictures the one it goes with is at of its own.
                 const own = player.durationSeconds / secondsPerFrame(clip)

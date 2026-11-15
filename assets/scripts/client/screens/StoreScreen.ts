@@ -1,3 +1,4 @@
+import { easeInOutCurve } from '@/client/view/GameScreenMath'
 import { modResources } from '@/client/content/ModResources'
 import { _decorator, Color, Component, Node, type Sprite, SpriteFrame } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
@@ -15,7 +16,6 @@ import { gameClock } from '@/core/GameClock'
 import type { MenuAction } from './MenuPages'
 import { formatMoney } from '@/client/ui/formatMoney'
 import { CrazyDaveView } from '@/client/characters/CrazyDaveView'
-import { loadClientContent } from '@/client/content/loadClientContent'
 import { uiAreaEdge } from '@/client/view/ClientViewport'
 
 const { ccclass } = _decorator
@@ -24,7 +24,7 @@ const SPRITES = [
     'store_nextbutton', 'store_nextbuttonhighlight', 'store_nextbuttondisabled',
     'store_prevbutton', 'store_prevbuttonhighlight', 'store_prevbuttondisabled',
     'store_mainmenubutton', 'store_mainmenubuttonhighlight', 'store_mainmenubuttondown',
-    'particles/seedpacketflash', 'coinbank',
+    'pvz:seedpacketflash', 'coinbank',
 ]
 
 @ccclass('PvZStoreScreen')
@@ -57,11 +57,9 @@ export class StoreScreen extends Component {
         this.data = await menuApi.getStore()
         this.ambientTimer = this.data.speech.ambient.initialDelay
         const itemSprites = this.data.pages.flatMap(page => page.items.flatMap(item => item.sprite ? [item.sprite] : []))
-        const [content, frames] = await Promise.all([
-            loadClientContent(),
+        const [frames] = await Promise.all([
             Promise.all([...new Set([...SPRITES, ...itemSprites])].map(async name => {
-                const frame = await modResources.asset(name, SpriteFrame)
-                if (!frame) throw new Error(`Missing store image: ${name}`)
+                const frame = await modResources.sprite(name)
                 return [name, frame] as const
             })),
         ])
@@ -71,7 +69,7 @@ export class StoreScreen extends Component {
         this.hatch = ui.image(this.node, this.sprites.store_hatchbackopen, { x: 299 }).node
         this.sign = ui.image(this.node, this.sprites.store_sign, { x: 285, y: -150 }).node
         // Original StoreScreen draws Dave at (-42, +68), including the bubble at (105, -58).
-        this.dave = await CrazyDaveView.create(this.node, { ...content, presentation: ui.assets.presentation }, ui, {
+        this.dave = await CrazyDaveView.create(this.node, ui.assets, ui, {
             position: { x: -42, y: -68 }, bubble: { sprite: 'pvz:store_speechbubble', x: 105, y: -58 }, clickToContinue: false,
         })
         this.dave.enter()
@@ -138,7 +136,7 @@ export class StoreScreen extends Component {
         if (state === 'hidden') return
         const x = (index < 4 ? 422 : 372) + index % 4 * 74, y = index < 4 ? 206 : 310
         const button = this.ui.button(this.items, {
-            images: { normal: this.sprites['particles/seedpacketflash'] }, x, y, width: 50, height: 87,
+            images: { normal: this.sprites['pvz:seedpacketflash'] }, x, y, width: 50, height: 87,
             imageBox: { width: 50, height: 70 }, pressOffset: [0, 0], enabled: state === 'available',
             pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), releaseToNormalOnPressOut: true, refreshHoverOnEnable: false,
         })
@@ -296,8 +294,7 @@ export class StoreScreen extends Component {
         if (this.waiting) return
         const wasReady = this.age >= this.data.speech.readyDelay
         this.age += dt
-        let t = Math.max(0, Math.min(1, (this.age - 0.5) / 0.6))
-        t = t * t * (3 - 2 * t); t = t * t * (3 - 2 * t)
+        const t = easeInOutCurve(Math.max(0, Math.min(1, (this.age - 0.5) / 0.6)))
         this.sign.setPosition(285, 150 * (1 - t))
         if (!wasReady && this.age >= this.data.speech.readyDelay) this.refreshEnabled()
         if (this.hatchTimer <= 0) { this.updateSpeech(dt); return }

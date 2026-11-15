@@ -1,3 +1,4 @@
+import { exact, nonNegativeInteger } from '@/shared/validate'
 import {
     assertJsonValue,
     jsonRoundTrip,
@@ -104,22 +105,4 @@ function parseSnapshot(value: unknown, name: string): WorldSnapshot {
     } catch (error) {
         throw new TypeError(`${name} is invalid: ${error instanceof Error ? error.message : String(error)}`)
     }
-}
-
-function exact(value: unknown, keys: readonly string[], name: string): Record<string, unknown> {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        throw new TypeError(`${name} must be an object`)
-    }
-    const source = value as Record<string, unknown>
-    const allowed = new Set(keys)
-    for (const key of Object.keys(source)) if (!allowed.has(key)) throw new TypeError(`${name}.${key} is not supported`)
-    for (const key of keys) if (!(key in source)) throw new TypeError(`${name}.${key} is required`)
-    return source
-}
-
-function nonNegativeInteger(value: unknown, name: string): number {
-    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
-        throw new TypeError(`${name} must be a non-negative safe integer`)
-    }
-    return value
 }

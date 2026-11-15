@@ -1,11 +1,10 @@
-import { _decorator, Color, Component, director, Director, gfx, isValid, JsonAsset, Material, Node, Sprite, SpriteFrame, toRadian, UISkew, UITransform, Vec3 } from 'cc'
-import { ClientContentLoader, SpriteRepository } from '@/client/content/ClientContentLoader'
-import { ContentRegistry } from '@/client/content/ContentRegistry'
+import { _decorator, Color, Component, director, Director, gfx, isValid, Material, Node, Sprite, SpriteFrame, toRadian, UISkew, UITransform, Vec3 } from 'cc'
+import { loadedReanim, loadReanim } from './ReanimAssets'
 import { uiNode } from '@/client/view/uiNode'
 import { gameClock } from '@/core/GameClock'
-import { animationFrame, animationFrames } from '@/client/render/AnimationAtlas'
+import { animationFrame } from '@/client/render/AnimationAtlas'
 import { KernelBatch, loadKernelMaterial, pictureMaterial, type KernelQuadSource } from '@/client/render/KernelBatch'
-import { BLEND, Header, IMAGE, kernel, KEY, loadKernel, TRACK } from '@/shared/kernel/index'
+import { BLEND, Header, IMAGE, kernel, KEY, TRACK } from '@/shared/kernel/index'
 import {
     attachmentMatrix,
     attachReanimPose,
@@ -97,79 +96,10 @@ function packClip(data: Reanim): PackedClip {
 type Segment = { first: number, end: number, frame: FrameGeometry, source: KernelQuadSource } | { trackId: string, view: TrackView }
 
 let additiveSpriteMaterial: Material | null = null
-const parsedReanims = new WeakMap<JsonAsset, Reanim>()
-interface ReanimAssets {
-    data: Reanim
-    frames: ReadonlyArray<readonly [string, SpriteFrame]>
-}
-// Registries define sprite overrides; share prepared assets only within the same content registry.
-const preparedReanims = new WeakMap<ContentRegistry, Map<string, Promise<ReanimAssets>>>()
-/** The ones that have arrived, for a player changing clips at once (ReanimPlayer.change). */
-const loadedReanims = new WeakMap<ContentRegistry, Map<string, ReanimAssets>>()
-
 interface TrackAttachment {
     parent: ReanimPlayer
     trackId: string
     basePose: ReanimKeyframe
-}
-
-export class ReanimRepository {
-    private readonly cache: Map<string, Promise<ReanimAssets>>
-    private readonly loaded: Map<string, ReanimAssets>
-
-    constructor(
-        private readonly registry: ContentRegistry,
-        private readonly loader = new ClientContentLoader(),
-    ) {
-        let cache = preparedReanims.get(registry), loaded = loadedReanims.get(registry)
-        if (!cache) preparedReanims.set(registry, cache = new Map())
-        if (!loaded) loadedReanims.set(registry, loaded = new Map())
-        this.cache = cache
-        this.loaded = loaded
-    }
-
-    /**
-     * Has every clip a view will play in memory, with what draws them, so that the view changes between them at once
-     * (ReanimPlayer.change): what the loading screen already did for all of them, where it loads everything.
-     */
-    async prepare(ids: Iterable<string>): Promise<void> {
-        await Promise.all([...[...new Set(ids)].map(id => this.load(id)), loadKernelMaterial()])
-    }
-
-    load(id: string): Promise<ReanimAssets> {
-        const cached = this.cache.get(id)
-        if (cached) return cached
-        const content = this.registry.resolve('reanim', id)
-        if (!content) return Promise.reject(new Error(`unknown reanim: ${id}`))
-
-        const promise = this.loader.load(content, JsonAsset).then(async asset => {
-            let data = parsedReanims.get(asset)
-            if (!data) {
-                data = parseReanim(asset.json)
-                parsedReanims.set(asset, data)
-            }
-            if (data.id !== id) throw new Error(`reanim ID mismatch: expected ${id}, got ${data.id}`)
-            const spriteIds = new Set<string>()
-            for (const track of data.tracks) {
-                for (const frame of track.keyframes) if (frame.sprite) spriteIds.add(frame.sprite)
-            }
-            const sprites = new SpriteRepository(this.registry, this.loader)
-            const [loaded] = await Promise.all([Promise.all([...spriteIds].sort().map(async spriteId =>
-                [spriteId, await sprites.load(spriteId, id)] as const,
-            )), loadKernel()])
-            // Pack after every image has arrived, so one animation's images share a page.
-            const packed = animationFrames(loaded.map(([, frame]) => frame))
-            const frames = loaded.map(([spriteId], index) => [spriteId, packed[index]] as const)
-            const assets = { data, frames }
-            this.loaded.set(id, assets)
-            return assets
-        }).catch(error => {
-            this.cache.delete(id)
-            throw error
-        })
-        this.cache.set(id, promise)
-        return promise
-    }
 }
 
 /**
@@ -239,14 +169,14 @@ export class ReanimPlayer extends Component {
     private drawingStale = true
 
     get durationSeconds(): number { return this.requireData().durationSeconds }
-    /** Where a track of a clip in memory (ReanimRepository.prepare) is in its first frame, for attaching from it. */
-    static firstPose(id: string, trackId: string, registry: ContentRegistry): ReanimKeyframe | undefined {
-        const track = loadedReanims.get(registry)?.get(id)?.data.tracks.find(candidate => candidate.id === trackId)
+    /** Where a track of a clip in memory (prepareReanims) is in its first frame, for attaching from it. */
+    static firstPose(id: string, trackId: string): ReanimKeyframe | undefined {
+        const track = loadedReanim(id)?.data.tracks.find(candidate => candidate.id === trackId)
         return track && sampleReanimTrack(track, 0) || undefined
     }
-    /** How long a clip in memory (ReanimRepository.prepare) is, for timing it before a player shows it. */
-    static duration(id: string, registry: ContentRegistry): number | undefined {
-        return loadedReanims.get(registry)?.get(id)?.data.durationSeconds
+    /** How long a clip in memory (prepareReanims) is, for timing it before a player shows it. */
+    static duration(id: string): number | undefined {
+        return loadedReanim(id)?.data.durationSeconds
     }
     /** The loaded clip, or null before the first load. */
     get loadedId(): string | null { return this.data?.id ?? null }
@@ -313,8 +243,9 @@ export class ReanimPlayer extends Component {
         this.applyPose()
     }
 
-    async load(id: string, registry: ContentRegistry, loader = new ClientContentLoader()): Promise<void> {
-        const [{ data, frames }] = await Promise.all([new ReanimRepository(registry, loader).load(id), loadKernelMaterial()])
+    /** Loads a clip by its resource ID (ReanimAssets) and shows it from its start. */
+    async load(id: string): Promise<void> {
+        const [{ data, frames }] = await Promise.all([loadReanim(id), loadKernelMaterial()])
         if (!this.node?.isValid) throw new Error('reanim player was destroyed while loading')
 
         this.clearViews()
@@ -339,10 +270,10 @@ export class ReanimPlayer extends Component {
      * another only changes which is played. This node and its batches stay, with its attachment to a parent's track,
      * its colors and what was put after tracks both clips have; what was set on single tracks (shown or hidden, other
      * images, colors) starts over, as with a clip just loaded. `blendSeconds`: from the pose it shows now (the
-     * original's StartBlend). The clip is in memory already (ReanimRepository.prepare).
+     * original's StartBlend). The clip is in memory already (prepareReanims).
      */
-    change(id: string, registry: ContentRegistry, blendSeconds = 0): void {
-        const assets = loadedReanims.get(registry)?.get(id)
+    change(id: string, blendSeconds = 0): void {
+        const assets = loadedReanim(id)
         if (!assets) throw new Error(`reanim is not loaded: ${id}`)
         const previous = this.data
         // The pose showing now, before its tracks are the other clip's.

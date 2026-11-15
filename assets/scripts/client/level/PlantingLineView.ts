@@ -1,5 +1,5 @@
+import { modResources } from '@/client/content/ModResources'
 import type { Node } from 'cc'
-import { SpriteRepository } from '@/client/content/ClientContentLoader'
 import type { UI } from '@/client/ui/UI'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { LevelPresentationDefinition } from '@/shared/content/presentation'
@@ -28,7 +28,7 @@ export class PlantingLineView {
         let stripe: Node | undefined
         if (look) {
             const board = content.definitions.boards[level.board]
-            const sprite = await new SpriteRepository(content.registry, content.loader).load(look.sprite)
+            const sprite = await modResources.sprite(look.sprite)
             const [x, y] = look.offset
             stripe = ui.image(ground.parent!, sprite, {
                 x: board.origin.x + (level.plantingLine.column + 1) * board.cell.width + x - 400, y: board.origin.y + y - 300,

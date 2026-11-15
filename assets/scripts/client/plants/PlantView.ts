@@ -1,8 +1,9 @@
+import { loadReanim, prepareReanims } from '@/client/reanim/ReanimAssets'
 import { Color, type Node, Sprite } from 'cc'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
-import type { LevelEntitySnapshot } from '@/client/level/LevelPresentationSnapshot'
+import { type LevelEntitySnapshot, parseSavedFlash, viewSaveData } from '@/client/level/LevelPresentationSnapshot'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
-import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
+import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { type LayerClips, LayerPlayers, type LayerShown, shownLayer } from '@/client/view/layerPlayback'
@@ -16,7 +17,6 @@ import { PLANT_WIDTH, plantFacingX, plantTeam } from '@/shared/content/teams'
 import { type PlantSnapshot, TICK_SECONDS, type WorldSnapshot } from '@/shared/protocol/index'
 import { plantDefinition } from './definitions'
 
-export type PlantViewSnapshot = Extract<LevelEntitySnapshot, { kind: 'plant' }>
 /**
  * A plant as a view shows it: what its layers play. On the board it is the server's whole snapshot; off it (the
  * almanac, a packet's picture) there is nothing else to it.
@@ -50,7 +50,8 @@ const MOWERED_ZOMBIE_FOOT = { x: 50, y: -117 }
 /** A plant turns about the middle of its base instead, from its top left in board units. */
 const MOWED_PLANT_FOOT = { x: PLANT_WIDTH / 2, y: 80 }
 /** LawnMoweredZombie's locator once loaded, by the content it is of. */
-const locators = new WeakMap<object, { track?: ReanimTrack }>()
+/** The mowed animation's locator track, loaded once (with the mowed clip) for every squashed plant. */
+let locator: { track?: ReanimTrack } | undefined
 
 interface FireParticle { id: string; x: number; y: number; delayTicks: number }
 
@@ -99,13 +100,12 @@ export class PlantView implements EntityView<PlantSnapshot> {
             }).node.setScale(scale, scale, 1)
         }
         // Every clip is in memory from here on, so a layer changes to one at once.
-        await new ReanimRepository(content.registry, content.loader).prepare(this.playable())
+        await prepareReanims(this.playable())
         if (!node.isValid) return
         this.root = uiNode({ name: 'Layers', parent: node }).node
         // Tracks a clip of the plant draws alone (the potato mine's light) are left to it by the others.
         const alone = Object.keys(this.animation.clips).flatMap(name => this.clips[name]?.onlyTracks ?? [])
-        this.layers = new LayerPlayers(this.root, [...Object.keys(this.animation.layers), ...(this.animation.blink ? [PLANT_BLINK_LAYER] : [])],
-            content.registry, alone)
+        this.layers = new LayerPlayers(this.root, [...Object.keys(this.animation.layers), ...(this.animation.blink ? [PLANT_BLINK_LAYER] : [])], alone)
         this.show(plant)
     }
 
@@ -141,7 +141,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
 
     /** How long one of its Reanim is, in the frames of its own pace (12 a second): what a Mod times a clip of its own by. */
     protected ownFrames(reanimId: string): number {
-        const seconds = ReanimPlayer.duration(reanimId, this.context.content.registry)
+        const seconds = ReanimPlayer.duration(reanimId)
         if (seconds === undefined) throw new Error(`Plant Reanim is not loaded: ${reanimId}`)
         return seconds * 12
     }
@@ -184,14 +184,14 @@ export class PlantView implements EntityView<PlantSnapshot> {
     private get layerClips(): LayerClips {
         return {
             picture: name => this.clip(name), played: name => this.animation.clips[name],
-            duration: reanimId => ReanimPlayer.duration(reanimId, this.context.content.registry) ?? 0,
+            duration: reanimId => ReanimPlayer.duration(reanimId) ?? 0,
         }
     }
 
     /** The pose a clip says its part is attached from (the first frame of the part in another of the plant's clips), when it does. */
     private basePose(clip: ClientAnimationClip, track: string): ReanimKeyframe | undefined {
         if (!clip.attachmentBase) return undefined
-        const pose = ReanimPlayer.firstPose(this.clip(clip.attachmentBase).reanimId, track, this.context.content.registry)
+        const pose = ReanimPlayer.firstPose(this.clip(clip.attachmentBase).reanimId, track)
         if (!pose) throw new Error(`${clip.reanimId} is attached from a part ${clip.attachmentBase} does not have: ${track}`)
         return pose
     }
@@ -243,18 +243,16 @@ export class PlantView implements EntityView<PlantSnapshot> {
      * its base as a zombie does about its foot, tipping the way the mower ran, then flattens.
      */
     private squash(plant: PlantSnapshot): void {
-        const { node, content } = this.context
+        const { node } = this.context
         if (!this.frozen) {
             this.frozen = true
             for (const player of node.getComponentsInChildren(ReanimPlayer)) player.pause()
             const shadow = node.getChildByName('PlantShadow')
             if (shadow) shadow.active = false
         }
-        let locator = locators.get(content.registry)
         if (!locator) {
-            const loaded: { track?: ReanimTrack } = {}
-            locators.set(content.registry, locator = loaded)
-            new ReanimRepository(content.registry, content.loader).load(MOWERED_REANIM)
+            const loaded: { track?: ReanimTrack } = locator = {}
+            loadReanim(MOWERED_REANIM)
                 .then(({ data }) => { loaded.track = data.tracks.find(track => track.id === 'locator') })
                 .catch(error => console.error('[Level] Failed to load the mowed animation', error))
         }
@@ -315,13 +313,14 @@ export class PlantView implements EntityView<PlantSnapshot> {
     }
 
     /** Its flash, which goes on across a save; the server's snapshot has the rest of what it shows. */
-    snapshot(entityId: number): PlantViewSnapshot {
+    snapshot(entityId: number): LevelEntitySnapshot {
         const flash = this.context.stage?.flashes.snapshot(entityId)
-        return { kind: 'plant', entityId, ...(flash ? { flash } : {}) }
+        return { kind: 'plant', entityId, data: flash ? { flash: { ...flash } } : {} }
     }
 
-    restore(snapshot: PlantViewSnapshot): void | Promise<void> {
-        this.context.stage?.flashes.restore(snapshot.entityId, snapshot.flash)
+    restore(snapshot: LevelEntitySnapshot): void | Promise<void> {
+        const data = viewSaveData(snapshot, [], ['flash'])
+        this.context.stage?.flashes.restore(snapshot.entityId, parseSavedFlash(data.flash, 'plant flash'))
     }
 
     destroy(): void {}
@@ -351,6 +350,7 @@ export class PlantView implements EntityView<PlantSnapshot> {
 
     /** Plant::DoSpecial: the explosion of the plant's presentation, where it went off, with its sounds. The plant is gone by then. */
     static readonly exploded: StageEvent = (stage, event) => {
+        stage.shake(3, -4, 'explosion')
         const presentation = typeof event.data.typeId === 'string' ? stage.content.presentation.plants[event.data.typeId] : undefined
         SoundSystem.playSounds(presentation?.explosionSounds)
         const { x, y, row } = event.data, explosion = presentation?.explosion
@@ -373,9 +373,10 @@ export class PlantView implements EntityView<PlantSnapshot> {
 
     /**
      * Plant::UpdateBowling: a rolling nut hits a zombie. Zombie::TakeShieldDamage rings a screen door; UpdateBowling a
-     * helm without a shield. The board shakes with it (LevelView).
+     * helm without a shield. The board shakes with it.
      */
     static readonly bowled: StageEvent = (stage, event) => {
+        stage.shake(1, -2, 'heavy')
         void SoundSystem.playFoley(SoundEffect.BowlingImpact, -3)
         const zombie = stage.content.presentation.zombies[String(event.data.typeId)]
         if (event.data.shield) SoundSystem.playSounds(zombie?.shield?.bowlingImpactSounds)

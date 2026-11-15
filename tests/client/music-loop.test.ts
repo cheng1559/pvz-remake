@@ -16,8 +16,8 @@ test('native music never ends by itself and jumps to its loop point, even when a
     const modules: Record<string, unknown> = {
         cc: { sys: { isNative: true } },
         '@/client/content/ModResources': { modResources: {
-            asset: async (id: string, _type: unknown, _animation: unknown, category?: string) =>
-                category === 'music' ? (id === 'pvz:choose_seeds' ? { json: tune } : undefined) : { nativeUrl: `${id}.mp3` },
+            json: async (kind: string, id: string) => kind === 'music' && id === 'pvz:choose_seeds' ? tune : undefined,
+            audio: async (id: string) => ({ nativeUrl: `${id}.mp3` }),
         } },
         '@/client/sound/SoundSystem': { SoundSystem: { getMusicVolume: () => 1, onMusicVolumeChange: () => () => {} } },
         '@/shared/content/music': musicContent,
@@ -55,8 +55,8 @@ test('night burst switches on the next order, crossfades the melody, and restore
     const modules: Record<string, unknown> = {
         cc: { sys: { isNative: true } },
         '@/client/content/ModResources': { modResources: {
-            asset: async (id: string, _type: unknown, _animation: unknown, category?: string) =>
-                category === 'music' ? (id === 'pvz:night_moongrains' ? { json: tune } : undefined) : { nativeUrl: `${id}.mp3` },
+            json: async (kind: string, id: string) => kind === 'music' && id === 'pvz:night_moongrains' ? tune : undefined,
+            audio: async (id: string) => ({ nativeUrl: `${id}.mp3` }),
         } },
         '@/client/sound/SoundSystem': { SoundSystem: { getMusicVolume: () => 1, onMusicVolumeChange: () => () => {} } },
         '@/shared/content/music': musicContent,

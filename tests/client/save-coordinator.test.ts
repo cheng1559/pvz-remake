@@ -137,7 +137,7 @@ test('a planted Sunflower survives the complete 1-2 save and restore pipeline', 
     assert.ok(plant)
     const presentation = levelPresentation(game.render())
     presentation.entities.push({
-        kind: 'plant', entityId: plant.entityId, flash: { tick: 0, ticks: 25 },
+        kind: 'plant', entityId: plant.entityId, data: { flash: { tick: 0, ticks: 25 } },
     })
     const saved = createGameSave({
         profileId: 1, mode: 'adventure', levelId: options.levelId, createdAt: 100, updatedAt: 200,
@@ -232,6 +232,6 @@ test('a debug coin falls to the ground and its animation passes the pause-save f
     const coin = game.render().items.find(item => item.typeId === 'pvz:coin_silver')!
     assert.equal(coin.landed, true, 'COIN_MOTION_COIN pulls the coin back down')
     const presentation = levelPresentation(game.render())
-    presentation.entities.push({ kind: 'item', entityId: coin.entityId, animation: reanim('pvz:coin_silver') })
+    presentation.entities.push({ kind: 'item', entityId: coin.entityId, data: { animation: reanim('pvz:coin_silver') } })
     assert.doesNotThrow(() => game.snapshotPresentation(presentation))
 })

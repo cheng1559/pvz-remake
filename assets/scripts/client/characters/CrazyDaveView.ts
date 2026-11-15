@@ -1,7 +1,7 @@
+import { prepareReanims } from '@/client/reanim/ReanimAssets'
+import { modResources } from '@/client/content/ModResources'
 import { Color, Node } from 'cc'
-import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
-import { SpriteRepository, type ClientContentLoader } from '@/client/content/ClientContentLoader'
-import type { ContentRegistry } from '@/client/content/ContentRegistry'
+import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
@@ -26,17 +26,14 @@ export class CrazyDaveView {
     private voicePending = false
     private voiceSequence = 0
 
-    static async create(parent: Node, content: {
-        registry: ContentRegistry, loader: ClientContentLoader, presentation: Pick<PresentationDefinitions, 'dave'>,
-    }, ui: UI, options: {
+    static async create(parent: Node, content: { presentation: Pick<PresentationDefinitions, 'dave'> }, ui: UI, options: {
         position?: { x: number, y: number }, bubble?: Partial<PresentationDefinitions['dave']['bubble']>, clickToContinue?: boolean,
     } = {}): Promise<CrazyDaveView> {
         const root = uiNode({ name: 'CrazyDave', parent, position: options.position, anchor: { x: 0, y: 1 }, active: false }).node
         root.once(Node.EventType.NODE_DESTROYED, () => SoundSystem.stopExclusive('crazyDave'))
         const config = { ...content.presentation.dave, bubble: { ...content.presentation.dave.bubble, ...options.bubble } }
         const layout = config.bubble
-        const sprites = new SpriteRepository(content.registry, content.loader)
-        const bubble = ui.image(root, await sprites.load(layout.sprite), layout).node
+        const bubble = ui.image(root, await modResources.sprite(layout.sprite), layout).node
         const label = ui.label(bubble, { text: '', font: 'profile', width: layout.textWidth, x: layout.textX, y: layout.textY, align: 'center', color: Color.BLACK })
         const hint = options.clickToContinue === false ? undefined : ui.label(bubble, {
             text: ui.text('CLICK_TO_CONTINUE'), font: 'packetCost', x: layout.continueX, y: layout.continueY,
@@ -44,14 +41,14 @@ export class CrazyDaveView {
         }).node
         bubble.active = false
         // Every clip is in memory from here on: the body changes between them at once.
-        await new ReanimRepository(content.registry, content.loader).prepare(Object.values(config.clips))
+        await prepareReanims(Object.values(config.clips))
         const body = uiNode({ name: 'Body', parent: root }).node.addComponent(ReanimPlayer)
         const blink = uiNode({ name: 'blink', parent: root, active: false }).node.addComponent(ReanimPlayer)
         const hand = uiNode({ name: 'HandItem', parent: root, position: config.hand }).node.addComponent(ReanimPlayer)
-        await hand.load(config.hand.reanim, content.registry, content.loader)
+        await hand.load(config.hand.reanim)
         hand.node.setScale(config.hand.scale, config.hand.scale, 1)
-        body.change(config.clips.idle_handing, content.registry)
-        blink.change(config.clips.blink, content.registry)
+        body.change(config.clips.idle_handing)
+        blink.change(config.clips.blink)
         // Parenting the entire item applies hand motion to its offset and scale as well as its tracks: it keeps the
         // place it has in the hand here, and waits on Dave himself while no clip holds it out.
         hand.node.setParent(body.getTrackNode(config.hand.track)!, true)
@@ -59,13 +56,13 @@ export class CrazyDaveView {
         body.enabled = blink.enabled = hand.enabled = false
         hand.node.active = false
         hand.play({ loop: true })
-        const mouths = await Promise.all(Object.entries(config.mouths).map(async ([token, id]) => [token, await sprites.load(id)] as const))
+        const mouths = await Promise.all(Object.entries(config.mouths).map(async ([token, id]) => [token, await modResources.sprite(id)] as const))
         root.active = false
-        return new CrazyDaveView(root, bubble, label, content.registry, body, blink, hand, new Map(mouths), config, hint)
+        return new CrazyDaveView(root, bubble, label, body, blink, hand, new Map(mouths), config, hint)
     }
 
     private constructor(readonly node: Node, private bubble: Node, private label: UILabel,
-        private registry: ContentRegistry, private body: ReanimPlayer, private blink: ReanimPlayer, private hand: ReanimPlayer,
+        private body: ReanimPlayer, private blink: ReanimPlayer, private hand: ReanimPlayer,
         private mouths: Map<string, import('cc').SpriteFrame>, private config: PresentationDefinitions['dave'], private hint?: Node) {
         this.blinkSeconds = config.blinkSeconds[0]
     }
@@ -152,7 +149,7 @@ export class CrazyDaveView {
         const { body, blink } = this, parts = this.config.parts
         // The hand item leaves the hand's track first: a clip without that track takes the track's node away.
         this.hand.node.setParent(this.node)
-        body.change(this.config.clips[name], this.registry,
+        body.change(this.config.clips[name],
             !this.started || name === 'enter' ? 0 : name === 'leave' || name.startsWith('idle') ? this.config.idleBlend : this.config.talkBlend)
         this.started = true
         body.setTrackSpriteOverride(parts.mouth, null)

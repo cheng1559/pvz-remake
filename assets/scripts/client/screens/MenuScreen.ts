@@ -1,5 +1,5 @@
 import { modResources } from '@/client/content/ModResources'
-import { _decorator, BlockInputEvents, Color, Component, director, Director, Node, Sprite, SpriteFrame, sys } from 'cc'
+import { _decorator, BlockInputEvents, Color, Component, director, Director, Node, Sprite, sys } from 'cc'
 import { DEBUG } from 'cc/env'
 import { preloadAssets } from '@/client/content/PreloadAssets'
 import { waitForPreloadFrame } from '@/client/content/preloadTasks'
@@ -98,14 +98,75 @@ export class MenuScreen extends Component {
         return this.createPage(id)
     }
 
+    /** A page's animations and controls over its backgrounds: its screen, or its buttons. True for an award on paper (a note). */
+    private async buildPage(id: MenuPageId, page: (typeof MENU_PAGES)[MenuPageId], root: Node, ui: UI): Promise<boolean> {
+        const animations = ui.assets.presentation.screens?.[`pvz:${id}`]
+        if (animations?.length) await showScreenAnimations(root, animations)
+        const controls = uiNode({
+            name: 'Controls', parent: root, position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 },
+        }).node
+        if (page.heading && id !== 'award') {
+            const { key, font, y, color } = page.heading
+            ui.label(controls, {
+                text: ui.text(key), font, x: 400, y, color: new Color(...color),
+                baseline: true, align: 'center',
+            })
+        }
+        const navigateButton = (target: MenuAction, options: UIButtonOptions) => ui.button(controls, {
+            ...options, onClick: () => this.onNavigate(target),
+        })
+        const navigate = (action: MenuAction) => { void this.onNavigate(action) }
+        switch (id) {
+            case 'minigames': case 'puzzle': case 'survival':
+                await showChallengeScreen(controls, ui, id, () => navigate('main'))
+                return false
+            case 'achievements':
+                await controls.addComponent(AchievementScreen).initialize(ui, () => navigate('main'))
+                return false
+            case 'help':
+                navigateButton('main', { skin: 'seed', text: ui.text('MAIN_MENU_BUTTON'), x: 324, y: 520, rightClickTriggers: false })
+                return false
+            case 'almanac': case 'plants': case 'zombies':
+                if (this.almanacPreset) this.almanacSelection = this.almanacPreset
+                else if (!this.page || !['almanac', 'plants', 'zombies'].includes(this.page.id)) this.almanacSelection = { plant: 0, zombie: 0 }
+                this.almanacPreset = null
+                await showAlmanacScreen(controls, ui, id, navigate, this.almanacSelection)
+                return false
+            case 'store': {
+                // Opened from a garden, or over the level (SeedChooserScreen's Store), it goes back to the game.
+                const backToGame = !this.page || ['garden', 'mushroom', 'aquarium', 'tree'].includes(this.page.id)
+                await controls.addComponent(StoreScreen).initialize(ui, navigate, ui.text(backToGame ? 'STORE_BACK_TO_GAME' : 'STORE_MAIN_MENU_BUTTON'))
+                return false
+            }
+            case 'award': {
+                const award = await showAwardScreen(controls, ui)
+                const paper = award.kind === 'note'
+                navigateButton(award.opens?.page ?? 'nextLevel', {
+                    skin: 'seed', text: ui.text(award.opens?.buttonKey ?? 'NEXT_LEVEL_BUTTON'), x: 324, y: paper ? 520 : 500,
+                    rightClickTriggers: false,
+                })
+                // Keeps its margin from the UI area's right edge, like Ultimate's top-right menu button.
+                if (award.showMainMenu) ui.button(uiAreaEdge(controls, 'right'), {
+                    skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON'), x: 677, y: 16,
+                    rightClickTriggers: false, onClick: () => this.onNavigate('main'),
+                })
+                // AwardScreen shows the new achievements first; Continue brings the award and its buttons back.
+                if (award.achievements.length) {
+                    controls.active = false
+                    await AwardAchievements.create(root, ui, award.achievements, () => { controls.active = true })
+                }
+                return paper
+            }
+            default:
+                if (!await showMenuPageControls(controls, ui, id, navigate)) throw new Error(`Menu page has no screen: ${id}`)
+                return false
+        }
+    }
+
     private async createPage(id: MenuPageId, prewarm = false): Promise<PreparedMenuPage> {
         let paperAward = false
         const page = MENU_PAGES[id]
-        const [ui, frames] = await Promise.all([UI.load(), Promise.all(page.backgrounds.map(async background => {
-            const frame = await modResources.asset(background.image, SpriteFrame)
-            if (!frame) throw new Error(`Missing menu background: ${background.image}`)
-            return frame
-        }))])
+        const [ui, frames] = await Promise.all([UI.load(), Promise.all(page.backgrounds.map(background => modResources.sprite(background.image)))])
         if (!this.node?.isValid) throw new Error('Menu was destroyed while loading')
         const root = uiNode({
             name: id, parent: this.node, viewport: true, active: false, graphics: true,
@@ -134,76 +195,9 @@ export class MenuScreen extends Component {
                 sprite: { frame, sizeMode: Sprite.SizeMode.CUSTOM, trim: false },
             })
         })
-        const animations = ui.assets.presentation.screens?.[`pvz:${id}`]
-        if (animations?.length) {
-            try { await showScreenAnimations(root.node, animations) }
-            catch (error) { root.node.destroy(); throw error }
-        }
-        const controls = uiNode({
-            name: 'Controls', parent: root.node, position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 },
-        }).node
-        if (page.heading && id !== 'award') {
-            const { key, font, y, color } = page.heading
-            ui.label(controls, {
-                text: ui.text(key), font, x: 400, y, color: new Color(...color),
-                baseline: true, align: 'center',
-            })
-        }
-        const navigateButton = (target: MenuAction, options: UIButtonOptions) => ui.button(controls, {
-            ...options, onClick: () => this.onNavigate(target),
-        })
-        if (id === 'minigames' || id === 'puzzle' || id === 'survival') {
-            try {
-                await showChallengeScreen(controls, ui, id, () => { void this.onNavigate('main') })
-            } catch (error) {
-                root.node.destroy()
-                throw error
-            }
-        } else if (id === 'achievements') {
-            try {
-                await controls.addComponent(AchievementScreen).initialize(ui, () => { void this.onNavigate('main') })
-            } catch (error) { root.node.destroy(); throw error }
-        } else if (id === 'help') {
-            navigateButton('main', { skin: 'seed', text: ui.text('MAIN_MENU_BUTTON'), x: 324, y: 520, rightClickTriggers: false })
-        } else if (id === 'almanac' || id === 'plants' || id === 'zombies') {
-            try {
-                if (this.almanacPreset) this.almanacSelection = this.almanacPreset
-                else if (!this.page || !['almanac', 'plants', 'zombies'].includes(this.page.id)) this.almanacSelection = { plant: 0, zombie: 0 }
-                this.almanacPreset = null
-                await showAlmanacScreen(controls, ui, id, action => { void this.onNavigate(action) }, this.almanacSelection)
-            } catch (error) { root.node.destroy(); throw error }
-        } else if (id === 'store') {
-            try {
-                // Opened from a garden, or over the level (SeedChooserScreen's Store), it goes back to the game.
-                const backToGame = !this.page || ['garden', 'mushroom', 'aquarium', 'tree'].includes(this.page.id)
-                await controls.addComponent(StoreScreen).initialize(ui, action => { void this.onNavigate(action) }, ui.text(backToGame ? 'STORE_BACK_TO_GAME' : 'STORE_MAIN_MENU_BUTTON'))
-            } catch (error) { root.node.destroy(); throw error }
-        } else if (id === 'award') {
-            try {
-                const award = await showAwardScreen(controls, ui)
-                paperAward = award.kind === 'note'
-                navigateButton(award.opens?.page ?? 'nextLevel', {
-                    skin: 'seed', text: ui.text(award.opens?.buttonKey ?? 'NEXT_LEVEL_BUTTON'), x: 324, y: paperAward ? 520 : 500,
-                    rightClickTriggers: false,
-                })
-                // Keeps its margin from the UI area's right edge, like Ultimate's top-right menu button.
-                if (award.showMainMenu) ui.button(uiAreaEdge(controls, 'right'), {
-                    skin: 'seedSmall', text: ui.text('AWARD_MAIN_MENU_BUTTON'), x: 677, y: 16,
-                    rightClickTriggers: false, onClick: () => this.onNavigate('main'),
-                })
-                // AwardScreen shows the new achievements first; Continue brings the award and its buttons back.
-                if (award.achievements.length) {
-                    controls.active = false
-                    await AwardAchievements.create(root.node, ui, award.achievements, () => { controls.active = true })
-                }
-            } catch (error) { root.node.destroy(); throw error }
-        } else if (!await showMenuPageControls(controls, ui, id, action => { void this.onNavigate(action) }).catch(error => {
-            root.node.destroy()
-            throw error
-        })) {
-            root.node.destroy()
-            throw new Error(`Menu page has no screen: ${id}`)
-        }
+        // A page that fails to build goes, whatever part of it failed.
+        try { paperAward = await this.buildPage(id, page, root.node, ui) }
+        catch (error) { root.node.destroy(); throw error }
         if (id === 'help' || id === 'award') PageFade.create(root.node, id === 'help' || paperAward ? Color.BLACK : Color.WHITE)
         return {
             id, root: root.node, retainPrevious: page.retainPrevious,

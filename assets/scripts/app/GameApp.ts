@@ -1,4 +1,5 @@
-import { _decorator, Component, director, Director, EventKeyboard, type EventTouch, game, Game, input, Input, KeyCode, Mask, Node, screen, sys } from 'cc'
+import { waitForPreloadFrame } from '@/client/content/preloadTasks'
+import { _decorator, Component, EventKeyboard, type EventTouch, game, Game, input, Input, KeyCode, Mask, Node, screen, sys } from 'cc'
 import { DEBUG, PREVIEW } from 'cc/env'
 import { uiNode } from '@/client/view/uiNode'
 import { initializeViewport, resetViewport } from '@/client/view/ClientViewport'
@@ -482,7 +483,7 @@ export class GameApp extends Component {
             })
             progress.onConfirm = progress.onCancel = () => {}
             // Paint the dialog before ZIP validation occupies the main thread.
-            await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
+            await waitForPreloadFrame()
             for (const file of files) {
                 if (!this.node?.isValid) break
                 try {

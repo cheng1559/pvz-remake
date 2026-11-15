@@ -1,12 +1,13 @@
-import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { ZombiePreview } from '@/client/hud/ZombiePreview'
-import { Color, Graphics, isValid, Node, Vec3 } from 'cc'
+import { LevelPlantingPreview } from './LevelPlantingPreview'
+import { LevelCoinBank } from './LevelCoinBank'
+import { LevelProgressMeter } from './LevelProgressMeter'
+import { isAdviceStyle } from '@/client/hud/advice/AdviceWidgetSnapshot'
+import { syncTutorialArrow } from './tutorialArrow'
+import { Color, Node, Vec3 } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
-import { FontRepository } from '@/client/content/ClientContentLoader'
+import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { uiNode } from '@/client/view/uiNode'
-import { formatMoney } from '@/client/ui/formatMoney'
 import { PlantPreview } from '@/client/hud/PlantPreview'
-import { SeedPacketRenderer, type SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
@@ -15,28 +16,15 @@ import { AdviceWidget } from '@/client/hud/advice/AdviceWidget'
 import { UIHoverManager, type UIHoverPointer } from '@/client/input/UIHoverManager'
 import { UIButton } from '@/client/ui/UIButton'
 import { levelStandsStill, type ServerEvent, type WorldSnapshot } from '@/shared/protocol/index'
-import { graveAt } from '@/shared/content/graves'
-import { graveAllowsPlanting } from '@/shared/content/teams'
 import { LevelSeedBank } from './LevelSeedBank'
-import { adventureStage, boardCell, levelAwardSize } from './LevelGeometry'
+import { itemAt } from './LevelGeometry'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { LevelPresentation } from './LevelPresentation'
 import type { LevelAdviceSnapshot, LevelHudSnapshot } from './LevelPresentationSnapshot'
-import { plantDefinition } from '@/client/plants/definitions'
-
-/** The pointer's place in the held preview, which sits this far left of and above it. */
-const CURSOR_PREVIEW_POINTER_X = 35
-const CURSOR_PREVIEW_POINTER_Y = 60
-/** The zombie in hand and over its cell (see zombiePreview). */
-const CURSOR_ZOMBIE = { x: CURSOR_PREVIEW_POINTER_X - 50, y: -(CURSOR_PREVIEW_POINTER_Y - 90), scale: 1, from: 'reanim' as const }
-const GRID_ZOMBIE = { x: -30, y: 30, scale: 1, from: 'zombie' as const }
 
 const TUTORIAL_FLASH_TICKS = 75
-const PROGRESS_METER_WIDTH = 158
-const PROGRESS_METER_HEIGHT = 27
-const PROGRESS_FILL_WIDTH = 143
 type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
-type FontAsset = Awaited<ReturnType<FontRepository['load']>>
+type FontAsset = BitmapFontAssets
 
 export interface LevelHudOptions {
     ui: UI
@@ -53,7 +41,6 @@ export interface LevelHudOptions {
     presentation: LevelPresentation
     seedPacketSlot: Node
     rootLayer: number
-    loadPacketSprite: SeedPacketRenderArgs['loadSprite']
     packetCostFont: FontAsset
     adviceNode: Node
     adviceParent: Node
@@ -77,31 +64,18 @@ export interface LevelHudOptions {
     coinBank: { node: Node, text: UILabel }
 }
 
-/** Board::ShowCoinBank's default duration; the bank fades out over its last 15 ticks. */
-const COIN_BANK_TICKS = 1000
-
 export class LevelHudPresenter {
     private adviceMessage = ''
     private adviceTick = 0
     private sunFlashTicks = 0
-    private coinBankTicks = 0
-    private coinBankTick = 0
-    /** LawnApp::mCrazyDaveState is not CRAZY_DAVE_OFF. */
-    private daveOut = false
-    private coinBank!: LevelHudOptions['coinBank']
-    private ui!: UI
     private pointer?: { x: number, y: number }
-    private progressWave = 0
-    private progressCountdownStart = 0
-    private progressMeterWidth = 0
-    private progressTick = 0
     private lastSnapshot?: WorldSnapshot
     private lastIntroComplete = false
     private lastMenuVisible = false
     private menuButton!: UIButton
-    private mobileGridGuide!: Node
-    private mobileGuideCell = -1
-    private canPlantAt?: LevelHudOptions['canPlantAt']
+    private readonly progress: LevelProgressMeter
+    private readonly coinBank: LevelCoinBank
+    private readonly preview: LevelPlantingPreview
     private readonly hoverClient = {
         clearHover: () => {},
         refreshHover: (pointer: UIHoverPointer, modalRoot: Node | null) => pointer.canHover && !modalRoot &&
@@ -110,47 +84,41 @@ export class LevelHudPresenter {
     }
 
     static create(options: LevelHudOptions): LevelHudPresenter {
-        const seedBank = new LevelSeedBank(options)
-        const advice = new AdviceWidget({ ui: options.ui, node: options.adviceNode, parent: options.adviceParent, font: options.adviceFont })
-        const presenter = new LevelHudPresenter(
-            options.content, options.tutorialArrowLayer, options.tutorialLawnFlash,
-            options.cursorPreview, options.gridPreview, options.cursorPlant, options.gridPlant,
-            seedBank, options.sunText,
-            options.progressMeter, options.progressFillClip, options.progressFill, options.progressHead,
-            options.levelText, advice, options.level, options.presentation,
-        )
+        const presenter = new LevelHudPresenter(options)
         presenter.menuButton = options.ui.button(options.controlsParent, {
             text: options.ui.text('MENU_BUTTON'), x: 681, y: -10, width: 117, height: 46,
             rightClickTriggers: false, enabled: false, clickSound: null,
         })
         presenter.menuButton.node.name = 'MenuButton'
-        presenter.mobileGridGuide = options.mobileGridGuide
-        presenter.coinBank = options.coinBank
-        presenter.ui = options.ui
-        presenter.canPlantAt = options.canPlantAt
         presenter.menuButton.node.active = false
         return presenter
     }
 
-    private constructor(
-        private readonly content: LoadedContent,
-        private readonly tutorialArrowLayer: Node,
-        private readonly tutorialLawnFlash: Node,
-        private readonly cursorPreview: Node,
-        private readonly gridPreview: Node,
-        private readonly cursorPlant: PlantPreview,
-        private readonly gridPlant: PlantPreview,
-        readonly seedBank: LevelSeedBank,
-        private readonly sunText: UILabel,
-        private readonly progressMeter: Node,
-        private readonly progressFillClip: Node,
-        private readonly progressFill: Node,
-        private readonly progressHead: Node,
-        private readonly levelText: UILabel,
-        private readonly advice: AdviceWidget,
-        private readonly level: LevelDefinition,
-        private readonly presentation: LevelPresentation,
-    ) {
+    private readonly content: LoadedContent
+    private readonly ui: UI
+    private readonly level: LevelDefinition
+    private readonly presentation: LevelPresentation
+    readonly seedBank: LevelSeedBank
+    private readonly advice: AdviceWidget
+    private readonly sunText: UILabel
+    private readonly tutorialArrowLayer: Node
+    private readonly tutorialLawnFlash: Node
+
+    private constructor(options: LevelHudOptions) {
+        this.content = options.content
+        this.ui = options.ui
+        this.level = options.level
+        this.presentation = options.presentation
+        this.seedBank = new LevelSeedBank(options)
+        this.advice = new AdviceWidget({ ui: options.ui, node: options.adviceNode, parent: options.adviceParent, font: options.adviceFont })
+        this.sunText = options.sunText
+        this.tutorialArrowLayer = options.tutorialArrowLayer
+        this.tutorialLawnFlash = options.tutorialLawnFlash
+        this.progress = new LevelProgressMeter(options.ui, options.level, {
+            meter: options.progressMeter, fillClip: options.progressFillClip, fill: options.progressFill, head: options.progressHead, levelText: options.levelText,
+        })
+        this.coinBank = new LevelCoinBank(options.content.definitions.items, options.coinBank)
+        this.preview = new LevelPlantingPreview(options.content, options.level, options, options.canPlantAt)
         UIHoverManager.registerClient(this.hoverClient)
         this.tutorialArrowLayer.once(Node.EventType.NODE_DESTROYED, () => {
             UIHoverManager.unregisterClient(this.hoverClient)
@@ -160,14 +128,7 @@ export class LevelHudPresenter {
 
     snapshot(): { hud: LevelHudSnapshot, advice: LevelAdviceSnapshot } {
         return {
-            hud: {
-                sunFlashTicks: this.sunFlashTicks,
-                coinBankTicks: this.coinBankTicks,
-                progressWave: this.progressWave,
-                progressCountdownStart: this.progressCountdownStart,
-                progressMeterWidth: this.progressMeterWidth,
-                progressTick: this.progressTick,
-            },
+            hud: { sunFlashTicks: this.sunFlashTicks, coinBankTicks: this.coinBank.remainingTicks, ...this.progress.snapshot() },
             advice: {
                 lastStatusMessage: this.adviceMessage,
                 lastSyncedTick: this.adviceTick,
@@ -180,14 +141,10 @@ export class LevelHudPresenter {
         this.lastIntroComplete = introComplete
         this.lastMenuVisible = menuVisible
         this.sunFlashTicks = snapshot.sunFlashTicks
-        this.coinBankTicks = snapshot.coinBankTicks
-        this.progressWave = snapshot.progressWave
-        this.progressCountdownStart = snapshot.progressCountdownStart
-        this.progressMeterWidth = snapshot.progressMeterWidth
-        this.progressTick = snapshot.progressTick
+        this.coinBank.restore(snapshot.coinBankTicks)
+        this.progress.restore(snapshot)
         this.pointer = undefined
-        this.cursorPreview.active = false
-        this.gridPreview.active = false
+        this.preview.hide()
         this.adviceMessage = advice.lastStatusMessage
         this.adviceTick = advice.lastSyncedTick
         this.advice.restore(advice.widget)
@@ -196,60 +153,19 @@ export class LevelHudPresenter {
         if (!world) return
         this.syncMenu(world, this.lastMenuVisible)
         this.syncSun(world.sun)
-        this.coinBankTick = world.gameplayTick
-        this.syncCoinBank(world, [])
-        this.syncProgress(world, this.lastIntroComplete)
-        this.syncPreviews(world)
+        this.coinBank.sync(world, [])
+        this.progress.sync(world, this.lastIntroComplete)
+        this.preview.sync(world, this.pointer)
         UIHoverManager.refreshHoverStates()
         this.syncSeedPacket(world, [], this.lastIntroComplete, false)
     }
 
-    /** Board::ShowCoinBank: shows the purse for a while (Crazy Dave's seed-slot offer uses 100 ticks). */
-    showCoinBank(ticks = COIN_BANK_TICKS): void {
-        this.coinBankTicks = ticks
-        if (this.lastSnapshot) this.syncCoinBank(this.lastSnapshot, [])
-    }
-
+    /** Board::ShowCoinBank (LevelCoinBank). */
+    showCoinBank(ticks?: number): void { this.coinBank.show(ticks) }
     /** Board::Pause: a paused game with coins shows the coin bank. */
-    showPauseCoinBank(): void {
-        if (this.lastSnapshot && this.lastSnapshot.money > 0) this.showCoinBank()
-    }
-
-    /**
-     * Board::Update counts the coin bank down in the intro too, except while the seed-slot purchase dialog is open;
-     * the gameplay tick only counts it during play.
-     */
-    advanceCoinBank(ticks: number): void {
-        if (this.coinBankTicks <= 0) return
-        this.coinBankTicks = Math.max(0, this.coinBankTicks - ticks)
-        if (this.lastSnapshot) this.syncCoinBank(this.lastSnapshot, [])
-    }
-
-    /** Board::DrawUICoinBank draws the bank at x = 450 on screen while Crazy Dave is out, and at 57 otherwise. */
-    setCoinBankBesideDave(beside: boolean): void {
-        if (this.daveOut === beside) return
-        this.daveOut = beside
-        const x = beside ? 450 - 57 : 0
-        if (this.coinBank.node.position.x !== x) this.coinBank.node.setPosition(x, this.coinBank.node.position.y)
-        if (this.lastSnapshot) this.syncCoinBank(this.lastSnapshot, [])
-    }
-
-    /** Board::DrawUICoinBank: shown while collecting money, and when a game with coins is paused (Board::Pause). */
-    private syncCoinBank(snapshot: WorldSnapshot, events: ServerEvent[]): void {
-        // The count only runs with the game, so a pause holds the bank on screen.
-        this.coinBankTicks = Math.max(0, this.coinBankTicks - Math.max(0, snapshot.gameplayTick - this.coinBankTick))
-        this.coinBankTick = snapshot.gameplayTick
-        // `moneyChanged`: the server changed the money other than by a pickup (/money, or a Mod), shown like one.
-        if (events.some(event => event.type === 'itemCollected' && this.content.definitions.items[String(event.data.typeId)]?.kind === 'money'
-            || event.type === 'moneyChanged')) this.coinBankTicks = COIN_BANK_TICKS
-        // DrawUICoinBank draws only in SCENE_PLAYING (not the intro, nor once the zombies got in), unless Crazy Dave is out.
-        const playing = snapshot.phase === 'gameplay' && snapshot.result !== 'lost'
-        this.coinBank.node.active = this.coinBankTicks > 0 && (playing || this.daveOut)
-        if (!this.coinBank.node.active) return
-        uiNode({ node: this.coinBank.node, opacity: Math.min(255, Math.round(255 * this.coinBankTicks / 15)) })
-        const text = formatMoney(snapshot.money)
-        if (this.coinBank.text.text !== text) this.coinBank.text.text = text
-    }
+    showPauseCoinBank(): void { this.coinBank.showWhilePaused() }
+    advanceCoinBank(ticks: number): void { this.coinBank.advance(ticks) }
+    setCoinBankBesideDave(beside: boolean): void { this.coinBank.setBesideDave(beside) }
 
     setPointer(pointer?: { x: number, y: number }): void {
         this.pointer = pointer
@@ -279,9 +195,9 @@ export class LevelHudPresenter {
         // Like too little sun, sun an enemy producer takes flashes the counter red, though without the buzzer.
         if (events.some(event => event.type === 'sunFlash' || event.type === 'sunDrained')) this.sunFlashTicks = 70
         this.syncSun(snapshot.sun)
-        this.syncCoinBank(snapshot, events)
-        this.syncProgress(snapshot, introComplete)
-        this.syncPreviews(snapshot)
+        this.coinBank.sync(snapshot, events)
+        this.progress.sync(snapshot, introComplete)
+        this.preview.sync(snapshot, this.pointer)
         this.syncSeedPacket(snapshot, events, introComplete)
         UIHoverManager.refreshHoverStates()
         this.syncAdvice(snapshot, events, elapsedTicks, introComplete)
@@ -333,8 +249,7 @@ export class LevelHudPresenter {
             if (event.type === 'advice') {
                 const key = event.data.key
                 const style = event.data.style
-                if (typeof key === 'string') this.advice.show(this.adviceText(key),
-                    style === 'hint' || style === 'tutorial-level2' || style === 'tutorial-later' || style === 'tutorial-later-stay' ? style : 'tutorial-level1')
+                if (typeof key === 'string') this.advice.show(this.adviceText(key), isAdviceStyle(style) ? style : 'tutorial-level1')
             } else if (event.type === 'achievementEarned' && event.data.announce === true && typeof event.data.titleKey === 'string') {
                 this.advice.show(this.ui.text('ACHIEVEMENT_ACHIEVED').replace('{ACHIEVEMENT}', this.ui.text(event.data.titleKey)), 'achievement')
             } else if (event.type === 'adviceCleared') {
@@ -345,204 +260,26 @@ export class LevelHudPresenter {
         this.advice.update(elapsedTicks, snapshot.gameplayTick)
     }
 
-    private syncProgress(snapshot: WorldSnapshot, introComplete: boolean): void {
-        if (snapshot.wave.index !== this.progressWave) {
-            this.progressWave = snapshot.wave.index
-            this.progressCountdownStart = snapshot.wave.countdown
-        } else this.progressCountdownStart = Math.max(this.progressCountdownStart, snapshot.wave.countdown)
-        const denominator = Math.max(1, snapshot.wave.total - 1)
-        const flagCount = snapshot.wave.flagWaves.length
-        const passedFlags = snapshot.wave.flagWaves.filter(index => index < snapshot.wave.index).length
-        const meterWidth = 150 - flagCount * 12
-        const waveStart = ((snapshot.wave.index - 1) * meterWidth / denominator + passedFlags * 12) / 150
-        const waveEnd = (snapshot.wave.index * meterWidth / denominator + passedFlags * 12) / 150
-        const waveProgress = this.progressCountdownStart > 0 ? 1 - snapshot.wave.countdown / this.progressCountdownStart : 0
-        const targetWidth = snapshot.wave.index > 0 ? Math.max(1 / 150, Math.min(1, waveStart + (waveEnd - waveStart) * waveProgress)) : 0
-        const targetMeterWidth = Math.round(150 * targetWidth)
-        const waveLength = meterWidth / denominator
-        for (let tick = this.progressTick + 1; tick <= snapshot.gameplayTick; tick++) {
-            const delta = targetMeterWidth - this.progressMeterWidth
-            if ((delta > waveLength && tick % 5 === 0) || (delta > 0 && tick % 20 === 0)) this.progressMeterWidth++
-        }
-        this.progressTick = snapshot.gameplayTick
-        const progress = this.progressMeterWidth / 150
-        const visible = introComplete && snapshot.result !== 'lost'
-        this.levelText.node.active = visible
-        this.progressMeter.active = visible && progress > 0
-        if (!visible) return
-        // Board::DrawLevel: [LEVEL] followed by the stage.
-        const level = `${this.ui.text('LEVEL')} ${adventureStage(this.level.adventureIndex)}`
-        if (this.levelText.text !== level) this.levelText.text = level
-        this.levelText.setPosition(progress > 0 ? 593 : 780, 595)
-        if (progress <= 0) return
-        for (const index of snapshot.wave.flagWaves) {
-            const flag = this.progressMeter.getChildByName(`ProgressFlag-${index}`)
-            const raised = snapshot.wave.index > index + 1 ? 1 : snapshot.wave.index === index + 1
-                ? Math.min(1, (this.progressCountdownStart - snapshot.wave.countdown) / 100) : 0
-            if (flag) flag.setPosition(flag.position.x, 3 + Math.round(14 * raised), 2)
-        }
-        const fillWidth = Math.max(1, Math.round(PROGRESS_FILL_WIDTH * progress))
-        const fillX = PROGRESS_METER_WIDTH - fillWidth - 7
-        uiNode({ node: this.progressFillClip }).transform.setContentSize(fillWidth, PROGRESS_METER_HEIGHT)
-        this.progressFillClip.setPosition(fillX, 0)
-        this.progressFill.setPosition(-fillX, 0)
-        this.progressHead.setPosition(138 - Math.round(135 * progress), 3, 3)
-        this.progressHead.setSiblingIndex(this.progressMeter.children.length - 1)
-    }
-
     private syncSun(value: number): void {
         const text = String(value)
         if (this.sunText.text !== text) this.sunText.text = text
         this.sunText.color = this.sunFlashTicks > 0 && this.sunFlashTicks % 20 < 10 ? Color.RED : Color.BLACK
     }
 
-    private syncPreviews(snapshot: WorldSnapshot): void {
-        const pointer = this.pointer
-        const mobile = GameDebugSettings.isMobileMode()
-        this.mobileGridGuide.active = false
-        const seed = snapshot.result === 'playing' && snapshot.cursor.mode === 'seed' && pointer !== undefined
-        this.cursorPreview.active = seed
-        if (!pointer || snapshot.result !== 'playing' || (!seed && !(mobile && snapshot.cursor.mode === 'tool'))) {
-            this.gridPreview.active = false
-            return
-        }
-        const board = this.content.definitions.boards[this.level.board]
-        const seedDefinition = snapshot.cursor.mode === 'seed' ? this.content.definitions.seeds[snapshot.cursor.seedId] : undefined
-        const plantSeed = seedDefinition?.kind === 'plant' ? seedDefinition : undefined
-        const plantId = plantSeed?.id
-        // A held packet of the other side from its seed's own puts down what faces the other way.
-        const mirrored = snapshot.cursor.mode === 'seed' && snapshot.cursor.team !== undefined
-        const zombieId = seedDefinition?.kind === 'zombie' ? seedDefinition.id : undefined
-        const graveSeed = seedDefinition?.kind === 'grave'
-        this.cursorPlant.node.active = this.gridPlant.node.active = zombieId === undefined && !graveSeed
-        if (graveSeed || this.gravePreviews) {
-            const { cursor, grid } = this.gravePreview
-            cursor.active = grid.active = graveSeed
-            // A packet of the plants' side turns the grave round, as its packet does.
-            for (const node of [cursor, grid]) {
-                node.setScale(mirrored ? -1 : 1, 1, 1)
-                node.setPosition(mirrored ? 82 : -4, node.position.y)
-            }
-        }
-        if (zombieId !== undefined || this.zombiePreviews) {
-            // Put down facing right, the zombie stands its own `facingRightOffsetX` further (see ZombieDefinition).
-            const facingRightOffsetX = zombieId === undefined ? undefined : this.content.definitions.zombies[zombieId].facingRightOffsetX
-            const { cursor, grid } = this.zombiePreview
-            for (const [preview, placement] of [[cursor, CURSOR_ZOMBIE], [grid, GRID_ZOMBIE]] as const) {
-                preview.setZombie(zombieId)
-                preview.setMirrored(mirrored)
-                preview.setPlacement({ ...placement, facingRightOffsetX })
-            }
-        }
-        const presentation = plantId ? plantDefinition(this.content.presentation, plantId) : undefined
-        const { row, column, inBounds } = boardCell(board, pointer.x, pointer.y + (presentation?.pointerOffsetY ?? 0))
-        let valid = inBounds && this.level.activeRows.includes(row)
-        // Challenge::IZombieMouseDownWithZombie: a zombie takes any cell of an active row, whatever stands there.
-        if (plantId) {
-            for (const preview of [this.cursorPlant, this.gridPlant]) {
-                preview.setPlant(plantId)
-                preview.setMirrored(mirrored)
-            }
-            const occupant = snapshot.plants.find(plant => this.content.definitions.plants[plant.typeId].occupiesCell !== false && plant.row === row && plant.column === column)
-            // Graves block planting, except for a grave buster, which needs one of the other side.
-            const team = snapshot.cursor.mode === 'seed' && snapshot.cursor.team || 'plants'
-            valid = valid && !occupant && graveAllowsPlanting(plantSeed!.placement, team, graveAt(snapshot.gridItems, row, column))
-                && (this.canPlantAt?.(snapshot, row, column) ?? true)
-        }
-        // A grave seed takes any cell of an active row but one with a grave already.
-        if (graveSeed) valid = valid && !graveAt(snapshot.gridItems, row, column)
-        if (plantId || zombieId !== undefined || graveSeed) {
-            this.cursorPreview.setPosition(pointer.x - CURSOR_PREVIEW_POINTER_X, -pointer.y + CURSOR_PREVIEW_POINTER_Y)
-            this.gridPreview.active = valid && !mobile
-            if (valid && !mobile) this.gridPreview.setPosition(board.origin.x + column * board.cell.width,
-                -(board.origin.y + row * board.cell.height + (presentation?.drawHeightOffset ?? 0)))
-        } else this.gridPreview.active = false
-        if (valid && mobile) {
-            this.mobileGridGuide.active = true
-            const cell = row * board.columns + column
-            if (cell !== this.mobileGuideCell) {
-                this.mobileGuideCell = cell
-                const graphics = this.mobileGridGuide.getComponent(Graphics)!
-                graphics.clear()
-                graphics.fillColor = new Color(255, 255, 255, 72)
-                graphics.fillRect(board.origin.x, -(board.origin.y + (row + 1) * board.cell.height), board.columns * board.cell.width, board.cell.height)
-                graphics.fillRect(board.origin.x + column * board.cell.width, -(board.origin.y + board.rows * board.cell.height), board.cell.width, board.rows * board.cell.height)
-            }
-        }
-    }
-
     private isPointerOverItem(snapshot: WorldSnapshot): boolean {
         if (levelStandsStill(snapshot) || snapshot.result !== 'playing' || GameDebugSettings.isMobileMode() || !this.pointer || snapshot.cursor.mode !== 'none') return false
-        const { x, y } = this.pointer
-        // Coin::MouseHitTest: the level rule may widen every item, as LevelInputPresenter.collectAt does.
         const padding = levelRulePresentation(this.content.presentation, this.level)?.itemPadding
-        return snapshot.items.some(item => {
-            const definition = this.content.definitions.items[item.typeId]
-            const size = definition ?? levelAwardSize(this.level.award)
-            const extra = padding?.size ?? (definition ? 15 : 0)
-            const below = padding?.height ?? 0
-            return item.state !== 'collecting' && x >= item.x - extra && x < item.x + size.width + extra &&
-                y >= item.y - extra && y < item.y + size.height + extra + below
-        })
+        return itemAt(snapshot.items, this.content.definitions.items, this.level, padding, this.pointer.x, this.pointer.y) !== undefined
     }
 
     /** Board::OffsetYForPlanting for the seed being planted; a zombie seed's cell is the pointer's. */
-    pointerOffsetY(seedId: string): number {
-        const seed = this.content.definitions.seeds[seedId]
-        return seed.kind === 'plant' ? plantDefinition(this.content.presentation, seed.id).pointerOffsetY ?? 0 : 0
-    }
-
-    private gravePreviews?: { cursor: Node, grid: Node }
-    /**
-     * A grave seed's grave in hand and translucent over its cell, as it will stand once risen: its corner 4 left of and
-     * 9 above the cell (GridItem::DrawGraveStone), from the cell the pointer is over.
-     */
-    private get gravePreview(): { cursor: Node, grid: Node } {
-        if (!this.gravePreviews) {
-            const cursor = SeedPacketRenderer.drawGrave(this.cursorPreview, this.cursorPreview.layer, -4, -9, 1)
-            const grid = SeedPacketRenderer.drawGrave(this.gridPreview, this.gridPreview.layer, -4, -9, 1)
-            uiNode({ node: grid, opacity: 100 })
-            this.gravePreviews = { cursor, grid }
-        }
-        return this.gravePreviews
-    }
-
-    private zombiePreviews?: { cursor: ZombiePreview, grid: ZombiePreview }
-    /**
-     * A zombie seed's zombie in hand and translucent over its cell: Plant::DrawSeedType's cached zombie, whose Reanim
-     * origin sits at (40, 40) in the frame. On an I, Zombie level CursorObject::Draw puts the frame at (-90, -130) from
-     * the pointer (Update's -25 and -35, then -10 and -10 - 15, then -55 and -70), so the origin is (-50, -90) from it.
-     * Over the cell the zombie stands where it will be put down (Challenge::IZombiePlaceZombie: 30 left of and above the
-     * cell), drawn as the level draws it; CursorPreview::Draw's (-49, -78) is 6 off that, which is taken as a bug.
-     */
-    private get zombiePreview(): { cursor: ZombiePreview, grid: ZombiePreview } {
-        if (!this.zombiePreviews) {
-            const cursor = uiNode({ name: 'CursorZombie', parent: this.cursorPreview }).node.addComponent(ZombiePreview).initialize(CURSOR_ZOMBIE)
-            const grid = uiNode({ name: 'GridZombie', parent: this.gridPreview }).node.addComponent(ZombiePreview).initialize(GRID_ZOMBIE)
-            grid.setColor(new Color(255, 255, 255, 100))
-            this.zombiePreviews = { cursor, grid }
-        }
-        return this.zombiePreviews
-    }
+    pointerOffsetY(seedId: string): number { return this.preview.pointerOffsetY(seedId) }
 
     private syncSeedTutorialArrow(visible: boolean): void {
-        // Restore recreates particle nodes, so reuse the live arrow instead of caching its component.
-        const [arrow, ...duplicates] = this.tutorialArrowLayer.children.filter(node =>
-            node.getComponent(ParticlePlayer)?.id === 'pvz:seedpacketpick' && isValid(node, true),
-        )
-        for (const duplicate of duplicates) duplicate.destroy()
-        if (!visible) {
-            arrow?.destroy()
-            return
-        }
+        if (!visible) { syncTutorialArrow(this.tutorialArrowLayer); return }
         const packet = this.seedBank.packets.find(packet => packet.seedId === (this.presentation.guideSeed ?? this.seedBank.packets[0]?.seedId))!
         // The bank may sit in an edge container, so place the arrow by the packet's world position.
-        const { x, y } = this.tutorialArrowLayer.inverseTransformPoint(new Vec3(), packet.view.node.worldPosition)
-        if (arrow) {
-            arrow.setPosition(x, y, 20)
-            return
-        }
-        ParticlePlayer.spawn({ parent: this.tutorialArrowLayer, id: "pvz:seedpacketpick", x, y, z: 20 })
+        syncTutorialArrow(this.tutorialArrowLayer, this.tutorialArrowLayer.inverseTransformPoint(new Vec3(), packet.view.node.worldPosition))
     }
 
 }

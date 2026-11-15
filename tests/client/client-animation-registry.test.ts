@@ -44,7 +44,8 @@ test('plant and zombie presentations use registered animations, including shared
         if (definition.clips) assert.ok(animations.resolve(id))
     }
     for (const [id, definition] of Object.entries(presentationFixture.zombies)) {
-        assert.deepEqual(animations.resolve(id), definition.clips)
+        // The registry fills in what the data leaves out (rateScale 1).
+        assert.deepEqual(animations.resolve(id), Object.fromEntries(Object.entries(definition.clips).map(([slot, clip]) => [slot, { rateScale: 1, ...clip }])))
     }
     // `from`: the explode-o-nut draws the wall-nut's clips, and what a definition writes beside it adds to them.
     assert.deepEqual(animations.resolve('pvz:explodenut'), animations.resolve('pvz:wallnut'))

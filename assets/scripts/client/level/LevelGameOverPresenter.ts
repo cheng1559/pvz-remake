@@ -34,11 +34,7 @@ export class LevelGameOverPresenter {
 
     static async loadAssets(presentation: BoardPresentation['gameOver']): Promise<SpriteFrame[]> {
         const [frames] = await Promise.all([
-            Promise.all(presentation.images.map(async name => {
-                const frame = await modResources.asset(name, SpriteFrame)
-                if (!frame) throw new Error(`Missing game-over image: ${name}`)
-                return frame
-            })),
+            Promise.all(presentation.images.map(name => modResources.sprite(name))),
             Promise.all([SoundEffect.LoseMusic, SoundEffect.Chomp, SoundEffect.Chomp2, SoundEffect.Scream].map(effect => SoundSystem.load(effect))),
         ])
         return frames

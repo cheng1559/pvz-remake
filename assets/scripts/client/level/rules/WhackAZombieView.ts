@@ -2,7 +2,7 @@ import { Node } from 'cc'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { uiNode } from '@/client/view/uiNode'
-import { SoundSystem } from '@/client/sound/SoundSystem'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { LevelRulePresentation, PresentationSound } from '@/shared/content/presentation'
@@ -73,7 +73,7 @@ export class WhackAZombieView implements LevelRuleView {
         const node = uiNode({ name: 'Hammer', parent: context.cursorLayer, anchor: { x: 0, y: 1 }, active: false }).node
         node.once(Node.EventType.NODE_DESTROYED, () => UIHoverManager.setIdleCursor('default'))
         const hammer = node.addComponent(ReanimPlayer)
-        await hammer.load(config.hammer.reanimId, content.registry, content.loader)
+        await hammer.load(config.hammer.reanimId)
         // Challenge::StartLevel: held on its last frame until the first blow.
         hammer.play({ loop: false, rate: config.hammer.fps / CLIP_FPS, timeSeconds: hammer.durationSeconds, hideOnFinish: false })
         view.hammer = hammer
@@ -99,6 +99,14 @@ export class WhackAZombieView implements LevelRuleView {
 
     sync(snapshot: WorldSnapshot, events: readonly ServerEvent[], introComplete: boolean): void {
         for (const event of events) {
+            // Board::NextWaveComing here: the awooga before the first wave, the siren before the last.
+            if (event.type === 'nextWaveComing') {
+                if (event.data.first) void SoundSystem.play(SoundEffect.Awooga)
+                if (event.data.siren) void SoundSystem.play(SoundEffect.Siren)
+                continue
+            }
+            // Board::DropLootPiece: FOLEY_SPAWN_SUN for the three suns a whacked zombie can drop.
+            if (event.type === 'sunDropped') { void SoundSystem.playFoley(SoundEffect.Throw, 10); continue }
             // A blow on a plant (`plantWhacked`) lands as one on a bare zombie: its bonk, and the POW when it ends it.
             if (event.type !== 'zombieWhacked' && event.type !== 'plantWhacked') continue
             const helm = event.data.helm === undefined ? undefined : String(event.data.helm)

@@ -62,6 +62,7 @@ test('Mod dialog keeps new imports and updates in its draft until Apply, includi
         const exports = loadScript('assets/scripts/client/dialogs/PackageDialog.ts', (name: string) => modules[name] ?? {}, { setTimeout })
         await exports.showPackageDialog(makeNode(), ui, { import: async () => [imported],
             save: async () => { steps.push('save-game') }, restart: async () => { steps.push('restart'); restarts++ } })
+        assert.deepEqual(steps.splice(0), ['paint'], 'the dialog shows Loading before it reads the installed Mods')
         importButton.onClick()
         await setImmediate()
         assert.equal(saves.length, 0, 'Import must not write files or settings')

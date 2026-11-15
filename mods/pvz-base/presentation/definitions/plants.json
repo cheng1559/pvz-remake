@@ -4,10 +4,10 @@
     "visual": {"seedType": "wallnut", "preview": 3, "nameKey": "WALL_NUT"},
     "plantedSounds": [{"audio": "pvz:bowling", "foley": false}],
     "clips": {
-      "body": {"reanimId": "pvz:wallnut_roll", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "blinkTwitch": {"reanimId": "pvz:wallnut_blink_twitch", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
-      "blinkTwice": {"reanimId": "pvz:wallnut_blink_twice", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
-      "blinkThrice": {"reanimId": "pvz:wallnut_blink_thrice", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
+      "body": {"reanimId": "pvz:wallnut_roll", "x": 0, "y": 0},
+      "blinkTwitch": {"reanimId": "pvz:wallnut_blink_twitch", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
+      "blinkTwice": {"reanimId": "pvz:wallnut_blink_twice", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
+      "blinkThrice": {"reanimId": "pvz:wallnut_blink_thrice", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
     },
     "shadow": {"x": -3, "y": -51}, "scale": 1
   },
@@ -23,10 +23,10 @@
   "pvz:peashooter": {
     "visual": {"seedType": "peashooter", "preview": 0},
     "clips": {
-      "body": {"reanimId": "pvz:peashooter", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "idleHead": {"reanimId": "pvz:peashooter_head_idle", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
-      "shootHead": {"reanimId": "pvz:peashooter_shoot", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
-      "blink": {"reanimId": "pvz:peashooter_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
+      "body": {"reanimId": "pvz:peashooter", "x": 0, "y": 0},
+      "idleHead": {"reanimId": "pvz:peashooter_head_idle", "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+      "shootHead": {"reanimId": "pvz:peashooter_shoot", "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+      "blink": {"reanimId": "pvz:peashooter_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
     },
     "shadow": {"x": -3, "y": -51},
     "scale": 1
@@ -34,10 +34,10 @@
   "pvz:repeater": {
     "visual": {"seedType": "repeater", "preview": 7},
     "clips": {
-      "body": {"reanimId": "pvz:repeater", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "idleHead": {"reanimId": "pvz:repeater_head_idle", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
-      "shootHead": {"reanimId": "pvz:repeater_shoot", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
-      "blink": {"reanimId": "pvz:peashooter_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
+      "body": {"reanimId": "pvz:repeater", "x": 0, "y": 0},
+      "idleHead": {"reanimId": "pvz:repeater_head_idle", "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+      "shootHead": {"reanimId": "pvz:repeater_shoot", "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+      "blink": {"reanimId": "pvz:peashooter_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
     },
     "shadow": {"x": -3, "y": -51},
     "scale": 1
@@ -45,10 +45,10 @@
   "pvz:snowpea": {
     "visual": {"seedType": "snowpea", "preview": 5, "nameKey": "SNOW_PEA"},
     "clips": {
-      "body": {"reanimId": "pvz:snowpea", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "idleHead": {"reanimId": "pvz:snowpea_head_idle", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
-      "shootHead": {"reanimId": "pvz:snowpea_shoot", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
-      "blink": {"reanimId": "pvz:snowpea_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
+      "body": {"reanimId": "pvz:snowpea", "x": 0, "y": 0},
+      "idleHead": {"reanimId": "pvz:snowpea_head_idle", "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+      "shootHead": {"reanimId": "pvz:snowpea_shoot", "x": 0, "y": 0, "attachmentTrackId": "anim_stem"},
+      "blink": {"reanimId": "pvz:snowpea_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
     },
     "shadow": {"x": -3, "y": -51},
     "scale": 1
@@ -57,8 +57,8 @@
     "visual": {"seedType": "sunflower", "preview": 1},
     "packet": {"time": 0.15},
     "clips": {
-      "body": {"reanimId": "pvz:sunflower", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "blink": {"reanimId": "pvz:sunflower_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_idle", "fullLastFrame": true}
+      "body": {"reanimId": "pvz:sunflower", "x": 0, "y": 0},
+      "blink": {"reanimId": "pvz:sunflower_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_idle", "fullLastFrame": true}
     },
     "shadow": {"x": -3, "y": -51},
     "scale": 1
@@ -67,8 +67,8 @@
     "visual": {"seedType": "cherrybomb", "preview": 2, "nameKey": "CHERRY_BOMB"},
     "view": "cherrybomb",
     "clips": {
-      "idle": {"reanimId": "pvz:cherrybomb_idle", "rateScale": 1, "fps": 30, "x": 0, "y": 0},
-      "explode": {"reanimId": "pvz:cherrybomb_explode", "rateScale": 1, "fps": 30, "x": 0, "y": 0}
+      "idle": {"reanimId": "pvz:cherrybomb_idle", "fps": 30, "x": 0, "y": 0},
+      "explode": {"reanimId": "pvz:cherrybomb_explode", "fps": 30, "x": 0, "y": 0}
     },
     "offBoard": {"body": "idle"},
     "shadow": {"x": -3, "y": -51},
@@ -81,12 +81,13 @@
     "visual": {"seedType": "wallnut", "preview": 3, "nameKey": "WALL_NUT"},
     "view": "wallnut",
     "parts": {"face": "anim_face"},
+    "crackedFaces": ["pvz:wallnut_cracked1", "pvz:wallnut_cracked2"],
     "chewParticle": "pvz:wallnuteatsmall",
     "clips": {
-      "body": {"reanimId": "pvz:wallnut", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "blinkTwitch": {"reanimId": "pvz:wallnut_blink_twitch", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
-      "blinkTwice": {"reanimId": "pvz:wallnut_blink_twice", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
-      "blinkThrice": {"reanimId": "pvz:wallnut_blink_thrice", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
+      "body": {"reanimId": "pvz:wallnut", "x": 0, "y": 0},
+      "blinkTwitch": {"reanimId": "pvz:wallnut_blink_twitch", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
+      "blinkTwice": {"reanimId": "pvz:wallnut_blink_twice", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
+      "blinkThrice": {"reanimId": "pvz:wallnut_blink_thrice", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
     },
     "shadow": {"x": -3, "y": -51},
     "scale": 1
@@ -95,11 +96,11 @@
     "visual": {"seedType": "potatomine", "preview": 4, "nameKey": "POTATO_MINE"},
     "explosion": {"effect": "pvz:potatomine", "x": 20, "layer": "particle"},
     "clips": {
-      "buried": {"reanimId": "pvz:potatomine_buried", "rateScale": 1, "fps": 12, "x": 12, "y": -12},
-      "rise": {"reanimId": "pvz:potatomine_rise", "rateScale": 1, "fps": 12, "x": 12, "y": -12},
-      "armed": {"reanimId": "pvz:potatomine_armed", "rateScale": 1, "fps": 12, "x": 12, "y": -12, "blend": 0},
-      "blink": {"reanimId": "pvz:potatomine_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
-      "glow": {"reanimId": "pvz:potatomine_glow", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_light", "onlyTracks": ["anim_glow"]}
+      "buried": {"reanimId": "pvz:potatomine_buried", "x": 12, "y": -12},
+      "rise": {"reanimId": "pvz:potatomine_rise", "x": 12, "y": -12},
+      "armed": {"reanimId": "pvz:potatomine_armed", "x": 12, "y": -12, "blend": 0},
+      "blink": {"reanimId": "pvz:potatomine_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true},
+      "glow": {"reanimId": "pvz:potatomine_glow", "x": 0, "y": 0, "attachmentTrackId": "anim_light", "onlyTracks": ["anim_glow"]}
     },
     "offBoard": {"body": "armed"},
     "packet": {"x": 12, "y": 12, "scale": 0.85, "clips": {"light": "glow"}},
@@ -113,11 +114,11 @@
     "view": "chomper",
     "parts": {"prey": ["Zombie_outerarm_hand", "Zombie_outerarm_lower"]},
     "clips": {
-      "idle": {"reanimId": "pvz:chomper", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "ready": {"reanimId": "pvz:chomper", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "bite": {"reanimId": "pvz:chomper_bite", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "chew": {"reanimId": "pvz:chomper_chew", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "blend": 0},
-      "swallow": {"reanimId": "pvz:chomper_swallow", "rateScale": 1, "fps": 12, "x": 0, "y": 0}
+      "idle": {"reanimId": "pvz:chomper", "x": 0, "y": 0},
+      "ready": {"reanimId": "pvz:chomper", "x": 0, "y": 0},
+      "bite": {"reanimId": "pvz:chomper_bite", "x": 0, "y": 0},
+      "chew": {"reanimId": "pvz:chomper_chew", "x": 0, "y": 0, "blend": 0},
+      "swallow": {"reanimId": "pvz:chomper_swallow", "x": 0, "y": 0}
     },
     "shadow": {"x": -21, "y": -57},
     "scale": 1
@@ -126,6 +127,7 @@
     "visual": {"seedType": "explodenut", "preview": 3, "tint": [255, 64, 64], "nameKey": "EXPLODE_O_NUT"},
     "view": "wallnut",
     "parts": {"face": "anim_face"},
+    "crackedFaces": ["pvz:wallnut_cracked1", "pvz:wallnut_cracked2"],
     "clips": {"from": "pvz:wallnut"},
     "chewParticle": "pvz:wallnuteatsmall",
     "shadow": {"x": -3, "y": -51},
@@ -136,11 +138,11 @@
   "pvz:puffshroom": {
     "visual": {"seedType": "puffshroom", "preview": 8, "nameKey": "PUFF_SHROOM"},
     "clips": {
-      "body": {"reanimId": "pvz:puffshroom", "rateScale": 1, "fps": 12, "x": 0, "y": -5},
-      "sleep": {"reanimId": "pvz:puffshroom_sleep", "rateScale": 1, "fps": 12, "x": 0, "y": -5},
-      "sleeping": {"reanimId": "pvz:sleeping", "rateScale": 1, "fps": 12, "x": 50, "y": -40},
-      "shoot": {"reanimId": "pvz:puffshroom_shoot", "rateScale": 1, "fps": 12, "x": 0, "y": -5},
-      "blink": {"reanimId": "pvz:puffshroom_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
+      "body": {"reanimId": "pvz:puffshroom", "x": 0, "y": -5},
+      "sleep": {"reanimId": "pvz:puffshroom_sleep", "x": 0, "y": -5},
+      "sleeping": {"reanimId": "pvz:sleeping", "x": 50, "y": -40},
+      "shoot": {"reanimId": "pvz:puffshroom_shoot", "x": 0, "y": -5},
+      "blink": {"reanimId": "pvz:puffshroom_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
     },
     "shadow": {"x": -3, "y": -47, "scale": 0.5},
     "scale": 1,
@@ -149,12 +151,12 @@
   "pvz:sunshroom": {
     "visual": {"seedType": "sunshroom", "preview": 9, "nameKey": "SUN_SHROOM"},
     "clips": {
-      "body": {"reanimId": "pvz:sunshroom_big", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "blend": 0.1},
-      "small": {"reanimId": "pvz:sunshroom", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "sleep": {"reanimId": "pvz:sunshroom_sleep", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "sleeping": {"reanimId": "pvz:sleeping", "rateScale": 1, "fps": 12, "x": 50, "y": -40},
-      "grow": {"reanimId": "pvz:sunshroom_grow", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "blend": 0.1},
-      "blink": {"reanimId": "pvz:sunshroom_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "attachmentBase": "small", "fullLastFrame": true}
+      "body": {"reanimId": "pvz:sunshroom_big", "x": 0, "y": 0, "blend": 0.1},
+      "small": {"reanimId": "pvz:sunshroom", "x": 0, "y": 0},
+      "sleep": {"reanimId": "pvz:sunshroom_sleep", "x": 0, "y": 0},
+      "sleeping": {"reanimId": "pvz:sleeping", "x": 50, "y": -40},
+      "grow": {"reanimId": "pvz:sunshroom_grow", "x": 0, "y": 0, "blend": 0.1},
+      "blink": {"reanimId": "pvz:sunshroom_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "attachmentBase": "small", "fullLastFrame": true}
     },
     "offBoard": {"body": "body"},
     "packet": {"clips": {"body": "small"}},
@@ -166,11 +168,11 @@
     "viewConfig": {"fireParticle": {"id": "pvz:fumecloud", "x": 85, "y": 31, "delayTicks": 35}},
     "fireSounds": [{"audio": "pvz:fume", "foley": true, "pitchRange": 10}],
     "clips": {
-      "body": {"reanimId": "pvz:fumeshroom", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "sleep": {"reanimId": "pvz:fumeshroom_sleep", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "sleeping": {"reanimId": "pvz:sleeping", "rateScale": 1, "fps": 12, "x": 62, "y": -40},
-      "shoot": {"reanimId": "pvz:fumeshroom_shoot", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "blink": {"reanimId": "pvz:fumeshroom_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
+      "body": {"reanimId": "pvz:fumeshroom", "x": 0, "y": 0},
+      "sleep": {"reanimId": "pvz:fumeshroom_sleep", "x": 0, "y": 0},
+      "sleeping": {"reanimId": "pvz:sleeping", "x": 62, "y": -40},
+      "shoot": {"reanimId": "pvz:fumeshroom_shoot", "x": 0, "y": 0},
+      "blink": {"reanimId": "pvz:fumeshroom_blink", "x": 0, "y": 0, "attachmentTrackId": "anim_face", "fullLastFrame": true}
     },
     "shadow": {"x": -3, "y": -47, "scale": 1.3},
     "scale": 1
@@ -181,8 +183,8 @@
     "almanacOffset": [0, 55],
     "plantedSounds": [{"audio": "pvz:gravebusterchomp", "foley": true}],
     "clips": {
-      "body": {"reanimId": "pvz:gravebuster", "rateScale": 1, "fps": 12, "x": 0, "y": 40, "blend": 0.1},
-      "land": {"reanimId": "pvz:gravebuster_land", "rateScale": 1, "fps": 12, "x": 0, "y": 40}
+      "body": {"reanimId": "pvz:gravebuster", "x": 0, "y": 40, "blend": 0.1},
+      "land": {"reanimId": "pvz:gravebuster_land", "x": 0, "y": 40}
     },
     "offBoard": {"body": "body"},
     "scale": 1,
@@ -192,9 +194,9 @@
   "pvz:hypnoshroom": {
     "visual": {"seedType": "hypnoshroom", "preview": 12, "nameKey": "HYPNO_SHROOM"},
     "clips": {
-      "body": {"reanimId": "pvz:hypnoshroom", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "sleep": {"reanimId": "pvz:hypnoshroom_sleep", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
-      "sleeping": {"reanimId": "pvz:sleeping", "rateScale": 1, "fps": 12, "x": 50, "y": -40}
+      "body": {"reanimId": "pvz:hypnoshroom", "x": 0, "y": 0},
+      "sleep": {"reanimId": "pvz:hypnoshroom_sleep", "x": 0, "y": 0},
+      "sleeping": {"reanimId": "pvz:sleeping", "x": 50, "y": -40}
     },
     "shadow": {"x": -3, "y": -51},
     "scale": 1

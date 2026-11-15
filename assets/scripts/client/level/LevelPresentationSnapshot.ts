@@ -1,3 +1,5 @@
+import { record, exact, array, boolean, finiteInRange, nonNegativeInteger, positiveInteger, integerInRange } from '@/shared/validate'
+import type { JsonObject } from '@/shared/protocol'
 import {
     parseParticlePlayerSnapshot,
     type ParticlePlayerSnapshot,
@@ -47,7 +49,6 @@ export interface LevelIntroSnapshot {
 
 export interface LevelEndSnapshot {
     ticks: number
-    durationTicks?: number
     finalWave: ReanimPlaybackSnapshot | null
     hugeWaveTicks?: number
 }
@@ -75,24 +76,15 @@ export interface LevelAudioSnapshot {
     firstWavePlayed: boolean
 }
 
-export type LevelEntitySnapshot =
-    | {
-        kind: 'plant'
-        entityId: number
-        flash?: FlashSnapshot
-    }
-    | {
-        kind: 'zombie'
-        entityId: number
-        body: ReanimPlaybackSnapshot | null
-        mowerDriver: ReanimPlaybackSnapshot | null
-        flash?: FlashSnapshot
-    }
-    | {
-        kind: 'item'
-        entityId: number
-        animation: ReanimPlaybackSnapshot | null
-    }
+/**
+ * What an entity's view keeps across a save (EntityView.snapshot): the entity's kind and ID, and `data` in the view's
+ * own format, which the view reads back itself (EntityView.restore), with the helpers below.
+ */
+export interface LevelEntitySnapshot {
+    kind: string
+    entityId: number
+    data: JsonObject
+}
 
 export type LevelParticleOwnerSnapshot =
     | {
@@ -105,7 +97,8 @@ export type LevelParticleOwnerSnapshot =
     | {
         kind: 'entity'
         entityId: number
-        slot: 'root' | 'body' | 'head' | 'shadow' | 'award-back-effects'
+        /** `root`, or one of the entity's view's particle anchors. */
+        slot: string
         x: number
         y: number
         z: number
@@ -125,7 +118,7 @@ export interface LevelParticleSnapshot {
 }
 
 export interface LevelPresentationSnapshot {
-    schemaVersion: 3
+    schemaVersion: 4
     flow: LevelFlowSnapshot
     intro: LevelIntroSnapshot
     end: LevelEndSnapshot
@@ -143,7 +136,7 @@ export function parseLevelPresentationSnapshot(value: unknown): LevelPresentatio
         'schemaVersion', 'flow', 'intro', 'end', 'advice', 'hud',
         'audio', 'entities', 'particles', 'extensions',
     ], 'Level presentation')
-    if (source.schemaVersion !== 3) throw new TypeError('Level presentation.schemaVersion must be 3')
+    if (source.schemaVersion !== 4) throw new TypeError('Level presentation.schemaVersion must be 4')
 
     const flow = parseFlow(source.flow)
     const intro = parseIntro(source.intro)
@@ -153,12 +146,9 @@ export function parseLevelPresentationSnapshot(value: unknown): LevelPresentatio
     if (flow.introCompletionSent && intro.previews.length > 0) {
         throw new TypeError('Level presentation cannot send intro completion before the intro ends')
     }
-    if (flow.completionStarted !== (end.ticks >= (end.durationTicks ?? END_COMPLETE))) {
-        throw new TypeError('Level presentation completion flow and end ticks are inconsistent')
-    }
 
     return {
-        schemaVersion: 3,
+        schemaVersion: 4,
         flow,
         intro,
         end,
@@ -205,11 +195,9 @@ function parseIntro(value: unknown): LevelIntroSnapshot {
 }
 
 function parseEnd(value: unknown): LevelEndSnapshot {
-    const source = exact(value, ['ticks', 'finalWave'], 'Level end', ['hugeWaveTicks', 'durationTicks'])
-    const durationTicks = source.durationTicks === undefined ? END_COMPLETE : finiteInRange(source.durationTicks, 1, END_COMPLETE, 'Level end.durationTicks')
+    const source = exact(value, ['ticks', 'finalWave'], 'Level end', ['hugeWaveTicks'])
     return {
-        ticks: finiteInRange(source.ticks, END_INACTIVE, durationTicks, 'Level end.ticks'),
-        ...(source.durationTicks === undefined ? {} : { durationTicks }),
+        ticks: finiteInRange(source.ticks, END_INACTIVE, END_COMPLETE, 'Level end.ticks'),
         finalWave: source.finalWave === null ? null : parseReanimPlaybackSnapshot(source.finalWave),
         ...(source.hugeWaveTicks === undefined ? {} : { hugeWaveTicks: finiteInRange(source.hugeWaveTicks, 0, 750, 'Level end.hugeWaveTicks') }),
     }
@@ -274,31 +262,24 @@ function parseEntities(value: unknown): LevelEntitySnapshot[] {
 
 function parseEntity(value: unknown, index: number): LevelEntitySnapshot {
     const name = `Level entities[${index}]`
-    const tagged = taggedObject(value, name)
-    const entityId = positiveInteger(tagged.entityId, `${name}.entityId`)
-    switch (tagged.kind) {
-        case 'plant': {
-            // The server animates a plant: it keeps only its flash.
-            const plant = exact(value, ['kind', 'entityId'], name, ['flash'])
-            return { kind: 'plant', entityId, ...(plant.flash === undefined ? {} : { flash: parseFlash(plant.flash, `${name}.flash`) }) }
-        }
-        case 'zombie': {
-            const source = exact(value, [
-                'kind', 'entityId', 'body', 'mowerDriver',
-            ], name, ['flash'])
-            return {
-                kind: 'zombie', entityId,
-                body: optionalReanim(source.body),
-                mowerDriver: optionalReanim(source.mowerDriver),
-                ...(source.flash === undefined ? {} : { flash: parseFlash(source.flash, `${name}.flash`) }),
-            }
-        }
-        case 'item': {
-            const source = exact(value, ['kind', 'entityId', 'animation'], name)
-            return { kind: tagged.kind, entityId, animation: optionalReanim(source.animation) }
-        }
-        default: throw new TypeError(`${name}.kind is invalid`)
-    }
+    const source = exact(value, ['kind', 'entityId', 'data'], name)
+    if (typeof source.kind !== 'string' || !source.kind) throw new TypeError(`${name}.kind is invalid`)
+    return { kind: source.kind, entityId: positiveInteger(source.entityId, `${name}.entityId`), data: record(source.data, `${name}.data`) as JsonObject }
+}
+
+/** A view's save data, with exactly the `keys` (and any of `optional`), for the view to read. */
+export function viewSaveData(snapshot: LevelEntitySnapshot, keys: readonly string[], optional: readonly string[] = []): Record<string, unknown> {
+    return exact(snapshot.data, keys, `${snapshot.kind} ${snapshot.entityId} view data`, optional)
+}
+
+/** A flash a view keeps (EntityFlashes), if it kept one. */
+export function parseSavedFlash(value: unknown, name: string): FlashSnapshot | undefined {
+    return value === undefined ? undefined : parseFlash(value, name)
+}
+
+/** A Reanim player's place in its clip, or none. */
+export function parseSavedPlayback(value: unknown): ReanimPlaybackSnapshot | null {
+    return optionalReanim(value)
 }
 
 function parseFlash(value: unknown, name: string): FlashSnapshot {
@@ -350,12 +331,11 @@ function parseParticleOwner(value: unknown, particleName: string): LevelParticle
     }
     if (tagged.kind === 'entity') {
         const source = exact(value, ['kind', 'entityId', 'slot', 'x', 'y', 'z'], name)
-        const slots = new Set(['root', 'body', 'head', 'shadow', 'award-back-effects'])
-        if (typeof source.slot !== 'string' || !slots.has(source.slot)) throw new TypeError(`${name}.slot is invalid`)
+        if (typeof source.slot !== 'string' || !source.slot) throw new TypeError(`${name}.slot is invalid`)
         return {
             kind: 'entity',
             entityId: positiveInteger(source.entityId, `${name}.entityId`),
-            slot: source.slot as Extract<LevelParticleOwnerSnapshot, { kind: 'entity' }>['slot'],
+            slot: source.slot,
             x: coordinate(source.x, `${name}.x`),
             y: coordinate(source.y, `${name}.y`),
             z: coordinate(source.z, `${name}.z`),
@@ -375,7 +355,7 @@ function parseParticleOwner(value: unknown, particleName: string): LevelParticle
 }
 
 function parseExtensions(value: unknown): Record<string, JsonValue> {
-    const source = plainObject(value, 'Level extensions')
+    const source = record(value, 'Level extensions')
     const result: Record<string, JsonValue> = {}
     for (const [id, extension] of Object.entries(source)) {
         if (!isQualifiedId(id)) throw new TypeError(`Level extension ID is invalid: ${id}`)
@@ -390,73 +370,15 @@ function optionalReanim(value: unknown): ReanimPlaybackSnapshot | null {
 }
 
 function taggedObject(value: unknown, name: string): Record<string, unknown> & { kind: string } {
-    const source = plainObject(value, name)
+    const source = record(value, name)
     if (typeof source.kind !== 'string') throw new TypeError(`${name}.kind must be a string`)
     return source as Record<string, unknown> & { kind: string }
-}
-
-function exact(value: unknown, keys: readonly string[], name: string, optional: readonly string[] = []): Record<string, unknown> {
-    const source = plainObject(value, name)
-    const allowed = new Set([...keys, ...optional])
-    for (const key of Object.keys(source)) if (!allowed.has(key)) throw new TypeError(`${name}.${key} is not supported`)
-    for (const key of keys) {
-        if (!Object.prototype.hasOwnProperty.call(source, key)) throw new TypeError(`${name}.${key} is required`)
-    }
-    return source
-}
-
-function plainObject(value: unknown, name: string): Record<string, unknown> {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)
-        || (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null)) {
-        throw new TypeError(`${name} must be a plain object`)
-    }
-    return value as Record<string, unknown>
-}
-
-function array(value: unknown, name: string): unknown[] {
-    if (!Array.isArray(value)) throw new TypeError(`${name} must be an array`)
-    return value
 }
 
 function unique(values: Array<string | number>, name: string): void {
     if (new Set(values).size !== values.length) throw new TypeError(`${name} must be unique`)
 }
 
-function boolean(value: unknown, name: string): boolean {
-    if (typeof value !== 'boolean') throw new TypeError(`${name} must be boolean`)
-    return value
-}
-
-function finite(value: unknown, name: string): number {
-    if (typeof value !== 'number' || !Number.isFinite(value)) throw new TypeError(`${name} must be finite`)
-    return value
-}
-
-function finiteInRange(value: unknown, min: number, max: number, name: string): number {
-    const result = finite(value, name)
-    if (result < min || result > max) throw new TypeError(`${name} must be between ${min} and ${max}`)
-    return result
-}
-
 function coordinate(value: unknown, name: string): number {
     return finiteInRange(value, -MAX_COORDINATE, MAX_COORDINATE, name)
-}
-
-function nonNegativeInteger(value: unknown, name: string): number {
-    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
-        throw new TypeError(`${name} must be a non-negative safe integer`)
-    }
-    return value
-}
-
-function positiveInteger(value: unknown, name: string): number {
-    const result = nonNegativeInteger(value, name)
-    if (result === 0) throw new TypeError(`${name} must be positive`)
-    return result
-}
-
-function integerInRange(value: unknown, min: number, max: number, name: string): number {
-    const result = nonNegativeInteger(value, name)
-    if (result < min || result > max) throw new TypeError(`${name} must be between ${min} and ${max}`)
-    return result
 }

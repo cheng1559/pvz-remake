@@ -1,5 +1,8 @@
-import { type Node, Sprite } from 'cc'
-import { boardToLayer, type Content, type EntityView, type LevelStage, type StageEvent } from '@/client/level/LevelStage'
+import { loadReanim } from '@/client/reanim/ReanimAssets'
+import { modResources } from '@/client/content/ModResources'
+import { type Node, Sprite, type SpriteFrame } from 'cc'
+import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
+import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { SoundSystem } from '@/client/sound/SoundSystem'
@@ -54,23 +57,40 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
 
     /** Its animation with its corner at `at` from the projectile's, playing in a loop; none if the projectile went meanwhile. */
     protected async animate(at: { x: number, y: number }): Promise<ReanimPlayer | undefined> {
-        const { node, content } = this.context, reanim = this.presentation.reanim
+        const { node } = this.context, reanim = this.presentation.reanim
         if (!reanim) throw new Error(`Projectile animation is not installed: ${this.context.projectile.typeId}`)
         const animation = uiNode({ name: 'ProjectileAnimation', parent: node, position: at, anchor: { x: 0, y: 1 } }).node
         animation.setScale(reanim.scale, reanim.scale, 1)
         const player = animation.addComponent(ReanimPlayer)
-        await player.load(reanim.id, content.registry, content.loader)
+        await player.load(reanim.id)
         if (!node.isValid) return undefined
         player.play({ loop: true, rate: reanim.rate })
         return player
     }
 
+    /** Each projectile's picture and its own shadow, by type: kept for the session once a level has loaded them. */
+    private static readonly pictures = new Map<string, SpriteFrame>()
+    private static readonly shadows = new Map<string, SpriteFrame>()
+
+    /** Every projectile's picture, shadow and animation, so the first of each type draws at once. */
+    static async preload(content: Content): Promise<void> {
+        await Promise.all(Object.entries(content.presentation.projectiles).map(async ([id, definition]) => {
+            if (definition.sprite) ProjectileView.pictures.set(id, await modResources.sprite(definition.sprite))
+            if (definition.shadow) {
+                const { sprite, cell, columns } = definition.shadow, atlas = await modResources.sprite(sprite)
+                ProjectileView.shadows.set(id, getAtlasFrame(atlas, cell, atlas.originalSize.width / columns, atlas.originalSize.height, columns))
+            }
+            // A mower's animation is ready when the first one sets off.
+            if (definition.reanim) await loadReanim(definition.reanim.id)
+        }))
+    }
+
     async initialize(): Promise<void> {
-        const { stage, projectile } = this.context, presentation = this.presentation, { assets } = stage, { typeId } = projectile
+        const { stage, projectile, content } = this.context, presentation = this.presentation, { typeId } = projectile
         if (projectile.entityId === undefined) return this.show()
         if (!await this.picture()) return
         // Its shadow is apart from it, on the ground: its own picture, or the board's plant shadow about a point.
-        const frame = presentation.shadow ? assets.projectileShadowFrames[typeId] : presentation.plantShadow ? assets.shadow : undefined
+        const frame = presentation.shadow ? ProjectileView.shadows.get(typeId) : presentation.plantShadow ? await plantShadow(content, stage) : undefined
         if (presentation.shadow && !frame) throw new Error(`Projectile shadow is not installed: ${typeId}`)
         if (frame) {
             this.shadowNode = uiNode({ name: 'ProjectileShadow', parent: stage.layer,
@@ -85,9 +105,9 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
 
     /** Its picture, or its animation playing in a loop; false if the projectile went meanwhile. */
     private async picture(): Promise<boolean> {
-        const { node, stage, projectile: { typeId } } = this.context, { reanim } = this.presentation
+        const { node, projectile: { typeId } } = this.context, { reanim } = this.presentation
         if (reanim) return !!await this.animate(reanim)
-        const frame = stage.assets.projectileFrames[typeId]
+        const frame = ProjectileView.pictures.get(typeId)
         if (!frame) throw new Error(`Projectile sprite is not installed: ${typeId}`)
         uiNode({ node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
         return true
@@ -146,7 +166,7 @@ export class ProjectileView implements EntityView<ProjectileSnapshot> {
 
     /** The middle of a projectile from its corner: of its picture, or of its hitbox for an animated one. It turns about it. */
     static middle(stage: LevelStage, typeId: string): { x: number, y: number } | undefined {
-        const picture = stage.assets.projectileFrames[typeId]?.originalSize, hitbox = stage.content.definitions.projectiles[typeId]?.hitbox
+        const picture = ProjectileView.pictures.get(typeId)?.originalSize, hitbox = stage.content.definitions.projectiles[typeId]?.hitbox
         return picture ? { x: picture.width / 2, y: picture.height / 2 } : hitbox && { x: hitbox.x + hitbox.width / 2, y: hitbox.y + hitbox.height / 2 }
     }
 

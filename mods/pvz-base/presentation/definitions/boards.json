@@ -11,6 +11,7 @@
   "pvz:night": {
     "background": "pvz:background2",
     "backgroundX": 80,
+    "plantShadow": "pvz:plantshadow2",
     "music": {"choosing": "choose_seeds", "gameplay": "night_moongrains"},
     "gameOver": {
       "images": ["zombieswon", "background2_gameover_interior_overlay", "background2_gameover_mask"],

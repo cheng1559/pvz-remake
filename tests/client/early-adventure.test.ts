@@ -40,7 +40,7 @@ test('conveyor keyboard selection uses packet identity and respects page and dia
         assert.equal(commands.length, 0)
         input.view.seedPacketAt = previous
     }
-    const shovel = { toolId: 'pvz:shovel', button: { node: { activeInHierarchy: true }, interactable: true } }
+    const shovel = { toolId: 'pvz:shovel', hotkey: 'F', button: { node: { activeInHierarchy: true }, interactable: true } }
     input.toolButtons = [shovel]
     snapshot.cursor = { mode: 'none' }
     input.onKeyDown({ keyCode: 70 })

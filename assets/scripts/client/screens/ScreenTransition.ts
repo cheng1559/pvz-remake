@@ -1,3 +1,4 @@
+import { easeInOutCurve } from '@/client/view/GameScreenMath'
 import { BlockInputEvents, Node, tween, type Tween } from 'cc'
 import { uiNode } from '@/client/view/uiNode'
 import { startGameTween } from '@/core/GameTween'
@@ -42,8 +43,7 @@ export class ScreenTransition {
         const achievements = showing ? next : previous
         await this.animate(0.75, progress => {
             if (!selector.isValid || !achievements.isValid) return
-            const curve = (t: number) => t * t * (3 - 2 * t)
-            const offset = 600 * curve(curve(progress))
+            const offset = 600 * easeInOutCurve(progress)
             selector.setPosition(0, showing ? offset : 600 - offset)
             // One pixel of overlap matches the original and avoids a seam between the pages.
             achievements.setPosition(0, showing ? -599 + offset : 1 - offset)

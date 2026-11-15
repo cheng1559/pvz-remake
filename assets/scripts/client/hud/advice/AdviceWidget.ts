@@ -5,11 +5,7 @@ import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
 import { FontMetricsUtil } from '@/client/font'
 import type { UI } from '@/client/ui/UI'
 import type { UILabel } from '@/client/ui/UILabel'
-import {
-    parseAdviceWidgetSnapshot,
-    type AdviceWidgetSnapshot,
-    type AdviceWidgetStyle,
-} from './AdviceWidgetSnapshot'
+import type { AdviceWidgetSnapshot, AdviceWidgetStyle } from './AdviceWidgetSnapshot'
 
 export type { AdviceWidgetSnapshot, AdviceWidgetStyle } from './AdviceWidgetSnapshot'
 
@@ -23,7 +19,6 @@ const ADVICE_WIDTH = 800
 const ADVICE_DURATION_FAST = 500
 /** MessageWidget::SetLabel, MESSAGE_STYLE_ACHIEVEMENT. */
 const ADVICE_DURATION_ACHIEVEMENT = 250
-const ADVICE_DURATION_LONG = 1500
 const ADVICE_DURATION_STAY = 10000
 const PVZ_NATIVE_FONT_SIZE = 0
 const ADVICE_TEXT_SIZE = PVZ_NATIVE_FONT_SIZE
@@ -90,16 +85,11 @@ export class AdviceWidget {
     snapshot(): AdviceWidgetSnapshot | null {
         if (!this.node.isValid || !this.node.active || !this._label.text) return null
 
-        return parseAdviceWidgetSnapshot({
-            message: this._label.text,
-            style: this._style,
-            durationTicks: this._durationTicks,
-            pulseTick: this._pulseTick,
-        })
+        return { message: this._label.text, style: this._style, durationTicks: this._durationTicks, pulseTick: this._pulseTick }
     }
 
-    restore(value: unknown) {
-        const snapshot = parseAdviceWidgetSnapshot(value)
+    /** A snapshot as the level's save has read it (parseAdviceWidgetSnapshot). */
+    restore(snapshot: AdviceWidgetSnapshot | null) {
         if (snapshot === null) {
             this.clear()
             return
@@ -178,46 +168,30 @@ export class AdviceWidget {
     }
 
     private _layout() {
-        const alpha = this._pulseAlpha()
+        return {
+            ...this._place(),
+            textOffsetY: ADVICE_TEXT_OFFSET_Y,
+            textColor: new Color(253, 245, 173, this._pulseAlpha()),
+            fontSize: ADVICE_TEXT_SIZE,
+            lineHeight: 0,
+            backdropAlpha: 128,
+        }
+    }
+
+    /** MessageWidget::Draw: the first tutorial's band, the later ones' (the achievement's too) or the hint's. */
+    private _place(): { y: number, height: number } {
         switch (this._style) {
             case 'tutorial-level1':
             case 'tutorial-level1-stay':
-                return {
-                    y: ADVICE_TUTORIAL_LEVEL1_Y,
-                    height: ADVICE_TUTORIAL_LEVEL1_HEIGHT,
-                    textOffsetY: ADVICE_TEXT_OFFSET_Y,
-                    textColor: new Color(253, 245, 173, alpha),
-                    fontSize: ADVICE_TEXT_SIZE,
-                    lineHeight: 0,
-                    backdropAlpha: 128,
-                }
-            // MessageWidget::Draw draws MESSAGE_STYLE_ACHIEVEMENT like the later tutorials.
+                return { y: ADVICE_TUTORIAL_LEVEL1_Y, height: ADVICE_TUTORIAL_LEVEL1_HEIGHT }
             case 'tutorial-level2':
             case 'tutorial-later':
             case 'tutorial-later-stay':
             case 'achievement':
-                return {
-                    y: ADVICE_TUTORIAL_LEVEL2_Y,
-                    height: ADVICE_TUTORIAL_LEVEL2_HEIGHT,
-                    textOffsetY: ADVICE_TEXT_OFFSET_Y,
-                    textColor: new Color(253, 245, 173, alpha),
-                    fontSize: ADVICE_TEXT_SIZE,
-                    lineHeight: 0,
-                    backdropAlpha: 128,
-                }
-            case 'hint-stay':
-            case 'hint-long':
+                return { y: ADVICE_TUTORIAL_LEVEL2_Y, height: ADVICE_TUTORIAL_LEVEL2_HEIGHT }
             case 'hint':
-            default:
-                return {
-                    y: ADVICE_HINT_Y,
-                    height: ADVICE_HINT_HEIGHT,
-                    textOffsetY: ADVICE_TEXT_OFFSET_Y,
-                    textColor: new Color(253, 245, 173, alpha),
-                    fontSize: ADVICE_TEXT_SIZE,
-                    lineHeight: 0,
-                    backdropAlpha: 128,
-                }
+            case 'hint-stay':
+                return { y: ADVICE_HINT_Y, height: ADVICE_HINT_HEIGHT }
         }
     }
 
@@ -252,8 +226,6 @@ export class AdviceWidget {
 
     private _durationForStyle(style: AdviceWidgetStyle) {
         switch (style) {
-            case 'hint-long':
-                return ADVICE_DURATION_LONG
             case 'hint-stay':
             case 'tutorial-level1-stay':
             case 'tutorial-later-stay':

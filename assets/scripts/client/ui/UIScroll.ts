@@ -1,3 +1,4 @@
+import { easeInOutCurve } from '@/client/view/GameScreenMath'
 import { _decorator, Color, Component, input, Input, Mask, Node, UITransform, Vec3, type EventMouse, type EventTouch } from 'cc'
 import { getWheelScrollSteps, TouchScrollGesture } from '@/client/input/ScrollGesture'
 import { uiNode, type UiNodeParts } from '@/client/view/uiNode'
@@ -144,8 +145,7 @@ export class UIScroll extends Component {
         dt = gameClock.delta(dt)
         if (this.tweenDuration > 0) {
             this.tweenElapsed = Math.min(this.tweenDuration, this.tweenElapsed + dt)
-            const curve = (t: number) => t * t * (3 - 2 * t)
-            this.setScroll(this.tweenStart + (this.tweenEnd - this.tweenStart) * curve(curve(this.tweenElapsed / this.tweenDuration)))
+            this.setScroll(this.tweenStart + (this.tweenEnd - this.tweenStart) * easeInOutCurve(this.tweenElapsed / this.tweenDuration))
             if (this.tweenElapsed >= this.tweenDuration) this.tweenDuration = 0
         }
         this.gesture.applyInertiaY(dt, () => this.scroll, value => this.setScroll(value))

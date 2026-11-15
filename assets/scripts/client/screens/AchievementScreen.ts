@@ -1,8 +1,8 @@
 import { modResources } from '@/client/content/ModResources'
-import { _decorator, Color, Component, input, Input, KeyCode, Sprite, type EventKeyboard, SpriteFrame } from 'cc'
+import { _decorator, Color, Component, input, Input, KeyCode, Sprite, type EventKeyboard } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import { preloadTasks } from '@/client/content/preloadTasks'
-import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
+import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { SoundEffect } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
@@ -36,15 +36,13 @@ export class AchievementScreen extends Component {
         const [data, frames] = await Promise.all([
             menuApi.getAchievements(),
             Promise.all(SPRITES.map(async name => {
-                const frame = await modResources.asset(name, SpriteFrame)
-                if (!frame) throw new Error(`Missing achievement image: ${name}`)
+                const frame = await modResources.sprite(name)
                 return [name, frame] as const
             })),
         ])
         const iconSprites = [...new Set(data.items.map(item => item.icon.sprite))]
         const iconFrames = new Map(await Promise.all(iconSprites.map(async id => {
-            const frame = await modResources.asset(id, SpriteFrame)
-            if (!frame) throw new Error(`Missing achievement icon: ${id}`)
+            const frame = await modResources.sprite(id)
             return [id, frame] as const
         })))
         if (!this.node.isValid) throw new Error('Achievement screen was destroyed while loading')

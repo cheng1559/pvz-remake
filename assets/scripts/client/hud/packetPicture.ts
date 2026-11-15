@@ -22,8 +22,7 @@ export interface PacketTilt { readonly factor: number, readonly angle: number, r
 /** A plant faces right: half as large again, leaning right about the packet's lower centre. */
 export const PLANT_TILT: PacketTilt = { factor: 1.5, angle: -12, pivot: [23, -25] }
 
-/** The packet's width, and its tilted clip: the inner image's side border behind the picture and bottom border. */
-const PACKET_WIDTH = 50
+/** The tilted clip: the inner image's side border behind the picture and bottom border. */
 const CLIP = { side: 3.5, bottom: 52, width: 220.5, height: 220 }
 
 /** Places the picture's root at `placement`; `tilted` (/tilted, in a packet of `packetScale`), tilted by `tilt`. */
@@ -77,7 +76,7 @@ export class PacketPictureStyle {
         const graphics = mask.subComp as Graphics | null
         if (!graphics) return false
         graphics.clear()
-        const left = this.facing === 'right' ? CLIP.side : PACKET_WIDTH - CLIP.side - CLIP.width
+        const left = this.facing === 'right' ? CLIP.side : SEED_PACKET_WIDTH - CLIP.side - CLIP.width
         graphics.rect(left * packetScale, -CLIP.bottom * packetScale, CLIP.width * packetScale, CLIP.height * packetScale)
         graphics.fill()
         return true

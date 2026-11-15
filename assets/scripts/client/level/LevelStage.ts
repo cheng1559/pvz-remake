@@ -1,9 +1,10 @@
+import { modResources } from '@/client/content/ModResources'
+import { getBoardPresentation } from './boards/definitions'
+import type { HapticStyle } from '@/platform/Haptics'
 import type { Color, Node, SpriteFrame } from 'cc'
-import { type FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
-import type { SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
 import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { PlantView } from '@/client/plants/PlantView'
-import type { ZombieView, ZombieViewSprites } from '@/client/zombies/ZombieView'
+import type { ZombieView } from '@/client/zombies/ZombieView'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { PresentationSound } from '@/shared/content/presentation'
 import type { PlantSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
@@ -21,22 +22,10 @@ export function boardToLayer(x: number, y: number): { x: number, y: number } {
     return { x: x - WIDTH / 2, y: HEIGHT / 2 - y }
 }
 
-/** The board's plant shadow, the darker one at night; off the board the day's. */
+/** The board's plant shadow (BoardPresentation.plantShadow, the darker one at night); off the board the day's. */
 export async function plantShadow(content: Content, stage?: LevelStage): Promise<SpriteFrame> {
-    return stage?.assets.shadow ?? new SpriteRepository(content.registry, content.loader).load('pvz:plantshadow')
-}
-
-/** The pictures a level loads before it starts, for what is on its board. */
-export interface LevelEntityAssets {
-    /** Projectile sprites by projectile ID. */
-    projectileFrames: Record<string, SpriteFrame>
-    projectileShadowFrames: Record<string, SpriteFrame>
-    /** The board's plant shadow, the darker one at night. */
-    shadow: SpriteFrame
-    zombieSprites: ZombieViewSprites
-    wallnutCracked: [SpriteFrame, SpriteFrame]
-    loadPacketSprite: SeedPacketRenderArgs['loadSprite']
-    packetCostFont: Awaited<ReturnType<FontRepository['load']>>
+    const id = (stage && getBoardPresentation(content.presentation, stage.level.board).plantShadow) ?? 'pvz:plantshadow'
+    return modResources.sprite(id)
 }
 
 /**
@@ -54,6 +43,8 @@ export interface EntityView<Entity = unknown> {
     destroy?(): void
     /** Its shadow, a node of the board's layer apart from its own: on the ground under it, drawn with the ground. */
     readonly shadowNode?: Node
+    /** The nodes of its own that particles go under, by name: a save keeps a particle's place by them. */
+    readonly particleAnchors?: Readonly<Record<string, Node>>
 }
 
 /**
@@ -65,7 +56,6 @@ export interface LevelStage {
     readonly layer: Node
     readonly content: Content
     readonly intro: LevelIntro
-    readonly assets: LevelEntityAssets
     /** The level being played, and the gameplay tick of the frame being drawn. */
     readonly level: LevelDefinition
     readonly gameplayTick: number
@@ -80,6 +70,10 @@ export interface LevelStage {
     readonly graveRise: { readonly particle: string, readonly sounds: readonly PresentationSound[] }
     /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
     sunBankOffset(): number
+    /** Ticks since the level was won (Board::UpdateLevelEndSequence), -1 before. */
+    levelEndTicks(): number
+    /** Board::ShakeBoard by (x, y), felt as `haptic`: of a frame's shakes, the strongest is felt once. */
+    shake(x: number, y: number, haptic: HapticStyle): void
     /**
      * A particle effect on the board at a draw order, in board coordinates (Board::AddPvzpParticle). `mirrored`: played
      * flipped left to right, for a zombie or plant facing the other way.

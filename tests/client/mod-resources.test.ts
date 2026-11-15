@@ -198,13 +198,13 @@ test('bootstrap artwork loads from the base archive without waiting for Mod inst
     const resources = new ModResources(async () => { baseReads++; return zipSync(zipFiles('pvz')) }, {
         ready: async () => { modReads++; return [] },
     })
-    const frame = await resources.baseAsset('pvz:button', modules.cc.SpriteFrame)
+    const frame = await resources.baseSprite('pvz:button')
     assert.ok(frame)
     assert.equal(modReads, 0)
     await resources.ready()
     assert.equal(modReads, 1)
     assert.equal(baseReads, 1, 'ordinary loading reuses the archive already opened for the logo')
-    assert.equal(await resources.baseAsset('pvz:button', modules.cc.SpriteFrame), frame)
+    assert.equal(await resources.baseSprite('pvz:button'), frame)
 })
 
 test('the builtin archive and resource-only Mods share validation and decoding', async () => {
@@ -219,17 +219,17 @@ test('the builtin archive and resource-only Mods share validation and decoding',
     assert.deepEqual(JSON.parse(new TextDecoder().decode(archive.files[archive.content.presentation!])), source.presentation)
     assert.equal(archive.files['base-content.json'], undefined)
     assert.equal(archive.content.resources.json['pvz:content'], undefined)
-    const animation = await base.asset('pvz:sodroll', modules.cc.JsonAsset, undefined, 'reanim')
-    const particle = await base.asset('pvz:sodroll', modules.cc.JsonAsset, undefined, 'particles')
-    assert.ok(Array.isArray(animation.json.tracks), 'same-name animation resolves within its own category')
-    assert.ok(Array.isArray(particle.json.emitters), 'same-name particle resolves within its own category')
+    const animation = await base.json('reanim', 'pvz:sodroll')
+    const particle = await base.json('particles', 'pvz:sodroll')
+    assert.ok(Array.isArray(animation.tracks), 'same-name animation resolves within its own category')
+    assert.ok(Array.isArray(particle.emitters), 'same-name particle resolves within its own category')
     assert.notEqual(animation, particle)
 
     const font = await base.font('pvz:briannetod12')
     assert.ok(font.textures.length > 0)
     for (const texture of font.textures) assert.deepEqual(texture.filters, [1, 0], 'base fonts blend thin strokes when shrinking and retain nearest magnification')
     assert.deepEqual(font.materials.map((material: any) => material.areaSampled), font.textures, 'base font glyphs average the atlas pixels under each screen pixel')
-    assert.ok((await base.ids(modules.cc.JsonAsset)).includes('pvz:selector_open'))
+    assert.ok((await base.ids('reanim')).includes('pvz:selector_open'))
     await manager.install(zipSync(zipFiles()))
     const resources = fresh()
     const frame = await resources.sprite('pvz:button')
@@ -240,9 +240,10 @@ test('the builtin archive and resource-only Mods share validation and decoding',
     assert.equal(modFont.config.json.layers[0].textureScale, 4)
     for (const texture of modFont.textures) assert.deepEqual(texture.filters, [1, 1], 'Mod fonts keep their existing linear sampling')
     assert.equal(modFont.materials, undefined, 'Mod fonts keep the default sprite material')
-    assert.equal((await resources.asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'first')
-    assert.equal((await resources.asset('pvz:note', modules.cc.TextAsset)).text, 'first')
-    assert.ok(await resources.asset('pvz:chomp', modules.cc.AudioClip))
+    assert.equal((await resources.json('json', 'pvz:config')).tag, 'first')
+    assert.ok(await resources.audio('pvz:chomp'))
+    assert.ok(await resources.audio('chomp'), 'an ID without a namespace is the base\'s')
+    await assert.rejects(resources.sprite('pvz:missing'), /Sprite is not installed: pvz:missing/)
 })
 
 test('one saved order controls overrides, scoped sprites and restart-only activation', async () => {
@@ -251,20 +252,20 @@ test('one saved order controls overrides, scoped sprites and restart-only activa
     await manager.install(zipSync(zipFiles('last', 'last', { animations: ['pvz:blink'] })))
     assert.equal((await manager.ready()).length, 0)
     const running = fresh()
-    assert.equal((await running.asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'last')
+    assert.equal((await running.json('json', 'pvz:config')).tag, 'last')
     assert.deepEqual(Array.from(await running.jsonLayers('pvz:config'), (layer: any) => layer.json.tag), ['first', 'last'],
         'text tables merge every layer, lowest priority first')
     assert.equal(await running.locale(), 'zh-CN', 'the text language comes from the last running Mod that declares one')
     assert.notEqual(await running.sprite('pvz:button'), await running.sprite('pvz:button', 'pvz:blink'))
     assert.equal(await manager.setEnabled(['last', 'first']), true)
-    assert.equal((await running.asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'last')
-    assert.equal((await fresh().asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'first')
+    assert.equal((await running.json('json', 'pvz:config')).tag, 'last')
+    assert.equal((await fresh().json('json', 'pvz:config')).tag, 'first')
     assert.deepEqual(Array.from(await new ModManager().list()), ['last', 'first'])
     await manager.install(zipSync(zipFiles('last', 'updated')))
     assert.deepEqual(Array.from(await new ModManager().list()), ['last', 'first'], 'updating a Mod preserves its saved priority')
-    assert.equal((await fresh().asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'first')
+    assert.equal((await fresh().json('json', 'pvz:config')).tag, 'first')
     assert.equal(await manager.unload('all'), true)
-    assert.equal(await fresh().asset('pvz:config', modules.cc.JsonAsset), undefined)
+    assert.equal(await fresh().json('json', 'pvz:config'), undefined)
 })
 
 test('disabled Mods retain their saved positions across restart, toggles and updates', async () => {
@@ -294,7 +295,7 @@ test('updates, uninstalls and failed writes preserve running bytes', async () =>
     const original = zipSync(zipFiles())
     await manager.install(original)
     const running = fresh()
-    assert.equal((await running.asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'first')
+    assert.equal((await running.json('json', 'pvz:config')).tag, 'first')
     const stored = archiveOf(storage, 'hd')!, saved = archives.get(stored)
     assert.ok(saved)
     db.failWrite = true
@@ -303,11 +304,11 @@ test('updates, uninstalls and failed writes preserve running bytes', async () =>
     assert.equal(archives.get(stored), saved)
     db.failWrite = false
     await manager.install(zipSync(zipFiles('hd', 'second')))
-    assert.equal((await fresh().asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'second')
+    assert.equal((await fresh().json('json', 'pvz:config')).tag, 'second')
     assert.equal(archives.has(stored), false, 'the replaced version is removed once no player uses it')
     await manager.uninstall('hd')
     assert.equal(archives.size, 0)
-    assert.equal((await running.asset('pvz:config', modules.cc.JsonAsset)).json.tag, 'first')
+    assert.equal((await running.json('json', 'pvz:config')).tag, 'first')
     assert.equal((await new ModManager().ready()).length, 0)
 })
 
@@ -528,7 +529,7 @@ test('Native installation, picker cleanup and on-demand installed reads share th
     const running = fresh()
     const frame = await running.file('hd', 'button.png', modules.cc.SpriteFrame)
     assert.equal(await running.file('hd', 'button.png', modules.cc.SpriteFrame), frame)
-    const clip = await running.asset('pvz:chomp', modules.cc.AudioClip)
+    const clip = await running.audio('pvz:chomp')
     assert.equal(clip.nativeUrl, installedRoot + 'audio/chomp.mp3', 'native loaders read installed files in place')
     assert.ok(![...files.keys()].some(path => path.startsWith('/app/mod-resources/')))
     modules.cc.native.fileUtils.getDataFromFile = getDataFromFile
@@ -538,7 +539,7 @@ test('Native installation, picker cleanup and on-demand installed reads share th
     assert.deepEqual(files.get(installedRoot + '.archive.zip'), data)
     failCommit = false
     await manager.install(zipSync(zipFiles('hd', 'second')))
-    const updated = await fresh().asset('pvz:chomp', modules.cc.AudioClip)
+    const updated = await fresh().audio('pvz:chomp')
     assert.equal(strFromU8(files.get(updated.nativeUrl)), 'ID3-second')
     await manager.uninstall('hd')
     assert.ok(![...files.keys()].some(path => path.startsWith('/app/mods/hd')), 'both versions are gone once nobody uses them')
@@ -547,7 +548,7 @@ test('Native installation, picker cleanup and on-demand installed reads share th
     modules['@/client/content/ModResources'] = { modResources: base }
     modules.cc.dynamicAtlasManager = { enabled: true }
     modules.cc.macro = {}
-    const frameWithoutMods = await base.asset('pvz:button', modules.cc.SpriteFrame)
+    const frameWithoutMods = await base.sprite('pvz:button')
     assert.equal(frameWithoutMods.originalSize.width, 100)
     assert.equal(modules.cc.dynamicAtlasManager.enabled, false, 'native 1x sprites must not copy released CPU images into an atlas')
     const pending = await manager.prepareImport(zipSync(modFiles('deferred')))
@@ -586,7 +587,7 @@ test('the web imports, installs and loads a large ZIP in slices without reading 
     assert.deepEqual(Array.from(await new ModManager().running()), ['big'])
     const resources = fresh()
     assert.equal((await resources.sprite('pvz:button')).originalSize.width, 50)
-    assert.equal((await resources.asset('pvz:note', modules.cc.TextAsset)).text, 'first')
+    assert.equal((await resources.json('json', 'pvz:config')).tag, 'first')
     assert.ok([...blobs.values()].some(blob => blob.size === image.length), 'the image URL is a slice of the stored ZIP')
     assert.ok(Math.max(...reads) < image.length, `largest read ${Math.max(...reads)} of a ${file.size}-byte ZIP`)
 })

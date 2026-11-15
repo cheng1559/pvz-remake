@@ -1,10 +1,11 @@
+import type { ToolButton } from './LevelBoardHud'
 import { EventMouse, EventTouch, type EventKeyboard, input, Input, KeyCode, Node, UITransform, type Vec2, Vec3 } from 'cc'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { gameClock } from '@/core/GameClock'
 import { uiNode } from '@/client/view/uiNode'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { executeDebugCliCommand } from '@/platform/debug/DebugCliCommands'
-import { boardCell, levelAwardSize } from './LevelGeometry'
+import { boardCell, itemAt } from './LevelGeometry'
 import type { LevelGame } from './LevelGame'
 import { LevelView } from './LevelView'
 import { UIButton } from '@/client/ui/UIButton'
@@ -30,7 +31,7 @@ export class LevelInputPresenter {
     private previousSpeed = 1
     private readonly buttons: UIButton[] = []
     private seedButtons: UIButton[] = []
-    private toolButtons: Array<{ toolId: string; button: UIButton }> = []
+    private toolButtons: ToolButton[] = []
     private mobilePress?: MobilePress
 
     constructor(
@@ -279,26 +280,11 @@ export class LevelInputPresenter {
         })
     }
 
-    /** Coin::MouseHitTest: sun and coins take clicks 15 further around; the level rule may widen every item. */
+    /** Collects the item under (x, y), if there is one. */
     private collectAt(x: number, y: number, includeAward = true): boolean {
-        const snapshot = this.game.render()
-        const padding = this.view.itemPadding
-        for (let index = snapshot.items.length - 1; index >= 0; index--) {
-            const item = snapshot.items[index]
-            const definition = this.game.definitions.items[item.typeId]
-            if (!includeAward && !definition) continue
-            const extra = padding?.size ?? (definition ? 15 : 0)
-            const below = padding?.height ?? 0
-            const award = levelAwardSize(this.view.level.award)
-            const width = definition?.width ?? award.width
-            const height = definition?.height ?? award.height
-            if (item.state !== 'collecting' && x >= item.x - extra && x < item.x + width + extra &&
-                y >= item.y - extra && y < item.y + height + extra + below) {
-                this.game.command({ type: 'collectItemAt', itemId: item.entityId })
-                return true
-            }
-        }
-        return false
+        const item = itemAt(this.game.render().items, this.game.definitions.items, this.view.level, this.view.itemPadding, x, y, includeAward)
+        if (item) this.game.command({ type: 'collectItemAt', itemId: item.entityId })
+        return item !== undefined
     }
 
     private onKeyPressing(event: EventKeyboard): void {
@@ -314,9 +300,10 @@ export class LevelInputPresenter {
             return
         }
         if (!GameDebugSettings.hotkeysEnabled) return
-        if (event.keyCode === KeyCode.KEY_F) {
-            const shovel = this.toolButtons.find(entry => entry.toolId === 'pvz:shovel')
-            if (shovel?.button.node.activeInHierarchy && shovel.button.interactable) this.selectTool(shovel.toolId, true)
+        // KeyCode's letters are their capitals' character codes.
+        const tool = this.toolButtons.find(entry => entry.hotkey !== undefined && entry.hotkey.charCodeAt(0) === event.keyCode)
+        if (tool) {
+            if (tool.button.node.activeInHierarchy && tool.button.interactable) this.selectTool(tool.toolId, true)
             return
         }
         if (!this.view.introComplete) return

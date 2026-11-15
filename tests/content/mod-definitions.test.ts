@@ -17,9 +17,6 @@ import { EntityViewRegistry } from '@/client/content/EntityViewRegistry'
 import { defineComponent, World } from '@/ecs'
 import { DefinitionSources } from '@/shared/content/DefinitionRegistry'
 import { createServerModHost } from '@/server/session/createModHost'
-import { ArchiveContentRegistry } from '@/client/content/ArchiveContentRegistry'
-import { ContentRegistry } from '@/client/content/ContentRegistry'
-import { CONTENT_CATEGORIES } from '@/shared/content'
 import * as modApi from '@/shared/mod'
 import { buildGameplayContent, buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
 import { parsePresentationDefinitions } from '@/shared/content/presentation'
@@ -64,53 +61,25 @@ test('Mod JSON decodes UTF-8 without package imports and uses the native single-
     assert.equal(decodes, 1)
 })
 
-test('Release preloading loads Mod archive assets without requesting a Cocos bundle config', async () => {
-    const registry = new ContentRegistry()
-    const table: Record<string, Record<string, string>> = Object.fromEntries(CONTENT_CATEGORIES.map(category =>
-        [category, { [`example:${category}`]: `assets/${category}.json` }]))
-    const files = new Map(Object.values(table).flatMap(entries =>
-        Object.values(entries).map(path => [path, Buffer.from('{}')] as const)))
-    const types = { sprites: class SpriteFrame {}, reanim: class JsonAsset {}, particles: class JsonAsset {},
-        fonts: class JsonAsset {}, sounds: class AudioClip {}, music: class JsonAsset {}, prefabs: class Prefab {} }
-    const loaded = new Set<string>(), bundles: string[] = [], progress: number[] = []
-    for (const category of CONTENT_CATEGORIES) {
-        for (const [id, path] of Object.entries(table[category] ?? {})) registry.registerEntry({
-            category, id, path, contentId: 'example:archive', contentVersion: '1.0.0', contentHash: 'example',
-        })
-    }
-    const loader = {
-        async loadBundle(location: string) {
-            assert.ok(!location.startsWith('pvzmod:///'), 'raw Mod archives have no config.json')
-            bundles.push(location)
-            return { loadDir(_path: string, report: Function, done: Function) { report(1, 1); done(null) } }
-        },
-        async load(content: any, type: any) {
-            const data = files.get(content.path)
-            assert.ok(data, `Missing archive fixture: ${content.path}`)
-            assert.equal(type.name, types[content.category as keyof typeof types].name)
-            if (type.name === 'JsonAsset') JSON.parse(data.toString('utf8'))
-            loaded.add(`${content.category}/${content.id}`)
-        },
-    }
+test('Release preloading loads every running pack\'s resources, then has each animation ready to play', async () => {
+    const steps: string[] = [], progress: number[] = []
     const modules: Record<string, unknown> = {
-        cc: { SpriteFrame: types.sprites, JsonAsset: types.reanim, AudioClip: types.sounds, Prefab: types.prefabs },
-        '@/shared/content': { CONTENT_CATEGORIES },
-        '@/client/view/offBoard': { offBoardContent: async () => ({ registry, loader }) },
-        '@/client/reanim/ReanimPlayer': { ReanimRepository: class {
-            async load(id: string) { assert.ok(loaded.has(`reanim/${id}`), 'archive JSON must be preloaded before animation preparation') }
+        './ModResources': { modResources: {
+            async preload(report: (progress: number) => void) { steps.push('resources'); report(1) },
+            async ids(kind: string) { return kind === 'reanim' ? ['pvz:sunflower', 'example:solar'] : [] },
         } },
-        '@/client/sound/SoundSystem': { SoundSystem: { async preloadAll() {} } },
-        '@/client/particle/ParticleAssets': { ParticleAssets: { async preloadAll() {} } },
-        './ModResources': { modResources: { async preload(report: Function) { report(1) } } },
+        '@/client/reanim/ReanimAssets': { async prepareReanims(ids: string[]) { steps.push(...ids) } },
+        '@/client/sound/SoundSystem': { SoundSystem: { async preloadAll() { steps.push('sounds') } } },
+        '@/client/particle/ParticleAssets': { ParticleAssets: { async preloadAll() { steps.push('particles') } } },
         './preloadTasks': { async preloadTasks(tasks: (() => Promise<unknown>)[], report: (progress: number) => void = () => {}) {
             for (const [index, task] of tasks.entries()) { await task(); report((index + 1) / tasks.length) }
         } },
     }
     const exports = loadScript('assets/scripts/client/content/PreloadAssets.ts', (id: string) => modules[id] ?? {})
     await exports.preloadAssets((value: number) => progress.push(value))
-    assert.deepEqual(bundles, [], 'ZIP preload never requests Cocos bundles')
-    assert.deepEqual([...loaded].sort(), Object.entries(table).flatMap(([kind, entries]) =>
-        Object.keys(entries as object).map(id => `${kind}/${id}`)).sort())
+    assert.deepEqual(steps, ['resources', 'pvz:sunflower', 'example:solar', 'sounds', 'particles'],
+        'the archives\' resources are loaded before the animations are made ready from them')
+    assert.ok(progress.every((value, index) => index === 0 || value >= progress[index - 1]))
     assert.equal(progress.at(-1), 1)
 })
 
@@ -141,32 +110,29 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
     const failures = new Map<string, string>(), errors: unknown[][] = []
     const modules: Record<string, unknown> = {
         cc: { JsonAsset: class {} },
-        '@/client/content/ClientContentLoader': { ClientContentLoader: class {
-            async loadBaseContent() { return { content: { gameplay: 'gameplay.json' }, files: {
+        '@/client/content/ModResources': { modResources: {
+            async baseContent() { return { content: { gameplay: 'gameplay.json' }, files: {
                 'gameplay.json': new TextEncoder().encode(JSON.stringify(gameplay)),
-            } } }
+            } } },
         } },
         '@/client/content/ClientAnimationRegistry': { ClientAnimationRegistry },
         '@/client/content/assertPresented': { assertPresented },
         '@/shared/mod/content': { contentJson },
-        '@/client/content/loadPresentationDefinitions': { loadPresentationDefinitions: async (_manifest: unknown, sources: unknown[]) => {
-            assert.equal(sources.length, 0, 'base validation must not recursively load Mods')
-            return presentation
-        } },
+        // The base's own tables: validating it must not load the Mods it is validating them against.
+        '@/client/content/loadPresentationDefinitions': { basePresentationJson: () => readPresentationSource() },
         '@/shared/content/DefinitionRegistry': { DefinitionSources, buildGameplayContent, buildPresentationDefinitions },
         '@/shared/mod/ModAssets': { ModAssets },
         '@/server/registry/GameplayRegistry': { GameplayRegistry },
         '@/server/session/createModHost': { createServerModHost: (...args: Parameters<typeof createServerModHost>) => keep(createServerModHost(...args)) },
         '@/client/content/ClientViews': { ClientViews },
-        '@/client/content/ArchiveContentRegistry': { ArchiveContentRegistry },
         '@/client/content/createModHost': {
             ClientModAssets: class extends ModAssets { async sprite(path: string) {
                 const png = this.bytes(path)
                 assert.deepEqual(Array.from(png.slice(0, 8)), [137, 80, 78, 71, 13, 10, 26, 10])
                 return { source: path }
             } },
-            createClientModHost: (owner: string, sources: DefinitionSources, resources: ArchiveContentRegistry, views: Record<string, Views>) =>
-                keep(new ModHost(owner, { ...clientModules, 'content/definitions': sources, 'content/resources': resources, 'client/views': views })),
+            createClientModHost: (owner: string, sources: DefinitionSources, views: Record<string, Views>) =>
+                keep(new ModHost(owner, { ...clientModules, 'content/definitions': sources, 'client/views': views })),
         },
         '@/client/content/ModManager': { modManager: { ready, failures } },
         '@/client/content/ModRuntime': {
@@ -232,7 +198,6 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         host.around(target, 'value', (next: any) => next() + 100)
     }, async ({ host, assets }: any) => {
         host.get('content/definitions').register(assets.id, { plants: { 'broken:leaked': {} } })
-        host.get('content/resources').register(assets, { sprites: { 'broken:leaked': 'sprite.png' } })
         const views = host.get('client/views')
         for (const registry of [views.plants, views.zombies]) {
             registry.register('broken:leaked', () => ({}))
@@ -253,14 +218,13 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         assert.equal((parseDebugCliCommand('/test:leaked') as { failure: string }).failure, 'syntax')
         assert.equal(result.gameplayDefinitions.length, 1)
         assert.equal(result.presentationDefinitions.length, 0)
-        assert.equal([...result.clientContent.entries()].length, 0)
         assert.deepEqual(result.gameplay.components.snapshot(new World()), {})
         for (const views of [result.views.plants, result.views.zombies]) {
             assert.equal(views.has('broken:leaked'), false)
             views.register('test:after', () => ({}))
         }
-        const installed = buildGameplayContent(base(), result.gameplayDefinitions)
-        result.gameplay.freeze(installed.definitions, installed.levels)
+        const content = buildGameplayContent(base(), result.gameplayDefinitions)
+        result.gameplay.freeze(content.definitions, content.levels)
         assert.match(loader.failures.get('legacy')!, /registerDefinitions is not a function/)
         assert.match(loader.failures.get('dependent')!, /Dependency failed to load: legacy/)
         assert.match(loader.failures.get('broken')!, /client.js.*client initialization failed/)
@@ -379,7 +343,7 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         const hello = await client.executor.execute('/example:hello', false, () => assert.fail('client command must not reach server'))
         assert.match(hello.ok ? hello.message : '', /Mod Lab/)
         await new Promise(setImmediate)
-        assert.equal(client.sounds[0].id, 'example:chime')
+        assert.deepEqual(client.sounds, ['example:chime'])
         const menu = new client.MainMenuScreen()
         await menu.initialize(menu.ui); await menu.initialize(menu.ui)
         assert.equal(menu.initialized, 2, 'wrapper keeps the original menu initialization')
@@ -387,7 +351,7 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         client.buttons[0].onClick()
         assert.match(client.dialogs[0].options.message, /example:charge/)
         const particles: unknown[][] = []
-        const view = await loaded.views.plants.create({ kind: 'example:beacon', typeId: 'example:beacon', content: client.game,
+        const view = await loaded.views.plants.create({ kind: 'example:beacon', typeId: 'example:beacon', content: {},
             particle: (...args: unknown[]) => particles.push(args) })
         assert.equal(view.body.loadedId, 'example:beacon')
         const world = { phase: 'gameplay', result: 'playing', paused: false, gameplayTick: 50, extensions: { 'example:charge': { '1': { remainingTicks: 200 } } } }

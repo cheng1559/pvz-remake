@@ -1,15 +1,13 @@
 import { Color, Node } from 'cc'
 import { uiNode } from '@/client/view/uiNode'
 import { SeedPacketView } from '@/client/hud/SeedPacketView'
+import { packetSubject } from '@/client/plants/definitions'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UILabel } from '@/client/ui/UILabel'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { levelStandsStill, type GameCommand, type SeedPacketSnapshot, type ServerEvent, type WorldSnapshot } from '@/shared/protocol'
-import type { SeedDefinition } from '@/shared/content/gameplay'
-import type { SeedPacketSeedType } from '@/shared/content/presentation'
 import type { LevelHudOptions } from './LevelHudPresenter'
-import { plantDefinition } from '@/client/plants/definitions'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { seedPacketX } from './LevelGeometry'
 
@@ -76,18 +74,10 @@ export class LevelSeedBank {
      * What a seed's packet draws and its tooltip's name key. A zombie seed's packet draws its zombie (SEED_ZOMBIE_*, seed
      * type -1), named as the almanac names it.
      */
-    private packetLook(seed: SeedDefinition): { seedType: SeedPacketSeedType, zombie?: string, grave?: boolean, name: string } {
-        const presentation = this.options.content.presentation
-        if (seed.kind === 'zombie') return { seedType: -1, zombie: seed.id, name: presentation.zombies[seed.id]?.nameKey ?? seed.id }
-        if (seed.kind === 'grave') return { seedType: -1, grave: true, name: 'GRAVE_SEED' }
-        const visual = plantDefinition(presentation, seed.id).visual
-        return { seedType: visual.seedType, name: visual.nameKey ?? String(visual.seedType).toUpperCase() }
-    }
-
     private createPacket(seedId: string | undefined, index: number): Packet {
         const options = this.options
         const seed = seedId === undefined ? undefined : options.content.definitions.seeds[seedId]
-        const look = seed && this.packetLook(seed)
+        const look = seed && packetSubject(options.content.presentation, seed)
         const view = new SeedPacketView({
             definitions: options.content.presentation,
             name: `SeedPacket-${index}`,
@@ -102,7 +92,6 @@ export class LevelSeedBank {
             labelLayer: this.labelLayer,
             cost: seed?.sunCost,
             drawCost: !options.level.conveyor,
-            loadSprite: options.loadPacketSprite,
             costFont: options.packetCostFont,
         })
         // SeedBank::Draw goes left to right: each packet goes in after the ones before it, all of them under the layers of
@@ -110,7 +99,7 @@ export class LevelSeedBank {
         view.node.setSiblingIndex(this.iconLayer.getSiblingIndex())
         if (seedId === undefined || options.seedChooser) view.node.active = false
         const tooltip = options.ui.tooltip(view.node, {
-            text: look ? options.ui.text(look.name) : '',
+            text: look ? options.ui.text(look.nameKey) : '',
             gap: 0,
             surface: options.level.conveyor ? options.tooltipSurface : undefined,
         })
@@ -179,12 +168,12 @@ export class LevelSeedBank {
             }
             if (packet && entry.seedId !== packet.seedId) {
                 const seed = this.options.content.definitions.seeds[packet.seedId]
-                const look = this.packetLook(seed)
+                const look = packetSubject(this.options.content.presentation, seed)
                 entry.seedId = packet.seedId
                 entry.hotkey = undefined
                 entry.tooltip.hide()
                 entry.view.setSeed(look.seedType, seed.sunCost, look.zombie, look.grave)
-                entry.tooltip.text = this.options.ui.text(look.name)
+                entry.tooltip.text = this.options.ui.text(look.nameKey)
                 // The picture loads after this frame is drawn: a belt packet would come in empty for a frame first.
                 const seedId = packet.seedId
                 entry.drawing = true

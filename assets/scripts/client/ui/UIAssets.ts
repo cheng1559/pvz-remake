@@ -1,32 +1,30 @@
 import { mergeStringLayers } from '@/shared/content/strings'
 import { loadPresentationDefinitions } from '@/client/content/loadPresentationDefinitions'
-import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 import { SpriteFrame } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
-import { loadBitmapFont } from '@/client/font/BitmapFontLoader'
 import { modResources } from '@/client/content/ModResources'
 
 const FONT_NAMES = {
-    label: 'dwarventodcraft18',
-    button: 'dwarventodcraft18greeninset',
-    buttonHover: 'dwarventodcraft18brightgreeninset',
-    large: 'dwarventodcraft36greeninset',
-    largeHover: 'dwarventodcraft36brightgreeninset',
-    title: 'dwarventodcraft24',
-    pageTitle: 'houseofterror28',
-    pageTitleSmall: 'houseofterror20',
-    body: 'dwarventodcraft15',
-    small: 'briannetod12',
-    yellow: 'dwarventodcraft18yellow',
-    profile: 'briannetod16',
-    packetCost: 'pico129',
-    tooltipTitle: 'pix118bold',
-    money: 'continuumbold14',
-    storeItem: 'houseofterror16',
+    label: 'pvz:dwarventodcraft18',
+    button: 'pvz:dwarventodcraft18greeninset',
+    buttonHover: 'pvz:dwarventodcraft18brightgreeninset',
+    large: 'pvz:dwarventodcraft36greeninset',
+    largeHover: 'pvz:dwarventodcraft36brightgreeninset',
+    title: 'pvz:dwarventodcraft24',
+    pageTitle: 'pvz:houseofterror28',
+    pageTitleSmall: 'pvz:houseofterror20',
+    body: 'pvz:dwarventodcraft15',
+    small: 'pvz:briannetod12',
+    yellow: 'pvz:dwarventodcraft18yellow',
+    profile: 'pvz:briannetod16',
+    packetCost: 'pvz:pico129',
+    tooltipTitle: 'pvz:pix118bold',
+    money: 'pvz:continuumbold14',
+    storeItem: 'pvz:houseofterror16',
     // Hotkey letters have their own ID: text packs replace houseofterror16 for words, HD packs can still redraw this one.
-    hotkey: 'hotkey',
-    achievement: 'dwarventodcraft12',
+    hotkey: 'pvz:hotkey',
+    achievement: 'pvz:dwarventodcraft12',
 } as const
 
 const SPRITE_NAMES = [
@@ -59,13 +57,11 @@ let pending: Promise<UIAssets> | undefined
 export async function loadUIAssets(): Promise<UIAssets> {
     await modResources.ready()
     if (pending) return pending
-    const loader = new ClientContentLoader()
     return pending = Promise.all([
-        loader.loadBaseContent().then(base => loadPresentationDefinitions(base)),
-        Promise.all(Object.entries(FONT_NAMES).map(async ([key, name]) => [key, await loadBitmapFont(name)] as const)),
+        loadPresentationDefinitions(),
+        Promise.all(Object.entries(FONT_NAMES).map(async ([key, id]) => [key, await modResources.font(id)] as const)),
         Promise.all(SPRITE_NAMES.map(async name => {
-            const frame = await modResources.asset(name, SpriteFrame)
-            if (!frame) throw new Error(`Missing UI sprite: ${name}`)
+            const frame = await modResources.sprite(name)
             return [name, frame] as const
         })),
         // All text is one table merged by key: the base, then each running Mod's own keys and translations.

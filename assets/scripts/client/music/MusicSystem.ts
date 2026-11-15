@@ -1,5 +1,5 @@
 import { modResources } from '@/client/content/ModResources'
-import { AudioClip, AudioSource, director, JsonAsset, Node, sys } from 'cc'
+import { AudioClip, AudioSource, director, Node, sys } from 'cc'
 import { musicResourceId, parseMusic, type Music, type MusicStemName } from '@/shared/content/music'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import {
@@ -327,8 +327,8 @@ export class MusicSystem {
     private static _loadTune(tuneId: MusicTuneId): Promise<Music | null> {
         let loading = this._tunes.get(tuneId)
         if (!loading) {
-            loading = modResources.asset(musicResourceId(tuneId), JsonAsset, undefined, 'music')
-                .then(asset => asset ? parseMusic(asset.json) : null)
+            loading = modResources.json('music', musicResourceId(tuneId))
+                .then(json => json === undefined ? null : parseMusic(json))
                 .catch(error => {
                     console.error(`[MusicSystem] Invalid music tune: ${tuneId}`, error)
                     this._tunes.delete(tuneId)
@@ -343,7 +343,7 @@ export class MusicSystem {
         const cached = this._clipLoading.get(path)
         if (cached) return cached
 
-        const loading = modResources.asset(path, AudioClip).then(clip => clip ?? null)
+        const loading = modResources.audio(path).then(clip => clip ?? null)
             .catch(error => { this._clipLoading.delete(path); throw error })
         this._clipLoading.set(path, loading)
         return loading

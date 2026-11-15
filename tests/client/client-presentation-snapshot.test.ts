@@ -89,7 +89,7 @@ test('client presentation snapshot restores interpolation, sequence, and consume
             ...saved,
             level: {
                 ...saved.level,
-                entities: [{ kind: 'item', entityId: 999, animation: null }],
+                entities: [{ kind: 'item', entityId: 999, data: { animation: null } }],
             },
         }),
         /item 999 is not in the current frame/,

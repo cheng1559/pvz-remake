@@ -3,7 +3,6 @@ import { ModHost } from '@/shared/mod/ModHost'
 import { ModAssets } from '@/shared/mod/ModAssets'
 import type { DefinitionSources } from '@/shared/content/DefinitionRegistry'
 import type { ClientViews } from './ClientViews'
-import type { ArchiveContentRegistry } from './ArchiveContentRegistry'
 import { modResources } from './ModResources'
 
 import * as viewport from '@/client/view/ClientViewport'
@@ -43,19 +42,13 @@ export class ClientModAssets extends ModAssets {
     /** An image file in this Mod's archive, read as is. */
     sprite(path: string) { return modResources.file(this.id, path, engine.SpriteFrame) }
     /** An image by resource ID: the Mod's own registration, unless a pack with higher priority replaces it (e.g. HD). */
-    async spriteResource(id: string) {
-        const frame = await modResources.sprite(id)
-        if (!frame) throw new Error(`Sprite is not installed: ${id}`)
-        return frame
-    }
+    spriteResource(id: string) { return modResources.sprite(id) }
 }
 
-export function createClientModHost(ownerId: string, definitions: DefinitionSources, resources: ArchiveContentRegistry,
-    views: ClientViews): ModHost {
+export function createClientModHost(ownerId: string, definitions: DefinitionSources, views: ClientViews): ModHost {
     return new ModHost(ownerId, {
         'cc': engine,
         'content/definitions': definitions,
-        'content/resources': resources,
         'client/views': views,
         'client/view/ClientViewport': viewport,
         'client/screens/MainMenuScreen': menu,

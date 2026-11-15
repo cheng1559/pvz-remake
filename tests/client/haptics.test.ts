@@ -59,12 +59,12 @@ test('haptics uses the iOS and Android bridges, coalesces requests by real time 
         ['ViewController', 'playHapticFeedback:', 'explosion'],
         ['ViewController', 'playHapticFeedback:', 'light'],
     ])
-    GameDebugSettings.setHapticsEnabled(false)
+    GameDebugSettings.set('hapticsEnabled', false)
     now = 480
     for (const style of ['light', 'medium', 'heavy', 'explosion']) Haptics.play(style)
     assert.equal(calls.length, 4, 'the toggle suppresses all feedback styles')
     assert.equal(load('platform/debug/GameDebugSettings', { cc: { sys } }).GameDebugSettings.hapticsEnabled, false)
-    GameDebugSettings.setHapticsEnabled(true)
+    GameDebugSettings.set('hapticsEnabled', true)
     Haptics.play()
     assert.equal(calls.length, 5)
     sys.os = 'android'

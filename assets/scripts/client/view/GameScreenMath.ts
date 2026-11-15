@@ -15,8 +15,12 @@ export function linear(startTick: number, endTick: number, tick: number, start: 
     return Math.round(linearFloat(startTick, endTick, tick, start, end))
 }
 
+/** TodAnimateCurve's CURVE_EASE_IN_OUT of a progress from 0 to 1: the S curve of the S curve. */
+export function easeInOutCurve(t: number): number {
+    return todCurveS(todCurveS(t))
+}
+
 export function easeInOut(startTick: number, endTick: number, tick: number, start: number, end: number) {
     const t = Math.max(0, Math.min(1, (tick - startTick) / (endTick - startTick)))
-    const eased = todCurveS(todCurveS(t))
-    return Math.round(lerp(start, end, eased))
+    return Math.round(lerp(start, end, easeInOutCurve(t)))
 }

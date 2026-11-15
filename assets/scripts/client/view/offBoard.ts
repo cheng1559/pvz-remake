@@ -14,12 +14,9 @@ import type { GridItemSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
  * animation differs (shared/content/animation, plantAnimation, zombieAnimation).
  */
 
-type Content = Awaited<ReturnType<typeof loadIntegratedGameContent>>
-let content: Promise<Content> | undefined
-
-/** The game's content, loaded once for everything shown off the board: loading it anew builds every definition again. */
-export function offBoardContent(): Promise<Content> {
-    return content ??= loadIntegratedGameContent().catch(error => { content = undefined; throw error })
+/** The game's content for everything shown off the board, the one a level is drawn with (loaded once). */
+export function offBoardContent(): ReturnType<typeof loadIntegratedGameContent> {
+    return loadIntegratedGameContent()
 }
 
 /** Nothing off the board is the server's, so nothing has to come out the same twice. */

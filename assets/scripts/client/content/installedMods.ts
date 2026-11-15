@@ -1,13 +1,11 @@
 import type { DefinitionSource } from '@/shared/content/DefinitionRegistry'
 import type { ModManifest } from '@/shared/mod'
-import type { ArchiveContentRegistry } from './ArchiveContentRegistry'
 import type { ClientViews } from './ClientViews'
 
-/** What the client takes from the installed Mods: who they are, their resources and views, and their definition layers. */
+/** What the client takes from the installed Mods: who they are, their views, and their definition layers (their resources are ModResources'). */
 export interface ClientMods {
     readonly manifests: readonly ModManifest[]
     readonly views: ClientViews
-    readonly clientContent: ArchiveContentRegistry
     readonly gameplayDefinitions: readonly DefinitionSource[]
     readonly presentationDefinitions: readonly DefinitionSource[]
 }

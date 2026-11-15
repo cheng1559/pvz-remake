@@ -14,15 +14,9 @@ export async function register(context: Context): Promise<void> {
         return [...entries, ...declarations.filter(spec => !entries.some((entry: any) => entry.name === spec.name))]
     })
     const help = new TextDecoder('utf-8').decode(assets.bytes('assets/help.txt'))
-    const { loadIntegratedGameContent } = host.get('client/game/loadIntegratedGameContent')
-    const { AudioClip } = host.get('cc')
     const { SoundSystem } = host.get('client/sound/SoundSystem')
-    const chime = async () => {
-        const game = await loadIntegratedGameContent()
-        const clip = await game.loader.load(game.registry.resolve('sounds', 'example:chime'), AudioClip)
-        await SoundSystem.playClip(clip)
-    }
-    const playChime = () => { void chime().catch(error => console.error('[Example Mod]', error)) }
+    // The Mod's own sound plays by its resource ID, as the game's do.
+    const playChime = () => { void SoundSystem.play('example:chime').catch((error: unknown) => console.error('[Example Mod]', error)) }
     const { executor } = host.get('platform/debug/DebugCliCommands')
     host.around(executor, 'execute', function (next, input, ...args) {
         const command = cli.parseDebugCliCommand(input)

@@ -14,7 +14,8 @@
   "presentation": {
     "screens": "presentation/definitions/screens.json",
     "conveyor": "presentation/definitions/conveyor.json",
-    "shovel": "presentation/definitions/shovel.json",
+    "tools": "presentation/definitions/tools.json",
+    "foley": "presentation/definitions/foley.json",
     "graves": "presentation/definitions/graves.json",
     "gridItems": "presentation/definitions/grid-items.json",
     "rules": "presentation/definitions/rules.json",
@@ -50309,7 +50310,6 @@
     },
     "json": {
       "pvz:strings": "assets/json/strings.json",
-      "pvz:presentation/definitions": "assets/presentation.json",
       "pvz:gameplay/store": "gameplay/store.json",
       "pvz:gameplay/almanac": "gameplay/almanac.json"
     },

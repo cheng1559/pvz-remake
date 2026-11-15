@@ -1,5 +1,6 @@
 import { director, Director } from 'cc'
 
+/** Resolves once the next frame has been drawn, so what was just put up shows before work holds the main thread. */
 export function waitForPreloadFrame(): Promise<void> {
     return new Promise(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
 }

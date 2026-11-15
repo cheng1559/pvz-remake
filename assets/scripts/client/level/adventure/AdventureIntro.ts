@@ -1,3 +1,4 @@
+import { modResources } from '@/client/content/ModResources'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ZOMBIE_FLAG_LAYER } from '@/shared/content/gameplay'
 import type { AdventureIntroLayout, PresentationDefinitions } from '@/shared/content/presentation'
@@ -10,7 +11,6 @@ import type {
     LevelIntroSnapshot,
     LevelParticleOwnerSnapshot,
 } from '../LevelPresentationSnapshot'
-import { SpriteRepository } from '@/client/content/ClientContentLoader'
 import { ParticleAssets } from '@/client/particle/ParticleAssets'
 import type { LevelIntro } from '../LevelIntro'
 import type { LevelIntroContext } from '../LevelPresentation'
@@ -36,6 +36,8 @@ const LAWN_MOWER_START = 620
 const LAWN_MOWER_DURATION = 25
 const SEED_BANK_START = 600
 const SEED_BANK_DURATION = 25
+/** SeedChooserScreen: the bank drops with the chooser. */
+const CHOOSER_BANK_START = 400
 const HOUSE_NAME_DURATION = 250
 /** CutScene::mGraveStoneTime: night graves rise after the pan, delaying the mowers and Ready-Set-Plant. */
 const GRAVE_STONE_TICKS = 100
@@ -72,8 +74,7 @@ export class AdventureIntro implements LevelIntro {
 
     static async create(context: LevelIntroContext, layout: AdventureIntroLayout): Promise<AdventureIntro> {
         const { content, level, slots, board, entityLayer, bank, houseName, audio, mowers, previewZombies } = context
-        const sprites = new SpriteRepository(content.registry, content.loader)
-        const [sod] = await Promise.all([sprites.load(layout.sod), ...(layout.rolls.length ? [ParticleAssets.load('pvz:sodroll')] : [])])
+        const [sod] = await Promise.all([modResources.sprite(layout.sod), ...(layout.rolls.length ? [ParticleAssets.load('pvz:sodroll')] : [])])
         const sodClip = uiNode({
             node: slots.sodClip, position: { x: layout.x - 400, y: 300 - layout.y }, anchor: { x: 0, y: 1 },
             size: { width: layout.rolls.length ? 0 : layout.width, height: sod.originalSize.height }, mask: Mask.Type.GRAPHICS_RECT,
@@ -83,7 +84,7 @@ export class AdventureIntro implements LevelIntro {
             sprite: { frame: sod, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node.active = false
         if (layout.existingSod) {
             const existing = layout.existingSod
-            const middle = await sprites.load(existing.sprite)
+            const middle = await modResources.sprite(existing.sprite)
             const node = uiNode({
                 name: 'ExistingSod', parent: board, position: { x: existing.x - WIDTH / 2, y: HEIGHT / 2 - existing.y }, anchor: { x: 0, y: 1 },
                 sprite: { frame: middle, sizeMode: Sprite.SizeMode.RAW, trim: false },
@@ -99,7 +100,7 @@ export class AdventureIntro implements LevelIntro {
             }).node
             node.setSiblingIndex(slots.sodRoll.getSiblingIndex() + index)
             const player = node.addComponent(ReanimPlayer)
-            await player.load('pvz:sodroll', content.registry, content.loader)
+            await player.load('pvz:sodroll')
             player.play({ loop: false, rate: 1, hideOnFinish: false })
             player.pause()
             node.active = false
@@ -111,7 +112,7 @@ export class AdventureIntro implements LevelIntro {
             // Screen text: it stays centered when a wide viewport shifts the lawn.
             const node = uiNode({ name: 'ReadySetPlant', parent: slots.overlayLayer, position: { x: 0, y: -24 }, active: false }).node
             ready = node.addComponent(ReanimPlayer)
-            await ready.load('pvz:readysetplant', content.registry, content.loader)
+            await ready.load('pvz:readysetplant')
             ready.play({ loop: false, rate: 1, hideOnFinish: false })
             ready.pause()
         }
@@ -149,8 +150,11 @@ export class AdventureIntro implements LevelIntro {
         }))
         introZombies.sort((left, right) => left.position.z - right.position.z)
             .forEach((node, index) => node.setSiblingIndex(index))
-        const intro = new AdventureIntro(board, sodClip, sodRolls, layout, ready, introZombies, previewTypes, content.presentation, bank, houseName,
+        // A conveyor level's belt stands in for the bank (Board::UpdateGame draws no bank with one).
+        const shown = level.conveyor ? { ...layout, hiddenSeedBank: true } : layout
+        const intro = new AdventureIntro(board, sodClip, sodRolls, shown, ready, introZombies, previewTypes, content.presentation, bank, houseName,
             mowers, audio, content.animations)
+        intro.seedChooser = context.seedChooser === true
         intro.graveTicks = level.graves?.length ? GRAVE_STONE_TICKS : 0
         intro.hasOpeningDialog = context.hasOpeningDialog === true
         if (context.previewTooltipSurface) {
@@ -224,6 +228,7 @@ export class AdventureIntro implements LevelIntro {
     }
 
     private graveTicks = 0
+    private seedChooser = false
     private get sodTicks(): number { return this.layout.rolls.length ? ROLL_SOD_END - ROLL_SOD_START : 0 }
     private get readyStart(): number { return INTRO_BASE_END + this.sodTicks + this.graveTicks }
     get graveStartTick(): number | undefined { return this.graveTicks ? PAN_LEFT_END + this.sodTicks : undefined }
@@ -341,8 +346,9 @@ export class AdventureIntro implements LevelIntro {
         this.houseName.active = !this.hasOpeningDialog && !this.layout.stationary && houseNameTicks > 0
         uiNode({ node: this.houseName, opacity: Math.min(255, houseNameTicks * 15) })
 
+        // The bank slides down from above the screen: after the lawn is rolled, or with the seed chooser's drop.
         const bankHeight = uiNode({ node: this.bank }).transform.height || 87
-        const bankStart = SEED_BANK_START + this.sodTicks
+        const bankStart = this.seedChooser ? CHOOSER_BANK_START : SEED_BANK_START + this.sodTicks
         this.bank.active = !this.layout.hiddenSeedBank && tick > bankStart
         this.bank.setPosition(
             easeInOut(475, PAN_LEFT_END, tick, 0, 10),

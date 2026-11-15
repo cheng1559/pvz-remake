@@ -1,4 +1,4 @@
-import { SpriteFrame, type Node } from 'cc'
+import type { Node } from 'cc'
 import { modResources } from '@/client/content/ModResources'
 import { SoundEffect } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'
@@ -7,7 +7,7 @@ import { uiAreaEdge } from '@/client/view/ClientViewport'
 
 const GARDENS: readonly MenuPageId[] = ['garden', 'mushroom', 'aquarium', 'tree']
 
-/** Returns false for pages that still use the basic navigation controls. */
+/** The controls of the gardens and the achievements page; false for a page that has none here. */
 export async function showMenuPageControls(
     parent: Node, ui: UI, id: MenuPageId, navigate: (action: MenuAction) => void,
 ): Promise<boolean> {
@@ -15,11 +15,7 @@ export async function showMenuPageControls(
     const names = gardenIndex >= 0 ? ['zen_nextgarden', 'zenshopbutton', 'zenshopbutton_highlight']
         : id === 'achievements' ? ['acheesements_back_highlight'] : []
     if (!names.length) return false
-    const frames = await Promise.all(names.map(async name => {
-        const frame = await modResources.asset(name, SpriteFrame)
-        if (!frame) throw new Error(`Missing page control: ${name}`)
-        return frame
-    }))
+    const frames = await Promise.all(names.map(name => modResources.sprite(name)))
     if (!parent.isValid) throw new Error('Menu page was destroyed while loading controls')
     if (gardenIndex >= 0) {
         const [next, shop, shopHighlight] = frames

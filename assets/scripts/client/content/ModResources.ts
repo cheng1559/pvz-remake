@@ -1,7 +1,7 @@
-import { Asset, assetManager, AudioClip, director, dynamicAtlasManager, ImageAsset, macro, JsonAsset, native, Rect, resources, Size, SpriteFrame, sys, TextAsset, Texture2D, Vec2 } from 'cc'
+import { Asset, assetManager, AudioClip, director, dynamicAtlasManager, ImageAsset, macro, JsonAsset, native, Prefab, Rect, resources, Size, SpriteFrame, sys, Texture2D, Vec2 } from 'cc'
 import type { BitmapFontAssets } from '@/client/font/BitmapFontAssets'
-import type { ContentCategory } from '@/shared/content'
 import type { FontConfig } from '@/client/font/FontRenderer.d'
+import { baseQualified } from '@/shared/mod'
 import { fontAreaMaterial } from '@/client/font/FontAreaMaterial'
 import { applySpriteDensity, getTextureDensity, setSpriteDensity } from './SpriteDensity'
 import { decodePremultipliedPng } from './PremultipliedPng'
@@ -19,10 +19,16 @@ interface LoadedPack {
     sprites: Map<string, Promise<SpriteFrame>>
     fonts: Map<string, Promise<BitmapFontAssets>>
     assets: Map<string, Promise<Asset>>
+    json: Map<string, unknown>
     urls: Map<string, string>
     runtimeRoot?: string
     premultiplied: Set<string>
 }
+
+/** The kinds of resource a pack registers (content.json `resources`). */
+export type ResourceKind = keyof ResourceManifest
+/** The resources that are JSON documents, read as such. */
+export type JsonResourceKind = 'json' | 'reanim' | 'particles' | 'music'
 
 type AssetType<T extends Asset> = new (...args: any[]) => T
 let nativeRuntimeReady = false
@@ -37,14 +43,16 @@ function archiveFile(files: ArchiveFiles, file: string): Promise<Uint8Array> {
     return readArchiveFile(files, file)
 }
 
-const archiveJson = contentJson
-
 function createPack(files: ArchiveFiles, id: string, content: ModContent, locale?: string): LoadedPack {
-    const { resources } = content
-    const manifest: PackManifest = { id, ...resources,
-        json: { ...resources.json, ...resources.reanim, ...resources.particles, ...resources.music } }
-    const premultiplied = new Set(Object.values(resources.sprites).filter(sprite => sprite.alphaMode === 'premultiplied').map(sprite => sprite.file))
-    return { locale, manifest, files, premultiplied, textures: new Map(), sprites: new Map(), fonts: new Map(), assets: new Map(), urls: new Map() }
+    const manifest: PackManifest = { id, ...content.resources }
+    const premultiplied = new Set(Object.values(manifest.sprites).filter(sprite => sprite.alphaMode === 'premultiplied').map(sprite => sprite.file))
+    return { locale, manifest, files, premultiplied, textures: new Map(), sprites: new Map(), fonts: new Map(), assets: new Map(), json: new Map(), urls: new Map() }
+}
+
+/** A JSON document of the pack, read once. */
+function packJson(pack: LoadedPack, file: string): unknown {
+    if (!pack.json.has(file)) pack.json.set(file, contentJson(pack.files, file))
+    return pack.json.get(file)
 }
 
 async function fileUrl(pack: LoadedPack, file: string, mime: string): Promise<string> {
@@ -191,10 +199,12 @@ export class ModResources {
         })()
     }
 
-    /** Bootstrap artwork can load from the base archive before pending Mod changes are applied. */
-    async baseAsset<T extends Asset>(id: string, type: AssetType<T>): Promise<T | undefined> {
+    /** Bootstrap artwork from the base archive alone, before pending Mod changes are applied (the PopCap logo). */
+    async baseSprite(id: string): Promise<SpriteFrame> {
         await this.readyBase()
-        return this.resolveAsset(id, type, undefined, true)
+        const pack = this.find('sprites', id, undefined, true)
+        if (!pack) throw new Error(`Sprite is not installed: ${id}`)
+        return this.spriteFrom(pack, baseQualified(id))
     }
 
     async baseContent(): Promise<ContentArchive> {
@@ -203,25 +213,20 @@ export class ModResources {
         return this.baseArchive
     }
 
+    /** Loads every resource of every running pack, for the loading screen. */
     async preload(onProgress: (progress: number) => void): Promise<void> {
         await this.ready()
-        const tasks = [...(this.base ? [this.base] : []), ...this.active].flatMap(pack => [
+        const tasks = this.running().flatMap(pack => [
             ...Object.entries(pack.manifest.sprites).flatMap(([id, entry]) =>
                 (entry.animations ?? [undefined]).map(animation => () => this.sprite(id, animation))),
             ...Object.keys(pack.manifest.fonts).map(id => () => this.font(id)),
-            ...Object.keys(pack.manifest.audio).map(id => () => this.asset(id, AudioClip)),
-            ...Object.keys(pack.manifest.json).map(id => () => this.asset(id, JsonAsset)),
-            ...Object.keys(pack.manifest.text).map(id => () => this.asset(id, TextAsset)),
+            ...Object.keys(pack.manifest.audio).map(id => () => this.audio(id)),
+            ...(['json', 'reanim', 'particles', 'music'] as const).flatMap(kind => Object.keys(pack.manifest[kind]).map(id => () => this.json(kind, id))),
+            ...Object.keys(pack.manifest.prefabs).map(id => () => this.prefab(id)),
         ])
         let completed = 0
         await Promise.all(tasks.map(async load => { await load(); onProgress(++completed / tasks.length) }))
         onProgress(1)
-    }
-
-    /** Resolve presentation assets before either the resources bundle or the content registry. */
-    async asset<T extends Asset>(id: string, type: AssetType<T>, animation?: string, category?: ContentCategory): Promise<T | undefined> {
-        await this.ready()
-        return this.resolveAsset(id, type, animation, false, category)
     }
 
     /** Raw Mod paths use the same decoder, caches and native upload limits as registered IDs. */
@@ -245,58 +250,107 @@ export class ModResources {
     /** Authoritative configuration bypasses presentation overrides. */
     async baseJson<T = unknown>(id: string): Promise<T> {
         await this.ready()
-        const asset = await this.resolveAsset(id, JsonAsset, undefined, true)
-        if (!asset) throw new Error(`Missing base JSON: ${id}`)
-        return asset.json as T
+        const pack = this.find('json', id, undefined, true)
+        if (!pack) throw new Error(`Missing base JSON: ${id}`)
+        return packJson(pack, pack.manifest.json[baseQualified(id)]) as T
     }
 
     /** The text language: the last running Mod's manifest locale, else the base's. */
     async locale(): Promise<string> {
         await this.ready()
-        const packs = [...(this.base ? [this.base] : []), ...this.active]
-            .filter(pack => pack === this.base || !this.manager.failures.has(pack.manifest.id))
-        return packs.reverse().find(pack => pack.locale)?.locale ?? 'en-US'
+        return this.running().reverse().find(pack => pack.locale)?.locale ?? 'en-US'
     }
 
     /** Every running layer of a JSON resource, base first and the highest-priority Mod last, for tables merged by key. */
     async jsonLayers(id: string): Promise<{ owner: string, json: unknown }[]> {
         await this.ready()
-        const packs = [...(this.base ? [this.base] : []), ...this.active]
-            .filter(pack => (pack === this.base || !this.manager.failures.has(pack.manifest.id)) && pack.manifest.json[id])
-        return packs.map(pack => ({ owner: pack.manifest.id, json: archiveJson(pack.files, pack.manifest.json[id]) }))
+        const qualified = baseQualified(id)
+        return this.running().filter(pack => pack.manifest.json[qualified])
+            .map(pack => ({ owner: pack.manifest.id, json: contentJson(pack.files, pack.manifest.json[qualified]) }))
     }
 
-    async ids(type: AssetType<Asset>, prefix = ''): Promise<string[]> {
+    /** The IDs of a kind of resource that any running pack registers. */
+    async ids(kind: ResourceKind): Promise<string[]> {
         await this.ready()
-        const kind = type === JsonAsset ? 'json' : type === AudioClip ? 'audio' : type === TextAsset ? 'text' : 'sprites'
-        return [...new Set([...(this.base ? [this.base] : []), ...this.active]
-            .flatMap(pack => Object.keys(pack.manifest[kind])))].filter(id => id.startsWith(prefix))
+        return [...new Set(this.running().flatMap(pack => Object.keys(pack.manifest[kind])))]
     }
 
-    private async resolveAsset<T extends Asset>(id: string, type: AssetType<T>, animation?: string, baseOnly = false, category?: ContentCategory): Promise<T | undefined> {
-        const assetType: AssetType<Asset> = type
-        if (!id.includes(':')) {
-            if (assetType === AudioClip || assetType === SpriteFrame || assetType === Texture2D) id = id.slice(id.lastIndexOf('/') + 1)
-            id = `pvz:${id}`
-        }
-        if (assetType === SpriteFrame) {
-            const pack = this.find('sprites', id, animation, baseOnly)
-            const asset: Asset | undefined = pack && await this.spriteFrom(pack, id)
-            return asset as T | undefined
-        }
-        if (assetType === Texture2D) {
-            const pack = this.find('sprites', id, animation, baseOnly)
-            if (!pack) return undefined
-            const entry = pack.manifest.sprites[id]
-            const asset: Asset = await texture(pack, entry.file, entry.scale ?? 1)
-            return asset as T
-        }
-        const kind = category === 'sprites' ? undefined : category === 'sounds' ? 'audio' : category ??
-            (assetType === AudioClip ? 'audio' : assetType === JsonAsset ? 'json' : assetType === TextAsset ? 'text' : undefined)
-        if (!kind) return undefined
-        const pack = this.find(kind, id, animation, baseOnly)
+    /**
+     * A sprite: the highest-priority running pack's that has it, for `animation` when the pack's entry is limited to some
+     * animations (an HD or text pack redrawing a picture only where those draw it).
+     */
+    async sprite(id: string, animation?: string): Promise<SpriteFrame> {
+        await this.ready()
+        const pack = this.find('sprites', id, animation)
+        if (!pack) throw new Error(`Sprite is not installed: ${id}`)
+        return this.spriteFrom(pack, baseQualified(id))
+    }
+
+    /** A sprite's image file for the platform to read itself (mouse cursors): a file path on native, a Blob URL on the web. */
+    async spriteUrl(id: string): Promise<{ url: string, scale: number } | undefined> {
+        await this.ready()
+        const pack = this.find('sprites', id)
         if (!pack) return undefined
-        return this.fileAsset(pack, pack.manifest[kind][id], type)
+        const entry = pack.manifest.sprites[baseQualified(id)]
+        return { url: await fileUrl(pack, entry.file, 'image/png'), scale: entry.scale ?? 1 }
+    }
+
+    /** A sound or a music stem, or nothing when no running pack has it (a game without that sound plays none). */
+    async audio(id: string): Promise<AudioClip | undefined> {
+        await this.ready()
+        const pack = this.find('audio', id)
+        return pack && this.fileAsset(pack, pack.manifest.audio[baseQualified(id)], AudioClip)
+    }
+
+    /** A JSON resource of `kind` as its document, or nothing when no running pack has it. */
+    async json(kind: JsonResourceKind, id: string): Promise<unknown> {
+        await this.ready()
+        const pack = this.find(kind, id)
+        return pack && packJson(pack, pack.manifest[kind][baseQualified(id)])
+    }
+
+    /** A prefab: the base's are the engine's own imports, which keep their compiled scripts and bindings. */
+    async prefab(id: string): Promise<Prefab> {
+        await this.ready()
+        const pack = this.find('prefabs', id)
+        if (!pack) throw new Error(`Prefab is not installed: ${id}`)
+        const file = pack.manifest.prefabs[baseQualified(id)]
+        if (pack !== this.base) return this.fileAsset(pack, file, Prefab)
+        const path = file.replace(/^assets\/prefabs\//, '').replace(/\.prefab$/i, '')
+        return new Promise((resolve, reject) => resources.load(path, Prefab, (error, asset) => error ? reject(error) : resolve(asset)))
+    }
+
+    async font(id: string): Promise<BitmapFontAssets> {
+        await this.ready()
+        const pack = this.find('fonts', id)
+        if (!pack) throw new Error(`Font is not installed: ${id}`)
+        const qualified = baseQualified(id)
+        const cached = pack.fonts.get(qualified)
+        if (cached) return cached
+        const file = pack.manifest.fonts[qualified]
+        const pending = (async () => {
+            const config = new JsonAsset()
+            config.json = contentJson(pack.files, file)
+            const data = config.json as FontConfig
+            if (!Array.isArray(data.layers) || !data.layers.length) throw new Error(`Invalid Mod font: ${id}`)
+            const directory = file.slice(0, file.lastIndexOf('/') + 1)
+            const textures = await Promise.all(data.layers.map(layer => {
+                relativeFile(layer.image)
+                return texture(pack, `${directory}${layer.image}.png`)
+            }))
+            if (pack !== this.base) return { config, textures }
+            // Linear minification preserves one-pixel strokes when the window shrinks; seed packet costs draw these atlases directly.
+            for (const atlas of textures) atlas.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.NEAREST)
+            // Pixel fonts such as Pix118Bold need area sampling to keep even strokes at non-integer scales.
+            return { config, textures, materials: await Promise.all(textures.map(fontAreaMaterial)) }
+        })().catch(error => { pack.fonts.delete(qualified); throw error })
+        pack.fonts.set(qualified, pending)
+        return pending
+    }
+
+    /** The base, then the running Mods in priority order (a Mod that failed to load is not running). */
+    private running(): LoadedPack[] {
+        return [...(this.base ? [this.base] : []), ...this.active.filter(pack => !this.manager.failures.has(pack.manifest.id))]
     }
 
     private fileAsset<T extends Asset>(pack: LoadedPack, file: string, type: AssetType<T>): Promise<T> {
@@ -309,42 +363,26 @@ export class ModResources {
                 const ext = file.slice(file.lastIndexOf('.')).toLowerCase()
                 return remote<AudioClip>(pack, file, ext, ext === '.mp3' ? 'audio/mpeg' : 'audio/wav')
             }
-            if (assetType !== JsonAsset && assetType !== TextAsset) return remote<T>(pack, file, file.slice(file.lastIndexOf('.')), 'application/octet-stream')
-            const asset = assetType === JsonAsset ? new JsonAsset() : new TextAsset()
-            asset.name = file.slice(file.lastIndexOf('/') + 1)
-            if (asset instanceof JsonAsset) asset.json = archiveJson(pack.files, file)
-            else asset.text = new TextDecoder('utf-8').decode(await archiveFile(pack.files, file))
-            return asset
+            return remote<T>(pack, file, file.slice(file.lastIndexOf('.')), 'application/octet-stream')
         })().catch(error => { pack.assets.delete(key); throw error })
         pack.assets.set(key, pending)
         return pending as Promise<T>
     }
 
-    private find(kind: keyof ResourceManifest, id: string, animation?: string, baseOnly = false): LoadedPack | undefined {
+    /**
+     * The highest-priority running pack that registers `id` (one without a namespace is the base's, `pvz:`): the last
+     * Mod first, the base last; `baseOnly`, the base alone.
+     */
+    private find(kind: ResourceKind, id: string, animation?: string, baseOnly = false): LoadedPack | undefined {
+        const qualified = baseQualified(id)
         return [...(baseOnly ? [] : this.active)].reverse().concat(this.base ? [this.base] : []).find(pack => {
             if (pack !== this.base && this.manager.failures.has(pack.manifest.id)) return false
-            const entry = pack.manifest[kind][id]
+            const entry = pack.manifest[kind][qualified]
             if (!entry) return false
             if (kind !== 'sprites') return true
             const scopes = (entry as PackSprite).animations
             return !scopes || (animation !== undefined && scopes.includes(animation))
         })
-    }
-
-    async sprite(id: string, animation?: string): Promise<SpriteFrame | undefined> {
-        await this.ready()
-        const pack = this.find('sprites', id, animation)
-        if (!pack) return undefined
-        return this.spriteFrom(pack, id)
-    }
-
-    /** A sprite's image file for the platform to read itself (mouse cursors): a file path on native, a Blob URL on the web. */
-    async spriteUrl(id: string): Promise<{ url: string, scale: number } | undefined> {
-        await this.ready()
-        const pack = this.find('sprites', id)
-        if (!pack) return undefined
-        const entry = pack.manifest.sprites[id]
-        return { url: await fileUrl(pack, entry.file, 'image/png'), scale: entry.scale ?? 1 }
     }
 
     private spriteFrom(pack: LoadedPack, id: string, entry = pack.manifest.sprites[id]): Promise<SpriteFrame> {
@@ -368,34 +406,6 @@ export class ModResources {
         pack.sprites.set(id, pending)
         return pending
     }
-
-    async font(id: string): Promise<BitmapFontAssets | undefined> {
-        await this.ready()
-        const pack = this.find('fonts', id)
-        if (!pack) return undefined
-        const cached = pack.fonts.get(id)
-        if (cached) return cached
-        const file = pack.manifest.fonts[id]
-        const pending = (async () => {
-            const config = new JsonAsset()
-            config.json = archiveJson(pack.files, file)
-            const data = config.json as FontConfig
-            if (!Array.isArray(data.layers) || !data.layers.length) throw new Error(`Invalid Mod font: ${id}`)
-            const directory = file.slice(0, file.lastIndexOf('/') + 1)
-            const textures = await Promise.all(data.layers.map(layer => {
-                relativeFile(layer.image)
-                return texture(pack, `${directory}${layer.image}.png`)
-            }))
-            if (pack !== this.base) return { config, textures }
-            // Linear minification preserves one-pixel strokes when the window shrinks; seed packet costs draw these atlases directly.
-            for (const atlas of textures) atlas.setFilters(Texture2D.Filter.LINEAR, Texture2D.Filter.NEAREST)
-            // Pixel fonts such as Pix118Bold need area sampling to keep even strokes at non-integer scales.
-            return { config, textures, materials: await Promise.all(textures.map(fontAreaMaterial)) }
-        })().catch(error => { pack.fonts.delete(id); throw error })
-        pack.fonts.set(id, pending)
-        return pending
-    }
-
 }
 
 async function loadBaseArchive(): Promise<Uint8Array> {

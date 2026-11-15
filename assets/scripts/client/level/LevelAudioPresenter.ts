@@ -117,13 +117,6 @@ export class LevelAudioPresenter {
             case 'mowerScored': void SoundSystem.playWithPitch(SoundEffect.Points, Math.max(0, Math.min(6, 6 - Number(event.data.remaining)))); break
             // Not enough sun, and an enemy producer taking sun away: the sun counter flashes with the buzzer.
             case 'sunFlash': case 'sunDrained': void SoundSystem.play(SoundEffect.Buzzer); break
-            // Board::NextWaveComing on Whack-a-Zombie: the awooga before the first wave, the siren before the last.
-            case 'nextWaveComing':
-                if (event.data.first) void SoundSystem.play(SoundEffect.Awooga)
-                if (event.data.siren) void SoundSystem.play(SoundEffect.Siren)
-                break
-            // Board::DropLootPiece: FOLEY_SPAWN_SUN for the three suns a whacked zombie can drop.
-            case 'sunDropped': void SoundSystem.playFoley(SoundEffect.Throw, 10); break
             // Board::MouseDownWithPlant: FOLEY_DROP for a seed dropped where it cannot be planted.
             case 'seedDropped': void SoundSystem.play(SoundEffect.Drop); break
             case 'levelAwardCollected':

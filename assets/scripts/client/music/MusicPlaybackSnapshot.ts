@@ -1,3 +1,4 @@
+import { boolean, exact, finiteInRange, nonNegativeFinite } from '@/shared/validate'
 import type { MusicTuneId } from '@/shared/content/music'
 export type { MusicTuneId } from '@/shared/content/music'
 
@@ -39,74 +40,44 @@ const KEYS: (keyof MusicPlaybackSnapshot)[] = [
 
 export function parseMusicPlaybackSnapshot(value: unknown): MusicPlaybackSnapshot | null {
     if (value === null) return null
-    const source = record(value)
-    exactKeys(source)
+    const source = exact(value, KEYS, 'music snapshot', ['drumsPhaseSec'])
     const tuneId = member(source.tuneId, TUNES, 'tuneId')
     const burstState = member(source.burstState, BURST_STATES, 'burstState')
     const drumsState = member(source.drumsState, DRUMS_STATES, 'drumsState')
-    const fadeOutCounter = nonNegative(source.fadeOutCounter, 'fadeOutCounter')
-    const fadeOutDuration = nonNegative(source.fadeOutDuration, 'fadeOutDuration')
+    const fadeOutCounter = nonNegativeFinite(source.fadeOutCounter, 'music snapshot.fadeOutCounter')
+    const fadeOutDuration = nonNegativeFinite(source.fadeOutDuration, 'music snapshot.fadeOutDuration')
     if (fadeOutCounter > fadeOutDuration || (fadeOutCounter > 0) !== (fadeOutDuration > 0)) {
         throw new TypeError('music snapshot fade counters are inconsistent')
     }
     const queuedDrumsBoundarySec = source.queuedDrumsBoundarySec === null
         ? null
-        : nonNegative(source.queuedDrumsBoundarySec, 'queuedDrumsBoundarySec')
+        : nonNegativeFinite(source.queuedDrumsBoundarySec, 'music snapshot.queuedDrumsBoundarySec')
     const queued = drumsState === 'on-queued' || drumsState === 'off-queued'
     if (queued !== (queuedDrumsBoundarySec !== null)) {
         throw new TypeError('music snapshot queued drums boundary is inconsistent with drumsState')
     }
     return {
         tuneId,
-        ...(source.drumsPhaseSec === undefined ? {} : { drumsPhaseSec: nonNegative(source.drumsPhaseSec, 'drumsPhaseSec') }),
-        timeSec: nonNegative(source.timeSec, 'timeSec'),
-        paused: boolean(source.paused, 'paused'),
-        mainVolume: volume(source.mainVolume, 'mainVolume'),
-        drumsVolume: volume(source.drumsVolume, 'drumsVolume'),
-        hihatsVolume: volume(source.hihatsVolume, 'hihatsVolume'),
+        ...(source.drumsPhaseSec === undefined ? {} : { drumsPhaseSec: nonNegativeFinite(source.drumsPhaseSec, 'music snapshot.drumsPhaseSec') }),
+        timeSec: nonNegativeFinite(source.timeSec, 'music snapshot.timeSec'),
+        paused: boolean(source.paused, 'music snapshot.paused'),
+        mainVolume: finiteInRange(source.mainVolume, 0, 1, 'music snapshot.mainVolume'),
+        drumsVolume: finiteInRange(source.drumsVolume, 0, 1, 'music snapshot.drumsVolume'),
+        hihatsVolume: finiteInRange(source.hihatsVolume, 0, 1, 'music snapshot.hihatsVolume'),
         fadeOutCounter,
         fadeOutDuration,
-        syncCounter: nonNegative(source.syncCounter, 'syncCounter'),
+        syncCounter: nonNegativeFinite(source.syncCounter, 'music snapshot.syncCounter'),
         burstState,
-        burstCounter: nonNegative(source.burstCounter, 'burstCounter'),
+        burstCounter: nonNegativeFinite(source.burstCounter, 'music snapshot.burstCounter'),
         drumsState,
-        drumsCounter: nonNegative(source.drumsCounter, 'drumsCounter'),
+        drumsCounter: nonNegativeFinite(source.drumsCounter, 'music snapshot.drumsCounter'),
         queuedDrumsBoundarySec,
-        queuedDrumsAtSec: nonNegative(source.queuedDrumsAtSec, 'queuedDrumsAtSec'),
-        queuedDrumsBoundaryWrapped: boolean(source.queuedDrumsBoundaryWrapped, 'queuedDrumsBoundaryWrapped'),
+        queuedDrumsAtSec: nonNegativeFinite(source.queuedDrumsAtSec, 'music snapshot.queuedDrumsAtSec'),
+        queuedDrumsBoundaryWrapped: boolean(source.queuedDrumsBoundaryWrapped, 'music snapshot.queuedDrumsBoundaryWrapped'),
     }
-}
-
-function record(value: unknown): Record<string, unknown> {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('music snapshot must be an object')
-    return value as Record<string, unknown>
-}
-
-function exactKeys(source: Record<string, unknown>) {
-    const allowed = new Set<string>([...KEYS, 'drumsPhaseSec'])
-    for (const key of KEYS) if (!(key in source)) throw new TypeError(`music snapshot.${key} is required`)
-    for (const key of Object.keys(source)) if (!allowed.has(key)) throw new TypeError(`music snapshot.${key} is not supported`)
 }
 
 function member<T extends string>(value: unknown, allowed: Set<T>, name: string): T {
     if (typeof value !== 'string' || !allowed.has(value as T)) throw new TypeError(`music snapshot.${name} is invalid`)
     return value as T
-}
-
-function nonNegative(value: unknown, name: string) {
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-        throw new TypeError(`music snapshot.${name} must be a non-negative finite number`)
-    }
-    return value
-}
-
-function volume(value: unknown, name: string) {
-    const parsed = nonNegative(value, name)
-    if (parsed > 1) throw new TypeError(`music snapshot.${name} must be at most 1`)
-    return parsed
-}
-
-function boolean(value: unknown, name: string) {
-    if (typeof value !== 'boolean') throw new TypeError(`music snapshot.${name} must be boolean`)
-    return value
 }

@@ -39,8 +39,9 @@ export class ClientAnimationRegistry {
     }
 }
 
+/** A copy of the clips with what they leave out filled in (rateScale 1). */
 function cloneDefinition<T extends object>(value: T): T {
-    return Object.fromEntries(Object.entries(value).map(([slot, animation]) => [slot, { ...animation }])) as T
+    return Object.fromEntries(Object.entries(value).map(([slot, animation]) => [slot, { rateScale: 1, ...animation }])) as T
 }
 
 function validateClip(target: string, slot: string, value: ClientAnimationClip): void {
@@ -51,10 +52,10 @@ function validateClip(target: string, slot: string, value: ClientAnimationClip):
     if (typeof value.reanimId !== 'string' || value.reanimId.length === 0) {
         throw new TypeError(`${target}.${slot}.reanimId must be a non-empty string`)
     }
-    for (const key of ['rateScale', 'x', 'y'] as const) {
+    for (const key of ['x', 'y'] as const) {
         if (!Number.isFinite(value[key])) throw new TypeError(`${target}.${slot}.${key} must be finite`)
     }
-    if (value.rateScale <= 0) throw new TypeError(`${target}.${slot}.rateScale must be positive`)
+    if (value.rateScale !== undefined && (!Number.isFinite(value.rateScale) || value.rateScale <= 0)) throw new TypeError(`${target}.${slot}.rateScale must be positive`)
     if (value.fps !== undefined && (!Number.isFinite(value.fps) || value.fps <= 0)) throw new TypeError(`${target}.${slot}.fps must be positive`)
     if (value.attachmentTrackId !== undefined &&
         (typeof value.attachmentTrackId !== 'string' || value.attachmentTrackId.length === 0)) {

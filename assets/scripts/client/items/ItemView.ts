@@ -1,6 +1,6 @@
+import { modResources } from '@/client/content/ModResources'
 import { type Node, Sprite } from 'cc'
-import { SpriteRepository } from '@/client/content/ClientContentLoader'
-import type { LevelEntitySnapshot } from '@/client/level/LevelPresentationSnapshot'
+import { type LevelEntitySnapshot, parseSavedPlayback, viewSaveData } from '@/client/level/LevelPresentationSnapshot'
 import type { Content, EntityView, LevelStage, StageEvent } from '@/client/level/LevelStage'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -8,12 +8,11 @@ import { SoundSystem } from '@/client/sound/SoundSystem'
 import { uiNode } from '@/client/view/uiNode'
 import { SUN_BANK_TARGET } from '@/shared/content/gameplay'
 import type { ItemPresentationDefinition } from '@/shared/content/presentation'
-import type { ItemSnapshot } from '@/shared/protocol/index'
+import { jsonRoundTrip, type ItemSnapshot, type JsonObject } from '@/shared/protocol/index'
 
 /** Item nodes sit at the 60x60 item's center (they scale around it); definitions measure from its top-left. */
 const HALF = 30
 
-export type ItemViewSnapshot = Extract<LevelEntitySnapshot, { kind: 'item' }>
 
 export interface ItemViewContext {
     node: Node
@@ -40,10 +39,9 @@ export class ItemView implements EntityView<ItemSnapshot> {
     }
 
     async initialize(): Promise<void> {
-        const { node, content } = this.context, definition = this.presentation
-        const sprites = new SpriteRepository(content.registry, content.loader)
+        const { node } = this.context, definition = this.presentation
         const image = async (name: string, sprite: string, [x, y]: readonly [number, number]) => {
-            const frame = await sprites.load(sprite)
+            const frame = await modResources.sprite(sprite)
             return uiNode({ name, parent: node, position: { x: x - HALF, y: HALF - y }, anchor: { x: 0, y: 1 },
                 sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node
         }
@@ -52,7 +50,7 @@ export class ItemView implements EntityView<ItemSnapshot> {
         const [x, y] = definition.offset
         const animation = this.animation = uiNode({ name: 'ItemAnimation', parent: node, position: { x: x - HALF, y: HALF - y } }).node
         const player = animation.addComponent(ReanimPlayer)
-        await player.load(definition.reanim, content.registry, content.loader)
+        await player.load(definition.reanim)
         const [min, max] = definition.rate
         // Coins start at a random point of their spin, each at its own speed.
         player.play({ loop: true, rate: min + Math.random() * (max - min), timeSeconds: min === max ? 0 : Math.random() * player.durationSeconds })
@@ -90,12 +88,13 @@ export class ItemView implements EntityView<ItemSnapshot> {
     }
 
     /** Where its spin is, for a save. */
-    snapshot(entityId: number): ItemViewSnapshot {
-        return { kind: 'item', entityId, animation: this.animation.getComponent(ReanimPlayer)?.snapshot() ?? null }
+    snapshot(entityId: number): LevelEntitySnapshot {
+        return { kind: 'item', entityId, data: jsonRoundTrip({ animation: this.animation.getComponent(ReanimPlayer)?.snapshot() ?? null }) as unknown as JsonObject }
     }
 
-    restore(snapshot: ItemViewSnapshot): void {
-        if (snapshot.animation) this.animation.getComponent(ReanimPlayer)?.restore(snapshot.animation)
+    restore(snapshot: LevelEntitySnapshot): void {
+        const animation = parseSavedPlayback(viewSaveData(snapshot, ['animation']).animation)
+        if (animation) this.animation.getComponent(ReanimPlayer)?.restore(animation)
     }
 
     /** Coin::Coin: the sound of an item as it comes. */

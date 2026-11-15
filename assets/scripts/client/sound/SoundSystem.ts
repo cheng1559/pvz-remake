@@ -1,7 +1,7 @@
 import { AudioClip, AudioSource, director, Node, sys } from 'cc'
 import { modResources } from '@/client/content/ModResources'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import type { PresentationSound } from '@/shared/content/presentation'
+import type { FoleyDefinition, PresentationSound } from '@/shared/content/presentation'
 
 type NativeAudioEngine = {
     play2d?: (url: string, loop: boolean, volume: number) => number
@@ -118,67 +118,15 @@ export class SoundSystem {
     private static readonly _pitchStepMultiplier = 1.0594630943592953
     private static readonly _foleyRecentSuppressMs = 100
     private static readonly _maxNativeOneShots = 32
-    private static readonly _foleyPitchRanges: Partial<Record<SoundEffect, number>> = {
-        [SoundEffect.Points]: 10,
-        [SoundEffect.ShieldHit]: 10,
-        [SoundEffect.Splat]: 10,
-        [SoundEffect.PlasticHit]: 5,
-        [SoundEffect.Grassstep]: 2,
-        [SoundEffect.PoleVault]: 5,
-        [SoundEffect.Lawnmower]: 10,
-        [SoundEffect.Throw]: 10,
-        [SoundEffect.ChompSoft]: 4,
-        [SoundEffect.LimbsPop]: 10,
-        [SoundEffect.SnowPeaSparkles]: 10,
-        [SoundEffect.ZombieFalling1]: 10,
-        [SoundEffect.ZombieFalling2]: 10,
-        [SoundEffect.Coin]: 10,
-        [SoundEffect.DirtRise]: 5,
-        [SoundEffect.BigChomp]: -2,
-        [SoundEffect.Juicy]: 2,
-        [SoundEffect.Shovel]: 5,
-        [SoundEffect.PlantGrow]: -2,
-    }
-    private static readonly _foleyVariants: Partial<Record<SoundEffect, readonly SoundEffect[]>> = {
-        [SoundEffect.ShieldHit]: [SoundEffect.ShieldHit, SoundEffect.ShieldHit2],
-        [SoundEffect.Splat]: [SoundEffect.Splat, SoundEffect.Splat2, SoundEffect.Splat3],
-        [SoundEffect.NewspaperRarrgh]: [SoundEffect.NewspaperRarrgh, SoundEffect.NewspaperRarrgh2, SoundEffect.NewspaperRarrgh2],
-        [SoundEffect.PlasticHit]: [SoundEffect.PlasticHit, SoundEffect.PlasticHit2],
-        [SoundEffect.Throw]: [SoundEffect.Throw, SoundEffect.Throw, SoundEffect.Throw, SoundEffect.Throw2],
-        [SoundEffect.Chomp]: [SoundEffect.Chomp, SoundEffect.Chomp2],
-        [SoundEffect.Plant]: [SoundEffect.Plant, SoundEffect.Plant2],
-        [SoundEffect.Groan]: [
-            SoundEffect.Groan,
-            SoundEffect.Groan2,
-            SoundEffect.Groan3,
-            SoundEffect.Groan4,
-            SoundEffect.Groan5,
-            SoundEffect.Groan6,
-        ],
-        [SoundEffect.ZombieFalling1]: [SoundEffect.ZombieFalling1, SoundEffect.ZombieFalling2],
-        [SoundEffect.CrazyDaveShort1]: [
-            SoundEffect.CrazyDaveShort1,
-            SoundEffect.CrazyDaveShort2,
-            SoundEffect.CrazyDaveShort3,
-        ],
-        [SoundEffect.CrazyDaveLong1]: [
-            SoundEffect.CrazyDaveLong1,
-            SoundEffect.CrazyDaveLong2,
-            SoundEffect.CrazyDaveLong3,
-        ],
-        [SoundEffect.CrazyDaveExtraLong1]: [
-            SoundEffect.CrazyDaveExtraLong1,
-            SoundEffect.CrazyDaveExtraLong2,
-            SoundEffect.CrazyDaveExtraLong3,
-        ],
-    }
-    private static _clips: Map<SoundEffect, AudioClip> = new Map()
-    private static _loading: Map<SoundEffect, Promise<AudioClip | null>> = new Map()
-    private static _audioBuffers: Map<SoundEffect, Promise<AudioBuffer | null>> = new Map()
-    private static _foleyLastPlayedAt: Map<SoundEffect, number> = new Map()
+    /** The presentation's foley (useFoley); none before it loads. */
+    private static _foley: Readonly<Record<string, FoleyDefinition>> = {}
+    private static _clips: Map<string, AudioClip> = new Map()
+    private static _loading: Map<string, Promise<AudioClip | null>> = new Map()
+    private static _audioBuffers: Map<string, Promise<AudioBuffer | null>> = new Map()
+    private static _foleyLastPlayedAt: Map<string, number> = new Map()
     private static _nativeOneShotIds: Set<number> = new Set()
     private static _exclusiveSources: Map<string, AudioSource> = new Map()
-    private static _exclusiveEffects: Map<string, SoundEffect> = new Map()
+    private static _exclusiveEffects: Map<string, string> = new Map()
     private static _exclusiveBaseVolumes: Map<string, number> = new Map()
     private static _exclusiveTokens: Map<string, number> = new Map()
     private static _exclusiveNativeAudioIds: Map<string, number> = new Map()
@@ -187,6 +135,11 @@ export class SoundSystem {
     private static _musicVolume = DEFAULT_MUSIC_VOLUME
     private static _sfxVolume = DEFAULT_SFX_VOLUME
     private static readonly _musicVolumeListeners = new Set<() => void>()
+
+    /** The presentation's foley by audio ID, once it has loaded. */
+    public static useFoley(foley: Readonly<Record<string, FoleyDefinition>>): void {
+        this._foley = foley
+    }
 
     public static preloadAll() {
         return Promise.all(this._effects.map((effect) => this.load(effect)))
@@ -216,14 +169,14 @@ export class SoundSystem {
         this._syncExclusiveSourceVolumes()
     }
 
-    public static load(effect: SoundEffect): Promise<AudioClip | null> {
+    public static load(effect: string): Promise<AudioClip | null> {
         const cached = this._clips.get(effect)
         if (cached) return Promise.resolve(cached)
 
         const loading = this._loading.get(effect)
         if (loading) return loading
 
-        const promise = modResources.asset(effect, AudioClip).then((clip) => {
+        const promise = modResources.audio(effect).then((clip) => {
             if (clip) {
                 this._clips.set(effect, clip)
                 this._preloadNativeSfx(clip)
@@ -235,14 +188,7 @@ export class SoundSystem {
         return promise
     }
 
-    public static async play(effect: SoundEffect, volume = 1) {
-        if (!GameDebugSettings.perfSfxEnabled) return
-        const clip = await this.load(effect)
-        if (!clip) return
-        return this.playClip(clip, volume)
-    }
-
-    public static async playSfx(effect: SoundEffect, volume = 1) {
+    public static async play(effect: string, volume = 1) {
         if (!GameDebugSettings.perfSfxEnabled) return
         const clip = await this.load(effect)
         if (!clip) return
@@ -257,31 +203,31 @@ export class SoundSystem {
         this._getSource().playOneShot(clip, resolvedVolume)
     }
 
-    public static playMusicVolumeSfx(effect: SoundEffect, volume = 1) {
+    public static playMusicVolumeSfx(effect: string, volume = 1) {
         const sfxVolume = this._sfxVolume
         const musicScaledVolume = sfxVolume < 1e-6 ? 0 : volume * this._musicVolume / sfxVolume
-        return this.playSfx(effect, musicScaledVolume)
+        return this.play(effect, musicScaledVolume)
     }
 
     /** Sounds a presentation names, each as foley (varied, not overlapping itself) or as a plain sample. */
     public static playSounds(sounds: readonly PresentationSound[] | undefined): void {
         for (const sound of sounds ?? []) {
-            if (sound.foley) void this.playFoley(sound.audio as SoundEffect, sound.pitchRange)
-            else void this.play(sound.audio as SoundEffect)
+            if (sound.foley) void this.playFoley(sound.audio, sound.pitchRange)
+            else void this.play(sound.audio)
         }
     }
 
-    public static playFoley(effect: SoundEffect, pitchRange?: number, volume = 1) {
+    public static playFoley(effect: string, pitchRange?: number, volume = 1) {
         if (!GameDebugSettings.perfSfxEnabled) return Promise.resolve()
         if (this._hasFoleyPlayedTooRecently(effect)) return Promise.resolve()
 
         const selectedEffect = this._pickFoleyEffect(effect)
-        const resolvedPitchRange = pitchRange ?? this._foleyPitchRanges[effect] ?? 0
+        const resolvedPitchRange = pitchRange ?? this._foley[effect]?.pitchRange ?? 0
         const pitch = resolvedPitchRange === 0 ? 0 : Math.random() * resolvedPitchRange
         return this.playWithPitch(selectedEffect, pitch, volume)
     }
 
-    public static async playExclusive(effect: SoundEffect, channel: string = effect, volume = 1) {
+    public static async playExclusive(effect: string, channel: string = effect, volume = 1) {
         if (!GameDebugSettings.perfSfxEnabled) return
         const token = (this._exclusiveTokens.get(channel) ?? 0) + 1
         this._exclusiveTokens.set(channel, token)
@@ -310,7 +256,7 @@ export class SoundSystem {
         source.play()
     }
 
-    public static playFoleyExclusive(effect: SoundEffect, channel: string = effect, pitchRange?: number, volume = 1) {
+    public static playFoleyExclusive(effect: string, channel: string = effect, pitchRange?: number, volume = 1) {
         if (!GameDebugSettings.perfSfxEnabled) return Promise.resolve()
         if (this._hasFoleyPlayedTooRecently(effect)) {
             this.stopExclusive(channel)
@@ -318,7 +264,7 @@ export class SoundSystem {
         }
 
         const selectedEffect = this._pickFoleyEffect(effect)
-        const resolvedPitchRange = pitchRange ?? this._foleyPitchRanges[effect] ?? 0
+        const resolvedPitchRange = pitchRange ?? this._foley[effect]?.pitchRange ?? 0
         if (resolvedPitchRange === 0) return this.playExclusive(selectedEffect, channel, volume)
 
         return this.playWithPitch(selectedEffect, Math.random() * resolvedPitchRange, volume)
@@ -336,7 +282,7 @@ export class SoundSystem {
         this._exclusiveSources.get(channel)?.stop()
     }
 
-    public static async playWithPitch(effect: SoundEffect, pitchSteps: number, volume = 1) {
+    public static async playWithPitch(effect: string, pitchSteps: number, volume = 1) {
         if (!GameDebugSettings.perfSfxEnabled) return
         const clip = await this.load(effect)
         if (!GameDebugSettings.perfSfxEnabled) return
@@ -448,14 +394,14 @@ export class SoundSystem {
         return node
     }
 
-    private static _pickFoleyEffect(effect: SoundEffect) {
-        const variants = this._foleyVariants[effect]
+    private static _pickFoleyEffect(effect: string) {
+        const variants = this._foley[effect]?.variants
         if (!variants || variants.length === 0) return effect
 
         return variants[Math.floor(Math.random() * variants.length)]
     }
 
-    private static _hasFoleyPlayedTooRecently(effect: SoundEffect) {
+    private static _hasFoleyPlayedTooRecently(effect: string) {
         const now = Date.now()
         const lastPlayedAt = this._foleyLastPlayedAt.get(effect)
         if (lastPlayedAt !== undefined && now - lastPlayedAt < this._foleyRecentSuppressMs) return true
@@ -502,7 +448,7 @@ export class SoundSystem {
         }
     }
 
-    private static _loadAudioBuffer(effect: SoundEffect, clip: AudioClip) {
+    private static _loadAudioBuffer(effect: string, clip: AudioClip) {
         const cached = this._audioBuffers.get(effect)
         if (cached) return cached
 

@@ -1,14 +1,16 @@
+import { prepareReanims } from '@/client/reanim/ReanimAssets'
+import { modResources } from '@/client/content/ModResources'
 import { Color, Mask, Node, Sprite, SpriteFrame, Vec3 } from 'cc'
 import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
 import { zombieDefinition } from './definitions'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { renderOrder } from '@/shared/content/renderOrder'
 import { mirrorX, ZOMBIE_WIDTH } from '@/shared/content/teams'
-import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
+import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
-import type { ZombieSnapshot, WorldSnapshot } from '@/shared/protocol/index'
-import type { LevelEntitySnapshot } from '@/client/level/LevelPresentationSnapshot'
+import { jsonRoundTrip, type JsonObject, type ZombieSnapshot, type WorldSnapshot } from '@/shared/protocol/index'
+import { type LevelEntitySnapshot, parseSavedFlash, parseSavedPlayback, viewSaveData } from '@/client/level/LevelPresentationSnapshot'
 import { attachmentTrack, type ZombiePresentationDefinition } from '@/shared/content/presentation'
 import { ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, ZOMBIE_FLAG_LAYER, type ZombieDefinition } from '@/shared/content/gameplay'
 import { ASSET_FPS } from '@/shared/content/animation'
@@ -19,12 +21,8 @@ import type { ZombieFlash } from '@/client/level/EntityFlashes'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { MIRRORED_SHIFT, zombiePartVisibility } from './zombieParts'
 
-/** Sprites a zombie swaps in as it takes damage. */
-export interface ZombieViewSprites {
-    damagedArm: SpriteFrame
-    poleVaulterDamagedArm: SpriteFrame
-    helms: Record<string, SpriteFrame>
-}
+/** Sprites a zombie swaps in as it takes damage, by ID: dented helms and shields, the bare arm, the enraged head. */
+export type ZombieViewSprites = Readonly<Record<string, SpriteFrame>>
 
 /** How a view draws its zombie, where that is not the board's way. */
 export interface ZombieDraw {
@@ -43,10 +41,8 @@ export interface ZombieViewContext {
     draw?: ZombieDraw
 }
 
-export type ZombieViewSnapshot = Extract<LevelEntitySnapshot, { kind: 'zombie' }>
 
 /** Off the board a zombie is whole: it swaps in none of the sprites of a damaged one. */
-const WHOLE = { helms: {} } as unknown as ZombieViewSprites
 const NO_FLASH: ZombieFlash = { flash: 0, through: false, past: false }
 
 /**
@@ -86,13 +82,12 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         this.presentation = zombieDefinition(content.presentation, zombie.typeId)
         this.gameplay = content.definitions.zombies[zombie.typeId]
         this.draw = context.draw ?? {}
-        this.layers = new LayerPlayers(this.node, Object.keys(this.gameplay.animation.layers), content.registry)
+        this.layers = new LayerPlayers(this.node, Object.keys(this.gameplay.animation.layers))
         for (const layer of Object.keys(this.gameplay.animation.layers)) if (layer !== ZOMBIE_BODY_LAYER) this.attachments.add(this.layers.player(layer).node)
     }
 
-    private get registry() { return this.context.content.registry }
-    private get loader() { return this.context.content.loader }
-    private get sprites(): ZombieViewSprites { return this.context.stage?.assets.zombieSprites ?? WHOLE }
+    /** The sprites it swaps in as it takes damage; none off the board, where it is shown whole. */
+    private sprites: ZombieViewSprites = {}
 
     /** The body's player, once it shows a clip. */
     private get player(): ReanimPlayer | null {
@@ -101,14 +96,24 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     /** Its shadow beside it, and every clip of this zombie in memory, so that it changes between them at once. */
+    /** Every zombie's swapped sprites and dropped parts, ready before play. */
+    static async preload(content: Content): Promise<void> {
+        const ids = new Set(Object.values(content.presentation.zombies).flatMap(zombie => [...swapSprites(zombie),
+            ...Object.values(zombie.drops).flatMap(drop => drop?.image ? [drop.image] : [])]))
+        await Promise.all([...ids].map(id => modResources.sprite(id)))
+    }
+
     async initialize(): Promise<void> {
         const { content, stage, node } = this.context
         const shadow = await plantShadow(content, stage)
+        if (stage) {
+            this.sprites = Object.fromEntries(await Promise.all(swapSprites(this.presentation).map(async id => [id, await modResources.sprite(id)] as const)))
+        }
         this.shadowNode = uiNode({
             name: 'ZombieShadow', parent: stage?.layer ?? node.parent!, anchor: { x: 0, y: 1 }, active: false,
             sprite: { frame: shadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
         }).node
-        await new ReanimRepository(this.registry, this.loader).prepare(
+        await prepareReanims(
             Object.values(this.clips()).flatMap(clip => typeof clip?.reanimId === 'string' ? [clip.reanimId] : []))
     }
 
@@ -173,7 +178,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         return shownLayer(state, zombie.animations, {
             picture: name => this.definition(name),
             played: name => zombieClip(this.gameplay.animation, name === superLongDeath && !this.clips()[superLongDeath] ? death : name),
-            duration: reanimId => ReanimPlayer.duration(reanimId, this.registry) ?? 0,
+            duration: reanimId => ReanimPlayer.duration(reanimId) ?? 0,
         })
     }
 
@@ -209,7 +214,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         this.attachments.add(node, drop.reanimId)
         const player = node.addComponent(ReanimPlayer)
         const dispose = () => { if (node.isValid) node.destroy() }
-        void player.load(drop.reanimId, this.registry, this.loader).then(() => {
+        void player.load(drop.reanimId).then(() => {
             if (node.isValid) player.play({ loop: false, rate: 1, onFinish: dispose })
             else dispose()
         }, error => {
@@ -243,18 +248,20 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     }
 
     /** Where its body and the mower's driver are in their blends, and its flash. */
-    snapshot(entityId: number): ZombieViewSnapshot {
+    snapshot(entityId: number): LevelEntitySnapshot {
         const flash = this.context.stage?.flashes.snapshot(entityId)
         return {
-            kind: 'zombie',
-            entityId,
-            body: this.player?.snapshot() ?? null,
-            mowerDriver: this.mowerDriver?.snapshot() ?? null,
-            ...(flash ? { flash } : {}),
+            kind: 'zombie', entityId, data: jsonRoundTrip({
+                body: this.player?.snapshot() ?? null,
+                mowerDriver: this.mowerDriver?.snapshot() ?? null,
+                ...(flash ? { flash } : {}),
+            }) as unknown as JsonObject,
         }
     }
 
-    async restore(snapshot: ZombieViewSnapshot): Promise<void> {
+    async restore(saved: LevelEntitySnapshot): Promise<void> {
+        const data = viewSaveData(saved, ['body', 'mowerDriver'], ['flash'])
+        const snapshot = { entityId: saved.entityId, body: parseSavedPlayback(data.body), mowerDriver: parseSavedPlayback(data.mowerDriver), flash: parseSavedFlash(data.flash, 'zombie flash') }
         this.context.stage?.flashes.restore(snapshot.entityId, snapshot.flash)
         // What it carries is shown again from the server's snapshot; the body keeps where it was in its blend.
         if (snapshot.body) await this.restorePlayer(this.layers.player(ZOMBIE_BODY_LAYER), 'ZombieAnimation', snapshot.body)
@@ -273,17 +280,17 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
     private async restorePlayer(
         current: ReanimPlayer | null,
         name: string,
-        snapshot: ZombieViewSnapshot['body'],
+        snapshot: ReturnType<typeof parseSavedPlayback>,
     ): Promise<ReanimPlayer | null> {
         if (!snapshot) {
             if (current?.node.isValid) current.node.destroy()
             return null
         }
-        await new ReanimRepository(this.registry, this.loader).prepare([snapshot.id])
+        await prepareReanims([snapshot.id])
         const player = current?.node.isValid ? current
             : uiNode({ name, parent: this.node, anchor: { x: 0, y: 1 } }).node.addComponent(ReanimPlayer)
         if (player.loadedId !== snapshot.id) {
-            player.change(snapshot.id, this.registry)
+            player.change(snapshot.id)
             const definition = this.definitionFromReanim(snapshot.id)
             if (definition) this.place(player.node, definition.x, definition.y)
         }
@@ -308,7 +315,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         if (!this.player) return
         const driver = this.mowerDriver = uiNode({ name: 'MoweredDriver', parent: this.node }).node.addComponent(ReanimPlayer)
         this.place(driver.node, animation.x, animation.y)
-        driver.change(animation.reanimId, this.registry)
+        driver.change(animation.reanimId)
         this.animation = ZOMBIE_CLIPS.mowered
         this.player.attachToTrack(driver, attachmentTrack(animation))
         driver.play({ ...this.playback(zombie, driver), hideOnFinish: false })
@@ -356,13 +363,13 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         const state = { hasHead: zombie.hasHead, hasTongue: zombie.hasTongue, hasArm: zombie.hasArm, holdingFlag: this.holdingFlag, helmStage, shieldStage, holdingShield }
         for (const [tracks, visible] of zombiePartVisibility(presentation, state)) this.player.setTracksVisible(tracks, visible)
         this.player.setTrackSpriteOverride(parts.upperArm, zombie.hasArm ? null
-            : presentation.damagedArmSprite ? this.sprites.helms[presentation.damagedArmSprite] : this.sprites[presentation.damagedArm])
+            : this.sprites[presentation.damagedArmSprite])
         const enraged = presentation.enragedHead
-        if (enraged) this.player.setTrackSpriteOverride(enraged.track, zombie.enraged && body(zombie).clip !== ZOMBIE_CLIPS.gasp ? this.sprites.helms[enraged.sprite] : null)
+        if (enraged) this.player.setTrackSpriteOverride(enraged.track, zombie.enraged && body(zombie).clip !== ZOMBIE_CLIPS.gasp ? this.sprites[enraged.sprite] : null)
         // Zombie::TakeHelmDamage and TakeShieldDamage swap in the dented sprite below 2/3 and 1/3 health.
         for (const [armor, stage] of [[presentation.helm, helmStage], [presentation.shield, shieldStage]] as const) {
             if (!armor || stage < 0 || !parts.helms.includes(armor.track)) continue
-            this.player.setTrackSpriteOverride(armor.track, stage === 0 ? null : this.sprites.helms[armor.damagedSprites[stage - 1]])
+            this.player.setTrackSpriteOverride(armor.track, stage === 0 ? null : this.sprites[armor.damagedSprites[stage - 1]])
         }
     }
 
@@ -584,7 +591,7 @@ export class ZombieView implements EntityView<ZombieSnapshot> {
         stage.addScenery(node, order, entityId)
         const end = () => { if (node.isValid) node.destroy() }
         const player = node.addComponent(ReanimPlayer)
-        void player.load(reanim, stage.content.registry, stage.content.loader).then(() => {
+        void player.load(reanim).then(() => {
             if (node.isValid) player.play({ loop: false, rate, timeSeconds: 0, onFinish: end })
         }).catch(error => {
             end()
@@ -603,4 +610,10 @@ const body = (zombie: ZombieSnapshot) => zombie.animations[ZOMBIE_BODY_LAYER]
 function armorStage(health: number, armor: { readonly health: number } | undefined): number {
     if (!armor || health <= 0) return -1
     return health < armor.health / 3 ? 2 : health < armor.health * 2 / 3 ? 1 : 0
+}
+
+/** The sprites a zombie swaps in as it takes damage: its dented helm and shield, its bare arm, its enraged head. */
+function swapSprites(zombie: ZombiePresentationDefinition): string[] {
+    return [...zombie.helm?.damagedSprites ?? [], ...zombie.shield?.damagedSprites ?? [], zombie.damagedArmSprite,
+        ...zombie.enragedHead ? [zombie.enragedHead.sprite] : []]
 }

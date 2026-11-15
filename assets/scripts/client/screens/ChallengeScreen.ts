@@ -1,10 +1,10 @@
 import { modResources } from '@/client/content/ModResources'
-import { Color, type Node, SpriteFrame } from 'cc'
+import { Color, type Node } from 'cc'
 import { menuApi } from '@/client/api/MenuApi'
 import type { ChallengePageId } from '@/shared/menu'
 export type { ChallengePageId } from '@/shared/menu'
 import { FontMetricsUtil } from '@/client/font'
-import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
+import { getAtlasFrame } from '@/client/render/atlasFrame'
 import type { UI } from '@/client/ui/UI'
 import { uiAreaEdge } from '@/client/view/ClientViewport'
 
@@ -16,11 +16,7 @@ export async function showChallengeScreen(
     const layout = ui.assets.presentation.challenges?.[`pvz:${page}`]
     if (!layout) throw new Error(`Missing challenge layout: ${page}`)
     const names = ['challenge_window', 'challenge_window_highlight', 'trophy', 'minigame_trophy', layout.thumbnails.sprite]
-    const frames = await Promise.all(names.map(async name => {
-        const frame = await modResources.asset(name, SpriteFrame)
-        if (!frame) throw new Error(`Missing challenge image: ${name}`)
-        return frame
-    }))
+    const frames = await Promise.all(names.map(name => modResources.sprite(name)))
     if (!parent.isValid) throw new Error('Challenge screen was destroyed while loading')
     const [window, highlight, trophy, miniTrophy, thumbnails] = frames
     ui.image(parent, trophy, { x: 718, y: 26, width: trophy.originalSize.width / 2, height: trophy.originalSize.height / 2 })

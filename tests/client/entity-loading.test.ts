@@ -2,6 +2,7 @@ import { EntityViewRegistry } from '@/client/content/EntityViewRegistry'
 import * as plantDefinitions from '@/client/plants/definitions'
 import * as zombieDefinitions from '@/client/zombies/definitions'
 import { buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
+import * as modContent from '@/shared/mod/content'
 import { contentJson } from '@/shared/mod/content'
 import * as modApi from '@/shared/mod'
 import assert from 'node:assert/strict'
@@ -49,7 +50,7 @@ clientStubs['./zombieParts'] = loadClientModule('zombies/zombieParts', {})
 /** The board of a test: a level whose award is the sunflower, and the views it is given, with no event handled. */
 function renderer(LevelEntityRenderer: any, views: object, intro: object = { complete: true }) {
     const content = { levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' } } } }, views: { events: { of: () => [] }, ...views } }
-    return new LevelEntityRenderer(content, {}, {}, {}, {}, intro, {})
+    return new LevelEntityRenderer(content, {}, {}, {}, intro, {})
 }
 
 test('a thing of a cell is drawn by its view like any entity: made when it comes, synced, and gone with it', async () => {
@@ -93,10 +94,8 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
     const cells: number[] = [], heights = new Map<Node, number>()
     const { GraveView } = loadClientModule('gridItems/GraveView', {
         cc: { Mask: { Type: { GRAPHICS_RECT: 0 } }, Sprite: { SizeMode: { RAW: 0 } } },
-        '@/client/content/ClientContentLoader': { SpriteRepository: class {
-            async load() { return { originalSize: { width: 500, height: 400 } } }
-        } },
-        '@/client/hud/SeedPacketRenderer': { getAtlasFrame(_atlas: unknown, cell: number) { cells.push(cell) } },
+        '@/client/content/ModResources': { modResources: { async sprite() { return { originalSize: { width: 500, height: 400 } } } } },
+        '@/client/render/atlasFrame': { getAtlasFrame(_atlas: unknown, cell: number) { cells.push(cell) } },
         '@/client/sound/SoundSystem': { SoundEffect: { DirtRise: 'dirt_rise' }, SoundSystem: { playFoley: async () => {} } },
         '@/client/view/GameScreenMath': loadClientModule('view/GameScreenMath', {}),
         '@/client/view/uiNode': { uiNode(options: any) {
@@ -343,62 +342,26 @@ test('a finished or cancelled shield drop cannot leave a component with a null n
     assert.doesNotThrow(() => view.sync({ state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true }))
 })
 
-test('presentation definitions use the common ZIP resolver without mutating base data', async () => {
-    const asset = { json: presentationFixture }
-    let current: unknown = asset
-    const manifest = { content: { presentation: 'presentation.json' },
+test('the presentation is built once from the base archive and the running Mods, and its foley goes to the sound system', async () => {
+    const base = { content: { presentation: 'presentation.json' },
         files: { 'presentation.json': new TextEncoder().encode(JSON.stringify(presentationFixture)) } }
-    const { loadPresentationDefinitions } = loadClientModule('content/loadPresentationDefinitions', {
-        cc: { JsonAsset: class {} },
-        './ModResources': { modResources: { async asset(id: string) {
-            assert.equal(id, 'pvz:presentation/definitions')
-            return current
-        } } },
+    let builds = 0, foley = 0
+    const load = (archive: object) => loadClientModule('content/loadPresentationDefinitions', {
+        './ModResources': { modResources: { baseContent: async () => archive } },
         './installedMods': { installedMods: async () => ({ presentationDefinitions: [] }) },
-        '@/shared/content/DefinitionRegistry': { buildPresentationDefinitions },
+        '@/client/sound/SoundSystem': { SoundSystem: { useFoley() { foley++ } } },
+        '@/shared/content/DefinitionRegistry': { buildPresentationDefinitions: (...args: Parameters<typeof buildPresentationDefinitions>) => {
+            builds++
+            return buildPresentationDefinitions(...args)
+        } },
         '@/shared/mod/content': { contentJson },
-    })
-    assert.deepEqual(await loadPresentationDefinitions(manifest), presentationFixture)
-    const alternate = structuredClone(presentationFixture)
-    current = { json: alternate }
-    assert.deepEqual(await loadPresentationDefinitions(manifest), alternate)
-    assert.equal(asset.json, presentationFixture)
-    current = undefined
-    assert.deepEqual(await loadPresentationDefinitions(manifest), presentationFixture)
-    await assert.rejects(loadPresentationDefinitions({ ...manifest, content: {} }), /does not define presentation/)
-})
-
-test('ZIP caches are shared across content loaders and failed requests can retry', async () => {
-    const assets = new Map<string, unknown>([['pvz:ready', {}]])
-    const manifest = {}
-    let loads = 0
-    const packs = {
-        async baseContent() { return manifest },
-        async asset(id: string) {
-            if (assets.has(id)) return assets.get(id)
-            if (++loads === 1) throw new Error('temporary read failure')
-            const asset = {}
-            assets.set(id, asset)
-            return asset
-        },
-    }
-    const { ClientContentLoader } = loadClientModule('content/ClientContentLoader', {
-        cc: { JsonAsset: class {} },
-        './ModResources': { modResources: packs },
-    })
-    const content = { contentHash: 'hash', category: 'sprites', id: 'pvz:ready', path: 'ready', contentId: 'pvz' }
-    class Asset {}
-    const loader = new ClientContentLoader()
-    assert.equal(await loader.load(content, Asset), assets.get('pvz:ready'))
-    assert.equal(await new ClientContentLoader().load(content, Asset), assets.get('pvz:ready'))
-    assert.equal(await loader.loadBaseContent(), manifest)
-    assert.equal(loads, 0)
-    const missing = { ...content, id: 'pvz:missing', path: 'missing' }
-    await assert.rejects(loader.load(missing, Asset), /temporary read failure/)
-    const first = loader.load(missing, Asset)
-    assert.equal(loader.load(missing, Asset), first)
-    await first
-    assert.equal(loads, 2)
+    }).loadPresentationDefinitions
+    const loadPresentation = load(base)
+    const presentation = await loadPresentation()
+    assert.deepEqual(presentation, presentationFixture)
+    assert.equal(await loadPresentation(), presentation, 'the UI and the game draw with the same one')
+    assert.deepEqual([builds, foley], [1, 1])
+    await assert.rejects(load({ ...base, content: {} })(), /does not define presentation/)
 })
 
 test('the base Mod prefab keeps its compiled engine bindings after moving into assets', async () => {
@@ -406,16 +369,26 @@ test('the base Mod prefab keeps its compiled engine bindings after moving into a
     const prefab = new Prefab()
     const source = readBaseContent().resources.prefabs['pvz:level']
     const requests: string[] = []
-    const { ClientContentLoader } = loadClientModule('content/ClientContentLoader', {
-        cc: { Prefab, resources: { load(path: string, type: unknown, complete: (error: null, value: Prefab) => void) {
-            requests.push(path)
-            assert.equal(type, Prefab)
-            assert.deepEqual(readFileSync(`assets/resources/${path}.prefab`), readFileSync(`mods/pvz-base/${source}`))
-            complete(null, prefab)
-        } } },
+    const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value))
+    const files = {
+        'manifest.json': encode({ schemaVersion: 1, id: 'pvz', version: '1.0.0', apiVersion: 1, contentHash: 'base', dependencies: [] }),
+        'content.json': encode({ resources: { prefabs: { 'pvz:level': source } } }),
+        [source]: new Uint8Array(readFileSync(`mods/pvz-base/${source}`)),
+    }
+    const { ModResources } = loadClientModule('content/ModResources', {
+        cc: { Prefab, macro: {}, dynamicAtlasManager: {}, sys: { isNative: false }, resources: {
+            load(path: string, type: unknown, complete: (error: null, value: Prefab) => void) {
+                requests.push(path)
+                assert.equal(type, Prefab)
+                assert.deepEqual(readFileSync(`assets/resources/${path}.prefab`), readFileSync(`mods/pvz-base/${source}`))
+                complete(null, prefab)
+            },
+        } },
+        './InstalledArchives': { unpackArchive: () => files },
+        '@/shared/mod/content': modContent,
     })
-    assert.equal(await new ClientContentLoader().load({ category: 'prefabs', contentId: 'pvz',
-        id: 'pvz:level', contentHash: 'base', path: source }, Prefab), prefab)
+    const resources = new ModResources(async () => new Uint8Array(), { ready: async () => [], failures: new Map() })
+    assert.equal(await resources.prefab('pvz:level'), prefab)
     assert.deepEqual(requests, ['ui/level'])
 })
 
@@ -508,7 +481,7 @@ test('a screen door zombie holds its door with the door arms, lowers them to eat
     const shown = new Map<string, boolean>()
     const player = { loadedId: 'pvz:door_zombie_walk', setTracksVisible(tracks: string[], visible: boolean) { for (const track of tracks) shown.set(track, visible) }, setTrackSpriteOverride() {} }
     const view = Object.assign(Object.create(ZombieView.prototype), {
-        layers: { player: () => player }, presentation, parts: '', holdingFlag: false, gameplay: { shield: { type: 'door', health: 1100 } }, context: { stage: { assets: { zombieSprites: { helms: {}, damagedArm: {} } } } },
+        layers: { player: () => player }, presentation, parts: '', holdingFlag: false, gameplay: { shield: { type: 'door', health: 1100 } }, sprites: {},
     })
     const zombie = { hasHead: true, hasTongue: false, hasArm: true, helmHealth: 0, shieldHealth: 1100, state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } } }
     const visible = (...tracks: string[]) => tracks.map(track => shown.get(track))
@@ -529,23 +502,26 @@ test('a player changes to another clip of its body in place: its batches stay, a
         'pvz:walk': { id: 'pvz:walk', tracks: [track('leg', 2), track('arm', 1)] },
         'pvz:death': { id: 'pvz:death', tracks: [track('head', 3), track('arm', 1)] },
     }
-    const { ReanimPlayer, ReanimRepository } = loadClientModule('reanim/ReanimPlayer', {
-        cc: { Component: class {}, JsonAsset: class {}, isValid: (node?: { isValid: boolean }) => node?.isValid === true,
-            _decorator: { ccclass: () => (value: unknown) => value } },
-        '@/shared/content/reanim': { parseReanim: (json: unknown) => json, sampleReanimTrack: (item: { id: string }) => ({ sprite: `pvz:${item.id}`, x: 7 }) },
-        '@/client/content/ClientContentLoader': { SpriteRepository: class { async load(id: string) { return { id } } } },
+    const reanims = loadClientModule('reanim/ReanimAssets', {
+        '@/client/content/ModResources': { modResources: { async json(_kind: string, id: string) { return clips[id] }, async sprite(id: string) { return { id } } } },
+        '@/shared/content/reanim': { parseReanim: (json: unknown) => json },
         '@/client/render/KernelBatch': { loadKernelMaterial: async () => {} },
     })
-    const registry = { resolve: (_category: string, id: string) => ({ id }) }
-    const loader = { async load(content: { id: string }) { return { json: clips[content.id] } } }
+    const { ReanimPlayer } = loadClientModule('reanim/ReanimPlayer', {
+        cc: { Component: class {}, isValid: (node?: { isValid: boolean }) => node?.isValid === true,
+            _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/shared/content/reanim': { parseReanim: (json: unknown) => json, sampleReanimTrack: (item: { id: string }) => ({ sprite: `pvz:${item.id}`, x: 7 }) },
+        './ReanimAssets': reanims,
+        '@/client/render/KernelBatch': { loadKernelMaterial: async () => {} },
+    })
     const batches = [{}]
     const player = Object.assign(Object.create(ReanimPlayer.prototype), {
         data: null, views: new Map(), frames: new Map(), frameOverrides: new Map(), followers: new Map(),
         blendFromPoses: new Map(), batches, blendDuration: 0, blendElapsed: 0, timeSeconds: 5, drawingStale: false, applyPose() {},
     })
-    assert.throws(() => player.change('pvz:walk', registry), /reanim is not loaded: pvz:walk/, 'a clip is in memory before it is played')
-    await new ReanimRepository(registry, loader).prepare(['pvz:walk', 'pvz:death'])
-    player.change('pvz:walk', registry, 0.2)
+    assert.throws(() => player.change('pvz:walk'), /reanim is not loaded: pvz:walk/, 'a clip is in memory before it is played')
+    await reanims.prepareReanims(['pvz:walk', 'pvz:death'])
+    player.change('pvz:walk', 0.2)
     assert.deepEqual([[...player.views.keys()], player.blendDuration, player.blendFromPoses.size], [['arm', 'leg'], 0.2, 0], 'nothing to blend from before the first clip')
 
     // What was set on single tracks starts over; a track both clips have keeps its own node, the others' go.
@@ -555,7 +531,7 @@ test('a player changes to another clip of its body in place: its batches stay, a
     Object.assign(player.views.get('leg'), { node: leg })
     player.followers.set('arm', [{}]).set('leg', [{}])
     player.timeSeconds = 3
-    player.change('pvz:death', registry, 0.2)
+    player.change('pvz:death', 0.2)
     assert.equal(player.loadedId, 'pvz:death')
     assert.deepEqual([...player.views.keys()], ['arm', 'head'])
     assert.deepEqual([player.views.get('arm').node, player.views.get('arm').visible, arm.active, arm.isValid, leg.isValid], [arm, true, true, true, false])
@@ -567,41 +543,38 @@ test('a player changes to another clip of its body in place: its batches stay, a
     // The same clip again (a repeated shot) only starts a blend from where it was.
     const views = [...player.views.values()]
     player.blendFromPoses.clear()
-    player.change('pvz:death', registry, 0.1)
+    player.change('pvz:death', 0.1)
     assert.deepEqual([[...player.views.values()], [...player.blendFromPoses.keys()].sort(), player.blendDuration], [views, ['arm', 'head'], 0.1])
 })
 
-test('preloaded animation frames are shared by registry and failed preparation can retry', async () => {
+test('an animation loads once for every player with the pictures its packs have for it, and a failed load can retry', async () => {
     let reads = 0, parses = 0
     const sprites: string[] = []
-    const asset = { json: {} }
     let fail = true
-    const { ReanimRepository } = loadClientModule('reanim/ReanimPlayer', {
-        cc: { Component: class {}, JsonAsset: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
-        '@/shared/content/reanim': { parseReanim: () => {
-            parses++
-            return { id: 'pvz:demo', tracks: [{ keyframes: [{ sprite: 'pvz:leaf' }, { sprite: 'pvz:leaf' }] }] }
-        } },
-        '@/client/content/ClientContentLoader': { SpriteRepository: class {
-            async load(id: string, animation: string) {
+    const { loadReanim } = loadClientModule('reanim/ReanimAssets', {
+        '@/client/content/ModResources': { modResources: {
+            async json(kind: string, id: string) { reads++; return { kind, id } },
+            async sprite(id: string, animation: string) {
                 sprites.push(`${animation}:${id}`)
                 if (fail) throw new Error('sprite unavailable')
                 return {}
-            }
+            },
         } },
+        '@/shared/content/reanim': { parseReanim: (json: { kind: string, id: string }) => {
+            parses++
+            assert.equal(json.kind, 'reanim')
+            return { id: json.id, tracks: [{ keyframes: [{ sprite: 'pvz:leaf' }, { sprite: 'pvz:leaf' }] }] }
+        } },
+        '@/client/render/KernelBatch': { loadKernelMaterial: async () => {} },
     })
-    const registry = { resolve: () => ({}) }, loader = { async load() { reads++; return asset } }
-    await assert.rejects(new ReanimRepository(registry, loader).load('pvz:demo'), /sprite unavailable/)
+    await assert.rejects(loadReanim('pvz:demo'), /sprite unavailable/)
     fail = false
-    const preparing = new ReanimRepository(registry, loader).load('pvz:demo')
-    assert.equal(new ReanimRepository(registry, loader).load('pvz:demo'), preparing)
+    const preparing = loadReanim('pvz:demo')
+    assert.equal(loadReanim('pvz:demo'), preparing)
     const prepared = await preparing
-    assert.equal(await new ReanimRepository(registry, loader).load('pvz:demo'), prepared)
-    assert.equal(reads, 2)
-    assert.equal(parses, 1)
-    assert.deepEqual(sprites, ['pvz:demo:pvz:leaf', 'pvz:demo:pvz:leaf'])
-    assert.notEqual(await new ReanimRepository({ resolve: () => ({}) }, loader).load('pvz:demo'), prepared,
-        'registries with different sprite overrides must not share prepared frames')
+    assert.equal(await loadReanim('pvz:demo'), prepared)
+    assert.deepEqual([reads, parses], [2, 2], 'only the failed load is read again')
+    assert.deepEqual(sprites, ['pvz:demo:pvz:leaf', 'pvz:demo:pvz:leaf'], 'each picture once, as the pack has it for this animation')
 })
 
 test('sound playback loads overridden base effects and namespaced Mod effects through shared resources', async () => {
@@ -610,7 +583,7 @@ test('sound playback loads overridden base effects and namespaced Mod effects th
     const reads: string[] = []
     const { SoundSystem, SoundEffect } = loadClientModule('sound/SoundSystem', {
         cc: { AudioClip: class {} },
-        '@/client/content/ModResources': { modResources: { async asset(id: string) {
+        '@/client/content/ModResources': { modResources: { async audio(id: string) {
             reads.push(id)
             return assets.get(id)
         } } },

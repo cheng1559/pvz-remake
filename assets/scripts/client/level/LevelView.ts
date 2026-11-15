@@ -1,20 +1,21 @@
 import { modResources } from '@/client/content/ModResources'
-import { Color, Component, Graphics, instantiate, Mask, Node, Sprite, Tween, SpriteFrame } from 'cc'
-import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
-import { Haptics, type HapticStyle } from '@/platform/Haptics'
 import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { LevelHitboxes } from './LevelHitboxes'
+import { LevelCoinBank } from './LevelCoinBank'
+import { LevelProgressMeter } from './LevelProgressMeter'
+import { Color, Component, instantiate, Mask, Node, Sprite, Tween } from 'cc'
+import { Haptics, type HapticStyle } from '@/platform/Haptics'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
-import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
+import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { easeInOut } from '@/client/view/GameScreenMath'
 import { LevelSlots } from './LevelSlots'
-import { FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
 import { UI } from '@/client/ui/UI'
 import { formatMoney } from '@/client/ui/formatMoney'
 import { seedBankExtraWidth } from './LevelGeometry'
 import type { UIButton } from '@/client/ui/UIButton'
 import { plantDefinition } from '@/client/plants/definitions'
-import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
+import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { PlantPreview } from '@/client/hud/PlantPreview'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
 import type { GameCommand, JsonObject, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
@@ -42,8 +43,9 @@ import { uiAreaEdge } from '@/client/view/ClientViewport'
 
 const WIDTH = 800
 const HEIGHT = 600
-const PROGRESS_METER_WIDTH = 158
-const PROGRESS_METER_HEIGHT = 27
+
+/** Haptic styles from the lightest. */
+const HAPTIC_STRENGTH: readonly HapticStyle[] = ['light', 'medium', 'heavy', 'explosion']
 
 export type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
 
@@ -65,7 +67,6 @@ export class LevelView {
     /** Coin::MouseHitTest: the level rule widens every item's click area. */
     itemPadding?: { readonly size: number; readonly height: number }
     private boardHud?: LevelBoardHud
-    private hideConveyorBank = () => {}
     private seedChooser?: LevelSeedChooser
     private seedChooserSend: (command: GameCommand) => void = () => {}
     /** Builds a chooser for a level that opened none, the first time a repick asks for one. */
@@ -102,9 +103,7 @@ export class LevelView {
     showPauseCoinBank(): void { this.hud.showPauseCoinBank() }
     /** The seed-slot purchase dialog holds the coin bank on screen. */
     private questionOpen = false
-    /** The lawn node: it carries the wide-viewport shift, the seed chooser pan and board shakes. */
-    private lawn!: Node
-    private hitboxes: Graphics | null = null
+    private hitboxes!: LevelHitboxes
     get introComplete(): boolean {
         return this.intro.complete
     }
@@ -121,7 +120,8 @@ export class LevelView {
         private readonly entityRenderer: LevelEntityRenderer,
         private readonly hud: LevelHudPresenter,
         private readonly particles: LevelParticlePresenter,
-        private readonly definitions: GameplayDefinitions,
+        /** The level's gameplay definitions; Mods read them (where collected items fly). */
+        readonly definitions: GameplayDefinitions,
         readonly level: LevelDefinition,
         readonly board: BoardDefinition,
     ) {}
@@ -134,44 +134,18 @@ export class LevelView {
         const presentation = getLevelPresentation(level, content.presentation, levelId)
         const animations = content.animations
         animations.freeze()
-        const sprites = new SpriteRepository(content.registry, content.loader)
-        const fonts = new FontRepository()
-        const helmSpriteIds = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => [...(zombie.helm?.damagedSprites ?? []), ...(zombie.shield?.damagedSprites ?? []), ...[zombie.damagedArmSprite, zombie.enragedHead?.sprite].filter((id): id is string => !!id)]))]
-        const dropImages = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => Object.values(zombie.drops).flatMap(drop => drop?.image ? [drop.image] : [])))]
         const [
-            background, seedbank, projectileEntries, projectileShadowEntries,
-            mowerShadow, damagedZombieArm, flagMeter, flagMeterParts,
-            flagMeterLevelProgress, sunFont, pico129, houseOfTerror16, houseOfTerror28, gameOverFrames, ui,
-            [poleVaulterArm, wallnutCracked1, wallnutCracked2], helmEntries,
+            background, seedbank, sunFont, pico129, houseOfTerror16, houseOfTerror28, gameOverFrames, ui,
         ] = await Promise.all([
-            sprites.load(presentation.board.background),
-            sprites.load('pvz:seedbank'),
-            Promise.all(Object.entries(content.presentation.projectiles).flatMap(([id, definition]) => definition.sprite
-                ? [(async () => [id, await sprites.load(definition.sprite!)] as const)()] : [])),
-            Promise.all(Object.entries(content.presentation.projectiles).flatMap(([id, definition]) => definition.shadow ? [(async () => {
-                const shadow = definition.shadow!
-                const atlas = await sprites.load(shadow.sprite)
-                return [id, getAtlasFrame(atlas, shadow.cell, atlas.originalSize.width / shadow.columns, atlas.originalSize.height, shadow.columns)] as const
-            })()] : [])),
-            sprites.load(boardDefinition.night ? 'pvz:plantshadow2' : 'pvz:plantshadow'),
-            sprites.load('pvz:zombie_outerarm_upper2'),
-            sprites.load('pvz:flagmeter'),
-            sprites.load('pvz:flagmeterparts'),
-            sprites.load('pvz:flagmeterlevelprogress'),
-            fonts.load('pvz:continuumbold14'),
-            fonts.load('pvz:pico129'),
-            fonts.load('pvz:houseofterror16'),
-            fonts.load('pvz:houseofterror28'),
+            modResources.sprite(presentation.board.background),
+            modResources.sprite('pvz:seedbank'),
+            modResources.font('pvz:continuumbold14'),
+            modResources.font('pvz:pico129'),
+            modResources.font('pvz:houseofterror16'),
+            modResources.font('pvz:houseofterror28'),
             LevelGameOverPresenter.loadAssets(presentation.board.gameOver),
             UI.load(),
-            Promise.all([
-                'pvz:zombie_polevaulter_outerarm_upper2', 'pvz:wallnut_cracked1', 'pvz:wallnut_cracked2',
-            ].map(id => sprites.load(id))),
-            Promise.all(helmSpriteIds.map(async id => [id, await sprites.load(id)] as const)),
-            Promise.all(dropImages.map(id => modResources.asset(id, SpriteFrame))),
-            // A mower's animation is ready when the first one sets off.
-            Promise.all(Object.values(content.presentation.projectiles).flatMap(definition => definition.reanim
-                ? [new ReanimRepository(content.registry, content.loader).load(definition.reanim.id)] : [])),
+            content.views.preload(content, level),
         ])
         const layout = instantiate(content.levelPrefab)
         root.addChild(layout)
@@ -224,64 +198,8 @@ export class LevelView {
         const coinLayer = uiNode({
             node: slots.coinLayer, size: { width: WIDTH, height: HEIGHT }, anchor: { x: 0, y: 1 },
         }).node
-        // Board::DrawUICoinBank at (57, 599 - height); money flies to (39, 558) on the board.
-        const coinBankFrame = await sprites.load('pvz:coinbank')
-        const coinBankY = 599 - coinBankFrame.originalSize.height
-        const coinBank = uiNode({ name: 'CoinBank', parent: hud, anchor: { x: 0, y: 1 }, active: false }).node
-        // Board::AddUIRenderItems draws the bank at RENDER_LAYER_COIN_BANK; coins sit one above it, so money flies over the bank.
-        coinBank.setSiblingIndex(coinLayer.getSiblingIndex())
-        ui.image(coinBank, coinBankFrame, { x: 57, y: coinBankY })
-        const coinText = ui.label(coinBank, { text: '', font: 'money', color: new Color(180, 255, 90), x: 57 + 116, y: coinBankY + 24, baseline: true, align: 'right' })
-        // The progress meter and level name keep their margin from the UI area's right edge, in the same draw order.
-        const hudRight = uiAreaEdge(hud, 'right')
-        hudRight.setSiblingIndex(slots.progressMeter.getSiblingIndex())
-        slots.progressMeter.setParent(hudRight)
-        slots.levelText.setParent(hudRight)
-        const progressMeter = uiNode({
-            node: slots.progressMeter, position: { x: 600, y: -575 },
-            size: { width: PROGRESS_METER_WIDTH, height: PROGRESS_METER_HEIGHT }, anchor: { x: 0, y: 1 },
-        }).node
-        uiNode({
-            node: slots.progressBack, anchor: { x: 0, y: 1 },
-            sprite: { frame: getAtlasFrame(flagMeter, 0, PROGRESS_METER_WIDTH, PROGRESS_METER_HEIGHT, 1), sizeMode: Sprite.SizeMode.RAW, trim: false },
-        })
-        const progressFillClip = uiNode({
-            node: slots.progressFillClip, position: { x: 150 }, anchor: { x: 0, y: 1 },
-            size: { width: 1, height: PROGRESS_METER_HEIGHT }, mask: Mask.Type.GRAPHICS_RECT,
-        }).node
-        const progressFill = uiNode({
-            node: slots.progressFill, position: { x: -150 }, anchor: { x: 0, y: 1 },
-            sprite: { frame: getAtlasFrame(flagMeter, 1, PROGRESS_METER_WIDTH, PROGRESS_METER_HEIGHT, 1), sizeMode: Sprite.SizeMode.RAW, trim: false },
-        }).node
-        uiNode({
-            node: slots.progressTrack, position: { x: 38, y: -14 }, anchor: { x: 0, y: 1 },
-            sprite: { frame: flagMeterLevelProgress, sizeMode: Sprite.SizeMode.RAW, trim: false },
-        })
-        const progressHead = uiNode({
-            node: slots.progressHead, position: { x: 138, y: 3, z: 3 }, anchor: { x: 0, y: 1 },
-            sprite: { frame: getAtlasFrame(flagMeterParts, 0, 25, 25, 3), sizeMode: Sprite.SizeMode.RAW, trim: false },
-        }).node
-        // A wave rule builds the waves per game, so the flags come with the snapshot.
-        for (const index of initial.wave.flagWaves) {
-            const x = 148 - 142 * (index + 1) / initial.wave.total
-            uiNode({
-                name: `ProgressFlagPole-${index}`, parent: progressMeter, position: { x, y: 4, z: 2 }, anchor: { x: 0, y: 1 },
-                sprite: { frame: getAtlasFrame(flagMeterParts, 1, 25, 25, 3), sizeMode: Sprite.SizeMode.RAW, trim: false },
-            })
-            uiNode({
-                name: `ProgressFlag-${index}`, parent: progressMeter, position: { x, y: 3, z: 2 }, anchor: { x: 0, y: 1 },
-                sprite: { frame: getAtlasFrame(flagMeterParts, 2, 25, 25, 3), sizeMode: Sprite.SizeMode.RAW, trim: false },
-            })
-        }
-        // Board::DrawProgressMeter draws the flags, then the "Level Progress" label, then the zombie head.
-        slots.progressTrack.setSiblingIndex(progressMeter.children.length - 1)
-        progressHead.setSiblingIndex(progressMeter.children.length - 1)
-        const levelText = ui.label(slots.levelText.parent!, {
-            node: slots.levelText, text: '', font: houseOfTerror16, color: new Color(224, 187, 98, 255),
-            x: 780, y: 595, align: 'right', baseline: true,
-        })
-        progressMeter.active = false
-        levelText.node.active = false
+        const coinBank = await LevelCoinBank.create(content, ui, hud, coinLayer)
+        const meterNodes = await LevelProgressMeter.create(content, ui, slots, hud, initial.wave, houseOfTerror16)
 
         const houseName = uiNode({
             node: slots.houseName, position: { x: -WIDTH / 2, y: HEIGHT / 2 },
@@ -291,12 +209,11 @@ export class LevelView {
             node: slots.houseLabel, text: ui.text('PLAYERS_HOUSE').replace('{PLAYER}', playerName), font: houseOfTerror28,
             width: WIDTH, y: 550, align: 'center', baseline: true,
         })
-        const loadPacketSprite = (name: string) => sprites.load(`pvz:${name}`)
         const initializePreview = (node: Node) => {
             uiNode({ node, position: { x: 0, y: 0 }, anchor: { x: 0, y: 1 }, sprite: { frame: null } })
             const preview = node.addComponent(PlantPreview)
             preview.initialize(content.presentation, undefined, async (parent, plantId) => {
-                const atlas = await loadPacketSprite('plant_previews_cached')
+                const atlas = await modResources.sprite('plant_previews_cached')
                 if (!parent.isValid) return
                 uiNode({ name: 'CachedPlantPreview', parent, position: { x: -40, y: 40 }, anchor: { x: 0, y: 1 },
                     sprite: { frame: getAtlasFrame(atlas, plantDefinition(content.presentation, String(plantId)).visual.preview, 220, 160, 8), sizeMode: Sprite.SizeMode.RAW, trim: false } })
@@ -357,38 +274,26 @@ export class LevelView {
             previewTooltipSurface: seedChooser?.previewTooltipSurface,
             almanacZombies: player.almanacZombies, openAlmanacZombie: nameKey => view.onOpenAlmanac?.(nameKey),
             chooserPages: player.almanacZombies !== undefined || player.store === true,
+            seedChooser: seedChooser !== undefined,
             mowers: () => entityRenderer.mowers(),
             previewZombies: initial.wave.previewZombies ?? {},
             hasOpeningDialog: initial.extensions['pvz:dialog'] !== undefined,
         })
         entityRenderer = new LevelEntityRenderer(
-            content, {
-                projectileFrames: Object.fromEntries(projectileEntries),
-                projectileShadowFrames: Object.fromEntries(projectileShadowEntries),
-                shadow: mowerShadow,
-                zombieSprites: {
-                    damagedArm: damagedZombieArm, poleVaulterDamagedArm: poleVaulterArm,
-                    helms: Object.fromEntries(helmEntries),
-                },
-                wallnutCracked: [wallnutCracked1, wallnutCracked2],
-                loadPacketSprite,
-                packetCostFont: pico129,
-            },
+            content,
             entityLayer, coinLayer, awardLayer, intro, graveRise,
         )
-        const end = new LevelEndPresenter(
-            content, awardLayer, overlayLayer, levelCompleteFade,
-            id => entityRenderer.node(id), audio, ui,
-        )
+        const end = new LevelEndPresenter(content, overlayLayer, levelCompleteFade, audio, ui)
+        entityRenderer.levelEndTicks = () => end.elapsed
         // The tutorial's arrow at a packet, over the HUD; a repick puts it under the bank it points at (raiseBankToChooser).
         const tutorialArrows = uiNode({ name: 'TutorialArrows', parent: coinLayer.parent! }).node
         const hudPresenter = LevelHudPresenter.create({
             ui, content, level, canPlantAt: (snapshot, row, column) => (view.plantingLine?.canPlantAt(column) ?? true) && (view.rule?.canPlantAt?.(snapshot, row, column) ?? true), seedChooser: initial.seedChooser, initialSeeds: initial.seedPackets.map(packet => packet?.seedId), presentation, seedPacketSlot: slots.seedPacket, rootLayer: root.layer,
-            loadPacketSprite, packetCostFont: pico129,
+            packetCostFont: pico129,
             adviceNode: slots.advice, adviceParent: hud, tooltipSurface, controlsParent: bankRight, adviceFont: houseOfTerror28,
             tutorialArrowLayer: tutorialArrows, tutorialLawnFlash: slots.tutorialLawnFlash, cursorPreview, gridPreview, mobileGridGuide,
             cursorPlant, gridPlant,
-            sunText, progressMeter, progressFillClip, progressFill, progressHead, levelText, coinBank: { node: coinBank, text: coinText },
+            sunText, progressMeter: meterNodes.meter, progressFillClip: meterNodes.fillClip, progressFill: meterNodes.fill, progressHead: meterNodes.head, levelText: meterNodes.levelText, coinBank,
         })
         const particlePresenter = new LevelParticlePresenter(
             layout,
@@ -404,11 +309,11 @@ export class LevelView {
         const gameOver = new LevelGameOverPresenter(board, bank, entityLayer, overlayLayer, entityRenderer, audio, gameOverFrames, presentation.board.gameOver)
         view = new LevelView(root, audio, intro, end, gameOver, entityRenderer, hudPresenter, particlePresenter, content.definitions, level, boardDefinition)
         entityRenderer.sunBankOffset = () => bankLeft.position.x
+        entityRenderer.shake = (x, y, haptic) => view.shakeBoard(x, y, haptic)
         view.openSeedChooser = createSeedChooser
         if (seedChooser) view.attachSeedChooser(seedChooser)
         if (ownedTools(initial).length || level.conveyor || initial.tutorial.dave) {
             view.boardHud = await LevelBoardHud.create(hud, bankLeft, content, ui, initial, cursorLayer, hudPresenter.seedBank, player, tooltipSurface, overlayLayer)
-            if (level.conveyor) view.hideConveyorBank = () => { bank.active = false }
         }
         view.itemPadding = rulePresentation?.itemPadding
         view.plantingLine = await PlantingLineView.create({ content, ui, ground: slots.sodClip, level, look: presentation.plantingLine, initial })
@@ -491,12 +396,9 @@ export class LevelView {
             if (!seedChooser) return
             view.pinScreen()
             raiseBank(!intro.complete && tick < 600)
-            if (intro.complete) return
-            bank.active = tick > 400
-            bank.setPosition(bank.position.x, easeInOut(400, 425, tick, 87, 0))
         }
         view.shakeTarget = { node: board, x: board.position.x, y: board.position.y }
-        view.lawn = board
+        view.hitboxes = new LevelHitboxes(board, content.definitions)
         view.player = player
         view.applySeedBankSlots = count => {
             const extra = seedBankExtraWidth(count)
@@ -515,7 +417,6 @@ export class LevelView {
         if (view.boardHud) view.boardHud.onQuestion = question => view.askDialogQuestion(ui, question)
         intro.sync()
         view.pinScreen()
-        view.hideConveyorBank()
         // Over everything the HUD got since, as the arrow spawned in play always was.
         tutorialArrows.setSiblingIndex(tutorialArrows.parent!.children.length - 1)
         return view
@@ -538,7 +439,6 @@ export class LevelView {
             if (this.boardHud.blocksIntro) return false
         }
         const complete = this.intro.update(dt, this.seedChooser?.choosing ? 425 : undefined)
-        this.hideConveyorBank()
         this.seedChooser?.update(dt)
         this.syncSeedChooserIntro()
         return complete
@@ -692,17 +592,16 @@ export class LevelView {
         this.boardHud?.sync(snapshot)
         this.seedChooser?.sync(snapshot)
         this.entityRenderer.sync(snapshot, changes, events)
-        this.hideConveyorBank()
         this.syncSeedChooserIntro()
-        this.playFeedback(events)
+        if (this.haptic) Haptics.play(this.haptic)
+        this.haptic = undefined
         this.syncShake(snapshot.gameplayTick)
         this.end.sync(snapshot, events)
-        for (const item of snapshot.items) this.end.syncAward(item, snapshot.levelId)
         this.hud.sync(snapshot, events, this.introComplete, this.menuVisible)
         this.rule?.sync?.(snapshot, events, this.introComplete)
         this.plantingLine?.sync(snapshot)
         for (const event of events) this.audio.play(event)
-        this.syncHitboxes(snapshot)
+        this.hitboxes.sync(snapshot)
         if (snapshot.result === 'lost') {
             this.end.cancelWarnings()
             this.gameOver.sync(snapshot, events)
@@ -710,41 +609,15 @@ export class LevelView {
         }
     }
 
-    private playFeedback(events: ServerEvent[]): void {
-        let style: HapticStyle | undefined
-        for (const event of events) {
-            switch (event.type) {
-                case 'plantExploded': this.shakeBoard(3, -4); style = 'explosion'; break
-                case 'bowlingImpact': this.shakeBoard(1, -2); style ??= 'heavy'; break
-            }
-        }
-        if (style) Haptics.play(style)
-    }
-
-    private syncHitboxes(snapshot: WorldSnapshot): void {
-        if (!GameDebugSettings.hitboxesVisible) { this.hitboxes?.clear(); return }
-        const graphics = this.hitboxes ??= uiNode({ name: 'Hitboxes', parent: this.lawn, graphics: true }).graphics!
-        graphics.clear()
-        graphics.lineWidth = 1
-        const draw = (entity: { x: number, y: number }, rect: { x: number, y: number, width: number, height: number }, color: Color) => {
-            graphics.strokeColor = color
-            graphics.rect(entity.x - 400 + rect.x, 300 - entity.y - rect.y - rect.height, rect.width, rect.height)
-            graphics.stroke()
-        }
-        for (const plant of snapshot.plants) draw(plant, this.definitions.plants[plant.typeId].body, Color.GREEN)
-        for (const zombie of snapshot.zombies) {
-            draw(zombie, this.definitions.zombies[zombie.typeId].body, Color.RED)
-            draw(zombie, this.definitions.zombies[zombie.typeId].attack, Color.YELLOW)
-        }
-        for (const projectile of snapshot.projectiles) draw(projectile, this.definitions.projectiles[projectile.typeId].hitbox, Color.CYAN)
-    }
-
     private shake = { endTick: 0, ticks: 0, x: 0, y: 0, tick: 0 }
     private shakeTarget: { node: Node, x: number, y: number } | null = null
+    /** The strongest haptic of this frame's shakes. */
+    private haptic?: HapticStyle
 
-    /** Board::ShakeBoard: callers supply amplitude and duration; playback follows gameplay ticks. */
-    shakeBoard(x: number, y: number, ticks = 12): void {
-        this.shake = { x, y, ticks, endTick: this.gameplayTick + ticks, tick: -1 }
+    /** Board::ShakeBoard for 12 gameplay ticks (LevelStage.shake). */
+    private shakeBoard(x: number, y: number, haptic: HapticStyle): void {
+        this.shake = { x, y, ticks: 12, endTick: this.gameplayTick + 12, tick: -1 }
+        if (!this.haptic || HAPTIC_STRENGTH.indexOf(haptic) > HAPTIC_STRENGTH.indexOf(this.haptic)) this.haptic = haptic
     }
 
     private syncShake(tick: number): void {
@@ -764,8 +637,9 @@ export class LevelView {
             this.entityRenderer.snapshot(),
             this.particles.snapshot(),
         ])
-        return parseLevelPresentationSnapshot({
-            schemaVersion: 3,
+        // Typed, so the format it is written in is the one it is read in; parsed, so it is saved only if it reads back.
+        const snapshot: LevelPresentationSnapshot = {
+            schemaVersion: 4,
             flow,
             intro: this.intro.snapshot(),
             end: this.end.snapshot(),
@@ -775,17 +649,17 @@ export class LevelView {
             entities,
             particles,
             extensions: {},
-        })
+        }
+        return parseLevelPresentationSnapshot(snapshot)
     }
 
     async restore(snapshot: LevelPresentationSnapshot): Promise<void> {
         await this.intro.restore(snapshot.intro)
         // The board, graves rising with the intro included, is shown as it was, quietly.
         await this.entityRenderer.restore(snapshot.entities)
-        this.hideConveyorBank()
         this.syncSeedChooserIntro()
         this.hud.restore(snapshot.hud, snapshot.advice, this.introComplete, this.menuVisible)
-        await Promise.all([this.end.restore(snapshot.end), this.audio.restore(snapshot.audio)])
+        await Promise.all([this.end.restore(snapshot.end, snapshot.flow.completionStarted), this.audio.restore(snapshot.audio)])
         await this.particles.restore(snapshot.particles)
     }
 

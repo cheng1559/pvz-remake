@@ -1,3 +1,4 @@
+import { record, finite, positiveFinite } from '@/shared/validate'
 import { withFrom } from './from'
 import type { MusicTuneId } from './music'
 import type { JsonObject } from '@/shared/protocol'
@@ -6,7 +7,8 @@ import { isRenderLayer, type RenderLayer } from './renderOrder'
 
 export interface ClientAnimationClip {
     readonly reanimId: string
-    readonly rateScale: number
+    /** How much faster than its `fps` it plays; 1 when left out (ClientAnimationRegistry fills it in). */
+    readonly rateScale?: number
     readonly x: number
     readonly y: number
     readonly attachmentTrackId?: string
@@ -16,6 +18,7 @@ export interface ClientAnimationClip {
     readonly onlyTracks?: readonly string[]
     /** Seconds a layer blends into it from the pose it had (Reanimation::StartBlend), 0.2 by default. */
     readonly blend?: number
+    /** The frames a second its Reanim was made for, 12 when left out. */
     readonly fps?: number
     /**
      * REANIM_*_FULL_LAST_FRAME (Plant::DoBlink's blink): its last picture keeps a frame's time, instead of the pictures
@@ -170,6 +173,8 @@ export interface PlantPresentationDefinition {
     /** AlmanacDialog: how far from a plant's usual place the almanac shows it, in original Y-down pixels (the grave buster's 55 down). */
     readonly almanacOffset?: readonly [number, number]
     readonly chewParticle?: string
+    /** Plant::AnimateNuts: the face's sprites under two thirds and under a third of its health (a `wallnut` view). */
+    readonly crackedFaces?: readonly [string, string]
     /** `layer`: the render layer of the effect, in the plant's row below `top` (the potato mine's `particle`). */
     readonly explosion?: { readonly effect: string; readonly x: number; readonly layer: RenderLayer }
     readonly plantedSounds?: readonly PresentationSound[]
@@ -186,6 +191,15 @@ export interface PresentationSound {
     readonly audio: string
     readonly foley: boolean
     readonly pitchRange?: number
+}
+
+/**
+ * How a sound plays as foley (LawnApp's FoleyParams): up to `pitchRange` semitones higher (lower when negative), and as
+ * one of its `variants` picked at random, itself among them as often as it is listed.
+ */
+export interface FoleyDefinition {
+    readonly pitchRange?: number
+    readonly variants?: readonly string[]
 }
 
 /** What stands in a cell without being a plant or a zombie (GridItemSnapshot): the view that draws it and where it is drawn among the rest. */
@@ -285,8 +299,8 @@ export interface ZombiePresentationDefinition {
     /** The almanac's small picture of it: where its Reanim's origin goes in the frame, and at what size. */
     readonly portrait?: { readonly x: number; readonly y: number; readonly scale: number }
     readonly parts: ZombieParts
-    readonly damagedArm: 'damagedArm' | 'poleVaulterDamagedArm'
-    readonly damagedArmSprite?: string
+    /** Zombie::TakeDamage's bare arm: the upper arm's sprite once the arm has dropped. */
+    readonly damagedArmSprite: string
     /** Zombie::UpdateZombieNewspaper: the head track takes this sprite while enraged. */
     readonly enragedHead?: { readonly track: string; readonly sprite: string }
     /** Zombie::UpdateZombieNewspaper: the roar on losing the paper, when the server allows it. */
@@ -482,6 +496,24 @@ export interface MainMenuDefinition {
     readonly startAdventure: { readonly track: string; readonly image: string; readonly highlight: string; readonly shadow: string; readonly adventureShadow: string }
 }
 
+/**
+ * A board tool in the bank beside the seeds (the shovel): its bank and picture, the tooltip, the hotkey (a letter) and
+ * the tutorial step that points at it (`arrowStep`). `x`: the bank's place before Board::GetSeedBankExtraWidth;
+ * `imageOffset`: the picture in its bank; `cursorOffset`: the held picture from the pointer; `arrowOffset`: the arrow
+ * from the bank's lower centre.
+ */
+export interface ToolPresentation {
+    readonly bank: string
+    readonly sprite: string
+    readonly tooltipKey: string
+    readonly hotkey?: string
+    readonly arrowStep?: string
+    readonly x: number
+    readonly imageOffset: readonly [number, number]
+    readonly cursorOffset: readonly [number, number]
+    readonly arrowOffset: readonly [number, number]
+}
+
 export interface PresentationDefinitions {
     readonly mainMenu: MainMenuDefinition
     readonly conveyor: {
@@ -489,7 +521,10 @@ export interface PresentationDefinitions {
         readonly packetX: number; readonly packetY: number; readonly beltY: number; readonly beltWidth: number; readonly beltHeight: number
         readonly frames: number; readonly frameTicks: number; readonly introStart: number; readonly introDuration: number
     }
-    readonly shovel: { readonly x: number; readonly imageOffset: readonly [number, number]; readonly cursorOffset: readonly [number, number]; readonly arrowOffset: readonly [number, number] }
+    /** Foley by audio ID. */
+    readonly foley: Readonly<Record<string, FoleyDefinition>>
+    /** The board's tools by ID (the shovel), for those a game gives the player. */
+    readonly tools: Readonly<Record<string, ToolPresentation>>
     /** Zombie::RiseFromGrave: the dirt and rumble of a zombie rising from a grave; a level may replace them (Whack-a-Zombie). */
     readonly graves: { readonly rise: { readonly particle: string; readonly sounds: readonly PresentationSound[] } }
     readonly dave: {
@@ -527,153 +562,164 @@ export interface PresentationDefinitions {
 }
 
 export function parsePresentationDefinitions(value: unknown): PresentationDefinitions {
-    const source = object(value, 'presentation definitions')
+    const source = record(value, 'presentation definitions')
     // A plant's or a zombie's clips may start as another's (withFrom).
-    const data: Record<string, unknown> = { ...source, plants: withFrom(object(source.plants, 'presentation definitions.plants'), 'clips', 'plants'),
-        zombies: withFrom(object(source.zombies, 'presentation definitions.zombies'), 'clips', 'zombies') }
-    for (const [id, layers] of Object.entries(object(data.screens ?? {}, 'presentation screens'))) {
+    const data: Record<string, unknown> = { ...source, plants: withFrom(record(source.plants, 'presentation definitions.plants'), 'clips', 'plants'),
+        zombies: withFrom(record(source.zombies, 'presentation definitions.zombies'), 'clips', 'zombies') }
+    for (const [id, layers] of Object.entries(record(data.screens ?? {}, 'presentation screens'))) {
         if (!Array.isArray(layers)) throw new TypeError(id + ' screen animations must be an array')
         const names = new Set<string>()
         for (const entry of layers) {
-            const layer = object(entry, id)
+            const layer = record(entry, id)
             text(layer.name, id + '.name'); text(layer.reanimId, id + '.reanimId')
             if (names.has(layer.name as string)) throw new TypeError(id + ' has duplicate animation names')
             names.add(layer.name as string)
-            point(layer, id); positive(layer.rate, id + '.rate')
+            point(layer, id); positiveFinite(layer.rate, id + '.rate')
             if (layer.playback !== 'loop' && layer.playback !== 'last') throw new TypeError(id + '.playback is invalid')
             if (layer.randomPhase !== undefined && (typeof layer.randomPhase !== 'boolean' || layer.playback !== 'loop')) throw new TypeError(id + '.randomPhase requires loop playback')
             if (layer.visibleTracks !== undefined) texts(layer.visibleTracks, id + '.visibleTracks')
         }
     }
-    for (const [id, entry] of Object.entries(object(data.challenges ?? {}, 'presentation challenges'))) {
-        const page = object(entry, 'challenges.' + id)
+    for (const [id, entry] of Object.entries(record(data.challenges ?? {}, 'presentation challenges'))) {
+        const page = record(entry, 'challenges.' + id)
         finite(page.x, `challenges.${id}.x`); finite(page.y, `challenges.${id}.y`)
-        positive(page.columnSpacing, `challenges.${id}.columnSpacing`); positive(page.rowSpacing, `challenges.${id}.rowSpacing`)
-        positive(page.buttonWidth, `challenges.${id}.buttonWidth`); positive(page.buttonHeight, `challenges.${id}.buttonHeight`)
-        const thumbnails = object(page.thumbnails, `challenges.${id}.thumbnails`)
+        positiveFinite(page.columnSpacing, `challenges.${id}.columnSpacing`); positiveFinite(page.rowSpacing, `challenges.${id}.rowSpacing`)
+        positiveFinite(page.buttonWidth, `challenges.${id}.buttonWidth`); positiveFinite(page.buttonHeight, `challenges.${id}.buttonHeight`)
+        const thumbnails = record(page.thumbnails, `challenges.${id}.thumbnails`)
         text(thumbnails.sprite, `challenges.${id}.thumbnails.sprite`)
         for (const key of ['columns', 'rows']) {
             if (!Number.isInteger(thumbnails[key]) || (thumbnails[key] as number) < 1) throw new TypeError(`challenges.${id}.thumbnails.${key} must be a positive integer`)
         }
         const cels = (thumbnails.columns as number) * (thumbnails.rows as number)
-        for (const [key, icon] of Object.entries(object(page.icons, `challenges.${id}.icons`))) {
+        for (const [key, icon] of Object.entries(record(page.icons, `challenges.${id}.icons`))) {
             if (!Number.isInteger(icon) || (icon as number) < 0 || (icon as number) >= cels) throw new TypeError(`challenges.${id}.icons.${key} is not a thumbnail cel`)
         }
     }
-    parseMainMenu(object(data.mainMenu, 'mainMenu'))
-    const conveyor = object(data.conveyor, 'conveyor')
+    parseMainMenu(record(data.mainMenu, 'mainMenu'))
+    const conveyor = record(data.conveyor, 'conveyor')
     for (const key of ['x', 'backdropX', 'clipX', 'packetX', 'packetY', 'beltY', 'introStart']) finite(conveyor[key], 'conveyor.' + key)
-    for (const key of ['width', 'height', 'beltWidth', 'beltHeight', 'frames', 'frameTicks', 'introDuration']) positive(conveyor[key], 'conveyor.' + key)
-    const graveRise = object(object(data.graves, 'graves').rise, 'graves.rise')
+    for (const key of ['width', 'height', 'beltWidth', 'beltHeight', 'frames', 'frameTicks', 'introDuration']) positiveFinite(conveyor[key], 'conveyor.' + key)
+    const graveRise = record(record(data.graves, 'graves').rise, 'graves.rise')
     text(graveRise.particle, 'graves.rise.particle'); sounds(graveRise.sounds, 'graves.rise.sounds', true)
-    const shovel = object(data.shovel, 'shovel')
-    finite(shovel.x, 'shovel.x')
-    for (const key of ['imageOffset', 'cursorOffset', 'arrowOffset']) pair(shovel[key], 'shovel.' + key)
-    const dave = object(data.dave, 'dave'), clips = object(dave.clips, 'dave.clips')
+    for (const [id, entry] of Object.entries(record(data.foley ?? {}, 'foley'))) {
+        const sound = record(entry, 'foley.' + id)
+        if (sound.pitchRange !== undefined) finite(sound.pitchRange, 'foley.' + id + '.pitchRange')
+        if (sound.variants !== undefined) texts(sound.variants, 'foley.' + id + '.variants')
+    }
+    for (const [id, entry] of Object.entries(record(data.tools, 'tools'))) {
+        const tool = record(entry, 'tools.' + id)
+        for (const key of ['bank', 'sprite', 'tooltipKey']) text(tool[key], 'tools.' + id + '.' + key)
+        if (tool.hotkey !== undefined && (typeof tool.hotkey !== 'string' || !/^[A-Z]$/.test(tool.hotkey))) throw new TypeError('tools.' + id + '.hotkey must be a letter A-Z')
+        if (tool.arrowStep !== undefined) text(tool.arrowStep, 'tools.' + id + '.arrowStep')
+        finite(tool.x, 'tools.' + id + '.x')
+        for (const key of ['imageOffset', 'cursorOffset', 'arrowOffset']) pair(tool[key], 'tools.' + id + '.' + key)
+    }
+    const dave = record(data.dave, 'dave'), clips = record(dave.clips, 'dave.clips')
     for (const key of ['enter', 'leave', 'idle', 'smalltalk', 'mediumtalk', 'blahblah', 'crazy', 'idle_handing', 'talk_handing', 'blink']) text(clips[key], 'dave.clips.' + key)
-    for (const key of ['sourceFps', 'transitionFps', 'talkFps', 'blinkFps', 'idleBlend', 'talkBlend', 'delay']) positive(dave[key], 'dave.' + key)
+    for (const key of ['sourceFps', 'transitionFps', 'talkFps', 'blinkFps', 'idleBlend', 'talkBlend', 'delay']) positiveFinite(dave[key], 'dave.' + key)
     pair(dave.blinkSeconds, 'dave.blinkSeconds'); pair(dave.talkLengths, 'dave.talkLengths')
-    const bubble = object(dave.bubble, 'dave.bubble'), hand = object(dave.hand, 'dave.hand')
+    const bubble = record(dave.bubble, 'dave.bubble'), hand = record(dave.hand, 'dave.hand')
     text(bubble.sprite, 'dave.bubble.sprite')
     for (const key of ['x', 'y', 'textX', 'textY', 'continueX', 'continueY', 'shake']) finite(bubble[key], 'dave.bubble.' + key)
-    positive(bubble.textWidth, 'dave.bubble.textWidth'); positive(bubble.textHeight, 'dave.bubble.textHeight')
-    text(hand.reanim, 'dave.hand.reanim'); text(hand.track, 'dave.hand.track'); positive(hand.scale, 'dave.hand.scale')
+    positiveFinite(bubble.textWidth, 'dave.bubble.textWidth'); positiveFinite(bubble.textHeight, 'dave.bubble.textHeight')
+    text(hand.reanim, 'dave.hand.reanim'); text(hand.track, 'dave.hand.track'); positiveFinite(hand.scale, 'dave.hand.scale')
     finite(hand.x, 'dave.hand.x'); finite(hand.y, 'dave.hand.y')
-    const daveParts = object(dave.parts, 'dave.parts')
+    const daveParts = record(dave.parts, 'dave.parts')
     text(daveParts.mouth, 'dave.parts.mouth'); texts(daveParts.eyes, 'dave.parts.eyes'); text(daveParts.head, 'dave.parts.head')
-    for (const [key, value] of Object.entries(object(dave.mouths, 'dave.mouths'))) text(value, 'dave.mouths.' + key)
-    for (const [id, entry] of Object.entries(object(data.boards ?? {}, 'presentation boards'))) {
-        const board = object(entry, id), music = object(board.music, id + '.music'), over = object(board.gameOver, id + '.gameOver')
+    for (const [key, value] of Object.entries(record(dave.mouths, 'dave.mouths'))) text(value, 'dave.mouths.' + key)
+    for (const [id, entry] of Object.entries(record(data.boards ?? {}, 'presentation boards'))) {
+        const board = record(entry, id), music = record(board.music, id + '.music'), over = record(board.gameOver, id + '.gameOver')
         text(board.background, id + '.background'); finite(board.backgroundX, id + '.backgroundX')
+        if (board.plantShadow !== undefined) text(board.plantShadow, id + '.plantShadow')
         text(music.choosing, id + '.music.choosing'); text(music.gameplay, id + '.music.gameplay')
         texts(over.images, id + '.gameOver.images')
         if ((over.images as unknown[]).length !== 3) throw new TypeError(id + '.gameOver.images must contain three images')
         point(over.interior, id + '.gameOver.interior'); point(over.doorway, id + '.gameOver.doorway')
         for (const field of ['clipX', 'winnerY', 'panX']) finite(over[field], id + '.gameOver.' + field)
     }
-    for (const [id, entry] of Object.entries(object(data.levels ?? {}, 'presentation levels'))) {
-        const level = object(entry, id), intro = object(level.intro, id + '.intro')
-        positive(intro.previewCapacity, id + '.intro.previewCapacity')
+    for (const [id, entry] of Object.entries(record(data.levels ?? {}, 'presentation levels'))) {
+        const level = record(entry, id), intro = record(level.intro, id + '.intro')
+        positiveFinite(intro.previewCapacity, id + '.intro.previewCapacity')
         if (!Number.isInteger(intro.previewCapacity)) throw new TypeError(id + '.intro.previewCapacity must be an integer')
         text(intro.sod, id + '.intro.sod')
-        finite(intro.x, id + '.intro.x'); finite(intro.y, id + '.intro.y'); positive(intro.width, id + '.intro.width')
+        finite(intro.x, id + '.intro.x'); finite(intro.y, id + '.intro.y'); positiveFinite(intro.width, id + '.intro.width')
         if (intro.sourceX !== undefined) finite(intro.sourceX, id + '.intro.sourceX')
         if (typeof intro.readySetPlant !== 'boolean' || !Array.isArray(intro.rolls)) throw new TypeError(id + ' has invalid intro settings')
         for (const value of intro.rolls) {
-            const roll = object(value, id + '.intro.rolls')
+            const roll = record(value, id + '.intro.rolls')
             for (const field of ['x', 'y', 'particleY']) finite(roll[field], id + '.intro.rolls.' + field)
         }
         if (intro.existingSod !== undefined) {
-            const sod = object(intro.existingSod, id + '.intro.existingSod')
+            const sod = record(intro.existingSod, id + '.intro.existingSod')
             text(sod.sprite, id + '.intro.existingSod.sprite'); point(sod, id + '.intro.existingSod')
         }
-        object(level.advice, id + '.advice')
+        record(level.advice, id + '.advice')
         if (level.adviceDuringIntro !== undefined && typeof level.adviceDuringIntro !== 'boolean') throw new TypeError(id + '.adviceDuringIntro must be boolean')
         if (level.adviceStyle !== undefined && level.adviceStyle !== 'hint-stay' && level.adviceStyle !== 'tutorial-level1-stay') throw new TypeError(id + '.adviceStyle is invalid')
         texts(level.seedGuideSteps, id + '.seedGuideSteps'); texts(level.lawnGuideSteps, id + '.lawnGuideSteps')
         if (level.seedGuideArrow !== undefined && level.seedGuideArrow !== false) throw new TypeError(id + '.seedGuideArrow can only be false')
         if (level.plantingLine !== undefined) {
-            const line = object(level.plantingLine, id + '.plantingLine')
+            const line = record(level.plantingLine, id + '.plantingLine')
             text(line.sprite, id + '.plantingLine.sprite')
             if (!Array.isArray(line.offset) || line.offset.length !== 2) throw new TypeError(id + '.plantingLine.offset must be [x, y]')
             for (const value of line.offset) finite(value, id + '.plantingLine.offset')
             if (!Array.isArray(line.dialogs) || line.dialogs.some(dialog => !Number.isInteger(dialog))) throw new TypeError(id + '.plantingLine.dialogs must list dialog IDs')
         }
     }
-    for (const [id, entry] of Object.entries(object(data.rules ?? {}, 'presentation rules'))) {
-        const rule = object(entry, 'rules.' + id)
+    for (const [id, entry] of Object.entries(record(data.rules ?? {}, 'presentation rules'))) {
+        const rule = record(entry, 'rules.' + id)
         if (rule.graveRise !== undefined) {
-            const rise = object(rule.graveRise, 'rules.' + id + '.graveRise')
+            const rise = record(rule.graveRise, 'rules.' + id + '.graveRise')
             text(rise.particle, 'rules.' + id + '.graveRise.particle'); sounds(rise.sounds, 'rules.' + id + '.graveRise.sounds', true)
         }
         if (rule.itemPadding !== undefined) {
-            const padding = object(rule.itemPadding, 'rules.' + id + '.itemPadding')
+            const padding = record(rule.itemPadding, 'rules.' + id + '.itemPadding')
             finite(padding.size, 'rules.' + id + '.itemPadding.size'); finite(padding.height, 'rules.' + id + '.itemPadding.height')
         }
     }
-    for (const [id, entry] of Object.entries(object(data.awards ?? {}, 'presentation awards'))) {
-        const award = object(entry, id)
-        text(award.sprite, id + '.sprite'); positive(award.scale, id + '.scale')
+    for (const [id, entry] of Object.entries(record(data.awards ?? {}, 'presentation awards'))) {
+        const award = record(entry, id)
+        text(award.sprite, id + '.sprite'); positiveFinite(award.scale, id + '.scale')
         for (const field of ['x', 'y', 'pageY']) finite(award[field], id + '.' + field)
         if (award.pageImages !== undefined) {
             if (!Array.isArray(award.pageImages) || !award.pageImages.length) throw new TypeError(id + '.pageImages must not be empty')
             for (const value of award.pageImages) {
-                const image = object(value, id + '.pageImages')
+                const image = record(value, id + '.pageImages')
                 text(image.sprite, id + '.pageImages.sprite'); point(image, id + '.pageImages')
-                for (const field of ['width', 'height']) if (image[field] !== undefined) positive(image[field], id + '.pageImages.' + field)
+                for (const field of ['width', 'height']) if (image[field] !== undefined) positiveFinite(image[field], id + '.pageImages.' + field)
             }
         }
     }
-    for (const [id, entry] of Object.entries(object(data.items, 'presentation items'))) {
-        const item = object(entry, id)
+    for (const [id, entry] of Object.entries(record(data.items, 'presentation items'))) {
+        const item = record(entry, id)
         if (item.view !== undefined) text(item.view, id + '.view')
         text(item.reanim, id + '.reanim'); pair(item.offset, id + '.offset'); range(item.rate, id + '.rate', true)
-        if (item.flight !== undefined) { const flight = object(item.flight, id + '.flight'); text(flight.sprite, id + '.flight.sprite'); pair(flight.offset, id + '.flight.offset') }
+        if (item.flight !== undefined) { const flight = record(item.flight, id + '.flight'); text(flight.sprite, id + '.flight.sprite'); pair(flight.offset, id + '.flight.offset') }
         if (item.glow !== undefined) {
-            const glow = object(item.glow, id + '.glow')
+            const glow = record(item.glow, id + '.glow')
             text(glow.sprite, id + '.glow.sprite'); pair(glow.offset, id + '.glow.offset')
             if (glow.inFlight !== undefined && typeof glow.inFlight !== 'boolean') throw new TypeError(id + '.glow.inFlight must be boolean')
         }
-        if (item.arrow !== undefined) { const arrow = object(item.arrow, id + '.arrow'); text(arrow.particle, id + '.arrow.particle'); pair(arrow.offset, id + '.arrow.offset') }
+        if (item.arrow !== undefined) { const arrow = record(item.arrow, id + '.arrow'); text(arrow.particle, id + '.arrow.particle'); pair(arrow.offset, id + '.arrow.offset') }
         for (const field of ['spawnSounds', 'landSounds', 'collectSounds']) sounds(item[field], id + '.' + field)
     }
-    const plants = object(data.plants, 'presentation definitions.plants')
-    const zombies = object(data.zombies, 'presentation definitions.zombies')
+    const plants = record(data.plants, 'presentation definitions.plants')
+    const zombies = record(data.zombies, 'presentation definitions.zombies')
     for (const [id, entry] of Object.entries(plants)) {
-        const plant = object(entry, id), visual = object(plant.visual, id + '.visual')
-        if (plant.viewConfig !== undefined) object(plant.viewConfig, id + '.viewConfig')
+        const plant = record(entry, id), visual = record(plant.visual, id + '.visual')
+        if (plant.viewConfig !== undefined) record(plant.viewConfig, id + '.viewConfig')
         if (typeof visual.seedType !== 'string' && typeof visual.seedType !== 'number') throw new TypeError(id + '.seedType is invalid')
         if (visual.preview !== undefined && (!Number.isInteger(visual.preview) || (visual.preview as number) < 0)) throw new TypeError(id + '.preview is invalid')
         if (plant.shadow !== undefined) {
             point(plant.shadow, id + '.shadow')
-            if ((plant.shadow as Record<string, unknown>).scale !== undefined) positive((plant.shadow as Record<string, unknown>).scale, id + '.shadow.scale')
+            if ((plant.shadow as Record<string, unknown>).scale !== undefined) positiveFinite((plant.shadow as Record<string, unknown>).scale, id + '.shadow.scale')
         }
-        positive(plant.scale, id + '.scale')
+        positiveFinite(plant.scale, id + '.scale')
         if (plant.layer !== undefined && !isRenderLayer(plant.layer)) throw new TypeError(id + '.layer is not a render layer')
         if (plant.drawHeightOffset !== undefined) finite(plant.drawHeightOffset, id + '.drawHeightOffset')
         if (plant.pointerOffsetY !== undefined) finite(plant.pointerOffsetY, id + '.pointerOffsetY')
         if (plant.parts !== undefined) {
-            const parts = object(plant.parts, id + '.parts')
+            const parts = record(plant.parts, id + '.parts')
             for (const key of Object.keys(parts)) if (!['eyes', 'face', 'prey'].includes(key)) throw new TypeError(id + '.parts.' + key + ' is not supported')
             if (parts.eyes !== undefined) texts(parts.eyes, id + '.parts.eyes')
             if (parts.face !== undefined) text(parts.face, id + '.parts.face')
@@ -682,28 +728,32 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (visual.nameKey !== undefined) text(visual.nameKey, id + '.visual.nameKey')
         if (visual.tooltipKey !== undefined) text(visual.tooltipKey, id + '.visual.tooltipKey')
         if (plant.view !== undefined) text(plant.view, id + '.view')
-        const packet = plant.packet === undefined ? {} : object(plant.packet, id + '.packet')
+        const packet = plant.packet === undefined ? {} : record(plant.packet, id + '.packet')
         for (const [field, clips] of [['offBoard', plant.offBoard], ['packet.clips', packet.clips]] as const) {
-            if (clips !== undefined) for (const [layer, clip] of Object.entries(object(clips, id + '.' + field))) text(clip, id + '.' + field + '.' + layer)
+            if (clips !== undefined) for (const [layer, clip] of Object.entries(record(clips, id + '.' + field))) text(clip, id + '.' + field + '.' + layer)
         }
         for (const key of ['x', 'y', 'time']) if (packet[key] !== undefined) finite(packet[key], id + '.packet.' + key)
-        if (packet.scale !== undefined) positive(packet.scale, id + '.packet.scale')
+        if (packet.scale !== undefined) positiveFinite(packet.scale, id + '.packet.scale')
         if (plant.almanacOffset !== undefined) pair(plant.almanacOffset, id + '.almanacOffset')
+        if (plant.crackedFaces !== undefined) {
+            if (!Array.isArray(plant.crackedFaces) || plant.crackedFaces.length !== 2) throw new TypeError(id + '.crackedFaces must be two sprites')
+            texts(plant.crackedFaces, id + '.crackedFaces')
+        }
         sounds(plant.plantedSounds, id + '.plantedSounds')
         sounds(plant.explosionSounds, id + '.explosionSounds')
         sounds(plant.fireSounds, id + '.fireSounds')
         if (plant.explosion !== undefined) {
-            const explosion = object(plant.explosion, id + '.explosion')
+            const explosion = record(plant.explosion, id + '.explosion')
             text(explosion.effect, id + '.explosion.effect'); finite(explosion.x, id + '.explosion.x')
             if (!isRenderLayer(explosion.layer)) throw new TypeError(id + '.explosion.layer is not a render layer')
         }
     }
     for (const [id, entry] of Object.entries(zombies)) {
-        const zombie = object(entry, id), parts = object(zombie.parts, id + '.parts')
+        const zombie = record(entry, id), parts = record(zombie.parts, id + '.parts')
         if (zombie.nameKey !== undefined) text(zombie.nameKey, id + '.nameKey')
-        if (zombie.damagedArmSprite !== undefined) text(zombie.damagedArmSprite, id + '.damagedArmSprite')
+        text(zombie.damagedArmSprite, id + '.damagedArmSprite')
         if (zombie.enragedHead !== undefined) {
-            const head = object(zombie.enragedHead, id + '.enragedHead')
+            const head = record(zombie.enragedHead, id + '.enragedHead')
             text(head.track, id + '.enragedHead.track')
             text(head.sprite, id + '.enragedHead.sprite')
         }
@@ -712,7 +762,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (zombie.previewBlockedCells !== undefined) {
             if (!Array.isArray(zombie.previewBlockedCells)) throw new TypeError(id + '.previewBlockedCells must be an array')
             for (const value of zombie.previewBlockedCells) {
-                const cell = object(value, id + '.previewBlockedCells[]')
+                const cell = record(value, id + '.previewBlockedCells[]')
                 for (const key of ['column', 'row']) {
                     if (!Number.isInteger(cell[key]) || (cell[key] as number) < 0 || (cell[key] as number) > 4) {
                         throw new TypeError(id + '.previewBlockedCells[].' + key + ' must be an integer between 0 and 4')
@@ -723,34 +773,33 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         point(zombie.shadow, id + '.shadow')
         if ((zombie.shadow as Record<string, unknown>).backwardsX !== undefined) finite((zombie.shadow as Record<string, unknown>).backwardsX, id + '.shadow.backwardsX')
         if (zombie.packet !== undefined) {
-            const packet = object(zombie.packet, id + '.packet')
-            finite(packet.x, id + '.packet.x'); finite(packet.y, id + '.packet.y'); positive(packet.scale, id + '.packet.scale')
+            const packet = record(zombie.packet, id + '.packet')
+            finite(packet.x, id + '.packet.x'); finite(packet.y, id + '.packet.y'); positiveFinite(packet.scale, id + '.packet.scale')
             if (packet.clip !== undefined) text(packet.clip, id + '.packet.clip')
         }
         if (zombie.portrait !== undefined) {
-            const portrait = object(zombie.portrait, id + '.portrait')
-            finite(portrait.x, id + '.portrait.x'); finite(portrait.y, id + '.portrait.y'); positive(portrait.scale, id + '.portrait.scale')
+            const portrait = record(zombie.portrait, id + '.portrait')
+            finite(portrait.x, id + '.portrait.x'); finite(portrait.y, id + '.portrait.y'); positiveFinite(portrait.scale, id + '.portrait.scale')
         }
         for (const part of ['head', 'hair', 'tongue', 'arm', 'helms']) texts(parts[part], id + '.parts.' + part)
         text(parts.upperArm, id + '.parts.upperArm')
         text(parts.ground, id + '.parts.ground')
         if (parts.held !== undefined) texts(parts.held, id + '.parts.held')
         if (parts.flagArm !== undefined) {
-            const flagArm = object(parts.flagArm, id + '.parts.flagArm')
+            const flagArm = record(parts.flagArm, id + '.parts.flagArm')
             texts(flagArm.holding, id + '.parts.flagArm.holding')
             texts(flagArm.free, id + '.parts.flagArm.free')
             text(flagArm.front, id + '.parts.flagArm.front')
         }
         if (parts.shieldArms !== undefined) {
-            const shieldArms = object(parts.shieldArms, id + '.parts.shieldArms')
+            const shieldArms = record(parts.shieldArms, id + '.parts.shieldArms')
             texts(shieldArms.holding, id + '.parts.shieldArms.holding')
             texts(shieldArms.free, id + '.parts.shieldArms.free')
             if (zombie.shield === undefined) throw new TypeError(id + '.parts.shieldArms requires a shield')
         }
-        object(zombie.clips, id + '.clips')
-        if (zombie.damagedArm !== 'damagedArm' && zombie.damagedArm !== 'poleVaulterDamagedArm') throw new TypeError(id + '.damagedArm is invalid')
-        for (const [part, value] of Object.entries(object(zombie.drops, id + '.drops'))) {
-            const drop = object(value, id + '.drops.' + part)
+        record(zombie.clips, id + '.clips')
+        for (const [part, value] of Object.entries(record(zombie.drops, id + '.drops'))) {
+            const drop = record(value, id + '.drops.' + part)
             text(drop.track, id + '.drops.' + part + '.track')
             text(drop.effect, id + '.drops.' + part + '.effect')
             pair(drop.offset, id + '.drops.' + part + '.offset')
@@ -759,7 +808,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         for (const slot of ['helm', 'shield'] as const) {
             if (zombie[slot] === undefined) continue
             const name = `${id}.${slot}`
-            const armor = object(zombie[slot], name)
+            const armor = record(zombie[slot], name)
             text(armor.track, name + '.track')
             text(armor.effect, name + '.effect')
             texts(armor.damagedSprites, name + '.damagedSprites')
@@ -769,7 +818,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             if (slot === 'shield' && armor.showsHair !== undefined) throw new TypeError(name + '.showsHair is only for a helm')
             if (armor.showsHair !== undefined && typeof armor.showsHair !== 'boolean') throw new TypeError(name + '.showsHair must be boolean')
             if (armor.dropReanim !== undefined) {
-                const reanim = object(armor.dropReanim, name + '.dropReanim')
+                const reanim = record(armor.dropReanim, name + '.dropReanim')
                 text(reanim.reanimId, name + '.dropReanim.reanimId')
                 pair(reanim.offset, name + '.dropReanim.offset')
             }
@@ -783,34 +832,34 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     }
     if (!zombies['pvz:normal']) throw new TypeError('Missing normal zombie presentation')
     for (const id of Object.keys(plants)) if (Object.hasOwn(zombies, id)) throw new TypeError('Duplicate presentation target: ' + id)
-    for (const [id, value] of Object.entries(object(data.gridItems, 'gridItems'))) {
-        const item = object(value, id)
+    for (const [id, value] of Object.entries(record(data.gridItems, 'gridItems'))) {
+        const item = record(value, id)
         text(item.view, id + '.view')
         if (!isRenderLayer(item.layer)) throw new TypeError(id + '.layer is not a render layer')
         if (item.offset !== undefined) finite(item.offset, id + '.offset')
     }
-    for (const [id, value] of Object.entries(object(data.projectiles, 'projectiles'))) {
-        const projectile = object(value, id)
+    for (const [id, value] of Object.entries(record(data.projectiles, 'projectiles'))) {
+        const projectile = record(value, id)
         if (projectile.view !== undefined) text(projectile.view, id + '.view')
-        if (projectile.viewConfig !== undefined) object(projectile.viewConfig, id + '.viewConfig')
+        if (projectile.viewConfig !== undefined) record(projectile.viewConfig, id + '.viewConfig')
         if ((projectile.sprite === undefined) === (projectile.reanim === undefined)) throw new TypeError(id + ' needs exactly one of sprite and reanim')
         if (projectile.sprite !== undefined) text(projectile.sprite, id + '.sprite')
         if (projectile.reanim !== undefined) {
-            const reanim = object(projectile.reanim, id + '.reanim')
+            const reanim = record(projectile.reanim, id + '.reanim')
             text(reanim.id, id + '.reanim.id'); point(reanim, id + '.reanim')
-            positive(reanim.scale, id + '.reanim.scale'); positive(reanim.rate, id + '.reanim.rate')
+            positiveFinite(reanim.scale, id + '.reanim.scale'); positiveFinite(reanim.rate, id + '.reanim.rate')
         }
         if (projectile.plantShadow !== undefined) point(projectile.plantShadow, id + '.plantShadow')
         if (projectile.layer !== undefined && !isRenderLayer(projectile.layer)) throw new TypeError(id + '.layer is not a render layer')
         if (projectile.shadow !== undefined) {
-            const shadow = object(projectile.shadow, id + '.shadow')
+            const shadow = record(projectile.shadow, id + '.shadow')
             text(shadow.sprite, id + '.shadow.sprite'); point(shadow.offset, id + '.shadow.offset')
-            positive(shadow.scale, id + '.shadow.scale')
+            positiveFinite(shadow.scale, id + '.shadow.scale')
             if (!Number.isInteger(shadow.columns) || (shadow.columns as number) < 1 || !Number.isInteger(shadow.cell)
                 || (shadow.cell as number) < 0 || (shadow.cell as number) >= (shadow.columns as number)) throw new TypeError(id + '.shadow has invalid atlas cells')
         }
         if (projectile.impact !== undefined) {
-            const impact = object(projectile.impact, id + '.impact')
+            const impact = record(projectile.impact, id + '.impact')
             text(impact.id, id + '.impact.id')
             if (impact.shotOffset !== undefined) pair(impact.shotOffset, id + '.impact.shotOffset')
             if (impact.lobOffset !== undefined) pair(impact.lobOffset, id + '.impact.lobOffset')
@@ -818,7 +867,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             if (!impact.free || impact.yRange !== undefined) range(impact.yRange, id + '.impact.yRange', true)
         }
         if (projectile.trail !== undefined) {
-            const trail = object(projectile.trail, id + '.trail')
+            const trail = record(projectile.trail, id + '.trail')
             text(trail.id, id + '.trail.id')
             point(trail, id + '.trail')
         }
@@ -826,22 +875,18 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         sounds(projectile.impactSounds, id + '.impactSounds', true)
         if (projectile.loud !== undefined && projectile.loud !== true) throw new TypeError(id + '.loud must be true')
     }
-    const packets = object(data.seedPackets, 'seedPackets')
-    const flash = object(packets.flash, 'seedPackets.flash')
+    const packets = record(data.seedPackets, 'seedPackets')
+    const flash = record(packets.flash, 'seedPackets.flash')
     text(flash.id, 'seedPackets.flash.id')
-    const selection = object(packets.selection, 'seedPackets.selection')
+    const selection = record(packets.selection, 'seedPackets.selection')
     if (!Array.isArray(selection.color) || selection.color.length !== 3 || selection.color.some(value => !Number.isInteger(value) || value < 0 || value > 255)) throw new TypeError('Invalid seedPackets.selection.color')
     placement(packets.defaultPlacement, 'seedPackets.defaultPlacement')
     placement(packets.grave, 'seedPackets.grave')
-    for (const [id, value] of Object.entries(object(packets.placements, 'seedPackets.placements'))) placement(value, 'seedPackets.placements.' + id)
-    for (const [id, value] of Object.entries(object(packets.plantCels, 'seedPackets.plantCels'))) {
+    for (const [id, value] of Object.entries(record(packets.placements, 'seedPackets.placements'))) placement(value, 'seedPackets.placements.' + id)
+    for (const [id, value] of Object.entries(record(packets.plantCels, 'seedPackets.plantCels'))) {
         if (!Number.isInteger(value) || (value as number) < 0) throw new TypeError('Invalid packet cel: ' + id)
     }
     return data as unknown as PresentationDefinitions
-}
-
-function finite(value: unknown, name: string): void {
-    if (typeof value !== 'number' || !Number.isFinite(value)) throw new TypeError(name + ' must be finite')
 }
 
 function text(value: unknown, name: string): void {
@@ -852,14 +897,14 @@ function parseMainMenu(menu: Record<string, unknown>): void {
     if (!Array.isArray(menu.buttons) || menu.buttons.length === 0) throw new TypeError('mainMenu.buttons must be a non-empty array')
     const names = new Set<string>()
     for (const [index, entry] of menu.buttons.entries()) {
-        const name = 'mainMenu.buttons[' + index + ']', button = object(entry, name)
+        const name = 'mainMenu.buttons[' + index + ']', button = record(entry, name)
         for (const key of ['name', 'track', 'image', 'highlight']) text(button[key], name + '.' + key)
         if (names.has(button.name as string)) throw new TypeError(name + '.name is duplicated')
         names.add(button.name as string)
         if (button.target !== undefined) text(button.target, name + '.target')
         for (const key of ['replace', 'sign', 'mode']) if (button[key] !== undefined && typeof button[key] !== 'boolean') throw new TypeError(name + '.' + key + ' must be a boolean')
         for (const key of ['x', 'y', 'imageX', 'imageY']) if (button[key] !== undefined) finite(button[key], name + '.' + key)
-        for (const key of ['width', 'height']) if (button[key] !== undefined) positive(button[key], name + '.' + key)
+        for (const key of ['width', 'height']) if (button[key] !== undefined) positiveFinite(button[key], name + '.' + key)
         if (button.polygon !== undefined) {
             if (!Array.isArray(button.polygon) || button.polygon.length < 3) throw new TypeError(name + '.polygon needs three points')
             button.polygon.forEach(point => pair(point, name + '.polygon[]'))
@@ -867,15 +912,15 @@ function parseMainMenu(menu: Record<string, unknown>): void {
     }
     texts(menu.images, 'mainMenu.images'); texts(menu.clouds, 'mainMenu.clouds')
     if (!Array.isArray(menu.flowers)) throw new TypeError('mainMenu.flowers must be an array')
-    menu.flowers.forEach(flower => point(object(flower, 'mainMenu.flowers[]'), 'mainMenu.flowers[]'))
-    const tracks = object(menu.tracks, 'mainMenu.tracks')
+    menu.flowers.forEach(flower => point(record(flower, 'mainMenu.flowers[]'), 'mainMenu.flowers[]'))
+    const tracks = record(menu.tracks, 'mainMenu.tracks')
     for (const key of ['sky', 'anchor', 'profileSign']) text(tracks[key], 'mainMenu.tracks.' + key)
     texts(tracks.replaced, 'mainMenu.tracks.replaced'); texts(tracks.handRocks, 'mainMenu.tracks.handRocks')
-    const keyShadow = object(menu.keyShadow, 'mainMenu.keyShadow')
+    const keyShadow = record(menu.keyShadow, 'mainMenu.keyShadow')
     for (const key of ['track', 'almanac', 'store']) text(keyShadow[key], 'mainMenu.keyShadow.' + key)
-    const trophy = object(menu.trophy, 'mainMenu.trophy')
+    const trophy = record(menu.trophy, 'mainMenu.trophy')
     for (const key of ['track', 'image', 'particle']) text(trophy[key], 'mainMenu.trophy.' + key)
-    const start = object(menu.startAdventure, 'mainMenu.startAdventure')
+    const start = record(menu.startAdventure, 'mainMenu.startAdventure')
     for (const key of ['track', 'image', 'highlight', 'shadow', 'adventureShadow']) text(start[key], 'mainMenu.startAdventure.' + key)
 }
 
@@ -890,8 +935,8 @@ function pair(value: unknown, name: string): void {
 }
 
 function placement(value: unknown, name: string): void {
-    const source = object(value, name)
-    positive(source.scale, name + '.scale')
+    const source = record(value, name)
+    positiveFinite(source.scale, name + '.scale')
     finite(source.offsetX, name + '.offsetX')
     finite(source.offsetY, name + '.offsetY')
 }
@@ -900,22 +945,13 @@ function sounds(value: unknown, name: string, required = false): void {
     if (value === undefined && !required) return
     if (!Array.isArray(value)) throw new TypeError(name + ' must be an array')
     for (const entry of value) {
-        const sound = object(entry, name)
+        const sound = record(entry, name)
         // A sound names its owner like any other resource: pvz:splat, corn:shoop.
         if (!isQualifiedId(sound.audio)) throw new TypeError(name + '.audio must be a qualified ID')
         if (typeof sound.foley !== 'boolean') throw new TypeError(name + '.foley must be boolean')
         // A negative range lowers the pitch, like FOLEY_NEWSPAPER_RIP's -2 (TodFoley).
         if (sound.pitchRange !== undefined) finite(sound.pitchRange, name + '.pitchRange')
     }
-}
-
-function object(value: unknown, name: string): Record<string, unknown> {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(name + ' must be an object')
-    return value as Record<string, unknown>
-}
-
-function positive(value: unknown, name: string): void {
-    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) throw new TypeError(name + ' must be positive')
 }
 
 function range(value: unknown, name: string, fractional = false): void {
@@ -925,13 +961,15 @@ function range(value: unknown, name: string, fractional = false): void {
 }
 
 function point(value: unknown, name: string): void {
-    const point = object(value, name)
+    const point = record(value, name)
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new TypeError(name + ' must be a finite point')
 }
 
 export interface BoardPresentation {
     readonly background: string
     readonly backgroundX: number
+    /** The shadow under its plants and zombies (Board::DrawShadow: IMAGE_PLANTSHADOW, IMAGE_PLANTSHADOW2 at night); the day's when left out. */
+    readonly plantShadow?: string
     readonly music: { readonly choosing: MusicTuneId; readonly gameplay: MusicTuneId }
     readonly gameOver: {
         readonly images: readonly [string, string, string]

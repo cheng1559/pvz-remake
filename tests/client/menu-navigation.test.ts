@@ -501,6 +501,7 @@ test('manager imports read sequentially, continue after failure and leave instal
                 Director: { EVENT_AFTER_DRAW: 'draw' }, director: { once(_event: string, callback: () => void) { steps.push('paint'); callback() } },
             },
             '@/client/ui/UI': { UI: { load: async () => ui } },
+            '@/client/content/preloadTasks': { waitForPreloadFrame: async () => { steps.push('paint') } },
             '@/client/content/InstalledArchives': { selectZips: async () => {
                 steps.push('pick')
                 return names.map(name => ({ name: `${name}.zip`,

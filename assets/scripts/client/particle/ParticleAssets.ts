@@ -1,10 +1,8 @@
-import { Rect, Size, SpriteFrame, Vec2 } from 'cc'
-import { ClientContentLoader, ParticleRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
-import { ContentRegistry } from '@/client/content/ContentRegistry'
-import { loadClientContent } from '@/client/content/loadClientContent'
+import type { SpriteFrame } from 'cc'
+import { getAtlasFrame } from '@/client/render/atlasFrame'
+import { modResources } from '@/client/content/ModResources'
 import { preloadTasks } from '@/client/content/preloadTasks'
-import { applySpriteDensity } from '@/client/content/SpriteDensity'
-import type { Particle, ParticleEmitter } from '@/shared/content/particle'
+import { parseParticle, type Particle, type ParticleEmitter } from '@/shared/content/particle'
 import { IMAGE, kernel } from '@/shared/kernel/index'
 import { packParticleEmitters } from '@/shared/kernel/particles'
 
@@ -29,67 +27,54 @@ function centeredGeometry(frame: SpriteFrame, output: Float64Array, offset: numb
 }
 const cells = new WeakMap<SpriteFrame, Map<string, Float64Array>>()
 
-let shared: Promise<ParticleAssets> | undefined
-let ready: ParticleAssets | undefined
+const loaded = new Map<string, LoadedParticle>()
+const pending = new Map<string, Promise<LoadedParticle>>()
 
-/** Particles of the game's content registry, built-in and Mod alike, shared by preloading and playback. */
+/** Particles by their resource IDs, built-in and Mod alike, loaded once for preloading and playback. */
 export class ParticleAssets {
-    private readonly particles: ParticleRepository
-    private readonly sprites: SpriteRepository
-    private readonly loaded = new Map<string, LoadedParticle>()
-    private readonly pending = new Map<string, Promise<LoadedParticle>>()
-
-    private constructor(private readonly registry: ContentRegistry, loader: ClientContentLoader) {
-        this.particles = new ParticleRepository(registry, loader)
-        this.sprites = new SpriteRepository(registry, loader)
-    }
-
-    private static instance(): Promise<ParticleAssets> {
-        return shared ??= loadClientContent().then(({ registry, loader }) => ready = new ParticleAssets(registry, loader))
-            .catch(error => { shared = undefined; throw error })
-    }
-
     /** Already loaded assets, so a spawn can start synchronously. */
-    static get(id: string, sprite?: string): LoadedParticle | undefined { return ready?.loaded.get(sprite ? `${id}|${sprite}` : id) }
-    static async load(id: string, sprite?: string): Promise<LoadedParticle> { return (await this.instance()).load(id, sprite) }
-    static async preloadAll(): Promise<void> {
-        const assets = await this.instance()
-        await preloadTasks([...assets.registry.entries('particles')].map(([id]) => () => assets.load(id)))
-    }
+    static get(id: string, sprite?: string): LoadedParticle | undefined { return loaded.get(sprite ? `${id}|${sprite}` : id) }
 
-    private load(id: string, sprite?: string): Promise<LoadedParticle> {
+    /** A particle, with its emitters' images (or `sprite` for all of them, a seed packet's flash). */
+    static load(id: string, sprite?: string): Promise<LoadedParticle> {
         const key = sprite ? `${id}|${sprite}` : id
-        const cached = this.loaded.get(key)
+        const cached = loaded.get(key)
         if (cached) return Promise.resolve(cached)
-        const pending = this.pending.get(key)
-        if (pending) return pending
+        const waiting = pending.get(key)
+        if (waiting) return waiting
         const task = this.loadUncached(id, sprite).then(result => {
-            this.loaded.set(key, result)
+            loaded.set(key, result)
             return result
-        }).finally(() => this.pending.delete(key))
-        this.pending.set(key, task)
+        }).finally(() => pending.delete(key))
+        pending.set(key, task)
         return task
     }
 
-    private async loadUncached(id: string, sprite?: string): Promise<LoadedParticle> {
-        const definition = await this.particles.load(id)
-        const loaded = await Promise.all(definition.emitters.map(async emitter => {
+    static async preloadAll(): Promise<void> {
+        await preloadTasks((await modResources.ids('particles')).map(id => () => this.load(id)))
+    }
+
+    private static async loadUncached(id: string, sprite?: string): Promise<LoadedParticle> {
+        const json = await modResources.json('particles', id)
+        if (json === undefined) throw new Error(`unknown particle: ${id}`)
+        const definition = parseParticle(json)
+        if (definition.id !== id) throw new Error(`particle ID mismatch: expected ${id}, got ${definition.id}`)
+        const emitters = (await Promise.all(definition.emitters.map(async emitter => {
             const image = sprite ?? emitter.sprite
             try {
-                return this.emitterAssets(emitter, await this.sprites.load(image))
+                return this.emitterAssets(emitter, await modResources.sprite(image))
             } catch (error) {
                 // As in the original game, an emitter without its image is left out; the rest still play.
                 console.warn(`[Particle] ${id} skips an emitter without ${image}`, error)
                 return undefined
             }
-        }))
-        const emitters = loaded.filter((emitter): emitter is ParticleEmitterAssets => !!emitter)
+        }))).filter((emitter): emitter is ParticleEmitterAssets => !!emitter)
         // Converted source effects may be empty when their original images no longer exist.
         if (definition.emitters.length && !emitters.length) throw new Error(`particle has no loadable emitters: ${id}`)
         return { definition, emitters, packed: packParticleEmitters(emitters.map(emitter => emitter.definition)) }
     }
 
-    private emitterAssets(definition: ParticleEmitter, frame: SpriteFrame): ParticleEmitterAssets {
+    private static emitterAssets(definition: ParticleEmitter, frame: SpriteFrame): ParticleEmitterAssets {
         frame.packable = false
         const { columns, rows } = definition, key = `${columns}:${rows}`
         let grids = cells.get(frame)
@@ -97,19 +82,10 @@ export class ParticleAssets {
         let geometry = grids.get(key)
         if (!geometry) {
             geometry = kernel().f64(columns * rows * IMAGE)
-            for (let row = 0; row < rows; row++) for (let column = 0; column < columns; column++) {
-                let cell = frame
-                if (columns !== 1 || rows !== 1) {
-                    const width = frame.originalSize.width / columns, height = frame.originalSize.height / rows
-                    cell = new SpriteFrame()
-                    cell.packable = false
-                    cell.reset({ texture: frame.texture, rect: new Rect(column * width, row * height, width, height),
-                        originalSize: new Size(width, height), offset: new Vec2(0, 0), isRotate: false })
-                    applySpriteDensity(cell)
-                    cell.packable = false
-                }
-                centeredGeometry(cell, geometry, (row * columns + column) * IMAGE)
-                if (cell !== frame) cell.destroy()
+            const width = frame.originalSize.width / columns, height = frame.originalSize.height / rows
+            for (let index = 0; index < columns * rows; index++) {
+                const cell = columns === 1 && rows === 1 ? frame : getAtlasFrame(frame, index, width, height, columns)
+                centeredGeometry(cell, geometry, index * IMAGE)
             }
             grids.set(key, geometry)
         }

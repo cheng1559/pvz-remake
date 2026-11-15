@@ -48,7 +48,7 @@ export class StageEventRegistry {
             zombieRoseFromGrave: ZombieView.rose, zombieChilled: ZombieView.chilled, zombieVaultSound: ZombieView.vaulted,
             zombieEnraged: ZombieView.enraged, zombieGroaned: ZombieView.groaned, zombieDying: ZombieView.fell,
             zombieMowered: ZombieView.mowered, zombieCharred: ZombieView.charred, zombiePuffed: ZombieView.puffed,
-            itemSpawned: ItemView.spawned, itemLanded: ItemView.landed, itemCollected: ItemView.collected, levelAwardDropped: AwardView.dropped,
+            itemSpawned: ItemView.spawned, itemLanded: ItemView.landed, itemCollected: ItemView.collected, levelAwardDropped: AwardView.dropped, levelAwardCollected: AwardView.collected,
         }
         for (const [type, handler] of Object.entries(before)) this.register(type, handler, 'before')
         for (const [type, handler] of Object.entries(after)) this.register(type, handler)

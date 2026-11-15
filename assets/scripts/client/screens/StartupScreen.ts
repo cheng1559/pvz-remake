@@ -1,9 +1,7 @@
 import { modResources } from '@/client/content/ModResources'
 import { modManager } from '@/client/content/ModManager'
 import { waitForPreloadFrame } from '@/client/content/preloadTasks'
-import { _decorator, Color, Component, input, Input, Mask, Node, Sprite, UITransform, type EventKeyboard, type EventMouse, type EventTouch, type UIOpacity, SpriteFrame } from 'cc'
-import { ClientContentLoader } from '@/client/content/ClientContentLoader'
-import { ContentRegistry } from '@/client/content/ContentRegistry'
+import { _decorator, Color, Component, input, Input, Mask, Node, Sprite, UITransform, type EventKeyboard, type EventMouse, type EventTouch, type UIOpacity } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -73,9 +71,8 @@ export class StartupScreen extends Component {
         this.content = uiNode({ parent: this.node, position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 } }).node
         if (!showLogo) return
         const frame = this.applyingMods
-            ? await modResources.baseAsset('pvz:popcap_logo', SpriteFrame)
-            : await modResources.asset('popcap_logo', SpriteFrame)
-        if (!frame) throw new Error('Missing PopCap logo')
+            ? await modResources.baseSprite('pvz:popcap_logo')
+            : await modResources.sprite('pvz:popcap_logo')
         if (!this.node?.isValid) return
         const logo = uiNode({
             name: 'PopCapLogo', parent: this.content, position: { x: 400, y: -300 },
@@ -135,22 +132,14 @@ export class StartupScreen extends Component {
     }
 
     private async loadTitle(): Promise<void> {
-        const loader = new ClientContentLoader()
-        const names = ['titlescreen', 'pvz_logo', 'loadbar_dirt', 'loadbar_grass', 'sodrollcap']
-        const [ui, frames, base] = await Promise.all([
-            UI.load(), Promise.all(names.map(async name => {
-                const frame = await modResources.asset(name, SpriteFrame)
-                if (!frame) throw new Error(`Missing startup image: ${name}`)
-                return frame
-            })), loader.loadBaseContent(),
+        const names = ['pvz:titlescreen', 'pvz:pvz_logo', 'pvz:loadbar_dirt', 'pvz:loadbar_grass', 'pvz:sodrollcap']
+        const [ui, frames] = await Promise.all([
+            UI.load(), Promise.all(names.map(name => modResources.sprite(name))),
             MusicSystem.preloadTune('title_theme'),
             SoundSystem.load(SoundEffect.LoadingBarFlower), SoundSystem.load(SoundEffect.LoadingBarZombie),
         ])
         if (!this.node?.isValid) return
         this.ui = ui
-        const registry = new ContentRegistry()
-        registry.register(base)
-        registry.freeze()
         const title = uiNode({ name: 'LoadingScreen', parent: this.content, active: false }).node
         const [background, logo, dirt, grass, roll] = frames
         ui.image(title, background)
@@ -175,7 +164,7 @@ export class StartupScreen extends Component {
             }).node
             node.setScale(index === 1 || index === 3 ? -1 : index === 2 ? 1.1 : 1, index === 2 ? 1.3 : 1, 1)
             const player = node.addComponent(ReanimPlayer)
-            await player.load(index === 4 ? 'pvz:loadbar_zombiehead' : 'pvz:loadbar_sprout', registry, loader)
+            await player.load(index === 4 ? 'pvz:loadbar_zombiehead' : 'pvz:loadbar_sprout')
             this.effects[index] = player
         }))
         if (!this.node?.isValid) return

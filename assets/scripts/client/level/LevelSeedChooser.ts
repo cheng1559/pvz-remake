@@ -1,7 +1,7 @@
 import { modResources } from '@/client/content/ModResources'
 import { Color, EventMouse, Node, UITransform, type EventTouch, SpriteFrame } from 'cc'
 import { SeedPacketView } from '@/client/hud/SeedPacketView'
-import { plantDefinition } from '@/client/plants/definitions'
+import { packetSubject } from '@/client/plants/definitions'
 import { UIButton } from '@/client/ui/UIButton'
 import type { UITooltip } from '@/client/ui/UITooltip'
 import type { UI } from '@/client/ui/UI'
@@ -15,7 +15,6 @@ import { chooserPages, pagePlaces, type ChooserPage } from '@/shared/content/cho
 import { packetTeam } from '@/shared/content/teams'
 import type { LoadedContent } from './LevelView'
 import { seedPacketX } from './LevelGeometry'
-import { SpriteRepository } from '@/client/content/ClientContentLoader'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 
@@ -108,18 +107,13 @@ export class LevelSeedChooser {
     static async create(ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, inputRoot: Node,
         notRecommended: (seedId: string) => string | undefined = () => undefined,
         pages: { almanac?: boolean, store?: boolean } = {}, entries: readonly ChooserEntry[] = [], cheatSeeds = false): Promise<LevelSeedChooser> {
-        const [background, silhouette] = await Promise.all(['seedchooser_background', 'seedpacketsilhouette'].map(async id => {
-            const sprite = await modResources.asset(id, SpriteFrame)
-            if (!sprite) throw new Error(`Missing seed chooser sprite: ${id}`)
-            return sprite
-        }))
+        const [background, silhouette] = await Promise.all(['seedchooser_background', 'seedpacketsilhouette'].map(id => modResources.sprite(id)))
         return new LevelSeedChooser(ui, content, parent, available, slots, background, silhouette, inputRoot, notRecommended, pages, entries, cheatSeeds)
     }
 
     private constructor(private readonly ui: UI, content: LoadedContent, parent: Node, available: readonly string[], slots: number, background: SpriteFrame, silhouette: SpriteFrame, inputRoot: Node,
         notRecommended: (seedId: string) => string | undefined = () => undefined, pages: { almanac?: boolean, store?: boolean } = {},
         entries: readonly ChooserEntry[] = [], cheatSeeds = false) {
-        const sprites = new SpriteRepository(content.registry, content.loader)
         this.definitions = content.definitions
         this.slots = slots
         this.silhouette = silhouette
@@ -148,24 +142,17 @@ export class LevelSeedChooser {
         this.addChoice = (card: ChooserEntry): Choice => {
             const seed = content.definitions.seeds[card.seedId]
             const args = { definitions: content.presentation, name: `Choose-${cardKey(card)}`, parent: this.cards, layer: parent.layer,
-                x: 0, y: 0, cost: seed.sunCost, costFont: ui.assets.fonts.packetCost, loadSprite: (name: string) => sprites.load(`pvz:${name}`) }
+                x: 0, y: 0, cost: seed.sunCost, costFont: ui.assets.fonts.packetCost }
             const views = [new SeedPacketView({ ...args, name: `ChosenShadow-${cardKey(card)}`, parent: shadows, iconLayer: this.cardIcons }),
                 new SeedPacketView({ ...args, iconLayer: this.cardIcons })]
             let tooltipOptions: Parameters<UI['tooltip']>[1]
             let warning: string | undefined
-            if (seed.kind === 'zombie') {
-                // A zombie seed's packet draws its zombie (SEED_ZOMBIE_*), named as the almanac names it.
-                for (const view of views) view.setSeed(-1, seed.sunCost, seed.id)
-                tooltipOptions = { text: ui.text(content.presentation.zombies[seed.id]?.nameKey ?? seed.id), gap: 0 }
-            } else if (seed.kind === 'grave') {
-                for (const view of views) view.setSeed(-1, seed.sunCost, undefined, true)
-                tooltipOptions = { text: ui.text('GRAVE_SEED'), gap: 0 }
-            } else {
-                const visual = plantDefinition(content.presentation, seed.id).visual
-                for (const view of views) view.setSeed(visual.seedType, seed.sunCost)
-                const nameKey = visual.nameKey ?? String(visual.seedType).toUpperCase()
+            const subject = packetSubject(content.presentation, seed)
+            for (const view of views) view.setSeed(subject.seedType, seed.sunCost, subject.zombie, subject.grave)
+            if (subject.tooltipKey === undefined) tooltipOptions = { text: ui.text(subject.nameKey), gap: 0 }
+            else {
                 warning = card.team === undefined ? notRecommended(card.seedId) : undefined
-                tooltipOptions = { title: ui.text(nameKey), text: ui.text(visual.tooltipKey ?? `${nameKey}_TOOLTIP`), gap: 0,
+                tooltipOptions = { title: ui.text(subject.nameKey), text: ui.text(subject.tooltipKey), gap: 0,
                     ...(warning ? { warning: ui.text(warning) } : {}) }
             }
             const [shadow, view] = views

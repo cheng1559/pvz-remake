@@ -1,3 +1,4 @@
+import { nonEmptyString, boolean, finite } from '@/shared/validate'
 import type { ReanimKeyframe, Reanim } from '@/shared/content/reanim'
 import { isQualifiedId } from '@/shared/mod/index'
 
@@ -159,21 +160,6 @@ function exactObject(value: unknown, keys: readonly string[], name: string): Rec
         if (!Object.prototype.hasOwnProperty.call(record, key)) throw new Error(`${name}.${key} is required`)
     }
     return record
-}
-
-function nonEmptyString(value: unknown, name: string): string {
-    if (typeof value !== 'string' || value.length === 0) throw new Error(`${name} must be a non-empty string`)
-    return value
-}
-
-function boolean(value: unknown, name: string): boolean {
-    if (typeof value !== 'boolean') throw new Error(`${name} must be a boolean`)
-    return value
-}
-
-function finite(value: unknown, name: string): number {
-    if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${name} must be finite`)
-    return value
 }
 
 function colorByte(value: unknown, name: string): number {

@@ -13,7 +13,7 @@ function reanim(id: string) {
 
 function snapshot(): any {
     return {
-        schemaVersion: 3,
+        schemaVersion: 4,
         flow: { introCompletionSent: true, completionStarted: false },
         intro: {
             ticks: 855,
@@ -32,12 +32,11 @@ function snapshot(): any {
             music: null, ownsMusic: true, gameplayStarted: true, firstWavePlayed: false,
         },
         entities: [{
-            kind: 'plant', entityId: 1, flash: { tick: 10, ticks: 25 },
+            kind: 'plant', entityId: 1, data: { flash: { tick: 10, ticks: 25 } },
         }, {
-            kind: 'zombie', entityId: 2, body: reanim('pvz:zombie_walk'),
-            mowerDriver: null,
+            kind: 'zombie', entityId: 2, data: { body: reanim('pvz:zombie_walk'), mowerDriver: null },
         }, {
-            kind: 'item', entityId: 4, animation: null,
+            kind: 'item', entityId: 4, data: { animation: null },
         }],
         particles: [{
             instanceId: 1,
@@ -90,6 +89,6 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
     assert.throws(invalid(value => { value.hud.progressMeterWidth = 151 }), /progressMeterWidth/)
     assert.throws(invalid(value => { value.hud.progressMeterWidth = 1.5 }), /progressMeterWidth/)
     assert.throws(invalid(value => { value.advice.lastSyncedTick = -1 }), /lastSyncedTick/)
-    assert.throws(invalid(value => { value.entities[0].animations = {} }), /animations is not supported/, 'the server animates a plant')
+    assert.throws(invalid(value => { value.entities[0].animations = {} }), /animations is not supported/, 'a view keeps what it saves in its data')
     assert.throws(invalid(value => { value.extensions.bad = {} }), /extension ID is invalid/)
 })

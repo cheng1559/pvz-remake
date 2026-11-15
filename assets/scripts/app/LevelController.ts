@@ -1,11 +1,11 @@
 import { BlockInputEvents, Mask, Node } from 'cc'
-import { isEnemyZombie } from '@/shared/content/teams'
+import { isZombieOnScreen } from '@/shared/content/zombieStates'
 import { LocalIntegratedGame } from './LocalIntegratedGame'
 import { loadInstalledMods } from './ModLoader'
 import { createLocalGameSaveStore } from './CocosGameSaveStore'
 import { GAME_SAVE_KEY } from './GameSaveStore'
 import { createGameSave, isCompatibleBaseContent, parseGameSave, type GameSave } from './SaveCoordinator'
-import { loadIntegratedGameContent, LEVEL_PREFAB_ID } from '@/client/game/loadIntegratedGameContent'
+import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { LevelView } from '@/client/level/LevelView'
 import {
     LevelScene,
@@ -108,13 +108,7 @@ export function createLevelController(
         try {
             const content = await loadIntegratedGameContent()
             if (!content.levels.levels[save?.levelId ?? levelId]) throw new Error(`Level is not installed: ${save?.levelId ?? levelId}`)
-            const resolvedBase = content.registry.resolve('prefabs', LEVEL_PREFAB_ID)
-            if (!resolvedBase) throw new Error(`Loaded content does not contain ${LEVEL_PREFAB_ID}`)
-            const base = {
-                id: resolvedBase.contentId,
-                version: resolvedBase.contentVersion,
-                contentHash: resolvedBase.contentHash,
-            }
+            const { base } = content
             if (save) {
                 if (save.profileId !== await profileId()) throw new Error('GameSave belongs to another player profile')
                 if (!isCompatibleBaseContent(save.contentSet.base, base)) {
@@ -291,9 +285,7 @@ export function createLevelController(
         countZombiesOnScreenForMusic() {
             const snapshot = current?.root.isValid ? current.game.currentSnapshot : null
             if (snapshot?.phase !== 'gameplay') return 0
-            return snapshot.zombies.reduce((count, zombie) => count + (
-                zombie.hasHead && isEnemyZombie(zombie) && (zombie.state === 'walking' || zombie.state === 'eating') ? 1 : 0
-            ), 0)
+            return snapshot.zombies.reduce((count, zombie) => count + (isZombieOnScreen(zombie) ? 1 : 0), 0)
         },
         getLevelDefinition() {
             return current?.root.isValid ? current.level : null

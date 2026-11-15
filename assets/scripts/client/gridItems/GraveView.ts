@@ -1,6 +1,6 @@
+import { modResources } from '@/client/content/ModResources'
 import { Mask, type Node, Sprite, type UITransform } from 'cc'
-import { SpriteRepository } from '@/client/content/ClientContentLoader'
-import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
+import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { easeInOut } from '@/client/view/GameScreenMath'
 import { uiNode } from '@/client/view/uiNode'
@@ -39,9 +39,8 @@ export class GraveView implements GridItemView {
     }
 
     async initialize(): Promise<void> {
-        const { node, item, content } = this.context, grave = item as Partial<GraveSnapshot>
-        const sprites = new SpriteRepository(content.registry, content.loader)
-        const [stones, mounds] = await Promise.all(['tombstones', 'tombstone_mounds'].map(id => sprites.load(`pvz:${id}`)))
+        const { node, item } = this.context, grave = item as Partial<GraveSnapshot>
+        const [stones, mounds] = await Promise.all(['pvz:tombstones', 'pvz:tombstone_mounds'].map(id => modResources.sprite(id)))
         const width = this.width = stones.originalSize.width / COLUMNS, height = this.height = stones.originalSize.height / ROWS
         // The first row of the lawn has its own stones, and one grave of a level the special ones.
         const cell = (grave.row === 0 ? 1 : grave.special ? 0 : 2 + (grave.variant ?? 0) % 2) * COLUMNS + (grave.variant ?? 0) % COLUMNS

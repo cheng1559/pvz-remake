@@ -5,17 +5,17 @@
     "nameKey": "ZOMBIE",
     "shadow": {"x": 23, "y": -92, "backwardsX": 11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": []},
-    "damagedArm": "damagedArm",
+    "damagedArmSprite": "pvz:zombie_outerarm_upper2",
     "clips": {
-      "idle": {"reanimId": "pvz:zombie", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "idle2": {"reanimId": "pvz:zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk": {"reanimId": "pvz:zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk2": {"reanimId": "pvz:zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "eat": {"reanimId": "pvz:zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
+      "idle": {"reanimId": "pvz:zombie", "x": 15, "y": 8},
+      "idle2": {"reanimId": "pvz:zombie_idle2", "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:zombie_walk", "x": 15, "y": 8},
+      "walk2": {"reanimId": "pvz:zombie_walk2", "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:zombie_eat", "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:zombie_death", "x": 15, "y": 8},
+      "death2": {"reanimId": "pvz:zombie_death2", "x": 15, "y": 8},
+      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "x": 15, "y": 8},
+      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {
       "head": {
@@ -40,18 +40,18 @@
     "nameKey": "FLAG_ZOMBIE",
     "shadow": {"x": 23, "y": -92, "backwardsX": 11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": [], "flagArm": {"holding": ["Zombie_flaghand", "Zombie_innerarm_screendoor"], "free": ["anim_innerarm3", "anim_innerarm2", "anim_innerarm1"], "front": "Zombie_innerarm_screendoor"}},
-    "damagedArm": "damagedArm",
+    "damagedArmSprite": "pvz:zombie_outerarm_upper2",
     "clips": {
-      "idle": {"reanimId": "pvz:flag_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "idle2": {"reanimId": "pvz:flag_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk": {"reanimId": "pvz:flag_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk2": {"reanimId": "pvz:flag_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "eat": {"reanimId": "pvz:flag_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"},
-      "flag": {"reanimId": "pvz:zombie_flag", "rateScale": 1, "fps": 12, "x": 15, "y": 8, "attachmentTrackId": "Zombie_flaghand"}
+      "idle": {"reanimId": "pvz:flag_idle", "x": 15, "y": 8},
+      "idle2": {"reanimId": "pvz:flag_idle2", "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:flag_walk", "x": 15, "y": 8},
+      "walk2": {"reanimId": "pvz:flag_walk2", "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:flag_eat", "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:zombie_death", "x": 15, "y": 8},
+      "death2": {"reanimId": "pvz:zombie_death2", "x": 15, "y": 8},
+      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "x": 15, "y": 8},
+      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "x": 0, "y": 0, "attachmentTrackId": "locator"},
+      "flag": {"reanimId": "pvz:zombie_flag", "x": 15, "y": 8, "attachmentTrackId": "Zombie_flaghand"}
     },
     "drops": {
       "head": {
@@ -77,17 +77,17 @@
     "nameKey": "CONEHEAD_ZOMBIE",
     "shadow": {"x": 23, "y": -92, "backwardsX": 11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": ["anim_cone", "anim_bucket"]},
-    "damagedArm": "damagedArm",
+    "damagedArmSprite": "pvz:zombie_outerarm_upper2",
     "clips": {
-      "idle": {"reanimId": "pvz:helm_zombie_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "idle2": {"reanimId": "pvz:helm_zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk": {"reanimId": "pvz:helm_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk2": {"reanimId": "pvz:helm_zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "eat": {"reanimId": "pvz:helm_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
+      "idle": {"reanimId": "pvz:helm_zombie_idle", "x": 15, "y": 8},
+      "idle2": {"reanimId": "pvz:helm_zombie_idle2", "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:helm_zombie_walk", "x": 15, "y": 8},
+      "walk2": {"reanimId": "pvz:helm_zombie_walk2", "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:helm_zombie_eat", "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:zombie_death", "x": 15, "y": 8},
+      "death2": {"reanimId": "pvz:zombie_death2", "x": 15, "y": 8},
+      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "x": 15, "y": 8},
+      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {
       "head": {
@@ -120,17 +120,17 @@
     "nameKey": "BUCKETHEAD_ZOMBIE",
     "shadow": {"x": 23, "y": -92, "backwardsX": 11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": ["anim_cone", "anim_bucket"]},
-    "damagedArm": "damagedArm",
+    "damagedArmSprite": "pvz:zombie_outerarm_upper2",
     "clips": {
-      "idle": {"reanimId": "pvz:helm_zombie_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "idle2": {"reanimId": "pvz:helm_zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk": {"reanimId": "pvz:helm_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk2": {"reanimId": "pvz:helm_zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "eat": {"reanimId": "pvz:helm_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
+      "idle": {"reanimId": "pvz:helm_zombie_idle", "x": 15, "y": 8},
+      "idle2": {"reanimId": "pvz:helm_zombie_idle2", "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:helm_zombie_walk", "x": 15, "y": 8},
+      "walk2": {"reanimId": "pvz:helm_zombie_walk2", "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:helm_zombie_eat", "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:zombie_death", "x": 15, "y": 8},
+      "death2": {"reanimId": "pvz:zombie_death2", "x": 15, "y": 8},
+      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "x": 15, "y": 8},
+      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {
       "head": {
@@ -167,16 +167,16 @@
     ],
     "shadow": {"x": 30, "y": -92, "backwardsX": -11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": [], "arm": ["Zombie_polevaulter_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_polevaulter_outerarm_upper", "ground": "_ground", "helms": [], "held": ["Zombie_polevaulter_innerarm_upper", "Zombie_polevaulter_innerarm_lower", "Zombie_polevaulter_innerhand", "Zombie_polevaulter_pole2", "Zombie_polevaulter_pole"]},
-    "damagedArm": "poleVaulterDamagedArm",
+    "damagedArmSprite": "pvz:zombie_polevaulter_outerarm_upper2",
     "vault": true,
     "clips": {
-      "idle": {"reanimId": "pvz:pole_vaulter_idle", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
-      "walk": {"reanimId": "pvz:pole_vaulter_walk", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
-      "eat": {"reanimId": "pvz:pole_vaulter_eat", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
-      "death": {"reanimId": "pvz:pole_vaulter_death", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
-      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"},
-      "run": {"reanimId": "pvz:pole_vaulter_run", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
-      "jump": {"reanimId": "pvz:pole_vaulter_jump", "rateScale": 1, "fps": 12, "x": 9, "y": 19}
+      "idle": {"reanimId": "pvz:pole_vaulter_idle", "x": 9, "y": 19},
+      "walk": {"reanimId": "pvz:pole_vaulter_walk", "x": 9, "y": 19},
+      "eat": {"reanimId": "pvz:pole_vaulter_eat", "x": 9, "y": 19},
+      "death": {"reanimId": "pvz:pole_vaulter_death", "x": 9, "y": 19},
+      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "x": 0, "y": 0, "attachmentTrackId": "locator"},
+      "run": {"reanimId": "pvz:pole_vaulter_run", "x": 9, "y": 19},
+      "jump": {"reanimId": "pvz:pole_vaulter_jump", "x": 9, "y": 19}
     },
     "drops": {
       "head": {
@@ -206,16 +206,15 @@
     "enrageSounds": [{"audio": "pvz:newspaper_rarrgh", "foley": true, "pitchRange": -2}],
     "shadow": {"x": 29, "y": -96, "backwardsX": 5},
     "parts": {"head": ["anim_head1", "anim_head_jaw", "anim_head_glasses", "anim_head_look", "anim_head_pupils"], "hair": ["anim_hair", "anim_hairpiece"], "tongue": [], "arm": ["Zombie_paper_leftarm_lower", "Zombie_paper_hands"], "upperArm": "Zombie_paper_leftarm_upper", "ground": "_ground", "helms": ["Zombie_paper_paper"]},
-    "damagedArm": "damagedArm",
     "clips": {
-      "idle": {"reanimId": "pvz:newspaper_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk": {"reanimId": "pvz:newspaper_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "eat": {"reanimId": "pvz:newspaper_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "gasp": {"reanimId": "pvz:newspaper_gasp", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "enragedWalk": {"reanimId": "pvz:newspaper_walk_nopaper", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "enragedEat": {"reanimId": "pvz:newspaper_eat_nopaper", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death": {"reanimId": "pvz:newspaper_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
+      "idle": {"reanimId": "pvz:newspaper_idle", "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:newspaper_walk", "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:newspaper_eat", "x": 15, "y": 8},
+      "gasp": {"reanimId": "pvz:newspaper_gasp", "x": 15, "y": 8},
+      "enragedWalk": {"reanimId": "pvz:newspaper_walk_nopaper", "x": 15, "y": 8},
+      "enragedEat": {"reanimId": "pvz:newspaper_eat_nopaper", "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:newspaper_death", "x": 15, "y": 8},
+      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {
       "head": {"track": "anim_head1", "effect": "pvz:zombienewspaperhead", "offset": [58, -30], "moweredEffect": "pvz:moweredzombiehead", "sounds": [{"audio": "pvz:limbs_pop", "foley": true, "pitchRange": 10}]},
@@ -245,17 +244,17 @@
         "free": ["Zombie_outerarm_hand", "Zombie_outerarm_lower", "Zombie_outerarm_upper", "anim_innerarm1", "anim_innerarm2", "anim_innerarm3"]
       }
     },
-    "damagedArm": "damagedArm",
+    "damagedArmSprite": "pvz:zombie_outerarm_upper2",
     "clips": {
-      "idle": {"reanimId": "pvz:door_zombie_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "idle2": {"reanimId": "pvz:door_zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk": {"reanimId": "pvz:door_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk2": {"reanimId": "pvz:door_zombie_walk2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "eat": {"reanimId": "pvz:door_zombie_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death": {"reanimId": "pvz:zombie_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death2": {"reanimId": "pvz:zombie_death2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
+      "idle": {"reanimId": "pvz:door_zombie_idle", "x": 15, "y": 8},
+      "idle2": {"reanimId": "pvz:door_zombie_idle2", "x": 15, "y": 8},
+      "walk": {"reanimId": "pvz:door_zombie_walk", "x": 15, "y": 8},
+      "walk2": {"reanimId": "pvz:door_zombie_walk2", "x": 15, "y": 8},
+      "eat": {"reanimId": "pvz:door_zombie_eat", "x": 15, "y": 8},
+      "death": {"reanimId": "pvz:zombie_death", "x": 15, "y": 8},
+      "death2": {"reanimId": "pvz:zombie_death2", "x": 15, "y": 8},
+      "superLongDeath": {"reanimId": "pvz:zombie_superlongdeath", "x": 15, "y": 8},
+      "mowered": {"reanimId": "pvz:lawnmowered_zombie", "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {
       "head": {

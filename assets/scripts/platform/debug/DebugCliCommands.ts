@@ -13,9 +13,9 @@ import { GameDebugSettings, type DebugPerfToggle } from './GameDebugSettings'
 
 /** The rule switches a level starts with (LevelController): outside one they set the preference alone. */
 const RULE_PREFERENCES: Record<string, () => boolean> = {
-    cooldown: () => GameDebugSettings.setRechargingEnabled(!GameDebugSettings.rechargingEnabled),
-    suncost: () => GameDebugSettings.setSunCostEnabled(!GameDebugSettings.sunCostEnabled),
-    plantinvincible: () => GameDebugSettings.setPlantInvincible(!GameDebugSettings.plantInvincible),
+    cooldown: () => GameDebugSettings.set('rechargingEnabled', !GameDebugSettings.rechargingEnabled),
+    suncost: () => GameDebugSettings.set('sunCostEnabled', !GameDebugSettings.sunCostEnabled),
+    plantinvincible: () => GameDebugSettings.set('plantInvincible', !GameDebugSettings.plantInvincible),
 }
 
 export async function executeDebugCliCommand(...args: Parameters<typeof executeCommand>): Promise<DebugCliResult> {
@@ -70,34 +70,34 @@ async function executeCommand(
             await OptionsSettings.setFullScreen(enabled)
             return debugSwitched(name, enabled)
         }
-        case 'mobile': return debugSwitched(name, (GameDebugSettings.setMobileEnabled(!GameDebugSettings.mobileEnabled), GameDebugSettings.mobileEnabled))
-        case 'hotkeys': return debugSwitched(name, (GameDebugSettings.setHotkeysEnabled(!GameDebugSettings.hotkeysEnabled), GameDebugSettings.hotkeysEnabled))
-        case 'haptics': return debugSwitched(name, (GameDebugSettings.setHapticsEnabled(!GameDebugSettings.hapticsEnabled), GameDebugSettings.hapticsEnabled))
+        case 'mobile': return debugSwitched(name, (GameDebugSettings.set('mobileEnabled', !GameDebugSettings.mobileEnabled), GameDebugSettings.mobileEnabled))
+        case 'hotkeys': return debugSwitched(name, (GameDebugSettings.set('hotkeysEnabled', !GameDebugSettings.hotkeysEnabled), GameDebugSettings.hotkeysEnabled))
+        case 'haptics': return debugSwitched(name, (GameDebugSettings.set('hapticsEnabled', !GameDebugSettings.hapticsEnabled), GameDebugSettings.hapticsEnabled))
         case 'cursor': {
-            GameDebugSettings.setOriginalCursorsEnabled(!GameDebugSettings.originalCursorsEnabled)
+            GameDebugSettings.set('originalCursorsEnabled', !GameDebugSettings.originalCursorsEnabled)
             CursorManager.refresh()
             return debugSwitched(name, GameDebugSettings.originalCursorsEnabled)
         }
         case 'highresolution': {
-            GameDebugSettings.setHighResolutionEnabled(!GameDebugSettings.highResolutionEnabled)
+            GameDebugSettings.set('highResolutionEnabled', !GameDebugSettings.highResolutionEnabled)
             OriginalResolution.refresh()
             return debugSwitched(name, GameDebugSettings.highResolutionEnabled)
         }
-        case 'tilted': return debugSwitched(name, GameDebugSettings.setTiltedSeedPackets(!GameDebugSettings.tiltedSeedPackets))
+        case 'tilted': return debugSwitched(name, GameDebugSettings.set('tiltedSeedPackets', !GameDebugSettings.tiltedSeedPackets))
         case 'cheatseed': {
             // A preference for the levels to come; in a level its chooser takes it up from the next one it opens.
-            if (!running) return debugSwitched(name, GameDebugSettings.setCheatSeedsEnabled(!GameDebugSettings.cheatSeedsEnabled))
+            if (!running) return debugSwitched(name, GameDebugSettings.set('cheatSeedsEnabled', !GameDebugSettings.cheatSeedsEnabled))
             const result = runGameCommand(command)
-            if (result.ok && result.enabled !== undefined) GameDebugSettings.setCheatSeedsEnabled(result.enabled)
+            if (result.ok && result.enabled !== undefined) GameDebugSettings.set('cheatSeedsEnabled', result.enabled)
             return result
         }
-        case 'fps': return debugSwitched(name, (GameDebugSettings.setFpsVisible(!GameDebugSettings.fpsVisible), GameDebugSettings.fpsVisible))
-        case 'hitboxes': return debugSwitched(name, (GameDebugSettings.setHitboxesVisible(!GameDebugSettings.hitboxesVisible), GameDebugSettings.hitboxesVisible))
+        case 'fps': return debugSwitched(name, (GameDebugSettings.set('fpsVisible', !GameDebugSettings.fpsVisible), GameDebugSettings.fpsVisible))
+        case 'hitboxes': return debugSwitched(name, (GameDebugSettings.set('hitboxesVisible', !GameDebugSettings.hitboxesVisible), GameDebugSettings.hitboxesVisible))
         case 'sharpness': {
             const sharpness = Number(args[0])
             if (!Number.isFinite(sharpness) || sharpness < 0 || sharpness > 1) return debugSyntax('Sharpness must be between 0 and 1')
             // The fonts' materials hold it; the picture enlarged over the window reads it as it is drawn.
-            setFontSharpness(GameDebugSettings.setSharpness(sharpness))
+            setFontSharpness(GameDebugSettings.set('sharpness', sharpness))
             return debugSuccess(`Sharpness: ${sharpness}`)
         }
         case 'mod': return { ...debugSuccess('Opening Mod manager'), action: 'manageMods' }
@@ -138,7 +138,7 @@ async function executeCommand(
         default: {
             if (!running) {
                 if (name === 'collect') {
-                    GameDebugSettings.setCollectMode(args[0].toLowerCase() as 'auto' | 'click' | 'move')
+                    GameDebugSettings.set('collectMode', args[0].toLowerCase() as 'auto' | 'click' | 'move')
                     return debugSuccess(`${name}: ${args[0]}`)
                 }
                 const turn = RULE_PREFERENCES[name]
@@ -146,13 +146,13 @@ async function executeCommand(
             }
             const result = runGameCommand(command)
             if (!result.ok) return result
-            if (name === 'collect') GameDebugSettings.setCollectMode(args[0].toLowerCase() as 'auto' | 'click' | 'move')
+            if (name === 'collect') GameDebugSettings.set('collectMode', args[0].toLowerCase() as 'auto' | 'click' | 'move')
             // The level's switches turn there; the preferences keep their new state for later levels.
             const enabled = result.enabled
             if (enabled === undefined) return result
-            if (name === 'cooldown') GameDebugSettings.setRechargingEnabled(enabled)
-            if (name === 'suncost') GameDebugSettings.setSunCostEnabled(enabled)
-            if (name === 'plantinvincible') GameDebugSettings.setPlantInvincible(enabled)
+            if (name === 'cooldown') GameDebugSettings.set('rechargingEnabled', enabled)
+            if (name === 'suncost') GameDebugSettings.set('sunCostEnabled', enabled)
+            if (name === 'plantinvincible') GameDebugSettings.set('plantInvincible', enabled)
             return { ...result, advice: debugSwitchAdvice(name, enabled) }
         }
     }

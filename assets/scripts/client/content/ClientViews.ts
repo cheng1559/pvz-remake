@@ -1,3 +1,5 @@
+import type { Content } from '@/client/level/LevelStage'
+import type { LevelDefinition } from '@/shared/content/gameplay'
 import { GridItemViewRegistry } from '@/client/gridItems/GridItemViewRegistry'
 import { ItemViewRegistry } from '@/client/items/ItemViewRegistry'
 import { StageEventRegistry } from '@/client/level/StageEventRegistry'
@@ -29,5 +31,10 @@ export class ClientViews {
 
     freeze(): void {
         for (const registry of this.registries) registry.freeze()
+    }
+
+    /** What the views of the board have ready before `level` starts (ViewPreload). */
+    async preload(content: Content, level: LevelDefinition): Promise<void> {
+        await Promise.all([this.plants, this.zombies, this.projectiles, this.gridItems, this.items].map(registry => registry.preload(content, level)))
     }
 }

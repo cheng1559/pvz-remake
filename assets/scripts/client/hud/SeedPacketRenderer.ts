@@ -1,3 +1,5 @@
+import { baseQualified } from '@/shared/mod'
+import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { createOffBoardGridItem } from '@/client/view/offBoard'
 import { GRAVE } from '@/shared/content/graves'
 import { modResources } from '@/client/content/ModResources'
@@ -11,13 +13,16 @@ import { PlantPreview } from './PlantPreview'
 import { ZombiePreview } from './ZombiePreview'
 import { PacketGrave } from './PacketGrave'
 import { SEED_PACKET_WIDTH } from './packetPicture'
-import { applySpriteDensity } from '@/client/content/SpriteDensity'
 import { supersampleSprites } from '@/client/render/KernelBatch'
 import { plantVisual, type SeedPacketSeedType } from '@/client/plants/definitions'
 export type { SeedPacketSeedType } from '@/client/plants/definitions'
+/** Mods take the atlas cells from here as they always have. */
+export { getAtlasFrame } from '@/client/render/atlasFrame'
 
 export { SEED_PACKET_WIDTH }
 export const SEED_PACKET_HEIGHT = 70
+/** SEED_IMITATER: its packet has a background of its own and no mobile selection frame. */
+export const IMITATER_SEED_TYPE = 48
 
 const SEED_PACKET_ATLAS_COLUMNS = 9
 const PACKET_PLANTS_ATLAS_COLUMNS = 13
@@ -41,7 +46,6 @@ const SELECTION_BRACKET = [
     { inset: 2, radius: 1, points: [[15, 2], [15, 5], [5, 5], [5, 24], [2, 24]] },
 ] as const
 
-const atlasFrames: WeakMap<SpriteFrame, Map<string, SpriteFrame>> = new WeakMap()
 
 export interface SeedPacketRenderArgs {
     definitions: PresentationDefinitions
@@ -60,24 +64,18 @@ export interface SeedPacketRenderArgs {
     cost?: number
     drawCost?: boolean
     upgrade?: boolean
-    loadSprite?: (name: string) => Promise<SpriteFrame>
     costFont?: BitmapFontAssets | null
 }
 
 
-async function loadPacketSprite(name: string): Promise<SpriteFrame> {
-    const frame = await modResources.asset(name, SpriteFrame)
-    if (!frame) throw new Error(`Missing seed packet sprite: ${name}`)
-    return frame
-}
 
 /** SeedPacket DrawSeedPacket: drawn larger than 1x, any packet uses the 2x IMAGE_SEEDPACKET_LARGER instead of its IMAGE_SEEDS cel. */
 @_decorator.ccclass('SeedPacketBackground')
 class SeedPacketBackground extends Component {
     initialize(sprite: Sprite, args: SeedPacketRenderArgs, scale: number): void {
-        const { seedType, upgrade, loadSprite = loadPacketSprite } = args
-        const frame = scale > 1 ? loadSprite('seedpacket_larger') : loadSprite('seeds').then(frame => getAtlasFrame(frame,
-            seedType === 48 ? BACKGROUND_IMITATER : upgrade ? BACKGROUND_UPGRADE : BACKGROUND_NORMAL,
+        const { seedType, upgrade } = args
+        const frame = scale > 1 ? modResources.sprite('seedpacket_larger') : modResources.sprite('seeds').then(frame => getAtlasFrame(frame,
+            seedType === IMITATER_SEED_TYPE ? BACKGROUND_IMITATER : upgrade ? BACKGROUND_UPGRADE : BACKGROUND_NORMAL,
             SEED_PACKET_WIDTH, SEED_PACKET_HEIGHT, SEED_PACKET_ATLAS_COLUMNS))
         void frame.then(frame => {
             if (isValid(this.node, true)) sprite.spriteFrame = frame
@@ -151,7 +149,7 @@ export class SeedPacketRenderer {
     }
 
     private static _drawPlantIcon(root: Node, args: SeedPacketRenderArgs, scale: number) {
-        const plantId = typeof args.seedType === 'string' && !args.seedType.includes(':') ? `pvz:${args.seedType}` : args.seedType
+        const plantId = typeof args.seedType === 'string' ? baseQualified(args.seedType) : args.seedType
         const seedId = typeof plantId === 'string' ? plantVisual(args.definitions, plantId)?.preview : plantId
         if (typeof seedId !== 'number') return
 
@@ -217,7 +215,7 @@ export class SeedPacketRenderer {
             return
         }
 
-        const atlas = await (args.loadSprite ?? loadPacketSprite)('packet_plants')
+        const atlas = await modResources.sprite('packet_plants')
         if (!isValid(root, true)) return
 
         uiNode({
@@ -242,7 +240,7 @@ export class SeedPacketRenderer {
     }
 
     private static async _drawScaledCachedPlant(root: Node, seedId: number, args: SeedPacketRenderArgs, scale: number): Promise<void> {
-        const atlas = await (args.loadSprite ?? loadPacketSprite)('plant_previews_cached')
+        const atlas = await modResources.sprite('plant_previews_cached')
         if (!isValid(root, true)) return
 
         const placement = args.definitions.seedPackets.placements[seedId] ?? args.definitions.seedPackets.defaultPlacement
@@ -423,41 +421,3 @@ export class SeedPacketRenderer {
     }
 }
 
-export function getAtlasFrame(
-    atlas: SpriteFrame,
-    index: number,
-    width: number,
-    height: number,
-    columns: number,
-) {
-    const cacheKey = `${index}:${width}:${height}:${columns}`
-    let framesByAtlas = atlasFrames.get(atlas)
-    if (!framesByAtlas) {
-        framesByAtlas = new Map<string, SpriteFrame>()
-        atlasFrames.set(atlas, framesByAtlas)
-    }
-
-    const cached = framesByAtlas.get(cacheKey)
-    if (cached) return cached
-
-    const atlasRect = atlas.rect
-    const atlasOriginalSize = atlas.originalSize
-    const atlasX = atlasOriginalSize.width >= columns * width ? 0 : atlasRect.x
-    const atlasY = atlasOriginalSize.height >= (Math.floor(index / columns) + 1) * height ? 0 : atlasRect.y
-    const frame = new SpriteFrame()
-    frame.reset({
-        texture: atlas.texture,
-        rect: new Rect(
-            atlasX + (index % columns) * width,
-            atlasY + Math.floor(index / columns) * height,
-            width,
-            height,
-        ),
-        originalSize: new Size(width, height),
-        offset: new Vec2(0, 0),
-        isRotate: false,
-    })
-    applySpriteDensity(frame)
-    framesByAtlas.set(cacheKey, frame)
-    return frame
-}

@@ -16,13 +16,13 @@ test('empty converted particles preload and expire without hiding image loading 
     const definitions = new Map([[empty.id, empty], ['test:missing-image', parseParticle({
         schemaVersion: 3, id: 'test:missing-image', emitters: [{ sprite: 'test:missing' }],
     })]])
-    const registry = { entries: () => [[empty.id, empty]] }
     const modules: Record<string, unknown> = {
-        '@/client/content/ClientContentLoader': {
-            ParticleRepository: class { async load(id: string) { return definitions.get(id) } },
-            SpriteRepository: class { async load() { throw new Error('image unavailable') } },
-        },
-        '@/client/content/loadClientContent': { loadClientContent: async () => ({ registry, loader: {} }) },
+        '@/client/content/ModResources': { modResources: {
+            ids: async (kind: string) => kind === 'particles' ? [empty.id] : [],
+            json: async (kind: string, id: string) => kind === 'particles' ? JSON.parse(JSON.stringify(definitions.get(id))) : undefined,
+            sprite: async () => { throw new Error('image unavailable') },
+        } },
+        '@/shared/content/particle': { parseParticle },
         '@/client/content/preloadTasks': { preloadTasks: async (tasks: (() => Promise<unknown>)[]) => {
             for (const task of tasks) await task()
         } },

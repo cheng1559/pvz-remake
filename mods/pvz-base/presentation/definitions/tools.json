@@ -1,0 +1,3 @@
+{
+  "pvz:shovel": {"bank": "pvz:shovelbank", "sprite": "pvz:shovel", "tooltipKey": "SHOVEL_TOOLTIP", "hotkey": "F", "arrowStep": "shovel-pickup", "x": 456, "imageOffset": [-7, -3], "cursorOffset": [-15, 65], "arrowOffset": [-25, 65]}
+}

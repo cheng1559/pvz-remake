@@ -1,4 +1,5 @@
-import { Color, director, Director, KeyCode, Node, UITransform } from 'cc'
+import { waitForPreloadFrame } from '@/client/content/preloadTasks'
+import { Color, KeyCode, Node, UITransform } from 'cc'
 import { FontMetricsUtil } from '@/client/font'
 import { modManager, type ModImport } from '@/client/content/ModManager'
 import { SoundEffect } from '@/client/sound/SoundSystem'
@@ -71,7 +72,7 @@ export async function showPackageDialog(parent: Node, ui: UI, options: PackageDi
     })
     const loading = notice(list.node, 'Loading...')
     // Paint Loading before reading and unpacking installed Mods.
-    await new Promise<void>(resolve => director.once(Director.EVENT_AFTER_DRAW, () => setTimeout(resolve, 0)))
+    await waitForPreloadFrame()
     if (!dialog.node.isValid || !dialog.node.activeInHierarchy) return dialog
     const manager = modManager
     let initial: string[], installedEntries: Entry[]

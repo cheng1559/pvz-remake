@@ -4,7 +4,7 @@ import { menuApi } from '@/client/api/MenuApi'
 import type { MainMenuUnlocks, UserView } from '@/shared/menu'
 import { offBoardContent } from '@/client/view/offBoard'
 import { preloadTasks } from '@/client/content/preloadTasks'
-import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
+import { getAtlasFrame } from '@/client/render/atlasFrame'
 import { MusicSystem } from '@/client/music/MusicSystem'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -73,7 +73,6 @@ export class MainMenuScreen extends Component {
     async initialize(ui: UI, onProgress: (progress: number) => void = () => {}): Promise<void> {
         this.ui = ui
         const game = await offBoardContent()
-        const { registry, loader } = game
         const menu = this.menu = game.presentation.mainMenu
         const imageNames = new Set([
             ...menu.buttons.flatMap(button => [button.image, button.highlight]), ...menu.images,
@@ -84,8 +83,7 @@ export class MainMenuScreen extends Component {
         let completed = 0
         const report = () => onProgress(++completed / total)
         await Promise.all([...imageNames].map(async name => {
-            const frame = await modResources.asset(name, SpriteFrame)
-            if (!frame) throw new Error(`Missing main menu image: ${name}`)
+            const frame = await modResources.sprite(name)
             this.frames.set(name, frame)
             report()
         }))
@@ -95,7 +93,7 @@ export class MainMenuScreen extends Component {
         const pending: (() => Promise<void>)[] = []
         const player = (name: string, parent = content): ReanimPlayer => {
             const animation = uiNode({ name, parent, anchor: { x: 0, y: 1 } }).node.addComponent(ReanimPlayer)
-            pending.push(() => animation.load(`pvz:selector_${name}`, registry, loader).then(report))
+            pending.push(() => animation.load(`pvz:selector_${name}`).then(report))
             return animation
         }
         this.clouds = menu.clouds.map(name => ({ player: player(name), delay: 0 }))
@@ -380,7 +378,7 @@ export class MainMenuScreen extends Component {
             this.startingSeconds = 0
             this.laughPlayed = false
             MusicSystem.stop()
-            void SoundSystem.playSfx(SoundEffect.LoseMusic)
+            void SoundSystem.play(SoundEffect.LoseMusic)
             void SoundSystem.playFoley(SoundEffect.DirtRise)
             for (const hand of this.hand) hand.play({ loop: false, timeSeconds: 0, hideOnFinish: false })
         } else if (config.target && isMenuDialog(config.target)) void this.onOpenDialog(config.target)

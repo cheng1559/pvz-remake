@@ -12,9 +12,7 @@ import type { LevelEntitySnapshot, LevelParticleOwnerSnapshot } from './LevelPre
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { boardCell } from './LevelGeometry'
 import { EntityFlashes } from './EntityFlashes'
-import { boardToLayer, type Content, type EntityView, type LevelEntityAssets, type LevelStage } from './LevelStage'
-
-export type { LevelEntityAssets } from './LevelStage'
+import { boardToLayer, type Content, type EntityView, type LevelStage } from './LevelStage'
 
 /** What an entity of the board is, by the list of the server's snapshot it is in. */
 type EntityKind = 'plant' | 'zombie' | 'projectile' | 'gridItem' | 'item'
@@ -40,6 +38,8 @@ export class LevelEntityRenderer implements LevelStage {
     private readonly entities = new Map<number, Entity>()
     /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
     sunBankOffset = (): number => 0
+    levelEndTicks = (): number => -1
+    shake: LevelStage['shake'] = () => {}
     private readonly creationTasks = new Map<number, Promise<void>>()
     readonly flashes = new EntityFlashes()
     /** The rows' waiting mowers, by row; one set off goes on as a projectile. */
@@ -55,7 +55,6 @@ export class LevelEntityRenderer implements LevelStage {
 
     constructor(
         readonly content: Content,
-        readonly assets: LevelEntityAssets,
         readonly layer: Node,
         private readonly coinLayer: Node,
         private readonly awardLayer: Node,
@@ -120,15 +119,13 @@ export class LevelEntityRenderer implements LevelStage {
     }
 
     particleOwner(node: Node): Extract<LevelParticleOwnerSnapshot, { kind: 'entity' }> | null {
-        for (const [entityId, { node: root }] of this.entities) {
+        for (const [entityId, { node: root, view }] of this.entities) {
             if (node !== root && !node.isChildOf(root)) continue
-            let slot: Extract<LevelParticleOwnerSnapshot, { kind: 'entity' }>['slot'] = 'root'
-            let parent = root
+            const anchors = Object.entries(view?.particleAnchors ?? {})
+            let slot = 'root', parent = root
             for (let ancestor = node.parent; ancestor && ancestor !== root; ancestor = ancestor.parent) {
-                if (ancestor.name === 'AwardBackEffects') { slot = 'award-back-effects'; parent = ancestor; break }
-                if (ancestor.name === 'Body') { slot = 'body'; parent = ancestor; break }
-                if (ancestor.name === 'Head') { slot = 'head'; parent = ancestor; break }
-                if (ancestor.name.includes('Shadow')) { slot = 'shadow'; parent = ancestor; break }
+                const anchor = anchors.find(([, anchorNode]) => anchorNode === ancestor)
+                if (anchor) { [slot, parent] = anchor; break }
             }
             const position = parent.inverseTransformPoint(new Vec3(), node.worldPosition)
             return { kind: 'entity', entityId, slot, x: position.x, y: position.y, z: position.z }
@@ -137,15 +134,9 @@ export class LevelEntityRenderer implements LevelStage {
     }
 
     particleParent(owner: Extract<LevelParticleOwnerSnapshot, { kind: 'entity' }>): Node | null {
-        const root = this.node(owner.entityId)
-        if (!root) return null
-        switch (owner.slot) {
-            case 'body': return root.getChildByName('Body') ?? root
-            case 'head': return root.getChildByName('Head') ?? root
-            case 'shadow': return root.getChildByName('MowerShadow') ?? root
-            case 'award-back-effects': return root.getChildByName('AwardBackEffects') ?? root
-            default: return root
-        }
+        const entity = this.entities.get(owner.entityId)
+        if (!entity) return null
+        return entity.view?.particleAnchors?.[owner.slot] ?? entity.node
     }
 
     /** What each view keeps of its own across a save. */

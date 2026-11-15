@@ -1,6 +1,6 @@
-import { _decorator, Color, Component, SpriteFrame, type Node } from 'cc'
+import { _decorator, Color, Component, type Node } from 'cc'
 import { modResources } from '@/client/content/ModResources'
-import { getAtlasFrame } from '@/client/hud/SeedPacketRenderer'
+import { getAtlasFrame } from '@/client/render/atlasFrame'
 import type { UI } from '@/client/ui/UI'
 import type { UIButton } from '@/client/ui/UIButton'
 import { easeInOut } from '@/client/view/GameScreenMath'
@@ -26,11 +26,7 @@ export class AwardAchievements extends Component {
     private continueButton!: UIButton
 
     static async create(parent: Node, ui: UI, entries: readonly AchievementEntry[], onContinue: () => void): Promise<AwardAchievements> {
-        const [background, ...icons] = await Promise.all(['pvz:challenge_background', ...entries.map(entry => entry.icon.sprite)].map(async id => {
-            const frame = await modResources.asset(id, SpriteFrame)
-            if (!frame) throw new Error(`Award achievement image is not installed: ${id}`)
-            return frame
-        }))
+        const [background, ...icons] = await Promise.all(['pvz:challenge_background', ...entries.map(entry => entry.icon.sprite)].map(id => modResources.sprite(id)))
         if (!parent.isValid) throw new Error('Award screen was destroyed while loading')
         const node = uiNode({ name: 'AwardAchievements', parent, position: { x: -400, y: 300 }, anchor: { x: 0, y: 1 } }).node
         const list = node.addComponent(AwardAchievements)

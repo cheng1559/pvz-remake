@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { parseModManifest } from '@/shared/mod'
 import { parseModContent, type ContentArchive } from '@/shared/mod/content'
 
@@ -29,47 +28,6 @@ test('base and Mod archives use the same manifest, content parser and file valid
         assert.throws(() => parseModContent({ ...base.content, presentation: 'missing.json' }, base.files), /Missing ZIP file/)
         assert.throws(() => parseModContent({ ...base.content, resources: { unknown: {} } }, base.files), /Unknown resource category/)
     }
-})
-
-test('ContentRegistry resolves common archive resources by category, rejects duplicates, and freezes', () => {
-    const base = archive()
-    const registry = new ContentRegistry()
-    registry.register(base)
-    assert.deepEqual(registry.resolve('sprites', 'pvz:sunflower'), {
-        category: 'sprites', id: 'pvz:sunflower', contentId: 'pvz', contentVersion: '2.0.0',
-        contentHash: 'pvz@2', path: 'sprite.png',
-    })
-    assert.equal(registry.resolve('sounds', 'pvz:sunflower'), undefined)
-    const warmed = new ContentRegistry()
-    warmed.register({ ...base, files: {} })
-    assert.equal(warmed.resolve('sprites', 'pvz:sunflower')?.path, 'sprite.png', 'decoded Native image bytes are not needed for metadata')
-    assert.throws(() => registry.register(base), /duplicate content manifest/)
-    // Each Mod owns its own namespace, so two archives never claim one ID; a direct entry still cannot repeat one.
-    assert.throws(() => registry.registerEntry({ ...registry.resolve('sprites', 'pvz:sunflower')!, contentId: 'addon' }), /duplicate sprites content/)
-    assert.equal([...registry.entries('sprites')].length, 1)
-
-    const other = archive('addon')
-    other.content.resources.sprites = {}
-    other.content.resources.audio['addon:sunflower'] = 'hit.mp3'
-    other.content.resources.audio['pvz:chomp'] = 'hit.mp3'
-    const files = { ...other.files, 'hit.mp3': new Uint8Array([1]) }
-    const second = new ContentRegistry()
-    second.register(base)
-    second.register({ ...other, files })
-    assert.equal(second.resolve('sounds', 'addon:sunflower')?.path, 'hit.mp3')
-    assert.equal(second.resolve('sounds', 'pvz:chomp'), undefined, 'a replacement of another namespace is not registered as the Mod\'s own')
-    second.registerEntry({
-        category: 'reanim', id: 'example:solar_peashooter', contentId: 'example:solar-mod',
-        contentVersion: '1.0.0', contentHash: 'example-solar-mod@1',
-        path: 'solar.json',
-    })
-    assert.throws(() => second.registerEntry(second.resolve('reanim', 'example:solar_peashooter')!), /duplicate reanim/)
-    second.freeze()
-    assert.throws(() => second.register(base), /frozen/)
-    assert.throws(() => second.registerEntry(second.resolve('reanim', 'example:solar_peashooter')!), /frozen/)
-    assert.throws(() => {
-        ;(second.resolve('sprites', 'pvz:sunflower') as { path: string }).path = 'changed'
-    }, TypeError)
 })
 
 test('a Mod manifest may name its author for the Mod list', () => {

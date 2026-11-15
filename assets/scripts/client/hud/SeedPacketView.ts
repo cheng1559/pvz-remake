@@ -9,6 +9,7 @@ import {
     SeedPacketRenderer,
     type SeedPacketRenderArgs,
     type SeedPacketSeedType,
+    IMITATER_SEED_TYPE,
 } from '@/client/hud/SeedPacketRenderer'
 import { uiNode } from '@/client/view/uiNode'
 import { PlantPreview } from './PlantPreview'
@@ -31,7 +32,6 @@ export interface SeedPacketViewArgs {
     costFont: BitmapFontAssets | null
     drawCost?: boolean
     cost?: number
-    loadSprite?: SeedPacketRenderArgs['loadSprite']
     /**
      * Where the packet's picture, cost and selection frame go, above every packet's background, so that a picture
      * standing out of its packet (/tilted) shows over its neighbours whichever way it leans. Without it
@@ -202,7 +202,7 @@ export class SeedPacketView {
             : options.cooldownTotal > 0 ? options.cooldownRemaining / options.cooldownTotal : 0
         this.syncCooldown(options.gameStarted ? percentDark : 0)
         if (this.selectedHighlight) this.selectedHighlight.active = options.mobile &&
-            this.seedType !== 48 &&
+            this.seedType !== IMITATER_SEED_TYPE &&
             options.gameStarted &&
             options.selected &&
             (options.conveyor || options.cooldownRemaining <= 0)

@@ -4,6 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { loadScript } from '../loadScript'
 import * as plantVisuals from '@/client/plants/definitions'
+import * as modApi from '@/shared/mod'
 import { buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 
@@ -25,16 +26,19 @@ function setup() {
         cc: { Component: class {}, Color,
             isValid: (node: Node) => node.isValid, _decorator: { ccclass: (name: string) => (value: unknown) => { classes[name] = value; return value } } },
         '@/client/plants/definitions': plantVisuals,
+        '@/shared/mod': modApi,
         '@/client/view/offBoard': {},
         '@/client/view/uiNode': { uiNode: () => ({ node: new Node() }) },
     }
+    const resources: { sprite?: (name: string) => Promise<unknown> } = {}
+    modules['@/client/content/ModResources'] = { modResources: resources }
     const load = (name: string) => {
         const path = name.includes('/') ? name : `hud/${name}`
         return loadScript(`assets/scripts/client/${path}.ts`, (id: string) => modules[id] ?? {})
     }
     modules['./PlantPreview'] = load('PlantPreview')
     const renderer = load('SeedPacketRenderer').SeedPacketRenderer
-    return { classes, modules, load, renderer }
+    return { classes, modules, load, renderer, resources }
 }
 
 test('namespaced Mod packets keep their ID and are drawn by their plant view instead of the cached plant pose', async () => {
@@ -69,12 +73,13 @@ test('namespaced Mod packets keep their ID and are drawn by their plant view ins
 })
 
 test('a packet drawn above 1x uses the larger background, as DrawSeedPacket does', async () => {
-    const { classes } = setup()
+    const { classes, resources } = setup()
     for (const [scale, upgrade, expected] of [[2, false, 'seedpacket_larger'], [2, true, 'seedpacket_larger'], [1, false, 'seeds']] as const) {
         const loaded: string[] = [], sprite: { spriteFrame?: unknown } = {}
+        resources.sprite = async (name: string) => { loaded.push(name); return { name } }
         const background = new classes.SeedPacketBackground()
         background.node = new Node()
-        background.initialize(sprite, { seedType: 0, upgrade, loadSprite: async (name: string) => { loaded.push(name); return { name } } }, scale)
+        background.initialize(sprite, { seedType: 0, upgrade }, scale)
         await new Promise(setImmediate)
         assert.deepEqual(loaded, [expected], `scale ${scale}${upgrade ? ' upgrade' : ''}`)
         if (scale > 1) assert.deepEqual(sprite.spriteFrame, { name: 'seedpacket_larger' })

@@ -1,5 +1,5 @@
 import { modResources } from '@/client/content/ModResources'
-import { Color, Mask, type Node, SpriteFrame } from 'cc'
+import { Color, Mask, type Node } from 'cc'
 import { SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import { PlantPreview } from '@/client/hud/PlantPreview'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
@@ -28,11 +28,10 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
     } else {
         const { plants, zombies } = await menuApi.getAlmanac()
         const names = page === 'plants'
-            ? ['particles/seedpacketflash', 'almanac_plantcard', 'almanac_groundday', 'almanac_groundnight', 'almanac_groundpool', 'almanac_groundnightpool', 'almanac_groundroof']
+            ? ['pvz:seedpacketflash', 'almanac_plantcard', 'almanac_groundday', 'almanac_groundnight', 'almanac_groundpool', 'almanac_groundnightpool', 'almanac_groundroof']
             : ['almanac_zombiewindow', 'almanac_zombiewindow2', 'almanac_zombieblank', 'almanac_zombiecard', 'almanac_groundday', 'almanac_groundice']
         const frames = await Promise.all(names.map(async name => {
-            const frame = await modResources.asset(name, SpriteFrame)
-            if (!frame) throw new Error(`Missing almanac image: ${name}`)
+            const frame = await modResources.sprite(name)
             return [name, frame] as const
         }))
         if (!parent.isValid) throw new Error('Almanac was destroyed while loading')
@@ -90,7 +89,7 @@ export async function showAlmanacScreen(parent: Node, ui: UI, page: 'almanac' | 
             for (const plant of drawOrder) {
                 const { x, y } = plantPosition(plant.id)
                 const button = ui.button(parent, {
-                    images: { normal: sprites['particles/seedpacketflash'] }, x, y, width: 50, height: 70,
+                    images: { normal: sprites['pvz:seedpacketflash'] }, x, y, width: 50, height: 70,
                     pressSound: null, clickSound: null, clickOnPress: !GameDebugSettings.isMobileMode(), pressOffset: [0, 0],
                     onClick: () => choose(plant),
                 })

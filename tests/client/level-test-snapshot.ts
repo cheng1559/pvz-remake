@@ -13,7 +13,7 @@ export function reanim(id: string) {
 export function levelPresentation(current: WorldSnapshot): LevelPresentationSnapshot {
     const complete = current.phase === 'gameplay'
     return {
-        schemaVersion: 3,
+        schemaVersion: 4,
         flow: { introCompletionSent: complete, completionStarted: current.result === 'won' },
         intro: {
             ticks: complete ? 855 : 0,
