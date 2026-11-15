@@ -18,7 +18,7 @@ export function createProductionSystem(definitions: GameplayDefinitions): GameSy
         id: 'pvz:plant-production',
         run({ world, commands, tick }) {
             const level = world.resources.get(LevelStateResource)
-            const stopped = level.result !== 'playing' || level.paused || !getDebugRules(world).sunSpawning ||
+            const stopped = level.result !== 'playing' || level.paused ||
                 [...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === level.definition.award.id)
             for (const entity of world.query(PlantComponent, PlantAttackComponent, PositionComponent)) {
                 const plant = world.get(entity, PlantComponent)!

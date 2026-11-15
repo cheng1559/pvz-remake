@@ -26,7 +26,7 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 | 掉落 | `/item {item_name} [row col]`，当前支持 `sun`、`award`；`award` 不像正常掉落那样清除场上僵尸 |
 | 数值 | `/sun {add|set} {number}`、`/money {add|set} {number}`（金币单位为原版 1 枚＝$10，同步写入档案；关卡外直接改档案，关卡内开场阶段也可用；改动后像拾取金币一样显示金币栏，开场阶段只在戴夫出场时显示） |
 | 小推车 | `/lawnmower {trigger|reset} [row]` |
-| 规则 | `/cooldown`、`/suncost`、`/sunspawning`、`/plantinvincible`、`/cheatseed` |
+| 规则 | `/cooldown`、`/suncost`、`/plantinvincible`、`/cheatseed` |
 | 收集 | `/collect {auto|click|move}`，自动／移动收集仅处理普通掉落 |
 | 成就 | `/achievement give {achievement}`、`/achievement reset [achievement]`（名称可省略 `pvz:`，如 `sunny-days`）。关卡内由关卡发放，与正常获得一样显示提示并播放音效；关卡外只写入档案，留到下一次领奖页列出。`reset` 不带名称时清除全部 |
 | 快捷键 | `/hotkeys`；`1`–`9`、`0` 选择普通种子栏或传送带对应槽位，`F` 拿起／放回铲子（手持植物时直接换成铲子，与数字键一致），`D` 切换 0 倍速，`R` 执行 `/repick` 重选种子，重选时再按 `R` 等同按下开始战斗，`S` 切换是否需要阳光（同 `/suncost`），`C` 切换是否有冷却（同 `/cooldown`） |
@@ -66,4 +66,4 @@ Debug 和 Release 构建中均可按 `/` 打开；移动模式下，双击屏幕
 
 当前内容包提供 1-1 至 2-5，植物有豌豆射手、向日葵、樱桃炸弹、坚果墙、土豆雷、寒冰射手、大嘴花、双发射手、小喷菇、阳光菇、大喷菇、墓碑吞噬者和爆炸坚果（`explodenut`，仅调试种植），僵尸有普通、旗帜、路障（`conehead`）、铁桶（`buckethead`）、撑杆（`pole_vaulter`）、读报（`newspaper`）和铁栅门（`screendoor`）僵尸；植物、僵尸、物品、关卡补全来自后端已安装内容。`/background` 及尚未迁移的实体和关卡会提示不可用。
 
-窗口复用 `UI.dialog`、`UI.input`；关卡修改通过 `debugCommand`／`debugResult` 通道执行，由后端验证并返回结果，不直接修改前端快照。规则开关作用于后端会话；冷却、阳光消耗、植物无敌、收集方式同时保存调试偏好，在新会话中重新应用。
+窗口复用 `UI.dialog`、`UI.input`；关卡修改通过 `debugCommand`／`debugResult` 通道执行，由后端验证并返回结果，不直接修改前端快照。规则开关作用于后端会话；冷却、阳光消耗、植物无敌、收集方式同时保存调试偏好，在新会话中重新应用，关卡外使用时只改偏好。

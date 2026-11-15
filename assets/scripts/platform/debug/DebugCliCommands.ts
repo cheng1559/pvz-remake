@@ -11,6 +11,13 @@ import { loadGameplayContent } from '@/client/game/loadIntegratedGameContent'
 import { OptionsSettings } from '@/platform/OptionsSettings'
 import { GameDebugSettings, type DebugPerfToggle } from './GameDebugSettings'
 
+/** The rule switches a level starts with (LevelController): outside one they set the preference alone. */
+const RULE_PREFERENCES: Record<string, () => boolean> = {
+    cooldown: () => GameDebugSettings.setRechargingEnabled(!GameDebugSettings.rechargingEnabled),
+    suncost: () => GameDebugSettings.setSunCostEnabled(!GameDebugSettings.sunCostEnabled),
+    plantinvincible: () => GameDebugSettings.setPlantInvincible(!GameDebugSettings.plantInvincible),
+}
+
 export async function executeDebugCliCommand(...args: Parameters<typeof executeCommand>): Promise<DebugCliResult> {
     return executor.execute(...args)
 }
@@ -129,7 +136,14 @@ async function executeCommand(
             return debugSuccess(`Granted ${id}`)
         }
         default: {
-            if (!running) return debugCondition('DEBUG_REQUIRES_LEVEL', name)
+            if (!running) {
+                if (name === 'collect') {
+                    GameDebugSettings.setCollectMode(args[0].toLowerCase() as 'auto' | 'click' | 'move')
+                    return debugSuccess(`${name}: ${args[0]}`)
+                }
+                const turn = RULE_PREFERENCES[name]
+                return turn ? debugSwitched(name, turn()) : debugCondition('DEBUG_REQUIRES_LEVEL', name)
+            }
             const result = runGameCommand(command)
             if (!result.ok) return result
             if (name === 'collect') GameDebugSettings.setCollectMode(args[0].toLowerCase() as 'auto' | 'click' | 'move')

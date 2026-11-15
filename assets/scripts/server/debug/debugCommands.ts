@@ -35,7 +35,7 @@ function executeCommand(
 ): DebugCliResult {
     const { name, args } = command
     const level = world.resources.get(LevelStateResource)
-    const preference = ['cooldown', 'suncost', 'sunspawning', 'plantinvincible', 'collect'].includes(name)
+    const preference = ['cooldown', 'suncost', 'plantinvincible', 'collect'].includes(name)
     // The purse and the achievements are no board state, so /money and /achievement also work in the intro (Crazy
     // Dave's offer checks the purse there).
     const anyPhase = name === 'money' || name === 'achievement'
@@ -226,7 +226,6 @@ function executeCommand(
         }
         case 'cooldown':
         case 'suncost':
-        case 'sunspawning':
         case 'plantinvincible':
         case 'collect': {
             const rules = { ...getDebugRules(world) }
@@ -236,7 +235,7 @@ function executeCommand(
                 return debugSuccess(`${name}: ${args[0]}`)
             }
             // A switch turns over.
-            const rule = ({ cooldown: 'cooldown', suncost: 'sunCost', sunspawning: 'sunSpawning', plantinvincible: 'plantInvincible' } as const)[name]
+            const rule = ({ cooldown: 'cooldown', suncost: 'sunCost', plantinvincible: 'plantInvincible' } as const)[name]
             const enabled = rules[rule] = !rules[rule]
             if (rule === 'cooldown' && !enabled) for (const packet of world.resources.get(SeedBankResource).packets) if (packet) packet.readyAtTick = 0
             world.resources.set(DebugRulesResource, rules)

@@ -3,7 +3,6 @@ import { defineResource, type World } from '@/ecs/index'
 export interface DebugRules {
     cooldown: boolean
     sunCost: boolean
-    sunSpawning: boolean
     plantInvincible: boolean
     collect: 'auto' | 'click' | 'move'
     /**
@@ -13,7 +12,7 @@ export interface DebugRules {
     cheatSeeds: boolean
 }
 export const DEFAULT_DEBUG_RULES: Readonly<DebugRules> = {
-    cooldown: true, sunCost: true, sunSpawning: true, plantInvincible: false, collect: 'click', cheatSeeds: false,
+    cooldown: true, sunCost: true, plantInvincible: false, collect: 'click', cheatSeeds: false,
 }
 export const DebugRulesResource = defineResource<DebugRules>('pvz:debug-rules')
 export function getDebugRules(world: World): Readonly<DebugRules> {
