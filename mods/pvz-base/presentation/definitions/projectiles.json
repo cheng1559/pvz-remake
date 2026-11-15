@@ -41,7 +41,7 @@
     "sprite": "pvz:puffshroom_puff1",
     "trail": {"id": "pvz:puffshroomtrail", "x": 13, "y": -13},
     "impact": {"id": "pvz:puffsplat", "shotOffset": [13, -1.5], "yRange": [20, 100]},
-    "fireSounds": [{"audio": "pvz:puff", "foley": true}],
+    "fireSounds": [{"audio": "pvz:puff", "foley": true, "pitchRange": 10}],
     "impactSounds": [{"audio": "pvz:splat", "foley": true, "pitchRange": 10}]
   }
 }

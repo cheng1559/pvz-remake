@@ -165,7 +165,7 @@
   "pvz:fumeshroom": {
     "visual": {"seedType": "fumeshroom", "preview": 10, "nameKey": "FUME_SHROOM"},
     "viewConfig": {"fireParticle": {"id": "pvz:fumecloud", "x": 85, "y": 31, "delayTicks": 35}},
-    "fireSounds": [{"audio": "pvz:fume", "foley": true}],
+    "fireSounds": [{"audio": "pvz:fume", "foley": true, "pitchRange": 10}],
     "clips": {
       "body": {"reanimId": "pvz:fumeshroom", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "sleep": {"reanimId": "pvz:fumeshroom_sleep", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
