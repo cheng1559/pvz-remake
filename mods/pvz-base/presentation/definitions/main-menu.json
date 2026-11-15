@@ -10,9 +10,9 @@
     {"name": "store", "target": "store", "track": "SelectorScreen_BG_Right", "x": 334, "y": 441, "image": "selectorscreen_store", "highlight": "selectorscreen_storehighlight"},
     {"name": "almanac", "target": "almanac", "track": "SelectorScreen_BG_Right", "x": 256, "y": 387, "image": "selectorscreen_almanac", "highlight": "selectorscreen_almanachighlight"},
     {"name": "achievements", "target": "achievements", "track": "SelectorScreen_BG_Left", "x": 20, "y": 480, "image": "achievements_pedestal", "highlight": "achievements_pedestal_press"},
-    {"name": "options", "target": "options", "track": "SelectorScreen_BG_Right", "x": 494, "y": 434, "width": 81, "height": 54, "imageY": 13, "image": "selectorscreen_options1", "highlight": "selectorscreen_options2"},
-    {"name": "help", "target": "help", "track": "SelectorScreen_BG_Right", "x": 576, "y": 458, "width": 48, "height": 55, "imageY": 28, "image": "selectorscreen_help1", "highlight": "selectorscreen_help2"},
-    {"name": "quit", "target": "quit", "track": "SelectorScreen_BG_Right", "x": 644, "y": 469, "width": 57, "height": 37, "imageX": 5, "imageY": 3, "image": "selectorscreen_quit1", "highlight": "selectorscreen_quit2"}
+    {"name": "options", "target": "options", "track": "SelectorScreen_BG_Right", "x": 494, "y": 434, "width": 81, "height": 54, "imageY": 15, "image": "selectorscreen_options1", "highlight": "selectorscreen_options2"},
+    {"name": "help", "target": "help", "track": "SelectorScreen_BG_Right", "x": 576, "y": 458, "width": 48, "height": 55, "imageY": 30, "image": "selectorscreen_help1", "highlight": "selectorscreen_help2"},
+    {"name": "quit", "target": "quit", "track": "SelectorScreen_BG_Right", "x": 644, "y": 469, "width": 57, "height": 37, "imageX": 5, "imageY": 5, "image": "selectorscreen_quit1", "highlight": "selectorscreen_quit2"}
   ],
   "images": ["selectorscreen_bg", "selectorscreen_levelnumbers"],
   "clouds": ["cloud1", "cloud2", "cloud4", "cloud5", "cloud6", "cloud7"],
