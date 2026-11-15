@@ -9,10 +9,10 @@ import {
 import { getDebugRules } from '../debug/debugRules'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { getAvailableSun } from '../level/items'
-import { TutorialResource, WaveResource } from '../state/levelState'
+import { TutorialResource } from '../state/levelState'
 import { initialPlantAbility } from '../plants/abilities'
 import { startPlantAnimations } from '../plants/animation'
-import { selectedSeedId, selectedTeam } from './seedBank'
+import { packetAvailability, selectedSeedId, selectedTeam } from './seedBank'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule } from '../rules/registry'
@@ -34,13 +34,7 @@ export const planting = {
             ? {} : { reason: 'seed-not-available' }
         const packet = slot === undefined ? seedBank.packets.find(packet => packet?.seedId === seedId) : seedBank.packets[slot]
         if (packet?.seedId !== seedId) return { reason: 'seed-not-available' }
-        if (getDebugRules(world).cooldown && packet.readyAtTick > session.gameplayTick) {
-            return { reason: 'seed-not-ready', warningKey: 'WAITING_FOR_SEED' }
-        }
-        if (getDebugRules(world).sunCost && getAvailableSun(world, definitions) < definitions.seeds[seedId].sunCost) {
-            return { reason: 'not-enough-sun', warningKey: 'NOT_ENOUGH_SUN' }
-        }
-        return {}
+        return packetAvailability(world, definitions, packet, session.gameplayTick)
     },
 
     /** Feedback for a refused selection; returns the rejection. */
@@ -96,7 +90,7 @@ export const planting = {
         const refuseCell = (code: CommandRejectionCode): CommandRejectionCode => {
             if (levelRule(world)?.dropsRefusedSeeds) {
                 clearCursor(world)
-                getActiveTutorial(world)?.seedCanceled?.(world, gameplayTick)
+                getActiveTutorial(world)?.seedCanceled?.(world, definitions, gameplayTick)
                 emitServerEvent(world.resources.get(EventQueueResource), 'seedDropped', {})
             }
             return code
@@ -158,7 +152,7 @@ export const planting = {
 
         const entity = planting.createPlant(session, seedId, row, column, team)
         spendSeed(session, seed, packet, sunCost)
-        getActiveTutorial(world)?.plantPlaced?.(world, gameplayTick, seed.id, occupiedEntity !== undefined)
+        getActiveTutorial(world)?.plantPlaced?.(world, definitions, gameplayTick, seed.id)
         emitServerEvent(world.resources.get(EventQueueResource), 'plantPlaced', {
             entityId: entity,
             typeId: seed.id,

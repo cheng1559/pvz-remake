@@ -1,10 +1,10 @@
-import { Color, type Node, Sprite, type SpriteFrame } from 'cc'
-import type { ClientAnimationClip, ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
-import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
+import { Color, type Node, Sprite } from 'cc'
+import type { ClientAnimationClip } from '@/client/content/ClientAnimationRegistry'
 import type { LevelEntitySnapshot } from '@/client/level/LevelPresentationSnapshot'
-import { boardToLayer, type LevelStage, type StageEvent } from '@/client/level/LevelStage'
+import { boardToLayer, type Content, type EntityView, type LevelStage, plantShadow, type StageEvent } from '@/client/level/LevelStage'
 import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
-import type { EntityAttachments } from '@/client/view/EntityAttachments'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { type LayerClips, LayerPlayers, type LayerShown, shownLayer } from '@/client/view/layerPlayback'
 import { uiNode } from '@/client/view/uiNode'
 import { PLANT_BLINK_LAYER, type PlantAnimationDefinition } from '@/shared/content/gameplay'
@@ -17,11 +17,6 @@ import { type PlantSnapshot, TICK_SECONDS, type WorldSnapshot } from '@/shared/p
 import { plantDefinition } from './definitions'
 
 export type PlantViewSnapshot = Extract<LevelEntitySnapshot, { kind: 'plant' }>
-/**
- * Requests a particle in board coordinates, matching Board::AddPvzpParticle. `mirrored`: the effect turned round, for a
- * plant facing left (the zombies' side).
- */
-export type PlantParticle = (effect: string, x: number, y: number, tint?: Color, mirrored?: boolean) => void
 /**
  * A plant as a view shows it: what its layers play. On the board it is the server's whole snapshot; off it (the
  * almanac, a packet's picture) there is nothing else to it.
@@ -38,17 +33,11 @@ export interface PlantDraw {
 }
 export interface PlantViewContext {
     node: Node
-    /** The plant's attachment list for effects that belong to it, such as Mod-added marks. */
-    attachments: EntityAttachments
-    content: Awaited<ReturnType<typeof loadIntegratedGameContent>>
-    animations: ClientAnimationRegistry
-    /** `wallnutCracked`: a chewed nut's faces, which only the board needs. */
-    assets: { shadow: SpriteFrame; wallnutCracked?: [SpriteFrame, SpriteFrame] }
+    content: Content
     plant: ShownPlant
-    tick: number
-    draw?: PlantDraw
     /** The board it is on; none off the board. */
     stage?: LevelStage
+    draw?: PlantDraw
 }
 
 /** Reanimation::StartBlend(20): a layer that changes its clip blends from the pose it had, unless the clip says how long. */
@@ -74,15 +63,17 @@ interface FireParticle { id: string; x: number; y: number; delayTicks: number }
  * On the board the server keeps the animation and `sync` follows its snapshots, with what else the board does to a
  * plant; off the board whoever shows the plant keeps it (shared/content/plantAnimation) and calls `show`.
  */
-export class PlantView {
+export class PlantView implements EntityView<PlantSnapshot> {
+    /** Effects that belong to the plant, such as Mod-added marks. */
+    readonly attachments = new EntityAttachments()
     protected readonly animation: PlantAnimationDefinition
     /** The layers' players are in it, over the shadow: a view moves the plant's picture by it. */
     protected root!: Node
     private layers!: LayerPlayers
     /** Tick the current shot started, for a particle that follows it; null until the next sync reports it. */
     private shotTick?: number | null
-    /** The bite or production glow it was last drawn with. */
-    private flash = 0
+    /** The bite or production glow (Plant::mEatenFlashCountdown) of the frame being drawn. */
+    protected flash = 0
     private highlighted = false
     private chilled = false
     /** Mowed, it is frozen as it stood for its squashing. */
@@ -95,15 +86,16 @@ export class PlantView {
     }
 
     async initialize(): Promise<void> {
-        const { node, content, assets, plant, draw } = this.context
+        const { node, content, plant, draw, stage } = this.context
         // Plant::DrawShadow skips a few plants, such as the grave buster: those have no shadow in their presentation.
         const shadow = draw?.shadow === false ? undefined : this.presentation.shadow
-        if (shadow) {
-            const scale = shadow.scale ?? 1, size = assets.shadow.originalSize
+        const frame = shadow && await plantShadow(content, stage)
+        if (shadow && frame && node.isValid) {
+            const scale = shadow.scale ?? 1, size = frame.originalSize
             uiNode({
                 name: 'PlantShadow', parent: node, anchor: { x: 0, y: 1 },
                 position: { x: shadow.x + size.width * (1 - scale) / 2, y: shadow.y - size.height * (1 - scale) / 2, z: -1 },
-                sprite: { frame: assets.shadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
+                sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false },
             }).node.setScale(scale, scale, 1)
         }
         // Every clip is in memory from here on, so a layer changes to one at once.
@@ -117,7 +109,7 @@ export class PlantView {
         this.show(plant)
     }
 
-    protected get presentation() { return plantDefinition(this.context.animations.definitions, this.context.plant.typeId) }
+    protected get presentation() { return plantDefinition(this.context.content.presentation, this.context.plant.typeId) }
 
     /** The first layer's player: the others are on its parts. */
     protected get body(): ReanimPlayer { return this.layers.player(Object.keys(this.animation.layers)[0]) }
@@ -126,8 +118,8 @@ export class PlantView {
     get players(): ReanimPlayer[] { return this.layers.shown }
 
     private get clips(): Record<string, ClientAnimationClip | undefined> {
-        const { animations, plant } = this.context
-        return animations.resolve(plant.typeId) as Record<string, ClientAnimationClip | undefined>
+        const { content, plant } = this.context
+        return content.animations.resolve(plant.typeId) as Record<string, ClientAnimationClip | undefined>
     }
 
     /** The presentation's clip of a name. */
@@ -211,19 +203,19 @@ export class PlantView {
 
     /**
      * The plant on the board for a frame: where it stands, facing its side's way, and what the board does to any plant
-     * (a mowed one is squashed, a chilled one is blue and slow, the shovel over it lights it). `sync` shows the plant
-     * itself. `flash`: the bite or production glow (Plant::mEatenFlashCountdown), from the client's EntityFlashes.
+     * (a mowed one is squashed, a chilled one is blue and slow, the shovel over it lights it). `onBoard` shows the
+     * plant itself.
      */
-    update(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, flash: number): void {
-        const { node } = this.context
+    sync(plant: PlantSnapshot, world: WorldSnapshot): void {
+        const { node, stage } = this.context
+        this.flash = stage?.flashes.plant(plant, world.gameplayTick) ?? 0
         // A mowed plant stays as it stood.
         if (plant.mowered) { this.squash(plant); return }
         // A plant on the zombies' side faces left, mirrored across its width.
         const mirrored = plant.team === 'zombies', at = boardToLayer(plant.x + (mirrored ? PLANT_WIDTH : 0), plant.y)
         node.setPosition(at.x, at.y)
         node.setScale(mirrored ? -1 : 1, 1, 1)
-        this.flash = flash
-        this.sync(plant, world, particle, flash)
+        this.onBoard(plant, world)
         // A plant chilled by a hostile snow pea draws blue and animates at half speed. Its players are revisited every
         // frame while chilled, since a layer may start a new clip, and once more as it thaws.
         const chilled = (plant.chilledTicks ?? 0) > 0
@@ -285,10 +277,18 @@ export class PlantView {
     }
 
     /**
-     * The plant itself on the board, by the server's snapshot: its layers, a particle that follows its shot, its color
-     * and its glow. A view adds what its plant does here.
+     * A particle effect of the plant's, over everything on the board (Board::AddPvzpParticle at RENDER_LAYER_TOP), in
+     * board coordinates. `mirrored`: the effect turned round, for a plant facing left.
      */
-    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, flash: number): void {
+    protected particle(effect: string, x: number, y: number, tint?: Color, mirrored?: boolean): void {
+        this.context.stage?.particle(effect, x, y, renderOrder('top'), tint, mirrored)
+    }
+
+    /**
+     * The plant itself on the board, by the server's snapshot: its layers, a particle that follows its shot, its color
+     * and its glow (`flash`). A view adds what its plant does here.
+     */
+    protected onBoard(plant: PlantSnapshot, world: WorldSnapshot): void {
         this.show(plant)
         const cue = this.presentation.viewConfig?.fireParticle as unknown as FireParticle | undefined
         if (cue && this.shotTick !== undefined) {
@@ -296,16 +296,16 @@ export class PlantView {
             if (world.gameplayTick - this.shotTick >= cue.delayTicks) {
                 // A plant facing left puffs from its mirrored mouth, the cloud blowing left.
                 const team = plantTeam(plant)
-                particle(cue.id, plant.x + plantFacingX(cue.x, team), plant.y + cue.y, undefined, team === 'zombies')
+                this.particle(cue.id, plant.x + plantFacingX(cue.x, team), plant.y + cue.y, undefined, team === 'zombies')
                 this.shotTick = undefined
             }
         }
         const body = this.body
         if (!body.loadedId) return
-        const gray = Math.min(255, flash * 3)
+        const gray = Math.min(255, this.flash * 3)
         // The layers over the first are on its parts, so its colors reach them all.
         body.setColorOverride(this.tint ?? Color.WHITE)
-        body.setExtraAdditiveDraw(flash > 0, new Color(gray, gray, gray, 255))
+        body.setExtraAdditiveDraw(this.flash > 0, new Color(gray, gray, gray, 255))
     }
 
     /** The color the presentation draws the plant in (the explode-o-nut's red). */
@@ -314,32 +314,71 @@ export class PlantView {
         return tint ? new Color(...tint) : undefined
     }
 
-    /** Nothing of its own to keep: the server's snapshot has what it shows. */
-    snapshot(entityId: number): PlantViewSnapshot { return { kind: 'plant', entityId, animations: {} } }
+    /** Its flash, which goes on across a save; the server's snapshot has the rest of what it shows. */
+    snapshot(entityId: number): PlantViewSnapshot {
+        const flash = this.context.stage?.flashes.snapshot(entityId)
+        return { kind: 'plant', entityId, ...(flash ? { flash } : {}) }
+    }
 
-    restore(_snapshot: PlantViewSnapshot): void | Promise<void> {}
+    restore(snapshot: PlantViewSnapshot): void | Promise<void> {
+        this.context.stage?.flashes.restore(snapshot.entityId, snapshot.flash)
+    }
 
-    /** What the view made outside its node goes with it. */
-    destroy?(): void
+    destroy(): void {}
+
+    /** A plant put down: what its presentation sounds besides the board's planting (Board::DoPlantingEffects). */
+    static readonly planted: StageEvent = (stage, event) => {
+        SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.plantedSounds)
+    }
 
     /** Plant::Fire: the plant starts what follows its shot. */
     static readonly fired: StageEvent = (stage, event) => {
         if (typeof event.data.plantId === 'number') stage.plant(event.data.plantId)?.fire()
     }
 
-    /** Plant::UpdatePotato adds PARTICLE_POTATO_MINE_RISE at the mine's own draw order, so it draws after it. */
+    /** Plant::Fire for the Fume-shroom plays the fume, and DoRowAreaDamage a splat for the zombies it hits. */
+    static readonly areaAttack: StageEvent = (stage, event) => {
+        SoundSystem.playSounds(stage.content.presentation.plants[String(event.data.typeId)]?.fireSounds)
+        if (Number(event.data.hits) > 0) void SoundSystem.playFoley(SoundEffect.Splat)
+    }
+
+    /** Plant::UpdatePotato adds PARTICLE_POTATO_MINE_RISE at the mine's own draw order, so it draws after it, with the dirt's sound. */
     static readonly rose: StageEvent = (stage, event, world) => {
+        void SoundSystem.playFoley(SoundEffect.DirtRise)
         const plant = world.plants.find(candidate => candidate.entityId === event.data.entityId)
         if (plant) stage.particle('pvz:potatominerise', plant.x + 40, plant.y + 40, stage.plantOrder(plant))
     }
 
-    /** Plant::DoSpecial: the explosion of the plant's presentation, where it went off. The plant is gone by then. */
+    /** Plant::DoSpecial: the explosion of the plant's presentation, where it went off, with its sounds. The plant is gone by then. */
     static readonly exploded: StageEvent = (stage, event) => {
-        const { x, y, row } = event.data
-        if (typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
-        const explosion = typeof event.data.typeId === 'string' ? stage.content.presentation.plants[event.data.typeId]?.explosion : undefined
-        if (!explosion) return
+        const presentation = typeof event.data.typeId === 'string' ? stage.content.presentation.plants[event.data.typeId] : undefined
+        SoundSystem.playSounds(presentation?.explosionSounds)
+        const { x, y, row } = event.data, explosion = presentation?.explosion
+        if (!explosion || typeof x !== 'number' || typeof y !== 'number' || typeof row !== 'number') return
         // The server mirrors the blast's center for a plant facing left; the effect's own offset mirrors with it.
         stage.particle(explosion.effect, x + (event.data.team === 'zombies' ? -explosion.x : explosion.x), y, renderOrder(explosion.layer, row))
+    }
+
+    /** A sun-shroom grows (FOLEY_PLANTGROW). */
+    static readonly grew: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.PlantGrow) }
+
+    /** Plant::UpdateProductionPlant throws its sun (FOLEY_SPAWN_SUN). */
+    static readonly produced: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Throw, 10) }
+
+    /** Chilled by a hostile snow pea, as a zombie's first chill sounds (FOLEY_FROZEN). */
+    static readonly chilled: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Frozen) }
+
+    /** Crushed by a mower, as a zombie is (FOLEY_SPLAT). */
+    static readonly mowered: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Splat) }
+
+    /**
+     * Plant::UpdateBowling: a rolling nut hits a zombie. Zombie::TakeShieldDamage rings a screen door; UpdateBowling a
+     * helm without a shield. The board shakes with it (LevelView).
+     */
+    static readonly bowled: StageEvent = (stage, event) => {
+        void SoundSystem.playFoley(SoundEffect.BowlingImpact, -3)
+        const zombie = stage.content.presentation.zombies[String(event.data.typeId)]
+        if (event.data.shield) SoundSystem.playSounds(zombie?.shield?.bowlingImpactSounds)
+        else if (event.data.helm) SoundSystem.playSounds(zombie?.helm?.bowlingImpactSounds)
     }
 }

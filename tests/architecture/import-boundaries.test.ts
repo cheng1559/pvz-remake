@@ -7,15 +7,21 @@ const root = join(process.cwd(), 'assets', 'scripts')
 
 test('runtime imports preserve client-server architecture boundaries', () => {
     const violations: string[] = []
-    // GameClock is the shared presentation clock used by GameApp, not a legacy runtime.
-    check('app', /(?:@\/|(?:\.\.\/)+)(?:core(?!\/GameClock['"])|ui|game)(?:\/|['"])/, 'app -> legacy runtime', violations)
-    check('client', /(?:@\/(?:server|ui|game)|(?:\.\.\/)+(?:server|ui|game))(?:\/|['"])/, 'client -> server/legacy ui/game', violations)
-    check('core', /(?:@\/(?:ui|game)|(?:\.\.\/)+(?:ui|game))(?:\/|['"])/, 'core -> legacy ui/game', violations)
-    check('server', /(?:(?:@\/(?:client|platform|core|ui|game)|(?:\.\.\/)+(?:client|platform|core|ui|game))(?:\/|['"])|from ['"]cc(?:\/|['"]))/, 'server -> client/platform/runtime/cc', violations)
-    check('shared', /(?:(?:@\/(?:client|server|platform)|(?:\.\.\/)+(?:client|server|platform))(?:\/|['"])|from ['"]cc(?:\/|['"]))/, 'shared -> client/server/platform/cc', violations)
-    check('ecs', /(?:(?:@\/(?:shared|server|client|platform)|(?:\.\.\/)+(?:shared|server|client|platform))(?:\/|['"])|from ['"]cc(?:\/|['"]))/, 'ecs -> shared/server/client/platform/cc', violations)
+    // The client talks to the server through the protocol only; the clock and tweens (core) stand on the engine alone.
+    check('client', imports(['server']), 'client -> server', violations)
+    check('core', imports(['app', 'client', 'server', 'platform']), 'core -> app/client/server/platform', violations)
+    // The server, what it shares with the client and the ECS run without the engine (headless tests, Node hosts).
+    check('server', imports(['app', 'client', 'platform', 'core'], true), 'server -> app/client/platform/core/cc', violations)
+    check('shared', imports(['app', 'client', 'server', 'platform', 'core'], true), 'shared -> app/client/server/platform/core/cc', violations)
+    check('ecs', imports(['app', 'shared', 'server', 'client', 'platform', 'core'], true), 'ecs -> app/shared/server/client/platform/core/cc', violations)
     assert.deepEqual(violations, [])
 })
+
+/** An import of one of `directories` (by the `@/` alias or a relative path), or of the engine. */
+function imports(directories: string[], engine = false): RegExp {
+    const names = directories.join('|')
+    return new RegExp(`(?:@\\/(?:${names})|(?:\\.\\.\\/)+(?:${names}))(?:\\/|['"])${engine ? `|from ['"]cc(?:\\/|['"])` : ''}`)
+}
 
 function check(directory: string, forbidden: RegExp, label: string, violations: string[]): void {
     for (const file of sourceFiles(join(root, directory))) {

@@ -1,6 +1,6 @@
 import { modResources } from '@/client/content/ModResources'
 import { AudioClip, AudioSource, director, JsonAsset, Node, sys } from 'cc'
-import { MUSIC_TUNE_IDS, musicResourceId, parseMusic, type Music, type MusicStemName } from '@/shared/content/music'
+import { musicResourceId, parseMusic, type Music, type MusicStemName } from '@/shared/content/music'
 import { SoundSystem } from '@/client/sound/SoundSystem'
 import {
     parseMusicPlaybackSnapshot,
@@ -74,10 +74,6 @@ export class MusicSystem {
     private static _node: Node | null = null
     private static _sources: Partial<Record<MusicStemName, AudioSource>> = {}
     private static _nativeAudioIds: Partial<Record<MusicStemName, number>> = {}
-    private static _overlaySources: Partial<Record<MusicStemName, AudioSource>> = {}
-    private static _overlayNativeAudioIds: Partial<Record<MusicStemName, number>> = {}
-    private static _overlayActiveStemNames: MusicStemName[] = []
-    private static _overlayPlayToken = 0
     /** Each tune is its own music resource, so a Mod replaces a tune by ID like any other asset. */
     private static _tunes: Map<MusicTuneId, Promise<Music | null>> = new Map()
     private static _clipLoading: Map<string, Promise<AudioClip | null>> = new Map()
@@ -171,10 +167,6 @@ export class MusicSystem {
         await Promise.all(this._activeStems(tune).map((stem) => this._loadClip(tune.stems[stem]!)))
     }
 
-    static async preloadAllTunes() {
-        await Promise.all(MUSIC_TUNE_IDS.map((tuneId) => this.preloadTune(tuneId)))
-    }
-
     static capturePlaybackSnapshot(): MusicPlaybackSnapshot | null {
         if (!this._playing || !this._currentTuneId || !this._currentTune) return null
 
@@ -245,55 +237,6 @@ export class MusicSystem {
         this._resumeSourcesAfterSeek()
     }
 
-    static async playOverlayTune(tuneId: MusicTuneId) {
-        this.stopOverlayTune()
-        const token = ++this._overlayPlayToken
-        const tune = await this._loadTune(tuneId)
-        if (token !== this._overlayPlayToken) return
-        if (!tune) {
-            console.warn(`[MusicSystem] Missing overlay music tune: ${tuneId}`)
-            return
-        }
-
-        const activeStems = this._activeStems(tune)
-        const clips = await Promise.all(activeStems.map((stem) => this._loadClip(tune.stems[stem]!)))
-        if (token !== this._overlayPlayToken) return
-        if (clips.some((clip) => !clip)) {
-            console.warn(`[MusicSystem] Missing overlay music clips for tune: ${tuneId}`)
-            return
-        }
-
-        this._overlayActiveStemNames = activeStems
-        this._unsubscribeMusicVolume ??= SoundSystem.onMusicVolumeChange(() => this._applyVolumes())
-        for (let i = 0; i < activeStems.length; i++) {
-            const stem = activeStems[i]
-            if (this._playNativeOverlayStem(stem, clips[i]!, tune)) continue
-
-            const source = this._getOverlaySource(stem)
-            source.stop()
-            source.clip = clips[i]
-            source.loop = this._loopsWholeFile(tune)
-            source.volume = this._overlayStemVolume(stem)
-            source.play()
-        }
-    }
-
-    static stopOverlayTune() {
-        this._overlayPlayToken++
-        for (const source of Object.values(this._overlaySources)) {
-            if (!source) continue
-            source.stop()
-            source.node.destroy()
-        }
-        this._overlaySources = {}
-        this._stopNativeOverlayStems()
-        this._overlayActiveStemNames = []
-        if (!this._playing) {
-            this._unsubscribeMusicVolume?.()
-            this._unsubscribeMusicVolume = null
-        }
-    }
-
     static stop() {
         this._playToken++
         for (const source of Object.values(this._sources)) {
@@ -315,7 +258,8 @@ export class MusicSystem {
         this._fadeOutCounter = 0
         this._fadeOutDuration = 0
         this._resetBurstState()
-        this.stopOverlayTune()
+        this._unsubscribeMusicVolume?.()
+        this._unsubscribeMusicVolume = null
     }
 
     static fadeOut(durationTicks: number) {
@@ -414,18 +358,6 @@ export class MusicSystem {
         node.addChild(stemNode)
         const source = stemNode.addComponent(AudioSource)
         this._sources[stem] = source
-        return source
-    }
-
-    private static _getOverlaySource(stem: MusicStemName) {
-        const cached = this._overlaySources[stem]
-        if (cached?.isValid) return cached
-
-        const node = this._getNode()
-        const stemNode = new Node(`MusicOverlay_${stem}`)
-        node.addChild(stemNode)
-        const source = stemNode.addComponent(AudioSource)
-        this._overlaySources[stem] = source
         return source
     }
 
@@ -753,12 +685,6 @@ export class MusicSystem {
             if (!source) continue
             source.volume = volume
         }
-        for (const stem of this._overlayActiveStemNames) {
-            const volume = this._overlayStemVolume(stem)
-            const audioId = this._overlayNativeAudioIds[stem]
-            if (audioId !== undefined) this._nativePlayer()?.setVolume(audioId, volume)
-            else if (this._overlaySources[stem]) this._overlaySources[stem]!.volume = volume
-        }
     }
 
     private static _resetBurstState() {
@@ -788,19 +714,6 @@ export class MusicSystem {
         return true
     }
 
-    private static _playNativeOverlayStem(stem: MusicStemName, clip: AudioClip, tune: MusicTuneManifest) {
-        const player = this._nativePlayer()
-        if (!player) return false
-
-        const url = clip.nativeUrl
-        if (!url) return false
-        const audioId = player.play(url, this._loopsWholeFile(tune), this._overlayStemVolume(stem))
-        if (typeof audioId !== 'number' || audioId < 0) return false
-
-        this._overlayNativeAudioIds[stem] = audioId
-        return true
-    }
-
     private static _stopNativeStems() {
         const player = this._nativePlayer()
         for (const audioId of Object.values(this._nativeAudioIds)) {
@@ -812,24 +725,10 @@ export class MusicSystem {
         this._nativeAudioIds = {}
     }
 
-    private static _stopNativeOverlayStems() {
-        const player = this._nativePlayer()
-        for (const audioId of Object.values(this._overlayNativeAudioIds)) {
-            if (audioId === undefined) continue
-            player?.pause(audioId)
-            player?.stop(audioId)
-        }
-        this._overlayNativeAudioIds = {}
-    }
-
     private static _stemVolume(stem: MusicStemName) {
         if (stem === 'main') return clamp01(this._mainVolume)
         if (stem === 'drums') return clamp01(this._drumsVolume)
         return clamp01(this._hihatsVolume)
-    }
-
-    private static _overlayStemVolume(stem: MusicStemName) {
-        return stem === 'main' ? SoundSystem.getMusicVolume() : 0
     }
 
     private static _nativePlayer(): MusicNativePlayer | null {

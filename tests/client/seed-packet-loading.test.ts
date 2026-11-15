@@ -2,8 +2,7 @@ import { presentationFixture } from './presentationFixture'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import * as plantVisuals from '@/client/plants/definitions'
 import { buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
@@ -30,13 +29,8 @@ function setup() {
         '@/client/view/uiNode': { uiNode: () => ({ node: new Node() }) },
     }
     const load = (name: string) => {
-        const module = { exports: {} as Record<string, any> }
         const path = name.includes('/') ? name : `hud/${name}`
-        const code = transpileModule(readFileSync(`assets/scripts/client/${path}.ts`, 'utf8'), {
-            compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-        })
-        runInNewContext(code.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {} })
-        return module.exports
+        return loadScript(`assets/scripts/client/${path}.ts`, (id: string) => modules[id] ?? {})
     }
     modules['./PlantPreview'] = load('PlantPreview')
     const renderer = load('SeedPacketRenderer').SeedPacketRenderer

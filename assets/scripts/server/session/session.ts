@@ -5,7 +5,7 @@ import type { EnabledMod, GameCommand, StartSessionPacket } from '@/shared/proto
 import { DeterministicRng } from '../state/DeterministicRng'
 import type { GameplayRegistry } from '../registry/GameplayRegistry'
 import { processCommandPhase } from './commands'
-import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, PositionComponent, RandomResource, SeedBankResource } from '../state/components'
+import { EconomyStateResource, LevelStateResource, PacketUpgradeOfferResource, RandomResource, SeedBankResource } from '../state/components'
 import { createConveyorSystem } from '../level/conveyor'
 import { EventQueueResource, createEventQueue } from '../state/events'
 import { createItemSystem } from '../level/items'
@@ -19,7 +19,7 @@ import { createPlantAbilitySystem } from '../plants/abilities'
 import { createPlantChillSystem } from '../plants/chill'
 import { createPlantAnimationSystem } from '../plants/animation'
 import { createProductionSystem } from '../plants/production'
-import { createPeashooterSystem } from '../plants/shooter'
+import { createPlantAttackSystem } from '../plants/shooter'
 import { createProjectileSystem } from '../combat/projectiles'
 import { ProjectileMotionsResource } from '../combat/motions'
 import { createWaveSystem } from '../level/waves'
@@ -28,6 +28,7 @@ import { createZombieGroanSystem } from '../zombies/groans'
 import { ZombieBehaviorsResource } from '../zombies/behaviors'
 import { AchievementsResource, observeAchievements } from '../achievements/achievements'
 import { createZombieSystem } from '../zombies/system'
+import { openingCooldown } from '../seeds/seedBank'
 
 export type CommandRejectionCode =
     | 'game-not-playing'
@@ -115,7 +116,7 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         { phase: 'spawn', system: createWaveSystem(definitions) },
         ...rule?.systems?.(definitions) ?? [],
         { phase: 'plant', system: createPlantChillSystem() },
-        { phase: 'plant', system: createPeashooterSystem(definitions) },
+        { phase: 'plant', system: createPlantAttackSystem(definitions) },
         { phase: 'plant', system: createProductionSystem(definitions) },
         { phase: 'plant', system: createPlantAbilitySystem(definitions) },
         { phase: 'plant', system: createConveyorSystem() },
@@ -126,7 +127,7 @@ export function createSession(content: ServerContent, world: World, clock: { tic
         { phase: 'zombie', system: gameplay.zombieBehaviors.system(definitions) },
         { phase: 'projectile', system: createProjectileSystem(definitions) },
         { phase: 'mower', system: createMowerSystem(definitions) },
-        { phase: 'cleanup', system: createItemSystem(definitions) },
+        { phase: 'item', system: createItemSystem(definitions) },
     ]
     for (const { phase, system } of systems) session.schedule.add(phase as Parameters<Schedule['add']>[0], system)
     return session
@@ -161,9 +162,8 @@ export function startSession(content: ServerContent, packet: StartSessionPacket)
     const bank = seedBankStart(definitions, level, chooserOffer(definitions, packet.ownedSeeds, packet.cheatSeeds === true), packet.packetUpgrades)
     world.resources.set(SeedBankResource, {
         selection: { mode: 'none' },
-        // SeedPacket::SetPacketType returns before the opening recharge on some levels.
         packets: 'seeds' in bank ? bank.seeds.map(({ seedId, team }) => {
-            const cooldown = level.openingRecharge === false ? 0 : definitions.seeds[seedId].initialCooldownTicks ?? 0
+            const cooldown = openingCooldown(world, definitions, seedId)
             return { seedId, readyAtTick: cooldown, cooldownTotal: cooldown, ...(team ? { team } : {}) }
         }) : [],
         ...('chooser' in bank ? { choosing: true } : {}),

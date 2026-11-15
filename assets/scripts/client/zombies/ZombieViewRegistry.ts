@@ -1,20 +1,14 @@
 import { EntityViewRegistry } from '@/client/content/EntityViewRegistry'
-import { ZombieView, type ZombieViewContext, type ZombieViewInstance } from './ZombieView'
+import { ZombieView, type ZombieViewContext } from './ZombieView'
 import { zombieDefinition } from './definitions'
 
-export type ZombieViewFactory = (context: ZombieViewContext) => ZombieViewInstance | Promise<ZombieViewInstance>
-
-export class ZombieViewRegistry extends EntityViewRegistry<ZombieViewContext, ZombieViewInstance> {
+/** The views of zombies, by the `view` of their presentation: `zombie` when it names none. A Mod's extends ZombieView. */
+export class ZombieViewRegistry extends EntityViewRegistry<ZombieViewContext, ZombieView> {
     constructor() {
         super(context => ({
-            kind: zombieDefinition(context.animations.definitions, context.zombie.typeId).view ?? 'zombie',
+            kind: zombieDefinition(context.content.presentation, context.zombie.typeId).view ?? 'zombie',
             typeId: context.zombie.typeId,
         }))
-        this.register('zombie', context => new ZombieView(
-            context.node, context.content.registry, context.content.loader, context.animations, context.shadowParent,
-            context.assets.shadow, context.assets.sprites, zombieDefinition(context.animations.definitions, context.zombie.typeId),
-            context.zombie.typeId, context.content.definitions.zombies[context.zombie.typeId],
-            context.attachments, context.draw,
-        ).prepare())
+        this.registerView('zombie', ZombieView)
     }
 }

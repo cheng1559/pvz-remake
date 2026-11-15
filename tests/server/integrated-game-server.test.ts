@@ -15,6 +15,7 @@ import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { ItemComponent,TutorialResource } from '@/server/state/levelState'
 import { damageZombie } from '@/server/zombies/damage'
+import { getAvailableSun } from '@/server/level/items'
 import { startMower } from '@/server/level/mower'
 import { spawnZombie } from '@/server/zombies/spawn'
 import {
@@ -149,7 +150,6 @@ test('selecting and placing Peashooter changes authority state atomically', () =
         column: 0,
         health: 300,
         maxHealth: 300,
-        recentlyEatenCounter: 0,
         x: 40,
         y: 280,
         row: 2,
@@ -310,6 +310,7 @@ test('collecting sun buys immediately but reaches the HUD only at the bank', () 
     }
     const server = new IntegratedGameServer(fiftySunDefinitions, levels)
     startGameplay(server)
+    const availableSun = () => getAvailableSun((server as unknown as { requireSession(): { world: World } }).requireSession().world, fiftySunDefinitions)
     runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' })
     runCommand(server, { type: 'placePlant', row: 2, column: 0 })
 
@@ -319,16 +320,16 @@ test('collecting sun buys immediately but reaches the HUD only at the bank', () 
     assert.equal(runCommand(server, { type: 'collectItemAt', itemId }), undefined)
     snapshot = server.snapshot()
     assert.equal(snapshot.sun, 50)
-    assert.equal(snapshot.availableSun, 100)
+    assert.equal(availableSun(), 100)
     assert.equal(runCommand(server, { type: 'selectSeed', seedId: 'pvz:peashooter' }), undefined)
     assert.equal(runCommand(server, { type: 'placePlant', row: 2, column: 1 }), undefined)
     snapshot = server.snapshot()
     assert.equal(snapshot.sun, 0)
-    assert.equal(snapshot.availableSun, 0)
+    assert.equal(availableSun(), 0)
 
     while (snapshot.items.some(item => item.entityId === itemId)) snapshot = server.tick()
     assert.equal(snapshot.sun, 0)
-    assert.equal(snapshot.availableSun, 0)
+    assert.equal(availableSun(), 0)
 })
 
 

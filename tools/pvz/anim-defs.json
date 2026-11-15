@@ -244,14 +244,12 @@
         "anim_idle",
         "anim_sleep",
         "anim_bigidle",
-        "anim_bigsleep",
         "anim_grow"
       ],
       "exports": {
         "anim_idle": "pvz:sunshroom",
         "anim_sleep": "pvz:sunshroom_sleep",
         "anim_bigidle": "pvz:sunshroom_big",
-        "anim_bigsleep": "pvz:sunshroom_bigsleep",
         "anim_grow": "pvz:sunshroom_grow"
       }
     },
@@ -1224,196 +1222,6 @@
       }
     }
   },
-  "zombie_football": {
-    "body": {
-      "animations": [
-        "anim_death",
-        "anim_eat",
-        "anim_walk",
-        "anim_idle"
-      ]
-    }
-  },
-  "zombie_disco": {
-    "body": {
-      "animations": [
-        "anim_moonwalk",
-        "anim_point",
-        "anim_walk",
-        "anim_armraise",
-        "anim_eat",
-        "anim_death"
-      ]
-    }
-  },
-  "zombie_backup": {
-    "body": {
-      "animations": [
-        "anim_walk",
-        "anim_armraise",
-        "anim_eat",
-        "anim_death"
-      ]
-    }
-  },
-  "zombie_snorkle": {
-    "body": {
-      "animations": [
-        "anim_aquarium_death",
-        "anim_aquarium_bite",
-        "anim_aquarium_swim",
-        "anim_death",
-        "anim_eat",
-        "anim_uptoeat",
-        "anim_swim",
-        "anim_jumpinpool",
-        "anim_walk",
-        "anim_idle"
-      ]
-    }
-  },
-  "zombie_zamboni": {
-    "body": {}
-  },
-  "zombie_bobsled": {
-    "body": {
-      "animations": [
-        "anim_idle",
-        "anim_walk",
-        "anim_push",
-        "anim_jump",
-        "anim_death",
-        "anim_eat"
-      ]
-    }
-  },
-  "zombie_dolphinrider": {
-    "body": {
-      "animations": [
-        "anim_idle",
-        "anim_walkdolphin",
-        "anim_walk",
-        "anim_jumpinpool",
-        "anim_ride",
-        "anim_dolphinjump",
-        "anim_eat",
-        "anim_swim",
-        "anim_death"
-      ]
-    }
-  },
-  "zombie_jackbox": {
-    "body": {
-      "animations": [
-        "anim_idle",
-        "anim_walk",
-        "anim_eat",
-        "anim_pop",
-        "anim_death"
-      ]
-    }
-  },
-  "zombie_balloon": {
-    "body": {
-      "animations": [
-        "anim_idle",
-        "anim_swing",
-        "anim_pop",
-        "anim_eat",
-        "anim_walk",
-        "anim_death"
-      ]
-    },
-    "propeller": {
-      "animations": [
-        "propeller"
-      ]
-    }
-  },
-  "zombie_digger": {
-    "body": {
-      "animations": [
-        "anim_idle",
-        "anim_walk",
-        "anim_eat",
-        "anim_death",
-        "anim_dig",
-        "anim_drill",
-        "anim_landing",
-        "anim_dizzy"
-      ]
-    }
-  },
-  "zombie_pogo": {
-    "body": {
-      "animations": [
-        "anim_pogo",
-        "anim_death",
-        "anim_walk",
-        "anim_idle",
-        "anim_eat"
-      ]
-    }
-  },
-  "zombie_yeti": {
-    "body": {
-      "animations": [
-        "anim_death",
-        "anim_eat",
-        "anim_walk",
-        "anim_idle"
-      ]
-    }
-  },
-  "zombie_bungi": {
-    "body": {
-      "animations": [
-        "anim_idle",
-        "anim_drop",
-        "anim_grab",
-        "anim_hold",
-        "anim_raise"
-      ]
-    }
-  },
-  "zombie_ladder": {
-    "body": {
-      "animations": [
-        "anim_idle",
-        "anim_ladderwalk",
-        "anim_laddereat",
-        "anim_death",
-        "anim_walk",
-        "anim_eat",
-        "anim_placeladder"
-      ]
-    }
-  },
-  "zombie_catapult": {
-    "body": {}
-  },
-  "zombie_gargantuar": {
-    "body": {
-      "animations": [
-        "anim_idle",
-        "anim_walk",
-        "anim_smash",
-        "anim_throw",
-        "anim_death"
-      ]
-    }
-  },
-  "zombie_imp": {
-    "body": {
-      "animations": [
-        "anim_land",
-        "anim_thrown",
-        "anim_walk",
-        "anim_eat",
-        "anim_death"
-      ]
-    }
-  },
   "treeofwisdom": {
     "tree": {
       "exports": {
@@ -1635,23 +1443,6 @@
       "exports": {
         "default": "pvz:sleeping"
       }
-    }
-  },
-  "zombie_boss": {
-    "body": {
-      "slots": [
-        "Boss_head2"
-      ],
-      "animations": [
-        "anim_head_idle"
-      ]
-    }
-  },
-  "zombie_boss_driver": {
-    "driver": {
-      "animations": [
-        "anim_idle"
-      ]
     }
   }
 }

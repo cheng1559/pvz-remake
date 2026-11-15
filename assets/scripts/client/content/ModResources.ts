@@ -24,7 +24,6 @@ interface LoadedPack {
     premultiplied: Set<string>
 }
 
-const fileKinds = ['fonts', 'audio', 'json', 'text'] as const
 type AssetType<T extends Asset> = new (...args: any[]) => T
 let nativeRuntimeReady = false
 let nativeRuntimeId = 0
@@ -277,10 +276,7 @@ export class ModResources {
     private async resolveAsset<T extends Asset>(id: string, type: AssetType<T>, animation?: string, baseOnly = false, category?: ContentCategory): Promise<T | undefined> {
         const assetType: AssetType<Asset> = type
         if (!id.includes(':')) {
-            if (assetType === AudioClip || assetType === SpriteFrame || assetType === Texture2D) {
-                id = id.replace(/\/(spriteFrame|texture)$/, '')
-                id = id.slice(id.lastIndexOf('/') + 1)
-            }
+            if (assetType === AudioClip || assetType === SpriteFrame || assetType === Texture2D) id = id.slice(id.lastIndexOf('/') + 1)
             id = `pvz:${id}`
         }
         if (assetType === SpriteFrame) {

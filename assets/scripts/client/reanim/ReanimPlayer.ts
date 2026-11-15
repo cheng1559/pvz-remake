@@ -217,7 +217,6 @@ export class ReanimPlayer extends Component {
     private blendDuration = 0
     private blendElapsed = 0
     private readonly frameOverrides = new Map<string, SpriteFrame>()
-    private readonly trackColors = new Map<string, Color>()
     private attachment: TrackAttachment | null = null
     /** Players attached to this one's tracks; stale entries are skipped and pruned. */
     private readonly trackAttachments = new Set<ReanimPlayer>()
@@ -351,7 +350,6 @@ export class ReanimPlayer extends Component {
         if (assets.data !== previous) {
             const views = new Map(this.views)
             this.views.clear()
-            this.trackColors.clear()
             this.frameOverrides.clear()
             this.data = assets.data
             this.frames.clear()
@@ -468,10 +466,6 @@ export class ReanimPlayer extends Component {
         return [...this.views.keys()]
     }
 
-    isTrackVisible(trackId: string): boolean {
-        return this.views.get(trackId)?.visible === true
-    }
-
     /** Exact track IDs; ones this clip lacks are skipped. */
     setTracksVisible(trackIds: readonly string[], visible: boolean): void {
         let changed = false
@@ -488,14 +482,6 @@ export class ReanimPlayer extends Component {
         // Keep the override on this animation's page so the player still draws in one batch.
         if (frame) this.frameOverrides.set(trackId, animationFrame(frame, this.frames.values().next().value))
         else this.frameOverrides.delete(trackId)
-        this.drawingStale = true
-        this.applyPose(trackId)
-    }
-
-    setTrackColorOverride(trackId: string, color: Color | null): void {
-        if (!this.views.has(trackId)) throw new Error(`unknown reanim track: ${trackId}`)
-        if (color) this.trackColors.set(trackId, color.clone())
-        else this.trackColors.delete(trackId)
         this.drawingStale = true
         this.applyPose(trackId)
     }
@@ -766,7 +752,7 @@ export class ReanimPlayer extends Component {
         state[Header.RED] = color.r; state[Header.GREEN] = color.g; state[Header.BLUE] = color.b; state[Header.ALPHA] = color.a
         state[Header.EXTRA] = this.drawExtraAdditive ? 1 : 0
         state[Header.EXTRA_RED] = extra.r; state[Header.EXTRA_GREEN] = extra.g; state[Header.EXTRA_BLUE] = extra.b; state[Header.EXTRA_ALPHA] = extra.a
-        state[Header.TINTED] = this.trackColors.size > 0 || color.r !== 255 || color.g !== 255 || color.b !== 255 ? 1 : 0
+        state[Header.TINTED] = color.r !== 255 || color.g !== 255 || color.b !== 255 ? 1 : 0
         state[Header.BLENDING] = this.blendDuration > 0 ? 1 : 0
         state[Header.RATIO] = this.blendDuration > 0 ? Math.min(1, this.blendElapsed / this.blendDuration) : 0
         state[Header.MATRIX_A] = matrix.a; state[Header.MATRIX_B] = matrix.b; state[Header.MATRIX_C] = matrix.c
@@ -855,8 +841,8 @@ export class ReanimPlayer extends Component {
         const blends = Header.SIZE + views.length * 4, imageStart = blends + views.length * BLEND
         const state = drawing.f64(imageStart + images.length * IMAGE)
         views.forEach(([id], index) => {
-            const color = this.trackColors.get(id) ?? Color.WHITE
-            state.set([color.r, color.g, color.b, color.a], Header.SIZE + index * 4)
+            // A track has no color of its own: the kernel's per-track color stays white.
+            state.set([255, 255, 255, 255], Header.SIZE + index * 4)
             const from = this.blendDuration > 0 ? this.blendFromPoses.get(id) : undefined
             if (from) state.set([1, from.x, from.y, from.scaleX, from.scaleY, from.skewX, from.skewY, from.alpha], blends + index * BLEND)
         })
@@ -906,13 +892,7 @@ export class ReanimPlayer extends Component {
         node.setScale(pose.scaleX, scaleY, 1)
         sprite.spriteFrame = frame
         if (this.supersampled && sprite.customMaterial !== pictureMaterial()) sprite.customMaterial = pictureMaterial()
-        const trackColor = this.trackColors.get(trackId) ?? Color.WHITE
-        setSpriteColor(sprite,
-            Math.round(color.r * trackColor.r / 255),
-            Math.round(color.g * trackColor.g / 255),
-            Math.round(color.b * trackColor.b / 255),
-            Math.round(pose.alpha * color.a * trackColor.a / 255),
-        )
+        setSpriteColor(sprite, color.r, color.g, color.b, Math.round(pose.alpha * color.a))
         sprite.enabled = true
         if (extraAdditive) {
             if (!view.additive) {
@@ -966,7 +946,6 @@ export class ReanimPlayer extends Component {
     }
 
     private clearViews(): void {
-        this.trackColors.clear()
         this.followers.clear()
         for (const view of this.views.values()) if (isValid(view.node, true)) view.node!.destroy()
         this.views.clear()

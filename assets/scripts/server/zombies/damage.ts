@@ -115,7 +115,8 @@ export function destroyZombie(world: World, definitions: GameplayDefinitions, en
     remover.destroyEntity(entity)
 }
 
-export function mowZombie(world: World, definitions: GameplayDefinitions, zombie: Zombie): void {
+/** Zombie::MowDown: flattened where it stands, it plays its mowered clip and is gone after MOWERED_TICKS. */
+export function flattenZombie(world: World, definitions: GameplayDefinitions, zombie: Zombie): void {
     if (zombie.state === 'dying' || zombie.state === 'mowered') return
     zombie.health = 0
     zombie.state = 'mowered'
@@ -155,8 +156,8 @@ function canDoSuperLongDeath(world: World): boolean {
     return !world.resources.get(TutorialResource).firstAdventure || world.resources.get(LevelStateResource).definition.adventureIndex > 5
 }
 
-/** Board::CountZombiesOnScreen: the zombies' side with their heads, not dying, other than `except`. */
-function countZombiesOnScreen(world: World, except: number): number {
+/** Board::CountZombiesOnScreen: the zombies' side (not mind-controlled) with their heads, not dying, other than `except`. */
+export function countZombiesOnScreen(world: World, except?: number): number {
     let count = 0
     for (const entity of world.query(ZombieComponent)) {
         const zombie = world.get(entity, ZombieComponent)!

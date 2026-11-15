@@ -1,4 +1,6 @@
 import { Sprite } from 'cc'
+import type { StageEvent } from '@/client/level/LevelStage'
+import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import { uiNode } from '@/client/view/uiNode'
 import { ProjectileView } from './ProjectileView'
 
@@ -14,13 +16,15 @@ const WAITING = { x: -4, y: -19 }
  * original has its cached frame, on the board's plant shadow.
  */
 export class MowerView extends ProjectileView {
-    async initialize(): Promise<void> {
-        if (this.context.projectile) return super.initialize()
+    async show(): Promise<void> {
         const { node, stage } = this.context, shadow = this.presentation.plantShadow
         if (shadow) {
             uiNode({ name: 'MowerShadow', parent: node, position: { x: shadow.x, y: -shadow.y, z: -1 },
-                sprite: { frame: stage.assets.mowerShadow, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+                sprite: { frame: stage.assets.shadow, sizeMode: Sprite.SizeMode.RAW, trim: false } })
         }
         (await this.animate(WAITING))?.pause()
     }
+
+    /** LawnMower::StartMower. */
+    static readonly activated: StageEvent = () => { void SoundSystem.playFoley(SoundEffect.Lawnmower) }
 }

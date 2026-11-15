@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import argparse
 import math
 import struct
 import zlib
@@ -349,38 +348,3 @@ def convert_directory(src_dir: Path, out_dir: Path) -> int:
         print(f"[particle-decompile] Wrote: {dst}")
         count += 1
     return count
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Decompile PvZ particle .xml.compiled cache files to XML text."
-    )
-    parser.add_argument(
-        "inputs",
-        nargs="*",
-        type=Path,
-        default=[Path("tools/raw/compiled/particles")],
-        help="Input .xml.compiled file or directory. Defaults to tools/raw/compiled/particles.",
-    )
-    parser.add_argument(
-        "-o",
-        "--out-dir",
-        type=Path,
-        default=Path("tools/raw/particles"),
-        help="Output directory. Defaults to tools/raw/particles.",
-    )
-    args = parser.parse_args()
-
-    count = 0
-    for item in args.inputs:
-        if item.is_dir():
-            count += convert_directory(item, args.out_dir)
-        else:
-            dst = convert_file(item, args.out_dir)
-            print(f"[particle-decompile] Wrote: {dst}")
-            count += 1
-    print(f"[particle-decompile] Decompile complete: {count} files")
-
-
-if __name__ == "__main__":
-    main()

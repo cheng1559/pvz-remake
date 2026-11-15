@@ -7,9 +7,8 @@ import { getAvailableSun } from './items'
 import { getActiveTutorial, TUTORIALS } from '../tutorials'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import { planWaves, type LevelRuleRegistry } from '../rules/registry'
-import { selectedSeedId } from '../seeds/seedBank'
+import { seedSunCost } from '../seeds/seedBank'
 import { createGraves } from './graves'
-import { getDebugRules } from '../debug/debugRules'
 
 export function initializeLevel(world: World, firstAdventure: boolean, definitions: GameplayDefinitions, rules: LevelRuleRegistry): void {
     const level = world.resources.get(LevelStateResource).definition
@@ -53,18 +52,16 @@ export function createLevelProgressSystem(definitions: GameplayDefinitions): Gam
             // SeedPacket::FlashIfReady: on the first gameplay update and when a usable packet finishes recharging.
             // Debug commands that clear a recharge do not count as finishing it.
             const bank = world.resources.get(SeedBankResource)
-            // `/suncost false` makes every packet affordable, as the planting check already does.
-            const sunCost = getDebugRules(world).sunCost
             for (const [slot, packet] of bank.packets.entries()) {
                 if (!packet) continue
                 const initialReady = tick === 1 && packet.readyAtTick <= tick
                 const cooldownFinished = packet.readyAtTick === tick
                 if (!initialReady && !cooldownFinished || bank.selection.mode === 'seed' && bank.selection.slot === slot ||
-                    getAvailableSun(world, definitions) < (sunCost ? definitions.seeds[packet.seedId].sunCost : 0)) continue
+                    getAvailableSun(world, definitions) < seedSunCost(world, definitions, packet.seedId)) continue
                 emitServerEvent(world.resources.get(EventQueueResource), 'seedPacketFlashRequested', { seedId: packet.seedId, slot })
-                if (cooldownFinished) script?.seedReady?.(world, tick, packet.seedId)
+                if (cooldownFinished) script?.seedReady?.(world, definitions, tick, packet.seedId)
             }
-            script?.update?.(world, tick)
+            script?.update?.(world, definitions, tick)
         },
     }
 }

@@ -1,20 +1,13 @@
 import { createLocalMenuTransport } from '@/app/LocalMenuApi'
 import { MenuApi } from '@/client/api/MenuApi'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind,ScriptTarget,transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import { readGameplaySource } from '../../tools/mod/content'
 
 
 function load(path: string, modules: Record<string, unknown> = {}) {
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync(`assets/scripts/${path}.ts`, 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {}, console })
-    return module.exports
+    return loadScript(`assets/scripts/${path}.ts`, (id: string) => modules[id] ?? {}, { console })
 }
 
 function fixture() {

@@ -26,6 +26,7 @@ tools/
 | 从原版图标生成网页和原生应用图标 | `npm run build:icons -- --ico /path/to/game.ico` |
 | 字体、图片超分辨率 | `python3 -m tools.resources.upscale_fonts`、`python3 -m tools.resources.upscale_ui` |
 | iOS JS 性能采样 | `npx tsx tools/profile/ios.ts ...` |
+| 资源转换工具的测试 | `npm run test:tools` |
 
 Python 命令在项目根目录执行。`npm run build:content` 调用 `python3 -m tools.pvz`；转换实现集中在 `pvz/`：
 
@@ -46,8 +47,7 @@ pvz/
 ├── strings.py               # 原版文本
 ├── audio.py                 # 音效转换
 ├── music/                   # 音乐转换及 libopenmpt 绑定
-├── cache/                   # 种子包、图鉴和小推车图集
-└── almanac.py               # 图鉴部件配置
+└── cache/                   # 种子包和图鉴用的植物预览图集，及其高清版（hd.py）
 ```
 
 原版资源转换规则在 `tools/pvz/anim-defs.json`：
@@ -55,6 +55,7 @@ pvz/
 - 省略 `animations` 时自动读取 Reanim 的 `anim_*` 标记；显式列表用于选取部分片段。没有标记时使用完整的 `default` 动画。
 - `slots` 配置部件挂点；`hiddenTrackPrefixes` 过滤不需要的装备轨道。
 - `exports` 将原版片段映射到游戏使用的资源 ID；Python 中不再维护另一份导出列表。
+- 每个动画的轨道另存为 `assets/json/animations/<名称>.json`，只供 `cache/` 绘制植物预览，游戏不读取，因此不登记为资源。
 
 `local/` 保存不纳入 Git 的本地资源包生成器，源码已保留，需要各自的素材输入。
 

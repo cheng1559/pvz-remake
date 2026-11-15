@@ -1,17 +1,10 @@
-import hashlib
 import json
 import re
 from xml.etree import ElementTree
 from pathlib import Path
 from typing import Any
 
-from .images import (content_sprite_name,
-    get_alpha_companion_name,
-    get_output_name,
-    is_alpha_companion_name,
-    select_image_resources,
-    write_preprocessed_resource,
-)
+from .images import content_sprite_name
 
 
 QUALIFIED_ID = re.compile(r"^[a-z0-9][a-z0-9_-]*:[a-z0-9][a-z0-9_./-]*$")
@@ -47,10 +40,7 @@ def load_anim_xml(xml_dir: Path, anim_name: str) -> ElementTree.Element:
     return root
 
 
-def parse_track_data(
-    track_node: ElementTree.Element,
-    include_inactive: bool = False,
-) -> tuple[str, int, list[dict[str, Any]]]:
+def parse_track_data(track_node: ElementTree.Element) -> tuple[str, int, list[dict[str, Any]]]:
     name_node = track_node.find('name')
     if name_node is None or name_node.text is None:
         raise ValueError(
@@ -105,103 +95,8 @@ def parse_track_data(
 
         if is_active:
             frames.append(curr.copy())
-        elif include_inactive:
-            hidden = curr.copy()
-            hidden['image'] = None
-            frames.append(hidden)
 
     return name, duration, frames
-
-
-def build_reanim(
-    source: Path,
-    content_id: str,
-    available_sprites: set[str],
-    namespace: str = "pvz",
-) -> dict[str, Any]:
-    """Convert one Reanim file to the small, runtime-independent format."""
-    if not QUALIFIED_ID.fullmatch(content_id):
-        raise ValueError(f"invalid reanim id: {content_id}")
-
-    root = ElementTree.fromstring(f"<root>{source.read_text(encoding='utf-8')}</root>")
-    fps_text = root.findtext("fps", "12")
-    try:
-        fps = int(fps_text)
-    except ValueError as error:
-        raise ValueError(f"invalid fps: {fps_text}") from error
-    if fps <= 0:
-        raise ValueError("fps must be positive")
-
-    duration: int | None = None
-    tracks: list[dict[str, Any]] = []
-    track_ids: set[str] = set()
-    missing_sprites: set[str] = set()
-    for z_index, track_node in enumerate(root.findall("track")):
-        track_id, track_duration, frames = parse_track_data(track_node, include_inactive=True)
-        if track_id in track_ids:
-            raise ValueError(f"duplicate track id: {track_id}")
-        track_ids.add(track_id)
-        if duration is None:
-            duration = track_duration
-        elif duration != track_duration:
-            raise ValueError(
-                f"track '{track_id}' has duration {track_duration}, expected {duration}"
-            )
-
-        keyframes = []
-        for frame in frames:
-            if not 0 <= frame["alpha"] <= 1:
-                raise ValueError(f"track '{track_id}' alpha must be between 0 and 1")
-            sprite = f"{namespace}:{content_sprite_name(frame['image'])}" if frame["image"] else None
-            if sprite is not None and sprite not in available_sprites:
-                missing_sprites.add(sprite)
-            keyframes.append({
-                "timeSeconds": frame["frameIndex"] / fps,
-                "x": frame["x"],
-                "y": frame["y"],
-                "scaleX": frame["sx"],
-                "scaleY": frame["sy"],
-                "skewX": frame["kx"],
-                "skewY": frame["ky"],
-                "alpha": frame["alpha"],
-                "sprite": sprite,
-                "interpolation": "linear",
-            })
-        if keyframes:
-            tracks.append({"id": track_id, "zIndex": z_index, "keyframes": keyframes})
-
-    if duration is None:
-        raise ValueError("reanim has no tracks")
-    if duration == 0 or not tracks:
-        raise ValueError("reanim has no active frames")
-    if missing_sprites:
-        raise ValueError(f"missing sprite references: {', '.join(sorted(missing_sprites))}")
-    return {
-        "schemaVersion": 2,
-        "id": content_id,
-        "durationSeconds": duration / fps,
-        "tracks": tracks,
-    }
-
-
-def write_reanim(
-    source: Path,
-    output: Path,
-    content_id: str,
-    available_sprites: set[str],
-    namespace: str = "pvz",
-) -> str:
-    payload = json.dumps(
-        build_reanim(source, content_id, available_sprites, namespace),
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    payload += b"\n"
-    output.write_bytes(payload)
-    return hashlib.sha256(payload).hexdigest()
 
 
 def warn_missing_track(anim_name: str, node_name: str, track_name: str, usage: str) -> None:
@@ -428,7 +323,6 @@ def plant_display_nodes(seed_id: int, nodes: dict) -> list[dict]:
     return parts
 
 
-
 def build_reanim_clip(
     source: Path,
     anim_info: dict[str, Any],
@@ -496,25 +390,6 @@ def build_reanim_clip(
     }
 
 
-def write_reanim_clip(
-    source: Path,
-    output: Path,
-    anim_info: dict[str, Any],
-    node_id: str,
-    clip_id: str,
-    content_id: str,
-    available_sprites: set[str],
-    namespace: str = "pvz",
-) -> str:
-    data = build_reanim_clip(
-        source, anim_info, node_id, clip_id, content_id, available_sprites, namespace
-    )
-    payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode() + b"\n"
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_bytes(payload)
-    return hashlib.sha256(payload).hexdigest()
-
-
 def _legacy_frame(
     frame: dict[str, Any],
     frame_index: int,
@@ -534,60 +409,3 @@ def _legacy_frame(
         "sprite": sprite,
         "interpolation": "linear",
     }
-
-
-def save_anim_data(output_dir: Path, anim_name: str, anim_nodes: dict[str, Any]):
-    output_dir.mkdir(parents=True, exist_ok=True)
-    with open(output_dir / f"{anim_name}.json", 'w') as f:
-        json.dump(anim_nodes, f, separators=(',', ':'))
-    node_names = ', '.join(anim_nodes.keys())
-    print(f"[reanim]   Nodes: {node_names}")
-    print(f"[reanim] Wrote: {output_dir / f'{anim_name}.json'}")
-
-
-def copy_textures(xml_dir: Path, texture_dir: Path):
-    """Copy all image files from xml_dir to texture_dir."""
-    texture_dir.mkdir(parents=True, exist_ok=True)
-
-    resources = select_image_resources(xml_dir)
-    copied = 0
-    skipped = 0
-    for resource_name, src in sorted(resources.items()):
-        if is_alpha_companion_name(resource_name) and resource_name[:-1] in resources:
-            continue
-        alpha_src = resources.get(get_alpha_companion_name(resource_name))
-        dst_name = get_output_name(src, resource_name, force_png=alpha_src is not None)
-        dst = texture_dir / dst_name
-        if write_preprocessed_resource(src, dst, resource_name=resource_name, alpha_src=alpha_src):
-            print(f"[reanim] Wrote: {dst}")
-            copied += 1
-        else:
-            skipped += 1
-
-    print(f"[reanim] Textures: {copied} copied, {skipped} skipped")
-
-
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description='Convert extracted Reanim tracks into Mod assets.')
-    parser.add_argument('--src', type=Path, required=True)
-    parser.add_argument('--config', type=Path, help='Animation conversion JSON; defaults to the base Mod configuration')
-    args = parser.parse_args()
-    xml_dir = args.src
-    output_dir = Path('mods/pvz-base/assets/json/animations')
-    texture_dir = Path('mods/pvz-base/assets/images')
-
-    definitions = load_animation_config(args.config)
-
-    for anim_name, anim_info in definitions.items():
-        print(f"[reanim] Processing: {anim_name}")
-
-        anim_xml = load_anim_xml(xml_dir, anim_name)
-        anim_nodes = get_anim_nodes(anim_name, anim_info, anim_xml)
-        save_anim_data(output_dir, anim_name, anim_nodes)
-
-    copy_textures(xml_dir, texture_dir)
-
-
-if __name__ == "__main__":
-    main()

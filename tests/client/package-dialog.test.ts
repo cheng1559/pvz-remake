@@ -2,14 +2,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { setImmediate } from 'node:timers/promises'
-import { runInNewContext } from 'node:vm'
+import { loadScript } from '../loadScript'
 const strings: Record<string, string> = JSON.parse(readFileSync('mods/pvz-base/assets/json/strings.json', 'utf8'))
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
 
 test('Mod dialog keeps new imports and updates in its draft until Apply, including rejected restart confirmation', async () => {
-    const compiled = transpileModule(readFileSync('assets/scripts/client/dialogs/PackageDialog.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    }).outputText
     for (const id of ['new', 'existing']) for (const action of ['cancel', 'apply', 'rejectRestart']) {
         const confirmations: string[] = [], saves: any[] = [], discarded: any[] = [], steps: string[] = []
         let confirm = true, restarts = 0, importButton: any
@@ -62,13 +58,8 @@ test('Mod dialog keeps new imports and updates in its draft until Apply, includi
             '@/client/sound/SoundSystem': { SoundEffect: { ButtonClick: 'buttonclick' }, SoundSystem: { play: async () => {} } },
             '@/client/view/uiNode': { uiNode: (options: any) => ({ node: makeNode(options.parent), graphics }) },
         }
-        const restarting: any = {}
-        runInNewContext(transpileModule(readFileSync('assets/scripts/client/dialogs/RestartingDialog.ts', 'utf8'), {
-            compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-        }).outputText, { exports: restarting, require: (name: string) => modules[name] ?? {} })
-        modules['./RestartingDialog'] = restarting
-        const exports: any = {}
-        runInNewContext(compiled, { exports, require: (name: string) => modules[name] ?? {}, setTimeout })
+        modules['./RestartingDialog'] = loadScript('assets/scripts/client/dialogs/RestartingDialog.ts', (name: string) => modules[name] ?? {})
+        const exports = loadScript('assets/scripts/client/dialogs/PackageDialog.ts', (name: string) => modules[name] ?? {}, { setTimeout })
         await exports.showPackageDialog(makeNode(), ui, { import: async () => [imported],
             save: async () => { steps.push('save-game') }, restart: async () => { steps.push('restart'); restarts++ } })
         importButton.onClick()

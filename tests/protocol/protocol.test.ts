@@ -106,7 +106,7 @@ test('local channel preserves FIFO order and drains each direction', () => {
 test('world snapshot validates migrated authoritative entity DTOs', () => {
     const snapshot = {
         levelId: 'pvz:adventure-1-1', tick: 0, gameplayTick: 0, phase: 'gameplay', result: 'playing', paused: false,
-        sun: 50, availableSun: 50, money: 0,
+        sun: 50, money: 0,
         wave: { index: 0, total: 4, flagWaves: [], countdown: 0 },
         cursor: { mode: 'seed', seedId: 'pvz:peashooter' },
         seedPackets: [{
@@ -122,8 +122,7 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
             entityId: 3, typeId: 'pvz:normal', x: 700, y: 280, row: 2,
             state: 'walking', health: 270, maxHealth: 270,
             animations: { body: { clip: 'walk', time: 0, rate: 12 } },
-            moweredTicksRemaining: 0,
-            hasHead: true, hasTongue: false, hasArm: true,
+            alpha: 255, hasHead: true, hasTongue: false, hasArm: true, helmHealth: 0, shieldHealth: 0,
         }],
         projectiles: [{ entityId: 4, typeId: 'pvz:pea', x: 96, y: 290, row: 2 }],
         items: [{

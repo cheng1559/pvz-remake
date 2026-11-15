@@ -14,7 +14,7 @@ import {
     ZombieComponent,
 } from '../state/components'
 import { damageZombie, isTargetableZombie } from '../zombies/damage'
-import { isHostile, plantFacingRect, plantTeam, projectileTeam, type Team, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
+import { isHostile, plantFacingRect, plantTeam, projectileTeam, teamDirection, zombieFacingRect, zombieTeam } from '@/shared/content/teams'
 import { damagePlant } from '../plants/damage'
 import { type MotionAim, type MotionStep, type ProjectileMotionDefinition, ProjectileMotionsResource } from './motions'
 import { chewSpeedScale, mowPlant, mowZombie, mowsPlants, mowsZombie } from '../level/mower'

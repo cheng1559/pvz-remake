@@ -172,10 +172,8 @@
     "clips": {
       "idle": {"reanimId": "pvz:pole_vaulter_idle", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
       "walk": {"reanimId": "pvz:pole_vaulter_walk", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
-      "walk2": {"reanimId": "pvz:pole_vaulter_walk", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
       "eat": {"reanimId": "pvz:pole_vaulter_eat", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
       "death": {"reanimId": "pvz:pole_vaulter_death", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
-      "death2": {"reanimId": "pvz:pole_vaulter_death", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
       "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"},
       "run": {"reanimId": "pvz:pole_vaulter_run", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
       "jump": {"reanimId": "pvz:pole_vaulter_jump", "rateScale": 1, "fps": 12, "x": 9, "y": 19}
@@ -212,13 +210,11 @@
     "clips": {
       "idle": {"reanimId": "pvz:newspaper_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:newspaper_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "walk2": {"reanimId": "pvz:newspaper_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "eat": {"reanimId": "pvz:newspaper_eat", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "gasp": {"reanimId": "pvz:newspaper_gasp", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "enragedWalk": {"reanimId": "pvz:newspaper_walk_nopaper", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "enragedEat": {"reanimId": "pvz:newspaper_eat_nopaper", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "death": {"reanimId": "pvz:newspaper_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
-      "death2": {"reanimId": "pvz:newspaper_death", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "mowered": {"reanimId": "pvz:lawnmowered_zombie", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "locator"}
     },
     "drops": {

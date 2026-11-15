@@ -1,9 +1,7 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 
 test('viewport expands from 4:3 to 21:9, then letterboxes outside the range without extending input into the bars', () => {
     const crop = {}, letterbox = {}, originalPolicy = {}
@@ -32,14 +30,10 @@ test('viewport expands from 4:3 to 21:9, then letterboxes outside the range with
         height = 0
         getComponent() { return { setContentSize: (size: any) => Object.assign(this, size) } }
     }
-    const exports: any = {}
-    const code = transpileModule(readFileSync('assets/scripts/client/view/ClientViewport.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    runInNewContext(code.outputText, { exports,
-        jsb: { setWindowAspectRatio: (...args: number[]) => { constraints.push(args); return true } },
-        require: () => ({ Node, view, screen, sys, ResolutionPolicy: { NO_BORDER: crop, SHOW_ALL: letterbox } }),
-    })
+    const exports = loadScript('assets/scripts/client/view/ClientViewport.ts',
+        () => ({ Node, view, screen, sys, ResolutionPolicy: { NO_BORDER: crop, SHOW_ALL: letterbox } }), {
+            jsb: { setWindowAspectRatio: (...args: number[]) => { constraints.push(args); return true } },
+        })
     exports.constrainNativeWindow(4 / 3, 21 / 9)
     assert.equal(constraints.length, 0, 'web preview does not constrain its host window')
     sys.isNative = true
@@ -113,15 +107,11 @@ test('iOS web restages the viewport once the keyboard has shown or hidden, as a 
     const sys = { isNative: false, os: 'ios', OS: { OSX: 'mac', WINDOWS: 'windows', IOS: 'ios' } }
     Object.assign(view, { getDesignResolutionSize: () => ({ width: 800, height: 600 }) })
     view.on('canvas-resize', () => events.push('stage'))
-    const exports: any = {}
-    const code = transpileModule(readFileSync('assets/scripts/client/view/ClientViewport.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    runInNewContext(code.outputText, { exports, Event, visualViewport: visual,
-        setTimeout: (callback: () => void) => timers.push(callback), clearTimeout: () => { timers.length = 0 },
-        window: { scrollTo: (x: number, y: number) => events.push(`scroll ${x},${y}`), dispatchEvent: (event: Event) => events.push(event.type) },
-        require: () => ({ Node: class {}, view, screen: {}, sys, ResolutionPolicy: {} }),
-    })
+    const exports = loadScript('assets/scripts/client/view/ClientViewport.ts',
+        () => ({ Node: class {}, view, screen: {}, sys, ResolutionPolicy: {} }), { Event, visualViewport: visual,
+            setTimeout: (callback: () => void) => timers.push(callback), clearTimeout: () => { timers.length = 0 },
+            window: { scrollTo: (x: number, y: number) => events.push(`scroll ${x},${y}`), dispatchEvent: (event: Event) => events.push(event.type) },
+        })
     exports.initializeViewport()
     exports.initializeViewport()
     visual.dispatchEvent(new Event('resize'))

@@ -10,7 +10,6 @@ import {
     RandomResource,
 } from '../state/components'
 import { ItemComponent } from '../state/levelState'
-import { getDebugRules } from '../debug/debugRules'
 import { plantTeam } from '@/shared/content/teams'
 
 export function createProductionSystem(definitions: GameplayDefinitions): GameSystem {

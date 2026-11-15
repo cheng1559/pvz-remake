@@ -1,5 +1,5 @@
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import { type BoardDefinition, ZOMBIE_FLAG_LAYER } from '@/shared/content/gameplay'
+import { ZOMBIE_FLAG_LAYER } from '@/shared/content/gameplay'
 import type { AdventureIntroLayout, PresentationDefinitions } from '@/shared/content/presentation'
 import { Mask, Node, Sprite, Vec3 } from 'cc'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -10,12 +10,10 @@ import type {
     LevelIntroSnapshot,
     LevelParticleOwnerSnapshot,
 } from '../LevelPresentationSnapshot'
-import type { ContentRegistry } from '@/client/content/ContentRegistry'
 import { SpriteRepository } from '@/client/content/ClientContentLoader'
 import { ParticleAssets } from '@/client/particle/ParticleAssets'
 import type { LevelIntro } from '../LevelIntro'
 import type { LevelIntroContext } from '../LevelPresentation'
-import type { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import type { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { createOffBoardZombie, type OffBoardZombie } from '@/client/view/offBoard'
 import { UIButton } from '@/client/ui/UIButton'
@@ -73,7 +71,7 @@ export class AdventureIntro implements LevelIntro {
     private previewTooltipContext?: { ui: UI; gameplay: GameplayDefinitions; almanacZombies: readonly string[] }
 
     static async create(context: LevelIntroContext, layout: AdventureIntroLayout): Promise<AdventureIntro> {
-        const { content, level, slots, board, entityLayer, bank, houseName, audio, entityNodes, previewZombies } = context
+        const { content, level, slots, board, entityLayer, bank, houseName, audio, mowers, previewZombies } = context
         const sprites = new SpriteRepository(content.registry, content.loader)
         const [sod] = await Promise.all([sprites.load(layout.sod), ...(layout.rolls.length ? [ParticleAssets.load('pvz:sodroll')] : [])])
         const sodClip = uiNode({
@@ -152,8 +150,7 @@ export class AdventureIntro implements LevelIntro {
         introZombies.sort((left, right) => left.position.z - right.position.z)
             .forEach((node, index) => node.setSiblingIndex(index))
         const intro = new AdventureIntro(board, sodClip, sodRolls, layout, ready, introZombies, previewTypes, content.presentation, bank, houseName,
-            content.definitions.boards[level.board],
-            entityNodes, audio, content.registry, content.loader, content.animations)
+            mowers, audio, content.animations)
         intro.graveTicks = level.graves?.length ? GRAVE_STONE_TICKS : 0
         intro.hasOpeningDialog = context.hasOpeningDialog === true
         if (context.previewTooltipSurface) {
@@ -217,11 +214,8 @@ export class AdventureIntro implements LevelIntro {
         private readonly definitions: PresentationDefinitions,
         private readonly bank: Node,
         private readonly houseName: Node,
-        private readonly geometry: BoardDefinition,
-        private readonly entityNodes: () => Iterable<Node>,
+        private readonly mowers: () => ReadonlyMap<number, Node>,
         private readonly audio: LevelAudioPresenter,
-        private readonly registry: ContentRegistry,
-        private readonly loader: ClientContentLoader,
         private readonly animations: ClientAnimationRegistry,
     ) { if (layout.stationary) this.ticks = SEED_BANK_START }
 
@@ -355,9 +349,7 @@ export class AdventureIntro implements LevelIntro {
             easeInOut(bankStart, bankStart + SEED_BANK_DURATION, tick, bankHeight, 0),
         )
 
-        for (const node of this.entityNodes()) {
-            if (!node.getChildByName('CachedMower')) continue
-            const row = Math.round((HEIGHT / 2 - node.position.y - this.geometry.origin.y - 23) / this.geometry.cell.height)
+        for (const [row, node] of this.mowers()) {
             const start = LAWN_MOWER_START + this.sodTicks + this.graveTicks + (2 - row) * 5
             node.active = tick > start || this.complete
             if (node.active && !this.complete) {

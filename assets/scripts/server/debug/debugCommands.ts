@@ -1,17 +1,10 @@
-import { Schedule, type World } from '@/ecs/index'
-import { packetTeam, type Team } from '@/shared/content/teams'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { Schedule } from '@/ecs/index'
+import { packetTeam } from '@/shared/content/teams'
+import type { Session } from '../session/session'
+import { planting } from '../seeds/planting'
 import { EMPTY_SLOT, debugAmount, debugCondition, debugSwitched, debugInteger, debugSuccess, debugSyntax, normalizeDebugName, type DebugCliCommand, type DebugCliResult } from '@/shared/debug/DebugCli'
 import { damageZombie } from '../zombies/damage'
-import {
-    EconomyStateResource,
-    LevelStateResource,
-    PlantComponent,
-    PositionComponent,
-    RandomResource,
-    SeedBankResource,
-    ZombieComponent,
-} from '../state/components'
+import { EconomyStateResource, LevelStateResource, PositionComponent, RandomResource, SeedBankResource, ZombieComponent } from '../state/components'
 import { pickZombieSpawnX, spawnZombie } from '../zombies/spawn'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { createWaveSystem } from '../level/waves'
@@ -29,10 +22,9 @@ export function executeDebugGameCommand(...args: Parameters<typeof executeComman
     return executor.execute(...args)
 }
 
-function executeCommand(
-    world: World, definitions: GameplayDefinitions, tick: number, command: DebugCliCommand,
-    createPlant: (seedId: string, row: number, column: number, team?: Team) => number,
-): DebugCliResult {
+/** A debug command on the session's game; what it puts down or finds it puts down and finds as playing does (planting). */
+function executeCommand(session: Session, command: DebugCliCommand): DebugCliResult {
+    const { world, definitions, gameplayTick: tick } = session
     const { name, args } = command
     const level = world.resources.get(LevelStateResource)
     const preference = ['cooldown', 'suncost', 'plantinvincible', 'collect', 'cheatseed'].includes(name)
@@ -70,7 +62,7 @@ function executeCommand(
             const grid = position(args[1], args[2])
             if (!grid) return invalidPosition()
             // `zombies`: on the zombies' side, facing left; the plants' side attacks it and it attacks them.
-            const entityId = createPlant(seedId, grid.row, grid.column!, args[3]?.toLowerCase() === 'zombies' ? 'zombies' : undefined)
+            const entityId = planting.createPlant(session, seedId, grid.row, grid.column!, args[3]?.toLowerCase() === 'zombies' ? 'zombies' : undefined)
             // `debug`: not the player's planting (Board::AddPlant), which the planting achievements check.
             emitServerEvent(events, 'plantPlaced', { entityId, typeId: plant,
                 row: grid.row, column: grid.column!, debug: true })
@@ -138,8 +130,7 @@ function executeCommand(
         case 'removeplant': {
             const grid = position(args[0], args[1])
             if (!grid) return invalidPosition()
-            const entity = [...world.query(PositionComponent, PlantComponent)].find(entity =>
-                world.get(entity, PositionComponent)!.row === grid.row && world.get(entity, PlantComponent)!.column === grid.column)
+            const entity = grid.column === undefined ? undefined : planting.findPlantAt(session, grid.row, grid.column)
             if (entity === undefined) return debugCondition('DEBUG_NO_PLANT_THERE')
             world.destroyEntity(entity)
             return debugSuccess('Plant removed')
@@ -159,12 +150,13 @@ function executeCommand(
             if (!typeId) return debugCondition('DEBUG_ZOMBIE_NOT_INSTALLED', args[0])
             const grid = position(args[1], args[2])
             if (!grid) return invalidPosition()
-            const entityId = spawnZombie(world, definitions, typeId, grid.row,
-                grid.column === undefined ? pickZombieSpawnX(definitions.zombies[typeId], world.resources.get(RandomResource))
-                    : level.board.origin.x + grid.column * level.board.cell.width,
-                level.board.origin.y + grid.row * level.board.cell.height - 30)
-            // `plants`: on the plants' side, walking right.
-            if (args[3]?.toLowerCase() === 'plants') world.get(entityId, ZombieComponent)!.team = 'plants'
+            // `plants`: on the plants' side, walking right. In a cell it goes down as a zombie seed's zombie does; without
+            // one it comes from where the wave's zombies come.
+            const team = args[3]?.toLowerCase() === 'plants' ? 'plants' : 'zombies'
+            const entityId = grid.column !== undefined ? planting.placeZombie(session, typeId, grid.row, grid.column, team)
+                : spawnZombie(world, definitions, typeId, grid.row, pickZombieSpawnX(definitions.zombies[typeId], world.resources.get(RandomResource)),
+                    level.board.origin.y + grid.row * level.board.cell.height - 30)
+            if (team === 'plants') world.get(entityId, ZombieComponent)!.team = 'plants'
             emitServerEvent(events, 'zombieSpawned', { entityId, typeId, row: grid.row })
             return debugSuccess(`Summoned ${args[0]}`)
         }

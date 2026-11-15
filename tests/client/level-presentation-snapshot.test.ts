@@ -32,16 +32,12 @@ function snapshot(): any {
             music: null, ownsMusic: true, gameplayStarted: true, firstWavePlayed: false,
         },
         entities: [{
-            kind: 'plant', entityId: 1,
-            animations: {
-                body: reanim('pvz:peashooter'), head: reanim('pvz:peashooter_head_idle'),
-                blink: reanim('pvz:peashooter_blink'),
-            }, idleRate: 1.25, blinkAtTick: 500,
+            kind: 'plant', entityId: 1, flash: { tick: 10, ticks: 25 },
         }, {
             kind: 'zombie', entityId: 2, body: reanim('pvz:zombie_walk'),
             mowerDriver: null,
         }, {
-            kind: 'sun', entityId: 4, animation: null,
+            kind: 'item', entityId: 4, animation: null,
         }],
         particles: [{
             instanceId: 1,
@@ -94,6 +90,6 @@ test('Adventure 1-1 presentation snapshot rejects malformed and cross-linked sta
     assert.throws(invalid(value => { value.hud.progressMeterWidth = 151 }), /progressMeterWidth/)
     assert.throws(invalid(value => { value.hud.progressMeterWidth = 1.5 }), /progressMeterWidth/)
     assert.throws(invalid(value => { value.advice.lastSyncedTick = -1 }), /lastSyncedTick/)
-    assert.throws(invalid(value => { value.entities[0].idleRate = Number.POSITIVE_INFINITY }), /finite numbers/)
+    assert.throws(invalid(value => { value.entities[0].animations = {} }), /animations is not supported/, 'the server animates a plant')
     assert.throws(invalid(value => { value.extensions.bad = {} }), /extension ID is invalid/)
 })

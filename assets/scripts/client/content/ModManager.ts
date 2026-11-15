@@ -44,8 +44,6 @@ const selectionKey = (profile: number | null) => `${PLAYER_MODS_PREFIX}${profile
 const pendingStorageKey = 'pvz-remake:pending-mod-changes'
 /** Set while a startup loads Mods and cleared at the main menu; still set means that startup ended (e.g. crashed) on the way. */
 const startingStorageKey = 'pvz-remake:mods-starting'
-// Mods used to be installed for the whole device; those settings and ZIPs are dropped.
-const legacyStorageKeys = ['pvz-remake:active-mods', 'pvz-remake:mod-order']
 let nextImport = 0
 
 const HASH_CHUNK = 4 << 20
@@ -131,7 +129,6 @@ export class ModManager {
         return this.initialization ??= (async () => {
             await this.startupGate
             await this.applyPendingChanges()
-            for (const key of legacyStorageKeys) sys.localStorage.removeItem(key)
             await this.collectGarbage()
             const ids = this.enabledIds(), installed: InstalledMod[] = []
             // The last startup ended while its Mods loaded (on iOS, the page is ended once it outgrows its memory), so this
@@ -537,7 +534,7 @@ export class ModManager {
         if (!this.referencedArchives().has(key)) await removeInstalledArchive('mods', key)
     }
 
-    /** Drops archives no player uses: deleted players, replaced versions and the old device-wide installs. */
+    /** Drops archives no player uses: deleted players' and replaced versions. */
     private async collectGarbage(): Promise<void> {
         const referenced = this.referencedArchives()
         for (const key of await listInstalledArchives('mods')) {

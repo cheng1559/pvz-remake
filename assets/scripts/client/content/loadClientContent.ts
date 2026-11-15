@@ -20,7 +20,7 @@ async function loadAssets() {
         registry.registerEntry({
             category: content.kind as ContentCategory, id: content.id, contentId: content.ownerId,
             contentVersion: content.ownerVersion, contentHash: content.contentHash,
-            bundle: content.bundle, path: content.path, schemaVersion: 2,
+            path: content.path,
         })
     }
     registry.freeze()

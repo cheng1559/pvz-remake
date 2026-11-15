@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import argparse
 import math
 import struct
 import zlib
@@ -213,39 +212,3 @@ def convert_file(src: Path, out_dir: Path) -> Path:
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(reanim_to_xml(reanim), encoding="utf-8")
     return dst
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Decompile PvZ reanim .compiled cache files to .reanim XML text."
-    )
-    parser.add_argument(
-        "inputs",
-        nargs="*",
-        type=Path,
-        default=[Path("tools/raw/compiled/reanim")],
-        help="Input .reanim.compiled file or directory. Defaults to tools/raw/compiled/reanim.",
-    )
-    parser.add_argument(
-        "-o",
-        "--out-dir",
-        type=Path,
-        default=Path("tools/raw/reanim"),
-        help="Output directory. Defaults to tools/raw/reanim.",
-    )
-    args = parser.parse_args()
-
-    sources: list[Path] = []
-    for item in args.inputs:
-        if item.is_dir():
-            sources.extend(sorted(item.glob("*.reanim.compiled")))
-        else:
-            sources.append(item)
-
-    for src in sources:
-        dst = convert_file(src, args.out_dir)
-        print(f"[reanim-decompile] Wrote: {dst}")
-
-
-if __name__ == "__main__":
-    main()

@@ -31,7 +31,7 @@ test('LocalIntegratedGame uses real systems wrapped through the host', () => {
     const mods = new GameplayRegistry()
     const host = new ModHost('test:solar-pea', {})
     host.around(Schedule.prototype, 'add', function (next, phase, system) {
-        if (system.id === 'pvz:peashooter') {
+        if (system.id === 'pvz:plant-attacks') {
             const run = system.run.bind(system)
             system.run = (context: any) => { run(context); runs++ }
         }
@@ -137,8 +137,7 @@ test('a planted Sunflower survives the complete 1-2 save and restore pipeline', 
     assert.ok(plant)
     const presentation = levelPresentation(game.render())
     presentation.entities.push({
-        kind: 'plant', entityId: plant.entityId,
-        animations: { body: reanim('pvz:sunflower'), blink: reanim('pvz:sunflower_blink') }, blinkAtTick: 500,
+        kind: 'plant', entityId: plant.entityId, flash: { tick: 0, ticks: 25 },
     })
     const saved = createGameSave({
         profileId: 1, mode: 'adventure', levelId: options.levelId, createdAt: 100, updatedAt: 200,
@@ -233,6 +232,6 @@ test('a debug coin falls to the ground and its animation passes the pause-save f
     const coin = game.render().items.find(item => item.typeId === 'pvz:coin_silver')!
     assert.equal(coin.landed, true, 'COIN_MOTION_COIN pulls the coin back down')
     const presentation = levelPresentation(game.render())
-    presentation.entities.push({ kind: 'sun', entityId: coin.entityId, animation: reanim('pvz:coin_silver') })
+    presentation.entities.push({ kind: 'item', entityId: coin.entityId, animation: reanim('pvz:coin_silver') })
     assert.doesNotThrow(() => game.snapshotPresentation(presentation))
 })

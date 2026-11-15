@@ -19,9 +19,9 @@ import { launchProjectile, ProjectileMotionsResource } from '../combat/motions'
 import { type GameplayDefinitions, PLANT_ATTACKS } from '@/shared/content/gameplay'
 import { firePlantAnimation, plantTrackPoint } from './animation'
 
-export function createPeashooterSystem(definitions: GameplayDefinitions): GameSystem {
+export function createPlantAttackSystem(definitions: GameplayDefinitions): GameSystem {
     return {
-        id: 'pvz:peashooter',
+        id: 'pvz:plant-attacks',
         run({ world, commands, tick }) {
             const level = world.resources.get(LevelStateResource)
             if (level.result === 'lost' || level.paused) return

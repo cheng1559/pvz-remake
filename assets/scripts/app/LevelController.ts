@@ -58,7 +58,7 @@ export interface LevelController {
     saveIfRunning(): Promise<GameSave | null>
     deleteSave(): Promise<void>
 }
-type ProbeGlobal = typeof globalThis & { pvzPhase4?: LevelController }
+type ProbeGlobal = typeof globalThis & { pvzLevel?: LevelController }
 
 interface RunningLevel {
     root: Node
@@ -361,7 +361,7 @@ export function createLevelController(
 }
 
 export function installLevelProbe(controller: LevelController): void {
-    ;(globalThis as ProbeGlobal).pvzPhase4 = controller
+    ;(globalThis as ProbeGlobal).pvzLevel = controller
 }
 
 function sameMods(left: readonly EnabledMod[], right: readonly EnabledMod[]): boolean {

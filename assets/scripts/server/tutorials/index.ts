@@ -49,12 +49,13 @@ export interface TutorialScript {
     initialize?(world: World, firstAdventure: boolean): void
     beforeSun?(world: World, tick: number): void
     sunSpawned?(world: World): void
-    update?(world: World, tick: number): void
+    update?(world: World, definitions: GameplayDefinitions, tick: number): void
     seedSelected?(world: World, seedId: string): void
-    seedCanceled?(world: World, tick: number): void
-    seedReady?(world: World, tick: number, seedId: string): void
+    seedCanceled?(world: World, definitions: GameplayDefinitions, tick: number): void
+    seedReady?(world: World, definitions: GameplayDefinitions, tick: number, seedId: string): void
     seedRejected?(world: World, reason: 'seed-not-ready' | 'not-enough-sun'): void
-    plantPlaced?(world: World, tick: number, plantId: string, upgraded: boolean): void
+    /** `seedId`: what was planted. */
+    plantPlaced?(world: World, definitions: GameplayDefinitions, tick: number, seedId: string): void
     sunCollected?(world: World, tick: number, seedId: string, canAfford: boolean): void
     /** A coin or diamond is picked up. */
     moneyCollected?(world: World, typeId: string): void

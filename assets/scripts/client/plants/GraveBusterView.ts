@@ -2,12 +2,12 @@ import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import type { PlantSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import type { StageEvent } from '@/client/level/LevelStage'
 import { plantRenderOffset, renderOrder } from '@/shared/content/renderOrder'
-import { PlantView, type PlantParticle } from './PlantView'
+import { PlantView } from './PlantView'
 
 /** Plant::UpdateGraveBuster: it lands, then chews and sinks while the grave disappears. */
 export class GraveBusterView extends PlantView {
-    sync(plant: PlantSnapshot, world: WorldSnapshot, particle: PlantParticle, flash: number): void {
-        super.sync(plant, world, particle, flash)
+    protected onBoard(plant: PlantSnapshot, world: WorldSnapshot): void {
+        super.onBoard(plant, world)
         if (plant.ability?.state !== 'eating') return
         const { node, content } = this.context
         // AddAttachedParticle: the chewing particle belongs to the buster and goes away with it.

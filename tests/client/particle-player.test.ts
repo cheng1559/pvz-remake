@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync } from 'node:fs'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import { parseParticle, type ParticleTrackCurve } from '@/shared/content/particle'
 import * as renderOrderModule from '@/shared/content/renderOrder'
 const parseDefinition = (value: { emitters: unknown[] }) => parseParticle({ schemaVersion: 3, id: 'pvz:test', ...value })
@@ -29,11 +28,7 @@ test('empty converted particles preload and expire without hiding image loading 
         } },
         '@/shared/kernel/particles': { packParticleEmitters },
     }
-    const exports: any = {}
-    const code = transpileModule(readFileSync('assets/scripts/client/particle/ParticleAssets.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {}, console: { warn() {} } })
+    const exports = loadScript('assets/scripts/client/particle/ParticleAssets.ts', (id: string) => modules[id] ?? {}, { console: { warn() {} } })
     await exports.ParticleAssets.preloadAll()
     const loaded = exports.ParticleAssets.get(empty.id)
     assert.equal(loaded.emitters.length, 0)
@@ -179,12 +174,8 @@ test('a finished recyclable particle is reused by the next spawn of its effect a
         '@/shared/kernel/index': kernelModule, '@/shared/kernel/particles': particles,
         './ParticleAssets': { ParticleAssets: { get: () => assets } }, './ParticlePlayerSnapshot': snapshots,
     }
-    const exports: any = {}
-    const code = transpileModule(readFileSync('assets/scripts/client/particle/ParticlePlayer.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? (id === '@/shared/content/renderOrder' ? renderOrderModule : {}) })
-    const { ParticlePlayer } = exports
+    const { ParticlePlayer } = loadScript('assets/scripts/client/particle/ParticlePlayer.ts',
+        (id: string) => modules[id] ?? (id === '@/shared/content/renderOrder' ? renderOrderModule : {}))
     const parent = makeNode('Holder', null)
     const spawn = (mirrored = false) => ParticlePlayer.spawn({ parent, id: 'pvz:test', x: 0, y: 0, mirrored, recycle: true })
     const first = spawn(true)

@@ -19,7 +19,7 @@ import { createItemSystem } from '@/server/level/items'
 import { createLevelProgressSystem,initializeLevel } from '@/server/level/level'
 import { ItemComponent,TutorialResource,WaveResource } from '@/server/state/levelState'
 import { createWaveSystem } from '@/server/level/waves'
-import { damageZombie, mowZombie } from '@/server/zombies/damage'
+import { damageZombie, flattenZombie } from '@/server/zombies/damage'
 import { spawnZombie } from '@/server/zombies/spawn'
 import { createZombieSystem } from '@/server/zombies/system'
 import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
@@ -97,11 +97,11 @@ test('level one drops its award from the last effective zombie before its corpse
     const headless = spawnZombie(world, definitions, 'pvz:normal', 2, 100, 250)
     world.get(headless, ZombieComponent)!.hasHead = false
     const mowered = spawnZombie(world, definitions, 'pvz:normal', 2, 500, 250)
-    mowZombie(world, definitions, world.get(mowered, ZombieComponent)!)
+    flattenZombie(world, definitions, world.get(mowered, ZombieComponent)!)
     const schedule = new Schedule()
     schedule.add('spawn', createWaveSystem(definitions))
     schedule.add('zombie', createZombieSystem(definitions))
-    schedule.add('cleanup', createItemSystem(definitions))
+    schedule.add('item', createItemSystem(definitions))
 
     schedule.run(world, 1)
     assert.equal([...world.query(ItemComponent)].length, 0)

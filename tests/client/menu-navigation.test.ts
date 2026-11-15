@@ -2,8 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { setImmediate } from 'node:timers/promises'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import { isMenuDialog, LEVEL_DIALOGS, MENU_PAGES, type MenuAction, type MenuPageId } from '@/client/screens/MenuPages'
 import { gameClock } from '@/core/GameClock'
 import { DEBUG_GOTO_PAGES, type DebugCliResult } from '@/shared/debug/DebugCli'
@@ -16,10 +15,6 @@ test('the first main menu uses Mod wrappers installed while UI assets are still 
         show() { calls.push('show') }
     }
     const host = new ModHost('test:menu', {})
-    const module = { exports: {} as any }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/MenuScreen.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
     const modules: Record<string, unknown> = {
         cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
         './MainMenuScreen': { MainMenuScreen },
@@ -37,9 +32,9 @@ test('the first main menu uses Mod wrappers installed while UI assets are still 
             return { node }
         } },
     }
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {} })
+    const { MenuScreen } = loadScript('assets/scripts/client/screens/MenuScreen.ts', (id: string) => modules[id] ?? {})
     try {
-        const screen = new module.exports.MenuScreen()
+        const screen = new MenuScreen()
         screen.node = { isValid: true }
         const first = await screen.prepare('main')
         assert.deepEqual(calls, ['initialize', 'widescreen-backgrounds'])
@@ -92,10 +87,6 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
     let dialogFails = false
     let awardOpens: Record<string, unknown> = {}
     const musicFrames: Array<{ ticks: number; zombies: number }> = []
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
     const modules: Record<string, unknown> = {
         cc: {
             Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
@@ -135,11 +126,10 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
         },
         '@/client/sound/SoundSystem': { SoundEffect: { Pause: 'pause' }, SoundSystem: { play: async (sound: string) => { sounds.push(sound) } } },
     }
-    runInNewContext(compiled.outputText, {
-        exports: module.exports, require: (id: string) => modules[id] ?? {},
+    const { GameApp } = loadScript('assets/scripts/app/GameApp.ts', (id: string) => modules[id] ?? {}, {
         console: { ...console, error: (...args: unknown[]) => errors.push(args) },
     })
-    const app = new module.exports.GameApp()
+    const app = new GameApp()
     const advice: string[] = []
     app.showAdvice = (message: string) => advice.push(message)
     let running = false
@@ -488,12 +478,8 @@ test('menu navigation preserves caller, pauses gameplay, and resumes without res
 })
 
 test('manager imports read sequentially, continue after failure and leave installation to the next startup', async () => {
-    const source = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    }).outputText
     for (const isNative of [false, true]) for (const names of [[], ['a'], ['bad'], ['a', 'bad', 'b']]) {
         const steps: string[] = []
-        const module = { exports: {} as Record<string, any> }
         const strings: Record<string, string> = JSON.parse(readFileSync('mods/pvz-base/assets/json/strings.json', 'utf8'))
         const ui = {
             text: (key: string) => strings[key] ?? key,
@@ -530,9 +516,9 @@ test('manager imports read sequentially, continue after failure and leave instal
                 setEnabled: async (ids: string[]) => { assert.deepEqual(Array.from(ids), ['a', 'b']); steps.push('enable:mods') },
             } },
         }
-        runInNewContext(source, { exports: module.exports, require: (id: string) => modules[id] ?? {}, setTimeout,
+        const { GameApp } = loadScript('assets/scripts/app/GameApp.ts', (id: string) => modules[id] ?? {}, { setTimeout,
             window: { location: { reload: () => steps.push('web-restart') } } })
-        const app = new module.exports.GameApp()
+        const app = new GameApp()
         app.node = { isValid: true }
         const imported = await app.importPackage()
         assert.deepEqual(Array.from(imported, (mod: any) => mod.id), names.filter(name => name !== 'bad'))
@@ -548,11 +534,7 @@ test('manager imports read sequentially, continue after failure and leave instal
 })
 
 test('saved-game prompt offers continue/restart/cancel and confirms a restart before closing', async () => {
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/dialogs/ContinueGameDialog.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    runInNewContext(compiled.outputText, { exports: module.exports })
+    const continueGame = loadScript('assets/scripts/client/dialogs/ContinueGameDialog.ts', () => ({}))
     const dialogs: Array<{ dialog: any, options: any }> = []
     const ui = {
         text: (key: string) => key,
@@ -570,7 +552,7 @@ test('saved-game prompt offers continue/restart/cancel and confirms a restart be
     }
     for (const action of ['continue', 'cancel', 'restart', 'rejectRestart'] as const) {
         dialogs.length = 0
-        const result = module.exports.showContinueGameDialog({}, ui)
+        const result = continueGame.showContinueGameDialog({}, ui)
         const prompt = dialogs[0]
         assert.deepEqual(Array.from(prompt.options.buttons, (button: any) => button.text),
             ['CONTINUE_BUTTON', 'RESTART_LEVEL_BUTTON', 'DIALOG_BUTTON_CANCEL'])
@@ -594,7 +576,6 @@ test('saved-game prompt offers continue/restart/cancel and confirms a restart be
 })
 
 test('options use direct exit during seed selection and confirmed exit during gameplay', async () => {
-    const exports: Record<string, any> = {}
     const modules: Record<string, unknown> = {
         cc: { Color: class {} },
         '@/client/api/MenuApi': { menuApi: { getSettings: async () => ({ musicVolume: 1, sfxVolume: 0.65, fullScreen: false }) } },
@@ -602,9 +583,7 @@ test('options use direct exit during seed selection and confirmed exit during ga
         '@/client/sound/SoundSystem': { SoundEffect: { ButtonClick: 'click' }, SoundSystem: { play: async () => {} } },
         '@/shared/menu': { SFX_VOLUME_SCALE: 0.65 },
     }
-    runInNewContext(transpileModule(readFileSync('assets/scripts/client/dialogs/OptionsDialog.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    }).outputText, { exports, require: (id: string) => modules[id] ?? {} })
+    const exports = loadScript('assets/scripts/client/dialogs/OptionsDialog.ts', (id: string) => modules[id] ?? {})
     for (const [inGame, levelIntro, expected] of [
         [true, true, ['MAIN_MENU_BUTTON', 'BACK_TO_GAME']],
         [true, false, ['VIEW_ALMANAC_BUTTON', 'RESTART_LEVEL_BUTTON', 'MAIN_MENU_BUTTON', 'BACK_TO_GAME']],
@@ -651,7 +630,6 @@ test('options use direct exit during seed selection and confirmed exit during ga
 })
 
 test('menu opened answer with the action their buttons stand for', async () => {
-    const exports: Record<string, any> = {}
     let options: any, dialogOptions: any
     const node = () => ({ isValid: true, once() {}, destroy() { this.isValid = false } })
     let quits = 0, userClose: (() => void) | undefined
@@ -662,9 +640,7 @@ test('menu opened answer with the action their buttons stand for', async () => {
         '@/client/view/uiNode': { uiNode: () => ({ node: node() }) },
         './OptionsDialog': { showOptionsDialog: async (_parent: unknown, _ui: unknown, value: unknown) => { options = value; return { node: node() } } },
     }
-    runInNewContext(transpileModule(readFileSync('assets/scripts/client/dialogs/MenuDialog.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    }).outputText, { exports, require: (id: string) => modules[id] ?? {} })
+    const exports = loadScript('assets/scripts/client/dialogs/MenuDialog.ts', (id: string) => modules[id] ?? {})
     const ui = {
         text: (key: string) => key,
         dialog: (_parent: unknown, value: unknown) => { dialogOptions = value; return { node: node(), content: {}, close() {} } },
@@ -705,59 +681,52 @@ test('modal pages retain their caller, full pages destroy it, and achievements s
     let achievementInitializations = 0, achievementRefreshes = 0, warmDraws = 0, preparationYields = 0
     let achievementRoot: any, achievementView: any
     let preload!: (progress: (value: number) => void) => Promise<void>
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/MenuScreen.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(compiled.outputText, {
-        exports: module.exports,
-        require: () => ({
-            Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
-            DEBUG: false, sys: { isBrowser: false, os: 'mac', OS: { IOS: 'ios' } }, preloadAssets: async (progress: (value: number) => void) => progress(1),
-            waitForPreloadFrame: async () => { preparationYields++ },
-            Director: { EVENT_AFTER_DRAW: 'draw' }, director: { once(_event: string, callback: () => void) {
-                assert.equal(achievementRoot.active, true, 'the loading screen warms the cached components before opening them')
-                warmDraws++
-                callback()
-            } },
-            UIHoverManager: { beginModalBlock() {}, endModalBlock() {} },
-            Color: class {}, Node: { EventType: { SIZE_CHANGED: 'size-changed' } },
-            isValid: () => false, offBoardContent: async () => ({}),
-            MENU_PAGES, MusicSystem: { playTune: async (tune: string) => { music.push(tune) } },
-            UI: { load: async () => ({
-                assets: { presentation: { screens: {} } },
-                text: (key: string) => key,
-            }) },
-            uiNode: (options: any) => {
-                const node = {
-                    name: options.name, isValid: true, active: options.active ?? true, children: [] as any[],
-                    addComponent() {
-                        const component = { node: this, show() {}, refresh: async () => { achievementRefreshes++ },
-                            initialize: async (_ui: unknown, callback: any) => {
-                                if (this.name === 'Startup') preload = callback
-                                if (this.name === 'Controls') {
-                                    assert.equal(achievementRoot.active, true, 'prewarm activates the page before constructing its components')
-                                    assert.equal(achievementRoot.siblingIndex, 0, 'incremental initialization stays behind the loading screen')
-                                    achievementInitializations++
-                                    achievementView = component
-                                }
-                            } }
-                        return component
-                    },
-                    getComponentInChildren: () => achievementView,
-                    setPosition(x: number, y: number) { (this as any).position = { x, y } },
-                    setSiblingIndex(index: number) { (this as any).siblingIndex = index },
-                    on() {},
-                    destroy() { this.isValid = false },
-                }
-                options.parent?.children?.push(node)
-                if (options.name === 'achievements') achievementRoot = node
-                return { node, transform: { contentSize: { width: 800, height: 600 } },
-                    graphics: options.graphics ? { clear() {}, fillRect() {} } : undefined }
-            },
-        }),
-    })
-    const screen = new module.exports.MenuScreen()
+    const { MenuScreen } = loadScript('assets/scripts/client/screens/MenuScreen.ts', () => ({
+        Component: class {}, _decorator: { ccclass: () => (value: unknown) => value },
+        DEBUG: false, sys: { isBrowser: false, os: 'mac', OS: { IOS: 'ios' } }, preloadAssets: async (progress: (value: number) => void) => progress(1),
+        waitForPreloadFrame: async () => { preparationYields++ },
+        Director: { EVENT_AFTER_DRAW: 'draw' }, director: { once(_event: string, callback: () => void) {
+            assert.equal(achievementRoot.active, true, 'the loading screen warms the cached components before opening them')
+            warmDraws++
+            callback()
+        } },
+        UIHoverManager: { beginModalBlock() {}, endModalBlock() {} },
+        Color: class {}, Node: { EventType: { SIZE_CHANGED: 'size-changed' } },
+        isValid: () => false, offBoardContent: async () => ({}),
+        MENU_PAGES, MusicSystem: { playTune: async (tune: string) => { music.push(tune) } },
+        UI: { load: async () => ({
+            assets: { presentation: { screens: {} } },
+            text: (key: string) => key,
+        }) },
+        uiNode: (options: any) => {
+            const node = {
+                name: options.name, isValid: true, active: options.active ?? true, children: [] as any[],
+                addComponent() {
+                    const component = { node: this, show() {}, refresh: async () => { achievementRefreshes++ },
+                        initialize: async (_ui: unknown, callback: any) => {
+                            if (this.name === 'Startup') preload = callback
+                            if (this.name === 'Controls') {
+                                assert.equal(achievementRoot.active, true, 'prewarm activates the page before constructing its components')
+                                assert.equal(achievementRoot.siblingIndex, 0, 'incremental initialization stays behind the loading screen')
+                                achievementInitializations++
+                                achievementView = component
+                            }
+                        } }
+                    return component
+                },
+                getComponentInChildren: () => achievementView,
+                setPosition(x: number, y: number) { (this as any).position = { x, y } },
+                setSiblingIndex(index: number) { (this as any).siblingIndex = index },
+                on() {},
+                destroy() { this.isValid = false },
+            }
+            options.parent?.children?.push(node)
+            if (options.name === 'achievements') achievementRoot = node
+            return { node, transform: { contentSize: { width: 800, height: 600 } },
+                graphics: options.graphics ? { clear() {}, fillRect() {} } : undefined }
+        },
+    }))
+    const screen = new MenuScreen()
     screen.node = { isValid: true, active: true, children: [] }
     const page = (id: MenuPageId) => ({
         id, retainPrevious: MENU_PAGES[id].retainPrevious,

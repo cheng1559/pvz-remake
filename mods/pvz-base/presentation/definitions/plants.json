@@ -153,7 +153,6 @@
       "small": {"reanimId": "pvz:sunshroom", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "sleep": {"reanimId": "pvz:sunshroom_sleep", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "sleeping": {"reanimId": "pvz:sleeping", "rateScale": 1, "fps": 12, "x": 50, "y": -40},
-      "bigSleep": {"reanimId": "pvz:sunshroom_bigsleep", "rateScale": 1, "fps": 12, "x": 0, "y": 0},
       "grow": {"reanimId": "pvz:sunshroom_grow", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "blend": 0.1},
       "blink": {"reanimId": "pvz:sunshroom_blink", "rateScale": 1, "fps": 12, "x": 0, "y": 0, "attachmentTrackId": "anim_face", "attachmentBase": "small", "fullLastFrame": true}
     },

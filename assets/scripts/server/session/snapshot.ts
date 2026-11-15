@@ -3,7 +3,6 @@ import { jsonRoundTrip } from '@/shared/protocol/index'
 import { EconomyStateResource, GridItemComponent, LevelStateResource, MowedPlantComponent, PlantAttackComponent, PlantComponent, PositionComponent, ProjectileComponent, SeedBankResource, ZombieComponent } from '../state/components'
 import { DebugRulesResource, getDebugRules } from '../debug/debugRules'
 import { heightOverRow, ProjectileMotionsResource } from '../combat/motions'
-import { getAvailableSun } from '../level/items'
 import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
 import { planting } from '../seeds/planting'
 import { selectedSeedId, selectedTeam } from '../seeds/seedBank'
@@ -41,7 +40,7 @@ export const snapshot = {
         })
         const plants: WorldSnapshot['plants'] = [...world.query(PositionComponent, PlantComponent)].map(entity => {
             const position = world.get(entity, PositionComponent)!
-            const { chilledTicks, blinkTicks, ...plant } = world.get(entity, PlantComponent)!
+            const { chilledTicks, blinkTicks, recentlyEatenCounter, ...plant } = world.get(entity, PlantComponent)!
             const production = definitions.plants[plant.typeId].producer && world.get(entity, PlantAttackComponent)
             return {
                 entityId: entity, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...position,
@@ -53,7 +52,7 @@ export const snapshot = {
             }
         })
         for (const entity of world.query(PositionComponent, MowedPlantComponent)) {
-            const { plant: { chilledTicks, blinkTicks, ...plant }, ticks, left } = world.get(entity, MowedPlantComponent)!
+            const { plant: { chilledTicks, blinkTicks, recentlyEatenCounter, ...plant }, ticks, left } = world.get(entity, MowedPlantComponent)!
             plants.push({
                 entityId: entity, ...plant, ...(chilledTicks ? { chilledTicks } : {}), ...world.get(entity, PositionComponent)!,
                 ...(plant.ability ? { ability: { ...plant.ability } } : {}),
@@ -73,7 +72,6 @@ export const snapshot = {
                 maxHealth: zombie.maxHealth,
                 // The rates a view plays them at: a chilled zombie's are halved.
                 animations: Object.fromEntries(Object.entries(zombie.animations).map(([layer, state]) => [layer, { ...state, rate: state.rate * zombiePace(zombie, layer) }])),
-                moweredTicksRemaining: zombie.moweredTicksRemaining,
                 alpha: zombie.state === 'dying' ? Math.min(255, Math.trunc(255 * zombie.deathTicksRemaining / 10)) : 255,
                 hasHead: zombie.hasHead,
                 hasTongue: zombie.hasTongue,
@@ -129,7 +127,6 @@ export const snapshot = {
             result: level.result,
             paused: level.paused,
             sun: economy.sun,
-            availableSun: getAvailableSun(world, definitions),
             money: economy.money,
             wave: {
                 index: waves.index,

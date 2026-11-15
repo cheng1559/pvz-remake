@@ -3,7 +3,7 @@ import { passedMark } from '@/shared/content/animation'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, SystemContext, World } from '@/ecs/index'
 import { type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
-import { damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
+import { damageZombie, startZombieDeath, updateHeadlessZombie, countZombiesOnScreen } from './damage'
 import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { startPostVaultWalk, startVault, updateVault } from './poleVault'
 import { RECENTLY_EATEN_TICKS, destroyEatenPlant, isPlantInedible } from '../plants/damage'
@@ -108,12 +108,10 @@ export class ZombieSystem implements GameSystem {
                     const speed = definition.enrage!.speedPerTick
                     zombie.speedPerTick = speed.min + random.nextFloat() * (speed.max - speed.min)
                     startWalk(zombie, animation, zombie.walkClip, random)
-                    // Zombie::UpdateZombieNewspaper roars only with its head on and at most 10 live headed zombies.
-                    const headed = [...world.query(ZombieComponent)].filter(other => {
-                        const state = world.get(other, ZombieComponent)!
-                        return state.hasHead && state.health > 0 && state.state !== 'dying' && state.state !== 'burned' && state.state !== 'mowered'
-                    }).length
-                    emitServerEvent(world.resources.get(EventQueueResource), 'zombieEnraged', { entityId: entity, typeId: zombie.typeId, roar: zombie.hasHead && headed <= 10 })
+                    // Zombie::UpdateZombieNewspaper roars only with its head on and at most 10 zombies on screen.
+                    emitServerEvent(world.resources.get(EventQueueResource), 'zombieEnraged', {
+                        entityId: entity, typeId: zombie.typeId, roar: zombie.hasHead && countZombiesOnScreen(world) <= 10,
+                    })
                 }
                 continue
             }

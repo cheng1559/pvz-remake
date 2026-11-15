@@ -1,18 +1,10 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
-
-function load(path: string, modules: Record<string, unknown>) {
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } })
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {} })
-    return module.exports
-}
+import { loadScript } from '../loadScript'
 
 test('flavor text draws its line ends and the spaces before them as one space, each counted in the width of the line', () => {
-    const { almanacLines } = load('assets/scripts/client/screens/AlmanacText.ts', { cc: { Color: class { constructor(...values: number[]) { Object.assign(this, values) } } } })
+    const modules: Record<string, unknown> = { cc: { Color: class { constructor(...values: number[]) { Object.assign(this, values) } } } }
+    const { almanacLines } = loadScript('assets/scripts/client/screens/AlmanacText.ts', (id: string) => modules[id] ?? {})
     // The lines come from the module's own realm: copied, to compare as arrays of this one.
     // A space the line ends on draws nothing.
     const text = (lines: Array<{ runs: Array<{ text: string }> }>) => Array.from(lines, line => Array.from(line.runs, run => run.text).join('').trimEnd())

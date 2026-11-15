@@ -7,7 +7,7 @@ import type { ServerFramePacket, SessionStartedPacket, WorldSnapshot } from '@/s
 function snapshot(tick: number): WorldSnapshot {
     return {
         levelId: 'pvz:adventure-1-1', tick, gameplayTick: tick, phase: 'gameplay', result: 'playing', paused: false,
-        sun: 50, availableSun: 50, money: 0, wave: { index: 0, total: 4, flagWaves: [], countdown: 10 },
+        sun: 50, money: 0, wave: { index: 0, total: 4, flagWaves: [], countdown: 10 },
         cursor: { mode: 'none' }, seedPackets: [], conveyorPackets: [],
         plants: [{
             entityId: 1, typeId: 'pvz:peashooter', seedId: 'pvz:peashooter',
@@ -17,8 +17,7 @@ function snapshot(tick: number): WorldSnapshot {
             entityId: 2, typeId: 'pvz:normal', state: 'walking',
             x: 10, y: 20, row: 2, health: 270, maxHealth: 270,
             animations: { body: { clip: 'walk', time: 0, rate: 12 } },
-            moweredTicksRemaining: 0,
-            hasHead: true, hasTongue: false, hasArm: true,
+            alpha: 255, hasHead: true, hasTongue: false, hasArm: true, helmHealth: 0, shieldHealth: 0,
         }],
         projectiles: [{ entityId: 6, typeId: 'pvz:pea', x: 20, y: 30, row: 2 }],
         items: [{ entityId: 4, typeId: 'pvz:sun', state: 'available', x: 30, y: 40, scale: 1, alpha: 255 }],

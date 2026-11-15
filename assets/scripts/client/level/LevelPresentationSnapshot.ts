@@ -79,9 +79,6 @@ export type LevelEntitySnapshot =
     | {
         kind: 'plant'
         entityId: number
-        animations: Record<string, ReanimPlaybackSnapshot>
-        idleRate?: number
-        blinkAtTick?: number
         flash?: FlashSnapshot
     }
     | {
@@ -92,7 +89,7 @@ export type LevelEntitySnapshot =
         flash?: FlashSnapshot
     }
     | {
-        kind: 'sun'
+        kind: 'item'
         entityId: number
         animation: ReanimPlaybackSnapshot | null
     }
@@ -281,16 +278,9 @@ function parseEntity(value: unknown, index: number): LevelEntitySnapshot {
     const entityId = positiveInteger(tagged.entityId, `${name}.entityId`)
     switch (tagged.kind) {
         case 'plant': {
-            const plant = exact(value, ['kind', 'entityId', 'animations'], name, ['idleRate', 'blinkAtTick', 'flash'])
-            // A plant the server animates keeps none of its own.
-            const animations = plainObject(plant.animations, `${name}.animations`)
-            return {
-                kind: 'plant', entityId,
-                animations: Object.fromEntries(Object.entries(animations).map(([slot, state]) => [slot, parseReanimPlaybackSnapshot(state)])),
-                ...(plant.idleRate === undefined ? {} : { idleRate: positiveFinite(plant.idleRate, `${name}.idleRate`) }),
-                ...(plant.blinkAtTick === undefined ? {} : { blinkAtTick: nonNegativeInteger(plant.blinkAtTick, `${name}.blinkAtTick`) }),
-                ...(plant.flash === undefined ? {} : { flash: parseFlash(plant.flash, `${name}.flash`) }),
-            }
+            // The server animates a plant: it keeps only its flash.
+            const plant = exact(value, ['kind', 'entityId'], name, ['flash'])
+            return { kind: 'plant', entityId, ...(plant.flash === undefined ? {} : { flash: parseFlash(plant.flash, `${name}.flash`) }) }
         }
         case 'zombie': {
             const source = exact(value, [
@@ -303,7 +293,7 @@ function parseEntity(value: unknown, index: number): LevelEntitySnapshot {
                 ...(source.flash === undefined ? {} : { flash: parseFlash(source.flash, `${name}.flash`) }),
             }
         }
-        case 'sun': {
+        case 'item': {
             const source = exact(value, ['kind', 'entityId', 'animation'], name)
             return { kind: tagged.kind, entityId, animation: optionalReanim(source.animation) }
         }
@@ -450,12 +440,6 @@ function finiteInRange(value: unknown, min: number, max: number, name: string): 
 
 function coordinate(value: unknown, name: string): number {
     return finiteInRange(value, -MAX_COORDINATE, MAX_COORDINATE, name)
-}
-
-function positiveFinite(value: unknown, name: string): number {
-    const result = finite(value, name)
-    if (result <= 0) throw new TypeError(`${name} must be positive`)
-    return result
 }
 
 function nonNegativeInteger(value: unknown, name: string): number {

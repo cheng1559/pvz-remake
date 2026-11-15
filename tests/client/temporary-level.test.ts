@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import * as protocol from '@/shared/protocol'
 
 // The protocol's own helpers run as they are: what is loaded asks them whether the level stands still.
@@ -32,10 +30,6 @@ test('temporary levels preserve the adventure save when entered, restarted and e
         saveAtBoundary() { return { levelId: this.levelId, mods: [] } }
         drainChanges() { return [] } drainEvents() { return [] }
     }
-    const module = { exports: {} as any }
-    const compiled = transpileModule(readFileSync('assets/scripts/app/LevelController.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
     const modules: Record<string, any> = {
         cc: { BlockInputEvents: class {}, Mask: { Type: { GRAPHICS_RECT: 1 } }, Node: class {} },
         './LocalIntegratedGame': { LocalIntegratedGame: Game },
@@ -55,8 +49,8 @@ test('temporary levels preserve the adventure save when entered, restarted and e
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { rechargingEnabled: true, sunCostEnabled: true, plantInvincible: true, collectMode: 'click' } },
         '@/shared/debug/DebugCli': {},
     }
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? shared[id], Date, Math, Promise, Error })
-    const controller = module.exports.createLevelController({})
+    const levelController = loadScript('assets/scripts/app/LevelController.ts', (id: string) => modules[id] ?? shared[id], { Date, Math, Promise, Error })
+    const controller = levelController.createLevelController({})
     await controller.play({ levelId: 'normal' })
     assert.equal(controller.isLevelIntro(), true)
     assert.equal(await controller.saveIfRunning(), null, 'leaving seed selection does not create a battle save')
@@ -85,17 +79,13 @@ test('temporary levels preserve the adventure save when entered, restarted and e
 })
 
 test('temporary level completion and defeat return to the menu without changing progress or saves', async () => {
-    const module = { exports: {} as any }
-    const compiled = transpileModule(readFileSync('assets/scripts/app/GameApp.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
     let completions = 0, deletions = 0
     const modules: Record<string, any> = {
         cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
         '@/client/api/MenuApi': { menuApi: { async completeLevel() { completions++ } } },
     }
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {}, console })
-    const app = new module.exports.GameApp()
+    const { GameApp } = loadScript('assets/scripts/app/GameApp.ts', (id: string) => modules[id] ?? {}, { console })
+    const app = new GameApp()
     const destinations: string[] = []
     app.navigate = async (page: string) => { destinations.push(page) }
     app.controller = { getLevelDefinition: () => ({ persistent: false }), async deleteSave() { deletions++ } }

@@ -1,16 +1,10 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 
 test('cached achievements refresh earned flags for the active profile and reset scroll and More state', async () => {
-    const module = { exports: {} as Record<string, any> }
     let earned = true, requests = 0
-    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/AchievementScreen.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => ({
+    const { AchievementScreen } = loadScript('assets/scripts/client/screens/AchievementScreen.ts', (id: string) => ({
         cc: { Component: class {}, Color: class { constructor(public r: number, public g: number, public b: number, public a: number) {} },
             _decorator: { ccclass: () => (value: unknown) => value } },
         '@/client/sound/SoundSystem': { SoundEffect: { GraveButton: 'pvz:gravebutton' } },
@@ -18,8 +12,8 @@ test('cached achievements refresh earned flags for the active profile and reset 
             requests++
             return { items: [{ id: 3, earned }, { id: 8, earned: !earned }] }
         } } },
-    } as Record<string, unknown>)[id] ?? {} })
-    const screen = new module.exports.AchievementScreen()
+    } as Record<string, unknown>)[id] ?? {})
+    const screen = new AchievementScreen()
     screen.node = { isValid: true }
     screen.scroll = { offset: 900 }
     screen.showingTop = true
@@ -39,16 +33,12 @@ test('cached achievements refresh earned flags for the active profile and reset 
 })
 
 test('achievement arrow keys use the GOTY speed: reset to 30 per press, minus 1 every 10ms', () => {
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/screens/AchievementScreen.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => ({
+    const { AchievementScreen } = loadScript('assets/scripts/client/screens/AchievementScreen.ts', (id: string) => ({
         cc: { Component: class {}, KeyCode: { ARROW_UP: 1, ARROW_DOWN: 2 }, _decorator: { ccclass: () => (value: unknown) => value } },
         '@/client/input/UIHoverManager': { UIHoverManager: { activeModalRoot: null, isInputBlocked: false } },
         '@/core/GameClock': { gameClock: { delta: (dt: number) => dt } },
-    } as Record<string, unknown>)[id] ?? {} })
-    const screen = new module.exports.AchievementScreen()
+    } as Record<string, unknown>)[id] ?? {})
+    const screen = new AchievementScreen()
     screen.node = { isValid: true }
     screen.scroll = { offset: 0 }
     const press = (keyCode: number) => screen.onKeyDown({ keyCode })
@@ -62,10 +52,6 @@ test('achievement arrow keys use the GOTY speed: reset to 30 per press, minus 1 
 })
 
 test('scrollbar follows the Steam GOTY ScrollbarWidget: thumb size, held track paging and layered thumb', () => {
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/ui/UIScroll.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
     let graphics: { calls: unknown[][], fillColor: unknown, clear(): void, fillRect(...values: number[]): void } | undefined
     const uiNode = (options: { graphics?: boolean }) => {
         const transform = {
@@ -81,7 +67,7 @@ test('scrollbar follows the Steam GOTY ScrollbarWidget: thumb size, held track p
         }
         return { node, transform, graphics }
     }
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => ({
+    const { UIScroll, scrollbarThumb, ZOMBIE_SCROLLBAR_COLORS } = loadScript('assets/scripts/client/ui/UIScroll.ts', (id: string) => ({
         cc: {
             _decorator: { ccclass: () => (value: unknown) => value }, Component: class {},
             Color: class { constructor(public r: number, public g: number, public b: number, public a = 255) {} },
@@ -92,8 +78,7 @@ test('scrollbar follows the Steam GOTY ScrollbarWidget: thumb size, held track p
         '@/client/view/uiNode': { uiNode },
         '@/core/GameClock': { gameClock: { delta: (dt: number) => dt } },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: { isMobileMode: () => false } },
-    } as Record<string, unknown>)[id] ?? {} })
-    const { UIScroll, scrollbarThumb, ZOMBIE_SCROLLBAR_COLORS } = module.exports
+    } as Record<string, unknown>)[id] ?? {})
 
     // Almanac box 170px high with a page of 85%: a 2px overflow still leaves 27px of thumb travel.
     const { size, position } = scrollbarThumb(170, 172, 144.5, 27.5)

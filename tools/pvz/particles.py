@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Convert original PvZ particle XML to the single full-feature particle schema."""
 from __future__ import annotations
-import argparse
 import json
 import re
 from pathlib import Path
@@ -230,18 +229,3 @@ def convert_directory(src_dir: Path, dst_dir: Path,
     for source in sources:
         write_particle(source, dst_dir / (source.stem.lower() + ".json"), "pvz:" + source.stem.lower(), image_grids=grids)
     return len(sources)
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--src", type=Path, required=True)
-    parser.add_argument("--dst", type=Path, default=Path("mods/pvz-base/assets/particles"))
-    parser.add_argument("--resources", type=Path, default=Path("tools/raw/properties/resources.xml"))
-    args = parser.parse_args()
-    if not args.src.is_dir():
-        raise FileNotFoundError(args.src)
-    print(f"Converted {convert_directory(args.src, args.dst, args.resources)} particle definitions")
-
-
-if __name__ == "__main__":
-    main()

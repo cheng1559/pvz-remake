@@ -37,7 +37,7 @@ test('ContentRegistry resolves common archive resources by category, rejects dup
     registry.register(base)
     assert.deepEqual(registry.resolve('sprites', 'pvz:sunflower'), {
         category: 'sprites', id: 'pvz:sunflower', contentId: 'pvz', contentVersion: '2.0.0',
-        contentHash: 'pvz@2', bundle: 'pvzmod:///pvz/', path: 'sprite.png', schemaVersion: 2,
+        contentHash: 'pvz@2', path: 'sprite.png',
     })
     assert.equal(registry.resolve('sounds', 'pvz:sunflower'), undefined)
     const warmed = new ContentRegistry()
@@ -61,7 +61,7 @@ test('ContentRegistry resolves common archive resources by category, rejects dup
     second.registerEntry({
         category: 'reanim', id: 'example:solar_peashooter', contentId: 'example:solar-mod',
         contentVersion: '1.0.0', contentHash: 'example-solar-mod@1',
-        bundle: 'pvzmod:///example%3Asolar-mod/', path: 'solar.json', schemaVersion: 2,
+        path: 'solar.json',
     })
     assert.throws(() => second.registerEntry(second.resolve('reanim', 'example:solar_peashooter')!), /duplicate reanim/)
     second.freeze()

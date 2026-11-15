@@ -9,7 +9,6 @@ export interface ArchiveContent {
     ownerId: string
     ownerVersion: string
     contentHash: string
-    bundle: string
     path: string
 }
 
@@ -21,7 +20,7 @@ export function* archiveEntries(assets: ModAssets, tables: ResourceManifest): It
         for (const [id, value] of Object.entries(entries)) {
             if (!isOwnId(assets.id, id)) continue
             const path = typeof value === 'string' ? value : value.file
-            yield { id, kind: kind as ContentCategory, path, bundle: assets.baseUrl,
+            yield { id, kind: kind as ContentCategory, path,
                 ownerId: assets.id, ownerVersion: assets.manifest.version, contentHash: assets.manifest.contentHash }
         }
     }

@@ -7,8 +7,7 @@ import * as modApi from '@/shared/mod'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind,ScriptTarget,transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import { presentationFixture } from './presentationFixture'
 import * as kernelModule from '@/shared/kernel/index'
 import * as protocolModule from '@/shared/protocol'
@@ -26,11 +25,10 @@ const clientStubs: Record<string, unknown> = {
     '@/shared/kernel/index': kernelModule,
     '@/shared/protocol': protocolModule,
     '@/shared/protocol/index': protocolModule,
-    // The renderer names the views' handlers of the server's events; a test that plays none needs no more of them.
-    '@/client/plants/PlantView': { PlantView: {} },
-    '@/client/plants/GraveBusterView': { GraveBusterView: {} },
-    '@/client/zombies/ZombieView': { ZombieView: {} },
-    '@/client/projectiles/ProjectileView': { ProjectileView: {} },
+    // The renderer tells plants and zombies by their views' classes.
+    '@/client/plants/PlantView': { PlantView: class PlantView {} },
+    '@/client/zombies/ZombieView': { ZombieView: class ZombieView {} },
+    '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfPlantsVisible: true, perfZombiesVisible: true } },
     '@/shared/content/renderOrder': renderOrderModule,
     // What a view reads of the animation it shows.
     '@/shared/content/animation': animationModule,
@@ -39,43 +37,45 @@ const clientStubs: Record<string, unknown> = {
 }
 
 function loadClientModule(path: string, modules: Record<string, unknown>) {
-    const module = { exports: {} as Record<string, any> }
-    const code = transpileModule(readFileSync(`assets/scripts/client/${path}.ts`, 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(code.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? clientStubs[id] ?? {} })
-    return module.exports
+    return loadScript(`assets/scripts/client/${path}.ts`, (id: string) => modules[id] ?? clientStubs[id] ?? {})
 }
 clientStubs['@/client/view/EntityAttachments'] = loadClientModule('view/EntityAttachments', {})
 clientStubs['./EntityFlashes'] = loadClientModule('level/EntityFlashes', {})
-clientStubs['./LevelStage'] = loadClientModule('level/LevelStage', {})
+clientStubs['./LevelStage'] = clientStubs['@/client/level/LevelStage'] = loadClientModule('level/LevelStage', {})
 clientStubs['./zombieParts'] = loadClientModule('zombies/zombieParts', {})
+
+/** The board of a test: a level whose award is the sunflower, and the views it is given, with no event handled. */
+function renderer(LevelEntityRenderer: any, views: object, intro: object = { complete: true }) {
+    const content = { levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' } } } }, views: { events: { of: () => [] }, ...views } }
+    return new LevelEntityRenderer(content, {}, {}, {}, {}, intro, {})
+}
 
 test('a thing of a cell is drawn by its view like any entity: made when it comes, synced, and gone with it', async () => {
     const node = { isValid: true, setPosition() {}, destroy() { this.isValid = false } }
     const { LevelEntityRenderer } = loadClientModule('level/LevelEntityRenderer', { '@/client/view/uiNode': { uiNode: () => ({ node }) } })
     const made: any[] = [], synced: unknown[] = []
     let destroyed = 0
-    const content = { levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' } } } },
-        gridItemViews: { async create(context: unknown) { made.push(context); return { sync(item: unknown) { synced.push(item) }, destroy() { destroyed++ } } } } }
-    const renderer = new LevelEntityRenderer(0, content, {}, {}, {}, {}, {}, {}, { complete: true })
-    renderer.syncLayerOrder = () => {}
+    const board = renderer(LevelEntityRenderer, { gridItems: { async create(context: any) {
+        made.push({ ...context, quiet: context.stage.quiet })
+        return { sync(item: unknown) { synced.push(item) }, destroy() { destroyed++ } }
+    } } })
+    board.syncLayerOrder = () => {}
     const grave = { entityId: 4, typeId: 'pvz:grave', row: 2, column: 1 }
     const snapshot = { levelId: 'test:level', gameplayTick: 0, plants: [], zombies: [], projectiles: [], items: [], mowerRows: [], gridItems: [grave], cursor: { mode: 'none' } }
-    renderer.sync(snapshot, { added: [4], removed: [] }, [])
-    await renderer.creationTasks.get(4)
+    board.sync(snapshot, { added: [4], removed: [] }, [])
+    await board.creationTasks.get(4)
     assert.equal(made.length, 1)
     assert.equal(made[0].item, grave)
-    assert.equal(made[0].added, false, 'what the level starts with comes without what goes with coming')
+    assert.equal(made[0].quiet, true, 'what the level starts with comes without what goes with coming')
     assert.deepEqual(synced, [grave], 'shown as soon as it is made')
-    renderer.sync(snapshot, { added: [], removed: [] }, [])
+    board.sync(snapshot, { added: [], removed: [] }, [])
     assert.equal(synced.length, 2)
-    renderer.sync({ ...snapshot, gridItems: [] }, { added: [], removed: [4] }, [])
+    board.sync({ ...snapshot, gridItems: [] }, { added: [], removed: [4] }, [])
     assert.equal(destroyed, 1)
-    assert.equal(renderer.node(4), undefined)
-    renderer.sync({ ...snapshot, gridItems: [{ ...grave, entityId: 5 }] }, { added: [5], removed: [] }, [])
-    await renderer.creationTasks.get(5)
-    assert.equal(made[1].added, true, 'one that comes during play')
+    assert.equal(board.node(4), undefined)
+    board.sync({ ...snapshot, gridItems: [{ ...grave, entityId: 5 }] }, { added: [5], removed: [] }, [])
+    await board.creationTasks.get(5)
+    assert.equal(made[1].quiet, false, 'one that comes during play')
 })
 
 test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one counted tick early, the special stone from row 0', async () => {
@@ -104,6 +104,11 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
             return { node, transform: { width: options.size?.width, setContentSize(_width: number, height: number) { heights.set(node, height) } } }
         } },
     })
+    const makeGrave = async (context: object) => {
+        const view = new GraveView(context)
+        await view.initialize()
+        return view
+    }
     const content = {
         definitions: { boards: { 'test:board': { origin: { x: 40, y: 80 }, cell: { width: 80, height: 100 } } }, plants: {} },
         levels: { levels: { 'test:level': { board: 'test:board' } } },
@@ -112,14 +117,14 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
     const world = (gameplayTick = 0, phase = 'intro') => ({ levelId: 'test:level', phase, gameplayTick, plants: [] })
     let particles = 0
     const intro = { complete: false, elapsedTicks: 0, graveStartTick: 0 }
-    const stage = { intro, particle() { particles++ } }
+    const stage = { intro, quiet: false, particle() { particles++ } }
     const graves = [
         { row: 2, column: 1, variant: 7, riseDelay: 0, offsetX: 0, offsetY: 0, special: true },
         { row: 3, column: 1, variant: 7, riseDelay: 30, offsetX: 0, offsetY: 0 },
         { row: 0, column: 2, variant: 7, riseDelay: 0, offsetX: 0, offsetY: 0, special: true },
     ].map((grave, index) => ({ entityId: index + 1, typeId: 'pvz:grave', ...grave }))
     const roots = graves.map(() => new Node()), views: any[] = []
-    for (const [index, grave] of graves.entries()) views.push(await GraveView.create({ node: roots[index], content, item: grave, stage }))
+    for (const [index, grave] of graves.entries()) views.push(await makeGrave({ node: roots[index], content, item: grave, stage }))
     // Stone and dirt per grave: the special stone uses row 0, the others row 2 + look % 2, and the first lawn row row 1.
     assert.deepEqual(cells, [2, 2, 17, 17, 7, 7])
     const stone = (root: Node) => heights.get(root.children.find(child => child.name === 'Stone')!)!
@@ -151,7 +156,9 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
     assert.equal(stone(roots[0]), 0, 'nothing shows before the rise')
     particles = 0
     intro.elapsedTicks = 99
-    graves.forEach((grave, index) => views[index].sync(grave, world(), false))
+    stage.quiet = true
+    graves.forEach((grave, index) => views[index].sync(grave, world()))
+    stage.quiet = false
     assert.equal(stone(roots[0]), 100, 'counter 100 shows the whole cel')
     assert.equal(particles, 0, 'a restored game takes the state without the dirt')
     views[0].sync(graves[0], world(0, 'gameplay'))
@@ -159,8 +166,8 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
 
     // /grave: a grave added in play rises from its gameplay tick, with the intro's dirt, once.
     const added = { entityId: 9, typeId: 'pvz:grave', row: 1, column: 3, variant: 4, riseDelay: 0, offsetX: 0, offsetY: 0, riseAtTick: 500 }
-    const root = new Node(), board = { intro: { complete: true }, particle() { particles++ } }
-    const playing = await GraveView.create({ node: root, content, item: added, stage: board, added: true })
+    const root = new Node(), board = { intro: { complete: true }, quiet: false, particle() { particles++ } }
+    const playing = await makeGrave({ node: root, content, item: added, stage: board })
     playing.sync(added, world(500, 'gameplay'))
     assert.equal(particles, 1)
     assert.deepEqual(root.position, { x: 40 + 3 * 80 - 4 - 400, y: 300 - 80 - 100 + 9 }, 'its corner 4 left of and 9 above its cell')
@@ -171,7 +178,7 @@ test('graves rise as GridItem::DrawGraveStone draws them: whole pixels, one coun
     }
     assert.equal(particles, 1, 'the dirt shows once')
     const late = { ...added, entityId: 10, riseAtTick: 100 }
-    const shown = await GraveView.create({ node: new Node(), content, item: late, stage: board, added: true })
+    const shown = await makeGrave({ node: new Node(), content, item: late, stage: board })
     shown.sync(late, world(900, 'gameplay'))
     assert.equal(particles, 1, 'a grave that shows up past its rise tick spawns no dirt')
 })
@@ -189,7 +196,7 @@ test('plant and zombie Mod view factories share registration, conflict and freez
         assert.throws(() => registry.register('example:custom', () => view), /duplicate/)
         registry.freeze()
         assert.equal(await registry.create({
-            [kind]: { typeId: 'example:entity' }, animations: { definitions: { [`${kind}s`]: { 'example:entity': { view: 'example:custom' } } } },
+            [kind]: { typeId: 'example:entity' }, content: { presentation: { [`${kind}s`]: { 'example:entity': { view: 'example:custom' } } } },
         }), view)
         assert.throws(() => registry.register('example:late', () => view), /frozen/)
     }
@@ -205,19 +212,16 @@ test('removing an entity while its custom view loads disposes the completed plan
         let finish!: (view: unknown) => void
         let context: any
         const factory = { create(value: unknown) { context = value; return new Promise(resolve => { finish = resolve }) } }
-        const content = { plantViews: factory, zombieViews: factory, levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' } } } } }
-        const renderer = new LevelEntityRenderer(0, content, {}, {}, {}, {}, {}, {}, {})
+        const board = renderer(LevelEntityRenderer, { plants: factory, zombies: factory })
         const entity = { entityId: 1, typeId: 'test:entity', behaviorState: { ticks: 3 } }
-        const snapshot = { levelId: 'test:level', gameplayTick: 5, plants: [], zombies: [], mowerRows: [], projectiles: [], items: [],
-            [kind + 's']: [entity] }
-        const pending = renderer.create(1, snapshot)
+        const pending = board.create(kind, entity)
         assert.equal(context[kind], entity)
-        renderer.remove(1)
+        board.remove(1)
         let disposed = 0
         finish({ destroy() { disposed++ } })
         await pending
         assert.equal(disposed, 1)
-        assert.equal(renderer.node(1), undefined)
+        assert.equal(board.node(1), undefined)
     }
 })
 
@@ -229,16 +233,19 @@ test('only attachments a zombie view registers keep playing while it walks into 
     const flag = { isValid: true, isChildOf: () => false }
     const cloth = { isValid: true, isChildOf: (parent: unknown) => parent === flag }
     const body = { isValid: true, isChildOf: () => false }
-    const content = { levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' } } } },
-        zombieViews: { create(context: any) { context.attachments.add(flag); return { sync() {}, destroy() {} } } } }
-    const renderer = new LevelEntityRenderer(0, content, {}, {}, {}, {}, {}, {}, { complete: true })
-    await renderer.create(1, { levelId: 'test:level', gameplayTick: 0, plants: [], mowerRows: [], projectiles: [], items: [],
-        zombies: [{ entityId: 1, typeId: 'test:zombie' }] })
-    assert.equal(renderer.runsDuringGameOver(1, { node: flag }), true)
-    assert.equal(renderer.runsDuringGameOver(1, { node: cloth }), true, 'parts of an attachment follow it')
-    assert.equal(renderer.runsDuringGameOver(1, { node: body }), false, 'the body follows the scripted walk instead')
+    const { EntityAttachments } = clientStubs['@/client/view/EntityAttachments'] as any
+    const { ZombieView } = clientStubs['@/client/zombies/ZombieView'] as any
+    const board = renderer(LevelEntityRenderer, { zombies: { create() {
+        const view = Object.assign(new ZombieView(), { attachments: new EntityAttachments(), sync() {}, destroy() {} })
+        view.attachments.add(flag)
+        return view
+    } } })
+    await board.create('zombie', { entityId: 1, typeId: 'test:zombie' })
+    assert.equal(board.runsDuringGameOver(1, { node: flag }), true)
+    assert.equal(board.runsDuringGameOver(1, { node: cloth }), true, 'parts of an attachment follow it')
+    assert.equal(board.runsDuringGameOver(1, { node: body }), false, 'the body follows the scripted walk instead')
     flag.isValid = false
-    assert.equal(renderer.runsDuringGameOver(1, { node: flag }), false, 'a destroyed attachment leaves the slot')
+    assert.equal(board.runsDuringGameOver(1, { node: flag }), false, 'a destroyed attachment leaves the slot')
 })
 
 for (const kind of ['plant', 'zombie'] as const) test(`${kind} factories stay hidden while loading and paused restore reveals the current state`, async () => {
@@ -256,34 +263,33 @@ for (const kind of ['plant', 'zombie'] as const) test(`${kind} factories stay hi
         if (synced.length === 0) assert.equal(node.active, false, 'the initial pose must be applied before showing the entity')
         synced.push(plant)
     }
-    const view = { sync: show, update: show, restore() { restored = true } }
-    const content = { levels: { levels: { 'test:level': { award: { id: 'pvz:sunflower' } } } },
-        [kind + 'Views']: { async create() {
-            assert.equal(node.active, false, 'raw animation tracks must stay hidden while the factory loads')
-            await loading
-            return view
-        } } }
-    const renderer = new LevelEntityRenderer(0, content, {}, {}, {}, {}, {}, {}, { complete: true })
-    renderer.syncLayerOrder = () => {}
+    const view = { sync: show, restore() { restored = true } }
+    const board = renderer(LevelEntityRenderer, { [kind + 's']: { async create() {
+        assert.equal(node.active, false, 'raw animation tracks must stay hidden while the factory loads')
+        await loading
+        return view
+    } } })
+    board.syncLayerOrder = () => {}
     const plant = { entityId: 1, typeId: 'test:plant', x: 40, y: 280, health: 300 }
     const snapshot = { levelId: 'test:level', gameplayTick: 0, paused: true, plants: [], zombies: [], [kind + 's']: [plant], projectiles: [],
         items: [], mowerRows: [], cursor: { mode: 'none' } }
     const changes = { added: [1], removed: [] }
-    renderer.sync(snapshot, changes, [])
-    const creation = renderer.creationTasks.get(1)
-    renderer.sync(snapshot, changes, [])
+    board.sync(snapshot, changes, [])
+    const creation = board.creationTasks.get(1)
+    board.sync(snapshot, changes, [])
     assert.equal(node.active, false, 'normal visibility updates must not reveal a pending plant')
     const current = { ...plant, health: 200 }
-    renderer.sync({ ...snapshot, [kind + 's']: [current] }, { added: [], removed: [] }, [])
+    board.sync({ ...snapshot, [kind + 's']: [current] }, { added: [], removed: [] }, [])
     finish()
     await creation
-    assert.equal(node.active, false, 'factory completion alone must not expose its stale initial state')
-    await renderer.restore([{ kind, entityId: 1 }])
+    assert.equal(node.active, false, 'factory completion alone does not show it')
+    assert.deepEqual(synced, [current], 'a view made is shown as its entity is now, not as it was when it was asked for')
+    await board.restore([{ kind, entityId: 1 }])
     assert.equal(restored, true)
-    assert.deepEqual(synced, [current])
+    assert.deepEqual(synced, [current, current])
     assert.equal(node.active, true, 'paused restore must reveal entities without waiting for another tick')
     settings.perfPlantsVisible = settings.perfZombiesVisible = false
-    renderer.sync(snapshot, { added: [], removed: [] }, [])
+    board.sync(snapshot, { added: [], removed: [] }, [])
     assert.equal(node.active, false, 'the performance visibility switch still applies')
 })
 
@@ -313,7 +319,7 @@ test('a finished or cancelled shield drop cannot leave a component with a null n
     })
     const { EntityAttachments } = clientStubs['@/client/view/EntityAttachments'] as any
     const view = Object.assign(Object.create(ZombieView.prototype), {
-        node: new Node(), shadowNode: new Node(), layers: { player: () => ({ loadedId: null }), shown: [], show() {} }, animation: 'walk',
+        context: { content: {} }, node: new Node(), shadowNode: new Node(), layers: { player: () => ({ loadedId: null }), shown: [], show() {} }, animation: 'walk',
         attachments: new EntityAttachments(), mirrored: false,
         presentation: presentationFixture.zombies['pvz:newspaper'], applyHitFlash() {}, applyColor() {}, applyParts() {},
     })
@@ -378,7 +384,7 @@ test('ZIP caches are shared across content loaders and failed requests can retry
         cc: { JsonAsset: class {} },
         './ModResources': { modResources: packs },
     })
-    const content = { bundle: 'base', contentHash: 'hash', category: 'sprites', id: 'pvz:ready', path: 'ready' }
+    const content = { contentHash: 'hash', category: 'sprites', id: 'pvz:ready', path: 'ready', contentId: 'pvz' }
     class Asset {}
     const loader = new ClientContentLoader()
     assert.equal(await loader.load(content, Asset), assets.get('pvz:ready'))
@@ -500,7 +506,7 @@ test('a screen door zombie holds its door with the door arms, lowers them to eat
     const shown = new Map<string, boolean>()
     const player = { loadedId: 'pvz:door_zombie_walk', setTracksVisible(tracks: string[], visible: boolean) { for (const track of tracks) shown.set(track, visible) }, setTrackSpriteOverride() {} }
     const view = Object.assign(Object.create(ZombieView.prototype), {
-        layers: { player: () => player }, presentation, parts: '', holdingFlag: false, gameplay: { shield: { type: 'door', health: 1100 } }, sprites: { helms: {}, damagedArm: {} },
+        layers: { player: () => player }, presentation, parts: '', holdingFlag: false, gameplay: { shield: { type: 'door', health: 1100 } }, context: { stage: { assets: { zombieSprites: { helms: {}, damagedArm: {} } } } },
     })
     const zombie = { hasHead: true, hasTongue: false, hasArm: true, helmHealth: 0, shieldHealth: 1100, state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } } }
     const visible = (...tracks: string[]) => tracks.map(track => shown.get(track))
@@ -532,7 +538,7 @@ test('a player changes to another clip of its body in place: its batches stay, a
     const loader = { async load(content: { id: string }) { return { json: clips[content.id] } } }
     const batches = [{}]
     const player = Object.assign(Object.create(ReanimPlayer.prototype), {
-        data: null, views: new Map(), frames: new Map(), trackColors: new Map(), frameOverrides: new Map(), followers: new Map(),
+        data: null, views: new Map(), frames: new Map(), frameOverrides: new Map(), followers: new Map(),
         blendFromPoses: new Map(), batches, blendDuration: 0, blendElapsed: 0, timeSeconds: 5, drawingStale: false, applyPose() {},
     })
     assert.throws(() => player.change('pvz:walk', registry), /reanim is not loaded: pvz:walk/, 'a clip is in memory before it is played')
@@ -546,13 +552,12 @@ test('a player changes to another clip of its body in place: its batches stay, a
     Object.assign(player.views.get('arm'), { node: arm, visible: false })
     Object.assign(player.views.get('leg'), { node: leg })
     player.followers.set('arm', [{}]).set('leg', [{}])
-    player.trackColors.set('arm', {})
     player.timeSeconds = 3
     player.change('pvz:death', registry, 0.2)
     assert.equal(player.loadedId, 'pvz:death')
     assert.deepEqual([...player.views.keys()], ['arm', 'head'])
     assert.deepEqual([player.views.get('arm').node, player.views.get('arm').visible, arm.active, arm.isValid, leg.isValid], [arm, true, true, true, false])
-    assert.deepEqual([[...player.followers.keys()], player.trackColors.size, [...player.frames.keys()].sort()], [['arm'], 0, ['pvz:arm', 'pvz:head']])
+    assert.deepEqual([[...player.followers.keys()], [...player.frames.keys()].sort()], [['arm'], ['pvz:arm', 'pvz:head']])
     assert.equal(player.batches, batches, 'what draws it is not rebuilt')
     assert.deepEqual([[...player.blendFromPoses.keys()], player.blendDuration, player.blendElapsed, player.timeSeconds, player.drawingStale], [['arm'], 0.2, 0, 0, true],
         'it blends the tracks both clips have, from the start of the new one')
@@ -622,11 +627,12 @@ test("a projectile's impact sounds and splats without a view of the projectile, 
         cc: { Sprite: { SizeMode: { RAW: 0 } } },
         '@/client/particle/ParticlePlayer': { ParticlePlayer: { spawn(args: unknown) { spawned.push(args) } } },
         '@/client/level/LevelStage': loadClientModule('level/LevelStage', {}),
+        '@/client/sound/SoundSystem': { SoundSystem: { playSounds(value: unknown) { if (value) sounds.push(value) } } },
         '@/shared/content/teams': teamsModule,
     })
     const layer = {}, zombieNode = {}
     const stage = {
-        layer, node: (id: number) => id === 7 ? zombieNode : undefined, audio: { sounds(value: unknown) { if (value) sounds.push(value) } },
+        layer, node: (id: number) => id === 7 ? zombieNode : undefined,
         assets: { projectileFrames: { 'test:pea': { originalSize: { width: 28, height: 28 } } } },
         content: {
             definitions: { projectiles: { 'test:pea': { hitbox: { x: 0, y: 0, width: 28, height: 28 } }, 'test:melon': { hitbox: { x: 20, y: 0, width: 60, height: 40 } } } },
@@ -678,4 +684,29 @@ test('a clip that ends plays over its own pictures and goes on where they end; a
     const cherry = shownLayer({ clip: 'explode', time: 5, rate: 12 }, layers,
         { ...clips, picture: (name: string) => ({ reanimId: name, rateScale: 1, fps: 30 }), duration: () => 14 / 30 })
     assert.deepEqual([cherry.once, cherry.frames], [true, undefined], 'its 14 pictures are as long as the clip')
+})
+
+test('a Mod hears of an event after the base, at the time it asks, and a Mod that failed to load takes its handlers away', () => {
+    // The base's handlers are the views' statics: any function stands in for them here.
+    const statics = new Proxy({}, { get: () => () => {} })
+    const views = Object.fromEntries([['plants/PlantView', 'PlantView'], ['plants/ChomperView', 'ChomperView'], ['plants/GraveBusterView', 'GraveBusterView'],
+        ['zombies/ZombieView', 'ZombieView'], ['projectiles/ProjectileView', 'ProjectileView'], ['projectiles/MowerView', 'MowerView'],
+        ['items/ItemView', 'ItemView'], ['items/AwardView', 'AwardView']].map(([path, name]) => [`@/client/${path}`, { [name]: statics }]))
+    const { StageEventRegistry } = loadClientModule('level/StageEventRegistry', views)
+    const registry = new StageEventRegistry()
+    const base = registry.of('plantExploded', 'after').length
+    assert.ok(base > 0)
+    const undo = registry.checkpoint()
+    const mine = () => {}
+    registry.register('plantExploded', mine)
+    registry.register('example:zap', mine, 'before')
+    assert.equal(registry.of('plantExploded', 'after').at(-1), mine)
+    // The registry is of the module's own realm: its lists are compared by what is in them.
+    assert.deepEqual([...registry.of('example:zap', 'before')], [mine])
+    assert.equal(registry.of('example:zap', 'after').length, 0)
+    undo()
+    assert.equal(registry.of('plantExploded', 'after').length, base)
+    assert.equal(registry.of('example:zap', 'before').length, 0)
+    registry.freeze()
+    assert.throws(() => registry.register('example:late', mine), /frozen/)
 })

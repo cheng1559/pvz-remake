@@ -23,12 +23,25 @@ const roundToInt = (value: number) => value > 0 ? Math.trunc(value + 0.5) : Math
 export class GraveView implements GridItemView {
     /** How far the level's own graves had risen when last shown; undefined before the first time. */
     private ticks?: number
+    /** It came with the level, as it started or was loaded, not put down during play: it shows none of its coming. */
+    private readonly cameWithLevel: boolean
 
-    static async create(context: GridItemViewContext): Promise<GraveView> {
-        const sprites = new SpriteRepository(context.content.registry, context.content.loader)
+    private width = 0
+    private height = 0
+    private stone!: Node
+    private dirt!: Node
+    private stoneSize!: UITransform
+    private dirtSize!: UITransform
+
+    constructor(private readonly context: GridItemViewContext) {
+        this.cameWithLevel = context.stage?.quiet ?? true
+    }
+
+    async initialize(): Promise<void> {
+        const { node, item, content } = this.context, grave = item as Partial<GraveSnapshot>
+        const sprites = new SpriteRepository(content.registry, content.loader)
         const [stones, mounds] = await Promise.all(['tombstones', 'tombstone_mounds'].map(id => sprites.load(`pvz:${id}`)))
-        const { node, item } = context, grave = item as Partial<GraveSnapshot>
-        const width = stones.originalSize.width / COLUMNS, height = stones.originalSize.height / ROWS
+        const width = this.width = stones.originalSize.width / COLUMNS, height = this.height = stones.originalSize.height / ROWS
         // The first row of the lawn has its own stones, and one grave of a level the special ones.
         const cell = (grave.row === 0 ? 1 : grave.special ? 0 : 2 + (grave.variant ?? 0) % 2) * COLUMNS + (grave.variant ?? 0) % COLUMNS
         const part = (name: string, atlas: typeof stones) => {
@@ -39,15 +52,19 @@ export class GraveView implements GridItemView {
             return clip
         }
         const stone = part('Stone', stones), dirt = part('Dirt', mounds)
-        const view = new GraveView(context, width, height, stone.node, dirt.node, stone.transform, dirt.transform)
-        view.layout(Infinity, 0)
-        return view
+        this.stone = stone.node
+        this.dirt = dirt.node
+        this.stoneSize = stone.transform
+        this.dirtSize = dirt.transform
+        this.show()
     }
 
-    private constructor(private readonly context: GridItemViewContext, private readonly width: number, private readonly height: number,
-        private readonly stone: Node, private readonly dirt: Node, private readonly stoneSize: UITransform, private readonly dirtSize: UITransform) {}
+    /** The grave off the board: risen. */
+    show(): void {
+        this.layout(Infinity, 0)
+    }
 
-    sync(grave: GraveSnapshot, world: WorldSnapshot, effects = true): void {
+    sync(grave: GraveSnapshot, world: WorldSnapshot): void {
         const { stage, node, content } = this.context
         if (!stage || !node.isValid) return
         const board = content.definitions.boards[content.levels.levels[world.levelId].board]
@@ -59,11 +76,11 @@ export class GraveView implements GridItemView {
         node.setScale(mirrored ? -1 : 1, 1, 1)
         // The level's own graves rise from the intro's grave tick; a level in play has them risen.
         const ticks = world.phase === 'gameplay' || stage.intro.complete ? Infinity : stage.intro.elapsedTicks - (stage.intro.graveStartTick ?? 0)
-        const added = this.context.added && this.ticks === undefined
         // CutScene::AddGraveStoneParticles, once, as the rise starts; and a grave put down in play, unless it is
-        // already past its rise tick.
-        if (effects && (grave.riseAtTick === undefined ? this.ticks !== undefined && this.ticks < 0 && ticks >= 0
-            : added && world.gameplayTick <= grave.riseAtTick)) this.riseEffects(grave, world)
+        // already past its rise tick. A board shown quietly (a save put back) takes the state without them.
+        const first = this.ticks === undefined
+        if (!stage.quiet && (grave.riseAtTick === undefined ? !first && this.ticks! < 0 && ticks >= 0
+            : first && !this.cameWithLevel && world.gameplayTick <= grave.riseAtTick)) this.riseEffects(grave, world)
         this.ticks = ticks
         // mGridItemCounter starts at -delay and Board::UpdateGridItems counts it in the tick the rise starts; a grave
         // added in play starts counting the tick after (graveRiseCounter).
@@ -89,7 +106,7 @@ export class GraveView implements GridItemView {
 
     /** `counter`: how far it has risen (mGridItemCounter); `eaten`: pixels a grave buster has eaten off the stone's top. */
     private layout(counter: number, eaten: number): void {
-        if (!this.stone.isValid) return
+        if (!this.stone?.isValid) return
         // PvzpAnimateCurve rounds each step to whole units (FloatRoundToInt).
         const position = roundToInt(easeInOut(0, 100, counter, 1000, 0))
         const stoneHeight = roundToInt(easeInOut(0, 1000, position, this.height, 0))

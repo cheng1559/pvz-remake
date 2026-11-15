@@ -36,7 +36,7 @@
 
 图鉴条目（植物的名称键、卡包图片编号和种子 ID、背景地面，僵尸的首次出场关卡等；植物的费用和冷却取自其种子定义的 `sunCost`、`cooldownTicks`，与原版图鉴读取 `gPlantDefs` 一致）配置在 `mods/pvz-base/gameplay/almanac.json`，登记为 `pvz:gameplay/almanac`，和商店一样由应用加载后注入后端；`server/menu/almanacCatalog` 只负责校验和解锁规则。图鉴按当前档案显示：植物只列出种子已拥有且已安装的（档案的 `seeds` 加 `seedBank.startingSeeds`，与选卡相同），其余格子不绘制；僵尸按 `gZombieDefs` 的 `mStartingLevel`，到达首次出场关卡才显示（`ZombieIsShown`，伴舞、雪橇队和小鬼要过了该关），否则画空白窗口且不可点；过了首次出场关卡才有说明（`ZombieHasDescription`），之前说明框居中显示 `NOT_ENCOUNTERED_YET`。通关冒险后僵尸全部显示。尚未实现：原版在本次选定玩家后击败过的僵尸也会提前显示说明（`gZombieDefeated`），以及雪人可出现前的剪影，目前雪人在可出现前直接隐藏。
 
-已实现实体的图鉴动画、身体坐标、缩放和影子来自统一表现定义；选卡预览也直接使用待机动画的坐标。生成器按身体动画资源自动匹配已有定义，目录只保留图鉴专用的布局、缩略图及种子包姿态参数。`almanac.py` 的类型绘制偏移表仅用于尚无动画定义的展示条目。
+已实现实体的图鉴动画、身体坐标、缩放和影子来自统一表现定义；选卡预览也直接使用待机动画的坐标。图鉴目录 `mods/pvz-base/gameplay/almanac.json` 只列出条目的顺序、文本键、对应的种子或僵尸，以及背景或出场关卡。
 
 主场景挂载 `app/GameApp.ts`，协调菜单页面，并通过 `app/LevelController.ts` 启动 `LocalIntegratedGame`。战斗逻辑在 `server` 中运行，客户端处理协议快照和事件。`server`、`shared`、`ecs` 不应引入引擎依赖。
 
@@ -64,7 +64,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 `AchievementScreen` 进入时通过 `getAchievements()` 一次读取成就定义（玩法定义的 `achievements` 表，本体 21 条按原版顺序，Mod 可追加）和当前用户已获得的成就 ID。触发、发放和领奖页展示见 [成就](ACHIEVEMENTS.zh-CN.md)。页面沿用两列坐标、70px 图集单元的 0.8 倍图标、绿色标题、位图换行说明，以及已解锁／未解锁图标的 255／32 透明度。复用 `UIScroll` 实现原滚轮每步 435px／0.35 秒、More／Top 每次 230px、触摸惯性，滚动动画接全局时钟。方向键按 GOTY：每次按下把速度设为 30，每 10ms 减 1 并移动对应像素，单次约 435px，连发只重置速度、不叠加。地下平铺背景和返回按钮随内容移动；滚动不请求数据，页面也不授予成就。
 
-主菜单由 `MainMenuScreen` 组合新版 `ReanimPlayer`，`MainMenuConfig` 保留原版按钮贴图、轨道偏移和多边形区域。入场按 `open → sign` 播放并停在末帧，另有独立云层、草和可点击的花。商店、图鉴和成就保留调用页面，关闭后不重播主菜单入场；进入帮助、挑战、花园、标题或战斗会销毁原菜单，返回时创建新实例并重新入场。`MenuPages.retainPrevious` 显式声明保留调用页面的入口，商店从花园打开时也保留原花园。设置、玩家列表、退出确认、暂停、失败和局内设置不是页面，而是菜单弹窗（`client/dialogs/MenuDialog`），对应原版的 Dialog：`GameApp.openDialog` 一次只打开一个，盖在当前页面或已暂停的关卡上，下层保持不变，关闭前不接收输入。主菜单按钮用同一个 `target` 指定页面或弹窗。冒险入口根据当前档案切换开始／继续贴图和关卡数字，点击后播放 4.5 秒闪烁、僵尸手和音效，再进入已有 1-1。人物形象编辑入口目前显示未开放提示。
+主菜单由 `MainMenuScreen` 组合新版 `ReanimPlayer`，表现定义的 `mainMenu`（`main-menu.json`）保存原版按钮贴图、轨道偏移和多边形点击区域。入场按 `open → sign` 播放并停在末帧，另有独立云层、草和可点击的花。商店、图鉴和成就保留调用页面，关闭后不重播主菜单入场；进入帮助、挑战、花园、标题或战斗会销毁原菜单，返回时创建新实例并重新入场。`MenuPages.retainPrevious` 显式声明保留调用页面的入口，商店从花园打开时也保留原花园。设置、玩家列表、退出确认、暂停、失败和局内设置不是页面，而是菜单弹窗（`client/dialogs/MenuDialog`），对应原版的 Dialog：`GameApp.openDialog` 一次只打开一个，盖在当前页面或已暂停的关卡上，下层保持不变，关闭前不接收输入。主菜单按钮用同一个 `target` 指定页面或弹窗。冒险入口根据当前档案切换开始／继续贴图和关卡数字，点击后播放 4.5 秒闪烁、僵尸手和音效，再进入已有 1-1。人物形象编辑入口目前显示未开放提示。
 
 页面由 `MenuScreen.prepare()` 在后台准备，再通过 `ScreenTransition` 切换。主菜单与成就页沿用旧版 0.75 秒上下滑动和双 S 曲线，主菜单在滑动后继续保留于屏幕外。`PageFade` 跟随页面激活和销毁：普通领奖从白色渐显，帮助从黑色渐显，按原版 180 个 10ms 游戏 tick 递减 alpha（1 倍速为 1.8 秒）。渐变节点只绘图，不阻断鼠标、触摸或键盘；页面渐变开始后立即释放导航锁，可中途返回，帮助页的 Enter／Space／Escape 均返回主菜单。仅资源准备、页面提交和成就滑动期间阻止重复操作。其余页面和弹窗直接切换，不额外添加通用淡入淡出；加载失败保留原页面和返回历史。
 
@@ -74,7 +74,7 @@ Release 在加载页准备全部资源和动画贴图，图鉴与种子包预览
 
 玩法配置按类别拆分在 `mods/pvz-base/gameplay/definitions/`：`plants.json`、`zombies.json`、`seeds.json` 等；`gameplay/settings.json` 保存全局默认参数，根目录 `content.json` 索引所有分类文件；打包时和 Mod 一样合并为 `assets/gameplay.json`，不增加资源请求。植物和僵尸的数值与 PvZ-Portable 和上一版一致。植物最多带一种能力：`shooter`（射手）、`producer`（向日葵）、`fuse`（樱桃炸弹，100 tick 后 3x3 烧焦）、`mine`（土豆雷，1500 tick 出土、106 tick 升起，炸 1800 且不留尸体）、`chomper`（大嘴花，70 tick 咬合、吞下后消化 4000 tick），没有能力的植物只阻挡（坚果墙）；`deathExplosion` 让爆炸坚果被吃掉时爆炸。`server/plants/abilities.ts` 的 `pvz:plant-abilities` 系统按 `Plant.ability` 状态推进，客户端 `client/plants` 下的视图按该状态切换动画，并负责眨眼、裂纹和土豆雷红灯。
 
-僵尸有两个防具位，与原版一致：一类防具 `helm`（`mHelmType`：路障 370、铁桶 1100）和二类防具 `shield`（`mShieldType`：报纸 150、铁栅门 1100），都写作 `{type, health}`，可以同时装备。伤害按 `Zombie::TakeDamage` 先打盾、再打头盔、最后打本体；盾不吃减速、算波次血量时按 0.2 计入，大喷菇穿过盾同时打本体；头盔、盾耗尽时分别发出 `zombieHelmDropped`、`zombieShieldDropped`；被割草机碾压时，戴着的头盔和盾牌先掉落（`Zombie::MowDown`）；`gait` 引用共用步态表，提供走路地面轨迹、啃食与死亡帧数；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `npm run build:content -- --pak /path/to/main.pak` 合并进现有转换输出，同步玩法数据并重新打包内置 ZIP。
+僵尸有两个防具位，与原版一致：一类防具 `helm`（`mHelmType`：路障 370、铁桶 1100）和二类防具 `shield`（`mShieldType`：报纸 150、铁栅门 1100），都写作 `{type, health}`，可以同时装备。伤害按 `Zombie::TakeDamage` 先打盾、再打头盔、最后打本体；盾不吃减速、算波次血量时按 0.2 计入，大喷菇穿过盾同时打本体；头盔、盾耗尽时分别发出 `zombieHelmDropped`、`zombieShieldDropped`；被割草机碾压时，戴着的头盔和盾牌先掉落（`Zombie::MowDown`）；玩法定义的 `animation` 给出各片段的帧数、走路的地面轨迹和啃食、死亡的标记帧，`from` 沿用另一种僵尸的片段；`vault` 描述撑杆僵尸的奔跑、跳跃和落地。投射物的 `chillTicks` 让僵尸动画、行走和啃食减半，与原版 `ApplyAnimRate` 相同。樱桃炸弹和爆炸坚果的爆炸会把僵尸烧成 `pvz:zombie_charred`，无头僵尸则变黑停住 300 tick。新增战斗动画由 `npm run build:content -- --pak /path/to/main.pak` 合并进现有转换输出，同步玩法数据并重新打包内置 ZIP。
 
 ## 服务端关卡结构
 
@@ -108,9 +108,9 @@ Mod 通过 `host.get('server/components')` 等固定名称取用模块，名称�
 
 `LevelGameOverPresenter` 使用失败后的前 150 tick，让获胜僵尸保持可见并从当前行走到门口，再衔接进屋行走和镜头移动。靠近门口时保留在门框前方的普通实体层，进入门口后才转入遮挡层；撑杆僵尸等越界位置已在门后方的对象，会在靠近过程中平滑移动到门口裁剪边缘再进入。`ZombieView` 连续推进两段动作的步态，不重新开始动画；服务端快照保持冻结。场上其余动画暂停，获胜僵尸挂件清单 `EntityAttachments`（对应原版 `mAttachmentID`）中的旗帜、惊叹号等继续播放。植物和僵尸外观都从上下文的 `attachments.add(node, type?)` 登记挂件，可按种类移除（如死亡时移除惊叹号）。挂在身体轨道上的动画（`attachToTrack`）自动继承身体的颜色和受击闪光，对应原版 `PropogateColorToAttachments`；清单挂件不继承颜色。失败演出仍持续 1100 tick，音效时序沿用原流程。
 
-`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。已验收的 1-1 铺草坪、预览僵尸和引导步骤位于 `level/adventure/Adventure11*`；通用流程不包含 1-1 时序。`level/boards/DayBoard` 保存白天背景、音乐和进屋门框参数；`mods/pvz-base/presentation/definitions/` 按类别维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，根目录 `mods/pvz-base/content.json` 和 Mod 使用相同的分类索引，打包时合并生成归档内的 `assets/presentation.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前安装了 1-1 至 2-5 内容。
+`LevelPresentation` 按后端 tutorial ID 选择开场和教程提示配置。冒险开场（铺草坪、预览僵尸、小推车入场）位于 `level/adventure/AdventureIntro`；通用流程不包含开场时序。场地的背景、音乐和失败场景坐标在表现定义的 `boards`（`boards.json`）中；`mods/pvz-base/presentation/definitions/` 按类别维护植物和僵尸的动画、种子包图集位置、视图类型、阴影和掉落图片，根目录 `mods/pvz-base/content.json` 和 Mod 使用相同的分类索引，打包时合并生成归档内的 `assets/presentation.json`。类型和校验统一位于 `shared/content/presentation.ts`，与玩法定义 `shared/content/gameplay.ts` 对应。后续关卡新增后端内容，并添加或复用 presentation 配置；新场景补充对应 board 展示配置，无需复制关卡流程、输入、HUD 或存档控制器。目前安装了 1-1 至 2-5 内容。
 
-客户端存档统一写入 `level` 字段，读取时兼容原 `adventure11` 字段；开场专属的状态校验放在各自的实现中。共用关卡布局为 `assets/resources/ui/level.prefab`，资源 ID 为 `pvz:level`，保留原 Prefab 和脚本 UUID。`client/showcase` 仅保留独立资源预览探针。
+客户端存档统一写入 `level` 字段；开场专属的状态校验放在各自的实现中。共用关卡布局为 `assets/resources/ui/level.prefab`，资源 ID 为 `pvz:level`，保留原 Prefab 和脚本 UUID。
 
 ## UI 组件
 
@@ -231,20 +231,26 @@ npm run check:preview -- --dry-run   # 只检查，不改文件
 
 iOS 禁止 JIT，V8 以解释模式运行，JS 开销远高于桌面，性能结论以真机为准。`PVZ_JS_PROFILE=1 npm run compile:ios:release` 在 Release 构建中打开 V8 调试端口（6086），不改变 `CC_DEBUG`。安装后用 `pymobiledevice3 usbmux forward 16086 6086` 转发端口，再运行 `npx tsx tools/profile/ios.ts http://127.0.0.1:16086 10 /tmp/pvz.cpuprofile` 采样并列出耗时最高的函数。`/level pvz:stress-test` 并用 `/fps` 打开帧率，用于高负载对比。
 
-动画和粒子不再每个部件一个节点：`ReanimPlayer` 把动画的图片放进共享图集页（`AnimationAtlas`），每个实例用一两个 `ReanimBatch` 直接写顶点；只有 `getTrackNode` 用到的部件才建节点，并在该处切开批次以保持绘制顺序。关键帧采样、过渡、附着矩阵、写顶点只在 `native/engine/common/kernel/` 的 C++ 里实现一次：原生平台经 `KernelBindings.cpp` 直接调用（iOS 的 JS 引擎没有 JIT，也就没有 WebAssembly）；Web 和测试使用同一源码编译的 WebAssembly，由 `assets/scripts/shared/kernel/` 统一封装。修改 C++ 后运行 `npm run build:kernel`（需要 Emscripten）重新生成并提交 `binary.ts`，其他构建不需要 Emscripten。粒子统一使用 `shared/content/particle.ts` 的 schemaVersion 3 格式与 `client/particle/ParticlePlayer` 入口。随机数、生成、寿命、场、颜色和变换由同一 C++ 核心计算，每个发射器一个 `ParticleBatch`，直接接收核心生成的四边形；同一帧的多个模拟 tick 一次进入核心，仅渲染最后状态。存档继续保存种子和年龄，通过核心重放恢复，播放器销毁或重新播放时释放核心状态。达到固定生成上限且已无粒子的系统会合并等待到期的 tick，并跳过空渲染，原寿命和存档年龄保持一致。
+动画和粒子不再每个部件一个节点：`ReanimPlayer` 把动画的图片放进共享图集页（`AnimationAtlas`），每个实例用一两个 `KernelBatch` 直接写顶点；只有 `getTrackNode` 用到的部件才建节点，并在该处切开批次以保持绘制顺序。关键帧采样、过渡、附着矩阵、写顶点只在 `native/engine/common/kernel/` 的 C++ 里实现一次：原生平台经 `KernelBindings.cpp` 直接调用（iOS 的 JS 引擎没有 JIT，也就没有 WebAssembly）；Web 和测试使用同一源码编译的 WebAssembly，由 `assets/scripts/shared/kernel/` 统一封装。修改 C++ 后运行 `npm run build:kernel`（需要 Emscripten）重新生成并提交 `binary.ts`，其他构建不需要 Emscripten。粒子统一使用 `shared/content/particle.ts` 的 schemaVersion 3 格式与 `client/particle/ParticlePlayer` 入口。随机数、生成、寿命、场、颜色和变换由同一 C++ 核心计算，每个粒子系统一个 `KernelBatch`，直接接收核心生成的四边形；同一帧的多个模拟 tick 一次进入核心，仅渲染最后状态。存档继续保存种子和年龄，通过核心重放恢复，播放器销毁或重新播放时释放核心状态。达到固定生成上限且已无粒子的系统会合并等待到期的 tick，并跳过空渲染，原寿命和存档年龄保持一致。
 
-Debug 构建保留 `pvzPhase4` 关卡调试入口；Mod 开发和安装见 [Mod 说明](MODS.md)。
+Debug 构建在全局变量 `pvzLevel` 上保留关卡调试入口；Mod 开发和安装见 [Mod 说明](MODS.md)。
 
 ### 植物与僵尸的客户端表现
 
-- `client/plants`：每种植物都按玩法定义的 `animation` 绘制（各层播哪个片段、播到哪），`PlantView` 是唯一的植物视图：关卡内 `sync` 跟随服务端快照，关卡外 `show` 由调用方按同一套规则推进。`CherryBombView`、`ChomperView`、`WallNutView`、`GraveBusterView` 在它之上加各自的关卡内表现（抖动、猎物手臂、裂纹、下沉）。Mod 的植物视图继承 `PlantView`（导出名 `client/plants/PlantView`），用 `playable` / `shown` 两个方法在某一层换上自己的片段；它可能在关卡外被创建，关卡专属的逻辑放在 `sync` 里。
-- 场上的每样东西都由它的视图绘制，按表现层定义里的 `view` 从注册表创建（`host.get('client/views')` 的 `plants`、`zombies`、`projectiles`、`gridItems`，Mod 可注册自己的）：
-  - `PlantView.update` 是关卡每帧的入口：摆放和朝向、被小推车压扁、冰冻变蓝减速、铲子高亮都在这里，然后调 `sync` 显示植物本身。
-  - `client/projectiles/ProjectileView` 画子弹的贴图或循环动画、地上的影子和拖尾，并按飞行方向旋转；`MowerView` 用同一个视图画等待中的小推车（缓存图）和触发后的小推车（动画）。
+- `client/plants`：每种植物都按玩法定义的 `animation` 绘制（各层播哪个片段、播到哪），`PlantView` 是唯一的植物视图：关卡内 `sync` 跟随服务端快照，关卡外 `show` 由调用方按同一套规则推进。`CherryBombView`、`ChomperView`、`WallNutView`、`GraveBusterView` 在它之上加各自的关卡内表现（抖动、猎物手臂、裂纹、下沉）。Mod 的植物视图继承 `PlantView`（导出名 `client/plants/PlantView`），用 `playable` / `shown` 两个方法在某一层换上自己的片段；它可能在关卡外被创建，关卡专属的逻辑放在 `onBoard` 里。
+- 场上的每样东西都由它的视图绘制。视图按种类各有注册表，合在 `ClientViews` 里（`content.views`；Mod 用 `host.get('client/views')`，下有 `plants`、`zombies`、`projectiles`、`gridItems`、`items` 和 `events`），按表现层定义里的 `view` 选用，Mod 可注册自己的。五种视图遵守同一套约定（`LevelStage.ts` 的 `EntityView`）：
+  - 由注册表按类创建（`registerView`）：用上下文 `{ node, content, 实体, stage?, draw? }` 构造，再 `initialize`。场上有 `stage`，场外没有；资源、影子图、当前关卡都从 `stage` 取。
+  - 关卡内每帧调 `sync(实体, world)`，节点由视图自己摆放；新建的视图一建好就按当时的快照 `sync` 一次。能在场外画的视图另有 `show`。
+  - 需要跨存档保留的东西由视图自己 `snapshot`／`restore`：植物和僵尸的受击闪光（数据在 `stage.flashes`）、僵尸身体和推车驱动的动画位置、阳光和钱币的旋转。存档里的条目按种类 `plant`／`zombie`／`item` 区分。
+  - 视图外的影子节点（僵尸、子弹）叫 `shadowNode`，渲染器统一把它排在地面层。
+- 各视图：
+  - `PlantView.sync`：摆放和朝向、被小推车压扁、冰冻变蓝减速、铲子高亮都在这里，然后调 `onBoard` 显示植物本身；子类和 Mod 在 `onBoard` 里加各自的关卡内表现，要粒子时调 `this.particle`。
+  - `ZombieView` 只有这一个类，Mod 的僵尸视图继承它；`typeId`、`attachments`（随僵尸一起走进房子的附属物）是公开的。
+  - `client/projectiles/ProjectileView` 画子弹的贴图或循环动画、地上的影子和拖尾，并按飞行方向旋转；还没飞出去的（等待中的小推车）走 `show`，`MowerView` 在那里画它停着的样子。
   - `client/gridItems`：格子物件（原版 `GridItem`）是服务端的实体，快照的 `gridItems` 按 `typeId` 列出。`GraveView` 画墓碑的升起和被吞噬；绘制层级写在表现层 `gridItems` 定义的 `layer`／`offset` 里。坑洞以后作为另一种类型加入。
-  - `LevelItemView` 画阳光、钱币和关卡奖励。
-- `LevelEntityRenderer` 只做四件事：哪些实体存在、按注册表创建和销毁视图、决定绘制层级、把服务端事件交给对应视图的处理函数。事件引起的效果写在所属的视图里（`PlantView.exploded`、`ZombieView.partDropped`、`ProjectileView.impact` 等静态函数）；它们只依赖事件数据和 `LevelStage`，不要求视图已经创建，所以刚出现就命中的子弹也有溅射。种植的泥土是场地的效果（`Board::DoPlantingEffects`），留在渲染器里。
-- `client/level/LevelStage` 是视图眼中的场地：实体层、资源、按层级生成粒子（`particle`）、把自己的节点排进绘制顺序（`addScenery`）、查别的实体的节点和视图。
+  - `client/items`：`ItemView` 画阳光和钱币，`AwardView` 画关卡奖励；物品的表现层定义可用 `view` 指定别的视图。
+- 服务端事件引起的画面和声音都写在所属视图的静态处理函数里（`PlantView.exploded`、`ZombieView.rose`、`ProjectileView.impact`、`ItemView.collected` 等），在 `ClientViews.events`（`StageEventRegistry`）里按事件类型登记；Mod 用 `register(类型, 函数, 'before' | 'after')` 给自己的或本体的事件加处理。处理函数只依赖事件数据和 `LevelStage`，不要求视图已经创建，所以刚出现就命中的子弹也有溅射。种植的泥土和声音是场地的效果（`Board::DoPlantingEffects`），也登记在这里。`LevelAudioPresenter` 只留关卡自己的声音：音乐、工具、波次、奖励、成就、阳光不足的蜂鸣。表现层写的音效列表用 `SoundSystem.playSounds` 播放。
+- `LevelEntityRenderer` 只做四件事：哪些实体存在、按注册表创建和销毁视图、决定绘制层级、把服务端事件交给登记的处理函数。它是视图眼中的场地（`client/level/LevelStage`）：实体层、资源、当前关卡、闪光数据、按层级生成粒子（`particle`）、把自己的节点排进绘制顺序（`addScenery`）、查别的实体的节点和视图。`quiet` 为真时（关卡的第一帧、读档）视图只摆出状态，不播"到达这个状态"的效果，比如墓碑升起的泥土。
 - `client/zombies/ZombieView` 按玩法定义的 `animation` 绘制僵尸的各层：`body` 是身体，其后是它携带的东西（旗子僵尸的 `flag` 层，以后气球的螺旋桨），片段写了 `attachmentTrackId` 的层挂在下层的这条轨道上、并在这条轨道处绘制（原版 `Reanimation::DrawRenderGroup`）。画层的代码 `LayerPlayers`（`client/view/layerPlayback`）由 `PlantView` 和 `ZombieView` 共用。冰冻只让身体减半（`Zombie::ApplyAnimRate`），携带物照自己的速率；旗子掉落由服务端删去 `flag` 层。并处理受伤部件、寒冰颜色、旗帜和碾压；影子写作 `shadow: {x, y, backwardsX?}`，与植物相同；表现层的 `view` 对植物和僵尸都可省略（默认 `plant`／`zombie`）；数值、移动和技能状态仍由服务端控制。
 - `ClientAnimationRegistry` 从上述 JSON 初始化，保留 Mod 动画覆盖、参数校验和冻结逻辑。新增表现应在对应定义和专属视图中维护，避免向通用关卡渲染器追加类型 ID 分支。
 
@@ -266,6 +272,6 @@ Debug 构建保留 `pvzPhase4` 关卡调试入口；Mod 开发和安装见 [Mod 
 
 关卡波次可以逐波列出（`waves: [{ zombies, flagWave?, points? }]`，如 `mods/example`），也可以由已注册的关卡规则生成：`rules: { kind, count, ...settings }`，二者选一。关卡规则（`server/rules/registry.ts` 的 `LevelRuleDefinition`）除了生成波次，还可以在原版 `Board` 调用 `Challenge` 的固定位置改变玩法：`systems`、`spawnsZombies`、`initialize`、`boardClick`、`cursorCleared`、`dropsRefusedSeeds`、`canPlantAt`、`dropLoot`、`holdsAward`，自己的状态存在 `wave.ruleState`（由 `parseState` 校验），给客户端的状态放在快照的 `extensions[kind]`。通用代码只调这些扩展点，不按关卡或规则 ID 判断。客户端对应的视图在 `client/level/rules/`（`registerLevelRuleView`），表现参数在 `presentation/definitions/rules.json`。内置三种规则：`pvz:adventure`、`pvz:bowling`（冒险出怪、点数固定乘 4、不掉钱）、`pvz:whack-a-zombie`。内置的 `pvz:adventure` 按原版首次冒险的 `Board::PickZombieWaves`：每波点数、旗帜波的普通僵尸和旗帜僵尸、可选的点数倍率 `pointsScale`（1-10 为 3）、在随机挑选前放入的 `fixedZombies`（本关引入的僵尸，放在第 count/2+1 波和最终波），以及最终波按僵尸池顺序补齐还没出现的有权重类型（`PutInMissingZombies`）。规则自己校验参数。`zombiePool` 的条目可以只写僵尸 ID，`points`、`weight`、`firstWave` 取僵尸的 `wave`，也可以写对象覆盖。整局出怪计划在开局时生成并随存档保存。Mod 通过 `GameplayRegistry.levelRules.register(owner, kind, { validate, draft, ...扩展点 })` 注册新规则。
 
-玩法 `boards.*.bounds` 决定场地水平边界，僵尸 `dropsFlag` 决定掉旗能力；表现 `boards` 保存背景、音乐和失败场景坐标。粒子的可选剩余时长随快照保存，种子闪光读取 `seedPackets.flash`，恢复不再按特效 ID 分支。商店数据位于 `mods/pvz-base/gameplay/store.json`，价格档位、购买条件、库存规则和购买结果均由服务端目录实例执行；应用只负责加载 JSON 并注入后端。
+玩法 `boards.*.bounds` 决定场地水平边界，僵尸动画带 `flag` 层时举旗，旗随 `Zombie::DropFlag` 掉落；表现 `boards` 保存背景、音乐和失败场景坐标。粒子的可选剩余时长随快照保存，种子闪光读取 `seedPackets.flash`，恢复不再按特效 ID 分支。商店数据位于 `mods/pvz-base/gameplay/store.json`，价格档位、购买条件、库存规则和购买结果均由服务端目录实例执行；应用只负责加载 JSON 并注入后端。
 
 Mod 入口统一为 `register({ host, assets })`，通过 `host.get()` 访问真实宿主模块与注册表，`host.around()`／`host.replace()` 包装实际方法。不再提供系统、页面、动画的专用增强接口。额外 ECS 组件经 `GameplayRegistry.components` 登记后参与世界快照和存档。示例见 [Mod 能力示例](../mods/example/README.md) 和 [Mod 文档](MODS.md)。

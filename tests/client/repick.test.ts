@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import * as chooserPages from '@/shared/content/chooserPages'
 import * as protocol from '@/shared/protocol'
 
@@ -11,12 +9,7 @@ class ReanimPlayer extends Component {}
 class ParticlePlayer extends Component {}
 
 function load(path: string, modules: Record<string, unknown>) {
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync(path, 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {}, console })
-    return module.exports
+    return loadScript(path, (id: string) => modules[id] ?? {}, { console })
 }
 
 test("a repick drops the chooser in, holds it while choosing and lifts it out after Let's Rock, on its own ticks", () => {

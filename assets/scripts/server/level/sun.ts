@@ -3,7 +3,6 @@ import type { GameplayDefinitions } from '@/shared/content/gameplay'
 import { LevelStateResource, PositionComponent, RandomResource } from '../state/components'
 import { ItemComponent, TutorialResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { getDebugRules } from '../debug/debugRules'
 
 const STATIC_SUN_Y = 60
 const SKY_SUN_X_MIN = 100

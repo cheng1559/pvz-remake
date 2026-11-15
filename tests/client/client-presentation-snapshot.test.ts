@@ -10,7 +10,7 @@ import { levelPresentation } from './level-test-snapshot'
 function snapshot(tick: number, x: number): WorldSnapshot {
     return {
         levelId: 'pvz:adventure-1-1', tick, gameplayTick: tick, phase: 'gameplay', result: 'playing', paused: false,
-        sun: 50, availableSun: 50, money: 0, wave: { index: 0, total: 4, flagWaves: [], countdown: 10 },
+        sun: 50, money: 0, wave: { index: 0, total: 4, flagWaves: [], countdown: 10 },
         cursor: { mode: 'none' }, seedPackets: [], conveyorPackets: [],
         plants: [], zombies: [], projectiles: [{ entityId: 1, typeId: 'pvz:pea', x, y: 20, row: 2 }],
         items: [], mowerRows: [], tutorial: { id: 'pvz:adventure-1-1', step: 'complete' }, extensions: {},
@@ -89,9 +89,9 @@ test('client presentation snapshot restores interpolation, sequence, and consume
             ...saved,
             level: {
                 ...saved.level,
-                entities: [{ kind: 'sun', entityId: 999, animation: null }],
+                entities: [{ kind: 'item', entityId: 999, animation: null }],
             },
         }),
-        /sun 999 is not in the current frame/,
+        /item 999 is not in the current frame/,
     )
 })

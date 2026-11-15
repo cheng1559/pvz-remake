@@ -1,67 +1,47 @@
 import { Color, Component, Node, Vec3 } from 'cc'
-import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { ClientWorldChanges } from '@/client/game/ClientWorld'
-import type { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { uiNode } from '@/client/view/uiNode'
 import { levelStandsStill, type PlantSnapshot, type ServerEvent, type WorldSnapshot, type ZombieSnapshot } from '@/shared/protocol/index'
 import { plantRenderOffset, renderOrder, SHADOW_RENDER_OFFSET, ZOMBIE_RENDER_OFFSET } from '@/shared/content/renderOrder'
-import { MOWER_READY_X, mowerY } from '@/shared/content/gameplay'
-import { LevelAudioPresenter } from './LevelAudioPresenter'
+import { type LevelDefinition, MOWER_READY_X, mowerY } from '@/shared/content/gameplay'
 import type { LevelIntro } from './LevelIntro'
-import type { ZombieViewInstance } from '@/client/zombies/ZombieView'
 import { ZombieView } from '@/client/zombies/ZombieView'
-import { EntityAttachments } from '@/client/view/EntityAttachments'
 import { PlantView } from '@/client/plants/PlantView'
-import { GraveBusterView } from '@/client/plants/GraveBusterView'
-import { ProjectileView } from '@/client/projectiles/ProjectileView'
-import type { GridItemView } from '@/client/gridItems/GridItemView'
 import type { LevelEntitySnapshot, LevelParticleOwnerSnapshot } from './LevelPresentationSnapshot'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import { boardCell } from './LevelGeometry'
-import { LevelItemView } from './LevelItemView'
 import { EntityFlashes } from './EntityFlashes'
-import { boardToLayer, type LevelEntityAssets, type LevelStage, type StageEvent } from './LevelStage'
+import { boardToLayer, type Content, type EntityView, type LevelEntityAssets, type LevelStage } from './LevelStage'
 
 export type { LevelEntityAssets } from './LevelStage'
 
-type LoadedContent = Awaited<ReturnType<typeof loadIntegratedGameContent>>
+/** What an entity of the board is, by the list of the server's snapshot it is in. */
+type EntityKind = 'plant' | 'zombie' | 'projectile' | 'gridItem' | 'item'
+type Positioned = { entityId: number, typeId: string, row: number, x: number, y: number }
 
-/**
- * Who hears of an event: the views whose entity it is about, by what it is. What falls off a zombie is heard of before
- * the frame's entities go, so it leaves from the zombie as it was; the rest once the frame is drawn.
- */
-const BEFORE: Record<string, StageEvent> = {
-    zombieHelmDropped: ZombieView.armorDropped, zombieShieldDropped: ZombieView.armorDropped, zombiePartDropped: ZombieView.partDropped,
+/** Each kind's list in a snapshot. */
+const LISTS: Record<EntityKind, (world: WorldSnapshot) => readonly { entityId: number, typeId: string }[]> = {
+    plant: world => world.plants, zombie: world => world.zombies, projectile: world => world.projectiles,
+    gridItem: world => world.gridItems ?? [], item: world => world.items,
 }
-const AFTER: Record<string, StageEvent> = {
-    plantFiring: PlantView.fired, mineRising: PlantView.rose, plantExploded: PlantView.exploded, graveBusted: GraveBusterView.busted,
-    projectileImpact: ProjectileView.impact,
-    zombieChewedPlant: ZombieView.chewed, zombieRoseFromGrave: ZombieView.rose, zombieCharred: ZombieView.charred, zombiePuffed: ZombieView.puffed,
-}
+const KINDS = Object.keys(LISTS) as EntityKind[]
+
+interface Entity { kind: EntityKind, node: Node, view?: EntityView }
 
 /**
  * What is on the board, drawn by the views of its entities (plants, zombies, projectiles, the things of a cell, items):
- * which exist, where each is drawn among the rest, and which view hears of an event. The views draw; the board is
- * their stage.
+ * which exist, where each is drawn among the rest, and which view hears of an event (ClientViews.events). The views
+ * draw; the board is their stage.
  */
 export class LevelEntityRenderer implements LevelStage {
     /** Nodes of the layer that are no entity's, each with its place in the draw order. */
     private readonly scenery = new Map<Node, { order: number, entityId?: number }>()
-    private readonly entities = new Map<number, Node>()
+    private readonly entities = new Map<number, Entity>()
     /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
     sunBankOffset = (): number => 0
-    private readonly pending = new Set<number>()
     private readonly creationTasks = new Map<number, Promise<void>>()
-    private readonly plantViews = new Map<number, PlantView>()
-    private readonly zombies = new Map<number, ZombieViewInstance>()
-    private readonly zombieTypes = new Map<number, string>()
-    private readonly projectiles = new Map<number, ProjectileView>()
-    private readonly gridItems = new Map<number, GridItemView>()
-    private readonly itemViews = new Map<number, LevelItemView>()
-    private readonly flashes = new EntityFlashes()
-    /** Each plant's and zombie's attachment list. */
-    private readonly attachments = new Map<number, EntityAttachments>()
+    readonly flashes = new EntityFlashes()
     /** The rows' waiting mowers, by row; one set off goes on as a projectile. */
     private readonly waitingMowers = new Map<number, Node>()
     private pointer?: { x: number; y: number }
@@ -69,38 +49,41 @@ export class LevelEntityRenderer implements LevelStage {
     private highlightedPlant?: number
     /** Board particles share one node per drawing order, so a new one is appended rather than moved. */
     private readonly particleHolders = new Map<number, Node>()
+    /** Drawing its first frame, or putting a save back. */
+    private firstFrame = false
+    private restoring = false
 
     constructor(
-        private readonly rootLayer: number,
-        readonly content: LoadedContent,
-        readonly animations: ClientAnimationRegistry,
+        readonly content: Content,
         readonly assets: LevelEntityAssets,
         readonly layer: Node,
         private readonly coinLayer: Node,
         private readonly awardLayer: Node,
-        readonly audio: LevelAudioPresenter,
         readonly intro: LevelIntro,
-        readonly riseParticle: string,
+        readonly graveRise: LevelStage['graveRise'],
     ) {}
 
+    get quiet(): boolean { return this.firstFrame || this.restoring }
+    get level(): LevelDefinition { return this.content.levels.levels[this.lastSnapshot!.levelId] }
+    get gameplayTick(): number { return this.lastSnapshot?.gameplayTick ?? 0 }
+
     addScenery(node: Node, order: number, entityId?: number): void { this.scenery.set(node, { order, ...(entityId === undefined ? {} : { entityId }) }) }
-    plant(id: number): PlantView | undefined { return this.plantViews.get(id) }
-    zombie(id: number): ZombieViewInstance | undefined { return this.zombies.get(id) }
-    zombieType(id: number): string | undefined { return this.zombieTypes.get(id) }
 
-    showZombie(zombie: ZombieSnapshot, world: WorldSnapshot): void {
-        const at = boardToLayer(zombie.x, zombie.y)
-        this.entities.get(zombie.entityId)?.setPosition(at.x, at.y)
-        this.zombies.get(zombie.entityId)?.sync(zombie, world, this.flashes.zombie(zombie.entityId, world.gameplayTick))
+    node(id: number): Node | undefined { return this.entities.get(id)?.node }
+
+    plant(id: number): PlantView | undefined {
+        const view = this.entities.get(id)?.view
+        return view instanceof PlantView ? view : undefined
     }
 
-    node(id: number): Node | undefined {
-        return this.entities.get(id)
+    zombie(id: number): ZombieView | undefined {
+        const view = this.entities.get(id)?.view
+        return view instanceof ZombieView ? view : undefined
     }
 
-    /** The entities' nodes and the waiting mowers', which the intro rolls in. */
-    nodes(): Iterable<Node> {
-        return [...this.entities.values(), ...this.waitingMowers.values()]
+    /** The rows' waiting mowers, by row, which the intro rolls in. */
+    mowers(): ReadonlyMap<number, Node> {
+        return this.waitingMowers
     }
 
     setPointer(pointer?: { x: number; y: number }): void {
@@ -117,14 +100,13 @@ export class LevelEntityRenderer implements LevelStage {
         const highlighted = cell?.inBounds ? snapshot.plants.find(plant => plant.row === cell.row && plant.column === cell.column &&
             this.content.definitions.plants[plant.typeId].occupiesCell !== false && !this.content.definitions.plants[plant.typeId].graveBuster &&
             plant.team !== 'zombies' && !plant.mowered)?.entityId : undefined
-        if (highlighted !== this.highlightedPlant && this.highlightedPlant !== undefined) this.plantViews.get(this.highlightedPlant)?.highlight(false)
-        if (highlighted !== undefined) this.plantViews.get(highlighted)?.highlight(true)
+        if (highlighted !== this.highlightedPlant && this.highlightedPlant !== undefined) this.plant(this.highlightedPlant)?.highlight(false)
+        if (highlighted !== undefined) this.plant(highlighted)?.highlight(true)
         this.highlightedPlant = highlighted
     }
 
     syncGameOverWinner(zombie: ZombieSnapshot, parent: Node, visible: boolean, ticks: number, y: number, approachTicks = 0): void {
-        const node = this.entities.get(zombie.entityId)
-        const view = this.zombies.get(zombie.entityId)
+        const node = this.node(zombie.entityId), view = this.zombie(zombie.entityId)
         if (!node || !view) return
         if (node.parent !== parent) node.setParent(parent)
         if (view.shadowNode.parent !== parent) view.shadowNode.setParent(parent)
@@ -134,11 +116,11 @@ export class LevelEntityRenderer implements LevelStage {
 
     /** The original keeps updating the winner's attachments; its body follows the scripted walk instead. */
     runsDuringGameOver(winnerId: number, component: Component): boolean {
-        return this.attachments.get(winnerId)?.has(component.node) ?? false
+        return this.zombie(winnerId)?.attachments.has(component.node) ?? false
     }
 
     particleOwner(node: Node): Extract<LevelParticleOwnerSnapshot, { kind: 'entity' }> | null {
-        for (const [entityId, root] of this.entities) {
+        for (const [entityId, { node: root }] of this.entities) {
             if (node !== root && !node.isChildOf(root)) continue
             let slot: Extract<LevelParticleOwnerSnapshot, { kind: 'entity' }>['slot'] = 'root'
             let parent = root
@@ -155,7 +137,7 @@ export class LevelEntityRenderer implements LevelStage {
     }
 
     particleParent(owner: Extract<LevelParticleOwnerSnapshot, { kind: 'entity' }>): Node | null {
-        const root = this.entities.get(owner.entityId)
+        const root = this.node(owner.entityId)
         if (!root) return null
         switch (owner.slot) {
             case 'body': return root.getChildByName('Body') ?? root
@@ -166,114 +148,78 @@ export class LevelEntityRenderer implements LevelStage {
         }
     }
 
+    /** What each view keeps of its own across a save. */
     async snapshot(): Promise<LevelEntitySnapshot[]> {
         await Promise.all(this.creationTasks.values())
         const result: LevelEntitySnapshot[] = []
-        for (const [entityId, view] of this.plantViews) {
-            const flash = this.flashes.snapshot(entityId)
-            result.push({ ...view.snapshot(entityId), ...(flash ? { flash } : {}) })
-        }
-        for (const [entityId, view] of this.zombies) {
-            const flash = this.flashes.snapshot(entityId)
-            result.push({ ...view.snapshot(entityId), ...(flash ? { flash } : {}) })
-        }
-        for (const [entityId, view] of this.itemViews) {
-            const item = view.snapshot(entityId)
-            if (item) result.push(item)
+        for (const [entityId, { view }] of this.entities) {
+            const saved = view?.snapshot?.(entityId)
+            if (saved) result.push(saved)
         }
         return result.sort((left, right) => left.entityId - right.entityId)
     }
 
+    /** Each view takes back what it kept, and the board is shown again quietly, as it was. */
     async restore(snapshots: LevelEntitySnapshot[]): Promise<void> {
-        await Promise.all(this.creationTasks.values())
-        for (const snapshot of snapshots) {
-            if (snapshot.kind === 'plant' || snapshot.kind === 'zombie') this.flashes.restore(snapshot.entityId, snapshot.flash)
-            if (snapshot.kind === 'plant') {
-                await this.plantViews.get(snapshot.entityId)?.restore(snapshot)
-            } else if (snapshot.kind === 'zombie') {
-                const view = this.zombies.get(snapshot.entityId)
-                if (view) await view.restore(snapshot)
-            } else this.itemViews.get(snapshot.entityId)?.restore(snapshot)
+        this.restoring = true
+        try {
+            await Promise.all(this.creationTasks.values())
+            for (const snapshot of snapshots) {
+                const entity = this.entities.get(snapshot.entityId)
+                if (entity?.kind === snapshot.kind) await entity.view?.restore?.(snapshot)
+            }
+            // Paused scenes do not tick again to reveal the restored views.
+            if (this.lastSnapshot) this.sync(this.lastSnapshot, { added: [], removed: [] }, [])
+        } finally {
+            this.restoring = false
         }
-        // Paused scenes do not tick again to reveal the restored views.
-        if (this.lastSnapshot) this.sync(this.lastSnapshot, { added: [], removed: [] }, [])
     }
 
     sync(snapshot: WorldSnapshot, changes: ClientWorldChanges, events: ServerEvent[]): void {
-        // What the level started or was loaded with comes without what goes with coming.
-        const added = this.lastSnapshot !== undefined
+        this.firstFrame = this.lastSnapshot === undefined
         this.lastSnapshot = snapshot
+        const handlers = this.content.views.events
         this.flashes.applyEvents(events, snapshot.gameplayTick)
-        for (const event of events) BEFORE[event.type]?.(this, event, snapshot)
+        for (const event of events) for (const handler of handlers.of(event.type, 'before')) handler(this, event, snapshot)
         for (const id of changes.removed) this.remove(id)
-        for (const id of changes.added) {
-            if (this.pending.has(id) || this.entities.has(id)) continue
-            const task = this.create(id, snapshot, added)
+        const added = new Set(changes.added)
+        if (added.size) for (const kind of KINDS) for (const entity of LISTS[kind](snapshot)) {
+            const id = entity.entityId
+            if (!added.has(id) || this.entities.has(id)) continue
+            const task = this.create(kind, entity)
                 .catch(error => console.error('[Level] Failed to create entity', error))
                 .finally(() => this.creationTasks.delete(id))
             this.creationTasks.set(id, task)
         }
-        const particle = (effect: string, x: number, y: number, tint?: Color, mirrored = false) => ParticlePlayer.spawn({
-            parent: this.layer, id: effect, ...boardToLayer(x, y), renderOrder: renderOrder('top'), tint, mirrored,
-        })
-        for (const plant of snapshot.plants) {
-            const flash = this.flashes.plant(plant, snapshot.gameplayTick)
-            this.plantViews.get(plant.entityId)?.update(plant, snapshot, particle, flash)
-        }
+        for (const kind of KINDS) for (const entity of LISTS[kind](snapshot)) this.entities.get(entity.entityId)?.view?.sync(entity, snapshot)
         this.syncPlantHighlight(snapshot)
-        for (const zombie of snapshot.zombies) this.showZombie(zombie, snapshot)
-        for (const projectile of snapshot.projectiles) this.projectiles.get(projectile.entityId)?.sync(projectile)
-        this.syncGridItems()
-        for (const item of snapshot.items) this.itemViews.get(item.entityId)?.sync(item)
         this.syncWaitingMowers(snapshot)
-        for (const plant of snapshot.plants) {
-            const node = this.entities.get(plant.entityId)
-            if (node) node.active = this.plantViews.has(plant.entityId) && GameDebugSettings.perfPlantsVisible
+        // A plant or a zombie shows once its view has drawn it as it is now.
+        for (const [kind, visible] of [['plant', GameDebugSettings.perfPlantsVisible], ['zombie', GameDebugSettings.perfZombiesVisible]] as const) {
+            for (const { entityId } of LISTS[kind](snapshot)) {
+                const entity = this.entities.get(entityId)
+                if (entity) entity.node.active = !!entity.view && visible
+            }
         }
-        for (const zombie of snapshot.zombies) {
-            const node = this.entities.get(zombie.entityId)
-            if (node) node.active = this.zombies.has(zombie.entityId) && GameDebugSettings.perfZombiesVisible
-        }
-        for (const event of events) {
-            AFTER[event.type]?.(this, event, snapshot)
-            if (event.type === 'plantPlaced') this.plantingEffect(snapshot, event)
-        }
+        for (const event of events) for (const handler of handlers.of(event.type, 'after')) handler(this, event, snapshot)
         this.syncLayerOrder(snapshot)
         if (!this.intro.complete) this.intro.sync()
+        this.firstFrame = false
     }
 
-    /**
-     * The things of the cells as they are now: also between the level's frames, since graves rise by the intro's time.
-     * `effects`: `false` takes their state without what goes with getting there (a restored game).
-     */
-    syncGridItems(effects = true): void {
+    /** The things of the cells as they are now: also between the level's frames, since graves rise by the intro's time. */
+    syncGridItems(): void {
         const world = this.lastSnapshot
-        for (const item of world?.gridItems ?? []) this.gridItems.get(item.entityId)?.sync(item, world!, effects)
+        for (const item of world?.gridItems ?? []) this.entities.get(item.entityId)?.view?.sync(item, world!)
     }
 
     private remove(id: number): void {
-        this.pending.delete(id)
-        this.plantViews.get(id)?.destroy?.()
-        this.plantViews.delete(id)
-        this.zombies.get(id)?.destroy()
-        this.zombies.delete(id)
-        this.zombieTypes.delete(id)
-        this.projectiles.get(id)?.destroy()
-        this.projectiles.delete(id)
-        this.gridItems.get(id)?.destroy?.()
-        this.gridItems.delete(id)
-        this.itemViews.delete(id)
+        const entity = this.entities.get(id)
+        entity?.view?.destroy?.()
         this.flashes.remove(id)
-        this.attachments.delete(id)
         if (this.highlightedPlant === id) this.highlightedPlant = undefined
-        this.entities.get(id)?.destroy()
+        entity?.node.destroy()
         this.entities.delete(id)
-    }
-
-    /** Board::DoPlantingEffects: the dirt of a plant put down, over everything. */
-    private plantingEffect(snapshot: WorldSnapshot, event: ServerEvent): void {
-        const plant = snapshot.plants.find(candidate => candidate.entityId === event.data.entityId)
-        if (plant) ParticlePlayer.spawn({ parent: this.layer, id: 'pvz:planting', ...boardToLayer(plant.x + 41, plant.y + 74), renderOrder: renderOrder('top') })
     }
 
     /** Recycled under a shared holder per draw order. */
@@ -286,64 +232,49 @@ export class LevelEntityRenderer implements LevelStage {
         ParticlePlayer.spawn({ parent, id: effect, ...boardToLayer(x, y), renderOrder: order, tint, mirrored, recycle: true })
     }
 
-    /** `added`: it came during play. */
-    private async create(id: number, snapshot: WorldSnapshot, added: boolean): Promise<void> {
-        const plant = snapshot.plants.find(value => value.entityId === id)
-        const zombie = snapshot.zombies.find(value => value.entityId === id)
-        const projectile = snapshot.projectiles.find(value => value.entityId === id)
-        const item = snapshot.items.find(value => value.entityId === id)
-        const gridItem = snapshot.gridItems?.find(value => value.entityId === id)
-        const positioned = plant ?? zombie ?? projectile
-        if (!positioned && !item && !gridItem) return
-        this.pending.add(id)
-        const level = this.content.levels.levels[snapshot.levelId]
+    /** An entity's node, and its view from the registry of its kind, shown at once as it is now. */
+    private async create(kind: EntityKind, entity: { entityId: number, typeId: string }): Promise<void> {
+        const id = entity.entityId, award = kind === 'item' && entity.typeId === this.level.award.id
+        const positioned = kind === 'plant' || kind === 'zombie' || kind === 'projectile' ? entity as Positioned : undefined
         const node = uiNode({
-            name: `Entity-${id}`, parent: item ? item.typeId === level.award.id ? this.awardLayer : this.coinLayer : this.layer,
+            name: `Entity-${id}`, parent: award ? this.awardLayer : kind === 'item' ? this.coinLayer : this.layer,
             anchor: { x: 0, y: 1 },
-            // An item and a thing of a cell are placed by their views.
             position: positioned && boardToLayer(positioned.x, positioned.y),
-            // Factories stay hidden until their first sync applies the current position and pose.
-            active: !plant && !zombie,
+            // A plant or a zombie stays hidden until a frame shows it as it is (the visibility in sync).
+            active: kind !== 'plant' && kind !== 'zombie',
         }).node
-        this.entities.set(id, node)
-        // A view made for an entity that went meanwhile goes with it.
-        const keep = <View extends { destroy?(): void }>(views: Map<number, View>, view: View): boolean => {
-            if (node.isValid) views.set(id, view)
-            else view.destroy?.()
-            return node.isValid
-        }
+        this.entities.set(id, { kind, node })
         try {
-            if (projectile) {
-                keep(this.projectiles, await this.content.projectileViews.create({ node, stage: this, typeId: projectile.typeId, projectile }))
-            } else if (plant) {
-                const attachments = new EntityAttachments()
-                const view = await this.content.plantViews.create({ node, attachments, content: this.content, animations: this.animations,
-                    assets: { shadow: this.assets.mowerShadow, wallnutCracked: this.assets.wallnutCracked },
-                    plant, tick: snapshot.gameplayTick, stage: this })
-                if (keep(this.plantViews, view)) this.attachments.set(id, attachments)
-            } else if (zombie) {
-                const attachments = new EntityAttachments()
-                const view = await this.content.zombieViews.create({ node, attachments, content: this.content, animations: this.animations,
-                    shadowParent: this.layer, assets: { shadow: this.assets.mowerShadow, sprites: this.assets.zombieSprites },
-                    zombie, tick: snapshot.gameplayTick })
-                if (keep(this.zombies, view)) {
-                    this.zombieTypes.set(id, zombie.typeId)
-                    this.attachments.set(id, attachments)
-                }
-            } else if (gridItem) {
-                const view = await this.content.gridItemViews.create({ node, content: this.content, item: gridItem, stage: this, added })
-                if (keep(this.gridItems, view)) this.syncGridItems()
-            } else {
-                const view = await LevelItemView.create(node, item!, { content: this.content, assets: this.assets, layer: this.rootLayer, level,
-                    sunBankOffset: () => this.sunBankOffset() })
-                if (node.isValid) { this.itemViews.set(id, view); view.sync(item!) }
-            }
+            const { views } = this.content, context = { node, content: this.content, stage: this }
+            const view: EntityView = await (kind === 'plant' ? views.plants.create({ ...context, plant: entity as PlantSnapshot })
+                : kind === 'zombie' ? views.zombies.create({ ...context, zombie: entity as ZombieSnapshot })
+                : kind === 'projectile' ? views.projectiles.create({ ...context, projectile: entity as WorldSnapshot['projectiles'][number] })
+                : kind === 'gridItem' ? views.gridItems.create({ ...context, item: entity as NonNullable<WorldSnapshot['gridItems']>[number] })
+                : views.items.create({ ...context, item: entity as WorldSnapshot['items'][number] }))
+            // A view made for an entity that went meanwhile goes with it.
+            if (!node.isValid || this.entities.get(id)?.node !== node) { view.destroy?.(); return }
+            this.entities.get(id)!.view = view
+            const now = this.lastSnapshot && LISTS[kind](this.lastSnapshot).find(value => value.entityId === id)
+            if (now) view.sync(now, this.lastSnapshot!)
         } catch (error) {
             if (node.isValid) node.destroy()
-            this.entities.delete(id)
+            if (this.entities.get(id)?.node === node) this.entities.delete(id)
             throw error
-        } finally {
-            this.pending.delete(id)
+        }
+    }
+
+    /** Where an entity is drawn among the rest; none for an item, which is not on the board's layer. */
+    private orderOf(kind: EntityKind, entity: Positioned): number | undefined {
+        const { presentation } = this.content
+        switch (kind) {
+            case 'plant': return this.plantOrder(entity as unknown as PlantSnapshot)
+            case 'zombie': return this.zombieOrder(entity.row)
+            case 'projectile': return renderOrder(presentation.projectiles[entity.typeId]?.layer ?? 'projectile', entity.row)
+            case 'gridItem': {
+                const { layer, offset } = presentation.gridItems[entity.typeId]
+                return renderOrder(layer, entity.row, offset)
+            }
+            default: return undefined
         }
     }
 
@@ -354,29 +285,15 @@ export class LevelEntityRenderer implements LevelStage {
             if (node.isValid) entries.push({ node, ...entry })
             else this.scenery.delete(node)
         }
-        const add = (entityId: number, order: number) => {
-            const node = this.entities.get(entityId)
-            if (node?.isValid) entries.push({ node, order, entityId })
+        for (const kind of KINDS) for (const value of LISTS[kind](snapshot)) {
+            const entity = this.entities.get(value.entityId), order = this.orderOf(kind, value as Positioned)
+            if (!entity?.node.isValid || order === undefined) continue
+            entries.push({ node: entity.node, order, entityId: value.entityId })
+            // Shadows lie on the ground layer, under every row's plants and zombies.
+            const shadow = entity.view?.shadowNode
+            if (shadow?.isValid) entries.push({ node: shadow, order: renderOrder('ground', (value as Positioned).row, SHADOW_RENDER_OFFSET), entityId: value.entityId })
         }
-        // Shadows lie on the ground layer, under every row's plants and zombies.
-        const shadow = (node: Node | undefined, entity: { entityId: number, row: number }) => {
-            if (node?.isValid) entries.push({ node, order: renderOrder('ground', entity.row, SHADOW_RENDER_OFFSET), entityId: entity.entityId })
-        }
-        const { presentation } = this.content
-        for (const entity of snapshot.plants) add(entity.entityId, this.plantOrder(entity))
-        for (const entity of snapshot.zombies) {
-            add(entity.entityId, this.zombieOrder(entity.row))
-            shadow(this.zombies.get(entity.entityId)?.shadowNode, entity)
-        }
-        for (const entity of snapshot.projectiles) {
-            add(entity.entityId, renderOrder(presentation.projectiles[entity.typeId]?.layer ?? 'projectile', entity.row))
-            shadow(this.projectiles.get(entity.entityId)?.shadowNode, entity)
-        }
-        for (const entity of snapshot.gridItems ?? []) {
-            const { layer, offset } = presentation.gridItems[entity.typeId]
-            add(entity.entityId, renderOrder(layer, entity.row, offset))
-        }
-        const mower = presentation.projectiles[this.content.levels.levels[snapshot.levelId].lawnMower]?.layer ?? 'projectile'
+        const mower = this.content.presentation.projectiles[this.content.levels.levels[snapshot.levelId].lawnMower]?.layer ?? 'projectile'
         for (const [row, node] of this.waitingMowers) entries.push({ node, order: renderOrder(mower, row) })
         for (const child of this.layer.children) {
             const particle = child.getComponent(ParticlePlayer)
@@ -431,7 +348,7 @@ export class LevelEntityRenderer implements LevelStage {
             const node = uiNode({ name: `WaitingMower-${row}`, parent: this.layer, anchor: { x: 0, y: 1 },
                 position: boardToLayer(MOWER_READY_X, mowerY(this.content.definitions.boards[level.board], row)) }).node
             this.waitingMowers.set(row, node)
-            void this.content.projectileViews.create({ node, stage: this, typeId: level.lawnMower })
+            void this.content.views.projectiles.create({ node, content: this.content, projectile: { typeId: level.lawnMower }, stage: this })
                 .catch(error => console.error('[Level] Failed to draw a waiting mower', error))
         }
     }

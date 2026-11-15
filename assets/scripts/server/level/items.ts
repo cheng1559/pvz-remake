@@ -8,13 +8,13 @@ import {
     SeedBankResource,
     type Position,
 } from '../state/components'
-import { getDebugRules } from '../debug/debugRules'
 import { ItemComponent, type Item } from '../state/levelState'
 import { emitServerEvent, EventQueueResource } from '../state/events'
 import { canDropLoot, updateMowerCoins } from './loot'
 import type { CommandRejectionCode, Session } from '../session/session'
 import { getActiveTutorial } from '../tutorials'
 import { clearCursor } from '../seeds/cursor'
+import { seedSunCost } from '../seeds/seedBank'
 
 /** Coin::UpdateCollected: sun flies to the sun bank, money to the coin bank at the bottom left. */
 const COIN_BANK_TARGET = { x: 39, y: 558 }
@@ -177,11 +177,11 @@ export const items = {
         const availableAfter = availableBefore + item.value
         for (const [slot, packet] of world.resources.get(SeedBankResource).packets.entries()) {
             if (!packet) continue
-            const seedCost = getDebugRules(world).sunCost ? definitions.seeds[packet.seedId].sunCost : 0
+            const seedCost = seedSunCost(world, definitions, packet.seedId)
             const ready = packet.readyAtTick <= session.gameplayTick
             if (ready && availableBefore < seedCost && availableAfter >= seedCost) {
                 emitServerEvent(events, 'seedPacketFlashRequested', { seedId: packet.seedId, slot })
-                getActiveTutorial(world)?.seedReady?.(world, session.gameplayTick, packet.seedId)
+                getActiveTutorial(world)?.seedReady?.(world, definitions, session.gameplayTick, packet.seedId)
             }
             getActiveTutorial(world)?.sunCollected?.(world, session.gameplayTick, packet.seedId, ready && availableAfter >= seedCost)
         }

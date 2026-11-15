@@ -5,8 +5,7 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind,ScriptTarget,transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import { readBaseContent } from '../../tools/mod/content'
 
 function setup() {
@@ -137,22 +136,17 @@ function setup() {
             return path
         }
     }
-    const load = (path: string) => {
-        const module = { exports: {} as Record<string, any> }
-        const code = transpileModule(readFileSync(path, 'utf8'), { compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 } })
-        runInNewContext(code.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {},
-            setTimeout, URL: TestURL, Blob, Uint8Array, DataView, TextDecoder, TextEncoder, jsb, location: { href: 'https://game.example/' },
-            indexedDB: { open: (name: string) => {
-                const request: any = { result: name === 'pvz-remake-mods' ? modDb : name === 'pvz-remake-mod-pending' ? pendingDb : db }
-                queueMicrotask(() => { request.onupgradeneeded(); request.onsuccess() })
-                return request
-            } },
-            document: { body: { appendChild() {} }, createElement: (tag: string) => tag === 'canvas'
-                ? { width: 0, height: 0, getContext: () => ({ drawImage() {}, getImageData: (_x: number, _y: number, width: number, height: number) => ({ data: new Uint8ClampedArray(width * height * 4) }) }) }
-                : picker = { click() {}, remove() {}, addEventListener(name: string, callback: unknown) { this[name] = callback } } },
-        })
-        return module.exports
-    }
+    const load = (path: string) => loadScript(path, (id: string) => modules[id] ?? {}, {
+        setTimeout, URL: TestURL, Blob, Uint8Array, DataView, TextDecoder, TextEncoder, jsb, location: { href: 'https://game.example/' },
+        indexedDB: { open: (name: string) => {
+            const request: any = { result: name === 'pvz-remake-mods' ? modDb : name === 'pvz-remake-mod-pending' ? pendingDb : db }
+            queueMicrotask(() => { request.onupgradeneeded(); request.onsuccess() })
+            return request
+        } },
+        document: { body: { appendChild() {} }, createElement: (tag: string) => tag === 'canvas'
+            ? { width: 0, height: 0, getContext: () => ({ drawImage() {}, getImageData: (_x: number, _y: number, width: number, height: number) => ({ data: new Uint8ClampedArray(width * height * 4) }) }) }
+            : picker = { click() {}, remove() {}, addEventListener(name: string, callback: unknown) { this[name] = callback } } },
+    })
     const archive = load('assets/scripts/client/content/InstalledArchives.ts')
     modules['./InstalledArchives'] = modules['@/client/content/InstalledArchives'] = archive
     modules['@/shared/mod'] = modules['@/shared/mod/index'] = load('assets/scripts/shared/mod/index.ts')
@@ -431,12 +425,8 @@ test('startup repairs missing and corrupt records while leaving a usable manager
     storage.set(key, JSON.stringify({ installed: Object.fromEntries(ids.map(id => [id, `${id}@stored`])), enabled: ids, order: [] }))
     archives.set('broken@stored', new Uint8Array([1, 2, 3]))
     archives.set('hd@stored', zipSync(zipFiles()))
-    // Device-wide installs from before players had their own Mods are dropped.
-    storage.set('pvz-remake:active-mods', JSON.stringify(['old']))
-    archives.set('old', zipSync(zipFiles('old')))
     assert.deepEqual(Array.from(await manager.running()), ['hd'])
     assert.deepEqual(JSON.parse(storage.get(key)!).enabled, ['hd'])
-    assert.deepEqual([storage.has('pvz-remake:active-mods'), archives.has('old')], [false, false])
     assert.ok((await manager.installed()).find((entry: any) => entry.id === 'broken').error)
     await manager.uninstall('broken')
     assert.equal(archives.has('broken@stored'), false)

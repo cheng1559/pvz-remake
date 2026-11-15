@@ -7,7 +7,7 @@ import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 import { LevelStateResource, PlantComponent, PlantAttackComponent, PositionComponent, ProjectileComponent, RandomResource, ZombieComponent } from '@/server/state/components'
 import { createEventQueue, drainServerEvents, EventQueueResource } from '@/server/state/events'
-import { createPeashooterSystem } from '@/server/plants/shooter'
+import { createPlantAttackSystem } from '@/server/plants/shooter'
 import { createPlantAbilitySystem, initialPlantAbility } from '@/server/plants/abilities'
 import { createProductionSystem } from '@/server/plants/production'
 import { ItemComponent } from '@/server/state/levelState'
@@ -120,7 +120,7 @@ function worldFor(night: boolean) {
 test('puff-shrooms sleep by day, only fire within range, and spores expire before collision at age 75', () => {
     for (const night of [false, true]) {
         const world = worldFor(night), schedule = new Schedule()
-        schedule.add('plant', createPeashooterSystem(definitions))
+        schedule.add('plant', createPlantAttackSystem(definitions))
         const plant = world.createEntity()
         world.add(plant, PositionComponent, { x: 40, y: 80, row: 0 })
         world.add(plant, PlantComponent, { typeId: 'pvz:puffshroom', seedId: 'pvz:puffshroom', column: 0,
@@ -236,7 +236,7 @@ test('sun-shrooms drop small sun until they grow, produce nothing while growing,
 
 test('fume-shrooms hit every zombie in reach at once, through the newspaper and into the body', () => {
     const world = worldFor(true), schedule = new Schedule()
-    schedule.add('plant', createPeashooterSystem(definitions))
+    schedule.add('plant', createPlantAttackSystem(definitions))
     plantAt(world, 'pvz:fumeshroom', 40)
     const paper = spawnZombie(world, definitions, 'pvz:newspaper', 0, 150, 50)
     const near = spawnZombie(world, definitions, 'pvz:normal', 0, 360, 50)

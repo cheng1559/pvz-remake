@@ -69,7 +69,6 @@ test('user APIs validate names on the backend, preserve IDs and old saves, and i
     if (!bob.ok || !bob.user) return assert.fail('Bob must exist')
     data.set(`pvz-remake:game-save-v2:${aliceId}:adventure`, 'Alice save')
     data.set(`pvz-remake:game-save-v2:${bob.user.id}:adventure:temp`, 'Bob temp')
-    data.set(`pvz-remake:saves:${bob.user.id}:adventure`, 'Bob legacy')
     assert.equal((await api.renameUser(bob.user.id, '  Bob   Two ')).ok, true)
     assert.equal((await api.getCurrentUser())?.name, 'Bob Two')
     assert.equal((await api.getCurrentUser())?.id, bob.user.id)

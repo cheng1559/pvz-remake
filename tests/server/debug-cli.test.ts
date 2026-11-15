@@ -33,11 +33,9 @@ test('CLI accepts old syntax, completes installed content and rejects malformed 
     for (const args of ['install', 'load local:widescreen', 'unload all', 'uninstall local:hd', 'list']) {
         assert.equal((parseDebugCliCommand('/mod ' + args) as { failure: string }).failure, 'syntax')
     }
-    for (const command of ['/unknown', '/win extra', '/cooldown yes', '/mod invalid', '/item sun 3', '/sun remove 1', '/hdseed true', '/hdseed false', '/grave', '/grave 3', '/grave 3 2 1']) {
+    for (const command of ['/unknown', '/win extra', '/cooldown yes', '/mod invalid', '/item sun 3', '/sun remove 1', '/grave', '/grave 3', '/grave 3 2 1']) {
         assert.equal((parseDebugCliCommand(command) as { failure: string }).failure, 'syntax')
     }
-    assert.deepEqual(getDebugCliCompletions('/hd'), [])
-    assert.equal(getDebugCliSuffix('/hdseed'), '')
     const game = setup()
     const catalog = game.debugCommand('catalog').catalog!
     assert.deepEqual(catalog.plants, ['bowling-wallnut', 'bowling-explodenut', 'sunflower', 'peashooter', 'repeater', 'cherrybomb', 'wallnut', 'potatomine', 'snowpea', 'chomper', 'explodenut', 'puffshroom', 'sunshroom', 'fumeshroom', 'gravebuster', 'hypnoshroom'])
@@ -198,7 +196,7 @@ test('CLI replaces a seed slot while paused, preserves slot order and saves the 
     game.command({ type: 'placePlant', row: 2, column: 2 })
     game.update(0)
     assert.equal(game.render().plants[0].typeId, 'pvz:snowpea')
-    assert.equal(game.render().availableSun, 325)
+    assert.equal(game.render().sun, 325)
     assert.equal(game.render().seedPackets[0]!.cooldownRemaining, definitions.seeds['pvz:snowpea'].cooldownTicks)
     const restored = new LocalIntegratedGame(definitions, levels, undefined, true)
     restored.start({ levelId: 'pvz:adventure-1-2', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], save: game.saveAtBoundary() })

@@ -2,8 +2,7 @@ import * as engine from 'cc'
 import { ModHost } from '@/shared/mod/ModHost'
 import { ModAssets } from '@/shared/mod/ModAssets'
 import type { DefinitionSources } from '@/shared/content/DefinitionRegistry'
-import { PlantViewRegistry } from '@/client/plants/PlantViewRegistry'
-import { ZombieViewRegistry } from '@/client/zombies/ZombieViewRegistry'
+import type { ClientViews } from './ClientViews'
 import type { ArchiveContentRegistry } from './ArchiveContentRegistry'
 import { modResources } from './ModResources'
 
@@ -29,8 +28,8 @@ import * as graveView from '@/client/gridItems/GraveView'
 import * as projectileView from '@/client/projectiles/ProjectileView'
 import * as mowerView from '@/client/projectiles/MowerView'
 import * as levelStage from '@/client/level/LevelStage'
-import type { ProjectileViewRegistry } from '@/client/projectiles/ProjectileViewRegistry'
-import type { GridItemViewRegistry } from '@/client/gridItems/GridItemViewRegistry'
+import * as itemView from '@/client/items/ItemView'
+import * as awardView from '@/client/items/AwardView'
 import * as entityFlashes from '@/client/level/EntityFlashes'
 import * as levelRules from '@/client/level/rules'
 import * as debugSettings from '@/platform/debug/GameDebugSettings'
@@ -52,7 +51,7 @@ export class ClientModAssets extends ModAssets {
 }
 
 export function createClientModHost(ownerId: string, definitions: DefinitionSources, resources: ArchiveContentRegistry,
-    views: { plants: PlantViewRegistry, zombies: ZombieViewRegistry, projectiles: ProjectileViewRegistry, gridItems: GridItemViewRegistry }): ModHost {
+    views: ClientViews): ModHost {
     return new ModHost(ownerId, {
         'cc': engine,
         'content/definitions': definitions,
@@ -79,6 +78,8 @@ export function createClientModHost(ownerId: string, definitions: DefinitionSour
         'client/gridItems/GraveView': graveView,
         'client/projectiles/ProjectileView': projectileView,
         'client/projectiles/MowerView': mowerView,
+        'client/items/ItemView': itemView,
+        'client/items/AwardView': awardView,
         'client/level/LevelStage': levelStage,
         'client/level/EntityFlashes': entityFlashes,
         'client/level/rules': levelRules,

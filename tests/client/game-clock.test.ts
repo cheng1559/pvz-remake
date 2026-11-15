@@ -2,10 +2,8 @@ import { withFixedBanks } from '../fixedBankLevels'
 import { readGameplaySource } from '../../tools/mod/content'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { GameClock, gameClock } from '@/core/GameClock'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
@@ -38,16 +36,12 @@ test('adventure pause freezes scene animation, particles and tweens without chan
     const child = { children: [] }
     const root = { children: [child], getComponentsInChildren: () => components }
     const paused = new Set<object>(), resumed = new Set<object>()
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/client/level/LevelView.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
     const modules: Record<string, unknown> = {
         cc: { Component, _decorator: { ccclass: () => (value: unknown) => value }, Tween: { pauseAllByTarget: (node: object) => paused.add(node), resumeAllByTarget: (node: object) => resumed.add(node) } },
         '@/client/reanim/ReanimPlayer': { ReanimPlayer }, '@/client/particle/ParticlePlayer': { ParticlePlayer },
     }
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {} })
-    const view = new module.exports.LevelView(root)
+    const { LevelView } = loadScript('assets/scripts/client/level/LevelView.ts', (id: string) => modules[id] ?? {})
+    const view = new LevelView(root)
     view.gameOver = { active: false }
     const speed = gameClock.speed
     view.setPaused(true)
@@ -59,12 +53,8 @@ test('adventure pause freezes scene animation, particles and tweens without chan
     components.push(...delayed)
     const delayedNode = { children: [] }
     root.children.push(delayedNode)
-    const sceneModule = { exports: {} as Record<string, any> }
-    const sceneCode = transpileModule(readFileSync('assets/scripts/client/level/LevelScene.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(sceneCode.outputText, { exports: sceneModule.exports, require: (id: string) => modules[id] ?? {} })
-    const scene = new sceneModule.exports.LevelScene()
+    const { LevelScene } = loadScript('assets/scripts/client/level/LevelScene.ts', (id: string) => modules[id] ?? {})
+    const scene = new LevelScene()
     scene.game = { render: () => ({ paused: true }), update() { assert.fail('paused gameplay must not advance') } }
     scene.view = view
     scene.audio = {}
@@ -160,14 +150,8 @@ test('one clock scales fixed-tick gameplay across frame rates, live speed change
 })
 
 test('running tweens receive speed changes and unsubscribe on completion or owner destruction', () => {
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync('assets/scripts/core/GameTween.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    runInNewContext(compiled.outputText, {
-        exports: module.exports,
-        require: (id: string) => id === 'cc' ? { Node: { EventType: { NODE_DESTROYED: 'destroyed' } } } : { gameClock },
-    })
+    const tween = loadScript('assets/scripts/core/GameTween.ts',
+        (id: string) => id === 'cc' ? { Node: { EventType: { NODE_DESTROYED: 'destroyed' } } } : { gameClock })
     const owners: EventEmitter[] = []
     try {
         for (const end of ['complete', 'destroy']) {
@@ -181,7 +165,7 @@ test('running tweens receive speed changes and unsubscribe on completion or owne
                 start() { return this },
             }
             gameClock.setSpeed(1)
-            module.exports.startGameTween(owner, animation)
+            tween.startGameTween(owner, animation)
             gameClock.setSpeed(2)
             gameClock.setSpeed(0)
             gameClock.setSpeed(0.5)

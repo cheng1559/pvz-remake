@@ -131,7 +131,7 @@ test('Schedule preserves phase/system order and flushes after each phase', () =>
     schedule.run(world, 7)
     assert.deepEqual(calls, ['create', 'read:7'])
     assert.throws(
-        () => schedule.add('cleanup', { id: 'test:late', run() {} }),
+        () => schedule.add('item', { id: 'test:late', run() {} }),
         /Schedule is frozen/,
     )
 })
@@ -151,7 +151,7 @@ test('Schedule rejects registration from a running system', () => {
         id: 'test:register-during-run',
         run() {
             assert.throws(
-                () => schedule.add('seed', { id: 'test:late', run() {} }),
+                () => schedule.add('spawn', { id: 'test:late', run() {} }),
                 /Schedule is frozen/,
             )
         },

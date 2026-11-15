@@ -18,7 +18,7 @@ export const whackTutorial: TutorialScript = {
     ...dialog,
     alwaysActive: true,
     initialize(world, firstAdventure) { dialog.initialize!(world, firstAdventure) },
-    update(world, tick) {
+    update(world, _definitions, tick) {
         const tutorial = world.resources.get(TutorialResource)
         if (tutorial.step === 'complete' && world.resources.get(EconomyStateResource).sun > 0) {
             tutorial.step = 'whack-before-pick-seed'

@@ -14,10 +14,10 @@ function canUpdate(world: World): boolean {
         ![...world.query(ItemComponent)].some(entity => world.get(entity, ItemComponent)!.typeId === level.definition.award.id)
 }
 
-function notePlantPlaced(world: World, tick: number, upgraded = false): void {
+function notePlantPlaced(world: World, tick: number): void {
     const tutorial = world.resources.get(TutorialResource)
     if (!tutorial.firstAdventure || tutorial.step === 'complete') return
-    const plantCount = [...world.query(PlantComponent)].length + (upgraded ? 1 : 0)
+    const plantCount = [...world.query(PlantComponent)].length
     if (plantCount === 1) {
         tutorial.step = 'first-plant-done'
         tutorial.sunAtTick = tick + FIRST_SUN_DELAY_TICKS
@@ -93,7 +93,7 @@ export const plantingTutorial: TutorialScript = {
             style: 'tutorial-level1',
         })
     },
-    update(world, tick) {
+    update(world, _definitions, tick) {
         if (!canUpdate(world)) return
         const tutorial = world.resources.get(TutorialResource)
         if (tutorial.step === 'enough-sun' && tutorial.promptAtTick !== undefined && tick >= tutorial.promptAtTick) {
@@ -107,12 +107,12 @@ export const plantingTutorial: TutorialScript = {
         }
     },
     seedSelected: noteSeedSelected,
-    seedCanceled: noteSeedCanceled,
-    seedReady(world, tick, seedId) {
+    seedCanceled: (world, _definitions, tick) => noteSeedCanceled(world, tick),
+    seedReady(world, _definitions, tick, seedId) {
         if (seedId === 'pvz:peashooter') noteSeedReady(world, tick)
     },
     sunCollected(world, tick, seedId, canAfford) {
         if (seedId === 'pvz:peashooter') noteSunCollected(world, tick, canAfford)
     },
-    plantPlaced(world, tick, _plantId, upgraded) { notePlantPlaced(world, tick, upgraded) },
+    plantPlaced(world, _definitions, tick) { notePlantPlaced(world, tick) },
 }

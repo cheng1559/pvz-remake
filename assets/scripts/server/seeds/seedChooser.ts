@@ -8,6 +8,7 @@ import type { CommandRejectionCode } from '../session/session'
 import { TutorialResource } from '../state/levelState'
 import { getDebugRules } from '../debug/debugRules'
 import { getActiveTutorial } from '../tutorials'
+import { openingCooldown } from './seedBank'
 
 /**
  * LawnApp::HasSeedType: the seeds in the chooser's grid the player owns, in place order. `owned` is the profile's list
@@ -124,8 +125,7 @@ export function applySeedChoice(world: World, definitions: GameplayDefinitions, 
             bank.packets.push(kept ? { ...kept } : { seedId: command.seedId, readyAtTick: 0, cooldownTotal: 0, ...(team ? { team } : {}) })
             return
         }
-        // Like a planted packet's recharge, the opening recharge is skipped while `/cooldown false` is active.
-        const cooldown = getDebugRules(world).cooldown ? definitions.seeds[command.seedId].initialCooldownTicks ?? 0 : 0
+        const cooldown = openingCooldown(world, definitions, command.seedId)
         bank.packets.push({ seedId: command.seedId, readyAtTick: cooldown, cooldownTotal: cooldown, ...(team ? { team } : {}) })
     }
 }

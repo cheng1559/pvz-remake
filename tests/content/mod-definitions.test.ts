@@ -8,10 +8,9 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { runInNewContext } from 'node:vm'
 import test from 'node:test'
 import * as fflate from 'fflate'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import { ModAssets } from '@/shared/mod/ModAssets'
 import { ModHost } from '@/shared/mod/ModHost'
 import { EntityViewRegistry } from '@/client/content/EntityViewRegistry'
@@ -46,10 +45,6 @@ function installed(id: string, server: any, client?: any) {
 }
 
 test('Mod JSON decodes UTF-8 without package imports and uses the native single-argument decoder contract', () => {
-    const compiled = transpileModule(readFileSync('assets/scripts/shared/mod/ModAssets.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    const exports: any = {}
     let decodes = 0
     class NativeDecoder {
         constructor(readonly encoding: string) { assert.equal(encoding, 'utf-8') }
@@ -60,8 +55,8 @@ test('Mod JSON decodes UTF-8 without package imports and uses the native single-
             return new TextDecoder(this.encoding).decode(args[0])
         }
     }
-    runInNewContext(compiled.outputText, { exports, TextDecoder: NativeDecoder,
-        require: (id: string) => assert.fail(`ModAssets must not import a runtime package: ${id}`) })
+    const exports = loadScript('assets/scripts/shared/mod/ModAssets.ts',
+        (id: string) => assert.fail(`ModAssets must not import a runtime package: ${id}`), { TextDecoder: NativeDecoder })
     const expected = { name: '玉米投手', description: 'Butter 🧈', damage: 20 }
     const files = { 'assets/test.json': new TextEncoder().encode(JSON.stringify(expected)) }
     const assets = new exports.ModAssets(installed('utf8', () => {}).manifest, files)
@@ -80,12 +75,9 @@ test('Release preloading loads Mod archive assets without requesting a Cocos bun
     const loaded = new Set<string>(), bundles: string[] = [], progress: number[] = []
     for (const category of CONTENT_CATEGORIES) {
         for (const [id, path] of Object.entries(table[category] ?? {})) registry.registerEntry({
-            category, id, path, bundle: 'pvzmod:///example%3Aarchive/',
-            contentId: 'example:archive', contentVersion: '1.0.0', contentHash: 'example', schemaVersion: 2,
+            category, id, path, contentId: 'example:archive', contentVersion: '1.0.0', contentHash: 'example',
         })
     }
-    registry.registerEntry({ category: 'sprites', id: 'pvz:background', path: 'sprites/background',
-        bundle: 'pvz-base', contentId: 'pvz', contentVersion: '1', contentHash: 'base', schemaVersion: 2 })
     const loader = {
         async loadBundle(location: string) {
             assert.ok(!location.startsWith('pvzmod:///'), 'raw Mod archives have no config.json')
@@ -114,11 +106,7 @@ test('Release preloading loads Mod archive assets without requesting a Cocos bun
             for (const [index, task] of tasks.entries()) { await task(); report((index + 1) / tasks.length) }
         } },
     }
-    const exports: any = {}
-    const code = transpileModule(readFileSync('assets/scripts/client/content/PreloadAssets.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
+    const exports = loadScript('assets/scripts/client/content/PreloadAssets.ts', (id: string) => modules[id] ?? {})
     await exports.preloadAssets((value: number) => progress.push(value))
     assert.deepEqual(bundles, [], 'ZIP preload never requests Cocos bundles')
     assert.deepEqual([...loaded].sort(), Object.entries(table).flatMap(([kind, entries]) =>
@@ -136,15 +124,21 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
         constructor() {
             super(context => ({ kind: context.kind, typeId: context.typeId }))
             const views = [...Object.values(presentation.plants).map((entry: any) => entry.view ?? 'plant'), ...Object.values(presentation.zombies).map((entry: any) => entry.view ?? 'zombie'),
-                ...Object.values(presentation.projectiles).map((entry: any) => entry.view ?? 'projectile'), ...Object.values(presentation.gridItems).map((entry: any) => entry.view)]
+                ...Object.values(presentation.projectiles).map((entry: any) => entry.view ?? 'projectile'), ...Object.values(presentation.gridItems).map((entry: any) => entry.view),
+                ...Object.values(presentation.items).map((entry: any) => entry.view ?? 'item'), 'award']
             for (const kind of new Set(views)) this.register(kind, () => ({}))
         }
     }
+    class ClientViews {
+        plants = new Views(); zombies = new Views(); projectiles = new Views(); gridItems = new Views(); items = new Views()
+        events = { register() {}, checkpoint: () => () => {}, freeze() {} }
+        checkpoint() {
+            const undo = [this.plants, this.zombies, this.projectiles, this.gridItems, this.items, this.events].map(registry => registry.checkpoint())
+            return () => { for (const step of undo.reverse()) step() }
+        }
+        freeze() { for (const registry of [this.plants, this.zombies, this.projectiles, this.gridItems, this.items, this.events]) registry.freeze() }
+    }
     const failures = new Map<string, string>(), errors: unknown[][] = []
-    const compiled = transpileModule(readFileSync('assets/scripts/app/ModLoader.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    const module = { exports: {} as any }
     const modules: Record<string, unknown> = {
         cc: { JsonAsset: class {} },
         '@/client/content/ClientContentLoader': { ClientContentLoader: class {
@@ -163,10 +157,7 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
         '@/shared/mod/ModAssets': { ModAssets },
         '@/server/registry/GameplayRegistry': { GameplayRegistry },
         '@/server/session/createModHost': { createServerModHost: (...args: Parameters<typeof createServerModHost>) => keep(createServerModHost(...args)) },
-        '@/client/plants/PlantViewRegistry': { PlantViewRegistry: Views },
-        '@/client/zombies/ZombieViewRegistry': { ZombieViewRegistry: Views },
-        '@/client/projectiles/ProjectileViewRegistry': { ProjectileViewRegistry: Views },
-        '@/client/gridItems/GridItemViewRegistry': { GridItemViewRegistry: Views },
+        '@/client/content/ClientViews': { ClientViews },
         '@/client/content/ArchiveContentRegistry': { ArchiveContentRegistry },
         '@/client/content/createModHost': {
             ClientModAssets: class extends ModAssets { async sprite(path: string) {
@@ -210,9 +201,9 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
             },
         },
     }
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {},
-        console: { info() {}, error: (...args: unknown[]) => errors.push(args) } })
-    return { load: module.exports.loadInstalledMods, failures, errors, dispose: () => { for (const host of hosts.reverse()) host.dispose() } }
+    const loader = loadScript('assets/scripts/app/ModLoader.ts', (id: string) => modules[id] ?? {},
+        { console: { info() {}, error: (...args: unknown[]) => errors.push(args) } })
+    return { load: loader.loadInstalledMods, failures, errors, dispose: () => { for (const host of hosts.reverse()) host.dispose() } }
 }
 
 test('a failed Mod rolls back both entries and patches; dependants skip while independent Mods keep loading', async () => {
@@ -264,7 +255,7 @@ test('a failed Mod rolls back both entries and patches; dependants skip while in
         assert.equal(result.presentationDefinitions.length, 0)
         assert.equal([...result.clientContent.entries()].length, 0)
         assert.deepEqual(result.gameplay.components.snapshot(new World()), {})
-        for (const views of [result.plantViews, result.zombieViews]) {
+        for (const views of [result.views.plants, result.views.zombies]) {
             assert.equal(views.has('broken:leaked'), false)
             views.register('test:after', () => ({}))
         }
@@ -322,7 +313,7 @@ test('definition registries reject collisions, foreign namespaces, unresolved re
     const invalid = presentation()
     delete invalid.data.plants['example:rapid_pea'].clips.blink
     // What draws a plant has the pictures of every clip its animation plays.
-    const any = { has: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any }
+    const any = { has: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any, items: any }
     assert.doesNotThrow(() => assertPresented(build().definitions, installed, views))
     assert.throws(() => assertPresented(build().definitions, buildPresentationDefinitions(source, [invalid]), views), /missing blink animation/)
 })
@@ -379,7 +370,7 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         const loaded = await loader.load()
         assert.deepEqual([...loader.failures], [])
         assert.deepEqual(Array.from(loaded.manifests, (entry: any) => entry.id), [manifest.id])
-        assert.ok(loaded.plantViews.has('example:beacon'))
+        assert.ok(loaded.views.plants.has('example:beacon'))
         assert.deepEqual(getDebugCliCompletions('/example:').sort(), ['/example:charge', '/example:hello'])
         assert.deepEqual(await client.executor.execute('/sun set 1', true, () => assert.fail()), { ok: false, failure: 'condition', key: 'DEBUG_NO_ACTIVE_GAME' }, 'failed conditions name a string key')
         parseParticle(contentJson(files, 'assets/particles/sparks.json'))
@@ -394,15 +385,16 @@ test('a packed Mod registers both entity kinds, runs custom behaviors and restor
         assert.equal(client.buttons.length, 1, 're-initializing does not duplicate the Mod panel')
         client.buttons[0].onClick()
         assert.match(client.dialogs[0].options.message, /example:charge/)
-        const view = await loaded.plantViews.create({ kind: 'example:beacon', typeId: 'example:beacon', content: client.game })
-        assert.equal(view.body.loadedId, 'example:beacon')
         const particles: unknown[][] = []
+        const view = await loaded.views.plants.create({ kind: 'example:beacon', typeId: 'example:beacon', content: client.game,
+            particle: (...args: unknown[]) => particles.push(args) })
+        assert.equal(view.body.loadedId, 'example:beacon')
         const world = { phase: 'gameplay', result: 'playing', paused: false, gameplayTick: 50, extensions: { 'example:charge': { '1': { remainingTicks: 200 } } } }
-        view.sync({ entityId: 1, x: 0, y: 0 }, world, (...args: unknown[]) => particles.push(args))
-        view.sync({ entityId: 1, x: 0, y: 0 }, world, (...args: unknown[]) => particles.push(args))
+        view.sync({ entityId: 1, x: 0, y: 0 }, world)
+        view.sync({ entityId: 1, x: 0, y: 0 }, world)
         assert.equal(particles.length, 1, 'drawing the same authoritative tick does not duplicate particles')
         world.paused = true; world.gameplayTick = 100
-        view.sync({ entityId: 1, x: 0, y: 0 }, world, (...args: unknown[]) => particles.push(args))
+        view.sync({ entityId: 1, x: 0, y: 0 }, world)
         assert.equal(particles.length, 1)
         assert.equal(view.body.tint.b, 110)
         const baseGameplay = base()

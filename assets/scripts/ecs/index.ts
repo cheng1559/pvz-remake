@@ -344,7 +344,6 @@ export interface SystemContext {
 
 export const GAME_PHASES = [
     'command',
-    'seed',
     'tutorial',
     'spawn',
     'plant',
@@ -352,9 +351,6 @@ export const GAME_PHASES = [
     'mower',
     'projectile',
     'item',
-    'progress',
-    'cleanup',
-    'snapshot',
 ] as const
 
 export type GamePhase = typeof GAME_PHASES[number]

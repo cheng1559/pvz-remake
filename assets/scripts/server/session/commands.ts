@@ -69,7 +69,7 @@ export const commands = {
         if (command.type === 'useToolAt') return tools.use(session, command.row, command.column)
         if (command.type === 'clearCursor') {
             const bank = world.resources.get(SeedBankResource)
-            if (bank.selection.mode !== 'none') getActiveTutorial(world)?.seedCanceled?.(world, session.gameplayTick)
+            if (bank.selection.mode !== 'none') getActiveTutorial(world)?.seedCanceled?.(world, session.definitions, session.gameplayTick)
             clearCursor(world)
             return
         }
@@ -144,8 +144,7 @@ function processNextCommand(session: Session): CommandRejectionCode | undefined 
                 items: [...Object.keys(definitions.items).map(id => id.replace(/^pvz:/, '')), 'award'],
                 levels: Object.keys(levels.levels).map(id => id.replace(/^pvz:adventure-/, '')),
             },
-        } : 'name' in parsed ? executeDebugGameCommand(session.world, definitions, session.gameplayTick, parsed,
-            (seedId, row, column, team) => planting.createPlant(session, seedId, row, column, team)) : parsed
+        } : 'name' in parsed ? executeDebugGameCommand(session, parsed) : parsed
         session.commandResults.push({ sequence: queued.sequence, debug })
         return
     }

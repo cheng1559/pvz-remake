@@ -10,7 +10,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parents[2] / 'tools'))
 
 from pvz.pak import extracted_pak, PAK_MAGIC, XOR_KEY
-from pvz.fonts import write_font
+from pvz.fonts import convert_font
 from pvz.images import convert_images
 from pvz.particles import build_particle, write_particle
 
@@ -64,13 +64,13 @@ SetDefaultPointSize 2;
             Image.new("RGBA", (2, 2), (255, 255, 255, 255)).save(root / "testfont.png")
             output = root / "output"
 
-            first = write_font(source, output, "pvz:testfont")
-            first_bytes = [(path.name, path.read_bytes()) for path in first]
-            second = write_font(source, output, "pvz:testfont")
+            outputs = lambda: sorted((path.name, path.read_bytes()) for path in output.iterdir())
+            convert_font(source, output)
+            first = outputs()
+            convert_font(source, output)
 
-            self.assertEqual(first_bytes, [(path.name, path.read_bytes()) for path in second])
-            self.assertTrue((output / "testfont_atlas.png").is_file())
-            self.assertIn('"schemaVersion":2', (output / "testfont.json").read_text())
+            self.assertEqual(first, outputs())
+            self.assertEqual([name for name, _ in first], ["testfont.json", "testfont_atlas.png"])
 
     def test_images_merge_alpha_and_skip_the_companion_mask(self):
         with tempfile.TemporaryDirectory() as directory:

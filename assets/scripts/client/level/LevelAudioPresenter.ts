@@ -1,4 +1,3 @@
-import type { PresentationDefinitions, PresentationSound } from '@/shared/content/presentation'
 import { Node, tween } from 'cc'
 import { startGameTween } from '@/core/GameTween'
 import { MusicSystem } from '@/client/music/MusicSystem'
@@ -12,9 +11,11 @@ export class LevelAudioPresenter {
     private gameplayStarted = false
     private firstWavePlayed = false
 
-    /** `riseSounds`: Zombie::RiseFromGrave, the level rule's `graveRise` or the presentation's `graves.rise`. */
-    constructor(private readonly music: BoardPresentation['music'], private readonly definitions: PresentationDefinitions,
-        private readonly riseSounds: readonly PresentationSound[]) {}
+    /**
+     * The level's own sounds and its music. What is heard of something on the board (a plant, a zombie, a projectile, an
+     * item) is its view's (ClientViews.events).
+     */
+    constructor(private readonly music: BoardPresentation['music']) {}
 
     snapshot(): LevelAudioSnapshot {
         return {
@@ -99,17 +100,6 @@ export class LevelAudioPresenter {
         void SoundSystem.play(SoundEffect.LightFill)
     }
 
-    sounds(sounds: readonly PresentationSound[] | undefined): void {
-        for (const sound of sounds ?? []) {
-            if (sound.foley) void SoundSystem.playFoley(sound.audio as SoundEffect, sound.pitchRange)
-            else void SoundSystem.play(sound.audio as SoundEffect)
-        }
-    }
-
-    chew(soft: boolean): void {
-        void SoundSystem.playFoley(soft ? SoundEffect.ChompSoft : SoundEffect.Chomp)
-    }
-
     finalWave(node: Node): void {
         startGameTween(node, tween(node).delay(0.6).call(() => void SoundSystem.play(SoundEffect.FinalWave)))
     }
@@ -119,57 +109,14 @@ export class LevelAudioPresenter {
             case 'toolSelected': void SoundSystem.playFoley(SoundEffect.Shovel); break
             case 'plantShoveled': void SoundSystem.play(SoundEffect.Plant2); break
             case 'toolMissed': void SoundSystem.play(SoundEffect.Drop); break
-            case 'bowlingImpact':
-                void SoundSystem.playFoley(SoundEffect.BowlingImpact, -3)
-                // Zombie::TakeShieldDamage rings a screen door; UpdateBowling a helm without a shield.
-                if (event.data.shield) this.sounds(this.definitions.zombies[String(event.data.typeId)]?.shield?.bowlingImpactSounds)
-                else if (event.data.helm) this.sounds(this.definitions.zombies[String(event.data.typeId)]?.helm?.bowlingImpactSounds)
-                break
-            // Challenge::IZombieMouseDownWithZombie puts a zombie down with FOLEY_PLANT too, and a grave seed goes down alike.
-            case 'zombiePlaced': case 'gravePlaced': void SoundSystem.playFoley(SoundEffect.Plant); break
-            case 'plantPlaced':
-                void SoundSystem.playFoley(SoundEffect.Plant)
-                this.sounds(this.definitions.plants[String(event.data.typeId)]?.plantedSounds)
-                break
             case 'musicBurst': MusicSystem.startBurst(); break
-            case 'sunProduced': void SoundSystem.playFoley(SoundEffect.Throw, 10); break
             case 'hugeWaveSound': void SoundSystem.play(SoundEffect.HugeWave); break
             // ReportAchievement::GiveAchievement plays it with the message, even when the message waits its turn.
             case 'achievementEarned': if (event.data.announce === true) void SoundSystem.play(SoundEffect.Achievement); break
-            case 'projectileFired':
-                this.sounds(this.definitions.projectiles[String(event.data.typeId)]?.fireSounds)
-                break
-            case 'plantExploded':
-                this.sounds(this.definitions.plants[String(event.data.typeId)]?.explosionSounds)
-                break
-            case 'plantAreaAttack':
-                // Plant::Fire plays the fume, and DoRowAreaDamage a splat for the zombies it hits.
-                this.sounds(this.definitions.plants[String(event.data.typeId)]?.fireSounds)
-                if (Number(event.data.hits) > 0) void SoundSystem.playFoley(SoundEffect.Splat)
-                break
-            case 'plantGrew': void SoundSystem.playFoley(SoundEffect.PlantGrow); break
-            case 'mineRising': void SoundSystem.playFoley(SoundEffect.DirtRise); break
-            case 'chomperBit': void SoundSystem.playFoley(SoundEffect.BigChomp); break
-            // Zombie::ApplyChill plays FOLEY_FROZEN on the first chill; a plant's chill sounds the same.
-            case 'zombieChilled': case 'plantChilled': void SoundSystem.playFoley(SoundEffect.Frozen); break
-            case 'zombieVaultSound':
-                void SoundSystem.playFoley(event.data.sound === 'polevault' ? SoundEffect.PoleVault : SoundEffect.Grassstep)
-                break
-            case 'itemCollected': if (event.data.silent !== true) this.sounds(this.definitions.items[String(event.data.typeId)]?.collectSounds); break
-            case 'itemSpawned': this.sounds(this.definitions.items[String(event.data.typeId)]?.spawnSounds); break
-            case 'itemLanded': this.sounds(this.definitions.items[String(event.data.typeId)]?.landSounds); break
             // Board::UpdateLevelEndSequence raises the pitch by one step for each mower already scored.
             case 'mowerScored': void SoundSystem.playWithPitch(SoundEffect.Points, Math.max(0, Math.min(6, 6 - Number(event.data.remaining)))); break
             // Not enough sun, and an enemy producer taking sun away: the sun counter flashes with the buzzer.
             case 'sunFlash': case 'sunDrained': void SoundSystem.play(SoundEffect.Buzzer); break
-            case 'mowerActivated': void SoundSystem.playFoley(SoundEffect.Lawnmower); break
-            case 'zombieMowered': case 'zombiePuffed': case 'plantMowered': void SoundSystem.playFoley(SoundEffect.Splat); break
-            case 'plantEaten': void SoundSystem.play(SoundEffect.Gulp); break
-            // Zombie::AnimateChewSound; Zombie::EatZombie gulps the last bite.
-            case 'zombieChewedZombie': this.chew(false); break
-            case 'zombieAteZombie': void SoundSystem.play(SoundEffect.Gulp); break
-            case 'zombieEnraged': if (event.data.roar === true) this.sounds(this.definitions.zombies[String(event.data.typeId)]?.enrageSounds); break
-            case 'zombieRoseFromGrave': this.sounds(this.riseSounds); break
             // Board::NextWaveComing on Whack-a-Zombie: the awooga before the first wave, the siren before the last.
             case 'nextWaveComing':
                 if (event.data.first) void SoundSystem.play(SoundEffect.Awooga)
@@ -177,9 +124,6 @@ export class LevelAudioPresenter {
                 break
             // Board::DropLootPiece: FOLEY_SPAWN_SUN for the three suns a whacked zombie can drop.
             case 'sunDropped': void SoundSystem.playFoley(SoundEffect.Throw, 10); break
-            case 'zombieDying': void SoundSystem.playFoley(SoundEffect.ZombieFalling1, 10); break
-            case 'zombieGroaned': void SoundSystem.playFoley(SoundEffect.Groan); break
-            case 'levelAwardDropped': void SoundSystem.playFoley(SoundEffect.Throw, 10); break
             // Board::MouseDownWithPlant: FOLEY_DROP for a seed dropped where it cannot be planted.
             case 'seedDropped': void SoundSystem.play(SoundEffect.Drop); break
             case 'levelAwardCollected':

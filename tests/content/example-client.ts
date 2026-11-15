@@ -35,7 +35,9 @@ export function exampleClient() {
         body = { loadedId: '', tint: Color.WHITE, setColorOverride(color: Color) { this.tint = color } }
         constructor(readonly context: any) {}
         async initialize() { this.body.loadedId = this.context.typeId }
-        sync(_plant: any, _world: any, _particle: any) {}
+        sync(plant: any, world: any, flash = 0) { this.onBoard(plant, world, flash) }
+        onBoard(_plant: any, _world: any, _flash: number) {}
+        particle(...args: unknown[]) { this.context.particle(...args) }
     }
     const game = {
         registry: { resolve: (category: string, id: string) => ({ category, id }) },

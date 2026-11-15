@@ -179,7 +179,6 @@ export interface WorldSnapshot {
     result: 'playing' | 'won' | 'lost'
     paused: boolean
     sun: number
-    availableSun: number
     money: number
     wave: WaveSnapshot
     cursor: CursorSnapshot
@@ -246,8 +245,6 @@ export interface PlantSnapshot extends EntityBehaviorState {
     column: number
     health: number
     maxHealth: number
-    /** Omitted by older snapshots; wall-nuts freeze while it is positive. */
-    recentlyEatenCounter?: number
     /** Fuse, mine or chomper progress; drives the plant animation. */
     ability?: { state: PlantAbilityState, ticks: number, prey?: 'plant' }
     /** A nocturnal plant on a day board. */
@@ -300,16 +297,14 @@ export interface ZombieSnapshot extends EntityBehaviorState {
     maxHealth: number
     /** What its body plays (ZombieDefinition.animation): its one layer, `body`. */
     animations: Record<string, LayerSnapshot>
-    moweredTicksRemaining: number
-    /** Omitted by older snapshots; defaults to fully opaque. */
-    alpha?: number
+    alpha: number
     hasHead: boolean
     hasTongue: boolean
     hasArm: boolean
-    /** Remaining helm health; 0 once the helm drops. Omitted by older snapshots. */
-    helmHealth?: number
-    /** Remaining shield health; 0 once the shield drops. Omitted by older snapshots. */
-    shieldHealth?: number
+    /** Remaining helm health; 0 without one or once it drops. */
+    helmHealth: number
+    /** Remaining shield health; 0 without one or once it drops. */
+    shieldHealth: number
     chilled?: boolean
     /** A pole vaulter still carrying the pole. */
     hasPole?: boolean
@@ -740,10 +735,6 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
     }
     boolean(snapshot.paused, 'snapshot.paused')
     integer(snapshot.sun, 'snapshot.sun')
-    integer(snapshot.availableSun, 'snapshot.availableSun')
-    if ((snapshot.availableSun as number) < (snapshot.sun as number)) {
-        throw new TypeError('snapshot.availableSun must not be below sun')
-    }
     integer(snapshot.money, 'snapshot.money')
     const wave = record(snapshot.wave, 'snapshot.wave')
     integer(wave.index, 'snapshot.wave.index')
@@ -839,7 +830,6 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         if ((plant.maxHealth as number) === 0 || (plant.health as number) > (plant.maxHealth as number)) {
             throw new TypeError(`${name}.health must not exceed a positive maxHealth`)
         }
-        if (plant.recentlyEatenCounter !== undefined) integer(plant.recentlyEatenCounter, `${name}.recentlyEatenCounter`)
         if (plant.asleep !== undefined && plant.asleep !== true) throw new TypeError(`${name}.asleep must be true when present`)
         if (plant.produceTicks !== undefined) integer(plant.produceTicks, `${name}.produceTicks`)
         if (plant.behaviorState !== undefined) record(plant.behaviorState, `${name}.behaviorState`)
@@ -861,21 +851,14 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         if (zombie.behaviorState !== undefined) record(zombie.behaviorState, `${name}.behaviorState`)
         if (!ZOMBIE_STATES.includes(zombie.state as ZombieState)) throw new TypeError(`${name}.state is unknown`)
         validateLayers(zombie.animations, `${name}.animations`)
-        integer(zombie.moweredTicksRemaining, `${name}.moweredTicksRemaining`)
-        if (zombie.alpha !== undefined) {
-            integer(zombie.alpha, `${name}.alpha`)
-            if ((zombie.alpha as number) < 0 || (zombie.alpha as number) > 255) {
-                throw new TypeError(`${name}.alpha must be between 0 and 255`)
-            }
-        }
-        if ((zombie.moweredTicksRemaining as number) < 0) {
-            throw new TypeError(`${name}.moweredTicksRemaining must be non-negative`)
+        integer(zombie.alpha, `${name}.alpha`)
+        if ((zombie.alpha as number) < 0 || (zombie.alpha as number) > 255) {
+            throw new TypeError(`${name}.alpha must be between 0 and 255`)
         }
         boolean(zombie.hasHead, `${name}.hasHead`)
         boolean(zombie.hasTongue, `${name}.hasTongue`)
         boolean(zombie.hasArm, `${name}.hasArm`)
         for (const key of ['helmHealth', 'shieldHealth'] as const) {
-            if (zombie[key] === undefined) continue
             integer(zombie[key], `${name}.${key}`)
             if ((zombie[key] as number) < 0) throw new TypeError(`${name}.${key} must be non-negative`)
         }

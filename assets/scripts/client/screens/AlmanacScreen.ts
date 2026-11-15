@@ -1,6 +1,6 @@
 import { modResources } from '@/client/content/ModResources'
 import { Color, Mask, type Node, SpriteFrame } from 'cc'
-import { getAtlasFrame, SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
+import { SeedPacketRenderer } from '@/client/hud/SeedPacketRenderer'
 import { PlantPreview } from '@/client/hud/PlantPreview'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
 import type { UI } from '@/client/ui/UI'

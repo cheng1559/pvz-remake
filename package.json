@@ -15,6 +15,7 @@
         "mod:pack": "tsx tools/mod/cli.ts pack",
         "typecheck:server": "tsc -p tsconfig.server.json",
         "test:server": "npm run typecheck:server && tsx --tsconfig tsconfig.server.json --test \"tests/**/*.test.ts\"",
+        "test:tools": "python3 -m unittest discover -s tests/tools",
         "preview:debug": "cocos preview --project .",
         "preview:release": "cocos preview --project . --no-debug",
         "check:preview": "tsx tools/preview/check-imports.ts",

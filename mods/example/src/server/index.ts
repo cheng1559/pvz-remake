@@ -86,8 +86,9 @@ export function register({ host, assets }: GameplayApi): void {
         return entries.some((entry: any) => entry.name === spec.name) ? entries : [...entries, spec]
     })
     const { executor } = host.get('server/debug/DebugCommands')
-    host.around(executor, 'execute', function (next, world, definitions, tick, command, createPlant) {
-        if (command.name !== spec.name) return next(world, definitions, tick, command, createPlant)
+    host.around(executor, 'execute', function (next, session, command) {
+        if (command.name !== spec.name) return next(session, command)
+        const { world } = session
         const level = world.resources.get(Level)
         if (level.phase !== 'gameplay' || level.result !== 'playing') return cli.debugCondition('example:cli_need_level')
         const row = cli.debugInteger(command.args[0]), column = cli.debugInteger(command.args[1])

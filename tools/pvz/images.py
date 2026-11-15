@@ -65,12 +65,6 @@ def load_alphagrid_resources(resources_xml: Path) -> dict[str, tuple[str, str]]:
     return result
 
 
-def get_output_name(src: Path, resource_name: str, force_png: bool) -> str:
-    if force_png or src.suffix.lower() == ".gif":
-        return f"{resource_name}.png"
-    return src.name.lower()
-
-
 def write_preprocessed_resource(
     src: Path,
     dst: Path,

@@ -1,6 +1,6 @@
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ZombiePreview } from '@/client/hud/ZombiePreview'
-import { Color, Graphics, isValid, Node, Sprite, Vec3 } from 'cc'
+import { Color, Graphics, isValid, Node, Vec3 } from 'cc'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import { FontRepository } from '@/client/content/ClientContentLoader'
 import { uiNode } from '@/client/view/uiNode'
@@ -127,7 +127,6 @@ export class LevelHudPresenter {
         presenter.coinBank = options.coinBank
         presenter.ui = options.ui
         presenter.canPlantAt = options.canPlantAt
-        presenter.loadPacketSprite = options.loadPacketSprite
         presenter.menuButton.node.active = false
         return presenter
     }
@@ -492,7 +491,6 @@ export class LevelHudPresenter {
         return seed.kind === 'plant' ? plantDefinition(this.content.presentation, seed.id).pointerOffsetY ?? 0 : 0
     }
 
-    private loadPacketSprite!: LevelHudOptions['loadPacketSprite']
     private gravePreviews?: { cursor: Node, grid: Node }
     /**
      * A grave seed's grave in hand and translucent over its cell, as it will stand once risen: its corner 4 left of and

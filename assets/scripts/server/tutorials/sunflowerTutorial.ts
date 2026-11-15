@@ -1,18 +1,15 @@
 import type { World } from '@/ecs/index'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { EconomyStateResource, PlantComponent, SeedBankResource } from '../state/components'
-import { ItemComponent, TutorialResource, WaveResource } from '../state/levelState'
+import { PlantComponent, SeedBankResource } from '../state/components'
+import { TutorialResource, WaveResource } from '../state/levelState'
 import type { TutorialScript } from './index'
-import { selectedSeedId } from '../seeds/seedBank'
+import { packetAvailability, selectedSeedId } from '../seeds/seedBank'
+import type { GameplayDefinitions } from '@/shared/content/gameplay'
 
-export function sunflowerReady(world: World, tick: number): boolean {
+/** The bank's sunflower packet can be picked up (SeedPacket::CanPickUp). */
+export function sunflowerReady(world: World, definitions: GameplayDefinitions, tick: number): boolean {
     const packet = world.resources.get(SeedBankResource).packets.find(packet => packet?.seedId === 'pvz:sunflower')
-    const economy = world.resources.get(EconomyStateResource)
-    const pending = [...world.query(ItemComponent)].reduce((sum, entity) => {
-        const item = world.get(entity, ItemComponent)!
-        return sum + (item.state === 'collecting' && item.typeId === 'pvz:sun' ? item.value : 0)
-    }, 0)
-    return !!packet && packet.readyAtTick <= tick && economy.sun - economy.pendingSunSpend + pending >= 50
+    return !!packet && !packetAvailability(world, definitions, packet, tick).reason
 }
 
 function advice(world: World, key: string): void {
@@ -34,22 +31,22 @@ function noteSeedSelected(world: World, seedId: string): void {
     }
 }
 
-function noteSeedCanceled(world: World, tick: number): void {
+function noteSeedCanceled(world: World, definitions: GameplayDefinitions, tick: number): void {
     const tutorial = world.resources.get(TutorialResource)
     if (tutorial.step === 'plant-sunflower' || tutorial.step === 'refresh-sunflower') {
-        tutorial.step = sunflowerReady(world, tick) ? 'pick-sunflower' : 'refresh-sunflower'
+        tutorial.step = sunflowerReady(world, definitions, tick) ? 'pick-sunflower' : 'refresh-sunflower'
     }
 }
 
-function noteSeedReady(world: World, tick: number): void {
+function noteSeedReady(world: World, definitions: GameplayDefinitions, tick: number): void {
     const tutorial = world.resources.get(TutorialResource)
     if (tutorial.step === 'refresh-sunflower' &&
-        selectedSeedId(world.resources.get(SeedBankResource)) !== 'pvz:sunflower' && sunflowerReady(world, tick)) {
+        selectedSeedId(world.resources.get(SeedBankResource)) !== 'pvz:sunflower' && sunflowerReady(world, definitions, tick)) {
         tutorial.step = 'pick-sunflower'
     }
 }
 
-function notePlantPlaced(world: World, tick: number, plantId: string): void {
+function notePlantPlaced(world: World, definitions: GameplayDefinitions, tick: number, plantId: string): void {
     const tutorial = world.resources.get(TutorialResource)
     if (tutorial.step === 'complete') return
     const count = [...world.query(PlantComponent)].filter(entity => world.get(entity, PlantComponent)!.typeId === 'pvz:sunflower').length
@@ -59,10 +56,10 @@ function notePlantPlaced(world: World, tick: number, plantId: string): void {
         tutorial.promptAtTick = undefined
         const waves = world.resources.get(WaveResource)
         if (waves.index === 0) waves.nextWaveAtTick = tick + 999
-    } else tutorial.step = sunflowerReady(world, tick) ? 'pick-sunflower' : 'refresh-sunflower'
+    } else tutorial.step = sunflowerReady(world, definitions, tick) ? 'pick-sunflower' : 'refresh-sunflower'
 }
 
-function update(world: World, tick: number): void {
+function update(world: World, _definitions: GameplayDefinitions, tick: number): void {
     const tutorial = world.resources.get(TutorialResource)
     if (tutorial.step === 'complete') return
     if (tick === 1) advice(world, 'ADVICE_PLANT_SUNFLOWER1')
@@ -83,7 +80,7 @@ export const sunflowerTutorial: TutorialScript = {
     seedSelected: noteSeedSelected,
     seedCanceled: noteSeedCanceled,
     plantPlaced: notePlantPlaced,
-    seedReady(world, tick, seedId) {
-        if (seedId === 'pvz:sunflower') noteSeedReady(world, tick)
+    seedReady(world, definitions, tick, seedId) {
+        if (seedId === 'pvz:sunflower') noteSeedReady(world, definitions, tick)
     },
 }

@@ -1,16 +1,9 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 
 function load(file: string, modules: Record<string, unknown>, globals = {}) {
-    const exports: any = {}
-    const compiled = transpileModule(readFileSync(`assets/scripts/${file}.ts`, 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    runInNewContext(compiled.outputText, { exports, require: (id: string) => modules[id] ?? {}, ...globals })
-    return exports
+    return loadScript(`assets/scripts/${file}.ts`, (id: string) => modules[id] ?? {}, globals)
 }
 
 test('haptics uses the iOS and Android bridges, coalesces requests by real time and delays explosions by game time', () => {

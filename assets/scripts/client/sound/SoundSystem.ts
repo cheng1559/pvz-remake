@@ -1,6 +1,7 @@
 import { AudioClip, AudioSource, director, Node, sys } from 'cc'
 import { modResources } from '@/client/content/ModResources'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
+import type { PresentationSound } from '@/shared/content/presentation'
 
 type NativeAudioEngine = {
     play2d?: (url: string, loop: boolean, volume: number) => number
@@ -260,6 +261,14 @@ export class SoundSystem {
         const sfxVolume = this._sfxVolume
         const musicScaledVolume = sfxVolume < 1e-6 ? 0 : volume * this._musicVolume / sfxVolume
         return this.playSfx(effect, musicScaledVolume)
+    }
+
+    /** Sounds a presentation names, each as foley (varied, not overlapping itself) or as a plain sample. */
+    public static playSounds(sounds: readonly PresentationSound[] | undefined): void {
+        for (const sound of sounds ?? []) {
+            if (sound.foley) void this.playFoley(sound.audio as SoundEffect, sound.pitchRange)
+            else void this.play(sound.audio as SoundEffect)
+        }
     }
 
     public static playFoley(effect: SoundEffect, pitchRange?: number, volume = 1) {

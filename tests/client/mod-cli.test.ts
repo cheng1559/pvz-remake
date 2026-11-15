@@ -1,9 +1,7 @@
 import { withFixedBanks } from '../fixedBankLevels'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import * as cli from '@/shared/debug/DebugCli'
 import * as menu from '@/shared/menu'
 import { ModHost } from '@/shared/mod/ModHost'
@@ -15,22 +13,18 @@ import { LocalIntegratedGame } from '@/app/LocalIntegratedGame'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { readGameplaySource } from '../../tools/mod/content'
 
+function load(path: string, modules: Record<string, unknown>) {
+    return loadScript(`assets/scripts/${path}.ts`, (id: string) => modules[id] ?? {})
+}
+
 function client() {
     const modules: Record<string, any> = {
         '@/shared/mod/ModHost': { ModHost }, '@/shared/mod/ModAssets': { ModAssets: class {} },
         '@/shared/debug/DebugCli': cli,
     }
-    const load = (path: string) => {
-        const exports: any = {}
-        const code = transpileModule(readFileSync(`assets/scripts/${path}.ts`, 'utf8'), {
-            compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-        })
-        runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
-        return exports
-    }
-    const commands = load('platform/debug/DebugCliCommands')
+    const commands = load('platform/debug/DebugCliCommands', modules)
     modules['@/platform/debug/DebugCliCommands'] = commands
-    const { createClientModHost } = load('client/content/createModHost')
+    const { createClientModHost } = load('client/content/createModHost', modules)
     return { host: createClientModHost('test:cli', {}, {}, {}, {}) as ModHost,
         execute: commands.executeDebugCliCommand as (input: string, running: boolean,
             run: (input: string) => cli.DebugCliResult) => Promise<cli.DebugCliResult> }
@@ -51,14 +45,6 @@ test('plant invincibility is saved only after a successful server command', asyn
         getItem: (key: string) => storage.get(key) ?? null,
         setItem: (key: string, value: string) => storage.set(key, value),
     } }
-    const load = (path: string, modules: Record<string, unknown>) => {
-        const exports: any = {}
-        const code = transpileModule(readFileSync(`assets/scripts/${path}.ts`, 'utf8'), {
-            compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-        })
-        runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
-        return exports
-    }
     const settings = () => load('platform/debug/GameDebugSettings', { cc: { sys } }).GameDebugSettings
     const GameDebugSettings = settings()
     const { executeDebugCliCommand } = load('platform/debug/DebugCliCommands', {
@@ -81,14 +67,6 @@ test('FPS and cursor commands persist their settings and work without an active 
         getItem: (key: string) => storage.get(key) ?? null,
         setItem: (key: string, value: string) => storage.set(key, value),
     } }
-    const load = (path: string, modules: Record<string, unknown>) => {
-        const exports: any = {}
-        const code = transpileModule(readFileSync(`assets/scripts/${path}.ts`, 'utf8'), {
-            compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-        })
-        runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
-        return exports
-    }
     const settings = () => load('platform/debug/GameDebugSettings', { cc: { sys } }).GameDebugSettings
     const GameDebugSettings = settings()
     let cursorRefreshes = 0
@@ -137,7 +115,6 @@ test('client Mod commands reuse parsing and completion, and disappear when their
         const goto = await run('/goto MINIGAMES')
         assert.deepEqual([goto.action, goto.page], ['goto', 'minigames'], '/goto opens any menu page')
         assert.equal((await run('/goto award')).failure, 'syntax', 'only pages the menu can open directly')
-        assert.equal((await run('/home')).failure, 'syntax', 'the old page commands are gone')
         assert.deepEqual(cli.getDebugCliCompletions('/goto mi'), ['/goto minigames'])
     } finally { host.dispose() }
     assert.deepEqual(cli.getDebugCliCompletions('/test:h'), [])
@@ -151,11 +128,11 @@ test('Mod game commands cross the normal client/server boundary while paused and
     syntax(host, name)
     syntax(serverHost, name)
     const { executor } = serverHost.get('server/debug/DebugCommands')
-    serverHost.around(executor, 'execute', (next, world, definitions, tick, command, createPlant) => {
-        if (command.name !== name) return next(world, definitions, tick, command, createPlant)
+    serverHost.around(executor, 'execute', (next, session, command) => {
+        if (command.name !== name) return next(session, command)
         const amount = cli.debugInteger(command.args[0])
         if (amount === null || amount < 0) return cli.debugSyntax('Use a non-negative integer')
-        const economy = world.resources.get(EconomyStateResource)
+        const economy = session.world.resources.get(EconomyStateResource)
         economy.sun += amount
         return cli.debugSuccess(`Sun: ${economy.sun}`)
     })
@@ -197,14 +174,10 @@ test('/money sets the profile purse outside a level and runs on the board inside
         async getPurse() { return { coins } },
         async setCoins(value: number) { coins = value; return { coins } },
     }
-    const exports: any = {}
-    const code = transpileModule(readFileSync('assets/scripts/platform/debug/DebugCliCommands.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
     const modules: Record<string, unknown> = { '@/shared/debug/DebugCli': cli, '@/shared/menu': menu, '@/client/api/MenuApi': { menuApi }, './GameDebugSettings': { GameDebugSettings: {} },
         // The coin cap comes from the gameplay settings.
         '@/client/game/loadIntegratedGameContent': { loadGameplayContent: async () => ({ definitions: readGameplaySource('definitions') }) } }
-    runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? {} })
+    const exports = load('platform/debug/DebugCliCommands', modules)
     const run = (command: string, running = false) => exports.executeDebugCliCommand(command, running, () => cli.debugSuccess('board'))
     const noPlayer = await run('/money set 5')
     assert.deepEqual([noPlayer.ok, noPlayer.key], [false, 'DEBUG_REQUIRES_PLAYER'])

@@ -395,6 +395,8 @@ export interface LevelRulePresentation {
 }
 /** Coin::CoinInitialize / Coin::Draw: how a sun or coin item looks; offsets are from the item's 60x60 top-left. */
 export interface ItemPresentationDefinition {
+    /** Its view (ItemViewRegistry): `item` when omitted. */
+    readonly view?: string
     /** Looping animation; `rate` is a random speed range relative to the clip's fps. */
     readonly reanim: string
     readonly offset: readonly [number, number]
@@ -644,6 +646,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     }
     for (const [id, entry] of Object.entries(object(data.items, 'presentation items'))) {
         const item = object(entry, id)
+        if (item.view !== undefined) text(item.view, id + '.view')
         text(item.reanim, id + '.reanim'); pair(item.offset, id + '.offset'); range(item.rate, id + '.rate', true)
         if (item.flight !== undefined) { const flight = object(item.flight, id + '.flight'); text(flight.sprite, id + '.flight.sprite'); pair(flight.offset, id + '.flight.offset') }
         if (item.glow !== undefined) {

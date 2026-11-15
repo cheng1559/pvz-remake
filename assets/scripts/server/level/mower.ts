@@ -5,7 +5,7 @@ import {
     ProjectileComponent, type Zombie, ZombieComponent,
 } from '../state/components'
 import { MOWERED_TICKS } from '@/shared/content/zombieAnimation'
-import { destroyZombie, dropZombieHelm, dropZombieShield, isFlattenableZombie, mowZombie as flattenZombie } from '../zombies/damage'
+import { destroyZombie, dropZombieHelm, dropZombieShield, isFlattenableZombie, flattenZombie } from '../zombies/damage'
 import { dropZombieLoot } from './loot'
 import { dropZombieFlag } from '../zombies/flag'
 import { WaveResource } from '../state/levelState'

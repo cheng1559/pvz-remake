@@ -10,6 +10,15 @@ export class EntityViewRegistry<Context, View> {
         this.views.register(this.qualify(kind), create)
     }
 
+    /** A view by its class: made with its context, then readied before it is used. */
+    registerView(kind: string, Type: new (context: Context) => View & { initialize(): void | Promise<void> }): void {
+        this.register(kind, async context => {
+            const view = new Type(context)
+            await view.initialize()
+            return view
+        })
+    }
+
     has(kind: string): boolean { return !!this.views.get(this.qualify(kind)) }
     checkpoint(): () => void { return this.views.checkpoint() }
     freeze(): void { this.views.freeze() }

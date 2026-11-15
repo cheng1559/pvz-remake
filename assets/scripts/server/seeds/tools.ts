@@ -43,7 +43,7 @@ export const tools = {
             getActiveTutorial(world)?.plantRemoved?.(world)
             emitServerEvent(world.resources.get(EventQueueResource), 'plantShoveled', { entityId: entity })
         } else {
-            getActiveTutorial(world)?.seedCanceled?.(world, session.gameplayTick)
+            getActiveTutorial(world)?.seedCanceled?.(world, session.definitions, session.gameplayTick)
             emitServerEvent(world.resources.get(EventQueueResource), 'toolMissed', {})
         }
     },

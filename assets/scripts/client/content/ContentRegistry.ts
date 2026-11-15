@@ -9,9 +9,7 @@ export interface ResolvedContent<K extends ContentCategory = ContentCategory> {
     readonly contentId: string
     readonly contentVersion: string
     readonly contentHash: string
-    readonly bundle: string
     readonly path: string
-    readonly schemaVersion: 2
 }
 
 export class ContentRegistry {
@@ -33,8 +31,7 @@ export class ContentRegistry {
         }
         this.contentIds.add(manifest.id)
         for (const entry of entries) this.registerEntry({ category: entry.kind, id: entry.id, path: entry.path,
-            contentId: entry.ownerId, contentVersion: entry.ownerVersion, contentHash: entry.contentHash,
-            bundle: entry.bundle, schemaVersion: 2 })
+            contentId: entry.ownerId, contentVersion: entry.ownerVersion, contentHash: entry.contentHash })
     }
 
     registerEntry(content: ResolvedContent): void {

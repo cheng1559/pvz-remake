@@ -1,31 +1,21 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind,ScriptTarget,transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import * as protocol from '@/shared/protocol'
 
 // The protocol's own helpers run as they are: what is loaded asks them whether the level stands still.
 const shared: Record<string, unknown> = { '@/shared/protocol': protocol, '@/shared/protocol/index': protocol }
 
-function loadLevelModule(name: string, modules: Record<string, unknown>) {
-    const exports: Record<string, any> = {}
-    const code = transpileModule(readFileSync(`assets/scripts/client/level/${name}.ts`, 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    })
-    runInNewContext(code.outputText, { exports, require: (id: string) => modules[id] ?? shared[id] ?? {} })
-    return exports
-}
-
 test('conveyor keyboard selection uses packet identity and respects page and dialog scopes', () => {
     const page = {}, modal: any = { activeModalRoot: page, isInputBlocked: false }
     const settings = { hotkeysEnabled: true }
-    const { LevelInputPresenter } = loadLevelModule('LevelInputPresenter', {
+    const modules: Record<string, unknown> = {
         cc: { KeyCode: { SPACE: 32, ENTER: 13, DIGIT_0: 48, DIGIT_1: 49, KEY_D: 68, KEY_F: 70 } },
         '@/client/input/UIHoverManager': { UIHoverManager: modal },
         '@/platform/debug/GameDebugSettings': { GameDebugSettings: settings },
         '@/platform/Haptics': { Haptics: { play() {} } },
-    })
+    }
+    const { LevelInputPresenter } = loadScript('assets/scripts/client/level/LevelInputPresenter.ts', (id: string) => modules[id] ?? shared[id] ?? {})
     const commands: any[] = []
     const snapshot: any = { paused: false, phase: 'gameplay', result: 'playing', cursor: { mode: 'none' },
         seedPackets: [], conveyorPackets: [{ id: 17, seedId: 'nut' }] }

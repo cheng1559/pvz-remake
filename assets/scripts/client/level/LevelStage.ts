@@ -1,20 +1,29 @@
 import type { Color, Node, SpriteFrame } from 'cc'
-import type { FontRepository } from '@/client/content/ClientContentLoader'
+import { type FontRepository, SpriteRepository } from '@/client/content/ClientContentLoader'
 import type { SeedPacketRenderArgs } from '@/client/hud/SeedPacketRenderer'
-import type { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
 import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { PlantView } from '@/client/plants/PlantView'
-import type { ZombieViewInstance, ZombieViewSprites } from '@/client/zombies/ZombieView'
-import type { PlantSnapshot, ServerEvent, WorldSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
-import type { LevelAudioPresenter } from './LevelAudioPresenter'
+import type { ZombieView, ZombieViewSprites } from '@/client/zombies/ZombieView'
+import type { LevelDefinition } from '@/shared/content/gameplay'
+import type { PresentationSound } from '@/shared/content/presentation'
+import type { PlantSnapshot, ServerEvent, WorldSnapshot } from '@/shared/protocol/index'
+import type { EntityFlashes } from './EntityFlashes'
 import type { LevelIntro } from './LevelIntro'
+import type { LevelEntitySnapshot } from './LevelPresentationSnapshot'
 
 const WIDTH = 800
 const HEIGHT = 600
 
+export type Content = Awaited<ReturnType<typeof loadIntegratedGameContent>>
+
 /** Board coordinates (from the top left, y down) in the entity layer's (from its middle, y up). */
 export function boardToLayer(x: number, y: number): { x: number, y: number } {
     return { x: x - WIDTH / 2, y: HEIGHT / 2 - y }
+}
+
+/** The board's plant shadow, the darker one at night; off the board the day's. */
+export async function plantShadow(content: Content, stage?: LevelStage): Promise<SpriteFrame> {
+    return stage?.assets.shadow ?? new SpriteRepository(content.registry, content.loader).load('pvz:plantshadow')
 }
 
 /** The pictures a level loads before it starts, for what is on its board. */
@@ -23,11 +32,28 @@ export interface LevelEntityAssets {
     projectileFrames: Record<string, SpriteFrame>
     projectileShadowFrames: Record<string, SpriteFrame>
     /** The board's plant shadow, the darker one at night. */
-    mowerShadow: SpriteFrame
+    shadow: SpriteFrame
     zombieSprites: ZombieViewSprites
     wallnutCracked: [SpriteFrame, SpriteFrame]
     loadPacketSprite: SeedPacketRenderArgs['loadSprite']
     packetCostFont: Awaited<ReturnType<FontRepository['load']>>
+}
+
+/**
+ * What every view of something on the board does (plants, zombies, projectiles, the things of a cell, items). It is made
+ * by its registry with its context (`node`, `content`, the entity, and `stage` on the board), readied by `initialize`,
+ * and `sync` shows its entity in each of the level's frames, where it places its node itself. A view of what is also
+ * drawn off the board has `show` for that. One that keeps something of its own across a save has `snapshot`/`restore`.
+ */
+export interface EntityView<Entity = unknown> {
+    initialize(): void | Promise<void>
+    sync(entity: Entity, world: WorldSnapshot): void
+    snapshot?(entityId: number): LevelEntitySnapshot | undefined
+    restore?(snapshot: LevelEntitySnapshot): void | Promise<void>
+    /** What the view made outside its node goes with it. */
+    destroy?(): void
+    /** Its shadow, a node of the board's layer apart from its own: on the ground under it, drawn with the ground. */
+    readonly shadowNode?: Node
 }
 
 /**
@@ -37,13 +63,23 @@ export interface LevelEntityAssets {
 export interface LevelStage {
     /** The layer the board's entities and effects are in. */
     readonly layer: Node
-    readonly content: Awaited<ReturnType<typeof loadIntegratedGameContent>>
-    readonly animations: ClientAnimationRegistry
-    readonly audio: LevelAudioPresenter
+    readonly content: Content
     readonly intro: LevelIntro
     readonly assets: LevelEntityAssets
-    /** Zombie::RiseFromGrave: the dirt of a zombie rising, the level rule's or the presentation's. */
-    readonly riseParticle: string
+    /** The level being played, and the gameplay tick of the frame being drawn. */
+    readonly level: LevelDefinition
+    readonly gameplayTick: number
+    /** Plants' and zombies' flashes (Plant::mEatenFlashCountdown, Zombie::mJustGotShotCounter), raised by the server's events. */
+    readonly flashes: EntityFlashes
+    /**
+     * What the board shows now it shows without what goes with getting there: its first frame, what the level starts or is
+     * loaded with, and a save being put back. A view made now came with the level, not during play.
+     */
+    readonly quiet: boolean
+    /** Zombie::RiseFromGrave: the dirt and rumble of a zombie rising, the level rule's or the presentation's. */
+    readonly graveRise: { readonly particle: string, readonly sounds: readonly PresentationSound[] }
+    /** How far the sun counter sits from its 800-wide layout position, e.g. when pinned to the screen edge. */
+    sunBankOffset(): number
     /**
      * A particle effect on the board at a draw order, in board coordinates (Board::AddPvzpParticle). `mirrored`: played
      * flipped left to right, for a zombie or plant facing the other way.
@@ -54,14 +90,10 @@ export interface LevelStage {
      * that order, it goes where that entity does.
      */
     addScenery(node: Node, order: number, entityId?: number): void
-    /** An entity's node. */
+    /** An entity's node, and the view of a plant or a zombie. */
     node(entityId: number): Node | undefined
     plant(entityId: number): PlantView | undefined
-    zombie(entityId: number): ZombieViewInstance | undefined
-    /** The type of a zombie it has drawn, also once the zombie is gone from the level's state. */
-    zombieType(entityId: number): string | undefined
-    /** A zombie's node and view brought to this state now, before what leaves from where it is. */
-    showZombie(zombie: ZombieSnapshot, world: WorldSnapshot): void
+    zombie(entityId: number): ZombieView | undefined
     /** Plant::CalcRenderOrder. */
     plantOrder(plant: Pick<PlantSnapshot, 'typeId' | 'row' | 'x' | 'behaviorState'>): number
     /** A zombie's draw order in a row. */

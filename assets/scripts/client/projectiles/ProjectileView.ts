@@ -1,7 +1,8 @@
 import { type Node, Sprite } from 'cc'
-import { boardToLayer, type LevelStage, type StageEvent } from '@/client/level/LevelStage'
+import { boardToLayer, type Content, type EntityView, type LevelStage, type StageEvent } from '@/client/level/LevelStage'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
+import { SoundSystem } from '@/client/sound/SoundSystem'
 import { uiNode } from '@/client/view/uiNode'
 import type { ProjectilePresentationDefinition } from '@/shared/content/presentation'
 import { renderOrder } from '@/shared/content/renderOrder'
@@ -20,19 +21,25 @@ const LOB_SPLAT: readonly [number, number] = [0, 0]
 const IMPACT_PAST = 60
 const ZOMBIE_MIDDLE = 40
 
+/**
+ * A projectile as a view shows it: in flight, the server's whole snapshot of it; before it flies (a row's mower, waiting
+ * to be set off), its type.
+ */
+export type ShownProjectile = Partial<ProjectileSnapshot> & Pick<ProjectileSnapshot, 'typeId'>
+
 export interface ProjectileViewContext {
     node: Node
+    content: Content
+    projectile: ShownProjectile
+    /** The board: projectiles are on no other. */
     stage: LevelStage
-    typeId: string
-    /** The projectile in flight; none for one that waits to be set off (a row's mower), which a view draws if it can. */
-    projectile?: ProjectileSnapshot
 }
 
 /**
  * A projectile: its picture or its looping animation, turned the way it flies, with what goes with it apart from it
  * so that neither turns as it does: its shadow on the ground and the trail it leaves.
  */
-export class ProjectileView {
+export class ProjectileView implements EntityView<ProjectileSnapshot> {
     /** Its shadow, a node of the board's layer: on the ground under it, drawn with the ground. */
     shadowNode?: Node
     private trail?: ParticlePlayer
@@ -40,15 +47,15 @@ export class ProjectileView {
     constructor(protected readonly context: ProjectileViewContext) {}
 
     protected get presentation(): ProjectilePresentationDefinition {
-        const presentation = this.context.stage.content.presentation.projectiles[this.context.typeId]
-        if (!presentation) throw new Error(`Projectile presentation is not installed: ${this.context.typeId}`)
+        const { content, projectile: { typeId } } = this.context, presentation = content.presentation.projectiles[typeId]
+        if (!presentation) throw new Error(`Projectile presentation is not installed: ${typeId}`)
         return presentation
     }
 
     /** Its animation with its corner at `at` from the projectile's, playing in a loop; none if the projectile went meanwhile. */
     protected async animate(at: { x: number, y: number }): Promise<ReanimPlayer | undefined> {
-        const { node, stage: { content } } = this.context, reanim = this.presentation.reanim
-        if (!reanim) throw new Error(`Projectile animation is not installed: ${this.context.typeId}`)
+        const { node, content } = this.context, reanim = this.presentation.reanim
+        if (!reanim) throw new Error(`Projectile animation is not installed: ${this.context.projectile.typeId}`)
         const animation = uiNode({ name: 'ProjectileAnimation', parent: node, position: at, anchor: { x: 0, y: 1 } }).node
         animation.setScale(reanim.scale, reanim.scale, 1)
         const player = animation.addComponent(ReanimPlayer)
@@ -59,22 +66,31 @@ export class ProjectileView {
     }
 
     async initialize(): Promise<void> {
-        const { node, stage, typeId, projectile } = this.context, presentation = this.presentation, { assets } = stage
-        if (presentation.reanim) {
-            if (!await this.animate(presentation.reanim)) return
-        } else {
-            const frame = assets.projectileFrames[typeId]
-            if (!frame) throw new Error(`Projectile sprite is not installed: ${typeId}`)
-            uiNode({ node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
-        }
+        const { stage, projectile } = this.context, presentation = this.presentation, { assets } = stage, { typeId } = projectile
+        if (projectile.entityId === undefined) return this.show()
+        if (!await this.picture()) return
         // Its shadow is apart from it, on the ground: its own picture, or the board's plant shadow about a point.
-        const frame = presentation.shadow ? assets.projectileShadowFrames[typeId] : presentation.plantShadow ? assets.mowerShadow : undefined
+        const frame = presentation.shadow ? assets.projectileShadowFrames[typeId] : presentation.plantShadow ? assets.shadow : undefined
         if (presentation.shadow && !frame) throw new Error(`Projectile shadow is not installed: ${typeId}`)
-        if (frame && projectile) {
+        if (frame) {
             this.shadowNode = uiNode({ name: 'ProjectileShadow', parent: stage.layer,
                 ...(presentation.shadow ? { anchor: { x: 0, y: 1 } } : {}), sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } }).node
         }
-        if (projectile) this.sync(projectile)
+    }
+
+    /** The projectile as it stands before it flies: its picture where it is. */
+    async show(): Promise<void> {
+        await this.picture()
+    }
+
+    /** Its picture, or its animation playing in a loop; false if the projectile went meanwhile. */
+    private async picture(): Promise<boolean> {
+        const { node, stage, projectile: { typeId } } = this.context, { reanim } = this.presentation
+        if (reanim) return !!await this.animate(reanim)
+        const frame = stage.assets.projectileFrames[typeId]
+        if (!frame) throw new Error(`Projectile sprite is not installed: ${typeId}`)
+        uiNode({ node, anchor: { x: 0, y: 1 }, sprite: { frame, sizeMode: Sprite.SizeMode.RAW, trim: false } })
+        return true
     }
 
     /**
@@ -134,6 +150,11 @@ export class ProjectileView {
         return picture ? { x: picture.width / 2, y: picture.height / 2 } : hitbox && { x: hitbox.x + hitbox.width / 2, y: hitbox.y + hitbox.height / 2 }
     }
 
+    /** Plant::Fire: the sound of what is fired. */
+    static readonly fired: StageEvent = (stage, event) => {
+        SoundSystem.playSounds(stage.content.presentation.projectiles[String(event.data.typeId)]?.fireSounds)
+    }
+
     /**
      * Projectile::DoImpact: its sounds and its splat, and the projectile is gone. It needs no view: one that hit before
      * it was ever drawn splats as well. A piercing projectile flies on through what it hits (`through`): it stays, with
@@ -148,8 +169,8 @@ export class ProjectileView {
         const targetType = event.data.targetTypeId
         const target = typeof targetType === 'string' ? stage.content.presentation.zombies[targetType] : undefined
         const armor = event.data.shield ? target?.shield : event.data.helm ? target?.helm : undefined
-        stage.audio.sounds(armor?.impactSounds)
-        if (!armor?.muffles || projectile?.loud) stage.audio.sounds(projectile?.impactSounds)
+        SoundSystem.playSounds(armor?.impactSounds)
+        if (!armor?.muffles || projectile?.loud) SoundSystem.playSounds(projectile?.impactSounds)
         const impact = projectile?.impact, { x, y, targetId, row } = event.data
         if (!impact || through || typeof x !== 'number' || typeof y !== 'number') return
         const zombie = world.zombies.find(candidate => candidate.entityId === targetId)

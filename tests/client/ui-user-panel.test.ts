@@ -1,20 +1,13 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { setImmediate } from 'node:timers/promises'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import { MenuApi } from '@/client/api/MenuApi'
 import { createLocalMenuTransport } from '@/app/LocalMenuApi'
 import { GAME_SAVE_KEY } from '@/app/GameSaveStore'
 
 function load(path: string, modules: Record<string, unknown>, globals: Record<string, unknown> = {}) {
-    const module = { exports: {} as Record<string, any> }
-    const compiled = transpileModule(readFileSync(`assets/scripts/${path}.ts`, 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
-    runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? {}, console, ...globals })
-    return module.exports
+    return loadScript(`assets/scripts/${path}.ts`, (id: string) => modules[id] ?? {}, { console, ...globals })
 }
 
 function profiles() {
@@ -108,7 +101,6 @@ test('user panel validates names, keeps rename IDs/saves, and confirms isolated 
     data.set(`${GAME_SAVE_KEY}:${alice.id}:adventure`, 'alice save')
     data.set(`${GAME_SAVE_KEY}:${bob.id}:adventure`, 'bob save')
     data.set(`${GAME_SAVE_KEY}:${bob.id}:adventure:temp`, 'bob temp')
-    data.set(`pvz-remake:saves:${bob.id}:adventure`, 'bob legacy save')
     const panel = await fixture.show()
     fixture.action(panel, 'RENAME_BUTTON')
     inputs.at(-1).value = '  Bob   Two  '
@@ -132,7 +124,6 @@ test('user panel validates names, keeps rename IDs/saves, and confirms isolated 
     assert.equal(store.getCurrentProfile().id, alice.id)
     assert.equal(data.get(`${GAME_SAVE_KEY}:${alice.id}:adventure`), 'alice save')
     assert.equal([...data.keys()].some(key => key.startsWith(`${GAME_SAVE_KEY}:${bob.id}:`)), false)
-    assert.equal(data.has(`pvz-remake:saves:${bob.id}:adventure`), false)
     fixture.action(panel, 'DELETE_BUTTON')
     dialogs.at(-1).close(true)
     await setImmediate()

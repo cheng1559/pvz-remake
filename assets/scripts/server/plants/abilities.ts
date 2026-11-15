@@ -13,7 +13,6 @@ import {
     RandomResource,
     ZombieComponent,
 } from '../state/components'
-import { WaveResource } from '../state/levelState'
 import { dropGraveLoot } from '../level/loot'
 import type { DeterministicRng } from '../state/DeterministicRng'
 import { destroyZombie, isTargetableZombie } from '../zombies/damage'
@@ -80,7 +79,6 @@ export function createPlantAbilitySystem(definitions: GameplayDefinitions): Game
                     case 'ready':
                         if (findAbilityTarget(world, definitions, position, plant, definition.chomper!) === undefined) break
                         next('biting', definition.chomper!.biteDelayTicks)
-                        emitServerEvent(events, 'chomperBiting', { entityId: entity })
                         break
                     case 'biting': {
                         if (ability.ticks > 0) break

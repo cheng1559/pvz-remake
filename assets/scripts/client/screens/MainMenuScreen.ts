@@ -59,7 +59,8 @@ export class MainMenuScreen extends Component {
     private playedFlowers = new Set<ReanimPlayer>()
     private user: UserView | null = null
     private ready = false
-    private background!: Sprite
+    /** The sky behind the selector, which Mods stretch (a wider screen's). */
+    background!: Sprite
     private opened = false
     private signShown = false
     private entrancePending = true

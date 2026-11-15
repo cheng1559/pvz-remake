@@ -18,7 +18,7 @@ import {
     RandomResource,
     ZombieComponent,
 } from '@/server/state/components'
-import { createPeashooterSystem } from '@/server/plants/shooter'
+import { createPlantAttackSystem } from '@/server/plants/shooter'
 import { createPlantAbilitySystem, initialPlantAbility } from '@/server/plants/abilities'
 import { createProjectileSystem } from '@/server/combat/projectiles'
 import { createZombieSystem } from '@/server/zombies/system'
@@ -45,7 +45,7 @@ function game(config = definitions) {
         mowerRows: [],
     })
     const schedule = new Schedule()
-    schedule.add('plant', createPeashooterSystem(config))
+    schedule.add('plant', createPlantAttackSystem(config))
     schedule.add('plant', createPlantAbilitySystem(config))
     schedule.add('zombie', createZombieSystem(config))
     schedule.add('projectile', createProjectileSystem(config))

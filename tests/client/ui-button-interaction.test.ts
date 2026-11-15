@@ -1,10 +1,8 @@
 import { presentationFixture } from './presentationFixture'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
 import * as plantDefinitions from '@/client/plants/definitions'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import * as protocol from '@/shared/protocol'
 
 // The protocol's own helpers run as they are: what is loaded asks them whether the level stands still.
@@ -92,14 +90,7 @@ function setup() {
         '@/platform/Haptics': { Haptics: { play: (style = 'light') => haptics.push(style) } },
         './CursorManager': { CursorManager: { set: (value: string) => { cursor = value; cursorHistory.push(value) } } },
     }
-    const load = (file: string) => {
-        const module = { exports: {} as Record<string, any> }
-        const compiled = transpileModule(readFileSync(file, 'utf8'), {
-            compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-        })
-        runInNewContext(compiled.outputText, { exports: module.exports, require: (id: string) => modules[id] ?? shared[id] ?? {} })
-        return module.exports
-    }
+    const load = (file: string) => loadScript(file, (id: string) => modules[id] ?? shared[id] ?? {})
     const hover = load('assets/scripts/client/input/UIHoverManager.ts').UIHoverManager
     modules['@/client/input/UIHoverManager'] = { UIHoverManager: hover }
     const Button = load('assets/scripts/client/ui/UIButton.ts').UIButton
@@ -176,7 +167,7 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         ui: { text: (key: string) => key, tooltip: () => ({ warning: '', show() {}, hide() {} }) },
     })
     const world = {
-        phase: 'gameplay', result: 'playing', paused: false, availableSun: 100, cursor: { mode: 'none' }, extensions: {},
+        phase: 'gameplay', result: 'playing', paused: false, cursor: { mode: 'none' }, extensions: {},
         seedPackets: ['pea', 'double'].map(seedId => ({ seedId, ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 750, availability: {} as any })),
     }
     const commands: any[] = []
@@ -206,7 +197,6 @@ test('level seeds keep independent affordability and cooldowns, and placement us
         world.seedPackets[1].cooldownRemaining = 1
         bank.sync(world, [], true, null)
         world.seedPackets[1].cooldownRemaining = 0
-        world.availableSun = 300
         world.seedPackets[1].availability = {}
         bank.sync(world, [], true, null)
         assert.deepEqual(flashes, [], 'a cleared recharge alone does not flash; the server decides readiness')
@@ -253,7 +243,7 @@ test('a belt packet shows once its picture is drawn, in its place on the belt fo
             })
         }
         const layout = presentationFixture.conveyor
-        const at = (x: number) => ({ phase: 'gameplay', result: 'playing', paused: false, availableSun: 0, cursor: { mode: 'none' }, extensions: {},
+        const at = (x: number) => ({ phase: 'gameplay', result: 'playing', paused: false, sun: 0, cursor: { mode: 'none' }, extensions: {},
             items: [], seedPackets: [], conveyorPackets: [{ id: 5, seedId: 'pea', selected: false, x, availability: {} }] })
         // The picture loads after the frame is drawn: until then the packet would show empty, so it waits.
         bank.sync(at(300), [], true, null, false)
@@ -273,7 +263,7 @@ test('a repick keeps the bank packets until its chooser is built, then leaves th
         ui: { text: (key: string) => key, tooltip: () => ({ show() {}, hide() {} }) },
     })
     try {
-        const snapshot = { phase: 'gameplay', result: 'playing', paused: false, availableSun: 0, cursor: { mode: 'none' }, extensions: {}, items: [],
+        const snapshot = { phase: 'gameplay', result: 'playing', paused: false, sun: 0, cursor: { mode: 'none' }, extensions: {}, items: [],
             seedChooser: { choosing: true, repick: true, slots: 1 },
             seedPackets: [{ seedId: 'pea', ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 0, availability: {} }] }
         const node = (bank.packets as any[])[0].view.node
@@ -301,7 +291,7 @@ test('ordinary and conveyor packets share mobile drag, tap, switch and cancel in
         })
         if (conveyor) assert.ok(bank.packets.every((packet: any) => packet.seedId === undefined && !packet.view.node.active),
             'conveyor slots start empty and hidden, without borrowing the first configured seed')
-        const snapshot: any = { phase: 'gameplay', result: 'playing', paused: false, availableSun: conveyor ? 0 : 100,
+        const snapshot: any = { phase: 'gameplay', result: 'playing', paused: false, sun: conveyor ? 0 : 100,
             cursor: { mode: 'none' }, extensions: {}, items: [],
             seedPackets: conveyor ? [] : ['pea', 'sunflower'].map(seedId => ({ seedId, ready: true, selected: false, cooldownRemaining: 0, cooldownTotal: 0, availability: {} })),
             conveyorPackets: conveyor ? [{ id: 17, seedId: 'pea', selected: false, x: 0, availability: {} }, { id: 29, seedId: 'pea', selected: false, x: 120, availability: {} }] : [],
@@ -380,7 +370,7 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
     const pea = ui.makeButton(0), sunflower = ui.makeButton(120), menu = ui.makeButton(680), modButton = ui.makeButton(560)
     const { LevelInputPresenter } = ui.load('assets/scripts/client/level/LevelInputPresenter.ts')
     const world = {
-        phase: 'gameplay', result: 'playing', paused: false, availableSun: 100, extensions: {},
+        phase: 'gameplay', result: 'playing', paused: false, sun: 100, extensions: {},
         cursor: { mode: 'none', seedId: '' },
         seedPackets: ['pea', 'sunflower'].map(seedId => ({ seedId, ready: true, selected: false, cooldownRemaining: 0, availability: {} })),
         items: [] as any[],
@@ -402,7 +392,7 @@ test('mobile planting keeps tap selection, aims while held, and resolves only th
         audio: { seedPacketSelected() {}, plantingCancelled() {} }, resetCursor() {}, setPointer(value?: any) { pointer = value },
         pointerOffsetY: () => 0, seedPacketAt: (snapshot: any, index: number) => {
             const packet = snapshot.seedPackets[index]
-            return packet && { ...packet, availability: !packet.ready ? { reason: 'seed-not-ready' } : snapshot.availableSun >= (index === 0 ? 100 : 50) ? {} : { reason: 'not-enough-sun' }, command: { type: 'selectSeed', seedId: packet.seedId } }
+            return packet && { ...packet, availability: !packet.ready ? { reason: 'seed-not-ready' } : snapshot.sun >= (index === 0 ? 100 : 50) ? {} : { reason: 'not-enough-sun' }, command: { type: 'selectSeed', seedId: packet.seedId } }
         },
         bindSeedPackets(select: (index: number) => void) {
             pea.button.onClick = () => select(0)

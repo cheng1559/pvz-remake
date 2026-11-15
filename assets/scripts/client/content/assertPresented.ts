@@ -12,7 +12,7 @@ const SPARED: readonly string[] = [ZOMBIE_CLIPS.standing2, ZOMBIE_CLIPS.superLon
  * for a zombie). Checked as content is put together, so that a Mod missing some fails to load, not a level to draw.
  */
 export function assertPresented(definitions: Pick<GameplayDefinitions, 'plants' | 'zombies' | 'projectiles'>, presentation: PresentationDefinitions,
-    views: { plants: Views, zombies: Views, projectiles: Views, gridItems: Views }): void {
+    views: { plants: Views, zombies: Views, projectiles: Views, gridItems: Views, items: Views }): void {
     const pictures = (id: string, clips: readonly string[]) => {
         const drawn = (presentation.plants[id] ?? presentation.zombies[id])?.clips as Record<string, unknown> | undefined
         for (const clip of clips) if (!drawn?.[clip]) throw new Error(`${id} is missing ${clip} animation`)
@@ -33,5 +33,8 @@ export function assertPresented(definitions: Pick<GameplayDefinitions, 'plants' 
     }
     for (const [id, item] of Object.entries(presentation.gridItems)) {
         if (!views.gridItems.has(item.view)) throw new Error(`Grid item presentation is not installed: ${id}`)
+    }
+    for (const [id, item] of Object.entries(presentation.items)) {
+        if (!views.items.has(item.view ?? 'item')) throw new Error(`Item presentation is not installed: ${id}`)
     }
 }

@@ -135,7 +135,7 @@ export class LevelView {
         const animations = content.animations
         animations.freeze()
         const sprites = new SpriteRepository(content.registry, content.loader)
-        const fonts = new FontRepository(content.registry, content.loader)
+        const fonts = new FontRepository()
         const helmSpriteIds = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => [...(zombie.helm?.damagedSprites ?? []), ...(zombie.shield?.damagedSprites ?? []), ...[zombie.damagedArmSprite, zombie.enragedHead?.sprite].filter((id): id is string => !!id)]))]
         const dropImages = [...new Set(Object.values(content.presentation.zombies).flatMap(zombie => Object.values(zombie.drops).flatMap(drop => drop?.image ? [drop.image] : [])))]
         const [
@@ -336,7 +336,7 @@ export class LevelView {
         levelCompleteFade.active = false
         const rulePresentation = levelRulePresentation(content.presentation, level)
         const graveRise = rulePresentation?.graveRise ?? content.presentation.graves.rise
-        const audio = new LevelAudioPresenter(presentation.board.music, content.presentation, graveRise.sounds)
+        const audio = new LevelAudioPresenter(presentation.board.music)
         const createSeedChooser = async (chooser: NonNullable<WorldSnapshot['seedChooser']>) => {
             const created = await LevelSeedChooser.create(ui, content, hud, chooser.availableSeeds, chooser.slots, root, seedId => {
                 // Board::SeedNotRecommendedForLevel: mushrooms by day, and grave busters without graves.
@@ -353,19 +353,19 @@ export class LevelView {
         let view!: LevelView
         let entityRenderer!: LevelEntityRenderer
         const intro = await presentation.createIntro({
-            content, level, slots, board, entityLayer, bank, houseName, audio, mowerShadow, ui,
+            content, level, slots, board, entityLayer, bank, houseName, audio, ui,
             previewTooltipSurface: seedChooser?.previewTooltipSurface,
             almanacZombies: player.almanacZombies, openAlmanacZombie: nameKey => view.onOpenAlmanac?.(nameKey),
             chooserPages: player.almanacZombies !== undefined || player.store === true,
-            entityNodes: () => entityRenderer.nodes(),
+            mowers: () => entityRenderer.mowers(),
             previewZombies: initial.wave.previewZombies ?? {},
             hasOpeningDialog: initial.extensions['pvz:dialog'] !== undefined,
         })
         entityRenderer = new LevelEntityRenderer(
-            root.layer, content, animations, {
+            content, {
                 projectileFrames: Object.fromEntries(projectileEntries),
                 projectileShadowFrames: Object.fromEntries(projectileShadowEntries),
-                mowerShadow,
+                shadow: mowerShadow,
                 zombieSprites: {
                     damagedArm: damagedZombieArm, poleVaulterDamagedArm: poleVaulterArm,
                     helms: Object.fromEntries(helmEntries),
@@ -374,7 +374,7 @@ export class LevelView {
                 loadPacketSprite,
                 packetCostFont: pico129,
             },
-            entityLayer, coinLayer, awardLayer, audio, intro, graveRise.particle,
+            entityLayer, coinLayer, awardLayer, intro, graveRise,
         )
         const end = new LevelEndPresenter(
             content, awardLayer, overlayLayer, levelCompleteFade,
@@ -780,11 +780,11 @@ export class LevelView {
 
     async restore(snapshot: LevelPresentationSnapshot): Promise<void> {
         await this.intro.restore(snapshot.intro)
-        this.entityRenderer.syncGridItems(false)
+        // The board, graves rising with the intro included, is shown as it was, quietly.
+        await this.entityRenderer.restore(snapshot.entities)
         this.hideConveyorBank()
         this.syncSeedChooserIntro()
         this.hud.restore(snapshot.hud, snapshot.advice, this.introComplete, this.menuVisible)
-        await this.entityRenderer.restore(snapshot.entities)
         await Promise.all([this.end.restore(snapshot.end), this.audio.restore(snapshot.audio)])
         await this.particles.restore(snapshot.particles)
     }

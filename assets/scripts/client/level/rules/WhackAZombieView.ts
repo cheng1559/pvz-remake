@@ -2,11 +2,11 @@ import { Node } from 'cc'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
 import { uiNode } from '@/client/view/uiNode'
+import { SoundSystem } from '@/client/sound/SoundSystem'
 import { UIHoverManager } from '@/client/input/UIHoverManager'
 import { GameDebugSettings } from '@/platform/debug/GameDebugSettings'
 import type { LevelRulePresentation, PresentationSound } from '@/shared/content/presentation'
 import { levelStandsStill, type ServerEvent, type WorldSnapshot } from '@/shared/protocol'
-import type { LevelAudioPresenter } from '../LevelAudioPresenter'
 import type { LevelRuleView, LevelRuleViewContext } from './LevelRuleView'
 
 /** Converted Reanim clips play at 12 frames per second at rate 1. */
@@ -59,7 +59,6 @@ export class WhackAZombieView implements LevelRuleView {
         private readonly kind: string,
         private readonly effects: Node,
         private readonly bank: Node,
-        private readonly audio: LevelAudioPresenter,
         private readonly isSun: (typeId: string) => boolean,
         bankHeight: number,
     ) {
@@ -70,7 +69,7 @@ export class WhackAZombieView implements LevelRuleView {
         const { content } = context
         const config = parseConfig(context.config)
         const isSun = (typeId: string) => content.definitions.items[typeId] !== undefined && content.definitions.items[typeId].kind !== 'money'
-        const view = new WhackAZombieView(config, context.kind, context.effectLayer, context.bank, context.audio, isSun, context.bankHeight)
+        const view = new WhackAZombieView(config, context.kind, context.effectLayer, context.bank, isSun, context.bankHeight)
         const node = uiNode({ name: 'Hammer', parent: context.cursorLayer, anchor: { x: 0, y: 1 }, active: false }).node
         node.once(Node.EventType.NODE_DESTROYED, () => UIHoverManager.setIdleCursor('default'))
         const hammer = node.addComponent(ReanimPlayer)
@@ -94,7 +93,7 @@ export class WhackAZombieView implements LevelRuleView {
             loop: false, rate: this.config.hammer.fps / CLIP_FPS, timeSeconds: this.config.hammer.swingTime * hammer.durationSeconds,
             hideOnFinish: false, onFinish: () => { if (this.touchSwing === point) this.touchSwing = undefined },
         })
-        this.audio.sounds(this.config.swingSounds)
+        SoundSystem.playSounds(this.config.swingSounds)
         return true
     }
 
@@ -103,9 +102,9 @@ export class WhackAZombieView implements LevelRuleView {
             // A blow on a plant (`plantWhacked`) lands as one on a bare zombie: its bonk, and the POW when it ends it.
             if (event.type !== 'zombieWhacked' && event.type !== 'plantWhacked') continue
             const helm = event.data.helm === undefined ? undefined : String(event.data.helm)
-            if (helm !== undefined) { this.audio.sounds(this.config.helmSounds[helm]); continue }
+            if (helm !== undefined) { SoundSystem.playSounds(this.config.helmSounds[helm]); continue }
             const { bonk } = this.config
-            this.audio.sounds(bonk.sounds)
+            SoundSystem.playSounds(bonk.sounds)
             if (event.data.killed !== true) continue
             const x = Number(event.data.x) + bonk.x, y = Number(event.data.y) + bonk.y
             ParticlePlayer.spawn({ parent: this.effects, id: bonk.particle, x, y: -y })

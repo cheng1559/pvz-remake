@@ -64,7 +64,7 @@ Apply 后若涉及导入、卸载、启用或已启用项排序，确认重启�
 
 植物的 `visual.nameKey`、`visual.tooltipKey` 分别指定名称和选卡说明的文本键，文本写在 Mod 的 `pvz:strings` 资源里。未指定 `tooltipKey` 时沿用原版的 `名称键_TOOLTIP` 约定。
 
-所有文字只存在一张按键合并的文本表 `pvz:strings` 中：本体一层是原版文本（含关卡提示语；服务端只发送提示的键）加上本体新增的界面文本（手写在 `tools/pvz/ui-strings.json`，生成 pvz-base 时合并进来，键不得与原版重复）。Mod 在 `resources.json` 里登记自己的 `pvz:strings` 文件作为一层：新增的键必须带自己的命名空间（如 `example:menu`），已有的键（本体或任何 Mod 的）都可以改写，按启用优先级后面的生效，所以翻译包只需列出要改的条目，也能翻译其他 Mod 的文字；不符合规则的新键会被忽略并在控制台报错。背景音乐每首是一个 `music` 资源，ID 为 `pvz:曲目名`（如 `pvz:night_moongrains`），格式见 `shared/content/music.ts`（schemaVersion 3：时长、循环点、以音频资源 ID 表示的分轨，可选原版爆发段落）。音乐 Mod 用同一 ID 登记要替换的曲目即可，其余曲目沿用本体。字体只按 ID 覆盖，没有“只读本体”的特例：快捷键字母使用独立的 `pvz:hotkey`（与 `pvz:houseofterror16` 同一份文件），文字包只覆盖后者，快捷键保持原版字形；高清包需同时登记 `pvz:hotkey` 才会重绘它。`ui.text(key)` 只接受键，不带默认值；缺失的键显示键名并在控制台报错。翻译包在 `manifest.json` 的 `locale` 写明文字语言（如 `zh-CN`，最后一个声明了 locale 的已启用 Mod 生效，默认 en-US）；本体通过 `ui.locale` 提供该值，图片里带文字的素材据此选择版本（例如宽屏 Mod 的成就页顶部）。
+所有文字只存在一张按键合并的文本表 `pvz:strings` 中：本体一层是原版文本（含关卡提示语；服务端只发送提示的键）加上本体新增的界面文本（手写在 `tools/pvz/ui-strings.json`，生成 pvz-base 时合并进来，键不得与原版重复）。Mod 在 `content.json` 的 `json` 类资源里登记自己的 `pvz:strings` 文件作为一层：新增的键必须带自己的命名空间（如 `example:menu`），已有的键（本体或任何 Mod 的）都可以改写，按启用优先级后面的生效，所以翻译包只需列出要改的条目，也能翻译其他 Mod 的文字；不符合规则的新键会被忽略并在控制台报错。背景音乐每首是一个 `music` 资源，ID 为 `pvz:曲目名`（如 `pvz:night_moongrains`），格式见 `shared/content/music.ts`（schemaVersion 3：时长、循环点、以音频资源 ID 表示的分轨，可选原版爆发段落）。音乐 Mod 用同一 ID 登记要替换的曲目即可，其余曲目沿用本体。字体只按 ID 覆盖，没有“只读本体”的特例：快捷键字母使用独立的 `pvz:hotkey`（与 `pvz:houseofterror16` 同一份文件），文字包只覆盖后者，快捷键保持原版字形；高清包需同时登记 `pvz:hotkey` 才会重绘它。`ui.text(key)` 只接受键，不带默认值；缺失的键显示键名并在控制台报错。翻译包在 `manifest.json` 的 `locale` 写明文字语言（如 `zh-CN`，最后一个声明了 locale 的已启用 Mod 生效，默认 en-US）；本体通过 `ui.locale` 提供该值，图片里带文字的素材据此选择版本（例如宽屏 Mod 的成就页顶部）。
 
 射手的 `shooter.initialDelayTicks` 和 `shooter.cadenceTicks` 均使用整数范围，例如初始等待 `{ "min": 0, "max": 150 }`、周期 `{ "min": 136, "max": 150 }`（周期最小值必须大于零）。服务端使用局内 RNG 抽取初始等待和每次周期；没有目标时也推进周期，当前时钟与 RNG 状态随存档保存。固定间隔使用相同的 `min`、`max`。
 
@@ -174,7 +174,6 @@ host.around(executor, 'execute', function (next, world, definitions, tick, comma
 
 服务端命令仍经过原有调试权限和命令队列，支持暂停时执行；Mod 自行检查其操作所需的世界状态。执行包装只处理自己的命令，其他命令调用 `next`。语法也使用包装扩展，避免直接修改列表；注册失败时，加载器会随 `host.dispose()` 一起撤销语法和执行包装，不留下失效命令或补全。
 
-旧 `mod.json`、`pack.json` ZIP 不再作为安装格式，需要安装重新打包后的版本。`/pack` 命令及独立资源包管理器已移除。
 
 本体 `assets/resources/base.zip` 与 Mod 共用 `manifest.json`、`content.json`、定义和资源解析器，不再包含专用内容索引。基础包固定最先加载且不可禁用／卸载；其源码 `mods/pvz-base/content.json` 与 Mod 一样索引分类 JSON，打包时合并成 `assets/gameplay.json` 和 `assets/presentation.json`。基础玩法额外提供 `settings`（schemaVersion、阳光与金钱上限 `economy`、种子栏 `seedBank`）、完整关卡、默认文本和种子目录；后加载的 Mod 使用自己的命名空间添加内容。`npm run mod:pack -- pvz-base` 使用通用 Mod 打包器生成 `dist/mods/pvz-base.zip`，`npm run mod:pack -- pvz-base --publish assets/resources/base.zip` 将同一产物发布到内置位置，哈希覆盖统一索引及全部文件。所有资源（含粒子）均在源 `content.json` 的 `resources` 中显式登记，打包阶段不扫描补齐。
 

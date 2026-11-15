@@ -5,7 +5,6 @@ Convert PvZ LawnStrings.txt into a Cocos Creator JSON resource.
 Used by the PAK importer through convert_lawnstrings() with explicit source and destination paths.
 """
 
-import argparse
 import html
 import json
 import re
@@ -105,33 +104,3 @@ def merge_project_strings(dst_path: Path, project_path: Path) -> int:
     strings.update(project)
     dst_path.write_text(json.dumps(strings, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     return len(project)
-
-
-def main():
-    parser = argparse.ArgumentParser(description='Convert PvZ LawnStrings.txt to JSON.')
-    parser.add_argument(
-        '--input',
-        type=Path,
-        default=Path('./tools/raw/properties/lawnstrings.txt'),
-        help='Source LawnStrings.txt path.',
-    )
-    parser.add_argument(
-        '--output',
-        type=Path,
-        default=Path('./mods/pvz-base/assets/json/strings.json'),
-        help='Destination JSON resource path.',
-    )
-    parser.add_argument(
-        '--default-xml',
-        type=Path,
-        default=Path('./tools/raw/properties/default.xml'),
-        help='Optional default.xml strings to merge without overriding LawnStrings keys.',
-    )
-    args = parser.parse_args()
-
-    count = convert_lawnstrings(args.input, args.output, args.default_xml)
-    print(f"[lawnstrings] Wrote {count} strings -> {args.output}")
-
-
-if __name__ == '__main__':
-    main()

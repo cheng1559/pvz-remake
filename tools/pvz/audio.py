@@ -6,7 +6,6 @@ The original package also contains tracker music and a few legacy audio formats.
 This script intentionally imports sound effects only and normalizes them to MP3.
 """
 
-import argparse
 import shutil
 import subprocess
 from pathlib import Path
@@ -90,32 +89,3 @@ def copy_sounds(src_dir: Path, dst_dir: Path, overwrite: bool = False, ffmpeg: s
         copied += 1
 
     return copied
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--src",
-        type=Path,
-        required=True,
-        help="Directory containing extracted PvZ sound files.",
-    )
-    parser.add_argument(
-        "--dst",
-        type=Path,
-        default=Path("./mods/pvz-base/assets/audio/sfx"),
-        help="Destination under the Cocos resources directory.",
-    )
-    parser.add_argument("--overwrite", action="store_true", help="Replace existing copied files.")
-    parser.add_argument("--ffmpeg", default="ffmpeg", help="ffmpeg executable used for MP3 conversion.")
-    args = parser.parse_args()
-
-    if not args.src.exists():
-        raise FileNotFoundError(f"Sound source directory does not exist: {args.src}")
-
-    count = copy_sounds(args.src, args.dst, args.overwrite, args.ffmpeg)
-    print(f"[sounds] Copied {count} sound effect files -> {args.dst}")
-
-
-if __name__ == "__main__":
-    main()

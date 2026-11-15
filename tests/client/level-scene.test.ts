@@ -1,28 +1,19 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import { gameClock } from '@/core/GameClock'
 
 test('a level scene runs an injected intro and level through clock scaling, pause, save and completion', async () => {
-    const module = { exports: {} as Record<string, any> }
-    const code = transpileModule(readFileSync('assets/scripts/client/level/LevelScene.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022, experimentalDecorators: true },
-    })
     let suspended = false
-    runInNewContext(code.outputText, {
-        exports: module.exports,
-        require: (id: string) => ({
-            cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
-            '@/core/GameClock': { gameClock },
-            '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfLogicEnabled: true } },
-            './LevelInputPresenter': { LevelInputPresenter: class {
-                start() {} destroy() {} suspend() { suspended = true } resume() { suspended = false }
-            } },
-        }[id] ?? {}),
-    })
-    const scene = new module.exports.LevelScene()
+    const { LevelScene } = loadScript('assets/scripts/client/level/LevelScene.ts', (id: string) => ({
+        cc: { Component: class {}, _decorator: { ccclass: () => (value: unknown) => value } },
+        '@/core/GameClock': { gameClock },
+        '@/platform/debug/GameDebugSettings': { GameDebugSettings: { perfLogicEnabled: true } },
+        './LevelInputPresenter': { LevelInputPresenter: class {
+            start() {} destroy() {} suspend() { suspended = true } resume() { suspended = false }
+        } },
+    }[id] ?? {}))
+    const scene = new LevelScene()
     let destroyed = false, complete = 0, introTicks = 0, choosing = 0, gameplay = 0
     let presentationPaused = false, musicPaused = false, coinBanks = 0
     const commands: string[] = [], deltas: number[] = []

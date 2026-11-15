@@ -2,11 +2,9 @@
 """
 Convert PvZ ImageFont descriptors into Cocos Creator JSON and texture assets.
 
-Used by the PAK importer; call convert_font() or write_font() with explicit paths.
+Used by the PAK importer and the local pack tools through convert_font() with explicit paths.
 """
 
-import re
-import sys
 import json
 from pathlib import Path
 from typing import Any
@@ -676,36 +674,3 @@ def convert_font(input_path: Path, output_dir: Path):
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(font_data, f, indent=2)
     print(f"[font] Wrote: {json_path}")
-
-
-def write_font(input_path: Path, output_dir: Path, content_id: str) -> list[Path]:
-    parser, font_data = _build_font(input_path)
-    font_data = {"schemaVersion": 2, "id": content_id, **font_data}
-    output_dir.mkdir(parents=True, exist_ok=True)
-    outputs = _write_font_atlases(parser, font_data, output_dir)
-    json_path = output_dir / f"{input_path.stem.lower()}.json"
-    json_path.write_text(
-        json.dumps(font_data, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    outputs.append(json_path)
-    return outputs
-
-
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(description='Convert extracted PvZ font descriptors into Mod assets.')
-    parser.add_argument('--src', type=Path, required=True)
-    parser.add_argument('--dst', type=Path, default=Path('mods/pvz-base/assets/fonts'))
-    args = parser.parse_args()
-    input_dir, output_dir = args.src, args.dst
-
-    for input_path in input_dir.glob("*.txt"):
-        print(f"[font] Processing: {input_path.name}")
-        convert_font(input_path, output_dir)
-
-    print("[font] Done")
-
-
-if __name__ == '__main__':
-    main()

@@ -1,15 +1,12 @@
 import type { Node } from 'cc'
-import { SpriteRepository } from '@/client/content/ClientContentLoader'
 import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { PlantDraw, PlantView, ShownPlant } from '@/client/plants/PlantView'
 import { plantDefinition } from '@/client/plants/definitions'
-import type { ZombieDraw, ZombieViewInstance, ZombieViewSprites } from '@/client/zombies/ZombieView'
-import { type AnimationRandom, ASSET_FPS } from '@/shared/content/animation'
-import { ZOMBIE_BODY_LAYER } from '@/shared/content/gameplay'
+import type { ZombieDraw, ZombieView } from '@/client/zombies/ZombieView'
+import { type AnimationRandom } from '@/shared/content/animation'
 import { startOffBoardPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { startOffBoardZombie } from '@/shared/content/zombieAnimation'
 import type { GridItemSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
-import { EntityAttachments } from './EntityAttachments'
 
 /**
  * Plants and zombies off the board: the almanac, a packet's picture, a preview, the street before a level. Each is
@@ -45,11 +42,7 @@ export async function createOffBoardPlant(node: Node, typeId: string, options: {
     const presentation = plantDefinition(game.presentation, typeId), packet = options.packet ? presentation.packet : undefined
     const state = startOffBoardPlant(animation, { ...presentation.offBoard, ...packet?.clips }, random, packet?.time)
     const plant: ShownPlant = { typeId, animations: state.animations }
-    const shadow = await new SpriteRepository(game.registry, game.loader).load('pvz:plantshadow')
-    if (!node.isValid) return null
-    const view = await game.plantViews.create({
-        node, attachments: new EntityAttachments(), content: game, animations: game.animations, assets: { shadow }, plant, tick: 0, draw: options.draw,
-    })
+    const view = await game.views.plants.create({ node, content: game, plant, draw: options.draw })
     return { view, advance(ticks) {
         for (let tick = 0; tick < ticks; tick++) stepPlantAnimation(animation, state, random)
         view.show(plant)
@@ -57,15 +50,14 @@ export async function createOffBoardPlant(node: Node, typeId: string, options: {
 }
 
 export interface OffBoardZombie {
-    view: ZombieViewInstance & Required<Pick<ZombieViewInstance, 'display' | 'players'>>
+    view: ZombieView
     /** What is shown; shown again with a change (the side it is on). */
     zombie: ZombieSnapshot
 }
 
 /**
  * A whole zombie in `node`, as it is off the board (Zombie::LoadReanim when it is not on it): standing, or held on the
- * first frame of `pose` (a clip of its presentation) for a picture. Its shadow, when drawn, goes beside the node. Nothing
- * for a zombie whose view does not draw it off the board.
+ * first frame of `pose` (a clip of its presentation) for a picture. Its shadow, when drawn, goes beside the node.
  */
 export async function createOffBoardZombie(node: Node, typeId: string,
     options: { pose?: string, mirrored?: boolean, hasTongue?: boolean, draw?: ZombieDraw } = {}): Promise<OffBoardZombie | null> {
@@ -77,21 +69,14 @@ export async function createOffBoardZombie(node: Node, typeId: string,
     // Whole and at rest, with its own helm and shield worn: little else of a snapshot is read off the board.
     const zombie: ZombieSnapshot = {
         entityId: -1, typeId, x: 0, y: 0, row: 0, state: 'walking', team: options.mirrored ? 'plants' : undefined,
-        health: definition.maxHealth, maxHealth: definition.maxHealth, moweredTicksRemaining: 0,
+        health: definition.maxHealth, maxHealth: definition.maxHealth, alpha: 255,
         hasHead: true, hasArm: true, hasTongue: options.hasTongue === true,
-        helmHealth: definition.helm?.health, shieldHealth: definition.shield?.health, animations,
+        helmHealth: definition.helm?.health ?? 0, shieldHealth: definition.shield?.health ?? 0, animations,
     }
-    const shadow = await new SpriteRepository(game.registry, game.loader).load('pvz:plantshadow')
-    if (!node.isValid) return null
-    const view = await game.zombieViews.create({
-        node, attachments: new EntityAttachments(), shadowParent: node.parent!, content: game, animations: game.animations,
-        // A whole zombie swaps in none of the sprites of a damaged one.
-        assets: { shadow, sprites: { helms: {} } as ZombieViewSprites }, zombie, tick: 0, draw: options.draw,
-    })
-    if (!view.display || !view.players) { view.destroy(); return null }
+    const view = await game.views.zombies.create({ node, content: game, zombie, draw: options.draw })
     view.shadowNode.setSiblingIndex(0)
-    view.display(zombie)
-    return { view: view as OffBoardZombie['view'], zombie }
+    view.show(zombie)
+    return { view, zombie }
 }
 
 /**
@@ -101,6 +86,6 @@ export async function createOffBoardZombie(node: Node, typeId: string,
 export async function createOffBoardGridItem(node: Node, typeId: GridItemSnapshot['typeId']): Promise<boolean> {
     const game = await offBoardContent()
     if (!node.isValid || !game.presentation.gridItems[typeId]) return false
-    await game.gridItemViews.create({ node, content: game, item: { typeId } })
+    await game.views.gridItems.create({ node, content: game, item: { typeId } })
     return true
 }

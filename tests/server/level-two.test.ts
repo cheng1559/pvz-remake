@@ -1,3 +1,5 @@
+import type { World } from '@/ecs/index'
+import { getAvailableSun } from '@/server/level/items'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
 import type { JsonValue,StartSessionPacket } from '@/shared/protocol'
@@ -57,7 +59,7 @@ test('1-2 starts with three rows and Sunflower teaching, and production resumes 
     const sun = server.save().entities.find(entity => entity.item?.accelerationY === 0.09)!
     assert.ok(sun.item!.scale > 0.4)
     assert.equal(runCommand(server, { type: 'collectItemAt', itemId: sun.entityId }), undefined)
-    assert.equal(server.snapshot().availableSun, 25)
+    assert.equal(getAvailableSun((server as unknown as { requireSession(): { world: World } }).requireSession().world, definitions), 25)
 })
 
 

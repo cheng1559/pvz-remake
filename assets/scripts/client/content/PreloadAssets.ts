@@ -16,9 +16,7 @@ export async function preloadAssets(onProgress: (progress: number) => void): Pro
     const { registry, loader } = await offBoardContent()
     const archives: ResolvedContent[] = []
     for (const category of CONTENT_CATEGORIES) {
-        for (const [, content] of registry.entries(category)) {
-            if (content.bundle.startsWith('pvzmod:///')) archives.push(content)
-        }
+        for (const [, content] of registry.entries(category)) archives.push(content)
     }
     await Promise.all([
         modResources.preload(value => onProgress(value * 0.7)),

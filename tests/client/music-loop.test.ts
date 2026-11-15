@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { ModuleKind, ScriptTarget, transpileModule } from 'typescript'
+import { loadScript } from '../loadScript'
 import * as playback from '@/client/music/MusicPlaybackSnapshot'
 import * as musicContent from '@/shared/content/music'
 
@@ -24,11 +22,7 @@ test('native music never ends by itself and jumps to its loop point, even when a
         '@/client/sound/SoundSystem': { SoundSystem: { getMusicVolume: () => 1, onMusicVolumeChange: () => () => {} } },
         '@/shared/content/music': musicContent,
     }
-    const exports: Record<string, any> = {}
-    const code = transpileModule(readFileSync('assets/scripts/client/music/MusicSystem.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    }).outputText
-    runInNewContext(code, { exports, require: (id: string) => modules[id] ?? {}, console, jsb: { AudioEngine: engine } })
+    const exports = loadScript('assets/scripts/client/music/MusicSystem.ts', (id: string) => modules[id] ?? {}, { console, jsb: { AudioEngine: engine } })
     const { MusicSystem } = exports
     const update = () => MusicSystem.update(0, { zombiesOnScreen: 0 })
 
@@ -68,10 +62,7 @@ test('night burst switches on the next order, crossfades the melody, and restore
         '@/shared/content/music': musicContent,
         './MusicPlaybackSnapshot': playback,
     }
-    const exports: Record<string, any> = {}
-    runInNewContext(transpileModule(readFileSync('assets/scripts/client/music/MusicSystem.ts', 'utf8'), {
-        compilerOptions: { module: ModuleKind.CommonJS, target: ScriptTarget.ES2022 },
-    }).outputText, { exports, require: (id: string) => modules[id] ?? {}, console, jsb: { AudioEngine: engine } })
+    const exports = loadScript('assets/scripts/client/music/MusicSystem.ts', (id: string) => modules[id] ?? {}, { console, jsb: { AudioEngine: engine } })
     const { MusicSystem } = exports
     await MusicSystem.playTune('night_moongrains')
     times.set(1, 9)

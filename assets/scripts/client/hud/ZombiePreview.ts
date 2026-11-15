@@ -141,7 +141,7 @@ export class ZombiePreview extends Component {
         const zombie = this.zombie
         if (!zombie || this.composite) return
         zombie.zombie = { ...zombie.zombie, team: mirrorBody ? 'plants' : undefined }
-        zombie.view.display(zombie.zombie)
+        zombie.view.show(zombie.zombie)
         this.root.getChildByName('Zombie')?.setPosition(mirrorBody ? this.placement.facingRightOffsetX ?? 0 : 0, 0)
     }
 

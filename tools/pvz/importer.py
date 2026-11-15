@@ -26,12 +26,6 @@ def decompile(raw: Path) -> None:
     decompile_particles(raw / 'compiled/particles', raw / 'particles')
     for source in sorted((raw / 'compiled/reanim').glob('*.reanim.compiled')):
         decompile_reanim(source, raw / 'reanim')
-    for source, target in (('zombie_jackson', 'zombie_disco'), ('zombie_dancer', 'zombie_backup')):
-        original, alias = raw / f'reanim/{source}.reanim', raw / f'reanim/{target}.reanim'
-        if original.exists() and not alias.exists():
-            shutil.copyfile(original, alias)
-
-
 
 
 def write_json(path: Path, value) -> None:
@@ -79,18 +73,15 @@ def import_assets(raw: Path, cursors: dict[str, Image.Image]) -> None:
     for source in sorted((raw / 'data').glob('*.txt')):
         convert_font(source, assets / 'fonts')
         config = assets / 'fonts' / f'{source.stem}.json'
+        # A font's atlases go with it by its layers (the Mod packer); nothing names them as sprites.
         register('fonts', f'pvz:{source.stem}', config)
-        register('json', f'pvz:fonts/{source.stem}', config)
-    for image in sorted((assets / 'fonts').glob('*.png')):
-        register_sprite(image)
 
     print('[content] Animation tracks and display clips', flush=True)
     configs = load_animation_config()
+    # The tracks of each animation are what the plant caches (cache/) draw from; the game plays the clips below, so
+    # the tracks are not registered.
     for name, config in configs.items():
-        nodes = get_anim_nodes(name, config, load_anim_xml(raw / 'reanim', name))
-        file = assets / f'json/animations/{name}.json'
-        write_json(file, nodes)
-        register('json', f'pvz:animations/{name}', file)
+        write_json(assets / f'json/animations/{name}.json', get_anim_nodes(name, config, load_anim_xml(raw / 'reanim', name)))
 
     def emit_clips(clips: list, definitions: dict) -> None:
         nodes = {}

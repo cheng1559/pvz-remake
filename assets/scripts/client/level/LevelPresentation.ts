@@ -1,4 +1,4 @@
-import type { Node, SpriteFrame } from 'cc'
+import type { Node } from 'cc'
 import type { LevelDefinition } from '@/shared/content/gameplay'
 import type { PresentationDefinitions } from '@/shared/content/presentation'
 import type { LoadedContent } from './LevelView'
@@ -28,8 +28,8 @@ export interface LevelIntroContext {
     bank: Node
     houseName: Node
     audio: LevelAudioPresenter
-    mowerShadow: SpriteFrame
-    entityNodes: () => Iterable<Node>
+    /** The rows' waiting mowers, by row. */
+    mowers: () => ReadonlyMap<number, Node>
     previewZombies: Readonly<Record<string, number>>
     hasOpeningDialog?: boolean
 }
