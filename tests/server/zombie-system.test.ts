@@ -17,7 +17,7 @@ import { spawnZombie } from '@/server/zombies/spawn'
 import { createZombieSystem } from '@/server/zombies/system'
 import { parseGameplayDefinitions } from '@/shared/content/gameplay'
 
-const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const board = definitions.boards['pvz:day']
 
 function game(content = definitions) {

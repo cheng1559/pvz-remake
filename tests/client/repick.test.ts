@@ -117,8 +117,8 @@ test('a chooser lays its pages out from the offer it has now, as /cheatseed turn
         cc: { Component, _decorator: { ccclass: () => (value: unknown) => value } },
         '@/shared/protocol': protocol, '@/shared/content/chooserPages': chooserPages,
     })
-    const definitions = { seeds: { 'pvz:pea': { kind: 'plant' }, 'pvz:sun': { kind: 'plant' }, 'pvz:normal': { kind: 'zombie' } },
-        seedCatalog: { 'pvz:pea': { position: 0 }, 'pvz:sun': { position: 3 } } }
+    const definitions = { seeds: { 'pvz:pea': { kind: 'plant', position: 0 }, 'pvz:sun': { kind: 'plant', position: 3 },
+        'pvz:normal': { kind: 'zombie', position: 0, hidden: true } } }
     const added: string[] = [], shown: string[][] = [], turner = { node: { active: true } }
     const chooser = Object.assign(Object.create(LevelSeedChooser.prototype), {
         definitions, choices: [] as Array<{ key: string }>, pages: [], page: 0, offerKey: '', pageTurners: [{ button: turner, step: 1 }],

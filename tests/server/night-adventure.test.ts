@@ -23,7 +23,7 @@ import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
 import { TICK_SECONDS } from '@/shared/protocol'
 
-const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 const options: StartSessionPacket = { type: 'startSession', protocolVersion: 1, sequence: 1,
     levelId: 'pvz:adventure-2-1', randomSeed: 7, initialMoney: 0, firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-2-1'), mods: [] }

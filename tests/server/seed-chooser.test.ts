@@ -11,7 +11,7 @@ import { chooserPages, cheatSeedEntries } from '@/shared/content/chooserPages'
 import { TICK_SECONDS } from '@/shared/protocol'
 
 const source = readGameplaySource
-const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
+const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 const options = { levelId: 'pvz:seed-chooser-test', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] }
 const seeds = chooserSeeds(definitions)
@@ -137,47 +137,45 @@ test('a recharge that runs out flashes once, while one cleared by turning `/cool
         'clearing the cherry bomb\'s recharge is not a recharge finishing')
 })
 
-test('chooser levels share the global seed catalog, including registered seeds, without a per-level pool', () => {
+test("chooser levels share the original seeds' grid without a per-level pool, and a Mod's seeds are not in it", () => {
     const { definitions: expanded, levels: sharedLevels } = buildGameplayContent(
         readBaseContent().gameplay, [{
             ownerId: 'test', data: {
                 seeds: { 'test:pea': { ...definitions.seeds['pvz:peashooter'] } },
-                seedCatalog: { 'test:pea': { position: 20 } },
                 levels: { 'test:chooser': { ...levels.levels[options.levelId] } },
             },
         }],
     )
-    const expected = [...seeds, 'test:pea']
     for (const levelId of [options.levelId, 'test:chooser']) {
         const game = new LocalIntegratedGame(expanded, sharedLevels)
         game.start({ ...options, levelId })
-        assert.deepEqual(game.render().seedChooser?.availableSeeds, expected)
-        command(game, { type: 'chooseSeed', seedId: 'test:pea' })
-        assert.deepEqual(chosen(game), ['test:pea'])
+        assert.deepEqual(game.render().seedChooser?.availableSeeds, seeds)
     }
-    assert.equal(expected.includes('pvz:bowling-wallnut'), false)
-    assert.equal(expected.includes('pvz:explodenut'), false)
+    assert.equal(seeds.includes('pvz:bowling-wallnut'), false)
+    assert.equal(seeds.includes('pvz:explodenut'), false)
 })
 
-test('the seed catalog is a table of grid places that Mods extend and override', () => {
-    // The grid holds the original's 48 plant seed types; the hidden seeds follow the Imitater's 48 from
-    // SEED_EXPLODE_O_NUT (49), so the chooser never offers them.
-    assert.deepEqual(['pvz:explodenut', 'pvz:bowling-wallnut', 'pvz:bowling-explodenut'].map(id => definitions.seedCatalog[id].position), [49, 50, 51])
-    assert.deepEqual(seeds.map(id => definitions.seedCatalog[id].position), seeds.map((_, index) => index))
+test('a seed\'s position is its place in its group: the original grid, a Mod\'s own seeds, or the hidden cards', () => {
+    const position = (id: string) => definitions.seeds[id].position
+    assert.deepEqual(seeds.map(position), seeds.map((_, index) => index), 'the original seed types')
+    const hidden = Object.keys(definitions.seeds).filter(id => definitions.seeds[id].hidden)
+    assert.deepEqual(hidden.map(position).sort((left, right) => left - right), [0, 1, 2, 8, 9, 10, 11, 12, 13, 14, 15])
     const build = (data: Record<string, unknown>) => buildGameplayContent(readBaseContent().gameplay, [{ ownerId: 'test', data }]).definitions
-    // Overrides move anyone's seed; the chooser follows place order and skips the gap left behind.
-    const moved = build({ overrides: { seedCatalog: { 'pvz:sunflower': { position: 30 }, 'pvz:explodenut': { position: 13 } } } })
-    assert.deepEqual(chooserSeeds(moved), [...seeds.filter(id => id !== 'pvz:sunflower'), 'pvz:explodenut', 'pvz:sunflower']
-        .sort((left, right) => moved.seedCatalog[left].position - moved.seedCatalog[right].position))
-    assert.equal(chooserSeeds(moved).includes('pvz:explodenut'), true)
-    // The upgrade plants' sixth row (40-47) is offered; the Imitater's place (48) and beyond are not.
-    const edges = build({ overrides: { seedCatalog: { 'pvz:explodenut': { position: 47 }, 'pvz:bowling-wallnut': { position: 48 } } } })
-    assert.equal(chooserSeeds(edges).at(-1), 'pvz:explodenut')
-    assert.equal(chooserSeeds(edges).includes('pvz:bowling-wallnut'), false)
-    // A Mod registers only its own seeds; two seeds cannot share a place.
-    assert.throws(() => build({ seedCatalog: { 'pvz:explodenut': { position: 13 } } }), /cannot register/)
-    assert.throws(() => build({ seeds: { 'test:pea': { ...definitions.seeds['pvz:peashooter'] } }, seedCatalog: { 'test:pea': { position: 0 } } }),
-        /same place/)
+    const pea = definitions.seeds['pvz:peashooter'], sunflower = definitions.seeds['pvz:sunflower']
+    // Overriding a seed moves it; the chooser follows place order and skips the gap left behind.
+    const moved = build({ overrides: { seeds: { 'pvz:sunflower': { ...sunflower, position: 30 } } } })
+    assert.deepEqual(chooserSeeds(moved), [...seeds.filter(id => id !== 'pvz:sunflower'), 'pvz:sunflower'])
+    // The grid holds the original's 48 plant seed types; the Imitater's 48 and beyond are no place in it.
+    assert.throws(() => build({ overrides: { seeds: { 'pvz:sunflower': { ...sunflower, position: 48 } } } }), /must be below 48/)
+    const { hidden: _hidden, ...zombie } = definitions.seeds['pvz:normal']
+    assert.throws(() => build({ overrides: { seeds: { 'pvz:normal': zombie } } }), /not a plant seed/)
+    // A Mod numbers its own seeds, the base's places notwithstanding, and none of them is a hidden card.
+    assert.equal(build({ seeds: { 'test:pea': { ...pea, position: 0 } } }).seeds['test:pea'].position, 0)
+    assert.throws(() => build({ seeds: { 'test:pea': { ...pea, hidden: true } } }), /only the base game's seeds are hidden cards/)
+    assert.throws(() => build({ seeds: { 'test:pea': { ...pea }, 'test:other': { ...pea } } }), /share position 0 in their group/)
+    const { position: _position, ...unplaced } = pea
+    assert.throws(() => build({ seeds: { 'test:pea': unplaced } }), /position is required/)
+    assert.throws(() => build({ seeds: { 'pvz:extra': { ...pea } } }), /cannot register/)
 })
 
 test('Mods offer cards beyond the grid, on either side, which the bank tells apart and a save keeps', () => {
@@ -316,42 +314,46 @@ test('a bank /cheatseed widened loads, with the switch on or off: a save holds i
     }
 })
 
-test("/cheatseed's pages: the owned grid, the hidden seeds, graves and zombies, then both again on the zombies' side", () => {
+test("/cheatseed's pages: the owned grid, the hidden cards at their places, then both again on the zombies' side", () => {
     for (const owned of [undefined, ['pvz:peashooter', 'pvz:wallnut']]) {
         const available = availableSeeds(definitions, owned)
         const pages = chooserPages(definitions, available)
         const names = pages.map(page => page.cards.map(card => `${card.seedId}${card.team ? `@${card.team}` : ''}`))
-        const zombies = Object.keys(definitions.seeds).filter(id => definitions.seeds[id].kind === 'zombie')
-        const hidden = ['pvz:explodenut', 'pvz:bowling-wallnut', 'pvz:bowling-explodenut']
+        const zombies = ['pvz:normal', 'pvz:flag', 'pvz:conehead', 'pvz:pole_vaulter', 'pvz:buckethead', 'pvz:newspaper', 'pvz:screendoor']
+        const plants = ['pvz:explodenut', 'pvz:bowling-wallnut', 'pvz:bowling-explodenut']
         assert.deepEqual(pages.map(page => page.catalog), [true, false, true, false])
         assert.deepEqual(names[0], available)
-        assert.deepEqual(pages[0].cards.map(card => card.place), available.map(id => definitions.seedCatalog[id].position), 'at their catalog places')
-        // The grave seed is the zombies' own: page 4 has it as it is, page 2 on the plants' side.
-        assert.deepEqual(names[1], [...hidden, 'pvz:grave@plants', ...zombies.map(id => `${id}@plants`)])
-        assert.deepEqual(pages[1].cards.map(card => card.place), names[1].map((_, index) => index), 'one after another')
+        assert.deepEqual(pages[0].cards.map(card => card.place), available.map(id => definitions.seeds[id].position), 'at their grid places')
+        // The zombie and grave seeds are the zombies' own: page 4 has them as they are, page 2 on the plants' side.
+        assert.deepEqual(names[1], [...plants, ...zombies.map(id => `${id}@plants`), 'pvz:grave@plants'])
+        assert.deepEqual(pages[1].cards.map(card => card.place), [0, 1, 2, 8, 9, 10, 11, 12, 13, 14, 15], 'at their positions')
         assert.deepEqual(names[2], names[0].map(id => `${id}@zombies`))
         assert.deepEqual(pages[2].cards.map(card => card.place), pages[0].cards.map(card => card.place), "page 3 keeps page 1's places")
-        assert.deepEqual(names[3], [...hidden.map(id => `${id}@zombies`), 'pvz:grave', ...zombies])
+        assert.deepEqual(names[3], [...plants.map(id => `${id}@zombies`), ...zombies, 'pvz:grave'])
         assert.deepEqual(cheatSeedEntries(definitions, available),
             pages.slice(1).flatMap(page => page.cards).map(({ seedId, team }) => ({ seedId, ...(team ? { team } : {}) })))
     }
 })
 
-test("/cheatseed puts the Mods' plants outside the grid on pages of their own, the cheat cards after them", () => {
-    const plant = definitions.seeds['pvz:peashooter'], zombie = definitions.seeds['pvz:normal']
+test("/cheatseed shows each Mod's seeds on pages of its own, by its positions, after the grid and before the hidden cards", () => {
+    const plant = definitions.seeds['pvz:peashooter']
+    const { hidden: _hidden, ...zombie } = definitions.seeds['pvz:normal']
     const modded = { ...definitions,
-        seeds: { ...definitions.seeds, 'test:far': { ...plant, id: 'test:far' }, 'test:loose': { ...plant, id: 'test:loose' },
-            'test:inside': { ...plant, id: 'test:inside' }, 'test:walker': { ...zombie, id: 'test:walker' } },
-        seedCatalog: { ...definitions.seedCatalog, 'test:far': { position: 60 }, 'test:inside': { position: 47 } } }
+        seeds: { ...definitions.seeds,
+            'test:far': { ...plant, id: 'test:far', position: 60 }, 'test:loose': { ...plant, id: 'test:loose', position: 0 },
+            'test:inside': { ...plant, id: 'test:inside', position: 47 }, 'test:walker': { ...zombie, id: 'test:walker', position: 1 },
+            'other:pea': { ...plant, id: 'other:pea', position: 0 } } }
     const available = availableSeeds(modded, undefined)
-    const names = chooserPages(modded, available).map(page => page.cards.map(card => `${card.seedId}${card.team ? `@${card.team}` : ''}`))
+    const pages = chooserPages(modded, available)
+    const names = pages.map(page => page.cards.map(card => `${card.seedId}${card.team ? `@${card.team}` : ''}`))
     const cheat = chooserPages(definitions, availableSeeds(definitions, undefined))[1].cards.map(card => `${card.seedId}${card.team ? `@${card.team}` : ''}`)
-    assert.equal(names.length, 6)
-    assert.equal(names[0].at(-1), 'test:inside', 'a Mod seed in the grid stays on the first page')
-    assert.deepEqual(names[1], ['test:far', 'test:loose'], 'in catalog order, then those it does not list')
-    assert.deepEqual(names[2], [...cheat, 'test:walker@plants'], 'the cheat cards start a page of their own, with a Mod zombie among them')
-    assert.deepEqual(names[4], ['test:far@zombies', 'test:loose@zombies'])
-    assert.deepEqual(names[5].at(-1), 'test:walker')
+    assert.deepEqual(available, seeds, "a Mod's seed is never in the grid")
+    assert.equal(names.length, 10)
+    assert.deepEqual([names[1], pages[1].cards.map(card => card.place)], [['test:loose', 'test:walker@plants', 'test:inside'], [0, 1, 47]])
+    assert.deepEqual([names[2], pages[2].cards.map(card => card.place)], [['test:far'], [12]], 'a position past a page goes on to the next')
+    assert.deepEqual(names[3], ['other:pea'], 'each Mod starts a page of its own, in the order they were installed')
+    assert.deepEqual(names[4], cheat, 'the hidden cards come last')
+    assert.deepEqual(names[6], ['test:loose@zombies', 'test:walker', 'test:inside@zombies'])
 })
 
 test('/cheatseed offers every grid seed, owned or not, and its pages, counted towards opening the chooser, and a Mod still adds its cards after them', () => {
@@ -369,11 +371,11 @@ test('/cheatseed offers every grid seed, owned or not, and its pages, counted to
     const game = start(true)
     command(game, { type: 'chooseSeed', seedId: 'pvz:sunflower' })
     assert.deepEqual(chosen(game), ['pvz:sunflower'], 'a seed not owned can be chosen')
-    // A Mod's plant placed in the grid, as corn's are, is on page 1 though nobody owns it.
-    const modded = { ...definitions, seeds: { ...definitions.seeds, 'test:pult': { ...definitions.seeds['pvz:peashooter'], id: 'test:pult' } },
-        seedCatalog: { ...definitions.seedCatalog, 'test:pult': { position: 47 } } }
-    assert.equal(chooserOffer(modded, ['pvz:peashooter'], true).available.at(-1), 'test:pult')
-    assert.deepEqual(chooserOffer(modded, ['pvz:peashooter']).available, ['pvz:peashooter'], 'without the switch only owned seeds')
+    // A Mod's plant is on its own page, never in the grid, and offered there with the switch only.
+    const modded = { ...definitions, seeds: { ...definitions.seeds, 'test:pult': { ...definitions.seeds['pvz:peashooter'], id: 'test:pult', position: 47 } } }
+    const cheating = chooserOffer(modded, ['pvz:peashooter'], true)
+    assert.deepEqual([cheating.available, cheating.entries[0]], [seeds, { seedId: 'test:pult' }])
+    assert.deepEqual(chooserOffer(modded, ['pvz:peashooter']), { available: ['pvz:peashooter'], entries: [] }, 'without the switch only owned seeds')
     const original = seedChooser.entries
     seedChooser.entries = (defs, owned) => [...original(defs, owned), { seedId: 'pvz:normal', team: 'plants' }, { seedId: 'test:missing' }]
     try {

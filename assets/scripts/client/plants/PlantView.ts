@@ -178,6 +178,8 @@ export class PlantView implements EntityView<PlantSnapshot> {
             const clip = plant.animations?.[name] && this.clip(plant.animations[name].clip)
             if (clip && !clip.onlyTracks) this.layers.player(name).setTracksVisible(this.presentation.parts?.eyes ?? [], !blinking)
         }
+        // On the board and off it (the almanac): the layers over the first are on its parts, so its colors reach them all.
+        if (this.body.loadedId) this.body.setColorOverride(this.tint ?? Color.WHITE)
     }
 
     /** The plant's clips, for what a layer shows (shownLayer). */
@@ -301,8 +303,6 @@ export class PlantView implements EntityView<PlantSnapshot> {
         const body = this.body
         if (!body.loadedId) return
         const gray = Math.min(255, this.flash * 3)
-        // The layers over the first are on its parts, so its colors reach them all.
-        body.setColorOverride(this.tint ?? Color.WHITE)
         body.setExtraAdditiveDraw(this.flash > 0, new Color(gray, gray, gray, 255))
     }
 

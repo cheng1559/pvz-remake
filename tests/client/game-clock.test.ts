@@ -74,7 +74,7 @@ test('adventure pause freezes scene animation, particles and tweens without chan
 })
 
 test('collecting sun while battle time is frozen does not hold back the next seed selection', () => {
-    const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+    const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
     const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
     const game = new LocalIntegratedGame(definitions, levels, undefined, true)
     game.start({ levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] })
@@ -95,7 +95,7 @@ test('collecting sun while battle time is frozen does not hold back the next see
 })
 
 test('one clock scales fixed-tick gameplay across frame rates, live speed changes, and freezing', () => {
-    const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+    const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
     const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
     for (const fps of [30, 60, 144]) {
         const clock = new GameClock()

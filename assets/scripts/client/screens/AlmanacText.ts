@@ -74,6 +74,11 @@ export function almanacTextHeight(ui: UI, text: string, width: number): number {
         .reduce((sum, line) => sum + lineSpacing + line.spacing, 0)
 }
 
+/** Text in the middle of a box both ways, as TodDrawStringWrapped's DS_ALIGN_CENTER_VERTICAL_MIDDLE draws it. */
+export function drawMiddleAlmanacText(parent: Node, ui: UI, text: string, box: { x: number, y: number, width: number, height: number }): void {
+    drawAlmanacText(parent, ui, text, { x: box.x, y: box.y + (box.height - almanacTextHeight(ui, text, box.width)) / 2, width: box.width, align: 'center' })
+}
+
 export function drawAlmanacText(parent: Node, ui: UI, text: string, box: {
     x: number, y: number, width: number, height?: number, align?: 'left' | 'center' | 'right', scrollColors?: ScrollbarColors,
 }): number {

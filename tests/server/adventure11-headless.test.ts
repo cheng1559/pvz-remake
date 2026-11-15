@@ -9,7 +9,7 @@ import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
 
 const source = readGameplaySource
-const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
+const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 const start: StartSessionPacket = {
     protocolVersion: 1,

@@ -33,6 +33,8 @@ export interface UIButtonOptions extends Box {
     images?: UIButtonImages
     /** Image bounds relative to the hit area; defaults to filling the button. */
     imageBox?: Box
+    /** Its images drawn mirrored left to right, and its label offset the other way (the almanac's Next Page). */
+    mirrored?: boolean
     polygon?: UIButtonPolygon
     /** A UI font name or loaded font; with hoverFont the stone and back skins' lit text can differ. */
     font?: UIFont | BitmapFontAssets
@@ -86,6 +88,9 @@ export class UI {
     constructor(readonly assets: UIAssets) {}
 
     /** Every key lives in the string tables (base, text packs, Mods); a missing one shows the key and logs. */
+    /** Whether the text table has `key`: for text that is shown only when there is some (a Mod plant's description). */
+    hasText(key: string): boolean { return this.assets.strings[key] !== undefined }
+
     text(key: string): string {
         const value = this.assets.strings[key]
         if (value !== undefined) return value
@@ -173,13 +178,22 @@ export class UI {
             down = this.box(visual, 'Pressed', { ...imageBox, x: (imageBox.x ?? 0) + 1 })
             this.stoneRow(normal, imageBox.width, imageBox.height, false)
             this.stoneRow(down, imageBox.width, imageBox.height, true)
-        } else if (images) image = this.image(visual, images.normal, imageBox)
+        } else if (images) {
+            image = this.image(visual, images.normal, imageBox)
+            // Turned round about the button's middle, as its label is: an image wider than the button (a pack's,
+            // with a margin) keeps its frame where the button is.
+            if (options.mirrored) {
+                image.node.setScale(-1, 1, 1)
+                image.node.setPosition(width - image.node.position.x, image.node.position.y)
+            }
+        }
         const normalFont = options.font ?? (back ? 'large' : stone ? 'button' : skin === 'seedSmall' || footer ? 'small' : 'body')
         const hoverFont = options.hoverFont ?? options.font ?? (back ? 'largeHover' : stone ? 'buttonHover' : normalFont)
         const fonts = normalFont === hoverFont ? [normalFont] : [normalFont, hoverFont]
         const color = options.color ?? (skin === 'seed' ? new Color(213, 159, 43)
             : skin === 'seedSmall' || footer ? new Color(42, 42, 90) : undefined)
         const textOffsetX = { stone: 1, back: -2, seed: 0, seedSmall: 0, almanacIndex: 8, almanacClose: -8, image: 0, text: 0 }[skin]
+            * (options.mirrored ? -1 : 1)
         const textOffsetY = { stone: -4, back: -5, seed: -1, seedSmall: 1, almanacIndex: 1, almanacClose: 1, image: 0, text: 0 }[skin]
         const labels = fonts.map(font => {
             const ascent = FontMetricsUtil.getMetrics((typeof font === 'object' ? font : this.assets.fonts[font]).config).ascent

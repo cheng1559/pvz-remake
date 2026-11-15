@@ -1,9 +1,10 @@
 import { record, array, nonEmptyString, finite, nonNegativeFinite, positiveFinite, nonNegativeInteger, positiveInteger, exact, trueFlag } from '@/shared/validate'
-import { isQualifiedId } from '@/shared/mod/index'
+import { BASE_MOD_ID, isOwnId, isQualifiedId } from '@/shared/mod/index'
+import { seedGroup } from './seedGroups'
 import { withFrom } from './from'
 import { jsonRoundTrip, type JsonObject } from '@/shared/protocol'
 import { PLANT_ABILITY_STATES, type PlantAbilityState } from './plantAbilities'
-import { PLANT_ATTACKS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type Point, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type UnlockedEntry, type ZombieDefinition } from '@/shared/content/gameplayTypes'
+import { CHOOSER_PLACES, PLANT_ATTACKS, PLANT_BLINK_LAYER, PLANT_BLINK_TICKS, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, type AchievementDefinition, type AchievementTrigger, type AnimationClip, type AnimationDefinition, type AwardOpens, type BoardDefinition, type ExplosionDefinition, type GameplayDefinitions, type GameplayLevels, type ItemDefinition, type LevelDefinition, type LevelRule, type LevelWave, type PlantAnimationDefinition, type PlantAttack, type PlantDefinition, type PlantTargeting, type Point, type ProjectileDefinition, type ProjectileOverrides, type Rect, type SeedDefinition, type UnlockedEntry, type ZombieDefinition } from '@/shared/content/gameplayTypes'
 
 /** Reading the gameplay definitions and levels from content, each checked as it is read (and against the rest). */
 
@@ -31,7 +32,7 @@ function parseProjectileAttributes(source: Record<string, unknown>, name: string
     return result
 }
 
-export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): GameplayDefinitions {
+export function parseGameplayDefinitions(value: unknown): GameplayDefinitions {
     const source = exact(value, [
         'schemaVersion', 'economy', 'boards', 'seeds', 'plants', 'zombies',
         'projectiles', 'items', 'achievements', 'seedBank',
@@ -45,9 +46,6 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
         economy: { maxSun: positiveInteger(economy.maxSun, 'economy.maxSun'), maxMoney: positiveInteger(economy.maxMoney, 'economy.maxMoney') },
         boards: mapped(source.boards, 'boards', parseBoard),
         seeds: mapped(source.seeds, 'seeds', parseSeed),
-        seedCatalog: mapped(seedCatalog, 'seed catalog', (entry, entryName) => ({
-            position: nonNegativeInteger(exact(entry, ['position'], entryName).position, `${entryName}.position`),
-        })),
         plants: mapped(withFrom(record(source.plants, 'plants'), 'animation', 'plants'), 'plants', parsePlant),
         zombies: mapped(withFrom(record(source.zombies, 'zombies'), 'animation', 'zombies'), 'zombies', parseZombie),
         projectiles: mapped(source.projectiles, 'projectiles', parseProjectile),
@@ -59,13 +57,16 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
     if (definitions.seedBank.baseSlots > definitions.seedBank.maxSlots) throw new Error('seedBank.baseSlots exceeds maxSlots')
     for (const id of definitions.seedBank.startingSeeds) reference(id, definitions.seeds, 'seedBank.startingSeeds')
 
-    const places = new Map<number, string>()
-    for (const [id, { position }] of Object.entries(definitions.seedCatalog)) {
-        const other = places.get(position)
-        if (other) throw new Error(`seed catalog puts ${other} and ${id} in the same place (${position})`)
-        places.set(position, id)
-        reference(id, definitions.seeds, 'seed catalog')
-        if (definitions.seeds[id].kind !== 'plant') throw new Error(`seed catalog lists ${id}, not a plant seed; the chooser only offers plants`)
+    // Each group numbers its places on its own (seedGroups): the original seeds are the chooser's grid of plants.
+    const places = new Map<string, string>()
+    for (const [id, seed] of Object.entries(definitions.seeds)) {
+        const group = seedGroup(id, seed), place = `${group} ${seed.position}`
+        if (seed.hidden && !isOwnId(BASE_MOD_ID, id)) throw new Error(`seeds.${id}.hidden: only the base game's seeds are hidden cards; a Mod's seeds are its own group`)
+        if (group === BASE_MOD_ID && seed.kind !== 'plant') throw new Error(`seeds.${id} is not a plant seed; the chooser's grid only offers plants, so mark it hidden`)
+        if (group === BASE_MOD_ID && seed.position >= CHOOSER_PLACES) throw new Error(`seeds.${id}.position must be below ${CHOOSER_PLACES}, in the chooser's grid`)
+        const other = places.get(place)
+        if (other) throw new Error(`seeds ${other} and ${id} share position ${seed.position} in their group`)
+        places.set(place, id)
     }
     for (const [id, seed] of Object.entries(definitions.seeds)) {
         if (seed.kind === 'plant') reference(seed.id, definitions.plants, `seeds.${id}.id`)
@@ -124,8 +125,10 @@ function parseBoard(value: unknown, name: string): BoardDefinition {
  * given. Only a plant seed has a `placement`, and a grave seed has no `id`.
  */
 function parseSeed(value: unknown, name: string, seedId: string): SeedDefinition {
-    const source = exact(value, ['kind', 'sunCost', 'cooldownTicks'], name, ['id', 'placement', 'initialCooldownTicks'])
+    const source = exact(value, ['kind', 'position', 'sunCost', 'cooldownTicks'], name, ['id', 'placement', 'initialCooldownTicks', 'hidden'])
     const common = {
+        position: nonNegativeInteger(source.position, `${name}.position`),
+        ...(source.hidden === undefined ? {} : { hidden: trueFlag(source.hidden, `${name}.hidden`) }),
         sunCost: nonNegativeInteger(source.sunCost, `${name}.sunCost`),
         cooldownTicks: nonNegativeInteger(source.cooldownTicks, `${name}.cooldownTicks`),
         ...(source.initialCooldownTicks === undefined ? {} : { initialCooldownTicks: nonNegativeInteger(source.initialCooldownTicks, `${name}.initialCooldownTicks`) }),

@@ -8,16 +8,13 @@ export const SUN_BANK_TARGET = { x: 15, y: 0 } as const
 
 /**
  * SeedChooserScreen's grid, the original's plant seed types: 0-39 in five rows, and the upgrade plants 40-47 in a sixth
- * once the chooser has seven rows (SeedChooserScreen::Has7Rows). 48 is the Imitater's, drawn on its own button, and
- * the hidden seeds follow from 49 (SEED_EXPLODE_O_NUT); none of those is offered.
+ * once the chooser has seven rows (SeedChooserScreen::Has7Rows). 48 is the Imitater's, drawn on its own button. A page
+ * of any group (seedGroups) has as many places.
  */
 export const CHOOSER_PLACES = 48
 
 /** The places in the chooser's usual five rows. */
 export const FIVE_ROW_PLACES = 40
-
-/** A seed's place in the chooser grid (SeedChooserScreen::GetSeedPositionInChooser), in reading order from 0. */
-export interface SeedCatalogEntry { position: number }
 
 export interface GameplayDefinitions {
     schemaVersion: 2
@@ -25,11 +22,6 @@ export interface GameplayDefinitions {
     economy: { maxSun: number; maxMoney: number }
     boards: Record<string, BoardDefinition>
     seeds: Record<string, SeedDefinition>
-    /**
-     * The chooser catalog, a table like the others: a Mod adds its own seeds and moves anyone's through `overrides`.
-     * A place left out stays empty in the grid.
-     */
-    seedCatalog: Record<string, SeedCatalogEntry>
     plants: Record<string, PlantDefinition>
     zombies: Record<string, ZombieDefinition>
     projectiles: Record<string, ProjectileDefinition>
@@ -63,6 +55,14 @@ export interface BoardDefinition {
 }
 
 interface SeedCommon {
+    /**
+     * Its place in its group (seedGroups), in reading order from 0, 8 columns and CHOOSER_PLACES a page; unique in the
+     * group. The original seeds' is their place in the chooser's grid (SeedChooserScreen::GetSeedPositionInChooser), the
+     * original's seed type, below CHOOSER_PLACES; a place with no seed stays empty.
+     */
+    position: number
+    /** One of the base game's hidden cards (seedGroups), which only `/cheatseed` offers; a Mod's seeds are its own group. */
+    hidden?: true
     sunCost: number
     cooldownTicks: number
     initialCooldownTicks?: number

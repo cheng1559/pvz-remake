@@ -9,6 +9,7 @@ import { uiNode } from '@/client/view/uiNode'
 import { fitViewport, uiAreaEdge, uiAreaInset } from '@/client/view/ClientViewport'
 import { easeInOut } from '@/client/view/GameScreenMath'
 import { SoundEffect, SoundSystem } from '@/client/sound/SoundSystem'
+import { WheelPageTurner } from '@/client/ui/WheelPageTurner'
 import { chooserEntryKey as cardKey, type ChooserEntry, type GameCommand, type WorldSnapshot } from '@/shared/protocol'
 import { CHOOSER_PLACES, FIVE_ROW_PLACES, type GameplayDefinitions } from '@/shared/content/gameplay'
 import { chooserPages, pagePlaces, type ChooserPage } from '@/shared/content/chooserPages'
@@ -40,8 +41,6 @@ interface Choice extends ChooserEntry {
 
 /** A repick's last tick: the chooser is out and the bank back from its choosing place, as quickly as they came in. */
 export const REPICK_END_TICK = 475
-/** One wheel notch (WHEEL_SCROLL_DELTA_PER_STEP); a touchpad's smaller steps add up to one before a page turns. */
-const WHEEL_STEP = 120
 
 /** Seed ownership/order comes from the server. Only card flights and panel motion live here. */
 export class LevelSeedChooser {
@@ -65,8 +64,8 @@ export class LevelSeedChooser {
     private page = 0
     /** What the pages were laid out from: a chooser that a later repick opens again may offer other cards. */
     private offerKey = ''
-    /** The wheel's travel towards the next turn. */
-    private wheelTravel = 0
+    /** The mouse wheel while the chooser is out turns its pages. */
+    private readonly pageWheel = new WheelPageTurner(step => this.turnPage(step))
     private snapshot?: WorldSnapshot
     private send: (command: GameCommand) => void = () => {}
     private age = 0
@@ -206,7 +205,7 @@ export class LevelSeedChooser {
             if (choice) { this.pick(choice); event.propagationStopped = true }
         }
         // The mouse wheel while the chooser is out turns its pages.
-        const wheel = (event: EventMouse) => { if (this.panel.active) this.wheel(event) }
+        const wheel = (event: EventMouse) => { if (this.panel.active) this.pageWheel.wheel(event, this.canTurnPage) }
         // HUD is above the seed bank. Listening on it would turn it into a hit target covering the bank. The level's root
         // is under everything, so listening there takes no click from anything else: a node with any mouse listener
         // takes every mouse press over it (NodeEventProcessor._handleMouseDown), whatever it listens for.
@@ -260,19 +259,6 @@ export class LevelSeedChooser {
         // A page at catalog places fills its grid with silhouettes, as its empty places are seeds not unlocked yet; one
         // whose cards come one after another draws them only up to its last card.
         this.showCards(cards, catalog ? undefined : pagePlaces(cards))
-    }
-
-    /** The wheel turns as the buttons do: down to the next page, up to the one before, one notch a page. */
-    private wheel(event: EventMouse): void {
-        const delta = event.getScrollY()
-        if (!delta || !this.canTurnPage) return
-        event.propagationStopped = true
-        if (Math.sign(delta) !== Math.sign(this.wheelTravel)) this.wheelTravel = 0
-        this.wheelTravel += delta
-        if (Math.abs(this.wheelTravel) < WHEEL_STEP) return
-        this.wheelTravel = 0
-        void SoundSystem.play(SoundEffect.Tap)
-        this.turnPage(delta < 0 ? 1 : -1)
     }
 
     /**

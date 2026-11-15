@@ -30,11 +30,10 @@ async function init(name: string, output?: string) {
     await mkdir(join(root, 'src', 'server'), { recursive: true })
     await mkdir(join(root, 'assets', 'gameplay'), { recursive: true })
     await writeJson(join(root, 'content.json'), { gameplay: {
-        plants: 'assets/gameplay/plants.json', seeds: 'assets/gameplay/seeds.json', seedCatalog: 'assets/gameplay/seed-catalog.json',
+        plants: 'assets/gameplay/plants.json', seeds: 'assets/gameplay/seeds.json',
     }, resources: {} })
     await writeJson(join(root, 'assets', 'gameplay', 'plants.json'), {})
     await writeJson(join(root, 'assets', 'gameplay', 'seeds.json'), {})
-    await writeJson(join(root, 'assets', 'gameplay', 'seed-catalog.json'), {})
     await writeJson(join(root, 'manifest.json'), {
         schemaVersion: 1,
         // The Mod ID is its namespace: its own resources and definitions are name:...

@@ -8,7 +8,7 @@ import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/
 import { getDebugCliCompletions, getDebugCliSuffix, parseDebugCliCommand } from '@/shared/debug/DebugCli'
 import { TICK_SECONDS } from '@/shared/protocol'
 
-const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
 function setup(debug = true, levelId = 'pvz:adventure-1-1', content = definitions) {
     const game = new LocalIntegratedGame(content, levels, undefined, debug)

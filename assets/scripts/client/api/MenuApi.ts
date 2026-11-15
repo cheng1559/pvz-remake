@@ -32,7 +32,8 @@ export class MenuApi {
     getSettings() { return this.request('getSettings', {}) }
     updateSettings(patch: Partial<Omit<MenuSettings, 'version'>>) { return this.request('updateSettings', { patch }) }
     getChallenges(page: MenuEndpoints['getChallenges']['args']['page']) { return this.request('getChallenges', { page }) }
-    getAlmanac() { return this.request('getAlmanac', {}) }
+    /** `cheatSeeds`: `/cheatseed` stands on, which opens the whole almanac. */
+    getAlmanac(cheatSeeds = false) { return this.request('getAlmanac', cheatSeeds ? { cheatSeeds } : {}) }
     getAchievements() { return this.request('getAchievements', {}) }
     earnAchievement(id: string, shown: boolean) { return this.request('earnAchievement', { id, shown }) }
     resetAchievements(id?: string) { return this.request('resetAchievements', id === undefined ? {} : { id }) }

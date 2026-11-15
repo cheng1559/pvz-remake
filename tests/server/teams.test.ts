@@ -9,7 +9,7 @@ import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { adventureSeeds } from './adventure-seeds'
 import { runCommand } from './run-command'
 
-const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 const options: StartSessionPacket = { type: 'startSession', protocolVersion: 1, sequence: 1, levelId: 'pvz:adventure-1-4',
     randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [], ownedSeeds: adventureSeeds(levels, 'pvz:adventure-1-4') }

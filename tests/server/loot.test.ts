@@ -5,7 +5,7 @@ import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/
 import { readGameplaySource } from '../../tools/mod/content'
 import { TICK_SECONDS } from '@/shared/protocol'
 
-const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 const money = (game: LocalIntegratedGame) => game.render().items.filter(item => definitions.items[item.typeId]?.kind === 'money')
 

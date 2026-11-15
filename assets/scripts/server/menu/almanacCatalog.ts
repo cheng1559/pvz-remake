@@ -1,5 +1,5 @@
 import type { AlmanacPlantDefinition, AlmanacView, AlmanacZombieDefinition } from '@/shared/menu'
-import type { SeedDefinition } from '@/shared/content/gameplay'
+import { seedGroupPages, type SeedDefinition } from '@/shared/content/gameplay'
 import type { PlayerProfile } from './profileStore'
 
 /**
@@ -26,14 +26,16 @@ export function createAlmanacCatalog(value: unknown) {
      * `seeds`, with their cost and recharge, AlmanacDialog::ZombieIsShown and
      * ZombieHasDescription for zombies. A zombie that debuts on the player's current level is not described yet;
      * the original also describes it once it has been defeated since the player was selected, which is not tracked.
-     * The Yeti's silhouette before it can spawn is not drawn, so it stays hidden until then.
+     * The Yeti's silhouette before it can spawn is not drawn, so it stays hidden until then. `cheatSeeds` (`/cheatseed`)
+     * shows and describes everything, and adds the pages of the other seed groups (seedGroupPages).
      */
-    function view(profile: PlayerProfile | null, owned: readonly string[], seeds: Readonly<Record<string, SeedDefinition>>): AlmanacView {
+    function view(profile: PlayerProfile | null, owned: readonly string[], seeds: Readonly<Record<string, SeedDefinition>>, cheatSeeds = false): AlmanacView {
         const level = profile?.adventureLevel ?? 1, finishedTimes = profile?.finishedAdventure ?? 0, finished = finishedTimes > 0
         return {
-            plants: plants.flatMap(plant => owned.includes(plant.seed) && seeds[plant.seed]
+            plants: plants.flatMap(plant => (cheatSeeds || owned.includes(plant.seed)) && seeds[plant.seed]
                 ? [{ ...plant, cost: seeds[plant.seed].sunCost, refreshTime: seeds[plant.seed].cooldownTicks }] : []),
             zombies: zombies.map(({ startingLevel, spawnedOnly, afterAdventure, ...zombie }) => {
+                if (cheatSeeds) return { ...zombie, shown: true, described: true }
                 if (afterAdventure) {
                     const spawns = finished && (finishedTimes >= 2 || level >= startingLevel)
                     return { ...zombie, shown: spawns, described: spawns && (finishedTimes >= 2 || startingLevel < level) }
@@ -42,6 +44,10 @@ export function createAlmanacCatalog(value: unknown) {
                     shown: finished || startingLevel < level || startingLevel === level && !spawnedOnly,
                     described: finished || startingLevel < level }
             }),
+            ...(cheatSeeds ? { groupPages: seedGroupPages({ seeds }).map(page => page.map(({ seedId, place }) => ({
+                seed: seedId, place, cost: seeds[seedId].sunCost, refreshTime: seeds[seedId].cooldownTicks,
+                ...(seeds[seedId].hidden ? { hidden: true as const } : {}),
+            }))) } : {}),
         }
     }
 

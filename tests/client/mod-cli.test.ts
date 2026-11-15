@@ -136,7 +136,7 @@ test('Mod game commands cross the normal client/server boundary while paused and
         economy.sun += amount
         return cli.debugSuccess(`Sun: ${economy.sun}`)
     })
-    const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+    const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
     const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
     const setup = (debugEnabled = true) => {
         const game = new LocalIntegratedGame(definitions, levels, undefined, debugEnabled)

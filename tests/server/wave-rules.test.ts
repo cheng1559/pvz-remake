@@ -6,7 +6,7 @@ import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { adventureRule, adventureWaveSettings } from '@/server/rules/adventure'
 
-const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 // ZombieType order and ZombieDefinition::mStartingLevel of the zombies the adventure levels use.
 const STARTING_LEVEL: Record<string, number> = { 'pvz:normal': 1, 'pvz:conehead': 3, 'pvz:pole_vaulter': 6, 'pvz:buckethead': 8, 'pvz:newspaper': 11, 'pvz:screendoor': 13 }

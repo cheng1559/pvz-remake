@@ -1,12 +1,6 @@
-import { CHOOSER_PLACES, type BoardDefinition, type GameplayDefinitions, type GameplayLevels, type LevelDefinition } from '@/shared/content/gameplayTypes'
+import type { BoardDefinition, GameplayLevels, LevelDefinition } from '@/shared/content/gameplayTypes'
 
-/** What the definitions of a level and its board give: where its mowers ride, the chooser's seeds, the tools it has. */
-
-/** The catalog seeds in the chooser's grid (places below CHOOSER_PLACES), in place order. */
-export function chooserSeeds(definitions: Pick<GameplayDefinitions, 'seedCatalog'>): string[] {
-    return Object.entries(definitions.seedCatalog).filter(([, entry]) => entry.position < CHOOSER_PLACES)
-        .sort(([, left], [, right]) => left.position - right.position).map(([id]) => id)
-}
+/** What the definitions of a level and its board give: where its mowers ride and the tools it has. */
 
 /** Where a mower rides in a row: a level's waits there, and a mowing projectile runs there, on the ground. */
 export function mowerY(board: BoardDefinition, row: number): number {

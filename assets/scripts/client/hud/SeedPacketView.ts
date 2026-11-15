@@ -25,6 +25,8 @@ export interface SeedPacketViewArgs {
     x: number
     y: number
     seedType?: SeedPacketSeedType
+    /** The upgrade plants' background (SeedPacket::DrawSeedPacket). */
+    upgrade?: boolean
     /** A zombie seed's zombie type, drawn instead of a plant. */
     zombie?: string
     /** A grave seed's packet, which draws a grave. */
@@ -40,6 +42,8 @@ export interface SeedPacketViewArgs {
     iconLayer?: Node
     /** Where text drawn on the packet goes (a hotkey), above every packet's picture (`labels`). */
     labelLayer?: Node
+    /** false: never shaded for a cooldown or a selection, so without the dark copy that takes (the almanac's). */
+    shade?: boolean
 }
 
 /** Keeps a packet's nodes in other layers on the packet: where it is, its size and whether it shows. */
@@ -121,7 +125,7 @@ export class SeedPacketView {
         if (this.top) {
             for (const child of [...this.node.children]) if (ICON_PARTS.has(child.name)) child.setParent(this.top, false)
         }
-        this.cooldownClip = this._createCooldownClip(args)
+        this.cooldownClip = args.shade === false ? undefined : this._createCooldownClip(args)
         this.selectedHighlight = this._createSelectedHighlight(args)
         if (this.top?.parent === this.node) this.top.setSiblingIndex(this.node.children.length - 1)
         if (this.mirrored) this.setMirrored(true)

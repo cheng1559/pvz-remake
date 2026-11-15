@@ -7,7 +7,7 @@ import { readGameplaySource } from '../../tools/mod/content'
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
 
-const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 const options: StartSessionPacket = { type: 'startSession', protocolVersion: 1, sequence: 1,
     levelId: 'pvz:adventure-2-4', randomSeed: 3, initialMoney: 0, firstAdventure: true, ownedSeeds: adventureSeeds(levels, 'pvz:adventure-2-4'), mods: [] }

@@ -27,7 +27,7 @@ import { spawnZombie } from '@/server/zombies/spawn'
 import { explode } from '@/server/combat/explosions'
 import type { JsonValue } from '@/shared/protocol/index'
 
-const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions)
 const board = definitions.boards['pvz:day']
 

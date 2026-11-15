@@ -1,12 +1,14 @@
 {
   "example:rapid_pea": {
     "kind": "plant",
+    "position": 0,
     "sunCost": 75,
     "cooldownTicks": 750,
     "placement": "ground"
   },
   "example:beacon": {
     "kind": "plant",
+    "position": 1,
     "sunCost": 100,
     "cooldownTicks": 750,
     "placement": "ground"

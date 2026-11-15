@@ -29,7 +29,7 @@ import { framePosition } from '@/shared/content/animation'
 
 const source = readGameplaySource
 
-const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
+const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 const startPacket: StartSessionPacket = {
     protocolVersion: 1,

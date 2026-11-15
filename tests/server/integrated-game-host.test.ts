@@ -10,7 +10,7 @@ import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/
 import type { ClientPacket, StartSessionPacket } from '@/shared/protocol/index'
 
 const source = readGameplaySource
-const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
+const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(withFixedBanks(source('levels')), definitions)
 const startPacket: StartSessionPacket = {
     protocolVersion: 1,

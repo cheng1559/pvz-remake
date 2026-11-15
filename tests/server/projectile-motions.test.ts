@@ -27,7 +27,7 @@ function firing(type: PlantAttack, overrides: object = {}) {
     const block = plant[was]
     delete plant[was]
     plant[type] = { ...block, projectile: { id: 'pvz:pea', ...overrides } }
-    const definitions = parseGameplayDefinitions(source, readGameplaySource('seed-catalog'))
+    const definitions = parseGameplayDefinitions(source)
     return { definitions, levels: parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), definitions) }
 }
 
@@ -136,7 +136,7 @@ test('a lobbed projectile comes down past a shield onto the body, where a straig
 function flying(pierce: boolean) {
     const source = readGameplaySource('definitions')
     if (pierce) source.projectiles['pvz:pea'].pierce = true
-    const definitions = parseGameplayDefinitions(source, readGameplaySource('seed-catalog'))
+    const definitions = parseGameplayDefinitions(source)
     const world = withProjectileMotions(new World())
     world.resources.set(LevelStateResource, { id: 'pvz:test', definition: { lawnMower: 'pvz:lawnmower' } as never, board: definitions.boards['pvz:day'],
         phase: 'gameplay', result: 'playing', paused: false, mowerRows: [] })

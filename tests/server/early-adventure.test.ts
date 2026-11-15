@@ -8,7 +8,7 @@ import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
 
 const source = readGameplaySource
-const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
+const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 const options = (index: number): StartSessionPacket => ({
     protocolVersion: 1, sequence: 1, type: 'startSession', levelId: `pvz:adventure-1-${index}`,

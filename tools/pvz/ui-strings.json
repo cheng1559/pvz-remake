@@ -83,5 +83,9 @@
   "DEBUG_UNAVAILABLE": "/%s is unavailable in this version",
   "GRAVE_SEED": "Grave",
   "SEED_CHOOSER_PREVIOUS_PAGE": "(Prev Page)",
-  "SEED_CHOOSER_NEXT_PAGE": "(Next Page)"
+  "SEED_CHOOSER_NEXT_PAGE": "(Next Page)",
+  "ALMANAC_PREVIOUS_PAGE": "PREVIOUS PAGE",
+  "ALMANAC_NEXT_PAGE": "NEXT PAGE",
+  "ALMANAC_HIDDEN_DESCRIPTION": "You shouldn't see this.",
+  "WAIT_TIME_NONE": "none"
 }

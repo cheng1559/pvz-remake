@@ -69,8 +69,17 @@ export interface AlmanacPlantDefinition {
 export interface AlmanacZombieDefinition { id: number, key: string, zombie: string, iceGround?: boolean }
 /** `shown` is AlmanacDialog::ZombieIsShown and `described` ZombieHasDescription for the current player. */
 export interface AlmanacZombieView extends AlmanacZombieDefinition { shown: boolean, described: boolean }
-/** The plants are only the ones the current player has (LawnApp::HasSeedType); every zombie keeps its window. */
-export interface AlmanacView { plants: AlmanacPlantDefinition[], zombies: AlmanacZombieView[] }
+/**
+ * A seed of a group after the original plants (seedGroupPages) on an almanac page: its place there, its cost and
+ * recharge as its definition has them, and whether it is one of the hidden cards, which have no description.
+ */
+export interface AlmanacGroupCard { seed: string, place: number, cost: number, refreshTime: number, hidden?: true }
+/**
+ * The plants are only the ones the current player has (LawnApp::HasSeedType); every zombie keeps its window. With
+ * `/cheatseed` every plant and zombie is there and described, and `groupPages` are the plant pages after the first:
+ * each Mod's seeds, then the hidden cards.
+ */
+export interface AlmanacView { plants: AlmanacPlantDefinition[], zombies: AlmanacZombieView[], groupPages?: AlmanacGroupCard[][] }
 export interface AchievementEntry { id: string, titleKey: string, descriptionKey: string, icon: { sprite: string, index: number } }
 export interface AchievementView {
     completed: number
@@ -107,7 +116,7 @@ export interface MenuEndpoints {
     getSettings: { args: Record<string, never>, result: MenuSettings }
     updateSettings: { args: { patch: Partial<Omit<MenuSettings, 'version'>> }, result: MenuSettings }
     getChallenges: { args: { page: ChallengePageId }, result: ChallengeView }
-    getAlmanac: { args: Record<string, never>, result: AlmanacView }
+    getAlmanac: { args: { cheatSeeds?: boolean }, result: AlmanacView }
     getAchievements: { args: Record<string, never>, result: AchievementView }
     /**
      * ReportAchievement::GiveAchievement: a level reports what it granted; `shown` when the level announced it.

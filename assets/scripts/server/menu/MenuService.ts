@@ -89,7 +89,7 @@ export class MenuService {
             }
             case 'getAlmanac': {
                 const profile = this.profiles.getCurrentProfile()
-                return this.almanacCatalog.view(profile, this.ownedSeeds(profile), this.gameplaySettings.seeds)
+                return this.almanacCatalog.view(profile, this.ownedSeeds(profile), this.gameplaySettings.seeds, request.args.cheatSeeds === true)
             }
             case 'getAchievements': return this.achievements()
             case 'earnAchievement': {

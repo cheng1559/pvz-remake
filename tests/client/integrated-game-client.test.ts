@@ -9,7 +9,7 @@ import { LocalGameChannel } from '@/shared/channel/index'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 
 const source = readGameplaySource
-const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
+const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(withFixedBanks(source('levels')), definitions)
 
 test('integrated client hides channel packets behind start, command, update, and render', () => {

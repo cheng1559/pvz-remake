@@ -25,7 +25,7 @@ import { createZombieSystem } from '@/server/zombies/system'
 import { parseGameplayDefinitions,parseGameplayLevels } from '@/shared/content/gameplay'
 
 const source = readGameplaySource
-const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
+const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(source('levels'), definitions)
 
 function setup() {

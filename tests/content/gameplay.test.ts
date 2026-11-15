@@ -10,10 +10,10 @@ import {
 const source = readGameplaySource
 
 test('Gameplay parses the 1-1 definitions and level headlessly', () => {
-    const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
+    const definitions = parseGameplayDefinitions(source('definitions'))
     const levels = parseGameplayLevels(source('levels'), definitions)
 
-    assert.deepEqual(definitions.seeds['pvz:peashooter'], { kind: 'plant', id: 'pvz:peashooter', sunCost: 100, cooldownTicks: 750, placement: 'ground' })
+    assert.deepEqual(definitions.seeds['pvz:peashooter'], { kind: 'plant', id: 'pvz:peashooter', position: 0, sunCost: 100, cooldownTicks: 750, placement: 'ground' })
     assert.equal(definitions.seeds['pvz:repeater'].sunCost, 200)
     assert.equal(definitions.plants['pvz:repeater'].shooter!.shotsPerBurst, 2)
     assert.equal(definitions.plants['pvz:repeater'].shooter!.burstIntervalTicks, 26)
@@ -33,7 +33,7 @@ test('Gameplay definitions reject unsupported, unsafe, and unresolved data', () 
     const invalid = (change: (value: any) => void) => {
         const value = source('definitions')
         change(value)
-        return () => parseGameplayDefinitions(value, source('seed-catalog'))
+        return () => parseGameplayDefinitions(value)
     }
 
     assert.throws(invalid(value => { value.extra = true }), /not supported/)
@@ -59,15 +59,14 @@ test('Gameplay definitions reject unsupported, unsafe, and unresolved data', () 
     assert.throws(invalid(value => { value.seeds['pvz:normal'].placement = 'ground' }), /placement is for plant seeds/)
     assert.throws(invalid(value => { value.seeds['pvz:grave'].id = 'pvz:normal' }), /id is for plant and zombie seeds/)
     assert.throws(invalid(value => { value.plants['pvz:peashooter'].shooter.projectile = 'pvz:missing' }), /unknown ID/)
-    assert.throws(() => parseGameplayDefinitions(source('definitions'), { 'pvz:missing': { position: 0 } }), /unknown ID/)
-    assert.throws(() => parseGameplayDefinitions(source('definitions'), { 'pvz:peashooter': { position: 0 }, 'pvz:sunflower': { position: 0 } }),
-        /same place/)
-    assert.throws(() => parseGameplayDefinitions(source('definitions'), { 'pvz:peashooter': { position: -1 } }), /non-negative/)
-    assert.throws(() => parseGameplayDefinitions(source('definitions'), ['pvz:peashooter']), /must be an object/)
+    assert.throws(invalid(value => { value.seeds['pvz:sunflower'].position = 0 }), /share position 0 in their group/)
+    assert.throws(invalid(value => { value.seeds['pvz:peashooter'].position = -1 }), /non-negative/)
+    assert.throws(invalid(value => { delete value.seeds['pvz:peashooter'].position }), /position is required/)
+    assert.throws(invalid(value => { value.seeds['pvz:peashooter'].hidden = false }), /hidden must be true/)
 })
 
 test('Gameplay levels validate all 1-1 references, active rows, and waves', () => {
-    const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
+    const definitions = parseGameplayDefinitions(source('definitions'))
     const invalid = (change: (level: any) => void) => {
         const value = source('levels')
         change(value.levels['pvz:adventure-1-1'])

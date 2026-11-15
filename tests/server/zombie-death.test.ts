@@ -9,7 +9,7 @@ import { spawnZombie } from '@/server/zombies/spawn'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
 import { readGameplaySource } from '../../tools/mod/content'
 
-const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 
 /** A board whose death roll is `roll` (Rand(100)) and whose rate roll is the middle of 24-30. */

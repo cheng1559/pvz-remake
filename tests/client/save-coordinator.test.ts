@@ -15,7 +15,7 @@ import { levelPresentation, reanim } from './level-test-snapshot'
 import { TICK_SECONDS } from '@/shared/protocol'
 
 const source = readGameplaySource
-const definitions = parseGameplayDefinitions(source('definitions'), source('seed-catalog'))
+const definitions = parseGameplayDefinitions(source('definitions'))
 const levels = parseGameplayLevels(withFixedBanks(source('levels')), definitions)
 
 test('base save compatibility requires matching identity, version and content hash', () => {

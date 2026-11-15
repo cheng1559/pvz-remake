@@ -6,8 +6,10 @@ import { parseGameplayDefinitions } from '@/shared/content/gameplay'
 import type { AnimationRandom } from '@/shared/content/animation'
 import { startOffBoardPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
 import { startOffBoardZombie } from '@/shared/content/zombieAnimation'
+import { createAlmanacCatalog } from '@/server/menu/almanacCatalog'
+import type { PlayerProfile } from '@/server/menu/profileStore'
 
-const gameplay = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const gameplay = parseGameplayDefinitions(readGameplaySource('definitions'))
 const almanac = readGameplaySource('almanac') as { plants: Array<{ id: number, key: string, seed: string }>, zombies: Array<{ id: number, key: string, zombie: string }> }
 /** Draws in turn from the values given, the last one from then on. */
 const random = (...values: number[]): AnimationRandom => {
@@ -85,4 +87,26 @@ test('a zombie off the board stands, three times in four its second way when it 
     const second = (id: string) => 'idle2' in (presentationFixture.zombies[id].clips as object)
     assert.deepEqual(['normal', 'flag', 'conehead', 'buckethead', 'screendoor', 'newspaper', 'pole_vaulter'].map(id => second(`pvz:${id}`)),
         [true, true, true, true, true, false, false])
+})
+
+test('/cheatseed opens the whole almanac, with each Mod\'s seeds and then the hidden cards on the plant pages after the first', () => {
+    const catalog = createAlmanacCatalog(readGameplaySource('almanac'))
+    const fresh = { adventureLevel: 1, finishedAdventure: 0 } as PlayerProfile
+    const plain = catalog.view(fresh, ['pvz:peashooter'], gameplay.seeds)
+    assert.deepEqual([plain.plants.map(plant => plant.seed), plain.zombies.some(zombie => zombie.described), plain.groupPages],
+        [['pvz:peashooter'], false, undefined])
+    const { hidden: _hidden, ...zombie } = gameplay.seeds['pvz:normal']
+    const seeds = { ...gameplay.seeds, 'test:pea': { ...gameplay.seeds['pvz:peashooter'], id: 'test:pea', position: 3 },
+        'test:walker': { ...zombie, id: 'test:walker', position: 0 } }
+    const cheating = catalog.view(fresh, ['pvz:peashooter'], seeds, true)
+    assert.deepEqual(cheating.plants.map(plant => plant.seed), almanac.plants.map(plant => plant.seed), 'every plant, owned or not')
+    assert.ok(cheating.zombies.every(entry => entry.shown && entry.described), 'every zombie, described')
+    const [mod, hidden] = cheating.groupPages!
+    assert.deepEqual(mod, [
+        { seed: 'test:walker', place: 0, cost: zombie.sunCost, refreshTime: zombie.cooldownTicks },
+        { seed: 'test:pea', place: 3, cost: 100, refreshTime: 750 },
+    ])
+    assert.deepEqual(hidden.map(card => [card.seed, card.place, card.hidden]).slice(0, 4),
+        [['pvz:explodenut', 0, true], ['pvz:bowling-wallnut', 1, true], ['pvz:bowling-explodenut', 2, true], ['pvz:normal', 8, true]])
+    assert.equal(hidden.at(-1)!.seed, 'pvz:grave')
 })

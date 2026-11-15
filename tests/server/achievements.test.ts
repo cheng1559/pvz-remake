@@ -7,7 +7,7 @@ import type { JsonValue, StartSessionPacket } from '@/shared/protocol'
 import { adventureSeeds } from './adventure-seeds'
 import { runCommand } from './run-command'
 
-const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const levels = parseGameplayLevels(readGameplaySource('levels'), definitions)
 const options: StartSessionPacket = { type: 'startSession', protocolVersion: 1, sequence: 1,
     levelId: 'pvz:adventure-1-1', randomSeed: 1, initialMoney: 0, firstAdventure: false, mods: [] }
@@ -128,7 +128,7 @@ test('achievement triggers are checked with the content', () => {
     const broken = (trigger: unknown) => {
         const source = readGameplaySource('definitions')
         source.achievements['pvz:spudow'].trigger = trigger
-        return () => new IntegratedGameServer(parseGameplayDefinitions(source, readGameplaySource('seed-catalog')), levels)
+        return () => new IntegratedGameServer(parseGameplayDefinitions(source), levels)
     }
     assert.throws(broken({ kind: 'pvz:nothing' }), /achievement trigger is not installed: pvz:nothing/)
     assert.throws(broken({ kind: 'pvz:blast', plants: ['pvz:torchwood'], kills: 1 }), /plants references unknown ID pvz:torchwood/)

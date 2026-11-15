@@ -11,7 +11,7 @@ import { runCommand } from './run-command'
 const json = readGameplaySource
 const source = json('definitions')
 source.zombies['test:zombie'] = { ...source.zombies['pvz:normal'], maxHealth: 540, behavior: { intervalTicks: 10 } }
-const definitions = parseGameplayDefinitions(source, json('seed-catalog'))
+const definitions = parseGameplayDefinitions(source)
 const levelSource = withFixedBanks(json('levels'))
 // 1-1's waves as listed waves, with the test zombie in the first.
 delete levelSource.levels['pvz:adventure-1-1'].rules

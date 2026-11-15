@@ -23,7 +23,7 @@ import { createProjectileSystem } from '@/server/combat/projectiles'
 import { EventQueueResource, createEventQueue } from '@/server/state/events'
 import { DeterministicRng } from '@/server/state/DeterministicRng'
 
-const definitions = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
+const definitions = parseGameplayDefinitions(readGameplaySource('definitions'))
 const board = definitions.boards['pvz:day']
 /** A level whose row 2 has a mower waiting. */
 function mowerWorld(): World {
@@ -208,7 +208,7 @@ test('a shooter can fire mowing projectiles, each from its mouth on its side, cr
     // A peashooter that fires mowers in place of peas.
     const source = readGameplaySource('definitions')
     source.plants['pvz:peashooter'].shooter.projectile = 'pvz:lawnmower'
-    const firing = parseGameplayDefinitions(source, readGameplaySource('seed-catalog'))
+    const firing = parseGameplayDefinitions(source)
     const levels = parseGameplayLevels(withFixedBanks(readGameplaySource('levels')), firing)
     const play = (lines: string[]) => {
         const game = new LocalIntegratedGame(firing, levels, undefined, true)

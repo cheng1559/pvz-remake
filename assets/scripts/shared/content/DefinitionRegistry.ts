@@ -69,13 +69,12 @@ class DefinitionRegistry {
 }
 
 export function buildGameplayContent(value: unknown, sources: readonly DefinitionSource[] = []) {
-    const { settings, levels: levelEntries, seedCatalog: seedCatalogValue, ...tables } = record(value, 'base gameplay')
+    const { settings, levels: levelEntries, ...tables } = record(value, 'base gameplay')
     const definitions = { ...record(settings, 'gameplay settings'), ...tables }
     const levels = { schemaVersion: definitions.schemaVersion, levels: record(levelEntries, 'gameplay levels') }
-    // The chooser catalog is a table too, keyed by seed: Mods add their own seeds and move any through `overrides`.
-    const registry = new DefinitionRegistry([...GAMEPLAY_TABLES, 'seedCatalog', 'levels'])
+    const registry = new DefinitionRegistry([...GAMEPLAY_TABLES, 'levels'])
     registry.register(BASE_MOD_ID, {
-        ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, definitions[kind]])), seedCatalog: seedCatalogValue, levels: levels.levels,
+        ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, definitions[kind]])), levels: levels.levels,
     }, true)
     const patches: DefinitionSource[] = [], overrides: DefinitionSource[] = []
     for (const source of sources) {
@@ -100,7 +99,7 @@ export function buildGameplayContent(value: unknown, sources: readonly Definitio
     }
     const resultDefinitions = parseGameplayDefinitions({
         ...definitions, ...Object.fromEntries(GAMEPLAY_TABLES.map(kind => [kind, registry.values(kind)])),
-    }, registry.values('seedCatalog'))
+    })
     const result = {
         definitions: resultDefinitions,
         levels: parseGameplayLevels({ ...levels, levels: installedLevels }, resultDefinitions),
