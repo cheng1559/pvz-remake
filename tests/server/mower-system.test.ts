@@ -54,7 +54,7 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
         typeId: 'pvz:normal', health: 270, maxHealth: 270, state: 'walking',
         speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
         moweredTicksRemaining: 0,
-        walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
+        walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
         hasHead: false, hasTongue: false, hasArm: true, groanCounter: 300,
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
     })
@@ -69,7 +69,7 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
     assert.equal(world.get(mowerEntity, PositionComponent)!.y, 303)
     assert.equal(world.hasEntity(zombie), true)
     assert.equal(world.get(zombie, ZombieComponent)!.state, 'mowered')
-    assert.equal(world.get(zombie, ZombieComponent)!.animationSpeed, 16 / 12)
+    assert.deepEqual(world.get(zombie, ZombieComponent)!.animations.body, { clip: 'mowered', time: 0, rate: 16 })
     assert.equal(world.get(zombie, ZombieComponent)!.moweredTicksRemaining, 50)
     assert.equal(world.get(mowerEntity, ProjectileComponent)!.chompCounter, 24)
     assert.equal(world.get(mowerEntity, PositionComponent)!.x, -19.996272)
@@ -80,7 +80,7 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
         typeId: 'pvz:normal', health: 270, maxHealth: 270, state: 'walking',
         speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
         moweredTicksRemaining: 0,
-        walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
+        walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
         hasHead: true, hasTongue: false, hasArm: true, groanCounter: 300,
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
     })
@@ -94,7 +94,8 @@ test("a row's mower sets off as a mowing projectile when a zombie with its head 
 
     assert.equal(world.get(mowerEntity, ProjectileComponent)!.chompCounter, 50)
     for (let tick = 5; tick <= 28; tick++) schedule.run(world, tick)
-    assert.ok(Math.abs(world.get(zombie, ZombieComponent)!.animationTime - 3.5) < 1e-9)
+    // Half of the driver's 8 frames, 25 ticks into its 50.
+    assert.ok(Math.abs(world.get(zombie, ZombieComponent)!.animations.body.time - 4) < 1e-9)
     for (let tick = 29; tick <= 52; tick++) schedule.run(world, tick)
     assert.equal(world.hasEntity(zombie), true)
     schedule.run(world, 53)
@@ -123,7 +124,7 @@ test('Zombie::MowDown drops a worn helm or shield before the mowed animation', (
         world.add(entity, PositionComponent, { x: -10, y: 280, row: 2 })
         world.add(entity, ZombieComponent, {
             typeId, health: 270, maxHealth: 270, state: 'walking', speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 0,
-            moweredTicksRemaining: 0, walkAnimation: 'anim_walk', animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
+            moweredTicksRemaining: 0, walkClip: 'walk', animations: { body: { clip: 'walk', time: 0, rate: 12 } },
             hasHead: true, hasTongue: false, hasArm: true, groanCounter: 300,
             helmHealth: definitions.zombies[typeId].helm?.health ?? 0, shieldHealth: definitions.zombies[typeId].shield?.health ?? 0,
             chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
@@ -151,7 +152,7 @@ test('a zombie that cannot be flattened (dying, vaulting, rising) goes in a puff
     world.add(zombie, PositionComponent, { x: -10, y: 280, row: 2 })
     world.add(zombie, ZombieComponent, {
         typeId: 'pvz:normal', health: 0, maxHealth: 270, state: 'dying', speedPerTick: 0.3, biteTicks: 0, deathTicksRemaining: 100,
-        moweredTicksRemaining: 0, walkAnimation: 'anim_walk', animation: 'anim_death', animationTime: 0, animationSpeed: 1,
+        moweredTicksRemaining: 0, walkClip: 'walk', animations: { body: { clip: 'death', time: 0, rate: 12 } },
         hasHead: false, hasTongue: false, hasArm: true, groanCounter: 300,
         helmHealth: 0, shieldHealth: 0, chilledTicks: 0, hasPole: false, enrageTicks: 0, riseTicks: 0,
     })

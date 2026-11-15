@@ -2,6 +2,7 @@ import type { BoardDefinition, LevelDefinition, ProjectileDefinition } from '@/s
 import type { DeterministicRng } from './DeterministicRng'
 import { defineComponent, defineResource } from '@/ecs/index'
 import type { EntityBehaviorState, GraveSnapshot, GridItemSnapshot, JsonObject, Team } from '@/shared/protocol'
+import type { LayerState } from '@/shared/content/animation'
 
 export interface Position {
     x: number
@@ -24,19 +25,9 @@ export interface Plant extends EntityBehaviorState {
     /** Ticks left slowed by a hostile snow pea (see plants/chill.ts); 0 when not chilled. */
     chilledTicks: number
     /** What each layer of its animation plays now (PlantDefinition.animation); see plants/animation.ts. */
-    animations?: Record<string, PlantLayer>
+    animations?: Record<string, LayerState>
     /** Ticks to its next blink (Plant::mBlinkCountdown). */
     blinkTicks?: number
-}
-
-/**
- * A layer of a plant's animation: the clip it plays, how far into it in frames, and its frames a second
- * (Reanimation::mAnimRate). A loop's time counts on past its length, for a view to wrap by its own clip's.
- */
-export interface PlantLayer {
-    clip: string, time: number, rate: number
-    /** There and going on, but not shown now (the potato mine's light between its flashes). */
-    hidden?: true
 }
 
 export type PlantAbilityState =
@@ -59,11 +50,6 @@ export interface PlantAttack {
     burst?: { fireAtTick: number, shotsRemaining: number }
 }
 
-export type ZombieAnimation =
-    | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_gasp' | 'anim_death' | 'anim_death2' | 'anim_superlongdeath' | 'mowered'
-    /** Standing, as a zombie does off the board (shared/content/zombieAnimation). */
-    | 'anim_idle' | 'anim_idle2'
-
 export interface Zombie extends EntityBehaviorState {
     typeId: string
     health: number
@@ -76,10 +62,13 @@ export interface Zombie extends EntityBehaviorState {
     /** Also counts down a burned zombie. */
     deathTicksRemaining: number
     moweredTicksRemaining: number
-    walkAnimation: 'anim_walk' | 'anim_walk2'
-    animation: ZombieAnimation
-    animationTime: number
-    animationSpeed: number
+    /** The clip it walks on, drawn as it comes (`walk` or `walk2`). */
+    walkClip: string
+    /**
+     * What its body plays now (ZombieDefinition.animation), its one layer; see zombies/animation.ts. The rates are
+     * those of an unchilled zombie: a chilled one's animation goes at half of them (zombiePace).
+     */
+    animations: Record<string, LayerState>
     hasHead: boolean
     hasTongue: boolean
     hasArm: boolean

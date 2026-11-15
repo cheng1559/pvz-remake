@@ -24,6 +24,7 @@ parseGameplayLevels,
 import { isJsonValue,parseServerPacket,type StartSessionPacket } from '@/shared/protocol/index'
 import { runCommand } from './run-command'
 import { adventureSeeds } from './adventure-seeds'
+import { framePosition } from '@/shared/content/animation'
 
 const source = readGameplaySource
 
@@ -185,7 +186,8 @@ test('Peashooter acquires a zombie ahead and fires after its fixed windup', () =
     // Plant::GetPeaHeadOffset: the pea's corner leaves (24, -33) from the stem the head is on, where the body's idle
     // loop had it when the plant fired, between two frames of its track; it has flown its first tick since.
     const { clips } = definitions.plants['pvz:peashooter'].animation!, track = clips.body.tracks!.anim_stem
-    const { body, head } = snapshot.plants[0].animations!, time = (body.time - body.rate / 100) % clips.body.frames
+    // Its frames are spread over the loop's whole length (Reanimation::GetFrameTime, framePosition).
+    const { body, head } = snapshot.plants[0].animations!, time = framePosition(clips.body, body.time - body.rate / 100)
     const from = track[Math.floor(time)], to = track[Math.min(track.length - 1, Math.floor(time) + 1)], part = time - Math.floor(time)
     const stem = { x: from.x + (to.x - from.x) * part, y: from.y + (to.y - from.y) * part }
     assert.ok(body.time > 0 && stem.x >= 37.6 && stem.x <= 47.4, `the loop has gone on to ${body.time}`)

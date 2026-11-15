@@ -5,7 +5,6 @@
     "seeds": "gameplay/definitions/seeds.json",
     "plants": "gameplay/definitions/plants.json",
     "zombies": "gameplay/definitions/zombies.json",
-    "zombieGaits": "gameplay/definitions/zombie-gaits.json",
     "projectiles": "gameplay/definitions/projectiles.json",
     "items": "gameplay/definitions/items.json",
     "achievements": "gameplay/definitions/achievements.json",

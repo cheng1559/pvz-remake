@@ -2,7 +2,6 @@ import type { EntityAllocatorSnapshot, EntityId } from '@/ecs/index'
 import {
     assertJsonValue,
     jsonRoundTrip,
-    zombieAnimationMatchesState,
     type JsonObject,
     type EnabledMod,
     type ServerEvent,
@@ -22,8 +21,8 @@ import type {
     SeedBankState,
     SeedPacketState,
     Zombie,
-    ZombieAnimation,
 } from '../state/components'
+import type { LayerState } from '@/shared/content/animation'
 import type { Item, TutorialState, WaveState } from '../state/levelState'
 import type { SavedComponents } from '../registry/JsonComponents'
 import { isQualifiedId } from '@/shared/mod'
@@ -384,19 +383,24 @@ function parsePlant(value: unknown, name: string): Plant {
         chilledTicks: nonNegativeInteger(source.chilledTicks, `${name}.chilledTicks`),
         ...(source.ability === undefined ? {} : { ability: parsePlantAbility(source.ability, `${name}.ability`) }),
         ...(source.team === undefined ? {} : { team: team(source.team, `${name}.team`) }),
-        ...(source.animations === undefined ? {} : { animations: Object.fromEntries(Object.entries(record(source.animations, `${name}.animations`)).map(([layer, entry]) => {
-            const state = optionalExact(entry, ['clip', 'time', 'rate'], ['hidden'], `${name}.animations.${layer}`)
-            if (state.hidden !== undefined && state.hidden !== true) throw new TypeError(`${name}.animations.${layer}.hidden must be true`)
-            return [layer, {
-                ...(state.hidden ? { hidden: true as const } : {}),
-                clip: nonEmptyString(state.clip, `${name}.animations.${layer}.clip`),
-                time: nonNegativeFinite(state.time, `${name}.animations.${layer}.time`),
-                rate: nonNegativeFinite(state.rate, `${name}.animations.${layer}.rate`),
-            }]
-        })) }),
+        ...(source.animations === undefined ? {} : { animations: parseLayers(source.animations, `${name}.animations`) }),
         ...(source.blinkTicks === undefined ? {} : { blinkTicks: nonNegativeInteger(source.blinkTicks, `${name}.blinkTicks`) }),
         ...parseBehaviorState(source, name),
     }
+}
+
+/** What the layers of an animation play, a plant's or a zombie's, by layer. */
+function parseLayers(value: unknown, name: string): Record<string, LayerState> {
+    return Object.fromEntries(Object.entries(record(value, name)).map(([layer, entry]) => {
+        const state = optionalExact(entry, ['clip', 'time', 'rate'], ['hidden'], `${name}.${layer}`)
+        if (state.hidden !== undefined && state.hidden !== true) throw new TypeError(`${name}.${layer}.hidden must be true`)
+        return [layer, {
+            ...(state.hidden ? { hidden: true as const } : {}),
+            clip: nonEmptyString(state.clip, `${name}.${layer}.clip`),
+            time: nonNegativeFinite(state.time, `${name}.${layer}.time`),
+            rate: nonNegativeFinite(state.rate, `${name}.${layer}.rate`),
+        }]
+    }))
 }
 
 function parsePlantAbility(value: unknown, name: string): PlantAbility {
@@ -422,29 +426,18 @@ function parsePlantAttack(value: unknown, name: string): PlantAttack {
 }
 
 const ZOMBIE_STATES: readonly Zombie['state'][] = ['walking', 'eating', 'vaulting', 'dying', 'burned', 'mowered']
-const ZOMBIE_ANIMATIONS: readonly ZombieAnimation[] = [
-    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_gasp', 'anim_death', 'anim_death2', 'anim_superlongdeath', 'mowered',
-]
 
 function parseZombie(value: unknown, name: string): Zombie {
     const source = optionalExact(value, [
         'typeId', 'health', 'maxHealth', 'state', 'speedPerTick', 'biteTicks', 'deathTicksRemaining',
-        'moweredTicksRemaining', 'walkAnimation', 'animation', 'animationTime', 'animationSpeed', 'hasHead', 'hasArm',
+        'moweredTicksRemaining', 'walkClip', 'animations', 'hasHead', 'hasArm',
         'hasTongue', 'groanCounter', 'helmHealth', 'shieldHealth', 'chilledTicks', 'hasPole', 'enrageTicks', 'riseTicks',
     ], ['behaviorState', 'droppedLoot', 'team'], name)
     if (!ZOMBIE_STATES.includes(source.state as Zombie['state'])) throw new TypeError(`${name}.state is unknown`)
     const maxHealth = positiveInteger(source.maxHealth, `${name}.maxHealth`)
     const health = nonNegativeInteger(source.health, `${name}.health`)
     if (health > maxHealth) throw new TypeError(`${name}.health must not exceed maxHealth`)
-    if (source.walkAnimation !== 'anim_walk' && source.walkAnimation !== 'anim_walk2') {
-        throw new TypeError(`${name}.walkAnimation is unknown`)
-    }
-    if (!ZOMBIE_ANIMATIONS.includes(source.animation as ZombieAnimation)) throw new TypeError(`${name}.animation is unknown`)
     const state = source.state as Zombie['state']
-    const animation = source.animation as ZombieAnimation
-    if (!zombieAnimationMatchesState(state, animation)) throw new TypeError(`${name}.animation is inconsistent with state`)
-    const animationSpeed = nonNegativeFinite(source.animationSpeed, `${name}.animationSpeed`)
-    if (animationSpeed === 0) throw new TypeError(`${name}.animationSpeed must be positive`)
     return {
         typeId: nonEmptyString(source.typeId, `${name}.typeId`),
         health,
@@ -454,10 +447,8 @@ function parseZombie(value: unknown, name: string): Zombie {
         biteTicks: nonNegativeInteger(source.biteTicks, `${name}.biteTicks`),
         deathTicksRemaining: nonNegativeInteger(source.deathTicksRemaining, `${name}.deathTicksRemaining`),
         moweredTicksRemaining: nonNegativeInteger(source.moweredTicksRemaining, `${name}.moweredTicksRemaining`),
-        walkAnimation: source.walkAnimation,
-        animation,
-        animationTime: nonNegativeFinite(source.animationTime, `${name}.animationTime`),
-        animationSpeed,
+        walkClip: nonEmptyString(source.walkClip, `${name}.walkClip`),
+        animations: parseLayers(source.animations, `${name}.animations`),
         hasHead: boolean(source.hasHead, `${name}.hasHead`),
         hasTongue: boolean(source.hasTongue, `${name}.hasTongue`),
         hasArm: boolean(source.hasArm, `${name}.hasArm`),

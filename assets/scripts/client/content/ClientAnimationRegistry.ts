@@ -1,4 +1,4 @@
-import { animationSource, type ClientAnimationClip, type ClientAnimationDefinitions, type ClientAnimationTarget, type PresentationDefinitions } from '@/shared/content/presentation'
+import { type ClientAnimationClip, type ClientAnimationDefinitions, type ClientAnimationTarget, type PresentationDefinitions } from '@/shared/content/presentation'
 export type { ClientAnimationClip, ShooterAnimationDefinition, ZombieAnimationDefinition, NormalZombieAnimationDefinition, SunflowerAnimationDefinition, FlagZombieAnimationDefinition, PoleVaulterAnimationDefinition, CherryBombAnimationDefinition, WallNutAnimationDefinition, PotatoMineAnimationDefinition, ChomperAnimationDefinition, ClientAnimationDefinitions, ClientAnimationTarget } from '@/shared/content/presentation'
 
 type AnyAnimationDefinition = Record<string, ClientAnimationClip>
@@ -10,7 +10,7 @@ export class ClientAnimationRegistry {
     constructor(readonly definitions: PresentationDefinitions) {
         const { plants, zombies } = definitions
         const defaults = Object.fromEntries(Object.entries({ ...plants, ...zombies })
-            .filter(([, definition]) => definition.animations).map(([id, definition]) => [id, definition.animations])) as unknown as ClientAnimationDefinitions
+            .filter(([, definition]) => definition.clips).map(([id, definition]) => [id, definition.clips])) as unknown as ClientAnimationDefinitions
         for (const [target, value] of Object.entries(defaults)) {
             const copy = cloneDefinition(value)
             for (const [slot, clip] of Object.entries(copy)) validateClip(target, slot, clip)
@@ -21,13 +21,6 @@ export class ClientAnimationRegistry {
 
     resolve<K extends ClientAnimationTarget>(target: K): ClientAnimationDefinitions[K] {
         return this.require(target)
-    }
-
-    /** The clips plant or zombie `id` plays (its `animationsFrom`, else its own). */
-    sourceOf(id: string): ClientAnimationTarget {
-        const definition = this.definitions.plants[id] ?? this.definitions.zombies[id]
-        if (!definition) throw new Error(`No presentation for ${id}`)
-        return animationSource(id, definition)
     }
 
     freeze(): void {
@@ -52,7 +45,7 @@ function cloneDefinition<T extends object>(value: T): T {
 
 function validateClip(target: string, slot: string, value: ClientAnimationClip): void {
     if (!value || typeof value !== 'object') throw new TypeError(`${target}.${slot} must be an object`)
-    const fields = new Set(['reanimId', 'rateScale', 'x', 'y', 'attachmentTrackId', 'attachmentBase', 'onlyTracks', 'blend', 'fps'])
+    const fields = new Set(['reanimId', 'rateScale', 'x', 'y', 'attachmentTrackId', 'attachmentBase', 'onlyTracks', 'blend', 'fps', 'fullLastFrame'])
     const unknown = Object.keys(value).find(key => !fields.has(key))
     if (unknown) throw new TypeError(`unknown ${target}.${slot} field: ${unknown}`)
     if (typeof value.reanimId !== 'string' || value.reanimId.length === 0) {
@@ -74,4 +67,5 @@ function validateClip(target: string, slot: string, value: ClientAnimationClip):
         throw new TypeError(`${target}.${slot}.onlyTracks must be non-empty strings`)
     }
     if (value.blend !== undefined && (!Number.isFinite(value.blend) || value.blend < 0)) throw new TypeError(`${target}.${slot}.blend must not be negative`)
+    if (value.fullLastFrame !== undefined && value.fullLastFrame !== true) throw new TypeError(`${target}.${slot}.fullLastFrame must be true`)
 }

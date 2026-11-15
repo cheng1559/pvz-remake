@@ -3,11 +3,10 @@
     "packet": {"x": -3, "y": -7, "scale": 0.35},
     "portrait": {"x": 21, "y": 14, "scale": 0.5},
     "nameKey": "ZOMBIE",
-    "shadowX": 23,
-    "shadowXBackwards": 11,
+    "shadow": {"x": 23, "y": -92, "backwardsX": 11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": []},
     "damagedArm": "damagedArm",
-    "animations": {
+    "clips": {
       "idle": {"reanimId": "pvz:zombie", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "idle2": {"reanimId": "pvz:zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -39,12 +38,10 @@
     "packet": {"x": -3, "y": -7, "scale": 0.35},
     "portrait": {"x": 23, "y": 24, "scale": 0.5},
     "nameKey": "FLAG_ZOMBIE",
-    "shadowX": 23,
-    "shadowXBackwards": 11,
+    "shadow": {"x": 23, "y": -92, "backwardsX": 11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": [], "flagArm": {"holding": ["Zombie_flaghand", "Zombie_innerarm_screendoor"], "free": ["anim_innerarm3", "anim_innerarm2", "anim_innerarm1"], "front": "Zombie_innerarm_screendoor"}},
     "damagedArm": "damagedArm",
-    "flag": true,
-    "animations": {
+    "clips": {
       "idle": {"reanimId": "pvz:flag_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "idle2": {"reanimId": "pvz:flag_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:flag_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -78,11 +75,10 @@
     "packet": {"x": -3, "y": -7, "scale": 0.35},
     "portrait": {"x": 21, "y": 26, "scale": 0.5},
     "nameKey": "CONEHEAD_ZOMBIE",
-    "shadowX": 23,
-    "shadowXBackwards": 11,
+    "shadow": {"x": 23, "y": -92, "backwardsX": 11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": ["anim_cone", "anim_bucket"]},
     "damagedArm": "damagedArm",
-    "animations": {
+    "clips": {
       "idle": {"reanimId": "pvz:helm_zombie_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "idle2": {"reanimId": "pvz:helm_zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:helm_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -122,11 +118,10 @@
     "packet": {"x": -3, "y": -7, "scale": 0.35},
     "portrait": {"x": 21, "y": 23, "scale": 0.5},
     "nameKey": "BUCKETHEAD_ZOMBIE",
-    "shadowX": 23,
-    "shadowXBackwards": 11,
+    "shadow": {"x": 23, "y": -92, "backwardsX": 11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"], "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground", "helms": ["anim_cone", "anim_bucket"]},
     "damagedArm": "damagedArm",
-    "animations": {
+    "clips": {
       "idle": {"reanimId": "pvz:helm_zombie_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "idle2": {"reanimId": "pvz:helm_zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:helm_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -170,12 +165,11 @@
       {"column": 0, "row": 0}, {"column": 0, "row": 1}, {"column": 0, "row": 2},
       {"column": 0, "row": 3}, {"column": 0, "row": 4}, {"column": 1, "row": 0}
     ],
-    "shadowX": 30,
-    "shadowXBackwards": -11,
+    "shadow": {"x": 30, "y": -92, "backwardsX": -11},
     "parts": {"head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": [], "arm": ["Zombie_polevaulter_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_polevaulter_outerarm_upper", "ground": "_ground", "helms": [], "held": ["Zombie_polevaulter_innerarm_upper", "Zombie_polevaulter_innerarm_lower", "Zombie_polevaulter_innerhand", "Zombie_polevaulter_pole2", "Zombie_polevaulter_pole"]},
     "damagedArm": "poleVaulterDamagedArm",
     "vault": true,
-    "animations": {
+    "clips": {
       "idle": {"reanimId": "pvz:pole_vaulter_idle", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
       "walk": {"reanimId": "pvz:pole_vaulter_walk", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
       "walk2": {"reanimId": "pvz:pole_vaulter_walk", "rateScale": 1, "fps": 12, "x": 9, "y": 19},
@@ -212,12 +206,10 @@
     "damagedArmSprite": "pvz:zombie_paper_leftarm_upper2",
     "enragedHead": {"track": "anim_head1", "sprite": "pvz:zombie_paper_madhead"},
     "enrageSounds": [{"audio": "pvz:newspaper_rarrgh", "foley": true, "pitchRange": -2}],
-    "shadowX": 29,
-    "shadowXBackwards": 5,
-    "shadowY": 96,
+    "shadow": {"x": 29, "y": -96, "backwardsX": 5},
     "parts": {"head": ["anim_head1", "anim_head_jaw", "anim_head_glasses", "anim_head_look", "anim_head_pupils"], "hair": ["anim_hair", "anim_hairpiece"], "tongue": [], "arm": ["Zombie_paper_leftarm_lower", "Zombie_paper_hands"], "upperArm": "Zombie_paper_leftarm_upper", "ground": "_ground", "helms": ["Zombie_paper_paper"]},
     "damagedArm": "damagedArm",
-    "animations": {
+    "clips": {
       "idle": {"reanimId": "pvz:newspaper_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:newspaper_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk2": {"reanimId": "pvz:newspaper_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
@@ -247,8 +239,7 @@
     "packet": {"x": -3, "y": -10, "scale": 0.35},
     "portrait": {"x": 21, "y": 14, "scale": 0.5},
     "nameKey": "SCREEN_DOOR_ZOMBIE",
-    "shadowX": 23,
-    "shadowXBackwards": 11,
+    "shadow": {"x": 23, "y": -92, "backwardsX": 11},
     "parts": {
       "head": ["anim_head1", "anim_head2"], "hair": ["anim_hair"], "tongue": ["anim_tongue"],
       "arm": ["Zombie_outerarm_lower", "Zombie_outerarm_hand"], "upperArm": "Zombie_outerarm_upper", "ground": "_ground",
@@ -259,7 +250,7 @@
       }
     },
     "damagedArm": "damagedArm",
-    "animations": {
+    "clips": {
       "idle": {"reanimId": "pvz:door_zombie_idle", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "idle2": {"reanimId": "pvz:door_zombie_idle2", "rateScale": 1, "fps": 12, "x": 15, "y": 8},
       "walk": {"reanimId": "pvz:door_zombie_walk", "rateScale": 1, "fps": 12, "x": 15, "y": 8},

@@ -1,3 +1,4 @@
+import { readPresentationSource } from '../../tools/mod/content'
 import { presentationFixture } from './presentationFixture'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
@@ -10,14 +11,14 @@ test('presentation definitions validate independently and never share global con
     const current = new ClientAnimationRegistry(presentationFixture)
     for (const change of [
         (data: any) => { data.plants['pvz:potatomine'].offBoard = { body: 1 } },
-        (data: any) => { data.plants['pvz:explodenut'].animationsFrom = 'pvz:missing' },
-        (data: any) => { delete data.zombies['pvz:conehead'].animations },
+        (data: any) => { data.plants['pvz:explodenut'].clips = { from: 'pvz:missing' } },
+        (data: any) => { delete data.zombies['pvz:conehead'].clips },
         (data: any) => { delete data.zombies['pvz:normal'] },
         (data: any) => { data.plants['pvz:potatomine'].packet = { scale: 0 } },
         (data: any) => { data.zombies['pvz:normal'].portrait = { x: 0, y: 0 } },
         (data: any) => { data.zombies['pvz:conehead'].helm.damagedSprites = ['pvz:zombie_cone2'] },
         (data: any) => { data.zombies['pvz:pole_vaulter'].previewBlockedCells = 'invalid' },
-        (data: any) => { data.zombies['pvz:newspaper'].shadowY = 'invalid' },
+        (data: any) => { data.zombies['pvz:newspaper'].shadow.y = 'invalid' },
         (data: any) => { data.zombies['pvz:pole_vaulter'].previewBlockedCells = [{ column: 5, row: 0 }] },
     ]) {
         const invalid = structuredClone(presentationFixture)
@@ -30,7 +31,7 @@ test('presentation definitions validate independently and never share global con
 test('client animation definitions are copied and freeze independently of source data', () => {
     const source: any = structuredClone(presentationFixture)
     const registry = new ClientAnimationRegistry(source)
-    source.plants['pvz:peashooter'].animations!.body.x = 12
+    source.plants['pvz:peashooter'].clips!.body.x = 12
     assert.equal(registry.resolve('pvz:peashooter').body.x, 0)
     registry.freeze()
     assert.ok(Object.isFrozen(registry.resolve('pvz:peashooter').body))
@@ -40,15 +41,17 @@ test('client animation definitions are copied and freeze independently of source
 test('plant and zombie presentations use registered animations, including shared bodies', () => {
     const animations = new ClientAnimationRegistry(presentationFixture)
     for (const [id, definition] of Object.entries(presentationFixture.plants)) {
-        if (definition.view) assert.ok(animations.resolve(animations.sourceOf(id)))
+        if (definition.clips) assert.ok(animations.resolve(id))
     }
     for (const [id, definition] of Object.entries(presentationFixture.zombies)) {
-        assert.deepEqual(animations.resolve(animations.sourceOf(id)), definition.animations)
+        assert.deepEqual(animations.resolve(id), definition.clips)
     }
-    assert.equal(animations.sourceOf('pvz:explodenut'), 'pvz:wallnut', 'the explode-o-nut plays the wall-nut')
-    const plain = { ...presentationFixture.zombies['pvz:normal'], animations: undefined, animationsFrom: 'pvz:normal' }
-    const custom = { ...presentationFixture, zombies: { ...presentationFixture.zombies, 'mod:plain': plain } }
-    assert.equal(new ClientAnimationRegistry(custom).sourceOf('mod:plain'), 'pvz:normal')
-    assert.equal(zombieDefinition(custom, 'mod:plain').animationsFrom, 'pvz:normal')
+    // `from`: the explode-o-nut draws the wall-nut's clips, and what a definition writes beside it adds to them.
+    assert.deepEqual(animations.resolve('pvz:explodenut'), animations.resolve('pvz:wallnut'))
+    const plain = { ...readPresentationSource().zombies['pvz:normal'], clips: { from: 'pvz:normal', walk: { reanimId: 'mod:walk', rateScale: 1, x: 0, y: 0 } } }
+    const custom = parsePresentationDefinitions({ ...readPresentationSource(), zombies: { ...readPresentationSource().zombies, 'mod:plain': plain } })
+    assert.equal(custom.zombies['mod:plain'].clips.walk.reanimId, 'mod:walk')
+    assert.deepEqual(custom.zombies['mod:plain'].clips.eat, custom.zombies['pvz:normal'].clips.eat)
+    assert.equal(zombieDefinition(custom, 'mod:plain').clips.walk.reanimId, 'mod:walk')
     assert.throws(() => zombieDefinition(presentationFixture, 'mod:missing'), /not installed/)
 })

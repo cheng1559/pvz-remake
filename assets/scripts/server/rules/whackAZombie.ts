@@ -3,7 +3,7 @@ import type { GameplayDefinitions, LevelRule } from '@/shared/content/gameplay'
 import { type EntityRemover, EconomyStateResource, LevelStateResource, PlantComponent, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { ItemComponent, WaveResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import { walkAnimationSpeed, zombieGait } from '../zombies/animation'
+import { startWalk } from '../zombies/animation'
 import { damageZombie, destroyZombie } from '../zombies/damage'
 import { damagePlant } from '../plants/damage'
 import { isHostile, plantFacingRect, plantTeam, zombieTeam } from '@/shared/content/teams'
@@ -196,7 +196,7 @@ function raiseGroup(world: World, definitions: GameplayDefinitions, remover: Ent
         }
         const zombie = world.get(raiseZombieFromGrave(world, definitions, grave, typeId, RISE_TICKS), ZombieComponent)!
         zombie.speedPerTick = 0.5 + random.nextFloat() * (maxSpeed - 0.5)
-        zombie.animationSpeed = walkAnimationSpeed(zombie.speedPerTick, zombieGait(definitions.zombies[typeId], definitions).walkGround)
+        startWalk(zombie, definitions.zombies[typeId].animation, zombie.walkClip, random)
     }
     state.groupTicks = random.integer(animateCurve(1, 12, wave, 100, 30), animateCurve(1, 12, wave, 200, 60))
     if (final) {

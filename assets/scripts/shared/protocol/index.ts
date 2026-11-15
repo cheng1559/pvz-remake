@@ -9,21 +9,6 @@ export const PLANT_ABILITY_STATES: readonly PlantAbilityState[] = [
     'small', 'growing', 'big', 'landing', 'eating',
 ]
 const ZOMBIE_STATES: readonly ZombieState[] = ['walking', 'eating', 'vaulting', 'dying', 'burned', 'mowered']
-const ZOMBIE_ANIMATIONS: readonly ZombieAnimationName[] = [
-    'anim_walk', 'anim_walk2', 'anim_run', 'anim_jump', 'anim_eat', 'anim_gasp', 'anim_death', 'anim_death2', 'anim_superlongdeath', 'mowered',
-]
-
-/** A burned zombie keeps the frame it was standing in. */
-export function zombieAnimationMatchesState(state: ZombieState, animation: ZombieAnimationName): boolean {
-    switch (state) {
-        case 'walking': return animation === 'anim_walk' || animation === 'anim_walk2' || animation === 'anim_run' || animation === 'anim_gasp'
-        case 'eating': return animation === 'anim_eat'
-        case 'vaulting': return animation === 'anim_jump'
-        case 'dying': return animation === 'anim_death' || animation === 'anim_death2' || animation === 'anim_superlongdeath'
-        case 'burned': return animation !== 'mowered' && animation !== 'anim_death' && animation !== 'anim_death2' && animation !== 'anim_superlongdeath'
-        case 'mowered': return animation === 'mowered'
-    }
-}
 
 export type EntityId = number
 export type ClientSequence = number
@@ -273,11 +258,8 @@ export interface PlantSnapshot extends EntityBehaviorState {
     team?: Team
     /** Ticks left slowed by a hostile snow pea: the plant draws blue and animates at half speed. */
     chilledTicks?: number
-    /**
-     * What each layer of the plant's animation plays, for a plant the server animates (PlantDefinition.animation):
-     * the clip, how far into it in frames, and its frames a second. A loop's time counts on past its length.
-     */
-    animations?: Record<string, { clip: string, time: number, rate: number, hidden?: true }>
+    /** What each layer of the plant's animation plays, for a plant the server animates (PlantDefinition.animation). */
+    animations?: Record<string, LayerSnapshot>
     /** A mower crushed it: no plant any more, it is squashed, `ticks` into it; `left` when the mower ran left. */
     mowered?: { ticks: number, left?: true }
 }
@@ -289,11 +271,17 @@ export type PlantAbilityState =
     | 'small' | 'growing' | 'big'
     | 'landing' | 'eating'
 
+/**
+ * What a layer of an animation plays (a plant's or a zombie's `animation`): the clip, how far into it in frames, and
+ * its frames a second. A loop's time counts on past its length, for a view to wrap by its own clip's.
+ */
+export interface LayerSnapshot {
+    clip: string, time: number, rate: number
+    /** There and going on, but not shown now (the potato mine's light between its flashes). */
+    hidden?: true
+}
+
 export type ZombieState = 'walking' | 'eating' | 'vaulting' | 'dying' | 'burned' | 'mowered'
-export type ZombieAnimationName =
-    | 'anim_walk' | 'anim_walk2' | 'anim_run' | 'anim_jump' | 'anim_eat' | 'anim_gasp' | 'anim_death' | 'anim_death2' | 'anim_superlongdeath' | 'mowered'
-    /** Standing, as a zombie does off the board (shared/content/zombieAnimation). */
-    | 'anim_idle' | 'anim_idle2'
 
 /**
  * The two sides (docs/TEAMS.zh-CN.md): the player's `plants` and the `zombies`. Sides attack each other; a zombie on the
@@ -310,9 +298,8 @@ export interface ZombieSnapshot extends EntityBehaviorState {
     row: number
     health: number
     maxHealth: number
-    animation: ZombieAnimationName
-    animationTime: number
-    animationSpeed: number
+    /** What its body plays (ZombieDefinition.animation): its one layer, `body`. */
+    animations: Record<string, LayerSnapshot>
     moweredTicksRemaining: number
     /** Omitted by older snapshots; defaults to fully opaque. */
     alpha?: number
@@ -861,13 +848,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
             if (!PLANT_ABILITY_STATES.includes(ability.state as PlantAbilityState)) throw new TypeError(`${name}.ability.state is unknown`)
             integer(ability.ticks, `${name}.ability.ticks`)
         }
-        if (plant.animations !== undefined) for (const [layer, entry] of Object.entries(record(plant.animations, `${name}.animations`))) {
-            const state = record(entry, `${name}.animations.${layer}`)
-            nonEmptyString(state.clip, `${name}.animations.${layer}.clip`)
-            finite(state.time, `${name}.animations.${layer}.time`)
-            finite(state.rate, `${name}.animations.${layer}.rate`)
-            if (state.hidden !== undefined && state.hidden !== true) throw new TypeError(`${name}.animations.${layer}.hidden must be true`)
-        }
+        if (plant.animations !== undefined) validateLayers(plant.animations, `${name}.animations`)
         if (plant.mowered !== undefined) {
             const mowered = record(plant.mowered, `${name}.mowered`)
             integer(mowered.ticks, `${name}.mowered.ticks`)
@@ -879,9 +860,7 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
         const zombie = validateLivingEntity(entry, name)
         if (zombie.behaviorState !== undefined) record(zombie.behaviorState, `${name}.behaviorState`)
         if (!ZOMBIE_STATES.includes(zombie.state as ZombieState)) throw new TypeError(`${name}.state is unknown`)
-        if (!ZOMBIE_ANIMATIONS.includes(zombie.animation as ZombieAnimationName)) throw new TypeError(`${name}.animation is unknown`)
-        finite(zombie.animationTime, `${name}.animationTime`)
-        finite(zombie.animationSpeed, `${name}.animationSpeed`)
+        validateLayers(zombie.animations, `${name}.animations`)
         integer(zombie.moweredTicksRemaining, `${name}.moweredTicksRemaining`)
         if (zombie.alpha !== undefined) {
             integer(zombie.alpha, `${name}.alpha`)
@@ -889,14 +868,8 @@ const validateWorldSnapshot = (value: unknown): Record<string, JsonValue> => {
                 throw new TypeError(`${name}.alpha must be between 0 and 255`)
             }
         }
-        if ((zombie.animationTime as number) < 0 || (zombie.animationSpeed as number) <= 0) {
-            throw new TypeError(`${name}.animation playback must be positive`)
-        }
         if ((zombie.moweredTicksRemaining as number) < 0) {
             throw new TypeError(`${name}.moweredTicksRemaining must be non-negative`)
-        }
-        if (!zombieAnimationMatchesState(zombie.state as ZombieState, zombie.animation as ZombieAnimationName)) {
-            throw new TypeError(`${name}.animation is inconsistent with state`)
         }
         boolean(zombie.hasHead, `${name}.hasHead`)
         boolean(zombie.hasTongue, `${name}.hasTongue`)
@@ -983,6 +956,17 @@ const record = (value: unknown, name: string): Record<string, JsonValue> => {
 const array = (value: unknown, name: string): JsonValue[] => {
     if (!Array.isArray(value)) throw new TypeError(`${name} must be an array`)
     return value
+}
+
+/** What the layers of an animation play (LayerSnapshot), by layer. */
+function validateLayers(value: unknown, name: string): void {
+    for (const [layer, entry] of Object.entries(record(value, name))) {
+        const state = record(entry, `${name}.${layer}`)
+        nonEmptyString(state.clip, `${name}.${layer}.clip`)
+        finite(state.time, `${name}.${layer}.time`)
+        finite(state.rate, `${name}.${layer}.rate`)
+        if (state.hidden !== undefined && state.hidden !== true) throw new TypeError(`${name}.${layer}.hidden must be true`)
+    }
 }
 
 const protocolVersion = (value: unknown): void => {

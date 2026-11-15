@@ -16,7 +16,7 @@ function snapshot(tick: number): WorldSnapshot {
         zombies: [{
             entityId: 2, typeId: 'pvz:normal', state: 'walking',
             x: 10, y: 20, row: 2, health: 270, maxHealth: 270,
-            animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
+            animations: { body: { clip: 'walk', time: 0, rate: 12 } },
             moweredTicksRemaining: 0,
             hasHead: true, hasTongue: false, hasArm: true,
         }],
@@ -74,18 +74,18 @@ test('ClientWorld switches the pole vaulter landing origin together with its ani
     const world = new ClientWorld()
     const jumping = snapshot(1)
     Object.assign(jumping.zombies[0], {
-        typeId: 'pvz:pole_vaulter', state: 'vaulting', animation: 'anim_jump', animationTime: 41.9, x: 400,
+        typeId: 'pvz:pole_vaulter', state: 'vaulting', animations: { body: { clip: 'jump', time: 42.9, rate: 24 } }, x: 400,
     })
     world.accept(jumping)
 
     const landed = snapshot(2)
     Object.assign(landed.zombies[0], {
-        typeId: 'pvz:pole_vaulter', animation: 'anim_walk', x: 249.9,
+        typeId: 'pvz:pole_vaulter', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, x: 249.9,
     })
     world.accept(landed)
     for (const alpha of [0, 0.25, 0.5, 0.999, 1]) {
         const zombie = world.render(alpha).zombies[0]
-        assert.equal(zombie.animation, 'anim_walk')
+        assert.equal(zombie.animations.body.clip, 'walk')
         assert.equal(zombie.x, 249.9, 'the walk pose must not use the pre-landing origin')
     }
 

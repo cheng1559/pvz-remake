@@ -1,23 +1,13 @@
-import {
-    CHILLED_ANIMATION_FACTOR,
-    TICKS_PER_SECOND,
-    ZOMBIE_ASSET_FPS,
-    ZOMBIE_MOWERED_ANIMATION_SPEED,
-    ZOMBIE_MOWERED_TICKS,
-    zombieGait,
-} from './animation'
+import { TICKS_PER_SECOND, playZombie, zombiePace } from './animation'
+import { MOWERED_TICKS } from '@/shared/content/zombieAnimation'
 import { type EntityRemover, LevelStateResource, RandomResource, type Zombie, ZombieComponent } from '../state/components'
 import { TutorialResource } from '../state/levelState'
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import type { World } from '@/ecs/index'
 import { dropZombieFlag } from './flag'
 import { dropZombieLoot } from '../level/loot'
 import { isEnemyZombie, isHostile, type Team, zombieTeam } from '@/shared/content/teams'
-
-const ZOMBIE_DEATH_RATE_MIN = 24
-
-const ZOMBIE_DEATH_RATE_MAX = 30
 
 const ZOMBIE_DEATH_HOLD_TICKS = 100
 
@@ -77,9 +67,7 @@ export function damageZombie(
             if (enrage) {
                 zombie.enrageTicks = enrage.pauseTicks
                 zombie.state = 'walking'
-                zombie.animation = 'anim_gasp'
-                zombie.animationTime = 0
-                zombie.animationSpeed = 8 / ZOMBIE_ASSET_FPS
+                playZombie(zombie, definition.animation, ZOMBIE_CLIPS.gasp, world.resources.get(RandomResource))
                 zombie.biteTicks = 0
             }
             emitServerEvent(events, 'zombieShieldDropped', {
@@ -111,7 +99,7 @@ export function damageZombie(
         emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'arm' })
     }
     if (zombie.hasHead && zombie.health < zombie.maxHealth / 3) {
-        dropZombieFlag(world, definitions, entity)
+        dropZombieFlag(world, entity)
         zombie.hasHead = false
         emitServerEvent(events, 'zombiePartDropped', { entityId: entity, part: 'head' })
         // Zombie::UpdateDamageStates: losing the head is when the zombie drops its loot.
@@ -127,16 +115,14 @@ export function destroyZombie(world: World, definitions: GameplayDefinitions, en
     remover.destroyEntity(entity)
 }
 
-export function mowZombie(zombie: Zombie): void {
+export function mowZombie(world: World, definitions: GameplayDefinitions, zombie: Zombie): void {
     if (zombie.state === 'dying' || zombie.state === 'mowered') return
     zombie.health = 0
     zombie.state = 'mowered'
-    zombie.animation = 'mowered'
-    zombie.animationTime = 0
-    zombie.animationSpeed = ZOMBIE_MOWERED_ANIMATION_SPEED
+    playZombie(zombie, definitions.zombies[zombie.typeId].animation, ZOMBIE_CLIPS.mowered, world.resources.get(RandomResource))
     zombie.biteTicks = 0
     zombie.deathTicksRemaining = 0
-    zombie.moweredTicksRemaining = ZOMBIE_MOWERED_TICKS
+    zombie.moweredTicksRemaining = MOWERED_TICKS
 }
 
 function chillZombie(world: World, entity: number, zombie: Zombie, ticks: number): void {
@@ -181,27 +167,20 @@ function countZombiesOnScreen(world: World, except: number): number {
 
 export function startZombieDeath(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie): void {
     if (zombie.state === 'dying') return
-    dropZombieFlag(world, definitions, entity)
+    dropZombieFlag(world, entity)
     // Zombie::PlayDeathAnim drops a shield still held with DropShield(1U).
     dropZombieShield(world, definitions, entity, zombie, true)
     const random = world.resources.get(RandomResource)
-    const deaths = zombieGait(definitions.zombies[zombie.typeId], definitions).deaths
+    const animation = definitions.zombies[zombie.typeId].animation, { superLongDeath, death2 } = ZOMBIE_CLIPS
     const roll = random.integer(0, 99)
-    const superLong = deaths.find(death => death.animation === 'anim_superlongdeath')
-    const death2 = deaths.find(death => death.animation === 'anim_death2')
     // Zombie::PlayDeathAnim: a 99 plays the super long death from level 6 (or after the adventure), unchilled, with at
-    // most five zombies on screen; above 50 is anim_death2.
-    const death = roll === 99 && superLong && canDoSuperLongDeath(world) && zombie.chilledTicks === 0 && countZombiesOnScreen(world, entity) <= 5
-        ? superLong : roll > 50 && death2 ? death2 : deaths[0]
+    // most five zombies on screen; above 50 is anim_death2. Each for a zombie whose animation has it.
+    const clip = roll === 99 && animation.clips[superLongDeath] && canDoSuperLongDeath(world) && zombie.chilledTicks === 0 && countZombiesOnScreen(world, entity) <= 5
+        ? superLongDeath : roll > 50 && animation.clips[death2] ? death2 : ZOMBIE_CLIPS.death
     zombie.state = 'dying'
-    zombie.animation = death.animation
-    zombie.animationTime = 0
-    // A chilled zombie keeps its slowed animation while falling.
-    const randomRate = (ZOMBIE_DEATH_RATE_MIN + random.nextFloat() * (ZOMBIE_DEATH_RATE_MAX - ZOMBIE_DEATH_RATE_MIN)) *
-        (zombie.chilledTicks > 0 ? CHILLED_ANIMATION_FACTOR : 1)
-    const rate = death.rate ?? randomRate
-    zombie.animationSpeed = rate / ZOMBIE_ASSET_FPS
-    zombie.deathTicksRemaining = Math.ceil(death.frames / rate * TICKS_PER_SECOND) + ZOMBIE_DEATH_HOLD_TICKS
+    // The clip's pace is drawn for it; a chilled zombie stays chilled, and so slowed, while it falls.
+    const body = playZombie(zombie, animation, clip, random)
+    zombie.deathTicksRemaining = Math.ceil(animation.clips[clip].frames / (body.rate * zombiePace(zombie)) * TICKS_PER_SECOND) + ZOMBIE_DEATH_HOLD_TICKS
 }
 
 export function updateHeadlessZombie(world: World, definitions: GameplayDefinitions, entity: number, zombie: Zombie): void {

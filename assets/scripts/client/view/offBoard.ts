@@ -4,15 +4,17 @@ import { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameConte
 import type { PlantDraw, PlantView, ShownPlant } from '@/client/plants/PlantView'
 import { plantDefinition } from '@/client/plants/definitions'
 import type { ZombieDraw, ZombieViewInstance, ZombieViewSprites } from '@/client/zombies/ZombieView'
-import { type AnimationRandom, startOffBoardPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
-import { offBoardZombieAnimation } from '@/shared/content/zombieAnimation'
+import { type AnimationRandom, ASSET_FPS } from '@/shared/content/animation'
+import { ZOMBIE_BODY_LAYER } from '@/shared/content/gameplay'
+import { startOffBoardPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
+import { startOffBoardZombie } from '@/shared/content/zombieAnimation'
 import type { GridItemSnapshot, ZombieSnapshot } from '@/shared/protocol/index'
 import { EntityAttachments } from './EntityAttachments'
 
 /**
  * Plants and zombies off the board: the almanac, a packet's picture, a preview, the street before a level. Each is
  * drawn by the view the board draws it with, and animated by the rules the server animates it by; only who keeps the
- * animation differs (shared/content/plantAnimation, zombieAnimation).
+ * animation differs (shared/content/animation, plantAnimation, zombieAnimation).
  */
 
 type Content = Awaited<ReturnType<typeof loadIntegratedGameContent>>
@@ -70,16 +72,15 @@ export async function createOffBoardZombie(node: Node, typeId: string,
     const game = await offBoardContent()
     const definition = game.definitions.zombies[typeId]
     if (!definition || !node.isValid) return null
-    const clips: Record<string, unknown> = game.animations.resolve(game.animations.sourceOf(typeId))
-    const standing = options.pose === undefined ? offBoardZombieAnimation(clips.idle2 !== undefined, random)
-        : { animation: `anim_${options.pose}` as ZombieSnapshot['animation'], animationTime: 0, animationSpeed: 1, start: 0 }
-    const { start, ...animation } = standing
-    // Whole and at rest, with its own helm and shield worn: none of the rest of a snapshot is read off the board.
-    const zombie = {
+    const clips: Record<string, unknown> = game.animations.resolve(typeId)
+    const animations = startOffBoardZombie(definition.animation, clip => clips[clip] !== undefined, random, options.pose)
+    // Whole and at rest, with its own helm and shield worn: little else of a snapshot is read off the board.
+    const zombie: ZombieSnapshot = {
         entityId: -1, typeId, x: 0, y: 0, row: 0, state: 'walking', team: options.mirrored ? 'plants' : undefined,
+        health: definition.maxHealth, maxHealth: definition.maxHealth, moweredTicksRemaining: 0,
         hasHead: true, hasArm: true, hasTongue: options.hasTongue === true,
-        helmHealth: definition.helm?.health, shieldHealth: definition.shield?.health, ...animation,
-    } as ZombieSnapshot
+        helmHealth: definition.helm?.health, shieldHealth: definition.shield?.health, animations,
+    }
     const shadow = await new SpriteRepository(game.registry, game.loader).load('pvz:plantshadow')
     if (!node.isValid) return null
     const view = await game.zombieViews.create({
@@ -89,7 +90,7 @@ export async function createOffBoardZombie(node: Node, typeId: string,
     })
     if (!view.display || !view.players) { view.destroy(); return null }
     view.shadowNode.setSiblingIndex(0)
-    view.display(zombie, start)
+    view.display(zombie)
     return { view: view as OffBoardZombie['view'], zombie }
 }
 

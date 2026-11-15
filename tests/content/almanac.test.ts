@@ -3,8 +3,9 @@ import { presentationFixture } from '../client/presentationFixture'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { parseGameplayDefinitions } from '@/shared/content/gameplay'
-import { type AnimationRandom, startOffBoardPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
-import { offBoardZombieAnimation } from '@/shared/content/zombieAnimation'
+import type { AnimationRandom } from '@/shared/content/animation'
+import { startOffBoardPlant, stepPlantAnimation } from '@/shared/content/plantAnimation'
+import { startOffBoardZombie } from '@/shared/content/zombieAnimation'
 
 const gameplay = parseGameplayDefinitions(readGameplaySource('definitions'), readGameplaySource('seed-catalog'))
 const almanac = readGameplaySource('almanac') as { plants: Array<{ id: number, key: string, seed: string }>, zombies: Array<{ id: number, key: string, zombie: string }> }
@@ -23,7 +24,7 @@ test('every almanac entry is a plant or a zombie its view can draw off the board
     for (const entry of almanac.plants) {
         const plant = gameplay.plants[entry.seed], presentation = presentationFixture.plants[entry.seed]
         assert.ok(plant?.animation && presentation, `${entry.key} has no plant to show`)
-        const clips = presentation.animations ?? presentationFixture.plants[presentation.animationsFrom!].animations!
+        const clips = presentation.clips!
         for (const picture of ['offBoard', 'packet'] as const) {
             const layers = shown(entry.seed, picture).animations!
             assert.ok(Object.keys(plant.animation.layers)[0] in layers, `${entry.key}: nothing on its first layer`)
@@ -34,7 +35,7 @@ test('every almanac entry is a plant or a zombie its view can draw off the board
         const presentation = presentationFixture.zombies[entry.zombie]
         assert.ok(gameplay.zombies[entry.zombie] && presentation, `${entry.key} has no zombie to show`)
         assert.ok(presentation.portrait, `${entry.key} has no small picture`)
-        const clips = (presentation.animations ?? presentationFixture.zombies[presentation.animationsFrom!].animations!) as unknown as Record<string, unknown>
+        const clips = presentation.clips as unknown as Record<string, unknown>
         assert.ok(clips.idle, `${entry.key} cannot stand`)
     }
 })
@@ -71,12 +72,17 @@ test('a plant off the board goes on by the rules of the board: a clip of the pre
 })
 
 test('a zombie off the board stands, three times in four its second way when it has one', () => {
-    // Zombie::LoadReanim: Rand(4) > 0, then the pace of the clip it took, then where in it it starts.
-    assert.deepEqual(offBoardZombieAnimation(true, random(0.5, 1, 0.5)), { animation: 'anim_idle2', animationTime: 0, animationSpeed: 2, start: 0.495 })
-    assert.deepEqual(offBoardZombieAnimation(true, random(0, 0.5, 0)), { animation: 'anim_idle', animationTime: 0, animationSpeed: 1.25, start: 0 })
-    assert.equal(offBoardZombieAnimation(false, random(0.5, 0)).animation, 'anim_idle', 'a zombie with one way to stand takes it')
+    // Zombie::LoadReanim: Rand(4) > 0, then the pace of the clip it took (12 to 24 a second, 12 to 18 the first way),
+    // then where in it it starts (0 to 0.99 of its 15 or 29 frames).
+    const animation = (id: string) => gameplay.zombies[id].animation, drawn = () => true
+    assert.deepEqual(startOffBoardZombie(animation('pvz:normal'), drawn, random(0.5, 1, 0.5)), { body: { clip: 'idle2', time: 15 * 0.495, rate: 24 } })
+    assert.deepEqual(startOffBoardZombie(animation('pvz:conehead'), drawn, random(0, 0.5, 0)), { body: { clip: 'idle', time: 0, rate: 15 } })
+    assert.equal(startOffBoardZombie(animation('pvz:newspaper'), drawn, random(0.5, 0)).body.clip, 'idle', 'a zombie with one way to stand takes it')
+    assert.equal(startOffBoardZombie(animation('pvz:normal'), () => false, random(0.5, 0)).body.clip, 'idle', 'and so does one drawn without the second')
+    // What it carries goes on as on the board: the flag zombie stands with its flag waving at 15 a second.
+    assert.deepEqual(startOffBoardZombie(animation('pvz:flag'), drawn, random(0.5)).flag, { clip: 'flag', time: 0, rate: 15 })
     // Zombie.reanim has anim_idle2, and so has every zombie drawn on it; the newspaper's and the pole vaulter's have not.
-    const second = (id: string) => 'idle2' in (presentationFixture.zombies[id].animations as object)
+    const second = (id: string) => 'idle2' in (presentationFixture.zombies[id].clips as object)
     assert.deepEqual(['normal', 'flag', 'conehead', 'buckethead', 'screendoor', 'newspaper', 'pole_vaulter'].map(id => second(`pvz:${id}`)),
         [true, true, true, true, true, false, false])
 })

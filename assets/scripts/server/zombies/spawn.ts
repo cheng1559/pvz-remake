@@ -2,7 +2,8 @@ import type { DeterministicRng } from '../state/DeterministicRng'
 import type { GameplayDefinitions, ZombieDefinition } from '@/shared/content/gameplay'
 import { PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import type { World } from '@/ecs/index'
-import { walkAnimationSpeed, zombieGait } from './animation'
+import { ZOMBIE_CLIPS } from '@/shared/content/gameplay'
+import { startWalk, startZombie } from './animation'
 import { ZombieBehaviorsResource } from './behaviors'
 
 /** Wave spawning and CLI summons share the configured range and flag-wave offset. */
@@ -26,7 +27,6 @@ export function spawnZombie(
     if (definition.behavior !== undefined && behaviorState === undefined) throw new Error(`Zombie behavior is not installed: ${typeId}`)
     const random = world.resources.get(RandomResource)
     const vault = definition.vault
-    const gait = zombieGait(definition, definitions)
     const speed = vault?.runSpeedPerTick ?? definition.speedPerTick
     const entity = world.createEntity()
     world.add(entity, PositionComponent, { x, y, row })
@@ -41,10 +41,8 @@ export function spawnZombie(
         biteTicks: 0,
         deathTicksRemaining: 0,
         moweredTicksRemaining: 0,
-        walkAnimation: 'anim_walk',
-        animation: 'anim_walk',
-        animationTime: 0,
-        animationSpeed: walkAnimationSpeed(speed.min, gait.walkGround),
+        walkClip: ZOMBIE_CLIPS.walk,
+        animations: {},
         hasHead: true,
         hasArm: true,
         helmHealth: definition.helm?.health ?? 0,
@@ -56,8 +54,8 @@ export function spawnZombie(
         ...(behaviorState === undefined ? {} : { behaviorState }),
     })
     const zombie = world.get(entity, ZombieComponent)!
-    zombie.walkAnimation = random.nextFloat() < 1 - definition.walk2Chance ? 'anim_walk' : 'anim_walk2'
-    zombie.animation = vault ? 'anim_run' : zombie.walkAnimation
-    zombie.animationSpeed = walkAnimationSpeed(zombie.speedPerTick, vault?.runGround ?? gait.walkGround)
+    zombie.walkClip = random.nextFloat() < 1 - definition.walk2Chance ? ZOMBIE_CLIPS.walk : ZOMBIE_CLIPS.walk2
+    startZombie(zombie, definition.animation, random)
+    startWalk(zombie, definition.animation, vault ? ZOMBIE_CLIPS.run : zombie.walkClip, random)
     return entity
 }

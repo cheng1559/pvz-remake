@@ -1,19 +1,38 @@
-import type { AnimationRandom } from './plantAnimation'
+import { ASSET_FPS, type Animated, type AnimationRandom, type LayerState, startLayer, startLayers, TICKS_PER_SECOND } from './animation'
+import { type AnimationClip, type AnimationDefinition, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from './gameplay'
 
-/** Frames a second, drawn for each zombie. */
-const IDLE_FPS = { min: 12, max: 18 }, IDLE2_FPS = { min: 12, max: 24 }
-const ASSET_FPS = 12
+/** What only a zombie's animation does (ZombieDefinition.animation), on the rules of every animation (./animation). */
+
+/** How often a zombie stands its second way where it has it: three times in four. */
+const SECOND_IN = 4
 
 /**
- * Zombie::LoadReanim: a zombie that is not on the board (the almanac, the street before a level) stands, three times
- * in four its second way when it has one (`idle2`: its animation has anim_idle2), at a pace drawn for it. On the board a zombie's animation is the server's
- * (server/zombies/animation), which starts it walking.
+ * The mower's driver for what it flattens (REANIM_LAWN_MOWERED_ZOMBIE), a zombie or a plant, the same for all: 8
+ * frames at 8 a second, advanced twice a tick, and held on the last.
  */
-export function offBoardZombieAnimation(idle2: boolean, random: AnimationRandom):
-    { animation: 'anim_idle' | 'anim_idle2', animationTime: number, animationSpeed: number, start: number } {
-    const second = random.integer(0, 3) > 0 && idle2
-    const { min, max } = second ? IDLE2_FPS : IDLE_FPS
-    const animationSpeed = (min + random.nextFloat() * (max - min)) / ASSET_FPS
-    // `start`: how far into the clip it starts, as a part of its length (mAnimTime, 0 to 0.99).
-    return { animation: second ? 'anim_idle2' : 'anim_idle', animationTime: 0, animationSpeed, start: random.nextFloat() * 0.99 }
+export const MOWERED_CLIP: AnimationClip = { frames: 8, fps: { min: 16, max: 16 }, hold: true }
+/** The ticks it lasts, after which what was flattened is gone. */
+export const MOWERED_TICKS = Math.ceil(MOWERED_CLIP.frames / MOWERED_CLIP.fps!.min * TICKS_PER_SECOND)
+/** The animation of a zombie under the mower: the driver, whatever the zombie. */
+export const MOWERED_ANIMATION: AnimationDefinition = { clips: { [ZOMBIE_CLIPS.mowered]: MOWERED_CLIP }, layers: {} }
+
+/** A clip a zombie's body is on: its animation's, or the mower's. */
+export function zombieClip(animation: AnimationDefinition, clip: string): AnimationClip | undefined {
+    return clip === ZOMBIE_CLIPS.mowered ? MOWERED_CLIP : animation.clips[clip]
+}
+
+/**
+ * Zombie::LoadReanim for a zombie that is not on the board (the almanac, the street before a level): it stands, its
+ * second way three times in four when it has one (`has`: whoever shows it has the clip's pictures), at the pace and
+ * from the part of the clip drawn for it (the clips' `fps` and `start`); what it carries goes on as on the board (a
+ * flag waving). On the board a zombie's animation is the server's (server/zombies/animation), which starts it walking.
+ * `pose`: its body held on the start of that clip instead, for a picture.
+ */
+export function startOffBoardZombie(animation: AnimationDefinition, has: (clip: string) => boolean, random: AnimationRandom, pose?: string): Record<string, LayerState> {
+    const zombie: Animated = {}
+    startLayers(animation, zombie, animation.layers, random)
+    const second = pose === undefined && random.integer(0, SECOND_IN - 1) > 0 && animation.clips[ZOMBIE_CLIPS.standing2] !== undefined && has(ZOMBIE_CLIPS.standing2)
+    zombie.animations![ZOMBIE_BODY_LAYER] = pose !== undefined ? { clip: pose, time: 0, rate: ASSET_FPS }
+        : startLayer(animation, zombie, second ? ZOMBIE_CLIPS.standing2 : ZOMBIE_CLIPS.standing, random)
+    return zombie.animations!
 }

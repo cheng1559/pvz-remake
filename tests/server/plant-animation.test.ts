@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { parseGameplayDefinitions, parseGameplayLevels } from '@/shared/content/gameplay'
+import { framePosition } from '@/shared/content/animation'
 import type { StartSessionPacket } from '@/shared/protocol'
 import { adventureSeeds } from './adventure-seeds'
 import { runCommand } from './run-command'
@@ -112,4 +113,13 @@ test('a wall-nut all but stops while it is chewed, and blinks one of its three w
     }
     assert.deepEqual([slowed, resumed], [true, true])
     assert.ok(blinks.size > 0 && [...blinks].every(clip => ['blinkTwitch', 'blinkTwice', 'blinkThrice'].includes(clip)), [...blinks].join())
+})
+
+test('Reanimation::GetFrameTime: a clip spreads its frames over its whole length, its last reached as it ends', () => {
+    const loop = { frames: 25, fps: { min: 12, max: 12 } }, once = { ...loop, hold: true as const }
+    assert.equal(framePosition(loop, 0), 0)
+    assert.equal(framePosition(loop, 12.5), 12)
+    assert.ok(Math.abs(framePosition(loop, 24.999) - 23.999) < 1e-3, 'a loop comes round to its first from its last')
+    assert.equal(framePosition(once, 25), 24)
+    assert.equal(framePosition(once, 40), 24, 'a clip that ends stays on its last')
 })

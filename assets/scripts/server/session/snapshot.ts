@@ -12,6 +12,7 @@ import type { Session } from './session'
 import { tools } from '../seeds/tools'
 import { getActiveTutorial } from '../tutorials'
 import { levelRule } from '../rules/registry'
+import { zombiePace } from '../zombies/animation'
 
 /** What the client draws each frame. Mods add their state through `host.around(snapshot, 'build', ...)`. */
 export const snapshot = {
@@ -70,9 +71,8 @@ export const snapshot = {
                 state: zombie.state,
                 health: zombie.health,
                 maxHealth: zombie.maxHealth,
-                animation: zombie.animation,
-                animationTime: zombie.animationTime,
-                animationSpeed: zombie.animationSpeed,
+                // The rates a view plays them at: a chilled zombie's are halved.
+                animations: Object.fromEntries(Object.entries(zombie.animations).map(([layer, state]) => [layer, { ...state, rate: state.rate * zombiePace(zombie, layer) }])),
                 moweredTicksRemaining: zombie.moweredTicksRemaining,
                 alpha: zombie.state === 'dying' ? Math.min(255, Math.trunc(255 * zombie.deathTicksRemaining / 10)) : 255,
                 hasHead: zombie.hasHead,

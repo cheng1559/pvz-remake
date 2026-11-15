@@ -47,7 +47,7 @@ test('namespaced Mod packets keep their ID and are drawn by their plant view ins
     const { classes, modules, load, renderer } = setup()
     const plant = structuredClone(presentationFixture.plants['pvz:peashooter']) as any
     plant.visual.seedType = 'example:rapid_pea'
-    plant.animations.body.reanimId = 'example:body'
+    plant.clips.body.reanimId = 'example:body'
     plant.packet = { x: 12, y: 12, scale: 0.85 }
     const definitions = buildPresentationDefinitions(presentationFixture, [{ ownerId: 'example', data: { plants: { 'example:rapid_pea': plant } } }])
     // The plant as a packet's picture has it: by its view, without a shadow, at the packet's place and size, held still.

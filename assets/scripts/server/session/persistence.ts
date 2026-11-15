@@ -1,5 +1,6 @@
 import type { World } from '@/ecs/index'
-import { type GameplayDefinitions, PLANT_BLINK_LAYER } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, PLANT_BLINK_LAYER, ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
+import { zombieClip } from '@/shared/content/zombieAnimation'
 import type { EnabledMod, JsonObject } from '@/shared/protocol/index'
 import { jsonRoundTrip } from '@/shared/protocol/index'
 import { DeterministicRng } from '../state/DeterministicRng'
@@ -260,9 +261,15 @@ function restoreEntity(content: ServerContent, world: World, saved: SavedEntity)
         if (!zombie) throw new Error(`Unknown saved zombie: ${saved.zombie.typeId}`)
         gameplay.zombieBehaviors.validateState(saved.zombie, zombie)
         if (!boardRow || saved.zombie.helmHealth > (zombie.helm?.health ?? 0) || saved.zombie.shieldHealth > (zombie.shield?.health ?? 0) ||
-            saved.zombie.hasPole && !zombie.vault ||
-            (saved.zombie.animation === 'anim_run' || saved.zombie.state === 'vaulting') && !zombie.vault) {
+            saved.zombie.hasPole && !zombie.vault || saved.zombie.state === 'vaulting' && !zombie.vault) {
             throw new Error(`Saved zombie ${saved.entityId} is invalid for the level`)
+        }
+        const body = saved.zombie.animations[ZOMBIE_BODY_LAYER]
+        if (!body || Object.keys(saved.zombie.animations).some(layer => !Object.hasOwn(zombie.animation.layers, layer)) || !zombie.animation.clips[saved.zombie.walkClip]?.ground ||
+            (saved.zombie.state === 'mowered') !== (body.clip === ZOMBIE_CLIPS.mowered) || !zombieClip(zombie.animation, body.clip) ||
+            saved.zombie.state === 'walking' && !saved.zombie.enrageTicks && !zombie.animation.clips[body.clip].ground ||
+            saved.zombie.state === 'dying' && !zombie.animation.clips[body.clip].marks) {
+            throw new Error(`Saved zombie ${saved.entityId} has an invalid animation state`)
         }
     }
     if (saved.projectile && (!boardRow || !definitions.projectiles[saved.projectile.typeId])) {

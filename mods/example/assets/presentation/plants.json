@@ -5,8 +5,7 @@
       "preview": 0,
       "nameKey": "example:rapid_pea"
     },
-    "view": "shooter",
-    "animations": {
+    "clips": {
       "body": {
         "reanimId": "pvz:peashooter",
         "rateScale": 1,
@@ -36,7 +35,8 @@
         "fps": 12,
         "x": 0,
         "y": 0,
-        "attachmentTrackId": "anim_face"
+        "attachmentTrackId": "anim_face",
+        "fullLastFrame": true
       }
     },
     "shadow": {
@@ -52,7 +52,7 @@
       "nameKey": "example:beacon"
     },
     "view": "example:beacon",
-    "animations": {
+    "clips": {
       "body": {
         "reanimId": "example:beacon",
         "rateScale": 1,

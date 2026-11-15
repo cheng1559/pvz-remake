@@ -7,31 +7,18 @@ import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import { uiNode } from '@/client/view/uiNode'
 import type { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import type { ContentRegistry } from '@/client/content/ContentRegistry'
-import type { ClientAnimationClip, ClientAnimationRegistry, ClientAnimationTarget, PoleVaulterAnimationDefinition, FlagZombieAnimationDefinition, NormalZombieAnimationDefinition } from '@/client/content/ClientAnimationRegistry'
+import type { ClientAnimationClip, ClientAnimationRegistry, ClientAnimationTarget } from '@/client/content/ClientAnimationRegistry'
 import type { ZombieSnapshot, WorldSnapshot } from '@/shared/protocol/index'
 import type { loadIntegratedGameContent } from '@/client/game/loadIntegratedGameContent'
 import type { LevelEntitySnapshot } from '@/client/level/LevelPresentationSnapshot'
 import { attachmentTrack, type ZombiePresentationDefinition } from '@/shared/content/presentation'
-import type { ZombieDefinition } from '@/shared/content/gameplay'
+import { ZOMBIE_BODY_LAYER, ZOMBIE_CLIPS, ZOMBIE_FLAG_LAYER, type ZombieDefinition } from '@/shared/content/gameplay'
+import { ASSET_FPS } from '@/shared/content/animation'
+import { zombieClip } from '@/shared/content/zombieAnimation'
 import { EntityAttachments } from '@/client/view/EntityAttachments'
+import { layerPlayback, LayerPlayers, type LayerShown, shownLayer } from '@/client/view/layerPlayback'
 import type { ZombieFlash } from '@/client/level/EntityFlashes'
 import { MIRRORED_SHIFT, zombiePartVisibility } from './zombieParts'
-
-type AnimationSlot = keyof (PoleVaulterAnimationDefinition & FlagZombieAnimationDefinition & NormalZombieAnimationDefinition)
-const SLOTS: Record<ZombieSnapshot['animation'], AnimationSlot> = {
-    anim_walk: 'walk',
-    anim_walk2: 'walk2',
-    anim_run: 'run',
-    anim_jump: 'jump',
-    anim_eat: 'eat',
-    anim_gasp: 'gasp',
-    anim_death: 'death',
-    anim_death2: 'death2',
-    anim_superlongdeath: 'superLongDeath',
-    mowered: 'mowered',
-    anim_idle: 'idle',
-    anim_idle2: 'idle2',
-}
 
 /** Sprites a zombie swaps in as it takes damage. */
 export interface ZombieViewSprites {
@@ -67,11 +54,10 @@ export interface ZombieViewInstance {
     /** `flash`: the hit flash (Zombie::mJustGotShotCounter), from the client's EntityFlashes. */
     sync(zombie: ZombieSnapshot, world: WorldSnapshot, flash: ZombieFlash): void
     /**
-     * The zombie off the board (the almanac, a packet's picture, the street before a level): whole, on the animation
-     * it is given, with nothing the board does to one. `start`: how far into the clip, as a part of its length. A view
-     * without it is not drawn off the board.
+     * The zombie off the board (the almanac, a packet's picture, the street before a level): whole, on what its body
+     * is given to play, with nothing the board does to one. A view without it is not drawn off the board.
      */
-    display?(zombie: ZombieSnapshot, start?: number): void
+    display?(zombie: ZombieSnapshot): void
     /** Its players, for whoever shows a picture of the zombie (a packet stills and colors them). */
     readonly players?: ReanimPlayer[]
     snapshot(entityId: number): ZombieViewSnapshot
@@ -83,14 +69,20 @@ export interface ZombieViewInstance {
     destroy(): void
 }
 
+/**
+ * A zombie, drawn by its animation (ZombieDefinition.animation): one player for its body, showing the clip its layer
+ * is on at its time into it, as a plant's view shows its layers. The pictures are the presentation's clip of the same
+ * name. On the board the server keeps the animation and `sync` follows its snapshots; off the board whoever shows the
+ * zombie gives it what to play and calls `display`.
+ */
 export class ZombieView implements ZombieViewInstance {
     readonly shadowNode: Node
-    /** The body: one player for all its clips, which it changes between in place. */
-    private player: ReanimPlayer | null = null
-    private animation: ZombieSnapshot['animation'] | null = null
+    /** Its layers: the body, one player for all its clips, which it changes between in place; over it what it carries. */
+    private readonly layers: LayerPlayers
+    /** The clip its body is on. */
+    private animation: string | null = null
     private parts = ''
     private mowerDriver: ReanimPlayer | null = null
-    private flag: ReanimPlayer | null = null
     private holdingFlag = false
     private latestZombie: ZombieSnapshot | null = null
     private flash: ZombieFlash = { flash: 0, through: false, past: false }
@@ -105,10 +97,10 @@ export class ZombieView implements ZombieViewInstance {
         shadow: SpriteFrame,
         private readonly sprites: ZombieViewSprites,
         private readonly presentation: ZombiePresentationDefinition,
-        /** Whose clips it plays: its own, or another's (a Mod zombie on the plain body). */
+        /** Its type, whose clips it draws. */
         private readonly target: ClientAnimationTarget,
-        /** The gameplay helm and shield, for their full health. */
-        private readonly armor: Pick<ZombieDefinition, 'helm' | 'shield'> = {},
+        /** Its gameplay definition: what its body plays, and the helm and shield for their full health. */
+        private readonly gameplay: Pick<ZombieDefinition, 'helm' | 'shield' | 'animation'>,
         private readonly attachments = new EntityAttachments(),
         private readonly draw: ZombieDraw = {},
     ) {
@@ -117,6 +109,14 @@ export class ZombieView implements ZombieViewInstance {
             active: false,
             sprite: { frame: shadow, sizeMode: Sprite.SizeMode.RAW, trim: false },
         }).node
+        this.layers = new LayerPlayers(node, Object.keys(gameplay.animation.layers), registry)
+        for (const layer of Object.keys(gameplay.animation.layers)) if (layer !== ZOMBIE_BODY_LAYER) this.attachments.add(this.layers.player(layer).node)
+    }
+
+    /** The body's player, once it shows a clip. */
+    private get player(): ReanimPlayer | null {
+        const player = this.layers.player(ZOMBIE_BODY_LAYER)
+        return player.loadedId ? player : null
     }
 
     /** Has every clip of this zombie in memory, so that it changes between them at once. */
@@ -146,9 +146,9 @@ export class ZombieView implements ZombieViewInstance {
                 if (armor?.dropReanim) this.attachments.remove(armor.dropReanim.reanimId)
             }
         }
-        this.holdingFlag = this.presentation.flag === true && zombie.hasHead && zombie.state !== 'dying' && zombie.state !== 'mowered'
+        this.holdingFlag = zombie.animations[ZOMBIE_FLAG_LAYER] !== undefined
         uiNode({ node: this.node, opacity: zombie.alpha ?? 255 })
-        this.shadowNode.setPosition(this.node.position.x + this.shadowX, this.node.position.y - (this.presentation.shadowY ?? 92))
+        this.placeShadow()
         // Zombie::HasShadow hides it while falling, burned, mowed or vaulting.
         this.shadowNode.active = zombie.state !== 'dying' && zombie.state !== 'mowered' && zombie.state !== 'burned' &&
             zombie.state !== 'vaulting' && !zombie.riseTicks
@@ -158,33 +158,52 @@ export class ZombieView implements ZombieViewInstance {
             this.syncMowered(zombie)
             return
         }
-        if (this.animation !== zombie.animation) this.show(zombie)
-        else {
-            this.applyParts(zombie)
-            this.player?.seek(zombie.animationTime / 12 * this.definition(zombie.animation).rateScale)
-        }
-        this.syncRise(zombie)
+        this.show(zombie)
     }
 
-    display(zombie: ZombieSnapshot, start = 0): void {
+    display(zombie: ZombieSnapshot): void {
         this.latestZombie = zombie
         this.syncFacing(zombie)
-        this.holdingFlag = this.presentation.flag === true
-        this.shadowNode.setPosition(this.node.position.x + this.shadowX, this.node.position.y - (this.presentation.shadowY ?? 92))
+        this.holdingFlag = zombie.animations[ZOMBIE_FLAG_LAYER] !== undefined
+        this.placeShadow()
         this.shadowNode.active = this.draw.shadow !== false
-        if (this.animation === zombie.animation) { this.applyParts(zombie); return }
         // The board draws a shield in its own colors, apart from the body's (applyHitFlash); a picture's shield takes the
         // picture's color with the rest, as a packet's gray.
         this.show(zombie, false)
-        if (start) this.player!.seek(start * this.player!.durationSeconds)
     }
 
-    get players(): ReanimPlayer[] { return [this.player, this.flag].filter((player): player is ReanimPlayer => !!player?.node.isValid) }
+    /**
+     * What a layer of the zombie shows of what it plays (shownLayer). A zombie drawn without the super long death falls
+     * with its plain one, at that one's length.
+     */
+    private shown(layer: string, zombie: ZombieSnapshot): LayerShown | undefined {
+        const state = zombie.animations[layer]
+        if (!state) return undefined
+        const { death, superLongDeath } = ZOMBIE_CLIPS
+        return shownLayer(state, zombie.animations, {
+            picture: name => this.definition(name),
+            played: name => zombieClip(this.gameplay.animation, name === superLongDeath && !this.clips()[superLongDeath] ? death : name),
+            duration: reanimId => ReanimPlayer.duration(reanimId, this.registry) ?? 0,
+        })
+    }
+
+    /** How a player shows what the zombie's body plays (the mower's driver takes the body's place). */
+    private playback(zombie: ZombieSnapshot, player: ReanimPlayer): ReturnType<typeof layerPlayback> {
+        return layerPlayback(this.shown(ZOMBIE_BODY_LAYER, zombie)!, player.durationSeconds)
+    }
+
+    private placeShadow(): void {
+        const { x, y, backwardsX } = this.presentation.shadow
+        // Zombie::DrawShadow's place differs for a zombie walking right.
+        this.shadowNode.setPosition(this.node.position.x + (this.mirrored ? backwardsX ?? x : x), this.node.position.y + y)
+    }
+
+    get players(): ReanimPlayer[] { return this.layers.shown.filter(player => player.node.isValid) }
 
     private syncRise(zombie: ZombieSnapshot): void {
         // Only the grave-rise clip owns this offset; a pending landing keeps its jump-origin compensation.
         if (!this.player || !this.riseClip) return
-        const clip = this.definition(zombie.animation)
+        const clip = this.definition(body(zombie).clip)
         if (zombie.riseTicks) {
             this.player.node.setParent(this.riseClip)
             this.place(this.player.node, clip.x + 50, clip.y - 110 - Math.min(200, zombie.riseTicks * 4))
@@ -210,23 +229,23 @@ export class ZombieView implements ZombieViewInstance {
     }
 
     getTrackWorldPosition(trackId: string): Vec3 | null {
-        return (this.flag?.trackIds.includes(trackId) ? this.flag : this.player)?.getTrackWorldPosition(trackId) ?? null
+        // The part is on the body, or on what it carries (the flag's own track).
+        return [...this.layers.shown].reverse().find(player => player.trackIds.includes(trackId))?.getTrackWorldPosition(trackId) ?? null
     }
 
     syncGameOverWalk(zombie: ZombieSnapshot, ticks: number, y: number, approachTicks = 0): void {
         const player = this.player
         if (!player) return
-        const duration = player.lastFrameTimeSeconds
-        const rate = this.definition(zombie.animation).rateScale
-        const start = zombie.animationTime / 12 * rate + approachTicks / 100 * zombie.animationSpeed * rate
-        const time = start + ticks / 100 * zombie.animationSpeed * rate
+        // The walk goes on from where the server left it, by the server's rule (walkZombie): the clip comes round by
+        // its length while its frames, and the ground under them, are spread over its length less one.
+        const { rate, timeSeconds } = this.playback(zombie, player), cycle = player.durationSeconds, last = player.lastFrameTimeSeconds
+        const start = timeSeconds + approachTicks / 100 * rate, time = start + ticks / 100 * rate
         const ground = this.presentation.parts.ground
-        const cycleDistance = (player.sampleTrack(ground, duration)?.x ?? 0) - (player.sampleTrack(ground, 0)?.x ?? 0)
-        const distance = (Math.floor(time / duration) - Math.floor(start / duration)) * cycleDistance
-            + (player.sampleTrack(ground, time % duration)?.x ?? 0) - (player.sampleTrack(ground, start % duration)?.x ?? 0)
+        const groundAt = (seconds: number) => player.sampleTrack(ground, seconds % cycle / cycle * last)?.x ?? 0
+        const distance = ((Math.floor(time / cycle) - Math.floor(start / cycle)) * (groundAt(cycle - 1e-9) - groundAt(0)) + groundAt(time) - groundAt(start)) * cycle / last
         this.node.setPosition(zombie.x - 400 - distance, 300 - y)
-        this.shadowNode.setPosition(this.node.position.x + this.shadowX, this.node.position.y - (this.presentation.shadowY ?? 92))
-        player.seek(time % duration)
+        this.placeShadow()
+        player.seek(time % cycle)
     }
 
     destroy(): void {
@@ -239,24 +258,20 @@ export class ZombieView implements ZombieViewInstance {
             entityId,
             body: this.player?.snapshot() ?? null,
             mowerDriver: this.mowerDriver?.snapshot() ?? null,
-            ...(this.flag ? { flag: this.flag.snapshot() } : {}),
         }
     }
 
     async restore(snapshot: Extract<LevelEntitySnapshot, { kind: 'zombie' }>): Promise<void> {
-        this.player = await this.restorePlayer(this.player, 'ZombieAnimation', snapshot.body)
+        // What it carries is shown again from the server's snapshot; the body keeps where it was in its blend.
+        if (snapshot.body) await this.restorePlayer(this.layers.player(ZOMBIE_BODY_LAYER), 'ZombieAnimation', snapshot.body)
         this.mowerDriver = await this.restorePlayer(this.mowerDriver, 'MoweredDriver', snapshot.mowerDriver)
-        this.flag = await this.restorePlayer(this.flag, 'Flag', snapshot.flag ?? null)
-        if (this.flag && this.player) {
-            this.attachFlag(this.flag, this.player, snapshot.flag?.attachmentTrackId ?? attachmentTrack(this.definition('flag')))
-        }
         if (snapshot.body?.attachmentTrackId && this.player && this.mowerDriver) {
             this.player.reattachAfterRestore(this.mowerDriver)
         }
         this.animation = snapshot.mowerDriver
-            ? 'mowered'
+            ? ZOMBIE_CLIPS.mowered
             : snapshot.body
-                ? (Object.entries(SLOTS).find(([, slot]) => this.clips()[slot]?.reanimId === snapshot.body!.id)?.[0] as ZombieSnapshot['animation'] | undefined) ?? null
+                ? Object.entries(this.clips()).find(([, clip]) => clip?.reanimId === snapshot.body!.id)?.[0] ?? null
                 : null
         this.parts = ''
     }
@@ -285,85 +300,59 @@ export class ZombieView implements ZombieViewInstance {
     private syncMowered(zombie: ZombieSnapshot): void {
         // Mowed before its body showed (put down on a running mower), or as it landed from its vault, with no walking
         // snapshot between: its walk stands in for the driver to take.
-        if (!this.player || this.presentation.vault && !zombie.hasPole && this.animation === 'anim_jump') {
-            this.show({ ...zombie, animation: 'anim_walk', animationTime: 0 })
+        if (!this.player || this.presentation.vault && !zombie.hasPole && this.animation === ZOMBIE_CLIPS.jump) {
+            this.show({ ...zombie, animations: { [ZOMBIE_BODY_LAYER]: { clip: ZOMBIE_CLIPS.walk, time: 0, rate: ASSET_FPS } } })
         }
-        this.flag?.hide()
         this.applyParts(zombie)
         this.player?.pause()
-        const animation = this.definition('mowered')
+        const animation = this.definition(ZOMBIE_CLIPS.mowered)
         if (this.mowerDriver) {
-            this.mowerDriver.seek(zombie.animationTime / 12 * animation.rateScale)
+            this.mowerDriver.seek(this.playback(zombie, this.mowerDriver).timeSeconds)
             if (this.player) this.player.seek(this.player.snapshot().timeSeconds)
-            this.flag?.seek(this.flag.snapshot().timeSeconds)
             return
         }
         if (!this.player) return
         const driver = this.mowerDriver = uiNode({ name: 'MoweredDriver', parent: this.node }).node.addComponent(ReanimPlayer)
         this.place(driver.node, animation.x, animation.y)
         driver.change(animation.reanimId, this.registry)
-        this.animation = 'mowered'
+        this.animation = ZOMBIE_CLIPS.mowered
         this.player.attachToTrack(driver, attachmentTrack(animation))
-        driver.play({
-            loop: false, rate: zombie.animationSpeed * animation.rateScale,
-            timeSeconds: zombie.animationTime / 12 * animation.rateScale, hideOnFinish: false,
-        })
+        driver.play({ ...this.playback(zombie, driver), hideOnFinish: false })
         driver.pause()
     }
 
     /**
-     * Shows the zombie's animation: its body changes to that clip where it is, blending from the pose it had, so that
-     * what is on the zombie (a splat, a dropped helm) stays over it.
+     * Shows the zombie's animation, each layer at its time. A body that comes to another clip changes to it where it is,
+     * blending from the pose it had, so that what is on the zombie (a splat, a dropped helm) stays over it; what it
+     * carries goes on the part of the body its clip names (a flag in its hand, drawn between the hand and the arm on the pole).
      * `board`: with what the board colors a zombie by; off it, whoever shows the picture colors it whole.
      */
     private show(zombie: ZombieSnapshot, board = true): void {
+        const changed = this.animation !== body(zombie).clip
         // Landing and WalkIntoHouse both use StartWalkAnim(0), without blending the held pole into the walk.
-        const landing = (this.animation === 'anim_jump' || this.presentation.vault && this.animation === 'anim_run' && zombie.hasPole === false)
+        const landing = (this.animation === ZOMBIE_CLIPS.jump || this.presentation.vault && this.animation === ZOMBIE_CLIPS.run && zombie.hasPole === false)
             && (zombie.state === 'walking' || zombie.state === 'eating')
-        const animation = this.definition(zombie.animation)
-        const blend = this.player && !landing && zombie.state !== 'mowered' ? 0.2 : 0
-        const player = this.player ??= uiNode({ name: 'ZombieAnimation', parent: this.node, anchor: { x: 0, y: 1 } }).node.addComponent(ReanimPlayer)
-        player.change(animation.reanimId, this.registry, blend)
-        const at = this.draw.position ?? animation
-        if (player.node.parent === this.node) this.place(player.node, at.x, at.y)
-        this.animation = zombie.animation
-        this.parts = ''
-        // Its flag goes with the hand of whichever clip plays, for as long as it holds one.
-        if (!this.holdingFlag && this.flag?.node.isValid) this.flag.node.destroy()
-        if (!this.holdingFlag) this.flag = null
-        else {
-            const clip = this.definition('flag')
-            if (!this.flag?.node.isValid) {
-                this.flag = uiNode({ name: 'Flag', parent: player.node, position: clip }).node.addComponent(ReanimPlayer)
-                this.attachments.add(this.flag.node)
-                this.flag.change(clip.reanimId, this.registry)
-                this.flag.play({ loop: true, rate: 15 / 12 * clip.rateScale })
-            }
-            this.attachFlag(this.flag, player, attachmentTrack(clip))
-        }
-        player.play({
-            loop: zombie.state !== 'dying' && zombie.state !== 'vaulting',
-            rate: zombie.animationSpeed * animation.rateScale,
-            timeSeconds: zombie.animationTime / 12 * animation.rateScale,
-            hideOnFinish: false,
+        this.layers.show(layer => this.shown(layer, zombie), {
+            blend: (layer, _clip, first) => layer === ZOMBIE_BODY_LAYER && !first && !landing && zombie.state !== 'mowered' ? 0.2 : 0,
+            place: (layer, player, clip) => {
+                const at = layer === ZOMBIE_BODY_LAYER ? this.draw.position ?? clip : clip
+                if (player.node.parent === this.node) this.place(player.node, at.x, at.y)
+            },
         })
+        if (changed) {
+            this.animation = body(zombie).clip
+            this.parts = ''
+        }
         this.applyParts(zombie)
-        if (board) {
+        if (board && changed) {
             this.applyHitFlash(zombie)
             this.applyColor(zombie, true)
         }
         this.syncRise(zombie)
     }
 
-    private attachFlag(flag: ReanimPlayer, body: ReanimPlayer, trackId: string): void {
-        // The flag is drawn between its hand track and the arm gripping the pole.
-        body.drawAfterTrack(flag.node, trackId)
-        flag.node.setPosition(0, 0)
-        flag.attachToTrack(body, trackId)
-    }
-
     private applyParts(zombie: ZombieSnapshot): void {
-        const helmStage = armorStage(zombie.helmHealth, this.armor.helm), shieldStage = armorStage(zombie.shieldHealth, this.armor.shield)
+        const helmStage = armorStage(zombie.helmHealth, this.gameplay.helm), shieldStage = armorStage(zombie.shieldHealth, this.gameplay.shield)
         // Zombie::ShowDoorArms: an eating zombie lowers the shield arms; a dropped shield takes them away for good.
         const holdingShield = shieldStage >= 0 && zombie.state !== 'eating'
         const signature = `${zombie.hasHead ? 1 : 0}|${zombie.hasTongue ? 1 : 0}|${zombie.hasArm ? 1 : 0}|${this.holdingFlag ? 1 : 0}|${helmStage}|${shieldStage}|${holdingShield ? 1 : 0}`
@@ -372,11 +361,10 @@ export class ZombieView implements ZombieViewInstance {
         const presentation = this.presentation, parts = presentation.parts
         const state = { hasHead: zombie.hasHead, hasTongue: zombie.hasTongue, hasArm: zombie.hasArm, holdingFlag: this.holdingFlag, helmStage, shieldStage, holdingShield }
         for (const [tracks, visible] of zombiePartVisibility(presentation, state)) this.player.setTracksVisible(tracks, visible)
-        if (parts.flagArm && !this.holdingFlag) this.flag?.hide()
         this.player.setTrackSpriteOverride(parts.upperArm, zombie.hasArm ? null
             : presentation.damagedArmSprite ? this.sprites.helms[presentation.damagedArmSprite] : this.sprites[presentation.damagedArm])
         const enraged = presentation.enragedHead
-        if (enraged) this.player.setTrackSpriteOverride(enraged.track, zombie.enraged && zombie.animation !== 'anim_gasp' ? this.sprites.helms[enraged.sprite] : null)
+        if (enraged) this.player.setTrackSpriteOverride(enraged.track, zombie.enraged && body(zombie).clip !== ZOMBIE_CLIPS.gasp ? this.sprites.helms[enraged.sprite] : null)
         // Zombie::TakeHelmDamage and TakeShieldDamage swap in the dented sprite below 2/3 and 1/3 health.
         for (const [armor, stage] of [[presentation.helm, helmStage], [presentation.shield, shieldStage]] as const) {
             if (!armor || stage < 0 || !parts.helms.includes(armor.track)) continue
@@ -387,11 +375,6 @@ export class ZombieView implements ZombieViewInstance {
     private color: 'normal' | 'chilled' | 'burned' = 'normal'
     /** Zombie::IsWalkingBackwards: a zombie on the plants' side faces right. */
     private mirrored = false
-
-    /** Zombie::DrawShadow offset in the original board coordinates, which differs for a zombie walking right. */
-    private get shadowX(): number {
-        return this.mirrored ? this.presentation.shadowXBackwards ?? this.presentation.shadowX : this.presentation.shadowX
-    }
 
     /**
      * Zombie::UpdateReanim: a zombie walking right draws its body mirrored (`m00 = -scale`) and 90 further right (see
@@ -421,7 +404,7 @@ export class ZombieView implements ZombieViewInstance {
         if (!this.player || color === this.color && !force) return
         this.color = color
         const value = color === 'burned' ? new Color(0, 0, 0) : color === 'chilled' ? new Color(75, 75, 255) : Color.WHITE
-        // The flag is attached to the hand track, so it takes the body's colors.
+        // What it carries is attached to the body's tracks, so it takes the body's colors.
         this.player.setColorOverride(value)
     }
 
@@ -451,19 +434,18 @@ export class ZombieView implements ZombieViewInstance {
         }
     }
 
-    private definition(animation: ZombieSnapshot['animation'] | AnimationSlot): ClientAnimationClip {
-        const slot = animation in SLOTS ? SLOTS[animation as ZombieSnapshot['animation']] : animation as AnimationSlot
-        const enraged = this.latestZombie?.enraged
-        const clips = this.clips()
-        // A zombie drawn without `superLongDeath` (anim_superlongdeath) falls with its `death`.
-        const clip = clips[enraged && (slot === 'walk' || slot === 'walk2') ? 'enragedWalk'
-            : enraged && slot === 'eat' ? 'enragedEat' : slot] ?? (slot === 'superLongDeath' ? clips.death : undefined)
-        if (!clip) throw new Error(`${this.target} has no ${slot} animation`)
+    /** The presentation's clip of a name: an enraged zombie's own walk and eating in place of the plain ones. */
+    private definition(name: string): ClientAnimationClip {
+        const enraged = this.latestZombie?.enraged, clips = this.clips(), { walk, walk2, eat, death, superLongDeath } = ZOMBIE_CLIPS
+        // A zombie drawn without `superLongDeath` falls with its `death`.
+        const clip = clips[enraged && (name === walk || name === walk2) ? 'enragedWalk'
+            : enraged && name === eat ? 'enragedEat' : name] ?? (name === superLongDeath ? clips[death] : undefined)
+        if (!clip) throw new Error(`${this.target} has no ${name} animation`)
         return clip
     }
 
-    private clips(): Partial<Record<AnimationSlot, ClientAnimationClip>> {
-        return this.animations.resolve(this.target) as Partial<Record<AnimationSlot, ClientAnimationClip>>
+    private clips(): Record<string, ClientAnimationClip | undefined> {
+        return this.animations.resolve(this.target) as Record<string, ClientAnimationClip | undefined>
     }
 
     private definitionFromReanim(reanimId: string): ClientAnimationClip | undefined {
@@ -589,6 +571,9 @@ export class ZombieView implements ZombieViewInstance {
 
 /** Zombie::ApplyBurn's shift for a charred zombie walking right, drawn mirrored. */
 const CHARRED_MIRRORED_SHIFT = 60
+
+/** What a zombie's body plays. */
+const body = (zombie: ZombieSnapshot) => zombie.animations[ZOMBIE_BODY_LAYER]
 
 /** -1 without the armor or once it is gone, otherwise its damage index (0 whole, 1 below 2/3, 2 below 1/3). */
 function armorStage(health: number | undefined, armor: { readonly health: number } | undefined): number {

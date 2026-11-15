@@ -121,7 +121,7 @@ test('world snapshot validates migrated authoritative entity DTOs', () => {
         zombies: [{
             entityId: 3, typeId: 'pvz:normal', x: 700, y: 280, row: 2,
             state: 'walking', health: 270, maxHealth: 270,
-            animation: 'anim_walk', animationTime: 0, animationSpeed: 1,
+            animations: { body: { clip: 'walk', time: 0, rate: 12 } },
             moweredTicksRemaining: 0,
             hasHead: true, hasTongue: false, hasArm: true,
         }],

@@ -11,14 +11,13 @@ export type PlantViewFactory = (context: PlantViewContext) => PlantView | Promis
 export class PlantViewRegistry extends EntityViewRegistry<PlantViewContext, PlantView> {
     constructor() {
         super(context => ({
-            kind: plantDefinition(context.animations.definitions, context.plant.typeId).view,
+            kind: plantDefinition(context.animations.definitions, context.plant.typeId).view ?? 'plant',
             typeId: context.plant.typeId,
         }))
-        // Every plant is drawn by its animation, whatever its layers: one view shows them, and a few plants add to it.
+        // Every plant is drawn by its animation, whatever its layers: one view shows them (`plant`, when its
+        // presentation names none), and a few plants add to it.
         const views: Record<string, typeof PlantView> = {
-            shooter: PlantView, sunflower: PlantView, potatomine: PlantView, puffshroom: PlantView, mushroom: PlantView,
-            sunshroom: PlantView, bowling: PlantView,
-            cherrybomb: CherryBombView, chomper: ChomperView, wallnut: WallNutView, gravebuster: GraveBusterView,
+            plant: PlantView, cherrybomb: CherryBombView, chomper: ChomperView, wallnut: WallNutView, gravebuster: GraveBusterView,
         }
         for (const [kind, View] of Object.entries(views)) {
             this.register(kind, async context => {

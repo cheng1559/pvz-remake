@@ -29,17 +29,17 @@ function dyingZombie(roll: number, { levelId = 'pvz:adventure-1-6', firstAdventu
 
 test('Zombie::PlayDeathAnim: a 99 plays the super long death at rate 14, from level 6, unchilled, with at most five on screen', () => {
     const longest = dyingZombie(99)
-    assert.equal(longest.animation, 'anim_superlongdeath')
-    assert.equal(longest.animationSpeed, 14 / 12, 'the fixed rate, not 24-30')
+    assert.equal(longest.animations.body.clip, 'superLongDeath')
+    assert.equal(longest.animations.body.rate, 14, 'the fixed rate, not 24-30')
     assert.equal(longest.deathTicksRemaining, Math.ceil(137 / 14 * 100) + 100)
-    assert.equal(dyingZombie(99, { others: 5 }).animation, 'anim_superlongdeath', 'five other zombies still allow it')
+    assert.equal(dyingZombie(99, { others: 5 }).animations.body.clip, 'superLongDeath', 'five other zombies still allow it')
     // Each failed condition falls back to anim_death2, as a roll above 50 does.
     for (const [label, options] of [
         ['level 5 of a first adventure', { levelId: 'pvz:adventure-1-5' }],
         ['a chilled zombie', { chilled: true }],
         ['six zombies on screen', { others: 6 }],
-    ] as const) assert.equal(dyingZombie(99, options).animation, 'anim_death2', label)
-    assert.equal(dyingZombie(99, { levelId: 'pvz:adventure-1-1', firstAdventure: false }).animation, 'anim_superlongdeath', 'any level after the adventure')
-    assert.deepEqual([dyingZombie(98).animation, dyingZombie(51).animation, dyingZombie(50).animation], ['anim_death2', 'anim_death2', 'anim_death'])
-    assert.equal(dyingZombie(99, { typeId: 'pvz:pole_vaulter' }).animation, 'anim_death', 'a gait without it keeps its own deaths')
+    ] as const) assert.equal(dyingZombie(99, options).animations.body.clip, 'death2', label)
+    assert.equal(dyingZombie(99, { levelId: 'pvz:adventure-1-1', firstAdventure: false }).animations.body.clip, 'superLongDeath', 'any level after the adventure')
+    assert.deepEqual([98, 51, 50].map(roll => dyingZombie(roll).animations.body.clip), ['death2', 'death2', 'death'])
+    assert.equal(dyingZombie(99, { typeId: 'pvz:pole_vaulter' }).animations.body.clip, 'death', 'an animation without it keeps its own deaths')
 })

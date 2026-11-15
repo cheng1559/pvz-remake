@@ -1,11 +1,12 @@
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { World } from '@/ecs/index'
 import { ZombieComponent } from '../state/components'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { ZOMBIE_FLAG_LAYER } from '@/shared/content/gameplay'
 
-export function dropZombieFlag(world: World, definitions: GameplayDefinitions, entity: number): void {
+/** Zombie::DropFlag: a zombie carrying a flag (its animation's flag layer) lets it go, with its head or as it dies. */
+export function dropZombieFlag(world: World, entity: number): void {
     const zombie = world.get(entity, ZombieComponent)!
-    if (!definitions.zombies[zombie.typeId].dropsFlag || !zombie.hasHead ||
-        zombie.state === 'dying' || zombie.state === 'mowered') return
+    if (!zombie.animations[ZOMBIE_FLAG_LAYER]) return
+    delete zombie.animations[ZOMBIE_FLAG_LAYER]
     emitServerEvent(world.resources.get(EventQueueResource), 'zombiePartDropped', { entityId: entity, part: 'flag' })
 }

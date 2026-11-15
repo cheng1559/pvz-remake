@@ -23,7 +23,9 @@ import { ContentRegistry } from '@/client/content/ContentRegistry'
 import { CONTENT_CATEGORIES } from '@/shared/content'
 import * as modApi from '@/shared/mod'
 import { buildGameplayContent, buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
+import { parsePresentationDefinitions } from '@/shared/content/presentation'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
+import { assertPresented } from '@/client/content/assertPresented'
 import { IntegratedGameServer } from '@/server/session/IntegratedGameServer'
 import { GameplayRegistry } from '@/server/registry/GameplayRegistry'
 import { runCommand } from '../server/run-command'
@@ -129,11 +131,11 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
     const hosts: ModHost[] = []
     const keep = (host: ModHost) => { hosts.push(host); return host }
     const gameplay = base()
-    const presentation = readPresentationSource()
+    const presentation = parsePresentationDefinitions(readPresentationSource())
     class Views extends EntityViewRegistry<any, any> {
         constructor() {
             super(context => ({ kind: context.kind, typeId: context.typeId }))
-            const views = [...[...Object.values(presentation.plants), ...Object.values(presentation.zombies)].map((entry: any) => entry.view ?? 'zombie'),
+            const views = [...Object.values(presentation.plants).map((entry: any) => entry.view ?? 'plant'), ...Object.values(presentation.zombies).map((entry: any) => entry.view ?? 'zombie'),
                 ...Object.values(presentation.projectiles).map((entry: any) => entry.view ?? 'projectile'), ...Object.values(presentation.gridItems).map((entry: any) => entry.view)]
             for (const kind of new Set(views)) this.register(kind, () => ({}))
         }
@@ -151,6 +153,7 @@ function modLoader(installed: any[], ready = async () => installed, clientModule
             } } }
         } },
         '@/client/content/ClientAnimationRegistry': { ClientAnimationRegistry },
+        '@/client/content/assertPresented': { assertPresented },
         '@/shared/mod/content': { contentJson },
         '@/client/content/loadPresentationDefinitions': { loadPresentationDefinitions: async (_manifest: unknown, sources: unknown[]) => {
             assert.equal(sources.length, 0, 'base validation must not recursively load Mods')
@@ -317,8 +320,11 @@ test('definition registries reject collisions, foreign namespaces, unresolved re
     assert.equal(JSON.stringify(source), before, 'registration cannot change the base asset')
     assert.ok(Object.isFrozen(installed.plants['example:rapid_pea']))
     const invalid = presentation()
-    delete invalid.data.plants['example:rapid_pea'].animations.blink
-    assert.throws(() => buildPresentationDefinitions(source, [invalid]), /missing blink animation/)
+    delete invalid.data.plants['example:rapid_pea'].clips.blink
+    // What draws a plant has the pictures of every clip its animation plays.
+    const any = { has: () => true }, views = { plants: any, zombies: any, projectiles: any, gridItems: any }
+    assert.doesNotThrow(() => assertPresented(build().definitions, installed, views))
+    assert.throws(() => assertPresented(build().definitions, buildPresentationDefinitions(source, [invalid]), views), /missing blink animation/)
 })
 
 test('overrides replace whole existing definitions by ID, one Mod per ID, before level patches apply', () => {

@@ -89,7 +89,6 @@ export type LevelEntitySnapshot =
         entityId: number
         body: ReanimPlaybackSnapshot | null
         mowerDriver: ReanimPlaybackSnapshot | null
-        flag?: ReanimPlaybackSnapshot
         flash?: FlashSnapshot
     }
     | {
@@ -296,12 +295,11 @@ function parseEntity(value: unknown, index: number): LevelEntitySnapshot {
         case 'zombie': {
             const source = exact(value, [
                 'kind', 'entityId', 'body', 'mowerDriver',
-            ], name, ['flag', 'flash'])
+            ], name, ['flash'])
             return {
                 kind: 'zombie', entityId,
                 body: optionalReanim(source.body),
                 mowerDriver: optionalReanim(source.mowerDriver),
-                ...(source.flag === undefined ? {} : { flag: parseReanimPlaybackSnapshot(source.flag) }),
                 ...(source.flash === undefined ? {} : { flash: parseFlash(source.flash, `${name}.flash`) }),
             }
         }

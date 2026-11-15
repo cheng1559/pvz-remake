@@ -1,4 +1,5 @@
 import { isQualifiedId } from '@/shared/mod/index'
+import { withFrom } from './from'
 import { jsonRoundTrip, type JsonObject, PLANT_ABILITY_STATES, type PlantAbilityState, type Team } from '@/shared/protocol'
 
 /** Board pixel where collected sun flies to: the sun counter in the original 800-wide layout. */
@@ -35,7 +36,6 @@ export interface GameplayDefinitions {
     seedCatalog: Record<string, SeedCatalogEntry>
     plants: Record<string, PlantDefinition>
     zombies: Record<string, ZombieDefinition>
-    zombieGaits: Record<string, ZombieGait>
     projectiles: Record<string, ProjectileDefinition>
     items: Record<string, ItemDefinition>
     /** The achievements, in their screen order (base first, then each Mod's). */
@@ -201,15 +201,18 @@ export interface PlantDefinition {
     chomper?: { attack: Rect; targeting: PlantTargeting; biteDelayTicks: number; biteTicks: number; digestTicks: number; swallowTicks: number }
     /** Explodes when eaten or otherwise destroyed by zombies. */
     deathExplosion?: ExplosionDefinition
-    /** What it plays, which the server keeps (server/plants/animation.ts); a plant without one is animated by its view. */
+    /**
+     * What it plays, which the server keeps (server/plants/animation.ts); a plant without one is animated by its view.
+     * With `from`, it plays another's (the explode-o-nut the wall-nut's), adding what it writes of its own (withFrom).
+     */
     animation?: PlantAnimationDefinition
 }
 
 /**
- * One clip of a plant's animation, under the name its presentation has the pictures under. It loops unless it has a
- * `next` or is `once`.
+ * One clip of an animation, a plant's or a zombie's, under the name its presentation has the pictures under. It loops
+ * unless it has a `next`, is `once` or is held.
  */
-export interface PlantClip {
+export interface AnimationClip {
     /** How long it is, in frames: a loop comes round, and a clip played once ends, after this many (Reanimation::mFrameCount). */
     frames: number
     /** Frames a second (Reanimation::mAnimRate), drawn when the clip starts; written as a number or as `[min, max]`. */
@@ -233,15 +236,30 @@ export interface PlantClip {
     start?: { min: number; max: number }
     /** Where parts of the plant are in each of its frames, for what goes with them (PlantDefinition.shooter.anchor). */
     tracks?: Record<string, Point[]>
+    /**
+     * In place of `fps`: where the ground is under it in each of its frames (the Reanim's `_ground`). What walks on it
+     * goes as far as its ground does, and it goes at the rate that takes its walker at the walker's speed
+     * (Zombie::UpdateAnimSpeed).
+     */
+    ground?: number[]
+    /**
+     * The parts of its length at which what it shows happens (Reanimation::ShouldTriggerTimedEvent): the bites of a
+     * zombie eating, the fall of one dying.
+     */
+    marks?: number[]
 }
 
-export interface PlantAnimationDefinition {
-    clips: Record<string, PlantClip>
+/** What a plant or a zombie plays: its clips, and its layers with the clip each starts on. */
+export interface AnimationDefinition {
+    clips: Record<string, AnimationClip>
     /**
      * Its layers, drawn in this order (a later one on an earlier one's part), and the clip each starts with; `null`
      * for one that is not there until something plays a clip on it.
      */
     layers: Record<string, string | null>
+}
+
+export interface PlantAnimationDefinition extends AnimationDefinition {
     /** The clips its layers play from the start as its ability comes to a state (Plant::PlayBodyReanim as mState changes). */
     states?: Partial<Record<PlantAbilityState, Record<string, string>>>
     /** Plant::SetSleeping: the clips its layers play in place of their own while it is asleep (a mushroom by day). */
@@ -266,7 +284,6 @@ export const PLANT_BLINK_TICKS = { min: 400, max: 799 }
 export interface ZombieArmor { type: string; health: number }
 
 export interface ZombieDefinition {
-    dropsFlag?: boolean
     /**
      * Put down facing right from a zombie seed (the original puts none down so), it stands this much further right to
      * line up with the others: Zombie::UpdateReanim draws every zombie 90 further, flipped, which turns the plain
@@ -297,8 +314,12 @@ export interface ZombieDefinition {
     shield?: ZombieArmor
     /** After losing the shield (Zombie::UpdateZombieNewspaper): stands still for pauseTicks, then walks at the new speed. */
     enrage?: { pauseTicks: number; speedPerTick: { min: number; max: number } }
-    /** Explicit animation profile and variants; equipment does not imply animation support. */
-    gait: string
+    /**
+     * What it plays, which the server keeps (server/zombies/animation.ts): its `body` on the clips the server has a
+     * zombie play (ZOMBIE_CLIPS), and over it what it carries (ZOMBIE_FLAG_LAYER). With `from`, a zombie plays
+     * another's (a cone zombie the plain zombie's), adding what it writes of its own (withFrom).
+     */
+    animation: AnimationDefinition
     tongueChance: number
     walk2Chance: number
     targetingInsets?: Record<string, number>
@@ -307,10 +328,9 @@ export interface ZombieDefinition {
     /** Board::PickGraveRisingZombieType: rises with its wave weight from the graves of levels that allow it; levels
      *  with their own graves name their zombies instead. */
     graveRise?: boolean
-    /** Runs at the first plant and vaults over it once. */
+    /** Runs at the first plant (its `run` clip) and vaults over it once (its `jump`). */
     vault?: {
         runSpeedPerTick: { min: number; max: number }
-        runGround: number[]
         attack: Rect
         /**
          * The rect it finds a rolling nut to vault over with, from much further, then jumping where it stands: the
@@ -318,19 +338,24 @@ export interface ZombieDefinition {
          */
         bowlingAttack?: Rect
         landedAttack: Rect
-        jumpFrames: number
-        jumpRate: number
         landingOffset: number
     }
 }
 
-/** `ground` samples the `_ground` track per frame; it sets walking speed like the original reanim. */
-export interface ZombieGait {
-    walkGround: number[]
-    eat: { frames: number; rate: number; chewTimes: number[] }
-    /** `rate` fixes the animation rate, as Zombie::PlayDeathAnim does for anim_superlongdeath (14). */
-    deaths: Array<{ animation: 'anim_death' | 'anim_death2' | 'anim_superlongdeath'; frames: number; fallTime: number; rate?: number }>
-}
+/** The layer a zombie's body plays on; the others are what it carries, going at their own pace (chill slows the body alone). */
+export const ZOMBIE_BODY_LAYER = 'body'
+/** The layer of a flag zombie's flag (Zombie::DropFlag drops it): a zombie with it carries a flag. */
+export const ZOMBIE_FLAG_LAYER = 'flag'
+/**
+ * The clips the server has a zombie play, by what it does (Zombie::PlayZombieReanim): its animation has those it can
+ * come to. `walk`, and `run` for a vaulter, walk on their ground; `eat` marks its bites and each death its fall;
+ * `standing` and `standing2` are how it stands off the board; `mowered` is the mower's own for every zombie
+ * (zombieAnimation's MOWERED_CLIP), so no animation has it.
+ */
+export const ZOMBIE_CLIPS = {
+    standing: 'idle', standing2: 'idle2', walk: 'walk', walk2: 'walk2', run: 'run', jump: 'jump', eat: 'eat', gasp: 'gasp',
+    death: 'death', death2: 'death2', superLongDeath: 'superLongDeath', mowered: 'mowered',
+} as const
 
 /**
  * The ways a plant attacks on a rhythm, each with the motion of what it fires (the server's ProjectileMotionRegistry):
@@ -527,7 +552,7 @@ interface Rect extends Point { width: number; height: number }
 export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): GameplayDefinitions {
     const source = exactObject(value, [
         'schemaVersion', 'economy', 'boards', 'seeds', 'plants', 'zombies',
-        'projectiles', 'items', 'achievements', 'zombieGaits', 'seedBank',
+        'projectiles', 'items', 'achievements', 'seedBank',
     ], 'gameplay definitions')
     const economy = exactObject(source.economy, ['maxSun', 'maxMoney'], 'gameplay definitions.economy')
     const seedBank = exactObject(source.seedBank, ['baseSlots', 'maxSlots', 'startingSeeds'], 'gameplay definitions.seedBank')
@@ -541,9 +566,8 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
         seedCatalog: mapped(seedCatalog, 'seed catalog', (entry, entryName) => ({
             position: nonNegativeInteger(exactObject(entry, ['position'], entryName).position, `${entryName}.position`),
         })),
-        plants: mapped(source.plants, 'plants', parsePlant),
-        zombies: mapped(source.zombies, 'zombies', parseZombie),
-        zombieGaits: mapped(source.zombieGaits, 'zombieGaits', parseZombieGait),
+        plants: mapped(withFrom(object(source.plants, 'plants'), 'animation', 'plants'), 'plants', parsePlant),
+        zombies: mapped(withFrom(object(source.zombies, 'zombies'), 'animation', 'zombies'), 'zombies', parseZombie),
         projectiles: mapped(source.projectiles, 'projectiles', parseProjectile),
         items: mapped(source.items, 'items', parseItem),
         achievements: mapped(source.achievements, 'achievements', parseAchievement),
@@ -574,10 +598,6 @@ export function parseGameplayDefinitions(value: unknown, seedCatalog: unknown): 
         if (plant.producer) reference(plant.producer.item, definitions.items, `plants.${id}.producer.item`)
         if (plant.producer?.growth) reference(plant.producer.growth.smallItem, definitions.items, `plants.${id}.producer.growth.smallItem`)
     }
-    for (const [id, zombie] of Object.entries(definitions.zombies)) {
-        reference(zombie.gait, definitions.zombieGaits, `zombies.${id}.gait`)
-    }
-
     return definitions
 }
 
@@ -802,7 +822,7 @@ function explosion(value: unknown, name: string): ExplosionDefinition {
 }
 
 function parseZombie(value: unknown, name: string): ZombieDefinition {
-    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'gait', 'tongueChance', 'walk2Chance'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'dropsFlag', 'wave', 'graveRise', 'facingRightOffsetX'])
+    const source = exactObject(value, ['maxHealth', 'boardEdgeX', 'spawn', 'speedPerTick', 'body', 'attack', 'bite', 'animation', 'tongueChance', 'walk2Chance'], name, ['helm', 'shield', 'enrage', 'vault', 'targetingInsets', 'behavior', 'wave', 'graveRise', 'facingRightOffsetX'])
     const spawn = exactObject(source.spawn, ['minX', 'maxX', 'flagWaveOffset'], `${name}.spawn`)
     const minX = finite(spawn.minX, `${name}.spawn.minX`)
     const maxX = finite(spawn.maxX, `${name}.spawn.maxX`)
@@ -817,7 +837,7 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
         speedPerTick: speedRange(source.speedPerTick, `${name}.speedPerTick`),
         body: rect(source.body, `${name}.body`),
         attack: rect(source.attack, `${name}.attack`),
-        gait: qualifiedId(source.gait, `${name}.gait`),
+        animation: parseAnimation(exactObject(source.animation, ['clips', 'layers'], `${name}.animation`), `${name}.animation`),
         tongueChance: fraction(source.tongueChance, `${name}.tongueChance`),
         walk2Chance: fraction(source.walk2Chance, `${name}.walk2Chance`),
         bite: {
@@ -826,10 +846,6 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
         },
     }
     if (source.facingRightOffsetX !== undefined) result.facingRightOffsetX = finite(source.facingRightOffsetX, `${name}.facingRightOffsetX`)
-    if (source.dropsFlag !== undefined) {
-        if (typeof source.dropsFlag !== 'boolean') throw new Error(`${name}.dropsFlag must be boolean`)
-        result.dropsFlag = source.dropsFlag
-    }
     if (source.behavior !== undefined) result.behavior = jsonRoundTrip(object(source.behavior, `${name}.behavior`)) as JsonObject
     if (source.wave !== undefined) {
         const wave = exactObject(source.wave, ['points', 'weight'], `${name}.wave`, ['firstWave'])
@@ -859,30 +875,47 @@ function parseZombie(value: unknown, name: string): ZombieDefinition {
     }
     if (source.vault !== undefined) {
         const vault = exactObject(source.vault,
-            ['runSpeedPerTick', 'runGround', 'attack', 'landedAttack', 'jumpFrames', 'jumpRate', 'landingOffset'], `${name}.vault`,
+            ['runSpeedPerTick', 'attack', 'landedAttack', 'landingOffset'], `${name}.vault`,
             ['bowlingAttack'])
         result.vault = {
             runSpeedPerTick: speedRange(vault.runSpeedPerTick, `${name}.vault.runSpeedPerTick`),
-            runGround: groundTrack(vault.runGround, `${name}.vault.runGround`),
             attack: rect(vault.attack, `${name}.vault.attack`),
             ...vault.bowlingAttack === undefined ? {} : { bowlingAttack: rect(vault.bowlingAttack, `${name}.vault.bowlingAttack`) },
             landedAttack: rect(vault.landedAttack, `${name}.vault.landedAttack`),
-            jumpFrames: frameCount(vault.jumpFrames, `${name}.vault.jumpFrames`),
-            jumpRate: positiveFinite(vault.jumpRate, `${name}.vault.jumpRate`),
             landingOffset: finite(vault.landingOffset, `${name}.vault.landingOffset`),
         }
     }
+    // The clips the server has it play: those every zombie comes to, and those of what this one does.
+    const { clips, layers } = result.animation, clip = ZOMBIE_CLIPS
+    const needs = (id: string, what: (clip: AnimationClip) => unknown, why: string) => {
+        if (!clips[id] || !what(clips[id])) throw new Error(`${name}.animation.clips.${id} must be a clip that ${why}`)
+    }
+    // Its body first, walking; over it what it carries, on its own clips (a flag, a balloon's propeller).
+    if (Object.keys(layers)[0] !== ZOMBIE_BODY_LAYER || layers[ZOMBIE_BODY_LAYER] !== clip.walk) throw new Error(`${name}.animation.layers must start with ${ZOMBIE_BODY_LAYER}: ${clip.walk}`)
+    for (const [layer, carried] of Object.entries(layers)) if (layer !== ZOMBIE_BODY_LAYER && carried === null) throw new Error(`${name}.animation.layers.${layer} must start a clip`)
+    for (const id of [clip.walk, ...(result.walk2Chance > 0 ? [clip.walk2] : []), ...(result.vault ? [clip.run] : [])]) needs(id, walked => walked.ground, 'walks on its ground')
+    needs(clip.eat, eaten => eaten.fps && eaten.marks, 'has fps and marks its bites')
+    for (const id of [clip.death, clip.death2, clip.superLongDeath]) {
+        if (id === clip.death || clips[id]) needs(id, death => death.fps && death.hold && death.marks?.length === 1, 'is held, has fps and marks its fall')
+    }
+    for (const id of [...(result.vault ? [clip.jump] : []), ...(result.enrage ? [clip.gasp] : [])]) needs(id, once => once.fps && once.hold, 'is held and has fps')
+    for (const id of [clip.standing, clip.standing2]) if (clips[id]) needs(id, standing => standing.fps, 'has fps')
     return result
 }
 
-function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefinition {
-    const source = exactObject(value, ['clips', 'layers'], name, ['fire', 'blink', 'states', 'asleep'])
-    const clips = named(source.clips, `${name}.clips`, (entry, clipName): PlantClip => {
-        const clip = exactObject(entry, ['frames'], clipName, ['fps', 'sync', 'fit', 'chewed', 'next', 'once', 'hold', 'start', 'tracks'])
+/** An animation's clips and layers; what else it has is its kind's to read. */
+function parseAnimation(source: Record<string, unknown>, name: string): AnimationDefinition {
+    const clips = named(source.clips, `${name}.clips`, (entry, clipName): AnimationClip => {
+        const clip = exactObject(entry, ['frames'], clipName, ['fps', 'sync', 'fit', 'chewed', 'next', 'once', 'hold', 'start', 'tracks', 'ground', 'marks'])
         const frames = positiveInteger(clip.frames, `${clipName}.frames`)
-        // One pace: its own or another layer's; or it fits, with a pace of its own only for where nothing is to fit.
-        if (clip.fit ? clip.sync !== undefined : (clip.fps === undefined) === (clip.sync === undefined)) throw new Error(`${clipName} needs exactly one of fps and sync, or fit`)
+        // One pace: its own, another layer's or its ground's; or it fits, with a pace of its own only for where nothing is to fit.
+        if (clip.fit ? clip.sync !== undefined || clip.ground !== undefined
+            : [clip.fps, clip.sync, clip.ground].filter(pace => pace !== undefined).length !== 1) throw new Error(`${clipName} needs exactly one of fps, sync and ground, or fit`)
         if (clip.chewed !== undefined && clip.fps === undefined) throw new Error(`${clipName}.chewed needs fps`)
+        const ground = clip.ground === undefined ? undefined : groundTrack(clip.ground, `${clipName}.ground`)
+        if (ground && ground.length !== frames) throw new Error(`${clipName}.ground must have a place for each of the clip's ${frames} frames`)
+        const marks = clip.marks === undefined ? undefined : array(clip.marks, `${clipName}.marks`).map((mark, index) => fraction(mark, `${clipName}.marks[${index}]`))
+        if (marks && !marks.length) throw new Error(`${clipName}.marks must not be empty`)
         for (const key of ['once', 'hold', 'fit', 'chewed']) if (clip[key] !== undefined && clip[key] !== true) throw new Error(`${clipName}.${key} must be true`)
         if ([clip.next, clip.once, clip.hold].filter(end => end !== undefined).length > 1) throw new Error(`${clipName} allows at most one of next, once and hold`)
         const from = clip.start === undefined ? undefined : array(clip.start, `${clipName}.start`).map((part, index) => fraction(part, `${clipName}.start[${index}]`))
@@ -900,6 +933,8 @@ function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefini
             ...(clip.once ? { once: true as const } : {}),
             ...(clip.hold ? { hold: true as const } : {}),
             ...(from ? { start: { min: from[0], max: from[1] } } : {}),
+            ...(ground ? { ground } : {}),
+            ...(marks ? { marks } : {}),
             ...(clip.tracks === undefined ? {} : { tracks: named(clip.tracks, `${clipName}.tracks`, (track, trackName) => {
                 const points = array(track, trackName).map((pair, index) => {
                     if (!Array.isArray(pair) || pair.length !== 2) throw new Error(`${trackName}[${index}] must be [x, y]`)
@@ -916,24 +951,30 @@ function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefini
     }
     const layers = named(source.layers, `${name}.layers`, (entry, entryName) => entry === null ? null : clipOf(entry, entryName))
     if (!Object.keys(layers).length) throw new Error(`${name}.layers must not be empty`)
+    for (const [id, clip] of Object.entries(clips)) {
+        if (clip.next !== undefined) clipOf(clip.next, `${name}.clips.${id}.next`)
+        if (clip.sync !== undefined && !Object.hasOwn(layers, clip.sync)) throw new Error(`${name}.clips.${id}.sync must be one of the animation's layers`)
+    }
+    return { clips, layers }
+}
+
+function parsePlantAnimation(value: unknown, name: string): PlantAnimationDefinition {
+    const source = exactObject(value, ['clips', 'layers'], name, ['fire', 'blink', 'states', 'asleep'])
+    const result: PlantAnimationDefinition = parseAnimation(source, name), { clips, layers } = result
+    const clipOf = (entry: unknown, entryName: string): string => {
+        if (typeof entry !== 'string' || !clips[entry]) throw new Error(`${entryName} must be one of the animation's clips`)
+        return entry
+    }
     /** What some layers play: `{layer: clip}`. */
     const playing = (entry: unknown, entryName: string): Record<string, string> => {
         const result = named(entry, entryName, clipOf)
-        for (const layer of Object.keys(result)) layerOf(layer, `${entryName}.${layer}`)
+        for (const layer of Object.keys(result)) if (!Object.hasOwn(layers, layer)) throw new Error(`${entryName}.${layer} must be one of the animation's layers`)
         return result
     }
     const abilityState = (entry: unknown, entryName: string): PlantAbilityState => {
         if (!PLANT_ABILITY_STATES.includes(entry as PlantAbilityState)) throw new Error(`${entryName} must be a state of a plant's ability`)
         return entry as PlantAbilityState
     }
-    const layerOf = (entry: string, entryName: string): void => {
-        if (!Object.hasOwn(layers, entry)) throw new Error(`${entryName} must be one of the animation's layers`)
-    }
-    for (const [id, clip] of Object.entries(clips)) {
-        if (clip.next !== undefined) clipOf(clip.next, `${name}.clips.${id}.next`)
-        if (clip.sync !== undefined) layerOf(clip.sync, `${name}.clips.${id}.sync`)
-    }
-    const result: PlantAnimationDefinition = { clips, layers }
     if (source.fire !== undefined) result.fire = playing(source.fire, `${name}.fire`)
     if (source.asleep !== undefined) result.asleep = playing(source.asleep, `${name}.asleep`)
     if (source.states !== undefined) {
@@ -972,39 +1013,6 @@ function parsePlantTargeting(value: unknown, name: string): PlantTargeting {
     }
 }
 
-function parseZombieGait(value: unknown, name: string): ZombieGait {
-    const gait = exactObject(value, ['walkGround', 'eat', 'deaths'], name)
-    const eat = exactObject(gait.eat, ['frames', 'rate', 'chewTimes'], `${name}.eat`)
-    const chewTimes = array(eat.chewTimes, `${name}.eat.chewTimes`).map((time, index) =>
-        fraction(time, `${name}.eat.chewTimes[${index}]`))
-    if (!chewTimes.length) throw new Error(`${name}.eat.chewTimes must not be empty`)
-    const deaths = array(gait.deaths, `${name}.deaths`).map((entry, index) => {
-        const death = exactObject(entry, ['animation', 'frames', 'fallTime'], `${name}.deaths[${index}]`, ['rate'])
-        if (death.animation !== 'anim_death' && death.animation !== 'anim_death2' && death.animation !== 'anim_superlongdeath') {
-            throw new Error(`${name}.deaths[${index}].animation must be anim_death, anim_death2 or anim_superlongdeath`)
-        }
-        return {
-            animation: death.animation as 'anim_death' | 'anim_death2' | 'anim_superlongdeath',
-            frames: frameCount(death.frames, `${name}.deaths[${index}].frames`),
-            fallTime: fraction(death.fallTime, `${name}.deaths[${index}].fallTime`),
-            ...(death.rate === undefined ? {} : { rate: positiveFinite(death.rate, `${name}.deaths[${index}].rate`) }),
-        }
-    })
-    if (deaths.length === 0 || deaths[0].animation !== 'anim_death') {
-        throw new Error(`${name}.deaths must start with anim_death`)
-    }
-    if (new Set(deaths.map(death => death.animation)).size !== deaths.length) throw new Error(`${name}.deaths repeats an animation`)
-    return {
-        walkGround: groundTrack(gait.walkGround, `${name}.walkGround`),
-        eat: {
-            frames: frameCount(eat.frames, `${name}.eat.frames`),
-            rate: positiveFinite(eat.rate, `${name}.eat.rate`),
-            chewTimes,
-        },
-        deaths,
-    }
-}
-
 function speedRange(value: unknown, name: string): { min: number; max: number } {
     const speed = exactObject(value, ['min', 'max'], name)
     const min = nonNegativeFinite(speed.min, `${name}.min`)
@@ -1027,12 +1035,6 @@ function groundTrack(value: unknown, name: string): number[] {
         throw new Error(`${name} must move forward over at least two frames`)
     }
     return ground
-}
-
-function frameCount(value: unknown, name: string): number {
-    const frames = positiveInteger(value, name)
-    if (frames < 2) throw new Error(`${name} must be at least 2`)
-    return frames
 }
 
 function fraction(value: unknown, name: string): number {

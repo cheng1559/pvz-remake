@@ -1,3 +1,4 @@
+import { withFrom } from './from'
 import type { MusicTuneId } from './music'
 import type { JsonObject } from '@/shared/protocol'
 import { isQualifiedId } from '@/shared/mod'
@@ -16,16 +17,16 @@ export interface ClientAnimationClip {
     /** Seconds a layer blends into it from the pose it had (Reanimation::StartBlend), 0.2 by default. */
     readonly blend?: number
     readonly fps?: number
+    /**
+     * REANIM_*_FULL_LAST_FRAME (Plant::DoBlink's blink): its last picture keeps a frame's time, instead of the pictures
+     * being spread over the clip's length (Reanimation::GetFrameTime).
+     */
+    readonly fullLastFrame?: true
 }
 
 export interface AnimationDefinition { readonly [slot: string]: ClientAnimationClip }
 
 /** The parent track a head, blink or flag clip attaches to; the data must name it. */
-/** The plant or zombie whose `animations` `id` plays: its `animationsFrom`, else itself. */
-export function animationSource(id: string, definition: { readonly animationsFrom?: string }): ClientAnimationTarget {
-    return definition.animationsFrom ?? id
-}
-
 export function attachmentTrack(clip: ClientAnimationClip): string {
     if (!clip.attachmentTrackId) throw new Error(`${clip.reanimId} needs an attachmentTrackId to attach`)
     return clip.attachmentTrackId
@@ -145,10 +146,13 @@ export interface PlantPresentationDefinition {
     readonly pointerOffsetY?: number
     readonly visual: PlantVisual
     readonly parts?: PlantParts
+    /** The view that draws it (PlantViewRegistry), where it has one of its own: every plant is drawn by its animation. */
     readonly view?: PlantViewKind
-    /** Another plant whose `animations` this one plays (the explode-o-nut plays the wall-nut's); by default its own. */
-    readonly animationsFrom?: ClientAnimationTarget
-    readonly animations?: ClientAnimationDefinitions[ClientAnimationTarget]
+    /**
+     * The pictures of its clips, by the names of its gameplay animation's: the Reanim each is drawn with, where, and the
+     * part it goes on. With `from`, another plant's, adding what it writes of its own (the explode-o-nut's are the wall-nut's).
+     */
+    readonly clips?: ClientAnimationDefinitions[ClientAnimationTarget]
     /**
      * Plant::PlantInitialize off the board (the almanac, a packet's picture): the clips its layers show there in place
      * of the ones they start with on it, `{layer: clip}`, going at those's pace (an armed potato mine, a grown sun-shroom).
@@ -262,13 +266,15 @@ export interface ZombieDrop {
 
 export interface ZombiePresentationDefinition {
     readonly nameKey?: string
+    /** The view that draws it (ZombieViewRegistry), where it has one of its own. */
     readonly view?: string
-    /** Another zombie whose `animations` this one plays (a Mod zombie on the plain body); by default its own. */
-    readonly animationsFrom?: ClientAnimationTarget
-    readonly animations?: ClientAnimationDefinitions[ClientAnimationTarget]
-    readonly shadowX: number
-    /** Zombie::DrawShadow's offset for a zombie walking right (mind-controlled); defaults to `shadowX`. */
-    readonly shadowXBackwards?: number
+    /** The pictures of its clips, as a plant's: with `from`, another zombie's, adding what it writes of its own (a Mod zombie on the plain body). */
+    readonly clips: ClientAnimationDefinitions[ClientAnimationTarget]
+    /**
+     * Zombie::DrawShadow: where its shadow lies from the zombie's place, as a plant's; `backwardsX` in place of `x`
+     * for a zombie walking right (mind-controlled), `x` by default.
+     */
+    readonly shadow: { readonly x: number; readonly y: number; readonly backwardsX?: number }
     /**
      * Its zombie seed's packet (SeedPacket::DrawSeedPacket for SEED_ZOMBIE_*): where the original has the cached
      * zombie frame, posed at (40, 40), drawn at this offset and scale. `clip` names the animation whose first frame
@@ -278,8 +284,6 @@ export interface ZombiePresentationDefinition {
     readonly packet?: { readonly x: number; readonly y: number; readonly scale: number; readonly clip?: string }
     /** The almanac's small picture of it: where its Reanim's origin goes in the frame, and at what size. */
     readonly portrait?: { readonly x: number; readonly y: number; readonly scale: number }
-    /** Original Y-down coordinates; defaults to 92. */
-    readonly shadowY?: number
     readonly parts: ZombieParts
     readonly damagedArm: 'damagedArm' | 'poleVaulterDamagedArm'
     readonly damagedArmSprite?: string
@@ -289,7 +293,6 @@ export interface ZombiePresentationDefinition {
     readonly enrageSounds?: readonly PresentationSound[]
     /** Unavailable cells in the 5x5 street-preview grid. */
     readonly previewBlockedCells?: readonly { readonly column: number; readonly row: number }[]
-    readonly flag?: boolean
     readonly vault?: boolean
     readonly drops: Readonly<Partial<Record<'head' | 'arm' | 'flag', ZombieDrop>>>
     /** The gameplay `helm`, worn on the head. */
@@ -432,20 +435,6 @@ export interface AwardPresentationDefinition {
     readonly pageY: number
     readonly pageImages?: readonly { readonly sprite: string; readonly x: number; readonly y: number; readonly width?: number; readonly height?: number }[]
 }
-const VIEW_SLOTS: Readonly<Record<string, readonly string[]>> = {
-    puffshroom: ['body', 'sleep', 'shoot', 'blink'],
-    /** A mushroom that only idles and sleeps (the Hypno-shroom until its ability comes). */
-    mushroom: ['body', 'sleep'],
-    sunshroom: ['body', 'small', 'sleep', 'bigSleep', 'grow', 'blink'],
-    gravebuster: ['body', 'land'],
-    bowling: ['body', 'blinkTwitch', 'blinkTwice', 'blinkThrice'],
-    shooter: ['body', 'idleHead', 'shootHead', 'blink'],
-    sunflower: ['body', 'blink'],
-    cherrybomb: ['idle', 'explode'],
-    wallnut: ['body', 'blinkTwitch', 'blinkTwice', 'blinkThrice'],
-    potatomine: ['buried', 'rise', 'armed', 'blink', 'glow'],
-    chomper: ['idle', 'bite', 'chew', 'swallow'],
-}
 export interface MainMenuButtonDefinition {
     readonly name: string
     /** The menu page, action or dialog (players, options, quit) it opens; adventure and zombatar have their own handling. */
@@ -536,7 +525,10 @@ export interface PresentationDefinitions {
 }
 
 export function parsePresentationDefinitions(value: unknown): PresentationDefinitions {
-    const data = object(value, 'presentation definitions')
+    const source = object(value, 'presentation definitions')
+    // A plant's or a zombie's clips may start as another's (withFrom).
+    const data: Record<string, unknown> = { ...source, plants: withFrom(object(source.plants, 'presentation definitions.plants'), 'clips', 'plants'),
+        zombies: withFrom(object(source.zombies, 'presentation definitions.zombies'), 'clips', 'zombies') }
     for (const [id, layers] of Object.entries(object(data.screens ?? {}, 'presentation screens'))) {
         if (!Array.isArray(layers)) throw new TypeError(id + ' screen animations must be an array')
         const names = new Set<string>()
@@ -687,7 +679,6 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
         if (visual.nameKey !== undefined) text(visual.nameKey, id + '.visual.nameKey')
         if (visual.tooltipKey !== undefined) text(visual.tooltipKey, id + '.visual.tooltipKey')
         if (plant.view !== undefined) text(plant.view, id + '.view')
-        if (plant.animationsFrom !== undefined) text(plant.animationsFrom, id + '.animationsFrom')
         const packet = plant.packet === undefined ? {} : object(plant.packet, id + '.packet')
         for (const [field, clips] of [['offBoard', plant.offBoard], ['packet.clips', packet.clips]] as const) {
             if (clips !== undefined) for (const [layer, clip] of Object.entries(object(clips, id + '.' + field))) text(clip, id + '.' + field + '.' + layer)
@@ -726,10 +717,8 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
                 }
             }
         }
-        if (zombie.animationsFrom !== undefined) text(zombie.animationsFrom, id + '.animationsFrom')
-        if (!Number.isFinite(zombie.shadowX)) throw new TypeError(id + ' has invalid presentation')
-        if (zombie.shadowY !== undefined) finite(zombie.shadowY, id + '.shadowY')
-        if (zombie.shadowXBackwards !== undefined) finite(zombie.shadowXBackwards, id + '.shadowXBackwards')
+        point(zombie.shadow, id + '.shadow')
+        if ((zombie.shadow as Record<string, unknown>).backwardsX !== undefined) finite((zombie.shadow as Record<string, unknown>).backwardsX, id + '.shadow.backwardsX')
         if (zombie.packet !== undefined) {
             const packet = object(zombie.packet, id + '.packet')
             finite(packet.x, id + '.packet.x'); finite(packet.y, id + '.packet.y'); positive(packet.scale, id + '.packet.scale')
@@ -755,8 +744,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
             texts(shieldArms.free, id + '.parts.shieldArms.free')
             if (zombie.shield === undefined) throw new TypeError(id + '.parts.shieldArms requires a shield')
         }
-        if (zombie.flag === true && parts.flagArm === undefined) throw new TypeError(id + '.parts.flagArm is required for a flag zombie')
-        object(zombie.animations, id + '.animations')
+        object(zombie.clips, id + '.clips')
         if (zombie.damagedArm !== 'damagedArm' && zombie.damagedArm !== 'poleVaulterDamagedArm') throw new TypeError(id + '.damagedArm is invalid')
         for (const [part, value] of Object.entries(object(zombie.drops, id + '.drops'))) {
             const drop = object(value, id + '.drops.' + part)
@@ -792,23 +780,6 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     }
     if (!zombies['pvz:normal']) throw new TypeError('Missing normal zombie presentation')
     for (const id of Object.keys(plants)) if (Object.hasOwn(zombies, id)) throw new TypeError('Duplicate presentation target: ' + id)
-    const targets = { ...plants, ...zombies }
-    for (const [id, entry] of Object.entries(targets)) {
-        const definition = entry as { animationsFrom?: string; animations?: unknown }
-        if (definition.animationsFrom && !(targets[definition.animationsFrom] as { animations?: unknown } | undefined)?.animations) {
-            throw new TypeError(id + ' references missing animations: ' + definition.animationsFrom)
-        }
-        // Every zombie is drawn from clips, its own or another's.
-        if (Object.hasOwn(zombies, id) && !definition.animationsFrom && !definition.animations) throw new TypeError(id + ' has no animations')
-    }
-    for (const [id, entry] of Object.entries(plants)) {
-        const plant = entry as PlantPresentationDefinition
-        const slots = plant.view && VIEW_SLOTS[plant.view]
-        if (!slots) continue
-        const target = targets[animationSource(id, plant)] as { animations?: AnimationDefinition }
-        if (!target.animations) throw new TypeError(id + ' has no animations')
-        for (const slot of slots) if (!target.animations[slot]) throw new TypeError(`${id} is missing ${slot} animation`)
-    }
     for (const [id, value] of Object.entries(object(data.gridItems, 'gridItems'))) {
         const item = object(value, id)
         text(item.view, id + '.view')
@@ -863,7 +834,7 @@ export function parsePresentationDefinitions(value: unknown): PresentationDefini
     for (const [id, value] of Object.entries(object(packets.plantCels, 'seedPackets.plantCels'))) {
         if (!Number.isInteger(value) || (value as number) < 0) throw new TypeError('Invalid packet cel: ' + id)
     }
-    return value as PresentationDefinitions
+    return data as unknown as PresentationDefinitions
 }
 
 function finite(value: unknown, name: string): void {

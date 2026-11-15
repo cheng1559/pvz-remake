@@ -1,7 +1,8 @@
 import { EventQueueResource, emitServerEvent } from '../state/events'
-import type { GameplayDefinitions, ZombieDefinition } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, ZOMBIE_CLIPS, type ZombieDefinition } from '@/shared/content/gameplay'
 import { type Position, RandomResource, type Zombie } from '../state/components'
-import { TICKS_PER_SECOND, ZOMBIE_ASSET_FPS, walkAnimationSpeed, zombieGait } from './animation'
+import { TICKS_PER_SECOND, playZombie, startWalk, stepZombie, zombieBody } from './animation'
+import { type AnimationRandom, passedMark } from '@/shared/content/animation'
 import type { World } from '@/ecs/index'
 import { PLANT_WIDTH, teamDirection, ZOMBIE_WIDTH, zombieTeam } from '@/shared/content/teams'
 
@@ -14,21 +15,18 @@ export function startVault(
     position: Position,
     plantPosition: Position,
     definition: ZombieDefinition,
-    pace: number,
+    random: AnimationRandom,
     /** Over a rolling nut the zombie jumps where it stands. */
     inPlace = false,
 ): void {
-    const vault = definition.vault!
     zombie.state = 'vaulting'
-    zombie.animation = 'anim_jump'
-    zombie.animationTime = 0
-    zombie.animationSpeed = vault.jumpRate / ZOMBIE_ASSET_FPS * pace
+    const jump = playZombie(zombie, definition.animation, ZOMBIE_CLIPS.jump, random)
     zombie.biteTicks = 0
     zombie.hasPole = false
     // Zombie::UpdateZombiePolevaulter spreads the jump over the animation; the landing adds the rest. The jump ends 80
     // past the plant's left edge (mX - aPlant->mX - 80); a zombie facing right mirrors that across both widths. One
     // put down on the plant's own cell does not jump back (the original's zombies never stand there).
-    const durationTicks = vault.jumpFrames / vault.jumpRate * TICKS_PER_SECOND
+    const durationTicks = definition.animation.clips[ZOMBIE_CLIPS.jump].frames / jump.rate * TICKS_PER_SECOND
     const x = Math.trunc(position.x)
     const distance = teamDirection(zombieTeam(zombie)) < 0 ? x - plantPosition.x - 80
         : plantPosition.x - x - (ZOMBIE_WIDTH - PLANT_WIDTH) - 80
@@ -45,33 +43,25 @@ export function updateVault(
 ): void {
     const definition = definitions.zombies[zombie.typeId]
     const vault = definition.vault!
-    const span = vault.jumpFrames - 1
-    const previous = zombie.animationTime
-    zombie.animationSpeed = vault.jumpRate / ZOMBIE_ASSET_FPS * pace
-    zombie.animationTime = Math.min(span, previous + span * vault.jumpRate * pace / (vault.jumpFrames * TICKS_PER_SECOND))
+    const jump = zombieBody(zombie), clip = definition.animation.clips[ZOMBIE_CLIPS.jump], previous = jump.time
+    stepZombie(zombie, definition.animation, world.resources.get(RandomResource))
     // A zombie facing right vaults right.
     const direction = teamDirection(zombieTeam(zombie))
     position.x += direction * zombie.speedPerTick * pace
     const events = world.resources.get(EventQueueResource)
-    if (previous < span * POLE_VAULT_STEP_TIME && zombie.animationTime >= span * POLE_VAULT_STEP_TIME) {
-        emitServerEvent(events, 'zombieVaultSound', { entityId: entity, sound: 'grassstep' })
-    }
-    if (previous < span * POLE_VAULT_SOUND_TIME && zombie.animationTime >= span * POLE_VAULT_SOUND_TIME) {
-        emitServerEvent(events, 'zombieVaultSound', { entityId: entity, sound: 'polevault' })
-    }
-    if (zombie.animationTime < span) return
+    if (passedMark(clip, previous, jump.time, POLE_VAULT_STEP_TIME)) emitServerEvent(events, 'zombieVaultSound', { entityId: entity, sound: 'grassstep' })
+    if (passedMark(clip, previous, jump.time, POLE_VAULT_SOUND_TIME)) emitServerEvent(events, 'zombieVaultSound', { entityId: entity, sound: 'polevault' })
+    if (jump.time < clip.frames) return
     position.x += direction * vault.landingOffset
-    startPostVaultWalk(world, definitions, zombie, pace)
+    startPostVaultWalk(world, definitions, zombie)
 }
 
 /** StartWalkAnim(0), shared by landing and WalkIntoHouse's pre-vault transition. */
-export function startPostVaultWalk(world: World, definitions: GameplayDefinitions, zombie: Zombie, pace: number): void {
+export function startPostVaultWalk(world: World, definitions: GameplayDefinitions, zombie: Zombie): void {
     const definition = definitions.zombies[zombie.typeId]
     const random = world.resources.get(RandomResource)
     zombie.hasPole = false
     zombie.state = 'walking'
-    zombie.animation = zombie.walkAnimation
-    zombie.animationTime = 0
     zombie.speedPerTick = definition.speedPerTick.min + random.nextFloat() * (definition.speedPerTick.max - definition.speedPerTick.min)
-    zombie.animationSpeed = walkAnimationSpeed(zombie.speedPerTick, zombieGait(definition, definitions).walkGround) * pace
+    startWalk(zombie, definition.animation, zombie.walkClip, random)
 }

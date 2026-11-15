@@ -4,7 +4,7 @@ import {
     LevelStateResource, MowedPlantComponent, type Plant, PlantAttackComponent, PlantComponent, type Position, PositionComponent, type Projectile,
     ProjectileComponent, type Zombie, ZombieComponent,
 } from '../state/components'
-import { ZOMBIE_MOWERED_TICKS } from '../zombies/animation'
+import { MOWERED_TICKS } from '@/shared/content/zombieAnimation'
 import { destroyZombie, dropZombieHelm, dropZombieShield, isFlattenableZombie, mowZombie as flattenZombie } from '../zombies/damage'
 import { dropZombieLoot } from './loot'
 import { dropZombieFlag } from '../zombies/flag'
@@ -46,7 +46,7 @@ export function createMowerSystem(definitions: GameplayDefinitions): GameSystem 
             }
             // A mowed plant is squashed for as long as a mowed zombie, then gone.
             for (const entity of world.query(MowedPlantComponent)) {
-                if (++world.get(entity, MowedPlantComponent)!.ticks >= ZOMBIE_MOWERED_TICKS) commands.destroyEntity(entity)
+                if (++world.get(entity, MowedPlantComponent)!.ticks >= MOWERED_TICKS) commands.destroyEntity(entity)
             }
         },
     }
@@ -112,8 +112,8 @@ export function mowZombie(world: World, definitions: GameplayDefinitions, mowerI
     }
     dropZombieShield(world, definitions, entity, zombie)
     dropZombieHelm(world, definitions, entity, zombie)
-    dropZombieFlag(world, definitions, entity)
-    flattenZombie(zombie)
+    dropZombieFlag(world, entity)
+    flattenZombie(world, definitions, zombie)
     dropZombieLoot(world, definitions, entity, world)
     emitServerEvent(events, 'zombieMowered', { mowerId, zombieId: entity })
 }

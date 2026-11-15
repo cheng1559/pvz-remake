@@ -57,8 +57,13 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     const walking = game()
     const walker = spawnZombie(walking.world, definitions, 'pvz:normal', 2, 700, 280)
     walking.run()
-    assert.equal(walking.world.get(walker, PositionComponent)!.x < 700, true)
-    assert.equal(walking.world.get(walker, ZombieComponent)!.animationTime > 0, true)
+    // Zombie::UpdateZombieWalking: a tick takes it as far as the ground goes between the frames its clip is at, at the
+    // clip's rate, which is its speed's (Zombie::UpdateAnimSpeed).
+    const body = walking.world.get(walker, ZombieComponent)!.animations.body, walk = definitions.zombies['pvz:normal'].animation.clips[body.clip]
+    const speed = walking.world.get(walker, ZombieComponent)!.speedPerTick
+    assert.ok(Math.abs(body.rate - speed * walk.frames / (walk.ground!.at(-1)! - walk.ground![0]) * 47) < 1e-9)
+    assert.ok(Math.abs(700 - walking.world.get(walker, PositionComponent)!.x - (walk.ground![1] - walk.ground![0]) * body.rate / 100) < 1e-9)
+    assert.ok(Math.abs(body.time - body.rate / 100) < 1e-12)
     let previousX = walking.world.get(walker, PositionComponent)!.x
     for (let tick = 0; tick < 300; tick++) {
         walking.run()
@@ -141,8 +146,8 @@ test('normal zombie uses grounded walking, loses limbs, bites, dies, and loses a
     damageZombie(dying.world, definitions, corpse, 70)
     const deathTicks = dying.world.get(corpse, ZombieComponent)!.deathTicksRemaining
     const dyingZombie = dying.world.get(corpse, ZombieComponent)!
-    const deathFrames = dyingZombie.animation === 'anim_death2' ? 32 : 38
-    assert.equal(deathTicks, Math.ceil((deathFrames + 1) / (dyingZombie.animationSpeed * 12) * 100) + 100)
+    const death = dyingZombie.animations.body
+    assert.equal(deathTicks, Math.ceil((death.clip === 'death2' ? 33 : 39) / death.rate * 100) + 100)
     assert.equal(dying.world.get(corpse, ZombieComponent)!.state, 'dying')
     assert.equal(
         dying.world.resources.get(EventQueueResource).events.some(event => event.type === 'zombieDying'),
@@ -198,4 +203,19 @@ test('zombie target cache follows component replacement, mutation and removal', 
     world.remove(plant, PlantComponent)
     resetPosition(); run()
     assert.equal(state(), 'walking')
+})
+
+test('a chilled zombie body goes at half its rate and its flag at its own, which it lets go with its head', () => {
+    const { world, run } = game()
+    const entity = spawnZombie(world, definitions, 'pvz:flag', 2, 700, 280)
+    const zombie = world.get(entity, ZombieComponent)!
+    damageZombie(world, definitions, entity, 1, { chillTicks: 1000 })
+    const before = { body: zombie.animations.body.time, flag: zombie.animations.flag.time }
+    run()
+    // Zombie::ApplyAnimRate halves the body alone; the flag is a Reanim of its own at 15 a second.
+    assert.ok(Math.abs(zombie.animations.body.time - before.body - zombie.animations.body.rate / 2 / 100) < 1e-9)
+    assert.ok(Math.abs(zombie.animations.flag.time - before.flag - 15 / 100) < 1e-9)
+    damageZombie(world, definitions, entity, 200)
+    assert.equal(zombie.animations.flag, undefined, 'Zombie::DropFlag')
+    assert.ok(world.resources.get(EventQueueResource).events.some(event => event.type === 'zombiePartDropped' && event.data.part === 'flag'))
 })

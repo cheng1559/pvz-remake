@@ -201,6 +201,12 @@ export class ReanimPlayer extends Component {
     private readonly frames = new Map<string, SpriteFrame>()
     private readonly views = new Map<string, TrackView>()
     private timeSeconds = 0
+    /**
+     * REANIM_*_FULL_LAST_FRAME (a plant's blink): its last picture keeps a frame's time of its own, as the others do.
+     * Otherwise, as Reanimation::GetFrameTime has it, the clip's pictures are spread over its whole length, its last
+     * reached as it ends (a loop coming round to its first from there).
+     */
+    fullLastFrame = false
     private playing = false
     private loop = true
     private rate = 1
@@ -246,7 +252,14 @@ export class ReanimPlayer extends Component {
     /** The loaded clip, or null before the first load. */
     get loadedId(): string | null { return this.data?.id ?? null }
     get lastFrameTimeSeconds(): number {
-        return Math.max(0, ...this.requireData().tracks.map(track => track.keyframes[track.keyframes.length - 1].timeSeconds))
+        return lastKeyTime(this.requireData())
+    }
+
+    /** Where in its pictures the clip is (Reanimation::GetFrameTime): its time, spread over the pictures' own span. */
+    private get poseSeconds(): number {
+        const data = this.data
+        if (!data || this.fullLastFrame || !(data.durationSeconds > 0)) return this.timeSeconds
+        return this.timeSeconds * lastKeyTime(data) / data.durationSeconds
     }
 
     /** Gives the track its own node, for callers that attach to it or change it directly. */
@@ -749,7 +762,7 @@ export class ReanimPlayer extends Component {
             if (parentPose) matrix = attachmentMatrix(parentPose, basePose)
             else shown = false
         }
-        state[Header.TIME] = this.timeSeconds
+        state[Header.TIME] = this.poseSeconds
         state[Header.RED] = color.r; state[Header.GREEN] = color.g; state[Header.BLUE] = color.b; state[Header.ALPHA] = color.a
         state[Header.EXTRA] = this.drawExtraAdditive ? 1 : 0
         state[Header.EXTRA_RED] = extra.r; state[Header.EXTRA_GREEN] = extra.g; state[Header.EXTRA_BLUE] = extra.b; state[Header.EXTRA_ALPHA] = extra.a
@@ -927,13 +940,13 @@ export class ReanimPlayer extends Component {
         return this.data
     }
 
-    sampleTrack(trackId: string, timeSeconds = this.timeSeconds): ReanimKeyframe | null {
+    sampleTrack(trackId: string, timeSeconds = this.poseSeconds): ReanimKeyframe | null {
         const track = this.requireData().tracks.find(candidate => candidate.id === trackId)
         return track ? sampleReanimTrack(track, timeSeconds) : null
     }
 
     private sampleBlendedTrack(track: ReanimTrack): ReanimKeyframe | null {
-        let pose = sampleReanimTrack(track, this.timeSeconds)
+        let pose = sampleReanimTrack(track, this.poseSeconds)
         const blendFrom = this.blendFromPoses.get(track.id)
         if (pose && blendFrom && this.blendDuration > 0) {
             pose = blendKeyframes(blendFrom, pose, Math.min(1, this.blendElapsed / this.blendDuration))
@@ -1010,6 +1023,14 @@ function positiveFinite(value: number, name: string): number {
 }
 
 let blendFrom: Float64Array | undefined, blendTo: Float64Array | undefined
+
+/** The time of a clip's last picture, of any track: what its pictures span. */
+const lastKeyTimes = new WeakMap<Reanim, number>()
+function lastKeyTime(data: Reanim): number {
+    let time = lastKeyTimes.get(data)
+    if (time === undefined) lastKeyTimes.set(data, time = Math.max(0, ...data.tracks.map(track => track.keyframes[track.keyframes.length - 1].timeSeconds)))
+    return time
+}
 
 function blendKeyframes(from: ReanimKeyframe, to: ReanimKeyframe, ratio: number): ReanimKeyframe {
     const drawing = kernel()

@@ -97,7 +97,7 @@ test('level one drops its award from the last effective zombie before its corpse
     const headless = spawnZombie(world, definitions, 'pvz:normal', 2, 100, 250)
     world.get(headless, ZombieComponent)!.hasHead = false
     const mowered = spawnZombie(world, definitions, 'pvz:normal', 2, 500, 250)
-    mowZombie(world.get(mowered, ZombieComponent)!)
+    mowZombie(world, definitions, world.get(mowered, ZombieComponent)!)
     const schedule = new Schedule()
     schedule.add('spawn', createWaveSystem(definitions))
     schedule.add('zombie', createZombieSystem(definitions))

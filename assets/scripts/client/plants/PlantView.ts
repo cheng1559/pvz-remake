@@ -5,10 +5,13 @@ import type { LevelEntitySnapshot } from '@/client/level/LevelPresentationSnapsh
 import { boardToLayer, type LevelStage, type StageEvent } from '@/client/level/LevelStage'
 import { ReanimPlayer, ReanimRepository } from '@/client/reanim/ReanimPlayer'
 import type { EntityAttachments } from '@/client/view/EntityAttachments'
+import { type LayerClips, LayerPlayers, type LayerShown, shownLayer } from '@/client/view/layerPlayback'
 import { uiNode } from '@/client/view/uiNode'
 import { PLANT_BLINK_LAYER, type PlantAnimationDefinition } from '@/shared/content/gameplay'
 import { type ReanimKeyframe, type ReanimTrack, sampleReanimTrack } from '@/shared/content/reanim'
+export type { LayerShown } from '@/client/view/layerPlayback'
 import { renderOrder } from '@/shared/content/renderOrder'
+import { MOWERED_CLIP } from '@/shared/content/zombieAnimation'
 import { PLANT_WIDTH, plantFacingX, plantTeam } from '@/shared/content/teams'
 import { type PlantSnapshot, TICK_SECONDS, type WorldSnapshot } from '@/shared/protocol/index'
 import { plantDefinition } from './definitions'
@@ -50,9 +53,9 @@ export interface PlantViewContext {
 
 /** Reanimation::StartBlend(20): a layer that changes its clip blends from the pose it had, unless the clip says how long. */
 const BLEND_SECONDS = 0.2
-/** The original's driver for a mowed zombie, and its rate (ZOMBIE_MOWERED_ANIMATION_SPEED: 8 fps, advanced twice). */
+/** The original's driver for a mowed zombie, which a mowed plant is squashed by too, at its pace (MOWERED_CLIP). */
 const MOWERED_REANIM = 'pvz:lawnmowered_zombie'
-const MOWERED_RATE = 16 / 12
+const MOWERED_RATE = MOWERED_CLIP.fps!.min / 12
 /** The point LawnMoweredZombie's locator turns a zombie about, its foot, in the zombie's own y-up units. */
 const MOWERED_ZOMBIE_FOOT = { x: 50, y: -117 }
 /** A plant turns about the middle of its base instead, from its top left in board units. */
@@ -60,21 +63,7 @@ const MOWED_PLANT_FOOT = { x: PLANT_WIDTH / 2, y: 80 }
 /** LawnMoweredZombie's locator once loaded, by the content it is of. */
 const locators = new WeakMap<object, { track?: ReanimTrack }>()
 
-interface Layer { player: ReanimPlayer, key?: string, time: number, shown: boolean }
 interface FireParticle { id: string; x: number; y: number; delayTicks: number }
-
-/** What a layer shows: a clip of the presentation, and how far into it in the server's frames. */
-export interface LayerShown {
-    /** Names what is shown: a layer shown something else starts it from the beginning. */
-    key: string
-    clip: ClientAnimationClip
-    time: number
-    /** Frames a second. */
-    rate: number
-    /** It plays once, over this many frames whatever its own length; a loop when omitted, coming round by its own length. */
-    frames?: number
-    hidden?: boolean
-}
 
 /**
  * A plant, drawn by its animation (PlantDefinition.animation): a player for each of its layers, showing the clip the
@@ -89,12 +78,7 @@ export class PlantView {
     protected readonly animation: PlantAnimationDefinition
     /** The layers' players are in it, over the shadow: a view moves the plant's picture by it. */
     protected root!: Node
-    private readonly layers = new Map<string, Layer>()
-    /**
-     * Reanimation::AttachToAnotherReanimation fixes the pose a part is attached from at its first attachment
-     * (mFrameBasePose): by the layer and the part.
-     */
-    private readonly bases = new Map<string, ReanimKeyframe>()
+    private layers!: LayerPlayers
     /** Tick the current shot started, for a particle that follows it; null until the next sync reports it. */
     private shotTick?: number | null
     /** The bite or production glow it was last drawn with. */
@@ -126,23 +110,24 @@ export class PlantView {
         await new ReanimRepository(content.registry, content.loader).prepare(this.playable())
         if (!node.isValid) return
         this.root = uiNode({ name: 'Layers', parent: node }).node
-        for (const layer of [...Object.keys(this.animation.layers), ...(this.animation.blink ? [PLANT_BLINK_LAYER] : [])]) {
-            this.layers.set(layer, { player: uiNode({ name: layer, parent: this.root }).node.addComponent(ReanimPlayer), time: 0, shown: false })
-        }
+        // Tracks a clip of the plant draws alone (the potato mine's light) are left to it by the others.
+        const alone = Object.keys(this.animation.clips).flatMap(name => this.clips[name]?.onlyTracks ?? [])
+        this.layers = new LayerPlayers(this.root, [...Object.keys(this.animation.layers), ...(this.animation.blink ? [PLANT_BLINK_LAYER] : [])],
+            content.registry, alone)
         this.show(plant)
     }
 
     protected get presentation() { return plantDefinition(this.context.animations.definitions, this.context.plant.typeId) }
 
     /** The first layer's player: the others are on its parts. */
-    protected get body(): ReanimPlayer { return this.layers.values().next().value!.player }
+    protected get body(): ReanimPlayer { return this.layers.player(Object.keys(this.animation.layers)[0]) }
 
     /** The players of the layers it shows, for whoever shows a picture of the plant (a packet stills and colors them). */
-    get players(): ReanimPlayer[] { return [...this.layers.values()].filter(layer => layer.shown).map(layer => layer.player) }
+    get players(): ReanimPlayer[] { return this.layers.shown }
 
     private get clips(): Record<string, ClientAnimationClip | undefined> {
         const { animations, plant } = this.context
-        return animations.resolve(animations.sourceOf(plant.typeId)) as Record<string, ClientAnimationClip | undefined>
+        return animations.resolve(plant.typeId) as Record<string, ClientAnimationClip | undefined>
     }
 
     /** The presentation's clip of a name. */
@@ -175,11 +160,8 @@ export class PlantView {
      */
     protected shown(layer: string, plant: ShownPlant): LayerShown | undefined {
         const state = plant.animations?.[layer]
-        if (!state) return undefined
         // A clip the presentation has in place of the animation's off the board is a loop of its own length.
-        const { frames, next, once, hold } = this.animation.clips[state.clip] ?? {}
-        return { key: state.clip, clip: this.clip(state.clip), time: state.time, rate: state.rate, hidden: state.hidden,
-            ...(next !== undefined || once || hold ? { frames } : {}) }
+        return state && shownLayer(state, plant.animations, this.layerClips)
     }
 
     /**
@@ -187,53 +169,30 @@ export class PlantView {
      * there is to a plant off the board.
      */
     show(plant: ShownPlant): void {
-        // The layers under the one being shown, with the tracks each draws.
-        const below: [string, ReanimPlayer, readonly string[]][] = [], { registry } = this.context.content, { draw } = this.context
-        const scale = draw?.scale ?? this.presentation.scale
-        // Tracks a clip of the plant draws alone (the potato mine's light) are left to it by the others.
-        const alone = Object.keys(this.animation.clips).flatMap(name => this.clips[name]?.onlyTracks ?? [])
-        const blinking = plant.animations?.[PLANT_BLINK_LAYER] !== undefined
-        for (const [name, layer] of this.layers) {
-            const shown = this.shown(name, plant), { player } = layer
-            if (!shown) {
-                if (layer.shown) player.hide()
-                layer.key = undefined
-                layer.shown = false
-                continue
-            }
-            const { clip } = shown, loop = shown.frames === undefined
-            // A clip started over (a second shot) blends from where the first had got to, as a clip changed to does.
-            const started = layer.key !== shown.key || !loop && shown.time < layer.time
-            if (started) {
-                player.change(clip.reanimId, registry, layer.key === undefined ? 0 : clip.blend ?? BLEND_SECONDS)
-                // It goes on the part it names, of the nearest layer under it that has the part (the head on the stem,
-                // the blink on the face), in that layer's space; or at its own place in the plant.
-                const track = clip.attachmentTrackId, parent = track ? [...below].reverse().find(([, , drawn]) => drawn.includes(track)) : undefined
-                const attached = !below.length || !!parent, [x, y] = parent ? [parent[1].node.position.x, parent[1].node.position.y] : [0, 0]
-                const own = draw?.position ? parent ? { x: 0, y: 0 } : draw.position : clip
-                player.node.setPosition(x + own.x, y + own.y)
-                player.node.setScale(attached ? scale : 1, attached ? scale : 1, 1)
-                if (track && parent) {
-                    const key = `${parent[0]}/${track}`, base = this.bases.get(key) ?? this.basePose(clip, track)
-                    player.attachToTrack(parent[1], track, base)
-                    if (!base && player.attachmentBasePose) this.bases.set(key, player.attachmentBasePose)
-                }
-                if (clip.onlyTracks) player.setTracksVisible(player.trackIds.filter(id => !clip.onlyTracks!.includes(id)), false)
-                else player.setTracksVisible(alone, false)
-            }
-            // Plant::DoBlink hides the eyes under the blink.
-            if (name !== PLANT_BLINK_LAYER && !clip.onlyTracks) player.setTracksVisible(this.presentation.parts?.eyes ?? [], !blinking)
-            // Seconds of the clip's own pictures to a frame of the animation's.
-            const length = loop ? clip.rateScale / 12 : player.durationSeconds / shown.frames!
-            const seconds = (loop ? shown.time : Math.min(shown.time, shown.frames!)) * length
-            // It plays on between two times it is shown, and is set right by each.
-            if (shown.hidden) { if (layer.shown) player.hide() }
-            else if (started || !layer.shown) player.play({ loop, rate: shown.rate * length, timeSeconds: seconds, hideOnFinish: false })
-            else player.seek(seconds)
-            layer.key = shown.key
-            layer.time = shown.time
-            layer.shown = !shown.hidden
-            below.push([name, player, clip.onlyTracks ?? player.trackIds])
+        const { draw } = this.context
+        this.layers.show(name => this.shown(name, plant), {
+            blend: (_name, clip, first) => first ? 0 : clip.blend ?? BLEND_SECONDS,
+            // The bottom layer at its place and size; another on no part, at its own place.
+            place: (_name, player, clip, first) => {
+                const own = draw?.position ?? clip, scale = first ? draw?.scale ?? this.presentation.scale : 1
+                player.node.setPosition(own.x, own.y)
+                player.node.setScale(scale, scale, 1)
+            },
+            basePose: (clip, track) => this.basePose(clip, track),
+        })
+        // Plant::DoBlink hides the eyes under the blink, for as long as it is shown.
+        const blinking = this.shown(PLANT_BLINK_LAYER, plant) !== undefined
+        for (const name of Object.keys(this.animation.layers)) {
+            const clip = plant.animations?.[name] && this.clip(plant.animations[name].clip)
+            if (clip && !clip.onlyTracks) this.layers.player(name).setTracksVisible(this.presentation.parts?.eyes ?? [], !blinking)
+        }
+    }
+
+    /** The plant's clips, for what a layer shows (shownLayer). */
+    private get layerClips(): LayerClips {
+        return {
+            picture: name => this.clip(name), played: name => this.animation.clips[name],
+            duration: reanimId => ReanimPlayer.duration(reanimId, this.context.content.registry) ?? 0,
         }
     }
 

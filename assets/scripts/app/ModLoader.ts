@@ -1,6 +1,7 @@
 import { DefinitionSources, buildGameplayContent, buildPresentationDefinitions } from '@/shared/content/DefinitionRegistry'
 import { ClientContentLoader } from '@/client/content/ClientContentLoader'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
+import { assertPresented } from '@/client/content/assertPresented'
 import { loadPresentationDefinitions } from '@/client/content/loadPresentationDefinitions'
 import { ModAssets } from '@/shared/mod/ModAssets'
 import type { ModHost } from '@/shared/mod/ModHost'
@@ -81,21 +82,7 @@ async function loadMods() {
             const presentation = buildPresentationDefinitions(base!.presentation, presentationDefinitions.sources)
             gameplay.validate(content.definitions)
             new ClientAnimationRegistry(presentation)
-            for (const id of Object.keys(content.definitions.plants)) {
-                const view = presentation.plants[id]?.view
-                if (!view || !plantViews.has(view)) throw new Error(`Plant presentation is not installed: ${id}`)
-            }
-            for (const id of Object.keys(content.definitions.zombies)) {
-                const view = presentation.zombies[id]
-                if (!view || !zombieViews.has(view.view ?? 'zombie')) throw new Error(`Zombie presentation is not installed: ${id}`)
-            }
-            for (const id of Object.keys(content.definitions.projectiles)) {
-                const view = presentation.projectiles[id]
-                if (!view || !projectileViews.has(view.view ?? 'projectile')) throw new Error(`Projectile presentation is not installed: ${id}`)
-            }
-            for (const [id, item] of Object.entries(presentation.gridItems)) {
-                if (!gridItemViews.has(item.view)) throw new Error(`Grid item presentation is not installed: ${id}`)
-            }
+            assertPresented(content.definitions, presentation, { plants: plantViews, zombies: zombieViews, projectiles: projectileViews, gridItems: gridItemViews })
             manifests.push(manifest)
             loadedIds.add(manifest.id)
         } catch (error) {

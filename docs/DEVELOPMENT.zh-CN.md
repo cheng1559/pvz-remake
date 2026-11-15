@@ -245,14 +245,14 @@ Debug 构建保留 `pvzPhase4` 关卡调试入口；Mod 开发和安装见 [Mod 
   - `LevelItemView` 画阳光、钱币和关卡奖励。
 - `LevelEntityRenderer` 只做四件事：哪些实体存在、按注册表创建和销毁视图、决定绘制层级、把服务端事件交给对应视图的处理函数。事件引起的效果写在所属的视图里（`PlantView.exploded`、`ZombieView.partDropped`、`ProjectileView.impact` 等静态函数）；它们只依赖事件数据和 `LevelStage`，不要求视图已经创建，所以刚出现就命中的子弹也有溅射。种植的泥土是场地的效果（`Board::DoPlantingEffects`），留在渲染器里。
 - `client/level/LevelStage` 是视图眼中的场地：实体层、资源、按层级生成粒子（`particle`）、把自己的节点排进绘制顺序（`addScenery`）、查别的实体的节点和视图。
-- `client/zombies/ZombieView` 读取僵尸表现定义，处理快照驱动的播放、受伤部件、寒冰颜色、旗帜和碾压；数值、移动和技能状态仍由服务端控制。
+- `client/zombies/ZombieView` 按玩法定义的 `animation` 绘制僵尸的各层：`body` 是身体，其后是它携带的东西（旗子僵尸的 `flag` 层，以后气球的螺旋桨），片段写了 `attachmentTrackId` 的层挂在下层的这条轨道上、并在这条轨道处绘制（原版 `Reanimation::DrawRenderGroup`）。画层的代码 `LayerPlayers`（`client/view/layerPlayback`）由 `PlantView` 和 `ZombieView` 共用。冰冻只让身体减半（`Zombie::ApplyAnimRate`），携带物照自己的速率；旗子掉落由服务端删去 `flag` 层。并处理受伤部件、寒冰颜色、旗帜和碾压；影子写作 `shadow: {x, y, backwardsX?}`，与植物相同；表现层的 `view` 对植物和僵尸都可省略（默认 `plant`／`zombie`）；数值、移动和技能状态仍由服务端控制。
 - `ClientAnimationRegistry` 从上述 JSON 初始化，保留 Mod 动画覆盖、参数校验和冻结逻辑。新增表现应在对应定义和专属视图中维护，避免向通用关卡渲染器追加类型 ID 分支。
 
 玩法配置和表现配置分别命名为 `GameplayDefinitions` 和 `PresentationDefinitions`，均按“加载 → 校验 → 返回对象 → 注入使用方”流转。`loadIntegratedGameContent` 返回 `definitions` 与 `presentation`；UI 通过 `UIAssets.presentation` 持有自己的表现定义。`ClientAnimationRegistry` 显式接收表现定义，视图与种子包通过构造参数或上下文使用配置，不设置全局配置单例。
 
 `shared/content/DefinitionRegistry` 使用现有通用 `Registry` 登记基础内容与 Mod JSON，登记结束后统一校验引用并冻结。服务端入口注册玩法表、关卡、显式关卡补丁和整体覆盖 `overrides`（任意已有 ID，同一 ID 仅限一个 Mod，在全部登记后、关卡补丁前生效），客户端入口注册表现表与名称文本；新的植物 ID、动画目标和视图工厂都经过注册表进入实际运行流程。UI 与战斗读取同一组 Mod 表现定义。新增植物示例及 API 见 [Mod 文档](MODS.md#新增植物与内容注册)。
 
-僵尸通过 `gait` 引用玩法定义中的 `zombieGaits`，`tongueChance` 和 `walk2Chance` 独立声明动画变体；不能从是否配置步态推断其他能力。植物能力的 `targeting` 声明范围、持杆目标过滤和交互修正键，僵尸的 `targetingInsets` 提供对应修正；撑杆落地后的攻击框使用 `vault.landedAttack`。客户端土豆雷的距离计算直接读取玩法攻击框和僵尸身体框。
+僵尸的 `animation` 和植物写法相同：`clips`（`frames`、`fps` 写数值或 `[min, max]`、`start`、`hold`，行走的片段用 `ground` 给出每帧地面位置，`marks` 标出咬下和倒地的时刻）和 `layers`（`{body: walk}`）；在其中写 `from`（`"animation": {"from": "pvz:normal"}`）表示从同一张表里另一个定义的动画开始，旁边写的片段和层加在上面（旗子僵尸在普通僵尸的身体上加一层旗子）。表现层的 `clips` 按同样的片段名给出图片，也用同样的 `from`（爆炸坚果的图片沿用坚果的），两层由同一个函数展开（`shared/content/from.ts`）。植物和僵尸的快照都用 `animations` 按层给出片段、时间和速率，由 `shared/content/animation` 同一份代码推进。`tongueChance` 和 `walk2Chance` 独立声明动画变体。植物能力的 `targeting` 声明范围、持杆目标过滤和交互修正键，僵尸的 `targetingInsets` 提供对应修正；撑杆落地后的攻击框使用 `vault.landedAttack`。客户端土豆雷的距离计算直接读取玩法攻击框和僵尸身体框。
 
 表现定义中的 `projectiles`、僵尸 `helm`/`shield`/`drops` 声明图片、轨道、特效、偏移和音效；音效的 `pitchRange` 是音高随机范围（负值表示降调，如撕报纸声的 -2）。防具的 `dropSounds` 在破碎时和 `dropReanim` 一起播放，绕过盾牌的伤害两者都不播放。`seedPackets` 保存图集格子和布局，`almanac` 保存绳索和浮动动画参数。新增同类内容应补定义，通用渲染器不按具体 ID 或数字编号分支。工厂按视图类型分派、专属技能状态机和单位换算常量仍保留在代码中。
 

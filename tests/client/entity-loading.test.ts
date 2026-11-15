@@ -12,7 +12,10 @@ import { ModuleKind,ScriptTarget,transpileModule } from 'typescript'
 import { presentationFixture } from './presentationFixture'
 import * as kernelModule from '@/shared/kernel/index'
 import * as protocolModule from '@/shared/protocol'
+import * as animationModule from '@/shared/content/animation'
+import * as gameplayModule from '@/shared/content/gameplay'
 import * as renderOrderModule from '@/shared/content/renderOrder'
+import * as zombieAnimationModule from '@/shared/content/zombieAnimation'
 import * as teamsModule from '@/shared/content/teams'
 import { readBaseContent } from '../../tools/mod/content'
 
@@ -29,6 +32,10 @@ const clientStubs: Record<string, unknown> = {
     '@/client/zombies/ZombieView': { ZombieView: {} },
     '@/client/projectiles/ProjectileView': { ProjectileView: {} },
     '@/shared/content/renderOrder': renderOrderModule,
+    // What a view reads of the animation it shows.
+    '@/shared/content/animation': animationModule,
+    '@/shared/content/gameplay': gameplayModule,
+    '@/shared/content/zombieAnimation': zombieAnimationModule,
 }
 
 function loadClientModule(path: string, modules: Record<string, unknown>) {
@@ -306,7 +313,8 @@ test('a finished or cancelled shield drop cannot leave a component with a null n
     })
     const { EntityAttachments } = clientStubs['@/client/view/EntityAttachments'] as any
     const view = Object.assign(Object.create(ZombieView.prototype), {
-        node: new Node(), shadowNode: new Node(), player: null, animation: 'anim_walk', attachments: new EntityAttachments(), mirrored: false,
+        node: new Node(), shadowNode: new Node(), layers: { player: () => ({ loadedId: null }), shown: [], show() {} }, animation: 'walk',
+        attachments: new EntityAttachments(), mirrored: false,
         presentation: presentationFixture.zombies['pvz:newspaper'], applyHitFlash() {}, applyColor() {}, applyParts() {},
     })
     view.armorDropped('shield')
@@ -314,17 +322,17 @@ test('a finished or cancelled shield drop cannot leave a component with a null n
     const finished = drops[0].player!
     finished.onFinish!()
     assert.equal(finished.node, null, 'Cocos clears a destroyed component node')
-    assert.doesNotThrow(() => view.sync({ state: 'walking', animation: 'anim_walk', animationTime: 0, hasHead: true }))
+    assert.doesNotThrow(() => view.sync({ state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true }))
 
     let finishLoad!: () => void
     loading = new Promise(resolve => { finishLoad = resolve })
     view.armorDropped('shield')
-    view.sync({ state: 'dying', animation: 'anim_walk', animationTime: 0, hasHead: true })
+    view.sync({ state: 'dying', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true })
     assert.equal(drops[1].isValid, false, 'death removes a drop even while its animation is loading')
     finishLoad()
     await new Promise(resolve => setImmediate(resolve))
     assert.equal(playCount, 1, 'a drop destroyed during loading must not start playing')
-    assert.doesNotThrow(() => view.sync({ state: 'walking', animation: 'anim_walk', animationTime: 0, hasHead: true }))
+    assert.doesNotThrow(() => view.sync({ state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } }, hasHead: true }))
 })
 
 test('presentation definitions use the common ZIP resolver without mutating base data', async () => {
@@ -441,7 +449,7 @@ test('presentation track lists name exact tracks that exist in their clips; losi
     const trackIds = (reanimId: string): string[] => JSON.parse(readFileSync(`mods/pvz-base/${content.resources.reanim[reanimId]}`, 'utf8'))
         .tracks.map((track: { id: string }) => track.id)
     for (const [id, zombie] of Object.entries<any>(zombies)) {
-        const tracks = new Set(Object.values<any>(zombie.animations).flatMap(clip => trackIds(clip.reanimId)))
+        const tracks = new Set(Object.values<any>(zombie.clips).flatMap(clip => trackIds(clip.reanimId)))
         const { flagArm, shieldArms, upperArm, ...lists } = zombie.parts
         const flag = [...flagArm ? [...flagArm.holding, ...flagArm.free, flagArm.front] : [], ...shieldArms ? [...shieldArms.holding, ...shieldArms.free] : []]
         for (const track of [upperArm, ...Object.values<string[]>(lists).flat(), ...flag, ...zombie.enragedHead ? [zombie.enragedHead.track] : []]) {
@@ -450,8 +458,8 @@ test('presentation track lists name exact tracks that exist in their clips; losi
     }
     const plants = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/plants.json', 'utf8'))
     for (const [id, plant] of Object.entries<any>(plants)) {
-        // A plant without its own clips (the explode-o-nut) draws those of its animationsFrom.
-        const clips = plant.animations ?? plants[plant.animationsFrom]?.animations ?? {}
+        // A plant whose clips are another's (the explode-o-nut) draws those.
+        const clips = plant.clips?.from ? plants[plant.clips.from].clips : plant.clips ?? {}
         const tracks = new Set(Object.values<any>(clips).flatMap(clip => trackIds(clip.reanimId)))
         const { eyes = [], glow = [], face } = plant.parts ?? {}
         for (const track of [...eyes, ...glow, ...face ? [face] : []]) assert.ok(tracks.has(track), `${id} lists ${track}`)
@@ -490,16 +498,16 @@ test('a screen door zombie holds its door with the door arms, lowers them to eat
     const { ZombieView } = loadClientModule('zombies/ZombieView', {})
     const presentation = JSON.parse(readFileSync('mods/pvz-base/presentation/definitions/zombies.json', 'utf8'))['pvz:screendoor']
     const shown = new Map<string, boolean>()
-    const player = { setTracksVisible(tracks: string[], visible: boolean) { for (const track of tracks) shown.set(track, visible) }, setTrackSpriteOverride() {} }
+    const player = { loadedId: 'pvz:door_zombie_walk', setTracksVisible(tracks: string[], visible: boolean) { for (const track of tracks) shown.set(track, visible) }, setTrackSpriteOverride() {} }
     const view = Object.assign(Object.create(ZombieView.prototype), {
-        player, presentation, parts: '', holdingFlag: false, armor: { shield: { type: 'door', health: 1100 } }, sprites: { helms: {}, damagedArm: {} },
+        layers: { player: () => player }, presentation, parts: '', holdingFlag: false, gameplay: { shield: { type: 'door', health: 1100 } }, sprites: { helms: {}, damagedArm: {} },
     })
-    const zombie = { hasHead: true, hasTongue: false, hasArm: true, helmHealth: 0, shieldHealth: 1100, state: 'walking', animation: 'anim_walk' }
+    const zombie = { hasHead: true, hasTongue: false, hasArm: true, helmHealth: 0, shieldHealth: 1100, state: 'walking', animations: { body: { clip: 'walk', time: 0, rate: 12 } } }
     const visible = (...tracks: string[]) => tracks.map(track => shown.get(track))
     view.applyParts(zombie)
     assert.deepEqual(visible('anim_screendoor', 'Zombie_outerarm_screendoor', 'Zombie_innerarm_screendoor_hand', 'Zombie_outerarm_hand', 'anim_innerarm1', 'Zombie_outerarm_upper'),
         [true, true, true, false, false, false], 'Zombie::SetupDoorArms(true)')
-    view.applyParts({ ...zombie, state: 'eating', animation: 'anim_eat' })
+    view.applyParts({ ...zombie, state: 'eating', animations: { body: { clip: 'eat', time: 0, rate: 36 } } })
     assert.deepEqual(visible('anim_screendoor', 'Zombie_outerarm_screendoor', 'Zombie_outerarm_hand', 'anim_innerarm1'), [true, false, true, true],
         'StartEating shows the free arms behind the door')
     view.applyParts({ ...zombie, shieldHealth: 0, hasArm: false })
@@ -642,4 +650,32 @@ test("a projectile's impact sounds and splats without a view of the projectile, 
     impact({ projectileId: 5, typeId: 'test:pea', x: 290, y: 120, targetId: 7, row: 1, through: true })
     assert.equal(spawned.length, 2, 'one that flies on through does not splat')
     assert.deepEqual(sounds, ['splat', 'thud', 'splat'])
+})
+
+test('a clip that ends plays over its own pictures and goes on where they end; a clip that fits its time is stretched', () => {
+    const { shownLayer } = loadClientModule('view/layerPlayback', {})
+    // A pack's shooting head of 18 pictures where the animation has 25 (JiangNan's repeater), at 45 a second.
+    const played: Record<string, object> = { shootHead: { frames: 25, fps: { min: 45, max: 45 }, next: 'idleHead' }, idleHead: { frames: 25, sync: 'body' },
+        land: { frames: 7, fit: true, hold: true }, blink: { frames: 3, once: true } }
+    const clips = {
+        picture: (name: string) => ({ reanimId: name, rateScale: 1 }), played: (name: string) => played[name],
+        duration: (reanimId: string) => ({ shootHead: 18, idleHead: 17, land: 9, blink: 2, body: 4 } as Record<string, number>)[reanimId] / 12,
+    }
+    const layers = { body: { clip: 'body', time: 40, rate: 17 } }
+    const shown = (clip: string, time: number) => JSON.parse(JSON.stringify(shownLayer({ clip, time, rate: 45 }, layers, clips) ?? null))
+    assert.deepEqual(shown('shootHead', 11.25), { key: 'shootHead', clip: { reanimId: 'shootHead', rateScale: 1 }, time: 11.25, rate: 45, once: true })
+    // Past its 18 pictures, the head is back on its idling, before the server's 25 frames are through: at its body's
+    // time, starting where its body is as a part of its own 4 pictures (Reanimation::mAnimTime is a part of a clip).
+    assert.deepEqual(shown('shootHead', 20), { key: 'idleHead', clip: { reanimId: 'idleHead', rateScale: 1 }, time: 40, rate: 17, sync: { time: 40, own: 4 } })
+    assert.equal(shown('blink', 2.5), null, 'a blink is gone once its pictures are')
+    assert.equal(shown('land', 3).frames, 7, 'a clip that fits its time is stretched over it')
+    // Pictures longer than the clip are stretched over it (a pack's death of 77 pictures for the animation's 39), and
+    // pictures made at another pace are counted at it (the cherry bomb's 14 at 30 a second).
+    played.death = { frames: 39, hold: true }
+    played.explode = { frames: 14, hold: true }
+    const longer = shownLayer({ clip: 'death', time: 39, rate: 27 }, layers, { ...clips, duration: (id: string) => id === 'death' ? 77 / 12 : clips.duration(id) })
+    assert.equal(longer.frames, 39)
+    const cherry = shownLayer({ clip: 'explode', time: 5, rate: 12 }, layers,
+        { ...clips, picture: (name: string) => ({ reanimId: name, rateScale: 1, fps: 30 }), duration: () => 14 / 30 })
+    assert.deepEqual([cherry.once, cherry.frames], [true, undefined], 'its 14 pictures are as long as the clip')
 })

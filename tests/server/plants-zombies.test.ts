@@ -177,8 +177,8 @@ test('helms absorb damage first and drop once, and snow peas chill through them,
     damageZombie(world, definitions, cold, 1, { chillTicks: 1000 })
     run(200)
     // Walking follows the `_ground` track, so the halved animation also halves the pace.
-    const warmFrames = world.get(warm, ZombieComponent)!.animationTime
-    const coldFrames = world.get(cold, ZombieComponent)!.animationTime
+    const warmFrames = world.get(warm, ZombieComponent)!.animations.body.time
+    const coldFrames = world.get(cold, ZombieComponent)!.animations.body.time
     assert.ok(Math.abs(coldFrames * 2 - warmFrames) < 1e-6, `${coldFrames} should be half of ${warmFrames}`)
     assert.equal(world.get(cold, ZombieComponent)!.chilledTicks, 800)
 
@@ -202,13 +202,13 @@ test('a pole vaulter runs at the first plant, vaults past it and walks on slowly
     const vaulter = zombie('pvz:pole_vaulter', 2, 700)
     const state = () => world.get(vaulter, ZombieComponent)!
     assert.ok(state().speedPerTick >= 0.66 && state().speedPerTick <= 0.68)
-    assert.equal(state().animation, 'anim_run')
+    assert.equal(state().animations.body.clip, 'run')
     for (let tick = 0; tick < 2000 && state().state !== 'vaulting'; tick++) run()
     assert.equal(state().state, 'vaulting')
     assert.equal(state().hasPole, false)
     const takeoff = world.get(vaulter, PositionComponent)!.x
     for (let tick = 0; tick < 400 && state().state === 'vaulting'; tick++) run()
-    assert.equal(state().animation, 'anim_walk')
+    assert.equal(state().animations.body.clip, 'walk')
     assert.ok(world.get(vaulter, PositionComponent)!.x < world.get(wall, PositionComponent)!.x - 40, 'lands behind the wall-nut')
     // Takeoff is about 79px right of the plant, so the original formula adds almost nothing to the 150px landing.
     assert.ok(takeoff - world.get(vaulter, PositionComponent)!.x > 140)

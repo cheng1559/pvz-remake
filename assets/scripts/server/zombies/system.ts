@@ -1,16 +1,8 @@
-import {
-    CHILLED_ANIMATION_FACTOR,
-    TICKS_PER_SECOND,
-    ZOMBIE_ASSET_FPS,
-    ZOMBIE_MOWERED_FRAME_SPAN,
-    ZOMBIE_MOWERED_TICKS,
-    deathOf,
-    walkZombie,
-    zombieGait,
-} from './animation'
+import { playZombie, startWalk, stepZombie, walkZombie, zombieBody, zombiePace } from './animation'
+import { passedMark } from '@/shared/content/animation'
 import { EventQueueResource, emitServerEvent } from '../state/events'
 import type { GameSystem, SystemContext, World } from '@/ecs/index'
-import type { GameplayDefinitions } from '@/shared/content/gameplay'
+import { type GameplayDefinitions, ZOMBIE_CLIPS } from '@/shared/content/gameplay'
 import { damageZombie, startZombieDeath, updateHeadlessZombie } from './damage'
 import { LevelStateResource, PlantComponent, type Plant, type Position, PositionComponent, RandomResource, ZombieComponent } from '../state/components'
 import { startPostVaultWalk, startVault, updateVault } from './poleVault'
@@ -65,13 +57,10 @@ export class ZombieSystem implements GameSystem {
             }
             // An earlier zombie's bite may have blown this one up.
             if (!position || !zombie || !world.hasEntity(entity)) continue
-            const definition = definitions.zombies[zombie.typeId]
-            const gait = zombieGait(definition, definitions)
+            const definition = definitions.zombies[zombie.typeId], animation = definition.animation
+            const random = world.resources.get(RandomResource)
             if (zombie.state === 'mowered') {
-                zombie.animationTime = Math.min(
-                    ZOMBIE_MOWERED_FRAME_SPAN,
-                    zombie.animationTime + ZOMBIE_MOWERED_FRAME_SPAN / ZOMBIE_MOWERED_TICKS,
-                )
+                stepZombie(zombie, animation, random)
                 if (--zombie.moweredTicksRemaining <= 0) {
                     const events = world.resources.get(EventQueueResource)
                     if (zombie.hasHead) {
@@ -87,19 +76,13 @@ export class ZombieSystem implements GameSystem {
                 continue
             }
             if (zombie.state === 'dying') {
-                const death = deathOf(gait, zombie.animation)
-                const span = death.frames - 1
-                const previousAnimationTime = zombie.animationTime
-                zombie.animationTime = Math.min(
-                    span,
-                    zombie.animationTime + span * zombie.animationSpeed * ZOMBIE_ASSET_FPS / (death.frames * TICKS_PER_SECOND),
-                )
-                const fallTime = span * death.fallTime
-                if (previousAnimationTime < fallTime && zombie.animationTime >= fallTime) {
+                const body = zombieBody(zombie), death = animation.clips[body.clip], previous = body.time
+                stepZombie(zombie, animation, random)
+                if (passedMark(death, previous, body.time, death.marks![0])) {
                     emitServerEvent(world.resources.get(EventQueueResource), 'zombieDying', {
                         entityId: entity,
                         typeId: zombie.typeId,
-                        animation: zombie.animation,
+                        clip: body.clip,
                     })
                 }
                 if (--zombie.deathTicksRemaining <= 0) commands.destroyEntity(entity)
@@ -119,14 +102,12 @@ export class ZombieSystem implements GameSystem {
                 continue
             }
             if (zombie.enrageTicks) {
-                const pace = zombie.chilledTicks > 0 ? CHILLED_ANIMATION_FACTOR : 1
-                zombie.animationTime += (Math.round(definition.enrage!.pauseTicks * 8 / 100) - 1) / definition.enrage!.pauseTicks * pace
-                zombie.enrageTicks = Math.max(0, zombie.enrageTicks - pace)
+                stepZombie(zombie, animation, random)
+                zombie.enrageTicks = Math.max(0, zombie.enrageTicks - zombiePace(zombie))
                 if (zombie.enrageTicks === 0) {
                     const speed = definition.enrage!.speedPerTick
-                    zombie.speedPerTick = speed.min + world.resources.get(RandomResource).nextFloat() * (speed.max - speed.min)
-                    zombie.animation = zombie.walkAnimation
-                    zombie.animationTime = 0
+                    zombie.speedPerTick = speed.min + random.nextFloat() * (speed.max - speed.min)
+                    startWalk(zombie, animation, zombie.walkClip, random)
                     // Zombie::UpdateZombieNewspaper roars only with its head on and at most 10 live headed zombies.
                     const headed = [...world.query(ZombieComponent)].filter(other => {
                         const state = world.get(other, ZombieComponent)!
@@ -144,10 +125,9 @@ export class ZombieSystem implements GameSystem {
         const definitions = this.definitions
         const zombie = world.get(entity, ZombieComponent)!
         const position = world.get(entity, PositionComponent)!
-        const definition = definitions.zombies[zombie.typeId]
-        const gait = zombieGait(definition, definitions)
-        const level = world.resources.get(LevelStateResource)
-        const pace = zombie.chilledTicks > 0 ? CHILLED_ANIMATION_FACTOR : 1
+        const definition = definitions.zombies[zombie.typeId], animation = definition.animation
+        const level = world.resources.get(LevelStateResource), random = world.resources.get(RandomResource)
+        const pace = zombiePace(zombie)
         const team = zombieTeam(zombie)
         const hostilePlants = (this.plantRows[position.row] ?? []).filter(target => isHostile(plantTeam(target.plant), team))
 
@@ -159,7 +139,7 @@ export class ZombieSystem implements GameSystem {
             updateVault(world, definitions, entity, zombie, position, pace)
         } else if (vaultTarget !== undefined) {
             // Over a rolling nut it jumps where it stands.
-            startVault(zombie, position, world.get(vaultTarget.entity, PositionComponent)!, definition, pace, vaultTarget.rolling)
+            startVault(zombie, position, world.get(vaultTarget.entity, PositionComponent)!, definition, random, vaultTarget.rolling)
         } else {
             // A running pole vaulter never stops to eat. Zombie::UpdateEating bites an enemy zombie first, then a plant.
             const attack = zombieFacingRect(definition.vault?.landedAttack ?? definition.attack, team)
@@ -169,31 +149,25 @@ export class ZombieSystem implements GameSystem {
             if (target === undefined && prey === undefined) {
                 if (zombie.state !== 'walking') {
                     zombie.state = 'walking'
-                    zombie.animation = zombie.hasPole ? 'anim_run' : zombie.walkAnimation
-                    zombie.animationTime = 0
+                    startWalk(zombie, animation, zombie.hasPole ? ZOMBIE_CLIPS.run : zombie.walkClip, random)
                 }
                 zombie.biteTicks = 0
-                const ground = zombie.animation === 'anim_run' ? definition.vault!.runGround : gait.walkGround
-                walkZombie(zombie, position, ground, pace, teamDirection(team))
+                walkZombie(zombie, position, animation, random, teamDirection(team))
                 if (!zombie.hasHead) updateHeadlessZombie(world, definitions, entity, zombie)
             } else {
                 if (zombie.state !== 'eating') {
                     zombie.state = 'eating'
-                    zombie.animation = 'anim_eat'
-                    zombie.animationTime = 0
+                    playZombie(zombie, animation, ZOMBIE_CLIPS.eat, random)
                 }
-                const eat = gait.eat
-                const span = eat.frames - 1
-                zombie.animationSpeed = eat.rate / ZOMBIE_ASSET_FPS * pace
-                const previousAnimationTime = zombie.animationTime
-                zombie.animationTime = (zombie.animationTime + eat.rate * pace / TICKS_PER_SECOND) % span
+                const body = zombieBody(zombie), eat = animation.clips[ZOMBIE_CLIPS.eat], previous = body.time
+                stepZombie(zombie, animation, random)
                 if (!zombie.hasHead) {
                     updateHeadlessZombie(world, definitions, entity, zombie)
                 } else {
                     // Zombie::EatZombie bites an enemy zombie as it bites a plant, but through the shield and without
                     // a flash. The client flashes a chewed plant.
                     const events = world.resources.get(EventQueueResource)
-                    const chewed = eat.chewTimes.some(time => didCrossLoopingTime(previousAnimationTime, zombie.animationTime, time * span))
+                    const chewed = eat.marks!.some(mark => passedMark(eat, previous, body.time, mark))
                     const cadence = definition.bite.cadenceTicks * (zombie.chilledTicks > 0 ? CHILLED_BITE_CADENCE_FACTOR : 1)
                     const bites = ++zombie.biteTicks >= cadence
                     if (bites) zombie.biteTicks = 0
@@ -228,7 +202,7 @@ export class ZombieSystem implements GameSystem {
             damageZombie(world, definitions, entity, 1800, { flash: false })
         } else if (zombie.hasHead && level.result === 'playing' && position.x <= edge) {
             // Zombie::WalkIntoHouse changes a pre-vault winner to its unarmed walking phase.
-            if (definition.vault && zombie.hasPole) startPostVaultWalk(world, definitions, zombie, pace)
+            if (definition.vault && zombie.hasPole) startPostVaultWalk(world, definitions, zombie)
             level.result = 'lost'
             emitServerEvent(world.resources.get(EventQueueResource), 'levelLost', {
                 zombieId: entity,
@@ -236,12 +210,6 @@ export class ZombieSystem implements GameSystem {
             return
         }
     }
-}
-
-function didCrossLoopingTime(previous: number, current: number, target: number): boolean {
-    return current >= previous
-        ? previous < target && target <= current
-        : previous < target || target <= current
 }
 
 /**

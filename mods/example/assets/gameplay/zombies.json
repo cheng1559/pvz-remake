@@ -8,7 +8,7 @@
     "body": { "x": 36, "y": 0, "width": 42, "height": 115 },
     "attack": { "x": 20, "y": 0, "width": 50, "height": 115 },
     "bite": { "damage": 4, "cadenceTicks": 4 },
-    "gait": "pvz:normal",
+    "animation": {"from": "pvz:normal"},
     "tongueChance": 0.2,
     "walk2Chance": 0.5
   }

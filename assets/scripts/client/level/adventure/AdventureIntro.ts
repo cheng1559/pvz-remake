@@ -1,5 +1,5 @@
 import { ParticlePlayer } from '@/client/particle/ParticlePlayer'
-import type { BoardDefinition } from '@/shared/content/gameplay'
+import { type BoardDefinition, ZOMBIE_FLAG_LAYER } from '@/shared/content/gameplay'
 import type { AdventureIntroLayout, PresentationDefinitions } from '@/shared/content/presentation'
 import { Mask, Node, Sprite, Vec3 } from 'cc'
 import { ReanimPlayer } from '@/client/reanim/ReanimPlayer'
@@ -42,9 +42,9 @@ const HOUSE_NAME_DURATION = 250
 /** CutScene::mGraveStoneTime: night graves rise after the pan, delaying the mowers and Ready-Set-Plant. */
 const GRAVE_STONE_TICKS = 100
 
-/** CutScene::PlaceStreetZombies apportions the configured slots from the actual wave roster. */
-export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, definitions: PresentationDefinitions, capacity: number): string[] {
-    const entries = Object.entries(counts).filter(([id, count]) => count > 0 && !definitions.zombies[id]?.flag)
+/** CutScene::PlaceStreetZombies apportions the configured slots from the actual wave roster, leaving out a zombie that carries a flag. */
+export function adventurePreviewTypes(counts: Readonly<Record<string, number>>, definitions: Pick<GameplayDefinitions, 'zombies'>, capacity: number): string[] {
+    const entries = Object.entries(counts).filter(([id, count]) => count > 0 && !definitions.zombies[id]?.animation.layers[ZOMBIE_FLAG_LAYER])
     const total = entries.reduce((sum, [, count]) => sum + count, 0)
     return entries.flatMap(([id, count]) => Array.from({ length: Math.max(1, Math.min(count, Math.floor(count * capacity / total))) }, () => id))
 }
@@ -119,7 +119,7 @@ export class AdventureIntro implements LevelIntro {
         }
         const introZombies: Node[] = []
         const previewTypes = new Map<Node, string>()
-        const types = layout.stationary ? [] : adventurePreviewTypes(previewZombies, content.presentation, layout.previewCapacity)
+        const types = layout.stationary ? [] : adventurePreviewTypes(previewZombies, content.definitions, layout.previewCapacity)
         const introPositions: Array<{ x: number, y: number, z: number }> = []
         const introSpots = Array.from({ length: 5 }, (_, gridX) =>
             Array.from({ length: 5 }, (_, gridY) => ({ gridX, gridY })),
@@ -288,7 +288,7 @@ export class AdventureIntro implements LevelIntro {
                 if (!definition) throw new Error(`Intro zombie is not installed: ${preview.typeId}`)
                 this.previewTypes.set(node, preview.typeId)
                 // The clip its body was on, which its saved playback then goes on from.
-                const pose = Object.entries(this.animations.resolve(this.animations.sourceOf(preview.typeId))).find(([, clip]) => clip.reanimId === preview.reanim.id)?.[0]
+                const pose = Object.entries(this.animations.resolve(preview.typeId)).find(([, clip]) => clip.reanimId === preview.reanim.id)?.[0]
                 if (!pose) throw new Error(`Intro animation is not installed: ${preview.reanim.id}`)
                 const zombie = await standInStreet(node, preview.typeId, preview.hasTongue, pose)
                 zombie.view.players[0].restore(preview.reanim)

@@ -3,6 +3,7 @@ import { loadPresentationDefinitions } from '@/client/content/loadPresentationDe
 import { JsonAsset, Prefab } from 'cc'
 import { loadClientContent } from '@/client/content/loadClientContent'
 import { ClientAnimationRegistry } from '@/client/content/ClientAnimationRegistry'
+import { assertPresented } from '@/client/content/assertPresented'
 import { modResources } from '@/client/content/ModResources'
 import { contentJson } from '@/shared/mod/content'
 
@@ -38,20 +39,7 @@ export async function loadIntegratedGameContent() {
     const { projectileViews, gridItemViews } = loadedMods
     projectileViews.freeze()
     gridItemViews.freeze()
-    for (const id of Object.keys(definitions.plants)) {
-        const definition = presentation.plants[id]
-        if (!definition?.view || !plantViews.has(definition.view)) throw new Error(`Plant presentation is not installed: ${id}`)
-    }
-    for (const id of Object.keys(definitions.projectiles)) {
-        if (!presentation.projectiles[id] || !projectileViews.has(presentation.projectiles[id].view ?? 'projectile')) throw new Error(`Projectile presentation is not installed: ${id}`)
-    }
-    for (const [id, item] of Object.entries(presentation.gridItems)) {
-        if (!gridItemViews.has(item.view)) throw new Error(`Grid item presentation is not installed: ${id}`)
-    }
-    for (const id of Object.keys(definitions.zombies)) {
-        const definition = presentation.zombies[id]
-        if (!definition || !zombieViews.has(definition.view ?? 'zombie')) throw new Error(`Zombie presentation is not installed: ${id}`)
-    }
+    assertPresented(definitions, presentation, { plants: plantViews, zombies: zombieViews, projectiles: projectileViews, gridItems: gridItemViews })
     const enabledMods = loadedMods.manifests
         .filter(mod => mod.gameplay !== undefined || loadedMods.gameplayDefinitions.some(source => source.ownerId === mod.id))
         .map(mod => ({ id: mod.id, version: mod.version, contentHash: mod.contentHash }))

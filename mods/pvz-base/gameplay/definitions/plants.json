@@ -17,16 +17,7 @@
     "maxHealth": 4000, "body": {"x": 10, "y": 0, "width": 60, "height": 80}, "occupiesCell": false,
     "behavior": {"kind": "bowling", "attack": {"x": 0, "width": 60}, "groundDeltas": [17.2, 18.7, 20.2, 20.2, 18.7, 17.2, 17.2, 18.8, 20.2, 20.2, 18.7, 17.3], "bounceSpeed": 2, "damage": 1800, "helmDamage": 900, "shieldDamage": 400, "bouncedBreaks": ["door"]},
     "deathExplosion": {"offset": {"x": 40, "y": 40}, "radius": 90, "rowRange": 1, "damage": 1800, "burn": true},
-    "animation": {
-      "clips": {
-        "body": {"frames": 13, "fps": [12, 18]},
-        "blinkTwitch": {"frames": 5, "fps": 15, "once": true},
-        "blinkTwice": {"frames": 7, "fps": 15, "once": true},
-        "blinkThrice": {"frames": 11, "fps": 15, "once": true}
-      },
-      "layers": {"body": "body"},
-      "blink": {"clip": {"blinkTwitch": 1, "blinkTwice": 6, "blinkThrice": 3}, "ticks": {"min": 1000, "max": 1999}}
-    }
+    "animation": {"from": "pvz:bowling-wallnut"}
   },
   "pvz:sunflower": {
     "maxHealth": 300,
@@ -189,16 +180,7 @@
     "maxHealth": 4000,
     "body": {"x": 10, "y": 0, "width": 60, "height": 80},
     "deathExplosion": {"offset": {"x": 40, "y": 40}, "radius": 90, "rowRange": 1, "damage": 1800, "burn": true},
-    "animation": {
-      "clips": {
-        "body": {"frames": 17, "fps": [10, 15], "chewed": true},
-        "blinkTwitch": {"frames": 5, "fps": 15, "once": true},
-        "blinkTwice": {"frames": 7, "fps": 15, "once": true},
-        "blinkThrice": {"frames": 11, "fps": 15, "once": true}
-      },
-      "layers": {"body": "body"},
-      "blink": {"clip": {"blinkTwitch": 1, "blinkTwice": 6, "blinkThrice": 3}, "ticks": {"min": 1000, "max": 1999}}
-    }
+    "animation": {"from": "pvz:wallnut"}
   },
   "pvz:puffshroom": {
     "low": true,
